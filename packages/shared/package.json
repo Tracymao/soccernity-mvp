@@ -1,0 +1,11 @@
+{
+  "name": "@soccernity/shared",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Shared types and design tokens across web, mobile and admin. Tokens in src/tokens are owned by the figma-design-system agent — do not hand-edit colour values here without updating Figma first.",
+  "main": "src/index.ts",
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

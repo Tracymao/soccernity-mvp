@@ -1,0 +1,24 @@
+{
+  "name": "soccernity",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Soccernity monorepo — see CLAUDE.md and docs/ before making architectural changes.",
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run start:dev --workspace=services/api",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:admin": "npm run dev --workspace=apps/admin",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "prisma:generate": "npm run prisma:generate --workspace=services/api",
+    "prisma:migrate": "npm run prisma:migrate --workspace=services/api"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

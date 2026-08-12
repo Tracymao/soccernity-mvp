@@ -1,0 +1,269 @@
+// Soccernity — Prisma schema
+// Source of truth: docs/Soccernity_MVP_Build_Plan_v1.1.docx, Section 3 (Data Model)
+// Do not add Discover-pillar (Player Passport, Combine Score, Scout CRM) or
+// Careers-pillar (Job Listing, Certification) models — out of MVP scope per
+// Build Plan Section 2.2. Adding them here is a Decision Log matter (Section 9),
+// not a schema change to make unilaterally.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Community ----------
+
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  phone             String?
+  passwordHash      String
+  displayName       String
+  dateOfBirth       DateTime
+  isMinor           Boolean   @default(false)
+  role              String    @default("fan") // fan | player | admin
+  verificationStatus String   @default("unverified")
+  createdAt         DateTime  @default(now())
+
+  // Safeguarding — required per Build Plan Section 8.3. Do not remove.
+  guardian          Guardian?
+
+  clubAffiliationId String?
+  clubAffiliation   ClubPage? @relation(fields: [clubAffiliationId], references: [id])
+
+  posts             Post[]
+  comments          Comment[]
+  savedPosts        SavedPost[]
+  followedBy        Follow[]        @relation("followee")
+  following         Follow[]        @relation("follower")
+  notifications     Notification[]
+  reportsFiled      Report[]        @relation("reporter")
+  messagesSent      Message[]
+  createdTeams      GrassrootsTeam[]
+  resultsEntered    Result[]
+  leaderboardEntry  LeaderboardEntry[]
+}
+
+// Guardian consent record — implements the six-screen flow in
+// Build Plan Section 8.3. consent_status must be "confirmed" before a
+// minor's profile becomes visible outside the guardian relationship.
+model Guardian {
+  id               String    @id @default(uuid())
+  minorUserId      String    @unique
+  minorUser        User      @relation(fields: [minorUserId], references: [id])
+  name             String
+  email            String
+  relationship     String
+  consentStatus    String    @default("pending") // pending | confirmed
+  consentToken     String    @unique
+  consentTimestamp DateTime?
+}
+
+model ClubPage {
+  id          String   @id @default(uuid())
+  name        String
+  league      String?
+  country     String?
+  logoUrl     String?
+  memberCount Int      @default(0)
+  members     User[]
+  posts       Post[]
+}
+
+model GrassrootsTeam {
+  id            String    @id @default(uuid())
+  name          String
+  city          String
+  leagueType    String // informal | school | academy
+  createdById   String
+  createdBy     User      @relation(fields: [createdById], references: [id])
+  verified      Boolean   @default(false)
+  fixturesHome  Fixture[] @relation("teamA")
+  fixturesAway  Fixture[] @relation("teamB")
+}
+
+model Fixture {
+  id            String          @id @default(uuid())
+  teamAId       String
+  teamA         GrassrootsTeam  @relation("teamA", fields: [teamAId], references: [id])
+  teamBId       String?
+  teamB         GrassrootsTeam? @relation("teamB", fields: [teamBId], references: [id])
+  scheduledAt   DateTime
+  venue         String?
+  status        String          @default("scheduled") // scheduled | live | full_time
+  result        Result?
+}
+
+model Result {
+  id            String   @id @default(uuid())
+  fixtureId     String   @unique
+  fixture       Fixture  @relation(fields: [fixtureId], references: [id])
+  scoreA        Int
+  scoreB        Int
+  enteredById   String
+  enteredBy     User     @relation(fields: [enteredById], references: [id])
+  enteredAt     DateTime @default(now())
+}
+
+model Post {
+  id            String    @id @default(uuid())
+  authorId      String
+  author        User      @relation(fields: [authorId], references: [id])
+  contentText   String
+  mediaUrls     String[]
+  clubPageId    String?
+  clubPage      ClubPage? @relation(fields: [clubPageId], references: [id])
+  banterRoomId  String?
+  banterRoom    BanterRoom? @relation(fields: [banterRoomId], references: [id])
+  likeCount     Int       @default(0)
+  commentCount  Int       @default(0)
+  createdAt     DateTime  @default(now())
+  comments      Comment[]
+  savedBy       SavedPost[]
+}
+
+model Comment {
+  id          String   @id @default(uuid())
+  postId      String
+  post        Post     @relation(fields: [postId], references: [id])
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id])
+  contentText String
+  createdAt   DateTime @default(now())
+}
+
+model BanterRoom {
+  id          String @id @default(uuid())
+  name        String
+  scopeType   String // club | league | country | topic
+  createdBy   String
+  memberCount Int    @default(0)
+  posts       Post[]
+}
+
+model Conversation {
+  id             String    @id @default(uuid())
+  participantIds String[]
+  createdAt      DateTime  @default(now())
+  messages       Message[]
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id])
+  contentText    String
+  mediaUrl       String?
+  sentAt         DateTime     @default(now())
+  readAt         DateTime?
+}
+
+model Notification {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  type         String // follow | comment | like | reply | system
+  payloadRefId String?
+  read         Boolean  @default(false)
+  createdAt    DateTime @default(now())
+}
+
+model SavedPost {
+  id       String   @id @default(uuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id])
+  postId   String
+  post     Post     @relation(fields: [postId], references: [id])
+  savedAt  DateTime @default(now())
+
+  @@unique([userId, postId])
+}
+
+model Follow {
+  id         String @id @default(uuid())
+  followerId String
+  follower   User   @relation("follower", fields: [followerId], references: [id])
+  followeeId String
+  followee   User   @relation("followee", fields: [followeeId], references: [id])
+
+  @@unique([followerId, followeeId])
+}
+
+// Feeds the Admin moderation queue — Build Plan Section 8.4.
+model Report {
+  id         String   @id @default(uuid())
+  reporterId String
+  reporter   User     @relation("reporter", fields: [reporterId], references: [id])
+  targetType String // post | user | comment
+  targetId   String
+  reason     String
+  status     String   @default("open") // open | reviewed | actioned
+  createdAt  DateTime @default(now())
+}
+
+model MediaAsset {
+  id         String   @id @default(uuid())
+  uploaderId String
+  url        String
+  type       String // image | video
+  size       Int
+  createdAt  DateTime @default(now())
+}
+
+// ---------- Admin & Operations Console (Log Book Section 6.6) ----------
+
+model Article {
+  id            String    @id @default(uuid())
+  title         String
+  body          String
+  categoryId    String
+  category      Category  @relation(fields: [categoryId], references: [id])
+  authorAdminId String
+  authorAdmin   AdminUser @relation(fields: [authorAdminId], references: [id])
+  status        String    @default("draft") // draft | published
+  publishedAt   DateTime?
+}
+
+model Category {
+  id       String    @id @default(uuid())
+  name     String
+  slug     String    @unique
+  articles Article[]
+}
+
+model AdminUser {
+  id       String    @id @default(uuid())
+  email    String    @unique
+  role     String // editor | moderator | superadmin
+  articles Article[]
+}
+
+// ---------- Sports Hub (cached from the licensed sports-data vendor — Decision Log #6) ----------
+
+model MatchData {
+  id            String   @id @default(uuid())
+  externalRef   String   @unique
+  competition   String
+  teams         String[]
+  score         String?
+  status        String // scheduled | live | full_time
+  kickoffTime   DateTime
+}
+
+// ---------- Play & Compete (leaderboard only — MVP scope, Build Plan Section 2.1) ----------
+
+model LeaderboardEntry {
+  id      String @id @default(uuid())
+  userId  String
+  user    User   @relation(fields: [userId], references: [id])
+  points  Int    @default(0)
+  rank    Int?
+  period  String // e.g. "2026-W33"
+
+  @@unique([userId, period])
+}
