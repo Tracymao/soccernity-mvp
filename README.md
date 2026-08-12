@@ -35,6 +35,20 @@ npm run dev:api
 
 Three items in `.env.example` are marked as open Decision Log items (Build Plan Section 9) — resolve those before Sprint 1 (auth, minimum age) or Sprint 4 (sports data vendor).
 
+## Branches
+
+- `main` — production, protected.
+- `staging` — pre-production.
+- Task branches — `sprint-<id>/<description>`, deleted after merge.
+
+```bash
+git checkout main && git pull
+git checkout -b sprint-1/guardian-consent-api
+# ...work...
+git push -u origin sprint-1/guardian-consent-api
+# open a PR into main
+```
+
 ## Agents
 
 Eight Claude Code subagents live in `.claude/agents/`. Three of them — `figma-design-system`, `figma-screen-builder`, `figma-to-code` — must run in that order. See `CLAUDE.md` for the full sequencing and the sprint-to-agent map in Build Plan Section 11.

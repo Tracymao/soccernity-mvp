@@ -9,6 +9,14 @@ Read this before doing anything. It's the short version of two much longer docum
 
 A platform giving unaffiliated grassroots football players — and the fans, coaches, and communities around them — an identity, a community, and (in a later phase) a safe path to being discovered. MVP v1 deliberately does **not** build the AI-scouting or careers pillars yet — see "What's explicitly out of scope" below before adding anything ambitious.
 
+## Branch strategy
+
+- `main` — production source of truth. Protected: nothing merges without CI passing and a review.
+- `staging` — pre-production, for testing a batch of merged work before it goes live.
+- Task branches — one per agent task or sprint deliverable, named `sprint-<id>/<short-description>` (e.g. `sprint-d/design-tokens`, `sprint-1/guardian-consent-api`) so the sprint dependency is visible in the branch name, not just in Build Plan Section 6. Delete after merge.
+
+`.github/workflows/deploy.yml` deploys `staging` and `main` automatically once pushed to — but its actual deploy step is a deliberate placeholder that fails loudly (`exit 1`) rather than guessing a hosting platform. See "Where things stand right now" below: hosting is Decision Log item #9, still open.
+
 ## Non-negotiables
 
 1. **Never remove or weaken the safeguarding fields on `User` or `Guardian`** (`is_minor`, `guardian_id`, `consent_status`, `consent_token`, `consent_timestamp`) or the restricted-pending state they support. This isn't a style preference — see Build Plan Section 8 and Log Book Section 10.
@@ -33,6 +41,7 @@ Full reasoning for every choice above: Build Plan Section 5.
 
 - **Sprint D and Sprint 0 have not started.** Dark mode doesn't exist in Figma yet. No screens exist yet for the guardian-consent flow, the full Notification Center, or Grassroots record-keeping.
 - **Three Decision Log items block Sprint 1 and Sprint 4** — auth provider choice, regional minimum age for the age-gate, and sports-data vendor selection (Build Plan Section 9, items #6–#8). Check these are resolved before starting that work; don't guess and move on.
+- **A fourth item, #9, blocks the deploy workflow specifically** — hosting platform is not yet chosen. `.github/workflows/deploy.yml` will fail on purpose until this is resolved and the workflow is updated to match. Don't fill in a provider by guessing.
 - Community, Sports Hub, and the Admin Console are the strongest-designed pillars in Figma (Log Book Section 23.1) — Discover and Careers have zero screens.
 
 ## The eight agents, and the order they run in

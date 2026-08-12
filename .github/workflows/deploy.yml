@@ -1,0 +1,64 @@
+name: Deploy
+
+# Deploys staging on every push to `staging`, and production on every push
+# to `main` (i.e. after a PR merges). The actual deploy step is a
+# placeholder — see the TODO below. Do not fill it in by guessing a
+# provider; MVP Build Plan Section 9, Decision Log item #9 (hosting
+# platform) must be resolved first, and this file should be updated
+# alongside that decision, not ahead of it.
+#
+# Section 5 recommends a managed container platform over self-managed
+# servers (AWS ECS/Fargate, or a PaaS such as Render/Railway) to minimise
+# DevOps overhead for a two-developer team — but which one is still open.
+
+on:
+  push:
+    branches: [main, staging]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Build
+        run: npm run build
+
+      # TODO once Decision Log item #9 (hosting platform) is resolved:
+      # upload the build output as an artifact here for the deploy jobs
+      # below to consume, e.g. actions/upload-artifact.
+
+  deploy-staging:
+    if: github.ref == 'refs/heads/staging'
+    needs: build
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Deploy to staging
+        run: |
+          echo "TODO: hosting platform not yet decided (MVP Build Plan Section 9, Decision Log #9)."
+          echo "Do not add real deploy commands here until that decision is made and documented."
+          exit 1
+
+  deploy-production:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Deploy to production
+        run: |
+          echo "TODO: hosting platform not yet decided (MVP Build Plan Section 9, Decision Log #9)."
+          echo "Do not add real deploy commands here until that decision is made and documented."
+          exit 1
