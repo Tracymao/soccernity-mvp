@@ -4,8 +4,8 @@ Read `CLAUDE.md` first — it's the short version of everything below and the fi
 
 ## Full documentation
 
-- `docs/Soccernity_Inventors_Log_Book_v2.7.docx` — strategy, product, market, safeguarding.
-- `docs/Soccernity_MVP_Build_Plan_v1.1.docx` — the document to actually build from: scope, data model, API contract, sprint backlog, definition of done.
+- `docs/Soccernity_Inventors_Log_Book_v2.9.docx` — strategy, product, market, safeguarding.
+- `docs/Soccernity_MVP_Build_Plan_v1.4.docx` — the document to actually build from: scope, data model, API contract, sprint backlog, definition of done.
 
 ## Structure
 
