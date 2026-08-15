@@ -52,16 +52,25 @@ frames.
 - **Fixed**: secondary/metadata text (navy@50% on white — "1.2k Replies",
   "Created By:") was 2.88:1, failing AA. Fixed via an alpha-only change to
   70% (≈5.0:1).
-- **Found, NOT fixed — open decision**: green (`#7BB929`) is used as
-  functional *text* (not the logo wordmark, which is exempt under WCAG's
-  brand-name carve-out) on white backgrounds in the Sports Hub Match
-  Details family — tab labels "H2H" / "Standings" / "Video" / "Scores",
-  the "Match Summary" heading, and score numbers ("1-1", "1-0") across
-  nodes `632:943`, `640:3737`, `667:151`, `667:1511`, `667:1952`. This is
-  **2.38:1, fails AA**. This is a pre-existing issue, not introduced by
-  Sprint D, and was left untouched rather than silently substituted with
-  an off-brand colour. Two options: switch to navy text (on-brand, passes
-  at 5.28:1) or an explicit founder decision to accept the failure.
+- **Found and fixed (follow-up commit)**: green was used as functional
+  *text* (not the logo wordmark, which is exempt under WCAG's brand-name
+  carve-out) on white backgrounds in the Sports Hub Match Details family
+  — the "H2H" / "Standings" / "Video" tab labels, the "Match Summary"
+  heading, and inline score numbers ("1 - 1", "1 - 0") across nodes
+  `632:943`, `640:3737`, `667:151`, `667:1511`, `667:1952`. On
+  investigation the fill wasn't literally hardcoded — it was bound to
+  `brand/green` (`VariableID:5096:3`, `#7BB929` in both modes), which is
+  functionally identical to hardcoding since it never varies and would
+  not have adapted in dark mode either. All 25 affected TEXT nodes were
+  rebound to the existing `color/text/primary` variable
+  (`VariableID:5096:8`) instead — no new colour or token introduced.
+  Verified by reading back `boundVariables.fills[0].color.id` on all 25
+  nodes (all resolve to `5096:8`). Resulting contrast: navy `#282E65` on
+  white = **12.58:1**, against a 4.5:1 AA threshold (all affected text is
+  14.37–16px, below the large-text exemption) — passes AA and AAA. The
+  correctly-green "Match" pill (white-on-green, a different token) and
+  the inactive "Statistics"/"Lineups" sub-tab labels were confirmed
+  untouched.
 
 ## 4. Components/screens touched
 
@@ -119,13 +128,14 @@ writeup mirrored in this document.
 
 ## 7. Open items for follow-up (not resolved this session)
 
-1. **Decision needed**: the green-text-on-white AA failure in Sports Hub
-   tab labels/scores (§3).
-2. **Decision needed**: neutral grey (`#D9D9D9`) has no dark-mode
+1. **Decision needed**: neutral grey (`#D9D9D9`) has no dark-mode
    equivalent — out of this session's mandated scope (only
    background/surface/green were specified).
-3. Icon library standardization (§5).
-4. Optional: fully exhaustive (non-chrome-depth) retouch of the Sports
+2. Icon library standardization (§5).
+3. Optional: fully exhaustive (non-chrome-depth) retouch of the Sports
    Hub / Admin Console sibling frames.
-5. Match Details real club-crest licensing — legal/business flag, not a
+4. Match Details real club-crest licensing — legal/business flag, not a
    design-token issue (§4).
+
+~~The green-text-on-white AA failure in Sports Hub tab labels/scores~~ —
+resolved in a follow-up commit on this branch; see §3.
