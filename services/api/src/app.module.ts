@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { SentryModule } from '@sentry/nestjs/setup';
+import { HealthModule } from './health/health.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -7,7 +9,13 @@ import { ConfigModule } from '@nestjs/config';
 // MVP scope per Build Plan Section 2.2.
 @Module({
   imports: [
+    // Must be the first import per @sentry/nestjs setup docs. Safe to import
+    // even when SENTRY_DSN is unset — Sentry.init() was never called (see
+    // src/instrument.ts), so the interceptors this module wires up become
+    // no-ops rather than doing anything.
+    SentryModule.forRoot(),
     ConfigModule.forRoot({ isGlobal: true }),
+    HealthModule, // Sprint 0 infra — MVP Build Plan Section 5
     // AuthModule,          // Sprint 1
     // UsersModule,         // Sprint 1
     // FeedModule,          // Sprint 2
