@@ -2,8 +2,8 @@
 
 Read this before doing anything. It's the short version of two much longer documents that live in `docs/` — read those in full before making any decision this file doesn't cover.
 
-- `docs/Soccernity_Inventors_Log_Book_v2.7.docx` — the strategic and product record. Vision, market, full feature catalogue, competitive positioning, safeguarding principles, Figma design audit.
-- `docs/Soccernity_MVP_Build_Plan_v1.1.docx` — the tactical execution plan. MVP scope, data model, API contract, sprint backlog, infrastructure decisions, definition of done. **This is the one to work from day to day.**
+- `docs/Soccernity_Inventors_Log_Book_v2.10.docx` — the strategic and product record. Vision, market, full feature catalogue, competitive positioning, safeguarding principles, Figma design audit.
+- `docs/Soccernity_MVP_Build_Plan_v1.4.docx` — the tactical execution plan. MVP scope, data model, API contract, sprint backlog, infrastructure decisions, definition of done. **This is the one to work from day to day.**
 
 ## What Soccernity is
 

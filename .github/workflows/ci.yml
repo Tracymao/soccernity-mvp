@@ -13,6 +13,9 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://soccernity:soccernity@localhost:5432/soccernity_test
+      REDIS_URL: redis://localhost:6379
     services:
       postgres:
         image: postgres:16
@@ -51,9 +54,6 @@ jobs:
 
       - name: Test
         run: npm run test
-        env:
-          DATABASE_URL: postgresql://soccernity:soccernity@localhost:5432/soccernity_test
-          REDIS_URL: redis://localhost:6379
 
       - name: Build
         run: npm run build
