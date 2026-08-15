@@ -44,6 +44,12 @@ Full reasoning for every choice above: Build Plan Section 5.
 - **A fourth item, #9, blocks the deploy workflow specifically** — hosting platform is not yet chosen. `.github/workflows/deploy.yml` will fail on purpose until this is resolved and the workflow is updated to match. Don't fill in a provider by guessing.
 - Community, Sports Hub, and the Admin Console are the strongest-designed pillars in Figma (Log Book Section 23.1) — Discover and Careers have zero screens.
 
+## Figma notes
+
+- File: "Soccernity-MVP", key `weZWWqggy9j13eX8bhFgs6`. It has three pages: **"soccernity Cover page"** (`1860:2500`, cover only — logo and background, nothing else; originally named "soccernity"), **"Soccernity"** (`0:1`, this is where every real screen lives — Community, Sports Hub, Admin Console, Auth, Banter Rooms, ~263 nodes; originally named "Page 1"), and **"dump"** (`2155:1285`, unused scratch, ignore it). Page IDs are stable across the rename — if referencing a page, prefer the ID over the name where possible.
+- `get_metadata`'s default, un-scoped page listing is unreliable on this file — it only ever surfaces the cover page (`1860:2500`), not the real content page (`0:1`). Don't trust it to enumerate pages. Fetch page `0:1` directly instead, or use `use_figma` to run `figma.root.children` directly if you need to confirm what pages exist.
+- `use_figma` operates on whatever the Figma desktop app currently has open locally — a completely separate connection from key-based reads like `get_metadata`. If a read via file key returns real content but `use_figma` doesn't match, the desktop app almost certainly has the wrong file or page active, not a permissions or data problem. Confirm the correct file is open and frontmost before trusting any `use_figma` result.
+
 ## The eight agents, and the order they run in
 
 All eight live in `.claude/agents/`. Three are sequence-dependent — running them out of order produces work built on an unfinished system:
