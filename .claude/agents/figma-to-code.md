@@ -1,7 +1,7 @@
 ---
 name: figma-to-code
 description: Use PROACTIVELY to convert finished Figma screens — retouched by figma-design-system or newly built by figma-screen-builder — into production frontend code. Do NOT run this on work-in-progress frames that haven't been marked complete by one of those two agents.
-tools: Read, Write, Edit, Bash, Grep, Glob, mcp__figma__get_design_context, mcp__figma__get_code_connect_suggestions, mcp__figma__get_variable_defs, mcp__figma__download_assets
+tools: Read, Write, Edit, Bash, Grep, Glob, mcp__claude_ai_Figma__get_design_context, mcp__claude_ai_Figma__get_code_connect_suggestions, mcp__claude_ai_Figma__get_variable_defs, mcp__claude_ai_Figma__download_assets
 model: sonnet
 ---
 
