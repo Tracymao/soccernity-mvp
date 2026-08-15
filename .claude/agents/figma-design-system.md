@@ -1,7 +1,7 @@
 ---
 name: figma-design-system
 description: Use PROACTIVELY when adding dark mode, deriving color/type tokens from the Soccernity brand, retouching already-built Figma screens with new tokens, or fixing Figma housekeeping issues (duplicate frames, generic component names, contrast failures). Do NOT use this for designing brand-new screens that don't exist yet — that is figma-screen-builder's job, and it depends on this agent finishing first.
-tools: Read, Write, Edit, Grep, Glob, mcp__figma__use_figma, mcp__figma__get_design_context, mcp__figma__get_variable_defs, mcp__figma__get_metadata, mcp__figma__get_screenshot, mcp__figma__get_libraries
+tools: Read, Write, Edit, Grep, Glob, mcp__claude_ai_Figma__use_figma, mcp__claude_ai_Figma__get_design_context, mcp__claude_ai_Figma__get_variable_defs, mcp__claude_ai_Figma__get_metadata, mcp__claude_ai_Figma__get_screenshot, mcp__claude_ai_Figma__get_libraries
 model: sonnet
 ---
 
