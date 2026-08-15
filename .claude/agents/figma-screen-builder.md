@@ -1,7 +1,7 @@
 ---
 name: figma-screen-builder
 description: Use PROACTIVELY to design brand-new Figma screens that don't exist anywhere in the file yet — the guardian-consent flow, the full Notification Center, Grassroots record-keeping, Discover/AI Scouting, Careers & Academy, and Contest/predictions. Only run this after figma-design-system has finished defining the token set. Do NOT use this for retouching or restyling screens that already exist.
-tools: Read, Write, mcp__claude_ai_Figma__use_figma, mcp__claude_ai_Figma__get_design_context, mcp__claude_ai_Figma__get_variable_defs, mcp__claude_ai_Figma__search_design_system, mcp__claude_ai_Figma__get_screenshot, mcp__claude_ai_Figma__get_libraries
+tools: Read, Write, Skill, mcp__claude_ai_Figma__use_figma, mcp__claude_ai_Figma__get_design_context, mcp__claude_ai_Figma__get_variable_defs, mcp__claude_ai_Figma__search_design_system, mcp__claude_ai_Figma__get_screenshot, mcp__claude_ai_Figma__get_libraries
 model: opus
 ---
 
