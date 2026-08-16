@@ -118,14 +118,27 @@
 }
 
 .sn-auth-field__input[aria-invalid="true"] {
-  border-color: #c0392b;
+  /* No error/denial colour exists in the Soccernity Theme token set --
+   * the same gap figma-screen-builder flagged rather than filled for the
+   * age-gate rejection state (Sprint D Design Notes, item #6). Inventing
+   * one here would repeat exactly the off-brand-colour mistake this file
+   * already fixed for the button/link/input hexes above. Using brand navy
+   * at full weight (vs. its low-alpha use elsewhere) to differentiate the
+   * invalid state without a new hue; error text below carries the actual
+   * information rather than relying on colour alone (also the more
+   * accessible pattern per WCAG 1.4.1, independent of the brand-colour
+   * constraint). A real error/denial token is a figma-design-system
+   * decision, not one to make unilaterally in a screen PR. */
+  border-color: var(--sn-brand-navy);
+  border-width: 2px;
 }
 
 .sn-auth-field__error {
   margin: 0;
   font-family: "Inter", sans-serif;
+  font-weight: 600;
   font-size: 14px;
-  color: #c0392b;
+  color: var(--sn-brand-navy);
 }
 
 .sn-auth-button {
@@ -183,6 +196,11 @@
 }
 
 .sn-auth-status--error {
-  background-color: rgba(192, 57, 43, 0.1);
-  color: #c0392b;
+  /* Same no-invented-error-colour reasoning as .sn-auth-field__error above --
+   * navy at low alpha (matching .sn-auth-field__input's pattern), border
+   * added so it's still distinguishable from the neutral input background
+   * without depending on a new hue. */
+  background-color: rgba(40, 46, 101, 0.08);
+  border: 1px solid var(--sn-brand-navy);
+  color: var(--sn-brand-navy);
 }
