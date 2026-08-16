@@ -1,5 +1,5 @@
 // Soccernity — Prisma schema
-// Source of truth: docs/Soccernity_MVP_Build_Plan_v1.1.docx, Section 3 (Data Model)
+// Source of truth: docs/Soccernity_MVP_Build_Plan_v1.7.docx, Section 3 (Data Model)
 // Do not add Discover-pillar (Player Passport, Combine Score, Scout CRM) or
 // Careers-pillar (Job Listing, Certification) models — out of MVP scope per
 // Build Plan Section 2.2. Adding them here is a Decision Log matter (Section 9),
