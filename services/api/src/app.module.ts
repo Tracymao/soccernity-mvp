@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { join } from 'path';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { HealthModule } from './health/health.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -34,7 +35,7 @@ import { HealthModule } from './health/health.module';
       envFilePath: join(__dirname, '..', '..', '..', '.env'),
     }),
     HealthModule, // Sprint 0 infra — MVP Build Plan Section 5
-    // AuthModule,          // Sprint 1
+    AuthModule, // Sprint 1 / PR B3 — login, refresh, logout (Section 4.1 / 5.7)
     // UsersModule,         // Sprint 1
     // FeedModule,          // Sprint 2
     // ClubsModule,         // Sprint 2
