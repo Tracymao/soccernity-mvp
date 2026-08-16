@@ -71,10 +71,17 @@ Full reasoning for every choice above: Build Plan Section 5.
   real migration run and verified, Sentry wired (not live — needs a
   human-created Sentry project), a real `/health` check with confirmed
   graceful degradation (PRs #8, #9, #10).
-- **Sprint 1 is in progress.** DPIA first draft, the web app shell/
-  routing foundation, and the auth foundation (hashing/JWT/rate
-  limiting) are built — check PRs #11–#13 for current merge status
-  before assuming any of it is on `main` yet.
+- **Sprint 1 is in progress. S1, F1, and B1 are merged to `main`**
+  (PRs #11–#13): the DPIA first draft, the web app shell/routing
+  foundation, and the auth foundation (argon2id hashing, JWT
+  issuance/rotation, rate limiting — infra only, no `/auth/*`
+  endpoints yet). B1 and F1 being done unblocks the next wave:
+  B2/B3/B4/B6 (register, login, forgot/reset-password, profile
+  endpoints) and F2/F3/F4 (login, signup, forgot/reset-password
+  screens) can all now start in parallel. B5 (guardian-consent
+  endpoints) still needs B2 first; B7 (the sprint-done proof) needs
+  both B5 and B6. None of these later PRs are started yet — don't
+  assume otherwise without checking.
 - **Decision Log #1, #7, #8, and #10 are resolved** — Community Groups
   vs. Banter Rooms, custom JWT, and the UK/Nigeria minimum-age question
   (both markets already match what the guardian-consent flow does by
