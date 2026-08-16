@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { join } from 'path';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { HealthModule } from './health/health.module';
 
@@ -14,7 +15,24 @@ import { HealthModule } from './health/health.module';
     // src/instrument.ts), so the interceptors this module wires up become
     // no-ops rather than doing anything.
     SentryModule.forRoot(),
-    ConfigModule.forRoot({ isGlobal: true }),
+    // envFilePath is explicit and built from __dirname (this compiled
+    // file's real on-disk location — services/api/dist/ under both
+    // `nest start` and `nest build`, per nest-cli.json's default
+    // sourceRoot/outDir), not left to default. This is a confirmed bug
+    // fix, not a hypothetical one: the default envFilePath resolves
+    // relative to process.cwd(), and there is no services/api/.env —
+    // only the repo-root one, per CLAUDE.md's "one root .env for now"
+    // decision (see PR #8's flagged gap, and CLAUDE.md's Environment
+    // variables section). __dirname sidesteps process.cwd() entirely,
+    // so this resolves correctly no matter how the process is launched
+    // — via `npm run dev:api` from the repo root, directly from inside
+    // services/api, or a process manager invoking dist/main.js with an
+    // arbitrary cwd. Do not "simplify" this back to a bare
+    // envFilePath-less ConfigModule.forRoot({ isGlobal: true }) call.
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: join(__dirname, '..', '..', '..', '.env'),
+    }),
     HealthModule, // Sprint 0 infra — MVP Build Plan Section 5
     // AuthModule,          // Sprint 1
     // UsersModule,         // Sprint 1
