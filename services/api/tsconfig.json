@@ -9,5 +9,12 @@
     "emitDecoratorMetadata": true,
     "strict": true,
     "skipLibCheck": true
-  }
+  },
+  // Sprint 1 / PR B1 is this project's first PR to add *.spec.ts files.
+  // Without this, `nest build` (plain tsc under the hood) compiles test
+  // files straight into the production dist/ output alongside real
+  // source. jest.config.js points ts-jest at this same tsconfig for
+  // *running* tests, so ts-jest still transforms *.spec.ts on its own
+  // in-memory — only the production build output is affected.
+  "exclude": ["node_modules", "dist", "**/*.spec.ts"]
 }
