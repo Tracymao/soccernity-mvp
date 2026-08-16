@@ -63,10 +63,33 @@ Full reasoning for every choice above: Build Plan Section 5.
 
 ## Where things stand right now
 
-- **Sprint D and Sprint 0 have not started.** Dark mode doesn't exist in Figma yet. No screens exist yet for the guardian-consent flow, the full Notification Center, or Grassroots record-keeping.
-- **Three Decision Log items block Sprint 1 and Sprint 4** — auth provider choice, regional minimum age for the age-gate, and sports-data vendor selection (Build Plan Section 9, items #6–#8). Check these are resolved before starting that work; don't guess and move on.
-- **A fourth item, #9, blocks the deploy workflow specifically** — hosting platform is not yet chosen. `.github/workflows/deploy.yml` will fail on purpose until this is resolved and the workflow is updated to match. Don't fill in a provider by guessing.
-- Community, Sports Hub, and the Admin Console are the strongest-designed pillars in Figma (Log Book Section 23.1) — Discover and Careers have zero screens.
+- **Sprint D is complete.** Light/dark tokens derived from the two brand
+  colours (no new palette), applied across Community/Sports Hub/Admin
+  Console, all six guardian-consent screens designed and refined
+  (PRs #4, #5, #6, #7).
+- **Sprint 0 is complete.** Local Postgres/Redis via docker-compose, a
+  real migration run and verified, Sentry wired (not live — needs a
+  human-created Sentry project), a real `/health` check with confirmed
+  graceful degradation (PRs #8, #9, #10).
+- **Sprint 1 is in progress.** DPIA first draft, the web app shell/
+  routing foundation, and the auth foundation (hashing/JWT/rate
+  limiting) are built — check PRs #11–#13 for current merge status
+  before assuming any of it is on `main` yet.
+- **Decision Log #1, #7, #8, and #10 are resolved** — Community Groups
+  vs. Banter Rooms, custom JWT, and the UK/Nigeria minimum-age question
+  (both markets already match what the guardian-consent flow does by
+  default). None of these block Sprint 1.
+- **Decision Log #6 (sports-data vendor) blocks Sprint 4 only** — not
+  Sprint 1. Don't hold up auth/consent work on it.
+- **Decision Log #9 (hosting platform) blocks `deploy.yml` specifically**
+  — it fails on purpose until this is resolved. Don't fill in a
+  provider by guessing.
+- **Community, Sports Hub, and Admin Console remain the
+  strongest-designed pillars** (Log Book Section 23.1). Discover and
+  Careers still have zero screens — unchanged, still Phase 2.
+- Before trusting any of the above, check Build Plan Section 9 (Decision
+  Log) directly rather than this summary if something looks off — this
+  section has gone stale before.
 
 ## Figma notes
 
