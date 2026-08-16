@@ -2,8 +2,8 @@
 
 Read this before doing anything. It's the short version of two much longer documents that live in `docs/` — read those in full before making any decision this file doesn't cover.
 
-- `docs/Soccernity_Inventors_Log_Book_v2.12.docx` — the strategic and product record. Vision, market, full feature catalogue, competitive positioning, safeguarding principles, Figma design audit.
-- `docs/Soccernity_MVP_Build_Plan_v1.6.docx` — the tactical execution plan. MVP scope, data model, API contract, sprint backlog, infrastructure decisions, definition of done. **This is the one to work from day to day.**
+- `docs/Soccernity_Inventors_Log_Book_v2.13.docx` — the strategic and product record. Vision, market, full feature catalogue, competitive positioning, safeguarding principles, Figma design audit.
+- `docs/Soccernity_MVP_Build_Plan_v1.7.docx` — the tactical execution plan. MVP scope, data model, API contract, sprint backlog, infrastructure decisions, definition of done. **This is the one to work from day to day.**
 
 ## What Soccernity is
 
@@ -32,6 +32,30 @@ A platform giving unaffiliated grassroots football players — and the fans, coa
 - Start as a modular monolith inside `services/api`. Don't split into separate services until load actually demands it.
 
 Full reasoning for every choice above: Build Plan Section 5.
+
+## Environment variables
+
+- One root `.env` for now, not one per workspace. Every variable currently
+  in use (`DATABASE_URL`, `JWT_SECRET`, `SENTRY_DSN`, etc.) is a
+  backend-only concern, consumed only by `services/api` — splitting
+  config across multiple `.env` files today would just create copies to
+  keep in sync for no real benefit.
+- `services/api` loads the root `.env` via an explicit path built from
+  `__dirname`, not by relying on `process.cwd()`. Do not "simplify" this
+  back to `ConfigModule.forRoot({ isGlobal: true })` with no
+  `envFilePath` — that resolves relative to the working directory at
+  process start, which changes depending on *how* the process is
+  launched (`npm run dev:api` from the repo root actually runs with
+  `cwd` set to `services/api/`, not root, because of how npm workspaces
+  scripts work). This was a real, confirmed bug, not a hypothetical one
+  — see PR #8's flagged gap and its fix.
+- This pattern is deliberately backend-only for now, not a rule to
+  extend by default. The first time `apps/web`, `apps/mobile`, or
+  `apps/admin` needs its own environment variable (a public API base
+  URL, for instance), *that* app gets its own workspace-local `.env` at
+  that point — don't add one preemptively.
+- Never commit `.env`. `.gitignore` already excludes it — confirmed via
+  `git check-ignore -v .env` during PR #8's verification.
 
 ## The data model and API contract are fixed specs, not suggestions
 
