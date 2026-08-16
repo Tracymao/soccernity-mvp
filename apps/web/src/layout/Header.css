@@ -1,0 +1,118 @@
+/* Colour values reference CSS custom properties from src/theme/applyTheme.ts
+ * (mirroring packages/shared/src/tokens) -- do not hardcode hex here. */
+
+.sn-header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 84px;
+  padding: 0 32px;
+  background-color: var(--sn-background-surface);
+  box-shadow: 0px 12px 58px 0px rgba(101, 101, 101, 0.06);
+}
+
+.sn-header__brand {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.sn-header__logo-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.sn-header__logo-mark {
+  display: block;
+}
+
+.sn-header__wordmark {
+  font-family: "Inter", sans-serif;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--sn-text-primary);
+}
+
+.sn-header__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  width: 240px;
+  height: 31px;
+  padding: 0 12px;
+  border-radius: 6px;
+  background-color: var(--sn-green-tint-12);
+}
+
+.sn-header__search-icon {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.sn-header__search-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  width: 100%;
+  font-family: "Montserrat", sans-serif;
+  font-size: 14px;
+  color: var(--sn-text-primary);
+}
+
+.sn-header__search-input::placeholder {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+.sn-header__nav {
+  flex: 1;
+  min-width: 0;
+}
+
+.sn-header__nav-list {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.sn-header__nav-link {
+  display: block;
+  white-space: nowrap;
+  text-decoration: none;
+  font-family: "Inter", sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: var(--sn-text-primary);
+  opacity: 0.7;
+}
+
+.sn-header__nav-link--active {
+  opacity: 1;
+  color: var(--sn-brand-green);
+}
+
+.sn-header__auth {
+  flex-shrink: 0;
+}
+
+.sn-header__login-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 41px;
+  padding: 0 24px;
+  border-radius: 6px;
+  background-color: var(--sn-brand-navy);
+  color: white;
+  font-family: "Montserrat", sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  text-decoration: none;
+}
