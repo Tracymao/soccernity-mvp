@@ -28,12 +28,22 @@ docs/        the two source documents above
 ```bash
 npm install
 cp .env.example .env   # then fill in the real values
+docker compose up -d   # local Postgres + Redis — see docker-compose.yml
 npm run prisma:generate
 npm run prisma:migrate
 npm run dev:api
 ```
 
-Three items in `.env.example` are marked as open Decision Log items (Build Plan Section 9) — resolve those before Sprint 1 (auth, minimum age) or Sprint 4 (sports data vendor).
+Confirm it's actually working, not just that commands didn't error:
+
+```bash
+curl http://localhost:<port>/health
+# expect {"status":"ok","database":"connected"}
+```
+
+Run the test suite too: `npm test` in `services/api` (25/25 passing as of Sprint 1's auth foundation).
+
+Two items in `.env.example` are still open Decision Log items and need a real value before deployment — `SPORTS_DATA_API_KEY` (#6) and hosting-platform secrets (#9). `JWT_SECRET` needs a real generated value (`openssl rand -base64 32`) even for local dev — never the placeholder.
 
 ## Branches
 
