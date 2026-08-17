@@ -1,0 +1,206 @@
+/* Shared styles for the auth flow (AuthLayout, AuthField, AuthButton).
+ *
+ * Colour conflict note (flagged for a human, see PR report): the Figma
+ * frames for Forgot Password (409:1264) and Reset Password (409:1463) use
+ * raw hex values that were never bound to the "Soccernity Theme" Figma
+ * Variable collection (get_variable_defs on both frames returns nothing
+ * usable) and don't match the two-brand-colour system in CLAUDE.md
+ * non-negotiable #3 (green #7BB929 / navy #282E65 only, everything else
+ * derived):
+ *   - CTA button fill:      #312f80 / #323080  (off-brand indigo, close to
+ *                            but not equal to brand navy #282E65)
+ *   - "Login!" link colour: #4f46e5             (off-brand indigo, not a
+ *                            derivation of either brand colour at all)
+ *   - body copy:             #4b5563             (a generic slate gray, not
+ *                            derived from brand navy)
+ *   - input fill:            #f3f4f6             (a generic cool gray, not
+ *                            derived from brand navy)
+ * This looks like leftover styling from a generic template rather than a
+ * deliberate design decision, so this file substitutes the closest
+ * on-brand token/derivation for each instead of hardcoding the Figma hex
+ * values. Ideal fix is for figma-design-system to retouch these two frames
+ * to bind proper Variables; until then, do not copy the raw hex above into
+ * new code.
+ */
+
+.sn-auth {
+  display: flex;
+  align-items: stretch;
+  min-height: 640px;
+  background-color: var(--sn-background-surface);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0px 12px 58px 0px rgba(101, 101, 101, 0.06);
+}
+
+.sn-auth__panel {
+  flex: 1 1 480px;
+  display: flex;
+  align-items: center;
+  padding: 48px;
+}
+
+.sn-auth__panel-inner {
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+.sn-auth__illustration {
+  flex: 1 1 480px;
+  display: none;
+}
+
+.sn-auth__illustration img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (min-width: 860px) {
+  .sn-auth__illustration {
+    display: block;
+  }
+}
+
+.sn-auth__title {
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 32px;
+  color: var(--sn-text-primary);
+  margin: 0 0 16px;
+}
+
+.sn-auth__subtitle {
+  font-family: "Inter", sans-serif;
+  font-size: 16px;
+  line-height: 28px;
+  color: var(--sn-text-secondary);
+  margin: 0 0 32px;
+}
+
+.sn-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.sn-auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sn-auth-field__label {
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--sn-text-primary);
+}
+
+.sn-auth-field__input {
+  /* Derived from brand navy at low alpha -- see file header note; the
+   * Figma frame's literal #f3f4f6 is not on-brand. */
+  background-color: rgba(40, 46, 101, 0.05);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 20px;
+  font-family: "Inter", sans-serif;
+  font-size: 16px;
+  color: var(--sn-text-primary);
+  width: 100%;
+}
+
+.sn-auth-field__input:focus {
+  outline: none;
+  border-color: var(--sn-brand-green);
+}
+
+.sn-auth-field__input[aria-invalid="true"] {
+  /* No error/denial colour exists in the Soccernity Theme token set --
+   * the same gap figma-screen-builder flagged rather than filled for the
+   * age-gate rejection state (Sprint D Design Notes, item #6). Inventing
+   * one here would repeat exactly the off-brand-colour mistake this file
+   * already fixed for the button/link/input hexes above. Using brand navy
+   * at full weight (vs. its low-alpha use elsewhere) to differentiate the
+   * invalid state without a new hue; error text below carries the actual
+   * information rather than relying on colour alone (also the more
+   * accessible pattern per WCAG 1.4.1, independent of the brand-colour
+   * constraint). A real error/denial token is a figma-design-system
+   * decision, not one to make unilaterally in a screen PR. */
+  border-color: var(--sn-brand-navy);
+  border-width: 2px;
+}
+
+.sn-auth-field__error {
+  margin: 0;
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--sn-brand-navy);
+}
+
+.sn-auth-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 25px;
+  border: none;
+  border-radius: 6px;
+  background-color: var(--sn-brand-navy);
+  color: white;
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: 0px 30px 30px 0px rgba(40, 46, 101, 0.15);
+}
+
+.sn-auth-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sn-auth-footer {
+  margin-top: 32px;
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--sn-text-secondary);
+  text-align: center;
+}
+
+.sn-auth-footer a {
+  color: var(--sn-brand-green);
+  text-decoration: none;
+}
+
+.sn-auth-footer a:hover {
+  text-decoration: underline;
+}
+
+.sn-auth-status {
+  font-family: "Inter", sans-serif;
+  font-size: 15px;
+  line-height: 22px;
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 0 0 24px;
+}
+
+.sn-auth-status--success {
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+}
+
+.sn-auth-status--error {
+  /* Same no-invented-error-colour reasoning as .sn-auth-field__error above --
+   * navy at low alpha (matching .sn-auth-field__input's pattern), border
+   * added so it's still distinguishable from the neutral input background
+   * without depending on a new hue. */
+  background-color: rgba(40, 46, 101, 0.08);
+  border: 1px solid var(--sn-brand-navy);
+  color: var(--sn-brand-navy);
+}

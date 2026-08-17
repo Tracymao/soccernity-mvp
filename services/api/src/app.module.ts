@@ -4,6 +4,7 @@ import { join } from 'path';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { HealthModule } from './health/health.module';
 import { AuthRegistrationModule } from './modules/auth/registration/registration.module';
+import { UsersModule } from './modules/users/users.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -42,7 +43,7 @@ import { AuthRegistrationModule } from './modules/auth/registration/registration
     // small merge-order conflict on the lines around this import is
     // expected when those land, not something to avoid architecturally.
     AuthRegistrationModule,
-    // UsersModule,         // Sprint 1
+    UsersModule, // Sprint 1 — B6 (profile endpoints, Section 4.2, self-scope only for now)
     // FeedModule,          // Sprint 2
     // ClubsModule,         // Sprint 2
     // BanterModule,        // Sprint 3
