@@ -11,7 +11,7 @@ import { Link } from "react-router-dom";
 import SignupSplitScreen from "./SignupSplitScreen";
 import { lightAuthThemeVars } from "./authThemeVars";
 import { toIsoDate } from "./age";
-import { registerUser, RegisterError } from "../../api/auth";
+import { registerUser, AuthApiError } from "../../api/auth";
 import type { RegisterRequest } from "../../api/auth";
 import illustration from "../../assets/signup/register-illustration.svg";
 import type { AgeGateValues, GuardianDetailsValues } from "./types";
@@ -79,7 +79,7 @@ export default function RegisterStep({ dob, isMinor, guardianDetails }: Register
       await registerUser(payload);
       setSuccess({ isMinor, guardianEmail: guardianDetails?.email });
     } catch (err) {
-      setError(err instanceof RegisterError ? err.message : "Something went wrong. Try again.");
+      setError(err instanceof AuthApiError ? err.message : "Something went wrong. Try again.");
     } finally {
       setSubmitting(false);
     }
