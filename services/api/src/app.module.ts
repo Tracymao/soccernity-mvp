@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { join } from 'path';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { HealthModule } from './health/health.module';
+import { AuthRegistrationModule } from './modules/auth/registration/registration.module';
 import { UsersModule } from './modules/users/users.module';
 
 // Feature modules land in src/modules/* as each is built — see the
@@ -35,7 +36,13 @@ import { UsersModule } from './modules/users/users.module';
       envFilePath: join(__dirname, '..', '..', '..', '.env'),
     }),
     HealthModule, // Sprint 0 infra — MVP Build Plan Section 5
-    // AuthModule,          // Sprint 1 — B2-B4 (register/login/forgot/reset), not yet wired
+    // Sprint 1 / PR B2 — POST /auth/register, POST /auth/verify-email
+    // only (Build Plan Section 4.1). Deliberately its own module, not a
+    // shared "AuthModule" — see registration.module.ts. B3/B4/B6 add the
+    // rest of the Auth/User endpoints in their own parallel modules; a
+    // small merge-order conflict on the lines around this import is
+    // expected when those land, not something to avoid architecturally.
+    AuthRegistrationModule,
     UsersModule, // Sprint 1 — B6 (profile endpoints, Section 4.2, self-scope only for now)
     // FeedModule,          // Sprint 2
     // ClubsModule,         // Sprint 2
