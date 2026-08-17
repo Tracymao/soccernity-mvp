@@ -38,3 +38,21 @@ endpoints will consume, per Section 5.7's concrete auth spec:
 
 No controllers, no DTOs, no wiring into `app.module.ts` yet — that's what
 makes this infra-only.
+
+## Update — Sprint 1 / PR B6 (users/profile) added the shared route guard
+
+`guards/jwt-auth.guard.ts` — `JwtAuthGuard`, the reusable "must have a
+valid access token" guard for every protected route in the app. Built in
+B6 because that's the first PR needing to protect a route (B2-B4 are all
+public/unauthenticated: register, login, forgot/reset-password). Later
+PRs (B5's guardian-consent endpoints, B7's enforcement pass, and every
+Sprint 2+ endpoint) should reuse this rather than re-implementing
+bearer-token parsing — see `guards/jwt-auth.guard.ts`'s doc comment and
+`services/api/src/modules/users/README.md` for the exact usage pattern.
+
+Registered as a provider + export on `AuthFoundationModule` alongside
+`PasswordService`/`TokenService`/`RefreshTokenStore` — any module that
+needs it imports `AuthFoundationModule`, the same way `UsersModule` does.
+Also added: `guards/current-user.decorator.ts` (`@CurrentUser()`, pulls
+the guard-verified `{ sub, role }` off the request) and
+`guards/authenticated-request.ts` (the `Request & { user: ... }` type).
