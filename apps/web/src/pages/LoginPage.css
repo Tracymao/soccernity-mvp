@@ -1,0 +1,194 @@
+/* Colour values reference CSS custom properties from src/theme/applyTheme.ts
+ * (mirroring packages/shared/src/tokens) -- do not hardcode hex here.
+ *
+ * See the comment block at the top of LoginPage.tsx: the Figma frame
+ * (407:844) uses raw indigo (#4F46E5) for its primary button/links rather
+ * than a Soccernity Theme token. Indigo is mapped to --sn-brand-navy
+ * (buttons) and --sn-brand-green (links) below instead of being carried
+ * over -- flagged there for human confirmation. */
+
+.sn-login {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 48px;
+  align-items: stretch;
+  min-height: calc(100vh - 84px - 64px); /* header height + AppShell's 32px*2 padding */
+  margin: -32px; /* offset AppShell.css's .sn-app-shell__content padding for a full-bleed panel */
+  background-color: var(--sn-background-surface);
+}
+
+.sn-login__panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  max-width: 440px;
+  width: 100%;
+  padding: 48px clamp(24px, 6vw, 96px);
+  margin: 0 auto;
+}
+
+.sn-login__title {
+  margin: 0 0 12px;
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 32px;
+  color: var(--sn-text-primary);
+}
+
+.sn-login__subtitle {
+  margin: 0 0 32px;
+  font-family: "Inter", sans-serif;
+  font-size: 16px;
+  line-height: 28px;
+  color: var(--sn-text-secondary);
+}
+
+.sn-login__form {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.sn-login__group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sn-login__label {
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--sn-text-primary);
+}
+
+.sn-login__label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sn-login__link {
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--sn-brand-green);
+  text-decoration: none;
+}
+
+.sn-login__link:hover {
+  text-decoration: underline;
+}
+
+.sn-login__input {
+  height: 65px;
+  padding: 0 40px;
+  border: none;
+  border-radius: 8px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-family: "Inter", sans-serif;
+  font-size: 16px;
+  outline-offset: 2px;
+}
+
+.sn-login__input::placeholder {
+  color: var(--sn-text-secondary);
+}
+
+.sn-login__input:focus-visible {
+  outline: 2px solid var(--sn-brand-green);
+}
+
+.sn-login__input:disabled {
+  opacity: 0.6;
+}
+
+.sn-login__remember {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--sn-text-primary);
+}
+
+.sn-login__remember input {
+  width: 25px;
+  height: 25px;
+  accent-color: var(--sn-brand-green);
+}
+
+.sn-login__error {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 6px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-family: "Inter", sans-serif;
+  font-size: 14px;
+}
+
+.sn-login__submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 25px;
+  border: none;
+  border-radius: 6px;
+  background-color: var(--sn-brand-navy);
+  color: white;
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: 0px 30px 30px rgba(40, 46, 101, 0.15);
+}
+
+.sn-login__submit:hover:not(:disabled) {
+  background-color: var(--sn-brand-green);
+  color: var(--sn-text-on-green);
+}
+
+.sn-login__submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sn-login__footer {
+  margin: 35px 0 0;
+  text-align: center;
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--sn-text-secondary);
+}
+
+.sn-login__footer a {
+  color: var(--sn-brand-green);
+  text-decoration: none;
+}
+
+.sn-login__footer a:hover {
+  text-decoration: underline;
+}
+
+.sn-login__hero {
+  display: none;
+  border-radius: 0 0 0 24px;
+  overflow: hidden;
+}
+
+.sn-login__hero-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (min-width: 900px) {
+  .sn-login__hero {
+    display: block;
+  }
+}
