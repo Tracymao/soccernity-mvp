@@ -277,3 +277,32 @@ itself is fully built and tested in isolation
 moment any of these routes exist; whoever builds them should import
 `AuthFoundationModule` and add `@UseGuards(JwtAuthGuard,
 GuardianConsentGuard)`.
+
+## Status update — Decision Log #16 (email case normalization)
+
+`registration.service.ts`'s `register()` and `auth.service.ts`'s
+`login()` both now normalize email to lowercase before touching
+Postgres — `register()` once, at the top (`const email =
+dto.email.toLowerCase()`), reused for both the duplicate-email check
+and the `User` row it creates; `login()` lowercases its `email`
+parameter before the `findUnique` call. Deliberately done at the
+service layer, not the DTO layer — `LoginDto`/`RegisterDto` stay plain
+`@IsEmail()` classes, so normalization applies the same way regardless
+of which controller path builds the DTO, rather than being tied to one
+call site's validation step. `Guardian.email` (the guardian's own
+address, a separate entity/field) is untouched — this decision item is
+about `User.email` matching, not guardian contact details.
+
+**Pre-existing rows caveat, not silently assumed away**: this is a
+write-time normalization, not a migration. Any `User` row created
+*before* this change that has a mixed-case email stays exactly as
+stored — Postgres's default `citext`-less text comparison is
+case-sensitive, so a pre-existing `"Temi@x.com"` row will not match a
+post-fix, lowercased `login()` lookup for `"temi@x.com"` unless that
+row is separately backfilled. This only matters if such rows actually
+exist in a real database; nothing in this codebase confirms or rules
+that out one way or the other. **Whether a backfill migration
+(`UPDATE "User" SET email = LOWER(email)`, plus checking for
+resulting duplicate-key collisions first) is worth a follow-up is
+flagged here, not built** — out of scope for this ticket per its own
+brief.
