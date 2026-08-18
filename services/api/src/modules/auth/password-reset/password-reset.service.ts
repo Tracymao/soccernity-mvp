@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PasswordService } from '../password/password.service';
@@ -14,14 +14,6 @@ import { ConsumedResetToken, ResetTokenStore } from './reset-token.store';
 // for how the two branches are kept response-identical.
 export const FORGOT_PASSWORD_GENERIC_MESSAGE =
   'If an account exists for that email address, a password reset link has been sent to it.';
-
-// Section 5.7 doesn't set a password policy for reset (or register); this
-// is a conservative, standard-practice minimum, applied here so
-// /auth/reset-password can't be used to set a trivially weak password.
-// If B2's /auth/register lands with a different minimum, that mismatch is
-// a merge-time reconciliation item, not something this PR can pre-empt
-// without seeing B2's code.
-const MIN_PASSWORD_LENGTH = 8;
 
 @Injectable()
 export class PasswordResetService {
@@ -71,10 +63,6 @@ export class PasswordResetService {
   }
 
   async resetPassword(rawToken: string, newPassword: string): Promise<void> {
-    if (typeof newPassword !== 'string' || newPassword.length < MIN_PASSWORD_LENGTH) {
-      throw new BadRequestException(`newPassword must be at least ${MIN_PASSWORD_LENGTH} characters`);
-    }
-
     let consumed: ConsumedResetToken;
     try {
       consumed = await this.resetTokenStore.verifyAndConsume(rawToken);
