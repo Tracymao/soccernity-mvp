@@ -94,6 +94,22 @@ describe('AuthService', () => {
         'Invalid credentials',
       );
     });
+
+    // Decision Log #16 (Build Plan Section 9): email is stored lowercase
+    // on write, so login must normalize the same way for matching to be
+    // case-insensitive.
+    it.each(['Player@Example.com', 'PLAYER@EXAMPLE.COM', 'player@EXAMPLE.com'])(
+      'logs in a user stored as "player@example.com" when the email is typed as %s',
+      async (typedEmail) => {
+        const { authService, prisma, passwordService } = await buildHarness();
+        const passwordHash = await passwordService.hash('correct-horse-battery-staple');
+        prisma.seed('player@example.com', { id: 'user-1', role: 'fan', passwordHash });
+
+        const result = await authService.login(typedEmail, 'correct-horse-battery-staple');
+
+        expect(result.accessToken).toEqual(expect.any(String));
+      },
+    );
   });
 
   describe('refresh', () => {

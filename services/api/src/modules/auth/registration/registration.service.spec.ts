@@ -138,6 +138,46 @@ describe('RegistrationService', () => {
       ).rejects.toBeInstanceOf(ConflictException);
     });
 
+    // Decision Log #16 (Build Plan Section 9): email normalized to
+    // lowercase on write.
+    it('normalizes email to lowercase on write', async () => {
+      const { service, prisma } = buildService();
+
+      const result = await service.register({
+        email: 'Test@Example.com',
+        password: 'password123',
+        displayName: 'Someone',
+        ...asOfAdult,
+      } as any);
+
+      expect(result.user.email).toBe('test@example.com');
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { email: 'test@example.com' } });
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ email: 'test@example.com' }) }),
+      );
+    });
+
+    it('rejects a case-insensitive duplicate email, not just an exact-match collision', async () => {
+      const { service, prisma } = buildService();
+      // Simulates "Test@Example.com" already registered (and, per this
+      // fix, stored lowercase as "test@example.com"). A second attempt
+      // with yet another casing must still collide with it.
+      prisma.user.findUnique.mockResolvedValueOnce({ id: 'existing-user', email: 'test@example.com' });
+
+      await expect(
+        service.register({
+          email: 'TEST@EXAMPLE.COM',
+          password: 'password123',
+          displayName: 'Someone',
+          ...asOfAdult,
+        } as any),
+      ).rejects.toBeInstanceOf(ConflictException);
+      // The lookup itself was normalized, not just the eventual write —
+      // this is what makes the collision case-insensitive rather than a
+      // lucky exact-string match.
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { email: 'test@example.com' } });
+    });
+
     it('rejects an implausible date of birth', async () => {
       const { service } = buildService();
 

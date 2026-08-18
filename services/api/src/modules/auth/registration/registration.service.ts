@@ -36,7 +36,16 @@ export class RegistrationService {
   ) {}
 
   async register(dto: RegisterDto): Promise<RegisterResult> {
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    // Decision Log #16 (Build Plan Section 9): normalize email to
+    // lowercase on write so matching is case-insensitive — a guardian or
+    // player who registered with mixed-case casing shouldn't be unable
+    // to log in (or get a false "not a duplicate" on re-registering)
+    // with the same address typed differently. Normalized once here and
+    // reused below rather than at the DTO layer, so it applies
+    // consistently regardless of which controller path builds the DTO.
+    const email = dto.email.toLowerCase();
+
+    const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
       // Deliberately generic — do not reveal whether the email exists via
       // timing or message differences beyond this standard 409; that's as
@@ -65,7 +74,7 @@ export class RegistrationService {
 
     const user = await this.prisma.user.create({
       data: {
-        email: dto.email,
+        email,
         phone: dto.phone,
         passwordHash,
         displayName: dto.displayName,

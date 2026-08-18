@@ -32,7 +32,12 @@ export class AuthService implements OnModuleInit {
   }
 
   async login(email: string, password: string): Promise<TokenPairResponse> {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    // Decision Log #16 (Build Plan Section 9): email is stored lowercase
+    // on write (registration.service.ts's register()) so matching here
+    // must normalize the same way, or a user who registered as
+    // "Temi@x.com" (now stored as "temi@x.com") couldn't log back in
+    // with the casing they originally typed.
+    const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
 
     // Verify against a real hash when the user exists, and against the
     // fixed dummy hash otherwise — never skip the argon2 call, and never
