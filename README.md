@@ -41,7 +41,7 @@ curl http://localhost:<port>/health
 # expect {"status":"ok","database":"connected"}
 ```
 
-Run the test suite too: `npm test` in `services/api` (25/25 passing as of Sprint 1's auth foundation).
+Run the test suite too: `npm test` in `services/api` (20 suites / 129 tests passing as of PR #25, the auth DTO validation follow-up).
 
 Two items in `.env.example` are still open Decision Log items and need a real value before deployment — `SPORTS_DATA_API_KEY` (#6) and hosting-platform secrets (#9). `JWT_SECRET` needs a real generated value (`openssl rand -base64 32`) even for local dev — never the placeholder.
 

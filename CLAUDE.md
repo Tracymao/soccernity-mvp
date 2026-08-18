@@ -71,21 +71,32 @@ Full reasoning for every choice above: Build Plan Section 5.
   real migration run and verified, Sentry wired (not live — needs a
   human-created Sentry project), a real `/health` check with confirmed
   graceful degradation (PRs #8, #9, #10).
-- **Sprint 1 is in progress. S1, F1, and B1 are merged to `main`**
-  (PRs #11–#13): the DPIA first draft, the web app shell/routing
-  foundation, and the auth foundation (argon2id hashing, JWT
-  issuance/rotation, rate limiting — infra only, no `/auth/*`
-  endpoints yet). B1 and F1 being done unblocks the next wave:
-  B2/B3/B4/B6 (register, login, forgot/reset-password, profile
-  endpoints) and F2/F3/F4 (login, signup, forgot/reset-password
-  screens) can all now start in parallel. B5 (guardian-consent
-  endpoints) still needs B2 first; B7 (the sprint-done proof) needs
-  both B5 and B6. None of these later PRs are started yet — don't
-  assume otherwise without checking.
-- **Decision Log #1, #7, #8, and #10 are resolved** — Community Groups
-  vs. Banter Rooms, custom JWT, and the UK/Nigeria minimum-age question
-  (both markets already match what the guardian-consent flow does by
-  default). None of these block Sprint 1.
+- **Sprint 1 wave 2 is merged to `main`.** S1, F1, B1 (PRs #11–#13,
+  the DPIA first draft, web app shell, and auth foundation) were the
+  first wave. B2/B3/B4/B6 (register/verify-email, login/refresh/logout,
+  forgot/reset-password, profile view-edit) and F2/F3/F4 (login,
+  signup entry — Age Gate/Guardian Details/Register, forgot/reset
+  screens) are all merged (PRs #17–#22, #24). A follow-up PR (#25)
+  converted the five auth DTOs that predated `main.ts`'s global
+  `ValidationPipe` (login/logout/refresh/forgot-password/reset-password)
+  from plain interfaces to `class-validator` classes, closing a gap
+  where the pipe was silently skipping them — see Decision Log #11.
+  Current test baseline: **20 suites / 129 tests, 0 failures** in
+  `services/api`.
+- **B5 (guardian-consent confirmation endpoint) and B7 (restricted-
+  pending enforcement) are next, not yet started.** B5 was blocked on
+  B2, which is now merged, so B5 is unblocked. B7 needs B5 merged
+  first — don't start it in parallel. `RegistrationService` already
+  creates the `Guardian` row and queues the consent email (logged, not
+  delivered — no email provider is configured); `JwtAuthGuard`'s own
+  header comment and `registration.controller.ts`'s comment both
+  already anticipate this work and name it B5/B7 — read those before
+  starting.
+- **Decision Log #1, #7, #8, #10, and #11 are resolved** — Community
+  Groups vs. Banter Rooms, custom JWT, the UK/Nigeria minimum-age
+  question (both markets already match what the guardian-consent flow
+  does by default), and the login/register email-normalization
+  mismatch closed by PR #25. None of these block Sprint 1.
 - **Decision Log #6 (sports-data vendor) blocks Sprint 4 only** — not
   Sprint 1. Don't hold up auth/consent work on it.
 - **Decision Log #9 (hosting platform) blocks `deploy.yml` specifically**
