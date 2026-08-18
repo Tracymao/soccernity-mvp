@@ -160,3 +160,43 @@ normalized email case either (`RegistrationService.register` stores
 case-sensitivity mismatch rather than introducing a new one, but it's
 worth knowing about if a case-insensitive-email decision is made later
 (Decision Log candidate).
+
+## Status update — PR B5 (`guardian-consent/`)
+
+Implements `POST /auth/guardian-consent` (Section 4.1), the guardian-
+facing confirmation step B2's `RegistrationService.register()` and
+`registration/registration.controller.ts` both flagged as out of their
+own scope. Self-contained module (`guardian-consent/`, exported as
+`GuardianConsentModule`), following the same per-PR module boundary
+B2/B3/B4 established — no `AuthFoundationModule` import needed since
+this endpoint issues no tokens, just updates the `Guardian` row.
+
+- No `JwtAuthGuard` on this route — the guardian confirming consent is
+  not a Soccernity account holder; `Guardian.consentToken` (a
+  server-issued, unguessable UUID, created by `RegistrationService`) is
+  itself the credential, same trust model as `/auth/reset-password`'s
+  token.
+- Unlike `email-verification-token.store.ts`'s Redis-backed,
+  delete-on-consume token, `Guardian.consentToken` is a persistent
+  Prisma column (Section 3) — a guardian may legitimately click the
+  same email link twice. `GuardianConsentService.confirmConsent()`
+  mirrors the *single-use state transition* (pending → confirmed) but
+  not the delete-the-token part: an already-confirmed token still
+  resolves and returns 200 idempotently, without re-setting
+  `consentTimestamp` or erroring.
+- Invalid/unknown token → generic 400, matching
+  `RegistrationService`'s own non-enumeration posture (doesn't
+  distinguish "never existed" from "already used and since rotated").
+- The confirm write uses `prisma.guardian.updateMany()` with a
+  `consentStatus: { not: 'confirmed' }` guard in the `where` clause,
+  not a plain `update()` — closes the read-then-write race between the
+  existence check and the write, so two concurrent submissions of the
+  same token can't both flip `consentTimestamp`.
+- **Out of scope, same as B2 flagged this endpoint**: the guardian-
+  facing web page (Section 8.3 step 4's plain-language explanation +
+  "I consent" action) that would call this endpoint. That's a frontend
+  concern for a separate PR — this is only the API contract it calls.
+- Section 8.3 steps 5-6 (restricted-pending enforcement on other
+  endpoints while consent is outstanding, and account activation) are
+  B7, not this PR — `confirmConsent()` only flips `Guardian.consentStatus`;
+  it doesn't touch the minor `User` row at all.

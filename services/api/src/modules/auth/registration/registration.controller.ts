@@ -16,7 +16,8 @@ import { RegisterResult, RegistrationService } from './registration.service';
 // POST /auth/verify-email. POST /auth/guardian-consent (also listed in
 // Section 4.1) is a distinct, guardian-facing endpoint — out of this PR's
 // scope; the Guardian row and its consentToken this controller creates
-// are what that endpoint will later consume.
+// are consumed by that endpoint, built in PR B5 — see
+// ../guardian-consent/guardian-consent.controller.ts.
 //
 // ValidationPipe is applied at the controller level (not globally in
 // main.ts) so this PR doesn't contend with B3/B4/B6's parallel auth PRs
