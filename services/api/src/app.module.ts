@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { join } from 'path';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { HealthModule } from './health/health.module';
+import { PasswordResetModule } from './modules/auth/password-reset/password-reset.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AuthRegistrationModule } from './modules/auth/registration/registration.module';
 import { UsersModule } from './modules/users/users.module';
@@ -37,6 +38,7 @@ import { UsersModule } from './modules/users/users.module';
       envFilePath: join(__dirname, '..', '..', '..', '.env'),
     }),
     HealthModule, // Sprint 0 infra — MVP Build Plan Section 5
+    PasswordResetModule, // Sprint 1 / PR B4 — /auth/forgot-password, /auth/reset-password
     AuthModule, // Sprint 1 / PR B3 — login, refresh, logout (Section 4.1 / 5.7)
     // Sprint 1 / PR B2 — POST /auth/register, POST /auth/verify-email
     // only (Build Plan Section 4.1). Deliberately its own module, not a
