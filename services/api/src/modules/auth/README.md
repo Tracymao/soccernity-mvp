@@ -306,3 +306,51 @@ that out one way or the other. **Whether a backfill migration
 resulting duplicate-key collisions first) is worth a follow-up is
 flagged here, not built** — out of scope for this ticket per its own
 brief.
+
+## Status update — Decision Log #17 (Postmark wired, still not live)
+
+`registration/email/registration-email.service.ts` and
+`password-reset/email/password-reset-email.service.ts`'s live-send
+branches (previously `throw new Error('...no email provider
+integration exists yet...')`) now call Postmark's real Node client
+(`new ServerClient(apiKey)`, `.sendEmail(...)`) instead. The existing
+`isConfigured`/`isLive` gate — both booleans, checked against
+`EMAIL_PROVIDER_API_KEY` being unset or the literal `"replace-me"`
+placeholder — is untouched; this PR only replaces what happens once
+that gate is already true.
+
+- **Still not live as of this PR** — same as `src/instrument.ts`'s
+  Sentry DSN: `EMAIL_PROVIDER_API_KEY` is still the `.env.example`
+  placeholder, so `isConfigured`/`isLive` are still `false` in every
+  dev/test run and the code path that actually calls Postmark has
+  never executed against a real account. Creating the Postmark account
+  and swapping in a real server token is a human action (billing,
+  domain/DKIM verification) — this PR makes that swap the *only*
+  remaining step, it doesn't perform it.
+- Added `POSTMARK_FROM_EMAIL` to `.env.example` — Postmark requires the
+  sending address to belong to a domain verified (SPF/DKIM) in the
+  account, so this can't reuse an arbitrary address; it's a second
+  placeholder that needs a real, verified value alongside the API key.
+- No Postmark message templates exist yet (also account-side setup),
+  so both services build minimal inline HTML/text bodies rather than
+  calling `sendEmailWithTemplate`. The copy itself is functional, not
+  final consent-flow language — Section 8.3 step 4's actual
+  guardian-facing wording is safeguarding-drafter / legal-review
+  territory (CLAUDE.md non-negotiable #2), same as the DPIA.
+- A thrown/rejected Postmark call is caught and logged at the call
+  site itself, never propagated — both `RegistrationService` and
+  `PasswordResetService` already treat email sending as
+  fire-and-forget-with-logging (see their own `.catch()` sites), so a
+  Postmark outage must not fail registration or a password reset.
+- The live branch logs only send success/failure and Postmark's
+  `MessageID` — never the token, reset link, or other email content.
+  (The not-live branch keeps logging the raw token/link, unchanged —
+  that's deliberate dev/test-only behavior, not something this PR
+  weakens.)
+- `verify-email` and `guardian-consent` emails mention their token as
+  plain text, not a clickable link — unlike password-reset's real,
+  built `ResetPasswordPage` (`apps/web`), there is no real frontend
+  page yet for either (email verification has none at all;
+  `GuardianConsentPage.tsx` is an explicit route stub, "PR F5 replaces
+  this file's contents with the real, Figma-derived screen(s)"), so
+  this PR doesn't fabricate links to pages that don't exist.
