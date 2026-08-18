@@ -1,4 +1,4 @@
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PasswordService } from '../password/password.service';
 import { InMemoryResetRedisFake } from './test-support/in-memory-reset-redis.fake';
@@ -85,14 +85,11 @@ describe('PasswordResetService', () => {
   });
 
   describe('resetPassword', () => {
-    it('rejects a password shorter than the minimum', async () => {
-      const { service, resetTokenStore, existingUser } = buildService();
-      const issued = await resetTokenStore.issue(existingUser!.id, 60);
-
-      await expect(service.resetPassword(issued.token, 'short')).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
-    });
+    // Password-length enforcement (8-char minimum) moved to
+    // ResetPasswordDto's @MinLength(8), applied by main.ts's global
+    // ValidationPipe before this service is ever called — see
+    // password-reset.controller.spec.ts's HTTP-layer coverage. The
+    // service itself no longer re-checks length.
 
     it('rejects an invalid/unknown token', async () => {
       const { service } = buildService();

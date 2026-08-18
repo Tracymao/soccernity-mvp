@@ -1,18 +1,10 @@
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  HttpCode,
-  HttpStatus,
-  Headers,
-  Post,
-} from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Headers, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthRateLimit } from './rate-limit/auth-rate-limit.decorator';
 import { TokenPairResponse } from './auth-response.mapper';
-import { parseLoginDto } from './dto/login.dto';
-import { parseLogoutDto } from './dto/logout.dto';
-import { parseRefreshDto } from './dto/refresh.dto';
+import { LoginDto } from './dto/login.dto';
+import { LogoutDto } from './dto/logout.dto';
+import { RefreshDto } from './dto/refresh.dto';
 
 function extractBearerToken(authorizationHeader: string | undefined): string | undefined {
   if (!authorizationHeader) return undefined;
@@ -32,40 +24,22 @@ export class AuthController {
   @AuthRateLimit()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() body: unknown): Promise<TokenPairResponse> {
-    let dto;
-    try {
-      dto = parseLoginDto(body);
-    } catch (error) {
-      throw new BadRequestException((error as Error).message);
-    }
+  async login(@Body() dto: LoginDto): Promise<TokenPairResponse> {
     return this.authService.login(dto.email, dto.password);
   }
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  async refresh(@Body() body: unknown): Promise<TokenPairResponse> {
-    let dto;
-    try {
-      dto = parseRefreshDto(body);
-    } catch (error) {
-      throw new BadRequestException((error as Error).message);
-    }
+  async refresh(@Body() dto: RefreshDto): Promise<TokenPairResponse> {
     return this.authService.refresh(dto.refreshToken);
   }
 
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
   async logout(
-    @Body() body: unknown,
+    @Body() dto: LogoutDto,
     @Headers('authorization') authorizationHeader?: string,
   ): Promise<void> {
-    let dto;
-    try {
-      dto = parseLogoutDto(body);
-    } catch (error) {
-      throw new BadRequestException((error as Error).message);
-    }
     const accessToken = extractBearerToken(authorizationHeader);
     await this.authService.logout(dto.refreshToken, dto.allSessions ?? false, accessToken);
   }

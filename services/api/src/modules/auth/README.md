@@ -135,3 +135,28 @@ deliberately not architected around).
   B1's own preference for explicit code over a new dependency
   mid-infra-PR. Adding real validation-decorator DTOs is a reasonable
   follow-up, but `main.ts` is shared territory across B2/B3/B6 too.
+
+## Update — DTO validation cleanup
+
+The "reasonable follow-up" flagged above (and the equivalent note on
+`dto/login.dto.ts`/`dto/logout.dto.ts`/`dto/refresh.dto.ts`) is done: all
+five of `AuthController`'s and `PasswordResetController`'s DTOs
+(`login`, `logout`, `refresh`, `forgot-password`, `reset-password`) are
+now `class-validator` classes, matching `registration/dto/*`'s pattern,
+and are validated by `main.ts`'s global `ValidationPipe` (added in B6)
+like every other auth DTO. The hand-rolled `parseLoginDto`/
+`parseLogoutDto`/`parseRefreshDto` functions and each controller's
+manual `typeof`/regex checks are gone — the pipe is now the only
+validation layer. `PasswordResetService.resetPassword`'s own
+`MIN_PASSWORD_LENGTH` check was removed too, since `ResetPasswordDto`'s
+`@MinLength(8)` now enforces it before the service is ever called.
+
+One intentional behavior change: `LoginDto.email` is no longer
+trimmed/lowercased before reaching `AuthService.login` (the old
+`parseLoginDto` did this; plain `@IsEmail()` doesn't). This actually
+makes `/auth/login` *consistent* with `/auth/register`, which never
+normalized email case either (`RegistrationService.register` stores
+`dto.email` as-is) — so this closes a pre-existing register/login
+case-sensitivity mismatch rather than introducing a new one, but it's
+worth knowing about if a case-insensitive-email decision is made later
+(Decision Log candidate).

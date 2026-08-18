@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, Post } from '@nestjs/common';
 import { AuthRateLimit } from '../rate-limit/auth-rate-limit.decorator';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -7,8 +7,6 @@ import { FORGOT_PASSWORD_GENERIC_MESSAGE, PasswordResetService } from './passwor
 // Build Plan Section 4.1 (Auth Service):
 //   POST /auth/forgot-password
 //   POST /auth/reset-password
-const EMAIL_SHAPE_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 @Controller('auth')
 export class PasswordResetController {
   constructor(private readonly passwordResetService: PasswordResetService) {}
@@ -21,33 +19,19 @@ export class PasswordResetController {
   @AuthRateLimit()
   @Post('forgot-password')
   @HttpCode(200)
-  async forgotPassword(@Body() body: ForgotPasswordDto): Promise<{ message: string }> {
-    const email = body?.email;
-    if (typeof email !== 'string' || !EMAIL_SHAPE_RE.test(email.trim())) {
-      throw new BadRequestException('A valid email is required');
-    }
-
+  async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<{ message: string }> {
     // Always the same response shape and message on this path, whether or
     // not the account exists — PasswordResetService.forgotPassword() never
     // throws for "not found", so there is no branch here that could leak
     // account existence via a different status code or body.
-    await this.passwordResetService.forgotPassword(email);
+    await this.passwordResetService.forgotPassword(dto.email);
     return { message: FORGOT_PASSWORD_GENERIC_MESSAGE };
   }
 
   @Post('reset-password')
   @HttpCode(200)
-  async resetPassword(@Body() body: ResetPasswordDto): Promise<{ message: string }> {
-    const token = body?.token;
-    const newPassword = body?.newPassword;
-    if (typeof token !== 'string' || token.length === 0) {
-      throw new BadRequestException('token is required');
-    }
-    if (typeof newPassword !== 'string' || newPassword.length === 0) {
-      throw new BadRequestException('newPassword is required');
-    }
-
-    await this.passwordResetService.resetPassword(token, newPassword);
+  async resetPassword(@Body() dto: ResetPasswordDto): Promise<{ message: string }> {
+    await this.passwordResetService.resetPassword(dto.token, dto.newPassword);
     return { message: 'Password has been reset successfully.' };
   }
 }

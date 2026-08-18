@@ -1,14 +1,10 @@
-export interface RefreshDto {
-  refreshToken: string;
-}
+import { IsNotEmpty, IsString } from 'class-validator';
 
-export function parseRefreshDto(body: unknown): RefreshDto {
-  if (typeof body !== 'object' || body === null) {
-    throw new Error('Request body must be an object');
-  }
-  const { refreshToken } = body as Record<string, unknown>;
-  if (typeof refreshToken !== 'string' || refreshToken.trim().length === 0) {
-    throw new Error('refreshToken is required');
-  }
-  return { refreshToken };
+// Build Plan Section 4.1 (POST /auth/refresh). Validated by main.ts's
+// global ValidationPipe (added in PR B6) like every other auth DTO —
+// see registration/dto/register.dto.ts for the same pattern.
+export class RefreshDto {
+  @IsString()
+  @IsNotEmpty()
+  refreshToken!: string;
 }
