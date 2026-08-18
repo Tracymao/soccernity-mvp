@@ -106,12 +106,10 @@ Full reasoning for every choice above: Build Plan Section 5.
   pending-consent minors) has no code to attach to yet, same reason as
   B7 above — it's guidance for whichever PR builds messaging in
   Sprint 3, not a Sprint 1 deliverable.
-- **One new open item, not yet a Decision Log entry**: whether a
-  backfill migration is needed for any pre-existing mixed-case `User`
-  emails now that #16 normalizes on write going forward (existing rows
-  aren't touched). Flagged in `auth/README.md`, not yet resolved on
-  the Decision Log — low urgency if no real user base existed before
-  PR #32 merged, but don't assume that without checking.
+- **Decision Log #18 is resolved.** No backfill migration needed for
+  #16's email-normalization fix — Soccernity has never had production
+  or shared user data, so no pre-existing mixed-case `User` row can
+  exist. Closed without a migration.
 - **Decision Log #6 (sports-data vendor) blocks Sprint 4 only** — not
   Sprint 1. Don't hold up auth/consent work on it.
 - **Decision Log #9 (hosting platform) blocks `deploy.yml` specifically**
