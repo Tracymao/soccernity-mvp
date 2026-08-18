@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ServerClient } from 'postmark';
 
 export type RegistrationEmailTemplate = 'verify-email' | 'guardian-consent';
 
@@ -10,28 +11,37 @@ export interface OutboundRegistrationEmail {
   data: Record<string, string>;
 }
 
-// "Wired, not live" — the same honest pattern src/instrument.ts already
-// established for Sentry (PR #8): .env.example's EMAIL_PROVIDER_API_KEY
-// is still the literal placeholder string "replace-me" because no real
-// email provider is configured yet (Build Plan Section 8.3 references the
-// guardian-consent email's content but not a chosen vendor — that
-// selection isn't made anywhere in Sections 3/4/5/9, so it's a Decision
-// Log candidate this PR surfaces rather than guesses). With the
-// placeholder in place, this service logs the would-be send (including
-// the token, so it's retrievable from server logs for manual/dev
-// verification) and resolves successfully — it does not attempt real
-// delivery, and it does not fabricate a fake "delivered" provider
-// response. Callers (RegistrationService) must never block registration
-// on this succeeding — see the fire-and-forget-with-logging call sites
-// there.
+// Decision Log #17 (Build Plan Section 9): Postmark is the chosen
+// transactional email provider. Wired to activate automatically the
+// instant a real value replaces .env.example's EMAIL_PROVIDER_API_KEY
+// placeholder ("replace-me") — exactly src/instrument.ts's existing
+// Sentry-DSN pattern (PR #8). Creating the actual Postmark account and
+// swapping in a real key is a human action (billing, domain/DKIM
+// verification) outside this PR's scope; until that happens,
+// `isConfigured` stays false and this service logs the would-be send
+// instead of calling Postmark, so the existing test suite (and any
+// dev/local run) never needs a live account or network access.
+//
+// No Postmark message templates exist yet (that's also account-side
+// setup) — the live branch below builds a minimal inline HTML/text body
+// per template rather than calling `sendEmailWithTemplate`. Also note:
+// unlike the not-live branch (which deliberately logs the raw token for
+// dev/manual testing), the live branch never logs email content or
+// tokens — only send success/failure and Postmark's MessageID.
 @Injectable()
 export class RegistrationEmailService {
   private readonly logger = new Logger(RegistrationEmailService.name);
   private readonly isConfigured: boolean;
+  private readonly postmarkClient?: ServerClient;
+  private readonly fromEmail?: string;
 
   constructor(private readonly config: ConfigService) {
     const apiKey = this.config.get<string>('EMAIL_PROVIDER_API_KEY')?.trim();
     this.isConfigured = Boolean(apiKey) && apiKey !== 'replace-me';
+    if (this.isConfigured) {
+      this.postmarkClient = new ServerClient(apiKey!);
+      this.fromEmail = this.config.get<string>('POSTMARK_FROM_EMAIL')?.trim();
+    }
   }
 
   async sendVerificationEmail(to: string, token: string): Promise<void> {
@@ -70,15 +80,64 @@ export class RegistrationEmailService {
       return;
     }
 
-    // No real provider integration exists yet even once a key is present
-    // — throwing here (rather than silently no-op'ing) means a real key
-    // without a real integration fails loudly instead of pretending to
-    // deliver. Wiring an actual provider (SendGrid/Postmark/SES/etc. —
-    // vendor choice itself is a Decision Log candidate, see class comment
-    // above) is future work, not something to fake here.
-    throw new Error(
-      'EMAIL_PROVIDER_API_KEY is set but no email provider integration exists yet — ' +
-        'wire a real provider client before enabling this key.',
-    );
+    // Never let a Postmark failure (network error, invalid/bounced
+    // address, etc.) propagate — RegistrationService already treats
+    // this whole call as fire-and-forget-with-logging (see its own
+    // .catch() call sites), so the failure is caught and logged here,
+    // as close to the actual API call as possible, rather than bubbling
+    // up and failing registration itself.
+    try {
+      const result = await this.postmarkClient!.sendEmail({
+        From: this.fromEmail ?? '',
+        To: email.to,
+        Subject: email.subject,
+        HtmlBody: renderHtmlBody(email.template, email.data),
+        TextBody: renderTextBody(email.template, email.data),
+        MessageStream: 'outbound',
+      });
+      this.logger.log(
+        `[email] sent "${email.template}" to ${email.to} (MessageID=${result.MessageID})`,
+      );
+    } catch (err) {
+      this.logger.error(
+        `[email] failed to send "${email.template}" to ${email.to}: ${(err as Error).message}`,
+      );
+    }
+  }
+}
+
+// Minimal, functional inline bodies — not final consent-flow copy.
+// Section 8.3 step 4's actual guardian-facing language belongs to the
+// safeguarding-drafter agent / legal review (CLAUDE.md non-negotiable
+// #2), same as the DPIA and consent-screen copy; this is just enough
+// content to make a real Postmark send meaningful, not a design
+// deliverable.
+function renderTextBody(template: RegistrationEmailTemplate, data: Record<string, string>): string {
+  switch (template) {
+    case 'verify-email':
+      return `Your Soccernity email verification code is: ${data.token}\n\nIf you did not request this, you can safely ignore this email.`;
+    case 'guardian-consent':
+      return (
+        `${data.minorDisplayName} has registered for a Soccernity account and listed you as their guardian.\n\n` +
+        `Your consent code is: ${data.consentToken}\n\n` +
+        `If you did not expect this email, you can safely ignore it.`
+      );
+    default:
+      throw new Error(`Unknown registration email template: ${template as string}`);
+  }
+}
+
+function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string, string>): string {
+  switch (template) {
+    case 'verify-email':
+      return `<p>Your Soccernity email verification code is: <strong>${data.token}</strong></p><p>If you did not request this, you can safely ignore this email.</p>`;
+    case 'guardian-consent':
+      return (
+        `<p><strong>${data.minorDisplayName}</strong> has registered for a Soccernity account and listed you as their guardian.</p>` +
+        `<p>Your consent code is: <strong>${data.consentToken}</strong></p>` +
+        `<p>If you did not expect this email, you can safely ignore it.</p>`
+      );
+    default:
+      throw new Error(`Unknown registration email template: ${template as string}`);
   }
 }
