@@ -71,32 +71,47 @@ Full reasoning for every choice above: Build Plan Section 5.
   real migration run and verified, Sentry wired (not live — needs a
   human-created Sentry project), a real `/health` check with confirmed
   graceful degradation (PRs #8, #9, #10).
-- **Sprint 1 wave 2 is merged to `main`.** S1, F1, B1 (PRs #11–#13,
-  the DPIA first draft, web app shell, and auth foundation) were the
-  first wave. B2/B3/B4/B6 (register/verify-email, login/refresh/logout,
-  forgot/reset-password, profile view-edit) and F2/F3/F4 (login,
-  signup entry — Age Gate/Guardian Details/Register, forgot/reset
-  screens) are all merged (PRs #17–#22, #24). A follow-up PR (#25)
-  converted the five auth DTOs that predated `main.ts`'s global
-  `ValidationPipe` (login/logout/refresh/forgot-password/reset-password)
-  from plain interfaces to `class-validator` classes, closing a gap
-  where the pipe was silently skipping them — see Decision Log #11.
-  Current test baseline: **20 suites / 129 tests, 0 failures** in
-  `services/api`.
-- **B5 (guardian-consent confirmation endpoint) and B7 (restricted-
-  pending enforcement) are next, not yet started.** B5 was blocked on
-  B2, which is now merged, so B5 is unblocked. B7 needs B5 merged
-  first — don't start it in parallel. `RegistrationService` already
-  creates the `Guardian` row and queues the consent email (logged, not
-  delivered — no email provider is configured); `JwtAuthGuard`'s own
-  header comment and `registration.controller.ts`'s comment both
-  already anticipate this work and name it B5/B7 — read those before
-  starting.
-- **Decision Log #1, #7, #8, #10, and #11 are resolved** — Community
-  Groups vs. Banter Rooms, custom JWT, the UK/Nigeria minimum-age
-  question (both markets already match what the guardian-consent flow
-  does by default), and the login/register email-normalization
-  mismatch closed by PR #25. None of these block Sprint 1.
+- **Sprint 1 backend is fully merged and closed out.** S1, F1, B1
+  (PRs #11–#13) were the first wave. B2/B3/B4/B6 and F2/F3/F4 are all
+  merged (PRs #17–#22, #24). B5 (guardian-consent confirmation
+  endpoint) and B7 (restricted-pending enforcement) are also merged
+  (PRs #28, #29) — `GuardianConsentGuard` exists, is tested, and reads
+  `isMinor`/`consentStatus` fresh from Postgres on every request, but
+  as of B7 none of Section 8.3 step 5's three target routes (public
+  profile view, DMs, Banter Rooms beyond read-only) exist yet to
+  actually attach it to — that's Sprint 3 work, not a Sprint 1 gap.
+  Three follow-up PRs closed out remaining Decision Log candidates:
+  DTO validation (#25, Decision Log #11), email case normalization
+  (#32, Decision Log #16), and wiring Postmark as the real email
+  provider (#33, Decision Log #17 — still not *live*; the account
+  itself doesn't exist yet, same as Sentry's DSN). Current test
+  baseline: **25 suites / 158 tests, 0 failures** in `services/api`.
+- **Sprint 1 frontend has a real gap: F5, F6, and F7 are not started.**
+  F1-F4 (app shell, login, signup, forgot/reset) are real, built
+  screens. F5 (`GuardianConsentPage.tsx`, route `/guardian-consent`)
+  and F6 (`ProfilePage.tsx`, route `/profile`) are route stubs only —
+  wired into `router.tsx` but rendering `PlaceholderPage`, waiting on
+  Figma-derived screens. **F7 (`VerifyEmailPage.tsx`, route
+  `/verify-email`) didn't exist at all until a Sprint 1 cleanup review
+  caught it** — `POST /auth/verify-email` (B2) and the email Postmark
+  now actually sends (Decision Log #17) have had no frontend page to
+  land on since Sprint 1 started. It's a stub now, same pattern as
+  F5/F6, but still needs its real screen. None of F5/F6/F7 block
+  backend work, but Sprint 1's own exit criterion (register, verify
+  email, declare age, guardian-consent-gated access) isn't actually
+  walkable by a real user until at least F7 (and arguably F5) are built.
+- **Decision Log #1, #7, #8, #10, #11, #12, #16, and #17 are resolved.**
+  #16 and #17 required real code changes beyond the doc entry — both
+  are merged (PRs #32, #33), see above. #12 (DM restriction scope for
+  pending-consent minors) has no code to attach to yet, same reason as
+  B7 above — it's guidance for whichever PR builds messaging in
+  Sprint 3, not a Sprint 1 deliverable.
+- **One new open item, not yet a Decision Log entry**: whether a
+  backfill migration is needed for any pre-existing mixed-case `User`
+  emails now that #16 normalizes on write going forward (existing rows
+  aren't touched). Flagged in `auth/README.md`, not yet resolved on
+  the Decision Log — low urgency if no real user base existed before
+  PR #32 merged, but don't assume that without checking.
 - **Decision Log #6 (sports-data vendor) blocks Sprint 4 only** — not
   Sprint 1. Don't hold up auth/consent work on it.
 - **Decision Log #9 (hosting platform) blocks `deploy.yml` specifically**

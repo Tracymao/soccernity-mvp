@@ -4,7 +4,7 @@
 // -- this uses the v6.4+ data-router API (createBrowserRouter +
 // RouterProvider), not the older <BrowserRouter>/<Switch> v5 pattern.
 //
-// F2-F6: add your route as a child of the root AppShell route below --
+// F2-F7: add your route as a child of the root AppShell route below --
 // you do NOT need to touch AppShell, Header, or main.tsx to do this.
 // Replace the corresponding placeholder page file in src/pages instead
 // of adding a new route path, unless your screen genuinely needs a new
@@ -22,6 +22,7 @@ import SignupPage from "../pages/SignupPage";
 import ForgotPasswordPage from "../pages/ForgotPasswordPage";
 import ResetPasswordPage from "../pages/ResetPasswordPage";
 import GuardianConsentPage from "../pages/GuardianConsentPage";
+import VerifyEmailPage from "../pages/VerifyEmailPage";
 import ProfilePage from "../pages/ProfilePage";
 import NotFoundPage from "../pages/NotFoundPage";
 
@@ -47,6 +48,9 @@ export const router = createBrowserRouter([
       { path: "reset-password", element: <ResetPasswordPage /> }, // F4
       { path: "guardian-consent", element: <GuardianConsentPage /> }, // F5
       { path: "profile", element: <ProfilePage /> }, // F6
+      // Added during a Sprint 1 cleanup review -- was missing entirely,
+      // not a pre-existing placeholder. See VerifyEmailPage.tsx.
+      { path: "verify-email", element: <VerifyEmailPage /> }, // F7
 
       { path: "*", element: <NotFoundPage /> },
     ],
