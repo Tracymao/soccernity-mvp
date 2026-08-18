@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { PrismaService } from '../../prisma/prisma.service';
 import { RedisModule } from '../../redis/redis.module';
+import { GuardianConsentGuard } from './guards/guardian-consent.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { PasswordService } from './password/password.service';
 import { AuthRateLimitModule } from './rate-limit/rate-limit.module';
@@ -27,6 +29,11 @@ import { TokenService } from './token/token.service';
 // should reuse. See guards/jwt-auth.guard.ts for the full usage pattern.
 // Any module that needs to protect a route imports AuthFoundationModule
 // to get it, the same way UsersModule does.
+//
+// Sprint 1 / PR B7 (restricted-pending enforcement) added
+// GuardianConsentGuard here on the same precedent, plus PrismaService
+// as its own dependency (no other provider in this module needed
+// Prisma before now) — see guards/guardian-consent.guard.ts.
 @Module({
   imports: [
     ConfigModule,
@@ -43,7 +50,7 @@ import { TokenService } from './token/token.service';
       }),
     }),
   ],
-  providers: [PasswordService, TokenService, RefreshTokenStore, JwtAuthGuard],
-  exports: [PasswordService, TokenService, RefreshTokenStore, JwtAuthGuard],
+  providers: [PasswordService, TokenService, RefreshTokenStore, JwtAuthGuard, PrismaService, GuardianConsentGuard],
+  exports: [PasswordService, TokenService, RefreshTokenStore, JwtAuthGuard, GuardianConsentGuard],
 })
 export class AuthFoundationModule {}

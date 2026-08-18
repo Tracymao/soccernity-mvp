@@ -200,3 +200,80 @@ this endpoint issues no tokens, just updates the `Guardian` row.
   endpoints while consent is outstanding, and account activation) are
   B7, not this PR — `confirmConsent()` only flips `Guardian.consentStatus`;
   it doesn't touch the minor `User` row at all.
+
+## Status update — PR B7 (`guards/guardian-consent.guard.ts`)
+
+Section 8.3 step 5, verbatim from the Build Plan: "Until consent is
+recorded, the minor's account exists but is restricted: no public
+profile visibility, no DMs from unverified accounts, no participation
+in Banter Rooms beyond read-only." `GuardianConsentGuard` is the
+enforcement mechanism — composable alongside `JwtAuthGuard`, not a
+replacement for it (always list `JwtAuthGuard` first in `@UseGuards()`
+so `request.user` exists first). Registered as a provider/export on
+`AuthFoundationModule`, same precedent as `JwtAuthGuard` itself (whose
+own header comment already named "B7's enforcement pass" as an
+intended consumer) — any future module protecting a route imports
+`AuthFoundationModule` to get both guards via DI. Added `PrismaService`
+to that module's providers too, since no other provider there needed
+Prisma before now.
+
+**On every request it protects**: re-reads `User.isMinor` fresh from
+Postgres (never trusts the access token, which structurally can't
+carry it — Section 5.7's non-negotiable). Non-minors pass through
+untouched, without even querying `Guardian`. For a minor, reads
+`Guardian.consentStatus` fresh (via `minorUserId`, `@unique`) and
+blocks with **403** unless it's exactly `"confirmed"` — a minor with no
+`Guardian` row at all (shouldn't happen given `RegistrationService`
+always creates one, but not guaranteed by a DB constraint) fails
+closed, not open. The 403 body carries a distinct `code:
+"guardian_consent_pending"` field, not just a generic message, so the
+frontend can render a "waiting on your guardian" state instead of
+treating this as an auth failure.
+
+**Explicitly NOT applied to `GET`/`PATCH /users/:id`** (B6) — Section
+8.3's restriction is about *other* users seeing/contacting the minor,
+not the minor managing their own account. A minor awaiting consent must
+still be able to view/edit their own profile. See
+`users/users.controller.http.spec.ts` for a dedicated regression test:
+it deliberately never provides `GuardianConsentGuard` (or its
+`PrismaService` dependency) to that controller's testing module at
+all, so if the guard were ever added to `UsersController` without also
+updating that test, module compilation itself fails, not just the
+assertion.
+
+**The central finding of this PR**: as of Sprint 1, none of Section
+8.3 step 5's three restricted behaviors have a real route to attach
+this guard to yet, so it isn't wired into `app.module.ts` or any
+controller anywhere:
+
+- **Public profile visibility** — `GET /users/:id/profile` (Section
+  4.2, the public-facing view of *another* user) is explicitly flagged
+  as out of scope in `users/users.controller.ts`'s own header comment;
+  only self-view/self-edit (`GET`/`PATCH /users/:id`) exist today, and
+  those are deliberately excluded above. Sprint 2's Follow work (Build
+  Plan Section 6) is the more likely place a real "view someone else's
+  profile" route lands.
+- **DMs from unverified accounts** — `src/modules/messaging/` is a
+  placeholder (`README.md` only, "Not yet implemented"), Sprint 3 per
+  Build Plan Section 6. **Flagging the wording itself as ambiguous**,
+  not just the missing implementation: Section 8.3 step 5 says "no DMs
+  *from* unverified accounts" (restricting who can message an
+  unverified/restricted-pending account), not "no DMs *sent by*" the
+  minor — it's not fully clear from this sentence alone whether a
+  pending minor should be blocked from *sending* DMs, *receiving* them,
+  or both, and whether "unverified" here means email-unverified
+  (`User.verificationStatus`) or restricted-pending specifically.
+  Whoever builds messaging in Sprint 3 should re-read this line in
+  context (and probably Log Book Section 10's fuller safeguarding
+  language) before wiring this guard in, rather than assume the
+  interpretation above.
+- **Banter Rooms beyond read-only** — `src/modules/banter/` is also
+  just a placeholder, Sprint 3.
+
+Per this PR's brief: none of these three endpoints are built as part
+of B7 — that would be scope creep into Sprint 2/3 work. The guard
+itself is fully built and tested in isolation
+(`guards/guardian-consent.guard.spec.ts`) so it's ready to attach the
+moment any of these routes exist; whoever builds them should import
+`AuthFoundationModule` and add `@UseGuards(JwtAuthGuard,
+GuardianConsentGuard)`.
