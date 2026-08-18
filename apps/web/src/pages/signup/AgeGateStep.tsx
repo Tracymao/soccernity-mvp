@@ -19,12 +19,17 @@ import "./SignupSplitScreen.css";
 const MINOR_AGE_THRESHOLD = 18;
 
 // Build Plan Section 8.3, step 1 also says the age gate should "block
-// signup outright below the applicable regional minimum age" -- but no
-// numeric value for that floor is defined anywhere in the Build Plan or
-// the Decision Log (Section 9 has no item for it). Rather than invent one
-// (e.g. COPPA's 13), this step implements only the under-18 vs 18+ branch
-// Decision Log #8 actually resolved, and does not add a hard block below
-// any age. Flagged in this PR's report as a Decision Log candidate.
+// signup outright below the applicable regional minimum age" -- resolved
+// by Decision Log #19 (Build Plan Section 9): not a legal-compliance
+// floor (neither UK GDPR Article 8 nor Nigeria's NDPA 2023 sets an
+// absolute floor below which guardian-consented signup is prohibited),
+// but a product/duty-of-care one -- below age 5, a Soccernity profile
+// wouldn't correspond to anything real about the child as a grassroots
+// player yet (UK grassroots football's own entry point, e.g. The FA's
+// mini-soccer pathway, starts around age 5-6), regardless of what a
+// guardian consents to. This is a hard block, unconditional on guardian
+// consent -- see the age check in handleSubmit below.
+const MINIMUM_SIGNUP_AGE = 5;
 
 interface AgeGateStepProps {
   initialValues: AgeGateValues;
@@ -50,6 +55,16 @@ export default function AgeGateStep({ initialValues, onContinue }: AgeGateStepPr
     const parsed = parseDateOfBirth(day, month, year);
     if (!parsed) {
       setError("Enter a valid date of birth.");
+      return;
+    }
+    // Decision Log #19: hard block below age 5, unconditional on
+    // guardian consent -- this form is filled out by/with a guardian for
+    // a young child, so the error is worded for that audience, not the
+    // child themself.
+    if (parsed.age < MINIMUM_SIGNUP_AGE) {
+      setError(
+        `Soccernity accounts are for players aged ${MINIMUM_SIGNUP_AGE} and up. Please wait until your child is old enough to create an account for them.`,
+      );
       return;
     }
     setError(null);
