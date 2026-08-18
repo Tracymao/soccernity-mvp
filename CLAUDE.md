@@ -100,12 +100,22 @@ Full reasoning for every choice above: Build Plan Section 5.
   backend work, but Sprint 1's own exit criterion (register, verify
   email, declare age, guardian-consent-gated access) isn't actually
   walkable by a real user until at least F7 (and arguably F5) are built.
-- **Decision Log #1, #7, #8, #10, #11, #12, #16, and #17 are resolved.**
-  #16 and #17 required real code changes beyond the doc entry — both
-  are merged (PRs #32, #33), see above. #12 (DM restriction scope for
-  pending-consent minors) has no code to attach to yet, same reason as
-  B7 above — it's guidance for whichever PR builds messaging in
-  Sprint 3, not a Sprint 1 deliverable.
+- **Decision Log #1, #7, #8, #10, #11, #12, #16, #17, and #19 are
+  resolved.** #16, #17, and #19 required real code changes beyond the
+  doc entry — all three are merged (PRs #32, #33, #38). #19 (age-5
+  signup floor) is `AgeGateStep.tsx`'s `MINIMUM_SIGNUP_AGE`, hard
+  blocking regardless of guardian consent. #12 (DM restriction scope
+  for pending-consent minors) has no code to attach to yet, same
+  reason as B7 above — it's guidance for whichever PR builds messaging
+  in Sprint 3, not a Sprint 1 deliverable.
+- **`apps/web` has its first-ever test suite, added by PR #38.**
+  Previously zero `.test.tsx`/`.spec.tsx` files existed anywhere in
+  the frontend workspace. `vite.config.ts` now imports `defineConfig`
+  from `vitest/config` (not plain `vite`) with a `test: { environment:
+  "jsdom" }` block, and `@testing-library/react`/`jsdom` are
+  devDependencies. `AgeGateStep.test.tsx` (7 cases) is the only test
+  file so far — don't assume broader frontend test coverage exists
+  just because the tooling now does.
 - **Decision Log #18 is resolved.** No backfill migration needed for
   #16's email-normalization fix — Soccernity has never had production
   or shared user data, so no pre-existing mixed-case `User` row can
