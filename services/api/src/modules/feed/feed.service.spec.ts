@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { encodeFeedCursor } from './cursor.util';
@@ -6,12 +6,43 @@ import { FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE } from './dto/feed-query.dto
 import { FeedService } from './feed.service';
 
 function buildPrismaMock() {
-  return {
+  const prisma = {
     post: {
       create: jest.fn(),
       findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    like: {
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      delete: jest.fn(),
+    },
+    comment: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+    },
+    savedPost: {
+      create: jest.fn(),
+      delete: jest.fn(),
+      findMany: jest.fn(),
     },
   } as unknown as PrismaService;
+
+  // FeedService uses interactive transactions ($transaction(async (tx)
+  // => ...)), not the array form — see likePost()'s own comment for why.
+  // The mock simply invokes the callback with the same top-level mock
+  // object standing in for `tx` (this module's tests don't need a
+  // distinct transaction-scoped client), so normal await/throw control
+  // flow inside the callback behaves exactly as it would against a real
+  // interactive transaction: a rejection from an earlier statement
+  // prevents any later statement in the same callback from ever running.
+  (prisma as unknown as { $transaction: jest.Mock }).$transaction = jest.fn((fn: (tx: unknown) => unknown) =>
+    fn(prisma),
+  );
+
+  return prisma;
 }
 
 const AUTHOR = { id: 'author-1', displayName: 'Author One' };
@@ -265,6 +296,477 @@ describe('FeedService', () => {
       expect(callArgs.select).not.toHaveProperty('comments');
       expect(callArgs.select).not.toHaveProperty('likes');
       expect(callArgs.select).not.toHaveProperty('savedBy');
+    });
+  });
+
+  describe('getPostById', () => {
+    it('returns the post when it exists', async () => {
+      const prisma = buildPrismaMock();
+      const row = buildPostRow();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(row);
+      const service = new FeedService(prisma);
+
+      await expect(service.getPostById('post-1')).resolves.toEqual(row);
+    });
+
+    it('throws NotFoundException, not a silent null, for a non-existent id', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new FeedService(prisma);
+
+      await expect(service.getPostById('does-not-exist')).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('likePost / unlikePost', () => {
+    function mockPostExists(prisma: PrismaService, exists = true) {
+      (prisma.post.findUnique as jest.Mock).mockImplementation((args: { select?: unknown }) => {
+        if (!exists) return Promise.resolve(null);
+        if (args?.select && (args.select as Record<string, unknown>).likeCount) {
+          return Promise.resolve({ likeCount: 1 });
+        }
+        return Promise.resolve({ id: 'post-1' });
+      });
+    }
+
+    it('throws NotFoundException when postId does not reference a real post (like)', async () => {
+      const prisma = buildPrismaMock();
+      mockPostExists(prisma, false);
+      const service = new FeedService(prisma);
+
+      await expect(service.likePost('user-1', 'missing-post')).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.like.create).not.toHaveBeenCalled();
+    });
+
+    it('creates a Like row and increments likeCount transactionally', async () => {
+      const prisma = buildPrismaMock();
+      mockPostExists(prisma);
+      (prisma.like.create as jest.Mock).mockResolvedValue({ id: 'like-1' });
+      (prisma.post.update as jest.Mock).mockResolvedValue({});
+      (prisma.post.findUnique as jest.Mock).mockImplementation((args: { select?: unknown }) => {
+        if ((args.select as Record<string, unknown>)?.likeCount) return Promise.resolve({ likeCount: 1 });
+        return Promise.resolve({ id: 'post-1' });
+      });
+      const service = new FeedService(prisma);
+
+      const result = await service.likePost('user-1', 'post-1');
+
+      expect(prisma.like.create).toHaveBeenCalledWith({ data: { userId: 'user-1', postId: 'post-1' } });
+      expect(prisma.post.update).toHaveBeenCalledWith({
+        where: { id: 'post-1' },
+        data: { likeCount: { increment: 1 } },
+      });
+      expect(result).toEqual({ postId: 'post-1', liked: true, likeCount: 1 });
+    });
+
+    it('treats a duplicate like (P2002) as idempotent success without double-incrementing', async () => {
+      const prisma = buildPrismaMock();
+      const dupError = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: '5.0.0',
+      });
+      (prisma.post.findUnique as jest.Mock)
+        .mockResolvedValueOnce({ id: 'post-1' }) // assertPostExists
+        .mockResolvedValueOnce({ likeCount: 1 }); // currentLikeCount, unchanged by this call
+      (prisma.like.create as jest.Mock).mockRejectedValue(dupError);
+      const service = new FeedService(prisma);
+
+      const result = await service.likePost('user-1', 'post-1');
+
+      expect(prisma.post.update).not.toHaveBeenCalled();
+      expect(result).toEqual({ postId: 'post-1', liked: true, likeCount: 1 });
+    });
+
+    it('rethrows an unrelated Prisma error from likePost rather than swallowing it', async () => {
+      const prisma = buildPrismaMock();
+      const otherError = new Prisma.PrismaClientKnownRequestError('Something else', {
+        code: 'P2025',
+        clientVersion: '5.0.0',
+      });
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.like.create as jest.Mock).mockRejectedValue(otherError);
+      const service = new FeedService(prisma);
+
+      await expect(service.likePost('user-1', 'post-1')).rejects.toBe(otherError);
+    });
+
+    it('throws NotFoundException when postId does not reference a real post (unlike)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new FeedService(prisma);
+
+      await expect(service.unlikePost('user-1', 'missing-post')).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.like.delete).not.toHaveBeenCalled();
+    });
+
+    it('deletes the Like row and decrements likeCount when one exists', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock)
+        .mockResolvedValueOnce({ id: 'post-1' }) // assertPostExists
+        .mockResolvedValueOnce({ likeCount: 0 }); // currentLikeCount after decrement
+      (prisma.like.findUnique as jest.Mock).mockResolvedValue({ id: 'like-1' });
+      (prisma.like.delete as jest.Mock).mockResolvedValue({ id: 'like-1' });
+      (prisma.post.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+      const service = new FeedService(prisma);
+
+      const result = await service.unlikePost('user-1', 'post-1');
+
+      expect(prisma.like.delete).toHaveBeenCalledWith({
+        where: { userId_postId: { userId: 'user-1', postId: 'post-1' } },
+      });
+      expect(prisma.post.updateMany).toHaveBeenCalledWith({
+        where: { id: 'post-1', likeCount: { gt: 0 } },
+        data: { likeCount: { decrement: 1 } },
+      });
+      expect(result).toEqual({ postId: 'post-1', liked: false, likeCount: 0 });
+    });
+
+    it('is idempotent (no-op, no error) when unliking a post that was never liked', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock)
+        .mockResolvedValueOnce({ id: 'post-1' }) // assertPostExists
+        .mockResolvedValueOnce({ likeCount: 0 }); // currentLikeCount
+      (prisma.like.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new FeedService(prisma);
+
+      const result = await service.unlikePost('user-1', 'post-1');
+
+      expect(prisma.like.delete).not.toHaveBeenCalled();
+      expect(prisma.post.updateMany).not.toHaveBeenCalled();
+      expect(result).toEqual({ postId: 'post-1', liked: false, likeCount: 0 });
+    });
+
+    it('treats a concurrent-delete race (P2025) as idempotent success rather than a 500', async () => {
+      const prisma = buildPrismaMock();
+      const raceError = new Prisma.PrismaClientKnownRequestError('Record to delete does not exist', {
+        code: 'P2025',
+        clientVersion: '5.0.0',
+      });
+      (prisma.post.findUnique as jest.Mock)
+        .mockResolvedValueOnce({ id: 'post-1' }) // assertPostExists
+        .mockResolvedValueOnce({ likeCount: 0 }); // currentLikeCount
+      (prisma.like.findUnique as jest.Mock).mockResolvedValue({ id: 'like-1' });
+      (prisma.like.delete as jest.Mock).mockRejectedValue(raceError);
+      const service = new FeedService(prisma);
+
+      const result = await service.unlikePost('user-1', 'post-1');
+
+      expect(result).toEqual({ postId: 'post-1', liked: false, likeCount: 0 });
+    });
+
+    it('nets to 0 across like, like again, unlike, unlike again (full integer-correctness sequence, not just 200s)', async () => {
+      const prisma = buildPrismaMock();
+      let likeCount = 0;
+      let likeRow: { id: string } | null = null;
+
+      (prisma.post.findUnique as jest.Mock).mockImplementation((args: { select?: unknown }) => {
+        const select = args.select as Record<string, unknown> | undefined;
+        if (select?.likeCount) return Promise.resolve({ likeCount });
+        return Promise.resolve({ id: 'post-1' });
+      });
+      (prisma.like.create as jest.Mock).mockImplementation(() => {
+        if (likeRow) {
+          return Promise.reject(
+            new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+              code: 'P2002',
+              clientVersion: '5.0.0',
+            }),
+          );
+        }
+        likeRow = { id: 'like-1' };
+        return Promise.resolve(likeRow);
+      });
+      (prisma.post.update as jest.Mock).mockImplementation(() => {
+        likeCount += 1;
+        return Promise.resolve({});
+      });
+      (prisma.like.findUnique as jest.Mock).mockImplementation(() => Promise.resolve(likeRow));
+      (prisma.like.delete as jest.Mock).mockImplementation(() => {
+        likeRow = null;
+        return Promise.resolve({});
+      });
+      (prisma.post.updateMany as jest.Mock).mockImplementation(() => {
+        if (likeCount > 0) likeCount -= 1;
+        return Promise.resolve({ count: 1 });
+      });
+
+      const service = new FeedService(prisma);
+
+      await service.likePost('user-1', 'post-1'); // 0 -> 1
+      const second = await service.likePost('user-1', 'post-1'); // already liked -> stays 1
+      const third = await service.unlikePost('user-1', 'post-1'); // 1 -> 0
+      const fourth = await service.unlikePost('user-1', 'post-1'); // already unliked -> stays 0
+
+      expect(second.likeCount).toBe(1);
+      expect(third.likeCount).toBe(0);
+      expect(fourth.likeCount).toBe(0);
+      expect(likeCount).toBe(0);
+    });
+  });
+
+  describe('addComment / getComments', () => {
+    const AUTHOR2 = { id: 'author-1', displayName: 'Author One' };
+
+    function buildCommentRow(overrides: Partial<Record<string, unknown>> = {}) {
+      return {
+        id: 'comment-1',
+        postId: 'post-1',
+        authorId: 'author-1',
+        author: AUTHOR2,
+        contentText: 'Nice goal',
+        createdAt: new Date('2026-08-01T00:00:00.000Z'),
+        ...overrides,
+      };
+    }
+
+    it('throws NotFoundException when postId does not reference a real post', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new FeedService(prisma);
+
+      await expect(service.addComment('missing-post', 'author-1', { contentText: 'x' })).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(prisma.comment.create).not.toHaveBeenCalled();
+    });
+
+    it('creates the Comment row and increments commentCount in the same transaction', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      const row = buildCommentRow();
+      (prisma.comment.create as jest.Mock).mockResolvedValue(row);
+      (prisma.post.update as jest.Mock).mockResolvedValue({});
+      const service = new FeedService(prisma);
+
+      const result = await service.addComment('post-1', 'author-1', { contentText: 'Nice goal' });
+
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(prisma.comment.create).toHaveBeenCalledWith({
+        data: { postId: 'post-1', authorId: 'author-1', contentText: 'Nice goal' },
+        select: expect.objectContaining({ contentText: true, author: expect.anything() }),
+      });
+      expect(prisma.post.update).toHaveBeenCalledWith({
+        where: { id: 'post-1' },
+        data: { commentCount: { increment: 1 } },
+      });
+      expect(result).toEqual(row);
+    });
+
+    it("never selects the comment author's passwordHash or isMinor", async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.comment.create as jest.Mock).mockResolvedValue(buildCommentRow());
+      (prisma.post.update as jest.Mock).mockResolvedValue({});
+      const service = new FeedService(prisma);
+
+      await service.addComment('post-1', 'author-1', { contentText: 'x' });
+
+      const callArgs = (prisma.comment.create as jest.Mock).mock.calls[0][0];
+      expect(callArgs.select.author.select).not.toHaveProperty('passwordHash');
+      expect(callArgs.select.author.select).not.toHaveProperty('isMinor');
+    });
+
+    it('throws NotFoundException from getComments when postId does not reference a real post', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new FeedService(prisma);
+
+      await expect(service.getComments('missing-post', {})).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.comment.findMany).not.toHaveBeenCalled();
+    });
+
+    it('orders comments oldest-first (createdAt asc, id asc)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.comment.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new FeedService(prisma);
+
+      await service.getComments('post-1', {});
+
+      const callArgs = (prisma.comment.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArgs.orderBy).toEqual([{ createdAt: 'asc' }, { id: 'asc' }]);
+      expect(callArgs.where).toEqual({ postId: 'post-1' });
+    });
+
+    it('applies an ascending cursor filter (createdAt > cursor OR createdAt = cursor AND id > cursor.id)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.comment.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new FeedService(prisma);
+      const cursor = encodeFeedCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), id: 'comment-2' });
+
+      await service.getComments('post-1', { cursor });
+
+      const callArgs = (prisma.comment.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArgs.where).toEqual({
+        postId: 'post-1',
+        OR: [
+          { createdAt: { gt: new Date('2026-08-02T00:00:00.000Z') } },
+          { createdAt: new Date('2026-08-02T00:00:00.000Z'), id: { gt: 'comment-2' } },
+        ],
+      });
+    });
+
+    it('paginates with a nextCursor when more comments exist than the limit', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      const rows = [
+        buildCommentRow({ id: 'comment-1', createdAt: new Date('2026-08-01T00:00:00.000Z') }),
+        buildCommentRow({ id: 'comment-2', createdAt: new Date('2026-08-02T00:00:00.000Z') }),
+        buildCommentRow({ id: 'comment-3', createdAt: new Date('2026-08-03T00:00:00.000Z') }), // lookahead row
+      ];
+      (prisma.comment.findMany as jest.Mock).mockResolvedValue(rows);
+      const service = new FeedService(prisma);
+
+      const page = await service.getComments('post-1', { limit: 2 });
+
+      expect(page.items.map((c) => c.id)).toEqual(['comment-1', 'comment-2']);
+      expect(page.nextCursor).toBe(
+        encodeFeedCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), id: 'comment-2' }),
+      );
+    });
+  });
+
+  describe('savePost / unsavePost', () => {
+    it('throws NotFoundException when postId does not reference a real post (save)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new FeedService(prisma);
+
+      await expect(service.savePost('user-1', 'missing-post')).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.savedPost.create).not.toHaveBeenCalled();
+    });
+
+    it('creates a SavedPost row (no counter to touch — SavedPost has none)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.savedPost.create as jest.Mock).mockResolvedValue({ id: 'saved-1' });
+      const service = new FeedService(prisma);
+
+      const result = await service.savePost('user-1', 'post-1');
+
+      expect(prisma.savedPost.create).toHaveBeenCalledWith({ data: { userId: 'user-1', postId: 'post-1' } });
+      expect(result).toEqual({ postId: 'post-1', saved: true });
+    });
+
+    it('treats a duplicate save (P2002) as idempotent success', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      const dupError = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: '5.0.0',
+      });
+      (prisma.savedPost.create as jest.Mock).mockRejectedValue(dupError);
+      const service = new FeedService(prisma);
+
+      await expect(service.savePost('user-1', 'post-1')).resolves.toEqual({ postId: 'post-1', saved: true });
+    });
+
+    it('throws NotFoundException when postId does not reference a real post (unsave)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new FeedService(prisma);
+
+      await expect(service.unsavePost('user-1', 'missing-post')).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.savedPost.delete).not.toHaveBeenCalled();
+    });
+
+    it('is idempotent (no error) when unsaving a post that was never saved (P2025)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      const notFoundError = new Prisma.PrismaClientKnownRequestError('Record to delete does not exist', {
+        code: 'P2025',
+        clientVersion: '5.0.0',
+      });
+      (prisma.savedPost.delete as jest.Mock).mockRejectedValue(notFoundError);
+      const service = new FeedService(prisma);
+
+      await expect(service.unsavePost('user-1', 'post-1')).resolves.toEqual({ postId: 'post-1', saved: false });
+    });
+
+    it('deletes an existing SavedPost row on unsave', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.savedPost.delete as jest.Mock).mockResolvedValue({ id: 'saved-1' });
+      const service = new FeedService(prisma);
+
+      const result = await service.unsavePost('user-1', 'post-1');
+
+      expect(prisma.savedPost.delete).toHaveBeenCalledWith({
+        where: { userId_postId: { userId: 'user-1', postId: 'post-1' } },
+      });
+      expect(result).toEqual({ postId: 'post-1', saved: false });
+    });
+  });
+
+  describe('getSavedPosts', () => {
+    function buildSavedRow(overrides: Partial<Record<string, unknown>> = {}) {
+      return {
+        postId: 'post-1',
+        savedAt: new Date('2026-08-01T00:00:00.000Z'),
+        post: buildPostRow(),
+        ...overrides,
+      };
+    }
+
+    it('scopes the query to the given userId', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.savedPost.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new FeedService(prisma);
+
+      await service.getSavedPosts('user-1', {});
+
+      const callArgs = (prisma.savedPost.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArgs.where).toEqual({ userId: 'user-1' });
+      expect(callArgs.orderBy).toEqual([{ savedAt: 'desc' }, { postId: 'desc' }]);
+    });
+
+    it('paginates with a nextCursor when more saved posts exist than the limit', async () => {
+      const prisma = buildPrismaMock();
+      const rows = [
+        buildSavedRow({ postId: 'post-3', savedAt: new Date('2026-08-03T00:00:00.000Z') }),
+        buildSavedRow({ postId: 'post-2', savedAt: new Date('2026-08-02T00:00:00.000Z') }),
+        buildSavedRow({ postId: 'post-1', savedAt: new Date('2026-08-01T00:00:00.000Z') }), // lookahead
+      ];
+      (prisma.savedPost.findMany as jest.Mock).mockResolvedValue(rows);
+      const service = new FeedService(prisma);
+
+      const page = await service.getSavedPosts('user-1', { limit: 2 });
+
+      expect(page.items.map((s) => s.postId)).toEqual(['post-3', 'post-2']);
+      expect(page.nextCursor).toBe(
+        encodeFeedCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), id: 'post-2' }),
+      );
+    });
+
+    it('applies a descending cursor filter keyed on savedAt/postId when a cursor is given', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.savedPost.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new FeedService(prisma);
+      const cursor = encodeFeedCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), id: 'post-2' });
+
+      await service.getSavedPosts('user-1', { cursor });
+
+      const callArgs = (prisma.savedPost.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArgs.where).toEqual({
+        userId: 'user-1',
+        OR: [
+          { savedAt: { lt: new Date('2026-08-02T00:00:00.000Z') } },
+          { savedAt: new Date('2026-08-02T00:00:00.000Z'), postId: { lt: 'post-2' } },
+        ],
+      });
+    });
+
+    it('embeds the full post without leaking passwordHash/isMinor', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.savedPost.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new FeedService(prisma);
+
+      await service.getSavedPosts('user-1', {});
+
+      const callArgs = (prisma.savedPost.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArgs.select.post.select.author.select).not.toHaveProperty('passwordHash');
+      expect(callArgs.select.post.select.author.select).not.toHaveProperty('isMinor');
     });
   });
 });

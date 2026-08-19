@@ -136,9 +136,9 @@ Full reasoning for every choice above: Build Plan Section 5.
   backend work, but Sprint 1's own exit criterion (register, verify
   email, declare age, guardian-consent-gated access) isn't actually
   walkable by a real user until at least F7 (and arguably F5) are built.
-- **Sprint 2 has started. Schema is ready; the Feed Service's first
-  slice (`POST /posts`, `GET /posts/feed`) is built, on a branch,
-  pending merge — see below.** Section 6's Sprint 2 scope: Feed Service (Section 4.3 —
+- **Sprint 2 is in progress. Schema is ready; the Feed Service's
+  Section 4.3 endpoints are now fully built across two slices — see
+  below.** Section 6's Sprint 2 scope: Feed Service (Section 4.3 —
   post/view/like/comment/save), club fan pages with auto-join on
   signup (Section 4.4's club subset only — **not** `/banter-rooms*` in
   the same section, that's Sprint 3), Follow, and wiring
@@ -155,30 +155,64 @@ Full reasoning for every choice above: Build Plan Section 5.
   `Post.likeCount` stays as a cache — see the comment on it in
   `schema.prisma` for the consistency obligation whoever builds the
   like endpoints must honor. That PR was schema-only, on purpose.
-  **`POST /posts` and `GET /posts/feed` (Section 4.3's first two
-  endpoints) are now built** — on branch `sprint-2/feed-service-core`,
-  verified against real Postgres/Redis and locally committed, **not
-  yet merged to `main`**, pending human review. `POST /posts` is gated
-  by `GuardianConsentGuard` in addition to `JwtAuthGuard` — a judgment
-  call, not a literal reading of Section 8.3 step 5 (whose own
-  enumerated restricted-pending list doesn't name general feed
-  posting), resting instead on Section 5.7's separate, broader
-  instruction to re-check consent status on every "posting" action;
-  flagged as a Decision Log candidate, see `modules/feed/README.md`.
-  `GET /posts/feed` is `JwtAuthGuard`-only (reading isn't the
-  safety-sensitive action posting is) and is scoped to the caller's own
-  posts plus posts by users they follow (`Follow` model) — Section 4.3
-  doesn't define feed scope beyond the endpoint existing, so that scope
-  is also a flagged judgment call, not an assumed spec. Cursor-based
-  (keyset) pagination, default page size 20 / max 50, per Section 5.5.
-  **Still nothing else in Section 4.3 or 4.4 is built**: `GET
-  /posts/:id`, like, comment, save, `GET /users/:id/saved-posts`
-  (Section 4.3), and all of Section 4.4 (`/clubs*`, `/banter-rooms*`)
-  remain unbuilt — this PR is deliberately that one slice, not the rest
-  of Sprint 2's scope. Test suite after this branch's changes: 28
-  suites / 208 tests, 0 failures (up from the 25/173 measured
-  immediately before it — see the corrected note on the Sprint 1
-  bullet above).
+  **Slice one (`POST /posts`, `GET /posts/feed`) is merged to `main`
+  (PR #53).** `POST /posts` is gated by `GuardianConsentGuard` in
+  addition to `JwtAuthGuard` — a judgment call, not a literal reading
+  of Section 8.3 step 5 (whose own enumerated restricted-pending list
+  doesn't name general feed posting), resting instead on Section 5.7's
+  separate, broader instruction to re-check consent status on every
+  "posting" action; flagged as a Decision Log candidate, see
+  `modules/feed/README.md`. `GET /posts/feed` is `JwtAuthGuard`-only
+  (reading isn't the safety-sensitive action posting is) and is scoped
+  to the caller's own posts plus posts by users they follow (`Follow`
+  model) — Section 4.3 doesn't define feed scope beyond the endpoint
+  existing, so that scope is also a flagged judgment call, not an
+  assumed spec. Cursor-based (keyset) pagination, default page size 20
+  / max 50, per Section 5.5.
+  **Slice two (the remaining seven Section 4.3 endpoints — `GET
+  /posts/:id`, `POST`/`DELETE /posts/:id/like`,
+  `POST`/`GET /posts/:id/comments`, `POST`/`DELETE /posts/:id/save`,
+  `GET /users/:id/saved-posts`) is now built** — on branch
+  `sprint-2/feed-service-reactions`, verified against real
+  Postgres/Redis and locally committed, **not yet merged to `main`**,
+  pending human review. `Section 4.3 is now complete end to end.` New
+  guard/scope judgment calls this slice made (all argued in full in
+  `modules/feed/README.md`, at the same depth as slice one's own two):
+  liking and saving are **not** gated by `GuardianConsentGuard` (only
+  `JwtAuthGuard`) — neither produces visible content the way posting
+  does; **commenting IS gated by `GuardianConsentGuard`**, landing the
+  same direction slice one argued for `POST /posts` and flagged as the
+  same open Decision Log candidate (is Section 8.3 step 5's
+  restricted-pending list exhaustive, or does Section 5.7's broader
+  "posting" language control); `GET /posts/:id/comments` orders
+  oldest-first (the opposite direction from the feed's own
+  most-recent-first), a documented UX judgment call since Section 4.3
+  is silent on comment-thread order; and `GET /users/:id/saved-posts`
+  defaults to the same conservative self-only/403-on-mismatch reading
+  `users/README.md` already established for `GET`/`PATCH /users/:id`,
+  flagged as a genuine open Decision Log candidate since Section 4.3
+  doesn't say whether saved posts are private or publicly viewable.
+  Like/save actions are idempotent (double-like, double-save,
+  unlike-when-not-liked, unsave-when-not-saved all return 200, not
+  500/404), backed by `Like`/`SavedPost`'s `@@unique([userId, postId])`
+  constraints and Prisma `P2002`/`P2025` handling; `Post.likeCount` and
+  the newly-commented `Post.commentCount` (see `schema.prisma`) are
+  kept consistent via Prisma **interactive transactions**
+  (`$transaction(async (tx) => ...)`, not the array form) so a
+  create/delete and its paired counter update can never land
+  independently — verified live against real Postgres by reading the
+  counters back after a full like/like/unlike/unlike sequence and
+  confirming they net to exactly 0, not just checking HTTP status
+  codes. `Post.commentCount` has no decrement path yet by design —
+  Section 4.3 has no `DELETE /posts/:id/comments/:commentId`, so
+  nothing removes a `Comment` row; whoever adds comment deletion later
+  must add that decrement then. **Still nothing in Section 4.4 is
+  built**: `/clubs*` and `/banter-rooms*` remain unbuilt — Sprint 2's
+  club-page work and Sprint 3's Banter Rooms are both separate,
+  upcoming PRs, not implied by Section 4.3 now being complete. Test
+  suite after this branch's changes: 29 suites / 262 tests, 0 failures
+  (up from the 28/208 measured immediately before it, on top of slice
+  one's own merge).
 - **Decision Log #1, #7, #8, #10, #11, #12, #16, #17, and #19 are
   resolved.** #16, #17, and #19 required real code changes beyond the
   doc entry — all three are merged (PRs #32, #33, #38). #19 (age-5
