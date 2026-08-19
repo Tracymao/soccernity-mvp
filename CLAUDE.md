@@ -127,6 +127,25 @@ Full reasoning for every choice above: Build Plan Section 5.
   backend work, but Sprint 1's own exit criterion (register, verify
   email, declare age, guardian-consent-gated access) isn't actually
   walkable by a real user until at least F7 (and arguably F5) are built.
+- **Sprint 2 has started. Schema is ready; no feature endpoints are
+  built yet.** Section 6's Sprint 2 scope: Feed Service (Section 4.3 —
+  post/view/like/comment/save), club fan pages with auto-join on
+  signup (Section 4.4's club subset only — **not** `/banter-rooms*` in
+  the same section, that's Sprint 3), Follow, and wiring
+  follow/comment/like events into `Notification` (the full
+  notification-center UI is still Sprint 3). `Post`, `Comment`,
+  `SavedPost`, `Follow`, `ClubPage`, `Notification` were already
+  scaffolded back in Sprint 0/D. Pre-planning found and fixed a real
+  gap before any endpoint work started (PR #51): `Post.likeCount` was
+  a bare denormalized counter with no per-user `Like` rows behind it,
+  making `POST`/`DELETE /posts/:id/like` impossible to implement
+  correctly (no way to prevent duplicate likes, no way to know which
+  row to remove on unlike). A `Like` model now exists, mirroring
+  `SavedPost`'s exact pattern (`@@unique([userId, postId])`).
+  `Post.likeCount` stays as a cache — see the comment on it in
+  `schema.prisma` for the consistency obligation whoever builds the
+  like endpoints must honor. **Nothing in Section 4.3 or 4.4 is built
+  yet** — this PR was schema-only, on purpose.
 - **Decision Log #1, #7, #8, #10, #11, #12, #16, #17, and #19 are
   resolved.** #16, #17, and #19 required real code changes beyond the
   doc entry — all three are merged (PRs #32, #33, #38). #19 (age-5
