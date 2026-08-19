@@ -37,6 +37,7 @@ model User {
   posts             Post[]
   comments          Comment[]
   savedPosts        SavedPost[]
+  likes             Like[]
   followedBy        Follow[]        @relation("followee")
   following         Follow[]        @relation("follower")
   notifications     Notification[]
@@ -119,11 +120,19 @@ model Post {
   clubPage      ClubPage? @relation(fields: [clubPageId], references: [id])
   banterRoomId  String?
   banterRoom    BanterRoom? @relation(fields: [banterRoomId], references: [id])
+  // Denormalized cache for feed-rendering performance (avoids a COUNT()
+  // per post on every feed load). Must be incremented/decremented
+  // transactionally alongside Like row creation/deletion by whichever
+  // service implements POST/DELETE /posts/:id/like (Build Plan
+  // Section 4.3) — never trust this in isolation as authoritative, and
+  // it should be recomputable via Like.count({ where: { postId } }) if
+  // it ever drifts from the real Like rows.
   likeCount     Int       @default(0)
   commentCount  Int       @default(0)
   createdAt     DateTime  @default(now())
   comments      Comment[]
   savedBy       SavedPost[]
+  likes         Like[]
 }
 
 model Comment {
@@ -181,6 +190,20 @@ model SavedPost {
   postId   String
   post     Post     @relation(fields: [postId], references: [id])
   savedAt  DateTime @default(now())
+
+  @@unique([userId, postId])
+}
+
+// Per-user like record backing POST/DELETE /posts/:id/like (Build Plan
+// Section 4.3). Post.likeCount stays as a denormalized cache alongside
+// this — see the comment there.
+model Like {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id])
+  likedAt   DateTime @default(now())
 
   @@unique([userId, postId])
 }
