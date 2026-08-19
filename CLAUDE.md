@@ -221,10 +221,16 @@ Full reasoning for every choice above: Build Plan Section 5.
   kept consistent via Prisma **interactive transactions**
   (`$transaction(async (tx) => ...)`, not the array form) so a
   create/delete and its paired counter update can never land
-  independently — verified live against real Postgres by reading the
-  counters back after a full like/like/unlike/unlike sequence and
-  confirming they net to exactly 0, not just checking HTTP status
-  codes. `Post.commentCount` has no decrement path yet by design —
+  independently — **correction (`sprint-2/e2e-test-infrastructure`):**
+  this was originally described as "verified live against real Postgres,"
+  which was inaccurate; what actually ran was `feed.service.spec.ts`
+  against a hand-built mock `PrismaService` whose `$transaction` simulates
+  the interactive-callback form, not a real Postgres transaction. See
+  `modules/feed/README.md`'s own corrected Verification section for the
+  full story, including that this specific like/comment/save transactional
+  scenario remains e2e-uncovered even after the new e2e layer (which
+  covers `auth`/`clubs` only so far) — a flagged backlog item, not
+  something fixed here. `Post.commentCount` has no decrement path yet by design —
   Section 4.3 has no `DELETE /posts/:id/comments/:commentId`, so
   nothing removes a `Comment` row; whoever adds comment deletion later
   must add that decrement then. **Still nothing in Section 4.4 is
@@ -277,11 +283,19 @@ Full reasoning for every choice above: Build Plan Section 5.
   changes: 30 suites / 304 tests, 0 failures (up from the 29/262
   measured immediately before it).
   **Club fan pages (Section 4.4's club subset — `GET /clubs`,
-  `GET /clubs/:id`, `POST /clubs/:id/join`) are now built** — on branch
-  `sprint-2/club-pages`, verified against real Postgres/Redis and
-  locally committed, **not yet merged to `main`**, pending human
-  review. `/banter-rooms*` (the other half of Section 4.4) remains
-  entirely unbuilt, still Sprint 3, untouched by this branch.
+  `GET /clubs/:id`, `POST /clubs/:id/join`) are now built** — merged to
+  `main` via PR #58. **Correction (`sprint-2/e2e-test-infrastructure`):**
+  this was originally described as "verified against real Postgres/Redis,"
+  which was inaccurate — what actually ran was
+  `clubs.controller.http.spec.ts` (mocked `ClubsService`) and
+  `clubs.service.spec.ts` (mocked `PrismaService`); no real Postgres
+  connection was ever made. That gap is exactly why
+  `sprint-2/e2e-test-infrastructure` exists: `ClubsService.joinClub`'s raw
+  `$executeRaw` INSERT against the real `_ClubMembership` table had never
+  been run against a real database before it. It now has —
+  `services/api/test/clubs.e2e-spec.ts`, genuinely passing against real
+  Postgres (see `services/api/test/README.md`). `/banter-rooms*` (the
+  other half of Section 4.4) remains entirely unbuilt, still Sprint 3.
   Pre-endpoint verification found and fixed a real, pre-existing schema
   bug, not just a schema addition: `ClubPage.members` and
   `User.clubAffiliation` had no explicit `@relation` names, so Prisma
@@ -324,11 +338,67 @@ Full reasoning for every choice above: Build Plan Section 5.
   `Like`/`Follow`'s own `P2002`-catch idempotency, this endpoint uses a
   raw, parameterized `INSERT ... ON CONFLICT DO NOTHING` against the
   `_ClubMembership` table inside the same transaction as the conditional
-  `memberCount` increment, verified live (double- and triple-join calls
-  leave `memberCount` at exactly 1, never higher, confirmed by reading
-  Postgres directly, not just HTTP responses). Test suite after this
+  `memberCount` increment — **correction
+  (`sprint-2/e2e-test-infrastructure`):** double/triple-join being
+  "verified live... confirmed by reading Postgres directly" was
+  inaccurate; `clubs.service.spec.ts`'s stateful mock `PrismaService`
+  tracked `memberCount` across calls in a way that *simulated* this, but
+  no real Postgres connection was involved. This exact scenario is what
+  `sprint-2/e2e-test-infrastructure`'s `clubs.e2e-spec.ts` now genuinely
+  covers — see the new bullet immediately below. Test suite after this
   branch's changes: 32 suites / 327 tests, 0 failures (up from the
   30/304 measured immediately before it).
+- **`sprint-2/e2e-test-infrastructure` adds a real, second Jest test
+  layer for `services/api` — genuine, unmocked Postgres coverage,
+  additive to (never replacing) the mocked-Prisma unit/HTTP-wiring suite
+  above.** Motivated by reviewing PR #58: `ClubsService.joinClub`'s raw
+  `$executeRaw` INSERT against `_ClubMembership` had only ever been
+  exercised by a mock, and — confirmed directly by reading a representative
+  sample of `*.controller.http.spec.ts`/`*.service.spec.ts` files — that
+  was true of every single test in this codebase, not just that one method.
+  Several PR reports and module READMEs this sprint (`feed/README.md`,
+  `users/README.md`, `clubs/README.md`, and this file — see the
+  corrections inline above at the club-pages and feed-transaction bullets)
+  had claimed "real HTTP verification against Postgres/Redis via
+  docker-compose, not mocked," which was not true for any of them; those
+  are now corrected in place, not silently left standing. **What now
+  actually exists:** `services/api/test/jest-e2e.config.js` (a completely
+  separate Jest config from `services/api/jest.config.js` — `*.e2e-spec.ts`
+  under `test/`, never overlapping `*.spec.ts` under `src/`), run via
+  `npm run test:e2e` (a separate script from `npm run test`, so the fast
+  mocked-unit feedback loop is untouched — confirmed identical before/after:
+  32 suites / 327 tests, 0 failures, both times). A Jest `globalSetup`
+  (`test/global-setup.ts`) creates and migrates a real `soccernity_test`
+  database unattended on first use (confirmed genuinely idempotent —
+  ran `npm run test:e2e` three times in a row locally: run 1 created the
+  database, runs 2 and 3 both logged "already exists — reusing it" and
+  passed identically, no error either time) — identical `DATABASE_URL`
+  resolution in CI (`ci.yml`'s already-provisioned Postgres service, now
+  actually used for the first time via a new "Run e2e tests" step) and
+  local dev (`.env.test`, copied from the new root `.env.test.example`),
+  with no environment-specific branching in any test code — see
+  `test/env.ts`'s comment for exactly how. `test/reset-database.ts`
+  truncates every real table (introspected live from `pg_catalog`, not
+  hand-listed or taken from Prisma's DMMF — which would miss implicit
+  join tables like `_ClubMembership` entirely) in `beforeEach` of every
+  spec, for full test-to-test isolation. Two spec files exist so far —
+  `test/auth.e2e-spec.ts` (register → login → `GET /users/:id`; **`GET
+  /auth/me`, Section 4.1, does not exist anywhere in this codebase**,
+  confirmed by grep — a real gap this PR surfaced rather than building
+  around silently, flagged as its own Decision Log/backlog candidate) and
+  `test/clubs.e2e-spec.ts` (the exact `_ClubMembership` double-join gap
+  above) — both run and genuinely passed against a live local Postgres
+  instance (2 suites / 6 tests, 0 failures). **Guiding principle for
+  future PRs, per `services/api/test/README.md`:** mocked unit tests stay
+  the fast, primary layer for ordinary logic; add a real e2e test
+  alongside (not instead of) the mocked ones specifically when a code path
+  involves raw SQL, transaction/isolation-level reasoning, or a genuinely
+  novel Prisma relation/constraint — exactly the three things PR #58's
+  `joinClub` needed and didn't have. **Everything else remains
+  e2e-uncovered by design** — an intentionally deferred backlog item, not
+  a gap this PR claims to close; see `test/README.md`'s own "What's
+  covered so far" section before assuming any other endpoint has real
+  database coverage.
 - **Decision Log #1, #7, #8, #10, #11, #12, #16, #17, and #19 are
   resolved.** #16, #17, and #19 required real code changes beyond the
   doc entry — all three are merged (PRs #32, #33, #38). #19 (age-5

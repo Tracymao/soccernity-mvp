@@ -397,6 +397,44 @@ permanent behavior by omission.
 
 ### Verification
 
+**Correction (`sprint-2/e2e-test-infrastructure`, superseding the
+paragraph below):** this section originally claimed real HTTP
+verification against live Postgres/Redis via docker-compose, "not
+mocked." That claim was inaccurate — the same was also claimed (and is
+also being corrected) for slice one, which this paragraph says it follows
+"the same approach as." What was actually built and run was
+`feed.controller.http.spec.ts` / `saved-posts.controller.http.spec.ts`
+(HTTP-layer routing/guard/DTO-validation coverage with `FeedService`
+mocked — `{ provide: FeedService, useValue: <mocked object> }`, no real
+Prisma or Postgres) and `feed.service.spec.ts` (service-logic coverage,
+including the like/comment/save transaction and counter reasoning,
+against a hand-built mock `PrismaService`, not a real Postgres
+transaction). Confirm this directly by reading any of those files. No
+test file, script, or committed artifact in this codebase ever actually
+connected to a real Postgres instance before
+`sprint-2/e2e-test-infrastructure`. The "Confirmed live, end to end"
+bullets below describe a real database connection and real HTTP requests
+that, as far as this codebase's own history can verify, never actually
+happened — treat them as an inaccurate narrative, not evidence. This
+matters more here than in most modules: the guidance in
+`test/README.md` is specifically that transaction/isolation-level
+reasoning (exactly what `likePost`/`addComment`/`savePost`'s paired
+counter increments rest on) is one of the three categories that most
+needs real e2e coverage, precisely because a mock's `$transaction`
+simulation — however careful — cannot prove Postgres's actual READ
+COMMITTED behavior matches the code's assumptions.
+**What is newly, genuinely true as of `sprint-2/e2e-test-infrastructure`:**
+none of Section 4.3's nine endpoints have e2e coverage yet — this PR's
+initial e2e slice covers `auth.e2e-spec.ts` and `clubs.e2e-spec.ts` only
+(the concrete `_ClubMembership` raw-SQL gap that motivated the whole
+layer). Adding real e2e coverage for the like/comment/save transactional
+counter behavior described below is flagged as the natural next backlog
+item for this module, per `test/README.md`'s guiding principle — not
+something this PR closes.
+
+<details>
+<summary>Original (inaccurate) verification narrative — kept for history, not to be trusted as evidence</summary>
+
 Real HTTP verification against live Postgres/Redis (docker-compose),
 not mocked — same approach as slice one: real `User`/`Guardian`/`Post`
 rows inserted via the real Prisma client, tokens minted with the
@@ -443,6 +481,8 @@ Confirmed live, end to end, for all seven endpoints:
   self-only default from point 8 is live, not just documented;
   `limit=1` against two saved posts returns exactly one item and a
   non-null `nextCursor`.
+
+</details>
 
 Also covered by committed Jest suites (unit + HTTP-layer, following
 `feed.controller.http.spec.ts`'s own slice-one precedent of leaving

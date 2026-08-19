@@ -341,6 +341,36 @@ does — see `users.module.ts`.
 
 ### Verification
 
+**Correction (`sprint-2/e2e-test-infrastructure`, superseding both
+paragraphs below):** both the PR B6 and Sprint 2 entries here originally
+claimed real, live verification against Postgres/Redis via
+docker-compose. That claim was inaccurate for both. What was actually
+built and run in each case was `users.controller.spec.ts` /
+`users.controller.http.spec.ts` / `users.controller.follow.http.spec.ts`
+(HTTP-layer routing/guard/DTO-validation coverage with `UsersService`
+mocked — `{ provide: UsersService, useValue: <mocked object> }`, no real
+Prisma or Postgres) and `users.service.spec.ts` (service-logic coverage
+against a hand-built mock `PrismaService`). Confirm this directly by
+reading any of those files. No test file, script, or committed artifact
+in this codebase ever actually connected to a real Postgres instance
+before `sprint-2/e2e-test-infrastructure`. The "Confirmed live, end to
+end" bullets below, and the standalone PR B6 sentence above them, describe
+a real database connection and real HTTP requests that, as far as this
+codebase's own history can verify, never actually happened — treat them
+as an inaccurate narrative, not evidence.
+**What is newly, genuinely true as of `sprint-2/e2e-test-infrastructure`:**
+`services/api/test/auth.e2e-spec.ts` now exercises `GET /users/:id`
+(self-scoped) for real — real Postgres, real HTTP via `supertest`, real
+`JwtAuthGuard`/`TokenService` chain, no mocked `PrismaService` anywhere in
+its `TestingModule` — as the third leg of a real register → login →
+fetch-profile round trip. None of the follow/follower/following
+endpoints below have e2e coverage yet — that remains an intentionally
+deferred backlog item per `test/README.md`'s guiding principle, not
+something this PR closes.
+
+<details>
+<summary>Original (inaccurate) verification narrative — kept for history, not to be trusted as evidence</summary>
+
 **PR B6**: Real HTTP verification (Postgres/Redis via docker-compose,
 real Nest server, real users inserted directly via Prisma, tokens minted
 with the `jsonwebtoken` library using the exact same payload shape and
@@ -382,6 +412,8 @@ via Prisma, tokens minted with `jsonwebtoken` against the real
   zero-rows-on-self-comment) — all read directly from Postgres via
   Prisma in the verification script, not inferred from HTTP status
   codes alone.
+
+</details>
 
 Also covered by committed Jest suites (unit + HTTP-layer):
 
