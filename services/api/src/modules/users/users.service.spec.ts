@@ -1,14 +1,34 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { encodeFeedCursor } from '../feed/cursor.util';
 import { UsersService } from './users.service';
 
 function buildPrismaMock() {
-  return {
+  const prisma = {
     user: {
       findUnique: jest.fn(),
       update: jest.fn(),
     },
+    follow: {
+      create: jest.fn(),
+      delete: jest.fn(),
+      findMany: jest.fn(),
+    },
+    notification: {
+      create: jest.fn(),
+    },
   } as unknown as PrismaService;
+
+  // Same interactive-transaction mock shape as feed.service.spec.ts's own
+  // buildPrismaMock — see that file's comment for why the callback form
+  // (not the array form) needs to actually run top-to-bottom with real
+  // await/throw semantics for these tests to be meaningful.
+  (prisma as unknown as { $transaction: jest.Mock }).$transaction = jest.fn((fn: (tx: unknown) => unknown) =>
+    fn(prisma),
+  );
+
+  return prisma;
 }
 
 const FULL_DB_ROW = {
@@ -135,6 +155,290 @@ describe('UsersService', () => {
 
       const callArgs = (prisma.user.update as jest.Mock).mock.calls[0][0];
       expect(callArgs.data).toEqual({});
+    });
+  });
+
+  describe('followUser / unfollowUser', () => {
+    it('rejects a self-follow with BadRequestException, without querying Prisma at all', async () => {
+      const prisma = buildPrismaMock();
+      const service = new UsersService(prisma);
+
+      await expect(service.followUser('user-1', 'user-1')).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      expect(prisma.follow.create).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when followeeId does not reference a real user', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new UsersService(prisma);
+
+      await expect(service.followUser('user-1', 'ghost')).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.follow.create).not.toHaveBeenCalled();
+    });
+
+    it('creates a Follow row and a recipient Notification (type: follow) transactionally', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'followee-1' });
+      (prisma.follow.create as jest.Mock).mockResolvedValue({ id: 'follow-1' });
+      const service = new UsersService(prisma);
+
+      const result = await service.followUser('follower-1', 'followee-1');
+
+      expect(prisma.follow.create).toHaveBeenCalledWith({
+        data: { followerId: 'follower-1', followeeId: 'followee-1' },
+      });
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: { userId: 'followee-1', type: 'follow', payloadRefId: 'follower-1' },
+      });
+      expect(result).toEqual({ following: true });
+    });
+
+    it('the Notification recipient is the followee, never the follower (actor)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'followee-1' });
+      (prisma.follow.create as jest.Mock).mockResolvedValue({ id: 'follow-1' });
+      const service = new UsersService(prisma);
+
+      await service.followUser('follower-1', 'followee-1');
+
+      const callArgs = (prisma.notification.create as jest.Mock).mock.calls[0][0];
+      expect(callArgs.data.userId).toBe('followee-1');
+      expect(callArgs.data.userId).not.toBe('follower-1');
+      // payloadRefId convention (users/README.md): the follower's own
+      // userId, so the recipient's client can resolve "who followed me".
+      expect(callArgs.data.payloadRefId).toBe('follower-1');
+    });
+
+    it('treats a duplicate follow (P2002) as idempotent success, without a duplicate Notification', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'followee-1' });
+      const dupError = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: '5.0.0',
+      });
+      (prisma.follow.create as jest.Mock).mockRejectedValue(dupError);
+      const service = new UsersService(prisma);
+
+      const result = await service.followUser('follower-1', 'followee-1');
+
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+      expect(result).toEqual({ following: true });
+    });
+
+    it('creates exactly one Notification row across a follow followed by a duplicate (idempotent) follow', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'followee-1' });
+      let following = false;
+      (prisma.follow.create as jest.Mock).mockImplementation(() => {
+        if (following) {
+          return Promise.reject(
+            new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+              code: 'P2002',
+              clientVersion: '5.0.0',
+            }),
+          );
+        }
+        following = true;
+        return Promise.resolve({ id: 'follow-1' });
+      });
+      const service = new UsersService(prisma);
+
+      await service.followUser('follower-1', 'followee-1');
+      await service.followUser('follower-1', 'followee-1'); // duplicate — P2002, idempotent
+
+      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('rethrows an unrelated Prisma error from followUser rather than swallowing it', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'followee-1' });
+      const otherError = new Prisma.PrismaClientKnownRequestError('Something else', {
+        code: 'P2025',
+        clientVersion: '5.0.0',
+      });
+      (prisma.follow.create as jest.Mock).mockRejectedValue(otherError);
+      const service = new UsersService(prisma);
+
+      await expect(service.followUser('follower-1', 'followee-1')).rejects.toBe(otherError);
+    });
+
+    it('rejects a self-unfollow with BadRequestException', async () => {
+      const prisma = buildPrismaMock();
+      const service = new UsersService(prisma);
+
+      await expect(service.unfollowUser('user-1', 'user-1')).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.follow.delete).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException from unfollowUser when followeeId does not reference a real user', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new UsersService(prisma);
+
+      await expect(service.unfollowUser('user-1', 'ghost')).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.follow.delete).not.toHaveBeenCalled();
+    });
+
+    it('deletes the Follow row on unfollow', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'followee-1' });
+      (prisma.follow.delete as jest.Mock).mockResolvedValue({ id: 'follow-1' });
+      const service = new UsersService(prisma);
+
+      const result = await service.unfollowUser('follower-1', 'followee-1');
+
+      expect(prisma.follow.delete).toHaveBeenCalledWith({
+        where: { followerId_followeeId: { followerId: 'follower-1', followeeId: 'followee-1' } },
+      });
+      expect(result).toEqual({ following: false });
+    });
+
+    it('is idempotent (no error) when unfollowing a user that was never followed (P2025)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'followee-1' });
+      const notFoundError = new Prisma.PrismaClientKnownRequestError('Record to delete does not exist', {
+        code: 'P2025',
+        clientVersion: '5.0.0',
+      });
+      (prisma.follow.delete as jest.Mock).mockRejectedValue(notFoundError);
+      const service = new UsersService(prisma);
+
+      await expect(service.unfollowUser('follower-1', 'followee-1')).resolves.toEqual({ following: false });
+    });
+
+    it('rethrows an unrelated Prisma error from unfollowUser rather than swallowing it', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'followee-1' });
+      const otherError = new Prisma.PrismaClientKnownRequestError('Something else', {
+        code: 'P2002',
+        clientVersion: '5.0.0',
+      });
+      (prisma.follow.delete as jest.Mock).mockRejectedValue(otherError);
+      const service = new UsersService(prisma);
+
+      await expect(service.unfollowUser('follower-1', 'followee-1')).rejects.toBe(otherError);
+    });
+  });
+
+  describe('getFollowers / getFollowing', () => {
+    function buildFollowRow(overrides: Partial<Record<string, unknown>> = {}) {
+      return {
+        id: 'follow-1',
+        createdAt: new Date('2026-08-01T00:00:00.000Z'),
+        follower: { id: 'follower-1', displayName: 'Follower One' },
+        followee: { id: 'followee-1', displayName: 'Followee One' },
+        ...overrides,
+      };
+    }
+
+    it('throws NotFoundException from getFollowers when :id does not reference a real user', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new UsersService(prisma);
+
+      await expect(service.getFollowers('ghost', {})).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.follow.findMany).not.toHaveBeenCalled();
+    });
+
+    it('scopes getFollowers to Follow rows where followeeId = :id, ordered most-recent-first', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
+      (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new UsersService(prisma);
+
+      await service.getFollowers('user-1', {});
+
+      const callArgs = (prisma.follow.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArgs.where).toEqual({ followeeId: 'user-1' });
+      expect(callArgs.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
+    });
+
+    it('returns the embedded follower as the minimal {id, displayName} shape, no passwordHash/isMinor', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
+      (prisma.follow.findMany as jest.Mock).mockResolvedValue([buildFollowRow()]);
+      const service = new UsersService(prisma);
+
+      const page = await service.getFollowers('user-1', {});
+
+      expect(page.items).toEqual([{ id: 'follower-1', displayName: 'Follower One' }]);
+
+      const callArgs = (prisma.follow.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArgs.select.follower.select).not.toHaveProperty('passwordHash');
+      expect(callArgs.select.follower.select).not.toHaveProperty('isMinor');
+    });
+
+    it('paginates getFollowers with a nextCursor when more rows exist than the limit', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
+      const rows = [
+        buildFollowRow({ id: 'follow-3', createdAt: new Date('2026-08-03T00:00:00.000Z') }),
+        buildFollowRow({ id: 'follow-2', createdAt: new Date('2026-08-02T00:00:00.000Z') }),
+        buildFollowRow({ id: 'follow-1', createdAt: new Date('2026-08-01T00:00:00.000Z') }), // lookahead
+      ];
+      (prisma.follow.findMany as jest.Mock).mockResolvedValue(rows);
+      const service = new UsersService(prisma);
+
+      const page = await service.getFollowers('user-1', { limit: 2 });
+
+      expect(page.items).toHaveLength(2);
+      expect(page.nextCursor).toBe(
+        encodeFeedCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), id: 'follow-2' }),
+      );
+    });
+
+    it('returns nextCursor: null when fewer rows exist than the limit', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
+      (prisma.follow.findMany as jest.Mock).mockResolvedValue([buildFollowRow()]);
+      const service = new UsersService(prisma);
+
+      const page = await service.getFollowers('user-1', { limit: 10 });
+
+      expect(page.items).toHaveLength(1);
+      expect(page.nextCursor).toBeNull();
+    });
+
+    it('applies a cursor filter (createdAt < cursor OR createdAt = cursor AND id < cursor.id) to getFollowers', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
+      (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new UsersService(prisma);
+      const cursor = encodeFeedCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), id: 'follow-2' });
+
+      await service.getFollowers('user-1', { cursor });
+
+      const callArgs = (prisma.follow.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArgs.where).toEqual({
+        followeeId: 'user-1',
+        OR: [
+          { createdAt: { lt: new Date('2026-08-02T00:00:00.000Z') } },
+          { createdAt: new Date('2026-08-02T00:00:00.000Z'), id: { lt: 'follow-2' } },
+        ],
+      });
+    });
+
+    it('throws NotFoundException from getFollowing when :id does not reference a real user', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new UsersService(prisma);
+
+      await expect(service.getFollowing('ghost', {})).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.follow.findMany).not.toHaveBeenCalled();
+    });
+
+    it('scopes getFollowing to Follow rows where followerId = :id, and returns the embedded followee', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
+      (prisma.follow.findMany as jest.Mock).mockResolvedValue([buildFollowRow()]);
+      const service = new UsersService(prisma);
+
+      const page = await service.getFollowing('user-1', {});
+
+      const callArgs = (prisma.follow.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArgs.where).toEqual({ followerId: 'user-1' });
+      expect(page.items).toEqual([{ id: 'followee-1', displayName: 'Followee One' }]);
     });
   });
 });

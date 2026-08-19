@@ -205,11 +205,24 @@ export class FeedService {
   // comment, save/unsave) — all six need "does this postId reference a
   // real Post" as their first move, and all six must 404 (not a raw FK
   // violation surfaced as 400/500) when it doesn't.
-  private async assertPostExists(postId: string): Promise<void> {
-    const post = await this.prisma.post.findUnique({ where: { id: postId }, select: { id: true } });
+  //
+  // Returns { id, authorId } rather than void, as of the follow/
+  // notification-wiring PR (sprint-2/follow-and-notifications): likePost
+  // and addComment need the post's authorId to (a) determine the
+  // Notification recipient and (b) suppress a self-notification when the
+  // actor IS the post's author. unlikePost/savePost/unsavePost/
+  // getComments still call this the same way as before and simply don't
+  // use the returned value — a purely additive signature change, not a
+  // restructuring of this shared check.
+  private async assertPostExists(postId: string): Promise<{ id: string; authorId: string }> {
+    const post = await this.prisma.post.findUnique({
+      where: { id: postId },
+      select: { id: true, authorId: true },
+    });
     if (!post) {
       throw new NotFoundException('Post not found');
     }
+    return post;
   }
 
   // POST /posts/:id/like. Like.@@unique([userId, postId]) is the
@@ -229,13 +242,30 @@ export class FeedService {
   // back. That's caught below and treated as an idempotent success, not
   // a 500, and importantly NOT a double-increment of a count that was
   // already correct.
+  //
+  // Notification wiring (sprint-2/follow-and-notifications): a
+  // Notification row (type: 'like', payloadRefId: postId, recipient
+  // userId: the POST'S AUTHOR — never the actor) is created inside this
+  // same transaction, immediately after the increment. Because it's
+  // inside the same $transaction callback, if tx.like.create threw
+  // P2002 above, execution never reaches this notification create at
+  // all — the whole callback (increment included) already rolled back —
+  // so a duplicate/idempotent like can never produce a duplicate
+  // Notification. No self-notification: skipped entirely when the actor
+  // IS the post's author (liking your own post is a real path through
+  // this code today, tested explicitly).
   async likePost(userId: string, postId: string): Promise<LikeState> {
-    await this.assertPostExists(postId);
+    const post = await this.assertPostExists(postId);
 
     try {
       await this.prisma.$transaction(async (tx) => {
         await tx.like.create({ data: { userId, postId } });
         await tx.post.update({ where: { id: postId }, data: { likeCount: { increment: 1 } } });
+        if (post.authorId !== userId) {
+          await tx.notification.create({
+            data: { userId: post.authorId, type: 'like', payloadRefId: postId },
+          });
+        }
       });
     } catch (err) {
       if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')) {
@@ -308,8 +338,21 @@ export class FeedService {
   // decrement path here on purpose: Section 4.3 has no
   // DELETE /posts/:id/comments/:commentId, so nothing in this codebase
   // ever removes a Comment row — see schema.prisma and feed/README.md.
+  //
+  // Notification wiring (sprint-2/follow-and-notifications): same
+  // pattern as likePost — a Notification row (type: 'comment',
+  // payloadRefId: postId, recipient userId: the POST'S AUTHOR, i.e.
+  // `post.authorId` below, never the commenter) is created inside this
+  // same transaction, after the Comment row and the commentCount
+  // increment. No self-notification when the commenter IS the post's
+  // author (`post.authorId !== authorId`, where `authorId` here is the
+  // COMMENT's author param, not to be confused with `post.authorId`).
+  // Unlike likePost, there is no idempotency concern to guard against
+  // here — every addComment call creates a genuinely new Comment row
+  // (see the comment above), so there's no duplicate-notification case
+  // analogous to the like P2002 path.
   async addComment(postId: string, authorId: string, dto: CreateCommentDto): Promise<FeedComment> {
-    await this.assertPostExists(postId);
+    const post = await this.assertPostExists(postId);
 
     return this.prisma.$transaction(async (tx) => {
       const comment = await tx.comment.create({
@@ -317,6 +360,11 @@ export class FeedService {
         select: COMMENT_SELECT,
       });
       await tx.post.update({ where: { id: postId }, data: { commentCount: { increment: 1 } } });
+      if (post.authorId !== authorId) {
+        await tx.notification.create({
+          data: { userId: post.authorId, type: 'comment', payloadRefId: postId },
+        });
+      }
       return comment;
     });
   }

@@ -220,11 +220,27 @@ model Like {
 }
 
 model Follow {
-  id         String @id @default(uuid())
+  id         String   @id @default(uuid())
   followerId String
-  follower   User   @relation("follower", fields: [followerId], references: [id])
+  follower   User     @relation("follower", fields: [followerId], references: [id])
   followeeId String
-  followee   User   @relation("followee", fields: [followeeId], references: [id])
+  followee   User     @relation("followee", fields: [followeeId], references: [id])
+  // Added ahead of GET /users/:id/followers and GET /users/:id/following
+  // (Build Plan Section 4.2, Sprint 2) -- a genuine addition beyond
+  // Section 3's literal field list, flagged here and in
+  // users/README.md as a Decision Log candidate rather than added
+  // silently. Section 3 didn't give Follow a timestamp at all, but
+  // Section 5.5 requires every list endpoint to be paginated, and
+  // Section 4.2's own followers/following lists have no other field to
+  // order by -- id is a random UUID (Prisma's default uuid() is v4, not
+  // sequential), so it carries no chronological meaning on its own and
+  // can only serve as a keyset tiebreaker, the same role it already
+  // plays for Post/Comment/Like. This mirrors the precedent Like.likedAt
+  // and SavedPost.savedAt already set: both of those join-table models
+  // needed a timestamp for the exact same reason (ordering their own
+  // list endpoints) and both got one without controversy -- Follow
+  // should not be the one join table left without one.
+  createdAt  DateTime @default(now())
 
   @@unique([followerId, followeeId])
 }
