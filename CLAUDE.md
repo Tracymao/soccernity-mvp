@@ -172,9 +172,28 @@ Full reasoning for every choice above: Build Plan Section 5.
   **Slice two (the remaining seven Section 4.3 endpoints — `GET
   /posts/:id`, `POST`/`DELETE /posts/:id/like`,
   `POST`/`GET /posts/:id/comments`, `POST`/`DELETE /posts/:id/save`,
-  `GET /users/:id/saved-posts`) is merged to `main` (PR #54)**, and a
-  follow-up (PR #55) fixed one flaky test (`rejects an expired access
-  token`, now using a frozen clock) unrelated to this feature work.
+  `GET /users/:id/saved-posts`) is merged to `main` (PR #54)**, and two
+  follow-ups fixed the same test (`rejects an expired access token`)
+  unrelated to this feature work — in sequence, not in one pass. PR #55
+  added a frozen clock (`jest.useFakeTimers()`), diagnosing the failure
+  as wall-clock/second-boundary jitter under CI/full-suite load. That
+  diagnosis was plausible but incomplete: PR #57 found and fixed the
+  actual root cause, confirmed directly against
+  `node_modules/@nestjs/config/dist/config.service.js` —
+  `ConfigService.get()` checks `process.env` **before** the
+  `internalConfig` object passed to `new ConfigService(configOverrides)`,
+  so the test's `JWT_ACCESS_TTL_SECONDS: -1` override was silently
+  ignored whenever something earlier in the same Jest worker (an e2e
+  spec bootstrapping the full app via `ConfigModule.forRoot`, which
+  loads the real root `.env`) had already populated
+  `process.env.JWT_ACCESS_TTL_SECONDS=900`. The frozen clock from PR #55
+  is still correct practice and was left in place; it just wasn't
+  sufficient on its own, since a real 900-second TTL is never expired
+  regardless of clock determinism. PR #57 fixed `buildTokenService()`
+  itself (not just this one test) to clear overridden keys from
+  `process.env` for the duration of `ConfigService`/`TokenService`
+  construction, so every current and future test using that helper is
+  protected, not only the expired-token one.
   `Section 4.3 is now complete end to end.` New
   guard/scope judgment calls this slice made (all argued in full in
   `modules/feed/README.md`, at the same depth as slice one's own two):
