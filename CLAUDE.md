@@ -107,12 +107,21 @@ Full reasoning for every choice above: Build Plan Section 5.
   as of B7 none of Section 8.3 step 5's three target routes (public
   profile view, DMs, Banter Rooms beyond read-only) exist yet to
   actually attach it to — that's Sprint 3 work, not a Sprint 1 gap.
-  Three follow-up PRs closed out remaining Decision Log candidates:
-  DTO validation (#25, Decision Log #11), email case normalization
-  (#32, Decision Log #16), and wiring Postmark as the real email
-  provider (#33, Decision Log #17 — still not *live*; the account
-  itself doesn't exist yet, same as Sentry's DSN). Current test
-  baseline: **25 suites / 158 tests, 0 failures** in `services/api`.
+  (The guard's first live attachment to a real route ended up being
+  none of those three — see the Sprint 2 bullet below: `POST /posts`,
+  justified by Section 5.7 rather than step 5's own list.) Three
+  follow-up PRs closed out remaining Decision Log candidates: DTO
+  validation (#25, Decision Log #11), email case normalization (#32,
+  Decision Log #16), and wiring Postmark as the real email provider
+  (#33, Decision Log #17 — still not *live*; the account itself doesn't
+  exist yet, same as Sentry's DSN). Test baseline recorded at the time:
+  25 suites / 158 tests, 0 failures. That number has since drifted
+  (measured directly during the Sprint 2 feed-service-core branch's own
+  verification: 25 suites / **173** tests, still 0 failures, before any
+  Sprint 2 code) — later PRs added tests without updating this line,
+  another instance of the drift this file's own "Keeping this file
+  current" section describes. Treat any specific count here as
+  approximate; `npx jest` in `services/api` is the source of truth.
 - **Sprint 1 frontend has a real gap: F5, F6, and F7 are not started.**
   F1-F4 (app shell, login, signup, forgot/reset) are real, built
   screens. F5 (`GuardianConsentPage.tsx`, route `/guardian-consent`)
@@ -127,8 +136,9 @@ Full reasoning for every choice above: Build Plan Section 5.
   backend work, but Sprint 1's own exit criterion (register, verify
   email, declare age, guardian-consent-gated access) isn't actually
   walkable by a real user until at least F7 (and arguably F5) are built.
-- **Sprint 2 has started. Schema is ready; no feature endpoints are
-  built yet.** Section 6's Sprint 2 scope: Feed Service (Section 4.3 —
+- **Sprint 2 has started. Schema is ready; the Feed Service's first
+  slice (`POST /posts`, `GET /posts/feed`) is built, on a branch,
+  pending merge — see below.** Section 6's Sprint 2 scope: Feed Service (Section 4.3 —
   post/view/like/comment/save), club fan pages with auto-join on
   signup (Section 4.4's club subset only — **not** `/banter-rooms*` in
   the same section, that's Sprint 3), Follow, and wiring
@@ -144,8 +154,31 @@ Full reasoning for every choice above: Build Plan Section 5.
   `SavedPost`'s exact pattern (`@@unique([userId, postId])`).
   `Post.likeCount` stays as a cache — see the comment on it in
   `schema.prisma` for the consistency obligation whoever builds the
-  like endpoints must honor. **Nothing in Section 4.3 or 4.4 is built
-  yet** — this PR was schema-only, on purpose.
+  like endpoints must honor. That PR was schema-only, on purpose.
+  **`POST /posts` and `GET /posts/feed` (Section 4.3's first two
+  endpoints) are now built** — on branch `sprint-2/feed-service-core`,
+  verified against real Postgres/Redis and locally committed, **not
+  yet merged to `main`**, pending human review. `POST /posts` is gated
+  by `GuardianConsentGuard` in addition to `JwtAuthGuard` — a judgment
+  call, not a literal reading of Section 8.3 step 5 (whose own
+  enumerated restricted-pending list doesn't name general feed
+  posting), resting instead on Section 5.7's separate, broader
+  instruction to re-check consent status on every "posting" action;
+  flagged as a Decision Log candidate, see `modules/feed/README.md`.
+  `GET /posts/feed` is `JwtAuthGuard`-only (reading isn't the
+  safety-sensitive action posting is) and is scoped to the caller's own
+  posts plus posts by users they follow (`Follow` model) — Section 4.3
+  doesn't define feed scope beyond the endpoint existing, so that scope
+  is also a flagged judgment call, not an assumed spec. Cursor-based
+  (keyset) pagination, default page size 20 / max 50, per Section 5.5.
+  **Still nothing else in Section 4.3 or 4.4 is built**: `GET
+  /posts/:id`, like, comment, save, `GET /users/:id/saved-posts`
+  (Section 4.3), and all of Section 4.4 (`/clubs*`, `/banter-rooms*`)
+  remain unbuilt — this PR is deliberately that one slice, not the rest
+  of Sprint 2's scope. Test suite after this branch's changes: 28
+  suites / 208 tests, 0 failures (up from the 25/173 measured
+  immediately before it — see the corrected note on the Sprint 1
+  bullet above).
 - **Decision Log #1, #7, #8, #10, #11, #12, #16, #17, and #19 are
   resolved.** #16, #17, and #19 required real code changes beyond the
   doc entry — all three are merged (PRs #32, #33, #38). #19 (age-5
