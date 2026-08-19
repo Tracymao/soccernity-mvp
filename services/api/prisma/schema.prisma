@@ -51,15 +51,16 @@ model User {
 // Build Plan Section 8.3. consent_status must be "confirmed" before a
 // minor's profile becomes visible outside the guardian relationship.
 model Guardian {
-  id               String    @id @default(uuid())
-  minorUserId      String    @unique
-  minorUser        User      @relation(fields: [minorUserId], references: [id])
-  name             String
-  email            String
-  relationship     String
-  consentStatus    String    @default("pending") // pending | confirmed
-  consentToken     String    @unique
-  consentTimestamp DateTime?
+  id                     String    @id @default(uuid())
+  minorUserId            String    @unique
+  minorUser              User      @relation(fields: [minorUserId], references: [id])
+  name                   String
+  email                  String
+  relationship           String
+  consentStatus          String    @default("pending") // pending | confirmed
+  consentToken           String    @unique
+  consentTokenExpiresAt  DateTime
+  consentTimestamp       DateTime?
 }
 
 model ClubPage {

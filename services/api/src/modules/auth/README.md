@@ -354,3 +354,71 @@ that gate is already true.
   `GuardianConsentPage.tsx` is an explicit route stub, "PR F5 replaces
   this file's contents with the real, Figma-derived screen(s)"), so
   this PR doesn't fabricate links to pages that don't exist.
+
+## Status update — DPIA finding R5 (consent token expiry + resend)
+
+`docs/sprint-1-dpia-outline-draft.md`'s R5 finding: `Guardian.consentToken`
+had no expiry and no single-use marker — a permanent credential granting
+the power to activate a child's account, sitting in an email inbox
+indefinitely. R5's own proposal (explicitly "not a decision," "no
+security analysis behind it") is a 72-hour token lifetime, invalidated
+on use where "use" means the window closing, with a resend path.
+Implemented as proposed, not re-litigated.
+
+- `Guardian.consentTokenExpiresAt` (new, `DateTime`, non-nullable) —
+  set at issuance (`RegistrationService.register()`) and re-issuance
+  (`resendConsent()` below) to now + 72 hours via
+  `guardian-consent/consent-token.constants.ts`'s
+  `computeConsentTokenExpiresAt()`. No separate `used`/`consumed`
+  boolean — `consentStatus` already distinguishes pending/confirmed,
+  and expiry is a distinct concern that applies *regardless* of
+  confirmation state (a confirmed guardian's token becomes unfindable
+  after the window too, since it's never needed again once confirmed).
+- `confirmConsent()`: expiry is checked **before** the
+  already-confirmed check, deliberately — the existing "a guardian may
+  legitimately click the same link twice" idempotency (unchanged, still
+  correct) only applies to a still-valid token being re-clicked, not an
+  aged-out one. An expired token gets the same generic `BadRequestException`
+  as a nonexistent one, whether or not it was ever confirmed.
+- `resendConsent(email)`: takes the **minor's** registered email, not
+  the guardian's — avoids a second lookup-by-guardian-email surface,
+  and the minor is who'd know to ask "did my guardian get the email."
+  Issues a genuinely **new** `consentToken` (not an extension of the
+  old one's expiry) — `consentToken` is `@unique`, so this overwrites
+  the only copy and the old token stops resolving entirely. No-ops
+  silently (same generic response either way, at the controller) for:
+  unknown email, a non-minor account, a minor with no `Guardian` row,
+  or a `Guardian` whose `consentStatus` is already `"confirmed"` — none
+  of these are distinguishable from the caller's side. Reuses
+  `RegistrationEmailService.sendGuardianConsentEmail` (PR #33's Postmark
+  wiring) rather than duplicating email-sending logic.
+- `POST /auth/guardian-consent/resend` carries `@AuthRateLimit()`
+  (same guard/decorator as `/auth/forgot-password`) — an unrated resend
+  endpoint targeting an arbitrary email is a spam vector against a
+  guardian's inbox. `GuardianConsentModule` now imports
+  `AuthFoundationModule` for that guard's DI graph, and declares its
+  own local `RegistrationEmailService` provider (not exported from
+  `AuthRegistrationModule`) — matching this codebase's existing
+  convention of each module declaring its own local `PrismaService`
+  rather than importing one via cross-module export.
+- `GUARDIAN_CONSENT_TOKEN_TTL_HOURS` (`.env.example`, default `72`) —
+  made configurable via env rather than a hardcoded constant, same
+  pattern as `RESET_TOKEN_TTL_MINUTES`. This wasn't explicitly asked
+  for; flagged as a deliberate call in this PR's report rather than
+  silently deviating from "implement 72 hours as specified."
+- **A Prisma migration was required and applied for real** —
+  `consentTokenExpiresAt` is `NOT NULL`, and the local dev database
+  (Decision Log #18: no production data, but this dev DB did have one
+  manual/test `Guardian` row) can't take a `NOT NULL` column with no
+  default in one step. Split into three statements: add nullable,
+  backfill existing rows to now + 72h (treated as freshly issued, not
+  deleted), then enforce `NOT NULL` — see
+  `prisma/migrations/20260818235411_add_guardian_consent_token_expiry/migration.sql`.
+- **This PR does not close R5 in the DPIA.** It gives counsel something
+  concrete to review — a real 72-hour window and a real resend path —
+  instead of an unmitigated gap. The 72-hour number itself, and
+  whether "single-use, invalidated on use" as implemented here actually
+  satisfies whatever counsel decides is needed, are still open per the
+  DPIA's own disclaimer on R5 and its Section 5 open-questions table
+  (item 9: "Consent token expiry and single-use (R5) — 72h proposed as
+  a starting number only — Counsel + backend-api").

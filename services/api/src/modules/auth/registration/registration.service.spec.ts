@@ -46,6 +46,11 @@ describe('RegistrationService', () => {
       sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
       sendGuardianConsentEmail: jest.fn().mockResolvedValue(undefined),
     };
+    // No GUARDIAN_CONSENT_TOKEN_TTL_HOURS override -- exercises
+    // consent-token.constants.ts's DEFAULT_CONSENT_TOKEN_TTL_HOURS
+    // fallback (DPIA finding R5), same as the real app when the env var
+    // is unset.
+    const config = { get: () => undefined };
 
     const service = new RegistrationService(
       prisma as any,
@@ -53,9 +58,10 @@ describe('RegistrationService', () => {
       tokenService as any,
       emailVerificationTokenStore as any,
       emailService as any,
+      config as any,
     );
 
-    return { service, prisma, passwordService, tokenService, emailVerificationTokenStore, emailService };
+    return { service, prisma, passwordService, tokenService, emailVerificationTokenStore, emailService, config };
   }
 
   describe('register', () => {
@@ -111,12 +117,20 @@ describe('RegistrationService', () => {
             email: 'parent@example.com',
             relationship: 'Parent',
             consentToken: expect.any(String),
+            consentTokenExpiresAt: expect.any(Date),
           }),
         }),
       );
       // Real, unique-looking consent token — not a placeholder/empty string.
       const createCall = prisma.guardian.create.mock.calls[0][0];
       expect(createCall.data.consentToken).toMatch(/^[0-9a-f-]{36}$/);
+      // DPIA finding R5: ~72 hours out by default (DEFAULT_CONSENT_TOKEN_TTL_HOURS),
+      // not left unset/permanent. Asserted as a range rather than an exact
+      // value to tolerate real test-execution time passing.
+      const expiresInMs = createCall.data.consentTokenExpiresAt.getTime() - Date.now();
+      const seventyTwoHoursMs = 72 * 60 * 60 * 1000;
+      expect(expiresInMs).toBeGreaterThan(seventyTwoHoursMs - 60_000);
+      expect(expiresInMs).toBeLessThanOrEqual(seventyTwoHoursMs);
       expect(emailService.sendGuardianConsentEmail).toHaveBeenCalledWith(
         'parent@example.com',
         createCall.data.consentToken,
