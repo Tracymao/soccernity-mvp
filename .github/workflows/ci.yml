@@ -16,6 +16,16 @@ jobs:
     env:
       DATABASE_URL: postgresql://soccernity:soccernity@localhost:5432/soccernity_test
       REDIS_URL: redis://localhost:6379
+      # Required by JwtModule.registerAsync (auth-foundation.module.ts) —
+      # no code-level default, unlike JWT_ACCESS_TTL_SECONDS/
+      # JWT_REFRESH_TTL_DAYS/etc. Missing here caused PR #59's own first
+      # CI run to fail ("Run e2e tests" step) with "secretOrPrivateKey
+      # must have a value" the instant a real jwtService.sign() call ran
+      # through a genuinely bootstrapped AppModule for the first time —
+      # see services/api/test/README.md and .env.test.example for the
+      # full explanation. Obviously-fake, test-only value: must never
+      # match any real deployment secret.
+      JWT_SECRET: ci-test-only-jwt-secret-do-not-use-in-any-real-environment
     services:
       postgres:
         image: postgres:16

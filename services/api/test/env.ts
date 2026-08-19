@@ -16,13 +16,28 @@ import * as path from 'path';
 // committed) is dotenv's own default behavior, not a conditional here:
 // dotenv.config() never overrides a variable already present in
 // process.env, and silently no-ops (does not throw) when the target file
-// doesn't exist. CI's ci.yml already sets DATABASE_URL as a real job-level
-// env var before `npm run test:e2e` runs, so by the time this file's
-// dotenv.config() call executes, DATABASE_URL is already set and the
-// missing-file no-op leaves it untouched. Locally, DATABASE_URL is usually
-// NOT already in process.env, so the load from .env.test actually takes
+// doesn't exist. CI's ci.yml already sets DATABASE_URL (and, as of the
+// PR #59 CI-failure fix below, JWT_SECRET) as real job-level env vars
+// before `npm run test:e2e` runs, so by the time this file's
+// dotenv.config() call executes, those are already set and the
+// missing-file no-op leaves them untouched. Locally, neither is usually
+// already in process.env, so the load from .env.test actually takes
 // effect. Same code path, same outcome logic, different starting state —
 // see test/README.md.
+//
+// Corrected framing, post PR #59: this file's job is to load whatever a
+// *self-contained* e2e run needs, not to assume a developer's pre-existing
+// local `.env` will quietly supply the rest. PR #59's own first CI run
+// failed with "secretOrPrivateKey must have a value" precisely because
+// JWT_SECRET was never one of the values anything here (or in ci.yml)
+// actually set — it only ever worked locally because a developer's
+// long-lived root `.env` happened to already have a real one, which
+// `ConfigModule.forRoot`'s own dotenv load (triggered by importing
+// AppModule) picks up completely independently of this file. That was
+// accidental, not by design — see .env.test.example's corrected comment
+// for the full explanation of which config keys are genuinely optional
+// (code-level default or graceful no-op) versus required with no
+// fallback (currently just JWT_SECRET).
 let loaded = false;
 
 export function loadTestEnv(): void {
