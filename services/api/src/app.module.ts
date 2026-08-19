@@ -8,6 +8,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { AuthRegistrationModule } from './modules/auth/registration/registration.module';
 import { GuardianConsentModule } from './modules/auth/guardian-consent/guardian-consent.module';
 import { UsersModule } from './modules/users/users.module';
+import { FeedModule } from './modules/feed/feed.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -50,7 +51,10 @@ import { UsersModule } from './modules/users/users.module';
     AuthRegistrationModule,
     GuardianConsentModule, // Sprint 1 / PR B5 — /auth/guardian-consent (Section 4.1 / 8.3 step 4)
     UsersModule, // Sprint 1 — B6 (profile endpoints, Section 4.2, self-scope only for now)
-    // FeedModule,          // Sprint 2
+    // Sprint 2 — Section 4.3 slice one only: POST /posts + GET /posts/feed.
+    // GET /posts/:id, like, comment, save (also Section 4.3) are a
+    // separate follow-up slice — see modules/feed/README.md.
+    FeedModule,
     // ClubsModule,         // Sprint 2
     // BanterModule,        // Sprint 3
     // MessagingModule,     // Sprint 3
