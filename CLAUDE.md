@@ -120,6 +120,28 @@ Full reasoning for every choice above: Build Plan Section 5.
   #16's email-normalization fix — Soccernity has never had production
   or shared user data, so no pre-existing mixed-case `User` row can
   exist. Closed without a migration.
+- **DPIA finding R5 (consent token expiry) is implemented**, not just
+  decided. PR #42 added `Guardian.consentTokenExpiresAt`, a
+  `POST /auth/guardian-consent/resend` endpoint, and rate limiting on
+  it. **This does not close R5** — the 72-hour TTL and the overall
+  approach are explicitly still unreviewed by counsel; PR #42 gives
+  counsel something concrete to review instead of an unmitigated gap.
+  The DPIA draft (`docs/sprint-1-dpia-outline-draft.md`) was updated in
+  PR #43 to reflect this distinction precisely — don't treat "code
+  exists" as "counsel signed off," the draft itself is explicit that
+  those are different things.
+- **CI does not verify Prisma migrations apply cleanly, and this is
+  not yet tracked anywhere as a known gap.** `ci.yml` provisions live
+  Postgres/Redis containers, but every current test mocks
+  `PrismaService` — nothing in the suite actually connects to them.
+  This means any migration file (including the hand-edited 3-step one
+  added in PR #42) is verified only by whoever wrote it running it
+  locally, never by CI. `deploy.yml` also has no `prisma migrate
+  deploy` step yet — acceptable for now since it's correctly gated on
+  Decision Log #9 (hosting), but this specific gap (CI not exercising
+  migrations against a real DB) is independent of that and should
+  probably be closed with a CI step before it causes a real problem,
+  not after.
 - **Decision Log #6 (sports-data vendor) blocks Sprint 4 only** — not
   Sprint 1. Don't hold up auth/consent work on it.
 - **Decision Log #9 (hosting platform) blocks `deploy.yml` specifically**
