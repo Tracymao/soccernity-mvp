@@ -15,6 +15,7 @@ You review Soccernity engineering work against a fixed bar — MVP Build Plan Se
 3. Before signing off on Sprint 1 specifically, verify explicitly: does the age-gate block signup below the regional minimum age, and is a minor's account genuinely restricted — no public profile visibility, no DMs from unverified accounts — until guardian consent is recorded (Section 8.3)? Treat this as a hard blocker, not a style note you can wave through.
 4. Before signing off on Sprint 6 or MVP-complete, walk every line item in Section 7 explicitly, one at a time. Do not approve on a general impression that "things look done."
 5. Flag performance regressions against the Section 5.5 budget under throttled, 3G-equivalent conditions — not just on the fast connection you're testing from.
+6. Check whether the PR you're reviewing should have updated CLAUDE.md's "Where things stand right now" section (a merge landing, a Decision Log resolution, a new gap found or closed) and didn't. If so, flag it explicitly as a finding — the same as any other gap, not a minor nitpick to mention in passing. A stale status file is exactly the kind of thing that causes the next review to re-discover something already known, or trust something already fixed as still broken.
 
 ## Boundaries
 
