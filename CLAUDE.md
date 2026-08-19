@@ -172,10 +172,10 @@ Full reasoning for every choice above: Build Plan Section 5.
   **Slice two (the remaining seven Section 4.3 endpoints — `GET
   /posts/:id`, `POST`/`DELETE /posts/:id/like`,
   `POST`/`GET /posts/:id/comments`, `POST`/`DELETE /posts/:id/save`,
-  `GET /users/:id/saved-posts`) is now built** — on branch
-  `sprint-2/feed-service-reactions`, verified against real
-  Postgres/Redis and locally committed, **not yet merged to `main`**,
-  pending human review. `Section 4.3 is now complete end to end.` New
+  `GET /users/:id/saved-posts`) is merged to `main` (PR #54)**, and a
+  follow-up (PR #55) fixed one flaky test (`rejects an expired access
+  token`, now using a frozen clock) unrelated to this feature work.
+  `Section 4.3 is now complete end to end.` New
   guard/scope judgment calls this slice made (all argued in full in
   `modules/feed/README.md`, at the same depth as slice one's own two):
   liking and saving are **not** gated by `GuardianConsentGuard` (only
@@ -210,9 +210,51 @@ Full reasoning for every choice above: Build Plan Section 5.
   built**: `/clubs*` and `/banter-rooms*` remain unbuilt — Sprint 2's
   club-page work and Sprint 3's Banter Rooms are both separate,
   upcoming PRs, not implied by Section 4.3 now being complete. Test
-  suite after this branch's changes: 29 suites / 262 tests, 0 failures
+  suite after slice two's changes: 29 suites / 262 tests, 0 failures
   (up from the 28/208 measured immediately before it, on top of slice
   one's own merge).
+  **Follow (Section 4.2's remaining four endpoints —
+  `POST`/`DELETE /users/:id/follow`, `GET /users/:id/followers`,
+  `GET /users/:id/following`) and notification-trigger wiring for
+  follow/like/comment into `Notification` are now built** — on branch
+  `sprint-2/follow-and-notifications`, verified against real
+  Postgres/Redis and locally committed, **not yet merged to `main`**,
+  pending human review. Follow endpoints are `JwtAuthGuard`-only (not
+  `GuardianConsentGuard`) — a follow produces even less visible content
+  than a like does (there's no follower/following count field anywhere
+  in `schema.prisma`), so this reads as unambiguous, unlike the still-open
+  Decision Log candidate on `POST /posts`/comments. `GET
+  /users/:id/followers`/`following` are deliberately **not** self-scoped
+  (a real departure from `GET /users/:id/saved-posts`'s self-only
+  default under the same kind of spec silence) — followers/following are
+  standard public social graph data on the platforms this product is
+  modeled after; flagged as a Decision Log candidate the same way
+  saved-posts' opposite default was. Self-follow/self-unfollow → 400;
+  `:id` not referencing a real user → 404; follow/unfollow are idempotent
+  (`Follow.@@unique([followerId, followeeId])` backing `P2002`/`P2025`
+  handling, identical pattern to `Like`). `Follow.createdAt` was added
+  to `schema.prisma` (migration `20260819160458_add_follow_created_at`)
+  — a genuine addition beyond Section 3's literal `Follow` fields,
+  flagged as a Decision Log candidate — because keyset pagination
+  (Section 5.5) needs a real timestamp to order by and `Follow` had
+  none, the same gap `Like.likedAt`/`SavedPost.savedAt` already closed
+  on the other two join-table models. `Notification` creation was
+  retrofitted into `FeedService.likePost`'s and `addComment`'s existing
+  `$transaction` callbacks (closing the gap PR #54 correctly left open —
+  that PR was never briefed to touch `Notification`) plus added fresh to
+  the new `followUser`: recipient is always the person being
+  followed/the post's author, never the actor; no self-notification
+  (liking/commenting on your own post, or the already-rejected
+  self-follow, create zero `Notification` rows); a duplicate/idempotent
+  like or follow can never produce a duplicate `Notification`, because
+  the notification write shares the same transaction as the row it's
+  reporting on. A `payloadRefId` convention is established (and
+  documented in `users/README.md`) for the first time: the follower's own
+  `userId` for a `'follow'` notification, the `postId` for `'like'`/
+  `'comment'`. `ClubPage`/`BanterRoom` (Section 4.4) remain entirely
+  unbuilt — unchanged by this PR. Test suite after this branch's
+  changes: 30 suites / 304 tests, 0 failures (up from the 29/262
+  measured immediately before it).
 - **Decision Log #1, #7, #8, #10, #11, #12, #16, #17, and #19 are
   resolved.** #16, #17, and #19 required real code changes beyond the
   doc entry — all three are merged (PRs #32, #33, #38). #19 (age-5

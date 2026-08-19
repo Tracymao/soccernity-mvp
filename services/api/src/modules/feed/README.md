@@ -373,11 +373,21 @@ permanent behavior by omission.
 - Everything in Section 4.4 (Club & Banter Service) — unchanged from
   slice one's own scope note; still Sprint 2 (clubs) / Sprint 3
   (Banter Rooms), neither touched by either feed slice.
-- Wiring `comment`/`like` events into `Notification` — Sprint 2 scope
-  per `CLAUDE.md`, but explicitly a separate PR. This slice creates
-  real `Like`/`Comment` rows for the first time in this codebase, which
-  is what makes that follow-up PR buildable, but doesn't itself touch
-  `Notification`.
+- ~~Wiring `comment`/`like` events into `Notification`~~ — was Sprint 2
+  scope per `CLAUDE.md` but explicitly deferred to a separate PR at the
+  time this slice was written (this slice created the real `Like`/
+  `Comment` rows for the first time in this codebase, which is what made
+  that follow-up buildable). **Retrofitted by
+  `sprint-2/follow-and-notifications`** — `FeedService.likePost` and
+  `FeedService.addComment`'s existing `$transaction` callbacks now each
+  also create a `Notification` row (recipient: the post's author, never
+  the actor; no self-notification). `unlikePost` does not and should
+  not (removing an action isn't performing one). See
+  `users/README.md`'s Sprint 2 section for the full reasoning, the
+  `payloadRefId` convention this established, and why it lives there
+  rather than here (that PR's actual new endpoints — `Follow` — are a
+  User Service concern per Section 4.2, and Follow's own notification is
+  what motivated doing all three triggers together).
 - `DELETE /posts/:id/comments/:commentId` — not in Section 4.3 at all;
   see point on `Post.commentCount`'s missing decrement path above. Not
   built speculatively.

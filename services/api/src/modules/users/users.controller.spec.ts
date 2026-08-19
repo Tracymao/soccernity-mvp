@@ -8,6 +8,10 @@ describe('UsersController', () => {
     const usersService = {
       getOwnProfile: jest.fn().mockResolvedValue({ id: 'user-1', displayName: 'Me' }),
       updateOwnProfile: jest.fn().mockResolvedValue({ id: 'user-1', displayName: 'Updated' }),
+      followUser: jest.fn().mockResolvedValue({ following: true }),
+      unfollowUser: jest.fn().mockResolvedValue({ following: false }),
+      getFollowers: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
+      getFollowing: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
     } as unknown as UsersService;
     const controller = new UsersController(usersService);
     return { controller, usersService };
@@ -52,6 +56,46 @@ describe('UsersController', () => {
         controller.updateById('someone-elses-id', user, { displayName: 'Hijacked' }),
       ).rejects.toThrow(ForbiddenException);
       expect(usersService.updateOwnProfile).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST/DELETE /users/:id/follow', () => {
+    it('follows using the caller (JWT sub) as follower and :id as followee — not self-scoped like GET/PATCH', async () => {
+      const { controller, usersService } = buildController();
+      const user: AccessTokenPayload = { sub: 'user-1', role: 'fan' };
+
+      const result = await controller.follow('user-2', user);
+
+      expect(usersService.followUser).toHaveBeenCalledWith('user-1', 'user-2');
+      expect(result).toEqual({ following: true });
+    });
+
+    it('unfollows using the caller as follower and :id as followee', async () => {
+      const { controller, usersService } = buildController();
+      const user: AccessTokenPayload = { sub: 'user-1', role: 'fan' };
+
+      const result = await controller.unfollow('user-2', user);
+
+      expect(usersService.unfollowUser).toHaveBeenCalledWith('user-1', 'user-2');
+      expect(result).toEqual({ following: false });
+    });
+  });
+
+  describe('GET /users/:id/followers, GET /users/:id/following', () => {
+    it('passes :id and the query straight through to UsersService.getFollowers — no self-scoping', async () => {
+      const { controller, usersService } = buildController();
+
+      await controller.followers('someone-elses-id', { cursor: 'abc', limit: 5 });
+
+      expect(usersService.getFollowers).toHaveBeenCalledWith('someone-elses-id', { cursor: 'abc', limit: 5 });
+    });
+
+    it('passes :id and the query straight through to UsersService.getFollowing — no self-scoping', async () => {
+      const { controller, usersService } = buildController();
+
+      await controller.following('someone-elses-id', { cursor: 'abc', limit: 5 });
+
+      expect(usersService.getFollowing).toHaveBeenCalledWith('someone-elses-id', { cursor: 'abc', limit: 5 });
     });
   });
 });

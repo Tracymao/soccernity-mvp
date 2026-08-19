@@ -28,6 +28,15 @@ function buildPrismaMock() {
       delete: jest.fn(),
       findMany: jest.fn(),
     },
+    // Added for notification wiring (sprint-2/follow-and-notifications):
+    // likePost/addComment now call tx.notification.create(...) inside
+    // their existing transactional callbacks. Every test in this file
+    // that exercises either method runs through this same mock, whether
+    // or not it cares about notifications — so this must exist
+    // unconditionally, not just in the tests added for this PR.
+    notification: {
+      create: jest.fn(),
+    },
   } as unknown as PrismaService;
 
   // FeedService uses interactive transactions ($transaction(async (tx)
@@ -502,6 +511,81 @@ describe('FeedService', () => {
       expect(fourth.likeCount).toBe(0);
       expect(likeCount).toBe(0);
     });
+
+    // Notification wiring, added by sprint-2/follow-and-notifications.
+    // likePost/unlikePost pre-date this describe block; only likePost
+    // gets Notification coverage here (unlikePost never creates one —
+    // see feed/README.md's "removing an action isn't performing one").
+    describe('notification wiring', () => {
+      it('creates a Notification row for the POST AUTHOR (recipient), never the liker (actor)', async () => {
+        const prisma = buildPrismaMock();
+        (prisma.post.findUnique as jest.Mock).mockImplementation((args: { select?: unknown }) => {
+          const select = args.select as Record<string, unknown> | undefined;
+          if (select?.likeCount) return Promise.resolve({ likeCount: 1 });
+          return Promise.resolve({ id: 'post-1', authorId: 'post-author-1' });
+        });
+        (prisma.like.create as jest.Mock).mockResolvedValue({ id: 'like-1' });
+        (prisma.post.update as jest.Mock).mockResolvedValue({});
+        const service = new FeedService(prisma);
+
+        await service.likePost('liker-1', 'post-1');
+
+        expect(prisma.notification.create).toHaveBeenCalledWith({
+          data: { userId: 'post-author-1', type: 'like', payloadRefId: 'post-1' },
+        });
+        // Explicit recipient-identity assertion, not just "a row exists"
+        // — getting this backwards would silently notify the wrong
+        // person.
+        const callArgs = (prisma.notification.create as jest.Mock).mock.calls[0][0];
+        expect(callArgs.data.userId).toBe('post-author-1');
+        expect(callArgs.data.userId).not.toBe('liker-1');
+      });
+
+      it('creates no Notification row when a user likes their own post (no self-notification)', async () => {
+        const prisma = buildPrismaMock();
+        (prisma.post.findUnique as jest.Mock).mockImplementation((args: { select?: unknown }) => {
+          const select = args.select as Record<string, unknown> | undefined;
+          if (select?.likeCount) return Promise.resolve({ likeCount: 1 });
+          return Promise.resolve({ id: 'post-1', authorId: 'self-1' });
+        });
+        (prisma.like.create as jest.Mock).mockResolvedValue({ id: 'like-1' });
+        (prisma.post.update as jest.Mock).mockResolvedValue({});
+        const service = new FeedService(prisma);
+
+        await service.likePost('self-1', 'post-1');
+
+        expect(prisma.notification.create).not.toHaveBeenCalled();
+      });
+
+      it('creates exactly one Notification row across a like followed by a duplicate (idempotent) like', async () => {
+        const prisma = buildPrismaMock();
+        let liked = false;
+        (prisma.post.findUnique as jest.Mock).mockImplementation((args: { select?: unknown }) => {
+          const select = args.select as Record<string, unknown> | undefined;
+          if (select?.likeCount) return Promise.resolve({ likeCount: liked ? 1 : 0 });
+          return Promise.resolve({ id: 'post-1', authorId: 'post-author-1' });
+        });
+        (prisma.like.create as jest.Mock).mockImplementation(() => {
+          if (liked) {
+            return Promise.reject(
+              new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+                code: 'P2002',
+                clientVersion: '5.0.0',
+              }),
+            );
+          }
+          liked = true;
+          return Promise.resolve({ id: 'like-1' });
+        });
+        (prisma.post.update as jest.Mock).mockResolvedValue({});
+        const service = new FeedService(prisma);
+
+        await service.likePost('liker-1', 'post-1');
+        await service.likePost('liker-1', 'post-1'); // duplicate — P2002, idempotent
+
+        expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+      });
+    });
   });
 
   describe('addComment / getComments', () => {
@@ -624,6 +708,38 @@ describe('FeedService', () => {
       expect(page.nextCursor).toBe(
         encodeFeedCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), id: 'comment-2' }),
       );
+    });
+
+    // Notification wiring, added by sprint-2/follow-and-notifications.
+    describe('notification wiring', () => {
+      it('creates a Notification row for the POST AUTHOR (recipient), never the commenter (actor)', async () => {
+        const prisma = buildPrismaMock();
+        (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1', authorId: 'post-author-1' });
+        (prisma.comment.create as jest.Mock).mockResolvedValue(buildCommentRow({ authorId: 'commenter-1' }));
+        (prisma.post.update as jest.Mock).mockResolvedValue({});
+        const service = new FeedService(prisma);
+
+        await service.addComment('post-1', 'commenter-1', { contentText: 'Nice goal' });
+
+        expect(prisma.notification.create).toHaveBeenCalledWith({
+          data: { userId: 'post-author-1', type: 'comment', payloadRefId: 'post-1' },
+        });
+        const callArgs = (prisma.notification.create as jest.Mock).mock.calls[0][0];
+        expect(callArgs.data.userId).toBe('post-author-1');
+        expect(callArgs.data.userId).not.toBe('commenter-1');
+      });
+
+      it('creates no Notification row when a user comments on their own post (no self-notification)', async () => {
+        const prisma = buildPrismaMock();
+        (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1', authorId: 'self-1' });
+        (prisma.comment.create as jest.Mock).mockResolvedValue(buildCommentRow({ authorId: 'self-1' }));
+        (prisma.post.update as jest.Mock).mockResolvedValue({});
+        const service = new FeedService(prisma);
+
+        await service.addComment('post-1', 'self-1', { contentText: 'Nice goal' });
+
+        expect(prisma.notification.create).not.toHaveBeenCalled();
+      });
     });
   });
 
