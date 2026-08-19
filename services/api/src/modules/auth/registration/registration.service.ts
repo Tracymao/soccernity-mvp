@@ -1,7 +1,9 @@
 import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { Guardian, User } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { computeConsentTokenExpiresAt } from '../guardian-consent/consent-token.constants';
 import { PasswordService } from '../password/password.service';
 import { TokenService } from '../token/token.service';
 import { TokenPair } from '../token/token.types';
@@ -33,6 +35,7 @@ export class RegistrationService {
     private readonly tokenService: TokenService,
     private readonly emailVerificationTokenStore: EmailVerificationTokenStore,
     private readonly emailService: RegistrationEmailService,
+    private readonly config: ConfigService,
   ) {}
 
   async register(dto: RegisterDto): Promise<RegisterResult> {
@@ -97,6 +100,9 @@ export class RegistrationService {
           email: dto.guardian.email,
           relationship: dto.guardian.relationship,
           consentToken: randomUUID(),
+          // DPIA finding R5: the token is a permanent credential without
+          // an expiry -- see guardian-consent/consent-token.constants.ts.
+          consentTokenExpiresAt: computeConsentTokenExpiresAt(this.config),
         },
       });
     }
