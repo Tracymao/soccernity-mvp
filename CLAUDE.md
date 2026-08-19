@@ -17,6 +17,33 @@ A platform giving unaffiliated grassroots football players — and the fans, coa
 
 `.github/workflows/deploy.yml` deploys `staging` and `main` automatically once pushed to — but its actual deploy step is a deliberate placeholder that fails loudly (`exit 1`) rather than guessing a hosting platform. See "Where things stand right now" below: hosting is Decision Log item #9, still open.
 
+## Keeping this file current
+
+"Where things stand right now" (below) has gone stale after nearly every
+PR merge in Sprint 1 — not from neglect, but because updating it was
+never part of any single PR's own definition of done, so it kept
+falling to a separate cleanup sweep instead. That sweep found the same
+class of gap five separate times, including once finding that this
+file's own bullet about a bug was itself describing the bug as unfixed
+after the fix had already merged.
+
+The fix: **any PR that changes something described in "Where things
+stand right now" — a merge landing, a Decision Log resolution, a new
+gap found, a follow-up closed — updates that section in the same PR,
+not a later one.** This applies to:
+
+- Any subagent (`backend-api`, `qa-reviewer`, etc.) whose PR resolves,
+  implements, or newly discovers something that section already
+  describes or should describe.
+- Whoever is reviewing and merging a PR on Claude's behalf, before
+  calling that PR fully done.
+
+If updating this file in the same PR genuinely isn't practical, the PR
+description must say so explicitly and name the exact follow-up needed
+— e.g. "CLAUDE.md not updated here, needs a status bullet noting X is
+now resolved" — so it's a visible, tracked debt rather than a silent
+one a future sweep has to rediscover from scratch.
+
 ## Non-negotiables
 
 1. **Never remove or weaken the safeguarding fields on `User` or `Guardian`** (`is_minor`, `guardian_id`, `consent_status`, `consent_token`, `consent_timestamp`) or the restricted-pending state they support. This isn't a style preference — see Build Plan Section 8 and Log Book Section 10.
