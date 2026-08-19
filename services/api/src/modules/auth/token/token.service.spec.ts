@@ -5,11 +5,42 @@ import { InMemoryRedisFake } from './test-support/in-memory-redis.fake';
 import { RefreshTokenStore } from './refresh-token.store';
 import { TokenService } from './token.service';
 
+// @nestjs/config's ConfigService.get() checks process.env BEFORE the
+// internalConfig object passed to `new ConfigService(...)` (see
+// node_modules/@nestjs/config/dist/config.service.js: validated-env,
+// then process.env, then internalConfig, then default). If a real
+// .env has already loaded a key this test is trying to override —
+// JWT_ACCESS_TTL_SECONDS=900, say — into process.env, the override
+// below is silently ignored and ConfigService returns the .env value
+// instead. Clearing the overridden keys from process.env for the
+// duration of construction (TokenService reads config exactly once,
+// in its own constructor, and caches it) closes that gap.
+function withClearedProcessEnv<T>(keys: string[], fn: () => T): T {
+  const saved = new Map<string, string | undefined>();
+  for (const key of keys) {
+    saved.set(key, process.env[key]);
+    delete process.env[key];
+  }
+  try {
+    return fn();
+  } finally {
+    for (const [key, value] of saved) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+}
+
 function buildTokenService(configOverrides: Record<string, unknown> = {}) {
-  const jwtService = new JwtService({ secret: 'unit-test-secret-do-not-use-in-real-env' });
-  const refreshTokenStore = new RefreshTokenStore(new InMemoryRedisFake());
-  const configService = new ConfigService(configOverrides);
-  return new TokenService(jwtService, refreshTokenStore, configService);
+  return withClearedProcessEnv(Object.keys(configOverrides), () => {
+    const jwtService = new JwtService({ secret: 'unit-test-secret-do-not-use-in-real-env' });
+    const refreshTokenStore = new RefreshTokenStore(new InMemoryRedisFake());
+    const configService = new ConfigService(configOverrides);
+    return new TokenService(jwtService, refreshTokenStore, configService);
+  });
 }
 
 describe('TokenService', () => {
