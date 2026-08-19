@@ -9,6 +9,7 @@ import { AuthRegistrationModule } from './modules/auth/registration/registration
 import { GuardianConsentModule } from './modules/auth/guardian-consent/guardian-consent.module';
 import { UsersModule } from './modules/users/users.module';
 import { FeedModule } from './modules/feed/feed.module';
+import { ClubsModule } from './modules/clubs/clubs.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -55,7 +56,11 @@ import { FeedModule } from './modules/feed/feed.module';
     // GET /posts/:id, like, comment, save (also Section 4.3) are a
     // separate follow-up slice — see modules/feed/README.md.
     FeedModule,
-    // ClubsModule,         // Sprint 2
+    // Sprint 2 — Section 4.4 (Club & Banter Service), club subset only:
+    // GET /clubs, GET /clubs/:id, POST /clubs/:id/join. /banter-rooms*
+    // (the other half of Section 4.4) remains Sprint 3 — see
+    // modules/clubs/README.md.
+    ClubsModule,
     // BanterModule,        // Sprint 3
     // MessagingModule,     // Sprint 3
     // NotificationsModule, // Sprint 3
