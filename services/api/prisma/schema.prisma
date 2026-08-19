@@ -31,8 +31,23 @@ model User {
   // Safeguarding — required per Build Plan Section 8.3. Do not remove.
   guardian          Guardian?
 
+  // Single, narrowly-scoped "this is my club" declared-identity field —
+  // a grassroots-player-identity concept, distinct from fan-page
+  // membership below. Named "ClubAffiliation" explicitly (see the
+  // sibling comment on ClubPage.affiliatedPlayers) so Prisma doesn't
+  // ambiguously fold this relation together with clubMemberships below
+  // — see that field's comment for the real bug this fixes.
+  // POST /clubs/:id/join (Build Plan Section 4.4, sprint-2/club-pages)
+  // never reads or writes clubAffiliationId/clubAffiliation.
   clubAffiliationId String?
-  clubAffiliation   ClubPage? @relation(fields: [clubAffiliationId], references: [id])
+  clubAffiliation   ClubPage? @relation("ClubAffiliation", fields: [clubAffiliationId], references: [id])
+
+  // Many-to-many club-fan-page membership backing POST /clubs/:id/join
+  // (Build Plan Section 4.4) — see ClubPage.members' own comment for
+  // the full reasoning on why this is the mechanism "join" uses, and
+  // why it had to be given an explicit relation name to work correctly
+  // at all.
+  clubMemberships   ClubPage[] @relation("ClubMembership")
 
   posts             Post[]
   comments          Comment[]
@@ -70,8 +85,49 @@ model ClubPage {
   league      String?
   country     String?
   logoUrl     String?
+  // Denormalized cache for GET /clubs and GET /clubs/:id (Build Plan
+  // Section 4.4, sprint-2/club-pages) — same category as
+  // Post.likeCount/Post.commentCount above: incremented transactionally
+  // alongside adding a row to `members` (POST /clubs/:id/join), never
+  // trust this in isolation, and it's recomputable via
+  // members.count()/prisma.user.count({ where: { clubMemberships: {
+  // some: { id: this.id } } } }) if it ever drifts. There is
+  // deliberately no decrement path: Section 4.4 lists no
+  // leave/unjoin endpoint (contrast with follow/like/save, which are
+  // all POST+DELETE pairs) — see clubs/README.md's "join-only, no
+  // leave" gap.
   memberCount Int      @default(0)
-  members     User[]
+
+  // Real, verified fix to a pre-existing bug in this field, found while
+  // building POST /clubs/:id/join (sprint-2/club-pages) — flagged as a
+  // Decision Log candidate, see clubs/README.md. Before this PR,
+  // `members User[]` had NO explicit @relation name, and neither did
+  // User.clubAffiliation's FK relation above. Because both are the only
+  // User<->ClubPage relations of their respective directions (one list
+  // field of type User[] here, one single field of type ClubPage? on
+  // User), Prisma's default relation-matching silently paired them into
+  // ONE relation — verified directly against a live Prisma client
+  // before this fix: calling `clubPage.update({ data: { members: {
+  // connect: { id: userId } } } })` actually wrote to
+  // `User.clubAffiliationId`, not a separate join table (no
+  // `_ClubPageToUser`-style table existed in the migration history
+  // either). That would have meant "join a club fan page" silently
+  // overwrote a user's single declared clubAffiliationId — exactly the
+  // field this module's brief explicitly says never to touch. The
+  // explicit `@relation("ClubMembership", ...)` name here (paired with
+  // User.clubMemberships) and `@relation("ClubAffiliation", ...)` on
+  // clubAffiliation (paired with affiliatedPlayers below) disambiguate
+  // the two into genuinely separate relations — this migration creates
+  // a real `_ClubMembership` implicit join table for the first time.
+  members     User[]   @relation("ClubMembership")
+
+  // Reverse side of User.clubAffiliation, required by Prisma for the
+  // relation to resolve at all now that it has its own explicit name
+  // (see `members`' comment above) — not exposed by any endpoint in
+  // this module. Section 4.4 has no "list users declaring this as their
+  // club" endpoint, and none is added speculatively here.
+  affiliatedPlayers User[] @relation("ClubAffiliation")
+
   posts       Post[]
 }
 

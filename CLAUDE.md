@@ -137,8 +137,10 @@ Full reasoning for every choice above: Build Plan Section 5.
   email, declare age, guardian-consent-gated access) isn't actually
   walkable by a real user until at least F7 (and arguably F5) are built.
 - **Sprint 2 is in progress. Schema is ready; the Feed Service's
-  Section 4.3 endpoints are now fully built across two slices — see
-  below.** Section 6's Sprint 2 scope: Feed Service (Section 4.3 —
+  Section 4.3 endpoints are fully built (two slices), Follow (Section
+  4.2's remaining four endpoints) and notification-trigger wiring are
+  merged, and club fan pages (Section 4.4's club subset) are now built
+  — see below.** Section 6's Sprint 2 scope: Feed Service (Section 4.3 —
   post/view/like/comment/save), club fan pages with auto-join on
   signup (Section 4.4's club subset only — **not** `/banter-rooms*` in
   the same section, that's Sprint 3), Follow, and wiring
@@ -235,10 +237,10 @@ Full reasoning for every choice above: Build Plan Section 5.
   **Follow (Section 4.2's remaining four endpoints —
   `POST`/`DELETE /users/:id/follow`, `GET /users/:id/followers`,
   `GET /users/:id/following`) and notification-trigger wiring for
-  follow/like/comment into `Notification` are now built** — on branch
-  `sprint-2/follow-and-notifications`, verified against real
-  Postgres/Redis and locally committed, **not yet merged to `main`**,
-  pending human review. Follow endpoints are `JwtAuthGuard`-only (not
+  follow/like/comment into `Notification` are merged to `main`**
+  (PR #56, `sprint-2/follow-and-notifications`; a follow-up PR #57 fixed
+  an unrelated config-precedence bug in a shared test helper, described
+  above). Follow endpoints are `JwtAuthGuard`-only (not
   `GuardianConsentGuard`) — a follow produces even less visible content
   than a like does (there's no follower/following count field anywhere
   in `schema.prisma`), so this reads as unambiguous, unlike the still-open
@@ -274,6 +276,59 @@ Full reasoning for every choice above: Build Plan Section 5.
   unbuilt — unchanged by this PR. Test suite after this branch's
   changes: 30 suites / 304 tests, 0 failures (up from the 29/262
   measured immediately before it).
+  **Club fan pages (Section 4.4's club subset — `GET /clubs`,
+  `GET /clubs/:id`, `POST /clubs/:id/join`) are now built** — on branch
+  `sprint-2/club-pages`, verified against real Postgres/Redis and
+  locally committed, **not yet merged to `main`**, pending human
+  review. `/banter-rooms*` (the other half of Section 4.4) remains
+  entirely unbuilt, still Sprint 3, untouched by this branch.
+  Pre-endpoint verification found and fixed a real, pre-existing schema
+  bug, not just a schema addition: `ClubPage.members` and
+  `User.clubAffiliation` had no explicit `@relation` names, so Prisma
+  silently merged them into a single relation backed only by
+  `clubAffiliationId` — no separate join table existed at all. Verified
+  directly against a live Prisma client (not assumed): calling
+  `clubPage.update({ data: { members: { connect: ... } } })` was
+  actually writing to `User.clubAffiliationId`. Fixed via explicit
+  `@relation("ClubMembership", ...)` / `@relation("ClubAffiliation",
+  ...)` names (migration `20260819204443_fix_club_membership_relation`),
+  which creates a genuine `_ClubMembership` join table for the first
+  time and requires two new, purely mechanical relation array fields
+  (`User.clubMemberships`, `ClubPage.affiliatedPlayers`) — flagged as a
+  Decision Log candidate in `modules/clubs/README.md`, since it's a real
+  addition beyond Section 3's literal field list even though it carries
+  no new business data. `clubAffiliationId` itself is untouched — not
+  read or written anywhere in this module, confirmed live. `POST
+  /clubs/:id/join` uses `ClubPage.members` (now a genuine many-to-many),
+  not `clubAffiliationId` (a narrower, single-club "declared identity"
+  field with no Section 4.4 endpoint referencing it) — both mechanisms
+  and the reasoning for choosing `members` are documented in full in
+  `modules/clubs/README.md`. **Auto-join on signup (Build Plan Section
+  6's Sprint 2 line) is explicitly NOT wired** — `RegisterDto`/
+  `RegistrationService` have no club-selection field or trigger point,
+  and neither was modified; flagged as an open Decision Log candidate,
+  not silently treated as done because club pages themselves shipped.
+  **Section 4.4 has no leave/unjoin endpoint** — unlike follow/like/save,
+  club membership is join-only in the Build Plan as written; a
+  symmetric `DELETE` was deliberately not invented, and this join-only
+  gap is flagged as a Decision Log candidate. All three routes are
+  `JwtAuthGuard`-only, each argued fresh for this resource rather than
+  inherited from feed/follow's own guard conclusions — see
+  `modules/clubs/README.md`. `GET /clubs` is paginated alphabetically by
+  `name` (keyset, `id` tiebreaker) since `ClubPage` has no timestamp
+  field to order most-recent-first by, unlike every other list endpoint
+  in this codebase — a small, adapted (not third-scheme) cursor util
+  mirrors `feed/cursor.util.ts`'s contract. `POST /clubs/:id/join`
+  idempotency required directly verifying (not assuming) that Prisma's
+  implicit-m2m `connect` does not throw on a duplicate pair — unlike
+  `Like`/`Follow`'s own `P2002`-catch idempotency, this endpoint uses a
+  raw, parameterized `INSERT ... ON CONFLICT DO NOTHING` against the
+  `_ClubMembership` table inside the same transaction as the conditional
+  `memberCount` increment, verified live (double- and triple-join calls
+  leave `memberCount` at exactly 1, never higher, confirmed by reading
+  Postgres directly, not just HTTP responses). Test suite after this
+  branch's changes: 32 suites / 327 tests, 0 failures (up from the
+  30/304 measured immediately before it).
 - **Decision Log #1, #7, #8, #10, #11, #12, #16, #17, and #19 are
   resolved.** #16, #17, and #19 required real code changes beyond the
   doc entry — all three are merged (PRs #32, #33, #38). #19 (age-5
