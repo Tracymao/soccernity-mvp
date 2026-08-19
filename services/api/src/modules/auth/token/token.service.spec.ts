@@ -60,10 +60,24 @@ describe('TokenService', () => {
   });
 
   it('rejects an expired access token', async () => {
-    const tokenService = buildTokenService({ JWT_ACCESS_TTL_SECONDS: -1 });
-    const pair = await tokenService.issueTokenPair('user-1', 'player');
+    // Was previously `JWT_ACCESS_TTL_SECONDS: -1` against the real clock:
+    // signing and verifying both read Date.now(), so "already expired"
+    // depended on the two calls landing in the same wall-clock second —
+    // true almost always, but not guaranteed under CI/full-suite load, which
+    // made this test flaky (confirmed 5/5 pass in isolation, intermittent
+    // failures alongside the full suite). Freezing the clock removes the
+    // race entirely: sign and verify now read the identical fake "now", so
+    // exp = iat - 1 is deterministically in the past every run.
+    jest.useFakeTimers();
+    try {
+      jest.setSystemTime(new Date('2024-01-01T00:00:00.000Z'));
+      const tokenService = buildTokenService({ JWT_ACCESS_TTL_SECONDS: -1 });
+      const pair = await tokenService.issueTokenPair('user-1', 'player');
 
-    expect(() => tokenService.verifyAccessToken(pair.accessToken.token)).toThrow(UnauthorizedException);
+      expect(() => tokenService.verifyAccessToken(pair.accessToken.token)).toThrow(UnauthorizedException);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('rotates a refresh token: old token stops working, new pair works', async () => {
