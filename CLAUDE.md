@@ -130,18 +130,32 @@ Full reasoning for every choice above: Build Plan Section 5.
   PR #43 to reflect this distinction precisely — don't treat "code
   exists" as "counsel signed off," the draft itself is explicit that
   those are different things.
-- **CI does not verify Prisma migrations apply cleanly, and this is
-  not yet tracked anywhere as a known gap.** `ci.yml` provisions live
-  Postgres/Redis containers, but every current test mocks
-  `PrismaService` — nothing in the suite actually connects to them.
-  This means any migration file (including the hand-edited 3-step one
-  added in PR #42) is verified only by whoever wrote it running it
-  locally, never by CI. `deploy.yml` also has no `prisma migrate
-  deploy` step yet — acceptable for now since it's correctly gated on
-  Decision Log #9 (hosting), but this specific gap (CI not exercising
-  migrations against a real DB) is independent of that and should
-  probably be closed with a CI step before it causes a real problem,
-  not after.
+- **CI now verifies Prisma migrations apply cleanly (PR #45).** This
+  was a real gap, found and closed within the same sweep: `ci.yml`
+  provisions live Postgres/Redis containers, but every test mocks
+  `PrismaService`, so nothing previously exercised them. A `prisma
+  migrate deploy` step now runs against the live CI Postgres container
+  before lint/test/build. `deploy.yml` still has no migrate step —
+  correctly untouched, still gated on Decision Log #9 (hosting).
+- **Decision Log #20 is resolved (triaged, not fully fixed).** A
+  cleanup review split all 42 `npm audit` findings into three tiers by
+  actual production exposure. Tier 1 (react-router/react-router-dom's
+  `GHSA-jjmj-jmhj-qwj2` open-redirect/XSS advisory, non-breaking) is
+  fixed — PR #47, verified by diffing `npm audit --json` before/after
+  to confirm the specific advisory cleared, not just that the raw
+  count moved (it didn't — `react-router-dom`'s entry now inherits
+  from `react-router`'s own remaining advisories, so the top-line 42
+  count is unchanged even though the fix is real). **Tier 2 is still
+  open** — `multer`/`lodash`/`qs`/`body-parser`/`express`/the whole
+  `@nestjs/*` family, plus `react-router`'s own remaining two
+  advisories (`GHSA-337j-9hxr-rhxg`, `GHSA-wrjc-x8rr-h8h6`) — all
+  require a major version bump (NestJS 10→11 or React Router 6→7) and
+  are deliberately deferred to a scoped Sprint 2 ticket, not
+  forgotten. `multer` and `lodash` are confirmed unused by any current
+  application code, so Tier 2's real-world exposure is low today, not
+  zero. **Tier 3 (the 1 critical — `vitest`, dev-only — and the ~12
+  react-native/metro advisories) is untouched by design** — zero
+  current exposure, `apps/mobile` has no application code yet.
 - **Decision Log #6 (sports-data vendor) blocks Sprint 4 only** — not
   Sprint 1. Don't hold up auth/consent work on it.
 - **Decision Log #9 (hosting platform) blocks `deploy.yml` specifically**
