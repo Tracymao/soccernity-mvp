@@ -128,6 +128,17 @@ model Post {
   // it should be recomputable via Like.count({ where: { postId } }) if
   // it ever drifts from the real Like rows.
   likeCount     Int       @default(0)
+  // Same denormalized-cache obligation as likeCount immediately above:
+  // must be incremented transactionally alongside Comment row creation
+  // by whichever code path implements POST /posts/:id/comments (Build
+  // Plan Section 4.3) — never trust this in isolation as authoritative,
+  // and it's recomputable via Comment.count({ where: { postId } }) if it
+  // ever drifts. Unlike likeCount, there is currently no decrement path:
+  // Section 4.3 does not list a DELETE /posts/:id/comments/:commentId
+  // endpoint, so nothing in this codebase ever deletes a Comment row.
+  // Whoever eventually adds comment deletion (a genuine addition beyond
+  // Section 4.3 as written, not a spec'd endpoint) must add the matching
+  // decrement then — see feed/README.md.
   commentCount  Int       @default(0)
   createdAt     DateTime  @default(now())
   comments      Comment[]
