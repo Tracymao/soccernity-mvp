@@ -444,17 +444,87 @@ Full reasoning for every choice above: Build Plan Section 5.
   to confirm the specific advisory cleared, not just that the raw
   count moved (it didn't — `react-router-dom`'s entry now inherits
   from `react-router`'s own remaining advisories, so the top-line 42
-  count is unchanged even though the fix is real). **Tier 2 is still
-  open** — `multer`/`lodash`/`qs`/`body-parser`/`express`/the whole
-  `@nestjs/*` family, plus `react-router`'s own remaining two
-  advisories (`GHSA-337j-9hxr-rhxg`, `GHSA-wrjc-x8rr-h8h6`) — all
-  require a major version bump (NestJS 10→11 or React Router 6→7) and
-  are deliberately deferred to a scoped Sprint 2 ticket, not
-  forgotten. `multer` and `lodash` are confirmed unused by any current
-  application code, so Tier 2's real-world exposure is low today, not
-  zero. **Tier 3 (the 1 critical — `vitest`, dev-only — and the ~12
+  count is unchanged even though the fix is real). **Tier 2's
+  `@nestjs/*` sub-item is now closed — see the NestJS 11 bullet
+  immediately below (Decision Log #24).** The rest of Tier 2 —
+  `multer`/`lodash`/`qs`/`body-parser`/`express`, plus `react-router`'s
+  own remaining two advisories (`GHSA-337j-9hxr-rhxg`,
+  `GHSA-wrjc-x8rr-h8h6`, which need a separate React Router 6→7 major
+  bump) — is still open, deliberately deferred, not forgotten. `multer`
+  and `lodash` are confirmed unused by any current application code, so
+  Tier 2's remaining real-world exposure is low today, not zero.
+  **Tier 3 (the 1 critical — `vitest`, dev-only — and the ~12
   react-native/metro advisories) is untouched by design** — zero
   current exposure, `apps/mobile` has no application code yet.
+- **Decision Log #24: `services/api` is upgraded from NestJS 10 to
+  NestJS 11 (11.2.1), closing Decision Log #20's Tier 2 `@nestjs/*`
+  sub-item.** `sprint-2/nestjs-11-upgrade`, 2026-08-20. Bumped
+  `@nestjs/common`/`@nestjs/core`/`@nestjs/platform-express`/
+  `@nestjs/testing`/`@nestjs/cli` to `^11.0.0` and `@nestjs/config` to
+  `^4.0.0` (v3 does not run on Nest 11); `@nestjs/throttler`'s existing
+  `^6.5.0` pin and `@nestjs/jwt`'s existing `^11.0.2` pin already
+  supported Nest 11 and needed no change. NestJS 12 deliberately not
+  targeted — alpha-only as of this entry, a separate and much larger
+  migration (full ESM, Jest→Vitest, ESLint→oxlint). A full, clean
+  `node_modules`/lockfile reinstall (not just `npm install` on top of
+  the existing tree) was required to actually fix the version bump —
+  an incremental install left a real pre-existing split, `@nestjs/core`/
+  `@nestjs/common` resolving to two different copies (11.2.1 nested
+  under `services/api/node_modules`, a stale 10.4.22 still hoisted at
+  the repo root and used by `@nestjs/throttler`/`@nestjs/jwt`/
+  `@sentry/nestjs`'s own `require()` calls) — confirmed via `npm ls`
+  before and after; the clean reinstall dedupes the whole workspace to
+  a single `@nestjs/common@11.2.1`/`@nestjs/core@11.2.1`. **The
+  highest-risk item — `@nestjs/config` v4 inverting `ConfigService.get()`'s
+  resolution order (internal configuration now wins over `process.env`,
+  the opposite of v3, which PR #57 already root-caused the v3-losing
+  side of in `token.service.spec.ts`'s `withClearedProcessEnv` helper)
+  — was proven empirically, not assumed.** Confirmed via grep that this
+  codebase has zero `ConfigModule` `load: [...]`/`registerAs()` custom
+  config factories anywhere, so there is no internal-configuration layer
+  for a real env var to lose to; a new regression test
+  (`services/api/src/config-precedence.spec.ts`) constructs
+  `ConfigService` the exact way `AppModule` does (`ConfigModule.forRoot`
+  with a real `envFilePath` on disk, not a hand-built config object) and
+  confirms it still reads a real, distinctive env var correctly, both
+  with and without a supplied default. Separately confirmed — by reading
+  v4's own `config.service.js` directly and by a live empirical check —
+  that `new ConfigService(overrides)` (`buildTokenService()`'s own
+  pattern) now has `overrides` win over `process.env` unconditionally,
+  the exact inversion of the v3 bug PR #57 fixed.
+  `withClearedProcessEnv` is left in place, now redundant-but-harmless
+  rather than load-bearing — its own comment in `token.service.spec.ts`
+  is updated to say so explicitly rather than leaving that undocumented.
+  Other CONFIRMED-LOW-RISK areas, verified empirically rather than
+  assumed: zero wildcard routes anywhere in `services/api/src` (Express
+  v5/`path-to-regexp` changes are a non-issue); zero direct `Reflector`
+  usage in this codebase's own code (the one `new Reflector()`
+  construction is inside `auth-throttler.guard.spec.ts`, exercising
+  `@nestjs/throttler`'s own internals, already Nest-11-compatible per
+  its peer range); `tsconfig.json`'s existing `target`/`module`/
+  (unset, defaulting) `moduleResolution` needed no change — confirmed by
+  a full `nest build`, both real test suites, and a manual `start:dev`
+  boot all succeeding with zero DI/module-resolution errors. Mocked
+  suite: 34 suites / 334 tests, 0 failures (up from the pre-upgrade
+  33/330 baseline by the one new `config-precedence.spec.ts` file — no
+  other test file needed a genuine code change, only the dependency
+  bump itself and one `prisma generate` step the reinstall had wiped).
+  e2e suite (real Postgres/Redis via `docker compose up -d`): 5 suites /
+  22 tests, 0 failures, unchanged in count — the real regression-safety
+  net (PR #59/#63) this upgrade was deliberately timed to have available
+  actually held. `npm run start:dev` boots cleanly with the full,
+  correct route table (confirmed via its own startup log, not assumed),
+  and `GET /health` returns `200 {"status":"ok","database":"connected"}`.
+  One side effect worth flagging, not silently bundled in: the clean
+  reinstall surfaced this npm environment's own install-script
+  allowlisting gate (a `package.json` `allowScripts` block, absent
+  before this PR) blocking `argon2`'s native build and `prisma
+  generate`'s own postinstall step; `npm approve-scripts --all` was run
+  once for the same five packages (`@prisma/client`, `@prisma/engines`,
+  `argon2`, `esbuild`, `prisma`) that already had install scripts before
+  this PR — nothing new was added to the trusted set, only formally
+  recorded — and the resulting root `package.json` diff is committed
+  alongside the version bumps themselves.
 - **Decision Log #6 (sports-data vendor) blocks Sprint 4 only** — not
   Sprint 1. Don't hold up auth/consent work on it.
 - **Decision Log #9 (hosting platform) blocks `deploy.yml` specifically**

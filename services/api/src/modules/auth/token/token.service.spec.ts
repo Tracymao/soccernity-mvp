@@ -5,16 +5,29 @@ import { InMemoryRedisFake } from './test-support/in-memory-redis.fake';
 import { RefreshTokenStore } from './refresh-token.store';
 import { TokenService } from './token.service';
 
-// @nestjs/config's ConfigService.get() checks process.env BEFORE the
+// @nestjs/config v3's ConfigService.get() checked process.env BEFORE the
 // internalConfig object passed to `new ConfigService(...)` (see
 // node_modules/@nestjs/config/dist/config.service.js: validated-env,
-// then process.env, then internalConfig, then default). If a real
-// .env has already loaded a key this test is trying to override —
+// then process.env, then internalConfig, then default, under v3). If a real
+// .env had already loaded a key this test is trying to override —
 // JWT_ACCESS_TTL_SECONDS=900, say — into process.env, the override
-// below is silently ignored and ConfigService returns the .env value
+// below was silently ignored and ConfigService returned the .env value
 // instead. Clearing the overridden keys from process.env for the
 // duration of construction (TokenService reads config exactly once,
-// in its own constructor, and caches it) closes that gap.
+// in its own constructor, and caches it) closed that gap.
+//
+// UPDATE (NestJS 10 -> 11 / @nestjs/config v3 -> v4 upgrade,
+// sprint-2/nestjs-11-upgrade): v4 inverts this precedence —
+// getFromInternalConfig() now runs BEFORE getFromProcessEnv() (confirmed
+// directly against v4's own config.service.js, and by a dedicated
+// regression test in src/config-precedence.spec.ts). That means the
+// scenario this helper exists to prevent is now structurally impossible:
+// `new ConfigService(configOverrides)` always has its overrides win over
+// process.env regardless of what's already set, with or without this
+// helper. withClearedProcessEnv() is left in place deliberately —
+// redundant-but-harmless, not wrong — rather than removed, since deleting
+// it buys nothing and this comment is the explicit record for why it's no
+// longer load-bearing, per this upgrade's own report.
 function withClearedProcessEnv<T>(keys: string[], fn: () => T): T {
   const saved = new Map<string, string | undefined>();
   for (const key of keys) {
