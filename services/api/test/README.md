@@ -129,35 +129,55 @@ see the remaining gaps listed below.
   counters read back from Postgres equal `Like.count()`/`Comment.count()`
   for that post, not just once at the end.
 
-**A real, discovered gap, not a production bug — flagged, not fixed
-here:** writing `feed-reactions.e2e-spec.ts`/`follow.e2e-spec.ts`/
+**A real, discovered gap, not a production bug when found — flagged then,
+now fixed at the source but the test workaround itself deliberately
+left in place:** writing `feed-reactions.e2e-spec.ts`/`follow.e2e-spec.ts`/
 `counters.e2e-spec.ts` against real `POST /auth/register` (the same
 `registerAndLogin()` pattern `auth.e2e-spec.ts`/`clubs.e2e-spec.ts` use)
 hit real 429s from `AuthThrottlerGuard` well before those files' own tests
 finished — each of these three files' coverage genuinely needs more than
 5 distinct users across one spec file's real HTTP traffic. Investigating
 found that `AUTH_RATE_LIMIT_MAX`/`AUTH_RATE_LIMIT_WINDOW_MS`
-(`rate-limit.module.ts`'s env-driven module-level throttler config) are
-**not actually consulted** by any of the four routes that currently apply
+(`rate-limit.module.ts`'s env-driven module-level throttler config) were
+**not actually consulted** by any of the four routes that apply
 `@AuthRateLimit()` (`register`, `login`, `forgot-password`,
-`guardian-consent/resend`): every call site invokes the decorator with no
+`guardian-consent/resend`): every call site invoked the decorator with no
 arguments, so its own hardcoded imported defaults
 (`DEFAULT_AUTH_RATE_LIMIT = 5`, `DEFAULT_AUTH_RATE_LIMIT_WINDOW_MS =
-60_000`) win at the route level regardless of what the module-level
-config says — an env var that looks configurable but currently has zero
-effect on any decorated route. This is a real config-wiring gap worth a
-follow-up ticket, not something this PR fixes (coverage-only, no
-production changes, per this PR's own brief). The workaround used instead
-is scoped entirely to test setup: these three files seed their `User`
-rows directly via Prisma (the same "seed directly via Prisma" precedent
-`clubs.e2e-spec.ts` already set for `ClubPage`) and mint a real access
-token via the real, unmocked `TokenService` pulled from the test's own
-NestJS DI container (`app.get(TokenService)`) rather than going through
-`POST /auth/register` — every downstream request in these files still
-exercises the real `JwtAuthGuard` → `TokenService.verifyAccessToken`
-chain end to end; only register's own HTTP/rate-limiter/argon2id path is
-bypassed, and that path is already fully covered by `auth.e2e-spec.ts`.
-See each file's own `createUser()` helper comment for the full writeup.
+60_000`) won at the route level regardless of what the module-level
+config said — an env var that looked configurable but had zero effect on
+any decorated route.
+
+**RESOLVED (branch `sprint-2/fix-auth-rate-limit-config-wiring`):**
+`AuthRateLimit()` no longer applies those defaults as its own default
+parameters; a bare `@AuthRateLimit()` now applies only the guard, so
+`AUTH_RATE_LIMIT_MAX`/`AUTH_RATE_LIMIT_WINDOW_MS` genuinely control every
+real call site — proven behaviorally (not just "it compiles") by
+`rate-limit/auth-rate-limit.decorator.spec.ts`, which wires the real
+guard through the real `AuthRateLimitModule` and shows a bare
+`@AuthRateLimit()` route respecting a non-default configured limit, and
+separately falling back to the hardcoded defaults when the env vars are
+unset. **That fix does not, by itself, make switching these three files
+over to real HTTP registration free** — `.env.test` still has no
+`AUTH_RATE_LIMIT_MAX` override, so the effective default stays 5/60s, and
+`feed-reactions.e2e-spec.ts` alone calls its `createUser()` helper 21
+times (37 total across all three files). Doing this properly would mean
+adding a test-specific rate-limit override plus converting all 37 call
+sites to real register/login HTTP traffic, each paying real argon2id
+hashing cost — judged a larger, separate change than the rate-limit fix
+PR's own scope, and deliberately left as a documented, tracked follow-up
+rather than done silently alongside the fix. The workaround below remains
+correct and intentional, not a symptom of the (now-fixed) bug: these
+three files seed their `User` rows directly via Prisma (the same "seed
+directly via Prisma" precedent `clubs.e2e-spec.ts` already set for
+`ClubPage`) and mint a real access token via the real, unmocked
+`TokenService` pulled from the test's own NestJS DI container
+(`app.get(TokenService)`) rather than going through `POST /auth/register`
+— every downstream request in these files still exercises the real
+`JwtAuthGuard` → `TokenService.verifyAccessToken` chain end to end; only
+register's own HTTP/rate-limiter/argon2id path is bypassed, and that path
+is already fully covered by `auth.e2e-spec.ts`. See each file's own
+`createUser()` helper comment for the full writeup.
 
 **Everything else remains e2e-uncovered — an intentionally deferred
 backlog item, not a gap this PR claims to close.** In particular:

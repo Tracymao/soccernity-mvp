@@ -43,9 +43,13 @@ describe('Follow e2e: follow/unfollow, notification direction, and followers/fol
   // Same real gap as feed-reactions.e2e-spec.ts's own detailed comment on
   // its identically-named helper: this file also needs more distinct
   // users across a single spec file's real HTTP traffic than real POST
-  // /auth/register's hardcoded (not actually env-configurable — see the
-  // other file's comment for the full explanation) 5-requests/60s
-  // AuthThrottlerGuard limit allows. Seeds the User row directly via
+  // /auth/register's hardcoded 5-requests/60s AuthThrottlerGuard limit
+  // allows. That limit's env-driven config (AUTH_RATE_LIMIT_MAX/
+  // AUTH_RATE_LIMIT_WINDOW_MS) was not actually being consulted at all —
+  // now fixed (sprint-2/fix-auth-rate-limit-config-wiring) — but this
+  // file was deliberately left on the Prisma-seeding workaround rather
+  // than switched to real HTTP registration; see the other file's comment
+  // for the full explanation. Seeds the User row directly via
   // Prisma and mints a real access token via the real, unmocked
   // TokenService pulled from this test's own DI container — every
   // downstream request still exercises the real JwtAuthGuard ->

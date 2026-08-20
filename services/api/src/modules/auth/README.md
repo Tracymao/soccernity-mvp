@@ -477,3 +477,63 @@ flat `accessToken: string` + `accessTokenExpiresIn: number` (via
   scaffolding — now reconciled against the real DTOs for real).
   `LoginPage.tsx`/`RegisterStep.tsx` needed no changes — both already
   only read the flat `result.accessToken`/`result.refreshToken` strings.
+
+## Status update — `AUTH_RATE_LIMIT_MAX`/`AUTH_RATE_LIMIT_WINDOW_MS` config-wiring fix (`sprint-2/fix-auth-rate-limit-config-wiring`)
+
+`sprint-2/e2e-coverage-expansion` (PR #63) surfaced a real, confirmed
+config-wiring bug: `AUTH_RATE_LIMIT_MAX`/`AUTH_RATE_LIMIT_WINDOW_MS`
+(`rate-limit.module.ts`'s env-driven module-level throttler config) had
+zero real effect on any of the four routes decorated with
+`@AuthRateLimit()` (`register`, `login`, `forgot-password`,
+`guardian-consent/resend`).
+
+- **Root cause:** `AuthRateLimit(limit = DEFAULT_AUTH_RATE_LIMIT, windowMs
+  = DEFAULT_AUTH_RATE_LIMIT_WINDOW_MS)` applied those default parameters
+  as a per-route `Throttle({ auth: { limit, ttl: windowMs } })` override
+  on every call, unconditionally — including on bare `@AuthRateLimit()`,
+  which every real call site used. NestJS's Throttler gives a route-level
+  `@Throttle()` override priority over the module-level named-throttler
+  config `AuthRateLimitModule` builds from `AUTH_RATE_LIMIT_MAX`/
+  `AUTH_RATE_LIMIT_WINDOW_MS`, so the env-driven config was being read
+  correctly but never actually reached any route — it was always silently
+  overridden by the same hardcoded numbers (5 requests / 60s) regardless
+  of what was configured.
+- **Fix:** `AuthRateLimit()` now takes an optional `{ limit, windowMs }`
+  override. Bare `@AuthRateLimit()` (every current call site) applies
+  *only* `UseGuards(AuthThrottlerGuard)`, with no `@Throttle()` metadata
+  at all — the route now genuinely falls through to
+  `AuthRateLimitModule`'s module-level, env-driven config. An explicit
+  override is opt-in, for a future route that specifically needs a
+  different limit than the shared auth default; none currently do.
+  `DEFAULT_AUTH_RATE_LIMIT`/`DEFAULT_AUTH_RATE_LIMIT_WINDOW_MS`
+  (`rate-limit.constants.ts`) are untouched — `rate-limit.module.ts`'s own
+  `|| DEFAULT_...` fallback still needs them for when the env vars
+  themselves aren't set.
+- **Proven behaviorally, not just compiled:**
+  `rate-limit/auth-rate-limit.decorator.spec.ts` wires the *real*
+  `AuthThrottlerGuard` through the *real* `AuthRateLimitModule` (same
+  pattern this file's own guardian-consent "real rate limiting" spec
+  already used for one route) against a throwaway controller carrying a
+  bare `@AuthRateLimit()`. One case sets `AUTH_RATE_LIMIT_MAX=2` (a value
+  deliberately different from the hardcoded default of 5) and confirms
+  the third request in a window now genuinely gets `429`, not `200` —
+  confirmed directly against the pre-fix decorator that this exact
+  assertion fails there (`expected 429, got 200`), so this is a real
+  regression-proof, not a test that would pass either way. A second case
+  confirms the fallback to `DEFAULT_AUTH_RATE_LIMIT` (5) still works when
+  the env vars are unset.
+- **The three e2e spec files PR #63 added
+  (`feed-reactions.e2e-spec.ts`, `follow.e2e-spec.ts`,
+  `counters.e2e-spec.ts`) were deliberately left on their existing
+  Prisma-seeding/`TokenService`-minting workaround, not switched to real
+  HTTP registration.** The fix alone doesn't make that switch free —
+  `.env.test` still has no `AUTH_RATE_LIMIT_MAX` override, so the
+  effective default stays 5/60s, and these three files' `createUser()`
+  helpers are called 37 times total (21 + 13 + 3) across real HTTP
+  traffic within each file's own throttler window. Doing this properly
+  would mean adding a test-specific rate-limit override plus converting
+  all 37 call sites to real register/login HTTP calls, each paying real
+  argon2id hashing cost — judged out of scope for this fix PR; each
+  file's own `createUser()` comment (and `test/README.md`) is updated to
+  say so explicitly rather than leave a stale "the bug is why we do this"
+  explanation standing after the bug itself is fixed.

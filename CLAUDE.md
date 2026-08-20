@@ -566,6 +566,43 @@ Full reasoning for every choice above: Build Plan Section 5.
   pagination and field-shape coverage (mocked unit suite's job), `GET
   /posts/:id`, and `auth/`'s refresh/logout/forgot-reset-password/
   guardian-consent/verify-email routes.
+- **The `AUTH_RATE_LIMIT_MAX`/`AUTH_RATE_LIMIT_WINDOW_MS` config-wiring
+  gap `sprint-2/e2e-coverage-expansion` flagged (above) is fixed**
+  (branch `sprint-2/fix-auth-rate-limit-config-wiring`). Root cause:
+  `AuthRateLimit()` applied `DEFAULT_AUTH_RATE_LIMIT`/
+  `DEFAULT_AUTH_RATE_LIMIT_WINDOW_MS` as its own default parameters and
+  always emitted a per-route `@Throttle()` override — since a route-level
+  `@Throttle()` wins over `AuthRateLimitModule`'s module-level, env-driven
+  config, every real call site (`register`, `login`, `forgot-password`,
+  `guardian-consent/resend`, all invoked as bare `@AuthRateLimit()`)
+  silently ignored the env vars regardless of what was configured. Fixed
+  by making the override opt-in: `AuthRateLimit(override?: { limit,
+  windowMs })` — bare `@AuthRateLimit()` now applies only the guard, with
+  no `@Throttle()` metadata, so it genuinely falls through to the
+  module-level config. Proven behaviorally (not just "it compiles") by a
+  new `rate-limit/auth-rate-limit.decorator.spec.ts`, which wires the real
+  guard through the real `AuthRateLimitModule` and confirmed directly
+  against the pre-fix code that the same assertion (`AUTH_RATE_LIMIT_MAX
+  =2` genuinely producing a 429 on the 3rd request) fails there
+  (`expected 429, got 200`) and passes post-fix. `DEFAULT_AUTH_RATE_LIMIT`/
+  `DEFAULT_AUTH_RATE_LIMIT_WINDOW_MS` are untouched — `rate-limit.module.ts`'s
+  `|| DEFAULT_...` fallback still needs them. **The three e2e spec files
+  the original gap-finding PR added were deliberately left on their
+  existing Prisma-seeding/`TokenService`-minting workaround, not switched
+  to real HTTP registration** — the fix doesn't make that switch free
+  (`.env.test` still has no `AUTH_RATE_LIMIT_MAX` override, and the three
+  files' `createUser()` helpers are called 37 times total across real HTTP
+  traffic within each file's own throttler window); judged a larger,
+  separate change than this fix PR's own scope, and each file's stale
+  "the bug is why we do this" comment (plus `test/README.md`'s matching
+  entry) is corrected in place to say the bug is fixed but the workaround
+  is being kept deliberately, not because it's still needed for the same
+  reason. Mocked suite after this branch: 33 suites / 330 tests, 0
+  failures (up from 32/328 — one new spec file, two new tests). e2e
+  suite: unchanged, 5 suites / 22 tests, 0 failures (comment-only changes
+  to the three affected spec files, no test-count change). See
+  `services/api/src/modules/auth/README.md`'s matching "Status update"
+  entry for the full writeup.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
