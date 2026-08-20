@@ -4,7 +4,7 @@
 // Register itself (the gap flagged in PR #5).
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import SignupSplitScreen from "./SignupSplitScreen";
 import DecorativeRings from "./DecorativeRings";
 import { darkAuthThemeVars } from "./authThemeVars";

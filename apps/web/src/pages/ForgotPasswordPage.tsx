@@ -17,7 +17,7 @@
 // email exists (to avoid leaking account existence), so the success state
 // here must not claim to have found -- or not found -- the email.
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import AuthLayout from "../components/auth/AuthLayout";
 import AuthField from "../components/auth/AuthField";
 import AuthButton from "../components/auth/AuthButton";
