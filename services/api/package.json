@@ -8,6 +8,7 @@
     "start:prod": "node dist/main.js",
     "build": "nest build",
     "test": "jest --passWithNoTests",
+    "test:e2e": "jest --config test/jest-e2e.config.js --runInBand",
     "lint": "eslint \"src/**/*.ts\" --no-error-on-unmatched-pattern",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"

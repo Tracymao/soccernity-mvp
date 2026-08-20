@@ -16,5 +16,15 @@
   // source. jest.config.js points ts-jest at this same tsconfig for
   // *running* tests, so ts-jest still transforms *.spec.ts on its own
   // in-memory — only the production build output is affected.
-  "exclude": ["node_modules", "dist", "**/*.spec.ts"]
+  //
+  // Sprint 2 / e2e-test-infrastructure added the "test" exclude below for
+  // the same reason: this tsconfig has no "include", so TypeScript's
+  // default file discovery starts from this file's own directory
+  // (services/api/) and would otherwise pull services/api/test/*.ts
+  // (including *.e2e-spec.ts) into `nest build`'s compilation too — and
+  // fail on it, since "test" sits outside rootDir "./src". test/jest-e2e.
+  // config.js's own ts-jest transform still runs those files fine for
+  // `npm run test:e2e`, same "excluded from the build, not from testing"
+  // split *.spec.ts already established.
+  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts"]
 }

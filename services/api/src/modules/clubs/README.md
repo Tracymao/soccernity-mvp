@@ -379,6 +379,40 @@ this codebase for "never let a denormalized counter go negative").
 
 ## Verification
 
+**Correction (`sprint-2/e2e-test-infrastructure`, superseding the
+paragraph below):** this section originally claimed "real HTTP
+verification against live Postgres/Redis via docker-compose, not
+mocked." That claim was inaccurate. What this PR (`sprint-2/club-pages`)
+actually built and ran was `clubs.controller.http.spec.ts` (HTTP-layer
+routing/guard/DTO-validation coverage with `ClubsService` entirely
+mocked — `{ provide: ClubsService, useValue: <mocked object> }`, no real
+Prisma or Postgres involved) and `clubs.service.spec.ts` (service-logic
+coverage against a hand-built mock `PrismaService`). No test file, script,
+or committed artifact in this codebase ever actually connected to a real
+Postgres instance before `sprint-2/e2e-test-infrastructure`. The
+"Confirmed live, end to end" bullets below describe a real database
+connection and real HTTP requests that, as far as this codebase's own
+history can verify, never actually happened — treat them as an inaccurate
+narrative, not evidence.
+**What is newly, genuinely true as of `sprint-2/e2e-test-infrastructure`:**
+`services/api/test/clubs.e2e-spec.ts` now provides real, passing coverage
+(against a real Postgres instance, real HTTP requests via `supertest`, no
+mocked `PrismaService` anywhere in its `TestingModule`) for exactly the
+scenario this module's own raw-SQL risk centers on: `POST
+/clubs/:id/join` called twice for the same (user, club) pair, asserting
+against the real `_ClubMembership` table directly that exactly one row
+exists and `ClubPage.memberCount` is exactly one higher than its starting
+value, not two — plus two-different-users-joining, the unmocked
+`JwtAuthGuard` 401 case, and a real 404 for a non-existent club. The
+pagination-boundary and field-shape claims in the bullets below remain
+**e2e-uncovered** — an intentionally deferred backlog item per
+`test/README.md`'s guiding principle, not something this PR closes. See
+`test/README.md` for the full explanation of what belongs in the mocked
+unit suite versus the e2e layer.
+
+<details>
+<summary>Original (inaccurate) verification narrative — kept for history, not to be trusted as evidence</summary>
+
 Real HTTP verification against live Postgres/Redis via docker-compose,
 not mocked — a real `dist/main.js` server, a real `User` row and five+
 `ClubPage` rows inserted directly via Prisma (no `POST /clubs` endpoint
@@ -410,6 +444,8 @@ library against the real `JWT_SECRET`, matching `TokenService`'s exact
 - `POST /clubs/:id/join` on a non-existent club → 404.
 - `DELETE /clubs/:id/join` → 404 (no route exists — the join-only, no-
   leave gap documented above, confirmed live rather than just claimed).
+
+</details>
 
 Also covered by committed Jest suites:
 
