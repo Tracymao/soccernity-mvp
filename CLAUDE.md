@@ -460,6 +460,31 @@ Full reasoning for every choice above: Build Plan Section 5.
 - **Decision Log #9 (hosting platform) blocks `deploy.yml` specifically**
   — it fails on purpose until this is resolved. Don't fill in a
   provider by guessing.
+- **Three Sprint 2 Decision Log candidates closed by the founder, no
+  code changes required for any of them** (see Build Plan Section 9,
+  entries #21–#23, for the full reasoning — this is the short version):
+  - **#21 — `GuardianConsentGuard` scope on `POST /posts` and
+    `POST /posts/:id/comments`.** The judgment call already implemented
+    (Section 5.7's broad "posting" language controls, not narrowed to
+    Section 8.3 step 5's literal enumerated list) is confirmed as
+    final, not a placeholder pending a narrower reading. Future
+    content-creation endpoints (Banter Room posts in Sprint 3, etc.)
+    should default to this same broad reading unless there's a specific
+    reason to diverge.
+  - **#22 — Saved posts stay private.** `GET /users/:id/saved-posts`'s
+    existing self-only/403-on-mismatch default is confirmed as final —
+    a saved-posts list is closer to a personal bookmark list than to
+    public activity like posts or likes, with no product benefit to
+    exposing it.
+  - **#23 — `GET /auth/me` is formally dropped from the spec.** It was
+    never built (confirmed by PR #59's e2e layer), and `GET /users/:id`
+    already covers "fetch my own profile" — the same precedent Decision
+    Log #15 already established for rejecting a `/users/me` alias.
+    **Section 4.1's API Contract Sketch should have its `GET /auth/me`
+    line removed** — this CLAUDE.md entry doesn't do that edit itself;
+    it's a note for whoever next edits Section 4 in the live Build Plan
+    document to also make that removal, so the endpoint list matches
+    what entry #23 records as decided.
 - **The `POST /auth/register` vs. `POST /auth/login` response-shape
   inconsistency PR #59's e2e layer surfaced is resolved** (branch
   `sprint-2/auth-response-shape-reconciliation`). Both endpoints now
