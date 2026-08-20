@@ -537,3 +537,69 @@ zero real effect on any of the four routes decorated with
   file's own `createUser()` comment (and `test/README.md`) is updated to
   say so explicitly rather than leave a stale "the bug is why we do this"
   explanation standing after the bug itself is fixed.
+
+## Status update — auto-join on signup (`sprint-2/auto-join-on-signup`)
+
+Closes the specific gap `clubs/README.md` flagged when club pages
+themselves shipped (PR #58): "auto-join on signup" (Build Plan Section
+6's Sprint 2 line) was left unbuilt because `RegisterDto` had no
+club-selection field at all.
+
+- `RegisterDto.clubId?: string` — new, `@IsOptional() @IsUUID()`,
+  matching `ClubPage.id`'s real UUID type (`schema.prisma`). Omitting
+  the field entirely is the "no club for now" path — not a special
+  sentinel value, just the natural absence of the field. No other
+  `RegisterDto` field changed.
+- `AuthRegistrationModule` now imports `ClubsModule` (which now exports
+  `ClubsService` for the first time — previously providers-only, no
+  `exports` array) so `RegistrationService` can inject `ClubsService`
+  via DI. No circular-dependency risk: `ClubsModule` imports
+  `AuthFoundationModule`, not `AuthRegistrationModule`.
+- `RegistrationService.register()`: when `dto.clubId` is provided, calls
+  `this.clubsService.joinClub(user.id, dto.clubId)` after user (and, for
+  a minor, guardian) creation — following the method's existing
+  sequential-steps pattern, not forced into the same `$transaction` as
+  user creation (`joinClub` is already internally transactional for its
+  own membership-row + `memberCount` pairing, per `clubs.service.ts`).
+- **Critical ordering fix, found and handled directly, not assumed
+  correct**: tracing `register()`'s actual step order confirmed that a
+  club-existence check that only happened as part of `joinClub` itself
+  (which, by construction, could only run after user/guardian creation)
+  would let a bad `clubId` 404 while leaving an already-committed,
+  orphaned `User` row behind (the pre-existing duplicate-email check
+  would then permanently block that address from registering again).
+  Fixed by calling `ClubsService.assertClubExists(dto.clubId)` (made
+  public — previously private, internal to `ClubsService` only)
+  *before* `prisma.user.create()` runs, not after. See
+  `test/registration-club-join.e2e-spec.ts` for the real-Postgres
+  regression proof: a nonexistent `clubId` produces a 404 and zero
+  `User` rows for that email (confirmed by querying directly), and the
+  same email can genuinely register afterward.
+- No `Notification` wiring — joining a club was never on Section 6's
+  notification-trigger list (follow/comment/like only) and that doesn't
+  change because the join now also happens during registration.
+- `AuthResponse`/`RegisterResponse` (`auth-response.mapper.ts`) gained no
+  new field for this — a successful club join is implied by a 201 with
+  no error; a caller wanting to confirm membership can already call
+  `GET /clubs/:id`.
+- **Explicitly not built here — flagged as a follow-up candidate, not
+  silently deferred**: a club-picker UI anywhere in the signup flow.
+  `apps/web`'s `SignupPage`/`RegisterStep` have no club-selection UI
+  today; this PR is backend-capability-only. See `clubs/README.md`'s
+  matching update for the same flag from the other module's side.
+- Verification: `registration.service.spec.ts` gained four new cases
+  (join called with a real clubId, no ClubsService calls at all when
+  clubId is omitted, `NotFoundException` propagates for a bad clubId
+  with `prisma.user.create` never called, and an explicit call-order
+  assertion proving `assertClubExists` runs before `user.create`).
+  `test/registration-club-join.e2e-spec.ts` (new) covers the same three
+  scenarios against real Postgres. Full mocked suite after this branch:
+  34 suites / 338 tests, 0 failures (up from 34 suites / 334 tests
+  immediately before it, verified directly by stashing this branch's
+  changes and re-running — no new suite, four new tests in the existing
+  `registration.service.spec.ts`; one pre-existing, timing-sensitive
+  test, `auth-rate-limit.decorator.spec.ts`'s "respects
+  AUTH_RATE_LIMIT_MAX/..." case, flaked once under full-suite load and
+  passed cleanly on an isolated re-run, unrelated to this change and not
+  fixed here). e2e suite: 6 suites / 25 tests, 0 failures (up from 5
+  suites / 22 tests — one new spec file, three new tests).

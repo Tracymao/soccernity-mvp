@@ -318,10 +318,13 @@ Full reasoning for every choice above: Build Plan Section 5.
   field with no Section 4.4 endpoint referencing it) — both mechanisms
   and the reasoning for choosing `members` are documented in full in
   `modules/clubs/README.md`. **Auto-join on signup (Build Plan Section
-  6's Sprint 2 line) is explicitly NOT wired** — `RegisterDto`/
-  `RegistrationService` have no club-selection field or trigger point,
-  and neither was modified; flagged as an open Decision Log candidate,
-  not silently treated as done because club pages themselves shipped.
+  6's Sprint 2 line) was left unwired by this PR** — `RegisterDto`/
+  `RegistrationService` had no club-selection field or trigger point at
+  the time, flagged as an open Decision Log candidate rather than
+  silently treated as done. **Resolved by
+  `sprint-2/auto-join-on-signup`** — see the dedicated bullet below for
+  the full detail; this bullet is left in place for the historical
+  record of what PR #58 itself did and didn't ship.
   **Section 4.4 has no leave/unjoin endpoint** — unlike follow/like/save,
   club membership is join-only in the Build Plan as written; a
   symmetric `DELETE` was deliberately not invented, and this join-only
@@ -752,6 +755,49 @@ Full reasoning for every choice above: Build Plan Section 5.
   to the three affected spec files, no test-count change). See
   `services/api/src/modules/auth/README.md`'s matching "Status update"
   entry for the full writeup.
+- **`sprint-2/auto-join-on-signup` closes the auto-join-on-signup gap
+  flagged above** (the club-pages bullet's "explicitly NOT wired" note)
+  — Build Plan Section 6's Sprint 2 line, left unbuilt because
+  `RegisterDto` had no club-selection field when club pages themselves
+  shipped in PR #58. `RegisterDto.clubId?: string` (optional,
+  `@IsUUID()`, matching `ClubPage.id`'s real UUID type) is the only DTO
+  change — omitting it entirely is the "no club for now" path, not a
+  sentinel value. `ClubsModule` now exports `ClubsService` (previously
+  providers-only) so `AuthRegistrationModule` can inject it via DI;
+  `RegistrationService.register()` calls the same `ClubsService.joinClub`
+  the standalone `POST /clubs/:id/join` endpoint uses, no join logic
+  reinvented. **A real ordering bug was found and fixed, not just
+  reasoned about**: tracing `register()`'s actual step order confirmed
+  that validating the club only as part of `joinClub` itself (which, by
+  construction, could only run after user/guardian creation) would let a
+  bad `clubId` 404 while leaving an already-committed, orphaned `User`
+  row behind — permanently blocking that email from ever registering
+  again, since the pre-existing duplicate-email check would then reject
+  retries. Fixed by making `ClubsService.assertClubExists` public
+  (previously private) and calling it *before* `prisma.user.create()`
+  runs. Proven, not just asserted: `test/registration-club-join.e2e-
+  spec.ts` (new) registers with a bad `clubId` against real Postgres,
+  confirms the 404, confirms directly via Prisma that no `User` row was
+  created for that email, and confirms the same email can genuinely
+  register afterward — plus the real-clubId (membership + `memberCount`
+  +1) and no-clubId (zero side effects on any club) paths. No
+  `Notification` wiring (joining a club was never on Section 6's
+  notification-trigger list) and no new field on
+  `AuthResponse`/`RegisterResponse` (a 201 with no error already implies
+  success; `GET /clubs/:id` covers confirming membership). **Explicitly
+  NOT built here, flagged as a follow-up candidate**: a club-picker UI
+  anywhere in the signup flow — `apps/web`'s `SignupPage`/`RegisterStep`
+  have no club-selection UI today, this PR is backend-capability-only.
+  See `services/api/src/modules/auth/README.md`'s and
+  `services/api/src/modules/clubs/README.md`'s matching "Status update"
+  entries for the full writeup. Mocked suite after this branch: 34
+  suites / 338 tests, 0 failures (up from a freshly re-verified 34
+  suites / 334 tests immediately before it on this same `main` — not the
+  33/330 figure recorded two bullets above, which had already gone stale
+  by the time this branch was cut, per this file's own "Keeping this
+  file current" caveat; four new tests, no new suite). e2e suite: 6
+  suites / 25 tests, 0 failures (up from 5 suites / 22 tests — one new
+  spec file, three new tests).
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

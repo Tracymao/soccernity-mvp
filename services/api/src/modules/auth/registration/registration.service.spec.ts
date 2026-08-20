@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { RegistrationService } from './registration.service';
 
 describe('RegistrationService', () => {
@@ -51,6 +51,12 @@ describe('RegistrationService', () => {
     // fallback (DPIA finding R5), same as the real app when the env var
     // is unset.
     const config = { get: () => undefined };
+    // sprint-2/auto-join-on-signup: mocked ClubsService, matching the
+    // real ClubsService's two methods RegistrationService actually calls.
+    const clubsService = {
+      assertClubExists: jest.fn().mockResolvedValue(undefined),
+      joinClub: jest.fn().mockResolvedValue({ clubId: 'club-1', joined: true, memberCount: 1 }),
+    };
 
     const service = new RegistrationService(
       prisma as any,
@@ -59,9 +65,19 @@ describe('RegistrationService', () => {
       emailVerificationTokenStore as any,
       emailService as any,
       config as any,
+      clubsService as any,
     );
 
-    return { service, prisma, passwordService, tokenService, emailVerificationTokenStore, emailService, config };
+    return {
+      service,
+      prisma,
+      passwordService,
+      tokenService,
+      emailVerificationTokenStore,
+      emailService,
+      config,
+      clubsService,
+    };
   }
 
   describe('register', () => {
@@ -217,6 +233,86 @@ describe('RegistrationService', () => {
           ...asOfAdult,
         } as any),
       ).resolves.toBeDefined();
+    });
+
+    // sprint-2/auto-join-on-signup
+    it('joins the given club when clubId is provided (auto-join on signup)', async () => {
+      const { service, clubsService } = buildService();
+
+      const result = await service.register({
+        email: 'joiner@example.com',
+        password: 'password123',
+        displayName: 'Joiner',
+        ...asOfAdult,
+        clubId: 'club-1',
+      } as any);
+
+      expect(clubsService.assertClubExists).toHaveBeenCalledWith('club-1');
+      expect(clubsService.joinClub).toHaveBeenCalledWith('user-1', 'club-1');
+      expect(result.user.id).toBe('user-1');
+    });
+
+    it('does not call ClubsService at all when clubId is omitted (the "no club for now" path)', async () => {
+      const { service, clubsService } = buildService();
+
+      await service.register({
+        email: 'no-club@example.com',
+        password: 'password123',
+        displayName: 'No Club',
+        ...asOfAdult,
+      } as any);
+
+      expect(clubsService.assertClubExists).not.toHaveBeenCalled();
+      expect(clubsService.joinClub).not.toHaveBeenCalled();
+    });
+
+    // The critical ordering regression this PR's brief called out: a bad
+    // clubId must fail the whole registration BEFORE any User row is
+    // committed, not after.
+    it('propagates a NotFoundException for a bad clubId and never creates the User row', async () => {
+      const { service, prisma, clubsService } = buildService();
+      clubsService.assertClubExists.mockRejectedValueOnce(new NotFoundException('Club not found'));
+
+      await expect(
+        service.register({
+          email: 'bad-club@example.com',
+          password: 'password123',
+          displayName: 'Bad Club',
+          ...asOfAdult,
+          clubId: 'does-not-exist',
+        } as any),
+      ).rejects.toBeInstanceOf(NotFoundException);
+
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(clubsService.joinClub).not.toHaveBeenCalled();
+    });
+
+    it('calls assertClubExists before user.create (ordering, not just outcome)', async () => {
+      const { service, prisma, clubsService } = buildService();
+      const callOrder: string[] = [];
+      clubsService.assertClubExists.mockImplementationOnce(async () => {
+        callOrder.push('assertClubExists');
+      });
+      prisma.user.create.mockImplementationOnce(({ data }: any) => {
+        callOrder.push('user.create');
+        return Promise.resolve({
+          id: 'user-1',
+          role: 'fan',
+          verificationStatus: 'unverified',
+          createdAt: new Date('2026-08-16T00:00:00.000Z'),
+          ...data,
+        });
+      });
+
+      await service.register({
+        email: 'order-check@example.com',
+        password: 'password123',
+        displayName: 'Order Check',
+        ...asOfAdult,
+        clubId: 'club-1',
+      } as any);
+
+      expect(callOrder).toEqual(['assertClubExists', 'user.create']);
     });
 
     it('issues an access/refresh token pair carrying only { sub, role } worth of identity', async () => {

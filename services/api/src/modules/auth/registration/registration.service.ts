@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { Guardian, User } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { ClubsService } from '../../clubs/clubs.service';
 import { computeConsentTokenExpiresAt } from '../guardian-consent/consent-token.constants';
 import { PasswordService } from '../password/password.service';
 import { TokenService } from '../token/token.service';
@@ -36,6 +37,7 @@ export class RegistrationService {
     private readonly emailVerificationTokenStore: EmailVerificationTokenStore,
     private readonly emailService: RegistrationEmailService,
     private readonly config: ConfigService,
+    private readonly clubsService: ClubsService,
   ) {}
 
   async register(dto: RegisterDto): Promise<RegisterResult> {
@@ -73,6 +75,24 @@ export class RegistrationService {
       );
     }
 
+    // Sprint 2 / sprint-2/auto-join-on-signup: auto-join on signup (Build
+    // Plan Section 6's Sprint 2 line, left unbuilt when club pages
+    // themselves shipped in PR #58 — RegisterDto had no club-selection
+    // field at all). Critical ordering: this existence check MUST happen
+    // before user.create() below, not after. If it ran after user
+    // creation, a bad clubId would 404 the request while leaving a real,
+    // orphaned User row already committed — un-retryable, since the
+    // duplicate-email check above would then block that same address from
+    // ever registering again. ClubsService.assertClubExists throws
+    // NotFoundException (its existing, already-correct behavior for
+    // standalone POST /clubs/:id/join) and is allowed to propagate here,
+    // failing the whole registration call with a 404 before anything is
+    // written. See test/registration-club-join.e2e-spec.ts for the
+    // regression proof.
+    if (dto.clubId) {
+      await this.clubsService.assertClubExists(dto.clubId);
+    }
+
     const passwordHash = await this.passwordService.hash(dto.password);
 
     const user = await this.prisma.user.create({
@@ -105,6 +125,20 @@ export class RegistrationService {
           consentTokenExpiresAt: computeConsentTokenExpiresAt(this.config),
         },
       });
+    }
+
+    // Auto-join on signup, continued from the pre-user-creation existence
+    // check above: the User (and, for a minor, Guardian) row now exists,
+    // so this is safe to call unconditionally when dto.clubId was
+    // provided — assertClubExists already confirmed the club is real
+    // before we got this far. Deliberately its own sequential step, not
+    // folded into the same $transaction as user/guardian creation
+    // (RegistrationService's brief: follow the existing sequential-steps
+    // pattern, don't force this into an artificial single transaction).
+    // joinClub itself is internally transactional (see clubs.service.ts)
+    // for the membership-row + memberCount pairing.
+    if (dto.clubId) {
+      await this.clubsService.joinClub(user.id, dto.clubId);
     }
 
     const verificationToken = await this.emailVerificationTokenStore.issue(user.id);
