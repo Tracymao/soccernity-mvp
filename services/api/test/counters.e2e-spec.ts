@@ -45,9 +45,11 @@ describe('Counters e2e: Post.likeCount/commentCount never drift from real Like/C
   }
 
   // Same real, discovered gap as feed-reactions.e2e-spec.ts's identically
-  // named helper — see that file's comment for the full explanation.
-  // Bypasses real POST /auth/register's hardcoded, not-actually-env-
-  // configurable rate limit by seeding the User row directly via Prisma
+  // named helper — see that file's comment for the full explanation
+  // (including why the underlying rate-limit config-wiring bug is now
+  // fixed but this file is still deliberately left on the workaround
+  // below, not switched to real HTTP registration). Bypasses real POST
+  // /auth/register's hardcoded rate limit by seeding the User row directly via Prisma
   // and minting a real access token via the real, unmocked TokenService
   // from this test's own DI container; every downstream request still
   // exercises the real JwtAuthGuard -> TokenService.verifyAccessToken

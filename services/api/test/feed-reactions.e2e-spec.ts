@@ -47,35 +47,48 @@ describe('Feed reactions e2e: like/unlike, comment, save/unsave against real Pos
   }
 
   // GAP FOUND WHILE BUILDING THIS SPEC (flagged, not silently worked
-  // around — see this PR's report): this file's brief called for the same
+  // around — see PR #63's report): this file's brief called for the same
   // register -> login createUser() pattern auth.e2e-spec.ts and
   // clubs.e2e-spec.ts already use. That pattern hits real POST
   // /auth/register, which is real-rate-limited (AuthThrottlerGuard,
   // Build Plan Section 5.7) at 5 requests/60s PER IP — and, as this spec
-  // file's own first run against real Postgres discovered, that limit is
-  // NOT actually configurable via AUTH_RATE_LIMIT_MAX/AUTH_RATE_LIMIT_
-  // WINDOW_MS (rate-limit.module.ts reads those into the module-level
-  // throttler config, but every current caller of the @AuthRateLimit()
-  // decorator — register, login, forgot-password, guardian-consent/resend
-  // — invokes it with NO arguments, so `Throttle({ auth: { limit:
-  // DEFAULT_AUTH_RATE_LIMIT, ttl: DEFAULT_AUTH_RATE_LIMIT_WINDOW_MS } })`'s
-  // own hardcoded imported constants win at the route level regardless of
-  // what the module-level, env-driven config says). This file's coverage
-  // genuinely needs many more than 5 distinct users across a single spec
-  // file's real HTTP traffic (like/unlike/comment/save notification-
-  // direction assertions each want their own author+actor pair), so
-  // reusing createUser() as-is would hit real 429s well before this
-  // file's own tests finish — confirmed directly: it did, on the first
-  // run.
+  // file's own first run against real Postgres discovered, that limit
+  // was NOT actually configurable via AUTH_RATE_LIMIT_MAX/AUTH_RATE_
+  // LIMIT_WINDOW_MS (rate-limit.module.ts reads those into the
+  // module-level throttler config, but every current caller of the
+  // @AuthRateLimit() decorator — register, login, forgot-password,
+  // guardian-consent/resend — invoked it with NO arguments, so
+  // `Throttle({ auth: { limit: DEFAULT_AUTH_RATE_LIMIT, ttl:
+  // DEFAULT_AUTH_RATE_LIMIT_WINDOW_MS } })`'s own hardcoded imported
+  // constants won at the route level regardless of what the module-level,
+  // env-driven config said). This file's coverage genuinely needs many
+  // more than 5 distinct users across a single spec file's real HTTP
+  // traffic (like/unlike/comment/save notification-direction assertions
+  // each want their own author+actor pair), so reusing createUser() as-is
+  // would hit real 429s well before this file's own tests finish —
+  // confirmed directly: it did, on the first run.
   //
-  // This is a real bug/gap surfaced by writing genuine e2e coverage
-  // (exactly what test/README.md says this layer is for), not fixed here
-  // per this PR's own "coverage-only, no production changes" rule — see
-  // the PR report. The fix below is scoped to test setup, not production
-  // code: seed the User row directly via Prisma (same "seed directly via
-  // Prisma" precedent clubs.e2e-spec.ts already set for ClubPage) and
-  // mint a real access token via the REAL, unmocked TokenService pulled
-  // straight from this test's own NestJS DI container
+  // RESOLVED (branch sprint-2/fix-auth-rate-limit-config-wiring):
+  // AuthRateLimit() no longer applies its own hardcoded default
+  // parameters unconditionally — a bare @AuthRateLimit() now applies
+  // ONLY the guard, so AUTH_RATE_LIMIT_MAX/AUTH_RATE_LIMIT_WINDOW_MS
+  // genuinely control every real call site now (see
+  // rate-limit/auth-rate-limit.decorator.ts and its own spec for the
+  // behavioral proof). That fix does NOT, by itself, make switching this
+  // file (and follow.e2e-spec.ts / counters.e2e-spec.ts, which point back
+  // to this comment) over to real HTTP registration free — .env.test still
+  // has no AUTH_RATE_LIMIT_MAX override, so the default stays 5/60s, and
+  // this file alone calls createUser() 21 times. Doing this properly would
+  // mean adding a test-specific rate-limit override plus converting every
+  // createUser() call site across three files (21 + 13 + 3 = 37 total) to
+  // real register/login HTTP calls, each paying real argon2id hashing
+  // cost — judged a larger, separate change than this bug-fix PR's scope;
+  // deliberately left as a documented follow-up rather than done here. The
+  // workaround immediately below remains correct and intentional, not a
+  // symptom of the (now-fixed) bug: seed the User row directly via Prisma
+  // (same "seed directly via Prisma" precedent clubs.e2e-spec.ts already
+  // set for ClubPage) and mint a real access token via the REAL, unmocked
+  // TokenService pulled straight from this test's own NestJS DI container
   // (`app.get(TokenService)`) — not a hand-built JWT, not a mocked
   // TokenService/JwtAuthGuard override (this file still uses the exact
   // same "real AppModule, no provider overrides" pattern as every other
