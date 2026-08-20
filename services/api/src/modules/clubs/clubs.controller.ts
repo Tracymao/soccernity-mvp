@@ -1,4 +1,4 @@
-import { Controller, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Controller, Delete, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../auth/guards/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
@@ -64,14 +64,46 @@ export class ClubsController {
   // resource" on a given call (see idempotency below), so 200-with-
   // resulting-state fits better than Nest's default 201.
   //
-  // Section 4.4 lists no leave/unjoin endpoint — unlike follow/like/save,
-  // which are all POST+DELETE pairs, this is join-only. Not built as a
-  // symmetric DELETE "to be consistent" — that would be scope Section 4.4
-  // didn't ask for. See clubs/README.md's "join-only, no leave" gap.
+  // Section 4.4 originally listed no leave/unjoin endpoint — unlike
+  // follow/like/save, which are all POST+DELETE pairs. That gap is now
+  // closed by DELETE :id/join below (sprint-2/club-leave). See
+  // clubs/README.md's "join-only, no leave" section for the full history
+  // of why this endpoint didn't exist until now, and for the Decision
+  // Log candidate this closes.
   @Post(':id/join')
   @HttpCode(200)
   @UseGuards(JwtAuthGuard)
   async join(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
     return this.clubsService.joinClub(user.sub, id);
+  }
+
+  // DELETE /clubs/:id/join. Symmetric with POST above, same route path
+  // (matching follow/like/save's own POST+DELETE-same-path convention,
+  // e.g. POST/DELETE /users/:id/follow, POST/DELETE /posts/:id/like).
+  //
+  // JwtAuthGuard only — this is a short confirmation of join's own
+  // guard argument above, not a fresh one: every reason join gave for
+  // staying JwtAuthGuard-only (a ClubPage fan-page membership is neither
+  // "a Banter Room" nor "a Community Group" under Section 5.7's literal
+  // list, and it produces no visible content — only a memberCount
+  // changing) applies at least as strongly to leaving as to joining.
+  // Leaving is, if anything, a more clearly non-safety-sensitive action
+  // than joining. See clubs/README.md for the full restatement.
+  //
+  // HttpCode(200), same reasoning as join and every other idempotent
+  // toggle action in this codebase (like/save/follow): leaving doesn't
+  // always change any state on a given call (see idempotency below), so
+  // 200-with-resulting-state fits better than a 204.
+  //
+  // Idempotent: leaving a club you're not a member of is a 200 with
+  // { joined: false, memberCount unchanged }, never a 404 — matching
+  // unlikePost/unfollowUser/unsavePost's own precedent for their DELETE
+  // endpoints. A non-existent :id is still a 404 (ClubsService.
+  // assertClubExists), identical to join's own 404 case.
+  @Delete(':id/join')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  async leave(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
+    return this.clubsService.leaveClub(user.sub, id);
   }
 }

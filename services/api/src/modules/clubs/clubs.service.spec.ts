@@ -204,4 +204,86 @@ describe('ClubsService', () => {
       expect(prisma.clubPage.update).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('leaveClub', () => {
+    it('throws NotFoundException when :id does not reference a real ClubPage, before ever touching the join table', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma as unknown as { clubPage: { updateMany: jest.Mock } }).clubPage.updateMany = jest.fn();
+
+      const service = new ClubsService(prisma);
+      await expect(service.leaveClub('user-1', 'missing')).rejects.toThrow(NotFoundException);
+      expect(prisma.$executeRaw).not.toHaveBeenCalled();
+    });
+
+    it('on a genuine leave (raw delete affects 1 row), decrements memberCount exactly once', async () => {
+      const prisma = buildPrismaMock();
+      (prisma as unknown as { clubPage: { updateMany: jest.Mock } }).clubPage.updateMany = jest.fn().mockResolvedValue({ count: 1 });
+      (prisma.clubPage.findUnique as jest.Mock)
+        .mockResolvedValueOnce({ id: 'club-1' }) // assertClubExists
+        .mockResolvedValueOnce({ memberCount: 0 }); // currentMemberCount, post-leave
+      (prisma.$executeRaw as jest.Mock).mockResolvedValue(1);
+
+      const service = new ClubsService(prisma);
+      const result = await service.leaveClub('user-1', 'club-1');
+
+      expect((prisma as unknown as { clubPage: { updateMany: jest.Mock } }).clubPage.updateMany).toHaveBeenCalledWith({
+        where: { id: 'club-1', memberCount: { gt: 0 } },
+        data: { memberCount: { decrement: 1 } },
+      });
+      expect(result).toEqual({ clubId: 'club-1', joined: false, memberCount: 0 });
+    });
+
+    it('idempotent: leaving a club you are not a member of (raw delete affects 0 rows) does NOT decrement memberCount, and is not a 404', async () => {
+      const prisma = buildPrismaMock();
+      const updateMany = jest.fn();
+      (prisma as unknown as { clubPage: { updateMany: jest.Mock } }).clubPage.updateMany = updateMany;
+      (prisma.clubPage.findUnique as jest.Mock)
+        .mockResolvedValueOnce({ id: 'club-1' }) // assertClubExists
+        .mockResolvedValueOnce({ memberCount: 0 }); // currentMemberCount, unchanged
+      (prisma.$executeRaw as jest.Mock).mockResolvedValue(0); // DELETE affected nothing — never a member
+
+      const service = new ClubsService(prisma);
+      const result = await service.leaveClub('user-1', 'club-1');
+
+      expect(updateMany).not.toHaveBeenCalled();
+      expect(result).toEqual({ clubId: 'club-1', joined: false, memberCount: 0 });
+    });
+
+    it('never lets memberCount go negative, even if leaveClub is called repeatedly on a club already at 0', async () => {
+      const prisma = buildPrismaMock();
+      let memberCount = 0;
+      // Simulates the `memberCount: { gt: 0 }` guard actually enforced by
+      // Postgres's real WHERE clause: updateMany is a no-op once
+      // memberCount is already 0, exactly mirroring FeedService.unlikePost's
+      // own likeCount floor-guard test precedent.
+      const updateMany = jest.fn().mockImplementation(async () => {
+        if (memberCount > 0) {
+          memberCount -= 1;
+          return { count: 1 };
+        }
+        return { count: 0 };
+      });
+      (prisma as unknown as { clubPage: { updateMany: jest.Mock } }).clubPage.updateMany = updateMany;
+      (prisma.clubPage.findUnique as jest.Mock).mockImplementation(
+        async (args: { select?: Record<string, boolean> }) => {
+          if (args.select?.memberCount) return { memberCount };
+          return { id: 'club-1' };
+        },
+      );
+      // A stale membership row exists (raw DELETE affects 1 row) even
+      // though memberCount is already 0 — the exact hypothetical drift
+      // scenario the updateMany floor-guard exists to protect against.
+      (prisma.$executeRaw as jest.Mock).mockResolvedValue(1);
+
+      const service = new ClubsService(prisma);
+      const first = await service.leaveClub('user-1', 'club-1');
+      expect(first.memberCount).toBe(0);
+
+      const second = await service.leaveClub('user-1', 'club-1');
+      expect(second.memberCount).toBe(0);
+
+      expect(memberCount).toBeGreaterThanOrEqual(0);
+    });
+  });
 });

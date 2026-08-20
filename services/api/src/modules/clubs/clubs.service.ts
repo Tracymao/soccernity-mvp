@@ -30,9 +30,14 @@ export interface ClubPageResult {
   nextCursor: string | null;
 }
 
+// `joined` is a plain boolean (not the `true`/`false` literal split you
+// might expect from separate join/leave types) — mirroring
+// FeedService.LikeState's own precedent (`liked: boolean`, shared by
+// both likePost and unlikePost) rather than inventing a parallel
+// JoinState/LeaveState pair for a single-field difference.
 export interface JoinState {
   clubId: string;
-  joined: true;
+  joined: boolean;
   memberCount: number;
 }
 
@@ -163,6 +168,61 @@ export class ClubsService {
     });
 
     return { clubId, joined: true, memberCount: await this.currentMemberCount(clubId) };
+  }
+
+  // DELETE /clubs/:id/join. Symmetric with joinClub above — mirrors its
+  // exact structure and idempotency discipline (assertClubExists first,
+  // same raw-SQL-against-"_ClubMembership" mechanism, same
+  // interactive-transaction pairing of the row mutation with the
+  // memberCount update) rather than inventing a different approach for
+  // the reverse direction. See clubs/README.md's "join-only, no leave"
+  // section (now closed) for the full history of why this didn't exist
+  // until now.
+  //
+  // Two things combine to guard memberCount against ever going negative,
+  // deliberately layered rather than relying on either alone:
+  //
+  // 1. The raw DELETE's own affected-row count (`affected > 0`) is
+  //    checked before touching memberCount at all — exactly the same
+  //    "only mutate the counter when the row mutation actually did
+  //    something" discipline joinClub's `INSERT ... ON CONFLICT DO
+  //    NOTHING` already established for the insert direction. Leaving a
+  //    club you were never a member of (or already left) affects 0 rows,
+  //    so memberCount is never touched — that alone makes leaveClub
+  //    idempotent, same as joinClub.
+  // 2. Even when the DELETE does affect a row, the decrement itself uses
+  //    `updateMany` with a `memberCount: { gt: 0 }` where-clause guard —
+  //    the exact pattern FeedService.unlikePost uses for `likeCount`, so
+  //    a decrement can never push memberCount below 0 even in a
+  //    hypothetical drift scenario (e.g. memberCount was already
+  //    manually reset to 0 while a stale membership row still existed).
+  //    Under normal operation #1 alone would already prevent this, but
+  //    #2 is cheap, already-established codebase precedent, and costs
+  //    nothing to include as a second line of defense.
+  //
+  // Leaving a club you're not a member of is treated as idempotent
+  // success (joined: false, memberCount unchanged), never a 404 — "you
+  // don't have this membership" and "you successfully ensured you don't
+  // have this membership" land on the same observable end state, the
+  // same reasoning unlikePost/unfollowUser/unsavePost already established
+  // for their own DELETE endpoints. A non-existent clubId is still a 404
+  // (via assertClubExists), matching joinClub's own 404 case exactly.
+  async leaveClub(userId: string, clubId: string): Promise<JoinState> {
+    await this.assertClubExists(clubId);
+
+    await this.prisma.$transaction(async (tx) => {
+      const affected = await tx.$executeRaw`DELETE FROM "_ClubMembership" WHERE "A" = ${clubId} AND "B" = ${userId}`;
+      if (affected > 0) {
+        await tx.clubPage.updateMany({
+          where: { id: clubId, memberCount: { gt: 0 } },
+          data: { memberCount: { decrement: 1 } },
+        });
+      }
+      // affected === 0 means this user was not a member (never joined, or
+      // already left) — idempotent success, memberCount left untouched.
+    });
+
+    return { clubId, joined: false, memberCount: await this.currentMemberCount(clubId) };
   }
 
   private async currentMemberCount(clubId: string): Promise<number> {

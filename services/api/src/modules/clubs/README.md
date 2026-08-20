@@ -8,16 +8,24 @@ Build Plan, **club subset only**.
 Section 4.4 (Club & Banter Service) lists these endpoints:
 
 ```
-GET    /clubs                — this PR
-GET    /clubs/:id            — this PR
-POST   /clubs/:id/join       — this PR
+GET    /clubs                — sprint-2/club-pages
+GET    /clubs/:id            — sprint-2/club-pages
+POST   /clubs/:id/join       — sprint-2/club-pages
+DELETE /clubs/:id/join       — sprint-2/club-leave (not in Section 4.4's
+                                literal text — closes the join-only, no-
+                                leave gap flagged as a Decision Log
+                                candidate by sprint-2/club-pages; see
+                                below)
 GET    /banter-rooms         — not built, Sprint 3
 POST   /banter-rooms/:id/... — not built, Sprint 3
 ```
 
-This PR builds **only** the three club endpoints. `/banter-rooms*` is
-explicitly out of scope — deferred to Sprint 3 per `CLAUDE.md`, not
-touched anywhere in this branch.
+`sprint-2/club-pages` built the three club endpoints Section 4.4
+literally lists. `sprint-2/club-leave` adds the fourth,
+`DELETE /clubs/:id/join`, closing a gap that PR flagged rather than
+silently leaving open — see "The join-only, no-leave gap" below.
+`/banter-rooms*` remains explicitly out of scope — deferred to Sprint 3
+per `CLAUDE.md`, not touched by either branch.
 
 ---
 
@@ -219,6 +227,15 @@ that there's no real tension to resolve, the same category as those
 three precedents, not the genuinely contested "is this posting?"
 questions (`feed/README.md` points 1/4).
 
+### `DELETE /clubs/:id/join` — `JwtAuthGuard` only (`sprint-2/club-leave`)
+
+Unlike every route above, this one is **not** argued fresh — see "Guard
+reasoning for `DELETE /clubs/:id/join` — short confirmation, not a fresh
+argument" further down (in the "join-only, no-leave gap" section) for
+the full statement of why a short confirmation of `POST :id/join`'s own
+conclusion is the right call here, not a departure from this section's
+own "argue every guard fresh" practice.
+
 ---
 
 ## Pagination — why alphabetical, not most-recent-first
@@ -342,28 +359,68 @@ and in `clubs.service.ts`'s own comment so it isn't a silent trap.
 
 ---
 
-## The join-only, no-leave gap
+## The join-only, no-leave gap — CLOSED by `sprint-2/club-leave`
 
 Section 4.4 lists no `DELETE /clubs/:id/join` (or `/leave`) endpoint —
 unlike `follow`/`like`/`save`, which are all `POST`+`DELETE` pairs in
-their respective sections, club membership is `POST`-only in the Build
-Plan as written. This PR builds exactly that: `POST /clubs/:id/join`
-and nothing else. A symmetric `DELETE` "to be consistent with every
-other toggle action in this codebase" was deliberately **not** added —
-that would be scope Section 4.4 didn't ask for, and inventing an unjoin
-endpoint speculatively risks guessing at a URL/response shape a future
-real spec update might choose differently.
+their respective sections, club membership was `POST`-only in the Build
+Plan as written. `sprint-2/club-pages` (this section originally) built
+exactly `POST /clubs/:id/join` and nothing else, deliberately not adding
+a symmetric `DELETE` speculatively — that would have been scope Section
+4.4 didn't ask for at the time.
 
-**This is a real, literal gap, flagged as a Decision Log candidate**: a
-user can join a club fan page today and has no way to leave one. Given
-every other membership-style relationship in this codebase (`Follow`,
-`Like`, `SavedPost`) supports the reverse action, this reads like an
-oversight in Section 4.4 rather than an intentional one-way design — but
-it's not this PR's place to assume that and build the fix anyway.
-Whoever resolves this Decision Log item should also decide whether
-`memberCount`'s decrement-on-leave should reuse `unlikePost`'s
-`updateMany`-with-a-floor-guard pattern (the established precedent in
-this codebase for "never let a denormalized counter go negative").
+**That gap is now closed.** `DELETE /clubs/:id/join` (`ClubsService.
+leaveClub`) is built, mirroring `joinClub`'s exact structure and
+idempotency discipline: `assertClubExists` first (same 404 for a
+non-existent `clubId`), a raw parameterized `DELETE FROM
+"_ClubMembership" WHERE "A" = ... AND "B" = ...` issued via
+`tx.$executeRaw` inside the same interactive transaction as a
+conditional `memberCount` decrement, and idempotent success (never a
+404) when leaving a club you're not a member of — the same reasoning
+`unlikePost`/`unfollowUser`/`unsavePost` already established for their
+own DELETE endpoints ("you don't have this membership" and "you
+successfully ensured you don't have this membership" are the same
+observable end state).
+
+`memberCount`'s decrement is guarded two ways, deliberately layered:
+
+1. The raw `DELETE`'s own affected-row count is checked first — the
+   decrement is only attempted when `affected > 0`, exactly mirroring
+   `joinClub`'s own "only mutate the counter when the row mutation
+   actually did something" discipline for its `INSERT ... ON CONFLICT DO
+   NOTHING`. This alone makes `leaveClub` idempotent.
+2. The decrement itself uses `updateMany` with a `memberCount: { gt: 0
+   }` where-clause guard — reusing `FeedService.unlikePost`'s exact
+   `likeCount` floor-guard pattern (the Decision Log candidate that
+   originally flagged this as the pattern to reuse), so `memberCount` can
+   never go negative even in a hypothetical drift scenario.
+
+**Verified against real Postgres** (`test/clubs.e2e-spec.ts`'s new
+`DELETE /clubs/:id/join (leaveClub)` describe block, not just the mocked
+unit suite): leaving a real membership removes the real `_ClubMembership`
+row and decrements `memberCount` by exactly 1; leaving a club you were
+never a member of is an idempotent 200 with `memberCount` unchanged,
+confirmed never negative even across three repeated calls on a club
+already at 0; a non-existent `clubId` still 404s; and a full `join ->
+leave -> join -> leave` cycle lands both `memberCount` and the real
+`_ClubMembership` row count back at their exact starting values after
+each complete cycle, not just once at the end — proving `leaveClub`
+leaves no residue that would prevent rejoining the same club.
+
+### Guard reasoning for `DELETE /clubs/:id/join` — short confirmation, not a fresh argument
+
+Unlike every other route in this module (each of which argues its guard
+choice independently per this module's own stated practice), `DELETE
+:id/join`'s guard choice is a short confirmation of `POST :id/join`'s
+own conclusion above, not a genuinely new argument: every reason that
+section gives for staying `JwtAuthGuard`-only — a `ClubPage` fan-page
+membership is neither "a Banter Room" nor "a Community Group" under
+Section 5.7's literal list, and it produces no visible content, only a
+`memberCount` changing — applies at least as strongly to leaving as to
+joining. If anything, leaving is more clearly non-safety-sensitive than
+joining (it removes a relationship rather than creating one), so there's
+no real tension here worth arguing fresh. `@UseGuards(JwtAuthGuard)`
+only, no `GuardianConsentGuard`, same as `POST :id/join`.
 
 ---
 
@@ -386,6 +443,15 @@ this codebase for "never let a denormalized counter go negative").
   never errors. 404 for a non-existent `:id`, checked before any write.
   No `Notification` created — joining a club isn't on Sprint 2's
   notification-trigger list (follow/comment/like only, per `CLAUDE.md`).
+- **`DELETE /clubs/:id/join`** (`sprint-2/club-leave`) —
+  `@UseGuards(JwtAuthGuard)` only, same reasoning as `POST :id/join` (see
+  the short-confirmation guard section above). `HttpCode(200)`. Response:
+  `{ clubId, joined: false, memberCount }`. Idempotent: leaving a club
+  you're not a member of is a 200 with `memberCount` unchanged, never a
+  404 — same convention as `unlikePost`/`unfollowUser`/`unsavePost`. 404
+  for a non-existent `:id`, identical to `POST :id/join`'s own case. No
+  `Notification` created or removed — consistent with `POST :id/join`
+  never creating one either.
 
 ---
 
@@ -421,6 +487,38 @@ pagination-boundary and field-shape claims in the bullets below remain
 `test/README.md`'s guiding principle, not something this PR closes. See
 `test/README.md` for the full explanation of what belongs in the mocked
 unit suite versus the e2e layer.
+
+**`sprint-2/club-leave` extends this same `test/clubs.e2e-spec.ts` file**
+with a `DELETE /clubs/:id/join (leaveClub)` describe block, same
+real-Postgres, no-mocked-`PrismaService` discipline as the `POST
+:id/join` coverage above: leaving a real membership (row genuinely gone
+from `_ClubMembership`, `memberCount` down by exactly 1, both checked
+directly against Postgres, not inferred from the HTTP response);
+idempotent leave-when-not-a-member (200, `memberCount` unchanged,
+confirmed never negative across three repeated calls against a club
+already at `memberCount: 0` — the specific boundary case the
+`updateMany`-with-a-floor-guard decrement exists for); a 404 for a
+non-existent `clubId`, matching `POST :id/join`'s own case; the unmocked
+`JwtAuthGuard` 401 case; and a full `join -> leave -> join -> leave`
+cycle asserting both `memberCount` and the real `_ClubMembership` row
+count return to their exact starting values after each complete cycle
+(not just once at the very end), the same "no drift across a real
+operation sequence" proof `test/counters.e2e-spec.ts` established for
+likes/comments, applied here for the first time to club membership. This
+block deliberately does **not** reuse this file's own pre-existing
+`registerAndLogin()` helper — four of its five scenarios need their own
+distinct user, which would have pushed this file's total real `POST
+/auth/register` calls past `AuthThrottlerGuard`'s hardcoded 5-requests/
+60s limit (the same real, discovered gap `test/README.md` already
+documents for `feed-reactions.e2e-spec.ts`/`follow.e2e-spec.ts`/
+`counters.e2e-spec.ts`). Instead it adds its own `createUser()` helper,
+identical in shape to those three files' own (seed a `User` row directly
+via Prisma, mint a real access token via the real, unmocked
+`TokenService` pulled from the test's own DI container) — see that
+helper's own comment in `test/clubs.e2e-spec.ts` for the full reasoning,
+including why the pre-existing `registerAndLogin()`-based tests above it
+were left untouched rather than migrated too (their own 4 calls stay
+comfortably under the limit on their own).
 
 <details>
 <summary>Original (inaccurate) verification narrative — kept for history, not to be trusted as evidence</summary>
@@ -470,14 +568,30 @@ Also covered by committed Jest suites:
   exactly 1 higher than baseline, never 2 — using a stateful mock that
   tracks `memberCount` across calls the same way the real transaction
   would).
-- `clubs.controller.http.spec.ts` — HTTP-layer coverage for all three
-  routes: query-param pass-through, pagination validation (`limit`
-  bounds), 404 propagation, route-ordering (`GET /clubs/:id` vs
-  `POST /clubs/:id/join` — confirmed `getClubById` is never called when
-  the request is actually a join), idempotent double-join at the HTTP
-  layer, and confirmation that `DELETE /clubs/:id/join` 404s (no route
-  registered).
+- `clubs.controller.http.spec.ts` — HTTP-layer coverage for all four
+  routes (updated by `sprint-2/club-leave` — the "`DELETE
+  /clubs/:id/join` 404s, no route registered" test from `sprint-2/
+  club-pages` was replaced, not kept alongside the new route, since that
+  route now genuinely exists): query-param pass-through, pagination
+  validation (`limit` bounds), 404 propagation, route-ordering (`GET
+  /clubs/:id` vs `POST /clubs/:id/join` — confirmed `getClubById` is
+  never called when the request is actually a join), idempotent
+  double-join and double-leave at the HTTP layer, and 404 propagation for
+  both `POST` and `DELETE :id/join`.
+- `clubs.service.spec.ts` (`sprint-2/club-leave` addition) — `leaveClub`:
+  404-before-any-write (mirroring `joinClub`'s own first test), the
+  genuine-delete-decrements case, the delete-affects-zero-rows-does-not-
+  decrement (not-a-member) idempotency case, and a dedicated
+  never-negative test that simulates a stale membership row existing
+  even though `memberCount` is already 0 (the exact hypothetical drift
+  scenario the `updateMany` floor guard defends against, mirroring
+  `FeedService.unlikePost`'s own `likeCount` floor-guard test precedent).
 
-Full `services/api` suite after this PR: **32 suites / 327 tests, 0
-failures** (up from 30/304 measured immediately before this branch's
-changes — see `CLAUDE.md`'s Sprint 2 status bullet for that baseline).
+Full `services/api` suite after `sprint-2/club-pages`: 32 suites / 327
+tests, 0 failures. After `sprint-2/club-leave`'s changes: **34 suites /
+344 tests, 0 failures** (mocked unit suite; re-measured directly, not
+assumed — see `CLAUDE.md`'s Sprint 2 status bullet for the running
+baseline). The real-Postgres e2e suite (`npm run test:e2e`) went from 6
+suites / 25 tests to **6 suites / 30 tests, 0 failures** — same suite
+count (this PR extends `test/clubs.e2e-spec.ts`, doesn't add a new file),
+5 new passing tests for `leaveClub`.
