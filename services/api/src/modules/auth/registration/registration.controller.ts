@@ -7,6 +7,7 @@ import {
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import { toAuthUserSummary, toTokenPairResponse } from '../auth-response.mapper';
 import { AuthRateLimit } from '../rate-limit/auth-rate-limit.decorator';
 import { RegisterDto } from './dto/register.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
@@ -47,20 +48,17 @@ export class RegistrationController {
 // Explicit response shaping — never spread the raw Prisma User (would
 // leak passwordHash) or Guardian row (would leak consentToken; the
 // guardian, not the registrant, receives that via the consent email).
+//
+// `user` and the token fields now come from auth-response.mapper.ts's
+// shared toAuthUserSummary()/toTokenPairResponse() — the same functions
+// POST /auth/login uses — instead of a second, independently-maintained
+// field list and a nested `accessToken: { token, expiresIn }` shape. See
+// auth/README.md's "response shape reconciliation" note for why these two
+// endpoints intentionally return the identical token/user shape now.
 function toRegisterResponse(result: RegisterResult) {
   const { user, guardian, tokens } = result;
   return {
-    user: {
-      id: user.id,
-      email: user.email,
-      phone: user.phone,
-      displayName: user.displayName,
-      dateOfBirth: user.dateOfBirth,
-      isMinor: user.isMinor,
-      role: user.role,
-      verificationStatus: user.verificationStatus,
-      createdAt: user.createdAt,
-    },
+    user: toAuthUserSummary(user),
     guardian: guardian
       ? {
           id: guardian.id,
@@ -70,7 +68,6 @@ function toRegisterResponse(result: RegisterResult) {
           consentStatus: guardian.consentStatus,
         }
       : null,
-    accessToken: tokens.accessToken,
-    refreshToken: tokens.refreshToken,
+    ...toTokenPairResponse(tokens),
   };
 }

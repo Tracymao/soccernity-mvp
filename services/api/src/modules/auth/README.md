@@ -422,3 +422,58 @@ Implemented as proposed, not re-litigated.
   DPIA's own disclaimer on R5 and its Section 5 open-questions table
   (item 9: "Consent token expiry and single-use (R5) — 72h proposed as
   a starting number only — Counsel + backend-api").
+
+## Status update — response shape reconciliation (`POST /auth/register` vs `POST /auth/login`)
+
+PR #59's real-Postgres e2e layer (`test/auth.e2e-spec.ts`,
+`test/clubs.e2e-spec.ts`) surfaced and flagged, rather than silently
+fixed, a genuine API-contract inconsistency between the two endpoints:
+`POST /auth/register` nested its token pair as
+`accessToken: { token, expiresIn }` while `POST /auth/login` returned a
+flat `accessToken: string` + `accessTokenExpiresIn: number` (via
+`auth-response.mapper.ts`'s `toTokenPairResponse`), and only
+`/auth/register` returned a `user` object at all. Resolved on branch
+`sprint-2/auth-response-shape-reconciliation`:
+
+- **Both endpoints now return the identical, flat shape.** `AuthResponse`
+  (`auth-response.mapper.ts`) is `TokenPairResponse`'s four token fields
+  (`accessToken`, `accessTokenExpiresIn`, `refreshToken`,
+  `refreshTokenExpiresAt`) plus `user: AuthUserSummary`. Register's old
+  nested `accessToken: { token, expiresIn }` is gone — it now calls the
+  same `toTokenPairResponse()` login uses.
+- **`POST /auth/login` now returns a `user` object too** — no new query;
+  `AuthService.login` already loads the full `User` row for password
+  verification, this is response-shaping only.
+- **`AuthUserSummary`** (also new, in `auth-response.mapper.ts`) is the
+  single shared shape for `user` on both endpoints: `id, email, phone,
+  displayName, dateOfBirth, isMinor, role, verificationStatus,
+  createdAt`. It replaces what used to be an inline object literal
+  duplicated only in `registration.controller.ts`'s own
+  `toRegisterResponse` — both endpoints now call the same
+  `toAuthUserSummary(user)` function, so they can't drift again by one
+  of them being edited and the other forgotten.
+- **`isMinor`/`verificationStatus` are deliberately present in `user`,
+  on both endpoints.** This does not weaken the non-negotiable in
+  `TokenPairResponse`'s own doc comment (Build Plan Section 5.7): that
+  rule is specifically about what `TokenService` puts *inside the JWT
+  access token payload* (`{ sub, role }` only, still enforced,
+  untouched by this change, still tested by
+  `token/token.service.spec.ts` and a dedicated `auth.service.spec.ts`
+  case that decodes the token and asserts on its payload directly) —
+  not about a fresh, one-time HTTP response body reading a user's own
+  current state back to them. `Guardian.consentStatus` is a separate
+  entity's field and never appears in `AuthUserSummary` at all, on
+  either endpoint.
+- **`TokenPairResponse` itself stays narrow, unchanged, and `user`-free.**
+  `POST /auth/refresh` still returns bare `TokenPairResponse` — a
+  background token-renewal call has no re-verified `User` row to attach
+  a `user` snapshot to (only a refresh token). `AuthResponse` is a
+  separate, wider type used only by `/auth/login` and `/auth/register`.
+- Downstream call sites fixed in the same PR: `test/auth.e2e-spec.ts`,
+  `test/clubs.e2e-spec.ts`, `registration/registration.controller.spec.ts`,
+  `auth.controller.http.spec.ts`, `auth.service.spec.ts`, and
+  `apps/web/src/api/auth.ts`'s `LoginResponse`/`RegisterResponse`
+  interfaces (previously explicitly marked as pre-B2/B3 speculative
+  scaffolding — now reconciled against the real DTOs for real).
+  `LoginPage.tsx`/`RegisterStep.tsx` needed no changes — both already
+  only read the flat `result.accessToken`/`result.refreshToken` strings.

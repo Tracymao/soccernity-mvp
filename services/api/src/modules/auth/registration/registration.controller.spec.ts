@@ -85,7 +85,12 @@ describe('RegistrationController (HTTP layer)', () => {
       expect(response.body.user.email).toBe('adult@example.com');
       expect(response.body.user.passwordHash).toBeUndefined();
       expect(response.body.guardian).toBeNull();
-      expect(response.body.accessToken.token).toBe('access-token');
+      // Flat shape, matching /auth/login's toTokenPairResponse output --
+      // see auth-response.mapper.ts and auth/README.md's response-shape
+      // reconciliation note.
+      expect(response.body.accessToken).toBe('access-token');
+      expect(response.body.accessTokenExpiresIn).toBe(900);
+      expect(response.body.refreshToken).toBe('refresh-id.secret');
     });
 
     it('rejects a body missing required fields with 400', async () => {

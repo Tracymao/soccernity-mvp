@@ -1,25 +1,16 @@
 // Auth Service client -- MVP Build Plan Section 4.1.
 //
-// *** NOT CONFIRMED WIRED TO A LIVE ENDPOINT AS OF THESE PRS. ***
-// `POST /auth/login` (PR B3) and `POST /auth/register` (PR B2) are
-// spec'd in Build Plan Section 4.1 but neither's controller/DTO had
-// merged to `main` as of Sprint 1 F2/F3 -- only the auth
-// *infrastructure* (PR B1: password hashing, token issuance, Redis
-// refresh-token store, rate-limit guard -- see
-// services/api/src/modules/auth/README.md) is in. There is no NestJS
-// route to call yet for either.
-//
-// This module makes the real request shapes (per Section 4.1 + the
-// concrete token spec in Section 5.7, and Section 3's User/Guardian
-// field names mirrored in services/api/prisma/schema.prisma) so that
-// once B2/B3 land, wiring is a base-URL/env change, not a rewrite.
-// Until then, calling either function will reject with a network/404
-// error against whatever origin the app is served from -- this is
-// intentional; it is not mocked or faked to look like a working demo.
-// LoginPage.tsx and RegisterStep.tsx surface that failure as a real
-// error state rather than pretending to succeed. Reconcile both shapes
-// against the real DTOs once B2/B3 land -- do not assume either is
-// correct until then.
+// Both `POST /auth/login` (PR B3) and `POST /auth/register` (PR B2) are
+// real, merged endpoints as of `sprint-2/auth-response-shape-
+// reconciliation`, which is also the PR that reconciled this file's
+// `LoginResponse`/`RegisterResponse` interfaces against the real backend
+// DTOs -- they were speculative pre-B2/B3 scaffolding before that. The
+// authoritative source of truth for both shapes is
+// `services/api/src/modules/auth/auth-response.mapper.ts`
+// (`AuthResponse`/`toAuthUserSummary`) and
+// `services/api/src/modules/auth/README.md`'s "response shape
+// reconciliation" note -- read those, not this comment, if either shape
+// changes again.
 import type { GuardianRelationship } from "../pages/signup/types";
 
 // No VITE_ env convention existed anywhere in apps/web before these PRs.
@@ -32,21 +23,37 @@ export interface LoginRequest {
 }
 
 // Section 5.7: access token is short-lived (15 min) and carries only
-// `userId` + `role` -- no `is_minor`/`consent_status` trusted claims.
-// Refresh token is rotating/revocable (Redis-backed per PR B1). Exact
-// response field names are NOT fixed by Section 4 (it's an endpoint
-// list, "not a full OpenAPI spec") -- this shape is this PR's best-guess
-// scaffolding pending B3, and should be reconciled against the real DTO
-// when that PR lands.
+// `userId` + `role` inside the JWT itself -- no `isMinor`/`consentStatus`
+// trusted claims there (services/api's token.types.ts's non-negotiable).
+// That's a separate concern from this response body, though: `user` here
+// intentionally DOES include `isMinor`/`verificationStatus` -- a fresh,
+// one-time HTTP response reading the caller's own current state back to
+// them, per auth-response.mapper.ts's `AuthUserSummary`. Refresh token is
+// rotating/revocable (Redis-backed per PR B1). This mirrors the real
+// `AuthResponse` shape both `POST /auth/login` and `POST /auth/register`
+// return as of sprint-2/auth-response-shape-reconciliation.
 export interface LoginResponse {
   accessToken: string;
+  accessTokenExpiresIn: number;
   refreshToken: string;
-  user: {
-    id: string;
-    email: string;
-    displayName: string;
-    role: "fan" | "player" | "admin";
-  };
+  refreshTokenExpiresAt: string;
+  user: AuthUserSummary;
+}
+
+// Shared by LoginResponse and RegisterResponse -- mirrors
+// services/api's auth-response.mapper.ts's AuthUserSummary exactly.
+// Never includes `passwordHash`; deliberately does include
+// `isMinor`/`verificationStatus` (see the comment above LoginResponse).
+export interface AuthUserSummary {
+  id: string;
+  email: string;
+  phone: string | null;
+  displayName: string;
+  dateOfBirth: string;
+  isMinor: boolean;
+  role: "fan" | "player" | "admin";
+  verificationStatus: string;
+  createdAt: string;
 }
 
 export interface RegisterRequest {
@@ -69,14 +76,25 @@ export interface RegisterRequest {
   };
 }
 
+// As of sprint-2/auth-response-shape-reconciliation, `POST /auth/register`
+// returns the identical token/user shape `POST /auth/login` does (see
+// LoginResponse above) -- previously this interface had no token fields
+// at all and a narrower, ad hoc `user` subset; both were speculative
+// scaffolding, not the real DTO. `guardian` is unaffected by that PR --
+// still only present when the registrant declared as a minor.
 export interface RegisterResponse {
-  user: {
+  accessToken: string;
+  accessTokenExpiresIn: number;
+  refreshToken: string;
+  refreshTokenExpiresAt: string;
+  user: AuthUserSummary;
+  guardian: {
     id: string;
+    name: string;
     email: string;
-    displayName: string;
-    isMinor: boolean;
-    verificationStatus: string;
-  };
+    relationship: GuardianRelationship;
+    consentStatus: string;
+  } | null;
 }
 
 // Shared by login() and registerUser() -- both are "a request to the auth

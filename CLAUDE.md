@@ -460,6 +460,33 @@ Full reasoning for every choice above: Build Plan Section 5.
 - **Decision Log #9 (hosting platform) blocks `deploy.yml` specifically**
   — it fails on purpose until this is resolved. Don't fill in a
   provider by guessing.
+- **The `POST /auth/register` vs. `POST /auth/login` response-shape
+  inconsistency PR #59's e2e layer surfaced is resolved** (branch
+  `sprint-2/auth-response-shape-reconciliation`). Both endpoints now
+  return the identical flat shape — `accessToken: string`,
+  `accessTokenExpiresIn: number`, `refreshToken: string`,
+  `refreshTokenExpiresAt: string`, plus `user: AuthUserSummary` (`id,
+  email, phone, displayName, dateOfBirth, isMinor, role,
+  verificationStatus, createdAt`) — via new shared
+  `toAuthUserSummary()`/`AuthResponse` in
+  `services/api/src/modules/auth/auth-response.mapper.ts`. Register's
+  old nested `accessToken: { token, expiresIn }` is gone; login gained
+  a `user` object it previously lacked. `isMinor`/`verificationStatus`
+  are deliberately present in `user` on both — that's a fresh HTTP
+  response reading a user's own state back to them, not the JWT
+  payload the Section 5.7 non-negotiable actually governs (`{ sub,
+  role }` only, unchanged, still enforced by `TokenService` and tested
+  directly). `TokenPairResponse` (used by `POST /auth/refresh`) stays
+  narrow and `user`-free on purpose. `apps/web/src/api/auth.ts`'s
+  `LoginResponse`/`RegisterResponse` interfaces — previously explicit
+  pre-B2/B3 scaffolding, never reconciled against a real DTO — are
+  updated to match; `LoginPage.tsx`/`RegisterStep.tsx` needed no call-
+  site changes. See `services/api/src/modules/auth/README.md`'s
+  "response shape reconciliation" entry for the full detail. Mocked
+  suite after this branch: 32 suites / 328 tests, 0 failures (one net
+  new test over the 32/327 baseline recorded above at PR #59 merge).
+  e2e suite: 2 suites / 6 tests, 0 failures, unchanged in count from
+  PR #59 (existing assertions updated to the new shape, not added to).
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
