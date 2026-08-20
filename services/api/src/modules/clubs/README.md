@@ -104,32 +104,44 @@ this reasoning, not just the fact that a migration exists.
 
 ## Two real ambiguities, resolved explicitly
 
-### 1. Auto-join on signup is not built here
+### 1. Auto-join on signup — RESOLVED, built by `sprint-2/auto-join-on-signup`
 
-Build Plan Section 6's Sprint 2 line reads "Build club fan pages with
-auto-join on signup." This PR does **not** wire that. `RegisterDto`
-(`auth/registration/dto/register.dto.ts`) has no club-selection field,
-and `RegistrationService` (`auth/registration/registration.service.ts`)
-has no code path that would know which club a new user should be
-auto-joined to — both were read, not modified, to confirm this. Wiring
-auto-join now would mean one of two things, neither appropriate for
-this PR:
+This section originally documented auto-join on signup as an
+unbuilt gap in this PR (`sprint-2/club-pages`) — `RegisterDto` had no
+club-selection field, and wiring one in speculatively, with no defined
+trigger or Figma signal, would have risked regressing an already-shipped
+registration flow for no real benefit at the time.
 
-- Guessing a UX for club selection during signup with no Figma screen
-  or Build Plan Section 4.1/8.3 signal to build against, or
-- Auto-joining every new user to some default/placeholder club, which
-  isn't what "auto-join" plausibly means and would need undoing later.
+**That gap is now closed.** `RegisterDto.clubId?: string` (optional,
+`@IsUUID()`, matching `ClubPage.id`'s real `@id @default(uuid())` type)
+lets a registering user join exactly one club at signup time.
+Omitting the field entirely is the "no club for now" path — not a
+special sentinel value, just the natural absence of the field. When
+provided, `RegistrationService.register()` calls the exact same
+`ClubsService.joinClub` this PR built (imported via `ClubsModule`,
+exported from `clubs.module.ts` for the first time so it resolves via
+DI into `AuthRegistrationModule`) — no join logic was reinvented.
 
-Sprint 1's registration flow is already shipped and independently
-verified; speculatively modifying it here, for a feature with no defined
-trigger, risks regressing a settled flow for no real benefit. **This
-gap is real and unbuilt as of this PR** — `POST /clubs/:id/join` exists
-as a standalone, user-initiated action only. Whoever eventually adds
-club selection to signup (a genuine product decision: single-select?
-multi-select? optional or required? at what step of the six-screen
-guardian-consent-aware flow?) should wire it to call the same
-`ClubsService.joinClub` this PR built, not reinvent the join logic.
-Flagged as a Decision Log candidate.
+**Critical ordering, deliberately handled**: `RegistrationService`
+calls `ClubsService.assertClubExists(dto.clubId)` (now a public method
+— previously private, used only internally by `joinClub`) *before*
+`prisma.user.create()` runs, not after. A bad `clubId` therefore 404s
+the whole registration request before any `User` row is committed —
+avoiding an orphaned, club-less `User` row that a subsequent retry with
+the same email could never recover from (the pre-existing duplicate-
+email check would block it). See
+`test/registration-club-join.e2e-spec.ts` for the real-Postgres proof
+of all three paths: real clubId (membership + `memberCount` +1), no
+clubId (zero side effects on any club), bad clubId (404, and no `User`
+row for that email — confirmed by querying directly, then confirming
+the same email can genuinely register afterward).
+
+**Still explicitly not built here (this PR, or `sprint-2/auto-join-on-
+signup`)**: a club-picker UI anywhere in the signup flow. `apps/web`'s
+`SignupPage`/`RegisterStep` have no club-selection UI today — that's a
+separate, natural frontend follow-up, flagged as a Decision Log/backlog
+candidate, not silently treated as done because the backend capability
+now exists.
 
 ### 2. `POST /clubs/:id/join` uses `ClubPage.members`, not `clubAffiliationId`
 

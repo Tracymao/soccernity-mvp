@@ -102,7 +102,17 @@ export class ClubsService {
   // shape/intent: "does :id reference a real ClubPage" is the first move,
   // and a well-formed but non-existent id must 404, never a raw FK
   // violation surfaced as 400/500.
-  private async assertClubExists(clubId: string): Promise<void> {
+  //
+  // Deliberately public (not private, as originally written) as of
+  // sprint-2/auto-join-on-signup: RegistrationService needs to validate
+  // a caller-supplied clubId *before* committing the new User row, so a
+  // bad clubId 404s the whole registration without leaving an orphaned,
+  // club-less User behind (see registration.service.ts's own comment on
+  // this ordering). Reusing this exact check — rather than duplicating
+  // it or calling the heavier getClubById (which selects the full club
+  // record RegistrationService has no use for) — keeps "does this
+  // clubId exist" defined in exactly one place.
+  async assertClubExists(clubId: string): Promise<void> {
     const club = await this.prisma.clubPage.findUnique({ where: { id: clubId }, select: { id: true } });
     if (!club) {
       throw new NotFoundException('Club not found');

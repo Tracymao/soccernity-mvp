@@ -128,6 +128,17 @@ see the remaining gaps listed below.
   unlike (idempotent) → comment → comment sequence, that the cached
   counters read back from Postgres equal `Like.count()`/`Comment.count()`
   for that post, not just once at the end.
+- `registration-club-join.e2e-spec.ts` (added by
+  sprint-2/auto-join-on-signup) — auto-join on signup
+  (`RegisterDto.clubId`) against real Postgres: registering with a real
+  `clubId` creates exactly one `_ClubMembership` row and increments
+  `ClubPage.memberCount` by exactly 1; registering with no `clubId` at
+  all has zero side effects on any club; and registering with a `clubId`
+  that doesn't reference a real club fails the whole request with 404
+  **and** creates no `User` row for that email — the direct proof that
+  `RegistrationService.register()` validates the club *before* committing
+  the `User` row, not after (see `auth/README.md`'s matching entry for
+  why that ordering matters).
 
 **A real, discovered gap, not a production bug when found — flagged then,
 now fixed at the source but the test workaround itself deliberately

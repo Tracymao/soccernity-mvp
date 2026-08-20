@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsDateString, IsEmail, IsOptional, IsString, MinLength, ValidateNested } from 'class-validator';
+import { IsDateString, IsEmail, IsOptional, IsString, IsUUID, MinLength, ValidateNested } from 'class-validator';
 import { GuardianDetailsDto } from './guardian-details.dto';
 
 // Build Plan Section 4.1 (POST /auth/register) and Section 3 (User entity
@@ -34,4 +34,17 @@ export class RegisterDto {
   @ValidateNested()
   @Type(() => GuardianDetailsDto)
   guardian?: GuardianDetailsDto;
+
+  // Sprint 2 / sprint-2/auto-join-on-signup — Build Plan Section 6's
+  // Sprint 2 line called for "club fan pages ... with auto-join on
+  // signup" but PR #58 (club pages themselves) shipped with no
+  // club-selection field anywhere in RegisterDto, flagged there as an
+  // open gap. Optional, matching ClubPage.id's real `@id
+  // @default(uuid())` type (schema.prisma) — omitting this field
+  // entirely is the "no club for now" path, not a special sentinel
+  // value. See RegistrationService.register()'s handling of this field
+  // for the club-existence-before-user-creation ordering this requires.
+  @IsOptional()
+  @IsUUID()
+  clubId?: string;
 }
