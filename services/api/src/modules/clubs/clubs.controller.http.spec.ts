@@ -16,6 +16,7 @@ describe('ClubsController (HTTP layer)', () => {
     listClubs: jest.fn(),
     getClubById: jest.fn(),
     joinClub: jest.fn(),
+    leaveClub: jest.fn(),
   };
 
   const CALLER = { sub: 'user-1', role: 'fan' };
@@ -150,9 +151,31 @@ describe('ClubsController (HTTP layer)', () => {
 
       await request(app.getHttpServer()).post('/clubs/missing/join').expect(404);
     });
+  });
 
-    it('there is no DELETE /clubs/:id/join route (join-only, no leave — Section 4.4 gap, see clubs/README.md)', async () => {
-      await request(app.getHttpServer()).delete('/clubs/club-1/join').expect(404);
+  describe('DELETE /clubs/:id/join', () => {
+    it('leaves a club with 200 (not 204 — same idempotent-toggle reasoning as POST :id/join), JwtAuthGuard only', async () => {
+      clubsService.leaveClub.mockResolvedValue({ clubId: 'club-1', joined: false, memberCount: 0 });
+
+      const response = await request(app.getHttpServer()).delete('/clubs/club-1/join').expect(200);
+
+      expect(response.body).toEqual({ clubId: 'club-1', joined: false, memberCount: 0 });
+      expect(clubsService.leaveClub).toHaveBeenCalledWith('user-1', 'club-1');
+    });
+
+    it('is idempotent on a double-leave (still 200, ClubsService owns the no-op)', async () => {
+      clubsService.leaveClub.mockResolvedValue({ clubId: 'club-1', joined: false, memberCount: 0 });
+
+      await request(app.getHttpServer()).delete('/clubs/club-1/join').expect(200);
+      await request(app.getHttpServer()).delete('/clubs/club-1/join').expect(200);
+
+      expect(clubsService.leaveClub).toHaveBeenCalledTimes(2);
+    });
+
+    it('propagates a 404 from ClubsService when :id does not reference a real club', async () => {
+      clubsService.leaveClub.mockRejectedValue(new NotFoundException('Club not found'));
+
+      await request(app.getHttpServer()).delete('/clubs/missing/join').expect(404);
     });
   });
 });

@@ -325,13 +325,16 @@ Full reasoning for every choice above: Build Plan Section 5.
   `sprint-2/auto-join-on-signup`** — see the dedicated bullet below for
   the full detail; this bullet is left in place for the historical
   record of what PR #58 itself did and didn't ship.
-  **Section 4.4 has no leave/unjoin endpoint** — unlike follow/like/save,
-  club membership is join-only in the Build Plan as written; a
-  symmetric `DELETE` was deliberately not invented, and this join-only
-  gap is flagged as a Decision Log candidate. All three routes are
-  `JwtAuthGuard`-only, each argued fresh for this resource rather than
-  inherited from feed/follow's own guard conclusions — see
-  `modules/clubs/README.md`. `GET /clubs` is paginated alphabetically by
+  **Section 4.4 originally had no leave/unjoin endpoint** — unlike
+  follow/like/save, club membership was join-only in the Build Plan as
+  written; a symmetric `DELETE` was deliberately not invented at the
+  time, and this join-only gap was flagged as a Decision Log candidate.
+  **Resolved by `sprint-2/club-leave`** — see the dedicated bullet near
+  the end of this Sprint 2 section for the full detail; this note is
+  left in place for the historical record of what PR #58 itself did and
+  didn't ship. All three original routes are `JwtAuthGuard`-only, each
+  argued fresh for this resource rather than inherited from
+  feed/follow's own guard conclusions — see `modules/clubs/README.md`. `GET /clubs` is paginated alphabetically by
   `name` (keyset, `id` tiebreaker) since `ClubPage` has no timestamp
   field to order most-recent-first by, unlike every other list endpoint
   in this codebase — a small, adapted (not third-scheme) cursor util
@@ -798,6 +801,60 @@ Full reasoning for every choice above: Build Plan Section 5.
   file current" caveat; four new tests, no new suite). e2e suite: 6
   suites / 25 tests, 0 failures (up from 5 suites / 22 tests — one new
   spec file, three new tests).
+- **`sprint-2/club-leave` closes the join-only, no-leave gap flagged
+  above and in `modules/clubs/README.md` since PR #58.** `DELETE
+  /clubs/:id/join` (`ClubsService.leaveClub`) is now built, mirroring
+  `joinClub`'s exact structure: `assertClubExists` first (same 404 for a
+  non-existent `clubId`), a raw parameterized `DELETE FROM
+  "_ClubMembership" WHERE "A" = ... AND "B" = ...` via `tx.$executeRaw`
+  inside the same interactive transaction as a conditional `memberCount`
+  decrement, and idempotent success (never a 404) when leaving a club
+  you're not a member of — the same reasoning `unlikePost`/
+  `unfollowUser`/`unsavePost` already established for their own DELETE
+  endpoints. `memberCount`'s decrement is guarded two ways: the raw
+  `DELETE`'s own affected-row count gates whether the decrement is
+  attempted at all (mirroring `joinClub`'s own insert-affected-rows
+  discipline), and the decrement itself uses `updateMany` with a
+  `memberCount: { gt: 0 }` where-clause guard, reusing
+  `FeedService.unlikePost`'s exact floor-guard pattern so `memberCount`
+  can never go negative. `JoinState.joined` changed from a `true` literal
+  to `boolean` (mirroring `FeedService.LikeState`'s own `liked: boolean`
+  precedent, shared by both likePost and unlikePost) so one interface
+  serves both `joinClub` and `leaveClub` rather than inventing a parallel
+  `LeaveState` type. **Guard reasoning for the new route is a short
+  confirmation of `POST :id/join`'s own conclusion, not a fresh
+  argument** — explicitly stated as such in `modules/clubs/README.md`:
+  every reason join gave for staying `JwtAuthGuard`-only (a `ClubPage`
+  fan-page membership is neither "a Banter Room" nor "a Community Group"
+  under Section 5.7's literal list, and produces no visible content)
+  applies at least as strongly to leaving. Real e2e coverage
+  (`test/clubs.e2e-spec.ts`'s new `DELETE /clubs/:id/join (leaveClub)`
+  describe block, extending the existing file rather than adding a new
+  one) proves, against real Postgres: a genuine leave removes the real
+  `_ClubMembership` row and decrements `memberCount` by exactly 1;
+  leaving a club you're not a member of is an idempotent 200 with
+  `memberCount` unchanged, confirmed never negative across three repeated
+  calls on a club already at 0; a non-existent `clubId` still 404s; and a
+  full `join -> leave -> join -> leave` cycle lands both `memberCount`
+  and the real `_ClubMembership` row count back at their exact starting
+  values after each complete cycle — the same "no drift across a real
+  operation sequence" proof `counters.e2e-spec.ts` established for
+  likes/comments, applied here for the first time to club membership.
+  Four of these five new e2e scenarios needed their own distinct user,
+  which would have pushed this file's total real `POST /auth/register`
+  calls past `AuthThrottlerGuard`'s hardcoded 5-requests/60s limit when
+  combined with the file's existing `registerAndLogin()`-based tests —
+  the same real, already-documented gap
+  `feed-reactions.e2e-spec.ts`/`follow.e2e-spec.ts`/`counters.e2e-spec.ts`
+  hit; this file's new tests use their own `createUser()` helper (seed a
+  `User` row directly via Prisma, mint a real token via the real,
+  unmocked `TokenService`) instead, leaving the pre-existing
+  `registerAndLogin()` tests untouched since their own 4 calls stay
+  comfortably under the limit on their own. Mocked suite after this
+  branch: 34 suites / 344 tests, 0 failures (up from 34/338 immediately
+  before it — 6 new tests, no new suite). e2e suite: 6 suites / 30 tests,
+  0 failures (up from 6/25 — 5 new tests, no new spec file, this branch
+  extends `test/clubs.e2e-spec.ts` rather than adding a sibling file).
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
