@@ -67,12 +67,12 @@ describe('Clubs e2e: POST /clubs/:id/join idempotency against the real "_ClubMem
       })
       .expect(201);
 
-    // POST /auth/register nests the access token as `{ token, expiresIn }`
-    // — see auth.e2e-spec.ts's note on the same asymmetry with
-    // POST /auth/login's flattened shape.
+    // POST /auth/register now returns the token pair in the same flat
+    // shape POST /auth/login does (sprint-2/auth-response-shape-
+    // reconciliation) -- see auth.e2e-spec.ts's note and auth/README.md.
     return {
       userId: registerResponse.body.user.id as string,
-      accessToken: registerResponse.body.accessToken.token as string,
+      accessToken: registerResponse.body.accessToken as string,
     };
   }
 

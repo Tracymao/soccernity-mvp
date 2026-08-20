@@ -74,20 +74,22 @@ describe('Auth e2e: register -> login -> GET /users/:id (real Postgres, no mocke
 
     expect(registerResponse.body.user.email).toBe(email.toLowerCase());
     expect(registerResponse.body.user).not.toHaveProperty('passwordHash');
-    // NOTE (found while building this spec, not silently worked around):
-    // POST /auth/register's response nests the access token as
-    // `{ token, expiresIn }` (registration.controller.ts's
-    // toRegisterResponse spreads TokenPair.accessToken directly), whereas
-    // POST /auth/login's response (auth-response.mapper.ts's
-    // toTokenPairResponse, used below) flattens it to a bare
-    // `accessToken: string` + separate `accessTokenExpiresIn`. Two
-    // genuinely different response shapes for conceptually the same
-    // "here is your token pair" payload — a real API-contract
-    // inconsistency this e2e spec surfaced by exercising both endpoints
-    // together, not a bug this PR's scope extends to fixing. Flagged in
-    // the PR report as a Decision Log candidate for whoever next touches
-    // either endpoint.
-    expect(registerResponse.body.accessToken.token).toEqual(expect.any(String));
+    // RESOLVED (was flagged here as a Decision Log candidate; now closed
+    // by the sprint-2/auth-response-shape-reconciliation PR): POST
+    // /auth/register's response now returns the token pair in the same
+    // flat shape POST /auth/login always has (auth-response.mapper.ts's
+    // toTokenPairResponse), not the old nested `accessToken: { token,
+    // expiresIn }`. See auth/README.md for the final, shared shape.
+    expect(registerResponse.body.accessToken).toEqual(expect.any(String));
+    expect(registerResponse.body.accessTokenExpiresIn).toEqual(expect.any(Number));
+    expect(registerResponse.body.refreshToken).toEqual(expect.any(String));
+    // Register's response also carries the same `user` summary shape
+    // login's response does (id, email, phone, displayName, dateOfBirth,
+    // isMinor, role, verificationStatus, createdAt) via the shared
+    // toAuthUserSummary() — spot-check a couple of fields beyond email
+    // above.
+    expect(registerResponse.body.user.isMinor).toBe(false);
+    expect(registerResponse.body.user.verificationStatus).toEqual(expect.any(String));
     const userId = registerResponse.body.user.id;
 
     // Prove real argon2id hashing genuinely happened against a real
@@ -121,6 +123,16 @@ describe('Auth e2e: register -> login -> GET /users/:id (real Postgres, no mocke
 
     expect(loginResponse.body.accessToken).toEqual(expect.any(String));
     const accessToken = loginResponse.body.accessToken as string;
+
+    // POST /auth/login's response now also carries a `user` object (this
+    // PR's second change) -- prove it's a real, correctly-populated
+    // snapshot of the just-authenticated user, not just that the response
+    // compiles against the new type.
+    expect(loginResponse.body.user.id).toBe(userId);
+    expect(loginResponse.body.user.email).toBe(email.toLowerCase());
+    expect(loginResponse.body.user.isMinor).toBe(false);
+    expect(loginResponse.body.user.verificationStatus).toEqual(expect.any(String));
+    expect(loginResponse.body.user).not.toHaveProperty('passwordHash');
 
     // Fetch the authenticated user's own profile through the real
     // JwtAuthGuard -> TokenService.verifyAccessToken chain (see the GAP

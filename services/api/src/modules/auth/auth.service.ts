@@ -1,7 +1,7 @@
 import { Injectable, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
-import { toTokenPairResponse, TokenPairResponse } from './auth-response.mapper';
+import { AuthResponse, toAuthUserSummary, toTokenPairResponse, TokenPairResponse } from './auth-response.mapper';
 import { PasswordService } from './password/password.service';
 import { InvalidRefreshTokenError, RefreshTokenReuseDetectedError } from './token/token.errors';
 import { TokenService } from './token/token.service';
@@ -31,7 +31,7 @@ export class AuthService implements OnModuleInit {
     this.dummyPasswordHash = await this.passwordService.hash(randomBytes(32).toString('hex'));
   }
 
-  async login(email: string, password: string): Promise<TokenPairResponse> {
+  async login(email: string, password: string): Promise<AuthResponse> {
     // Decision Log #16 (Build Plan Section 9): email is stored lowercase
     // on write (registration.service.ts's register()) so matching here
     // must normalize the same way, or a user who registered as
@@ -52,7 +52,12 @@ export class AuthService implements OnModuleInit {
     }
 
     const tokenPair = await this.tokenService.issueTokenPair(user.id, user.role);
-    return toTokenPairResponse(tokenPair);
+    // `user` was already loaded above for password verification — this is
+    // response-shaping only, not a new query. See auth-response.mapper.ts's
+    // AuthResponse/toAuthUserSummary comments for why isMinor/
+    // verificationStatus are safe to include here even though they must
+    // never appear inside the access token itself.
+    return { ...toTokenPairResponse(tokenPair), user: toAuthUserSummary(user) };
   }
 
   async refresh(refreshToken: string): Promise<TokenPairResponse> {

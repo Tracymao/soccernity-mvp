@@ -27,6 +27,24 @@ describe('AuthController (HTTP layer)', () => {
     refreshTokenExpiresAt: new Date('2026-08-18T00:00:00.000Z').toISOString(),
   };
 
+  // /auth/login's response (unlike /auth/refresh's) also carries a `user`
+  // summary as of sprint-2/auth-response-shape-reconciliation -- see
+  // auth-response.mapper.ts's AuthResponse/toAuthUserSummary.
+  const authResponse = {
+    ...tokenPairResponse,
+    user: {
+      id: 'user-1',
+      email: 'player@example.com',
+      phone: null,
+      displayName: 'Player One',
+      dateOfBirth: new Date('1995-01-01').toISOString(),
+      isMinor: false,
+      role: 'fan',
+      verificationStatus: 'unverified',
+      createdAt: new Date('2026-08-16T00:00:00.000Z').toISOString(),
+    },
+  };
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [AuthController],
@@ -55,15 +73,15 @@ describe('AuthController (HTTP layer)', () => {
   });
 
   describe('POST /auth/login', () => {
-    it('returns 200 with the token pair on success', async () => {
-      authService.login.mockResolvedValueOnce(tokenPairResponse);
+    it('returns 200 with the token pair and user on success', async () => {
+      authService.login.mockResolvedValueOnce(authResponse);
 
       const response = await request(app.getHttpServer())
         .post('/auth/login')
         .send({ email: 'player@example.com', password: 'password123' })
         .expect(200);
 
-      expect(response.body).toEqual(tokenPairResponse);
+      expect(response.body).toEqual(authResponse);
       expect(authService.login).toHaveBeenCalledWith('player@example.com', 'password123');
     });
 

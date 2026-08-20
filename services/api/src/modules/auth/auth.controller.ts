@@ -1,7 +1,7 @@
 import { Body, Controller, HttpCode, HttpStatus, Headers, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthRateLimit } from './rate-limit/auth-rate-limit.decorator';
-import { TokenPairResponse } from './auth-response.mapper';
+import { AuthResponse, TokenPairResponse } from './auth-response.mapper';
 import { LoginDto } from './dto/login.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { RefreshDto } from './dto/refresh.dto';
@@ -24,7 +24,7 @@ export class AuthController {
   @AuthRateLimit()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() dto: LoginDto): Promise<TokenPairResponse> {
+  async login(@Body() dto: LoginDto): Promise<AuthResponse> {
     return this.authService.login(dto.email, dto.password);
   }
 
