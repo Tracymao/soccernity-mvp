@@ -1,15 +1,24 @@
 // Route table for apps/web.
 //
-// react-router-dom is pinned to ^6.22 in package.json (6.30.4 installed)
-// -- this uses the v6.4+ data-router API (createBrowserRouter +
-// RouterProvider), not the older <BrowserRouter>/<Switch> v5 pattern.
+// react-router is pinned to ^7.18.2 in package.json -- migrated from the
+// react-router-dom@6.x package (Decision Log #25; react-router 8 requires
+// React >=19.2.7 and is tracked as a follow-up, blocked on a separate
+// React 19 upgrade this app has not taken). v7 unified react-router-dom's
+// exports into the single "react-router" package; this app renders via
+// plain ReactDOM.createRoot (src/main.tsx), not SSR/hydration, so the
+// "react-router/dom" subpath (needed only for framework-mode hydration)
+// is not used here -- createBrowserRouter/RouterProvider/Outlet/Link/
+// NavLink/useNavigate/useSearchParams/MemoryRouter all still come from
+// the main "react-router" package. This still uses the same v6.4+
+// data-router API (createBrowserRouter + RouterProvider), not the older
+// <BrowserRouter>/<Switch> v5 pattern.
 //
 // F2-F7: add your route as a child of the root AppShell route below --
 // you do NOT need to touch AppShell, Header, or main.tsx to do this.
 // Replace the corresponding placeholder page file in src/pages instead
 // of adding a new route path, unless your screen genuinely needs a new
 // path not listed here (in which case, add it here too).
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter } from "react-router";
 import AppShell from "../layout/AppShell";
 import HomePage from "../pages/HomePage";
 import SportsHubPage from "../pages/SportsHubPage";

@@ -14,7 +14,7 @@
 // until then it will fail with a network/404 error, surfaced as the same
 // generic error state a real failure (e.g. expired token) would use.
 import { useState, type FormEvent } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router";
 import AuthLayout from "../components/auth/AuthLayout";
 import AuthField from "../components/auth/AuthField";
 import AuthButton from "../components/auth/AuthButton";

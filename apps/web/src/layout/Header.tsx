@@ -6,7 +6,7 @@
 // F2 (Login) lands and real auth state exists, the right-hand slot here
 // should switch to the avatar/notification cluster from "header 1"
 // instead of always rendering the Login button.
-import { NavLink } from "react-router-dom";
+import { NavLink } from "react-router";
 import logoMark from "../assets/icons/soccernity-logo-mark.svg";
 import searchIcon from "../assets/icons/search.svg";
 import { primaryNavItems } from "./navigation";

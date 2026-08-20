@@ -4,7 +4,7 @@
 // file rather than pre-existing.
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import AgeGateStep from "./AgeGateStep";
 import type { AgeGateValues } from "./types";
 

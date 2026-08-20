@@ -10,7 +10,7 @@
 // content padding so this still reads as full-bleed *below* the header,
 // the closest approximation available without touching shared layout.
 import type { ReactNode, CSSProperties } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import logoMark from "../../assets/icons/soccernity-logo-mark.svg";
 import "./SignupSplitScreen.css";
 

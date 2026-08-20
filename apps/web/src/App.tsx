@@ -4,7 +4,7 @@
 // screen here that figma-to-code should be converting from a finished
 // Figma design -- add a route + placeholder page instead (see
 // src/pages/PlaceholderPage.tsx).
-import { RouterProvider } from "react-router-dom";
+import { RouterProvider } from "react-router";
 import { router } from "./app/router";
 
 export default function App() {

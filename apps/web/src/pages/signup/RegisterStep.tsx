@@ -7,7 +7,7 @@
 // collected it (the gap flagged in PR #5).
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import SignupSplitScreen from "./SignupSplitScreen";
 import { lightAuthThemeVars } from "./authThemeVars";
 import { toIsoDate } from "./age";

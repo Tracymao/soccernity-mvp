@@ -444,14 +444,25 @@ Full reasoning for every choice above: Build Plan Section 5.
   to confirm the specific advisory cleared, not just that the raw
   count moved (it didn't — `react-router-dom`'s entry now inherits
   from `react-router`'s own remaining advisories, so the top-line 42
-  count is unchanged even though the fix is real). **Tier 2's
-  `@nestjs/*` sub-item is now closed — see the NestJS 11 bullet
-  immediately below (Decision Log #24).** The rest of Tier 2 —
-  `multer`/`lodash`/`qs`/`body-parser`/`express`, plus `react-router`'s
-  own remaining two advisories (`GHSA-337j-9hxr-rhxg`,
-  `GHSA-wrjc-x8rr-h8h6`, which need a separate React Router 6→7 major
-  bump) — is still open, deliberately deferred, not forgotten. `multer`
-  and `lodash` are confirmed unused by any current application code, so
+  count is unchanged even though the fix is real). **Tier 2 is now
+  mostly closed, with one explicit follow-up remaining — not fully
+  done, do not round this up.** The `@nestjs/*` sub-item is closed —
+  see the NestJS 11 bullet immediately below (Decision Log #24). The
+  `react-router`/`apps/web` sub-item is also closed for its `GHSA-337j-
+  9hxr-rhxg`/`GHSA-wrjc-x8rr-h8h6` advisories, but via an *interim*
+  step, not the originally-scoped major bump: `apps/web` now runs
+  React Router 7 (`7.18.2`), not React Router 8 — see Decision Log
+  #25 immediately below. `apps/web` runs React 18, and React Router 8
+  has a hard peer-dependency floor of React `>=19.2.7` (confirmed via
+  real npm registry metadata and a reproduced `npm install --dry-run`
+  ERESOLVE error — see #25), so landing v8 now was not possible without
+  also bundling an unscoped React 19 upgrade. **React Router 8 remains
+  open, tracked as a follow-up, explicitly blocked on that separate,
+  not-yet-scoped React 19 upgrade** — the same "blocked on purpose, not
+  guessed around" pattern Decision Log #9 uses for `deploy.yml`. The
+  remainder of Tier 2 — `multer`/`lodash`/`qs`/`body-parser`/`express`
+  — is still open, deliberately deferred, not forgotten. `multer` and
+  `lodash` are confirmed unused by any current application code, so
   Tier 2's remaining real-world exposure is low today, not zero.
   **Tier 3 (the 1 critical — `vitest`, dev-only — and the ~12
   react-native/metro advisories) is untouched by design** — zero
@@ -525,6 +536,74 @@ Full reasoning for every choice above: Build Plan Section 5.
   this PR — nothing new was added to the trusted set, only formally
   recorded — and the resulting root `package.json` diff is committed
   alongside the version bumps themselves.
+- **Decision Log #25: `apps/web` is upgraded from `react-router-dom` 6
+  to React Router 7 (`7.18.2`) — explicitly not React Router 8, and v8
+  is not to be described as reached anywhere.** `sprint-2/react-
+  router-8-upgrade`, 2026-08-20 (branch name predates this correction;
+  renaming it mid-flight wasn't worth the churn, but the actual work
+  targets v7). React Router 8.3.0 is the current npm `latest`, but its
+  `package.json` declares a hard `peerDependencies` floor of
+  `react`/`react-dom` `>=19.2.7` — confirmed via real npm registry
+  metadata, and reproduced directly: a real `npm install react-router@8
+  --dry-run` against a scratch `"react": "^18.2.0"` project fails with
+  `npm error code ERESOLVE` / `peer react@">=19.2.7" from
+  react-router@8.3.0` / `Found: react@18.3.1`. Bundling an unscoped
+  React 19 upgrade into this PR, or force-installing past that conflict
+  (`--force`/`--legacy-peer-deps`), were both explicitly ruled out —
+  neither is a real fix, and a React 19 bump is its own unscoped body of
+  work. **This PR lands React Router 7 (`7.18.2`) instead, confirmed
+  React-18-compatible the same rigorous way**: its `package.json`
+  declares `peerDependencies` `react`/`react-dom` `>=18`, and a real
+  `npm install react-router@7.18.2 --dry-run` against the same scratch
+  project succeeds cleanly (8 packages added, no ERESOLVE, no force
+  flags). `react-router-dom` itself is not carried forward as a v7
+  release — npm registry metadata confirms it has never published an
+  `8.x` and its own `latest` dist-tag is frozen at `7.18.2`, a dead-end
+  package going forward — so all 12 import lines across the 12 files
+  that referenced it (`App.tsx`, `app/router.tsx`, `layout/AppShell.tsx`,
+  `layout/Header.tsx`, `pages/ForgotPasswordPage.tsx`,
+  `pages/LoginPage.tsx`, `pages/NotFoundPage.tsx`,
+  `pages/ResetPasswordPage.tsx`, `pages/signup/AgeGateStep.tsx`,
+  `pages/signup/AgeGateStep.test.tsx`, `pages/signup/RegisterStep.tsx`,
+  `pages/signup/SignupSplitScreen.tsx`) now import directly from the
+  unified `react-router` package instead, avoiding a second import
+  rewrite whenever React Router 8 is eventually taken. The
+  `react-router/dom` subpath (v7's home for `RouterProvider`/
+  `HydratedRouter` in framework-mode SSR hydration) is deliberately not
+  used — `apps/web` renders via plain `ReactDOM.createRoot`
+  (`src/main.tsx`), not `hydrateRoot`/SSR, so `createBrowserRouter`/
+  `RouterProvider`/`Outlet`/`Link`/`NavLink`/`useNavigate`/
+  `useSearchParams`/`MemoryRouter` all still come from the main
+  `react-router` entry point, confirmed directly against v7.18.2's own
+  published type definitions rather than assumed. **Node engine did
+  *not* need a bump for v7 specifically** — its `package.json` declares
+  `engines.node: ">=20.0.0"` (v8 requires `>=22.22.0`), and the root
+  `package.json`'s existing `"node": ">=20"` already satisfies that, so
+  `engines` is untouched. Verified after a full clean reinstall (root
+  `node_modules`/`package-lock.json` removed, `npm install` from repo
+  root): `apps/web`'s test suite passes (1 suite / 7 tests, 0 failures,
+  unchanged from the pre-migration baseline), `npx tsc --noEmit` passes
+  with zero type errors, `npm run build` produces a clean production
+  bundle with zero errors. Every real route in `src/app/router.tsx` (`/`,
+  `/sports-hub`, `/news`, `/leaderboard`, `/community`, `/banter`,
+  `/login`, `/signup`, `/forgot-password`, `/reset-password`,
+  `/guardian-consent`, `/profile`, `/verify-email`, plus the wildcard
+  404) was checked two ways, both stated precisely rather than
+  overclaimed: **HTTP-level** (the Vite dev server returns 200 for every
+  path — confirms no server-side crash, not that client-side routing
+  actually resolved), and a **genuine JS-execution smoke test** (a
+  temporary Vitest spec, deleted before commit, that mounted v7's
+  `createMemoryRouter`/`RouterProvider`/`Outlet` against the real route
+  tree and every real page component for all 14 paths in jsdom — all 14
+  rendered without throwing). **No real browser/visual check was done**
+  — no Playwright/Puppeteer or other browser-automation tool is
+  available in this environment; don't read the above as a manual
+  browser confirmation. **React Router 8 remains open, explicitly
+  tracked as a follow-up, blocked on a separate, not-yet-scoped React 19
+  upgrade for `apps/web`** — same "blocked on purpose, not guessed
+  around" pattern as Decision Log #9's `deploy.yml`/hosting gate. Full
+  detail, including the exact reproduced ERESOLVE output, is in Build
+  Plan Section 9's Decision Log #25 entry.
 - **Decision Log #6 (sports-data vendor) blocks Sprint 4 only** — not
   Sprint 1. Don't hold up auth/consent work on it.
 - **Decision Log #9 (hosting platform) blocks `deploy.yml` specifically**

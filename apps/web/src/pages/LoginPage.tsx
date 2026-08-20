@@ -34,7 +34,7 @@
 // route through the same shell) or a follow-up ticket, not something to
 // decide unilaterally in this PR.
 import { FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router";
 import { AuthApiError, login } from "../api/auth";
 import loginHero from "../assets/illustrations/login-hero.svg";
 import "./LoginPage.css";
