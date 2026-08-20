@@ -71,8 +71,12 @@ certainly the right (and much faster) choice.
 
 ## What's covered so far — and what isn't yet
 
-This PR adds two spec files as an initial representative slice, **not**
-retroactive e2e coverage of every endpoint:
+The original PR (#59) added two spec files as an initial representative
+slice. `sprint-2/e2e-coverage-expansion` (this PR) adds three more,
+closing the specific backlog items #59 itself flagged (feed like/comment/
+save, follow/notification wiring, and the counter-increment logic behind
+all of them) — **still not retroactive e2e coverage of every endpoint**,
+see the remaining gaps listed below.
 
 - `auth.e2e-spec.ts` — register → login → fetch-own-profile, through a
   real NestJS app instance, real Postgres, real argon2id hashing, and a
@@ -95,15 +99,78 @@ retroactive e2e coverage of every endpoint:
   than its starting value, not two. Also covers two different users
   joining the same club, the real (unmocked) `JwtAuthGuard` 401 case, and
   a real 404 for a non-existent club id.
+- `feed-reactions.e2e-spec.ts` (added by sprint-2/e2e-coverage-expansion)
+  — `FeedService.likePost`/`unlikePost`/`addComment`/`savePost`/
+  `unsavePost` against real Postgres: the `Like` row + `Post.likeCount`
+  increment landing in the same transaction, double-like idempotency
+  (exactly one `Like` row, `likeCount` +1 not +2), unlike idempotency at
+  the "already unliked" boundary (never negative), two distinct `Comment`
+  rows from the same user producing `commentCount = 2`, and save/unsave
+  idempotency. Also directly queries the real `Notification` table (not
+  the HTTP response) to prove recipient direction — liking/commenting
+  creates a `Notification` addressed to the **post's author**, never the
+  actor — the no-self-notification case for both (author acting on their
+  own post → zero `Notification` rows), and that a double-like produces
+  exactly one `Notification` row, not two.
+- `follow.e2e-spec.ts` (added by sprint-2/e2e-coverage-expansion) —
+  `UsersService.followUser`/`unfollowUser`/`getFollowers`/`getFollowing`
+  against real Postgres: self-follow rejected with 400 and no `Follow` row
+  created, follow/unfollow idempotency (exactly one `Follow` row and
+  exactly one `Notification` row on a double-follow, recipient direction
+  verified directly — the followed user's `userId`, `payloadRefId` the
+  follower's own id), and `GET /users/:id/followers`/`/following` checked
+  against `Follow` rows seeded directly via Prisma (not via the follow
+  endpoint's own write path, which is already covered separately).
+- `counters.e2e-spec.ts` (added by sprint-2/e2e-coverage-expansion) — the
+  direct, real-Postgres proof of the "denormalized cache must never
+  drift" comment on `Post.likeCount`/`commentCount` in `schema.prisma`:
+  asserts, at every step of a real like → like (idempotent) → unlike →
+  unlike (idempotent) → comment → comment sequence, that the cached
+  counters read back from Postgres equal `Like.count()`/`Comment.count()`
+  for that post, not just once at the end.
+
+**A real, discovered gap, not a production bug — flagged, not fixed
+here:** writing `feed-reactions.e2e-spec.ts`/`follow.e2e-spec.ts`/
+`counters.e2e-spec.ts` against real `POST /auth/register` (the same
+`registerAndLogin()` pattern `auth.e2e-spec.ts`/`clubs.e2e-spec.ts` use)
+hit real 429s from `AuthThrottlerGuard` well before those files' own tests
+finished — each of these three files' coverage genuinely needs more than
+5 distinct users across one spec file's real HTTP traffic. Investigating
+found that `AUTH_RATE_LIMIT_MAX`/`AUTH_RATE_LIMIT_WINDOW_MS`
+(`rate-limit.module.ts`'s env-driven module-level throttler config) are
+**not actually consulted** by any of the four routes that currently apply
+`@AuthRateLimit()` (`register`, `login`, `forgot-password`,
+`guardian-consent/resend`): every call site invokes the decorator with no
+arguments, so its own hardcoded imported defaults
+(`DEFAULT_AUTH_RATE_LIMIT = 5`, `DEFAULT_AUTH_RATE_LIMIT_WINDOW_MS =
+60_000`) win at the route level regardless of what the module-level
+config says — an env var that looks configurable but currently has zero
+effect on any decorated route. This is a real config-wiring gap worth a
+follow-up ticket, not something this PR fixes (coverage-only, no
+production changes, per this PR's own brief). The workaround used instead
+is scoped entirely to test setup: these three files seed their `User`
+rows directly via Prisma (the same "seed directly via Prisma" precedent
+`clubs.e2e-spec.ts` already set for `ClubPage`) and mint a real access
+token via the real, unmocked `TokenService` pulled from the test's own
+NestJS DI container (`app.get(TokenService)`) rather than going through
+`POST /auth/register` — every downstream request in these files still
+exercises the real `JwtAuthGuard` → `TokenService.verifyAccessToken`
+chain end to end; only register's own HTTP/rate-limiter/argon2id path is
+bypassed, and that path is already fully covered by `auth.e2e-spec.ts`.
+See each file's own `createUser()` helper comment for the full writeup.
 
 **Everything else remains e2e-uncovered — an intentionally deferred
-backlog item, not a gap this PR claims to close.** In particular: every
-other endpoint in `feed/`, `users/`, `clubs/`, `auth/` (refresh, logout,
-forgot/reset-password, guardian-consent, verify-email) has mocked-Prisma
-coverage only. Whoever next touches raw SQL, transaction reasoning, or a
-novel Prisma relation/constraint in one of those modules should add a
-sibling `*.e2e-spec.ts` here, per the guiding principle above — not treat
-this PR as having already covered them.
+backlog item, not a gap this PR claims to close.** In particular:
+pagination/field-shape coverage for `GET /posts/feed`, `GET
+/posts/:id/comments`, and `GET /clubs` remains deliberately out of scope
+here (ordinary list/read logic is the mocked unit suite's job, per the
+guiding principle above); `GET /posts/:id` itself; and every other
+endpoint in `auth/` (refresh, logout, forgot/reset-password,
+guardian-consent, verify-email) still has mocked-Prisma coverage only.
+Whoever next touches raw SQL, transaction reasoning, or a novel Prisma
+relation/constraint in one of those areas should add a sibling
+`*.e2e-spec.ts` here, per the guiding principle above — not treat this PR
+as having already covered them.
 
 ## Running locally
 

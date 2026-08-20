@@ -512,6 +512,60 @@ Full reasoning for every choice above: Build Plan Section 5.
   new test over the 32/327 baseline recorded above at PR #59 merge).
   e2e suite: 2 suites / 6 tests, 0 failures, unchanged in count from
   PR #59 (existing assertions updated to the new shape, not added to).
+- **`sprint-2/e2e-coverage-expansion` closes the specific e2e backlog
+  PR #59 flagged: feed like/comment/save, follow/notification wiring, and
+  the counter-increment logic behind all of them.** Three new spec files,
+  all genuinely passing against real Postgres — `test/
+  feed-reactions.e2e-spec.ts` (like/unlike/comment/save/unsave
+  transactional counter behavior, plus `Notification` recipient-direction
+  and no-self-notification proof for both `like` and `comment`, verified
+  by querying the real `Notification` table directly, never inferred from
+  the HTTP response), `test/follow.e2e-spec.ts` (self-follow rejection,
+  follow/unfollow idempotency, `Notification` recipient direction for
+  `type: 'follow'`, and `GET /users/:id/followers`/`/following` checked
+  against `Follow` rows seeded directly via Prisma), and `test/
+  counters.e2e-spec.ts` (the direct, step-by-step proof that
+  `Post.likeCount`/`commentCount` never drift from real `Like`/`Comment`
+  row counts through a full like/like/unlike/unlike/comment/comment
+  sequence, not just checked once at the end). e2e suite after this PR: 5
+  suites / 22 tests, 0 failures (up from PR #59's 2/6). Mocked suite
+  unaffected: 32 suites / 328 tests, 0 failures — identical before and
+  after. **A real, discovered gap — flagged, not fixed here (coverage-
+  only PR, no production changes):** writing these three files against
+  real `POST /auth/register` (the same pattern `auth.e2e-spec.ts`/
+  `clubs.e2e-spec.ts` use) hit real `AuthThrottlerGuard` 429s well before
+  their own tests finished, because each file's coverage genuinely needs
+  more than 5 distinct users across one spec file's real HTTP traffic.
+  Investigating found `AUTH_RATE_LIMIT_MAX`/`AUTH_RATE_LIMIT_WINDOW_MS`
+  (`rate-limit.module.ts`'s env-driven module-level throttler config) are
+  **not actually consulted by any of the four routes currently decorated
+  with `@AuthRateLimit()`** (`register`, `login`, `forgot-password`,
+  `guardian-consent/resend`) — every call site invokes the decorator with
+  no arguments, so its own hardcoded imported defaults
+  (`DEFAULT_AUTH_RATE_LIMIT = 5`, `DEFAULT_AUTH_RATE_LIMIT_WINDOW_MS =
+  60_000`) win at the route level regardless of what the env-driven
+  module config says. That env var currently has zero real effect on any
+  decorated route — a genuine config-wiring gap, worth its own follow-up
+  ticket, not something this PR touches. The workaround is scoped
+  entirely to test setup: these three files seed their `User` rows
+  directly via Prisma and mint a real access token via the real, unmocked
+  `TokenService` pulled from the test's own DI container
+  (`app.get(TokenService)`) instead of calling `POST /auth/register` —
+  every downstream request still exercises the real `JwtAuthGuard` →
+  `TokenService.verifyAccessToken` chain end to end; only register's own
+  HTTP/rate-limiter/argon2id path is bypassed, and that path is already
+  fully covered by `auth.e2e-spec.ts`. See `test/README.md`'s matching
+  entry and each file's own `createUser()` helper comment. **No other
+  real bug was surfaced** — every recipient-direction and idempotency
+  assumption the mocked unit suite already made (`feed.service.spec.ts`,
+  `users.service.spec.ts`) held up unchanged against a real database;
+  this layer earned its keep specifically by catching the rate-limiter
+  config gap above, not by finding an error in the transactional/
+  notification logic itself. Remaining e2e-uncovered by design, same as
+  before: `GET /posts/feed`/`GET /posts/:id/comments`/`GET /clubs`
+  pagination and field-shape coverage (mocked unit suite's job), `GET
+  /posts/:id`, and `auth/`'s refresh/logout/forgot-reset-password/
+  guardian-consent/verify-email routes.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
