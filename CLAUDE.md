@@ -936,6 +936,57 @@ Full reasoning for every choice above: Build Plan Section 5.
   **34 suites / 356 tests, 0 failures**. e2e suite went from a freshly
   re-verified 6 suites / 30 tests, 0 failures to **6 suites / 37 tests, 0
   failures**.
+- **`sprint-2/global-jest-timeout` raises `jest.config.js`'s
+  `testTimeout` from Jest's implicit 5000ms default to a measured
+  30000ms for the whole mocked unit suite**, replacing the per-test-file
+  patch pattern `sprint-2/fix-rate-limit-test-timeout` (merged just
+  before this branch was cut, fixing `auth-rate-limit.decorator.spec.ts`'s
+  two flaky real-HTTP tests with a 20000ms per-test override) started —
+  **note: that fix branch's own merge has no dedicated bullet in this
+  file, an instance of the exact drift this file's "Keeping this file
+  current" section describes; not backfilled here since it's out of this
+  PR's own scope, flagged as a small follow-up rather than silently left
+  for a future sweep to rediscover.** That branch's own load-simulation
+  found the deeper issue: even a plain mocked-Prisma test with zero real
+  HTTP calls (`auth.service.spec.ts`, which exercises real argon2id
+  hashing via `PasswordService`) can also exceed 5000ms under heavy CPU
+  contention, so file-by-file timeout patches aren't sustainable.
+  **Measured, not guessed** (12-logical-core local dev machine, full
+  34-suite run, CPU-saturating Node busy-loop background processes
+  spawned alongside `npx jest` as a local approximation of CI-style
+  contention — not a real CI measurement): 8 extra busy processes →
+  worst single test ~4.4-5.1s (right at the old 5000ms edge, and the
+  level that reproduced an actual "Exceeded timeout of 5000ms" failure);
+  16 extra busy processes, 2 runs → worst single test 8724ms / 9588ms;
+  24 extra busy processes, 2 runs → worst single test 12736ms / 13841ms
+  — the figure this decision is anchored on, as "heavy but still
+  plausible" contention; 32 extra busy processes → worst single test
+  27440ms, recorded but treated as an outlier/extreme rather than the
+  basis for this number, since the jump from 24→32 processes (~13s→~27s)
+  is disproportionately larger than 16→24 was, suggesting
+  memory-pressure/GC thrashing rather than proportional CPU-sharing at
+  that level. **30000ms is ~2.2x the ~13841ms worst-case figure it's
+  based on** (over the "at least 2x" floor), while staying well under
+  the 32-process outlier. Full reasoning and the raw numbers live in
+  `jest.config.js`'s own comment, not just here. **Explicit trade-off**:
+  a genuinely broken test (real infinite loop/unresolved promise, not
+  contention) now takes up to 30s instead of 5s to fail loudly — judged
+  the right trade against the alternative of intermittent false-negative
+  CI failures on healthy code. **`auth-rate-limit.decorator.spec.ts`'s
+  two 20000ms per-test overrides are removed** (30000ms >= 20000ms, so
+  they were redundant) and that file's comment is rewritten to explain
+  the global default now covers it, cross-referencing this entry, rather
+  than leaving reasoning written against the old 5000ms baseline
+  standing. **Verified, not assumed**: 5 consecutive normal (no
+  simulated load) full-suite runs, all 34 suites / 356 tests, 0 failures,
+  wall-clock times of 30.975s / 32.789s / 24.659s / 24.902s / 27.732s —
+  consistent with the pre-change baseline (31.273s), confirming
+  `testTimeout` only changes the ceiling before a hung/slow test fails,
+  not normal run time. Two further load-simulated full-suite runs with
+  the new 30000ms default actually in place (16 extra processes, then 24
+  extra processes — the exact level the 30000ms figure is anchored on)
+  both passed 0 failures, the real proof the fix holds under the same
+  conditions that caused failures before.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
