@@ -582,11 +582,26 @@ club-selection field at all.
   new field for this — a successful club join is implied by a 201 with
   no error; a caller wanting to confirm membership can already call
   `GET /clubs/:id`.
-- **Explicitly not built here — flagged as a follow-up candidate, not
-  silently deferred**: a club-picker UI anywhere in the signup flow.
-  `apps/web`'s `SignupPage`/`RegisterStep` have no club-selection UI
-  today; this PR is backend-capability-only. See `clubs/README.md`'s
-  matching update for the same flag from the other module's side.
+- **This gap is now closed by `sprint-2/club-picker-ui`** — not by
+  wiring `RegisterDto.clubId` into `apps/web` as this bullet originally
+  implied would happen, but by a deliberate direction change: `GET
+  /clubs` (`clubs.controller.ts`) is `JwtAuthGuard`-only, and
+  `SignupFlow.tsx`'s age-gate → guardian-details → register step
+  machine runs entirely before any account (and therefore any JWT)
+  exists — there is no point in that pre-account flow where a
+  club-picker step could actually call `GET /clubs`. Rather than
+  loosening that guard (a real, undesirable security/product change to
+  an endpoint whose `JwtAuthGuard`-only reasoning was deliberate — see
+  `clubs.controller.ts`'s own comment), the club-picker step was built
+  *after* account creation instead: `ClubPickerStep.tsx`, rendered from
+  `RegisterStep.tsx`'s existing success view, using the `accessToken`
+  `RegisterResponse` already returns to call `GET /clubs` and `POST
+  /clubs/:id/join` directly. **This means `RegisterDto.clubId`'s
+  auto-join-on-signup capability remains unused by the web client** —
+  it's still real, tested backend capability usable by mobile or a
+  future direct-API caller, just not exercised by this path. See
+  `clubs/README.md`'s matching update and CLAUDE.md's Sprint 2 status
+  section for the full reasoning.
 - Verification: `registration.service.spec.ts` gained four new cases
   (join called with a real clubId, no ClubsService calls at all when
   clubId is omitted, `NotFoundException` propagates for a bad clubId

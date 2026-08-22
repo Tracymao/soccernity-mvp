@@ -7,12 +7,13 @@
 // collected it (the gap flagged in PR #5).
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import SignupSplitScreen from "./SignupSplitScreen";
 import { lightAuthThemeVars } from "./authThemeVars";
 import { toIsoDate } from "./age";
 import { registerUser, AuthApiError } from "../../api/auth";
 import type { RegisterRequest } from "../../api/auth";
+import ClubPickerStep from "./ClubPickerStep";
 import illustration from "../../assets/signup/register-illustration.svg";
 import type { AgeGateValues, GuardianDetailsValues } from "./types";
 import "./SignupSplitScreen.css";
@@ -28,13 +29,16 @@ function isValidEmail(value: string): boolean {
 }
 
 export default function RegisterStep({ dob, isMinor, guardianDetails }: RegisterStepProps) {
+  const navigate = useNavigate();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState<{ isMinor: boolean; guardianEmail?: string } | null>(null);
+  const [success, setSuccess] = useState<{ isMinor: boolean; guardianEmail?: string; accessToken: string } | null>(
+    null,
+  );
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -76,8 +80,8 @@ export default function RegisterStep({ dob, isMinor, guardianDetails }: Register
     setError(null);
     setSubmitting(true);
     try {
-      await registerUser(payload);
-      setSuccess({ isMinor, guardianEmail: guardianDetails?.email });
+      const result = await registerUser(payload);
+      setSuccess({ isMinor, guardianEmail: guardianDetails?.email, accessToken: result.accessToken });
     } catch (err) {
       setError(err instanceof AuthApiError ? err.message : "Something went wrong. Try again.");
     } finally {
@@ -101,10 +105,8 @@ export default function RegisterStep({ dob, isMinor, guardianDetails }: Register
           ) : (
             <p className="signup-success__body">Welcome to Soccernity.</p>
           )}
-          <Link to="/" className="signup-split__footer">
-            Continue to Soccernity
-          </Link>
         </div>
+        <ClubPickerStep accessToken={success.accessToken} onDone={() => navigate("/")} />
       </SignupSplitScreen>
     );
   }

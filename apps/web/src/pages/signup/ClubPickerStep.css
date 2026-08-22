@@ -1,0 +1,126 @@
+/* Rendered inside SignupSplitScreen's light-theme left panel (see
+ * RegisterStep.tsx's success branch) -- reuses --signup-* custom
+ * properties from SignupSplitScreen.css rather than inventing new ones. */
+
+.club-picker {
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.club-picker__search {
+  height: 52px;
+  padding: 0 20px;
+  background-color: var(--signup-input-fill, var(--signup-surface));
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font: 400 15px "Inter", sans-serif;
+  color: var(--signup-text-primary);
+  box-sizing: border-box;
+}
+
+.club-picker__search::placeholder {
+  color: var(--signup-text-secondary);
+}
+
+.club-picker__status {
+  font: 400 14px "Inter", sans-serif;
+  color: var(--signup-text-secondary);
+  margin: 0;
+}
+
+.club-picker__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.club-picker__item {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border-radius: 8px;
+  background-color: var(--signup-input-fill, var(--signup-surface));
+}
+
+.club-picker__logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.club-picker__logo--placeholder {
+  background-color: var(--signup-green-tint, rgba(123, 185, 41, 0.2));
+}
+
+.club-picker__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.club-picker__name {
+  font: 600 15px "Inter", sans-serif;
+  color: var(--signup-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.club-picker__secondary {
+  font: 400 13px "Inter", sans-serif;
+  color: var(--signup-text-secondary);
+}
+
+.club-picker__join-button {
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 6px;
+  background-color: var(--signup-brand-navy);
+  color: #ffffff;
+  font: 600 13px "Inter", sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.club-picker__join-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.club-picker__item-error {
+  grid-column: 1 / -1;
+  font: 400 13px "Inter", sans-serif;
+  color: #d92d20;
+  margin: 0;
+}
+
+.club-picker__load-more {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--signup-brand-green);
+  font: 600 14px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.club-picker__load-more:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.club-picker__continue {
+  margin-top: 8px;
+}
