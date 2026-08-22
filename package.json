@@ -21,6 +21,18 @@
   "engines": {
     "node": ">=20"
   },
+  "overrides": {
+    "@soccernity/web": {
+      "react-router": {
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8"
+      },
+      "@testing-library/react": {
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8"
+      }
+    }
+  },
   "allowScripts": {
     "@prisma/client@5.22.0": true,
     "@prisma/engines@5.22.0": true,

@@ -631,6 +631,60 @@ Full reasoning for every choice above: Build Plan Section 5.
   bullet immediately below for exactly what was built to prepare for this
   stack, and `docs/deployment.md` for the human setup steps this decision
   still requires.
+- **Decision Log #27: `apps/web` is upgraded from React 18 to React 19
+  (`19.2.8`), closing the blocker Decision Log #25 recorded against React
+  Router 8.** `sprint-2/react-19-upgrade`, 2026-08-22. `apps/admin` is
+  untouched — stays on React 18 and React Router 6, the same
+  leave-it-alone treatment it got during the Router 6→7 migration.
+  **Re-confirmed, not just trusted, that this was a low-risk version bump
+  rather than a rewrite**: a fresh grep across `apps/web/src` for every
+  React 19 removed/breaking legacy API (`propTypes`, `defaultProps` on
+  function components, `forwardRef`, `findDOMNode`, `ReactDOM.render`,
+  `ReactDOM.hydrate`, `unmountComponentAtNode`, `contextTypes`/
+  `getChildContext`, string refs, `React.createFactory`) found zero
+  matches, and the official codemod registry's `react-19-migration-recipe`
+  (five bundled codemods — `react-19-replace-reactdom-render`,
+  `react-19-replace-string-ref`, `react-19-replace-act-import`,
+  `react-19-replace-use-form-state`, `react-prop-types-typescript`) was
+  actually run against `apps/web` (`npx codemod@latest run
+  react-19-migration-recipe --target apps/web`, non-interactive) and
+  **modified 0 of 169 files** — confirming the grep's finding rather than
+  replacing it. `src/main.tsx` already used `ReactDOM.createRoot` plus
+  `<React.StrictMode>`; neither needed a change. Version bumps in
+  `apps/web/package.json`: `react`/`react-dom` `^18.2.0` → `^19.2.8`,
+  `@types/react` `^18.2.0` → `^19.2.18`, `@types/react-dom` `^18.2.0` →
+  `^19.2.4`, `@testing-library/react` `^14.2.0` → `^16.3.2` (v16 is the
+  first major with real React 19 support; v14 produces a peer-dependency
+  ERESOLVE against `react@19`), plus a new explicit devDependency,
+  `@testing-library/dom` `^10.4.1` — `@testing-library/react@16` moved it
+  from a transitive dependency to a required peer, confirmed via its own
+  published `peerDependencies` (`@testing-library/dom: ^10.0.0`) rather
+  than guessed. A full clean reinstall (root `node_modules`/
+  `package-lock.json` removed, `npm install` from the repo root) was done
+  per the same standing practice PR #65 (NestJS 11) established for major
+  dependency bumps in this workspace. **That reinstall surfaced a real,
+  confirmed regression, not just a version bump**: npm's own hoisting
+  resolved `react-router`/`@testing-library/react`'s internal React peer
+  to the root-hoisted React 18.3.1 (from `apps/admin`/`apps/mobile`)
+  instead of `apps/web`'s own nested React 19.2.8, producing two live
+  React copies in one app and a real, reproduced test failure. Fixed via
+  scoped npm `overrides` keyed to the `@soccernity/web` workspace only —
+  full detail, including how `apps/admin` was verified to be unaffected,
+  is in the dedicated `sprint-2/react-19-upgrade` status bullet further
+  down this Sprint 2 section. **Verified, not assumed**:
+  `apps/web`'s vitest suite passes cleanly under React 19 +
+  `@testing-library/react` v16; `npx tsc --noEmit` passes with zero type
+  errors under the stricter `@types/react` v19 types; `npm run build`
+  produces a clean production bundle. `<React.StrictMode>` was specifically
+  re-checked for new double-invocation warnings under React 19 and found
+  none. **This unblocks Decision Log #25's own React Router 8 follow-up**
+  — `react-router`/`react-router-dom` versions were deliberately untouched
+  in this PR (out of scope by design), so React Router 8 (needing
+  `react`/`react-dom` `>=19.2.7`, now satisfied) is ready to run as its own
+  separate follow-up PR, not bundled in here. See the dedicated
+  `sprint-2/react-19-upgrade` bullet further down this Sprint 2 section
+  for the full verification detail, including the manual page-load smoke
+  test.
 - **Three Sprint 2 Decision Log candidates closed by the founder, no
   code changes required for any of them** (see Build Plan Section 9,
   entries #21–#23, for the full reasoning — this is the short version):
@@ -1115,6 +1169,81 @@ Full reasoning for every choice above: Build Plan Section 5.
   unaffected by this entire PR, confirmed by a real run: 34 suites / 356
   tests, 0 failures, identical to the pre-existing baseline recorded two
   bullets above.
+- **`sprint-2/react-19-upgrade` upgrades `apps/web` from React 18 to
+  React 19 (`19.2.8`), closing Decision Log #25's own recorded blocker on
+  React Router 8.** See the dedicated Decision Log #27 entry above for the
+  version-bump/codemod detail; this bullet covers what verification
+  actually found, including a real bug the upgrade itself surfaced.
+  **A genuine, confirmed regression was found and fixed mid-task, not
+  just a clean version bump**: after bumping `apps/web/package.json` and
+  doing the standard clean root reinstall, `npm ls react react-dom`
+  showed `react-router@7.18.2` and `@testing-library/react@16.3.2` —
+  both hoisted to the *root* `node_modules` because only `apps/web`
+  depends on them — resolving their own internal `react`/`react-dom`
+  peers to the root-hoisted React **18.3.1** (pulled in by
+  `apps/admin`/`apps/mobile`, both still genuinely on React 18 by
+  design), while `apps/web`'s own application code resolved to its
+  locally-nested React **19.2.8** — two live copies of React inside the
+  same app. This is not a hypothetical: it broke `apps/web`'s real test
+  suite immediately, with the actual failure being `Error: Objects are
+  not valid as a React child (found: object with keys {$$typeof, type,
+  key, props, _owner, _store})` — the textbook duplicate-React-instance
+  symptom, and confirmed by tracing the physical `node_modules` layout,
+  not guessed from the error message alone. **Fixed via scoped npm
+  `overrides`** in the root `package.json`, nested under `@soccernity/web`
+  so it only affects that workspace's own dependency edges — forces
+  `react-router` and `@testing-library/react`, but only the copies of
+  each that `@soccernity/web` itself pulls in, to resolve `react`/
+  `react-dom` to `^19.2.8` rather than whatever the root happens to have
+  hoisted. **Verified this doesn't leak into `apps/admin`**: `npm ls
+  react react-dom` after the fix shows `@soccernity/admin`'s entire tree
+  (including its own separate `react-router-dom@6.30.6` → internal
+  `react-router@6.30.6`) still fully deduped to React `18.3.1`, untouched
+  — the override is keyed by the *importing* workspace
+  (`@soccernity/web`), not by package name alone, so admin's identically-
+  named-but-different-major `react-router@6.30.6` dependency edge was
+  never in scope. This is the same category of hoisting-related
+  staleness PR #65 (NestJS 11) flagged for `@nestjs/core`/`@nestjs/common`,
+  but sharper here because it wasn't stale-cache staleness — it was a
+  legitimate, repeatable outcome of mixing React 18 and React 19 across
+  workspaces in one npm workspaces tree, and would recur on any future
+  clean reinstall without the override in place. **Real verification
+  results, all re-run after the override fix, none estimated**: `apps/web`
+  vitest suite — 1 suite / 7 tests, 0 failures (`AgeGateStep.test.tsx`,
+  the same suite and count as the pre-upgrade baseline); `npx tsc
+  --noEmit` in `apps/web` — zero errors under the new `@types/react`
+  v19 types; `npm run build` — clean production bundle, zero errors.
+  **A genuine JS-execution smoke test was run, the same standard Decision
+  Log #25 set for the Router 7 migration** — a temporary Vitest spec
+  (deleted before commit, never reaching `main`), mounting
+  `<React.StrictMode>` (matching `main.tsx` exactly) around v7's real
+  `createMemoryRouter`/`RouterProvider` against the real route tree and
+  every real page component, for all 14 real paths in
+  `src/app/router.tsx`, asserting not just "renders without throwing" but
+  also zero `console.error`/`console.warn` calls per route — all 14
+  passed clean, which is what re-confirmed `<React.StrictMode>` produces
+  no new double-invocation warnings or lifecycle errors under React 19.
+  **The dev server was actually started and real pages were actually
+  requested** (`npm run dev`, then `curl` against `/`, `/login`,
+  `/signup`, `/sports-hub`, `/community` on the running server) — all
+  five returned real HTTP 200s with a clean dev-server log (no stack
+  traces, no Vite error overlay triggers). **Stated plainly, matching
+  Decision Log #25's own honesty about this**: no real browser or
+  Playwright/Puppeteer-style visual check was available in this
+  environment either, so "real pages requested against a live dev
+  server" plus the jsdom-based StrictMode/console-error smoke test above
+  is the actual verification ceiling here, same as it was for the Router
+  6→7 migration — this is not a substitute for an actual human browser
+  check. **`apps/admin` was not touched at all** — not its `package.json`,
+  not its React version, not its React Router version — confirmed by a
+  clean `git diff` scoped to `apps/admin/` showing zero changes.
+  **React Router 8 is now genuinely unblocked**, not just declared
+  unblocked: its own peer-dependency floor (`react`/`react-dom`
+  `>=19.2.7`) is satisfied by this branch's `19.2.8`, confirmed against
+  the same real npm registry metadata Decision Log #25 used originally —
+  but `react-router`/`react-router-dom` versions were deliberately left
+  untouched in this PR (explicitly out of scope), so that upgrade is
+  still its own separate, not-yet-started follow-up PR, not bundled here.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
