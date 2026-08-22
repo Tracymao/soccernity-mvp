@@ -1,0 +1,177 @@
+# Render Blueprint — Infrastructure as Code for services/api's web service.
+# Decision Log #26 (Build Plan Section 9 / CLAUDE.md): Render (API) + Neon
+# (Postgres) + Upstash (Redis), unbundled. This file is imported directly
+# in Render's dashboard ("New > Blueprint") to create the service(s) below.
+#
+# CONFIDENCE NOTE (read before trusting this file blindly): this was written
+# from existing knowledge of Render's Blueprint spec, without live access to
+# re-verify it against Render's current docs. The overall shape (`services`,
+# `type: web`, `env: node`, `buildCommand`, `startCommand`,
+# `healthCheckPath`, `envVars` with `sync: false`) is used with reasonable
+# confidence. Two fields are lower-confidence and flagged explicitly rather
+# than presented as verified fact — see the comments on `preDeployCommand`
+# and `branch` below. There is no `rootDir` field used here at all (see the
+# comment above `buildCommand`) — that's a deliberate choice, not an
+# oversight. Live validation of this entire file still requires a human
+# with a real Render account importing it — see docs/deployment.md.
+#
+# This repo models two environments per CLAUDE.md's branch strategy
+# (`staging`, `main`) and .github/workflows/deploy.yml's own
+# RENDER_STAGING_URL / RENDER_PRODUCTION_URL split, so this Blueprint
+# defines two services, one per branch, rather than one. Render Blueprints
+# support a per-service `branch` field for exactly this — confirmed with
+# reasonable, not full, confidence (see the note on `branch` below).
+
+services:
+  - type: web
+    name: soccernity-api-staging
+    env: node
+    branch: staging
+    # LOWER CONFIDENCE: `branch` is used here with reasonable but not full
+    # confidence as the correct Blueprint key for pinning a service to a
+    # non-default branch. If this key name is wrong, the practical fallback
+    # is to configure the branch manually in Render's dashboard after
+    # importing this Blueprint once for the default branch.
+    plan: free
+    # Free tier for staging — no safety-critical, guardian-consent-email
+    # traffic depends on staging's cold-start behavior the way it does on
+    # production's, so the cost tradeoff favors free here. See the
+    # production service below for why production is on Starter instead.
+    region: oregon
+    # No rootDir set: rather than scoping Render's build/start cwd into
+    # services/api (which would need its own standalone package-lock.json
+    # to install cleanly, since npm workspace hoisting/lockfile lives at
+    # the repo root), every command below runs from the repo root and
+    # explicitly targets services/api via `--workspace=services/api` or an
+    # explicit `--schema` path — the same npm-workspaces-aware pattern
+    # .github/workflows/ci.yml already uses successfully.
+    buildCommand: npm install && npm run prisma:generate && npm run build --workspace=services/api
+    # Mirrors ci.yml's own three build-time steps ("Install dependencies",
+    # "Generate Prisma client", "Build"), scoped to services/api only for
+    # the last step (`--workspace=services/api`) since this Blueprint only
+    # ever needs to build the API, not apps/web/apps/admin/apps/mobile —
+    # a deliberate, stated narrowing of ci.yml's own unscoped `npm run
+    # build` (which builds every workspace via `--workspaces --if-present`,
+    # appropriate for CI verifying the whole monorepo but wasteful for a
+    # deploy that only ships the API).
+    preDeployCommand: npx prisma migrate deploy --schema=services/api/prisma/schema.prisma
+    # LOWER CONFIDENCE: `preDeployCommand` is Render's field (introduced
+    # after this file's underlying spec knowledge was last refreshed, to
+    # the best of available confidence) for running a one-off command
+    # after build but before the new deploy is cut over — the correct place
+    # for a non-interactive migration step. Explicitly NOT `prisma migrate
+    # dev` (interactive, can prompt for a migration name, wrong for
+    # non-interactive production/staging deploys) — mirrors ci.yml's own
+    # `npx prisma migrate deploy` exactly. This step needs DIRECT_URL
+    # resolvable (see Decision Log #26) — Render injects every envVar below
+    # as a real process-level environment variable regardless of working
+    # directory, so the `--schema` flag's relative path is the only cwd
+    # concern, not env-var resolution. If `preDeployCommand` turns out not
+    # to be a real/current Render Blueprint field, the fallback is to run
+    # this same command as the first part of `buildCommand` instead —
+    # functionally close enough for an MVP with no active users yet, just
+    # without Render's zero-downtime-cutover guarantee.
+    startCommand: npm run start:prod --workspace=services/api
+    # services/api/package.json's real "start:prod" script: `node dist/main.js`.
+    healthCheckPath: /health
+    # services/api/src/health/health.controller.ts — GET /health, a real
+    # `SELECT 1` against Postgres, not a hardcoded 200 (Sprint 0 requirement,
+    # Build Plan Section 5).
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_ACCESS_TTL_SECONDS
+        sync: false
+      - key: JWT_REFRESH_TTL_DAYS
+        sync: false
+      - key: AUTH_RATE_LIMIT_MAX
+        sync: false
+      - key: AUTH_RATE_LIMIT_WINDOW_MS
+        sync: false
+      - key: RESET_TOKEN_TTL_MINUTES
+        sync: false
+      - key: SPORTS_DATA_API_KEY
+        sync: false
+      - key: EMAIL_PROVIDER_API_KEY
+        sync: false
+      - key: POSTMARK_FROM_EMAIL
+        sync: false
+      - key: WEB_APP_BASE_URL
+        sync: false
+      - key: GUARDIAN_CONSENT_TOKEN_TTL_HOURS
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY
+        sync: false
+      - key: S3_SECRET_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+    # `sync: false` on every entry per this PR's brief: Render will prompt
+    # for a real value in its dashboard when this Blueprint is imported,
+    # and never provision, guess, or store a real/placeholder secret in
+    # this committed file — same posture as .env.example's own placeholders.
+    # NOTE: PORT is deliberately NOT listed here. Render web services
+    # auto-assign and inject their own PORT env var; services/api/src/main.ts
+    # already reads `process.env.PORT ?? 3000`, so no configuration is
+    # needed for Render's own PORT injection to work correctly.
+
+  - type: web
+    name: soccernity-api
+    env: node
+    branch: main
+    plan: starter
+    # Render's $7/month Starter tier (not Free) for production — Decision
+    # Log #26's stated reasoning: avoiding cold-start delay on
+    # safety-critical flows such as the guardian-consent email link
+    # (Build Plan Section 8.3), which Render's free tier's spin-down-on-
+    # idle behavior would otherwise introduce.
+    region: oregon
+    buildCommand: npm install && npm run prisma:generate && npm run build --workspace=services/api
+    preDeployCommand: npx prisma migrate deploy --schema=services/api/prisma/schema.prisma
+    startCommand: npm run start:prod --workspace=services/api
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_ACCESS_TTL_SECONDS
+        sync: false
+      - key: JWT_REFRESH_TTL_DAYS
+        sync: false
+      - key: AUTH_RATE_LIMIT_MAX
+        sync: false
+      - key: AUTH_RATE_LIMIT_WINDOW_MS
+        sync: false
+      - key: RESET_TOKEN_TTL_MINUTES
+        sync: false
+      - key: SPORTS_DATA_API_KEY
+        sync: false
+      - key: EMAIL_PROVIDER_API_KEY
+        sync: false
+      - key: POSTMARK_FROM_EMAIL
+        sync: false
+      - key: WEB_APP_BASE_URL
+        sync: false
+      - key: GUARDIAN_CONSENT_TOKEN_TTL_HOURS
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY
+        sync: false
+      - key: S3_SECRET_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false

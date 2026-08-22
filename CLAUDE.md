@@ -612,9 +612,25 @@ Full reasoning for every choice above: Build Plan Section 5.
   Plan Section 9's Decision Log #25 entry.
 - **Decision Log #6 (sports-data vendor) blocks Sprint 4 only** — not
   Sprint 1. Don't hold up auth/consent work on it.
-- **Decision Log #9 (hosting platform) blocks `deploy.yml` specifically**
-  — it fails on purpose until this is resolved. Don't fill in a
-  provider by guessing.
+- **Decision Log #9 (hosting platform) is resolved — see Decision Log
+  #26.** `deploy.yml` no longer fails on purpose; see the dedicated
+  bullet below for what actually changed.
+- **Decision Log #26: hosting is Render (API) + Neon (Postgres) + Upstash
+  (Redis), unbundled rather than a single all-in-one platform — resolving
+  Decision Log #9.** Chosen for cost alignment with a pre-launch MVP's
+  near-zero traffic: Neon and Upstash both have genuinely permanent free
+  tiers that scale to zero, and Render's $7/month Starter tier (used for
+  production only, not staging) avoids cold-start delay specifically on
+  safety-critical flows like the guardian-consent email link (Build Plan
+  Section 8.3). This was also chosen to avoid a specific reliability
+  concern with Railway (an alternative platform) for Node.js/Prisma/
+  Postgres production workloads — **that specific concern was given by
+  the founder/task requester, not independently verified or sourced by
+  the agent that implemented this decision**, and should not be read as
+  an independently confirmed citation. See the `sprint-2/deployment-setup`
+  bullet immediately below for exactly what was built to prepare for this
+  stack, and `docs/deployment.md` for the human setup steps this decision
+  still requires.
 - **Three Sprint 2 Decision Log candidates closed by the founder, no
   code changes required for any of them** (see Build Plan Section 9,
   entries #21–#23, for the full reasoning — this is the short version):
@@ -1015,6 +1031,90 @@ Full reasoning for every choice above: Build Plan Section 5.
   extra processes — the exact level the 30000ms figure is anchored on)
   both passed 0 failures, the real proof the fix holds under the same
   conditions that caused failures before.
+- **`sprint-2/deployment-setup` prepares `services/api` for the newly
+  resolved hosting stack (Decision Log #26) — configuration and
+  documentation only, no application code changed, and live deployment is
+  entirely unverified pending real Neon/Upstash/Render accounts.**
+  `prisma/schema.prisma`'s `datasource` block now has a `directUrl` field
+  alongside `url` — `DATABASE_URL` (pooled, via Neon's PgBouncer) for
+  normal runtime queries, `DIRECT_URL` (unpooled) for `prisma migrate
+  deploy`/`dev`, since PgBouncer's transaction-pooling mode can interfere
+  with the advisory locks and prepared statements Prisma Migrate relies
+  on. Locally (docker-compose's plain Postgres, no pooler), both point at
+  the identical value — verified genuinely locally, not assumed: with
+  `DIRECT_URL` added to `.env`/`.env.test` (and `.env.example`/
+  `.env.test.example`), `npm run prisma:generate` and `npm run test:e2e`
+  both still pass, e2e suite unchanged at 6 suites / 37 tests, 0 failures,
+  before and after. `.env.example` also gains a note that `REDIS_URL`
+  will be a `rediss://` (TLS) URL once Upstash is real — confirmed this
+  needs zero code changes by reading `RedisService`
+  (`services/api/src/redis/redis.service.ts`, which passes the full URL
+  straight into ioredis's constructor) and `node_modules/ioredis`'s own
+  `Redis.js`/README directly, both confirming ioredis auto-detects
+  `rediss://` and enables TLS from the URL scheme alone. A new
+  `render.yaml` at the repo root defines two Render web services as
+  Blueprint IaC — `soccernity-api-staging` (branch `staging`, Free plan)
+  and `soccernity-api` (branch `main`, Starter plan, for the cold-start
+  reason in Decision Log #26) — each with a `buildCommand` mirroring
+  `ci.yml`'s own install/generate/build steps (scoped to
+  `--workspace=services/api` only, a deliberate narrowing from `ci.yml`'s
+  unscoped `npm run build` since Render only ever needs to ship the API),
+  a `preDeployCommand` running `prisma migrate deploy` against
+  `DIRECT_URL` (never `migrate dev`), `healthCheckPath: /health`, and
+  every real env var from `.env.example` listed with `sync: false` (set
+  manually in Render's dashboard, nothing provisioned or guessed here).
+  **Explicitly flagged, not presented as verified fact**: the exact
+  Blueprint field names `preDeployCommand` and `branch` are used at
+  reasonable but not full confidence (no live access to re-verify
+  Render's current docs) — `render.yaml`'s own comments say so directly,
+  and real validation needs a human with a real Render account importing
+  it. `.github/workflows/deploy.yml`'s old deliberate-failure placeholder
+  (`exit 1`, blocking on Decision Log #9) is replaced with a
+  `workflow_dispatch`-triggered smoke test that curls the real deployed
+  `GET /health` and fails loudly if it isn't
+  `{"status":"ok","database":"connected"}` — manually triggered rather
+  than automatic-on-push, a deliberate, flagged trade-off: reliably
+  timing "after Render's deploy actually finished" would need Render's
+  own deploy-status API plus an API-key secret, judged a bigger dependency
+  than this PR's scope; Temi runs it herself from GitHub Actions after
+  confirming a deploy finished in Render's dashboard. `RENDER_STAGING_URL`
+  /`RENDER_PRODUCTION_URL` are secrets Temi must still set manually — no
+  real deploy exists yet for either. **One real, discovered conflict with
+  this PR's own brief, flagged rather than silently resolved either way**:
+  the brief asked for `.github/workflows/ci.yml` to be left completely
+  untouched, but adding `directUrl` to the schema means anywhere `prisma
+  migrate deploy` runs against a live datasource now needs `DIRECT_URL`
+  resolvable — including `ci.yml`'s own existing "Run database migrations"
+  step, whose job-level `env` block only had `DATABASE_URL`/`REDIS_URL`/
+  `JWT_SECRET`. Confirmed by literally reproducing it locally (`npx prisma
+  migrate deploy` with that exact env shape fails with P1012,
+  "Environment variable not found: DIRECT_URL") before deciding: leaving
+  `ci.yml` untouched would have broken CI on the next push, which
+  conflicts with this repo's own non-negotiable that nothing merges
+  without CI passing — so one additive line (`DIRECT_URL`, same value as
+  the existing `DATABASE_URL` line, same reasoning as local dev) was added
+  to `ci.yml`'s env block, and is called out here and in the PR itself
+  rather than left as an unflagged deviation. **A separate real,
+  pre-existing gap was found and left unfixed by design (out of this PR's
+  scope, not something this PR's own changes caused)**: `prisma migrate
+  deploy`/`generate` invoked via this repo's own documented npm scripts
+  (`npm run prisma:migrate`/`prisma:generate`, real npm-workspace cwd
+  = `services/api`, confirmed against CLAUDE.md's own already-documented
+  cwd gotcha) never actually find the root `.env` file via Prisma CLI's
+  own independent dotenv auto-discovery — confirmed by reproducing this
+  against the pre-existing schema too (git-stashing this PR's own schema
+  change and rerunning the identical npm script still failed the same
+  way, with `DATABASE_URL not found`), so this is not new. It doesn't
+  affect this PR's own deliverables: `services/api/test/global-setup.ts`
+  already does its own explicit dotenv loading of `.env.test` before
+  spawning `prisma migrate deploy` as a child process (confirmed this is
+  why `test:e2e` already worked), and both CI and Render inject real
+  env vars directly into the process environment rather than relying on a
+  `.env` file at all. Left as a flagged, out-of-scope finding for whoever
+  next touches local Prisma CLI ergonomics, not fixed here. Mocked suite
+  unaffected by this entire PR, confirmed by a real run: 34 suites / 356
+  tests, 0 failures, identical to the pre-existing baseline recorded two
+  bullets above.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
