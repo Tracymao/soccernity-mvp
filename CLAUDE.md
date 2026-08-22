@@ -685,6 +685,108 @@ Full reasoning for every choice above: Build Plan Section 5.
   `sprint-2/react-19-upgrade` bullet further down this Sprint 2 section
   for the full verification detail, including the manual page-load smoke
   test.
+- **Decision Log #28: `apps/web` is upgraded from React Router 7
+  (`7.18.2`) to React Router 8 (`8.3.0`), closing Decision Log #25's
+  originally-recorded blocker now that Decision Log #27 (React 19) has
+  landed.** `sprint-2/react-router-8-upgrade`, 2026-08-22. `apps/admin` is
+  untouched — stays on `react-router-dom ^6.22.0`/React 18, the same
+  leave-it-alone treatment it got during both the v6→v7 migration and the
+  React 19 upgrade, confirmed by a clean `git diff` scoped to
+  `apps/admin/`. **What the real v7→v8 changelog actually required was
+  read from the upstream `CHANGELOG.md` directly (`remix-run/react-router`
+  repo), not assumed from the version number alone.** The headline
+  baseline-support bump: Node `22.22.0+` (previously `20.0.0+`), React
+  `19.2.7+` (previously `18+`, already satisfied by Decision Log #27), and
+  Vite `7+`; the package is now published ESM-only. The `react-router-dom`
+  package — kept in v7 purely as a convenience re-export for apps that
+  hadn't finished the v6→v7 import swap — is fully removed in v8, not just
+  deprecated further. Every `future.v8_*` flag (`v8_middleware`,
+  `v8_passThroughRequests`, `v8_trailingSlashAwareDataRequests`,
+  `v8_viteEnvironmentApi`; `v8_splitRouteModules` moved to a top-level
+  config option) is removed, with its behavior now the unconditional
+  default. Remaining changes — the internal `hasErrorBoundary` route field,
+  the deprecated `data` param on route-module `meta` functions, the
+  Cloudflare Vite dev proxy, `@react-router/architect`'s
+  `useRequestContextDomainName` option — are all `@react-router/dev`
+  framework-mode or SSR-specific surfaces this app never uses. **Grepped
+  `apps/web/src` for every one of the above, real results, zero assumed**:
+  `react-router-dom` matched only inside a single explanatory code comment
+  in `router.tsx` (now updated) — no actual import anywhere, confirming
+  the v7 migration's own "unified `react-router` package" import already
+  made this app immune to the package's removal, unlike `apps/admin`,
+  which still genuinely depends on it and was correctly left alone.
+  `hasErrorBoundary`, `MiddlewareEnabled`, `AppLoadContext`,
+  `future.v8_*`/`v8_middleware`/`v8_passThroughRequests`/
+  `v8_trailingSlashAwareDataRequests`/`v8_splitRouteModules`/
+  `v8_viteEnvironmentApi`, `unstable_previewServerPrerendering`,
+  `MetaArgs`/`MetaMatch`/`UIMatch`, and any `loader`/`action`/route-`meta`
+  usage: zero matches, all zero, confirmed by grep, not inferred from "this
+  app doesn't use framework mode." `router.tsx`'s own
+  `createBrowserRouter([...])` call passes no `future` options object at
+  all — there were no `future.v7_*` flags opted into during the v6→v7
+  migration to begin with — so v8's wholesale removal of the `future.v8_*`
+  flag set required literally zero code changes here. **A genuine, flagged
+  risk this PR does NOT fix, staying inside its apps/web-only scope**:
+  `react-router@8.3.0`'s own published `engines.node` is `>=22.22.0`
+  (confirmed via real npm registry metadata, not assumed), but this repo's
+  root `package.json` still declares `"node": ">=20"` and
+  `.github/workflows/ci.yml` still pins `node-version: "20"` for every CI
+  job, `apps/web` included — neither was touched here. No `.npmrc` sets
+  `engine-strict`, so this doesn't fail `npm install` locally (this
+  environment's actual Node is `v24.16.0`, well above the floor either
+  way), but CI's real Node 20 runners have never actually been proven to
+  run `react-router@8.3.0`'s own build/runtime code, only assumed
+  compatible by extension of the local, higher-Node verification below.
+  Bumping CI's Node version or the root `engines` field is a repo-wide
+  decision touching `services/api`'s and `apps/admin`'s own CI runs too —
+  explicitly out of this PR's apps/web-only scope, left as a flagged
+  follow-up rather than silently bundled in or silently ignored. **The
+  mandatory hoisting check (per PR #74's own precedent that this exact
+  kind of major bump can silently duplicate React across workspaces) was
+  run for real, not skipped as a formality**: a full clean reinstall
+  (root `node_modules`/`package-lock.json` removed, `npm install` from the
+  repo root), then `npm ls react-router`/`react-router-dom`/`react`/
+  `react-dom` at the root. Result: clean, no regression found.
+  `@soccernity/web` fully deduped to `react-router@8.3.0` on top of its own
+  `react@19.2.8`/`react-dom@19.2.8`; `@soccernity/admin` fully deduped to
+  its own `react-router-dom@6.30.6` → internal `react-router@6.30.6` on
+  top of `react@18.3.1`/`react-dom@18.3.1`, completely untouched;
+  `@soccernity/mobile`'s own `react@18.2.0` tree unaffected. The existing
+  PR #74 override (`overrides.@soccernity/web.react-router.{react,
+  react-dom}`, scoped by *importing workspace*, not by package version)
+  already targets `react-router` by name inside the `@soccernity/web`
+  workspace, so it applied automatically to the new v8 resolution with no
+  edit needed — no new override was required. **Real verification, all
+  re-run after the bump, none estimated**: `apps/web` vitest suite — 1
+  suite / 7 tests, 0 failures, identical to the pre-upgrade baseline;
+  `npx tsc --noEmit` in `apps/web` — zero errors; `npm run build` — clean
+  production bundle, zero errors. **A genuine JS-execution smoke test was
+  run, the same standard Decision Log #25/#27 both used**: a temporary
+  Vitest spec (deleted before commit, never reaching `main`) took
+  `router.routes` directly off the real `createBrowserRouter` instance
+  exported by `router.tsx` and mounted it via v8's real
+  `createMemoryRouter`/`RouterProvider`, under `<React.StrictMode>`
+  matching `main.tsx` exactly, for all 14 real paths (the 13 routes
+  defined in `router.tsx` plus the wildcard 404) — all 14 rendered with
+  zero `console.error`/`console.warn` calls, confirming no new
+  double-invocation or router-deprecation warnings under v8. The dev
+  server was also actually started and all 14 real paths were `curl`'d
+  against it directly, all returning real HTTP 200s with a clean
+  dev-server log. **Stated plainly, matching Decision Log #25/#27's own
+  honesty about this**: no real browser or Playwright/Puppeteer-style
+  visual check was available in this environment, so the jsdom-based
+  StrictMode/console-error smoke test plus the real dev-server HTTP check
+  above is the actual verification ceiling here, same as both prior
+  upgrades. `RouterProvider` (along with `createBrowserRouter`, `Outlet`,
+  `Link`, `NavLink`, `useNavigate`, `useSearchParams`, `MemoryRouter`) was
+  confirmed still exported from the main `react-router` entry point in
+  v8.3.0 directly against its own published `.d.ts` — the `react-router/
+  dom` subpath remains needed only for framework-mode SSR hydration
+  (`HydratedRouter`), which this plain-`ReactDOM.createRoot` app still
+  does not use, so no import paths changed. **React Router 8 is now
+  genuinely landed, not just unblocked** — both halves of Decision Log
+  #25's originally-recorded blocker (React 19, then Router 8 itself) are
+  closed.
 - **Three Sprint 2 Decision Log candidates closed by the founder, no
   code changes required for any of them** (see Build Plan Section 9,
   entries #21–#23, for the full reasoning — this is the short version):
@@ -1244,6 +1346,36 @@ Full reasoning for every choice above: Build Plan Section 5.
   but `react-router`/`react-router-dom` versions were deliberately left
   untouched in this PR (explicitly out of scope), so that upgrade is
   still its own separate, not-yet-started follow-up PR, not bundled here.
+- **`sprint-2/react-router-8-upgrade` upgrades `apps/web` from React
+  Router 7 (`7.18.2`) to React Router 8 (`8.3.0`), closing Decision Log
+  #25's originally-recorded blocker now that both halves it named —
+  React 19 (Decision Log #27) and Router 8 itself — are landed.** See the
+  dedicated Decision Log #28 entry above for the full detail: the real
+  upstream changelog findings (Node `22.22.0+`, React `19.2.7+` baseline,
+  ESM-only, full `react-router-dom` package removal, every `future.v8_*`
+  flag now default-on), the real `apps/web/src` grep results (zero
+  matches for every changed/removed API the changelog calls out, and zero
+  `future` flags were ever opted into in `router.tsx` to begin with), the
+  flagged-but-not-fixed Node-engine mismatch (CI still pins Node 20;
+  `react-router@8.3.0` declares `>=22.22.0`; left as an explicit follow-up
+  since fixing it touches `services/api`'s and `apps/admin`'s own CI runs,
+  outside this PR's apps/web-only scope), and the mandatory hoisting
+  check (clean — `apps/admin`'s React 18/`react-router-dom@6.30.6` tree is
+  fully deduped and untouched, `apps/web` resolves cleanly to
+  `react-router@8.3.0` on React `19.2.8`, and PR #74's existing scoped
+  `@soccernity/web` override already covered `react-router` by name with
+  no edit needed). Verification: `apps/web` vitest 1 suite / 7 tests, 0
+  failures (unchanged); `npx tsc --noEmit` clean; `npm run build` clean;
+  a temporary Vitest spec (deleted before commit) mounted the real
+  `router.routes` via v8's `createMemoryRouter`/`RouterProvider` under
+  `<React.StrictMode>` for all 14 real paths, zero
+  `console.error`/`console.warn`; the dev server was started and all 14
+  paths were `curl`'d directly, all real HTTP 200s. Same honesty as
+  Decision Log #25/#27: no real browser/Playwright check was available in
+  this environment, so this jsdom smoke test plus the live dev-server HTTP
+  check is the actual verification ceiling. `router.tsx`'s own header
+  comment is updated in place to describe the v8 state rather than left
+  describing the now-resolved v7-blocked-on-Router-8 history.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
