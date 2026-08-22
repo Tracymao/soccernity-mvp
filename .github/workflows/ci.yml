@@ -15,6 +15,21 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://soccernity:soccernity@localhost:5432/soccernity_test
+      # One-line, additive deviation from this PR's own brief (which asked
+      # for ci.yml to be left completely untouched) — flagged explicitly,
+      # not silently done. prisma/schema.prisma's datasource block now
+      # declares `directUrl` (Decision Log #26, Neon's pooled-vs-direct
+      # connection split — see .env.example's own DIRECT_URL comment).
+      # Confirmed by literally reproducing it locally: running
+      # `npx prisma migrate deploy` with this exact env shape (DATABASE_URL
+      # set, DIRECT_URL unset) fails with Prisma error P1012,
+      # "Environment variable not found: DIRECT_URL" — which would have
+      # broken this job's existing "Run database migrations" step on the
+      # very next push without this line. No pooler sits in front of CI's
+      # own ephemeral Postgres service container, so the same value as
+      # DATABASE_URL above is correct here, identical to local dev's own
+      # .env/.env.test pattern.
+      DIRECT_URL: postgresql://soccernity:soccernity@localhost:5432/soccernity_test
       REDIS_URL: redis://localhost:6379
       # Required by JwtModule.registerAsync (auth-foundation.module.ts) —
       # no code-level default, unlike JWT_ACCESS_TTL_SECONDS/
