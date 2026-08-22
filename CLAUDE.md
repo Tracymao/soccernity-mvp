@@ -725,22 +725,40 @@ Full reasoning for every choice above: Build Plan Section 5.
   `createBrowserRouter([...])` call passes no `future` options object at
   all — there were no `future.v7_*` flags opted into during the v6→v7
   migration to begin with — so v8's wholesale removal of the `future.v8_*`
-  flag set required literally zero code changes here. **A genuine, flagged
-  risk this PR does NOT fix, staying inside its apps/web-only scope**:
+  flag set required literally zero code changes here. **The Node-engine gap
+  originally flagged here as a follow-up (see the superseded paragraph this
+  replaces, preserved in git history on this same branch) has since been
+  folded into this same PR by the founder, not left open.**
   `react-router@8.3.0`'s own published `engines.node` is `>=22.22.0`
-  (confirmed via real npm registry metadata, not assumed), but this repo's
-  root `package.json` still declares `"node": ">=20"` and
-  `.github/workflows/ci.yml` still pins `node-version: "20"` for every CI
-  job, `apps/web` included — neither was touched here. No `.npmrc` sets
-  `engine-strict`, so this doesn't fail `npm install` locally (this
-  environment's actual Node is `v24.16.0`, well above the floor either
-  way), but CI's real Node 20 runners have never actually been proven to
-  run `react-router@8.3.0`'s own build/runtime code, only assumed
-  compatible by extension of the local, higher-Node verification below.
-  Bumping CI's Node version or the root `engines` field is a repo-wide
-  decision touching `services/api`'s and `apps/admin`'s own CI runs too —
-  explicitly out of this PR's apps/web-only scope, left as a flagged
-  follow-up rather than silently bundled in or silently ignored. **The
+  (confirmed via real npm registry metadata, not assumed), and this repo's
+  root `package.json` and `.github/workflows/ci.yml` had both still been
+  pinned to Node `20` — meaning CI had never actually run `react-router@8.3.0`'s
+  own build/runtime code on a Node floor that satisfies its real
+  requirement; the only reason `npm install`/`npm run build` ever worked at
+  all is that this development environment's actual Node (`v24.16.0`) and
+  every prior CI run happened to exceed the stated `>=20` floor anyway. Once
+  flagging this as a "repo-wide decision touching `services/api`'s and
+  `apps/admin`'s own CI runs too" was raised, the founder decided the
+  correct move was to fold the bump into this PR rather than defer it: root
+  `package.json`'s `engines.node` is now `>=22.22.0`, and
+  `.github/workflows/ci.yml`'s single `actions/setup-node@v4` step (shared
+  by every job in this monorepo's one CI workflow — `services/api` and
+  `apps/admin` included, there is no per-workspace Node matrix) now pins
+  `node-version: "22.22.0"`. No other Node-version reference exists
+  anywhere else in the repo to reconcile — confirmed by checking
+  `.github/workflows/deploy.yml` (no `setup-node` step at all; it only
+  curls an already-deployed `/health` endpoint), `render.yaml` (no explicit
+  Node version pin; Render resolves its Node version from the deployed
+  service's own `package.json` `engines.node`, so it now inherits
+  `>=22.22.0` automatically with no edit needed there), every other
+  workspace's own `package.json` (`apps/web`, `apps/admin`, `apps/mobile`,
+  `services/api`, `packages/shared` — none declare their own `engines.node`
+  field, so there was no conflicting/lower floor to fix), the root
+  `README.md` and `docs/deployment.md` (no Node-version mention in either),
+  and the repo for any `.nvmrc`/`Dockerfile` (neither exists anywhere in
+  this codebase). This is a CI/engines-only change — no dependency version
+  changed, `npm ls react-router` at the repo root resolves identically to
+  before this fix-up. **The
   mandatory hoisting check (per PR #74's own precedent that this exact
   kind of major bump can silently duplicate React across workspaces) was
   run for real, not skipped as a formality**: a full clean reinstall
@@ -1356,10 +1374,12 @@ Full reasoning for every choice above: Build Plan Section 5.
   flag now default-on), the real `apps/web/src` grep results (zero
   matches for every changed/removed API the changelog calls out, and zero
   `future` flags were ever opted into in `router.tsx` to begin with), the
-  flagged-but-not-fixed Node-engine mismatch (CI still pins Node 20;
-  `react-router@8.3.0` declares `>=22.22.0`; left as an explicit follow-up
-  since fixing it touches `services/api`'s and `apps/admin`'s own CI runs,
-  outside this PR's apps/web-only scope), and the mandatory hoisting
+  Node-engine gap this same PR folded in and fixed, not left as a
+  follow-up (`react-router@8.3.0` declares `>=22.22.0`; root
+  `package.json`'s `engines.node` and `.github/workflows/ci.yml`'s single
+  `actions/setup-node@v4` step — shared by every job, `services/api` and
+  `apps/admin` included — are both now `22.22.0`, with CI itself proven
+  green on that floor, not just the YAML edited), and the mandatory hoisting
   check (clean — `apps/admin`'s React 18/`react-router-dom@6.30.6` tree is
   fully deduped and untouched, `apps/web` resolves cleanly to
   `react-router@8.3.0` on React `19.2.8`, and PR #74's existing scoped
