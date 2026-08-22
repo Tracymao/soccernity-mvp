@@ -144,12 +144,21 @@ clubId (zero side effects on any club), bad clubId (404, and no `User`
 row for that email — confirmed by querying directly, then confirming
 the same email can genuinely register afterward).
 
-**Still explicitly not built here (this PR, or `sprint-2/auto-join-on-
-signup`)**: a club-picker UI anywhere in the signup flow. `apps/web`'s
-`SignupPage`/`RegisterStep` have no club-selection UI today — that's a
-separate, natural frontend follow-up, flagged as a Decision Log/backlog
-candidate, not silently treated as done because the backend capability
-now exists.
+**Closed by `sprint-2/club-picker-ui`** — with a real direction change
+from what this bullet originally anticipated. A club-picker UI was
+built in `apps/web`, but it does not call `RegisterDto.clubId`/this
+module's auto-join path at all: `GET /clubs` is `JwtAuthGuard`-only
+(this file's own guard reasoning below), and `apps/web`'s signup step
+machine runs entirely before an account exists, so there's no JWT
+available at the point a pre-account club-picker step would need one.
+The picker was built as a new step *after* account creation instead
+(`ClubPickerStep.tsx`, rendered from `RegisterStep.tsx`'s success view),
+calling `GET /clubs` and `POST /clubs/:id/join` directly with the access
+token registration already returns. `RegisterDto.clubId`'s auto-join
+capability (this section, above) is therefore still real and tested,
+just not exercised by the web client — see
+`services/api/src/modules/auth/README.md`'s matching update and
+CLAUDE.md's Sprint 2 status section for the full reasoning.
 
 ### 2. `POST /clubs/:id/join` uses `ClubPage.members`, not `clubAffiliationId`
 

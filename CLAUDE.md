@@ -1411,6 +1411,67 @@ Full reasoning for every choice above: Build Plan Section 5.
   check is the actual verification ceiling. `router.tsx`'s own header
   comment is updated in place to describe the v8 state rather than left
   describing the now-resolved v7-blocked-on-Router-8 history.
+- **`sprint-2/club-picker-ui` builds the club-picker step in `apps/web`'s
+  signup flow (Build Plan Section 6's Sprint 2 line), closing the gap
+  `sprint-2/auto-join-on-signup` (PR #67) explicitly left open — a
+  frontend-only PR, no backend code touched.** Before writing any code,
+  the real blocker this task was briefed to surface was confirmed, not
+  assumed: `GET /clubs` (`services/api/src/modules/clubs/
+  clubs.controller.ts`) is `@UseGuards(JwtAuthGuard)`-only, deliberately
+  (see that file's own guard-reasoning comment), and `apps/web`'s
+  `SignupFlow.tsx` step machine (age-gate → guardian-details → register)
+  runs entirely before any account — and therefore any JWT — exists.
+  There is no existing authenticated-fetch pattern anywhere else in
+  `apps/web` either (only `LoginPage.tsx` handles a token at all, by
+  stashing it post-login). **Direction chosen: (b), club selection moved
+  to *after* account creation, not (a) loosening `GET /clubs`'s guard or
+  adding a new public endpoint** — a real, deliberate choice, not a
+  default. `ClubPickerStep.tsx` is a new, skippable step rendered from
+  `RegisterStep.tsx`'s existing success view (previously just a
+  "Continue to Soccernity" link, now replaced by this step, whose own
+  final action carries that same copy/destination once at least one club
+  has been joined, or "Skip for now" until then — one action, not two
+  redundant buttons). It uses the `accessToken` `RegisterResponse`
+  already returns (`apps/web/src/api/auth.ts`) to call a new
+  `apps/web/src/api/clubs.ts` client (`listClubs`/`joinClub`, `Bearer`
+  header, mirroring `services/api`'s real `ClubPageResult`/`JoinState`
+  shapes exactly). **A direct, practical consequence of choosing (b):
+  `RegisterDto.clubId` — the auto-join-on-signup field
+  `sprint-2/auto-join-on-signup` added specifically for this — goes
+  unused by the web client.** It's still real, tested backend capability
+  (mobile or a future direct-API caller can still use it); the web
+  client instead calls the already-public-to-authenticated-users `POST
+  /clubs/:id/join` itself, after registration, which is the more natural
+  fit once the picker is a post-account step rather than a field on the
+  registration payload. No guard was changed anywhere, so this closes
+  with no new Decision Log candidate of its own — seeing (a) was the
+  branch that would have needed one. A simple client-side substring
+  filter over already-loaded clubs (not a real cross-catalog search — 
+  `GET /clubs` has no text-search parameter, only `league`/`country`
+  equality filters) plus cursor-based "Load more" cover the "searchable/
+  browsable list" ask; no dedicated Figma screen exists for this step,
+  flagged as a real design gap rather than invented design language —
+  built plain, matching `SignupSplitScreen`'s existing light-theme
+  tokens/spacing. A failed join attempt shows an inline per-club error
+  but never blocks the step's own continue/skip action. Verified:
+  `npx tsc --noEmit` and `npm run build` in `apps/web` both clean;
+  `ClubPickerStep.test.tsx` (new, 7 cases — initial load, join success,
+  failed join not blocking continue, skip-without-joining, continue
+  label changing once a club is joined, cursor-based load-more, load
+  error) passes, `apps/web`'s full suite now 2 suites / 14 tests, 0
+  failures (up from 1/7). Same standard as the React 19/Router 8 PRs: a
+  temporary Vitest spec (deleted before commit) mounted the real
+  `SignupFlow` end to end — age gate → register → club picker, mocking
+  only the API calls — and confirmed zero `console.error`/`console.warn`
+  through the whole walk; the dev server was also started for real and
+  `GET /signup` returned a real HTTP 200 with a clean log. Same honesty
+  as those prior PRs: no real browser/Playwright check was available in
+  this environment, so this is the actual verification ceiling, not a
+  substitute for a human browser check. See
+  `services/api/src/modules/auth/README.md`'s and
+  `services/api/src/modules/clubs/README.md`'s matching "explicitly not
+  built here" bullets, now updated to point here instead of describing
+  an open gap.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
