@@ -69,6 +69,20 @@ describe('AuthRateLimit() decorator (env-driven module config, real guard)', () 
     return app;
   }
 
+  // Longer per-test timeout (default Jest budget is 5000ms): unlike the
+  // vast majority of this codebase's mocked-Prisma unit tests, this test
+  // bootstraps a real Nest application (real AuthThrottlerGuard, real
+  // AuthRateLimitModule) and makes multiple real HTTP round trips via
+  // supertest in sequence. That's structurally heavier than a mocked
+  // test, and under full 34-suite parallel CPU contention it has twice
+  // exceeded the default 5000ms budget with "Exceeded timeout of 5000ms
+  // for a test" -- PR #67 and PR #69 -- despite the underlying
+  // rate-limiting behavior being correct both times (re-run immediately
+  // after each failure passed cleanly, and PR #64's original
+  // mutation-testing-style proof already confirmed the logic itself).
+  // This is a timeout-budget fix, not a logic fix: both tests below get
+  // a 20000ms override (real headroom over the 5000ms default, not a
+  // bare-minimum bump) via Jest's per-test third argument.
   it('respects AUTH_RATE_LIMIT_MAX/AUTH_RATE_LIMIT_WINDOW_MS when set to a value other than the hardcoded default', async () => {
     // 2 is deliberately different from DEFAULT_AUTH_RATE_LIMIT (5) --
     // under the pre-fix decorator, this route would have been governed
@@ -85,8 +99,12 @@ describe('AuthRateLimit() decorator (env-driven module config, real guard)', () 
     } finally {
       await app.close();
     }
-  });
+  }, 20000);
 
+  // Same reasoning as the sibling test above: a real app bootstrap plus
+  // six real HTTP round trips in sequence is at least as much real work,
+  // so it gets the same generous budget rather than relying on the
+  // default 5000ms.
   it('falls back to DEFAULT_AUTH_RATE_LIMIT/DEFAULT_AUTH_RATE_LIMIT_WINDOW_MS when the env vars are not set', async () => {
     delete process.env.AUTH_RATE_LIMIT_MAX;
     delete process.env.AUTH_RATE_LIMIT_WINDOW_MS;
@@ -100,5 +118,5 @@ describe('AuthRateLimit() decorator (env-driven module config, real guard)', () 
     } finally {
       await app.close();
     }
-  });
+  }, 20000);
 });
