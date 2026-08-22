@@ -936,19 +936,47 @@ Full reasoning for every choice above: Build Plan Section 5.
   **34 suites / 356 tests, 0 failures**. e2e suite went from a freshly
   re-verified 6 suites / 30 tests, 0 failures to **6 suites / 37 tests, 0
   failures**.
+- **`sprint-2/fix-rate-limit-test-timeout` fixed the
+  `auth-rate-limit.decorator.spec.ts` flake noted in the bullet just
+  above.** That test's two real-app, real-HTTP tests had failed twice
+  under full-suite parallel CPU contention — once flagged during PR #67,
+  once reproduced and confirmed live during PR #69's own verification,
+  both times with `Exceeded timeout of 5000ms for a test`, and both
+  times passing cleanly on an unchanged re-run. Not a logic bug: PR #64's
+  original mutation-testing-style proof (revert the fix, confirm the
+  test fails; restore it, confirm it passes) had already established the
+  underlying rate-limiting behavior was correct — this was purely a
+  timeout-budget problem, a real-HTTP/real-app-bootstrap test occasionally
+  not finishing inside Jest's default 5000ms window under heavy parallel
+  load. Fix: both tests given a 20000ms per-test override (Jest's
+  third-argument form), with real headroom rather than a bare-minimum
+  bump, plus a comment citing PR #67 and PR #69 as the two prior
+  sightings. **Verified, not assumed**: 5 consecutive normal full-suite
+  runs, 0 failures each time; a genuine CPU-load simulation (8
+  CPU-saturating background processes on a 12-core machine, run twice)
+  reproduced conditions close to the original failures and the fixed
+  file passed both times, while a then-untouched, out-of-scope file
+  (`auth.service.spec.ts`, a plain mocked test with no real HTTP calls)
+  hit the *old* default 5000ms timeout under the same simulated load —
+  confirming the load simulation was genuinely reproducing the failure
+  conditions, and surfacing that the underlying problem was broader than
+  this one file. That broader finding is what `sprint-2/global-jest-timeout`
+  (next bullet) went on to fix properly. This branch's own merge went
+  undocumented here for one PR cycle — the exact "drift" this file's own
+  "Keeping this file current" section warns about, and the gap the next
+  bullet's own note flags; this bullet closes it, inserted in its correct
+  chronological place rather than appended out of order.
 - **`sprint-2/global-jest-timeout` raises `jest.config.js`'s
   `testTimeout` from Jest's implicit 5000ms default to a measured
   30000ms for the whole mocked unit suite**, replacing the per-test-file
   patch pattern `sprint-2/fix-rate-limit-test-timeout` (merged just
   before this branch was cut, fixing `auth-rate-limit.decorator.spec.ts`'s
   two flaky real-HTTP tests with a 20000ms per-test override) started —
-  **note: that fix branch's own merge has no dedicated bullet in this
-  file, an instance of the exact drift this file's "Keeping this file
-  current" section describes; not backfilled here since it's out of this
-  PR's own scope, flagged as a small follow-up rather than silently left
-  for a future sweep to rediscover.** That branch's own load-simulation
-  found the deeper issue: even a plain mocked-Prisma test with zero real
-  HTTP calls (`auth.service.spec.ts`, which exercises real argon2id
+  now documented in its own bullet directly above, added after the fact
+  to close the exact gap this note originally flagged. That branch's own
+  load-simulation found the deeper issue: even a plain mocked-Prisma test
+  with zero real HTTP calls (`auth.service.spec.ts`, which exercises real
+  argon2id
   hashing via `PasswordService`) can also exceed 5000ms under heavy CPU
   contention, so file-by-file timeout patches aren't sustainable.
   **Measured, not guessed** (12-logical-core local dev machine, full
