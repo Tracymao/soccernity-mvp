@@ -189,12 +189,15 @@ model Post {
   // by whichever code path implements POST /posts/:id/comments (Build
   // Plan Section 4.3) — never trust this in isolation as authoritative,
   // and it's recomputable via Comment.count({ where: { postId } }) if it
-  // ever drifts. Unlike likeCount, there is currently no decrement path:
-  // Section 4.3 does not list a DELETE /posts/:id/comments/:commentId
-  // endpoint, so nothing in this codebase ever deletes a Comment row.
-  // Whoever eventually adds comment deletion (a genuine addition beyond
-  // Section 4.3 as written, not a spec'd endpoint) must add the matching
-  // decrement then — see feed/README.md.
+  // ever drifts. A decrement path NOW EXISTS (sprint-2/comment-delete):
+  // Section 4.3 as originally written has no DELETE
+  // /posts/:id/comments/:commentId, but that endpoint has since been
+  // added as a genuine spec addition, not a literal Section 4.3 line item
+  // — see feed/README.md's Decision Log candidate on this. FeedService's
+  // deleteComment() decrements this field transactionally alongside the
+  // Comment row's deletion, using the same updateMany-with-a-floor-guard
+  // (commentCount: { gt: 0 }) pattern unlikePost() already established
+  // for likeCount — see feed.service.ts.
   commentCount  Int       @default(0)
   createdAt     DateTime  @default(now())
   comments      Comment[]

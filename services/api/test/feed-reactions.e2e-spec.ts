@@ -229,6 +229,159 @@ describe('Feed reactions e2e: like/unlike, comment, save/unsave against real Pos
     });
   });
 
+  describe('comment deletion (DELETE /posts/:id/comments/:commentId)', () => {
+    async function postComment(post: { id: string }, actor: { accessToken: string }, contentText: string) {
+      const response = await request(app.getHttpServer())
+        .post(`/posts/${post.id}/comments`)
+        .set('Authorization', `Bearer ${actor.accessToken}`)
+        .send({ contentText })
+        .expect(201);
+      return response.body as { id: string };
+    }
+
+    it('the comment author can delete their own comment: the row is genuinely gone and commentCount decrements by exactly 1', async () => {
+      const author = await createUser('author');
+      const commenter = await createUser('commenter');
+      const post = await seedPost(author.userId);
+      const comment = await postComment(post, commenter, 'Delete me');
+
+      await request(app.getHttpServer())
+        .delete(`/posts/${post.id}/comments/${comment.id}`)
+        .set('Authorization', `Bearer ${commenter.accessToken}`)
+        .expect(204);
+
+      const prisma = getTestPrismaClient();
+      const commentRow = await prisma.comment.findUnique({ where: { id: comment.id } });
+      expect(commentRow).toBeNull();
+
+      const postRow = await prisma.post.findUniqueOrThrow({ where: { id: post.id } });
+      expect(postRow.commentCount).toBe(0);
+    });
+
+    it('the POST AUTHOR can delete someone else\'s comment on their own post — same outcome, proving the "OR post author" half works', async () => {
+      const author = await createUser('author');
+      const commenter = await createUser('commenter');
+      const post = await seedPost(author.userId);
+      const comment = await postComment(post, commenter, 'Moderate me');
+
+      await request(app.getHttpServer())
+        .delete(`/posts/${post.id}/comments/${comment.id}`)
+        .set('Authorization', `Bearer ${author.accessToken}`)
+        .expect(204);
+
+      const prisma = getTestPrismaClient();
+      const commentRow = await prisma.comment.findUnique({ where: { id: comment.id } });
+      expect(commentRow).toBeNull();
+
+      const postRow = await prisma.post.findUniqueOrThrow({ where: { id: post.id } });
+      expect(postRow.commentCount).toBe(0);
+    });
+
+    it('a third user (neither comment author nor post author) is rejected with 403 and has zero effect', async () => {
+      const author = await createUser('author');
+      const commenter = await createUser('commenter');
+      const stranger = await createUser('stranger');
+      const post = await seedPost(author.userId);
+      const comment = await postComment(post, commenter, 'Not yours to delete');
+
+      await request(app.getHttpServer())
+        .delete(`/posts/${post.id}/comments/${comment.id}`)
+        .set('Authorization', `Bearer ${stranger.accessToken}`)
+        .expect(403);
+
+      const prisma = getTestPrismaClient();
+      const commentRow = await prisma.comment.findUnique({ where: { id: comment.id } });
+      expect(commentRow).not.toBeNull();
+
+      const postRow = await prisma.post.findUniqueOrThrow({ where: { id: post.id } });
+      expect(postRow.commentCount).toBe(1);
+    });
+
+    it('deleting a commentId that does not exist is a 404', async () => {
+      const author = await createUser('author');
+      const post = await seedPost(author.userId);
+
+      await request(app.getHttpServer())
+        .delete(`/posts/${post.id}/comments/00000000-0000-0000-0000-000000000000`)
+        .set('Authorization', `Bearer ${author.accessToken}`)
+        .expect(404);
+    });
+
+    it('deleting a commentId that exists but belongs to a DIFFERENT post than the URL is a 404, not a 403', async () => {
+      const author = await createUser('author');
+      const commenter = await createUser('commenter');
+      const postA = await seedPost(author.userId);
+      const postB = await seedPost(author.userId);
+      const comment = await postComment(postA, commenter, 'I belong to postA, not postB');
+
+      // commenter genuinely authored this comment, so if the mismatch were
+      // (incorrectly) treated as an authorization question rather than a
+      // resource-identity one, this would come back 200/204, not 404.
+      await request(app.getHttpServer())
+        .delete(`/posts/${postB.id}/comments/${comment.id}`)
+        .set('Authorization', `Bearer ${commenter.accessToken}`)
+        .expect(404);
+
+      const prisma = getTestPrismaClient();
+      const commentRow = await prisma.comment.findUnique({ where: { id: comment.id } });
+      expect(commentRow).not.toBeNull();
+    });
+
+    it('deleting the same real comment twice: 204 the first time, 404 the second — NOT the idempotent-200 pattern like/save/follow/join use', async () => {
+      const author = await createUser('author');
+      const commenter = await createUser('commenter');
+      const post = await seedPost(author.userId);
+      const comment = await postComment(post, commenter, 'Only deletable once');
+
+      await request(app.getHttpServer())
+        .delete(`/posts/${post.id}/comments/${comment.id}`)
+        .set('Authorization', `Bearer ${commenter.accessToken}`)
+        .expect(204);
+
+      await request(app.getHttpServer())
+        .delete(`/posts/${post.id}/comments/${comment.id}`)
+        .set('Authorization', `Bearer ${commenter.accessToken}`)
+        .expect(404);
+    });
+
+    it('a comment/comment/delete/comment sequence lands commentCount at exactly 2, matching Comment.count() at each step', async () => {
+      const author = await createUser('author');
+      const commenter = await createUser('commenter');
+      const post = await seedPost(author.userId);
+      const prisma = getTestPrismaClient();
+
+      async function assertCommentCountMatches(expected: number) {
+        const postRow = await prisma.post.findUniqueOrThrow({ where: { id: post.id } });
+        const realCount = await prisma.comment.count({ where: { postId: post.id } });
+        expect(postRow.commentCount).toBe(expected);
+        expect(realCount).toBe(expected);
+      }
+
+      const first = await postComment(post, commenter, 'First');
+      await assertCommentCountMatches(1);
+
+      const second = await postComment(post, commenter, 'Second');
+      await assertCommentCountMatches(2);
+
+      await request(app.getHttpServer())
+        .delete(`/posts/${post.id}/comments/${first.id}`)
+        .set('Authorization', `Bearer ${commenter.accessToken}`)
+        .expect(204);
+      await assertCommentCountMatches(1);
+
+      const third = await postComment(post, commenter, 'Third');
+      await assertCommentCountMatches(2);
+
+      // Pin the exact final numbers, not just "they match each other" —
+      // the surviving rows are the second and third comments; the first
+      // (deleted) comment is genuinely gone.
+      const finalCount = await prisma.comment.count({ where: { postId: post.id } });
+      expect(finalCount).toBe(2);
+      const remaining = await prisma.comment.findMany({ where: { postId: post.id } });
+      expect(remaining.map((c) => c.id).sort()).toEqual([second.id, third.id].sort());
+    });
+  });
+
   describe('save / unsave', () => {
     it('save creates a SavedPost row and is idempotent on a double-save', async () => {
       const author = await createUser('author');

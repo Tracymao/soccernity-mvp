@@ -1,4 +1,11 @@
-import { BadRequestException, ExecutionContext, INestApplication, NotFoundException, ValidationPipe } from '@nestjs/common';
+import {
+  BadRequestException,
+  ExecutionContext,
+  ForbiddenException,
+  INestApplication,
+  NotFoundException,
+  ValidationPipe,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -28,6 +35,7 @@ describe('FeedController (HTTP layer)', () => {
     unlikePost: jest.fn(),
     addComment: jest.fn(),
     getComments: jest.fn(),
+    deleteComment: jest.fn(),
     savePost: jest.fn(),
     unsavePost: jest.fn(),
   };
@@ -389,6 +397,56 @@ describe('FeedController (HTTP layer)', () => {
       feedService.getComments.mockRejectedValue(new NotFoundException('Post not found'));
 
       await request(app.getHttpServer()).get('/posts/missing/comments').expect(404);
+    });
+  });
+
+  describe('DELETE /posts/:id/comments/:commentId', () => {
+    it('deletes a comment with 204 (no body), JwtAuthGuard only — GuardianConsentGuard never queried', async () => {
+      currentUser = PENDING_MINOR;
+      feedService.deleteComment.mockResolvedValue(undefined);
+
+      const response = await request(app.getHttpServer())
+        .delete('/posts/post-1/comments/comment-1')
+        .expect(204);
+
+      expect(response.body).toEqual({});
+      expect(feedService.deleteComment).toHaveBeenCalledWith('post-1', 'comment-1', 'minor-1');
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('propagates a 404 from FeedService when commentId does not reference a real comment', async () => {
+      currentUser = ADULT;
+      feedService.deleteComment.mockRejectedValue(new NotFoundException('Comment not found'));
+
+      await request(app.getHttpServer()).delete('/posts/post-1/comments/missing').expect(404);
+    });
+
+    it('propagates a 404 from FeedService when the comment exists but belongs to a different post than the URL', async () => {
+      currentUser = ADULT;
+      feedService.deleteComment.mockRejectedValue(new NotFoundException('Comment not found'));
+
+      await request(app.getHttpServer()).delete('/posts/wrong-post/comments/comment-1').expect(404);
+    });
+
+    it('propagates a 403 from FeedService when the requester is neither the comment author nor the post author', async () => {
+      currentUser = ADULT;
+      feedService.deleteComment.mockRejectedValue(
+        new ForbiddenException('You may only delete your own comments, or comments on your own post'),
+      );
+
+      await request(app.getHttpServer()).delete('/posts/post-1/comments/comment-1').expect(403);
+    });
+
+    it('is NOT idempotent at the HTTP layer either — a second delete call surfaces FeedService\'s 404, not a synthesized 204', async () => {
+      currentUser = ADULT;
+      feedService.deleteComment
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new NotFoundException('Comment not found'));
+
+      await request(app.getHttpServer()).delete('/posts/post-1/comments/comment-1').expect(204);
+      await request(app.getHttpServer()).delete('/posts/post-1/comments/comment-1').expect(404);
+
+      expect(feedService.deleteComment).toHaveBeenCalledTimes(2);
     });
   });
 

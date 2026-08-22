@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { encodeFeedCursor } from './cursor.util';
@@ -22,6 +22,8 @@ function buildPrismaMock() {
     comment: {
       create: jest.fn(),
       findMany: jest.fn(),
+      findUnique: jest.fn(),
+      delete: jest.fn(),
     },
     savedPost: {
       create: jest.fn(),
@@ -740,6 +742,116 @@ describe('FeedService', () => {
 
         expect(prisma.notification.create).not.toHaveBeenCalled();
       });
+    });
+  });
+
+  describe('deleteComment', () => {
+    function mockComment(overrides: Partial<{ id: string; postId: string; authorId: string; postAuthorId: string }> = {}) {
+      const row = {
+        id: overrides.id ?? 'comment-1',
+        postId: overrides.postId ?? 'post-1',
+        authorId: overrides.authorId ?? 'commenter-1',
+        post: { authorId: overrides.postAuthorId ?? 'post-author-1' },
+      };
+      return row;
+    }
+
+    it('throws NotFoundException when commentId does not reference a real comment', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.comment.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new FeedService(prisma);
+
+      await expect(service.deleteComment('post-1', 'missing-comment', 'commenter-1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(prisma.comment.delete).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException (not ForbiddenException) when the comment exists but belongs to a different post than the URL', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.comment.findUnique as jest.Mock).mockResolvedValue(
+        mockComment({ postId: 'a-different-post', authorId: 'commenter-1' }),
+      );
+      const service = new FeedService(prisma);
+
+      await expect(
+        service.deleteComment('post-1', 'comment-1', 'commenter-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.comment.delete).not.toHaveBeenCalled();
+    });
+
+    it('throws ForbiddenException when the requester is neither the comment author nor the post author', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.comment.findUnique as jest.Mock).mockResolvedValue(
+        mockComment({ authorId: 'commenter-1', postAuthorId: 'post-author-1' }),
+      );
+      const service = new FeedService(prisma);
+
+      await expect(
+        service.deleteComment('post-1', 'comment-1', 'someone-else'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.comment.delete).not.toHaveBeenCalled();
+    });
+
+    it('allows the comment author to delete their own comment', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.comment.findUnique as jest.Mock).mockResolvedValue(
+        mockComment({ authorId: 'commenter-1', postAuthorId: 'post-author-1' }),
+      );
+      (prisma.comment.delete as jest.Mock).mockResolvedValue({ id: 'comment-1' });
+      (prisma.post.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+      const service = new FeedService(prisma);
+
+      await service.deleteComment('post-1', 'comment-1', 'commenter-1');
+
+      expect(prisma.comment.delete).toHaveBeenCalledWith({ where: { id: 'comment-1' } });
+    });
+
+    it('allows the POST AUTHOR to delete someone else\'s comment on their own post', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.comment.findUnique as jest.Mock).mockResolvedValue(
+        mockComment({ authorId: 'commenter-1', postAuthorId: 'post-author-1' }),
+      );
+      (prisma.comment.delete as jest.Mock).mockResolvedValue({ id: 'comment-1' });
+      (prisma.post.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+      const service = new FeedService(prisma);
+
+      await service.deleteComment('post-1', 'comment-1', 'post-author-1');
+
+      expect(prisma.comment.delete).toHaveBeenCalledWith({ where: { id: 'comment-1' } });
+    });
+
+    it('decrements commentCount transactionally, using the same floor-guarded updateMany pattern as unlikePost', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.comment.findUnique as jest.Mock).mockResolvedValue(
+        mockComment({ authorId: 'commenter-1', postAuthorId: 'post-author-1' }),
+      );
+      (prisma.comment.delete as jest.Mock).mockResolvedValue({ id: 'comment-1' });
+      (prisma.post.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+      const service = new FeedService(prisma);
+
+      await service.deleteComment('post-1', 'comment-1', 'commenter-1');
+
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(prisma.post.updateMany).toHaveBeenCalledWith({
+        where: { id: 'post-1', commentCount: { gt: 0 } },
+        data: { commentCount: { decrement: 1 } },
+      });
+    });
+
+    it('is NOT idempotent: deleting the same comment a second time is a 404, not a 200 (unlike like/save/follow/join)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.comment.findUnique as jest.Mock)
+        .mockResolvedValueOnce(mockComment({ authorId: 'commenter-1', postAuthorId: 'post-author-1' }))
+        .mockResolvedValueOnce(null); // gone after the first delete
+      (prisma.comment.delete as jest.Mock).mockResolvedValue({ id: 'comment-1' });
+      (prisma.post.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+      const service = new FeedService(prisma);
+
+      await service.deleteComment('post-1', 'comment-1', 'commenter-1');
+      await expect(service.deleteComment('post-1', 'comment-1', 'commenter-1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 

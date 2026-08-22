@@ -855,6 +855,87 @@ Full reasoning for every choice above: Build Plan Section 5.
   before it — 6 new tests, no new suite). e2e suite: 6 suites / 30 tests,
   0 failures (up from 6/25 — 5 new tests, no new spec file, this branch
   extends `test/clubs.e2e-spec.ts` rather than adding a sibling file).
+- **`sprint-2/comment-delete` builds `DELETE
+  /posts/:id/comments/:commentId`, closing the comment-deletion gap
+  `schema.prisma`'s own comment on `Post.commentCount` has flagged since
+  PR #54 ("whoever eventually adds comment deletion... must add the
+  matching decrement then").** This is a genuine addition beyond Section
+  4.3's originally-written nine-endpoint list, not a literal spec line
+  item — **flagged as a Decision Log candidate** in `modules/feed/
+  README.md`'s new dedicated section: Section 4.3 arguably should have
+  paired every POST/DELETE-capable Section-3 entity symmetrically from
+  the start (it does for `Like`/`SavedPost`/`Follow`/`ClubPage`
+  membership already), and `Comment` was the one remaining exception.
+  **Authorization is comment-author OR post-author**, not
+  comment-author-only — there's no moderator/admin role anywhere in this
+  codebase's guards yet, and this matches how comment moderation works on
+  comparable platforms; neither role → 403, the same "authenticated but
+  not authorized" convention `UsersController.assertSelf()` already
+  established. **Existence-and-belongs-to-this-post is checked BEFORE
+  authorization, and a `commentId` that exists but references a
+  DIFFERENT post than the URL is a 404, not a 403** — a resource-identity
+  mismatch, not an authorization question; proven directly by an e2e case
+  where the requester genuinely authored the comment in question and
+  still gets 404 via the wrong post's URL, confirming this isn't an
+  authorization shortcut in disguise. **This endpoint is deliberately NOT
+  idempotent, unlike every other DELETE in this module/its siblings**
+  (`unlikePost`/`unsavePost`/`unfollowUser`/`leaveClub`, all backed by a
+  many-to-many toggle relationship where "absent" is a normal,
+  repeatedly-reachable resting state): a `Comment` has its own
+  single-row primary-key identity, so a second delete of the same real
+  `commentId` is a genuine 404, not a synthesized 200/204 — proven by an
+  explicit delete-twice test at both the mocked-unit and real-Postgres
+  layers. **Guard choice (`JwtAuthGuard` only, NOT `GuardianConsentGuard`)
+  is argued fresh, not inherited from `POST /posts/:id/comments`'s own
+  Decision-Log-#21-confirmed guard**: removing your own content, or
+  moderating content on your own post, produces no new visible content —
+  the same category `unlikePost`/`unsavePost` already sit in, not the
+  category comment *creation* is in. **Response is a default `204 No
+  Content`**, not the `200`-with-resulting-state pattern
+  like/save/follow/join/leave use — a delete has nothing meaningful left
+  to report about the now-gone resource. The `Comment` row's deletion and
+  `Post.commentCount`'s decrement happen inside one interactive
+  `$transaction`, using the same `updateMany`-with-a-`commentCount: {
+  gt: 0 }`-floor-guard pattern `unlikePost`/`leaveClub` already
+  established, as a second line of defense on top of `Comment`'s own
+  primary-key-backed existence check. `schema.prisma`'s comment on
+  `Post.commentCount` is updated in this same PR to say the decrement
+  path now exists, rather than being left describing a gap that's
+  already closed. No `Notification` wiring — there's no existing
+  precedent anywhere in this codebase for notifying someone their content
+  was removed, and nothing in Section 4/Section 6 calls for one here.
+  Real e2e coverage (`test/feed-reactions.e2e-spec.ts`'s new "comment
+  deletion" describe block, extending the existing file rather than
+  adding a sibling one) proves, against real Postgres: comment-author and
+  post-author deletion both genuinely remove the `Comment` row and
+  decrement `Post.commentCount` by exactly 1; a third user gets 403 with
+  the row and counter both provably unchanged; a non-existent `commentId`
+  is 404; the cross-post-mismatch case above is 404 not 403; delete-twice
+  is 204 then 404; and a comment/comment/delete/comment sequence lands
+  `Post.commentCount` at exactly 2, matching `Comment.count()` at every
+  step — the same "no drift across a real operation sequence" proof
+  `counters.e2e-spec.ts` established for likes, applied here for the
+  first time to comment deletion. This file's new tests reuse the
+  existing `createUser()`-via-Prisma-plus-real-`TokenService` helper (not
+  `POST /auth/register`), the same already-documented
+  `AuthThrottlerGuard` rate-limit workaround every other describe block
+  in this file uses — `feed-reactions.e2e-spec.ts` now calls
+  `createUser()` 32 times (up from 21), and `test/README.md`'s own
+  running tally of `createUser()` call counts across all three
+  rate-limit-workaround files is corrected in the same PR to a freshly
+  re-counted 46 total (32 + 12 + 2), not the previously-stated 37 (which
+  was already stale before this PR, an instance of the same drift
+  CLAUDE.md's own "Keeping this file current" section describes — not
+  something this PR introduced). **Real, directly re-measured before/after
+  test counts, not estimated**: mocked suite went from a freshly
+  re-verified 34 suites / 344 tests with 1 pre-existing failure
+  (`auth-rate-limit.decorator.spec.ts`'s `AUTH_RATE_LIMIT_MAX` test,
+  confirmed to fail on clean `main` before any edit in this branch and
+  pass cleanly on every run once this branch's changes were in place — a
+  flake, not a regression this PR caused or is responsible for fixing) to
+  **34 suites / 356 tests, 0 failures**. e2e suite went from a freshly
+  re-verified 6 suites / 30 tests, 0 failures to **6 suites / 37 tests, 0
+  failures**.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
