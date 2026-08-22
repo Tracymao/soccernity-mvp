@@ -758,7 +758,22 @@ Full reasoning for every choice above: Build Plan Section 5.
   and the repo for any `.nvmrc`/`Dockerfile` (neither exists anywhere in
   this codebase). This is a CI/engines-only change — no dependency version
   changed, `npm ls react-router` at the repo root resolves identically to
-  before this fix-up. **The
+  before this fix-up. **CI was actually observed running green on this
+  floor, not just assumed from the YAML edit** — the real GitHub Actions
+  run this push triggered on `sprint-2/react-router-8-upgrade` (PR #75),
+  `https://github.com/Tracymao/soccernity-mvp/actions/runs/32594356564`,
+  completed with conclusion `success` in 1m45s, and its own "Run
+  actions/setup-node@v4" step log was read directly to confirm the real
+  Node version the job ran with — `Attempting to download 22.22.0...`,
+  `Acquiring 22.22.0 - x64 from
+  .../node-22.22.0-linux-x64.tar.gz`, `Environment details` / `node:
+  v22.22.0` — genuinely downloaded and installed, not inferred from the
+  workflow file's own text. (A separate, unrelated annotation on that
+  run — "Node.js 20 is deprecated... forced to run on Node.js 24" — is
+  GitHub Actions' own runtime for the `actions/checkout@v4`/
+  `actions/setup-node@v4` action code itself, not this job's Node
+  version; not to be confused with the `node: v22.22.0` line above,
+  which is the actual job environment.) **The
   mandatory hoisting check (per PR #74's own precedent that this exact
   kind of major bump can silently duplicate React across workspaces) was
   run for real, not skipped as a formality**: a full clean reinstall
