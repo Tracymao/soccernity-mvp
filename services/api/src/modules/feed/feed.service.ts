@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { decodeFeedCursor, encodeFeedCursor } from './cursor.util';
@@ -412,6 +412,70 @@ export class FeedService {
     return {
       OR: [{ createdAt: { gt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { gt: cursor.id } }],
     };
+  }
+
+  // DELETE /posts/:id/comments/:commentId. Deliberately NOT the
+  // idempotent-200 pattern likePost/unlikePost/savePost/unsavePost use —
+  // see feed/README.md's "Is comment deletion idempotent?" section. A
+  // Comment has its own single-row primary-key identity (unlike a
+  // Like/SavedPost's @@unique([userId, postId]) toggle relationship,
+  // where "absent" is a normal, repeatedly-reachable resting state): once
+  // a given commentId is deleted, a second DELETE on it is genuinely
+  // indistinguishable from calling it on a commentId that never existed —
+  // both are a real 404, not a synthesized 200.
+  //
+  // Existence-and-belongs-to-this-post is checked BEFORE authorization,
+  // and both failure modes are 404, not 403 — a commentId that exists but
+  // references a DIFFERENT postId than the URL's :id is a resource-
+  // identity mismatch (the URL is simply wrong about where this comment
+  // lives), not an authorization question, so it gets the same status as
+  // "this commentId doesn't exist at all" rather than leaking that the id
+  // is real via a 403.
+  //
+  // Authorization: the comment's own author, OR the post's author, may
+  // delete it — there is no moderator/admin role anywhere in this
+  // codebase yet, and this matches how comment moderation works on
+  // comparable platforms (you can always delete your own comment; a post
+  // author can remove comments left on their own post). Neither → 403
+  // ForbiddenException, the same "authenticated but not authorized for
+  // this resource" convention UsersController.assertSelf() /
+  // SavedPostsController.assertSelf() already established (403, not 404,
+  // once the resource's existence itself is settled).
+  //
+  // Atomic counter update: the Comment row's deletion and
+  // Post.commentCount's decrement happen inside one interactive
+  // $transaction, mirroring the create-side increment in addComment()
+  // above and closing the decrement gap schema.prisma's own comment on
+  // Post.commentCount has flagged since PR #54. The decrement itself
+  // additionally uses updateMany with a commentCount: { gt: 0 }
+  // where-clause floor guard — the same two-layer guard reasoning
+  // leaveClub() uses for memberCount (a straightforward delete-then-
+  // decrement shouldn't be able to double-fire here, since a Comment's
+  // own primary key — not a toggle relationship — backs the existence
+  // check above, but the floor guard is cheap, already-established
+  // codebase precedent, and costs nothing to include as a second line of
+  // defense).
+  async deleteComment(postId: string, commentId: string, requestingUserId: string): Promise<void> {
+    const comment = await this.prisma.comment.findUnique({
+      where: { id: commentId },
+      select: { id: true, postId: true, authorId: true, post: { select: { authorId: true } } },
+    });
+
+    if (!comment || comment.postId !== postId) {
+      throw new NotFoundException('Comment not found');
+    }
+
+    if (comment.authorId !== requestingUserId && comment.post.authorId !== requestingUserId) {
+      throw new ForbiddenException('You may only delete your own comments, or comments on your own post');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.comment.delete({ where: { id: commentId } });
+      await tx.post.updateMany({
+        where: { id: postId, commentCount: { gt: 0 } },
+        data: { commentCount: { decrement: 1 } },
+      });
+    });
   }
 
   // POST /posts/:id/save. SavedPost.@@unique([userId, postId]) backs the

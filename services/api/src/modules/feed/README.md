@@ -5,8 +5,10 @@ Build target: Sprint 2 — Section 4.3 of the MVP Build Plan.
 ## Status
 
 **Slice one (`POST /posts` + `GET /posts/feed`) — done, merged to `main`
-(PR #53).** **Slice two (the remaining seven endpoints) — done, this
-PR.**
+(PR #53).** **Slice two (the remaining seven endpoints) — done, merged to
+`main` (PR #54).** **`DELETE /posts/:id/comments/:commentId` — done,
+`sprint-2/comment-delete`, a genuine addition beyond Section 4.3's
+original list, see "Comment deletion" below.**
 
 Section 4.3 lists nine endpoints total:
 
@@ -23,10 +25,15 @@ DELETE /posts/:id/save               — slice two
 GET    /users/:id/saved-posts        — slice two
 ```
 
-All nine endpoints in Section 4.3 now exist. Nothing in Section 4.4
-(Club & Banter Service — `GET /clubs`, `GET /clubs/:id`,
-`POST /clubs/:id/join`, all of `/banter-rooms*`) is built by either
-slice — see "Deliberately out of scope" below.
+All nine endpoints in Section 4.3 now exist. Beyond Section 4.3's
+original list, `DELETE /posts/:id/comments/:commentId`
+(`sprint-2/comment-delete`) closes the comment-deletion gap
+`schema.prisma`'s own comment on `Post.commentCount` has flagged since PR
+#54 — see "Comment deletion (`DELETE /posts/:id/comments/:commentId`) —
+a genuine spec addition" below. Nothing in Section 4.4 (Club & Banter
+Service — `GET /clubs`, `GET /clubs/:id`, `POST /clubs/:id/join`, all of
+`/banter-rooms*`) is built by this module — see "Deliberately out of
+scope" below.
 
 ---
 
@@ -388,14 +395,227 @@ permanent behavior by omission.
   rather than here (that PR's actual new endpoints — `Follow` — are a
   User Service concern per Section 4.2, and Follow's own notification is
   what motivated doing all three triggers together).
-- `DELETE /posts/:id/comments/:commentId` — not in Section 4.3 at all;
-  see point on `Post.commentCount`'s missing decrement path above. Not
-  built speculatively.
+- ~~`DELETE /posts/:id/comments/:commentId`~~ — was not in Section 4.3 at
+  all when slice two shipped; see point on `Post.commentCount`'s missing
+  decrement path above, and was deliberately not built speculatively at
+  the time. **Built by `sprint-2/comment-delete`** — see the dedicated
+  section below for the full reasoning; this bullet is left in place for
+  the historical record of what slice two itself did and didn't ship.
 - Anything club/room-membership-aware in `GET /posts/feed`'s scope —
   unchanged from slice one's own flagged gap (see point 2 above);
   slice two didn't touch `getFeed()`.
 
+---
+
+## Comment deletion (`DELETE /posts/:id/comments/:commentId`) — a genuine spec addition
+
+Section 4.3, as originally written, lists nine endpoints and none of them
+is a comment-deletion route — slice two's own README section (above) and
+`schema.prisma`'s comment on `Post.commentCount` both flagged this
+explicitly rather than building it speculatively: "whoever eventually
+adds comment deletion... must add the matching decrement then." This PR
+is that follow-up. **Flagged as a Decision Log candidate**, same as every
+other genuine addition beyond a literal Section 3/4 field or endpoint
+list this codebase has made this sprint (`Follow.createdAt`, the
+`_ClubMembership` relation names, `DELETE /clubs/:id/join`): Section 4.3
+should arguably have paired every POST/DELETE-capable Section-3 entity
+symmetrically from the start (it does for `Like`, `SavedPost`, `Follow`,
+and now `ClubPage` membership), and `Comment` was the one exception until
+now. Whoever next revisits Section 4.3's own text should add this line
+item explicitly rather than leave the spec silently out of sync with what
+this codebase actually implements.
+
+### Is this endpoint idempotent, like unlike/unsave/unfollow/leave?
+
+**No — and this is a deliberate, argued departure from every other
+DELETE endpoint in this module and its sibling modules.** Every existing
+idempotent-DELETE endpoint in this codebase (`unlikePost`, `unsavePost`,
+`unfollowUser`, `leaveClub`) is backed by a **many-to-many toggle
+relationship** — `Like`/`SavedPost`/`Follow`'s own `@@unique([...])`
+constraints, or `ClubPage.members`'s implicit join table — where "this
+relationship doesn't exist" is a normal resting state a caller can
+observe and re-trigger repeatedly with no meaningful difference between
+"it was never there" and "I just removed it."
+
+A `Comment` is different in kind: it has its own **single-row primary-key
+identity** (`Comment.id`), the same as a `Post` does. Once a specific
+`commentId` is deleted, a second `DELETE` on that exact id is genuinely
+indistinguishable from calling it on a `commentId` that never existed at
+all — there is no "current state" left to report back as a 200, the way
+`{ liked: false, likeCount: N }` meaningfully describes the post's state
+after an unlike. Synthesizing a 200 here would misrepresent what actually
+happened (nothing, the second time) as a successful no-op action, when in
+truth the resource is just gone. This endpoint therefore returns a
+genuine 404 on a repeat delete, and `feed.service.spec.ts`/
+`feed-reactions.e2e-spec.ts` both include an explicit test proving this
+directly (delete once → 204/success; delete the same id again → 404) —
+not just documented as an intention.
+
+### Why existence-and-belongs-to-this-post is checked BEFORE authorization, and why a mismatch is 404 not 403
+
+`FeedService.deleteComment(postId, commentId, requestingUserId)` first
+loads the comment and checks two things together: does a `Comment` with
+this `commentId` exist at all, and if so, does its own `postId` match the
+`:id` in the URL? Either failure — no such comment, or a comment that
+exists but belongs to a *different* post — is a **404**, before
+authorization is even considered.
+
+This is a deliberate distinction, not an oversight: a `commentId` that
+exists under a different post is a **resource-identity mismatch** (the
+URL is simply wrong about where this comment lives), not an authorization
+question. Returning 403 for that case would leak information the caller
+has no right to (confirming "this id is real, you're just not allowed to
+touch it") when the caller's URL itself doesn't even correctly describe
+the resource they're pointing at. `feed-reactions.e2e-spec.ts` proves
+this concretely: a commenter who **genuinely authored** the comment in
+question still gets a 404, not a 403 or a success, when they target it
+via the wrong post's URL — confirming this is resource-identity
+reasoning, not an authorization shortcut that happens to reject them for
+an unrelated reason.
+
+### Authorization: comment author OR post author, never neither
+
+Once existence-and-identity is settled, `requestingUserId` must equal
+either `comment.authorId` or the post's own `authorId` — anyone else gets
+a **403** `ForbiddenException`, the same "authenticated but not
+authorized for this resource" convention `UsersController.assertSelf()`
+/ `SavedPostsController.assertSelf()` already established elsewhere in
+this codebase (403, not 404, once the resource's existence itself isn't
+in question).
+
+There is no moderator/admin role anywhere in this codebase's `User.role`
+field (`fan | player | admin` exists as a string, but nothing in Section
+4's endpoint list or this codebase's guards currently branches on
+`admin`) — so "post author can also delete" is the only sensible
+moderation mechanism available today, and matches how comment moderation
+works on comparable platforms: you can always delete your own comment,
+and the author of a post can remove comments left on it. Both
+`feed.service.spec.ts` and `feed-reactions.e2e-spec.ts` cover both halves
+of this OR independently (comment-author-deletes-own-comment, and
+post-author-deletes-someone-else's-comment-on-their-own-post), not just
+the union.
+
+### Guard choice: `JwtAuthGuard` only, argued fresh (not inherited from `POST /posts/:id/comments`)
+
+`POST /posts/:id/comments` is gated by `GuardianConsentGuard` (point 4,
+above) because Decision Log #21 confirmed that creating a comment is
+"closer to posting" — genuinely new content, visible to every reader of
+the thread. `DELETE /posts/:id/comments/:commentId` does not inherit that
+conclusion automatically; it's argued fresh here, the same discipline
+point 3 (liking) used rather than assuming a shared conclusion with
+point 4 (commenting) just because both involve a `Comment` row.
+
+Removing your own content, or moderating content left on your own post,
+produces **no new visible content** — the exact same category
+`unlikePost`/`unsavePost` already sit in (point 3/5 above: "removing an
+action isn't performing one," to reuse the phrase this README already
+uses for why `unlikePost` gets no `Notification`). Section 5.7's
+safety-sensitive-action list ("posting, messaging, joining a Banter Room
+or Community Group") has no more claim on a deletion than it does on an
+unlike. `@UseGuards(JwtAuthGuard)` only.
+
+### Response shape: default 204, not 200-with-state
+
+Every other action endpoint in this module (`like`/`unlike`,
+`save`/`unsave`) returns `200` with the resulting state
+(`{ postId, liked: boolean, likeCount: number }` etc.) because those are
+idempotent **toggles** — the whole point of the response is to tell the
+caller the current state after their call, which might not have changed
+anything on this particular request. A comment deletion has no such
+"current state" left to report: once it succeeds, the resource is gone,
+and (per the idempotency argument above) a second call is a 404, not
+another state snapshot. NestJS's own default success code for a route
+with no meaningful response body — `204 No Content` — fits this better
+than inventing a `{ deleted: true }` envelope with nothing useful in it,
+so `@HttpCode(HttpStatus.NO_CONTENT)` is used explicitly rather than
+relying on an implicit default, mirroring this codebase's existing habit
+of stating HTTP-code choices explicitly rather than leaving them to
+frameworks defaults to imply intent (see `@HttpCode(200)`'s own comments
+on the like/save routes).
+
+### No `Notification` wiring
+
+Deleting a comment does not create or remove any `Notification` row.
+There is no existing precedent for "notify someone their content was
+removed" anywhere in this codebase's notification wiring
+(`sprint-2/follow-and-notifications` only ever creates `Notification`
+rows for `like`/`comment`/`follow` — actions that produce something,
+never actions that remove something), and nothing in Section 4's spec or
+Section 6's Sprint 2 scope calls for one here. Not built speculatively.
+
+### Atomic counter update
+
+The `Comment` row's deletion and `Post.commentCount`'s decrement happen
+inside one Prisma interactive `$transaction` — the same
+create-side/delete-side pairing discipline `addComment`
+(`tx.comment.create` + `tx.post.update({ commentCount: { increment: 1 }
+})`) and `unlikePost` (`tx.like.delete` + a floor-guarded
+`tx.post.updateMany`) already established. The decrement itself uses
+`updateMany` with a `commentCount: { gt: 0 }` where-clause floor guard —
+the exact pattern `unlikePost` uses for `likeCount`, and the exact
+two-layer reasoning `leaveClub` documents for `memberCount`: existence is
+already gated by `Comment`'s own primary key (not a toggle relationship),
+so a straightforward delete-then-decrement shouldn't be able to
+double-fire under normal operation, but the floor guard is cheap,
+already-established codebase precedent, and costs nothing to include as
+a second line of defense.
+
+### What's implemented
+
+- **`DELETE /posts/:id/comments/:commentId`** — `@UseGuards(JwtAuthGuard)`
+  only. `204 No Content` (no response body) on success.
+  - A non-existent `commentId`, or one that exists but references a
+    different `postId` than the URL → **404**, checked before
+    authorization.
+  - Neither the comment's author nor the post's author → **403**.
+  - **Not idempotent**: a second delete of the same real comment is a
+    **404**, not a repeated 204 — see the dedicated section above.
+  - Atomic, floor-guarded `Post.commentCount` decrement, same pattern as
+    `unlikePost`'s `likeCount` decrement.
+
 ### Verification
+
+Mocked unit coverage (`feed.service.spec.ts`, `feed.controller.http.spec.ts`):
+not-found (missing comment), not-found (wrong post), forbidden (neither
+role), success via the comment author, success via the post author, the
+transactional `updateMany`-floor-guard call shape, and the
+non-idempotent delete-twice-is-404 sequence — both at the service layer
+and, separately, at the HTTP layer (confirming the controller doesn't
+swallow or reshape `FeedService`'s thrown exceptions).
+
+Real e2e coverage, against real Postgres
+(`test/feed-reactions.e2e-spec.ts`'s new "comment deletion" describe
+block, extending the existing file rather than adding a sibling one):
+comment-author deletion and post-author deletion both genuinely remove
+the `Comment` row (queried directly, not inferred from the HTTP status)
+and decrement `Post.commentCount` by exactly 1; a third user is rejected
+with 403 with the row and counter both provably **unchanged**; a
+non-existent `commentId` is a 404; a `commentId` belonging to a different
+post is a 404 even when the requester genuinely authored that comment
+(the resource-identity-mismatch proof described above); deleting the
+same real comment twice is 204 then 404; and a
+comment/comment/delete/comment sequence lands `Post.commentCount` at
+exactly 2, matching `Comment.count()` at every intermediate step — the
+same "no drift across a real operation sequence" proof
+`counters.e2e-spec.ts` established for likes, applied here for the first
+time to comment deletion. This file's new tests reuse the existing
+`createUser()`-via-Prisma-plus-real-`TokenService` helper (not `POST
+/auth/register`) for the same, already-documented `AuthThrottlerGuard`
+rate-limit reason every other describe block in this file does.
+
+Mocked suite after this branch: **34 suites / 356 tests, 0 failures**
+(up from a freshly re-measured 34 suites / 344 tests, 1 failure
+immediately before this branch's changes on the same clean `main` —
+that pre-existing failure, `auth-rate-limit.decorator.spec.ts`'s
+`AUTH_RATE_LIMIT_MAX`-respecting test, is unrelated to this PR: it was
+reproduced twice on clean `main` before any edit in this branch was
+made, and passed cleanly on every run of the full suite once this
+branch's own changes were in place — a flake, not a regression this PR
+introduced or is responsible for fixing). e2e suite: **6 suites / 37
+tests, 0 failures** (up from a freshly re-measured 6 suites / 30 tests, 0
+failures immediately before this branch's changes — 7 new tests, no new
+spec file, this branch extends `test/feed-reactions.e2e-spec.ts` rather
+than adding one).
 
 **Correction (`sprint-2/e2e-test-infrastructure`, superseding the
 paragraph below):** this section originally claimed real HTTP

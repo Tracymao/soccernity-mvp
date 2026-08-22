@@ -128,6 +128,25 @@ see the remaining gaps listed below.
   unlike (idempotent) → comment → comment sequence, that the cached
   counters read back from Postgres equal `Like.count()`/`Comment.count()`
   for that post, not just once at the end.
+- `feed-reactions.e2e-spec.ts`'s "comment deletion" describe block (added
+  by `sprint-2/comment-delete`) — `FeedService.deleteComment`
+  (`DELETE /posts/:id/comments/:commentId`) against real Postgres: the
+  comment author deleting their own comment and the post author deleting
+  someone else's comment on their own post both genuinely remove the
+  `Comment` row and decrement `Post.commentCount` by exactly 1; a third
+  user (neither role) gets a 403 with the row and counter both
+  provably unchanged; a non-existent `commentId` is a 404; a `commentId`
+  that exists but belongs to a different post than the URL is a 404 (not
+  a 403) even when the requester genuinely authored that comment —
+  confirming the resource-identity-mismatch reasoning, not an
+  authorization shortcut; deleting the same real comment twice is 204
+  then 404, proving this endpoint deliberately does NOT follow the
+  idempotent-200 pattern `like`/`save`/`follow`/`join`/`leave` all use;
+  and a comment/comment/delete/comment sequence lands `commentCount` at
+  exactly 2 and matches `Comment.count()` at every step, the same
+  "no-drift across a real operation sequence" proof `counters.e2e-spec.ts`
+  established for likes, applied here for the first time to comment
+  deletion.
 - `registration-club-join.e2e-spec.ts` (added by
   sprint-2/auto-join-on-signup) — auto-join on signup
   (`RegisterDto.clubId`) against real Postgres: registering with a real
@@ -171,13 +190,19 @@ separately falling back to the hardcoded defaults when the env vars are
 unset. **That fix does not, by itself, make switching these three files
 over to real HTTP registration free** — `.env.test` still has no
 `AUTH_RATE_LIMIT_MAX` override, so the effective default stays 5/60s, and
-`feed-reactions.e2e-spec.ts` alone calls its `createUser()` helper 21
-times (37 total across all three files). Doing this properly would mean
-adding a test-specific rate-limit override plus converting all 37 call
-sites to real register/login HTTP traffic, each paying real argon2id
-hashing cost — judged a larger, separate change than the rate-limit fix
-PR's own scope, and deliberately left as a documented, tracked follow-up
-rather than done silently alongside the fix. The workaround below remains
+`feed-reactions.e2e-spec.ts` alone calls its `createUser()` helper 32
+times as of `sprint-2/comment-delete`'s new comment-deletion coverage (up
+from 21 at the time this paragraph was first written — directly
+re-counted via grep, not estimated; `follow.e2e-spec.ts`/
+`counters.e2e-spec.ts` are 12/2 respectively by the same direct count, for
+a genuinely re-measured 46 total across all three files, not the
+previously-stated 37 — see this file's own drift caveat elsewhere in
+`CLAUDE.md`). Doing this properly would mean adding a test-specific
+rate-limit override plus converting every call site to real register/login
+HTTP traffic, each paying real argon2id hashing cost — judged a larger,
+separate change than the rate-limit fix PR's own scope, and deliberately
+left as a documented, tracked follow-up rather than done silently
+alongside the fix. The workaround below remains
 correct and intentional, not a symptom of the (now-fixed) bug: these
 three files seed their `User` rows directly via Prisma (the same "seed
 directly via Prisma" precedent `clubs.e2e-spec.ts` already set for

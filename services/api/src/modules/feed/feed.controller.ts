@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../auth/guards/current-user.decorator';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -9,15 +9,20 @@ import { FeedQueryDto } from './dto/feed-query.dto';
 import { FeedService } from './feed.service';
 
 // Build Plan Section 4.3 (Feed Service). Slice one (merged, PR #53) was
-// POST /posts and GET /posts/feed only. This slice adds the remaining
-// seven: GET /posts/:id, POST/DELETE /posts/:id/like,
+// POST /posts and GET /posts/feed only. Slice two (merged, PR #54) added
+// the remaining seven: GET /posts/:id, POST/DELETE /posts/:id/like,
 // POST/GET /posts/:id/comments, POST/DELETE /posts/:id/save. The eighth
-// remaining Section 4.3 endpoint, GET /users/:id/saved-posts, lives on
+// Section 4.3 endpoint, GET /users/:id/saved-posts, lives on
 // SavedPostsController (saved-posts.controller.ts) in this same module
 // — its path is under /users, not /posts, so it can't share this
 // controller's @Controller('posts') prefix, but it shares FeedService
-// and this module's guard/select conventions. See feed/README.md for
-// the full guard-choice reasoning for every route in this slice.
+// and this module's guard/select conventions. DELETE
+// /posts/:id/comments/:commentId (this PR, sprint-2/comment-delete) is a
+// genuine addition beyond Section 4.3's original nine-endpoint list —
+// see feed/README.md for the full reasoning, including why it's a
+// flagged Decision Log candidate rather than something quietly slipped
+// in. See feed/README.md for the full guard-choice reasoning for every
+// route in this module.
 @Controller('posts')
 export class FeedController {
   constructor(private readonly feedService: FeedService) {}
@@ -121,6 +126,33 @@ export class FeedController {
   @UseGuards(JwtAuthGuard)
   async getComments(@Param('id') id: string, @Query() query: FeedQueryDto) {
     return this.feedService.getComments(id, query);
+  }
+
+  // DELETE /posts/:id/comments/:commentId — JwtAuthGuard only,
+  // deliberately NOT GuardianConsentGuard. Argued fresh here rather than
+  // inherited from POST /posts/:id/comments's own GuardianConsentGuard-
+  // gated conclusion (Decision Log #21 gated comment CREATION on the
+  // reading that it's "closer to posting" — genuinely new content
+  // visible to others). Removing your own content, or moderating content
+  // left on your own post, doesn't produce any new visible content — the
+  // same category feed/README.md already puts unlike/unsave in, not the
+  // category POST /posts/:id/comments is in. See feed/README.md for the
+  // full argument.
+  //
+  // Default 204 (no body), not the 200-with-resulting-state pattern
+  // like/save/follow/join/leave use — see feed/README.md's "response
+  // shape" section for why: a delete has nothing meaningful left to
+  // return about the now-gone resource, unlike a toggle endpoint whose
+  // whole point is reporting the resulting state.
+  @Delete(':id/comments/:commentId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtAuthGuard)
+  async deleteComment(
+    @Param('id') id: string,
+    @Param('commentId') commentId: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ): Promise<void> {
+    return this.feedService.deleteComment(id, commentId, user.sub);
   }
 
   // POST/DELETE /posts/:id/save — JwtAuthGuard only. Saving a post is a
