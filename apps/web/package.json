@@ -10,8 +10,8 @@
     "lint": "eslint \"src/**/*.{ts,tsx}\" --no-error-on-unmatched-pattern"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "react-router": "^7.18.2",
     "@soccernity/shared": "*"
   },
@@ -20,10 +20,11 @@
     "@vitejs/plugin-react": "^4.0.0",
     "typescript": "^5.4.0",
     "vitest": "^1.0.0",
-    "@testing-library/react": "^14.2.0",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/dom": "^10.4.1",
     "jsdom": "^24.0.0",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "eslint-plugin-react": "^7.34.0",
     "@typescript-eslint/parser": "^7.0.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0"
