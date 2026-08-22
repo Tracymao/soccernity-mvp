@@ -1,17 +1,23 @@
 // Route table for apps/web.
 //
-// react-router is pinned to ^7.18.2 in package.json -- migrated from the
-// react-router-dom@6.x package (Decision Log #25; react-router 8 requires
-// React >=19.2.7 and is tracked as a follow-up, blocked on a separate
-// React 19 upgrade this app has not taken). v7 unified react-router-dom's
-// exports into the single "react-router" package; this app renders via
-// plain ReactDOM.createRoot (src/main.tsx), not SSR/hydration, so the
-// "react-router/dom" subpath (needed only for framework-mode hydration)
-// is not used here -- createBrowserRouter/RouterProvider/Outlet/Link/
-// NavLink/useNavigate/useSearchParams/MemoryRouter all still come from
-// the main "react-router" package. This still uses the same v6.4+
-// data-router API (createBrowserRouter + RouterProvider), not the older
-// <BrowserRouter>/<Switch> v5 pattern.
+// react-router is pinned to ^8.3.0 in package.json -- upgraded from
+// react-router@7.18.2 (Decision Log #25) once React 19 landed (Decision
+// Log #27) satisfied v8's react/react-dom >=19.2.7 peer floor; see
+// Decision Log #28 for the v7->v8 upgrade itself. react-router-dom (the
+// v6 package this app originally migrated off of) no longer exists as of
+// v8 -- it's fully removed upstream, not just deprecated -- but this app
+// already imported everything from the unified "react-router" package
+// since the v7 migration, so that removal has no effect here. This app
+// renders via plain ReactDOM.createRoot (src/main.tsx), not SSR/
+// hydration, so the "react-router/dom" subpath (needed only for
+// framework-mode hydration) is not used here -- createBrowserRouter/
+// RouterProvider/Outlet/Link/NavLink/useNavigate/useSearchParams/
+// MemoryRouter all still come from the main "react-router" package,
+// confirmed still exported from there in v8.3.0. This still uses the
+// same v6.4+ data-router API (createBrowserRouter + RouterProvider), not
+// the older <BrowserRouter>/<Switch> v5 pattern. No `future` flags were
+// ever opted into here, so v8's removal of the `future.v8_*` flag set
+// required no changes to this file.
 //
 // F2-F7: add your route as a child of the root AppShell route below --
 // you do NOT need to touch AppShell, Header, or main.tsx to do this.

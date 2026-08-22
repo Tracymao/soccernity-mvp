@@ -19,7 +19,7 @@
     "prisma:migrate": "npm run prisma:migrate --workspace=services/api"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.22.0"
   },
   "overrides": {
     "@soccernity/web": {
