@@ -101,6 +101,29 @@ describe("GuardianConsentPage", () => {
     expect(resendButton.disabled).toBe(true);
   });
 
+  // sprint-1/f5-f6-bugfixes -- Bug 1 fix, option (a). Confirms the dead
+  // "you can resend once every 24 hours" footnote is genuinely gone, not
+  // just harder to trigger -- checked in both the canResend:true (the
+  // only real-world case, per getConsentStatus()'s own canResend ===
+  // consentStatus === 'pending' definition) and canResend:false (the
+  // artificial case the test above already exercises to check the
+  // button's disabled state) shapes, since the old dead code was
+  // specifically conditioned on canResend:false.
+  it("never renders a resend-cooldown footnote, regardless of canResend", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({
+      consentStatus: "pending",
+      guardianEmail: "guardian@example.com",
+      canResend: false,
+      consentTimestamp: null,
+    });
+
+    renderPage();
+    await screen.findByText(/waiting for approval/i);
+
+    expect(screen.queryByText(/once every 24 hours/i)).toBeNull();
+  });
+
   it("renders the activation confirmation state (screen 6) when consentStatus is confirmed", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({

@@ -32,8 +32,8 @@
 // built plain, matching [the app's] existing... visual style rather than a
 // divergent one-off look"). Built the same way here: plain, using this
 // page's own existing field/button styling, not invented design language.
-import { useState, type FormEvent } from "react";
-import { Link } from "react-router";
+import { useEffect, useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router";
 import {
   AuthApiError,
   changePassword,
@@ -41,7 +41,17 @@ import {
   deleteAccount,
 } from "../../api/auth";
 import { UsersApiError, updateUser, type UserProfile } from "../../api/users";
+import { clearStoredSession } from "../../lib/session";
 import "./EditProfileModal.css";
+
+// sprint-1/f5-f6-bugfixes -- Bug 2 fix. How long the success message stays
+// on screen before redirecting to /login, once the account is
+// deactivated/marked for deletion. Long enough to actually read a
+// one-sentence confirmation, short enough not to feel stuck on a dead
+// screen -- there's no existing "toast"/timed-banner precedent anywhere
+// else in this app to match, so this is a judgment call, not a reused
+// convention.
+const POST_ACTION_REDIRECT_DELAY_MS = 2500;
 
 interface EditProfileModalProps {
   accessToken: string;
@@ -60,6 +70,7 @@ function splitDisplayName(displayName: string): { firstName: string; lastName: s
 type ManagePanel = null | "password" | "deactivate" | "delete";
 
 export default function EditProfileModal({ accessToken, user, onClose, onSaved }: EditProfileModalProps) {
+  const navigate = useNavigate();
   const initialName = splitDisplayName(user.displayName);
   const [firstName, setFirstName] = useState(initialName.firstName);
   const [lastName, setLastName] = useState(initialName.lastName);
@@ -81,6 +92,20 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
   const [confirmActionPassword, setConfirmActionPassword] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
   const [actionMessage, setActionMessage] = useState<{ kind: "error" | "success"; text: string } | null>(null);
+  // sprint-1/f5-f6-bugfixes -- Bug 2 fix. Set true only after a genuinely
+  // successful deactivateAccount()/deleteAccount() call (never on error).
+  // The actual session-clearing (clearStoredSession()) happens
+  // synchronously in the handler below, immediately on success -- this
+  // flag only delays the *navigation*, so the still-valid-looking access
+  // token is removed from storage as soon as possible, not held onto for
+  // the sake of the read-the-message delay.
+  const [redirectPending, setRedirectPending] = useState(false);
+
+  useEffect(() => {
+    if (!redirectPending) return;
+    const timer = window.setTimeout(() => navigate("/login"), POST_ACTION_REDIRECT_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [redirectPending, navigate]);
 
   async function handleSave(event: FormEvent) {
     event.preventDefault();
@@ -148,11 +173,20 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
     setActionBusy(true);
     try {
       await deactivateAccount(accessToken, confirmActionPassword);
+      // sprint-1/f5-f6-bugfixes -- Bug 2 fix. The access token this modal
+      // was handed is now stale (the backend's own login() rejects a
+      // deactivated account, and deactivateAccount() already revokes
+      // refresh-token sessions server-side) but was never being cleared
+      // client-side, so the UI kept looking like a normal logged-in
+      // session for up to the token's ~15-minute natural expiry. Clear it
+      // immediately -- don't wait for the redirect delay below.
+      clearStoredSession();
       setActionMessage({
         kind: "success",
         text: "Your account has been deactivated. You'll need to reactivate it to log in again.",
       });
       setConfirmActionPassword("");
+      setRedirectPending(true);
     } catch (error) {
       setActionMessage({
         kind: "error",
@@ -177,11 +211,18 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
     setActionBusy(true);
     try {
       await deleteAccount(accessToken, confirmActionPassword);
+      // sprint-1/f5-f6-bugfixes -- Bug 2 fix. Confirmed deleteAccount()'s
+      // handler had the exact same stale-session gap as
+      // handleDeactivate() above (same missing clearStoredSession()/
+      // redirect, same reasoning) -- not a hypothetical, checked directly
+      // before this fix. Identical fix applied here.
+      clearStoredSession();
       setActionMessage({
         kind: "success",
         text: "Your request has been received. Your account will be processed for deletion.",
       });
       setConfirmActionPassword("");
+      setRedirectPending(true);
     } catch (error) {
       setActionMessage({
         kind: "error",
