@@ -1,10 +1,13 @@
-import { BadRequestException, INestApplication, ValidationPipe } from '@nestjs/common';
+import { BadRequestException, ExecutionContext, INestApplication, NotFoundException, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { AuthRateLimitModule } from '../rate-limit/rate-limit.module';
 import { AuthThrottlerGuard } from '../rate-limit/auth-throttler.guard';
 import { GuardianConsentController } from './guardian-consent.controller';
 import { GuardianConsentService } from './guardian-consent.service';
+
+const AUTHENTICATED_MINOR = { sub: 'minor-1', role: 'fan' };
 
 // Exercises real HTTP request/response handling (routing, DTO
 // validation, status codes) with GuardianConsentService mocked out,
@@ -15,6 +18,7 @@ describe('GuardianConsentController (HTTP layer)', () => {
   const guardianConsentService = {
     confirmConsent: jest.fn(),
     resendConsent: jest.fn(),
+    getConsentStatus: jest.fn(),
   };
 
   beforeAll(async () => {
@@ -29,6 +33,19 @@ describe('GuardianConsentController (HTTP layer)', () => {
       // Real rate-limit enforcement is exercised separately below.
       .overrideGuard(AuthThrottlerGuard)
       .useValue({ canActivate: () => true })
+      // GET /auth/guardian-consent/status (sprint-1/f5-f6-missing-endpoints)
+      // carries JwtAuthGuard -- overridden here, same pattern
+      // auth.controller.http.spec.ts and users.controller.http.spec.ts
+      // already use, since this TestingModule has no real
+      // TokenService/PrismaService for the real guard to depend on.
+      .overrideGuard(JwtAuthGuard)
+      .useValue({
+        canActivate: (context: ExecutionContext) => {
+          const req = context.switchToHttp().getRequest();
+          req.user = AUTHENTICATED_MINOR;
+          return true;
+        },
+      })
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -176,6 +193,42 @@ describe('GuardianConsentController (HTTP layer)', () => {
       expect(guardianConsentService.resendConsent).not.toHaveBeenCalled();
     });
   });
+
+  // GET /auth/guardian-consent/status (sprint-1/f5-f6-missing-endpoints).
+  // JwtAuthGuard only -- see guardian-consent.service.ts's
+  // getConsentStatus() and auth/README.md for the full guard-choice
+  // reasoning (a restricted-pending minor must be able to check their own
+  // status, so this can't be gated behind GuardianConsentGuard itself).
+  describe('GET /auth/guardian-consent/status', () => {
+    it('returns 200 with the real consent-status shape, keyed off the caller-from-JWT id', async () => {
+      guardianConsentService.getConsentStatus.mockResolvedValueOnce({
+        consentStatus: 'pending',
+        guardianEmail: 'guardian@example.com',
+        canResend: true,
+        consentTimestamp: null,
+      });
+
+      const response = await request(app.getHttpServer())
+        .get('/auth/guardian-consent/status')
+        .expect(200);
+
+      expect(response.body).toEqual({
+        consentStatus: 'pending',
+        guardianEmail: 'guardian@example.com',
+        canResend: true,
+        consentTimestamp: null,
+      });
+      expect(guardianConsentService.getConsentStatus).toHaveBeenCalledWith(AUTHENTICATED_MINOR.sub);
+    });
+
+    it('maps a NotFoundException (no Guardian row for this caller) to 404', async () => {
+      guardianConsentService.getConsentStatus.mockRejectedValueOnce(
+        new NotFoundException('No guardian consent record exists for this account'),
+      );
+
+      await request(app.getHttpServer()).get('/auth/guardian-consent/status').expect(404);
+    });
+  });
 });
 
 // Separate app instance with the REAL AuthThrottlerGuard (not overridden)
@@ -195,7 +248,21 @@ describe('POST /auth/guardian-consent/resend (real rate limiting)', () => {
       imports: [AuthRateLimitModule],
       controllers: [GuardianConsentController],
       providers: [{ provide: GuardianConsentService, useValue: guardianConsentService }, AuthThrottlerGuard],
-    }).compile();
+    })
+      // Same reasoning as the block above -- GET /auth/guardian-consent/status's
+      // JwtAuthGuard needs overriding here too, or module compilation
+      // itself fails (this describe block never exercises that route,
+      // but Nest still resolves every guard referenced anywhere in the
+      // controller at compile time).
+      .overrideGuard(JwtAuthGuard)
+      .useValue({
+        canActivate: (context: ExecutionContext) => {
+          const req = context.switchToHttp().getRequest();
+          req.user = AUTHENTICATED_MINOR;
+          return true;
+        },
+      })
+      .compile();
 
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));

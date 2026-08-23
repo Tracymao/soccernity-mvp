@@ -7,17 +7,23 @@ import { TokenService } from './token/token.service';
 import { PasswordService } from './password/password.service';
 import { AuthService } from './auth.service';
 
-// Minimal fake standing in for PrismaService — only the one method
-// AuthService actually calls. Keeps this a fast unit test while still
-// exercising AuthService's real logic (including the real PasswordService
-// and a real TokenService/RefreshTokenStore pair, same as
-// token.service.spec.ts's pattern) rather than mocking those away too.
+// Minimal fake standing in for PrismaService — only the methods AuthService
+// actually calls. Keeps this a fast unit test while still exercising
+// AuthService's real logic (including the real PasswordService and a real
+// TokenService/RefreshTokenStore pair, same as token.service.spec.ts's
+// pattern) rather than mocking those away too.
 //
 // The seeded record now carries the full set of fields
 // auth-response.mapper.ts's toAuthUserSummary() reads (email, phone,
 // displayName, dateOfBirth, isMinor, verificationStatus, createdAt), not
 // just the {id, role, passwordHash} login previously needed — since login()
 // now shapes a `user` object into its response too.
+//
+// sprint-1/f5-f6-missing-endpoints added accountStatus (defaulting to
+// 'active', matching prisma/schema.prisma's own column default) plus a
+// findUnique-by-id path and a real update() -- changePassword/
+// deactivateAccount/deleteAccount/reactivateAccount all read/write a user
+// by id, not just by email the way login() alone needed.
 interface FakeUserRecord {
   id: string;
   role: string;
@@ -29,6 +35,7 @@ interface FakeUserRecord {
   isMinor: boolean;
   verificationStatus: string;
   createdAt: Date;
+  accountStatus: string;
 }
 
 const DEFAULT_SEED_FIELDS = {
@@ -38,14 +45,34 @@ const DEFAULT_SEED_FIELDS = {
   isMinor: false,
   verificationStatus: 'unverified',
   createdAt: new Date('2026-08-16T00:00:00.000Z'),
+  accountStatus: 'active',
 };
 
 class FakePrismaUsers {
   private usersByEmail = new Map<string, FakeUserRecord>();
+  private usersById = new Map<string, FakeUserRecord>();
 
   user = {
-    findUnique: async ({ where: { email } }: { where: { email: string } }) => {
-      return this.usersByEmail.get(email) ?? null;
+    findUnique: async ({ where }: { where: { email?: string; id?: string } }) => {
+      if (where.email !== undefined) return this.usersByEmail.get(where.email) ?? null;
+      if (where.id !== undefined) return this.usersById.get(where.id) ?? null;
+      return null;
+    },
+    update: async ({
+      where: { id },
+      data,
+    }: {
+      where: { id: string };
+      data: Partial<FakeUserRecord>;
+    }) => {
+      const existing = this.usersById.get(id);
+      if (!existing) {
+        throw new Error(`FakePrismaUsers.update: no seeded user with id ${id}`);
+      }
+      const updated: FakeUserRecord = { ...existing, ...data };
+      this.usersById.set(id, updated);
+      this.usersByEmail.set(updated.email, updated);
+      return updated;
     },
   };
 
@@ -55,7 +82,9 @@ class FakePrismaUsers {
       Omit<FakeUserRecord, 'id' | 'role' | 'passwordHash'>
     >,
   ) {
-    this.usersByEmail.set(email, { email, ...DEFAULT_SEED_FIELDS, ...record });
+    const full: FakeUserRecord = { email, ...DEFAULT_SEED_FIELDS, ...record };
+    this.usersByEmail.set(email, full);
+    this.usersById.set(full.id, full);
   }
 }
 
@@ -276,6 +305,204 @@ describe('AuthService', () => {
       await expect(authService.logout(session.refreshToken, true, undefined)).rejects.toThrow(
         UnauthorizedException,
       );
+    });
+  });
+
+  describe('changePassword', () => {
+    it('changes the password on a correct current password, and the new one works on a subsequent login', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('old-password-123');
+      prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash });
+
+      await authService.changePassword('user-1', 'old-password-123', 'new-password-456');
+
+      // The new password now works...
+      const result = await authService.login('a@example.com', 'new-password-456');
+      expect(result.accessToken).toEqual(expect.any(String));
+      // ...and the old one no longer does.
+      await expect(authService.login('a@example.com', 'old-password-123')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('rejects a wrong current password and leaves the stored hash untouched', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('old-password-123');
+      prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash });
+
+      await expect(
+        authService.changePassword('user-1', 'totally-wrong-password', 'new-password-456'),
+      ).rejects.toThrow(UnauthorizedException);
+      await expect(
+        authService.changePassword('user-1', 'totally-wrong-password', 'new-password-456'),
+      ).rejects.toThrow('Current password is incorrect');
+
+      // Old password still works -- nothing was written.
+      const result = await authService.login('a@example.com', 'old-password-123');
+      expect(result.accessToken).toEqual(expect.any(String));
+    });
+
+    // Revoking other sessions on a successful password change is a
+    // deliberate decision (see auth.service.ts's comment on
+    // changePassword) -- proven here, not just asserted in a comment.
+    it('revokes every existing refresh-token session on a successful change', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('old-password-123');
+      prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash });
+      const sessionA = await authService.login('a@example.com', 'old-password-123');
+      const sessionB = await authService.login('a@example.com', 'old-password-123');
+
+      await authService.changePassword('user-1', 'old-password-123', 'new-password-456');
+
+      await expect(authService.refresh(sessionA.refreshToken)).rejects.toThrow(UnauthorizedException);
+      await expect(authService.refresh(sessionB.refreshToken)).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('deactivateAccount / login interaction', () => {
+    it('deactivates on a correct password, and a subsequent login is rejected with a distinct message', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('the-real-password');
+      prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash });
+
+      await authService.deactivateAccount('user-1', 'the-real-password');
+
+      await expect(authService.login('a@example.com', 'the-real-password')).rejects.toThrow(
+        UnauthorizedException,
+      );
+      await expect(authService.login('a@example.com', 'the-real-password')).rejects.toThrow(
+        /deactivated/i,
+      );
+    });
+
+    it('rejects a wrong password and does not deactivate the account', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('the-real-password');
+      prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash });
+
+      await expect(authService.deactivateAccount('user-1', 'wrong-password')).rejects.toThrow(
+        UnauthorizedException,
+      );
+
+      // Still active -- login still works normally.
+      const result = await authService.login('a@example.com', 'the-real-password');
+      expect(result.accessToken).toEqual(expect.any(String));
+    });
+
+    it('revokes every existing refresh-token session on deactivation', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('the-real-password');
+      prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash });
+      const session = await authService.login('a@example.com', 'the-real-password');
+
+      await authService.deactivateAccount('user-1', 'the-real-password');
+
+      await expect(authService.refresh(session.refreshToken)).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('reactivateAccount', () => {
+    it('flips a deactivated account back to active and returns a working token pair', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('the-real-password');
+      prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash });
+      await authService.deactivateAccount('user-1', 'the-real-password');
+      // Deactivated -- normal login is currently rejected.
+      await expect(authService.login('a@example.com', 'the-real-password')).rejects.toThrow(
+        UnauthorizedException,
+      );
+
+      const result = await authService.reactivateAccount('a@example.com', 'the-real-password');
+
+      expect(result.accessToken).toEqual(expect.any(String));
+      expect(result.user.id).toBe('user-1');
+
+      // Reactivated -- a normal login now works again too.
+      const loginResult = await authService.login('a@example.com', 'the-real-password');
+      expect(loginResult.accessToken).toEqual(expect.any(String));
+    });
+
+    it('treats an already-active account with correct credentials as a plain login, not an error', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('the-real-password');
+      prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash });
+
+      const result = await authService.reactivateAccount('a@example.com', 'the-real-password');
+
+      expect(result.accessToken).toEqual(expect.any(String));
+      expect(result.user.id).toBe('user-1');
+    });
+
+    it('rejects wrong credentials with the same generic message login() uses', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('the-real-password');
+      prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash });
+
+      await expect(authService.reactivateAccount('a@example.com', 'wrong-password')).rejects.toThrow(
+        'Invalid credentials',
+      );
+    });
+
+    // The explicit exclusion this PR's brief calls out: a pending_deletion
+    // account must NOT be reactivated by this endpoint, even with fully
+    // correct credentials -- see auth.service.ts's own comment on why.
+    it('does NOT reactivate a pending_deletion account, even with correct credentials', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('the-real-password');
+      prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash });
+      await authService.deleteAccount('user-1', 'the-real-password');
+
+      await expect(authService.reactivateAccount('a@example.com', 'the-real-password')).rejects.toThrow(
+        'Invalid credentials',
+      );
+    });
+  });
+
+  describe('deleteAccount', () => {
+    it('sets accountStatus to pending_deletion on a correct password, without deleting the User row', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('the-real-password');
+      prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash });
+
+      await authService.deleteAccount('user-1', 'the-real-password');
+
+      // The row still exists and is still findable by email -- a hard
+      // requirement from this PR's brief (no hard delete in this PR).
+      const stillExists = await prisma.user.findUnique({ where: { email: 'a@example.com' } });
+      expect(stillExists).not.toBeNull();
+      expect(stillExists!.accountStatus).toBe('pending_deletion');
+
+      // Login is rejected (generic message, not a distinct one -- see
+      // login()'s own comment on why pending_deletion doesn't get the
+      // distinct "deactivated" message).
+      await expect(authService.login('a@example.com', 'the-real-password')).rejects.toThrow(
+        'Invalid credentials',
+      );
+    });
+
+    it('rejects a wrong password and does not touch accountStatus', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('the-real-password');
+      prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash });
+
+      await expect(authService.deleteAccount('user-1', 'wrong-password')).rejects.toThrow(
+        UnauthorizedException,
+      );
+
+      const stillActive = await prisma.user.findUnique({ where: { email: 'a@example.com' } });
+      expect(stillActive).not.toBeNull();
+      expect(stillActive!.accountStatus).toBe('active');
+    });
+
+    it('revokes every existing refresh-token session on a delete request', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('the-real-password');
+      prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash });
+      const session = await authService.login('a@example.com', 'the-real-password');
+
+      await authService.deleteAccount('user-1', 'the-real-password');
+
+      await expect(authService.refresh(session.refreshToken)).rejects.toThrow(UnauthorizedException);
     });
   });
 });

@@ -618,3 +618,237 @@ club-selection field at all.
   passed cleanly on an isolated re-run, unrelated to this change and not
   fixed here). e2e suite: 6 suites / 25 tests, 0 failures (up from 5
   suites / 22 tests — one new spec file, three new tests).
+
+## Status update — guardian-consent-status, change-password, deactivate/delete/reactivate-account (`sprint-1/f5-f6-missing-endpoints`)
+
+Closes two confirmed gaps (re-verified directly by `grep -r
+"change-password\|deactivate\|delete-account\|accountStatus"
+services/api/src` before writing any code — zero matches for either, same
+as the task brief's own claim): no endpoint exposed a minor's own
+guardian-consent status, and there was no change-password/deactivate/
+delete-account capability anywhere in this codebase.
+
+### Part 1 — `GET /auth/guardian-consent/status`
+
+Two real shape choices existed, per this PR's own brief: extend `GET
+/users/:id`'s response to nest a `guardian` object for a minor viewing
+their own profile, or build a dedicated `GET /auth/guardian-consent/status`
+endpoint. **Chose the dedicated endpoint**, confirming (not just assuming)
+the brief's own recommendation was right after reading `users/README.md`
+and `users.service.ts` directly: `GET /users/:id` is a general-purpose
+profile endpoint already used by every caller regardless of `isMinor`, and
+bolting safeguarding-specific nested data onto it would mix concerns and
+bloat the response shape for the vast majority of non-minor callers who'd
+always get `guardian: null`. A dedicated endpoint keeps single
+responsibility, groups naturally with the two existing
+`POST /auth/guardian-consent*` routes (same controller,
+`guardian-consent.controller.ts`, same safeguarding domain), and its guard
+requirement is cleaner to state and enforce in isolation from whatever
+`GET /users/:id` might ever need to do.
+
+- **Guard: `JwtAuthGuard` ONLY, deliberately NOT `GuardianConsentGuard`.**
+  This is a hard requirement, not a style choice, restated from the task
+  brief: a restricted-pending minor must be able to check their own
+  restricted status by definition — gating this behind the same guard
+  that enforces the restriction would make it impossible for a restricted
+  user to ever see why they're restricted. `GuardianConsentModule` already
+  imported `AuthFoundationModule` (for `AuthThrottlerGuard`'s DI graph on
+  the existing `resend` route) — no new module import was needed for
+  `JwtAuthGuard`'s own DI graph.
+- **Response shape** (`GuardianConsentStatusResponse`,
+  `guardian-consent.service.ts`): `consentStatus` (`"pending" |
+  "confirmed"`, straight off the `Guardian` row), `guardianEmail` (for a
+  future "change guardian email" UI action this PR doesn't build),
+  `canResend` (a `boolean`, computed with the exact same condition
+  `resendConsent()` already gates a real resend on —
+  `consentStatus === 'pending'` — so the frontend never has to re-derive
+  that business rule), and `consentTimestamp` (`null` until confirmed).
+- **"Caller has no `Guardian` row" → a real 404**, never a silent null
+  200 — matches this codebase's own established convention
+  (`ClubsService.assertClubExists`, `UsersService.assertUserExists`).
+  This one query (`prisma.guardian.findUnique({ where: { minorUserId } })`
+  returning `null`) covers two cases the caller's side genuinely cannot
+  distinguish and doesn't need to: the caller isn't a minor at all, or a
+  data-invariant violation (a minor with no `Guardian` row, which
+  `RegistrationService` should never produce but isn't guaranteed by a DB
+  constraint).
+- **Reads fresh from Postgres on every call** — `GuardianConsentService.getConsentStatus`
+  does a plain `findUnique`, never caches or trusts anything off the JWT
+  (which structurally can't carry `consentStatus` anyway — `token.types.ts`).
+  Proven directly by a dedicated unit test that mutates the underlying row
+  between two calls and confirms the second call reflects the change.
+- `:sub` (the caller's own id, off the verified JWT via `@CurrentUser()`)
+  is always what's looked up — there is no path param on this route at
+  all, so it can never be used to read another user's guardian-consent
+  state, unlike `GET /users/:id`'s ownership-check pattern.
+
+### Part 2 — change-password, deactivate/delete/reactivate-account
+
+All four new routes live on the existing `AuthController`/`AuthService`
+(`auth.controller.ts`/`auth.service.ts`) rather than a new module — they're
+account-lifecycle actions on the same `User` row `login`/`refresh`/`logout`
+already operate on, and `AuthModule` already imports `AuthFoundationModule`
+(so `JwtAuthGuard` was already available via DI with no new import).
+
+- **`POST /auth/change-password`** — `JwtAuthGuard`. `userId` comes from
+  the verified JWT (`@CurrentUser()`), never a request-body field — a
+  caller can only ever change their own password via this endpoint.
+  Fetches the real, current `passwordHash` fresh from Postgres and reuses
+  `PasswordService.verify` (the exact call `login()` uses), never
+  reimplementing argon2 logic. `newPassword` validation is exactly
+  `@IsString() @MinLength(8)` — the identical rule `RegisterDto.password`
+  uses, deliberately not stricter or looser, per the brief. Error posture
+  is deliberately distinct from `login()`'s generic message: this is an
+  authenticated user who already proved identity via a valid JWT, so
+  there's no enumeration concern the way login's generic error protects
+  against (there's nothing to enumerate — the caller already knows their
+  own account exists); "Current password is incorrect" is fine here and
+  still never leaks hash internals. **Revokes every other active session
+  on success** (`tokenService.revokeAllSessionsForUser`) — a considered
+  decision, not skipped: this is a one-line reuse of the exact mechanism
+  `logout(allSessions=true)` and `PasswordResetService.resetPassword`
+  already use for the identical "credential changed, kill other sessions"
+  scenario, and a changed password that leaves old sessions valid defeats
+  much of the point of changing it.
+- **`POST /auth/deactivate-account`** — `JwtAuthGuard`. Requires `password`
+  re-entry as a confirmation step (a hard requirement from the brief, not
+  optional scope: a bare POST with no re-auth must never be able to
+  deactivate an account), verified fresh against Postgres via
+  `PasswordService.verify`. On success: `accountStatus` →
+  `"deactivated"`, and **revokes every existing session** — deactivation
+  blocking *future* logins is meaningless if the caller's current
+  still-valid access/refresh tokens keep working, so this is a required
+  consequence, not scope creep (proven by a dedicated e2e assertion: the
+  refresh token minted just before deactivation is confirmed unusable
+  immediately after).
+- **`POST /auth/delete-account`** — same shape/guard/re-auth requirement
+  as deactivate. Sets `accountStatus` → `"pending_deletion"` —
+  **deliberately does NOT hard-delete the `User` row** (a hard requirement
+  from the brief), proven directly by an e2e assertion that the row still
+  exists and is still findable by email immediately after. This is a
+  minors' data platform with real GDPR/NDPA implications (CLAUDE.md's
+  safeguarding non-negotiables, this project's DPIA history) and
+  retention/erasure policy is **explicitly not decided here** — see the
+  Decision Log candidate below. Revokes every session, same reasoning as
+  deactivation.
+- **`POST /auth/reactivate-account`** — deliberately **unauthenticated**
+  (`{ email, password }` body, no `JwtAuthGuard`): a deactivated account's
+  existing tokens are already revoked by `deactivateAccount()`, so there
+  is no JWT to gate this behind. Same credential-verification trust level
+  and timing-safety posture as `login()` itself, including the identical
+  fixed dummy-hash comparison so an unknown email takes the same real
+  argon2id work as a known one. Carries `@AuthRateLimit()` — same
+  brute-force-protection reasoning as `login`/`register`, on the same
+  shared `'auth'` named-throttler bucket (see the config-wiring-fix entry
+  above). **Only a genuinely `"deactivated"` account is flipped back to
+  `"active"`** and issued a fresh token pair — "log in, but first
+  un-deactivate." An already-`"active"` account with correct credentials
+  is treated as a plain, no-state-change login (this endpoint is a strict
+  superset of `login()` for that case) rather than rejected — there's no
+  reason to punish a caller who didn't realize reactivation wasn't
+  necessary. **A `"pending_deletion"` account is explicitly NOT
+  reactivated** — rejected with the same generic `"Invalid credentials"`
+  an unknown email/wrong password gets, deliberately not a distinct
+  message, since this PR builds no self-service undo path for a deletion
+  request and doesn't want to even confirm to an unauthenticated caller
+  that the account exists in that state.
+- **`AuthService.login()`** now rejects a non-`"active"` account —
+  checked **after** password verification succeeds, deliberately: this
+  distinct message is only ever revealed to someone who already proved
+  they know the correct password, so it doesn't weaken the existing
+  non-enumeration posture (an attacker without the real password still
+  only ever sees the generic `"Invalid credentials"`). A `"deactivated"`
+  account gets a specific, actionable message pointing at
+  `reactivate-account`; `"pending_deletion"` (and any future non-`"active"`
+  state) deliberately gets the same generic message a wrong password
+  would, for the same "don't confirm this state to anyone" reasoning as
+  `reactivateAccount()` above.
+
+### `User.accountStatus` — a genuine schema addition, Decision Log candidate
+
+`accountStatus String @default("active")` (`prisma/schema.prisma`,
+migration `20260823011617_add_user_account_status`) is a real addition
+beyond Section 3's literal `User` field list — flagged here, not added
+silently, per CLAUDE.md's "the data model is a fixed spec" rule. Mirrors
+the existing `consentStatus`/`verificationStatus` string-enum convention
+already used twice in this same schema (rather than a `Boolean` plus a
+separate deletion flag): `"active"` (default) | `"deactivated"`
+(self-service reversible, via `reactivate-account`) | `"pending_deletion"`
+(self-service, **not** reversible via any endpoint in this PR).
+
+**This PR deliberately does not decide retention/erasure policy — that's
+an open Decision Log candidate for real founder/legal input**, not
+resolved unilaterally here, per the brief's own explicit instruction:
+
+- What the actual retention window for a `"pending_deletion"` account
+  should be before any further action (if any) is taken.
+- Whether erasure ever becomes a true hard delete of the `User` row (and,
+  if so, what happens to rows that reference it — `Post`, `Comment`,
+  `Like`, `Follow`, etc. — none of which `ON DELETE CASCADE` today).
+- Whether a minor's `Guardian` row needs its own, separate erasure
+  handling distinct from the minor's own `User` row.
+- Whether `"pending_deletion"` should ever have a self-service undo
+  window at all — this PR's `reactivateAccount()` explicitly refuses to
+  provide one, but that's an implementation choice pending the real
+  policy decision, not the policy decision itself.
+- Whether `AuthUserSummary`/`AuthResponse` (`auth-response.mapper.ts`)
+  should ever expose `accountStatus` to the caller directly, the way
+  `isMinor`/`verificationStatus` already are — this PR deliberately did
+  **not** add it there (out of scope; the existing four endpoints
+  communicate account state via HTTP status/response body shape, not a
+  new field on every login/register response), but a future
+  account-settings UI may want it.
+
+### Verification
+
+**Real, directly measured — not estimated**, per this PR's own brief and
+this file's own established standard for that:
+
+- Mocked unit suite (`npx jest`, `services/api`) — confirmed baseline by
+  stashing this branch's own changes and re-running against a clean
+  checkout: **34 suites / 356 tests, 0 failures**. After this branch:
+  **34 suites / 386 tests, 0 failures** (30 new tests, no new suite — new
+  `describe` blocks added to `auth.service.spec.ts`,
+  `auth.controller.http.spec.ts`,
+  `guardian-consent/guardian-consent.service.spec.ts`, and
+  `guardian-consent/guardian-consent.controller.spec.ts`).
+  `auth.controller.http.spec.ts` and `guardian-consent.controller.spec.ts`
+  both needed a new `.overrideGuard(JwtAuthGuard)` in their
+  `TestingModule` setup (same pattern
+  `users/users.controller.http.spec.ts` already established) — both
+  controllers now have at least one real `JwtAuthGuard`-protected route,
+  and neither test file's `TestingModule` provides a real
+  `TokenService`/`PrismaService` for the real guard to depend on.
+- e2e suite (`npm run test:e2e`, real Postgres/Redis via `docker compose
+  up -d`) — before this branch: **6 suites / 37 tests, 0 failures**. After:
+  **7 suites / 39 tests, 0 failures** — one new file,
+  `test/account-lifecycle.e2e-spec.ts`, two new `describe` blocks (each
+  with its own app instance/own in-memory `AuthThrottlerGuard` bucket,
+  deliberately, so the file's real HTTP calls to `login`/
+  `reactivate-account` — both `@AuthRateLimit()`-decorated, sharing one
+  `'auth'` named-throttler bucket — stay under the default 5-requests/60s
+  limit per block; full reasoning in the file's own header comment,
+  following the same already-documented constraint
+  `feed-reactions.e2e-spec.ts`/`follow.e2e-spec.ts`/`clubs.e2e-spec.ts`
+  hit for `POST /auth/register`). Covers, against real Postgres: the
+  brief's required minimum (deactivate → login fails with a distinct
+  message → reactivate → login succeeds), a real session-revocation proof
+  (the refresh token minted just before deactivation is confirmed
+  unusable immediately after), a real change-password argon2id round trip
+  (old password stops working, new one — freshly hashed and stored in
+  Postgres, confirmed via a direct row read — works), and the
+  delete-account/`pending_deletion` exclusion (row provably still exists
+  post-delete, `reactivate-account` provably refuses to undo it, a normal
+  login stays rejected). `GET /auth/guardian-consent/status` was
+  deliberately **not** given its own e2e file — per `test/README.md`'s own
+  guiding principle, it's a plain Prisma read with no raw SQL, no
+  transaction/isolation-level reasoning, and no novel relation/constraint,
+  so the mocked unit coverage in
+  `guardian-consent.service.spec.ts`/`guardian-consent.controller.spec.ts`
+  is the right (and much faster) layer for it, matching how this codebase
+  has treated comparable plain-read endpoints elsewhere.
+- Migration: `prisma/migrations/20260823011617_add_user_account_status/migration.sql`
+  — a single `ALTER TABLE "User" ADD COLUMN "accountStatus" TEXT NOT NULL
+  DEFAULT 'active'`, applied and verified against both the local dev
+  database and (via `test/global-setup.ts`, automatically) the
+  `soccernity_test` e2e database.

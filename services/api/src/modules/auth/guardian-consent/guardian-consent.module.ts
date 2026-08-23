@@ -23,6 +23,11 @@ import { GuardianConsentService } from './guardian-consent.service';
 // password-reset.module.ts, users.module.ts) -- this follows the same
 // established convention rather than introducing a new cross-module
 // coupling.
+//
+// sprint-1/f5-f6-missing-endpoints's GET /auth/guardian-consent/status
+// also needs AuthFoundationModule -- for JwtAuthGuard's DI graph this
+// time. Already imported here (for AuthThrottlerGuard above), so no new
+// import was required.
 @Module({
   imports: [ConfigModule, AuthFoundationModule],
   controllers: [GuardianConsentController],
