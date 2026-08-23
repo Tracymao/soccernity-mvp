@@ -118,6 +118,61 @@ export class UsersService {
     }
   }
 
+  // Existence + safeguarding visibility check for getFollowers/getFollowing
+  // ONLY -- revisits Decision Log #31 (users/README.md point 2, "followers/
+  // following public-scope reasoning"), does not override it. #31 reasoned
+  // entirely from product parity with mainstream social apps and checked
+  // only whether Section 8.3 step 5's *enumerated* restricted-pending list
+  // named followers/following specifically (it doesn't) -- it never
+  // cross-checked against Section 8.3's broader principle that a minor's
+  // profile shouldn't be visible outside the guardian relationship before
+  // consent is recorded. This closes that gap: a restricted-pending
+  // minor's social graph (:id as the TARGET, not the caller) is hidden
+  // entirely, regardless of who's asking -- see users/README.md's
+  // "followers/following restricted-pending gap" section for the full
+  // options considered and why this is the conservative default.
+  //
+  // Deliberately NOT GuardianConsentGuard -- that guard reads
+  // request.user (the CALLER) to decide what the caller may do; this
+  // check is the opposite direction, reading whether the :id in the URL
+  // (the TARGET, who may not be the caller at all) is a restricted-
+  // pending minor whose social graph shouldn't be exposed. Mirrors
+  // GuardianConsentGuard's own isMinor -> Guardian.consentStatus read
+  // pattern and Section 5.7's fresh-read-from-Postgres discipline, but a
+  // guard can't express "check the route param's owner," only "check the
+  // authenticated caller," so this is a service-level check instead.
+  //
+  // A restricted-pending target is treated identically to a non-existent
+  // one (NotFoundException, not a distinct 403) -- the target's social
+  // graph edges don't exist from the caller's point of view, matching
+  // this codebase's established "hide via 404, never a silent 200/403
+  // that confirms a restricted account exists" convention (e.g.
+  // GuardianConsentController's own "no Guardian row" 404).
+  private async assertFollowGraphVisible(userId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, isMinor: true },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (!user.isMinor) {
+      return;
+    }
+
+    // Guardian.minorUserId is @unique (prisma/schema.prisma) -- at most
+    // one Guardian row per minor.
+    const guardian = await this.prisma.guardian.findUnique({
+      where: { minorUserId: userId },
+      select: { consentStatus: true },
+    });
+    if (guardian?.consentStatus === 'confirmed') {
+      return;
+    }
+
+    throw new NotFoundException('User not found');
+  }
+
   // POST /users/:id/follow. followerId is the caller (from the verified
   // JWT), followeeId is :id. Self-follow is a business rule, not an auth
   // check -- rejected with 400 here, the same "cross-field/business
@@ -197,7 +252,15 @@ export class UsersService {
   // users/README.md's "followers/following public-scope reasoning" for
   // the full argument; short version: this is standard public social
   // graph data on every platform this product is modeled after, and
-  // nothing in Section 8.3 step 5 or Section 5.7 restricts it.
+  // nothing in Section 8.3 step 5's *enumerated* restricted-pending list
+  // or Section 5.7 restricts it by name.
+  //
+  // sprint-2/followers-scope-fix: that public-scope conclusion (Decision
+  // Log #31) is revisited, not overridden, for one specific case -- a
+  // restricted-pending minor as the TARGET (:id), regardless of who's
+  // asking. See assertFollowGraphVisible and users/README.md's
+  // "followers/following restricted-pending gap" section (supersedes
+  // Decision Log #31, pending founder review).
   //
   // Same keyset-cursor pagination pattern as FeedService (cursor.util.ts
   // reused as-is, no second pagination scheme invented), ordered
@@ -206,7 +269,7 @@ export class UsersService {
   // feed's own most-recent-first convention. :id not referencing a real
   // User -> 404.
   async getFollowers(userId: string, query: FeedQueryDto): Promise<FollowPage> {
-    await this.assertUserExists(userId);
+    await this.assertFollowGraphVisible(userId);
 
     const limit = Math.min(query.limit ?? FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE);
 
@@ -228,7 +291,7 @@ export class UsersService {
   // followerId = :id, each entry is the followee). Same scope/pagination
   // reasoning as getFollowers above, mirrored exactly.
   async getFollowing(userId: string, query: FeedQueryDto): Promise<FollowPage> {
-    await this.assertUserExists(userId);
+    await this.assertFollowGraphVisible(userId);
 
     const limit = Math.min(query.limit ?? FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE);
 
