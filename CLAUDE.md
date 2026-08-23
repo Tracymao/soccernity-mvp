@@ -239,9 +239,12 @@ Full reasoning for every choice above: Build Plan Section 5.
 - **F5 and F6 are now real, built screens (`sprint-1/f5-f6-real-screens`,
   branched from `origin/main` after `sprint-1/f5-f6-missing-endpoints`
   merged the endpoints below) — no longer route stubs.** F7
-  (`VerifyEmailPage.tsx`, route `/verify-email`) is untouched by this PR
-  and remains a stub — still genuinely not started, see its own paragraph
-  below.
+  (`VerifyEmailPage.tsx`, route `/verify-email`) was untouched by this PR
+  and remained a stub at the time — see its own paragraph below for that
+  status as it stood then. **F7 is now also real, built by
+  `sprint-1/f7-club-picker-code` — see the dedicated bullet later in this
+  Sprint 2 section for the full detail**; this paragraph is left as-is for
+  the historical record of what this specific PR did and didn't ship.
   - **F5 routing decision**: the pre-existing `/guardian-consent` route
     covered two structurally different audiences that don't belong behind
     one component — an unauthenticated guardian confirming via an emailed
@@ -344,19 +347,23 @@ Full reasoning for every choice above: Build Plan Section 5.
     directly, all returning real HTTP 200s, matching the same verification
     standard the last three infra PRs (React 19, Router 8,
     club-picker-ui) used.
-  - **Sprint 1's own exit criterion is now closer to walkable, but still
-    not fully walkable end to end by a real user — stated plainly, not
-    rounded up.** Register → declare age → guardian-consent-gated access
-    is now real: a minor can register, their guardian can confirm consent
-    via a real emailed-link page, and the minor can check their own
-    restricted/confirmed status on a real page. **Email verification is
-    still the missing link**: F7 (`VerifyEmailPage.tsx`, route
-    `/verify-email`) is untouched by this PR and remains exactly the stub
-    it was — `POST /auth/verify-email` (B2) and the email Postmark now
-    actually sends (Decision Log #17) still have no real frontend page to
-    land on. Until F7 is built, "register, verify email, declare age,
-    guardian-consent-gated access" isn't walkable end to end by a real
-    user, even though three of its four steps now are.
+  - **Sprint 1's own exit criterion was, at the time this PR merged,
+    closer to walkable but still not fully walkable end to end by a real
+    user — stated plainly, not rounded up.** Register → declare age →
+    guardian-consent-gated access was real: a minor could register, their
+    guardian could confirm consent via a real emailed-link page, and the
+    minor could check their own restricted/confirmed status on a real
+    page. **Email verification was still the missing link at that time**:
+    F7 (`VerifyEmailPage.tsx`, route `/verify-email`) was untouched by
+    this PR and remained exactly the stub it was — `POST
+    /auth/verify-email` (B2) and the email Postmark now actually sends
+    (Decision Log #17) still had no real frontend page to land on.
+    **This is now resolved — see `sprint-1/f7-club-picker-code` below.
+    Sprint 1's own exit criterion ("register, verify email, declare age,
+    guardian-consent-gated access") is now fully walkable end to end by a
+    real user, with all four steps real** — this paragraph is left as-is
+    for the historical record of what this specific PR did and didn't
+    ship.
   - **Two small, real, self-flagged bugs found during independent review
     of this PR are now fixed (`sprint-1/f5-f6-bugfixes`), both UX-only, no
     backend/data-integrity issue in either case.** Bug 1:
@@ -1732,6 +1739,78 @@ Full reasoning for every choice above: Build Plan Section 5.
   `services/api/src/modules/clubs/README.md`'s matching "explicitly not
   built here" bullets, now updated to point here instead of describing
   an open gap.
+- **`sprint-1/f7-club-picker-code` converts the two Figma screen families
+  from `sprint-1/f7-club-picker-screens` (PR #81, merged) into real
+  `apps/web` code: F7 is now a real screen, and `ClubPickerStep.tsx` gets
+  a visual-only dark-theme retrofit.** Two distinct tasks, same PR.
+  **F7 (`VerifyEmailPage.tsx`, route `/verify-email`) replaces its
+  `PlaceholderPage` stub entirely** — a new `verifyEmail(token)` client
+  added to `apps/web/src/api/auth.ts`, modeled directly on
+  `confirmGuardianConsent`'s same unauthenticated/non-enumerating
+  pattern. Token read from `?token=` via `useSearchParams`, mirroring
+  `GuardianConsentConfirmPage.tsx` exactly: no token present renders the
+  Missing Token state and the API call never fires (proven by a test,
+  same as that page's own precedent); a token present auto-fires on
+  mount, showing Verifying while in flight, then Verified or the generic
+  Link Invalid Or Expired message on a 400 (no invalid-vs-expired
+  distinction leaked, matching the backend). **This closes Sprint 1's own
+  exit criterion end to end** — see the updated note earlier in this
+  Sprint 2 section. Two decisions were deliberately left open rather than
+  resolved here: (1) the Verified state's CTA routes to `/profile`, not
+  `/` — confirmed `HomePage.tsx` is still a `PlaceholderPage` stub today,
+  `ProfilePage.tsx` is the one real authenticated destination that
+  exists; (2) a verified minor with pending guardian consent still lands
+  on the standard Verified state (a disclosure row only, no redirect) —
+  `{ verified, userId }` carries no consent-status field to branch on,
+  and the merged design PR's own report already left open whether such a
+  user should route to the restricted-pending view instead, so this PR
+  repeats that question rather than picking a side. The Figma frames'
+  "Contact support" affordance on the error/missing-token states is
+  rendered as a visibly present but disabled button (no dead link) —
+  confirmed by grep that no resend-verification endpoint and no support/
+  contact destination (mailto, `/contact` route) exist anywhere in this
+  codebase.
+  **`ClubPickerStep.tsx`'s visual theme is retrofitted from
+  `SignupSplitScreen`'s light theme (used only because no Figma design
+  existed at the time it was built) to the real dark Soccernity Theme
+  design — behavior is unchanged.** All 7 pre-existing
+  `ClubPickerStep.test.tsx` tests pass completely unchanged (same names,
+  same assertions) — the retrofit is purely markup/CSS-class driven, as
+  it needed to be. **A real shell/architecture decision was required and
+  is documented, not silently made**: the Figma club-picker frames are
+  full-bleed, single-column, dark — structurally incompatible with being
+  nested inside `SignupSplitScreen`'s light two-panel shell the way it
+  used to be. `ClubPickerStep` now owns its own self-contained full-bleed
+  dark shell (the same negative-margin-cancels-`AppShell`-padding
+  technique `GuardianConsent.css`/`SignupSplitScreen.css` already
+  established, so as not to duplicate a second logo/top bar under the
+  real site `Header`), and `RegisterStep.tsx`'s success branch now
+  renders it as a full replacement rather than a child of
+  `SignupSplitScreen`. The former "Account created"/guardian-email
+  confirmation text moved into a new, optional, additive
+  `confirmationMessage?: ReactNode` prop — no existing caller/test passes
+  it, so this is backward compatible by construction. Two Figma-vs-
+  shipped-code conflicts were deliberately kept, not fixed: the "Load
+  more clubs" button label (Figma says "Load more") stays exactly as
+  shipped since `ClubPickerStep.test.tsx` asserts on that exact text; and
+  the single "No clubs match that filter." string still covers both
+  "zero clubs total" and "filter matched nothing" — a known, reproduced-
+  as-is ambiguity in both the merged design and the code, not a
+  drive-by fix. New route-scoped theme-vars files
+  (`verify-email/verifyEmailThemeVars.ts`, `signup/clubPickerThemeVars.ts`)
+  follow `consentThemeVars.ts`'s established convention exactly: each
+  distinct route/flow gets its own scoped file sourced from
+  `packages/shared`'s `colors.dark`, even when the underlying values are
+  identical to another flow's. Verified: `npx tsc --noEmit`, `npm run
+  build`, and `npm run lint` all clean; `apps/web`'s full vitest suite —
+  **7 suites / 41 tests, 0 failures** (up from 5 suites / 32 tests before
+  this PR — one new `VerifyEmailPage.test.tsx`, 4 cases, following
+  `GuardianConsentConfirmPage.test.tsx`'s conventions). A real dev-server
+  smoke test (`/verify-email?token=...`, `/verify-email` with no token,
+  and `/signup`'s club-picker step) returned clean HTTP 200s with no
+  console errors — same verification ceiling as every prior frontend PR
+  in this project (no real browser/Playwright available in this
+  environment).
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
