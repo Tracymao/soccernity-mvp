@@ -339,6 +339,174 @@ standalone module), so any module needing it just adds
 `AuthFoundationModule` to its own `imports`, the same way `UsersModule`
 does — see `users.module.ts`.
 
+---
+
+## `sprint-2/followers-scope-fix` — followers/following restricted-pending gap
+
+**Supersedes Decision Log #31, pending founder review.** This does not
+silently override #31's own text in the Build Plan docx — that edit is
+deliberately left for the founder to make by hand after reading this
+section, per this task's own brief. This section is the "same depth"
+writeup that brief asked for.
+
+### The gap, confirmed directly against code before any fix was written
+
+Decision Log #31 (documented above as this file's own point 2, "Are `GET
+/users/:id/followers` and `GET /users/:id/following` self-scoped, or
+public?") made both endpoints public — `JwtAuthGuard` only, no
+self-scoping, no `GuardianConsentGuard`. Its reasoning was entirely
+product-parity ("every mainstream social app exposes this") plus a check
+of whether **Section 8.3 step 5's own enumerated restricted-pending
+list** — "no public profile visibility, no DMs from unverified accounts,
+no participation in Banter Rooms beyond read-only" — named
+followers/following specifically. It doesn't.
+
+What #31 never did: cross-check that conclusion against **Section 8.3's
+broader principle**, not just its step-5 list — "Until consent is
+recorded, the minor's account exists but is restricted," and the first
+item on that same enumerated list is literally "no public profile
+visibility." A user's followers/following list is part of their public
+profile surface on every platform #31's own product-parity argument
+cites — the same platforms that also gate a private/restricted account's
+follower list behind that same privacy setting. #31 checked "is this
+named," not "does this fall under the thing that IS named."
+
+Confirmed directly by reading `users.controller.ts` and
+`users.service.ts` on a fresh `main` before writing any fix: neither
+`getFollowers`/`getFollowing` nor the `assertUserExists` check they both
+called read `isMinor` or `consentStatus` anywhere, for either the caller
+or the target `:id`. A restricted-pending minor's full social graph was
+visible to any authenticated caller.
+
+### Why `GuardianConsentGuard` itself isn't reusable here
+
+Checked directly (`auth/guards/guardian-consent.guard.ts`) before
+designing the fix, per this task's own instruction to look at existing
+precedent first. `GuardianConsentGuard` reads `request.user` — the
+**caller** — and decides what the caller may do (block a restricted-
+pending minor from posting/commenting on `POST /posts`,
+`POST /posts/:id/comments`, per Decision Log #21). It has never been used
+to protect a *different* user's data from being viewed. This gap is the
+opposite direction: `:id` in the URL (the **target**, who is very often
+not the caller at all) needs to be checked, not `request.user`. A guard
+can express "check the authenticated caller" cheaply
+(`context.switchToHttp().getRequest().user`); it can't cleanly express
+"check the user identified by this route's `:id` param" without becoming
+route-shape-aware in a way no existing guard in this codebase is. So the
+fix is a service-level check (`UsersService.assertFollowGraphVisible`),
+not a new guard — consistent with this module's own existing precedent
+that cross-field/business rules (self-follow, existence) belong in the
+service layer, not the controller or a guard.
+
+### Options considered
+
+**(a) Hide followers/following entirely for a restricted-pending target
+user (404, indistinguishable from non-existent), regardless of caller —
+chosen, implemented.**
+- Pro: matches Section 8.3's "no public profile visibility" item
+  literally — a followers/following list is exactly that kind of
+  visibility. Simplest to reason about and to prove correct (one check,
+  one outcome, no caller-identity branching to get wrong). Fails safe:
+  a bug in "is this the target's own request" logic can't leak data,
+  because there's no such logic to have a bug in.
+- Con: also hides the list from the minor's own client, e.g. a
+  restricted-pending minor's own "who follows me" screen (if one is ever
+  built) would 404 too, even though they're not viewing anyone else's
+  data. No such screen exists in this codebase today (confirmed —
+  `apps/web` has no followers/following UI at all yet), so this con is
+  theoretical right now, not a regression against real shipped UI.
+
+**(b) Same as (a), but only when the caller isn't the user themselves.**
+- Pro: closes the gap for every third party while letting a
+  restricted-pending minor still see their own social graph.
+- Con: requires threading the caller's identity into
+  `getFollowers`/`getFollowing` (currently `(userId, query)` only — no
+  caller param at all), which both controller routes and the service
+  signature would need to change to support. A restricted-pending
+  minor's own client could then distinguish "I am restricted" (200) from
+  "this other minor is restricted" (404) by comparing who's asking —
+  not a data leak about a *third party*, but it does mean the
+  restricted-pending state itself becomes observable through a side
+  channel (self-request succeeds, others' requests to the same `:id`
+  don't) that (a) doesn't have. Real added complexity for a UI surface
+  that doesn't exist yet.
+
+**(c) Leave endpoints public but exclude a restricted-pending user from
+appearing *in other users'* followers/following lists (their own graph
+edges hidden from others, not their own view of their own edges).**
+- Pro: closest to "hide the edges, not the node" — a restricted-pending
+  minor could still see who they follow/who follows them; only
+  *appearing in someone else's list* is suppressed.
+- Con: doesn't actually close Section 8.3's "no public profile
+  visibility" concern — `GET /users/:id/followers` for the
+  restricted-pending minor's own `:id` would still return 200 with a
+  full (if filtered-from-others'-perspective) list, meaning the minor's
+  own follow relationships remain directly queryable by anyone who
+  simply asks `GET /users/:minor-id/following` — the exact endpoint this
+  gap is about. This option only partially closes the gap (hides the
+  minor from *appearing on other people's pages*) while leaving the
+  minor's *own* page's data exposed, which is the more direct version of
+  the same problem. Also the most implementation complexity of the
+  three — filtering "does this row's embedded user need hiding" per-row
+  in `toFollowPage`, on every single page fetched by every caller,
+  forever, vs. one existence-time check.
+
+**Decision: (a).** Per this task's own instruction and
+`CLAUDE.md`'s non-negotiable stance, minors' data safety takes precedence
+over product-parity reasoning when the two conflict — and unlike (b)/(c),
+(a) has no path by which a restricted-pending minor's status or graph
+data leaks to anyone, including through a side channel, at the cost of a
+theoretical (not currently real) UX gap for the minor's own eventual
+"my followers" screen. That screen, when built, should use
+`GET /auth/guardian-consent/status` (already built, already
+`JwtAuthGuard`-only-not-`GuardianConsentGuard`, exactly so a restricted
+minor can check their own status) to decide whether to render a
+"you'll be able to see this once your guardian confirms" state instead
+of calling `GET /users/:id/followers` for their own id at all — a future
+frontend concern, not something this backend-only PR needs to solve.
+
+### What's implemented
+
+`UsersService.assertFollowGraphVisible(userId)` — a new private method,
+used by `getFollowers`/`getFollowing` only (NOT by `followUser`/
+`unfollowUser`/`assertUserExists`, which are unchanged and out of this
+PR's scope — see "Deliberately not touched" below). Mirrors
+`GuardianConsentGuard`'s own `isMinor` → `Guardian.consentStatus` read
+pattern and Section 5.7's fresh-read-from-Postgres discipline exactly,
+but checks the **target** `:id`, not `request.user`:
+
+- `:id` doesn't exist at all → 404 (unchanged from before).
+- `:id` exists and `isMinor: false` → visible (unchanged from before;
+  `Guardian` is never even queried in this case).
+- `:id` exists, `isMinor: true`, no `Guardian` row, or
+  `Guardian.consentStatus !== 'confirmed'` → 404, identical to
+  non-existent — **the fix**.
+- `:id` exists, `isMinor: true`, `Guardian.consentStatus === 'confirmed'`
+  → visible, same as any non-minor (once consent is confirmed, this
+  restriction no longer applies to that user at all).
+
+This is a genuine 404, not a distinct 403/error code — deliberately
+matching this codebase's established "hide via 404, never a signal that
+confirms a restricted account exists" convention, the same reasoning
+`GuardianConsentController`'s own "no Guardian row for this caller" 404
+already uses.
+
+### Deliberately not touched, flagged rather than silently expanded
+
+- `followUser`/`unfollowUser`/`assertUserExists` are unchanged. Whether
+  *following* or *being followed by* a restricted-pending minor should
+  itself be blocked (as opposed to just hiding the resulting lists) is a
+  different, broader question this task's brief didn't ask and this PR
+  doesn't answer — a real follow-up Decision Log candidate, not resolved
+  here.
+- `GET /users/:id` / `PATCH /users/:id` (the self-only profile
+  endpoints) are untouched — already self-scoped by `assertSelf()`, not
+  part of this gap.
+- No `Notification`, guard, or route/controller signature changes.
+  `assertFollowGraphVisible` takes only `(userId: string)` — no caller
+  param — by design, matching option (a)'s "regardless of caller"
+  requirement structurally, not just by convention.
+
 ### Verification
 
 **Correction (`sprint-2/e2e-test-infrastructure`, superseding both

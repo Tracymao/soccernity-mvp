@@ -15,6 +15,9 @@ function buildPrismaMock() {
       delete: jest.fn(),
       findMany: jest.fn(),
     },
+    guardian: {
+      findUnique: jest.fn(),
+    },
     notification: {
       create: jest.fn(),
     },
@@ -439,6 +442,106 @@ describe('UsersService', () => {
       const callArgs = (prisma.follow.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.where).toEqual({ followerId: 'user-1' });
       expect(page.items).toEqual([{ id: 'followee-1', displayName: 'Followee One' }]);
+    });
+  });
+
+  // sprint-2/followers-scope-fix -- revisits Decision Log #31 (see
+  // users.controller.ts's and users.service.ts's own updated comments,
+  // and users/README.md's "followers/following restricted-pending gap"
+  // section). A restricted-pending minor as the TARGET (:id) must be
+  // invisible via both getFollowers and getFollowing, regardless of
+  // caller -- this is the gap #31 never checked.
+  describe('getFollowers / getFollowing restricted-pending target visibility', () => {
+    it('getFollowers 404s when :id is a minor with no Guardian row at all', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true });
+      (prisma.guardian.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new UsersService(prisma);
+
+      await expect(service.getFollowers('minor-1', {})).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.follow.findMany).not.toHaveBeenCalled();
+    });
+
+    it('getFollowers 404s when :id is a minor with consentStatus still pending', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true });
+      (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'pending' });
+      const service = new UsersService(prisma);
+
+      await expect(service.getFollowers('minor-1', {})).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.follow.findMany).not.toHaveBeenCalled();
+    });
+
+    it('getFollowers succeeds when :id is a minor with confirmed consent', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true });
+      (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'confirmed' });
+      (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new UsersService(prisma);
+
+      await expect(service.getFollowers('minor-1', {})).resolves.toEqual({ items: [], nextCursor: null });
+      expect(prisma.follow.findMany).toHaveBeenCalled();
+    });
+
+    it('getFollowers succeeds and never queries Guardian when :id is not a minor', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'adult-1', isMinor: false });
+      (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new UsersService(prisma);
+
+      await expect(service.getFollowers('adult-1', {})).resolves.toEqual({ items: [], nextCursor: null });
+      expect(prisma.guardian.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('getFollowing 404s when :id is a minor with consentStatus still pending', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true });
+      (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'pending' });
+      const service = new UsersService(prisma);
+
+      await expect(service.getFollowing('minor-1', {})).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.follow.findMany).not.toHaveBeenCalled();
+    });
+
+    it('getFollowing succeeds when :id is a minor with confirmed consent', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true });
+      (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'confirmed' });
+      (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new UsersService(prisma);
+
+      await expect(service.getFollowing('minor-1', {})).resolves.toEqual({ items: [], nextCursor: null });
+      expect(prisma.follow.findMany).toHaveBeenCalled();
+    });
+
+    it('Guardian is looked up by minorUserId with a fresh Postgres read, never trusted from a cached/stale value', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true });
+      (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'confirmed' });
+      (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new UsersService(prisma);
+
+      await service.getFollowers('minor-1', {});
+
+      expect(prisma.guardian.findUnique).toHaveBeenCalledWith({
+        where: { minorUserId: 'minor-1' },
+        select: { consentStatus: true },
+      });
+    });
+
+    it('restriction applies regardless of which existing user is asking -- getFollowers takes no caller param at all', async () => {
+      // assertFollowGraphVisible is only ever passed the route's :id
+      // (the target), never the caller -- this test documents that the
+      // service method's signature structurally cannot special-case "but
+      // the minor is asking about themselves," matching option (a)'s
+      // "regardless of caller" requirement.
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true });
+      (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'pending' });
+      const service = new UsersService(prisma);
+
+      expect(service.getFollowers.length).toBe(2); // (userId, query) -- no caller/actor param
+      await expect(service.getFollowers('minor-1', {})).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });

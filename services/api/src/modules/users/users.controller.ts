@@ -111,15 +111,30 @@ export class UsersController {
   // users/README.md's "followers/following public-scope reasoning" for
   // the full argument: followers/following lists are standard public
   // social graph data on essentially every platform this product is
-  // modeled after, and nothing in Section 8.3 step 5's restricted-pending
-  // list or Section 5.7's safety-sensitive-action list names them. This
-  // is a deliberate departure from the self-only default the saved-posts
-  // endpoint chose under the same kind of spec silence — not an
-  // unexamined default here, a different judgment call reached because
-  // there's an actual signal to reason from this time. Paginated with the
-  // same keyset-cursor FeedQueryDto/cursor.util.ts machinery as every
-  // other list endpoint in this codebase (Section 5.5). :id not
-  // referencing a real User → 404 (UsersService.assertUserExists).
+  // modeled after, and nothing in Section 8.3 step 5's *enumerated*
+  // restricted-pending list or Section 5.7's safety-sensitive-action list
+  // names them. This is a deliberate departure from the self-only default
+  // the saved-posts endpoint chose under the same kind of spec silence —
+  // not an unexamined default here, a different judgment call reached
+  // because there's an actual signal to reason from this time. Paginated
+  // with the same keyset-cursor FeedQueryDto/cursor.util.ts machinery as
+  // every other list endpoint in this codebase (Section 5.5). :id not
+  // referencing a real, visible User → 404
+  // (UsersService.assertFollowGraphVisible).
+  //
+  // sprint-2/followers-scope-fix: Decision Log #31's public-scope
+  // conclusion above was reasoned entirely from product parity and only
+  // checked whether Section 8.3 step 5's enumerated list named these
+  // routes (it doesn't) — it never cross-checked Section 8.3's broader
+  // principle that a minor's profile shouldn't be visible outside the
+  // guardian relationship before consent is recorded. A restricted-
+  // pending minor as the TARGET (:id) now 404s on both routes for every
+  // caller, same as a non-existent user — see
+  // UsersService.assertFollowGraphVisible and users/README.md's
+  // "followers/following restricted-pending gap" section. This revisits
+  // #31, it does not silently override it: flagged as superseding #31,
+  // pending founder review before the Build Plan's own Decision Log text
+  // is updated.
   @Get(':id/followers')
   async followers(@Param('id') id: string, @Query() query: FeedQueryDto) {
     return this.usersService.getFollowers(id, query);
