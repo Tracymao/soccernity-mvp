@@ -40,6 +40,20 @@ model User {
   verificationStatus String   @default("unverified")
   createdAt         DateTime  @default(now())
 
+  // Sprint 1 / sprint-1/f5-f6-missing-endpoints — a genuine addition beyond
+  // Section 3's literal User field list, flagged as a Decision Log
+  // candidate (see auth/README.md's "change-password / deactivate /
+  // delete" entry for the full writeup). Mirrors the existing
+  // consentStatus/verificationStatus string-enum convention already used
+  // twice in this schema, rather than a Boolean + a separate deletion
+  // flag. "active" (default) | "deactivated" (self-service, reversible via
+  // POST /auth/reactivate-account) | "pending_deletion" (self-service,
+  // NOT reversible via any endpoint in this PR — see AuthService.deleteAccount's
+  // own comment; no hard-delete of this row happens anywhere yet, pending
+  // a real retention/erasure policy decision this PR deliberately does not
+  // make unilaterally).
+  accountStatus     String    @default("active")
+
   // Safeguarding — required per Build Plan Section 8.3. Do not remove.
   guardian          Guardian?
 

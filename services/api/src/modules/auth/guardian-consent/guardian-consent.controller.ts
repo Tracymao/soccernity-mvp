@@ -1,8 +1,11 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import { CurrentUser } from '../guards/current-user.decorator';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { AccessTokenPayload } from '../token/token.types';
 import { AuthRateLimit } from '../rate-limit/auth-rate-limit.decorator';
 import { GuardianConsentDto } from './dto/guardian-consent.dto';
 import { ResendGuardianConsentDto } from './dto/resend-guardian-consent.dto';
-import { GuardianConsentService } from './guardian-consent.service';
+import { GuardianConsentService, GuardianConsentStatusResponse } from './guardian-consent.service';
 
 // Build Plan Section 4.1 (Auth Service): POST /auth/guardian-consent.
 // No JwtAuthGuard here (unlike /users/* — see users/README.md) — the
@@ -42,5 +45,20 @@ export class GuardianConsentController {
   async resend(@Body() dto: ResendGuardianConsentDto): Promise<{ message: string }> {
     await this.guardianConsentService.resendConsent(dto.email);
     return { message: 'If that account has a guardian consent request pending, a new email has been sent.' };
+  }
+
+  // Sprint 1 / sprint-1/f5-f6-missing-endpoints — GET /auth/guardian-consent/status.
+  // JwtAuthGuard ONLY, deliberately NOT GuardianConsentGuard — this is the
+  // route a restricted-pending minor uses to check WHY they're
+  // restricted, so it cannot itself be gated behind the guard that
+  // enforces the restriction (see guardian-consent.service.ts's
+  // getConsentStatus() and auth/README.md for the full reasoning).
+  // `:sub` (the caller's own id, off the verified JWT) is always what's
+  // looked up — there is no path param, so this can never be used to read
+  // another user's guardian-consent state.
+  @UseGuards(JwtAuthGuard)
+  @Get('guardian-consent/status')
+  async status(@CurrentUser() user: AccessTokenPayload): Promise<GuardianConsentStatusResponse> {
+    return this.guardianConsentService.getConsentStatus(user.sub);
   }
 }

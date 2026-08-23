@@ -1,8 +1,9 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { ExecutionContext, INestApplication, UnauthorizedException, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthThrottlerGuard } from './rate-limit/auth-throttler.guard';
 
 // Exercises real HTTP request/response handling (routing, DTO
@@ -12,12 +13,26 @@ import { AuthThrottlerGuard } from './rate-limit/auth-throttler.guard';
 // that lived in auth.controller.spec.ts before LoginDto/RefreshDto/
 // LogoutDto became class-validator classes validated by main.ts's
 // global ValidationPipe.
+//
+// sprint-1/f5-f6-missing-endpoints added four JwtAuthGuard/unguarded
+// routes (change-password, deactivate-account, delete-account,
+// reactivate-account) to this same controller. JwtAuthGuard is
+// overridden (not left real) the same way
+// users/users.controller.http.spec.ts already does -- this file mocks
+// AuthService entirely, so there is no real TokenService/PrismaService
+// in this TestingModule for the real JwtAuthGuard to depend on.
+const AUTHENTICATED_USER = { sub: 'user-1', role: 'fan' };
+
 describe('AuthController (HTTP layer)', () => {
   let app: INestApplication;
   const authService = {
     login: jest.fn(),
     refresh: jest.fn(),
     logout: jest.fn(),
+    changePassword: jest.fn(),
+    deactivateAccount: jest.fn(),
+    deleteAccount: jest.fn(),
+    reactivateAccount: jest.fn(),
   };
 
   const tokenPairResponse = {
@@ -57,6 +72,18 @@ describe('AuthController (HTTP layer)', () => {
       // rate-limit/auth-throttler.guard.spec.ts).
       .overrideGuard(AuthThrottlerGuard)
       .useValue({ canActivate: () => true })
+      // Same pattern users.controller.http.spec.ts already established:
+      // bypass real token verification, attach a fixed authenticated
+      // user to the request so change-password/deactivate/delete-account
+      // handlers have a @CurrentUser() to read.
+      .overrideGuard(JwtAuthGuard)
+      .useValue({
+        canActivate: (context: ExecutionContext) => {
+          const req = context.switchToHttp().getRequest();
+          req.user = AUTHENTICATED_USER;
+          return true;
+        },
+      })
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -185,6 +212,122 @@ describe('AuthController (HTTP layer)', () => {
         .expect(400);
 
       expect(authService.logout).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /auth/change-password', () => {
+    it('returns 204 and delegates to authService with the caller-from-JWT id, not a body field', async () => {
+      authService.changePassword.mockResolvedValueOnce(undefined);
+
+      await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .send({ currentPassword: 'old-password', newPassword: 'new-password-123' })
+        .expect(204);
+
+      expect(authService.changePassword).toHaveBeenCalledWith(
+        AUTHENTICATED_USER.sub,
+        'old-password',
+        'new-password-123',
+      );
+    });
+
+    it('rejects a newPassword shorter than 8 characters with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .send({ currentPassword: 'old-password', newPassword: 'short' })
+        .expect(400);
+
+      expect(authService.changePassword).not.toHaveBeenCalled();
+    });
+
+    it('rejects a body missing currentPassword with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .send({ newPassword: 'new-password-123' })
+        .expect(400);
+
+      expect(authService.changePassword).not.toHaveBeenCalled();
+    });
+
+    it('propagates a 401 thrown by the service (wrong current password)', async () => {
+      authService.changePassword.mockRejectedValueOnce(
+        new UnauthorizedException('Current password is incorrect'),
+      );
+
+      await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .send({ currentPassword: 'wrong', newPassword: 'new-password-123' })
+        .expect(401);
+    });
+  });
+
+  describe('POST /auth/deactivate-account', () => {
+    it('returns 204 and delegates to authService with the caller-from-JWT id and the re-entered password', async () => {
+      authService.deactivateAccount.mockResolvedValueOnce(undefined);
+
+      await request(app.getHttpServer())
+        .post('/auth/deactivate-account')
+        .send({ password: 'the-real-password' })
+        .expect(204);
+
+      expect(authService.deactivateAccount).toHaveBeenCalledWith(AUTHENTICATED_USER.sub, 'the-real-password');
+    });
+
+    it('rejects a body missing password with 400 -- a bare POST must never deactivate an account', async () => {
+      await request(app.getHttpServer()).post('/auth/deactivate-account').send({}).expect(400);
+
+      expect(authService.deactivateAccount).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /auth/delete-account', () => {
+    it('returns 204 and delegates to authService with the caller-from-JWT id and the re-entered password', async () => {
+      authService.deleteAccount.mockResolvedValueOnce(undefined);
+
+      await request(app.getHttpServer())
+        .post('/auth/delete-account')
+        .send({ password: 'the-real-password' })
+        .expect(204);
+
+      expect(authService.deleteAccount).toHaveBeenCalledWith(AUTHENTICATED_USER.sub, 'the-real-password');
+    });
+
+    it('rejects a body missing password with 400 -- a bare POST must never delete an account', async () => {
+      await request(app.getHttpServer()).post('/auth/delete-account').send({}).expect(400);
+
+      expect(authService.deleteAccount).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /auth/reactivate-account', () => {
+    it('returns 200 with a token pair + user on success', async () => {
+      authService.reactivateAccount.mockResolvedValueOnce(authResponse);
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/reactivate-account')
+        .send({ email: 'player@example.com', password: 'the-real-password' })
+        .expect(200);
+
+      expect(response.body).toEqual(authResponse);
+      expect(authService.reactivateAccount).toHaveBeenCalledWith('player@example.com', 'the-real-password');
+    });
+
+    it('rejects a body missing password with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/reactivate-account')
+        .send({ email: 'player@example.com' })
+        .expect(400);
+
+      expect(authService.reactivateAccount).not.toHaveBeenCalled();
+    });
+
+    it('rejects an invalid email with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/reactivate-account')
+        .send({ email: 'not-an-email', password: 'the-real-password' })
+        .expect(400);
+
+      expect(authService.reactivateAccount).not.toHaveBeenCalled();
     });
   });
 });

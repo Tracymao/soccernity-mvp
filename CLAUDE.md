@@ -122,6 +122,120 @@ Full reasoning for every choice above: Build Plan Section 5.
   another instance of the drift this file's own "Keeping this file
   current" section describes. Treat any specific count here as
   approximate; `npx jest` in `services/api` is the source of truth.
+- **`sprint-1/f5-f6-missing-endpoints` closes two confirmed backend gaps
+  F5/F6's real screens will need once built: a minor's own
+  guardian-consent status was not exposed by any endpoint, and there was
+  no change-password/deactivate/delete-account capability anywhere in
+  this codebase** (re-verified directly via `grep -r
+  "change-password\|deactivate\|delete-account\|accountStatus"
+  services/api/src` before any code was written — zero matches for
+  either, confirming the task brief's own claim rather than trusting it).
+  Backend-only — `apps/web` untouched, a separate frontend PR follows
+  later to actually build F5/F6 against these endpoints.
+  - **Part 1 — `GET /auth/guardian-consent/status`.** Two real shape
+    choices existed (extend `GET /users/:id` with a nested `guardian`
+    object for a minor viewing their own profile, vs. a dedicated
+    endpoint); chose the **dedicated endpoint**
+    (`guardian-consent.controller.ts`), confirming rather than assuming
+    the reasoning: `GET /users/:id` is general-purpose and used by every
+    caller regardless of `isMinor`, so bolting safeguarding-specific
+    nested data onto it would bloat the response for the vast majority of
+    non-minor callers; a dedicated route keeps single responsibility and
+    groups naturally with the two existing `POST /auth/guardian-consent*`
+    routes on the same controller. **Guard: `JwtAuthGuard` ONLY,
+    deliberately NOT `GuardianConsentGuard`** — a hard requirement, not a
+    style choice: a restricted-pending minor must be able to check their
+    own restricted status by definition, and gating this behind the same
+    guard that enforces the restriction would make that impossible.
+    Response carries `consentStatus`, `guardianEmail` (for a future
+    "change guardian email" UI action this PR doesn't build), `canResend`
+    (computed with the exact same condition `resendConsent()` already
+    gates a real resend on, so the frontend never re-derives that
+    business rule), and `consentTimestamp` (`null` until confirmed). "No
+    `Guardian` row for this caller" (not a minor, or a data-invariant
+    violation — indistinguishable from the caller's side, and both
+    handled identically) is a real 404, never a silent null 200, matching
+    this codebase's established convention
+    (`ClubsService.assertClubExists`, `UsersService.assertUserExists`).
+    Reads fresh from Postgres on every call, proven directly by a test
+    that mutates the underlying row between two calls and confirms the
+    second reflects the change.
+  - **Part 2 — `POST /auth/change-password`, `POST
+    /auth/deactivate-account`, `POST /auth/delete-account`, `POST
+    /auth/reactivate-account`**, all added to the existing
+    `AuthController`/`AuthService` rather than a new module (same `User`
+    row `login`/`refresh`/`logout` already operate on; `AuthFoundationModule`
+    was already imported, so `JwtAuthGuard` needed no new wiring).
+    `change-password` reuses `PasswordService.verify`/`.hash` (never
+    reimplements argon2), applies `RegisterDto.password`'s identical
+    `@IsString() @MinLength(8)` rule to `newPassword`, and **revokes every
+    other active session on success** (`tokenService.revokeAllSessionsForUser`
+    — a deliberate decision, reusing the exact mechanism
+    `logout(allSessions=true)`/`PasswordResetService.resetPassword`
+    already use for "credential changed, kill other sessions").
+    `deactivate-account`/`delete-account` both **require password
+    re-entry as a confirmation step** (a hard requirement — a bare POST
+    with no re-auth must never deactivate or delete an account) and both
+    revoke every existing session on success (deactivation blocking
+    future logins is meaningless if current tokens keep working).
+    `reactivate-account` is deliberately **unauthenticated**
+    (`{email, password}`, same credential-verification/timing-safety
+    posture and dummy-hash comparison as `login()`) since a deactivated
+    account's tokens are already revoked and there's no JWT to gate it
+    behind; only a genuinely `"deactivated"` account is flipped back to
+    `"active"` (an already-`"active"` account with correct credentials is
+    treated as a plain login, not an error); a `"pending_deletion"`
+    account is explicitly **not** reactivated, rejected with the same
+    generic "Invalid credentials" a wrong password gets. `AuthService.login()`
+    now rejects any non-`"active"` account, checked **after** password
+    verification succeeds so the distinct "deactivated" message is only
+    ever revealed to someone who already proved they know the correct
+    password (preserving the existing non-enumeration posture for
+    everyone else); `"pending_deletion"` gets the same generic message a
+    wrong password would, not a distinct one.
+  - **`User.accountStatus String @default("active")`** (migration
+    `20260823011617_add_user_account_status`) is a genuine schema
+    addition beyond Section 3's literal field list — flagged, not added
+    silently. Mirrors the existing `consentStatus`/`verificationStatus`
+    string-enum convention already used twice in this schema:
+    `"active"` | `"deactivated"` (self-service reversible) |
+    `"pending_deletion"` (self-service, **not** reversible by any
+    endpoint in this PR — no hard delete of the `User` row happens
+    anywhere yet).
+  - **Deactivation-vs-deletion retention/erasure policy is an open
+    Decision Log candidate, deliberately not resolved here** — this is a
+    minors' data platform with real GDPR/NDPA implications (this
+    project's own DPIA history, CLAUDE.md's safeguarding non-negotiables).
+    Open questions for real founder/legal input: the actual retention
+    window for a `"pending_deletion"` account before any further action;
+    whether erasure ever becomes a true hard delete of the `User` row
+    (and what happens to rows referencing it — `Post`, `Comment`, `Like`,
+    `Follow`, etc. — none of which `ON DELETE CASCADE` today); whether a
+    minor's `Guardian` row needs its own separate erasure handling;
+    whether `"pending_deletion"` should ever have a self-service undo
+    window at all (this PR's `reactivateAccount()` refuses to provide
+    one, but that's an implementation choice pending the real policy
+    decision, not the decision itself).
+  - **Verification, real and directly measured**: mocked suite — baseline
+    confirmed by stashing this branch's changes and re-running against a
+    clean checkout, **34 suites / 356 tests, 0 failures**; after this
+    branch, **34 suites / 386 tests, 0 failures** (30 new tests, no new
+    suite). e2e suite — before: **6 suites / 37 tests, 0 failures**;
+    after: **7 suites / 39 tests, 0 failures** (`test/account-lifecycle.e2e-spec.ts`,
+    new — covers the required deactivate → login-fails → reactivate →
+    login-succeeds round trip against real Postgres, a real
+    session-revocation proof, a real change-password argon2id round trip,
+    and the delete-account/`pending_deletion`-exclusion path; two
+    `describe` blocks, each with its own app instance/own in-memory
+    `AuthThrottlerGuard` bucket, to stay under the shared `'auth'`
+    named-throttler's default 5-requests/60s limit across
+    `login`/`reactivate-account` calls — see the file's own header
+    comment). `GET /auth/guardian-consent/status` deliberately has no e2e
+    coverage — a plain Prisma read, none of `test/README.md`'s own
+    e2e-worthy categories (raw SQL, transaction reasoning, novel
+    relation/constraint) apply, so the mocked unit layer is the right one.
+    Full detail in `services/api/src/modules/auth/README.md`'s matching
+    "Status update" entry and `services/api/test/README.md`.
 - **Sprint 1 frontend has a real gap: F5, F6, and F7 are not started.**
   F1-F4 (app shell, login, signup, forgot/reset) are real, built
   screens. F5 (`GuardianConsentPage.tsx`, route `/guardian-consent`)

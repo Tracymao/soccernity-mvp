@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { GuardianConsentService } from './guardian-consent.service';
 
 // Fakes rather than @nestjs/testing's TestingModule — matches B1/B4's
@@ -263,6 +263,77 @@ describe('GuardianConsentService', () => {
 
       await expect(service.resendConsent('minor@example.com')).resolves.toBeUndefined();
       expect(emailService.sendGuardianConsentEmail).not.toHaveBeenCalled();
+    });
+  });
+
+  // GET /auth/guardian-consent/status (sprint-1/f5-f6-missing-endpoints).
+  // See guardian-consent.service.ts's getConsentStatus() and
+  // auth/README.md for the full guard/shape reasoning.
+  describe('getConsentStatus', () => {
+    it('returns real, current data for a pending minor: canResend true, consentTimestamp null', async () => {
+      const { service, guardian } = buildService({
+        guardian: buildFakeGuardian({ consentStatus: 'pending', consentTimestamp: null }),
+      });
+
+      const result = await service.getConsentStatus(guardian!.minorUserId);
+
+      expect(result).toEqual({
+        consentStatus: 'pending',
+        guardianEmail: guardian!.email,
+        canResend: true,
+        consentTimestamp: null,
+      });
+    });
+
+    it('returns real, current data for a confirmed minor: canResend false, real consentTimestamp', async () => {
+      const confirmedAt = new Date('2026-01-05T12:00:00.000Z');
+      const { service, guardian } = buildService({
+        guardian: buildFakeGuardian({ consentStatus: 'confirmed', consentTimestamp: confirmedAt }),
+      });
+
+      const result = await service.getConsentStatus(guardian!.minorUserId);
+
+      expect(result).toEqual({
+        consentStatus: 'confirmed',
+        guardianEmail: guardian!.email,
+        canResend: false,
+        consentTimestamp: confirmedAt,
+      });
+    });
+
+    // Covers both indistinguishable cases this codebase's own convention
+    // treats identically -- not a minor at all, or a data-invariant
+    // violation (a minor with no Guardian row) -- both are a real 404,
+    // never a silent null 200.
+    it('404s when the caller has no Guardian row at all', async () => {
+      const { service } = buildService({ guardian: null });
+
+      await expect(service.getConsentStatus('user-with-no-guardian-row')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    // Reads fresh from Postgres on every call -- not cached off any prior
+    // result. Proven directly: mutate the underlying row between two
+    // calls and confirm the second call reflects the change, not the
+    // first call's snapshot.
+    it('reads fresh from Postgres on every call, not a cached/stale snapshot', async () => {
+      const guardian = buildFakeGuardian({ consentStatus: 'pending' });
+      const { service, prisma } = buildService({ guardian });
+
+      const first = await service.getConsentStatus(guardian.minorUserId);
+      expect(first.consentStatus).toBe('pending');
+
+      // Simulate the guardian confirming between the two calls, exactly
+      // the way confirmConsent()'s real updateMany() would mutate the row.
+      guardian.consentStatus = 'confirmed';
+      guardian.consentTimestamp = new Date('2026-02-01T00:00:00.000Z');
+
+      const second = await service.getConsentStatus(guardian.minorUserId);
+      expect(second.consentStatus).toBe('confirmed');
+      expect(second.canResend).toBe(false);
+      expect(second.consentTimestamp).toEqual(guardian.consentTimestamp);
+      expect(prisma.guardian.findUnique).toHaveBeenCalledTimes(2);
     });
   });
 });

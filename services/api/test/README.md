@@ -158,6 +158,34 @@ see the remaining gaps listed below.
   `RegistrationService.register()` validates the club *before* committing
   the `User` row, not after (see `auth/README.md`'s matching entry for
   why that ordering matters).
+- `account-lifecycle.e2e-spec.ts` (added by
+  `sprint-1/f5-f6-missing-endpoints`) — the task brief's own required
+  minimum e2e coverage: deactivate → login fails (with a distinct
+  message) → reactivate → login succeeds, against real Postgres, plus a
+  real change-password argon2id round trip and the
+  delete-account/`pending_deletion` self-service-undo exclusion. Two
+  `describe` blocks, **each with its own app instance** (a deliberate
+  departure from most other files in this directory, which share one app
+  per file) — `login`/`reactivate-account` are both `@AuthRateLimit()`-
+  decorated and share one `'auth'` named-throttler bucket (5 requests/60s
+  default), so this file budgets its real HTTP calls to those two routes
+  carefully per block, and giving each block its own app instance gets it
+  its own fresh, independent in-memory `AuthThrottlerGuard` bucket rather
+  than accumulating calls across the whole file. `change-password`/
+  `deactivate-account`/`delete-account` carry no `@AuthRateLimit()` at all
+  (`JwtAuthGuard` only), so calls to those three are unlimited within a
+  test. Where an access token is needed purely to call a
+  `JwtAuthGuard`-protected route (not to prove login itself works), it's
+  minted directly via the app's own real `TokenService`
+  (`app.get(TokenService)`) rather than a real HTTP `/auth/login` call —
+  the same "don't spend real HTTP budget on setup, only on what's
+  actually under test" principle
+  `feed-reactions.e2e-spec.ts`/`follow.e2e-spec.ts`'s own `createUser()`
+  helpers already established for `POST /auth/register`'s rate limit,
+  applied here for `login`'s. `GET /auth/guardian-consent/status`
+  deliberately has **no** e2e coverage — see `auth/README.md`'s matching
+  entry for why (a plain Prisma read, none of the three e2e-worthy
+  categories this file's own guiding principle above lists apply).
 
 **A real, discovered gap, not a production bug when found — flagged then,
 now fixed at the source but the test workaround itself deliberately
@@ -222,7 +250,13 @@ pagination/field-shape coverage for `GET /posts/feed`, `GET
 here (ordinary list/read logic is the mocked unit suite's job, per the
 guiding principle above); `GET /posts/:id` itself; and every other
 endpoint in `auth/` (refresh, logout, forgot/reset-password,
-guardian-consent, verify-email) still has mocked-Prisma coverage only.
+guardian-consent — including its new `GET .../status` route, see
+`account-lifecycle.e2e-spec.ts`'s own bullet above for why, verify-email)
+still has mocked-Prisma coverage only. `sprint-1/f5-f6-missing-endpoints`
+added real e2e coverage for `login`/`change-password`/
+`deactivate-account`/`delete-account`/`reactivate-account` specifically
+(`account-lifecycle.e2e-spec.ts`, above) — those five are no longer in
+this "mocked-Prisma coverage only" list.
 Whoever next touches raw SQL, transaction reasoning, or a novel Prisma
 relation/constraint in one of those areas should add a sibling
 `*.e2e-spec.ts` here, per the guiding principle above — not treat this PR

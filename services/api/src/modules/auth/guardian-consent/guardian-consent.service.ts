@@ -1,9 +1,33 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { RegistrationEmailService } from '../registration/email/registration-email.service';
 import { computeConsentTokenExpiresAt } from './consent-token.constants';
+
+// Sprint 1 / sprint-1/f5-f6-missing-endpoints — the response shape for
+// GET /auth/guardian-consent/status (see getConsentStatus below). Carries
+// exactly what Build Plan Section 8.3's Restricted Pending State and
+// Activation Confirmation screens need to render for real, no more:
+//
+// - consentStatus: the real, current value, straight off the Guardian
+//   row — never inferred from a JWT claim (structurally impossible
+//   anyway, see token.types.ts) or cached.
+// - guardianEmail: for a future "change guardian email" UI action — this
+//   PR only exposes the data that action would need, it doesn't build
+//   the action itself.
+// - canResend: computed with the exact same condition
+//   resendConsent() below already gates a real resend on
+//   (consentStatus === 'pending'), so the frontend never has to
+//   re-derive or duplicate that business rule client-side.
+// - consentTimestamp: null until confirmed, useful for the Activation
+//   Confirmation screen. Costs nothing extra since it's already selected.
+export interface GuardianConsentStatusResponse {
+  consentStatus: string;
+  guardianEmail: string;
+  canResend: boolean;
+  consentTimestamp: Date | null;
+}
 
 // Build Plan Section 8.3, step 4: the guardian-facing confirmation
 // endpoint. Steps 1-3 (age declaration, guardian-details capture, the
@@ -114,5 +138,37 @@ export class GuardianConsentService {
     });
 
     await this.emailService.sendGuardianConsentEmail(updated.email, updated.consentToken, user.displayName);
+  }
+
+  // GET /auth/guardian-consent/status. `minorUserId` is the CALLER's own
+  // id, taken from the verified JWT (`sub`) by the controller — never a
+  // path param, and this route is deliberately JwtAuthGuard-only, NOT
+  // GuardianConsentGuard: a restricted-pending minor must be able to
+  // check their own restricted status by definition, and gating this
+  // behind the same guard that enforces the restriction would make that
+  // impossible. See auth/README.md for the full guard-choice writeup.
+  //
+  // "No Guardian row for this caller" covers two indistinguishable cases
+  // — the caller isn't a minor at all, or a data-invariant violation (a
+  // minor with no Guardian row, which RegistrationService should never
+  // produce but isn't guaranteed by a DB constraint) — both are a real
+  // 404, never a silent null 200, matching this codebase's own
+  // established convention (see ClubsService.assertClubExists,
+  // UsersService.assertUserExists).
+  async getConsentStatus(minorUserId: string): Promise<GuardianConsentStatusResponse> {
+    const guardian = await this.prisma.guardian.findUnique({ where: { minorUserId } });
+    if (!guardian) {
+      throw new NotFoundException('No guardian consent record exists for this account');
+    }
+
+    return {
+      consentStatus: guardian.consentStatus,
+      guardianEmail: guardian.email,
+      // Mirrors resendConsent()'s own gate exactly (`consentStatus !==
+      // 'pending'` -> no resend) so the frontend never has to re-derive
+      // this business rule itself.
+      canResend: guardian.consentStatus === 'pending',
+      consentTimestamp: guardian.consentTimestamp,
+    };
   }
 }
