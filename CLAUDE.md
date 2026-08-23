@@ -43,6 +43,15 @@ description must say so explicitly and name the exact follow-up needed
 — e.g. "CLAUDE.md not updated here, needs a status bullet noting X is
 now resolved" — so it's a visible, tracked debt rather than a silent
 one a future sweep has to rediscover from scratch.
+- **The same rule applies to the Build Plan's Decision Log**: any PR whose
+  own text says it "resolves," "closes," or "supersedes" an earlier
+  Decision Log entry must also append a one-line forward-pointer to that
+  earlier entry's own Status column — not just add a new row. A sweep
+  found four entries (#9, #20, #24, #25) that had gone silently stale
+  this exact way: each one's original Status text kept describing an
+  already-resolved question as open, because the entry that resolved it
+  only ever pointed forward in its own text, never backward into the
+  entry it superseded.
 
 ## Non-negotiables
 
