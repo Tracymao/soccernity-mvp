@@ -1,0 +1,232 @@
+/* Verify Email (F7) -- four states rendered by VerifyEmailPage.tsx,
+ * derived from Figma nodes 5143:6635 (Verifying), 5143:6648 (Verified),
+ * 5143:6661 (Link Invalid Or Expired), 5143:6674 (Missing Token).
+ *
+ * Layout note (same deviation GuardianConsent.css / SignupSplitScreen.css
+ * already flagged for their own Figma frames): the source frames each
+ * draw their own full-bleed top bar with an embedded Soccernity wordmark,
+ * but this app always renders the shared site Header above every routed
+ * page (src/layout/AppShell.tsx) -- duplicating a second wordmark bar
+ * here would double up under it. Built to render *within* AppShell's
+ * content area instead, using a negative margin to cancel its padding so
+ * the dark background still reads as full-bleed below the real header,
+ * mirroring consent-page's own `margin: -32px` precedent exactly.
+ *
+ * Colour values reference the --verify-* custom properties set inline
+ * from verifyEmailThemeVars.ts -- do not hardcode hex here. */
+
+.verify-page {
+  min-height: calc(100vh - 90px);
+  margin: -32px;
+  padding: 64px 32px;
+  background-color: var(--verify-bg);
+  color: var(--verify-text-primary);
+  font-family: "Inter", sans-serif;
+  display: flex;
+  justify-content: center;
+}
+
+.verify-page__column {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  width: 100%;
+  max-width: 760px;
+}
+
+.verify-card {
+  background-color: var(--verify-surface);
+  border: 1px solid var(--verify-icon-inactive);
+  border-radius: 12px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.verify-card--tint {
+  background-color: var(--verify-green-tint);
+  border: none;
+  padding: 24px 28px;
+  gap: 14px;
+}
+
+.verify-card--centered {
+  align-items: center;
+  gap: 24px;
+  padding: 56px;
+  text-align: center;
+}
+
+.verify-card__title {
+  font: 600 18px "Inter", sans-serif;
+  margin: 0;
+  color: var(--verify-text-primary);
+  width: 100%;
+}
+
+.verify-card__footnote {
+  font: 400 12px/1.5 "Inter", sans-serif;
+  color: var(--verify-text-secondary);
+  margin: 0;
+  width: 100%;
+}
+
+.verify-spinner {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 6px solid var(--verify-icon-inactive);
+  border-top-color: var(--verify-brand-green);
+  animation: verify-spin 0.9s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes verify-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.verify-icon-circle {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.verify-icon-circle--success {
+  background-color: var(--verify-green-tint-28);
+  color: var(--verify-brand-green);
+}
+
+.verify-icon-circle--neutral {
+  background-color: var(--verify-icon-inactive);
+  color: var(--verify-text-primary);
+}
+
+.verify-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.verify-header--centered {
+  align-items: center;
+  text-align: center;
+}
+
+.verify-heading {
+  font: 600 34px/1.3 "Inter", sans-serif;
+  margin: 0;
+  color: var(--verify-text-primary);
+}
+
+.verify-subheading {
+  font: 400 16px/1.6 "Inter", sans-serif;
+  margin: 0;
+  color: var(--verify-text-secondary);
+}
+
+.verify-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.verify-list--tight {
+  gap: 10px;
+}
+
+.verify-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.verify-row__icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  background-color: var(--verify-green-tint-28);
+  color: var(--verify-brand-green);
+}
+
+.verify-row__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.verify-row__title {
+  font: 600 15px/1.5 "Inter", sans-serif;
+  color: var(--verify-text-primary);
+  margin: 0;
+}
+
+.verify-row__body {
+  font: 400 14px/1.5 "Inter", sans-serif;
+  color: var(--verify-text-secondary);
+  margin: 0;
+}
+
+.verify-actions {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.verify-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 316px;
+  height: 64px;
+  border-radius: 6px;
+  font: 600 16px "Inter", sans-serif;
+  cursor: pointer;
+  border: none;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.verify-button--primary {
+  background-color: var(--verify-brand-green);
+  color: var(--verify-text-on-green);
+}
+
+.verify-button--secondary {
+  background-color: transparent;
+  color: var(--verify-text-primary);
+  border: 1px solid var(--verify-icon-inactive);
+}
+
+.verify-button--secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.verify-status-message {
+  font: 400 16px/1.6 "Inter", sans-serif;
+  color: var(--verify-text-secondary);
+  margin: 0;
+}

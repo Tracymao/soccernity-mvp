@@ -91,23 +91,36 @@ export default function RegisterStep({ dob, isMinor, guardianDetails }: Register
 
   const rightPanel = <img src={illustration} alt="" className="signup-split__illustration" />;
 
+  // SHELL DECISION: the Figma Club Picker frames are full-bleed dark and
+  // single-column -- structurally incompatible with SignupSplitScreen's
+  // light two-panel shell this used to render inside. ClubPickerStep now
+  // owns its own full-bleed dark shell (see its header comment), so it's
+  // rendered here as a full replacement of the success view, not nested
+  // inside SignupSplitScreen any more. The "Account created" / guardian-
+  // email confirmation text that used to live in a separate
+  // .signup-success block is passed into ClubPickerStep's new, optional
+  // confirmationMessage prop instead, rendered above its own "Join a
+  // club" heading.
   if (success) {
     return (
-      <SignupSplitScreen variant="light" themeVars={lightAuthThemeVars} rightPanel={rightPanel}>
-        <div className="signup-success">
-          <h1 className="signup-split__heading">Account created</h1>
-          {success.isMinor ? (
-            <p className="signup-success__body">
-              We&rsquo;ve emailed {success.guardianEmail} to ask them to approve your account. Until they approve,
-              your profile stays private and some features are limited (Build Plan Section 8.3, restricted-pending
-              state).
-            </p>
-          ) : (
-            <p className="signup-success__body">Welcome to Soccernity.</p>
-          )}
-        </div>
-        <ClubPickerStep accessToken={success.accessToken} onDone={() => navigate("/")} />
-      </SignupSplitScreen>
+      <ClubPickerStep
+        accessToken={success.accessToken}
+        onDone={() => navigate("/")}
+        confirmationMessage={
+          <>
+            <h1 className="club-picker__confirmation-heading">Account created</h1>
+            {success.isMinor ? (
+              <p className="club-picker__confirmation-body">
+                We&rsquo;ve emailed {success.guardianEmail} to ask them to approve your account. Until they approve,
+                your profile stays private and some features are limited (Build Plan Section 8.3, restricted-pending
+                state).
+              </p>
+            ) : (
+              <p className="club-picker__confirmation-body">Welcome to Soccernity.</p>
+            )}
+          </>
+        }
+      />
     );
   }
 

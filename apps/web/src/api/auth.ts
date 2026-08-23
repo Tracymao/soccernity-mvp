@@ -231,6 +231,45 @@ export async function resendGuardianConsentRequest(email: string): Promise<{ mes
   return (await response.json()) as { message: string };
 }
 
+// --- Email verification (F7, Build Plan Section 4.1) ----------------------
+//
+// POST /auth/verify-email is unauthenticated -- the user clicking the
+// emailed link is not necessarily signed in yet -- and, like
+// confirmGuardianConsent above, deliberately non-enumerating on failure:
+// an invalid, expired, or already-used token all land on the same
+// generic 400 message, mirroring the backend's own trust model exactly.
+
+export interface VerifyEmailResponse {
+  verified: true;
+  userId: string;
+}
+
+export async function verifyEmail(token: string): Promise<VerifyEmailResponse> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/verify-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    // Deliberately generic -- matches the backend's own non-enumeration
+    // posture: an invalid, expired, or already-used token are all
+    // indistinguishable from here.
+    throw new AuthApiError("This verification link is invalid or has expired.", {
+      status: response.status,
+    });
+  }
+
+  return (await response.json()) as VerifyEmailResponse;
+}
+
 // --- Account lifecycle (F6, sprint-1/f5-f6-missing-endpoints) -------------
 //
 // All three are JwtAuthGuard-only, 204-No-Content-on-success, and require
