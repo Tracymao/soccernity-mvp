@@ -37,6 +37,7 @@ import SignupPage from "../pages/SignupPage";
 import ForgotPasswordPage from "../pages/ForgotPasswordPage";
 import ResetPasswordPage from "../pages/ResetPasswordPage";
 import GuardianConsentPage from "../pages/GuardianConsentPage";
+import GuardianConsentConfirmPage from "../pages/GuardianConsentConfirmPage";
 import VerifyEmailPage from "../pages/VerifyEmailPage";
 import ProfilePage from "../pages/ProfilePage";
 import NotFoundPage from "../pages/NotFoundPage";
@@ -61,7 +62,14 @@ export const router = createBrowserRouter([
       { path: "signup", element: <SignupPage /> }, // F3 (age gate + signup)
       { path: "forgot-password", element: <ForgotPasswordPage /> }, // F4
       { path: "reset-password", element: <ResetPasswordPage /> }, // F4
+      // F5: /guardian-consent is the MINOR's own authenticated status view
+      // (GET /auth/guardian-consent/status); /guardian-consent/confirm is
+      // the new, separate, public route for the GUARDIAN's own
+      // unauthenticated confirmation action (POST /auth/guardian-consent)
+      // -- see GuardianConsentConfirmPage.tsx's header comment for the
+      // full routing-split argument.
       { path: "guardian-consent", element: <GuardianConsentPage /> }, // F5
+      { path: "guardian-consent/confirm", element: <GuardianConsentConfirmPage /> }, // F5
       { path: "profile", element: <ProfilePage /> }, // F6
       // Added during a Sprint 1 cleanup review -- was missing entirely,
       // not a pre-existing placeholder. See VerifyEmailPage.tsx.

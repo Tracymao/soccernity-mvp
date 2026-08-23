@@ -144,6 +144,168 @@ export async function login(payload: LoginRequest): Promise<LoginResponse> {
   return (await response.json()) as LoginResponse;
 }
 
+// --- Guardian consent (Build Plan Section 8.3, F5) ------------------------
+//
+// GuardianConsentDto/{message} shape mirrors
+// services/api/src/modules/auth/guardian-consent/guardian-consent.controller.ts
+// exactly. confirmGuardianConsent/resendGuardianConsentRequest are both
+// deliberately unauthenticated (no Bearer header) -- the guardian is not a
+// Soccernity account holder, and the token/email themselves are the
+// credential, mirroring resetPassword's own trust model in lib/authApi.ts.
+// getGuardianConsentStatus is the one authenticated call of the three (it's
+// the MINOR checking their own status), so it takes an access token.
+
+export interface GuardianConsentStatus {
+  consentStatus: string;
+  guardianEmail: string;
+  canResend: boolean;
+  consentTimestamp: string | null;
+}
+
+export async function confirmGuardianConsent(consentToken: string): Promise<{ message: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/guardian-consent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ consentToken }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    // Deliberately generic -- matches the backend's own non-enumeration
+    // posture (guardian-consent.service.ts's confirmConsent()): an
+    // unknown, expired, or already-rotated token all land here
+    // indistinguishably.
+    throw new AuthApiError("This link is invalid or has expired. Ask the account holder to resend the request.", {
+      status: response.status,
+    });
+  }
+
+  return (await response.json()) as { message: string };
+}
+
+export async function getGuardianConsentStatus(accessToken: string): Promise<GuardianConsentStatus> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/guardian-consent/status`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    throw new AuthApiError(`Couldn't load your guardian consent status (${response.status}).`, {
+      status: response.status,
+    });
+  }
+
+  return (await response.json()) as GuardianConsentStatus;
+}
+
+export async function resendGuardianConsentRequest(email: string): Promise<{ message: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/guardian-consent/resend`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    throw new AuthApiError(`Couldn't send that request (${response.status}).`, { status: response.status });
+  }
+
+  return (await response.json()) as { message: string };
+}
+
+// --- Account lifecycle (F6, sprint-1/f5-f6-missing-endpoints) -------------
+//
+// All three are JwtAuthGuard-only, 204-No-Content-on-success, and require
+// the current password as a re-entry confirmation step -- mirrored here
+// exactly (see auth.controller.ts). The UI calling these MUST collect the
+// password before calling, never send a blank/omitted one.
+
+export async function changePassword(
+  accessToken: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    const message = response.status === 401 ? "Your current password is incorrect." : "Couldn't change your password.";
+    throw new AuthApiError(message, { status: response.status });
+  }
+}
+
+export async function deactivateAccount(accessToken: string, password: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/deactivate-account`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ password }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    const message = response.status === 401 ? "That password is incorrect." : "Couldn't deactivate your account.";
+    throw new AuthApiError(message, { status: response.status });
+  }
+}
+
+// This does NOT hard-delete anything server-side -- deleteAccount() sets
+// the account to a pending_deletion status (see auth.controller.ts's own
+// comment). Callers must present copy that reflects that ("your request
+// has been received"), never "your account has been deleted".
+export async function deleteAccount(accessToken: string, password: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/delete-account`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ password }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    const message = response.status === 401 ? "That password is incorrect." : "Couldn't process that request.";
+    throw new AuthApiError(message, { status: response.status });
+  }
+}
+
 export async function registerUser(payload: RegisterRequest): Promise<RegisterResponse> {
   let response: Response;
   try {

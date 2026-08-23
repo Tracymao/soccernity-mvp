@@ -1,0 +1,240 @@
+/* Shared styles for GuardianConsentPage (minor's status view) and
+ * GuardianConsentConfirmPage (guardian's public confirmation view).
+ * Colour values reference the --consent-* custom properties set inline
+ * from consentThemeVars.ts -- do not hardcode hex here.
+ *
+ * Layout note (same deviation AuthLayout.tsx/SignupSplitScreen.tsx already
+ * flagged for their own Figma frames): both source frames (5108:6629,
+ * 5108:6630, 5108:6631) draw their own full-bleed top bar with an embedded
+ * Soccernity wordmark. This app always renders the shared site Header
+ * above routed content (src/layout/AppShell.tsx) -- duplicating a second
+ * wordmark bar here would double up under it. Built to render *within*
+ * AppShell's content area instead, using a negative margin to cancel its
+ * padding so the dark background still reads as full-bleed below the real
+ * header, mirroring signup-split's own `margin: -32px` precedent exactly.
+ */
+
+.consent-page {
+  min-height: calc(100vh - 90px);
+  margin: -32px;
+  padding: 64px 32px;
+  background-color: var(--consent-bg);
+  color: var(--consent-text-primary);
+  font-family: "Inter", sans-serif;
+  display: flex;
+  justify-content: center;
+}
+
+.consent-page__column {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  width: 100%;
+  max-width: 760px;
+}
+
+.consent-pill {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-radius: 99px;
+  background-color: var(--consent-green-tint-28);
+  color: var(--consent-brand-green);
+  font: 600 12px "Inter", sans-serif;
+}
+
+.consent-page__heading {
+  font: 600 34px/1.3 "Inter", sans-serif;
+  margin: 0 0 12px;
+  color: var(--consent-text-primary);
+}
+
+.consent-page__subheading {
+  font: 400 16px/1.6 "Inter", sans-serif;
+  margin: 0;
+  color: var(--consent-text-secondary);
+}
+
+.consent-card {
+  background-color: var(--consent-surface);
+  border: 1px solid var(--consent-icon-inactive);
+  border-radius: 12px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.consent-card--tint {
+  background-color: var(--consent-green-tint);
+  border: none;
+  padding: 24px 28px;
+}
+
+.consent-card__title {
+  font: 600 18px "Inter", sans-serif;
+  margin: 0;
+  color: var(--consent-text-primary);
+}
+
+.consent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.consent-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--consent-icon-inactive);
+  border-radius: 8px;
+}
+
+.consent-list--plain .consent-row {
+  border: none;
+  padding: 0;
+  align-items: flex-start;
+}
+
+.consent-row__icon {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.consent-row__icon--on {
+  background-color: var(--consent-green-tint-28);
+  color: var(--consent-brand-green);
+}
+
+.consent-row__icon--off {
+  background-color: var(--consent-icon-inactive);
+  color: var(--consent-text-secondary);
+}
+
+.consent-row__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.consent-row__title {
+  font: 600 15px/1.5 "Inter", sans-serif;
+  color: var(--consent-text-primary);
+}
+
+.consent-row__body {
+  font: 400 14px/1.5 "Inter", sans-serif;
+  color: var(--consent-text-secondary);
+}
+
+.consent-pill--status {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 99px;
+  border: 1px solid var(--consent-icon-inactive);
+  font: 600 12px "Inter", sans-serif;
+  color: var(--consent-text-secondary);
+}
+
+.consent-pill--status-on {
+  border: none;
+  background-color: var(--consent-green-tint-28);
+  color: var(--consent-brand-green);
+}
+
+.consent-actions {
+  display: flex;
+  gap: 16px;
+}
+
+.consent-button {
+  flex: 1;
+  height: 64px;
+  border-radius: 6px;
+  font: 600 16px "Inter", sans-serif;
+  cursor: pointer;
+  border: none;
+}
+
+.consent-button--primary {
+  background-color: var(--consent-brand-green);
+  color: var(--consent-text-on-green);
+}
+
+.consent-button--primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.consent-button--secondary {
+  background-color: transparent;
+  color: var(--consent-text-primary);
+  border: 1px solid var(--consent-icon-inactive);
+}
+
+.consent-button--secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.consent-footnote {
+  font: 400 13px/1.6 "Inter", sans-serif;
+  color: var(--consent-text-secondary);
+  margin: 0;
+}
+
+.consent-status-message {
+  font: 400 16px/1.6 "Inter", sans-serif;
+  color: var(--consent-text-secondary);
+}
+
+.consent-status-message--error {
+  color: var(--consent-brand-green);
+}
+
+/* Confirm page (guardian's view) specific bits */
+.consent-eyebrow {
+  font: 600 13px "Inter", sans-serif;
+  color: var(--consent-text-secondary);
+  margin: 0 0 12px;
+}
+
+.consent-checkbox-row {
+  display: flex;
+  gap: 15px;
+  align-items: flex-start;
+  padding: 20px 24px;
+  border-radius: 8px;
+  background-color: var(--consent-green-tint);
+  border: 1.5px solid var(--consent-brand-green);
+}
+
+.consent-checkbox-row input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.consent-checkbox-row label {
+  font: 600 15px/1.5 "Inter", sans-serif;
+  color: var(--consent-text-primary);
+}
+
+.consent-fineprint {
+  font: 400 12px "Inter", sans-serif;
+  color: var(--consent-text-secondary);
+  font-style: italic;
+}

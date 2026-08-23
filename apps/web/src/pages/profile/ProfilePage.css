@@ -1,0 +1,241 @@
+/* Colour values reference the app-wide --sn-* custom properties from
+ * src/theme/applyTheme.ts (mirroring packages/shared/src/tokens) -- do not
+ * hardcode hex here. Unlike the guardian-consent screens, this page's
+ * source frame (Figma node 1455:4362, "Profile 1") is a LIGHT-theme design
+ * that matches the app's current single active mode (main.tsx calls
+ * applyTheme("light")), so it reads the shared --sn-* variables directly
+ * rather than needing a scoped theme-vars file the way the dark
+ * guardian-consent screens did. */
+
+.profile-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.profile-header {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  background-color: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 16px;
+  padding: 32px;
+}
+
+.profile-header__avatar {
+  flex-shrink: 0;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background-color: var(--sn-green-tint-12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 40px "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+  overflow: hidden;
+}
+
+.profile-header__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-header__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.profile-header__name {
+  font: 600 24px "Inter", sans-serif;
+  margin: 0;
+  color: var(--sn-text-primary);
+}
+
+.profile-header__meta {
+  font: 400 14px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.profile-header__badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.profile-badge {
+  font: 600 12px "Inter", sans-serif;
+  padding: 4px 10px;
+  border-radius: 99px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-brand-navy);
+}
+
+.profile-badge--pending {
+  background-color: transparent;
+  border: 1px solid var(--sn-icon-inactive);
+  color: var(--sn-text-secondary);
+}
+
+.profile-header__stats {
+  display: flex;
+  gap: 24px;
+  margin-top: 4px;
+}
+
+.profile-stat {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.profile-stat strong {
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.profile-stat span {
+  color: var(--sn-text-secondary);
+  font-size: 14px;
+}
+
+.profile-edit-button {
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 8px;
+  border: none;
+  background-color: var(--sn-brand-navy);
+  color: white;
+  font: 600 14px "Inter", sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.profile-section {
+  background-color: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 16px;
+  padding: 24px 32px;
+}
+
+.profile-section__title {
+  font: 600 16px "Inter", sans-serif;
+  margin: 0 0 8px;
+  color: var(--sn-text-primary);
+}
+
+.profile-section__body {
+  font: 400 15px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.profile-field-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+}
+
+.profile-field-row:last-child {
+  border-bottom: none;
+}
+
+.profile-field-row__label {
+  color: var(--sn-text-secondary);
+  font: 400 14px "Inter", sans-serif;
+}
+
+.profile-field-row__value {
+  color: var(--sn-text-primary);
+  font: 600 14px "Inter", sans-serif;
+  text-align: right;
+}
+
+.profile-field-row__value--disabled {
+  color: var(--sn-text-secondary);
+  font-weight: 400;
+  font-style: italic;
+}
+
+.profile-tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+  padding: 0 8px;
+}
+
+.profile-tab {
+  background: none;
+  border: none;
+  padding: 12px 4px;
+  font: 600 14px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.profile-tab--active {
+  color: var(--sn-brand-navy);
+  border-bottom-color: var(--sn-brand-navy);
+}
+
+.profile-empty-state {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--sn-text-secondary);
+  font: 400 14px/1.6 "Inter", sans-serif;
+}
+
+.profile-follow-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.profile-follow-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font: 400 14px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+}
+
+.profile-status-message {
+  font: 400 15px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  padding: 48px 0;
+  text-align: center;
+}
+
+.profile-status-message--error {
+  color: var(--sn-brand-navy);
+}
+
+.profile-load-more {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--sn-brand-green);
+  font: 600 13px "Inter", sans-serif;
+  cursor: pointer;
+  padding: 4px 0;
+}

@@ -236,20 +236,127 @@ Full reasoning for every choice above: Build Plan Section 5.
     relation/constraint) apply, so the mocked unit layer is the right one.
     Full detail in `services/api/src/modules/auth/README.md`'s matching
     "Status update" entry and `services/api/test/README.md`.
-- **Sprint 1 frontend has a real gap: F5, F6, and F7 are not started.**
-  F1-F4 (app shell, login, signup, forgot/reset) are real, built
-  screens. F5 (`GuardianConsentPage.tsx`, route `/guardian-consent`)
-  and F6 (`ProfilePage.tsx`, route `/profile`) are route stubs only —
-  wired into `router.tsx` but rendering `PlaceholderPage`, waiting on
-  Figma-derived screens. **F7 (`VerifyEmailPage.tsx`, route
-  `/verify-email`) didn't exist at all until a Sprint 1 cleanup review
-  caught it** — `POST /auth/verify-email` (B2) and the email Postmark
-  now actually sends (Decision Log #17) have had no frontend page to
-  land on since Sprint 1 started. It's a stub now, same pattern as
-  F5/F6, but still needs its real screen. None of F5/F6/F7 block
-  backend work, but Sprint 1's own exit criterion (register, verify
-  email, declare age, guardian-consent-gated access) isn't actually
-  walkable by a real user until at least F7 (and arguably F5) are built.
+- **F5 and F6 are now real, built screens (`sprint-1/f5-f6-real-screens`,
+  branched from `origin/main` after `sprint-1/f5-f6-missing-endpoints`
+  merged the endpoints below) — no longer route stubs.** F7
+  (`VerifyEmailPage.tsx`, route `/verify-email`) is untouched by this PR
+  and remains a stub — still genuinely not started, see its own paragraph
+  below.
+  - **F5 routing decision**: the pre-existing `/guardian-consent` route
+    covered two structurally different audiences that don't belong behind
+    one component — an unauthenticated guardian confirming via an emailed
+    token, and the authenticated minor checking their own status. Split
+    into `/guardian-consent` (unchanged path, stays the minor's own
+    authenticated status view — `GuardianConsentPage.tsx`, `GET
+    /auth/guardian-consent/status`, renders Screen 5 "Restricted Pending"
+    or Screen 6 "Activation Confirmation" depending on the real
+    `consentStatus`) and a new `/guardian-consent/confirm`
+    (`GuardianConsentConfirmPage.tsx`, public/unauthenticated, `POST
+    /auth/guardian-consent`, reached via the emailed link's `?token=`).
+    This mirrors the backend's own status/confirm split exactly, and a
+    dedicated test proves the confirm route is genuinely public (renders
+    and calls the endpoint correctly with both `sessionStorage` and
+    `localStorage` cleared beforehand). Only Section 8.3 step 5's three
+    named restrictions (no public profile visibility, no DMs from
+    unverified accounts, no participation in Banter Rooms beyond
+    read-only) are rendered on Screen 5 — the Figma frame's own "SCOPE
+    OPEN" annotation about Grassroots/Sports Hub is left exactly as open
+    as the frame left it, nothing invented. **Figma-vs-spec conflict,
+    flagged rather than silently resolved**: the confirm screen's Figma
+    frame renders a personalized "Request Summary" panel (minor's name,
+    DOB, guardian's relationship, request date) that would need a
+    GET-by-consent-token lookup endpoint; no such endpoint exists in
+    Section 4.1 or in `sprint-1/f5-f6-missing-endpoints` — `POST
+    /auth/guardian-consent` returns only `{ message }`. That panel is
+    omitted rather than fabricated; the real, generic safeguarding
+    education content elsewhere on the frame is kept. The frame's "I do
+    not consent" button also has no matching backend action (no
+    decline/reject endpoint, only confirm) — modeled as "take no action,
+    with an explicit acknowledgement message," not a silent no-op.
+  - **F6 (`ProfilePage.tsx`, route `/profile`) is a real profile view +
+    edit flow.** The view screen ("Profile 1", node 1455:4362) is wired to
+    `GET /users/:id` (self-only, id from the access token's own `sub`
+    claim decoded client-side — `src/lib/session.ts`, display-convenience
+    only, never a trust boundary) plus genuinely paginated
+    Followers/Following lists (`GET /users/:id/followers`/`following`,
+    lazy-loaded on click, Section 5.5 discipline). **Deliberately NOT
+    reproduced**: the Figma frame's trending-news/suggested-follows/
+    fixtures sidebars and its mock "Comments and Replies" feed — all
+    static lorem-ipsum content with no backing Section 4 endpoint;
+    reproducing it as if functional would misrepresent placeholder
+    content as a built feature, the same discipline already applied to
+    Bio/Location below. The edit screen ("Edit Profile" modal, node
+    1466:18196) is wired to `PATCH /users/:id` for the two fields the
+    backend actually accepts (`displayName`, split into
+    first/last-name inputs and rejoined on save; `phone`, a real
+    functional field the Figma frame doesn't happen to include, added
+    anyway and flagged). **Bio, Location, Preferred Club, and Date of
+    Birth are rendered visibly but disabled**, each with its own `// no
+    backend field/endpoint yet` comment — Bio/Location have no column on
+    `User` at all; Date of Birth is deliberately excluded server-side
+    (could flip `isMinor`); Preferred Club's `clubAffiliationId` exists on
+    the schema but no endpoint writes it (club membership goes through
+    `ClubPage.members`/`POST /clubs/:id/join` instead). "Manage Account"
+    (Change Password → `POST /auth/change-password`; a "Forgotten
+    Password?" link to the existing `/forgot-password` route; Deactivate →
+    `POST /auth/deactivate-account`; Delete → `POST /auth/delete-account`)
+    has no Figma screen anywhere in the file — built plain, same
+    "no dedicated screen exists, flagged rather than invented" precedent
+    `ClubPickerStep.tsx` already established for its own step. Deactivate
+    and Delete are two distinct actions (not one), and both require
+    re-entering the password inline before the call fires — the UI cannot
+    reach either endpoint without it. Delete's success copy says "your
+    request has been received... processed for deletion," never implying
+    instant/permanent deletion, matching what `POST /auth/delete-account`
+    actually does server-side (`pending_deletion` status, not a hard
+    delete).
+  - **"Create Profile" (node 1498:2303) investigated, not built.** Its
+    field list — Full Name, Username, Date of Birth, Location, Bio,
+    Preferred Club, profile picture — was compared against
+    `RegisterStep.tsx`'s real registration payload and `ClubPickerStep.tsx`'s
+    post-registration club join. Full Name, Date of Birth, and Preferred
+    Club are already collected by Age Gate/Register/ClubPicker
+    respectively — building them again here would be duplicate, confusing
+    UX. Username and profile picture are the only genuinely new fields,
+    but neither has any backing column anywhere on `User`
+    (`prisma/schema.prisma`'s `User` model has no `username`/avatar field
+    at all) or any endpoint — worse than the already-flagged Bio/Location
+    gap, since there isn't even a partial `PATCH` field to attach to.
+    Conclusion: this screen is a superseded/alternate design, not a real
+    gap in the current signup flow — not built. Whether Soccernity wants a
+    username/avatar concept at all is a real product decision for a human,
+    not something to invent a frontend for unilaterally.
+  - **Verification**: `apps/web`'s vitest suite went from the pre-existing
+    2 suites / 14 tests, 0 failures (`AgeGateStep.test.tsx`,
+    `ClubPickerStep.test.tsx`) to **5 suites / 32 tests, 0 failures** —
+    three new files (`GuardianConsentPage.test.tsx`,
+    `GuardianConsentConfirmPage.test.tsx`, `ProfilePage.test.tsx`),
+    including the public-with-no-session test above. `npx tsc --noEmit`,
+    `npm run lint`, and `npm run build` are all clean. A temporary Vitest
+    spec (deleted before the final commit, never reaching `main`) mounted
+    the real route tree end to end: registered-as-minor's guardian
+    confirming via `/guardian-consent/confirm`, then the minor's own
+    `/guardian-consent` view genuinely reflecting `pending` and then
+    `confirmed` across two fresh mounts (simulating a real refetch after
+    the guardian approves) — passed. The real dev server was also started
+    and all 15 real paths (14 routes plus the wildcard 404, including both
+    new/changed guardian-consent paths and `/profile`) were `curl`'d
+    directly, all returning real HTTP 200s, matching the same verification
+    standard the last three infra PRs (React 19, Router 8,
+    club-picker-ui) used.
+  - **Sprint 1's own exit criterion is now closer to walkable, but still
+    not fully walkable end to end by a real user — stated plainly, not
+    rounded up.** Register → declare age → guardian-consent-gated access
+    is now real: a minor can register, their guardian can confirm consent
+    via a real emailed-link page, and the minor can check their own
+    restricted/confirmed status on a real page. **Email verification is
+    still the missing link**: F7 (`VerifyEmailPage.tsx`, route
+    `/verify-email`) is untouched by this PR and remains exactly the stub
+    it was — `POST /auth/verify-email` (B2) and the email Postmark now
+    actually sends (Decision Log #17) still have no real frontend page to
+    land on. Until F7 is built, "register, verify email, declare age,
+    guardian-consent-gated access" isn't walkable end to end by a real
+    user, even though three of its four steps now are.
 - **Sprint 2 is in progress. Schema is ready; the Feed Service's
   Section 4.3 endpoints are fully built (two slices), Follow (Section
   4.2's remaining four endpoints) and notification-trigger wiring are
