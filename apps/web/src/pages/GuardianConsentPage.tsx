@@ -302,6 +302,20 @@ export default function GuardianConsentPage() {
           </div>
         </div>
 
+        {/* sprint-1/f5-f6-bugfixes -- Bug 1 fix, option (a): the dead
+            "you can resend once every 24 hours" footnote that used to sit
+            below this block is removed, not reworded. Its condition
+            (`!status.canResend`) can never be true here: the backend
+            defines `canResend` as exactly `consentStatus === 'pending'`
+            (guardian-consent.service.ts's getConsentStatus()), and this
+            whole branch only ever renders when consentStatus is already
+            'pending' -- so the footnote described a real cooldown rule
+            that doesn't exist anywhere server-side (confirmed:
+            resendConsent() has no such check at all). `disabled={!status
+            .canResend || ...}` below is left as-is -- it's inert today for
+            the same reason, but stays correctly wired for the day a real
+            cooldown (option (b), a genuine backend addition -- see this
+            PR's description) makes `canResend` actually vary. */}
         <div className="consent-actions">
           <button
             type="button"
@@ -327,9 +341,6 @@ export default function GuardianConsentPage() {
           <p className="consent-status-message consent-status-message--error" role="alert">
             Couldn&rsquo;t send that just now. Please try again shortly.
           </p>
-        )}
-        {!status.canResend && (
-          <p className="consent-footnote">You can resend a request once every 24 hours.</p>
         )}
       </div>
     </div>

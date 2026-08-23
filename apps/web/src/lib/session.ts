@@ -15,9 +15,39 @@
 // flagged as a reasonable follow-up in this PR's description, not
 // unilaterally built here.
 const ACCESS_TOKEN_KEY = "sn_access_token";
+// Matches LoginPage.tsx's own key name -- the only other place this app
+// writes a session. Not read anywhere in this file (no refresh-token
+// getter exists, or is needed, client-side), only cleared by
+// clearStoredSession() below.
+const REFRESH_TOKEN_KEY = "sn_refresh_token";
 
 export function getStoredAccessToken(): string | null {
   return window.sessionStorage.getItem(ACCESS_TOKEN_KEY) ?? window.localStorage.getItem(ACCESS_TOKEN_KEY);
+}
+
+// sprint-1/f5-f6-bugfixes -- Bug 2 fix. Genuinely new: no clear/logout
+// helper existed anywhere in apps/web before this fix (confirmed by grep
+// across apps/web/src -- LoginPage.tsx only ever WRITES a session; nothing
+// reads it back and clears it, and there is no logout button/flow anywhere
+// in this app yet). Added here, not invented ad hoc at each call site,
+// because this is the one file that already owns the storage-key names and
+// the "check both sessionStorage and localStorage" convention
+// getStoredAccessToken established -- a real clear has to mirror that same
+// dual-location check, or a "Stay signed in" (localStorage) session would
+// survive a clear that only touched sessionStorage.
+//
+// Removes BOTH keys from BOTH locations: the access token (this file's own
+// concern) and the refresh token (LoginPage.tsx's sibling key) -- a
+// deactivated/deleted account already has its server-side refresh-token
+// session revoked (TokenService.revokeAllSessionsForUser, called by both
+// AuthService.deactivateAccount and deleteAccount), so the stored refresh
+// token is already dead server-side by the time this runs; clearing it too
+// is just not leaving a known-dead credential sitting in browser storage.
+export function clearStoredSession(): void {
+  window.sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+  window.localStorage.removeItem(ACCESS_TOKEN_KEY);
+  window.sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+  window.localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
 // Decodes the (already-verified-by-the-server) access token's payload

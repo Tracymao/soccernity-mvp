@@ -357,6 +357,45 @@ Full reasoning for every choice above: Build Plan Section 5.
     land on. Until F7 is built, "register, verify email, declare age,
     guardian-consent-gated access" isn't walkable end to end by a real
     user, even though three of its four steps now are.
+  - **Two small, real, self-flagged bugs found during independent review
+    of this PR are now fixed (`sprint-1/f5-f6-bugfixes`), both UX-only, no
+    backend/data-integrity issue in either case.** Bug 1:
+    `GuardianConsentPage.tsx`'s "you can resend once every 24 hours"
+    footnote was dead code — its condition (`!status.canResend`) can never
+    be true inside the `consentStatus === 'pending'` branch it lived in,
+    since `getConsentStatus()` defines `canResend` as exactly
+    `consentStatus === 'pending'`. **Fixed via option (a) — the footnote
+    text is removed, not reworded** — a real 24-hour cooldown was never
+    actually implemented anywhere server-side (`resendConsent()` has no
+    such check, confirmed by reading it directly), so leaving text
+    describing a rule that doesn't exist would have been actively
+    misleading, not just inert; option (b) (building a genuine
+    `lastResendAt`-backed cooldown) is real new scope, left as an
+    unbuilt, unresolved candidate, not silently started. Bug 2:
+    `EditProfileModal.tsx`'s `handleDeactivate()` showed a success message
+    on a successful `POST /auth/deactivate-account` but never cleared the
+    still-valid access token from storage or redirected away, leaving the
+    UI looking like a normal logged-in session for up to the token's
+    ~15-minute natural expiry even though the backend's own `login()`
+    already rejects a deactivated account and sessions are already
+    server-side revoked. **Fixed**: a new `clearStoredSession()` helper in
+    `apps/web/src/lib/session.ts` (genuinely new — no clear/logout helper
+    existed anywhere in `apps/web` before this fix, confirmed by grep;
+    `LoginPage.tsx` only ever *writes* a session) clears both the access
+    and refresh token keys from both `sessionStorage`/`localStorage`,
+    called synchronously right on success — not delayed — so the stale
+    credential is gone immediately; a 2.5s delay (no existing
+    toast/timed-banner precedent in this app to match, a judgment call)
+    then redirects to `/login` via `useNavigate`, giving the person a
+    moment to actually read the success message first. **`deleteAccount()`'s
+    handler was checked, not assumed fine — it had the exact same gap,
+    confirmed by reading it directly, and got the identical fix**, not a
+    different one. Real tests added for both (`GuardianConsentPage.test.tsx`,
+    a new `EditProfileModal.test.tsx`), including the redirect firing only
+    after real storage-clearing is observed, and both failure paths (wrong
+    password) leaving the session untouched. `apps/web` vitest suite: 6
+    suites / 37 tests, 0 failures (up from 5/32). `tsc --noEmit`,
+    `npm run build`, `npm run lint` all clean.
 - **Sprint 2 is in progress. Schema is ready; the Feed Service's
   Section 4.3 endpoints are fully built (two slices), Follow (Section
   4.2's remaining four endpoints) and notification-trigger wiring are
