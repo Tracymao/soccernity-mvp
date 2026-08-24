@@ -1820,6 +1820,83 @@ Full reasoning for every choice above: Build Plan Section 5.
   console errors — same verification ceiling as every prior frontend PR
   in this project (no real browser/Playwright available in this
   environment).
+  - **`sprint-2/followers-scope-fix` revisits Decision Log #31, not
+  overrides it: `GET /users/:id/followers` and `GET
+  /users/:id/following` for a restricted-pending minor as the TARGET
+  (`:id`) now 404 for every caller, matching a non-existent user.**
+  #31's original public-scope reasoning still stands for non-restricted
+  users — this closes one specific gap it never checked (its own
+  reasoning only tested whether Section 8.3 step 5's *enumerated*
+  restricted-pending list named these two routes, not the broader
+  principle that a minor's profile shouldn't be visible pre-consent).
+  `UsersService.assertFollowGraphVisible` is a new service-level check
+  reading the target `:id`'s `isMinor`/`Guardian.consentStatus` —
+  deliberately not `GuardianConsentGuard`, which only ever gates the
+  *caller's* own restricted status, not another user's. Verified:
+  `npx tsc --noEmit`, `npm run build`, `npm run lint` all clean; mocked
+  suite 34 suites / 394 tests, 0 failures (8 new); e2e suite unchanged,
+  7 suites / 39 tests, 0 failures (this fix is unit-testable, no e2e
+  spec needed). See `users/README.md`'s "followers/following
+  restricted-pending gap" section and Decision Log #31/#41.
+- **`sprint-2/account-deletion-sweep` implements Decision Log #42's
+  retention policy for real: a `pending_deletion` account
+  (`AuthService.deleteAccount`) now gets an actual hard `User` DELETE
+  30 days after `pendingDeletionAt` (new field — `accountStatus` alone
+  never recorded when the state began), via a daily `@Cron` job, not a
+  manually-triggered endpoint.** Guardian/consent records survive that
+  hard-delete on purpose: a new, deliberately decoupled
+  `ConsentAuditRecord` (`minorUserId` as a plain string, not an FK —
+  the whole point is surviving the `User` row it describes) snapshots
+  `consentStatus`/`consentConfirmedAt`, then the real `Guardian` row is
+  deleted, then the `User` row — all in one transaction, so a blocked
+  delete can't leave Guardian gone with User still there.
+  `ConsentAuditRecord` gets its own independent 6-month purge timer,
+  matching Decision Log #42's "~7 months total" math.
+  **Investigation found every FK from Post/Comment/Follow/Like/
+  SavedPost/Notification/Report/Message/LeaderboardEntry/
+  GrassrootsTeam/Result to `User` is `ON DELETE RESTRICT`** — meaning,
+  as shipped here, **a hard-delete failed for any account with real
+  activity.** Flagged then as a new Decision Log #44 candidate — since
+  resolved by the founder as option (a), cascade, applied to those
+  eleven tables (not Guardian, which stays on #42's separate
+  snapshot-then-delete mechanism); implementation is a follow-up PR
+  (`sprint-2/account-deletion-cascade`), not yet merged as of this
+  bullet. Verified for this PR specifically: `npx tsc --noEmit`,
+  `npm run build`, `npm run lint` all clean; mocked suite 35 suites /
+  407 tests, 0 failures; e2e suite (real Postgres, real `RESTRICT`
+  constraint exercised, not mocked) 8 suites / 51 tests, 0 failures. A
+  real bug caught mid-PR by the e2e suite itself: `Date.setMonth`
+  drifted the 6-month cutoff by an hour across a DST boundary — fixed
+  to `setUTCMonth`.
+  - **`sprint-2/account-deletion-cascade` implements Decision Log #44 (cascade,
+  resolved by the founder): all eleven User-referencing FKs are now
+  `ON DELETE CASCADE`, not `RESTRICT`.** A hard-delete on any account —
+  including one with real activity — now succeeds. Second-order discovery
+  made while implementing, not a new policy question: `Comment.postId`,
+  `SavedPost.postId`, and `Like.postId` were *also* `RESTRICT` (against
+  `Post`, not `User`), which would have silently blocked the cross-user
+  cascade the founder's own resolution describes — flipped those three
+  to `CASCADE` too. `Guardian.minorUserId` stays `RESTRICT`, unchanged —
+  confirmed directly against `information_schema.referential_constraints`,
+  not assumed — Decision Log #42's separate snapshot-then-delete
+  mechanism still depends on it. **The core cross-user consequence is
+  proven by a real Postgres e2e test**: hard-deleting User A also deletes
+  User B's own `Comment`/`Like`/`SavedPost` on User A's post, while User
+  B's own account is explicitly asserted untouched.
+  `AccountDeletionSweepService`'s `P2003` catch was reworked, not deleted
+  — kept as a defensive fallback for schema drift, recharacterized from
+  an expected/routine path to an investigate-this signal, since
+  `blockedUserIds` should now stay empty in normal operation. One piece
+  deliberately left alone: `Fixture.teamAId`/`teamBId` and
+  `Result.fixtureId` (GrassrootsTeam's own children) remain `RESTRICT`
+  — `GrassrootsModule` isn't wired into the app yet, so this chain is
+  unreachable today; flagged for whoever builds it. Verified:
+  `npx tsc --noEmit`, `npm run build`, `npm run lint` all clean; mocked
+  suite 35 suites / 408 tests, 0 failures (1 new); e2e suite (real
+  Postgres, real cascade fired, not mocked) 8 suites / 54 tests, 0
+  failures (the 2 stale "blocked" tests from PR #88 replaced with 5 new
+  ones, including the cross-user cascade proof and the raw-SQL schema
+  checks).
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
