@@ -6,16 +6,22 @@ import { AccountDeletionSweepService } from '../src/modules/account-deletion/acc
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
 
 // Real-Postgres coverage for AccountDeletionSweepService (Build Plan
-// Section 9, Decision Log #42) — the same category (2)/(3)
-// "transaction/isolation-level reasoning" and "genuinely novel Prisma
-// relation/constraint" test/README.md's guiding principle calls out for
-// e2e coverage. This one specifically needed real Postgres, not a mock:
-// the entire point of hardDeleteUser's transaction ordering is that
+// Section 9, Decision Log #42 and Decision Log #44) — the same category
+// (1)/(2)/(3) "raw SQL", "transaction/isolation-level reasoning", and
+// "genuinely novel Prisma relation/constraint" test/README.md's guiding
+// principle calls out for e2e coverage. This one specifically needed
+// real Postgres, not a mock, for two separate reasons: (1) the entire
+// point of hardDeleteUser's transaction ordering is that
 // Guardian.minorUserId is a real ON DELETE RESTRICT foreign key against
 // User (confirmed against the real migration SQL before writing any
 // code) — a mocked PrismaService would happily let a User delete
 // "succeed" regardless of ordering, telling you nothing about whether
-// the real constraint is actually satisfied.
+// the real constraint is actually satisfied; (2) Decision Log #44's own
+// cascade behavior — including the cross-user consequence of cascading
+// a Post into other users' Comment/Like/SavedPost rows — is entirely a
+// database-level mechanism (ON DELETE CASCADE) that a mocked
+// PrismaService cannot exercise at all; only a real Postgres instance
+// can prove it actually fires.
 describe('AccountDeletionSweepService e2e: 30-day hard-delete + 6-month consent-audit purge, against real Postgres', () => {
   let app: INestApplication;
   let sweepService: AccountDeletionSweepService;
@@ -217,36 +223,165 @@ describe('AccountDeletionSweepService e2e: 30-day hard-delete + 6-month consent-
     });
   });
 
-  describe('sweepPendingDeletions — the RESTRICT/related-content gap (Decision Log #44 candidate, not resolved by this PR)', () => {
-    it('a past-due account with a real Post is left in pending_deletion, not hard-deleted, and is reported as blocked', async () => {
+  // sprint-2/account-deletion-cascade -- Decision Log #44 is now
+  // RESOLVED (option a, cascade). The describe block this replaces
+  // ("the RESTRICT/related-content gap ... not resolved by this PR")
+  // proved a Post BLOCKED a hard-delete; that is now exactly backwards
+  // and would fail against the current schema. See
+  // account-deletion/README.md's "Decision Log #44" section for the
+  // full resolution and the founder's own stated reasoning.
+  describe('sweepPendingDeletions — Decision Log #44 (cascade) is live: related content no longer blocks a hard-delete', () => {
+    async function createActiveUser(label: string) {
       const prisma = getTestPrismaClient();
-      const author = await seedPendingDeletionUser('has-post', { pendingDeletionAt: daysAgo(31) });
-      await prisma.post.create({
-        data: { authorId: author.id, contentText: 'A real post that should block a hard-delete today' },
+      return prisma.user.create({
+        data: {
+          email: uniqueEmail(label),
+          passwordHash: 'unused-in-this-e2e-spec-file',
+          displayName: `E2E Cascade Other User ${label}`,
+          dateOfBirth: new Date('1998-07-04'),
+        },
+      });
+    }
+
+    it('hard-deletes a past-due account that has its OWN Post, Comment, Like, and Follow — all of it is genuinely gone from Postgres afterward, and blockedUserIds is empty', async () => {
+      const prisma = getTestPrismaClient();
+      const author = await seedPendingDeletionUser('own-content', { pendingDeletionAt: daysAgo(31) });
+      const other = await createActiveUser('follow-target');
+
+      const post = await prisma.post.create({ data: { authorId: author.id, contentText: 'my own post' } });
+      const comment = await prisma.comment.create({
+        data: { postId: post.id, authorId: author.id, contentText: 'my own comment' },
+      });
+      const like = await prisma.like.create({ data: { userId: author.id, postId: post.id } });
+      const follow = await prisma.follow.create({ data: { followerId: author.id, followeeId: other.id } });
+
+      const result = await sweepService.sweepPendingDeletions();
+
+      expect(result.hardDeletedUserIds).toContain(author.id);
+      expect(result.blockedUserIds).toEqual([]);
+
+      expect(await prisma.user.findUnique({ where: { id: author.id } })).toBeNull();
+      expect(await prisma.post.findUnique({ where: { id: post.id } })).toBeNull();
+      expect(await prisma.comment.findUnique({ where: { id: comment.id } })).toBeNull();
+      expect(await prisma.like.findUnique({ where: { id: like.id } })).toBeNull();
+      expect(await prisma.follow.findUnique({ where: { id: follow.id } })).toBeNull();
+
+      // The other, unrelated user's own account is untouched.
+      expect(await prisma.user.findUnique({ where: { id: other.id } })).not.toBeNull();
+    });
+
+    // THE single most important test in this PR — the founder's own,
+    // explicitly stated real mechanical consequence of Decision Log #44,
+    // proven directly against real Postgres, not left implicit inside a
+    // broader test: "cascading Post also cascades away Comment/Like/
+    // SavedPost rows written by OTHER, unrelated users on that post."
+    it("CROSS-USER CASCADE — the core Decision Log #44 consequence: hard-deleting a Post's author also deletes ANOTHER user's Comment/Like/SavedPost rows on that same post, not just the author's own content", async () => {
+      const prisma = getTestPrismaClient();
+      const userA = await seedPendingDeletionUser('user-a-author', { pendingDeletionAt: daysAgo(31) });
+      const userB = await createActiveUser('user-b-engager');
+
+      const post = await prisma.post.create({ data: { authorId: userA.id, contentText: "User A's post" } });
+      const commentByB = await prisma.comment.create({
+        data: { postId: post.id, authorId: userB.id, contentText: "User B's comment on User A's post" },
+      });
+      const likeByB = await prisma.like.create({ data: { userId: userB.id, postId: post.id } });
+      const savedByB = await prisma.savedPost.create({ data: { userId: userB.id, postId: post.id } });
+
+      const result = await sweepService.sweepPendingDeletions();
+
+      expect(result.hardDeletedUserIds).toContain(userA.id);
+      expect(result.blockedUserIds).toEqual([]);
+
+      // User A and their Post are gone, as expected.
+      expect(await prisma.user.findUnique({ where: { id: userA.id } })).toBeNull();
+      expect(await prisma.post.findUnique({ where: { id: post.id } })).toBeNull();
+
+      // The real, explicitly-stated consequence: User B's own Comment,
+      // Like, and SavedPost rows on that post are ALSO gone — cascaded
+      // away via the Post, even though User B's own account was never
+      // touched by this sweep run at all.
+      expect(await prisma.comment.findUnique({ where: { id: commentByB.id } })).toBeNull();
+      expect(await prisma.like.findUnique({ where: { id: likeByB.id } })).toBeNull();
+      expect(await prisma.savedPost.findUnique({ where: { id: savedByB.id } })).toBeNull();
+
+      // Critically, User B's OWN ACCOUNT is entirely untouched — only
+      // their engagement with User A's now-deleted post is gone. This is
+      // what makes the previous assertions "cross-user cascade" and not
+      // "User B was also deleted."
+      const stillB = await prisma.user.findUnique({ where: { id: userB.id } });
+      expect(stillB).not.toBeNull();
+      expect(stillB!.accountStatus).toBe('active');
+    });
+
+    it('a Follow relationship cascades in either direction — whether the hard-deleted user is the follower or the followee', async () => {
+      const prisma = getTestPrismaClient();
+      const deletedAsFollower = await seedPendingDeletionUser('follower-deleted', { pendingDeletionAt: daysAgo(31) });
+      const deletedAsFollowee = await seedPendingDeletionUser('followee-deleted', { pendingDeletionAt: daysAgo(31) });
+      const bystander = await createActiveUser('bystander');
+
+      const followAsFollower = await prisma.follow.create({
+        data: { followerId: deletedAsFollower.id, followeeId: bystander.id },
+      });
+      const followAsFollowee = await prisma.follow.create({
+        data: { followerId: bystander.id, followeeId: deletedAsFollowee.id },
       });
 
       const result = await sweepService.sweepPendingDeletions();
 
-      expect(result.hardDeletedUserIds).not.toContain(author.id);
-      expect(result.blockedUserIds).toContain(author.id);
+      expect(result.hardDeletedUserIds).toEqual(
+        expect.arrayContaining([deletedAsFollower.id, deletedAsFollowee.id]),
+      );
+      expect(await prisma.follow.findUnique({ where: { id: followAsFollower.id } })).toBeNull();
+      expect(await prisma.follow.findUnique({ where: { id: followAsFollowee.id } })).toBeNull();
+      expect(await prisma.user.findUnique({ where: { id: bystander.id } })).not.toBeNull();
+    });
+  });
 
-      const stillThere = await prisma.user.findUnique({ where: { id: author.id } });
-      expect(stillThere).not.toBeNull();
-      expect(stillThere!.accountStatus).toBe('pending_deletion');
+  // Direct, raw-SQL proof against Postgres's own system catalogs — the
+  // "raw SQL" e2e-worthy category test/README.md's guiding principle
+  // calls out, and the most authoritative possible confirmation that the
+  // migration actually shipped the intended constraint set: not just
+  // "these behaviors happen to work," but "these exact FK constraints
+  // carry exactly the intended ON DELETE rule," queried the same way
+  // account-deletion/README.md's own investigation section did before
+  // any code was written.
+  describe('Decision Log #44 — direct schema-level proof (Postgres system catalogs, not application behavior)', () => {
+    async function getDeleteRule(constraintName: string): Promise<string> {
+      const prisma = getTestPrismaClient();
+      const rows = await prisma.$queryRaw<{ delete_rule: string }[]>`
+        SELECT rc.delete_rule
+        FROM information_schema.referential_constraints rc
+        WHERE rc.constraint_name = ${constraintName}
+      `;
+      return rows[0]?.delete_rule ?? 'CONSTRAINT NOT FOUND';
+    }
+
+    it('all fifteen constraints Decision Log #44 resolved (eleven User-referencing tables, plus the three Post-referencing ones needed for cross-user cascade) are genuinely ON DELETE CASCADE in the live database', async () => {
+      const cascadedConstraints = [
+        'GrassrootsTeam_createdById_fkey',
+        'Result_enteredById_fkey',
+        'Post_authorId_fkey',
+        'Comment_postId_fkey',
+        'Comment_authorId_fkey',
+        'Message_senderId_fkey',
+        'Notification_userId_fkey',
+        'SavedPost_userId_fkey',
+        'SavedPost_postId_fkey',
+        'Like_userId_fkey',
+        'Like_postId_fkey',
+        'Follow_followerId_fkey',
+        'Follow_followeeId_fkey',
+        'Report_reporterId_fkey',
+        'LeaderboardEntry_userId_fkey',
+      ];
+
+      for (const constraintName of cascadedConstraints) {
+        expect(await getDeleteRule(constraintName)).toBe('CASCADE');
+      }
     });
 
-    it('one blocked account does not prevent an unrelated eligible account from being hard-deleted in the same sweep run', async () => {
-      const prisma = getTestPrismaClient();
-      const blocked = await seedPendingDeletionUser('blocked-sibling', { pendingDeletionAt: daysAgo(31) });
-      await prisma.post.create({ data: { authorId: blocked.id, contentText: 'blocks hard-delete' } });
-      const eligible = await seedPendingDeletionUser('eligible-sibling', { pendingDeletionAt: daysAgo(31) });
-
-      const result = await sweepService.sweepPendingDeletions();
-
-      expect(result.blockedUserIds).toContain(blocked.id);
-      expect(result.hardDeletedUserIds).toContain(eligible.id);
-      expect(await prisma.user.findUnique({ where: { id: blocked.id } })).not.toBeNull();
-      expect(await prisma.user.findUnique({ where: { id: eligible.id } })).toBeNull();
+    it('Guardian.minorUserId is genuinely UNCHANGED — still ON DELETE RESTRICT, confirmed directly, not assumed from this PR\'s own intent', async () => {
+      expect(await getDeleteRule('Guardian_minorUserId_fkey')).toBe('RESTRICT');
     });
   });
 

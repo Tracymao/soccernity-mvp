@@ -3,41 +3,51 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
-// Build Plan Section 9, Decision Log #42. Two independent timers:
+// Build Plan Section 9, Decision Log #42 (grace period + hard-delete +
+// consent-record retention) and Decision Log #44 (what happens to the
+// hard-deleted user's other content — cascade). Two independent timers:
 //
 // 1. A "pending_deletion" account (AuthService.deleteAccount) gets a
 //    30-day grace period from User.pendingDeletionAt, then this service
 //    hard-deletes the User row -- a real DELETE, not an anonymize/scramble.
-// 2. Guardian/consent records are the deliberate exception: they don't
-//    die with the User row. AccountDeletionSweepService.hardDeleteUser
+//    Per Decision Log #44 (sprint-2/account-deletion-cascade), that
+//    single delete now cascades through the user's entire digital
+//    footprint on the platform -- Posts, Comments, Follows, Likes,
+//    SavedPosts, Notifications, Reports, Messages, LeaderboardEntry rows,
+//    and any GrassrootsTeam/Result rows they created -- including
+//    cascading away Comment/Like/SavedPost rows OTHER, unrelated users
+//    wrote on THIS user's Posts. That is the founder's explicitly stated,
+//    accepted consequence of "delete removes your entire footprint," not
+//    an oversight -- see account-deletion/README.md.
+// 2. Guardian/consent records are the deliberate exception, untouched by
+//    Decision Log #44: they don't die with the User row. hardDeleteUser
 //    snapshots what's needed to prove consent occurred into
 //    ConsentAuditRecord (schema.prisma -- see that model's own comment
 //    for why it's a plain userId string, not a foreign key) and deletes
 //    the real Guardian row, before the User row itself can be deleted at
 //    all (Guardian.minorUserId is ON DELETE RESTRICT against User,
-//    confirmed against the real migration SQL -- ordering here isn't
-//    optional). ConsentAuditRecord.createdAt is that record's OWN
-//    6-month purge clock, independent of whatever happens to the User
-//    row afterwards -- Decision Log #42's own "~7 months total from the
-//    original delete-account request" math only holds if this second
-//    clock starts at hard-delete time, not at the (possibly
-//    years-earlier) original consent-confirmation time.
+//    confirmed against the real migration SQL, and confirmed still
+//    RESTRICT after this PR -- ordering here isn't optional).
+//    ConsentAuditRecord.createdAt is that record's OWN 6-month purge
+//    clock, independent of whatever happens to the User row afterwards
+//    -- Decision Log #42's own "~7 months total from the original
+//    delete-account request" math only holds if this second clock
+//    starts at hard-delete time, not at the (possibly years-earlier)
+//    original consent-confirmation time.
 const GRACE_PERIOD_DAYS = 30;
 const CONSENT_AUDIT_RETENTION_MONTHS = 6;
 
 export interface SweepPendingDeletionsResult {
   hardDeletedUserIds: string[];
-  // See account-deletion/README.md's Decision Log #44 candidate — every
-  // FK from Post/Comment/Follow/Like/SavedPost/Notification/Report/
-  // Message/LeaderboardEntry/GrassrootsTeam/Result to User is
-  // ON DELETE RESTRICT (confirmed against the real migration SQL, not
-  // assumed), so an account past its 30-day mark that has ANY related
-  // content cannot be hard-deleted today without a real, separate
-  // decision on what happens to that content. Those accounts land here,
-  // not in hardDeletedUserIds — left in pending_deletion, untouched,
-  // logged, and re-attempted on every future sweep run until that
-  // decision is made and implemented, deliberately not silently resolved
-  // by this PR.
+  // sprint-2/account-deletion-cascade — Decision Log #44 is now resolved
+  // (cascade, see account-deletion/README.md) and all eleven previously-
+  // RESTRICT FKs from Post/Comment/Follow/Like/SavedPost/Notification/
+  // Report/Message/LeaderboardEntry/GrassrootsTeam/Result to User are
+  // ON DELETE CASCADE. **This should stay empty in normal operation** —
+  // it is no longer an expected, routine outcome the way it was under
+  // Decision Log #44's original "leave RESTRICT in place" default. See
+  // sweepPendingDeletions' own comment for what a non-empty result here
+  // actually means now.
   blockedUserIds: string[];
 }
 
@@ -73,6 +83,21 @@ export class AccountDeletionSweepService {
   // first for any minor with a Guardian row). `now` defaults to the real
   // clock but is an explicit parameter specifically so tests can prove
   // the 30-day boundary without mocking global time.
+  //
+  // sprint-2/account-deletion-cascade — Decision Log #44 (cascade) is
+  // now live: all eleven previously-RESTRICT FKs into User (Post,
+  // Comment, Follow x2, Like, SavedPost, Notification, Report, Message,
+  // LeaderboardEntry, GrassrootsTeam, Result), plus Comment.post/
+  // SavedPost.post/Like.post (needed so a Post cascading away from its
+  // author's delete keeps cascading into rows OTHER users wrote on it —
+  // see schema.prisma's comments on those three relations and
+  // account-deletion/README.md), are now ON DELETE CASCADE. A single
+  // `tx.user.delete` below therefore removes a user's entire digital
+  // footprint in one statement — no more per-table content handling is
+  // needed here, and none should be added; that would just duplicate
+  // what the database itself now does. Guardian.minorUserId is the one
+  // deliberate exception, still RESTRICT — see hardDeleteUser's own
+  // comment for why, and schema.prisma's Guardian model comment.
   async sweepPendingDeletions(now: Date = new Date()): Promise<SweepPendingDeletionsResult> {
     const cutoff = new Date(now.getTime() - GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000);
 
@@ -95,11 +120,25 @@ export class AccountDeletionSweepService {
         if (!this.isForeignKeyRestrictError(err)) {
           throw err;
         }
+        // Reached only if something in the User→* deletion graph is
+        // RESTRICT when Decision Log #44's own resolution says it
+        // should now be CASCADE — a schema/migration drift or a newly
+        // added table that reintroduced RESTRICT without this service
+        // being updated, not a normal, expected outcome the way it was
+        // before this PR. Kept as a defensive fallback (so a drift like
+        // that fails safe — the account stays in pending_deletion,
+        // nothing is silently lost — rather than crashing the whole
+        // sweep run for every other due account too), but this branch
+        // should never actually fire in normal operation post-cascade.
+        // If it does, that is itself the thing to investigate, not a
+        // routine "content is blocking this delete" case to shrug off.
         this.logger.warn(
-          `Account deletion sweep: user ${user.id} is past its 30-day grace period but has related ` +
-            'content (Post/Comment/Follow/Like/etc.) blocking a hard-delete under the current ' +
-            'ON DELETE RESTRICT schema — see account-deletion/README.md\'s Decision Log #44 candidate. ' +
-            'Left in pending_deletion, not purged.',
+          `Account deletion sweep: user ${user.id} is past its 30-day grace period but hit an ` +
+            'unexpected foreign-key-restrict error (P2003) on hard-delete. Decision Log #44 (cascade) ' +
+            'means this should not happen — every FK into User except Guardian.minorUserId is now ' +
+            'ON DELETE CASCADE. This likely indicates schema drift (a new RESTRICT relation added ' +
+            "without updating this service) rather than an expected 'blocked' outcome — investigate " +
+            'rather than assume this is routine. Left in pending_deletion, not purged.',
         );
         blockedUserIds.push(user.id);
       }
@@ -109,13 +148,23 @@ export class AccountDeletionSweepService {
   }
 
   // One transaction: the ConsentAuditRecord write, the Guardian delete,
-  // and the User delete either all happen or none do. This matters
-  // specifically because of the RESTRICT chain above — if the User
-  // delete itself fails (unrelated content elsewhere), the Guardian
-  // delete and the ConsentAuditRecord write that already ran in this
-  // same transaction are rolled back too, so a blocked account is never
-  // left with its Guardian row (or its safeguarding audit trail) already
-  // gone while the User row survives.
+  // and the User delete either all happen or none do. Guardian.minorUserId
+  // is the one relation Decision Log #44 (cascade) deliberately did NOT
+  // touch — it stays ON DELETE RESTRICT (Decision Log #42's own,
+  // separate resolution: a Guardian row must be snapshotted into
+  // ConsentAuditRecord and explicitly deleted here, never silently
+  // cascaded away). That RESTRICT is still real and still load-bearing:
+  // without deleting the Guardian row first, `tx.user.delete` below
+  // would still fail for any minor with one. Every OTHER FK into User is
+  // now CASCADE (see sweepPendingDeletions' own comment), so
+  // `tx.user.delete` alone handles all eleven other tables — nothing
+  // else needs deleting here. Wrapping this in a transaction still
+  // matters for the Guardian/ConsentAuditRecord pairing specifically: if
+  // the User delete somehow still fails (the P2003 fallback case above),
+  // the Guardian delete and ConsentAuditRecord write already run in this
+  // same transaction are rolled back too, so that unexpected case is
+  // never left with the Guardian row (or its safeguarding audit trail)
+  // already gone while the User row survives.
   private async hardDeleteUser(userId: string, isMinor: boolean): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       if (isMinor) {
@@ -145,6 +194,10 @@ export class AccountDeletionSweepService {
     });
   }
 
+  // Defensive fallback only — see sweepPendingDeletions' own comment on
+  // the catch site. Post-Decision-Log-#44, a real P2003 here signals an
+  // inconsistent/drifted schema state, not a routine "this account has
+  // related content" case.
   private isForeignKeyRestrictError(err: unknown): boolean {
     return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003';
   }

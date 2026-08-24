@@ -112,6 +112,22 @@ model User {
 model Guardian {
   id                     String    @id @default(uuid())
   minorUserId            String    @unique
+  // sprint-2/account-deletion-cascade -- DELIBERATELY left as the
+  // implicit default (RESTRICT on Postgres when no onDelete is given),
+  // NOT changed to Cascade alongside every other User-referencing
+  // relation in this schema. Decision Log #44 (cascade) explicitly does
+  // NOT apply to Guardian -- Decision Log #42 already resolved this
+  // relation separately: AccountDeletionSweepService snapshots the
+  // needed consent-proof fields into ConsentAuditRecord and deletes the
+  // real Guardian row itself, BEFORE the User row, inside one
+  // transaction (see account-deletion-sweep.service.ts). That mechanism
+  // depends on RESTRICT still blocking a direct User delete while a
+  // Guardian row remains -- if this were Cascade, Postgres would delete
+  // Guardian silently on its own timeline, and the service's explicit
+  // snapshot-then-delete ordering would no longer be the only path to a
+  // successful hard-delete, undermining the whole reason
+  // ConsentAuditRecord exists. This omission is deliberate, confirmed
+  // unchanged by this PR -- not an oversight.
   minorUser              User      @relation(fields: [minorUserId], references: [id])
   name                   String
   email                  String
@@ -228,13 +244,25 @@ model ClubPage {
   posts       Post[]
 }
 
+// sprint-2/account-deletion-cascade -- createdBy is now Cascade (Decision
+// Log #44), but Fixture.teamAId (below) referencing THIS model is still
+// RESTRICT and deliberately untouched by this PR: GrassrootsModule isn't
+// wired into app.module.ts yet (Sprint 5, commented out) and has no
+// controller/service, so no live endpoint can create a GrassrootsTeam,
+// Fixture, or Result row today -- this chain is unreachable in practice.
+// Flagged here, not silently left inconsistent: whoever builds Grassroots
+// endpoints should revisit Fixture.teamAId/teamBId and Result.fixtureId
+// under this same cascade principle then, since a User who created a team
+// with existing fixtures would otherwise hit the exact same RESTRICT wall
+// this PR fixes for Post/Comment/Like.
 model GrassrootsTeam {
   id            String    @id @default(uuid())
   name          String
   city          String
   leagueType    String // informal | school | academy
   createdById   String
-  createdBy     User      @relation(fields: [createdById], references: [id])
+  // Decision Log #44 (cascade) -- see account-deletion/README.md.
+  createdBy     User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
   verified      Boolean   @default(false)
   fixturesHome  Fixture[] @relation("teamA")
   fixturesAway  Fixture[] @relation("teamB")
@@ -259,14 +287,21 @@ model Result {
   scoreA        Int
   scoreB        Int
   enteredById   String
-  enteredBy     User     @relation(fields: [enteredById], references: [id])
+  // Decision Log #44 (cascade) -- see account-deletion/README.md.
+  enteredBy     User     @relation(fields: [enteredById], references: [id], onDelete: Cascade)
   enteredAt     DateTime @default(now())
 }
 
 model Post {
   id            String    @id @default(uuid())
   authorId      String
-  author        User      @relation(fields: [authorId], references: [id])
+  // Decision Log #44 (cascade) -- see account-deletion/README.md.
+  // Deleting a Post this way then needs to keep cascading into its own
+  // children (Comment.post/SavedPost.post/Like.post below) for a User
+  // delete to actually complete when someone else has commented/saved/
+  // liked this post -- those three relations carry onDelete: Cascade
+  // too, for exactly this reason, not independently of this decision.
+  author        User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
   contentText   String
   mediaUrls     String[]
   clubPageId    String?
@@ -305,9 +340,19 @@ model Post {
 model Comment {
   id          String   @id @default(uuid())
   postId      String
-  post        Post     @relation(fields: [postId], references: [id])
+  // sprint-2/account-deletion-cascade -- NOT itself one of Decision Log
+  // #44's eleven User-referencing tables, but load-bearing for it:
+  // without this, cascading a Post away (via Post.author's own Cascade,
+  // above) would still hit this RESTRICT and abort the whole delete the
+  // moment ANY comment -- including one from a completely different,
+  // unrelated user -- exists on that post. See account-deletion/README.md
+  // for the full mechanical explanation and the founder's own explicit
+  // "cascading Post also cascades away Comment/Like/SavedPost rows
+  // written by OTHER, unrelated users" framing of this exact consequence.
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   authorId    String
-  author      User     @relation(fields: [authorId], references: [id])
+  // Decision Log #44 (cascade) -- see account-deletion/README.md.
+  author      User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   contentText String
   createdAt   DateTime @default(now())
 }
@@ -333,7 +378,8 @@ model Message {
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id])
   senderId       String
-  sender         User         @relation(fields: [senderId], references: [id])
+  // Decision Log #44 (cascade) -- see account-deletion/README.md.
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
   contentText    String
   mediaUrl       String?
   sentAt         DateTime     @default(now())
@@ -343,7 +389,8 @@ model Message {
 model Notification {
   id           String   @id @default(uuid())
   userId       String
-  user         User     @relation(fields: [userId], references: [id])
+  // Decision Log #44 (cascade) -- see account-deletion/README.md.
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   type         String // follow | comment | like | reply | system
   payloadRefId String?
   read         Boolean  @default(false)
@@ -353,9 +400,14 @@ model Notification {
 model SavedPost {
   id       String   @id @default(uuid())
   userId   String
-  user     User     @relation(fields: [userId], references: [id])
+  // Decision Log #44 (cascade) -- see account-deletion/README.md.
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   postId   String
-  post     Post     @relation(fields: [postId], references: [id])
+  // sprint-2/account-deletion-cascade -- load-bearing for #44 the same
+  // way Comment.post is (see that model's comment): a Post cascading
+  // away from its author's User delete must keep cascading into
+  // SavedPost rows saved by OTHER users too, or the whole delete aborts.
+  post     Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   savedAt  DateTime @default(now())
 
   @@unique([userId, postId])
@@ -367,9 +419,14 @@ model SavedPost {
 model Like {
   id        String   @id @default(uuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  // Decision Log #44 (cascade) -- see account-deletion/README.md.
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   postId    String
-  post      Post     @relation(fields: [postId], references: [id])
+  // sprint-2/account-deletion-cascade -- load-bearing for #44 the same
+  // way Comment.post is (see that model's comment): a Post cascading
+  // away from its author's User delete must keep cascading into Like
+  // rows from OTHER users too, or the whole delete aborts.
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   likedAt   DateTime @default(now())
 
   @@unique([userId, postId])
@@ -378,9 +435,10 @@ model Like {
 model Follow {
   id         String   @id @default(uuid())
   followerId String
-  follower   User     @relation("follower", fields: [followerId], references: [id])
+  // Decision Log #44 (cascade) -- see account-deletion/README.md.
+  follower   User     @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
   followeeId String
-  followee   User     @relation("followee", fields: [followeeId], references: [id])
+  followee   User     @relation("followee", fields: [followeeId], references: [id], onDelete: Cascade)
   // Added ahead of GET /users/:id/followers and GET /users/:id/following
   // (Build Plan Section 4.2, Sprint 2) -- a genuine addition beyond
   // Section 3's literal field list, flagged here and in
@@ -405,7 +463,8 @@ model Follow {
 model Report {
   id         String   @id @default(uuid())
   reporterId String
-  reporter   User     @relation("reporter", fields: [reporterId], references: [id])
+  // Decision Log #44 (cascade) -- see account-deletion/README.md.
+  reporter   User     @relation("reporter", fields: [reporterId], references: [id], onDelete: Cascade)
   targetType String // post | user | comment
   targetId   String
   reason     String
@@ -467,7 +526,8 @@ model MatchData {
 model LeaderboardEntry {
   id      String @id @default(uuid())
   userId  String
-  user    User   @relation(fields: [userId], references: [id])
+  // Decision Log #44 (cascade) -- see account-deletion/README.md.
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   points  Int    @default(0)
   rank    Int?
   period  String // e.g. "2026-W33"
