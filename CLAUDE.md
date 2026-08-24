@@ -1820,7 +1820,7 @@ Full reasoning for every choice above: Build Plan Section 5.
   console errors — same verification ceiling as every prior frontend PR
   in this project (no real browser/Playwright available in this
   environment).
-  - **`sprint-2/followers-scope-fix` revisits Decision Log #31, not
+- **`sprint-2/followers-scope-fix` revisits Decision Log #31, not
   overrides it: `GET /users/:id/followers` and `GET
   /users/:id/following` for a restricted-pending minor as the TARGET
   (`:id`) now 404 for every caller, matching a non-existent user.**
@@ -1868,7 +1868,7 @@ Full reasoning for every choice above: Build Plan Section 5.
   real bug caught mid-PR by the e2e suite itself: `Date.setMonth`
   drifted the 6-month cutoff by an hour across a DST boundary — fixed
   to `setUTCMonth`.
-  - **`sprint-2/account-deletion-cascade` implements Decision Log #44 (cascade,
+- **`sprint-2/account-deletion-cascade` implements Decision Log #44 (cascade,
   resolved by the founder): all eleven User-referencing FKs are now
   `ON DELETE CASCADE`, not `RESTRICT`.** A hard-delete on any account —
   including one with real activity — now succeeds. Second-order discovery
