@@ -57,7 +57,7 @@ describe('AccountDeletionSweepService', () => {
       });
     });
 
-    it('hard-deletes a non-minor due user: no Guardian lookup, no ConsentAuditRecord, User row deleted', async () => {
+    it('hard-deletes a non-minor due user via a single tx.user.delete call: no Guardian lookup, no ConsentAuditRecord, and no per-table content deletion of any kind', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'user-1', isMinor: false }]);
       const service = new AccountDeletionSweepService(prisma);
@@ -69,6 +69,32 @@ describe('AccountDeletionSweepService', () => {
       expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'user-1' } });
       expect(result.hardDeletedUserIds).toEqual(['user-1']);
       expect(result.blockedUserIds).toEqual([]);
+    });
+
+    // sprint-2/account-deletion-cascade (Decision Log #44) -- a mock
+    // can't exercise real ON DELETE CASCADE (that's a database-level
+    // concern, proven for real in account-deletion-sweep.e2e-spec.ts's
+    // cross-user cascade test), but the important behavioral claim at
+    // THIS layer is structural: hardDeleteUser issues exactly one
+    // tx.user.delete call and nothing else for a non-minor -- no
+    // per-table Post/Comment/Follow/Like/etc. deletion code exists to
+    // simulate or assert on, because none should exist. The service
+    // relies entirely on the schema's own cascade behavior, proven at
+    // the e2e layer, not on any application-level fan-out here.
+    it('does not attempt any per-table content deletion for Post/Comment/Follow/Like/etc. -- that is left entirely to the database\'s own ON DELETE CASCADE', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'user-with-content', isMinor: false }]);
+      const service = new AccountDeletionSweepService(prisma);
+
+      await service.sweepPendingDeletions();
+
+      // The mock only ever defines user/guardian/consentAuditRecord
+      // methods (see buildPrismaMock) -- there is no post/comment/follow/
+      // like/etc. mock to call in the first place, which is itself part
+      // of the proof: nothing in AccountDeletionSweepService references
+      // those models at all.
+      expect(prisma.user.delete).toHaveBeenCalledTimes(1);
+      expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'user-with-content' } });
     });
 
     it('minor with a confirmed Guardian row: snapshots a ConsentAuditRecord, deletes Guardian, then deletes User', async () => {
@@ -140,26 +166,36 @@ describe('AccountDeletionSweepService', () => {
       expect(result.hardDeletedUserIds).toEqual(['minor-1']);
     });
 
-    it('a foreign-key-restrict error (P2003) on the User delete is caught: the account is reported as blocked, not hard-deleted, and the sweep does not throw', async () => {
+    // sprint-2/account-deletion-cascade (Decision Log #44) -- this used
+    // to be the EXPECTED, routine outcome for any user with related
+    // content (PR #88's original "leave RESTRICT in place" default).
+    // Post-cascade, every FK into User except Guardian.minorUserId is
+    // ON DELETE CASCADE, so a real P2003 here should never actually
+    // happen in normal operation -- this test now proves the DEFENSIVE
+    // FALLBACK still works (schema drift / a future RESTRICT relation
+    // added without updating this service fails safe: the account stays
+    // in pending_deletion, nothing is silently lost, the sweep doesn't
+    // crash), not that blocking is an expected result.
+    it('DEFENSIVE FALLBACK ONLY (schema-drift scenario, not expected in normal operation): a foreign-key-restrict error (P2003) on the User delete is still caught, and the account is reported as blocked rather than crashing the sweep', async () => {
       const prisma = buildPrismaMock();
-      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'has-posts-1', isMinor: false }]);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'unexpectedly-blocked-1', isMinor: false }]);
       (prisma.user.delete as jest.Mock).mockRejectedValue(fkRestrictError());
       const service = new AccountDeletionSweepService(prisma);
 
       const result = await service.sweepPendingDeletions();
 
-      expect(result.blockedUserIds).toEqual(['has-posts-1']);
+      expect(result.blockedUserIds).toEqual(['unexpectedly-blocked-1']);
       expect(result.hardDeletedUserIds).toEqual([]);
     });
 
-    it('one blocked (P2003) account does not stop the rest of the sweep from processing other due accounts', async () => {
+    it('DEFENSIVE FALLBACK ONLY: one account unexpectedly hitting P2003 does not stop the rest of the sweep from processing other due accounts', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.findMany as jest.Mock).mockResolvedValue([
-        { id: 'blocked-1', isMinor: false },
+        { id: 'unexpectedly-blocked-1', isMinor: false },
         { id: 'eligible-1', isMinor: false },
       ]);
       (prisma.user.delete as jest.Mock).mockImplementation(({ where: { id } }: { where: { id: string } }) => {
-        if (id === 'blocked-1') {
+        if (id === 'unexpectedly-blocked-1') {
           return Promise.reject(fkRestrictError());
         }
         return Promise.resolve({});
@@ -168,7 +204,7 @@ describe('AccountDeletionSweepService', () => {
 
       const result = await service.sweepPendingDeletions();
 
-      expect(result.blockedUserIds).toEqual(['blocked-1']);
+      expect(result.blockedUserIds).toEqual(['unexpectedly-blocked-1']);
       expect(result.hardDeletedUserIds).toEqual(['eligible-1']);
     });
 
