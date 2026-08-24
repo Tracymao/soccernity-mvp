@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { join } from 'path';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { HealthModule } from './health/health.module';
@@ -10,6 +11,7 @@ import { GuardianConsentModule } from './modules/auth/guardian-consent/guardian-
 import { UsersModule } from './modules/users/users.module';
 import { FeedModule } from './modules/feed/feed.module';
 import { ClubsModule } from './modules/clubs/clubs.module';
+import { AccountDeletionModule } from './modules/account-deletion/account-deletion.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -40,6 +42,11 @@ import { ClubsModule } from './modules/clubs/clubs.module';
       isGlobal: true,
       envFilePath: join(__dirname, '..', '..', '..', '.env'),
     }),
+    // Registered once, globally — any @Cron()/@Interval()/@Timeout()
+    // decorator anywhere in the app (currently just
+    // AccountDeletionSweepService) needs this to actually run; it does
+    // not belong to that module specifically.
+    ScheduleModule.forRoot(),
     HealthModule, // Sprint 0 infra — MVP Build Plan Section 5
     PasswordResetModule, // Sprint 1 / PR B4 — /auth/forgot-password, /auth/reset-password
     AuthModule, // Sprint 1 / PR B3 — login, refresh, logout (Section 4.1 / 5.7)
@@ -61,6 +68,10 @@ import { ClubsModule } from './modules/clubs/clubs.module';
     // (the other half of Section 4.4) remains Sprint 3 — see
     // modules/clubs/README.md.
     ClubsModule,
+    // sprint-2/account-deletion-sweep — Build Plan Section 9, Decision
+    // Log #42. No route: registers AccountDeletionSweepService's daily
+    // @Cron() job only. See modules/account-deletion/README.md.
+    AccountDeletionModule,
     // BanterModule,        // Sprint 3
     // MessagingModule,     // Sprint 3
     // NotificationsModule, // Sprint 3

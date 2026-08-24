@@ -776,6 +776,20 @@ separate deletion flag): `"active"` (default) | `"deactivated"`
 (self-service reversible, via `reactivate-account`) | `"pending_deletion"`
 (self-service, **not** reversible via any endpoint in this PR).
 
+**RESOLVED (Decision Log #42, Build Plan Section 9) and implemented
+(`sprint-2/account-deletion-sweep`) — see
+`modules/account-deletion/README.md` for the full architecture.** Short
+version: a 30-day grace period from a new `User.pendingDeletionAt`
+timestamp, then a real hard `DELETE` of the `User` row (not
+anonymization) via a scheduled `AccountDeletionSweepService`, with a
+decoupled `ConsentAuditRecord` snapshotting the minimum needed to prove
+guardian consent occurred before the `Guardian` row (which would
+otherwise block the hard-delete outright — `Guardian.minorUserId` is a
+real `ON DELETE RESTRICT` foreign key, confirmed against the live
+migration SQL) is itself deleted; that record gets its own independent
+6-month purge timer. What was still genuinely undecided at the time this
+paragraph was originally written, resolved as of Decision Log #42:
+
 **This PR deliberately does not decide retention/erasure policy — that's
 an open Decision Log candidate for real founder/legal input**, not
 resolved unilaterally here, per the brief's own explicit instruction:
@@ -785,12 +799,29 @@ resolved unilaterally here, per the brief's own explicit instruction:
 - Whether erasure ever becomes a true hard delete of the `User` row (and,
   if so, what happens to rows that reference it — `Post`, `Comment`,
   `Like`, `Follow`, etc. — none of which `ON DELETE CASCADE` today).
+  **RESOLVED on direction (Decision Log #42): yes, a real hard `DELETE`,
+  not anonymization. The parenthetical's own question — what happens to
+  referencing `Post`/`Comment`/`Like`/`Follow`/etc. rows — is still open**,
+  now tracked as its own Decision Log #44 candidate (see
+  `modules/account-deletion/README.md`): every one of those foreign keys
+  is `ON DELETE RESTRICT`, confirmed directly against the real migration
+  SQL, so a hard-delete attempt on any account with real activity fails
+  outright rather than cascading or silently orphaning. Left genuinely
+  unresolved, not guessed at, by `sprint-2/account-deletion-sweep` —
+  such an account is simply left in `pending_deletion`, reported as
+  blocked, and re-attempted on every future sweep run.
 - Whether a minor's `Guardian` row needs its own, separate erasure
-  handling distinct from the minor's own `User` row.
+  handling distinct from the minor's own `User` row. **RESOLVED
+  (Decision Log #42) and implemented**: yes — see
+  `modules/account-deletion/README.md`'s `ConsentAuditRecord` design.
 - Whether `"pending_deletion"` should ever have a self-service undo
   window at all — this PR's `reactivateAccount()` explicitly refuses to
   provide one, but that's an implementation choice pending the real
-  policy decision, not the policy decision itself.
+  policy decision, not the policy decision itself. **Still open** —
+  Decision Log #42 resolved the grace-period *duration* (30 days) and
+  what happens at the end of it, not whether that window is ever
+  self-service-undoable; `sprint-2/account-deletion-sweep` does not
+  change `reactivateAccount()`'s existing refusal.
 - Whether `AuthUserSummary`/`AuthResponse` (`auth-response.mapper.ts`)
   should ever expose `accountStatus` to the caller directly, the way
   `isMinor`/`verificationStatus` already are — this PR deliberately did

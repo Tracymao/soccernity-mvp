@@ -36,6 +36,7 @@ interface FakeUserRecord {
   verificationStatus: string;
   createdAt: Date;
   accountStatus: string;
+  pendingDeletionAt: Date | null;
 }
 
 const DEFAULT_SEED_FIELDS = {
@@ -46,6 +47,7 @@ const DEFAULT_SEED_FIELDS = {
   verificationStatus: 'unverified',
   createdAt: new Date('2026-08-16T00:00:00.000Z'),
   accountStatus: 'active',
+  pendingDeletionAt: null,
 };
 
 class FakePrismaUsers {
@@ -478,6 +480,27 @@ describe('AuthService', () => {
       await expect(authService.login('a@example.com', 'the-real-password')).rejects.toThrow(
         'Invalid credentials',
       );
+    });
+
+    // sprint-2/account-deletion-sweep -- Decision Log #42's 30-day grace
+    // period is measured from this field. AccountDeletionSweepService
+    // cannot find "past its 30-day mark" rows without it, so this is the
+    // one behavior change deleteAccount itself needed for that sweep to
+    // be possible at all.
+    it('records pendingDeletionAt as the moment the request was made, starting Decision Log #42\'s 30-day clock', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('the-real-password');
+      prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash });
+      const before = Date.now();
+
+      await authService.deleteAccount('user-1', 'the-real-password');
+
+      const after = Date.now();
+      const stillExists = await prisma.user.findUnique({ where: { email: 'a@example.com' } });
+      expect(stillExists!.pendingDeletionAt).not.toBeNull();
+      const recordedAt = stillExists!.pendingDeletionAt!.getTime();
+      expect(recordedAt).toBeGreaterThanOrEqual(before);
+      expect(recordedAt).toBeLessThanOrEqual(after);
     });
 
     it('rejects a wrong password and does not touch accountStatus', async () => {
