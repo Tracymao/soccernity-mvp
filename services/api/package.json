@@ -2,7 +2,7 @@
   "name": "@soccernity/api",
   "private": true,
   "version": "0.1.0",
-  "description": "Soccernity backend \u2014 NestJS modular monolith. See CLAUDE.md before splitting into separate services.",
+  "description": "Soccernity backend — NestJS modular monolith. See CLAUDE.md before splitting into separate services.",
   "scripts": {
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main.js",
@@ -19,6 +19,7 @@
     "@nestjs/platform-express": "^11.0.0",
     "@nestjs/config": "^4.0.0",
     "@nestjs/jwt": "^11.0.2",
+    "@nestjs/schedule": "^6.1.3",
     "@nestjs/throttler": "^6.5.0",
     "@prisma/client": "^5.0.0",
     "@sentry/nestjs": "^10.70.0",

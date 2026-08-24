@@ -136,18 +136,22 @@ export class AuthService implements OnModuleInit {
   }
 
   // POST /auth/delete-account. Same password-re-entry requirement as
-  // deactivateAccount. Sets accountStatus = "pending_deletion" —
-  // deliberately does NOT hard-delete the User row (a hard requirement
-  // from this PR's brief): this is a minors' data platform with real
-  // GDPR/NDPA implications (see CLAUDE.md's safeguarding non-negotiables
-  // and this project's DPIA history), and retention/erasure policy is
-  // explicitly NOT decided here — see auth/README.md's Decision Log
-  // candidate. This is deliberately incomplete pending that decision, not
-  // a true delete, and the naming/response must never imply otherwise to
-  // a caller. Revokes every session, same reasoning as deactivation.
+  // deactivateAccount. Sets accountStatus = "pending_deletion" and
+  // pendingDeletionAt = now() — deliberately does NOT hard-delete the
+  // User row itself. Decision Log #42 (Build Plan Section 9) resolved
+  // the retention/erasure policy this comment used to describe as an
+  // open Decision Log candidate: a 30-day grace period from
+  // pendingDeletionAt, after which AccountDeletionSweepService
+  // (sprint-2/account-deletion-sweep, see account-deletion/README.md)
+  // hard-deletes the row on its own schedule — this endpoint only starts
+  // that clock, it never deletes anything itself. Revokes every session,
+  // same reasoning as deactivation.
   async deleteAccount(userId: string, password: string): Promise<void> {
     const user = await this.assertPasswordCorrect(userId, password);
-    await this.prisma.user.update({ where: { id: user.id }, data: { accountStatus: 'pending_deletion' } });
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { accountStatus: 'pending_deletion', pendingDeletionAt: new Date() },
+    });
     await this.tokenService.revokeAllSessionsForUser(userId);
   }
 

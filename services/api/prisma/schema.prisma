@@ -54,6 +54,18 @@ model User {
   // make unilaterally).
   accountStatus     String    @default("active")
 
+  // sprint-2/account-deletion-sweep — a genuine addition beyond Section
+  // 3's literal User field list, flagged per CLAUDE.md's "the data model
+  // is a fixed spec" rule. Set the moment accountStatus flips to
+  // "pending_deletion" (AuthService.deleteAccount), left null otherwise.
+  // Decision Log #42's 30-day grace period has to be measured from
+  // *something* — accountStatus alone records the current state, not
+  // when it started, so AccountDeletionSweepService could not otherwise
+  // tell a request from an hour ago from one from 40 days ago. Never
+  // written to for "deactivated" (Decision Log #42 does not cover that
+  // state, and deactivation stays self-service-reversible).
+  pendingDeletionAt DateTime?
+
   // Safeguarding — required per Build Plan Section 8.3. Do not remove.
   guardian          Guardian?
 
@@ -87,6 +99,11 @@ model User {
   createdTeams      GrassrootsTeam[]
   resultsEntered    Result[]
   leaderboardEntry  LeaderboardEntry[]
+
+  // sprint-2/account-deletion-sweep -- backs AccountDeletionSweepService's
+  // own query (accountStatus = 'pending_deletion' AND pendingDeletionAt
+  // <= cutoff), so the daily sweep isn't a full table scan.
+  @@index([accountStatus, pendingDeletionAt])
 }
 
 // Guardian consent record — implements the six-screen flow in
@@ -103,6 +120,60 @@ model Guardian {
   consentToken           String    @unique
   consentTokenExpiresAt  DateTime
   consentTimestamp       DateTime?
+}
+
+// sprint-2/account-deletion-sweep, implementing Decision Log #42's
+// "ARCHITECTURE IMPLICATION" paragraph. Guardian.minorUserId is
+// ON DELETE RESTRICT against User (confirmed directly against the real
+// migration SQL, not assumed) -- hard-deleting a User row with a
+// Guardian row still attached fails outright at the database level, it
+// does not silently cascade or orphan. AccountDeletionSweepService must
+// therefore snapshot what Decision Log #42 calls "proof that guardian
+// consent was validly obtained" into THIS table and delete the real
+// Guardian row, before it can hard-delete the User row at all.
+//
+// minorUserId is a deliberate plain String, NOT a @relation/foreign key
+// to User -- this table's entire purpose is to survive independently of
+// the User row it describes, and it is only ever written at the exact
+// moment that row is about to be hard-deleted. A real FK here would make
+// "survives the User row's hard-delete" structurally impossible.
+//
+// Deliberately NOT full Guardian PII -- no name, no email, no
+// relationship. Decision Log #42 asks for only "what's needed to prove
+// consent occurred" for a future legal-defense claim, not a mirror of
+// the Guardian row. consentStatus + consentConfirmedAt is that minimum:
+// enough to show whether (and when) a guardian actually confirmed
+// consent for this specific minorUserId before the account was deleted.
+//
+// createdAt is this record's own creation time -- i.e. the hard-delete
+// moment, not the original consent-confirmation moment (Guardian rows
+// carry their own consentTimestamp for that, snapshotted separately into
+// consentConfirmedAt below). Decision Log #42's own math -- "~7 months
+// total from the original delete-account request" for a 30-day grace
+// period plus a 6-month consent-record retention -- only holds if the
+// 6-month purge clock in AccountDeletionSweepService starts here, at
+// hard-delete time, not at the (possibly years-earlier) original
+// consent-confirmation time. Indexed for the sweep's own purge query.
+model ConsentAuditRecord {
+  id                 String    @id @default(uuid())
+  minorUserId        String
+  // Guardian.consentStatus's own value at the moment of hard-delete --
+  // "pending" is a real, expected case here too (a restricted-pending
+  // minor who deletes their own account before a guardian ever
+  // confirms), not just "confirmed".
+  consentStatus      String
+  // Guardian.consentTimestamp's own value, snapshotted -- null when
+  // consentStatus was "pending" at hard-delete time.
+  consentConfirmedAt DateTime?
+  // How consent was (or would have been) captured -- currently always
+  // the one flow this codebase implements (Build Plan Section 8.3's
+  // emailed-token confirm link, GuardianConsentModule). A plain string,
+  // not an enum, so a second consent method added later doesn't need a
+  // migration to describe existing rows.
+  consentMethod      String    @default("guardian-consent-link")
+  createdAt          DateTime  @default(now())
+
+  @@index([createdAt])
 }
 
 model ClubPage {
