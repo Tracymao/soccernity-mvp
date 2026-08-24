@@ -1897,6 +1897,31 @@ Full reasoning for every choice above: Build Plan Section 5.
   failures (the 2 stale "blocked" tests from PR #88 replaced with 5 new
   ones, including the cross-user cascade proof and the raw-SQL schema
   checks).
+- **`sprint-2/leaderboard-design-new` designs a brand-new "Leaderboard Page
+  Desktop" frame (`5171:6633`) in Figma — no leaderboard screen existed
+  anywhere in the file before this.** Routing note: this task was dispatched
+  labelled "Agent: figma-design-system," but was new-screen design work
+  ("no existing frame to revise"), so it was routed to `figma-screen-builder`
+  instead, per that agent's own documented boundary — flagged rather than
+  silently followed or silently overridden. Ranked by a plain integer, no
+  reward iconography (Phase 2), real display names including minors per
+  Decision Log #45, restricted-pending minors simply absent from the data.
+  Global/Per-Club/Per-Competition/Per-Time-Period are one combinable filter
+  bar, not four screens; "Competition" (umbrella) vs. "Contest" (one
+  video-skill-challenge type, eventually fed by `2072:5584`, not wired in
+  this pass) follows this project's taxonomy, with the competition selector
+  designed to accept future types generically. Full detail in
+  `docs/sprint-2-leaderboard-page-design-report.md`. **This design surfaces
+  three new open Decision Log candidates, none resolved here**: (1) no
+  points model exists anywhere in the schema or API — this board ranks by
+  an integer the platform doesn't yet store; (2) the schema has two
+  different "club" mechanisms (`ClubPage` membership vs.
+  `User.clubAffiliationId`) plus an unbuilt grassroots-team concept, and
+  which one the club-filter axis means isn't decided; (3) whether the board
+  is visible to logged-out visitors (relevant given minors' real names are
+  shown for scout/club visibility, and scouts may not have accounts) is
+  unresolved. `figma-to-code` should not build this screen until at least
+  the points-model question is settled.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
