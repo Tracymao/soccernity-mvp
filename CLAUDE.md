@@ -2019,6 +2019,46 @@ Full reasoning for every choice above: Build Plan Section 5.
   the binding, and a genuinely-bound paint can still **render as that literal**
   (black icons that read back as correctly bound to `brand/green`) — pass the
   variable's resolved value, not a `{0,0,0}` placeholder.
+- **A second pass on the same `sprint-2/homepage-rebuild` branch/PR (#97, still
+  unmerged) added a third homepage frame, `5204:6728` — "Home Page Desktop —
+  Premium Light (Sprint 2, Pass 2)".** This was a fix-up commit, not a new
+  branch or PR. **The founder's brief for this pass asserted, incorrectly, that
+  the file had no Figma variables at all and asked for a new collection to be
+  created** — the agent verified live before acting rather than trusting the
+  brief, found the existing `Soccernity Theme` collection (see "Figma notes"
+  above) fully intact, and did **not** create a duplicate. Every colour value
+  the brief asked for already existed at the exact same value under a
+  different name (`brand/green-tint-12`→`brand/green-tint`,
+  `surface/neutral`→`brand/off-white`, `text/on-dark`→`color/text/on-navy`);
+  existing names were kept, per the brief's own "no naming drift" instruction.
+  Pass 1's binding claims were also independently re-audited, not just
+  trusted, and held up. **Build directive for this pass was looser than Pass
+  1's**: reuse only the header and footer (footer cloned from Pass 1's
+  already-fixed version, not the raw original — flagged, since the brief said
+  to pull from the original), invent everything else. Result: 269 bound / 0
+  unbound paints across the entire authored page body (Pass 1's fixture strip
+  still carried 1,760 unbound club-crest trademark paints; this pass replaced
+  crest cells with typographic fixture cards specifically to drop that
+  dependency — a real product/legal-facing decision, not just cleanup, see the
+  report's Decision Log candidate #2). One real AA contrast failure was caught
+  by measurement and fixed (a green eyebrow label on a 28%-tint chip over navy
+  measured 3.34:1; fixed by setting the label to `color/text/on-navy` and
+  keeping green only as a small non-text dot). Two real bugs were found and
+  fixed: three cloned thumbnails resized against a stale pre-reflow width
+  (showing cropped, wrong-aspect images), and `figma.createVector()` silently
+  adding unbound black strokes to new nodes. Full detail, including the
+  complete token-mapping table and six new open Decision Log candidates (which
+  homepage frame is now canonical given three exist; whether fixtures should
+  ever show licensed club crests; a naming asymmetry between
+  `brand/green-tint` and `brand/green-tint-28`; `color/background/page` going
+  unused for a second frame running; no elevation/shadow token convention yet;
+  and that this pass's "season record" hero card implies a per-player stats
+  model with no schema backing, the same class of gap the Leaderboard design
+  flagged for its own points model), in
+  `docs/sprint-2-homepage-rebuild-variables-report.md`. **All three homepage
+  frames — `2631:3951` (original), `5191:6652` (Pass 1), `5204:6728` (Pass
+  2) — currently coexist; picking a canonical one is the founder's call, not
+  made by either pass.**
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
@@ -2031,6 +2071,17 @@ Full reasoning for every choice above: Build Plan Section 5.
 - File: "Soccernity-MVP", key `weZWWqggy9j13eX8bhFgs6`. It has three pages: **"soccernity Cover page"** (`1860:2500`, cover only — logo and background, nothing else; originally named "soccernity"), **"Soccernity"** (`0:1`, this is where every real screen lives — Community, Sports Hub, Admin Console, Auth, Banter Rooms, ~263 nodes; originally named "Page 1"), and **"dump"** (`2155:1285`, unused scratch, ignore it). Page IDs are stable across the rename — if referencing a page, prefer the ID over the name where possible.
 - `get_metadata`'s default, un-scoped page listing is unreliable on this file — it only ever surfaces the cover page (`1860:2500`), not the real content page (`0:1`). Don't trust it to enumerate pages. Fetch page `0:1` directly instead, or use `use_figma` to run `figma.root.children` directly if you need to confirm what pages exist.
 - `use_figma` operates on whatever the Figma desktop app currently has open locally — a completely separate connection from key-based reads like `get_metadata`. If a read via file key returns real content but `use_figma` doesn't match, the desktop app almost certainly has the wrong file or page active, not a permissions or data problem. Confirm the correct file is open and frontmost before trusting any `use_figma` result.
+- This file has one real Figma variable collection: **`Soccernity Theme`**
+  (`VariableCollectionId:5096:2`), modes **Light** (`5096:0`, default) /
+  **Dark** (`5096:1`), 12 COLOR variables — Sprint D created the original ten,
+  PR #96 added `color/text/on-navy` and `brand/off-white`. Confirm this
+  directly (`get_variable_defs` / `figma.variables.getLocalVariableCollectionsAsync()`)
+  before assuming any brief's claim about whether variables exist in this file
+  — one already has gotten this wrong (`sprint-2/homepage-rebuild`'s second
+  pass, which asserted the file had no variables at all; it didn't, and the
+  agent caught it by checking live rather than trusting the brief). Full
+  variable/value table in `docs/sprint-2-homepage-rebuild-report.md` §0.1 and
+  `docs/sprint-2-homepage-rebuild-variables-report.md` §2.
 
 ## The eight agents, and the order they run in
 
