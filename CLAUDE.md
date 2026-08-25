@@ -1922,6 +1922,38 @@ Full reasoning for every choice above: Build Plan Section 5.
   shown for scout/club visibility, and scouts may not have accounts) is
   unresolved. `figma-to-code` should not build this screen until at least
   the points-model question is settled.
+- **`sprint-2/brand-guide-light-mode-tokens` documents a new "Brand Guide —
+  Light Mode Tokens (Sprint 2)" frame (`5182:6652`) in Figma, pairing with
+  Sprint D's existing dark-mode frame (`5100:2`, untouched), and fixes one
+  confirmed off-brand colour bug.** Five tokens, all traceable to the two
+  brand hex values: `brand/navy` `#282E65` and `brand/green` `#7BB929`
+  (existing, unchanged); `brand/green-tint 12%` (reused as-is from Sprint
+  D's own variable, not re-derived); `color/text/on-navy` `#FFFFFF` (a new
+  variable formalising an already-correct pairing — Frame 397's social
+  labels already render white on navy); and `brand/off-white` `#F4F5FB`
+  (**newly derived** this session — same hue/saturation as navy, HSL
+  `234.1°, 43.3%`, but lightness raised to 97% rather than lowered to 9%,
+  the light-mode mirror of how Sprint D derived `bg/page-dark`; disclosed
+  finding: the *existing* `color/background/page` Light value is flat
+  `#FFFFFF`, not derived this way, so `brand/off-white` is a genuinely new,
+  additional token, not a replacement — whether it should become one is an
+  open question). Both new tokens are real Figma Variables in the existing
+  `Soccernity Theme` collection (`VariableCollectionId:5096:2`), matching
+  Sprint D's own convention, not just documented swatches. **One contrast
+  failure found and disclosed, not silently patched**: `brand/green` on
+  `brand/off-white` measures 2.19:1, failing AA — resolved by scoping
+  green's usage note to icon/accent fills only, never text on a light
+  background, consistent with how the file already treats green elsewhere;
+  no new colour was introduced. **Bug fix**: Frame 396's wordmark
+  (`2286:1364`) was rendering `#040404` (near-black, off-palette) — fixed
+  to `brand/navy` `#282E65`, bound to the real variable. Full detail,
+  including the hand-computed contrast ratios and the two disclosed
+  placeholder decisions (`brand/off-white`'s Dark-mode value is inherited
+  from `color/background/page`'s existing dark value, not independently
+  derived — light-mode-only scope), in
+  `docs/sprint-2-brand-guide-light-mode-tokens-report.md`. Icon library
+  standardisation and the club-crest-licensing question remain open,
+  untouched, same as Sprint D and the leaderboard design left them.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
