@@ -1954,6 +1954,71 @@ Full reasoning for every choice above: Build Plan Section 5.
   `docs/sprint-2-brand-guide-light-mode-tokens-report.md`. Icon library
   standardisation and the club-crest-licensing question remain open,
   untouched, same as Sprint D and the leaderboard design left them.
+- **`sprint-2/homepage-rebuild` rebuilds the homepage from scratch in Figma as a
+  new frame, "Home Page Desktop — Light Mode Rebuild (Sprint 2)" (`5191:6652`),
+  replacing the hero-only patch of PR #94 (`sprint-2/homepage-hero-rework`),
+  which the founder rejected as insufficient.** Routing note: dispatched
+  labelled "Agent: figma-screen-builder", but the target frame (`2631:3951`)
+  **already exists**, which normally makes it `figma-design-system`'s domain —
+  the brief's scope (full reconstruction/reassembly of the whole page, not a
+  token retouch of an existing layout) is why it was routed to
+  `figma-screen-builder` instead. Flagged rather than silently followed; this is
+  the mirror of the Leaderboard bullet's own routing flag, running the opposite
+  direction. **The original `2631:3951` was deliberately preserved, not
+  overwritten** (2,191 nodes, non-reproducible raster placement, and the founder
+  needs a side-by-side) — whether it should now be archived or replaced is an
+  open call, not made there. Full-page assembly of reused pieces only: Header
+  re-instanced as the same `header 7` variant, and all hero / fixture-crest /
+  About-icon / Talents / Trending imagery cloned from the original rather than
+  re-sourced. Everything is auto-layout, explicit **Light** mode, and **the body
+  of the page has zero unbound paints** (the two remaining unbound zones are
+  deliberate: reused club-crest trademark art, and the shared `Header`
+  instance). **Before/after colour audit, measured not estimated**: the original
+  had 2,006 solid paints with only **27 bound (1.3%), all 27 inside the `Header`
+  instance**, and carried real off-palette black — `#1E1E1E` (the footer's own
+  background), `#232323` ×18, `#000000` ×59, `#0E0E0E` ×2, `#000000` @35%/@50% —
+  all fixed in the rebuild, same disclosure discipline as PR #96's `#040404`
+  wordmark. Non-colour defects found and fixed: two duplicate footer social
+  bars, a `visible = false` LinkedIn icon, a 4.97px ghost "Soccernity" text
+  node, a duplicated "Terms of Service" link, a 2022 copyright, an orphan
+  "Address" label, the hero's supporting paragraph being copy-paste leakage of
+  the Zaha news blurb, ×3 duplicated Trending cards, the "Scounting" typo ×4,
+  and three cards positioned off-canvas outside their own parents. **One real
+  contrast failure caught by measurement, not by eye**: white hero text over the
+  reused pitch photo at the initially-built 62% navy scrim measures 3.98:1
+  worst-case (fails AA); raised to 72%, it measures 5.32:1. Separately confirmed
+  that **white on `brand/green` is 2.38:1 and fails AA** — the green Trending
+  band uses `color/text/on-green` (navy, 5.28:1) instead, the mirror of PR #96's
+  green-on-light finding. Full detail in
+  `docs/sprint-2-homepage-rebuild-report.md`. **This rebuild surfaces new open
+  Decision Log candidates, none resolved there**: (1) **the big one — is `/` the
+  logged-out marketing landing page or the authenticated home feed?** The brief
+  named a create-a-post card, suggested follows and feed posts as things to
+  reuse "from the current Home Page Desktop frame"; they are not on it and it
+  has no variants — they live in the **Community** pillar (`1306:7149` and the
+  four `Create a post` frames), and the homepage's own Header is `header 7`, the
+  logged-out variant, so a signed-in composer can't coexist with it; `apps/web`'s
+  `/` is still a `PlaceholderPage` stub, so the code settles nothing either;
+  rebuilt as the marketing page it demonstrably is, with the merge question
+  flagged rather than assumed; (2) a **club-picker entry point was deliberately
+  not built** — no component exists for it, and adding one to a logged-out page
+  would contradict `sprint-2/club-picker-ui`'s already-resolved direction (b)
+  (club selection happens *after* account creation, because `GET /clubs` is
+  `JwtAuthGuard`-only); (3) **Trending Topics and Today's Fixture have no data
+  source** — both are placeholder, blocked on the still-unresolved **Decision Log
+  #6** (sports-data vendor), and Section 4 defines no news or fixtures endpoint,
+  so `figma-to-code` must not wire either; (4) the shared **`Header` component
+  still carries `#000000` ×12, `#0E0E0E` ×2, `#000000` @35% and a green-tint
+  search pill** — deliberately not overridden from inside a screen-design task,
+  so this is a real open retrofit item for `figma-design-system` affecting
+  **every** screen in the file, not just this one; (5) whether `brand/off-white`
+  should replace `color/background/page`'s flat `#FFFFFF` Light value — PR #96's
+  own open question, now with a concrete screen depending on the answer. Also
+  worth knowing for anyone writing Figma variables in this file:
+  `setBoundVariableForPaint()` keeps the literal colour you pass it underneath
+  the binding, and a genuinely-bound paint can still **render as that literal**
+  (black icons that read back as correctly bound to `brand/green`) — pass the
+  variable's resolved value, not a `{0,0,0}` placeholder.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
