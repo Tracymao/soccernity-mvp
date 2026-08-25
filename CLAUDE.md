@@ -1954,6 +1954,111 @@ Full reasoning for every choice above: Build Plan Section 5.
   `docs/sprint-2-brand-guide-light-mode-tokens-report.md`. Icon library
   standardisation and the club-crest-licensing question remain open,
   untouched, same as Sprint D and the leaderboard design left them.
+- **`sprint-2/homepage-rebuild` rebuilds the homepage from scratch in Figma as a
+  new frame, "Home Page Desktop — Light Mode Rebuild (Sprint 2)" (`5191:6652`),
+  replacing the hero-only patch of PR #94 (`sprint-2/homepage-hero-rework`),
+  which the founder rejected as insufficient.** Routing note: dispatched
+  labelled "Agent: figma-screen-builder", but the target frame (`2631:3951`)
+  **already exists**, which normally makes it `figma-design-system`'s domain —
+  the brief's scope (full reconstruction/reassembly of the whole page, not a
+  token retouch of an existing layout) is why it was routed to
+  `figma-screen-builder` instead. Flagged rather than silently followed; this is
+  the mirror of the Leaderboard bullet's own routing flag, running the opposite
+  direction. **The original `2631:3951` was deliberately preserved, not
+  overwritten** (2,191 nodes, non-reproducible raster placement, and the founder
+  needs a side-by-side) — whether it should now be archived or replaced is an
+  open call, not made there. Full-page assembly of reused pieces only: Header
+  re-instanced as the same `header 7` variant, and all hero / fixture-crest /
+  About-icon / Talents / Trending imagery cloned from the original rather than
+  re-sourced. Everything is auto-layout, explicit **Light** mode, and **the body
+  of the page has zero unbound paints** (the two remaining unbound zones are
+  deliberate: reused club-crest trademark art, and the shared `Header`
+  instance). **Before/after colour audit, measured not estimated**: the original
+  had 2,006 solid paints with only **27 bound (1.3%), all 27 inside the `Header`
+  instance**, and carried real off-palette black — `#1E1E1E` (the footer's own
+  background), `#232323` ×18, `#000000` ×59, `#0E0E0E` ×2, `#000000` @35%/@50% —
+  all fixed in the rebuild, same disclosure discipline as PR #96's `#040404`
+  wordmark. Non-colour defects found and fixed: two duplicate footer social
+  bars, a `visible = false` LinkedIn icon, a 4.97px ghost "Soccernity" text
+  node, a duplicated "Terms of Service" link, a 2022 copyright, an orphan
+  "Address" label, the hero's supporting paragraph being copy-paste leakage of
+  the Zaha news blurb, ×3 duplicated Trending cards, the "Scounting" typo ×4,
+  and three cards positioned off-canvas outside their own parents. **One real
+  contrast failure caught by measurement, not by eye**: white hero text over the
+  reused pitch photo at the initially-built 62% navy scrim measures 3.98:1
+  worst-case (fails AA); raised to 72%, it measures 5.32:1. Separately confirmed
+  that **white on `brand/green` is 2.38:1 and fails AA** — the green Trending
+  band uses `color/text/on-green` (navy, 5.28:1) instead, the mirror of PR #96's
+  green-on-light finding. Full detail in
+  `docs/sprint-2-homepage-rebuild-report.md`. **This rebuild surfaces new open
+  Decision Log candidates, none resolved there**: (1) **the big one — is `/` the
+  logged-out marketing landing page or the authenticated home feed?** The brief
+  named a create-a-post card, suggested follows and feed posts as things to
+  reuse "from the current Home Page Desktop frame"; they are not on it and it
+  has no variants — they live in the **Community** pillar (`1306:7149` and the
+  four `Create a post` frames), and the homepage's own Header is `header 7`, the
+  logged-out variant, so a signed-in composer can't coexist with it; `apps/web`'s
+  `/` is still a `PlaceholderPage` stub, so the code settles nothing either;
+  rebuilt as the marketing page it demonstrably is, with the merge question
+  flagged rather than assumed; (2) a **club-picker entry point was deliberately
+  not built** — no component exists for it, and adding one to a logged-out page
+  would contradict `sprint-2/club-picker-ui`'s already-resolved direction (b)
+  (club selection happens *after* account creation, because `GET /clubs` is
+  `JwtAuthGuard`-only); (3) **Trending Topics and Today's Fixture have no data
+  source** — both are placeholder, blocked on the still-unresolved **Decision Log
+  #6** (sports-data vendor), and Section 4 defines no news or fixtures endpoint,
+  so `figma-to-code` must not wire either; (4) the shared **`Header` component
+  still carries `#000000` ×12, `#0E0E0E` ×2, `#000000` @35% and a green-tint
+  search pill** — deliberately not overridden from inside a screen-design task,
+  so this is a real open retrofit item for `figma-design-system` affecting
+  **every** screen in the file, not just this one; (5) whether `brand/off-white`
+  should replace `color/background/page`'s flat `#FFFFFF` Light value — PR #96's
+  own open question, now with a concrete screen depending on the answer. Also
+  worth knowing for anyone writing Figma variables in this file:
+  `setBoundVariableForPaint()` keeps the literal colour you pass it underneath
+  the binding, and a genuinely-bound paint can still **render as that literal**
+  (black icons that read back as correctly bound to `brand/green`) — pass the
+  variable's resolved value, not a `{0,0,0}` placeholder.
+- **A second pass on the same `sprint-2/homepage-rebuild` branch/PR (#97, still
+  unmerged) added a third homepage frame, `5204:6728` — "Home Page Desktop —
+  Premium Light (Sprint 2, Pass 2)".** This was a fix-up commit, not a new
+  branch or PR. **The founder's brief for this pass asserted, incorrectly, that
+  the file had no Figma variables at all and asked for a new collection to be
+  created** — the agent verified live before acting rather than trusting the
+  brief, found the existing `Soccernity Theme` collection (see "Figma notes"
+  above) fully intact, and did **not** create a duplicate. Every colour value
+  the brief asked for already existed at the exact same value under a
+  different name (`brand/green-tint-12`→`brand/green-tint`,
+  `surface/neutral`→`brand/off-white`, `text/on-dark`→`color/text/on-navy`);
+  existing names were kept, per the brief's own "no naming drift" instruction.
+  Pass 1's binding claims were also independently re-audited, not just
+  trusted, and held up. **Build directive for this pass was looser than Pass
+  1's**: reuse only the header and footer (footer cloned from Pass 1's
+  already-fixed version, not the raw original — flagged, since the brief said
+  to pull from the original), invent everything else. Result: 269 bound / 0
+  unbound paints across the entire authored page body (Pass 1's fixture strip
+  still carried 1,760 unbound club-crest trademark paints; this pass replaced
+  crest cells with typographic fixture cards specifically to drop that
+  dependency — a real product/legal-facing decision, not just cleanup, see the
+  report's Decision Log candidate #2). One real AA contrast failure was caught
+  by measurement and fixed (a green eyebrow label on a 28%-tint chip over navy
+  measured 3.34:1; fixed by setting the label to `color/text/on-navy` and
+  keeping green only as a small non-text dot). Two real bugs were found and
+  fixed: three cloned thumbnails resized against a stale pre-reflow width
+  (showing cropped, wrong-aspect images), and `figma.createVector()` silently
+  adding unbound black strokes to new nodes. Full detail, including the
+  complete token-mapping table and six new open Decision Log candidates (which
+  homepage frame is now canonical given three exist; whether fixtures should
+  ever show licensed club crests; a naming asymmetry between
+  `brand/green-tint` and `brand/green-tint-28`; `color/background/page` going
+  unused for a second frame running; no elevation/shadow token convention yet;
+  and that this pass's "season record" hero card implies a per-player stats
+  model with no schema backing, the same class of gap the Leaderboard design
+  flagged for its own points model), in
+  `docs/sprint-2-homepage-rebuild-variables-report.md`. **All three homepage
+  frames — `2631:3951` (original), `5191:6652` (Pass 1), `5204:6728` (Pass
+  2) — currently coexist; picking a canonical one is the founder's call, not
+  made by either pass.**
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
@@ -1966,6 +2071,17 @@ Full reasoning for every choice above: Build Plan Section 5.
 - File: "Soccernity-MVP", key `weZWWqggy9j13eX8bhFgs6`. It has three pages: **"soccernity Cover page"** (`1860:2500`, cover only — logo and background, nothing else; originally named "soccernity"), **"Soccernity"** (`0:1`, this is where every real screen lives — Community, Sports Hub, Admin Console, Auth, Banter Rooms, ~263 nodes; originally named "Page 1"), and **"dump"** (`2155:1285`, unused scratch, ignore it). Page IDs are stable across the rename — if referencing a page, prefer the ID over the name where possible.
 - `get_metadata`'s default, un-scoped page listing is unreliable on this file — it only ever surfaces the cover page (`1860:2500`), not the real content page (`0:1`). Don't trust it to enumerate pages. Fetch page `0:1` directly instead, or use `use_figma` to run `figma.root.children` directly if you need to confirm what pages exist.
 - `use_figma` operates on whatever the Figma desktop app currently has open locally — a completely separate connection from key-based reads like `get_metadata`. If a read via file key returns real content but `use_figma` doesn't match, the desktop app almost certainly has the wrong file or page active, not a permissions or data problem. Confirm the correct file is open and frontmost before trusting any `use_figma` result.
+- This file has one real Figma variable collection: **`Soccernity Theme`**
+  (`VariableCollectionId:5096:2`), modes **Light** (`5096:0`, default) /
+  **Dark** (`5096:1`), 12 COLOR variables — Sprint D created the original ten,
+  PR #96 added `color/text/on-navy` and `brand/off-white`. Confirm this
+  directly (`get_variable_defs` / `figma.variables.getLocalVariableCollectionsAsync()`)
+  before assuming any brief's claim about whether variables exist in this file
+  — one already has gotten this wrong (`sprint-2/homepage-rebuild`'s second
+  pass, which asserted the file had no variables at all; it didn't, and the
+  agent caught it by checking live rather than trusting the brief). Full
+  variable/value table in `docs/sprint-2-homepage-rebuild-report.md` §0.1 and
+  `docs/sprint-2-homepage-rebuild-variables-report.md` §2.
 
 ## The eight agents, and the order they run in
 
