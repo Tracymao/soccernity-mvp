@@ -2059,6 +2059,60 @@ Full reasoning for every choice above: Build Plan Section 5.
   frames — `2631:3951` (original), `5191:6652` (Pass 1), `5204:6728` (Pass
   2) — currently coexist; picking a canonical one is the founder's call, not
   made by either pass.**
+- **`sprint-2/retrofit-light-mode-tokens` (PR #98, merged) retrofitted 16
+  existing screens — Leaderboard, all six Guardian Consent screens, all
+  five Club Picker screens, all four Verify Email screens — to light-mode
+  tokens.** Flagging a real gap, not silently fixing it after the fact:
+  **that PR never added a status bullet to this file**, the exact drift
+  this file's own "Keeping this file current" section exists to prevent —
+  the agent that did that work had no shell/Bash tool available and
+  couldn't commit or edit this file at all (see that PR's own report,
+  `docs/sprint-2-retrofit-light-mode-tokens-report.md`, §10), and
+  whoever merged the PR on Temi's behalf didn't add the bullet either.
+  Full detail lives only in that report; the short version: it found all
+  16 frames were already variable-bound but pinned to Dark mode, fixed a
+  real invisible-footer-text bug, and left open Decision Log candidates
+  including "should the shared `Header` component's off-palette black and
+  `green-tint-28` search pill be fixed file-wide" — see the next bullet.
+- **`sprint-2/retrofit-light-mode-tokens-round2` (PR #99) retrofits the
+  remaining 11 named sections — Blog, Sports/Livescores, Bants, Message,
+  Contest, Community, Create Post, Settings, Components, and both mobile
+  Community/Message sections — 80 frames total, to the same light-mode
+  token standard used by the Premium Light homepage (PR #97/#98) and
+  Leaderboard (PR #98).** Admin Panel, Auth Pages, and Email Template are
+  explicitly deferred to a separate push. Full detail, including a
+  per-section breakdown and 12 open Decision Log candidates, is in
+  `docs/sprint-2-retrofit-light-mode-tokens-round2-report.md`. Headlines:
+  **this closes the prior bullet's own open item** — the shared Navbar's
+  off-palette black and its `brand/green-tint-28` search pill (flagged
+  three times before this: CLAUDE.md, PR #96, PR #97) are now fixed at
+  the component level, not just one instance. Also root-caused and
+  eliminated `brand/green-tint-28` everywhere else it had spread (Bants,
+  Settings' live and an orphaned toggle-switch component). Found and
+  corrected a **documentation error in this PR's own first batch**: the
+  Navbar's `header 4`/`header 7` variant labels were reported backwards
+  in that batch's own summary (its detailed content description was
+  actually correct) — independently re-verified via live screenshot +
+  metadata before it could propagate: `header 4` is logged-in, `header 7`
+  is logged-out. Found and fixed a recurring copy-paste bug (`#034694`, a
+  club-crest blue) used by accident as real UI color — footer copyright
+  text, a CTA button background, dividers, tab labels — across Community,
+  Create Post, and Community (Mobile). Confirmed, not merely assumed, that
+  a recurring "muted metadata text fails AA" finding reported across five
+  separate sections (Bants, Message, Message Mobile, Contest-adjacent,
+  Create Post) is a real, unresolved design decision (deliberately
+  low-opacity, already-on-brand navy text) and not a tooling bug, by
+  distinguishing it from a superficially similar but structurally
+  different black-text case in Community/Settings/Community Mobile that
+  *was* correctly fixed. Surfaced that `1306:7149`/`1308:11643` (the
+  Community Home Page Template referenced by name in this task's own
+  brief) are both `visible: false` and render nothing anywhere in the
+  file — not fixed, flagged for whoever owns that content next. Also
+  surfaced: a text-node fill rebind can silently trigger a Figma
+  text-wrap regression on tightly-boxed nodes (found and fixed in the
+  final batch, **not retroactively checked across the other 8 batches**
+  — a real follow-up gap, not closed by this PR). Not merged — same
+  standing instruction every design-stage PR in this project follows.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
