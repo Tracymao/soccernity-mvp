@@ -2163,10 +2163,11 @@ Full reasoning for every choice above: Build Plan Section 5.
     Forgot/Reset desktop; `header 4` (logged-in) added to Create Profile
     desktop — **flagged ambiguous** (post-registration the user has a
     session, but a mid-onboarding full logged-in nav is arguable).
-    **Mobile auth frames got no navbar** — `2824:4309` has only 1440px
-    desktop variants, no mobile variant exists; a mobile navbar variant
-    is a named follow-up. Whether auth pages should carry the full app
-    nav at all is flagged for design review.
+    **Mobile auth frames got no navbar** — `2824:4309` had only 1440px
+    desktop variants, no mobile variant existed; flagged as a named
+    follow-up. **Now closed — see `sprint-2/mobile-navbar-variant`
+    below.** Whether auth pages should carry the full app nav at all is
+    still flagged for design review.
   - **Decision Log #46 added** (Build Plan Section 9): the founder
     confirms **`5204:6728` "Home Page Desktop — Premium Light (Sprint 2,
     Pass 2)" is the canonical homepage**; `2631:3951` and `5191:6652` are
@@ -2191,6 +2192,42 @@ Full reasoning for every choice above: Build Plan Section 5.
     Section 9's table — a drift gap; this PR left #45 free for that
     entry and used #46/#47.
   - Not merged — same standing instruction every design-stage PR follows.
+- **`sprint-2/mobile-navbar-variant` designs the mobile navbar variant
+  PR #100 flagged as missing, and applies it to the five Auth Pages
+  mobile frames.** Two variants added **inside the existing set
+  `2824:4309`** (not a standalone frame): `Property 1=header 7 — mobile`
+  (`5386:6575`, logged-out) and `Property 1=header 4 — mobile`
+  (`5386:6576`, logged-in) — single-property naming so they stay paired
+  with the desktop `header 4`/`header 7` in the variant picker (a second
+  "Breakpoint" property was rejected — would have meant renaming the
+  existing desktop variants). Built at **428px** (the mobile-screen
+  convention already in this file — `community mobile 1–5` /
+  `Messages mobile window 2/4` are all 428 wide), **64px** tall,
+  `color/background/surface` bg, `SPACE_BETWEEN` auto-layout. Every
+  element cloned from the desktop variants so both breakpoints share
+  sub-components + tokens: logo (mark → `brand/green` + navy, wordmark →
+  `color/text/primary`), a standalone search icon (`brand/navy` stroke,
+  collapsed from the desktop search pill), and the right-side action —
+  Login button (`brand/navy` + `color/text/on-navy`) for logged-out,
+  messages glyph + avatar for logged-in. **The 6-icon nav row + full
+  search pill are dropped on mobile** — that nav lives in the separate
+  bottom tab bar (`Mobile App Nav Icons`, `2230:4328`), and an auth
+  screen needs neither. **0 unbound paints** in either variant; only
+  Light-mode Soccernity Theme tokens, **no `brand/green-tint-28`**
+  (Decision Log #47), no new colour, no dark-mode. **Applied to all five
+  Auth mobile frames** — `header 7 — mobile` on Login (`1625:2303`) /
+  Register (`1625:2333`) / Forgot (`1625:2375`) / Reset (`1625:2404`),
+  `header 4 — mobile` on Create Profile (`1629:2449`) — same
+  logged-in/out judgment (and same flagged Create-Profile ambiguity) as
+  PR #100's desktop counterparts. The frames are 390px wide so each
+  instance is resized to 390 on placement (auto-layout reflows);
+  in-frame "Group 103" logo lockups hidden, content shifted down 64px
+  (Create Profile mobile, being VERTICAL auto-layout, gets an
+  `ABSOLUTE`-positioned navbar + `paddingTop` 40 → 104 instead).
+  **Decision Log #48 added** (Build Plan Section 9), formally closing
+  PR #100's "mobile auth navbar" follow-up. Full detail:
+  `docs/sprint-2-mobile-navbar-variant-report.md`. Not merged — same
+  standing instruction every design-stage PR follows.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
