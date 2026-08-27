@@ -2113,6 +2113,84 @@ Full reasoning for every choice above: Build Plan Section 5.
   final batch, **not retroactively checked across the other 8 batches**
   — a real follow-up gap, not closed by this PR). Not merged — same
   standing instruction every design-stage PR in this project follows.
+- **`sprint-2/retrofit-light-mode-auth-email` retrofits the two sections
+  PR #99 explicitly deferred — AUTH PAGES (10 frames) and EMAIL TEMPLATE
+  (5 existing + 1 new) — to the same light-mode token standard, plus a
+  Date-of-Birth field, the reset-password email, and per-screen navbar
+  variants.** ADMIN PANEL is still deferred to its own later push; the
+  Guardian Consent / Club Picker / Verify Email frames were already done
+  (PRs #98/#99/#82) and were left untouched. Full detail in
+  `docs/sprint-2-retrofit-light-mode-auth-email-report.md`. Headlines:
+  - **The 10 auth frames were a pre-brand indigo template** (`#4F46E5`
+    buttons/links, `#6C63FF` illustration accents, `#000000` headings,
+    `#F3F4F6` inputs, **zero** variable bindings, **no navbar**). Now
+    100% bound (frame bg → `brand/off-white`; headings/labels/links →
+    `color/text/primary`; sub-copy/placeholders → `color/text/secondary`;
+    inputs/checkbox/avatar-placeholder → `brand/green-tint` 12%; primary
+    buttons → `brand/navy` + `color/text/on-navy`; illustration ground →
+    `brand/navy`, pitch/foliage → `brand/green`, linework →
+    secondary/`color/icon/inactive`). **Deliberately left unbound and
+    documented:** the `undraw` goalkeeper illustration's ~9 skin/hair
+    hexes — re-binding them would break the figure, same precedent as
+    PR #97's club-crest trademark art.
+  - **Primary buttons resolved to `brand/navy` (not `brand/green`)** for
+    a single consistent treatment across auth + email; `color/text/on-green`
+    is unused in this delivery. Flagged as a judgment call, not a spec.
+  - **Date of Birth field added to Register desktop + mobile**, reusing
+    the existing-but-unwired date picker **"Group 847"** (`5230:25115`,
+    self-labelled "Date picker for date of birth field") — retrofitted
+    (86 paints re-bound) and integrated as an open-state picker below the
+    new field on both frames, rather than building a new one.
+  - **New "Reset your password" email frame** (`5372:7272`, cloned from
+    `1380:2297`) — the forgot-password reset-link email, distinct from
+    the existing after-the-fact "password changed" confirmation. Copy
+    matches the real backend send
+    (`password-reset/email/password-reset-email.service.ts`: subject
+    "Reset your Soccernity password", 60-min TTL per
+    `DEFAULT_RESET_TOKEN_TTL_MINUTES`).
+  - **All 6 email templates re-copied** to a consistent standard (clear
+    heading, concise body, one CTA where relevant, uniform "The Soccernity
+    Team" sign-off). **Copy-accuracy flags (no code changed):** only the
+    new reset-password email maps to a real backend send — the other 5
+    templates (account-created welcome, both password-change emails, both
+    admin/mod emails) are **not wired to any backend send** today;
+    `1380:2297` originally described an email-link password-change flow
+    that does not exist (real `POST /auth/change-password` is immediate +
+    revokes sessions, no email step) and overlapped `1380:2318` — renamed
+    + rewritten as a security *notification*, overlap still flagged;
+    "recive" → "receive" and inconsistent sign-offs fixed everywhere.
+  - **Navbar variants:** `header 7` (logged-out) added to Login/Register/
+    Forgot/Reset desktop; `header 4` (logged-in) added to Create Profile
+    desktop — **flagged ambiguous** (post-registration the user has a
+    session, but a mid-onboarding full logged-in nav is arguable).
+    **Mobile auth frames got no navbar** — `2824:4309` has only 1440px
+    desktop variants, no mobile variant exists; a mobile navbar variant
+    is a named follow-up. Whether auth pages should carry the full app
+    nav at all is flagged for design review.
+  - **Decision Log #46 added** (Build Plan Section 9): the founder
+    confirms **`5204:6728` "Home Page Desktop — Premium Light (Sprint 2,
+    Pass 2)" is the canonical homepage**; `2631:3951` and `5191:6652` are
+    preserved but non-canonical. Closes the open question from PR #97's
+    report / `sprint-2-homepage-rebuild-variables-report.md` §10.
+  - **Decision Log #47 added**: the founder confirms **`brand/green-tint-28`
+    is NOT a real design-system token** — the only wash token is
+    `brand/green-tint` (12%). This delivery uses only `brand/green-tint`
+    and introduced zero new `-28` usages, but a file-wide scan found
+    **~133 pre-existing `-28` bound paints** across Navbar/Guardian-Consent/
+    Leaderboard/Club/Settings/Homepage frames. **Rebinding all 133 +
+    deleting the variable (`5098:7071`) is a named follow-up
+    `figma-design-system` cleanup PR** — deliberately not bundled into
+    this scoped auth/email retrofit (six out-of-scope screen families,
+    real regression risk). PR #99's claim that it "eliminated
+    `brand/green-tint-28` everywhere else it had spread" was
+    over-stated — the component was fixed (fresh navbar instances are
+    clean) but old instances and other frames still carry it.
+  - **Numbering note:** `docs/sprint-2-leaderboard-page-design-report.md`
+    references a "Decision Log #45" (real display names incl. minors on
+    the leaderboard) that was never actually written into Build Plan
+    Section 9's table — a drift gap; this PR left #45 free for that
+    entry and used #46/#47.
+  - Not merged — same standing instruction every design-stage PR follows.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
