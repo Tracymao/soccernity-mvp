@@ -2462,6 +2462,57 @@ Full reasoning for every choice above: Build Plan Section 5.
   Decision Log #60 restart behaviour, and real sends for the two new
   emails (same status as PR #104's 5 unwired templates). Not merged —
   Temi's call after independent verification.
+- **`sprint-2/close-decision-log-58` closes Decision Log #58 (the
+  "Create Profile" screen's `username` / `avatar` / `bio` / `location`
+  fields) — documentation only, no Figma frames and no application code
+  touched.** Founder resolution: **all four fields stay on the Create
+  Profile screen exactly as designed** (option (b), not (a) — the screen
+  is NOT deprecated). `username` is confirmed **distinct from
+  `displayName`** (the schema's only name field, used as "full name"
+  everywhere) and is not duplicative. Each of the four is now logged as
+  an open **backend requirement** for when backend work resumes — new
+  `User` columns for `username`, `avatar` (plus image storage), `bio`,
+  `location`, and endpoint support to write them. This supersedes
+  CLAUDE.md's earlier **"Create Profile investigated, not built"**
+  analysis (in the `sprint-1/f5-f6-real-screens` bullet) and PR #104's
+  **"flagged, NOT built (founder-blocked)"** note on the same screen —
+  both of which had left the screen's future open; it is now settled as
+  keep-and-back-with-real-columns. Build Plan Decision Log #58 moved from
+  Open to Resolved in the same PR. Tracked going forward in the
+  "Backend requirements parked until backend work resumes" list below.
+  Not merged — Temi's call.
+- **Backend requirements parked until backend work resumes.** Backend is
+  currently paused; design/frontend-doc PRs during this stretch have
+  logged real backend work here so it isn't lost on resume. Check each
+  item against the live schema/API before acting — some may have been
+  picked up already.
+  - **`User.username`** — new column. Distinct from `displayName`.
+    Needed by the Create Profile screen. (Decision Log #58)
+  - **`User` avatar** — new column + image upload/storage. Create
+    Profile screen. (Decision Log #58)
+  - **`User.bio`** — new column. Create Profile screen; also the
+    disabled Bio field on the Edit Profile modal. (Decision Log #58)
+  - **`User.location`** — new column. Create Profile screen; also the
+    disabled Location field on the Edit Profile modal. (Decision Log #58)
+  - **Endpoint support to write the four fields above** — extend
+    `PATCH /users/:id` (or a dedicated create-profile endpoint) once the
+    columns exist. (Decision Log #58)
+  - **Guardian decline endpoint** — no decline/reject route exists, only
+    confirm. Needed by the Consent Declined screens. (Decision Log #34)
+  - **Change-guardian-email endpoint** — must implement the Decision Log
+    #60 "restart the consent flow from scratch" behaviour. (PR #105)
+  - **Real Postmark sends for the new email templates** — verify-email
+    body reconcile ("code" → link), account-deletion-requested,
+    guardian-approved / guardian-declined notices, plus PR #100's 5
+    still-unwired templates. (Decision Log #17, #56, #59)
+  - **`AUTH_RATE_LIMIT_MAX` / `AUTH_RATE_LIMIT_WINDOW_MS` follow-through**
+    — the wiring bug is fixed (`sprint-2/fix-auth-rate-limit-config-wiring`),
+    but `.env.test` still has no override and the three e2e
+    rate-limit-workaround files still seed users via Prisma rather than
+    real `POST /auth/register`. (`sprint-2/e2e-coverage-expansion`)
+  - **`GET /auth/me`** — formally dropped from the spec (Decision Log
+    #23); listed here only so a resume sweep doesn't re-add it by
+    reflex. No action needed.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
