@@ -2301,6 +2301,37 @@ Full reasoning for every choice above: Build Plan Section 5.
     rebound the 12 `#3539df` in-content button pills to `brand/navy` and
     amended Decision Log #52's Status to "Partially resolved". Not
     merged — Temi's call after independent verification.
+- **`sprint-2/auth-social-signin` adds Google / Apple / Facebook
+  third-party sign-in UI to Login and Register (desktop + mobile — 4
+  frames: `407:844`, `1625:2303`, `407:1051`, `1625:2333`).**
+  Visual/UI only — **no backend, no OAuth, no click behaviour**; the
+  wiring is a separate future push once the backend side is ready. Same
+  category of additive-UI-on-existing-frames work as PR #100's Register
+  Date-of-Birth field. Each frame gets an identical "Or continue with"
+  divider below the primary email/password submit button, then three
+  full-width provider buttons (white `color/background/surface` fill,
+  1px `color/icon/inactive` border, `color/text/primary` label) —
+  email/password stays the visually primary path (solid `brand/navy`
+  CTA). Provider order Google → Apple → Facebook, consistent across all
+  four frames; desktop 440px / mobile 350px, same layout language
+  scaled. All chrome bound to Soccernity Theme Light-mode tokens
+  (collection `5096:2`); the **only** unbound fills are the provider
+  brand marks themselves — multicolour Google G, black Apple silhouette,
+  Facebook blue — a disclosed brand-non-negotiable-#3 exception in the
+  same category as the undraw illustration tones and club-crest artwork.
+  **Logo assets:** Google (`FRAME #355:188`) and Facebook (`FRAME
+  #355:174`) reused as-is from the in-file Brand Guide social-icon demo
+  (Facebook's is the older `#3C5A9A` blue, left as-is); **no Apple mark
+  existed anywhere in the file** — created new from the standard Apple
+  silhouette via `createNodeFromSvg`. Register-mobile note: the new
+  block is placed clear of the pre-existing open-Date-of-Birth-picker
+  overlap (`5379:6190`, from PR #100), not directly under the
+  visually-covered primary button. **Decision Log #55** proposed
+  (placement / hierarchy / provider order / Apple-button-guidelines flag
+  for the OAuth pass) — written into Build Plan Section 9 (table 6) in
+  this PR via `python-docx`, full text also in
+  `docs/sprint-2-auth-social-signin-report.md` §7. Not merged — Temi's
+  call after independent verification.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
