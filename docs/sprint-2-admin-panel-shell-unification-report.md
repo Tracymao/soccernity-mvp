@@ -369,3 +369,111 @@ entries still need transcribing from §8 if the finalising session also lacks py
   verification ceiling.
 - **No application code touched.** `apps/`, `services/`, `packages/` unchanged. Figma-only
   plus this report + the CLAUDE.md status bullet.
+
+---
+
+## 11. Fix-up: off-navy blue button fills → `brand/navy`
+
+**Context:** §9's git steps are superseded — the coordinator created branch
+`sprint-2/admin-panel-shell-unification` (PR #102, base `main` @ `ca0db73`) and committed
+Phases 1–3 + CLAUDE.md + report + Build Plan Decision Log #49–#54. This section documents a
+**follow-up commit on the same branch/PR** (no new branch/PR).
+
+**Task:** rebind every **button** fill that is a blue other than `brand/navy` `#282E65` across
+all 24 Admin frames (15 unified + 9 new).
+
+### 11.1 Scan result
+
+A full scan of all 24 frames for blue SOLID paints (`b` is the max channel, `b > 0.33`,
+`b − r > 0.10`, excluding `#282E65 ± 0.045`) found exactly **one** off-navy blue in use:
+**`#3539df`** (rgb 53, 57, 223 — an indigo). **No `#4F46E5` and no `#034694`** are present on
+any Admin frame today — the original §4.2 / Decision Log #52 text listed `#4F46E5` alongside
+`#3539DF`; the actual value on every affected button is `#3539df`. `#3539df` also appears on
+**non-button** elements (left untouched per brief — Decision Log #52 follow-ups):
+
+- Dashboard: the "Visitor statistics" chart line stroke (`114:324`).
+- Media / Media Upload 1 / Media Upload 2 / Media Preview: the row action-icon strokes
+  (download / view / edit), ~16 vectors per frame inside `Group`.
+- Users: the ban/unban action icon (`917:378` stroke + `917:385` `Subtract` fill inside
+  `Group 254`).
+
+### 11.2 Buttons rebound — before / after (measured)
+
+All 12 are in-content primary/submit buttons: a rounded-pill `RECTANGLE`
+(`Rectangle 34`, r30, 225×50 — "Submit Post"; or `Rectangle 47`, r27, 196×50 — "Submit" /
+"Upload") behind a white label. Fill → `brand/navy` (`VariableID:5096:4`, Light `5096:0`,
+resolved `#282E65`). Label → `color/text/on-navy` (`VariableID:5182:6654`).
+
+| # | Frame | Button node | Label | Fill before | Fill after | Label fix |
+|---|---|---|---|---|---|---|
+| 1 | Articles - Create Post | `124:478` | Submit Post | `#3539df` | `brand/navy` | → `color/text/on-navy` |
+| 2 | Categories | `128:559` | Submit Post | `#3539df` | `brand/navy` | → `color/text/on-navy` |
+| 3 | Categories - Add Category | `138:151` | Submit Post | `#3539df` | `brand/navy` | → `color/text/on-navy` |
+| 4 | Categories - Add Category | `359:491` | Submit | `#3539df` | `brand/navy` | → `color/text/on-navy` |
+| 5 | Media - Media Upload - step 1 | `917:13` | Upload | `#3539df` | `brand/navy` | → `color/text/on-navy` |
+| 6 | Media - Media Upload - step 2 | `917:209` | Upload | `#3539df` | `brand/navy` | → `color/text/on-navy` |
+| 7 | Settings | `1658:2371` | Submit Post | `#3539df` | `brand/navy` | → `color/text/on-navy` |
+| 8 | Settings - Add new role | `1658:2523` | Submit Post | `#3539df` | `brand/navy` | → `color/text/on-navy` |
+| 9 | Settings - Add new role | `1658:2580` | Submit | `#3539df` | `brand/navy` | → `color/text/on-navy` |
+| 10 | Settings - Edit role | `1658:2659` | Submit Post | `#3539df` | `brand/navy` | → `color/text/on-navy` |
+| 11 | Settings - Edit role | `1658:2716` | Submit | `#3539df` | `brand/navy` | → `color/text/on-navy` |
+| 12 | Settings - Delete Role | `5403:7210` | Submit Post | `#3539df` | `brand/navy` | → `color/text/on-navy` |
+
+**Per-frame count of off-navy blue button fills found → fixed:**
+
+| Frame | found | fixed | remaining |
+|---|---|---|---|
+| Articles - Create Post | 1 | 1 | 0 |
+| Categories | 1 | 1 | 0 |
+| Categories - Add Category | 2 | 2 | 0 |
+| Media - Media Upload - step 1 | 1 | 1 | 0 |
+| Media - Media Upload - step 2 | 1 | 1 | 0 |
+| Settings | 1 | 1 | 0 |
+| Settings - Add new role | 2 | 2 | 0 |
+| Settings - Edit role | 2 | 2 | 0 |
+| Settings - Delete Role | 1 | 1 | 0 |
+| **Total (9 frames touched)** | **12** | **12** | **0** |
+
+The other 15 frames (both Contest frames, Dashboard, Articles, Media, Media Preview, Users,
+and 8 of the 9 Phase 3 frames) had **no off-navy blue button fills** — confirmed by the same
+scan. Phase 3's own form-submit and delete/confirm buttons were already `brand/navy`
+(unchanged — non-negotiable #3, no red on the delete buttons).
+
+### 11.3 Ambiguous cases
+
+**None.** Every hit was an unambiguous rounded-pill rectangle sitting directly behind a
+"Submit" / "Submit Post" / "Upload" label. `Settings - Delete Role`'s button (`5403:7210`)
+sits behind the 45% scrim (dimmed) but is a real button node and was rebound for
+consistency. No blue "chips", tabs, or links were in scope; the `#3539df` icon strokes and
+the Users ban-icon `Subtract` fill were left as flagged Decision Log #52 follow-ups.
+
+### 11.4 Verification
+
+- Post-fix re-scan of all 9 touched frames: **0 off-navy blue button fills remain.**
+- Screenshots captured for Articles - Create Post, Categories, Settings - Add new role,
+  Media - Media Upload - step 2, Settings - Delete Role — all in-content buttons now render
+  navy with white labels.
+- No non-button element changed. No new colour introduced (traces to `brand/navy` /
+  `color/text/on-navy`). Light mode only.
+
+### 11.5 Decision Log #52 — status update
+
+**Applied** to `docs/Soccernity_MVP_Build_Plan_v1.7.docx` Section 9 (row where cell[0] == "52")
+in the finalising session that made the fix-up commit. The `figma-design-system` agent that
+did the rebinding had no Bash / python-docx; the coordinator applied this and committed.
+Decision Log #52's Status text was amended to:
+
+> **Partially resolved (fix-up commit on PR #102):** the **button** subset of the off-navy /
+> indigo problem is fixed — all 12 in-content submit/upload buttons across 9 Admin screens
+> (`#3539df` pills) rebound to `brand/navy` with `color/text/on-navy` labels. **Still open:**
+> the rest of the Admin Panel content retrofit — `#3539df` action-icon strokes (Media /
+> Media Preview / Users / Dashboard chart line), `#1E1E1E` card fill, `#FF0000`/`#FF0808`
+> reds, `#000000` table body text, and unbound content page-titles — plus the standing
+> "no `color/action/destructive` token" question.
+
+### 11.6 Git
+
+**Done** by the finalising session: Decision Log #52 status applied via python-docx, then
+committed on `sprint-2/admin-panel-shell-unification` and pushed to PR #102 (not merged, no
+new branch/PR) as `Fix-up: rebind off-navy blue button fills to brand/navy across Admin Panel
+screens`.

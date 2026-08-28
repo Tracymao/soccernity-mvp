@@ -2256,6 +2256,15 @@ Full reasoning for every choice above: Build Plan Section 5.
     list set `SPACE_BETWEEN` to pin Settings to the bottom on the
     1024-tall frames. Content areas untouched. Shell paint audit: **0
     unbound / 0 black / 0 `brand/green-tint-28`** on all 15 shells.
+    **Fix-up commit on the same PR** additionally rebound the **button**
+    subset of the content-area colour debt: all **12** in-content
+    submit/upload buttons across 9 screens (Articles-Create Post,
+    Categories, Categories-Add Category ×2, Media Upload 1/2, Settings,
+    Settings-Add/Edit role ×2, Settings-Delete Role) were `#3539df`
+    indigo pills — rebound to `brand/navy` with `color/text/on-navy`
+    labels. Only `#3539df` was found (no `#4F46E5`/`#034694`); the
+    `#3539df` action-**icon** strokes (Media/Media Preview/Users/Dashboard
+    chart) were left as Decision Log #52 follow-ups.
   - **Phase 3 (9 new frames, page `0:1`, row at y 4706):** the 7 named
     screens — **Contest - Create Task** (`5403:6640`), **Contest -
     Schedule Task** (`5403:6753`, **reuses the existing calendar
@@ -2276,17 +2285,22 @@ Full reasoning for every choice above: Build Plan Section 5.
     clones-vs-component + Admin sidebar icon-library mix), #50 (shell
     y-placement on 1024-tall frames), #51 (per-screen primary-action
     labels + 2 removals), #52 (**Admin Panel content areas still not
-    light-mode-retrofitted** — indigo `#4F46E5`/`#3539DF` buttons,
-    `#1E1E1E`, reds, black table text; + the standing "no
+    light-mode-retrofitted** — the **button** subset now fixed by the
+    fix-up commit above [12 `#3539df` pills → `brand/navy`]; still open:
+    `#3539df` action-icon strokes, `#1E1E1E`, reds, black table text,
+    unbound content titles + the standing "no
     `color/action/destructive` token" question), #53 (**calendar
     component `2365:2033` is not token-bound**), #54 (**"Admin Profile"
     implies an admin-account data model that doesn't exist** in Section
     3/4 — founder/backend call).
   - The Figma work and the report were produced by the
     `figma-design-system` agent (no Bash tool that session); the branch,
-    commit, `.docx` Decision Log transcription and PR were finalised in a
-    follow-up session with shell access. Not merged — Temi's call after
-    independent verification.
+    commit, `.docx` Decision Log transcription and PR (#102) were
+    finalised in a follow-up session with shell access. A **later fix-up
+    commit on PR #102** (see the Phase-2 sub-bullet + report §11)
+    rebound the 12 `#3539df` in-content button pills to `brand/navy` and
+    amended Decision Log #52's Status to "Partially resolved". Not
+    merged — Temi's call after independent verification.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
