@@ -2228,6 +2228,65 @@ Full reasoning for every choice above: Build Plan Section 5.
   PR #100's "mobile auth navbar" follow-up. Full detail:
   `docs/sprint-2-mobile-navbar-variant-report.md`. Not merged — same
   standing instruction every design-stage PR follows.
+- **`sprint-2/admin-panel-shell-unification` unifies the Admin Panel
+  shell across all 15 existing Admin screens and adds 9 new Admin
+  screens — a deliberate ONE-TIME combined-scope PR** (existing-frame
+  retouch, normally `figma-design-system`, + brand-new screens, normally
+  `figma-screen-builder`, run together this once to save a round trip;
+  **the normal split resumes after this PR**). Full detail:
+  `docs/sprint-2-admin-panel-shell-unification-report.md`.
+  - **Phase 1:** added a **"Categories"** sidebar item (2×2-grid icon
+    `u:apps`, above "Contest", Settings still pinned bottom) to both
+    Contest tab frames (`2363:2244`, `2363:3446`). Plus a disclosed
+    "Phase 1b" token-cleanup of both Contest shells — sidebar wash →
+    `brand/navy` @ 12%, all nav labels/icons → `color/text/primary` /
+    `color/text/on-navy`, search placeholder → `color/text/secondary`,
+    and the **recurring logo-wordmark-in-green bug fixed** (→
+    `color/text/primary`) + the 6.7 px ghost "Soccernity" text hidden.
+  - **Phase 2:** the 13 other Admin screens (Dashboard, Articles,
+    Articles-Create Post, Categories, Categories-Add Category, Media,
+    Media Upload 1/2, Media Preview, Users-team members, Settings,
+    Settings-Add/Edit role) had their old sidebar (`Group 65`) + top bar
+    (`Group 64`) + standalone action buttons **removed wholesale** and
+    replaced with a clone of the cleaned Contest shell, grouped "Admin
+    Shell". Per-screen active nav item set; top-bar primary button
+    relabelled per screen ("Create Article", "Add Media", "Add Role",
+    "Save Changes", …) and **removed** on Dashboard + Media Preview (no
+    primary action). Shell placed at y 95 (not Contest's y 186) and nav
+    list set `SPACE_BETWEEN` to pin Settings to the bottom on the
+    1024-tall frames. Content areas untouched. Shell paint audit: **0
+    unbound / 0 black / 0 `brand/green-tint-28`** on all 15 shells.
+  - **Phase 3 (9 new frames, page `0:1`, row at y 4706):** the 7 named
+    screens — **Contest - Create Task** (`5403:6640`), **Contest -
+    Schedule Task** (`5403:6753`, **reuses the existing calendar
+    component `2365:2033`, `calendar 2` variant** — no calendar built
+    from scratch), **Contest - Edit Task** (`5403:6866`), **Contest -
+    Search Task** (`5403:6979`), **Contest - Delete Task** (`5403:7092`,
+    scrim + confirm dialog), **Settings - Delete Role** (`5403:7205`,
+    scrim + confirm dialog), **Admin - Admin Profile** (`5403:7327`,
+    all nav inactive) — plus 2 audit-pass screens built beyond the named
+    list: **Contest - Empty State** (`5405:8277`) and **Contest - Task
+    Scheduled (Success)** (`5405:8390`). All authored paints token-bound;
+    residual unbound = the reused calendar's own un-retrofitted
+    internals + scrim-covered cloned table content. Delete buttons are
+    **navy**, not red — no destructive token exists and non-negotiable
+    #3 forbids inventing one.
+  - **Six Decision Log candidates surfaced and added to Build Plan
+    Section 9 in this PR (#49–#54):** #49 (Categories icon + shell-as-
+    clones-vs-component + Admin sidebar icon-library mix), #50 (shell
+    y-placement on 1024-tall frames), #51 (per-screen primary-action
+    labels + 2 removals), #52 (**Admin Panel content areas still not
+    light-mode-retrofitted** — indigo `#4F46E5`/`#3539DF` buttons,
+    `#1E1E1E`, reds, black table text; + the standing "no
+    `color/action/destructive` token" question), #53 (**calendar
+    component `2365:2033` is not token-bound**), #54 (**"Admin Profile"
+    implies an admin-account data model that doesn't exist** in Section
+    3/4 — founder/backend call).
+  - The Figma work and the report were produced by the
+    `figma-design-system` agent (no Bash tool that session); the branch,
+    commit, `.docx` Decision Log transcription and PR were finalised in a
+    follow-up session with shell access. Not merged — Temi's call after
+    independent verification.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
