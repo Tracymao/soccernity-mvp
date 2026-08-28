@@ -2413,6 +2413,55 @@ Full reasoning for every choice above: Build Plan Section 5.
   clean** — every auth screen family has both widths; emails are single
   fluid-width. No application code touched. Not merged — Temi's call
   after independent verification.
+- **`sprint-2/retrofit-screen-build-guardian-consent` builds the 7
+  guardian-consent-flow screens/emails PR #104's audit flagged as
+  missing** — Figma design only, no backend/DTO/endpoint changes (that
+  waits until backend work resumes). Full detail:
+  `docs/sprint-2-retrofit-screen-build-guardian-consent-report.md`.
+  Reference pattern: the existing Activation Confirmation screen
+  (`5108:6631`) and verify-email email (`5439:7053`). All 14 new frames
+  bound to Soccernity Theme Light; icon/panel washes use
+  `brand/green-tint` (12%), **not** `brand/green-tint-28` (Decision Log
+  #47) — 12 paints that carried `-28` from the clone sources were
+  rebound. The 7 items, **desktop + mobile for the 5 screens, fluid for
+  the 2 emails**:
+  1. **Consent Approved (Guardian)** — `5488:7164` / mobile `5501:8225`.
+     Green check, "What happens next" card, outline "Done" (guardian has
+     no session to navigate into).
+  2. **Consent Declined (Guardian)** — `5488:7206` / `5501:8289`.
+     **Neutral grey icon + navy check, no red** — a recorded decision,
+     not an error. "What this means" card.
+  3. **Consent Declined — Minor Notice** — `5491:8241` / `5501:8453`.
+     The minor's counterpart to Activation Confirmation: neutral icon,
+     "Still switched off" card with OFF pills (mirroring Activation's ON
+     pills), green "What you can do now" panel, and the required
+     **"Resend approval request"** button (green primary) +
+     "Change guardian email" (outline).
+  4. **Approval Request Resent (Minor)** — `5488:7248` / `5501:8342`.
+     "New request sent" confirmation, green "Back to my account".
+  5. **"Guardian approved your account" email** (to the minor) —
+     `5501:8584` + title head `5501:8582`. Cloned from the verify-email
+     template.
+  6. **"Guardian declined your account" email** (to the minor) —
+     `5501:8607` + title head `5501:8605`.
+  7. **Change Guardian Email (Minor)** — `5498:7164` / `5501:8536`.
+     Standalone settings-style screen, available while consent is
+     pending: current guardian email (read-only) + new-email input + a
+     **prominent green-tint notice that submitting restarts the consent
+     flow from scratch** (account back to pending, old approval link
+     invalidated, fresh request to the new address). → **Decision Log
+     #60.**
+  The Guardian Consent section had **no mobile frames at all** before
+  this (flagged in PR #104) — these 10 mobile frames are the first;
+  each has a fresh 64px logo top bar, a 350px content column, full-width
+  stacked buttons. Guardian Consent Design Notes frame (`5116:6633`)
+  updated (item 2, item 5, new item 13). **0 frame overlaps**, **0
+  green-tint-28** in any new frame (verified node-by-node). **Backend
+  still needs, whenever it resumes:** a guardian decline endpoint
+  (Decision Log #34), a change-guardian-email endpoint implementing the
+  Decision Log #60 restart behaviour, and real sends for the two new
+  emails (same status as PR #104's 5 unwired templates). Not merged —
+  Temi's call after independent verification.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
