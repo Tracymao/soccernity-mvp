@@ -2513,6 +2513,63 @@ Full reasoning for every choice above: Build Plan Section 5.
   - **`GET /auth/me`** — formally dropped from the spec (Decision Log
     #23); listed here only so a resume sweep doesn't re-add it by
     reflex. No action needed.
+- **`sprint-2/retrofit-screen-build-guardian-email-home-contest` is a
+  combined audit-and-build pass over four sections — Guardian Consent,
+  Email Verification, Homepage/Leaderboard, and Contest** (Figma design
+  only, no app/backend code). Full detail:
+  `docs/sprint-2-retrofit-screen-build-guardian-email-home-contest-report.md`.
+  Headlines:
+  - **Leaderboard Contest-type tab — all 3 monthly-phase states built**
+    (Decision Log #61): `5524:7188` **Pending (Weeks 1–3)** — empty-state
+    card + week-progress chips + "View this week's contest ›" CTA;
+    `5524:7512` **Live — Level 1 Final (Week 4)** — "LEVEL 1 FINAL · LIVE"
+    banner + all weekly winners listed + "live order" note; `5524:7836`
+    **Crowned — Monthly Winners** — text pill "1st · Monthly winner" (no
+    trophy/medal iconography, Leaderboard rule). Cloned from `5171:6633`;
+    COMPETITION filter = "Contest", TIME PERIOD relabelled This month /
+    Past months; `brand/green-tint-28` rebound to `brand/green-tint`
+    (Decision Log #47). **Judgment calls (Decision Log #61):** the
+    brief's "no particular order" live state is rendered as a genuinely
+    *ranked* list + persistent LIVE banner (an unordered RANK column
+    reads as a bug); finalist count treated as *dynamic*, never
+    hard-coded "9"; ties render as two rows sharing an ordinal text pill.
+  - **Contest → Leaderboard monthly connectors — both built.**
+    **Contest → Leaderboard:** "View leaderboard ›" CTA on the new
+    **Contest — Weekly Results (Top 3)** frame (`5528:7260`, light-token
+    standard). **Leaderboard → Contest:** "View this contest ›" on all 3
+    Contest-tab states. A `Leaderboard — Contest Tab & Monthly Mechanic —
+    Design Notes` frame documents the mechanic in-file.
+  - **Email Verification mobile — all 4 built** (`5531:7264` / `:7284` /
+    `:7356` / `:7412`); the section had zero mobile frames before.
+  - **Guardian Consent mobile for screens 4, 5, 6 built** (`5531:7626` /
+    `5531:7461` / `5531:7544`), completing the mobile set alongside
+    PR #105's 7–11. **New screen: `Guardian Consent — 12 Approval Link
+    Unusable (Guardian)`** desktop `5533:7264` + mobile `5533:7306` (the
+    guardian clicks an expired/used consent link) — Decision Log #64.
+  - **Guardian Consent field-accuracy fixes:** GC2 guardian name
+    collapsed from First/Last to one "Guardian's full name" input
+    (matches `Guardian.name` single column — **Decision Log #63**);
+    consent-link lifetime copy changed from "7 days" to "3 days" in ~6
+    places to match `DEFAULT_CONSENT_TOKEN_TTL_HOURS = 72` (still
+    provisional per DPIA R5 — **Decision Log #62**); the unimplemented
+    "resend once every 24 hours" cooldown claim removed from GC5
+    desktop+mobile; GC4's unbacked "Request Summary" panel annotated as
+    reference-only.
+  - **Founder-blocked (flagged, not built):** guardian decline endpoint +
+    `consentStatus="declined"` (DL #34); GET-by-consent-token endpoint
+    (GC4 panel); `POST /auth/resend-verification` + its screen; the
+    Verify-Email "minor verified, consent pending" variant (product
+    decision); `/` marketing-page-vs-home-feed (product decision);
+    homepage fixtures/news/season-record data (DL #6 + no stats model);
+    Leaderboard/Contest points model + club axis + public visibility
+    (unchanged); the entire Contest data model + monthly handoff mechanic.
+  - **Scoped follow-ups (design, deliberately not bundled):** Guardian
+    Consent mobile for screens 1/1a/2 (auth-mobile `header 7 — mobile`
+    pattern); mobile homepage (5298px canonical, just settled DL #46);
+    mobile leaderboard; a coordinated Contest user-facing section pass
+    (retrofit + mobile + a "Week N of 4 / Level 1 Final" phase
+    indicator); retrofitting `2072:5584` to light tokens.
+  - Not merged — same standing instruction every design-stage PR follows.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
