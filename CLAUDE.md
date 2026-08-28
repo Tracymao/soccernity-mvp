@@ -2570,6 +2570,58 @@ Full reasoning for every choice above: Build Plan Section 5.
     (retrofit + mobile + a "Week N of 4 / Level 1 Final" phase
     indicator); retrofitting `2072:5584` to light tokens.
   - Not merged — same standing instruction every design-stage PR follows.
+- **`sprint-2/mobile-leaderboard-homepage-contest-audit` builds the
+  mobile screens the previous pass flagged as follow-ups, plus a full
+  leaderboard + Contest audit** (Figma design only, no app/backend
+  code). Full detail:
+  `docs/sprint-2-mobile-leaderboard-homepage-contest-audit-report.md`.
+  Headlines:
+  - **Guardian Consent mobile 1 / 1a / 2 built** (`5539:7264` / `:7314`
+    / `:7354`) — the whole GC mobile set (1–12) is now complete. Used
+    the GC-family 64px top bar, **not** the `header 7 — mobile` auth
+    navbar, to keep the section uniform (**Decision Log #67**, closes
+    PR #107's open "auth-mobile pattern" question).
+  - **Leaderboard mobile built** (`5540:7264`) — the 5-column table
+    becomes a card-style row list (rank + avatar + "name / @handle ·
+    Club" left, points + delta right); filter bar stacks; header →
+    `header 4 — mobile`. **Decision Log #65.**
+  - **All 3 Contest-tab mobile states built** (`5541:7304` Pending /
+    `5541:7527` Live Level-1 / `5541:7750` Crowned) — same content
+    decisions as the desktop states (DL #61), "View this contest ›"
+    connectors preserved.
+  - **Leaderboard empty state built** (desktop `5542:7344` + mobile
+    `5542:7695`) — a filter combo with 0 ranked players shows one card,
+    not a blank table or an error. Also serves as the concrete
+    SCOPE = "By club" artifact. **Decision Log #66.**
+  - **Leaderboard filter matrix confirmed against real artifacts**, not
+    assumed — a `Leaderboard — Filter Matrix (worked combinations)`
+    annotation frame maps every axis of the locked global × club ×
+    competition × time-period spec to a built screen/state. The only
+    real gaps were the empty state and a concrete By-club artifact
+    (both now built); the matrix otherwise needs no per-combination
+    frame (any state = a different pill set + re-queried table).
+  - **Homepage mobile built** (`5543:7407`) — the canonical `5204:6728`
+    (DL #46) reflowed to 390px: all horizontal card rows stack, hero
+    goes vertical, footer wraps. Token bindings inherited unchanged
+    (layout-only). ~6750px.
+  - **Contest audit:** `2155:1062` "How Contest works" / "Task for this
+    week" lorem-ipsum replaced with real monthly-mechanic copy;
+    **Contest — Weekly Results mobile built** (`5545:7394`). The 3
+    legacy user-facing Contest frames' full mobile + phase-indicator
+    work is flagged as the Contest section's own coordinated pass (they
+    are 100% unbound legacy frames).
+  - **`2072:5584` green-tint retrofit done** (Item 6, targeted single
+    frame): 8 unbound `#d9d9d9` fills → `brand/green-tint` (12%); 3
+    off-palette trophy vectors (`#e9c400`/`#bcb5b5`/`#cd7f32`) →
+    `brand/navy` (**Decision Log #68**). The shared Header instance and
+    `brand/green-tint-28` were deliberately NOT touched (that's the
+    separate file-wide cleanup).
+  - **Founder-blocked (flagged, not built):** Leaderboard/Contest points
+    model, club-axis definition, public visibility; Prediction &
+    Commentary competition type; the entire Contest data model + monthly
+    handoff mechanic; Contest "already voted" / "between weeks" states;
+    homepage fixtures/news/season-record data.
+  - Not merged — same standing instruction every design-stage PR follows.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
