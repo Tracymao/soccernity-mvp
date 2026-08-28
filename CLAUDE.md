@@ -2332,6 +2332,87 @@ Full reasoning for every choice above: Build Plan Section 5.
   this PR via `python-docx`, full text also in
   `docs/sprint-2-auth-social-signin-report.md` §7. Not merged — Temi's
   call after independent verification.
+- **`sprint-2/retrofit-screen-build-auth-email` is a combined
+  audit-and-build pass over the Auth Pages + Email Template sections and
+  the flows they belong to** (registration, login, verify-email,
+  forgot/reset password, guardian consent, account deletion) — the same
+  "find the gaps AND build the fix in one PR" model the Admin Panel
+  unification pass used, not a report-only audit. Full detail:
+  `docs/sprint-2-retrofit-screen-build-auth-email-report.md`. Backend
+  contract checked directly against every DTO in
+  `services/api/src/modules/auth/`, both email services,
+  `guardian-relationship.constants.ts`, and the shipped
+  `apps/web/src/pages/signup/`. **Built:**
+  - **New "Verify your email" email** (`5439:7053`) + title head
+    (`5435:8132`). The registration flow's first transactional email
+    (`RegistrationEmailService.sendVerificationEmail`, subject "Verify
+    your Soccernity email") had no design, even though its landing
+    screens and the sibling password-reset / guardian-consent emails all
+    exist. Designed **link-based** (CTA → `/verify-email?token=…` +
+    fallback) to match the shipped `VerifyEmailPage.tsx` and Section
+    8.3's "link" model — the backend placeholder body currently renders a
+    "verification code" and needs reconciling when Postmark goes live
+    (explicitly non-final). Copy states the real 48h TTL
+    (`DEFAULT_EMAIL_VERIFICATION_TTL_MS`). **Decision Log #56.**
+  - **New "Account deletion requested" email** (`5439:7074`) + title head
+    (`5435:8134`). Decision Log #42's 30-day grace period exists to allow
+    recovery from an accidental/coerced deletion — which requires
+    notifying the user. States the window + "sign back in to cancel". No
+    backend send wired yet (same status as the 5 other unwired
+    templates). **Decision Log #59.**
+  - **New "Forgot Password — Link Sent" screen** — desktop (`5474:7077`)
+    + mobile (`5474:8375`). The shipped `ForgotPasswordPage.tsx` has an
+    enumeration-safe `submitted` state; the Figma frame stopped at the
+    form. "Check your email" + enumeration-safe copy + 60-min TTL.
+  - **New age-gate rejection screen** — `Guardian Consent — 1a Age Gate —
+    Below Minimum Age` (`5464:7077`), the below-age-5 hard block
+    (Decision Log #19) that Sprint D's guardian-consent report item 6
+    deferred to figma-design-system pending a colour call. Built as a
+    **calm navy/white informational state, NOT an error/denial colour**
+    — no new colour, the two-colour palette rule holds. Navy button, not
+    the green "go" CTA. **Decision Log #57.** (In the Guardian Consent
+    section — adjacent to Auth Pages, built here because the brief names
+    the guardian-consent flow as in-scope for the audit.)
+  - **New "Password reset link title head"** (`5435:8130`) — the one
+    email in the section that lacked a title-head frame (added by PR
+    #100). The 5 existing title heads had **hardcoded black text** and 2
+    stale captions — all now bound (text → `color/text/primary`, bg →
+    `color/background/surface`) and synced.
+  - **Register mobile (`1625:2333`): "Username" field → "Full Name"
+    First/Last row**, matching desktop and `RegisterDto.displayName`
+    (`RegisterStep.tsx` collects first+last → displayName; `username` has
+    no `User` column). Also fixed the mobile frame's vertical stacking —
+    Terms text, Create-account button and the social block had been
+    overlapping the always-open date picker.
+  - **Reset Password desktop + mobile:** "Use at least 8 characters."
+    helper added under the Password field (Decision Log #14, previously
+    stated nowhere in the UI).
+  - **Guardian Details Capture (`5108:6627`):** the relationship select's
+    "OPTIONS PENDING PRODUCT DECISION" note replaced with the resolved
+    list — `GUARDIAN_RELATIONSHIPS = ['Parent', 'Legal Guardian',
+    'Grandparent', 'Other']` (defined in code, shipped in
+    `GuardianDetailsStep.tsx`). The Guardian Consent **Design Notes
+    frame** (`5116:6633`) items 3, 6, 7, 9, 11, 12 updated from open to
+    RESOLVED.
+  - Section banners for Auth Pages + Email Template + Guardian Consent
+    widened to cover the new frames.
+  **Flagged, NOT built (founder-blocked):** the **"Create Profile"
+  screen** (`1498:2303` / `1629:2449`) is almost entirely unbacked —
+  username, avatar, bio, location have no `User` column; DOB is
+  server-excluded; Full Name / Preferred Club duplicate Register /
+  Club Picker. CLAUDE.md already concluded it's "a superseded/alternate
+  design… not built." Whether Soccernity adopts a username/avatar/bio/
+  location profile model, or formally deprecates the screen, is a
+  founder product + data-model decision. **Decision Log #58** — not
+  redesigned in this pass. **Also carried forward, not resolved:** the 5
+  unwired email templates (PR #100 §5), the consent-declined screen
+  (Decision Log #34), resend-verification (Decision Log #37), the
+  `1380:2297`/`1380:2318` near-duplicate password-change emails (PR #100
+  §8.4), and the fact that the whole Guardian Consent section is
+  desktop-only. **Missing-mobile check for Auth Pages + Email Template:
+  clean** — every auth screen family has both widths; emails are single
+  fluid-width. No application code touched. Not merged — Temi's call
+  after independent verification.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
