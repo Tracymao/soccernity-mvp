@@ -2513,6 +2513,18 @@ Full reasoning for every choice above: Build Plan Section 5.
   - **`GET /auth/me`** — formally dropped from the spec (Decision Log
     #23); listed here only so a resume sweep doesn't re-add it by
     reflex. No action needed.
+  - **Represented-club field + endpoint** — persist the one club a user
+    "represents" for points/leaderboard (the "Which club do I represent"
+    selector, `5570:7813`). Distinct from `ClubPage` membership; arguably
+    what `User.clubAffiliationId` was always for (nothing writes it
+    today) — or a decision that `clubAffiliationId` IS this. Ties to the
+    open Leaderboard club-axis question. (Decision Log #74)
+  - **Competition / Contest data model** — competition entities (name,
+    type, scoring mechanism, entry window), entries, votes, weekly
+    rounds, Level-1 field, points ledger. Needed before `figma-to-code`
+    can build any Leaderboard board (Overall / Contest / Competition) or
+    the Admin Create Competition screen (`5566:8033`). (Decision Log
+    #70–#73; still founder-blocked)
 - **`sprint-2/retrofit-screen-build-guardian-email-home-contest` is a
   combined audit-and-build pass over four sections — Guardian Consent,
   Email Verification, Homepage/Leaderboard, and Contest** (Figma design
@@ -2621,6 +2633,89 @@ Full reasoning for every choice above: Build Plan Section 5.
     Commentary competition type; the entire Contest data model + monthly
     handoff mechanic; Contest "already voted" / "between weeks" states;
     homepage fixtures/news/season-record data.
+  - Not merged — same standing instruction every design-stage PR follows.
+- **`sprint-2/leaderboard-competition-split-admin-homepage` is a
+  consolidated fix-and-build pass over six founder decisions** (Figma
+  design only, no app/backend code). Full detail:
+  `docs/sprint-2-leaderboard-competition-split-admin-homepage-report.md`.
+  Decision Log **#69–#75** added; forward-pointers appended to #61, #68,
+  #46. Routing flagged: Items 1/2/5 are `figma-design-system` retouches,
+  Items 3/4/6 are new screens (normally `figma-screen-builder`) — run
+  together this once, the same one-time model PR #102 used. Headlines:
+  - **Top-3 medals (Item 1, Decision Log #69) — founder override of the
+    original "no rank iconography" rule.** New `Leaderboard Rank Medal`
+    component set `5551:7420`, palette-only (rank 1 solid `brand/green`,
+    rank 2 solid `brand/navy`, rank 3 `brand/green-tint` + navy outline —
+    **no gold/silver/bronze**, non-negotiable #3). The numeral stays
+    inside the disc (rank number restyled, not removed); the points value
+    and points ordering are untouched — additive. Placed on `5171:6633`,
+    `5540:7264`, Contest Crowned `5524:7836` / `5541:7750`, and the new
+    Competition boards — desktop + mobile. **NOT** on the Contest Level-1
+    Final, the weekly-fill states, the empty states, or State Study A
+    (all live/unsettled). Base frame's "DECIDED — No badge" note
+    (`5177:6676`/`5177:6677`) rewritten in place.
+  - **Contest weekly-fill progression (Item 2, Decision Log #70) —
+    corrects PR #108.** The single static "pending" state is replaced by
+    a 4-step sequence, desktop + mobile: Vacant (Week 1 Phase 1,
+    `5524:7188` / `5541:7304` — the **old pending frames converted in
+    place, no orphaned duplicate**) → Week 1 winners in, 3 rows
+    (`5556:7426` / `5561:7483`) → Weeks 1–2, 6 rows (`5556:7529` /
+    `5561:7608`) → Weeks 1–3, **9 rows, count DYNAMIC** (`5556:7632` /
+    `5561:7733`). Weekly-fill rows carry **no medal** (weekly winners are
+    equal, not a settled 1/2/3 — each row shows "Week N · 1st/2nd/3rd" as
+    plain text). Week 4 → the existing Live state, unchanged. Contest
+    Design-Notes frame `5534:7264` rewritten.
+  - **Contest / Competition split into two board tabs (Item 3, Decision
+    Log #71–#72).** Judgment call, flagged: the brief's five-name list
+    ("Global / Per-Club / Contest / Competition / Per-Time-Period") is
+    read as the **union of dimensions**, not five literal tabs.
+    Global/Per-Club = the SCOPE control; Per-Time-Period = the TIME
+    control (both unchanged, combinable); Contest/Competition (+ implicit
+    **Overall**) = a **new board-tab row** (`Leaderboard — Board Tabs`
+    component `5563:7573`, underline style, above the filter bar). The
+    **COMPETITION dropdown is removed** from the Overall and Contest
+    boards (Contest's mechanic is fixed — no selector); it survives only
+    on the Competition board, relabelled **COMPETITION TYPE**. Board tabs
+    applied to base `5171:6633` / `5540:7264`, all six Contest-tab
+    desktop states + six mobiles, and the empty states. **New Competition
+    frames:** Prediction desktop `5564:7561`, Commentary desktop
+    `5564:7832`, Prediction mobile `5565:7623`, Commentary mobile
+    `5565:7864` — one **generic** `RANK / PLAYER / CLUB / <metric> /
+    SCORE` shell (middle metric column is competition-supplied: Accuracy
+    vs Votes — **not** hardcoded), ranking always by the SCORE integer.
+    State Study B (`5176:6652`) rewritten as the COMPETITION TYPE
+    selector.
+  - **Admin — Create Competition (Item 4, Decision Log #73).** New admin
+    screen `5566:8033` + success `5569:7813` on the unified Admin shell.
+    New **"Competitions" sidebar nav item** (3-bar podium glyph),
+    inserted after Contest, active — **propagating it to the other 15
+    Admin shells is a flagged follow-up** (same pattern as "Categories").
+    Form: name · type · scoring mechanism (Accuracy-scored /
+    Community-voted / Custom) · custom method · entry brief · entry
+    window · entries per player · Leaderboard-visibility toggle (helper
+    text surfaces the still-open public-visibility question).
+  - **Homepage "Your season record" card removed (Item 5, Decision Log
+    #75).** `5206:6823` removed from the canonical homepage hero
+    (`5204:6728`, DL #46) — the hero already centres its card cluster, so
+    the single remaining fixture card reads as intentional. Mobile
+    homepage's own copy (`5543:7445`) removed too. Resolves the flagged
+    per-player-stats-model concern for the homepage.
+  - **"Which club do I represent" selector (Item 6, Decision Log #74).**
+    New standalone screen `5570:7813` (desktop) / `5570:7887` (mobile),
+    placed next to the Club Picker family. A user in multiple
+    `clubMemberships` radio-picks **one** represented club for
+    points/leaderboard; a banner states joining/leaving other club pages
+    doesn't change it. **Backend requirement parked:** persisting the
+    represented club needs a real field/endpoint — distinct from
+    `ClubPage` membership, arguably what `User.clubAffiliationId` was
+    always for (nothing writes it today). This is the concrete artifact
+    the open Leaderboard "which club does the club axis mean?" question
+    now depends on.
+  - **Cleanup:** deleted orphan frame `5542:7694` (empty 100×100 "Empty
+    State" at origin, a stray `createFrame()` default).
+  - **Founder-blocked (unchanged):** points model, club axis, public
+    visibility, the entire Contest + Competition data model. `figma-to-code`
+    must not build any of these boards until a scoring model is specced.
   - Not merged — same standing instruction every design-stage PR follows.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
