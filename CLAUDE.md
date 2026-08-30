@@ -2717,6 +2717,66 @@ Full reasoning for every choice above: Build Plan Section 5.
     visibility, the entire Contest + Competition data model. `figma-to-code`
     must not build any of these boards until a scoring model is specced.
   - Not merged — same standing instruction every design-stage PR follows.
+- **`sprint-2/admin-competitions-nav-settings-club-rep` — three scoped
+  Figma fixes** (Figma design only, no app/backend code). Full detail:
+  `docs/sprint-2-admin-competitions-nav-settings-club-rep-report.md`.
+  Decision Log **#76–#79** added to Build Plan Section 9, with a
+  forward-pointer appended to #73's Status. The Figma work and report
+  were produced by the `figma-design-system` agent (no Bash that
+  session, same constraint PR #98/#102 hit); the branch, commit,
+  `.docx` transcription and PR (#110) were finalised in a follow-up
+  session with shell access.
+  - **Task 1 — "Competitions" sidebar nav item replicated across all 24
+    remaining Admin Panel screens** (the 2 original Contest-tab frames +
+    22 unified Admin-shell screens). Each gets an **inactive** `Nav —
+    Competitions` row (icon `u:chat-bubble-user`, text "Competitions")
+    inserted directly below "Contest" and above "Media" inside
+    `Frame 5744`, cloned from that screen's own Contest row then forced
+    to the inactive token set — row fill `color/background/surface`
+    (`5096:7`), icon + label `color/text/primary` (`5096:8`). Matches
+    the already-correct reference at `5566:8141` (inside Admin — Create
+    Competition). **This closes Decision Log #73's flagged follow-up**
+    ("propagating it to the other 15 Admin shells") — count reconciled:
+    #73 estimated 15, actual scope was **24** (more Admin screens exist
+    than #73 assumed, plus the 2 legacy Contest-tab frames).
+    `5566:8033`/`5566:8067` and `5569:7813`/`5569:7847` already had the
+    item and were left alone. All 24 verified: 7 nav rows, Competitions
+    at index 5, no page-bounds clipping (short 655px sidebars are
+    `SPACE_BETWEEN` so Settings stays pinned; tall 806px sidebars have
+    49px headroom). **Decision Log #76.**
+  - **Task 2 — clipped sidebar on Admin — Competition Created (Success)
+    (`5569:7813`) fixed** by growing the page frame 900 → **1184**
+    (not shrinking the 806px sidebar component, not matching the
+    sibling's outlier 1530). 1184 is the standard tall-Admin-frame
+    height in this file (the whole Contest screen family), giving the
+    same 49px sidebar-bottom margin. The two visible full-bleed
+    backgrounds (`5569:7817` bg photo, `5569:7846` sidebar rectangle)
+    resized to match; sidebar row order/content untouched. **Decision
+    Log #77.**
+  - **Task 3 — "Club Representation" entry point added to the
+    user-facing Settings screen** (Settings — Overview, `2905:4798`),
+    opening the standalone club-representation selector (`5570:7813`
+    desktop / `5570:7887` mobile, from PR #108 / Decision Log #74). New
+    row in the **Account** panel (`Frame 5918`), placed between "Account
+    Information" and "Change Password" — grouped with identity/profile
+    settings, above the security/danger items. Icon = `fi:A_users`
+    (people glyph, rebound to `brand/navy` to match sibling icons),
+    subtitle "Set your represented club". **Decision Log #78.**
+  - **Task 3 (cont.) — mobile Settings — Overview built** (`5607:7813`,
+    390px, next to the club-rep mobile family), with the same Club
+    Representation entry point. **One-off routing override authorised by
+    the founder for this pass only** — `figma-design-system` built a
+    brand-new screen, which is normally `figma-screen-builder`'s job.
+    **This does NOT change the standing agent-sequencing rule.**
+    Adaptation calls: 390px / 350px content column / 64px top bar
+    (matching `5570:7887`); dropped the desktop's left profile /
+    trending-news / suggested-follows column (not settings content);
+    stacked the desktop settings-nav menu + Account panel vertically in
+    one column; category-nav and account rows rebuilt fresh at mobile
+    scale (16/12 type) rather than forcing the desktop's rigid 331px /
+    390px frames into a narrow column. 0 visible unbound paints, 0
+    `brand/green-tint-28`, Light-mode tokens only. **Decision Log #79.**
+  - Not merged — same standing instruction every design-stage PR follows.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
