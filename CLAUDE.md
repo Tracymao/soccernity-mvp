@@ -3060,6 +3060,70 @@ Full reasoning for every choice above: Build Plan Section 5.
     decision (vs. a Breakpoint variant), the variant-can't-be-overlay-
     destination finding, and the click-outside-dismiss API limitation.
   - Not merged — same standing instruction every design-stage PR follows.
+- **`sprint-2/mobile-settings-community-message-rebuild` builds the 12 deeper
+  Settings leaf mobile screens PR #112 deferred, rebuilds all 5 Community
+  mobile frames at 390px with real auto-layout, and rebuilds the entire
+  Message pillar desktop + mobile** — 23 new frames + 2 new components, Figma
+  design only, no app/backend code. Full detail:
+  `docs/sprint-2-mobile-settings-community-message-rebuild-report.md`.
+  Decision Log **#107–#120** added in this PR (the report drafts these as
+  #104–#117 — a stale guess from CLAUDE.md; the live docx ended at #106).
+  - **Settings (12 new 390px frames, `5695:8213`–`5696:8384`)** follow PR
+    #112's mobile pattern exactly. New **`Settings Toggle`** component set
+    (`5694:8219`, `State=On`/`State=Off`); the pre-existing `Toggle Switch`
+    (`2927:10195`) was **not** reused — it is a broken orphan (92×87, two
+    stacked instances not variants, a child outside its own bounds, 0
+    instances file-wide) and is recommended for deletion. **24 desktop copy
+    bugs fixed on the 12 source frames and mirrored on mobile** — incl. a
+    three-fragment unreadable list on Mute New Accounts, "Soccernity **page**"
+    → "sessions", lowercase "soccernity.com", and five
+    singular/plural/casing errors. **Deactivate Account uses a navy button,
+    not red**: white on `semantic/alert` measures **4.12:1** and fails AA;
+    alert is used only as a non-text accent bar.
+  - **Community: all 5 legacy 428px absolute-layout frames rebuilt at 390px**
+    (`5701:8239`, `5703:8250`, `5701:8328`, `5702:8250`, `5702:8317`) and the
+    originals **archived, not deleted** (hidden, `ARCHIVED —` prefix, moved to
+    an archive strip). **Corrects PR #112's finding that
+    `1306:7149` "renders nothing"** — the COMPONENT_SET is hidden, but both
+    variants are fully populated (100/102 children, 111 text nodes each), so
+    no fallback was needed. Sidebars (Trends/Fixtures/Trending News/Suggested)
+    were deliberately not reflowed — placeholder content blocked on Decision
+    Log #6 with no Section 4 endpoint.
+  - **Message pillar rebuilt: 3 desktop + 3 mobile frames**, 4 legacy frames
+    archived, and **`Messages mobile window 3` converted to a real component**
+    (`Message — Conversation Actions Menu`, `5706:8270`) instanced onto the
+    mobile chat screen — **closing Decision Log #89's open item**. The
+    original desktop "no message page" conflated "no conversation selected"
+    with "empty inbox" (it showed 8 conversations beside empty-inbox copy);
+    now three distinct states. PR #112's `5648:8054` empty state was
+    **retained, not rebuilt** (already 390px, already 31/31 bound).
+  - **Colour audit, measured**: Message pillar went from 385 paints / 368
+    bound (95.6%) with real off-palette `#1e1e1e`, `#a1584a`, `#d9d9d9` ×13,
+    to **470 paints / 466 bound (99.1%) and zero off-palette hexes**. Across
+    the whole delivery: **945 paints, 939 bound (99.4%)**; the only 6 unbound
+    are the shared Navbar's avatar `[IMAGE]` fill (component debt, not
+    editable from an instance). **0 `brand/green-tint-28`**, **0 new colours**,
+    **0 frame overlaps**.
+  - **New file-wide authoring gotcha (belongs in Figma notes): a
+    variable-bound paint takes its alpha from the variable, not from the
+    paint's own `opacity`** — binding `brand/navy` to a paint set at 30%
+    yields a fully opaque paint (it produced two solid scrims here). Use a
+    token that carries its own alpha (`brand/green-tint` 12%,
+    `color/icon/inactive` 15%), or re-apply opacity to a copy of the paint
+    *after* binding. A "0 unbound paints" audit can pass while a paint still
+    renders at the wrong alpha.
+  - **Flagged, not fixed**: three Settings desktop leaves
+    (`2926:8764`, `2926:8996`, and the `2926:9721`/`2927:9954`/`2927:10205`
+    trio) carry *structural* content leakage — whole rows with live controls
+    copy-pasted from the wrong screen, plus overlapping duplicate headings.
+    Fixing them is layout surgery on built screens (`figma-design-system`'s
+    domain) and needs a product decision on what belongs there, so **desktop
+    and mobile deliberately diverge on those three screens** until resolved.
+  - **Founder calls open**: which Message frames are canonical (nothing was
+    deleted, same shape as the homepage's Decision Log #46 situation), and
+    whether the archived Community/Message frames should now be deleted
+    outright.
+  - Not merged — same standing instruction every design-stage PR follows.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
