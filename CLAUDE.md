@@ -3124,6 +3124,53 @@ Full reasoning for every choice above: Build Plan Section 5.
     whether the archived Community/Message frames should now be deleted
     outright.
   - Not merged — same standing instruction every design-stage PR follows.
+- **`sprint-2/component-hygiene-toggles-nav` — component hygiene pass over
+  the Settings toggles and dead component families** (Figma design only,
+  stacks on PR #116 / `sprint-2/mobile-settings-community-message-rebuild`).
+  Full detail: `docs/sprint-2-component-hygiene-toggles-nav-report.md`.
+  Decision Log **#121–#124** drafted in the report (reconfirm numbering —
+  #116's docx ended at #120; docx not editable this session, follow-up
+  shell step listed in the report §7).
+  - **Desktop Settings toggles standardised on `Settings Toggle`
+    (`5694:8219`).** 13 effectively-visible controls across 7 Settings
+    desktop frames — 11 raw `Rectangle 352` pale-green squares + 2
+    `Component 22` sliders — swapped to `State=Off` instances,
+    absolute-pinned to the exact original slot (component swap, not
+    redesign). `Settings Toggle` instances file-wide: 13 → 26 (18 Off /
+    8 On). The premise "desktop uses raw rectangles, not a component" was
+    only partly right — two rows used a *second* local component
+    (`Component 22`); folded into the same swap so one canonical toggle
+    component remains.
+  - **Dead `Toggle Switch` `2927:10195` deleted** (0 instances file-wide,
+    confirmed). Its nested `Component 22` (`2927:10191`) / `Component 23`
+    (`2927:10192`) definitions went with it — 0 external instances after
+    the swap, 0 broken instances file-wide afterwards.
+  - **5 effectively-hidden `Rectangle 352` toggle-squares** inside
+    `visible:false` template scaffolding (`Frame 5920` / `Frame 5927`)
+    left in place — non-rendering; flagged for a future Settings-desktop
+    layout pass to delete the abandoned scaffolding wholesale.
+  - **Settings sidebar-nav typo fixed:** `Frame 5904` (`2906:7170`)
+    variant value `Property 1=Disolay and language` →
+    `Property 1=Display and language`. **Not** renamed to the standardised
+    visible label "Display, Language and Region" — a comma in a
+    single-property Figma variant value is parsed as a property separator
+    and would corrupt instance→variant resolution. All 17 instances
+    auto-migrated (same IDs), 0 detached, set total unchanged at 90. The
+    component's internal visible label still renders "Display, Languages
+    And Region" (plural) vs PR #114's "Display, Language and Region" — a
+    ~90-instance text change, deferred.
+  - **Dead component families archived (`Old —` prefix, not deleted):**
+    `Mobile Drop Down Components` (`1870:2753`, 8 variants, 0 instances
+    file-wide) → `Old — Mobile Drop Down Components`; `Mobile App Nav
+    Icons` (`2230:4328`, 7 variants, 0 instances on `0:1`, 2 `home`-variant
+    instances only on the ignored `dump` scratch page) → `Old — Mobile App
+    Nav Icons`.
+  - **OPEN — founder sign-off:** Build Plan Section 6's Sprint 3 messaging
+    bullet still cites "the existing Drop Down Components chat frames" as
+    the DM source; superseded by PR #116's live Message pillar
+    (`5706:8270` + 6 frames). Section 6 citation needs a founder-approved
+    correction in a separate documentation pass (Decision Log #123).
+  - Not merged — same standing instruction every design-stage PR follows.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
