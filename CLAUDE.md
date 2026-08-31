@@ -2865,6 +2865,61 @@ Full reasoning for every choice above: Build Plan Section 5.
     Username and Country have no `User` column (Decision Log #58). `figma-to-code` must not
     wire any of these.
   - Not merged — same standing instruction every design-stage PR follows.
+- **`sprint-2/notification-bell-navbar-slot` — shipped Tasks 4/5/6 + a
+  file-wide off-palette-red audit; the notification-bell slot work
+  (Tasks 1–3, DL #88's follow-up) is BLOCKED and deliberately not
+  built.** Figma design only, no app/backend code. Full detail:
+  `docs/sprint-2-notification-bell-navbar-slot-report.md`.
+  - **The blocker:** `Notification Bell Icon/no notification`
+    (`2819:4090`) and `.../notification` (`2819:4089`) are **not**
+    empty unbuilt bell components — `2819:4090` is the **live
+    user-avatar component** (`IMAGE`-filled `Ellipse 33`, **~85
+    instances** across every Navbar in the file; the "Avatar" instance
+    in `header 4 — mobile` points at it), and `2819:4089` is avatar +
+    the `#fa0606` status dot (0 instances). Building bell artwork into
+    those node IDs would turn ~85 avatars file-wide into
+    bells-behind-photos. Also: `Dropdown menu/no notification`
+    (`2841:5361`) and `Dropdown menu/notification on` (`2841:5363`)
+    have **0 instances and no prototype wiring** — there is no
+    existing bell-dropdown pattern to mirror, and both are account
+    menus, not notification lists. PR #112's own DL #88 notes made the
+    same misread. **DL #88 is NOT marked resolved** — a forward-pointer
+    was appended noting the follow-up is blocked; new **DL #93–#98**
+    record the finding, a corrected build plan (rename the avatar
+    components, build the bell as a NEW `Notification Bell` component
+    set with a `Has Unread` variant), and the judgment calls (bell on
+    logged-in variants only; "See all notifications" → Notification
+    Centre `5640:7815` desktop / `5643:8003` mobile).
+  - **Shipped (verified Figma writes):** **Task 6** — shared `header 4`
+    Navbar messages-glyph's 2 unbound `#d9d9d9` paints (`Rectangle
+    348` `2841:4245`, `Polygon 6` `2841:4246`) bound to `brand/navy`,
+    matching `header 4 — mobile` which was already correct. **Task 5**
+    — Bants desktop room-row status dot (`Ellipse 67` in `Group 403` /
+    `2353:1610`, **102 instances**) was off-palette amber `#DBA111`,
+    now `brand/green` (giving desktop rows a real active/inactive
+    variant to match mobile is out of scope — **DL #98**). **Task 4** —
+    9 Settings desktop copy fixes on `2922:5832` / `2922:5602` /
+    `2922:5382` (title "display and languages and region" → "Display,
+    Language and Region"; "Manage how **X** content…" → "…Soccernity
+    content…"; "Accessibilty" → "Accessibility"; three
+    verbatim-reused sub-labels on `2922:5832` given distinct copy from
+    the mobile frame `5649:8140`; "Choose the notification you like to
+    see_and those you don't" fixed to "Choose the notifications you'd
+    like to see and those you don't" on `2922:5602` — its correct
+    context; "Manage Information associated with you post" → "Manage
+    information associated with your post"). **Deviation flagged:** on
+    `2922:5832` the stray-underscore string is the *Accessibility*
+    row's description (a copy-paste bug), so it got the mobile frame's
+    Accessibility copy ("Adjust contrast, motion and text size")
+    instead of the notification-filter string. This closes CLAUDE.md's
+    prior note that desktop/mobile Settings copy "currently disagree
+    on purpose (#92)".
+  - **Flagged, not touched (DL #97):** off-palette `#fa0606` also
+    appears in Sports Hub H2H/Standings win-loss form dots
+    (`Rectangle 99` ×~36), Admin table-cell blocks (`Rectangle 43`
+    ×3), and "Block User" labels (×4) — needs its own sweep +
+    a destructive-token decision (non-negotiable #3).
+  - Not merged — same standing instruction every design-stage PR follows.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
