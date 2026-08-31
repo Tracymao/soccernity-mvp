@@ -3001,6 +3001,64 @@ Full reasoning for every choice above: Build Plan Section 5.
     variant), **#102** (`header 7` desktop stray avatar `2841:4177` —
     recommend removal), **#103** (combine `Avatar/*` + `Dropdown menu/*`
     into `Has Unread` variant sets; click-outside-dismiss follow-up).
+    **#101, #102, #103 are now RESOLVED by
+    `sprint-2/avatar-dropdown-variant-sets` (next bullet) — forward-pointers
+    appended to each.**
+  - Not merged — same standing instruction every design-stage PR follows.
+- **`sprint-2/avatar-dropdown-variant-sets` closes DL #101, #102, #103**
+  (raised by PR #114). Figma design only, no app/backend code. **Stacks on
+  the PR #114 branch (`sprint-2/avatar-notification-dropdown-wiring`) →
+  PR #113 (`sprint-2/notification-bell-navbar-slot`)** — those rows exist
+  only on PR #114's branch, so this branched from it, not `main`. Reviewer
+  merges the stack in order (or merges this, which contains all three).
+  Full detail: `docs/sprint-2-avatar-dropdown-variant-sets-report.md`.
+  - **DL #101 — mobile Notification row now routes to the MOBILE
+    Notification Centre.** The two account dropdowns were cloned to a
+    four-member slash-named family: `Dropdown menu/no notification`
+    (`2841:5361`) + `Dropdown menu/notification on` (`2841:5363`) keep the
+    Notification-row `NAVIGATE → 5640:7815` (desktop); new
+    `Dropdown menu/mobile - no notification` (`5685:9300`) +
+    `Dropdown menu/mobile - notification on` (`5685:9312`) target
+    `5643:8003` (mobile). The `header 4 — mobile` avatar instance
+    (`5387:7675`) overlay was re-pointed `2841:5361 → 5685:9300`; the
+    desktop avatar (`2838:3579`) and the `Avatar` "Has Unread=true"
+    variant (`2819:4089`) still open `2841:5361` / `2841:5363`.
+    **Dropdown sizing decision: no mobile-resized variant needed** — the
+    menu is a compact 146×142 anchored dropdown that fits inside the
+    390/428px mobile navbar; only the nav target differs.
+  - **DL #102 — stray logged-out-desktop avatar removed.** `header 7`
+    (`2841:4104`) carried an absolutely-positioned, z-order-hidden avatar
+    instance (`2841:4177`, 0 reactions) sitting behind the Login button
+    (`Frame 5805`/`2631:3972`). Removed. Zero visual change (screenshot
+    diff clean on `header 7` + Login/Register/Home/Forgot-Password-Sent);
+    Login button and nav icons unmoved (both absolute-positioned).
+  - **DL #103 — `Avatar/*` combined into a variant set; `Dropdown menu/*`
+    deliberately NOT.** `Avatar/no notification` (`2819:4090`) +
+    `Avatar/notification` (`2819:4089`) are now the **`Avatar`
+    COMPONENT_SET** (`5685:9241`), property **`Has Unread`** (boolean
+    false/true; default false). All 78 live instances on page `0:1` re-point
+    cleanly to the variant IDs (unchanged — `combineAsVariants` preserves
+    component IDs); appearance and the per-instance overlay reactions
+    unchanged. **The two dropdowns were tried as a set and reverted**:
+    Figma rejects a COMPONENT that is a variant inside a COMPONENT_SET as
+    an `OPEN_OVERLAY` **destination** (`"destination … was rejected … not
+    reachable from this source"`), which broke every avatar→dropdown
+    overlay. They stay a slash-named family instead. A "Breakpoint"
+    variant axis was therefore not viable — hence the four-member family
+    above.
+  - **Click-outside-dismiss (DL #103 tail): cannot be set from the plugin
+    API.** `overlayBackgroundInteraction` is declared `readonly` in the
+    `use_figma` API surface on **every** node type (verified on COMPONENT
+    and FRAME; `.d.ts` confirms) — PR #114's "settable only on instances"
+    is inaccurate for this environment. It IS a one-checkbox job in the
+    Figma desktop UI ("Close when clicking outside" on each avatar's Open
+    Overlay interaction — `2838:3579`, `5387:7675`, `2819:4089`), and it
+    is a non-issue for `figma-to-code` (standard backdrop/`useOnClickOutside`).
+    Documented, not silently skipped.
+  - **Decision Log:** #101/#102/#103 marked **RESOLVED** with
+    forward-pointers; new entries added for the mobile-dropdown-family
+    decision (vs. a Breakpoint variant), the variant-can't-be-overlay-
+    destination finding, and the click-outside-dismiss API limitation.
   - Not merged — same standing instruction every design-stage PR follows.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
