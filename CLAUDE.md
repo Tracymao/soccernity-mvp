@@ -3149,6 +3149,9 @@ Full reasoning for every choice above: Build Plan Section 5.
     `visible:false` template scaffolding (`Frame 5920` / `Frame 5927`)
     left in place — non-rendering; flagged for a future Settings-desktop
     layout pass to delete the abandoned scaffolding wholesale.
+    **Deleted by `sprint-2/settings-label-align-docx-dl123`** (which also
+    found they are input-background rects sitting in *visible* `Frame
+    5914` rows, not toggle-squares in hidden scaffolding).
   - **Settings sidebar-nav typo fixed:** `Frame 5904` (`2906:7170`)
     variant value `Property 1=Disolay and language` →
     `Property 1=Display and language`. **Not** renamed to the standardised
@@ -3158,7 +3161,10 @@ Full reasoning for every choice above: Build Plan Section 5.
     auto-migrated (same IDs), 0 detached, set total unchanged at 90. The
     component's internal visible label still renders "Display, Languages
     And Region" (plural) vs PR #114's "Display, Language and Region" — a
-    ~90-instance text change, deferred.
+    ~90-instance text change, deferred. **Done by
+    `sprint-2/settings-label-align-docx-dl123`** — label `characters` set
+    to "Display, Language and Region" on all three Display-row states,
+    90 instances intact, 0 detachments.
   - **Dead component families archived (`Old —` prefix, not deleted):**
     `Mobile Drop Down Components` (`1870:2753`, 8 variants, 0 instances
     file-wide) → `Old — Mobile Drop Down Components`; `Mobile App Nav
@@ -3170,6 +3176,53 @@ Full reasoning for every choice above: Build Plan Section 5.
     the DM source; superseded by PR #116's live Message pillar
     (`5706:8270` + 6 frames). Section 6 citation needs a founder-approved
     correction in a separate documentation pass (Decision Log #123).
+    **DL #123 correction spec'd by `sprint-2/settings-label-align-docx-dl123`**
+    (that pass had no shell either — the finalising session applies it).
+  - Not merged — same standing instruction every design-stage PR follows.
+- **`sprint-2/settings-label-align-docx-dl123` — 3 small hygiene items,
+  stacks on PR #117 (`sprint-2/component-hygiene-toggles-nav`) → PR #116**
+  (Figma design only, no app/backend code). Full detail:
+  `docs/sprint-2-settings-label-align-docx-dl123-report.md`.
+  - **Settings sidebar-nav visible label aligned to singular.** The
+    `Frame 5904` set (`2906:7170`), Display row, rendered "Display,
+    Languages And Region" (plural) — PR #117 fixed only the variant-value
+    typo and deferred the label. The label TEXT nodes for all three
+    Display-row states — `2906:7227` (`Property 1=Display and language`),
+    `2906:7232` (`Display hover`), `2922:6352` (`clicked display`) — had
+    underlying `characters` "display, languages and region" rendered
+    title-cased by a pre-existing `textCase: TITLE`. `characters` set to
+    "Display, Language and Region" (singular); the `textCase: TITLE`
+    transform left in place, so the render is "Display, Language And
+    Region" (capital "And"), matching how page heading `2922:5832` was
+    handled earlier. Component-level edit: **90 set instances before = 90
+    after**, all resolving to real variants, 0 detachments, 0 stale
+    overrides. Other nav rows untouched. All three Display states edited
+    (not just the resting state) for within-row consistency — flagged as
+    a judgment call.
+  - **5 dead hidden `Rectangle 352` rectangles deleted** — `2926:8175`,
+    `2926:9351`, `2926:9844`, `2927:10080`, `2926:9605`. PR #117 flagged
+    these and left them for a later pass. Confirmed genuinely dead:
+    `visible:false`, fill bound to `brand/green-tint`, no
+    `componentPropertyReferences`, no prototype reactions (file-wide scan:
+    0 reactions target these IDs), not overlay/scroll targets, not inside
+    any component; sibling `Frame 5920` text blocks are the live rendered
+    row content. They are leftover **form-input background rectangles**
+    from row duplication (this file names input backgrounds `Rectangle
+    352`, 536×31 — identical geometry), sitting as direct children of a
+    **visible** `Frame 5914` — not "toggle-squares inside `visible:false`
+    scaffolding" as PR #117 described (count and hidden state matched
+    exactly; the characterisation didn't). Parent `Frame 5914` rows
+    remain live and were **not** removed; each still carries a separate
+    hidden `Frame 5926` scaffolding leftover, flagged for a future
+    Settings-desktop layout pass.
+  - **DL #123 docx correction spec'd, not applied** (no shell this
+    session). The finalising session must: (Edit 1) replace Section 6's
+    Sprint 3 messaging bullet ("…from the existing Drop Down Components
+    chat frames.") with wording citing the PR #116 Message pillar
+    (`5706:8270`); (Edit 2) **append** a "RESOLVED (founder-approved)"
+    forward-note to Decision Log Table 6 row #123's Status; (Edit 3) add
+    new rows **#125** (Task 1) and **#126** (Task 2). Exact text for all
+    three in the report §"TASK 3". Live docx Decision Log ends at #124.
   - Not merged — same standing instruction every design-stage PR follows.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
