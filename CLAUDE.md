@@ -2777,6 +2777,31 @@ Full reasoning for every choice above: Build Plan Section 5.
     390px frames into a narrow column. 0 visible unbound paints, 0
     `brand/green-tint-28`, Light-mode tokens only. **Decision Log #79.**
   - Not merged — same standing instruction every design-stage PR follows.
+- **`sprint-2/token-verify-clubpicker-cta` — small Figma verification + fix pass over the
+  8 user-facing sections (Blog, Sports, Club Picker, Bants, Message, Community home feed,
+  Create Post, user-facing Settings).** Figma-only, no app/backend code; no new
+  screens/states/mobile (that stays `figma-screen-builder`'s job). Confirmed PR #98/#99's
+  Layer-1 light-mode retrofit holds: Message, Community, Create Post, and all 19
+  user-facing Settings frames are fully clean; user-facing Blog and Sports are token-clean
+  (Sports' remaining unbound paints are the disclosed flag/crest/jersey art). **22 nodes
+  fixed, all in scope:** Club Picker's 14 never-migrated `brand/green-tint-28` fills →
+  `brand/green-tint`, its 5 hidden black ghost-wordmark fills → `brand/navy`, 2 stale Bants
+  navbar Header **instance** `-28` overrides → `brand/green-tint`, 1 black Bants add-icon →
+  `brand/navy`. **Club Picker CTA contrast (the trigger for this pass) was already
+  compliant** — labels bound to `color/text/on-green` (navy) on `brand/green` = 5.29:1
+  AA-pass; deliberately not rebound to a navy fill (unrequested visible redesign). Flagged,
+  not fixed (out of scope): `123:56` "Articles" / `124:313` "Articles - Create Post" are
+  **Admin Panel** shell screens, not user-facing Blog — their unbound black content titles
+  fold into Decision Log #52 (an accidental edit to `124:313` this pass was reverted);
+  shared "Navigation" component set `1078:3761` renders unbound black icon glyphs (`1102:*`)
+  across 5 Bants frames — needs its own shared-component pass; `1620:13390` "Settingd" node
+  does not exist anywhere on page `0:1` (already fixed or stale ticket ref) and no "22
+  duplicate Settings frames" exist in user-facing Settings (all 19 uniquely named; bare
+  "Settings" `1658:2303` is Admin Panel). Report:
+  `docs/sprint-2-clubpicker-cta-token-verify-report.md`. **Decision Log #80–#83 proposed**
+  in that report (highest existing entry is #79) — still need transcribing into Build Plan
+  Section 9's `.docx` by a follow-up session. Not merged — same standing instruction every
+  design-stage PR follows.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
