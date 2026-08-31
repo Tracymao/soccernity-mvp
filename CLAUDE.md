@@ -2798,10 +2798,73 @@ Full reasoning for every choice above: Build Plan Section 5.
   does not exist anywhere on page `0:1` (already fixed or stale ticket ref) and no "22
   duplicate Settings frames" exist in user-facing Settings (all 19 uniquely named; bare
   "Settings" `1658:2303` is Admin Panel). Report:
-  `docs/sprint-2-clubpicker-cta-token-verify-report.md`. **Decision Log #80–#83 proposed**
-  in that report (highest existing entry is #79) — still need transcribing into Build Plan
-  Section 9's `.docx` by a follow-up session. Not merged — same standing instruction every
-  design-stage PR follows.
+  `docs/sprint-2-clubpicker-cta-token-verify-report.md`. **Decision Log #80–#83** — now
+  transcribed into Build Plan Section 9 by the `sprint-2/screen-builds-notification-centre`
+  PR below (its own report couldn't see this one, since that branch predates PR #111's
+  merge; harmless — #80–#83 are this pass's, #84+ are that one's). Not merged — same
+  standing instruction every design-stage PR follows.
+- **`sprint-2/screen-builds-notification-centre` builds the full-page Notification Centre
+  (net-new, Sprint 3 scope) plus the missing mobile equivalents across Sports, Club Picker,
+  Bants, Message and Settings** — 25 new frames, Figma design only, no app/backend code.
+  Full detail: `docs/sprint-2-screen-builds-notification-centre-report.md`. **Decision Log
+  #80–#92** transcribed into Build Plan Section 9 in this PR (both this pass's #84–#92 and
+  the merged PR #111's #80–#83, which had never been transcribed). `#45` remains a real
+  un-written gap.
+  - **Notification Centre built desktop + mobile** — feed with read/unread row states
+    (`5640:7815` / `5643:8003`) and empty states (`5642:7898` / `5642:7997`), plus a Design
+    Notes frame (`5644:8023`). Unread rows = `brand/green-tint` + white avatar disc +
+    `brand/green` dot; read rows = white `surface`, on a `brand/off-white` page. **Only
+    follow / like / comment rows are designed** — the three types the shipped backend (PR
+    #56) can actually produce; no mention/Banter/club types were invented (**Decision Log
+    #87**, which also records the no-self-notification and idempotent-no-double-notify rules
+    already true in code).
+  - **Four brief premises were wrong and were caught by checking live, not trusting:**
+    (1) the shared Navbar has **NO bell** — verified across all four variants of `2824:4309`
+    (action cluster is a messages glyph + avatar); the bell + navy unread badge is therefore
+    an `ABSOLUTE` overlay on each Notification Centre frame's own Navbar instance, and the
+    badge reuses the navy count-pill from `Dropdown menu/notification on`, **not** the
+    off-palette red `#fa0606` dot on `Notification Bell Icon/notification` (**Decision Log
+    #88**); (2) `Articles Page mobile` (`87:80`) **already exists**, so no Blog mobile was
+    built (**#84**); (3) the Create Post section already holds **five** user-facing "Create
+    a post" frames, so no Community composer was built (**#91**); (4) only **three** of the
+    four legacy `Messages mobile window` frames are superseded — **window 3 (`1762:2833`) is
+    a unique Mark-as-Read / View-Profile / Block / Delete-Chat context menu with no
+    replacement**, left live while windows 1/2/4 were hidden + renamed `ARCHIVED —` and
+    moved to an archive strip (**#89**).
+  - **Mobile built:** Sports logged-out/logged-in (`5647:8023` / `5647:8169` — desktop
+    sidebar reflowed to a league chip row, typographic club marks not licensed crests,
+    **#85**); all 5 Club Picker states (`5645:8023` / `8082` / `8141`, `5646:8023` / `8044`
+    — carrying the desktop's own open-decision note across verbatim); 7 Bants states
+    (`5650:8074` / `8161` / `8221` / `8314`, `5651:8166` / `8207` / `8253` — reusing the
+    existing `Filter Tabs (All / My Bants)` component as real instances); a Message empty
+    state (`5648:8054`); and 5 Settings category screens (`5649:8074` / `8092` / `8116` /
+    `8140` / `8176`) — the **12 deeper Settings leaf screens are a flagged, deliberately
+    unbundled follow-up** (**#92**).
+  - **Canonical mobile width proposed as 390** (**#86**) — the file currently holds
+    390/428/375/360/311. **`community mobile 1–5` were deliberately NOT resized** (**#90**):
+    all five are absolute-layout with 13–31 fixed-position children, so a 428→390 resize
+    overflows rather than reflows; a proper 390 rebuild is its own scoped task.
+    Re-confirmed `1306:7149` / `1308:11643` are still `visible: false` and render nothing —
+    left as found, not silently "fixed".
+  - **Audit, measured:** **0 `brand/green-tint-28`** across all 25 new frames; **23 of 25
+    frames 0 unbound paints**; the 2 Sports frames' single unbound paint (a cloned legacy
+    `uil:calender`) was found and fixed in-pass. The only residual unbound paints (2 each on
+    the two Notification Centre desktop frames) are `Rectangle 348` / `Polygon 6` **inside
+    the shared `header 4` Navbar instance** — pre-existing component debt, not editable from
+    an instance.
+  - **Flagged, not fixed (scope lock — these are `figma-design-system`'s):** the red
+    `#fa0606` bell dot; both "Notification Bell Icon" components being near-empty and
+    rendering nothing; Bants' off-palette orange status dot; the shared `header 4`'s 2
+    unbound paints; and **six real Settings desktop copy bugs** (incl. a leftover "how **X**
+    content is displayed to you" from a Twitter/X template and an "Accessibilty" typo) —
+    corrected on the new mobile frames only, so desktop and mobile copy currently disagree
+    on purpose (**#92**).
+  - **Founder-blocked (flagged, not built):** Sports fixtures/news have no data source
+    (Decision Log #6 still open, no Section 4 endpoint); Bants has no backend
+    (`/banter-rooms*` is unbuilt Sprint 3 work); `Settings — Account Information (Edit)`'s
+    Username and Country have no `User` column (Decision Log #58). `figma-to-code` must not
+    wire any of these.
+  - Not merged — same standing instruction every design-stage PR follows.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
