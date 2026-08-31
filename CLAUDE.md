@@ -2890,6 +2890,10 @@ Full reasoning for every choice above: Build Plan Section 5.
     set with a `Has Unread` variant), and the judgment calls (bell on
     logged-in variants only; "See all notifications" → Notification
     Centre `5640:7815` desktop / `5643:8003` mobile).
+    **SUPERSEDED:** the founder has since overridden this — NO new bell
+    component; the existing avatar IS the indicator. **DL #93–#96 are
+    superseded, DL #97 is resolved**, by
+    `sprint-2/avatar-notification-dropdown-wiring` (see two bullets down).
   - **Shipped (verified Figma writes):** **Task 6** — shared `header 4`
     Navbar messages-glyph's 2 unbound `#d9d9d9` paints (`Rectangle
     348` `2841:4245`, `Polygon 6` `2841:4246`) bound to `brand/navy`,
@@ -2919,6 +2923,84 @@ Full reasoning for every choice above: Build Plan Section 5.
     (`Rectangle 99` ×~36), Admin table-cell blocks (`Rectangle 43`
     ×3), and "Block User" labels (×4) — needs its own sweep +
     a destructive-token decision (non-negotiable #3).
+    **RESOLVED by `sprint-2/avatar-notification-dropdown-wiring`** (next
+    bullet): founder authorised a `semantic/alert` token (`#FA0606`),
+    now bound across 110 paints.
+  - Not merged — same standing instruction every design-stage PR follows.
+- **`sprint-2/avatar-notification-dropdown-wiring` — corrects PR #113's
+  approach per a founder override, and closes the `#fa0606` sweep.**
+  Figma design only, no app/backend code. Stacks on the PR #113 branch
+  (`sprint-2/notification-bell-navbar-slot`), because it must mark that
+  branch's DL #93–#98 as superseded. Full detail:
+  `docs/sprint-2-avatar-notification-dropdown-wiring-report.md`.
+  - **Founder override:** NO new Notification Bell component is built.
+    The existing round **avatar** component IS the notification
+    indicator — clicking it opens the account dropdown (Profile /
+    Notification / Settings / Log out); the Notification row carries the
+    unread counter and links to the Notification Centre. PR #113's
+    **DL #93, #94, #95, #96 are SUPERSEDED** (forward-pointers appended);
+    **DL #97 (the `#fa0606` sweep) is RESOLVED** here; DL #98 (Bants
+    desktop active/inactive) is unrelated and unchanged.
+  - **Task 1 — avatar components renamed** (name only, 0 appearance
+    change, verified on sample instances): `2819:4090` "Notification Bell
+    Icon/no notification" → **"Avatar/no notification"** (~85 instances);
+    `2819:4089` "Notification Bell Icon/notification" → **"Avatar/notification"**
+    (0 instances; adds the unread dot `Ellipse 98` `2819:4084`).
+  - **Task 2 — new semantic token `semantic/alert`** (`VariableID:5670:8226`)
+    in the `Soccernity Theme` collection. **`#FA0606`** (kept, not
+    normalised — it is the value already in ~110 places) in **both**
+    Light and Dark modes (small non-text indicator; the hue reads on
+    white and on near-black alike). `Ellipse 98` bound to it.
+    **Founder-authorised deliberate exception to non-negotiable #3**
+    (two-colour palette) — red is retained as a semantic
+    loss/destructive/alert colour only. New Decision Log entry added.
+  - **Task 3 — avatar → account-dropdown overlay wired at the navbar
+    instance level** (not on the shared component — the other ~85
+    avatars, e.g. post authors, must not open *my* account menu):
+    `ON_CLICK → OPEN_OVERLAY` on `2838:3579` (header 4 desktop) and
+    `5387:7675` (header 4 — mobile) → `Dropdown menu/no notification`
+    (`2841:5361`). The `Avatar/notification` component's own stale
+    overlay target was corrected `2841:5361` → `2841:5363` (0 instances,
+    so harmless; makes a future instance-swap inherit the right
+    dropdown). **All 4 Navbar variants checked:** `header 4` (`2838:3502`)
+    logged-in desktop — wired; `header 4 — mobile` (`5386:6576`)
+    logged-in mobile — wired; `header 7 — mobile` (`5386:6575`)
+    logged-out mobile — no avatar, correct; `header 7` (`2841:4104`)
+    logged-out desktop — **carries a stray avatar instance (`2841:4177`),
+    flagged, left unwired (0 reactions), recommended for removal**
+    (new DL entry).
+  - **Task 4 — Notification row → Notification Centre.** `ON_CLICK →
+    NAVIGATE` on the Notification row in both dropdowns (`2841:5368` in
+    "notification on", `2819:4077` in "no notification") → **desktop**
+    Notification Centre `5640:7815`. Limitation: the dropdown components
+    are shared desktop/mobile and a reaction carries one target;
+    routing mobile → `5643:8003` needs a mobile dropdown variant
+    (follow-up, new DL entry).
+  - **Task 5 — `#fa0606` sweep completed.** `semantic/alert` bound to
+    **110** paints: Sports Hub H2H/Standing loss dots (`Rectangle 99`
+    ×29 + `Rectangle 101` ×1), Admin table-cell blocks (`Rectangle 43`
+    ×3), "Block User" labels (×4) + their block icons (×3), and — newly
+    found in the same audit and in the same destructive-semantic bucket
+    — 70 `ant-design:delete-outlined` trash-icon vectors across Admin
+    Categories / Settings / Media / Users. **Excluded: 1** — the
+    `#fa0606` fill inside the "YouTube logo" vector (`761:13`), an
+    external brand mark (same class as club-crest artwork). Final rescan:
+    0 unbound `#fa0606` paints remain except that one.
+  - **Judgment calls / follow-ups (new Decision Log entries):** the two
+    avatar components + the two dropdowns should be combined into
+    variant sets (`Has Unread` boolean) so one instance swap flips both,
+    instead of the current two-loose-components + manual-reaction-retarget
+    dance; mobile dropdown variant for Task 4's mobile route; removal of
+    the `header 7` desktop stray avatar.
+  - **Decision Log:** PR #113's **#93–#96 marked SUPERSEDED**, **#97
+    RESOLVED** (forward-pointers appended); new **#99** (`semantic/alert`
+    token, `#FA0606`, Light=Dark, founder-authorised exception to
+    non-negotiable #3), **#100** (avatar→dropdown wired per Navbar
+    instance, not on the shared component), **#101** (Notification row
+    routes to desktop Notification Centre only; mobile needs a dropdown
+    variant), **#102** (`header 7` desktop stray avatar `2841:4177` —
+    recommend removal), **#103** (combine `Avatar/*` + `Dropdown menu/*`
+    into `Has Unread` variant sets; click-outside-dismiss follow-up).
   - Not merged — same standing instruction every design-stage PR follows.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
