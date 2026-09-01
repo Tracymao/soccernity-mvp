@@ -3371,6 +3371,85 @@ Full reasoning for every choice above: Build Plan Section 5.
     side now that #128–#130 unblocked Leaderboard/Contest board-level
     design work — dummy data is the established convention, same as the
     rest of the Leaderboard/Contest boards.
+- **`sprint-2/decision-log-133-137-followup` closes out four of the five #131–#137
+  deferrals PR #124 raised, now that #133/#137 stayed unblocked and #135/#136 got
+  real docx rows for the first time.** Figma design only, no app/backend code. Full
+  detail: `docs/sprint-2-decision-log-133-137-followup-report.md`.
+  - **Docx catch-up done first, verified before any Figma work**: #138 and #139 —
+    already live in this file's own text above — were transcribed into the Build
+    Plan's live docx Decision Log (Section 9) for the first time, with forward-
+    pointers appended to #135/#136's own Status cells. Table now runs **#1–#144**
+    contiguously, zero gaps, zero duplicates.
+  - **Contest (#134) — retrofit + mobile + 2 new states, mostly built.** The "100%
+    unbound" characterisation of the 3 legacy Contest frames was stale — a live
+    audit found them mostly bound already (PR #107/#108's prior partial work);
+    fixed the real remaining debt instead: 24× `brand/green-tint-28` →
+    `brand/green-tint` (Decision Log #47) + 10× unbound `#d9d9d9` fan-avatar
+    placeholders → `brand/green-tint`, across `2155:1062`/`2072:5584`/`2094:994`.
+    All 3 now 0 unbound, 0 `-tint-28`. Built mobile (390px) for all 3: Contest —
+    Details, Entries & Ranking, Voting. Built the two flagged-missing states —
+    Contest — Already Voted, Contest — Between Weeks — **desktop only**; mobile
+    for these two deferred (**Decision Log #140**) since the legacy frames'
+    absolute-position internals made even the desktop edits need several
+    overlap-correction passes. Bants gained a pre-categories Search Filter mobile
+    screen + a No Results empty state; one further Bants mobile gap (a second
+    categories-view state) stays open (**Decision Log #144**).
+  - **Admin Moderation (#135, resolved by #138) — 3 new screens built** on fresh
+    clones of the existing unified Admin shell, with a new "Moderation" sidebar
+    row (reusing the file's own `el:ban-circle` icon): **Admin — Moderation
+    Queue** (Report-entity table + an Open Reports/Appeals tab pair + a callout
+    stating the #138 appeal-routing rule in plain language, making it legible in
+    the design itself), **Admin — Report Detail & Action** (reported-content +
+    report-details cards, four navy action buttons — no destructive-red token
+    invented — and a §8.4 both-parties-notified note), **Admin — Appeal Review**
+    (routing banner naming the original reviewer, read-only original decision,
+    appeal reason, Uphold/Overturn actions). Admin Panel colour/token treatment
+    left untouched everywhere (hard constraint honoured) — new screens reuse the
+    shell's own existing, unedited fills. **Correction to PR #124's own report**
+    (**Decision Log #142**): `917:218` ("Users – team members") was flagged there
+    as admin-role management, distinct from a real user list — re-checked directly
+    and that flag was wrong; it's already a real `GET/PATCH /admin/users` list
+    (Username/Date Joined/Status + block/delete actions), so no redundant user-
+    list screen was built. **New "Moderation" nav item exists only on these 3
+    screens' own shells**, not propagated to the other 26 existing Admin shells —
+    same "new item on new screens only, propagation is its own pass" precedent as
+    Categories (DL #49) / Competitions (DL #76) (**Decision Log #141**).
+    Moderation-outcome/appeal-decision email templates remain unbuilt, consistent
+    with the 5-other-unwired-template precedent (**Decision Log #143**).
+  - **Message recipient picker (#136, resolved by #139) — built**: Message — New
+    Conversation (Recipient Picker), desktop + mobile, cloned from the real
+    Message pillar shell (PR #116). Combines a search bar ("by username or
+    display name") with a default "PEOPLE YOU FOLLOW" list shown before any
+    search term, per #139. Search bar is a real, present UI element despite no
+    people-search endpoint existing yet — the same backend-pending-field
+    convention Decision Log #58 already established. Restricted-pending exclusion
+    is shown by the sample people simply never including one — no invented copy.
+  - **Sports Hub mobile (#133) — re-confirmed still blocked, untouched.**
+    Decision Log #6 (sports-data vendor) checked directly: still "Open — blocks
+    Sprint 4". Left alone, as instructed.
+  - **Club Picker empty-state wording (#137) — built**: Club Picker — 6 No Clubs
+    Available Yet, desktop + mobile, cloned from the "No Clubs Match Filter"
+    frame with the filter value cleared, new "clubs still being added" copy, and
+    the (now-meaningless) Load More button removed — a real, distinct
+    catalogue-empty state alongside the existing filter-empty state.
+  - **Two reusable Figma-authoring bugs found and fixed mid-pass, worth folding
+    into this file's own Figma notes later**: (1) `setBoundVariableForPaint`
+    keeps whatever literal colour you pass in — building several nav rows with a
+    generic grey `{0.5,0.5,0.5}` placeholder rendered as visibly grey, unreadable
+    boxes even though the variable binding underneath was genuinely correct;
+    fixed by resolving each token's real Light-mode RGB once and using that as
+    the literal before binding. (2) `figma.createFrame()` + setting `.layoutMode`
+    alone does NOT make a frame hug its own content — it silently keeps Figma's
+    default 100×100 size unless `primaryAxisSizingMode`/`counterAxisSizingMode`
+    are set explicitly; produced literal 100px-tall rows with invisible content
+    on the first Admin build. Fixed by setting both axis modes explicitly, and by
+    preferring `figma.createAutoLayout()` (hugs both axes by default) for every
+    frame built afterward — zero sizing-mode corrections needed from that point
+    on. Neither bug reached the final, verified state of anything in this PR.
+  - Build Plan Decision Log **#140–#144** added (Section 9), continuing from
+    #139, via python-docx deep-copying the last row's XML; forward-pointers
+    appended to #133–#137's own Status cells.
+  - Not merged — Temi's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
