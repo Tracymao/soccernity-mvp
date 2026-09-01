@@ -3356,7 +3356,21 @@ Full reasoning for every choice above: Build Plan Section 5.
     (**#137**, minor, conservative single-state kept).
   - Build Plan Decision Log **#131–#137** added (Section 9, Table 6),
     continuing from #130, via python-docx deep-copying the last row's XML.
-  - Not merged — Temi's call after review.
+  - Merged as PR #124.
+  - **Follow-up resolution (post-merge):** two of the five deferrals
+    above depended on real founder decisions, not just build work —
+    resolved now so the #133–#137 follow-up pass can build instead of
+    re-flagging. **Decision Log #138** resolves #135's appeal-routing
+    question: an appeal is reviewed by a SECOND admin/moderator, never
+    the original reviewer. **Decision Log #139** resolves #136's
+    recipient-picker question: both a search bar (by username/name) and
+    a default follow-list section, combined. #133 (Sports Hub mobile,
+    still blocked on Decision Log #6) and #137 (Club Picker empty-state
+    wording, minor) needed no decision and are unchanged. #134 (Contest
+    mobile/retrofit/Bants) has no data-model blocker on the *design*
+    side now that #128–#130 unblocked Leaderboard/Contest board-level
+    design work — dummy data is the established convention, same as the
+    rest of the Leaderboard/Contest boards.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
