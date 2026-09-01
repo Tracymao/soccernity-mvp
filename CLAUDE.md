@@ -3449,7 +3449,7 @@ Full reasoning for every choice above: Build Plan Section 5.
   - Build Plan Decision Log **#140–#144** added (Section 9), continuing from
     #139, via python-docx deep-copying the last row's XML; forward-pointers
     appended to #133–#137's own Status cells.
-  - Not merged — Temi's call after review.
+  - Merged as PR #128.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
