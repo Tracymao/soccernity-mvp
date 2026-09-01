@@ -3297,7 +3297,66 @@ Full reasoning for every choice above: Build Plan Section 5.
     FRAMEs (×2 on every Settings frame including the clean category
     screens) — a deliberately-hidden decorative layer, not row-duplication
     scaffolding.
-  - Merged as PR #119 — the most recent merge to `main` as of this entry.
+  - Merged as PR #119.
+- **`sprint-2/all-sections-followup-mobile-field-audit` is a founder-authorised
+  audit-AND-build sweep of all 20 sections (missing follow-up screens,
+  missing mobile screens, field accuracy vs. Build Plan §3/§4 and the
+  shipped `services/api` DTOs) — same one-time combined-scope override as
+  PR #102 / #110, wider.** Figma design only, no app/backend code. Full
+  detail: `docs/sprint-2-all-sections-followup-mobile-field-audit-report.md`.
+  **Honest scope:** a true 20-section build is multi-PR; this pass did the
+  full structural audit, built the highest-value clearly-in-scope gaps
+  (Community — the current sprint — mobile parity, plus the one
+  backend-implied Auth flow-completion screen), and flagged the rest as
+  Decision Log candidates #131–#137 with the reason each was deferred
+  (Sprint 4/5 sections not started; absent Contest/Competition and
+  Report/moderation data models; work already earmarked in a prior PR as
+  its own coordinated pass). Field-accuracy was a spot-check confirming
+  prior passes' reconciliations still hold — no screen was found showing
+  a *fake* field; the mismatches that exist are all
+  backend-owes-a-column cases already logged (Decision Log #58/#74).
+  - **Built (7 frames, 0 unbound paints except inherited illustration
+    tones; 0 `brand/green-tint-28`; 0 new colour):**
+    - **Reset Password — Success desktop (`5776:8405`) + mobile
+      (`5777:8479`)** — the reset flow had a screen for every step except
+      the success state, even though `POST /auth/reset-password` succeeds
+      and `PasswordResetService.resetPassword` revokes every other
+      session. Cloned from Reset Password desktop/mobile so the
+      split-screen shell + navbar + token bindings are inherited. Copy
+      states the change landed AND all other sessions signed out; single
+      navy "Continue to log in" button → `/login` (the app's `/` is still
+      a `PlaceholderPage`). **Decision Log #131.**
+    - **Community mobile parity — 5 frames**, cloned from the real PR #116
+      mobile frames: **Post View (`5779:8490`)** (back app-bar + expanded
+      post + comment thread + pinned composer — covers both `1620:20139`
+      and `949:73`), **Profile · Media (`5778:8490`)** and **Profile ·
+      Saved (`5778:8567`)** (built as Profile tab-STATES, not standalone
+      routes — active tab → `brand/green` underline; Media = 3-col
+      `brand/green-tint` grid; Saved = save glyph re-bound to
+      `brand/green`), **Search & Trending (`5780:8581`)** (composer row →
+      `brand/green-tint` search field + For you / Trending / News chip
+      row, mirroring desktop `2876:4628` minus "Bant"), **Inactive
+      Account (`5780:8679`)** (mirrors desktop `1662:2782` —
+      Activate/Delete, matching shipped `POST /auth/reactivate-account` /
+      `delete-account`). **Decision Log #132.**
+  - **Flagged, NOT built (new Decision Log candidates):** Sports Hub
+    match-centre mobile — 7 screens, 0 mobile (**#133**, deferred to
+    Sprint 4, blocked with Decision Log #6); Contest user-facing mobile +
+    legacy light-token retrofit + Bants missing mobile variants/empty
+    states (**#134**, deferred to a dedicated Sprint 3 Contest/Bants pass,
+    already flagged PR #108, data model absent); Admin moderation-queue
+    screens + moderation-outcome/appeal-decision email templates —
+    §4.8/§8.4 workflow has zero screens (**#135**, deferred to Sprint 5,
+    needs founder input on the §8.4 appeal-routing model; Admin Panel
+    colour/token treatment was NOT touched — hard constraint); Message
+    "new conversation / recipient picker" screen — `POST /conversations`
+    has no starting-a-DM screen (**#136**, deferred to Sprint 3,
+    recipient-picker source unresolved); Club Picker "no clubs match
+    filter" vs "no clubs exist at all" still one conflated state
+    (**#137**, minor, conservative single-state kept).
+  - Build Plan Decision Log **#131–#137** added (Section 9, Table 6),
+    continuing from #130, via python-docx deep-copying the last row's XML.
+  - Not merged — Temi's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
