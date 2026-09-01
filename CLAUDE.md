@@ -2716,6 +2716,18 @@ Full reasoning for every choice above: Build Plan Section 5.
   - **Founder-blocked (unchanged):** points model, club axis, public
     visibility, the entire Contest + Competition data model. `figma-to-code`
     must not build any of these boards until a scoring model is specced.
+    **RESOLVED** — points model, club axis, and public visibility are no
+    longer founder-blocked; see Decision Log #128–#130 (club axis =
+    User.clubMemberships + the represented-club selector from #74; login
+    required, no logged-out access; points = Contest/Competition results +
+    baseline engagement). Exact per-action point weights remain a real,
+    parked backend-api task, but the design/screen-building blocker is
+    cleared. The Contest + Competition *data model* itself (schema,
+    endpoints) is still unbuilt — backend is still paused — so
+    `figma-to-code` still can't wire these boards to real data, but
+    `figma-design-system`/`figma-screen-builder` may now build and finish
+    any remaining Leaderboard/Contest/Competition screens without waiting
+    on a scoring answer.
   - Merged as PR #109.
 - **`sprint-2/admin-competitions-nav-settings-club-rep` — three scoped
   Figma fixes** (Figma design only, no app/backend code). Full detail:
