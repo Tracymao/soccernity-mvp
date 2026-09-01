@@ -2111,8 +2111,7 @@ Full reasoning for every choice above: Build Plan Section 5.
   surfaced: a text-node fill rebind can silently trigger a Figma
   text-wrap regression on tightly-boxed nodes (found and fixed in the
   final batch, **not retroactively checked across the other 8 batches**
-  — a real follow-up gap, not closed by this PR). Not merged — same
-  standing instruction every design-stage PR in this project follows.
+  — a real follow-up gap, not closed by this PR). Merged as PR #99.
 - **`sprint-2/retrofit-light-mode-auth-email` retrofits the two sections
   PR #99 explicitly deferred — AUTH PAGES (10 frames) and EMAIL TEMPLATE
   (5 existing + 1 new) — to the same light-mode token standard, plus a
@@ -2186,12 +2185,17 @@ Full reasoning for every choice above: Build Plan Section 5.
     `brand/green-tint-28` everywhere else it had spread" was
     over-stated — the component was fixed (fresh navbar instances are
     clean) but old instances and other frames still carry it.
-  - **Numbering note:** `docs/sprint-2-leaderboard-page-design-report.md`
+  - **Numbering note (now closed):** `docs/sprint-2-leaderboard-page-design-report.md`
     references a "Decision Log #45" (real display names incl. minors on
     the leaderboard) that was never actually written into Build Plan
-    Section 9's table — a drift gap; this PR left #45 free for that
-    entry and used #46/#47.
-  - Not merged — same standing instruction every design-stage PR follows.
+    Section 9's table when this PR was merged — a drift gap; this PR left
+    #45 free for that entry and used #46/#47. **That gap is now closed**
+    — #45 has been transcribed retroactively into Section 9, between #44
+    and #46, recording the founder's contemporaneous decision (real
+    display names for all users including minors; restricted-pending
+    minors simply absent from the data, per the platform-wide
+    restricted-pending rule).
+  - Merged as PR #100.
 - **`sprint-2/mobile-navbar-variant` designs the mobile navbar variant
   PR #100 flagged as missing, and applies it to the five Auth Pages
   mobile frames.** Two variants added **inside the existing set
@@ -2226,8 +2230,7 @@ Full reasoning for every choice above: Build Plan Section 5.
   `ABSOLUTE`-positioned navbar + `paddingTop` 40 → 104 instead).
   **Decision Log #48 added** (Build Plan Section 9), formally closing
   PR #100's "mobile auth navbar" follow-up. Full detail:
-  `docs/sprint-2-mobile-navbar-variant-report.md`. Not merged — same
-  standing instruction every design-stage PR follows.
+  `docs/sprint-2-mobile-navbar-variant-report.md`. Merged as PR #101.
 - **`sprint-2/admin-panel-shell-unification` unifies the Admin Panel
   shell across all 15 existing Admin screens and adds 9 new Admin
   screens — a deliberate ONE-TIME combined-scope PR** (existing-frame
@@ -2330,8 +2333,7 @@ Full reasoning for every choice above: Build Plan Section 5.
   (placement / hierarchy / provider order / Apple-button-guidelines flag
   for the OAuth pass) — written into Build Plan Section 9 (table 6) in
   this PR via `python-docx`, full text also in
-  `docs/sprint-2-auth-social-signin-report.md` §7. Not merged — Temi's
-  call after independent verification.
+  `docs/sprint-2-auth-social-signin-report.md` §7. Merged as PR #103.
 - **`sprint-2/retrofit-screen-build-auth-email` is a combined
   audit-and-build pass over the Auth Pages + Email Template sections and
   the flows they belong to** (registration, login, verify-email,
@@ -2411,8 +2413,7 @@ Full reasoning for every choice above: Build Plan Section 5.
   §8.4), and the fact that the whole Guardian Consent section is
   desktop-only. **Missing-mobile check for Auth Pages + Email Template:
   clean** — every auth screen family has both widths; emails are single
-  fluid-width. No application code touched. Not merged — Temi's call
-  after independent verification.
+  fluid-width. No application code touched. Merged as PR #104.
 - **`sprint-2/retrofit-screen-build-guardian-consent` builds the 7
   guardian-consent-flow screens/emails PR #104's audit flagged as
   missing** — Figma design only, no backend/DTO/endpoint changes (that
@@ -2460,8 +2461,7 @@ Full reasoning for every choice above: Build Plan Section 5.
   still needs, whenever it resumes:** a guardian decline endpoint
   (Decision Log #34), a change-guardian-email endpoint implementing the
   Decision Log #60 restart behaviour, and real sends for the two new
-  emails (same status as PR #104's 5 unwired templates). Not merged —
-  Temi's call after independent verification.
+  emails (same status as PR #104's 5 unwired templates). Merged as PR #105.
 - **`sprint-2/close-decision-log-58` closes Decision Log #58 (the
   "Create Profile" screen's `username` / `avatar` / `bio` / `location`
   fields) — documentation only, no Figma frames and no application code
@@ -2480,7 +2480,7 @@ Full reasoning for every choice above: Build Plan Section 5.
   keep-and-back-with-real-columns. Build Plan Decision Log #58 moved from
   Open to Resolved in the same PR. Tracked going forward in the
   "Backend requirements parked until backend work resumes" list below.
-  Not merged — Temi's call.
+  Merged as PR #106.
 - **Backend requirements parked until backend work resumes.** Backend is
   currently paused; design/frontend-doc PRs during this stretch have
   logged real backend work here so it isn't lost on resume. Check each
@@ -2581,7 +2581,7 @@ Full reasoning for every choice above: Build Plan Section 5.
     mobile leaderboard; a coordinated Contest user-facing section pass
     (retrofit + mobile + a "Week N of 4 / Level 1 Final" phase
     indicator); retrofitting `2072:5584` to light tokens.
-  - Not merged — same standing instruction every design-stage PR follows.
+  - Merged as PR #107.
 - **`sprint-2/mobile-leaderboard-homepage-contest-audit` builds the
   mobile screens the previous pass flagged as follow-ups, plus a full
   leaderboard + Contest audit** (Figma design only, no app/backend
@@ -2633,7 +2633,7 @@ Full reasoning for every choice above: Build Plan Section 5.
     Commentary competition type; the entire Contest data model + monthly
     handoff mechanic; Contest "already voted" / "between weeks" states;
     homepage fixtures/news/season-record data.
-  - Not merged — same standing instruction every design-stage PR follows.
+  - Merged as PR #108.
 - **`sprint-2/leaderboard-competition-split-admin-homepage` is a
   consolidated fix-and-build pass over six founder decisions** (Figma
   design only, no app/backend code). Full detail:
@@ -2716,7 +2716,7 @@ Full reasoning for every choice above: Build Plan Section 5.
   - **Founder-blocked (unchanged):** points model, club axis, public
     visibility, the entire Contest + Competition data model. `figma-to-code`
     must not build any of these boards until a scoring model is specced.
-  - Not merged — same standing instruction every design-stage PR follows.
+  - Merged as PR #109.
 - **`sprint-2/admin-competitions-nav-settings-club-rep` — three scoped
   Figma fixes** (Figma design only, no app/backend code). Full detail:
   `docs/sprint-2-admin-competitions-nav-settings-club-rep-report.md`.
@@ -2776,7 +2776,7 @@ Full reasoning for every choice above: Build Plan Section 5.
     scale (16/12 type) rather than forcing the desktop's rigid 331px /
     390px frames into a narrow column. 0 visible unbound paints, 0
     `brand/green-tint-28`, Light-mode tokens only. **Decision Log #79.**
-  - Not merged — same standing instruction every design-stage PR follows.
+  - Merged as PR #110.
 - **`sprint-2/token-verify-clubpicker-cta` — small Figma verification + fix pass over the
   8 user-facing sections (Blog, Sports, Club Picker, Bants, Message, Community home feed,
   Create Post, user-facing Settings).** Figma-only, no app/backend code; no new
@@ -2801,8 +2801,7 @@ Full reasoning for every choice above: Build Plan Section 5.
   `docs/sprint-2-clubpicker-cta-token-verify-report.md`. **Decision Log #80–#83** — now
   transcribed into Build Plan Section 9 by the `sprint-2/screen-builds-notification-centre`
   PR below (its own report couldn't see this one, since that branch predates PR #111's
-  merge; harmless — #80–#83 are this pass's, #84+ are that one's). Not merged — same
-  standing instruction every design-stage PR follows.
+  merge; harmless — #80–#83 are this pass's, #84+ are that one's). Merged as PR #111.
 - **`sprint-2/screen-builds-notification-centre` builds the full-page Notification Centre
   (net-new, Sprint 3 scope) plus the missing mobile equivalents across Sports, Club Picker,
   Bants, Message and Settings** — 25 new frames, Figma design only, no app/backend code.
@@ -2864,7 +2863,7 @@ Full reasoning for every choice above: Build Plan Section 5.
     (`/banter-rooms*` is unbuilt Sprint 3 work); `Settings — Account Information (Edit)`'s
     Username and Country have no `User` column (Decision Log #58). `figma-to-code` must not
     wire any of these.
-  - Not merged — same standing instruction every design-stage PR follows.
+  - Merged as PR #112.
 - **`sprint-2/notification-bell-navbar-slot` — shipped Tasks 4/5/6 + a
   file-wide off-palette-red audit; the notification-bell slot work
   (Tasks 1–3, DL #88's follow-up) is BLOCKED and deliberately not
@@ -2926,7 +2925,7 @@ Full reasoning for every choice above: Build Plan Section 5.
     **RESOLVED by `sprint-2/avatar-notification-dropdown-wiring`** (next
     bullet): founder authorised a `semantic/alert` token (`#FA0606`),
     now bound across 110 paints.
-  - Not merged — same standing instruction every design-stage PR follows.
+  - Merged as PR #113.
 - **`sprint-2/avatar-notification-dropdown-wiring` — corrects PR #113's
   approach per a founder override, and closes the `#fa0606` sweep.**
   Figma design only, no app/backend code. Stacks on the PR #113 branch
@@ -3004,7 +3003,7 @@ Full reasoning for every choice above: Build Plan Section 5.
     **#101, #102, #103 are now RESOLVED by
     `sprint-2/avatar-dropdown-variant-sets` (next bullet) — forward-pointers
     appended to each.**
-  - Not merged — same standing instruction every design-stage PR follows.
+  - Merged as PR #114.
 - **`sprint-2/avatar-dropdown-variant-sets` closes DL #101, #102, #103**
   (raised by PR #114). Figma design only, no app/backend code. **Stacks on
   the PR #114 branch (`sprint-2/avatar-notification-dropdown-wiring`) →
@@ -3059,7 +3058,7 @@ Full reasoning for every choice above: Build Plan Section 5.
     forward-pointers; new entries added for the mobile-dropdown-family
     decision (vs. a Breakpoint variant), the variant-can't-be-overlay-
     destination finding, and the click-outside-dismiss API limitation.
-  - Not merged — same standing instruction every design-stage PR follows.
+  - Merged as PR #115.
 - **`sprint-2/mobile-settings-community-message-rebuild` builds the 12 deeper
   Settings leaf mobile screens PR #112 deferred, rebuilds all 5 Community
   mobile frames at 390px with real auto-layout, and rebuilds the entire
@@ -3126,7 +3125,7 @@ Full reasoning for every choice above: Build Plan Section 5.
     deleted, same shape as the homepage's Decision Log #46 situation), and
     whether the archived Community/Message frames should now be deleted
     outright.
-  - Not merged — same standing instruction every design-stage PR follows.
+  - Merged as PR #116.
 - **`sprint-2/component-hygiene-toggles-nav` — component hygiene pass over
   the Settings toggles and dead component families** (Figma design only,
   stacks on PR #116 / `sprint-2/mobile-settings-community-message-rebuild`).
@@ -3181,7 +3180,7 @@ Full reasoning for every choice above: Build Plan Section 5.
     correction in a separate documentation pass (Decision Log #123).
     **DL #123 correction spec'd by `sprint-2/settings-label-align-docx-dl123`**
     (that pass had no shell either — the finalising session applies it).
-  - Not merged — same standing instruction every design-stage PR follows.
+  - Merged as PR #117.
 - **`sprint-2/settings-label-align-docx-dl123` — 3 small hygiene items,
   stacks on PR #117 (`sprint-2/component-hygiene-toggles-nav`) → PR #116**
   (Figma design only, no app/backend code). Full detail:
@@ -3226,7 +3225,10 @@ Full reasoning for every choice above: Build Plan Section 5.
     forward-note to Decision Log Table 6 row #123's Status; (Edit 3) add
     new rows **#125** (Task 1) and **#126** (Task 2). Exact text for all
     three in the report §"TASK 3". Live docx Decision Log ends at #124.
-  - Not merged — same standing instruction every design-stage PR follows.
+  - Merged as PR #118. The DL #123 correction and the #125/#126 rows this
+    bullet spec'd were applied in the finalising session and are now live
+    in the docx — see the `sprint-2/settings-desktop-scaffolding-sweep`
+    bullet below and Build Plan Section 9 directly.
 - **`sprint-2/settings-desktop-scaffolding-sweep` — one consolidated sweep
   of hidden row-duplication scaffolding across all 18 user-facing Settings
   desktop frames, replacing the three prior piecemeal passes (PR #117,
@@ -3283,7 +3285,7 @@ Full reasoning for every choice above: Build Plan Section 5.
     FRAMEs (×2 on every Settings frame including the clean category
     screens) — a deliberately-hidden decorative layer, not row-duplication
     scaffolding.
-  - Not merged — same standing instruction every design-stage PR follows.
+  - Merged as PR #119 — the most recent merge to `main` as of this entry.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
