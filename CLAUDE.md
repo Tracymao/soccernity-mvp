@@ -3112,13 +3112,16 @@ Full reasoning for every choice above: Build Plan Section 5.
     `color/icon/inactive` 15%), or re-apply opacity to a copy of the paint
     *after* binding. A "0 unbound paints" audit can pass while a paint still
     renders at the wrong alpha.
-  - **Flagged, not fixed**: three Settings desktop leaves
+  - **Flagged, not fixed** (→ **DL #110 RESOLVED by
+    `sprint-2/settings-desktop-scaffolding-sweep`**, see that bullet below):
+    three Settings desktop leaves
     (`2926:8764`, `2926:8996`, and the `2926:9721`/`2927:9954`/`2927:10205`
-    trio) carry *structural* content leakage — whole rows with live controls
-    copy-pasted from the wrong screen, plus overlapping duplicate headings.
-    Fixing them is layout surgery on built screens (`figma-design-system`'s
-    domain) and needs a product decision on what belongs there, so **desktop
-    and mobile deliberately diverge on those three screens** until resolved.
+    trio) carried *structural* content leakage — leaked "Authentication App"
+    rows, "Submit" buttons and overlapping duplicate "Push notification"
+    headings. **All of it turned out to be `visible:false` scaffolding
+    left over from row duplication (not live rows), so no product decision
+    was needed** — the sweep deleted it. `2926:8996` renamed
+    `Settings — Your Posts (Sensitive Media)`.
   - **Founder calls open**: which Message frames are canonical (nothing was
     deleted, same shape as the homepage's Decision Log #46 situation), and
     whether the archived Community/Message frames should now be deleted
@@ -3223,6 +3226,63 @@ Full reasoning for every choice above: Build Plan Section 5.
     forward-note to Decision Log Table 6 row #123's Status; (Edit 3) add
     new rows **#125** (Task 1) and **#126** (Task 2). Exact text for all
     three in the report §"TASK 3". Live docx Decision Log ends at #124.
+  - Not merged — same standing instruction every design-stage PR follows.
+- **`sprint-2/settings-desktop-scaffolding-sweep` — one consolidated sweep
+  of hidden row-duplication scaffolding across all 18 user-facing Settings
+  desktop frames, replacing the three prior piecemeal passes (PR #117,
+  PR #118, the DL #110 audit)** (Figma design only, no app/backend code).
+  Stacks on PR #118 (`sprint-2/settings-label-align-docx-dl123`) → PR #117
+  → PR #116. Full detail:
+  `docs/sprint-2-settings-desktop-scaffolding-sweep-report.md`. Decision Log
+  **#127** drafted in the report (live docx ends at #126); **DL #110 marked
+  RESOLVED** with the Task 2 detail appended to its Status.
+  - **17 hidden scaffolding nodes deleted**, each confirmed dead by all
+    four checks (`visible:false`; 0 file-wide prototype reactions target
+    it; not inside any COMPONENT/COMPONENT_SET/INSTANCE; not a
+    `componentPropertyReferences` target):
+    - **9 × hidden `Frame 5926`** — a 121×35 "Submit" button (each with a
+      dead `ON_CLICK → 2924:6870` of its own) left in the Account panel of
+      Security Overview, Notifications (Mute & Filter), Notification
+      Preferences, Push, Email, Mute New Accounts, Two-Factor Auth (SMS),
+      Direct Messages, Your Posts.
+    - **3 × hidden `Frame 5920`→`Frame 5933`** — a duplicate/stray "Push
+      notification" heading sitting at the exact coordinates of the visible
+      labelled row on the trio (`2926:9721`, `2927:9954`, `2927:10205`).
+      **All `visible:false` — cosmetic, never a live render bug** (DL #110's
+      "overlapping duplicate headings").
+    - **2 × hidden `Frame 5928`** — a leaked "Email Notification" +
+      hidden 2FA blurb block on Push and Email.
+    - **2 × hidden `Frame 5927`** — a leaked "Authentication App" heading +
+      description block (belongs on Two-Factor Auth) on Direct Messages
+      (`2926:8764`) and Your Posts (`2926:8996`) — DL #110's Task 2.1/2.2.
+    - **1 × hidden `Rectangle 352`** (536×31 input-field background) on
+      Email — a sixth instance of the exact leftover PR #118 deleted five
+      of.
+  - **`2926:8996` renamed** `Settings — Sensitive Content & 2FA App` →
+    `Settings — Your Posts (Sensitive Media)` (matching its mobile sibling
+    `5696:8261`); its visible `Frame 5919` heading was already accurate
+    ("Your posts" → title-cased to "Your Posts"). The visible content is
+    the sensitive-media-marking-on-your-posts toggle — the "2FA App" in
+    the old name was only ever the now-deleted hidden leak.
+  - **No `Frame 5914` row became empty; no live row touched.** Screenshots
+    of all three trio panels + the two renamed/de-leaked panels confirm
+    zero visual change (everything removed was already `visible:false`).
+  - **Kept + flagged, not deleted this pass** (all pass the 4 checks but
+    are outside the "hidden FRAME" mandate — a follow-up text-hygiene
+    micro-pass can remove them with the IDs in the report):
+    `See information about your account` (unused template subtitle, ×12,
+    one per Account-panel frame); the 2FA "Help protect your account…"
+    blurb leaked as hidden text into notification nav rows (×4); the
+    "Choose to filter out content…" blurb leaked (×2); hidden
+    `information-circle-sharp` icon (×2); and — inside **live** input rows
+    on Change Password (`2924:6870`) and Account Information (Edit)
+    (`2924:7112`), both out of scope — hidden leftover `Confirm your
+    Password` labels (×7) and sample values (`@mitch`, `+2348104020224`,
+    `michaelschenider249@gmail.com`).
+  - **Kept, out of scope:** `ph:soccer-ball-fill` decorative background
+    FRAMEs (×2 on every Settings frame including the clean category
+    screens) — a deliberately-hidden decorative layer, not row-duplication
+    scaffolding.
   - Not merged — same standing instruction every design-stage PR follows.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
