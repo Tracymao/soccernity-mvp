@@ -3968,9 +3968,57 @@ Full reasoning for every choice above: Build Plan Section 5.
     `createNodeFromSvg` output was explicitly re-bound during
     construction, per the known unbound-black-stroke gotcha).
   - **PHASE 2 (separate `figma-to-code` follow-up, `apps/web`)**: replace
-    `Header.tsx` / `navigation.ts` with the icon navbar, wire
-    `Bottom Navigation — Mobile` on mobile, add `/clubs` to the nav
-    (Decision Log #156), and implement runtime auth-state switching.
+    `Header.tsx` / `navigation.ts` with the icon navbar, wire the mobile
+    nav (see the next bullet — it's the drawer, not the bottom bar), add
+    `/clubs` to the nav (Decision Log #156), and implement runtime
+    auth-state switching.
+- **`sprint-2/mobile-nav-drawer-canonical` (figma-design-system,
+  2026-09-02) redirects Decision Log #160's mobile-nav answer** — Figma
+  design only, `apps/web` NOT touched. Report:
+  `docs/sprint-2-mobile-nav-drawer-canonical-report.md`. Decision Log
+  **#162–#163** added; forward-pointer on **#160**.
+  - **PR #144's `Bottom Navigation — Mobile` icon-row (`5863:9505`) is
+    RETAGGED, not deleted** → `Bottom Navigation — Mobile App Nav
+    (Reserved — Native iOS/Android)`; its two pairing frames renamed
+    `Reserved (Native App) — …`. **Artwork/layout untouched.** It's the
+    right pattern for a future native app, not the current mobile *web*
+    build.
+  - **The mobile-web answer: the slide-in Navigation Drawer, promoted to
+    a real reusable COMPONENT `Navigation Drawer — Mobile` (`5870:10689`)**
+    — it had existed only as a one-off FRAME (`5703:8320`) inside one
+    Community screen. 390×844, a full-bleed `Scrim` (`ON_CLICK → CLOSE`)
+    + the 268px `Panel` cloned verbatim from `5703:8320` (identity block,
+    nav list, divider, Log out). The one-off screen `5703:8250` now
+    renders an instance of it. Instance this on any mobile screen that
+    needs full nav, the same way `header 4 — mobile` is instanced.
+  - **"Clubs" added to the drawer** (`Nav — Clubs`, `5870:10735`, cloned
+    from `Nav — Sports Hub` — identical marker-dot + text-row structure),
+    positioned at the end of the content-pillar group: Home · Community ·
+    Sports Hub · Bants · Leaderboard · **Clubs** · Messages ·
+    Notifications · Profile · Settings — Log out.
+  - **Trigger wired: `header 4 — mobile`'s avatar (`5387:7675`)
+    `ON_CLICK → OPEN_OVERLAY → 5870:10689`** (set on the component node,
+    inherited by all ~46 instances). **This supersedes Decision Log
+    #100/#101 (avatar → mobile account dropdown) FOR MOBILE ONLY** — the
+    desktop avatar (`2838:3579` → `2841:5361`) is unchanged. The two
+    mobile account-dropdown variants (`5685:9300` / `5685:9312`) are now
+    redundant (the drawer is a strict superset) — **recommended for
+    retirement, not deleted here**. Plugin-API limits: the
+    slide-in-from-left transition and `overlayPositionType=TOP_LEFT` must
+    be set once by hand in the Figma UI (`setReactionsAsync` rejects a
+    `DirectionalTransition`; overlay props readonly — same class of limit
+    PR #115 hit).
+  - **Scrim fill**: a variable-bound `brand/navy` paint at paint-level
+    `opacity` renders **solid** on instances (this file's documented
+    "bound paint takes alpha from the variable" gotcha), so the scrim
+    uses **two stacked `color/icon/inactive` fills** (navy 15% each →
+    ~28%, alpha travels with the token). **No `overlay/scrim` token
+    exists** — flagged as Decision Log #163, along with the drawer's nav
+    list diverging from the desktop set (no "News" item; "Bants" vs
+    "banter").
+  - **Standing rules**: palette-only, no `brand/green-tint-28`, no new
+    colours, Light mode only, **0 unbound / 0 off-palette paints** across
+    the whole `Navigation Drawer — Mobile` subtree (audited node-by-node).
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
