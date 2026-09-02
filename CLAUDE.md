@@ -3559,6 +3559,48 @@ Full reasoning for every choice above: Build Plan Section 5.
     complete, but it propagated the pre-existing broken *Competitions*
     icon forward unchanged and did not catch it.
   - Merged as PR #131.
+- **Sprint 2 sweep (no PR — a status review, not a build pass) found the
+  project is materially behind where the PR volume suggests.** Build Plan
+  Section 6's actual Sprint 2 done-when criterion ("a user can post,
+  follow another user or club, like/comment, and save a post, all
+  reflected correctly on refresh") is **not met**: the Feed/Clubs/Follow
+  backend is genuinely complete and tested, but `apps/web`'s `HomePage.tsx`
+  and `CommunityPage.tsx` are still literal 5-line `PlaceholderPage`
+  stubs — **zero `figma-to-code` conversion has ever run** on any of the
+  6 target pages, across the entire `sprint-2/*` PR history. Most of that
+  PR history is real, high-quality work, but a lot of it is Sprint 3–6
+  content (Notification Centre, Message, Sports Hub, Admin moderation,
+  Leaderboard) built early under the `sprint-2/*` branch prefix via the
+  dummy-data-ahead-of-blockers convention — legitimate, but it means the
+  branch prefix doesn't track Build Plan Sprint 2 scope. The actual
+  bottleneck to closing Sprint 2 is running `figma-to-code` on Home and
+  Community and wiring them to the already-complete backend, not more
+  design work. Decision Log audited in full: 151 entries at sweep time,
+  28 genuinely open (correctly scoped to later sprints or explicitly
+  non-MVP-blocking — none block converting Home/Community), 11 more still
+  read "Open" as their first word despite a resolution appended later in
+  the same cell (cosmetic debt, not a real blocker, worth a cleanup pass
+  sometime). Community's canonical frame (`1306:7149`) was re-confirmed
+  fully populated (100+ children, 111 text nodes per variant) — an
+  earlier "renders nothing" finding (PR #112) was already corrected by a
+  later pass; it's just `hidden: true`, which doesn't block `get_metadata`/
+  `get_design_context` reads.
+  - **Found and fixed:** Homepage's canonical frame (`5204:6728`) carried
+    a stale "BLOCKER, carried forward unresolved from Pass 1: is '/' the
+    marketing landing page or the authenticated home feed?" annotation
+    directly in its own annotation zone (`5214:6833`) — contradicting a
+    decision that had already been made in practice (Community owns all
+    authenticated feed content; Homepage's Header instance is the
+    logged-out `header 7` variant) but was never actually written into
+    the Decision Log. Founder confirmed final: "/" is exclusively the
+    logged-out marketing page; logged-in users route to Community
+    (`1306:7149`) instead. **Decision Log #152** added recording this.
+    The stale annotation text was corrected in place via `use_figma`
+    (canonical text-edit recipe: load current fonts → mutate → return
+    IDs) to read "RESOLVED" instead of "BLOCKER," so a future
+    `figma-to-code` pass reading this frame's own notes doesn't get
+    misled. The Pass 1 predecessor frame referenced in the old annotation
+    (`5191:6652`) no longer exists in the file — nothing to fix there.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
