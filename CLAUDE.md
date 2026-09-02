@@ -3875,6 +3875,52 @@ Full reasoning for every choice above: Build Plan Section 5.
     already-shipped `DELETE /clubs/:id/join` (`sprint-2/club-leave`); the
     "Leave" button is the first surface to need it — `figma-to-code` must
     add it during conversion.
+- **`sprint-2/club-pages-conversion` (figma-to-code, 2026-09-02) converts
+  PR #142's Club Pages designs into real, working React — `apps/web`
+  only, `services/api` untouched. Closes the CODE HALF of Decision Log
+  #155 (#155 now fully closed, design + code) and Decision Log #158
+  (`leaveClub()` client).** Report:
+  `docs/sprint-2-club-pages-conversion-report.md`.
+  - **`api/clubs.ts` — two new clients**: `getClubById(accessToken,
+    clubId)` (`GET /clubs/:id`; a 404 surfaces as `ClubsApiError` with
+    `status: 404`, not a distinct type — the caller decides how to render
+    it) and `leaveClub(accessToken, clubId)` (`DELETE /clubs/:id/join`,
+    mirrors `joinClub` exactly — **closes #158**).
+  - **`ClubsPage.tsx`** (route `/clubs`, new) — "Clubs — Browse". `GET
+    /clubs` + cursor "Load more"; client-side name filter over loaded
+    pages only (`GET /clubs` has no text-search param — field labelled
+    "Filter loaded clubs by name"); per-club **Join / Leave** button
+    driven by that club's real `joined` (Decision Log #154), toggling the
+    row + member count from the endpoint's own response; each card
+    `<Link>`s to `/clubs/:id`. No-session → "Log in to browse clubs",
+    API never called (mirrors `ProfilePage`/`CommunityPage`).
+  - **`ClubFanPage.tsx`** (route `/clubs/:id`, new) — "Club — Fan Page".
+    `useParams` → `getClubById`; badge, name, `league • country`, member
+    count, one Join/Leave button, "← Clubs" back link, and the scope note
+    **reproduced verbatim** ("Member posts and a full member list aren't
+    part of club pages yet."). A **404 renders an honest "Club not found"
+    state** with a link back to `/clubs`, never a crash; a non-404
+    failure renders a generic error (distinguished by `err.status`).
+  - **`ClubJoinButton.tsx`** (new, shared by both pages) — same
+    "act, then trust the real response" shape `PostCard.tsx` uses for
+    like/save. **`ClubsPage.css`** references the app-wide `--sn-*`
+    tokens (light mode, `CommunityPage.css` convention); the design's
+    "Top Bar — Soccernity" is NOT reproduced (AppShell renders the shared
+    Header). **`router.tsx`** gains both routes.
+  - **NOT done, by design**: **Decision Log #156** (Navbar entry point)
+    stays open — no Navbar link was added; adding one is shared-component
+    work touching every screen, out of scope. These pages are reachable
+    by direct URL and via the Club Picker → Fan Page `<Link>` path; full
+    in-app discoverability waits on #156. **Decision Log #157**
+    (club-scoped posts endpoint) stays open — no feed / composer / member
+    list was added to the Fan Page.
+  - **Verification**: `npx tsc --noEmit`, `npm run lint`, `npm run build`
+    all clean; `npx vitest run` — **11 files / 66 tests, 0 failures** (up
+    from 9/51 — `ClubsPage.test.tsx` +8, `ClubFanPage.test.tsx` +7, no
+    existing test changed); dev-server smoke test `/clubs`,
+    `/clubs/:id`, `/`, `/community` all HTTP 200. No real
+    browser/Playwright check available — same ceiling as every prior
+    `apps/web` PR.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

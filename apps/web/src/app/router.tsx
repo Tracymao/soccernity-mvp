@@ -31,6 +31,8 @@ import SportsHubPage from "../pages/SportsHubPage";
 import NewsPage from "../pages/NewsPage";
 import LeaderboardPage from "../pages/LeaderboardPage";
 import CommunityPage from "../pages/CommunityPage";
+import ClubsPage from "../pages/ClubsPage";
+import ClubFanPage from "../pages/ClubFanPage";
 import BanterPage from "../pages/BanterPage";
 import LoginPage from "../pages/LoginPage";
 import SignupPage from "../pages/SignupPage";
@@ -64,6 +66,13 @@ export const router = createBrowserRouter([
       // Follow, Build Plan Section 4.3 / 4.2). See CommunityPage.tsx.
       { path: "community", element: <CommunityPage /> },
       { path: "banter", element: <BanterPage /> },
+      // Persistent Club Pages (Build Plan Section 6 Sprint 2 "Club
+      // Pages"). /clubs browses the catalogue (GET /clubs); /clubs/:id
+      // is a single club's fan page (GET /clubs/:id). Both convert
+      // sprint-2/club-pages-design (PR #142); see ClubsPage.tsx. No
+      // Navbar entry point yet — Decision Log #156 is still open.
+      { path: "clubs", element: <ClubsPage /> },
+      { path: "clubs/:id", element: <ClubFanPage /> },
 
       // Auth / onboarding flow -- F2 through F6.
       { path: "login", element: <LoginPage /> }, // F2

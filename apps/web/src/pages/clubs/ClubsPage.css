@@ -1,0 +1,318 @@
+/* Club Pages — Clubs — Browse (ClubsPage.tsx) and Club — Fan Page
+ * (ClubFanPage.tsx). Figma source: frames 5841:9240 / 5841:9306 /
+ * 5841:9365 / 5841:9431, "Soccernity-MVP" (weZWWqggy9j13eX8bhFgs6),
+ * from sprint-2/club-pages-design (PR #142).
+ *
+ * Colour values reference the app-wide --sn-* custom properties from
+ * src/theme/applyTheme.ts — do not hardcode hex. Light theme, the app's
+ * single active mode, matching CommunityPage.css / ProfilePage.css. The
+ * design's own "Top Bar — Soccernity" is NOT reproduced here — AppShell
+ * already renders the shared site Header, same as every other routed
+ * page in this app. */
+
+.clubs-page,
+.clubs-fan {
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* --- status messages (shared shape with Community / Profile) -------- */
+
+.clubs-status {
+  font: 400 15px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  padding: 48px 0;
+  text-align: center;
+  margin: 0;
+}
+
+.clubs-status--error {
+  color: var(--sn-brand-navy);
+}
+
+/* --- Browse: header + search ------------------------------------- */
+
+.clubs-page__header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.clubs-page__title {
+  font: 600 34px/1.3 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.clubs-page__subtitle {
+  font: 400 16px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.clubs-search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  padding: 0 18px;
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+}
+
+.clubs-search__icon {
+  flex-shrink: 0;
+  color: var(--sn-text-secondary);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.clubs-search__input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  font: 400 15px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.clubs-search__input::placeholder {
+  color: var(--sn-text-secondary);
+}
+
+/* --- Browse: club list ----------------------------------------- */
+
+.clubs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.clubs-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 12px;
+}
+
+.clubs-card__link {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.clubs-card__badge {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 20px "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+  background: var(--sn-green-tint-12);
+}
+
+.clubs-card__meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.clubs-card__name {
+  font: 600 16px/1.4 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clubs-card__place {
+  font: 400 14px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.clubs-card__members {
+  font: 400 13px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+/* --- Join / Leave button (ClubJoinButton.tsx) ----------------- */
+
+.clubs-join {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+}
+
+.clubs-join--block {
+  align-items: flex-start;
+}
+
+.clubs-join__button {
+  min-width: 112px;
+  height: 44px;
+  padding: 0 20px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--sn-brand-green);
+  color: var(--sn-text-on-green);
+  font: 600 15px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.clubs-join--block .clubs-join__button {
+  min-width: 200px;
+  height: 48px;
+}
+
+.clubs-join__button--leave {
+  background: var(--sn-background-surface);
+  border-color: var(--sn-icon-inactive);
+  color: var(--sn-text-primary);
+}
+
+.clubs-join__button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.clubs-join__error {
+  font: 400 13px/1.4 "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+  margin: 0;
+}
+
+/* --- Browse: load more --------------------------------------- */
+
+.clubs-load-more {
+  height: 50px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sn-text-primary);
+  font: 600 15px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.clubs-load-more:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* --- Fan Page ------------------------------------------------- */
+
+.clubs-back {
+  font: 600 15px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  text-decoration: none;
+  align-self: flex-start;
+}
+
+.clubs-fan__identity {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.clubs-fan__badge {
+  flex-shrink: 0;
+  width: 88px;
+  height: 88px;
+  border-radius: 16px;
+  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 36px "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+  background: var(--sn-green-tint-12);
+}
+
+.clubs-fan__text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.clubs-fan__name {
+  font: 600 30px/1.25 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.clubs-fan__place {
+  font: 400 16px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.clubs-fan__members {
+  font: 400 14px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.clubs-fan__divider {
+  border: none;
+  height: 1px;
+  background: var(--sn-icon-inactive);
+  margin: 0;
+  width: 100%;
+}
+
+.clubs-fan__note {
+  font: 400 14px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+/* --- narrow screens: stack the browse card, full-width buttons --- */
+
+@media (max-width: 560px) {
+  .clubs-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .clubs-join,
+  .clubs-join--block {
+    align-items: stretch;
+  }
+
+  .clubs-join__button,
+  .clubs-join--block .clubs-join__button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .clubs-fan__identity {
+    gap: 16px;
+  }
+
+  .clubs-fan__name {
+    font-size: 24px;
+  }
+}

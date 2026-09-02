@@ -66,6 +66,29 @@ export async function listClubs(accessToken: string, cursor?: string): Promise<C
   return (await response.json()) as ClubPageResult;
 }
 
+// GET /clubs/:id -- a single club, same ClubSummary shape as the list
+// entries (services/api clubs.service.ts's getClubById). A missing club is
+// a real 404 from the server; surfaced here as a ClubsApiError with
+// status 404, deliberately NOT a distinct error type -- the caller
+// (ClubFanPage.tsx) decides whether to render "club not found" vs a
+// generic load error by inspecting `.status`.
+export async function getClubById(accessToken: string, clubId: string): Promise<ClubSummary> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/clubs/${clubId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch {
+    throw new ClubsApiError("Couldn't reach the Soccernity server.");
+  }
+
+  if (!response.ok) {
+    throw new ClubsApiError(`Couldn't load that club (${response.status}).`, { status: response.status });
+  }
+
+  return (await response.json()) as ClubSummary;
+}
+
 export async function joinClub(accessToken: string, clubId: string): Promise<JoinClubResult> {
   let response: Response;
   try {
@@ -79,6 +102,30 @@ export async function joinClub(accessToken: string, clubId: string): Promise<Joi
 
   if (!response.ok) {
     throw new ClubsApiError(`Couldn't join that club (${response.status}).`, { status: response.status });
+  }
+
+  return (await response.json()) as JoinClubResult;
+}
+
+// DELETE /clubs/:id/join -- the mirror of joinClub. Same method-only
+// difference the backend uses (POST/DELETE on the same path,
+// clubs.controller.ts), same JoinClubResult return (its `joined: boolean`
+// is deliberately not a literal-true type -- clubs.service.ts's own
+// comment -- so one shape serves both directions). Idempotent server-side:
+// leaving a club you're not in is a 200, not a 404.
+export async function leaveClub(accessToken: string, clubId: string): Promise<JoinClubResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/clubs/${clubId}/join`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch {
+    throw new ClubsApiError("Couldn't reach the Soccernity server.");
+  }
+
+  if (!response.ok) {
+    throw new ClubsApiError(`Couldn't leave that club (${response.status}).`, { status: response.status });
   }
 
   return (await response.json()) as JoinClubResult;
