@@ -3450,6 +3450,69 @@ Full reasoning for every choice above: Build Plan Section 5.
     #139, via python-docx deep-copying the last row's XML; forward-pointers
     appended to #133–#137's own Status cells.
   - Merged as PR #128.
+- **`sprint-2/create-post-sports-contest-mobile-admin-notif-fix` is a
+  founder-authorised audit-AND-build Figma pass (routing override this
+  pass only: the design-system agent built the wholly-new screens itself)
+  covering five confirmed gaps/bugs** — Figma design only, no app/backend
+  code. Full detail:
+  `docs/sprint-2-create-post-sports-contest-mobile-admin-notif-fix-report.md`.
+  - **Create Post mobile parity (Item 1)** — base `5701:8328` extended
+    with a "Create a Post / Contest" mode-tab row; three new 390px
+    frames: **With Attachment** (`5818:8962`), **Contest Mode**
+    (`5818:8997` — count badge "1" verbatim from desktop `2009:2913`,
+    reusing the Notification Centre "Unread Count Badge" pattern
+    `5640:7915`, not a new badge), **Feed Context / Pinned Post**
+    (`5818:9031`, cloned from the real Home Feed mobile). **Sub-finding:**
+    desktop `2496:4462` and `2565:3951` have identical composers —
+    differ only in the feed pin badge ("Contest post" vs "post") — so
+    one mobile frame covers both, not two.
+  - **Sports/Livescores match-centre mobile (Item 2, Decision Log #145)**
+    — 8 new 390px frames: Match Details (`5820:8976`), Match Statistics
+    (`5822:9075`), First Half Stats (`5823:9108`), Second Half Stats
+    (`5823:9317`), Lineups (`5825:9207`), H2H (`5824:9174`), Standing
+    (`5821:9068`), Video (`5821:9009`), plus a new `Match Centre Header —
+    Mobile` component (`5819:8976`). Built with **dummy match data copied
+    verbatim from the desktop frames** (Liverpool 1–3 Chelsea) ahead of
+    the still-open Decision Log #6 sports-data vendor blocker — same
+    convention as the Contest/Leaderboard boards. Typographic club marks
+    only (Decision Log #85); real-crest licensing untouched.
+    `figma-to-code` must not wire these to data until #6 resolves. H2H /
+    Standing use a palette-compliant W/D/L + promotion/relegation colour
+    scheme (green / navy / `semantic/alert`), deliberately not
+    reproducing the desktop's off-palette amber for draws/mid-table —
+    flagged as Decision Log #149.
+  - **Contest mobile (Item 3)** — **closes Decision Log #140**: Contest —
+    Already Voted — Mobile (`5815:8916`) and Contest — Between Weeks —
+    Mobile (`5815:8948`), 390px, matching the three existing Contest
+    mobile screens.
+  - **Admin Panel sidebar (Item 4)** — Bug A: fixed the broken Moderation
+    nav item on the 3 Moderation screens (`5794:8635`, `5796:8635`,
+    `5796:8753`) — flattened the triple-nested icon to a single
+    `el:ban-circle`, corrected the stale "Categories" layer name (the
+    render was already "Moderation"). Bug B: propagated a correct
+    **inactive** "Nav — Moderation" row (nav index 3, between Users and
+    Categories) to the **26** other Admin Panel screens — **29/29** now
+    carry it, no clipping. Hard constraint honoured: **zero Admin Panel
+    colour/token/rebind changes**. Flagged (Decision Log #146): the
+    active-row Moderation icon is invisible (navy-on-navy) on the 3
+    Moderation screens because it binds `color/text/primary` where every
+    sibling active-row icon binds `color/text/on-navy` — a one-line
+    rebind left for founder sign-off, not done here (would violate the
+    Item 4 constraint). Also flagged (Decision Log #147): the
+    `fi:A_users` "Users" nav icon renders nothing file-wide (empty
+    fills) — pre-existing, folds into the DL #52 Admin retrofit family.
+  - **Notification Centre icon (Item 5)** — removed the orphaned floating
+    bell + unread-badge overlay nodes from all 4 Notification Centre
+    frames (`5640:7815`, `5643:8003`, `5642:7898`, `5642:7997`).
+    Verified the underlying `header 4` / `header 4 — mobile` navbar
+    instances already show the correct avatar-notification treatment
+    (PR #113/#114) — no blank navbar left behind.
+  - 0 unbound paints on every frame built fresh (excludes the shared
+    navbar instance's avatar `[IMAGE]` fill). 0 `brand/green-tint-28`,
+    0 new colours, 0 frame overlaps. Build Plan Decision Log **#145–#149**
+    added (Section 9), continuing from #144; forward-pointer appended to
+    #140.
+  - Not merged — Temi's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
