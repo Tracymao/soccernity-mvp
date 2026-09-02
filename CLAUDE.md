@@ -3740,6 +3740,42 @@ Full reasoning for every choice above: Build Plan Section 5.
     liked/saved/followed post renders its three controls in the acted
     state on first paint, no clicks). Decision Log #153 Status cell got a
     second forward-pointer noting the frontend is now wired too.
+- **`sprint-2/clubs-joined-flag` (backend-api, 2026-09-02) closes
+  Decision Log #154 — the sibling gap PR #136's report flagged off #153.
+  `services/api` only, `apps/web` untouched.** Report:
+  `docs/sprint-2-clubs-joined-flag-report.md`.
+  - **`GET /clubs` and `GET /clubs/:id` now return a per-caller `joined`
+    boolean** — `true` iff a `ClubPage.members` row exists for `(club,
+    caller)`. Computed per request, not stored. New exported type
+    `ClubSummaryWithViewerState = ClubSummary & { joined: boolean }`;
+    `CLUB_SELECT` / `ClubSummary` unchanged (intersection on top).
+  - **No N+1.** `listClubs(query, userId)` resolves a whole page with
+    **one** batched `clubPage.findMany({ where: { id: { in: [...] },
+    members: { some: { id: userId } } } })` (a zero-club page issues
+    none); `getClubById(clubId, userId)` uses one `findFirst`. A **plain
+    Prisma relation filter**, not the raw `$executeRaw` against
+    `_ClubMembership` that `joinClub`/`leaveClub` need for write
+    atomicity — a read has no such need. 404 for a missing club still
+    thrown before the membership lookup.
+  - **`clubs.controller.ts` `list` AND `getById` both gained
+    `@CurrentUser()`** — mirroring PR #136's `feed.controller.ts`
+    change. `JwtAuthGuard` already attaches `request.user`; signature
+    change only.
+  - `joinClub`/`leaveClub`'s `JoinState` already carries `joined` —
+    unchanged. No other Clubs endpoint returns `ClubSummary`.
+  - **`apps/web` NOT touched** — updating `api/clubs.ts`'s `ClubSummary`
+    type + any local joined-state tracking (`ClubPickerStep.tsx`) is a
+    separate follow-up, same two-PR split #153/#137 used.
+  - **Decision Log #154 added** to Build Plan Section 9 (references back
+    to #153's own status text where the candidate was raised); #153's
+    Status cell got a forward-pointer to #154.
+  - **Verification**: `nest build` + `npm run lint` clean; `npx jest`
+    (full unit suite) **35 suites / 419 tests, 0 failures** (up from
+    35/415 — new `clubs.service.spec.ts` viewer-state cases); `npm run
+    test:e2e` — new describe block in `test/clubs.e2e-spec.ts` proving
+    `joined` against real Postgres/`_ClubMembership`, including that the
+    flag is scoped to the calling user (user B joining doesn't flip it
+    for user A).
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

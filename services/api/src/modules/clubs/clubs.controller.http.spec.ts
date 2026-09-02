@@ -64,12 +64,17 @@ describe('ClubsController (HTTP layer)', () => {
         .get('/clubs?cursor=abc123&limit=5&league=Sunday+League&country=England')
         .expect(200);
 
-      expect(clubsService.listClubs).toHaveBeenCalledWith({
-        cursor: 'abc123',
-        limit: 5,
-        league: 'Sunday League',
-        country: 'England',
-      });
+      expect(clubsService.listClubs).toHaveBeenCalledWith(
+        {
+          cursor: 'abc123',
+          limit: 5,
+          league: 'Sunday League',
+          country: 'England',
+        },
+        // @CurrentUser() is now injected so the service can compute the
+        // per-caller `joined` flag (Decision Log #154).
+        CALLER.sub,
+      );
     });
 
     it('rejects a limit above the max page size with 400', async () => {
@@ -109,6 +114,8 @@ describe('ClubsController (HTTP layer)', () => {
       const response = await request(app.getHttpServer()).get('/clubs/club-1').expect(200);
       expect(response.body.id).toBe('club-1');
       expect(response.body).not.toHaveProperty('members');
+      // @CurrentUser() passed through (Decision Log #154).
+      expect(clubsService.getClubById).toHaveBeenCalledWith('club-1', CALLER.sub);
     });
 
     it('propagates a 404 from ClubsService for a non-existent club', async () => {

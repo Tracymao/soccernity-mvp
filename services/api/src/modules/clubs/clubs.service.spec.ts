@@ -6,8 +6,15 @@ import { ClubsService } from './clubs.service';
 function buildPrismaMock() {
   const prisma = {
     clubPage: {
-      findMany: jest.fn(),
+      // findMany is called TWICE by listClubs as of Decision Log #154:
+      // once for the club page, then once for the per-caller membership
+      // subset. Tests that reach the second call use
+      // .mockResolvedValueOnce(...) per call in sequence (same technique
+      // feed.service.spec.ts uses for post.findUnique's multiple call
+      // sites). findFirst is new — getClubById's single membership check.
+      findMany: jest.fn().mockResolvedValue([]),
       findUnique: jest.fn(),
+      findFirst: jest.fn().mockResolvedValue(null),
       update: jest.fn(),
     },
     // $executeRaw backs joinClub()'s raw "INSERT ... ON CONFLICT DO
@@ -47,26 +54,31 @@ describe('ClubsService', () => {
     it('orders alphabetically by name asc, id asc, and returns the lean select shape', async () => {
       const prisma = buildPrismaMock();
       const rows = [buildClubRow({ id: 'club-1', name: 'Alpha FC' })];
-      (prisma.clubPage.findMany as jest.Mock).mockResolvedValue(rows);
+      (prisma.clubPage.findMany as jest.Mock)
+        .mockResolvedValueOnce(rows) // the club page
+        .mockResolvedValueOnce([]); // membership subset — caller is in none
 
       const service = new ClubsService(prisma);
-      const result = await service.listClubs({});
+      const result = await service.listClubs({}, 'user-1');
 
-      expect(prisma.clubPage.findMany).toHaveBeenCalledWith(
+      expect((prisma.clubPage.findMany as jest.Mock).mock.calls[0][0]).toEqual(
         expect.objectContaining({
           orderBy: [{ name: 'asc' }, { id: 'asc' }],
           select: expect.objectContaining({ id: true, name: true, memberCount: true }),
         }),
       );
-      expect(result).toEqual({ items: rows, nextCursor: null });
+      expect(result).toEqual({
+        items: rows.map((r) => ({ ...r, joined: false })),
+        nextCursor: null,
+      });
     });
 
     it('never selects `members` on the list response (low-bandwidth discipline, Section 5.5)', async () => {
       const prisma = buildPrismaMock();
-      (prisma.clubPage.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.clubPage.findMany as jest.Mock).mockResolvedValueOnce([]);
 
       const service = new ClubsService(prisma);
-      await service.listClubs({});
+      await service.listClubs({}, 'user-1');
 
       const callArgs = (prisma.clubPage.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.select).not.toHaveProperty('members');
@@ -81,10 +93,10 @@ describe('ClubsService', () => {
         buildClubRow({ id: 'club-1', name: 'Alpha FC' }),
         buildClubRow({ id: 'club-2', name: 'Beta FC' }), // lookahead row
       ];
-      (prisma.clubPage.findMany as jest.Mock).mockResolvedValue(rows);
+      (prisma.clubPage.findMany as jest.Mock).mockResolvedValueOnce(rows).mockResolvedValueOnce([]);
 
       const service = new ClubsService(prisma);
-      const result = await service.listClubs({ limit });
+      const result = await service.listClubs({ limit }, 'user-1');
 
       expect(result.items).toHaveLength(1);
       expect(result.nextCursor).toBe(encodeClubCursor({ name: 'Alpha FC', id: 'club-1' }));
@@ -92,11 +104,11 @@ describe('ClubsService', () => {
 
     it('applies the cursor as a strict "after this (name, id)" filter, ANDed with any league/country filters', async () => {
       const prisma = buildPrismaMock();
-      (prisma.clubPage.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.clubPage.findMany as jest.Mock).mockResolvedValueOnce([]);
       const cursor = encodeClubCursor({ name: 'Alpha FC', id: 'club-1' });
 
       const service = new ClubsService(prisma);
-      await service.listClubs({ cursor, league: 'Sunday League', country: 'England' });
+      await service.listClubs({ cursor, league: 'Sunday League', country: 'England' }, 'user-1');
 
       const callArgs = (prisma.clubPage.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.where).toEqual({
@@ -112,28 +124,97 @@ describe('ClubsService', () => {
       const prisma = buildPrismaMock();
       const service = new ClubsService(prisma);
 
-      await expect(service.listClubs({ cursor: 'not-valid-base64json' })).rejects.toThrow();
+      await expect(service.listClubs({ cursor: 'not-valid-base64json' }, 'user-1')).rejects.toThrow();
+    });
+
+    // --- Decision Log #154: per-caller `joined` on GET /clubs ---
+
+    it('attaches `joined` per club from the caller\'s membership rows on a mixed page', async () => {
+      const prisma = buildPrismaMock();
+      const rows = [
+        buildClubRow({ id: 'club-a', name: 'Alpha FC' }),
+        buildClubRow({ id: 'club-b', name: 'Beta FC' }),
+        buildClubRow({ id: 'club-c', name: 'Gamma FC' }),
+      ];
+      (prisma.clubPage.findMany as jest.Mock)
+        .mockResolvedValueOnce(rows)
+        .mockResolvedValueOnce([{ id: 'club-a' }, { id: 'club-c' }]); // caller is a member of a and c
+
+      const service = new ClubsService(prisma);
+      const result = await service.listClubs({}, 'user-1');
+
+      const byId = Object.fromEntries(result.items.map((c) => [c.id, c.joined]));
+      expect(byId).toEqual({ 'club-a': true, 'club-b': false, 'club-c': true });
+    });
+
+    it('resolves `joined` for the whole page in exactly ONE membership query, keyed on the page\'s ids (no N+1)', async () => {
+      const prisma = buildPrismaMock();
+      const rows = [
+        buildClubRow({ id: 'club-a', name: 'Alpha FC' }),
+        buildClubRow({ id: 'club-b', name: 'Beta FC' }),
+        buildClubRow({ id: 'club-c', name: 'Gamma FC' }),
+      ];
+      (prisma.clubPage.findMany as jest.Mock).mockResolvedValueOnce(rows).mockResolvedValueOnce([]);
+
+      const service = new ClubsService(prisma);
+      await service.listClubs({}, 'user-1');
+
+      // Call 0 = the club page, call 1 = the single batched membership subset.
+      expect(prisma.clubPage.findMany).toHaveBeenCalledTimes(2);
+      expect((prisma.clubPage.findMany as jest.Mock).mock.calls[1][0]).toEqual({
+        where: { id: { in: ['club-a', 'club-b', 'club-c'] }, members: { some: { id: 'user-1' } } },
+        select: { id: true },
+      });
+    });
+
+    it('issues NO membership query when the page has zero clubs', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.clubPage.findMany as jest.Mock).mockResolvedValueOnce([]);
+
+      const service = new ClubsService(prisma);
+      const result = await service.listClubs({}, 'user-1');
+
+      expect(result.items).toEqual([]);
+      expect(prisma.clubPage.findMany).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('getClubById', () => {
-    it('returns the club with the same lean select shape as the list', async () => {
+    it('returns the club (lean select shape) with joined: false when the caller is not a member', async () => {
       const prisma = buildPrismaMock();
       const row = buildClubRow();
       (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue(row);
+      (prisma.clubPage.findFirst as jest.Mock).mockResolvedValue(null);
 
       const service = new ClubsService(prisma);
-      const result = await service.getClubById('club-1');
+      const result = await service.getClubById('club-1', 'user-1');
 
-      expect(result).toEqual(row);
+      expect(result).toEqual({ ...row, joined: false });
     });
 
-    it('throws NotFoundException for a non-existent id', async () => {
+    it('returns joined: true when a membership row exists for the caller', async () => {
+      const prisma = buildPrismaMock();
+      const row = buildClubRow();
+      (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue(row);
+      (prisma.clubPage.findFirst as jest.Mock).mockResolvedValue({ id: 'club-1' });
+
+      const service = new ClubsService(prisma);
+      const result = await service.getClubById('club-1', 'user-1');
+
+      expect(result.joined).toBe(true);
+      expect((prisma.clubPage.findFirst as jest.Mock).mock.calls[0][0]).toEqual({
+        where: { id: 'club-1', members: { some: { id: 'user-1' } } },
+        select: { id: true },
+      });
+    });
+
+    it('throws NotFoundException for a non-existent id, before any membership lookup', async () => {
       const prisma = buildPrismaMock();
       (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue(null);
 
       const service = new ClubsService(prisma);
-      await expect(service.getClubById('missing')).rejects.toThrow(NotFoundException);
+      await expect(service.getClubById('missing', 'user-1')).rejects.toThrow(NotFoundException);
+      expect(prisma.clubPage.findFirst).not.toHaveBeenCalled();
     });
   });
 

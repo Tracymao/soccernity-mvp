@@ -24,20 +24,28 @@ export class ClubsController {
   // this codebase so far requires SOME authentication; there is no
   // logged-out/public route anywhere yet, and Section 4.4 gives no signal
   // that GET /clubs should be the first exception to that.
+  // @CurrentUser() added (Decision Log #154): the response now carries a
+  // per-caller `joined` boolean, so the service needs the caller's own
+  // id. JwtAuthGuard already attaches request.user — signature change
+  // only, no new guard wiring.
   @Get()
   @UseGuards(JwtAuthGuard)
-  async list(@Query() query: ListClubsQueryDto) {
-    return this.clubsService.listClubs(query);
+  async list(@Query() query: ListClubsQueryDto, @CurrentUser() user: AccessTokenPayload) {
+    return this.clubsService.listClubs(query, user.sub);
   }
 
   // JwtAuthGuard only, same reasoning as GET /clubs above — reading a
   // single club's page is no more safety-sensitive than reading the
   // catalog it came from. :id not referencing a real ClubPage → 404
   // (ClubsService.getClubById).
+  //
+  // @CurrentUser() added (Decision Log #154), mirroring the same change
+  // PR #136 made to feed.controller.ts's getById — the response carries a
+  // per-caller `joined` flag, so the service needs the caller id.
   @Get(':id')
   @UseGuards(JwtAuthGuard)
-  async getById(@Param('id') id: string) {
-    return this.clubsService.getClubById(id);
+  async getById(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
+    return this.clubsService.getClubById(id, user.sub);
   }
 
   // JwtAuthGuard only — argued fresh, not inherited from POST /posts's

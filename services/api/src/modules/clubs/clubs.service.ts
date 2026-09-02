@@ -25,8 +25,24 @@ const CLUB_SELECT = {
 
 export type ClubSummary = Prisma.ClubPageGetPayload<{ select: typeof CLUB_SELECT }>;
 
+// What GET /clubs and GET /clubs/:id actually return to a client: the
+// lean club row plus ONE per-request-user-computed boolean (Decision Log
+// #154). `joined` is NOT a stored column — it's `true` iff a
+// `ClubPage.members` relation row exists for (this club, the CALLING
+// user). Same discipline as feed.service.ts's `FeedPostWithViewerState`
+// (Decision Log #153): the field is an intersection on top, never added
+// to CLUB_SELECT itself.
+//
+// Resolved WITHOUT an N+1: `listClubs()` resolves a whole page with a
+// single batched `clubPage.findMany({ where: { id: { in: [...] },
+// members: { some: { id: userId } } } })`; `getClubById()` resolves the
+// single club with one `findFirst`. Both use a plain Prisma relation
+// filter — a read-only existence check needs none of the raw-SQL
+// atomicity `joinClub`/`leaveClub` require for their INSERT/DELETE.
+export type ClubSummaryWithViewerState = ClubSummary & { joined: boolean };
+
 export interface ClubPageResult {
-  items: ClubSummary[];
+  items: ClubSummaryWithViewerState[];
   nextCursor: string | null;
 }
 
@@ -51,7 +67,7 @@ export class ClubsService {
   // keyset tiebreaker for two clubs sharing an identical name. Keyset
   // (not offset) pagination, same Section 5.5 discipline as every other
   // list endpoint here — see dto/list-clubs-query.dto.ts.
-  async listClubs(query: ListClubsQueryDto): Promise<ClubPageResult> {
+  async listClubs(query: ListClubsQueryDto, userId: string): Promise<ClubPageResult> {
     const limit = Math.min(query.limit ?? CLUBS_DEFAULT_PAGE_SIZE, CLUBS_MAX_PAGE_SIZE);
 
     const filters: Prisma.ClubPageWhereInput[] = [];
@@ -72,11 +88,37 @@ export class ClubsService {
     });
 
     const hasMore = rows.length > limit;
-    const items = hasMore ? rows.slice(0, limit) : rows;
-    const last = items[items.length - 1];
+    const trimmed = hasMore ? rows.slice(0, limit) : rows;
+    const last = trimmed[trimmed.length - 1];
     const nextCursor = hasMore && last ? encodeClubCursor({ name: last.name, id: last.id }) : null;
 
+    const joinedIds = await this.membershipSubset(
+      userId,
+      trimmed.map((c) => c.id),
+    );
+    const items = trimmed.map((club) => ({ ...club, joined: joinedIds.has(club.id) }));
+
     return { items, nextCursor };
+  }
+
+  // Decision Log #154 — the subset of `clubIds` the caller is a member
+  // of, resolved in ONE batched query, never one lookup per club (no
+  // N+1). Empty input → empty Set with no query issued (same
+  // zero-item short-circuit feed.service.ts's attachViewerState uses).
+  // A plain Prisma relation filter (`members: { some: { id } }`) is the
+  // right tool for a read-only existence check — `joinClub`/`leaveClub`
+  // only needed raw SQL against "_ClubMembership" for the atomicity an
+  // INSERT/DELETE + memberCount update requires, which doesn't apply to
+  // a read.
+  private async membershipSubset(userId: string, clubIds: string[]): Promise<Set<string>> {
+    if (clubIds.length === 0) {
+      return new Set();
+    }
+    const rows = await this.prisma.clubPage.findMany({
+      where: { id: { in: clubIds }, members: { some: { id: userId } } },
+      select: { id: true },
+    });
+    return new Set(rows.map((r) => r.id));
   }
 
   private buildCursorFilter(rawCursor: string): Prisma.ClubPageWhereInput {
@@ -94,12 +136,23 @@ export class ClubsService {
   // fields than viewing it in the catalog list. A non-existent :id is a
   // 404, never a silent null 200, matching FeedService.getPostById's
   // precedent.
-  async getClubById(clubId: string): Promise<ClubSummary> {
+  //
+  // Takes `userId` (the caller, from @CurrentUser() — a real controller-
+  // signature change made alongside this, see clubs.controller.ts) so the
+  // response can carry the same per-caller `joined` flag `listClubs` does
+  // (Decision Log #154). One club, so a single `findFirst` existence
+  // check — no batching needed. The 404 for a missing club is still
+  // thrown before the membership lookup.
+  async getClubById(clubId: string, userId: string): Promise<ClubSummaryWithViewerState> {
     const club = await this.prisma.clubPage.findUnique({ where: { id: clubId }, select: CLUB_SELECT });
     if (!club) {
       throw new NotFoundException('Club not found');
     }
-    return club;
+    const membership = await this.prisma.clubPage.findFirst({
+      where: { id: clubId, members: { some: { id: userId } } },
+      select: { id: true },
+    });
+    return { ...club, joined: membership !== null };
   }
 
   // Shared existence check for getClubById and joinClub, mirroring
