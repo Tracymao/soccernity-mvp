@@ -3713,6 +3713,33 @@ Full reasoning for every choice above: Build Plan Section 5.
     `GET /posts/:id`, and the change is plain `findMany`/`findUnique` —
     none of `test/README.md`'s add-an-e2e triggers apply). Decision Log
     #153's Status cell got a `RESOLVED` forward-pointer in the same PR.
+- **`sprint-2/postcard-viewer-state-wiring` (figma-to-code, 2026-09-02)
+  is the frontend follow-up `sprint-2/feed-per-user-flags` unblocked —
+  `apps/web` only, Decision Log #153 now fully closed on both sides.**
+  Report: `docs/sprint-2-postcard-viewer-state-wiring-report.md`.
+  - `apps/web/src/api/feed.ts`: `FeedPostAuthor` gains
+    `isFollowing: boolean`; `FeedPost` gains `isLiked` / `isSaved`.
+    `FeedComment`/`CommentPage` untouched (comments never show a follow
+    button). New `CreatedPost` type (= `FeedPost` minus the three viewer
+    fields) is what `createPost` now returns — `POST /posts` genuinely
+    stays unenriched per #153, so the client type stops over-claiming;
+    the values are deterministically `false` for a brand-new post.
+  - `PostCard.tsx`: `useState(post.isLiked)` / `useState(post.isSaved)` /
+    `useState(post.author.isFollowing)` instead of the hardcoded
+    `useState(false)` + session-local workaround PR #135 shipped. The
+    old "KNOWN GAP" header paragraph is replaced with a note pointing at
+    #153. Toggle handlers / `isOwnPost` follow-skip / idempotency
+    reasoning all unchanged — targeted initial-state fix, not a refactor.
+  - `CommunityPage.tsx` `onCreated` normalises the created post to a full
+    `FeedPost` (`isLiked:false, isSaved:false, author.isFollowing:false`)
+    on prepend — the one spot that augments a `FeedPost` shape.
+    `PostComposer.tsx` `onCreated` prop type follows to `CreatedPost`.
+  - **Verification**: `npx tsc --noEmit`, `npm run lint`, `npm run build`
+    clean; `npx vitest run` — **9 files / 50 tests, 0 failures** (up from
+    9/49 — one new `CommunityPage` case proving an already
+    liked/saved/followed post renders its three controls in the acted
+    state on first paint, no clicks). Decision Log #153 Status cell got a
+    second forward-pointer noting the frontend is now wired too.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

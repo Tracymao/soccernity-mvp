@@ -46,7 +46,7 @@ function post(overrides: Partial<FeedPost> = {}): FeedPost {
   return {
     id: "post-1",
     authorId: "user-2",
-    author: { id: "user-2", displayName: "Emeka John" },
+    author: { id: "user-2", displayName: "Emeka John", isFollowing: false },
     contentText: "First goal of the season, what a feeling",
     mediaUrls: [],
     clubPageId: null,
@@ -54,6 +54,8 @@ function post(overrides: Partial<FeedPost> = {}): FeedPost {
     likeCount: 3,
     commentCount: 1,
     createdAt: new Date().toISOString(),
+    isLiked: false,
+    isSaved: false,
     ...overrides,
   };
 }
@@ -99,7 +101,12 @@ describe("CommunityPage", () => {
     vi.mocked(getFeed).mockResolvedValueOnce({ items: [], nextCursor: null });
     vi.mocked(getUser).mockResolvedValueOnce({ displayName: "Ada Player" } as never);
     vi.mocked(createPost).mockResolvedValueOnce(
-      post({ id: "new-post", authorId: "user-1", author: { id: "user-1", displayName: "Ada Player" }, contentText: "Just posted this" }),
+      post({
+        id: "new-post",
+        authorId: "user-1",
+        author: { id: "user-1", displayName: "Ada Player", isFollowing: false },
+        contentText: "Just posted this",
+      }),
     );
 
     renderPage();
@@ -129,7 +136,7 @@ describe("CommunityPage", () => {
   it("does not render a Follow button on the caller's own post", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
     vi.mocked(getFeed).mockResolvedValueOnce({
-      items: [post({ authorId: "user-1", author: { id: "user-1", displayName: "Ada Player" } })],
+      items: [post({ authorId: "user-1", author: { id: "user-1", displayName: "Ada Player", isFollowing: false } })],
       nextCursor: null,
     });
     vi.mocked(getUser).mockResolvedValueOnce({ displayName: "Ada Player" } as never);
@@ -137,5 +144,34 @@ describe("CommunityPage", () => {
     renderPage();
     await screen.findByText(/first goal of the season/i);
     expect(screen.queryByRole("button", { name: "Follow" })).toBeNull();
+  });
+
+  it("renders like / save / follow in their already-acted state on initial load from the API's per-caller fields (Decision Log #153)", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    vi.mocked(getFeed).mockResolvedValueOnce({
+      items: [
+        post({
+          likeCount: 7,
+          isLiked: true,
+          isSaved: true,
+          author: { id: "user-2", displayName: "Emeka John", isFollowing: true },
+        }),
+      ],
+      nextCursor: null,
+    });
+    vi.mocked(getUser).mockResolvedValueOnce({ displayName: "Ada Player" } as never);
+
+    renderPage();
+
+    // No clicks -- this is the initial render straight from GET /posts/feed.
+    const likeBtn = await screen.findByRole("button", { name: /7 likes/i });
+    expect(likeBtn.getAttribute("aria-pressed")).toBe("true");
+
+    const saveBtn = screen.getByRole("button", { name: /saved/i });
+    expect(saveBtn.getAttribute("aria-pressed")).toBe("true");
+
+    expect(screen.getByRole("button", { name: "Following" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Follow" })).toBeNull();
+    expect(likePost).not.toHaveBeenCalled();
   });
 });

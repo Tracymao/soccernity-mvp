@@ -24,6 +24,10 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?
 export interface FeedPostAuthor {
   id: string;
   displayName: string;
+  // Per-calling-user viewer state (Decision Log #153, services/api PR #136).
+  // `true` iff the caller follows this author. Always `false` for the
+  // caller's own posts (you can't follow yourself).
+  isFollowing: boolean;
 }
 
 export interface FeedPost {
@@ -37,6 +41,13 @@ export interface FeedPost {
   likeCount: number;
   commentCount: number;
   createdAt: string;
+  // Per-calling-user viewer state (Decision Log #153). `true` iff the
+  // caller has already liked / saved this post. Returned by GET
+  // /posts/feed and GET /posts/:id only -- POST /posts (createPost) and
+  // GET /users/:id/saved-posts deliberately do NOT carry these yet
+  // (flagged, not fixed, in Decision Log #153).
+  isLiked: boolean;
+  isSaved: boolean;
 }
 
 export interface FeedPage {
@@ -85,6 +96,17 @@ export interface CreatePostRequest {
   clubPageId?: string;
   banterRoomId?: string;
 }
+
+// POST /posts returns the created post WITHOUT the per-caller
+// viewer-state fields -- Decision Log #153 deliberately left createPost
+// (and GET /users/:id/saved-posts) unenriched. For a brand-new post
+// isLiked / isSaved / author.isFollowing are all deterministically false
+// anyway (you haven't liked or saved your own new post; you can't follow
+// yourself), so CommunityPage fills them in when it prepends the post to
+// the feed.
+export type CreatedPost = Omit<FeedPost, "isLiked" | "isSaved" | "author"> & {
+  author: Omit<FeedPostAuthor, "isFollowing">;
+};
 
 export class FeedApiError extends Error {
   readonly status?: number;
@@ -137,7 +159,7 @@ export async function getFeed(accessToken: string, cursor?: string): Promise<Fee
 
 // POST /posts -- JwtAuthGuard + GuardianConsentGuard. A 403 here means the
 // caller is a restricted-pending minor.
-export async function createPost(accessToken: string, payload: CreatePostRequest): Promise<FeedPost> {
+export async function createPost(accessToken: string, payload: CreatePostRequest): Promise<CreatedPost> {
   const response = await authedFetch("/posts", accessToken, {
     method: "POST",
     body: JSON.stringify(payload),
@@ -148,7 +170,7 @@ export async function createPost(accessToken: string, payload: CreatePostRequest
       { status: response.status },
     );
   }
-  return (await response.json()) as FeedPost;
+  return (await response.json()) as CreatedPost;
 }
 
 // POST /posts/:id/like -- idempotent toggle-on (200 even if already liked).
