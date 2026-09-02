@@ -17,12 +17,20 @@
 // The avatar opens two different real overlays by design (Decision Log
 // #162): the account dropdown on desktop, the Navigation Drawer on
 // mobile -- picked by useIsMobile().
+//
+// Decision Log #168: when a session exists, Header fetches the signed-in
+// user's profile once (getUser(accessToken, sub)) and passes it to
+// NavDrawer for its identity block. The fetch is keyed on the access
+// token, so it runs once per session -- not on every drawer open/close.
+// A pending or failed fetch leaves `profile` null, which NavDrawer
+// renders as its generic "Signed in" fallback.
 import { useEffect, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import logoMark from "../assets/icons/soccernity-logo-mark.svg";
 import searchIcon from "../assets/icons/search.svg";
 import messagesIcon from "../assets/icons/messages.svg";
-import { clearStoredSession, getStoredAccessToken } from "../lib/session";
+import { getUser, type UserProfile } from "../api/users";
+import { clearStoredSession, decodeAccessToken, getStoredAccessToken } from "../lib/session";
 import { primaryNavItems } from "./navigation";
 import { useIsMobile } from "./useIsMobile";
 import AccountDropdown from "./AccountDropdown";
@@ -37,14 +45,46 @@ export default function Header() {
   // Re-derived on every navigation -- login writes the token then
   // navigate()s, logout clears it then navigate()s, and either way this
   // recomputes because location.key changed.
-  const hasSession = Boolean(getStoredAccessToken());
+  const accessToken = getStoredAccessToken();
+  const hasSession = Boolean(accessToken);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
 
   // Close any open overlay when the route changes or the session ends.
   useEffect(() => {
     setMenuOpen(false);
   }, [location.key, hasSession]);
+
+  // Fetch the signed-in user's profile once per session, for NavDrawer's
+  // identity block (Decision Log #168). Keyed on the token itself: it
+  // runs on login and is cleared on logout, but a plain navigation
+  // (same token) does not refetch. A failure leaves `profile` null --
+  // NavDrawer falls back to its generic "Signed in" row, navigation
+  // still works.
+  useEffect(() => {
+    if (!accessToken) {
+      setProfile(null);
+      return;
+    }
+    const decoded = decodeAccessToken(accessToken);
+    if (!decoded) {
+      setProfile(null);
+      return;
+    }
+    let cancelled = false;
+    setProfile(null);
+    getUser(accessToken, decoded.sub)
+      .then((result) => {
+        if (!cancelled) setProfile(result);
+      })
+      .catch(() => {
+        if (!cancelled) setProfile(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
 
   function handleLogout() {
     clearStoredSession();
@@ -134,7 +174,7 @@ export default function Header() {
       </div>
 
       {menuOpen && isMobile && (
-        <NavDrawer onClose={() => setMenuOpen(false)} onLogout={handleLogout} />
+        <NavDrawer onClose={() => setMenuOpen(false)} onLogout={handleLogout} profile={profile} />
       )}
     </header>
   );

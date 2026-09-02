@@ -6,13 +6,44 @@
 //
 // Header.tsx / navigation.ts had NO test file before this (Phase 2 of the
 // navbar correction, Decision Log #161).
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router";
 import Header from "./Header";
 import { primaryNavItems, drawerNavItems } from "./navigation";
+import type { UserProfile } from "../api/users";
+
+vi.mock("../api/users", async () => {
+  const actual = await vi.importActual<typeof import("../api/users")>("../api/users");
+  return { ...actual, getUser: vi.fn() };
+});
+
+import { getUser } from "../api/users";
 
 const TOKEN_KEY = "sn_access_token";
+
+// A real, decodable { sub, role } access token (base64url), matching
+// ProfilePage.test.tsx's helper. The other tests deliberately use a
+// non-decodable string so Header's profile fetch never fires there.
+function base64Url(value: object): string {
+  return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function decodableToken(sub = "user-1"): string {
+  return `${base64Url({ alg: "none" })}.${base64Url({ sub, role: "fan" })}.sig`;
+}
+
+const BASE_PROFILE: UserProfile = {
+  id: "user-1",
+  email: "adeniyi@example.com",
+  phone: null,
+  displayName: "Adeniyi Christiana",
+  dateOfBirth: "1997-11-08",
+  isMinor: false,
+  role: "fan",
+  verificationStatus: "verified",
+  createdAt: "2026-01-15T00:00:00.000Z",
+  clubAffiliationId: null,
+};
 
 function LocationProbe() {
   const location = useLocation();
@@ -37,6 +68,7 @@ beforeEach(() => {
   window.sessionStorage.clear();
   window.localStorage.clear();
   setViewport(1200);
+  vi.mocked(getUser).mockReset();
 });
 
 describe("navigation config", () => {
@@ -184,5 +216,76 @@ describe("Header -- logged in (mobile)", () => {
 
     expect(window.sessionStorage.getItem(TOKEN_KEY)).toBeNull();
     expect(screen.getByTestId("pathname").textContent).toBe("/");
+  });
+});
+
+// Decision Log #168 -- the drawer identity block wired to a real
+// getUser(accessToken, sub) fetch owned by Header.
+describe("Header -- drawer identity block (Decision Log #168)", () => {
+  beforeEach(() => {
+    window.sessionStorage.setItem(TOKEN_KEY, decodableToken("user-1"));
+    setViewport(500);
+  });
+
+  function openDrawer() {
+    renderHeader();
+    fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
+    return screen.getByRole("dialog", { name: "Navigation" });
+  }
+
+  it("fetches the signed-in user's profile once, keyed on the token", async () => {
+    vi.mocked(getUser).mockResolvedValueOnce(BASE_PROFILE);
+    const drawer = openDrawer();
+    await within(drawer).findByText("Adeniyi Christiana");
+
+    expect(getUser).toHaveBeenCalledTimes(1);
+    expect(getUser).toHaveBeenCalledWith(decodableToken("user-1"), "user-1");
+
+    // A plain navigation (same token) must not refetch.
+    fireEvent.click(within(drawer).getByRole("navigation", { name: "Primary" }).querySelector("a")!);
+    expect(getUser).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the real displayName (and its initials) when the fetch succeeds", async () => {
+    vi.mocked(getUser).mockResolvedValueOnce(BASE_PROFILE);
+    const drawer = openDrawer();
+
+    expect(await within(drawer).findByText("Adeniyi Christiana")).not.toBeNull();
+    expect(within(drawer).getByText("AC")).not.toBeNull();
+    expect(within(drawer).queryByText("Signed in")).toBeNull();
+  });
+
+  it("still opens and navigates while the fetch is pending", () => {
+    vi.mocked(getUser).mockReturnValueOnce(new Promise<never>(() => {}));
+    const drawer = openDrawer();
+
+    // Generic fallback shown, drawer fully functional.
+    expect(within(drawer).getByText("Signed in")).not.toBeNull();
+    expect(within(drawer).queryByText("Adeniyi Christiana")).toBeNull();
+
+    const nav = within(drawer).getByRole("navigation", { name: "Primary" });
+    fireEvent.click(within(nav).getByRole("link", { name: "Clubs" }));
+    expect(screen.getByTestId("pathname").textContent).toBe("/clubs");
+  });
+
+  it("falls back to the generic 'Signed in' row if the fetch fails, without breaking navigation", async () => {
+    vi.mocked(getUser).mockRejectedValueOnce(new Error("network"));
+    const drawer = openDrawer();
+
+    await waitFor(() => expect(getUser).toHaveBeenCalled());
+    expect(within(drawer).getByText("Signed in")).not.toBeNull();
+    expect(within(drawer).queryByText("Adeniyi Christiana")).toBeNull();
+
+    fireEvent.click(within(drawer).getByRole("button", { name: "Log out" }));
+    expect(window.sessionStorage.getItem(TOKEN_KEY)).toBeNull();
+    expect(screen.getByTestId("pathname").textContent).toBe("/");
+  });
+
+  it("never renders a handle / username row (no real data for one -- Decision Log #58)", async () => {
+    vi.mocked(getUser).mockResolvedValueOnce({ ...BASE_PROFILE, displayName: "Adeniyi Christiana" });
+    const drawer = openDrawer();
+
+    await within(drawer).findByText("Adeniyi Christiana");
+    expect(within(drawer).queryByText((content) => content.includes("@"))).toBeNull();
   });
 });
