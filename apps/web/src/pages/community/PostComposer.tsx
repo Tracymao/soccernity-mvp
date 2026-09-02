@@ -22,7 +22,7 @@
 // failure.
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
-import { createPost, FeedApiError, type FeedPost } from "../../api/feed";
+import { createPost, FeedApiError, type CreatedPost } from "../../api/feed";
 
 const MAX_LENGTH = 3000;
 
@@ -36,7 +36,7 @@ function initialsFor(name: string): string {
 interface PostComposerProps {
   accessToken: string;
   authorName: string;
-  onCreated: (post: FeedPost) => void;
+  onCreated: (post: CreatedPost) => void;
 }
 
 export default function PostComposer({ accessToken, authorName, onCreated }: PostComposerProps) {

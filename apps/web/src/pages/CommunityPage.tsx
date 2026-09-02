@@ -183,7 +183,15 @@ export default function CommunityPage() {
           <PostComposer
             accessToken={token}
             authorName={profile?.displayName ?? "You"}
-            onCreated={(post) => setPosts((prev) => [post, ...prev])}
+            onCreated={(post) =>
+              // POST /posts doesn't return the per-caller viewer-state
+              // fields (Decision Log #153); for a post you just created
+              // they're all deterministically false.
+              setPosts((prev) => [
+                { ...post, isLiked: false, isSaved: false, author: { ...post.author, isFollowing: false } },
+                ...prev,
+              ])
+            }
           />
         )}
 

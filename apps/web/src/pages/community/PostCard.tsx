@@ -1,20 +1,20 @@
 // A single feed post, with its real like / comment / save / follow
 // actions wired to Build Plan Section 4.3 (Feed) and 4.2 (Follow).
 //
-// KNOWN GAP (flagged as a Decision Log candidate in this PR's report):
-// the GET /posts/feed response carries no per-current-user "isLiked" /
-// "isSaved" field, and there is no "isFollowing" on the embedded author
-// either. So on first render every post shows its like / save / follow
-// control in the DEFAULT (not-yet-acted) state, regardless of whether
-// the caller has actually already liked / saved / followed. Once the
-// user acts in THIS session, the toggle endpoint's response (or, for
-// follow, the known resulting state) is used to reflect the change for
-// the rest of the session via local component state. A hard refresh
-// resets that local state -- the backend needs to add those fields for
-// the UI to be correct across reloads. The like/save endpoints are
-// idempotent (feed.service.ts), so a "re-like" of an already-liked post
-// is harmless; likeCount is always taken fresh from the server response,
-// never re-derived client-side.
+// The like / save / follow controls initialise from the real per-caller
+// viewer-state the API returns on every post -- post.isLiked,
+// post.isSaved, post.author.isFollowing (Decision Log #153, services/api
+// PR #136). After the user acts in-session, the toggle endpoint's
+// response (or, for follow, the known resulting state) keeps local
+// component state in sync. The like/save endpoints are idempotent
+// (feed.service.ts), so a redundant "re-like" is harmless; likeCount is
+// always taken fresh from the server response, never re-derived
+// client-side.
+//
+// (Historical note: PR #135 shipped this component before #136 existed,
+// with these three hardcoded to false on mount and a documented
+// session-local workaround. This is the follow-up #153 called out as
+// "the separate follow-up this unblocks".)
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import {
@@ -54,15 +54,15 @@ interface PostCardProps {
 }
 
 export default function PostCard({ post, accessToken, currentUserId }: PostCardProps) {
-  const [liked, setLiked] = useState(false);
+  const [liked, setLiked] = useState(post.isLiked);
   const [likeCount, setLikeCount] = useState(post.likeCount);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(post.isSaved);
   const [likePending, setLikePending] = useState(false);
   const [savePending, setSavePending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const isOwnPost = post.authorId === currentUserId;
-  const [following, setFollowing] = useState(false);
+  const [following, setFollowing] = useState(post.author.isFollowing);
   const [followPending, setFollowPending] = useState(false);
 
   const [commentsOpen, setCommentsOpen] = useState(false);
