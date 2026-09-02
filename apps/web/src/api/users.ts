@@ -126,3 +126,26 @@ export async function getFollowing(
   }
   return (await response.json()) as FollowPage;
 }
+
+// POST /users/:id/follow -- JwtAuthGuard only. Idempotent (following
+// someone you already follow still returns { following: true }). 400 if
+// :id is the caller's own id; 404 if :id isn't a real, visible user.
+// Lives here rather than in api/feed.ts because it's a User Service
+// endpoint (Section 4.2) -- api/feed.ts is Section 4.3 only.
+export async function followUser(accessToken: string, userId: string): Promise<{ following: boolean }> {
+  const response = await authedFetch(`/users/${userId}/follow`, accessToken, { method: "POST" });
+  if (!response.ok) {
+    throw new UsersApiError(`Couldn't follow that user (${response.status}).`, { status: response.status });
+  }
+  return (await response.json()) as { following: boolean };
+}
+
+// DELETE /users/:id/follow -- JwtAuthGuard only. Idempotent (unfollowing
+// someone you don't follow still succeeds with { following: false }).
+export async function unfollowUser(accessToken: string, userId: string): Promise<{ following: boolean }> {
+  const response = await authedFetch(`/users/${userId}/follow`, accessToken, { method: "DELETE" });
+  if (!response.ok) {
+    throw new UsersApiError(`Couldn't unfollow that user (${response.status}).`, { status: response.status });
+  }
+  return (await response.json()) as { following: boolean };
+}

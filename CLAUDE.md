@@ -3601,6 +3601,72 @@ Full reasoning for every choice above: Build Plan Section 5.
     `figma-to-code` pass reading this frame's own notes doesn't get
     misled. The Pass 1 predecessor frame referenced in the old annotation
     (`5191:6652`) no longer exists in the file — nothing to fix there.
+- **`sprint-2/home-community-conversion` (figma-to-code, 2026-09-02)
+  converts the two Figma screens Sprint 2 actually needs into real,
+  working `apps/web` code — `HomePage.tsx` and `CommunityPage.tsx` were
+  literal 5-line `PlaceholderPage` stubs until this PR. No `services/api`
+  code touched.** Report:
+  `docs/sprint-2-home-community-conversion-report.md`.
+  - **Build Plan Section 6's Sprint 2 done-when criterion ("a user can
+    post, follow another user or club, like/comment, and save a post,
+    all reflected correctly on refresh") is now met** — with one honest
+    caveat (see Decision Log #153 below). Post → `POST /posts`;
+    like/comment → `POST /posts/:id/like` + `/comments`; save → `POST
+    /posts/:id/save` (+ `GET /users/:id/saved-posts` persists it);
+    follow a user → `POST /users/:id/follow`; follow a club → the
+    already-shipped `POST /clubs/:id/join` (`sprint-2/club-picker-ui`,
+    not re-built here — no club surface in the Community template frame).
+    All four actions persist server-side and survive a reload; the
+    denormalized `likeCount`/`commentCount` come back on `GET
+    /posts/feed`.
+  - **New `apps/web/src/api/feed.ts`** — Feed Service client (Section
+    4.3), mirroring `api/clubs.ts`/`api/users.ts` conventions exactly
+    (own fetch wrapper, own `FeedApiError`, `VITE_API_BASE_URL`, Bearer
+    auth, cursor pagination). `followUser`/`unfollowUser` were added to
+    `api/users.ts` (not `feed.ts`) since follow is a Section 4.2 User
+    Service endpoint.
+  - **HomePage** = the logged-out marketing page only (Figma `5204:6728`,
+    Decision Log #46/#152). If `getStoredAccessToken()` returns a token
+    it renders `<Navigate to="/community" replace />` — no separate
+    authenticated-homepage design exists or was built. Everything below
+    the navbar (hero live-fixture card, Today's Fixtures, Talents clips,
+    Trending stories) is **hardcoded dummy content** matching the frame —
+    no fixtures/news/points data source exists (Decision Log #6). Club
+    crests rendered typographically. CTAs → `/signup`.
+  - **CommunityPage** (Figma `1306:7148`) — three-column social layout;
+    **only the centre column (composer + feed) is wired to real data.**
+    Composer built against the dedicated Create Post frame (`2008:655`),
+    not the template's embedded mock. No-session → "Log in to see your
+    feed" prompt, zero API calls (mirrors `ProfilePage.tsx`).
+    Restricted-pending minors get the real 403 from `POST
+    /posts`/`/comments` (`GuardianConsentGuard`) surfaced inline with a
+    `/guardian-consent` link. The left "Trends" rail and right "Who to
+    follow" / "Trending News" rails are **static sample content, visibly
+    captioned "Sample"** — Section 4.2 defines follow/followers/following
+    only, there is **no suggested-users endpoint** and inventing a
+    suggestion algorithm was out of scope. Composer photo/video/poll
+    icons rendered disabled (no media-upload endpoint) — same discipline
+    as `EditProfileModal.tsx`'s disabled fields.
+  - **Decision Log #153 added** (Build Plan Section 9, appended via
+    python-docx): `GET /posts/feed`'s `FeedPost` payload exposes **no
+    per-current-user `isLiked`/`isSaved`** flag, and the embedded author
+    has no `isFollowing`. So on first load and after every hard refresh,
+    every like/save/follow control renders in its default
+    (not-yet-acted) state regardless of the real relationship — it
+    self-corrects only for actions taken in the current session (via the
+    idempotent toggle-endpoint responses + local state). **No fake
+    client-side flag was added.** Safe in practice (like/save are
+    idempotent; `likeCount` always taken fresh from the server), but a
+    real backend gap — candidate for the next `backend-api` Feed pass:
+    add caller-scoped `isLiked`/`isSaved` to the feed + single-post
+    payloads and `isFollowing` to the post author.
+  - **Verification**: `npx tsc --noEmit`, `npm run lint`, `npm run build`
+    all clean; `npx vitest run` — **9 suites / 49 tests, 0 failures** (up
+    from 7/41 — `HomePage.test.tsx` +3, `CommunityPage.test.tsx` +5, no
+    existing test changed); dev-server smoke test `/`, `/community`,
+    `/signup`, `/login` all HTTP 200. No real browser/Playwright check
+    available in this environment — same ceiling as every prior
+    `apps/web` PR.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

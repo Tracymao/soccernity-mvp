@@ -1,0 +1,606 @@
+/* Home (logged-out marketing page). Figma source: canonical frame
+ * 5204:6728 ("Home Page Desktop -- Premium Light, Sprint 2 Pass 2").
+ *
+ * Colour values reference the app-wide --sn-* custom properties from
+ * src/theme/applyTheme.ts -- do not hardcode hex here. The frame is a
+ * LIGHT-theme design matching the app's single active mode
+ * (main.tsx calls applyTheme("light")). Navy sections use white body
+ * text (the app's token map has no --sn-text-on-navy equivalent; white
+ * on navy is the same pairing ProfilePage.css already uses for its navy
+ * button). */
+
+.home {
+  /* Cancel AppShell's 32px content padding so the navy hero/closing
+   * sections and the footer run full-bleed, the same negative-margin
+   * technique SignupSplitScreen.css / GuardianConsent.css already use. */
+  margin: -32px;
+}
+
+.home section,
+.home footer {
+  padding-left: clamp(20px, 7vw, 100px);
+  padding-right: clamp(20px, 7vw, 100px);
+}
+
+/* --- shared bits --------------------------------------------------- */
+
+.home-eyebrow {
+  font: 600 11px "Inter", sans-serif;
+  letter-spacing: 1.4px;
+  color: var(--sn-text-secondary);
+  margin: 0 0 8px;
+}
+
+.home-eyebrow--on-navy {
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.home-eyebrow__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sn-brand-green);
+}
+
+.home-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 32px;
+  border-radius: 10px;
+  font: 600 16px "Inter", sans-serif;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.home-btn--primary {
+  background: var(--sn-brand-green);
+  color: var(--sn-text-on-green);
+}
+
+.home-btn--ghost-on-navy {
+  border: 1.5px solid #fff;
+  color: #fff;
+}
+
+.home-cta-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.home-pill {
+  display: inline-flex;
+  align-items: center;
+  font: 600 10px "Inter", sans-serif;
+  letter-spacing: 0.8px;
+  padding: 4px 9px;
+  border-radius: 6px;
+}
+
+.home-pill--live {
+  background: var(--sn-brand-green);
+  color: var(--sn-text-on-green);
+}
+
+.home-pill--ft {
+  background: var(--sn-icon-inactive);
+  color: var(--sn-text-primary);
+}
+
+.home-pill--upcoming {
+  background: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+}
+
+.home-pill--tag {
+  background: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+}
+
+.home-pill--tag-green {
+  background: var(--sn-brand-green);
+  color: var(--sn-text-on-green);
+}
+
+.home-pill--rank {
+  background: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-family: "Montserrat", "Inter", sans-serif;
+  letter-spacing: 0.6px;
+}
+
+.home-hairline {
+  height: 1px;
+  width: 100%;
+  background: var(--sn-icon-inactive);
+}
+
+.home-badge {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 13px "Montserrat", "Inter", sans-serif;
+}
+
+.home-badge--sm {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  font-size: 11px;
+}
+
+.home-team-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.home-team-row__name {
+  flex: 1;
+  min-width: 0;
+  font: 600 15px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.home-team-row__name--muted {
+  font-weight: 500;
+}
+
+.home-team-row__score {
+  font: 800 20px "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.home-team-row__score--muted {
+  color: var(--sn-text-secondary);
+}
+
+/* --- hero -------------------------------------------------------- */
+
+.home-hero {
+  background: var(--sn-brand-navy);
+  display: flex;
+  gap: 72px;
+  align-items: center;
+  padding-top: 92px;
+  padding-bottom: 92px;
+  flex-wrap: wrap;
+}
+
+.home-hero__copy {
+  flex: 1 1 480px;
+}
+
+.home-hero__title {
+  font: 800 clamp(40px, 5vw, 62px)/1.1 "Montserrat", "Inter", sans-serif;
+  color: #fff;
+  letter-spacing: -1.2px;
+  margin: 20px 0 22px;
+}
+
+.home-hero__lede {
+  font: 400 18px/1.7 "Inter", sans-serif;
+  color: #fff;
+  max-width: 560px;
+  margin: 0 0 36px;
+}
+
+.home-hero__card {
+  flex: 0 1 440px;
+  background: var(--sn-background-surface);
+  border-radius: 20px;
+  padding: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: 0 18px 40px -10px rgba(40, 46, 101, 0.16);
+}
+
+.home-fixture-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.home-fixture-card__league,
+.home-fixture__league {
+  font: 500 12px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.home-fixture-card__teams {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.home-fixture-card__venue {
+  font: 400 13px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+/* --- generic section -------------------------------------------- */
+
+.home-section {
+  padding-top: 76px;
+  padding-bottom: 76px;
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+  background: var(--sn-background-page);
+}
+
+.home-section--surface {
+  background: var(--sn-background-surface);
+}
+
+.home-section--center {
+  align-items: center;
+}
+
+.home-section__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.home-section__head-centered {
+  text-align: center;
+  max-width: 720px;
+}
+
+.home-section__title {
+  font: 700 clamp(24px, 3vw, 32px)/1.25 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  letter-spacing: -0.6px;
+  margin: 0;
+}
+
+.home-section__sub {
+  font: 400 16px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 14px 0 0;
+}
+
+.home-section__link {
+  font: 600 14px "Inter", sans-serif;
+  padding: 12px 18px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.home-section__link--outline {
+  border: 1px solid var(--sn-icon-inactive);
+  color: var(--sn-text-primary);
+}
+
+.home-section__link--navy {
+  background: var(--sn-brand-navy);
+  color: #fff;
+}
+
+/* --- fixtures grid --------------------------------------------- */
+
+.home-fixture-grid,
+.home-clip-grid,
+.home-pillar-grid {
+  display: grid;
+  gap: 24px;
+  width: 100%;
+}
+
+.home-fixture-grid {
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+
+.home-fixture {
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 16px;
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.home-fixture__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.home-fixture__teams {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.home-fixture__venue {
+  font: 400 11px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+/* --- pillars -------------------------------------------------- */
+
+.home-pillar-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.home-pillar {
+  background: var(--sn-green-tint-12);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 18px;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.home-pillar__badge {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--sn-brand-green);
+  color: var(--sn-text-on-green);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: 800 17px "Montserrat", "Inter", sans-serif;
+}
+
+.home-pillar__title {
+  font: 700 20px/1.4 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.home-pillar__body {
+  font: 400 15px/1.65 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+/* --- talent clips ------------------------------------------- */
+
+.home-clip-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.home-clip {
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 18px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.home-clip__media {
+  height: 200px;
+  background: var(--sn-brand-navy);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-clip__play {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.home-clip__length {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  background: var(--sn-brand-navy);
+  color: #fff;
+  font: 600 10px "Inter", sans-serif;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.home-clip__body {
+  padding: 20px 22px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.home-clip__title {
+  font: 600 17px/1.45 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.home-clip__meta {
+  font: 400 13px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+/* --- trending / editorial --------------------------------- */
+
+.home-editorial {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 28px;
+}
+
+@media (max-width: 900px) {
+  .home-editorial {
+    grid-template-columns: 1fr;
+  }
+}
+
+.home-featured {
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.home-featured__media {
+  height: 300px;
+  background: var(--sn-brand-navy);
+  position: relative;
+  padding: 24px;
+}
+
+.home-featured__body {
+  padding: 28px 32px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.home-featured__title {
+  font: 700 26px/1.4 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.home-featured__excerpt {
+  font: 400 15px/1.65 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.home-featured__meta {
+  font: 400 12px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.home-story-list {
+  background: var(--sn-background-page);
+  border-radius: 20px;
+  padding: 24px;
+}
+
+.home-story {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+}
+
+.home-story:last-child {
+  border-bottom: none;
+}
+
+.home-story__thumb {
+  width: 88px;
+  height: 88px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: var(--sn-brand-navy);
+}
+
+.home-story__text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.home-story__title {
+  font: 600 15px/1.45 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.home-story__meta {
+  font: 400 12px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+/* --- closing CTA ------------------------------------------ */
+
+.home-closing {
+  background: var(--sn-brand-navy);
+  padding-top: 84px;
+  padding-bottom: 84px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+
+.home-closing__title {
+  font: 800 clamp(30px, 4vw, 44px)/1.25 "Montserrat", "Inter", sans-serif;
+  color: #fff;
+  letter-spacing: -1px;
+  margin: 0;
+}
+
+.home-closing__sub {
+  font: 400 17px/1.6 "Inter", sans-serif;
+  color: #fff;
+  max-width: 640px;
+  margin: 0 0 4px;
+}
+
+/* --- footer --------------------------------------------- */
+
+.home-footer {
+  background: var(--sn-brand-navy);
+  padding-top: 48px;
+  padding-bottom: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  text-align: center;
+}
+
+.home-footer__brand {
+  font: 600 20px "Montserrat", "Inter", sans-serif;
+  color: #fff;
+}
+
+.home-footer__links {
+  display: flex;
+  gap: 40px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.home-footer__links span {
+  font: 600 15px "Montserrat", "Inter", sans-serif;
+  color: #fff;
+}
+
+.home-footer__legal {
+  font: 400 11px/1.6 "Montserrat", "Inter", sans-serif;
+  color: rgba(255, 255, 255, 0.72);
+  max-width: 900px;
+  margin: 0;
+}
