@@ -70,10 +70,16 @@ export class FeedController {
   // "feed" against this :id param route first and this one would shadow
   // it — same ordering constraint that already applied before this PR,
   // just now relevant because a second GET on this controller exists.
+  //
+  // @CurrentUser() added (Decision Log #153): the response now carries
+  // per-caller isLiked / isSaved / author.isFollowing, so the service
+  // needs the caller's own id — the same id GET /posts/feed already
+  // passes through. JwtAuthGuard already attaches request.user, so this
+  // is a signature change only, no new guard wiring.
   @Get(':id')
   @UseGuards(JwtAuthGuard)
-  async getById(@Param('id') id: string) {
-    return this.feedService.getPostById(id);
+  async getById(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
+    return this.feedService.getPostById(id, user.sub);
   }
 
   // POST/DELETE /posts/:id/like — JwtAuthGuard only, deliberately NOT

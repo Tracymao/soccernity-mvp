@@ -44,8 +44,33 @@ const POST_SELECT = {
 
 export type FeedPost = Prisma.PostGetPayload<{ select: typeof POST_SELECT }>;
 
+// What GET /posts/feed and GET /posts/:id actually return to a client:
+// the raw post plus three per-request-user-computed booleans (Decision
+// Log #153). None of them are stored columns — they're derived, per
+// request, from the CALLING user's own Like / SavedPost / Follow rows:
+//
+//   - isLiked            — does a Like row exist for (callerId, postId)?
+//   - isSaved            — does a SavedPost row exist for (callerId, postId)?
+//   - author.isFollowing — does a Follow row exist for
+//                          (followerId: callerId, followeeId: post.authorId)?
+//
+// isFollowing is a hard `false` — never a lookup result — for the
+// caller's OWN posts: UsersService.followUser rejects a self-follow, so a
+// Follow row where followerId === followeeId can never exist, and the
+// frontend consumes a real `false` more simply than a null.
+//
+// These are computed WITHOUT an N+1: getFeed() resolves a whole page in
+// three batched `findMany({ where: { …: { in: [...] } } })` queries;
+// getPostById() resolves a single row with three unique-key existence
+// checks. See attachViewerState() / getPostById().
+export type FeedPostWithViewerState = FeedPost & {
+  isLiked: boolean;
+  isSaved: boolean;
+  author: FeedPost['author'] & { isFollowing: boolean };
+};
+
 export interface FeedPage {
-  items: FeedPost[];
+  items: FeedPostWithViewerState[];
   nextCursor: string | null;
 }
 
@@ -83,6 +108,17 @@ export interface SaveState {
 // Shape for a single GET /users/:id/saved-posts entry: the saved-at
 // timestamp plus the full embedded post (reusing POST_SELECT, same
 // field-minimization discipline as everywhere else in this module).
+//
+// NOTE (Decision Log #153): the embedded `post` here is the RAW FeedPost
+// shape, NOT FeedPostWithViewerState — getSavedPosts does not attach
+// isLiked / isSaved / author.isFollowing. `isSaved` would be trivially
+// `true` for every row (that's what "saved posts" means), but isLiked /
+// isFollowing would need the same enrichment getFeed does. Left as a
+// flagged follow-up rather than done here: this task (Decision Log #153)
+// scoped the fields to GET /posts/feed and GET /posts/:id only, and
+// apps/web's saved-posts screen isn't built yet. Same story for
+// createPost's response (a freshly created post: isLiked / isSaved /
+// isFollowing are all trivially false).
 const SAVED_POST_SELECT = {
   postId: true,
   savedAt: true,
@@ -173,11 +209,61 @@ export class FeedService {
     });
 
     const hasMore = rows.length > limit;
-    const items = hasMore ? rows.slice(0, limit) : rows;
-    const last = items[items.length - 1];
+    const trimmed = hasMore ? rows.slice(0, limit) : rows;
+    const last = trimmed[trimmed.length - 1];
     const nextCursor = hasMore && last ? encodeFeedCursor({ createdAt: last.createdAt, id: last.id }) : null;
 
+    const items = await this.attachViewerState(userId, trimmed);
     return { items, nextCursor };
+  }
+
+  // Decision Log #153 — resolves isLiked / isSaved / author.isFollowing
+  // for a whole feed page in THREE batched queries, never one lookup per
+  // post (no N+1). Empty-page-safe: a page with no posts skips all three
+  // lookups rather than issuing empty-IN queries. The follow lookup is
+  // additionally scoped to authors OTHER than the caller — a self-follow
+  // row never exists, so the caller's own posts get isFollowing: false
+  // with nothing queried for them.
+  private async attachViewerState(userId: string, posts: FeedPost[]): Promise<FeedPostWithViewerState[]> {
+    if (posts.length === 0) {
+      return [];
+    }
+
+    const postIds = posts.map((p) => p.id);
+    const otherAuthorIds = [
+      ...new Set(posts.filter((p) => p.authorId !== userId).map((p) => p.authorId)),
+    ];
+
+    const [likedRows, savedRows, followedRows] = await Promise.all([
+      this.prisma.like.findMany({
+        where: { userId, postId: { in: postIds } },
+        select: { postId: true },
+      }),
+      this.prisma.savedPost.findMany({
+        where: { userId, postId: { in: postIds } },
+        select: { postId: true },
+      }),
+      otherAuthorIds.length > 0
+        ? this.prisma.follow.findMany({
+            where: { followerId: userId, followeeId: { in: otherAuthorIds } },
+            select: { followeeId: true },
+          })
+        : Promise.resolve([] as { followeeId: string }[]),
+    ]);
+
+    const likedPostIds = new Set(likedRows.map((r) => r.postId));
+    const savedPostIds = new Set(savedRows.map((r) => r.postId));
+    const followedAuthorIds = new Set(followedRows.map((r) => r.followeeId));
+
+    return posts.map((post) => ({
+      ...post,
+      isLiked: likedPostIds.has(post.id),
+      isSaved: savedPostIds.has(post.id),
+      author: {
+        ...post.author,
+        isFollowing: post.authorId !== userId && followedAuthorIds.has(post.authorId),
+      },
+    }));
   }
 
   private buildCursorFilter(rawCursor: string): Prisma.PostWhereInput {
@@ -193,12 +279,44 @@ export class FeedService {
   // 404, never a silent null 200 — callers (including the like/comment/
   // save handlers below, via their own existence checks) should never
   // have to distinguish "post not found" from "post found but empty."
-  async getPostById(postId: string): Promise<FeedPost> {
+  //
+  // Takes `userId` (the caller, from @CurrentUser() — a real controller-
+  // signature change made alongside this, see feed.controller.ts) so it
+  // can attach the same isLiked / isSaved / author.isFollowing viewer
+  // state getFeed() does (Decision Log #153). One row, so three
+  // unique-key existence checks — no batching needed. isFollowing is
+  // forced false without a lookup for the caller's own post, same as
+  // attachViewerState().
+  async getPostById(postId: string, userId: string): Promise<FeedPostWithViewerState> {
     const post = await this.prisma.post.findUnique({ where: { id: postId }, select: POST_SELECT });
     if (!post) {
       throw new NotFoundException('Post not found');
     }
-    return post;
+
+    const isOwnPost = post.authorId === userId;
+    const [likeRow, savedRow, followRow] = await Promise.all([
+      this.prisma.like.findUnique({
+        where: { userId_postId: { userId, postId } },
+        select: { id: true },
+      }),
+      this.prisma.savedPost.findUnique({
+        where: { userId_postId: { userId, postId } },
+        select: { id: true },
+      }),
+      isOwnPost
+        ? Promise.resolve(null)
+        : this.prisma.follow.findUnique({
+            where: { followerId_followeeId: { followerId: userId, followeeId: post.authorId } },
+            select: { id: true },
+          }),
+    ]);
+
+    return {
+      ...post,
+      isLiked: likeRow !== null,
+      isSaved: savedRow !== null,
+      author: { ...post.author, isFollowing: followRow !== null },
+    };
   }
 
   // Shared existence check for every action endpoint below (like/unlike,
