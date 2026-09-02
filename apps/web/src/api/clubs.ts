@@ -7,7 +7,7 @@
 // that matters for where this client is used).
 //
 // Shape mirrors services/api/src/modules/clubs/clubs.service.ts's
-// CLUB_SELECT / ClubPageResult / JoinState exactly.
+// ClubSummaryWithViewerState / ClubPageResult / JoinState exactly.
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
 
 export interface ClubSummary {
@@ -17,6 +17,12 @@ export interface ClubSummary {
   country: string | null;
   logoUrl: string | null;
   memberCount: number;
+  // Per-calling-user viewer state (Decision Log #154, services/api PR
+  // #138). `true` iff the caller is already a member of this club.
+  // Returned by GET /clubs and GET /clubs/:id. POST/DELETE
+  // /clubs/:id/join's JoinClubResult carries its own `joined` separately
+  // (that's the action result, unrelated to this list-response field).
+  joined: boolean;
 }
 
 export interface ClubPageResult {
