@@ -359,4 +359,108 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
       expect(await currentMemberCount()).toBe(0);
     });
   });
+
+  // Decision Log #154: GET /clubs and GET /clubs/:id now return a
+  // per-caller `joined` boolean, computed via a plain Prisma relation
+  // filter (members: { some: { id: userId } }) against the same real
+  // "_ClubMembership" table joinClub/leaveClub write to. These prove it
+  // against a live database, and that the filter is scoped to the CALLING
+  // user (not leaking another user's membership).
+  describe('GET /clubs + GET /clubs/:id per-caller `joined` flag (Decision Log #154)', () => {
+    async function seedNamedClub(name: string) {
+      const prisma = getTestPrismaClient();
+      return prisma.clubPage.create({
+        data: { name, league: 'Sunday League', country: 'England', memberCount: 0 },
+      });
+    }
+
+    it('GET /clubs reports joined:true only for the clubs the caller has actually joined', async () => {
+      const joinedClub = await seedNamedClub('Aardvark FC');
+      const otherClub = await seedNamedClub('Zephyr FC');
+      const { accessToken } = await createUser('joined-list');
+
+      await request(app.getHttpServer())
+        .post(`/clubs/${joinedClub.id}/join`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      const list = await request(app.getHttpServer())
+        .get('/clubs')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      const byId = Object.fromEntries(
+        (list.body.items as { id: string; joined: boolean }[]).map((c) => [c.id, c.joined]),
+      );
+      expect(byId[joinedClub.id]).toBe(true);
+      expect(byId[otherClub.id]).toBe(false);
+    });
+
+    it('GET /clubs/:id reports joined:true after a real join and joined:false for a non-member', async () => {
+      const club = await seedNamedClub('Boomerang FC');
+      const member = await createUser('gbid-member');
+      const nonMember = await createUser('gbid-nonmember');
+
+      await request(app.getHttpServer())
+        .post(`/clubs/${club.id}/join`)
+        .set('Authorization', `Bearer ${member.accessToken}`)
+        .expect(200);
+
+      const asMember = await request(app.getHttpServer())
+        .get(`/clubs/${club.id}`)
+        .set('Authorization', `Bearer ${member.accessToken}`)
+        .expect(200);
+      expect(asMember.body.joined).toBe(true);
+
+      const asNonMember = await request(app.getHttpServer())
+        .get(`/clubs/${club.id}`)
+        .set('Authorization', `Bearer ${nonMember.accessToken}`)
+        .expect(200);
+      expect(asNonMember.body.joined).toBe(false);
+    });
+
+    it('the `joined` flag is scoped to the calling user — user B joining does not flip it true for user A', async () => {
+      const club = await seedNamedClub('Cartwheel FC');
+      const userA = await createUser('scope-a');
+      const userB = await createUser('scope-b');
+
+      await request(app.getHttpServer())
+        .post(`/clubs/${club.id}/join`)
+        .set('Authorization', `Bearer ${userB.accessToken}`)
+        .expect(200);
+
+      const asA = await request(app.getHttpServer())
+        .get(`/clubs/${club.id}`)
+        .set('Authorization', `Bearer ${userA.accessToken}`)
+        .expect(200);
+      expect(asA.body.joined).toBe(false);
+
+      const listAsA = await request(app.getHttpServer())
+        .get('/clubs')
+        .set('Authorization', `Bearer ${userA.accessToken}`)
+        .expect(200);
+      const clubInList = (listAsA.body.items as { id: string; joined: boolean }[]).find((c) => c.id === club.id);
+      expect(clubInList?.joined).toBe(false);
+    });
+
+    it('leaving a club flips `joined` back to false', async () => {
+      const club = await seedNamedClub('Dandelion FC');
+      const { accessToken } = await createUser('gb-leave');
+
+      await request(app.getHttpServer())
+        .post(`/clubs/${club.id}/join`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+      await request(app.getHttpServer())
+        .delete(`/clubs/${club.id}/join`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      const after = await request(app.getHttpServer())
+        .get(`/clubs/${club.id}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+      expect(after.body.joined).toBe(false);
+    });
+  });
 });

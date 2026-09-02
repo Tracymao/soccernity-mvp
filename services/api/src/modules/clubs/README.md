@@ -604,3 +604,68 @@ baseline). The real-Postgres e2e suite (`npm run test:e2e`) went from 6
 suites / 25 tests to **6 suites / 30 tests, 0 failures** — same suite
 count (this PR extends `test/clubs.e2e-spec.ts`, doesn't add a new file),
 5 new passing tests for `leaveClub`.
+
+---
+
+## Per-caller `joined` on `GET /clubs` + `GET /clubs/:id` (`sprint-2/clubs-joined-flag`, closes Decision Log #154)
+
+`GET /clubs` and `GET /clubs/:id` now return one extra boolean per club,
+telling the **calling user** whether they're already a member:
+
+- `joined` — a `ClubPage.members` relation row exists for `(this club,
+  the calling user)`
+
+Not a stored column — computed per request. `CLUB_SELECT` / `ClubSummary`
+are unchanged; the returned shape is the new intersection type
+`ClubSummaryWithViewerState`.
+
+### Why this was a real gap
+
+`GET /clubs` could tell you a club's `memberCount` but not whether *you*
+were one of those members — only `POST`/`DELETE /clubs/:id/join`'s own
+`JoinState` response carries that. So `apps/web`'s club-picker / any
+future "my clubs" surface had the identical problem the feed had before
+Decision Log #153: no way to render a join button in the right state on
+load. This is the exact sibling gap PR #136's report flagged (Decision
+Log #153's own text names it: "GET /clubs (ClubSummary) has the identical
+gap — no per-user 'joined' field").
+
+### No N+1
+
+`listClubs(query, userId)` → after the club page resolves and the
+lookahead row is trimmed, one batched query:
+
+```
+clubPage.findMany({
+  where: { id: { in: clubIds }, members: { some: { id: userId } } },
+  select: { id: true },
+})
+```
+
+returns exactly the subset of the page's ids the caller is a member of →
+a `Set` → one `.map` over the page. A zero-club page skips the query
+entirely (same short-circuit `feed.service.ts`'s `attachViewerState`
+uses).
+
+`getClubById(clubId, userId)` — one club, so one `findFirst` existence
+check. The 404 for a missing club is still thrown **before** the
+membership lookup.
+
+**Plain Prisma relation filter, not raw SQL.** `joinClub`/`leaveClub`
+need raw `$executeRaw` against `"_ClubMembership"` only for the atomicity
+an `INSERT`/`DELETE` + `memberCount` update requires — a read-only
+existence check has no such need, so `members: { some: { id } }` is the
+right tool.
+
+### Controller change
+
+`clubs.controller.ts` — both `list` and `getById` gained `@CurrentUser()
+user: AccessTokenPayload`, mirroring exactly what PR #136 did for
+`feed.controller.ts`'s `getById`. `JwtAuthGuard` already attaches
+`request.user`; no new guard wiring.
+
+### `apps/web` not touched
+
+Updating `apps/web/src/api/clubs.ts`'s `ClubSummary` type and wherever
+club "joined" state is currently locally tracked is a separate follow-up
+— the same two-PR split Decision Log #153 used.
