@@ -3817,6 +3817,64 @@ Full reasoning for every choice above: Build Plan Section 5.
   - **Verification**: `npx tsc --noEmit`, `npm run lint`, `npm run
     build` clean; `npx vitest run` — **9 files / 51 tests, 0 failures**
     (up from 9/50 — one new `ClubPickerStep` case).
+- **`sprint-2/club-pages-design` (figma-screen-builder, 2026-09-02)
+  designs the persistent Club Pages surface — closing the DESIGN HALF of
+  Decision Log #155 (an incomplete Sprint 2 "Club Pages" deliverable, not
+  later-sprint scope). Figma design only — no app/backend code; frontend
+  code conversion is a separate figma-to-code follow-up per this project's
+  agent-sequencing rule.** Report:
+  `docs/sprint-2-club-pages-design-report.md`.
+  - **5 frames on page `0:1`, cloned from the existing Club Picker family
+    (`5146:6635` desktop / `5645:8023` mobile)** so every card / badge /
+    button / search / load-more / empty-state pattern AND every variable
+    binding is inherited, not reinvented: **Clubs — Browse — Desktop
+    (`5841:9240`) / Mobile (`5841:9306`)**, **Club — Fan Page — Desktop
+    (`5841:9365`) / Mobile (`5841:9431`)**, and a **Design Notes frame
+    (`5853:9240`)**.
+  - **Clubs — Browse** = the persistent, always-reachable version of what
+    `ClubPickerStep` does, minus onboarding framing: the "Skip for now" /
+    "Continue" dynamic-label footer and the confirmation-message slot are
+    removed; header is "Clubs" not "Join a club". Real `ClubSummary`
+    fields only (badge, name, `league • country`, member count). **New:
+    a "Leave" affordance** — one sample card shows the joined →
+    `joined: true` state (Decision Log #154) as a white / navy-15%-outline
+    button, de-emphasised against the green "Join"; `ClubPickerStep` never
+    needed this since a fresh signup has nothing to leave. Client-side
+    name filter over loaded pages only (`GET /clubs` has no text-search
+    param — placeholder stays "Filter loaded clubs by name"); cursor
+    "Load more"; every club card carries a prototype `ON_CLICK → NAVIGATE`
+    to its Fan Page.
+  - **Club — Fan Page** = view one club: "← Clubs" back link, badge, name,
+    `league • country`, member count, one Join/Leave button, one thin
+    divider + one muted scope note ("Member posts and a full member list
+    aren't part of club pages yet."). That is the **entire** real-data
+    content — deliberately sparse, an honest reflection of what
+    `ClubSummary`/`JoinClubResult` expose, same discipline
+    `ProfilePage.tsx` applies to its unbacked tabs. Not padded with dummy
+    content.
+  - **HARD CONSTRAINT confirmed honoured — no club feed, no posts, no
+    member list, no composer** was designed on either screen.
+    `GET /posts/feed` never reads `Post.clubPageId`, so a club feed has no
+    backend to bind to; flagged as **Decision Log #157** (a genuinely
+    missing endpoint, not vendor-blocked content — not faked with dummy
+    data).
+  - **Standing rules verified**: `brand/navy` / `brand/green` /
+    `brand/green-tint` (12%) only — **no `brand/green-tint-28`, no new
+    colours**; **Light mode only**; **0 unbound / 0 off-palette paints**
+    across all 5 frame subtrees (audited node-by-node — cloned frames
+    inherit `Soccernity Theme` bindings, every fresh node bound on
+    creation). Frame grounds use `color/background/page`.
+  - **New Decision Log candidates (#156–#158, transcribed into Build Plan
+    Section 9 in this PR; forward-pointer appended to #155's Status):**
+    **#156** — no nav-bar entry point for "Clubs — Browse" (conservative
+    meanwhile: both new screens use the simple "Top Bar — Soccernity"
+    logo bar matching the club-picker family / `5570:7813` selector, not
+    the full logged-in `header 4`; where Clubs lives in nav is deferred).
+    **#157** — club fan-page feed / club-scoped posts endpoint doesn't
+    exist. **#158** — `apps/web` has no `leaveClub()` client for the
+    already-shipped `DELETE /clubs/:id/join` (`sprint-2/club-leave`); the
+    "Leave" button is the first surface to need it — `figma-to-code` must
+    add it during conversion.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
