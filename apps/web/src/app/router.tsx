@@ -47,6 +47,12 @@ export const router = createBrowserRouter([
     path: "/",
     element: <AppShell />,
     children: [
+      // "/" is the logged-out marketing landing page (Decision Log #46:
+      // canonical Figma frame 5204:6728). Decision Log #152: a signed-in
+      // visitor is redirected to /community from inside HomePage itself
+      // (it checks getStoredAccessToken() and renders <Navigate> when a
+      // session exists) -- there is no separate authenticated-homepage
+      // route or design.
       { index: true, element: <HomePage /> },
 
       // Content nav (Community / Sports Hub pillars -- see Header's
@@ -54,6 +60,8 @@ export const router = createBrowserRouter([
       { path: "sports-hub", element: <SportsHubPage /> },
       { path: "news", element: <NewsPage /> },
       { path: "leaderboard", element: <LeaderboardPage /> },
+      // The authenticated feed -- Sprint 2's functional core (Feed +
+      // Follow, Build Plan Section 4.3 / 4.2). See CommunityPage.tsx.
       { path: "community", element: <CommunityPage /> },
       { path: "banter", element: <BanterPage /> },
 
