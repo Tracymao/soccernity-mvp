@@ -1,0 +1,118 @@
+/* Mobile Navigation Drawer. Figma "Navigation Drawer -- Mobile"
+ * (5870:10689), Decision Log #162. Colour values reference --sn-* custom
+ * properties from src/theme/applyTheme.ts -- do not hardcode hex. */
+
+.sn-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+
+.sn-drawer__scrim {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+  /* ~28% navy -- two stacked 15% icon-inactive washes, per Decision Log
+   * #163 (a variable-bound navy paint renders solid in Figma; there is
+   * no dedicated scrim token). */
+  background-color: rgba(40, 46, 101, 0.28);
+  cursor: pointer;
+}
+
+.sn-drawer__panel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 268px;
+  max-width: 84vw;
+  padding: 24px 20px;
+  background-color: var(--sn-background-surface);
+  overflow-y: auto;
+}
+
+.sn-drawer__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sn-drawer__wordmark {
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--sn-brand-navy);
+}
+
+.sn-drawer__identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0 18px;
+}
+
+.sn-drawer__avatar {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  background-color: var(--sn-green-tint-12);
+}
+
+.sn-drawer__signed-in {
+  font-family: "Montserrat", sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--sn-text-primary);
+}
+
+.sn-drawer__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sn-drawer__link {
+  display: block;
+  padding: 12px;
+  border-radius: 8px;
+  font-family: "Montserrat", sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  text-decoration: none;
+  color: var(--sn-text-primary);
+}
+
+.sn-drawer__link--active {
+  font-weight: 600;
+  background-color: var(--sn-green-tint-12);
+}
+
+.sn-drawer__link--disabled {
+  color: var(--sn-text-secondary);
+  cursor: not-allowed;
+}
+
+.sn-drawer__divider {
+  height: 1px;
+  margin: 10px 0;
+  background-color: var(--sn-icon-inactive);
+}
+
+.sn-drawer__logout {
+  padding: 12px;
+  border: none;
+  background: transparent;
+  font-family: "Montserrat", sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  text-align: left;
+  color: var(--sn-text-secondary);
+  cursor: pointer;
+}

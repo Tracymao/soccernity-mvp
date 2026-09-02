@@ -4061,6 +4061,61 @@ Full reasoning for every choice above: Build Plan Section 5.
     colours, Light mode only; **0 unbound / 0 off-palette paints** across
     the `header 4` master subtree, `Navigation Drawer — Mobile`, and the
     new `Nav — Blog` item.
+- **`sprint-2/navbar-phase-2-icon-nav-and-auth-state` (figma-to-code,
+  2026-09-03) — PHASE 2 of the founder-directed navbar correction
+  (Decision Log #161), `apps/web` only, `services/api` NOT touched.**
+  Report: `docs/sprint-2-navbar-phase-2-report.md`. Replaces the
+  unrequested text-label nav (`Header.tsx` / `navigation.ts`) with the
+  real Figma icon navbars (PRs #144–#146), fixes the auth-state
+  switching that never actually worked, wires the canonical mobile
+  drawer, adds Clubs to the working nav, and resolves Decision Log #165.
+  - **Icon nav**: 6 SVG assets exported from Figma `header 4` (2838:3502)
+    — `nav-sports-hub`, `nav-blog`, `nav-community`, `nav-leaderboard`,
+    `nav-bants`, `nav-clubs` in `src/assets/icons/` (+ `messages.svg`).
+    Canonical order (from `header 4` / `header 7`): Sports Hub (`/sports-hub`)
+    → Blog (`/news`) → Community (`/community`) → Leaderboard
+    (`/leaderboard`) → Bants (`/banter`) → Clubs (`/clubs`). `navigation.ts`
+    rewritten; `NavItem` now carries `icon` + `tinted` (Sports Hub / Clubs
+    sit on a CSS green-tint tile — the other four bake it into the SVG,
+    matching the frame).
+  - **Auth-state switching** (`Header.tsx`, the actual bug this phase
+    fixes): session read via `getStoredAccessToken()` (no `AuthContext`
+    built — same call as every other converted page), re-derived on every
+    navigation via `useLocation().key`. No session → icon nav + Login
+    button (`header 7`). Session → icon nav + messages icon + avatar
+    (`header 4`). Avatar opens the **desktop account dropdown**
+    (Profile / Notification / Settings / Log out, from 2841:5363) on
+    desktop viewports and the **canonical mobile Navigation Drawer**
+    (5870:10689, Decision Log #162) on mobile — two different real
+    overlays by design, picked by `useIsMobile()` (reads
+    `window.innerWidth` at the 820px breakpoint; no `matchMedia`, so
+    jsdom-testable). `Log out` (both overlays) calls
+    `clearStoredSession()` + `navigate("/")`.
+  - **Decision Log #165 RESOLVED**: `"Blog"` is the canonical label
+    everywhere in `apps/web` code (nav label, drawer text, icon
+    aria-label). The `/news` route path and `NewsPage.tsx` filename are
+    internal identifiers, deliberately unchanged — a fuller rename is a
+    larger separate change, flagged not done.
+  - **New judgment calls flagged (Build Plan Decision Log #166–#168, no
+    code fix here)**: **#166** — `/messages`, `/notifications`,
+    `/settings` have no route in `router.tsx`; those nav items (and the
+    header messages icon) render non-navigating + visibly disabled
+    (`aria-disabled`, "Not available yet") rather than linking to the 404
+    page, per the brief. **#167** — the Figma dropdown's unread-count
+    badge has no data source (no notifications API client); the
+    Notification row renders with no number rather than a fake one.
+    **#168** — the drawer/dropdown identity block (name, `@handle`,
+    avatar photo) has no client-side source (token is `{ sub, role }`
+    only); rendered as a generic "Signed in" row + plain avatar circle.
+  - **New files**: `src/layout/{AccountDropdown,NavDrawer,useIsMobile}`
+    (+ their CSS), `src/layout/Header.test.tsx` (Header / `navigation.ts`
+    were genuinely untested before this — 13 new tests). **Verification**:
+    `npx tsc --noEmit`, `npm run lint`, `npm run build` all clean;
+    `npx vitest run` — **12 files / 79 tests, 0 failures** (up from 11/66
+    — Header.test.tsx +13, no existing test changed); dev-server smoke
+    test `/`, `/community`, `/clubs`, `/news`, `/login` all HTTP 200, no
+    console errors. No real browser/Playwright check available — same
+    ceiling as every prior `apps/web` PR.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
