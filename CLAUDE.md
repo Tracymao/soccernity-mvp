@@ -3510,9 +3510,7 @@ Full reasoning for every choice above: Build Plan Section 5.
   - 0 unbound paints on every frame built fresh (excludes the shared
     navbar instance's avatar `[IMAGE]` fill). 0 `brand/green-tint-28`,
     0 new colours, 0 frame overlaps. Build Plan Decision Log **#145–#149**
-    added (Section 9), continuing from #144; forward-pointer appended to
-    #140.
-  - Not merged — Temi's call after review.
+  - Merged as PR #130.
 - **`sprint-2/admin-sidebar-competitions-icon-fix` corrects a mass
   copy-paste defect in the Admin Panel sidebar that PR #130 (and PR #110
   before it) missed** — Figma design only, no app/backend code. Stacks on
@@ -3560,8 +3558,7 @@ Full reasoning for every choice above: Build Plan Section 5.
     claim missed** — PR #130's coverage of the *Moderation* nav item was
     complete, but it propagated the pre-existing broken *Competitions*
     icon forward unchanged and did not catch it.
-  - Not merged — Temi's call after review. Branch
-    `sprint-2/admin-sidebar-competitions-icon-fix`.
+  - Merged as PR #131.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
