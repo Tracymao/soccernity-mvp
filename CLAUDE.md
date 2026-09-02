@@ -3799,13 +3799,21 @@ Full reasoning for every choice above: Build Plan Section 5.
     there. `router.tsx` has no standalone Clubs route. The new test
     (a `joined: true` club renders "Joined" disabled on first paint, no
     click) is a regression guard for a hypothetical reuse.
-  - **Decision Log #155 added**: no persistent "my clubs" /
+  - **Decision Log #155 added, then CORRECTED**: no persistent "my clubs" /
     club-browsing page exists in `apps/web` — the reason `joined` (#154)
     and `DELETE /clubs/:id/join` (`leaveClub`) have no live frontend
-    consumer. A real Clubs page is Sprint 3+ new-screen work
-    (`figma-screen-builder`/`figma-design-system`), and would also need
-    a `leaveClub()` client in `api/clubs.ts` (none exists). #154's
-    Status cell got a frontend-wired forward-pointer.
+    consumer. **The entry originally called this "Sprint 3+ territory" —
+    that was wrong and has been struck.** Build Plan Section 6 names
+    "Club Pages" directly in **Sprint 2's own heading** ("Sprint 2 —
+    Feed, Club Pages, Follow") and task line ("Build club fan pages with
+    auto-join on signup") — no other sprint mentions a club-viewing page
+    anywhere. This is an **incomplete Sprint 2 deliverable**, not
+    forward-looking scope: Sprint 2 shipped the join-picker
+    (`ClubPickerStep.tsx`) but never a page to view a club, its fan-page
+    feed, or your own membership. Still needs `figma-screen-builder`/
+    `figma-design-system` (new screen) plus a `leaveClub()` client (none
+    exists in `api/clubs.ts`). #154's Status cell got a frontend-wired
+    forward-pointer.
   - **Verification**: `npx tsc --noEmit`, `npm run lint`, `npm run
     build` clean; `npx vitest run` — **9 files / 51 tests, 0 failures**
     (up from 9/50 — one new `ClubPickerStep` case).
