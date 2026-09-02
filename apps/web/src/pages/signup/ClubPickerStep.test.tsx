@@ -35,6 +35,7 @@ const CLUB_A: ClubSummary = {
   country: "England",
   logoUrl: null,
   memberCount: 12,
+  joined: false,
 };
 
 const CLUB_B: ClubSummary = {
@@ -44,6 +45,7 @@ const CLUB_B: ClubSummary = {
   country: null,
   logoUrl: null,
   memberCount: 0,
+  joined: false,
 };
 
 function renderStep(onDone = vi.fn()) {
@@ -132,6 +134,26 @@ describe("ClubPickerStep", () => {
     await waitFor(() => expect(listClubs).toHaveBeenCalledWith("test-token", "cursor-1"));
     expect(await screen.findByText("Harbour United")).not.toBeNull();
     expect(screen.queryByRole("button", { name: /load more clubs/i })).toBeNull();
+  });
+
+  it("renders a club the caller already belongs to (joined: true from GET /clubs) in the Joined state on first paint, no click (Decision Log #154)", async () => {
+    // Dead code in the app's current usage -- ClubPickerStep is only
+    // reached right after registration, when a new account has joined
+    // nothing -- but the right behaviour given the type change, and a
+    // regression guard if this component is ever reused. Mirrors PR
+    // #137's own PostCard.tsx initial-state test.
+    vi.mocked(listClubs).mockResolvedValueOnce({
+      items: [{ ...CLUB_A, joined: true }, CLUB_B],
+      nextCursor: null,
+    });
+
+    renderStep();
+
+    const joinedButton = await screen.findByRole("button", { name: "Joined" });
+    expect((joinedButton as HTMLButtonElement).disabled).toBe(true);
+    // The other club, joined: false, still shows a live Join button.
+    expect((screen.getByRole("button", { name: "Join" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(joinClub).not.toHaveBeenCalled();
   });
 
   it("shows a load error without crashing", async () => {

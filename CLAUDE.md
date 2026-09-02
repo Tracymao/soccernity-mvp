@@ -3776,6 +3776,39 @@ Full reasoning for every choice above: Build Plan Section 5.
     `joined` against real Postgres/`_ClubMembership`, including that the
     flag is scoped to the calling user (user B joining doesn't flip it
     for user A).
+- **`sprint-2/clubpicker-joined-wiring` (figma-to-code, 2026-09-02) is
+  the frontend follow-up to Decision Log #154 — `apps/web` only. Closes a
+  type/correctness gap, NOT a live user-facing bug** (unlike PR #137's
+  `PostCard.tsx` fix). Report:
+  `docs/sprint-2-clubpicker-joined-wiring-report.md`.
+  - `apps/web/src/api/clubs.ts`: `ClubSummary` gains `joined: boolean`
+    (from `GET /clubs` / `GET /clubs/:id`). `JoinClubResult`'s own
+    `joined` untouched.
+  - `ClubPickerStep.tsx`: one line — each club's join-button state now
+    falls back to `club.joined ? "joined" : "idle"` instead of always
+    `"idle"` (the in-session `joinState` map still wins once the user
+    acts). Same "seed from the API" shape as `PostCard.tsx`. Nothing
+    else touched — state shape / filtering / pagination / error handling
+    / the continue button all unchanged (`hasJoinedAny`, i.e. the
+    continue-button label, still reflects only in-session joins —
+    deliberately left, cosmetic, reachable only in a hypothetical
+    reuse).
+  - **No live symptom today:** `ClubPickerStep` is rendered only once,
+    from `RegisterStep`'s post-registration success view — a brand-new
+    account has joined nothing, so `club.joined` is always `false`
+    there. `router.tsx` has no standalone Clubs route. The new test
+    (a `joined: true` club renders "Joined" disabled on first paint, no
+    click) is a regression guard for a hypothetical reuse.
+  - **Decision Log #155 added**: no persistent "my clubs" /
+    club-browsing page exists in `apps/web` — the reason `joined` (#154)
+    and `DELETE /clubs/:id/join` (`leaveClub`) have no live frontend
+    consumer. A real Clubs page is Sprint 3+ new-screen work
+    (`figma-screen-builder`/`figma-design-system`), and would also need
+    a `leaveClub()` client in `api/clubs.ts` (none exists). #154's
+    Status cell got a frontend-wired forward-pointer.
+  - **Verification**: `npx tsc --noEmit`, `npm run lint`, `npm run
+    build` clean; `npx vitest run` — **9 files / 51 tests, 0 failures**
+    (up from 9/50 — one new `ClubPickerStep` case).
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

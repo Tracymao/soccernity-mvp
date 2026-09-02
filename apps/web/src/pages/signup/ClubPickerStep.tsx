@@ -177,7 +177,17 @@ export default function ClubPickerStep({ accessToken, onDone, confirmationMessag
           {!loading && visibleClubs.length > 0 && (
             <ul className="club-picker__list">
               {visibleClubs.map((club) => {
-                const state = joinState[club.id] ?? "idle";
+                // Seed from the API's real per-caller `joined` flag
+                // (Decision Log #154) rather than always starting at
+                // "idle" — the same way PostCard.tsx seeds its useState
+                // from the feed response. In this component's one current
+                // caller (RegisterStep's post-registration success view)
+                // a brand-new account has joined nothing, so this is
+                // `false` in practice today; it makes the component
+                // correct by construction if ever reached again or
+                // reused. `joinState` (in-session click-through) still
+                // takes precedence once the user acts.
+                const state = joinState[club.id] ?? (club.joined ? "joined" : "idle");
                 const joinButtonClass =
                   state === "joined"
                     ? "club-picker__join-button club-picker__join-button--joined"
