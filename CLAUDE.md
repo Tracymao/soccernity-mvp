@@ -3513,6 +3513,55 @@ Full reasoning for every choice above: Build Plan Section 5.
     added (Section 9), continuing from #144; forward-pointer appended to
     #140.
   - Not merged — Temi's call after review.
+- **`sprint-2/admin-sidebar-competitions-icon-fix` corrects a mass
+  copy-paste defect in the Admin Panel sidebar that PR #130 (and PR #110
+  before it) missed** — Figma design only, no app/backend code. Stacks on
+  the PR #130 branch (`sprint-2/create-post-sports-contest-mobile-admin-notif-fix`)
+  because it references that branch's DL #146/#149 and its "29/29" claim.
+  Full detail: `docs/sprint-2-admin-sidebar-competitions-icon-fix-report.md`.
+  - **The bug:** on 27 of the 29 Admin Panel screens the "Competitions"
+    sidebar nav item's icon was an exact duplicate of the "Contest" row
+    icon (badge glyph) instead of the intended three-bar chart. Only
+    `5566:8033` (Admin — Create Competition) and `5569:7813` (Competition
+    Created — Success) had it right. Layer names were no help — the icon
+    frame is named `u:chat-bubble-user` on every screen; the real
+    discriminator is icon-frame child geometry (3 `RECTANGLE`s = correct
+    vs 1 `VECTOR` = broken, the latter the same node shape as the Contest
+    icon).
+  - **The fix (founder's explicit instruction):** replaced the **entire**
+    sidebar nav block (`Frame 5745` — the 8-item list + pinned Settings)
+    on all 27 non-reference screens with a fresh clone of `5566:8067`,
+    then re-applied each screen's own active-nav highlighting using the
+    established binding pattern (active = `brand/navy` +
+    `color/text/on-navy`; inactive = `color/background/surface` +
+    `color/text/primary`). Each target's own outer block geometry
+    (655px/`SPACE_BETWEEN` for the 16 "Admin Shell" GROUP screens,
+    806px/`MIN` for the 10 Contest/Profile FRAME screens) was preserved
+    so nothing moved and Settings stays bottom-pinned.
+  - **Coverage:** 29 Admin screens total (re-verified: `u:create-dashboard`
+    instances = 29, `Frame 5745` blocks = 29). **29/29 now carry the
+    correct bar-chart Competitions icon** (post-swap structure audit of
+    all 29 + before/after screenshots on the reference, both known-broken
+    samples `917:218`/`5794:8635`, and spot checks). 0 unbound paints on
+    every block touched; no other colour/token/binding changed anywhere;
+    no prototype reactions existed on any old block. Every screen swapped
+    cleanly — including the 2 legacy hand-built Contest-tab shells and the
+    3 dialog/scrim screens.
+  - **Closes Decision Log #146** (PR #130's flagged navy-on-navy
+    invisible active Moderation-row icon) as a side effect of re-binding
+    the active state correctly — the 3 Moderation screens' active-row icon
+    is now `color/text/on-navy` white (verified on `5835:9240` /
+    `5835:9283` / `5835:9326`). **Decision Log #147** (`fi:A_users`
+    empty-fill Users icon) unchanged — the reference block carries the
+    identical nodes; still DL #52 family. New Decision Log **#150** (the
+    fix) and **#151** (whether Admin sidebars should be unified to one
+    height) added; forward-pointer appended to #146.
+  - **This corrects the icon-fidelity gap PR #130's "29/29 carry it"
+    claim missed** — PR #130's coverage of the *Moderation* nav item was
+    complete, but it propagated the pre-existing broken *Competitions*
+    icon forward unchanged and did not catch it.
+  - Not merged — Temi's call after review. Branch
+    `sprint-2/admin-sidebar-competitions-icon-fix`.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
