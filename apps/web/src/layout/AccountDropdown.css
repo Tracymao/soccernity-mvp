@@ -1,0 +1,45 @@
+/* Desktop account dropdown. Figma "Dropdown menu/notification on"
+ * (2841:5363). Colour values reference --sn-* custom properties from
+ * src/theme/applyTheme.ts -- do not hardcode hex. */
+
+.sn-account-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 146px;
+  background-color: var(--sn-background-surface);
+  filter: drop-shadow(0px 2px 1.95px rgba(0, 0, 0, 0.25));
+}
+
+.sn-account-dropdown__item {
+  display: block;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  background-color: var(--sn-background-surface);
+  box-shadow: 0px 2px 1.95px rgba(0, 0, 0, 0.1);
+  font-family: "Inter", sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  text-align: left;
+  text-decoration: none;
+  color: var(--sn-text-primary);
+}
+
+a.sn-account-dropdown__item,
+button.sn-account-dropdown__item {
+  cursor: pointer;
+}
+
+.sn-account-dropdown__item:hover:not(.sn-account-dropdown__item--disabled) {
+  background-color: var(--sn-green-tint-12);
+}
+
+.sn-account-dropdown__item--disabled {
+  color: var(--sn-text-secondary);
+  cursor: not-allowed;
+}
