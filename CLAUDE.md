@@ -4019,6 +4019,48 @@ Full reasoning for every choice above: Build Plan Section 5.
   - **Standing rules**: palette-only, no `brand/green-tint-28`, no new
     colours, Light mode only, **0 unbound / 0 off-palette paints** across
     the whole `Navigation Drawer — Mobile` subtree (audited node-by-node).
+- **`sprint-2/desktop-icon-nav-and-header-fix` (figma-design-system,
+  2026-09-02) — three founder-directed corrections, Figma only,
+  `apps/web` NOT touched.** Report:
+  `docs/sprint-2-desktop-icon-nav-and-header-fix-report.md`. Decision Log
+  **#164–#165** added; forward-pointer on **#163**.
+  - **Finding 1 — 11 text-label-nav screens → icon nav.** `Header/header
+    5` (`2839:3583`, a LIVE SCORE / NEWS / LEADERBOARD / BANTER /
+    COMMUNITY text nav) had exactly 11 live instances, all on
+    Leaderboard/Contest-family screens. All 11 `swapComponent`'d to
+    `header 4` (`2838:3502`), each now 1440×90 `FILL`, renamed `Navbar —
+    header 4`. `Header/header 5` confirmed at **0 instances** and
+    **archived** (renamed `ARCHIVED — …`, not deleted).
+  - **Finding 2 — header 4 width bug: the brief's premise was INVERTED
+    (Decision Log #164).** Briefed as "PR #144 correctly grew the master
+    1440→1474; stale 1440 instances need raising to 1474." Investigation
+    found: (a) the 1474 was PR #144's **accident** — a nested
+    `appendChild` bumped the master's FIXED width, with ~13px dead
+    whitespace; header 4 fits cleanly at 1440. (b) 1474 was **breaking 42
+    screens** — a 1474 navbar in a 1440 `clipsContent` frame clipped the
+    account avatar ~2/3 (confirmed on `Settings — Overview`). (c) the "7
+    stale overrides" weren't overrides — 6 are `FILL` (correctly filling
+    1440); only Create Profile was a real 1474 overhang. **Fix: master
+    resized 1474 → 1440** + auto-layout `CENTER` → `SPACE_BETWEEN`
+    (stale `itemSpacing: 419` cleared) so logo/nav pins left, messages +
+    avatar pins right at the 20px padding. **All 59 `header 4` instances
+    (48 + 11 swapped) now 1440; 0 at 1474; clipped-avatar bug fixed on 42
+    screens.** No screen-frame widths changed. `header 7` untouched
+    (already 1440).
+  - **Finding 3 — `Nav — Blog` added to `Navigation Drawer — Mobile`**
+    (`5870:10689`), after `Nav — Sports Hub`, cloned from an existing
+    item. **Label "Blog"** — the drawer uses section names not routes
+    ("Bants" not `banter`), and the Figma file consistently calls this
+    pillar "Blog" (the `blog` icon, `Blog Page Desktop`). `apps/web`'s
+    `navigation.ts` calls it "News" (`/news`) — **flagged as Decision Log
+    #165**, not silently resolved (same treatment #163 gave
+    Bants-vs-banter). Closes #163's Blog/News gap. Drawer order now:
+    Home · Community · Sports Hub · Blog · Bants · Leaderboard · Clubs ·
+    Messages · Notifications · Profile · Settings — Log out.
+  - **Standing rules**: palette-only, no `brand/green-tint-28`, no new
+    colours, Light mode only; **0 unbound / 0 off-palette paints** across
+    the `header 4` master subtree, `Navigation Drawer — Mobile`, and the
+    new `Nav — Blog` item.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
