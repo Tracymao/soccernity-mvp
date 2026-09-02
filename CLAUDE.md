@@ -4116,6 +4116,35 @@ Full reasoning for every choice above: Build Plan Section 5.
     test `/`, `/community`, `/clubs`, `/news`, `/login` all HTTP 200, no
     console errors. No real browser/Playwright check available — same
     ceiling as every prior `apps/web` PR.
+- **`sprint-2/navdrawer-real-identity` (figma-to-code, 2026-09-03) closes
+  Decision Log #168 — the mobile Navigation Drawer's identity block is
+  now wired to real data. `apps/web` only.** Report:
+  `docs/sprint-2-navdrawer-real-identity-report.md`.
+  - `Header.tsx` fetches the signed-in user's profile **once per session**
+    via `getUser(accessToken, decodeAccessToken(token).sub)` (the same
+    real endpoint `ProfilePage.tsx` uses), keyed on the access token so a
+    plain navigation does not refetch, and passes the result to
+    `NavDrawer` as a `profile` prop. `NavDrawer` renders the real
+    `displayName` + an initials avatar (`initialsFor`, a third small local
+    copy of the `ProfilePage`/`PostCard` pattern).
+  - **No `@handle`/username row** — `UserProfile` has no such field and
+    there is no backend column (Decision Log #58); the Figma
+    `@christine001` is decorative. Name renders as a single line.
+  - **Pending fetch** → drawer opens immediately showing the existing
+    generic "Signed in" fallback (fetch never blocks opening). **Failed
+    fetch** → same fallback; navigation is never broken.
+  - **Decision Log #166 / #167 explicitly NOT touched** — confirmed out
+    of scope by founder decision (they are separate Sprint 3/6 Messaging /
+    Notifications / Settings builds, not navbar follow-ups); their Status
+    cells got a light-touch note saying so.
+  - **New file**: none. `Header.test.tsx` +5 tests (real displayName on
+    success; drawer opens + navigates while pending; generic fallback on
+    fetch failure without breaking nav; fetch-once-per-token; never
+    renders an `@` handle). **Verification**: `npx tsc --noEmit`,
+    `npm run lint`, `npm run build` clean; `npx vitest run` — **12 files
+    / 84 tests, 0 failures** (up from 12/79, no existing test changed);
+    dev-server smoke test `/`, `/community`, `/clubs` all HTTP 200. No
+    real browser/Playwright check available.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

@@ -59,13 +59,21 @@
 
 .sn-drawer__avatar {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 40px;
   height: 40px;
   border-radius: 20px;
   background-color: var(--sn-green-tint-12);
+  font-family: "Montserrat", sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--sn-text-primary);
 }
 
-.sn-drawer__signed-in {
+.sn-drawer__signed-in,
+.sn-drawer__name {
   font-family: "Montserrat", sans-serif;
   font-weight: 600;
   font-size: 14px;
