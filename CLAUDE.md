@@ -3921,6 +3921,56 @@ Full reasoning for every choice above: Build Plan Section 5.
     `/clubs/:id`, `/`, `/community` all HTTP 200. No real
     browser/Playwright check available — same ceiling as every prior
     `apps/web` PR.
+- **`sprint-2/navbar-icon-set-complete` (figma-design-system, 2026-09-02)
+  is PHASE 1 of a founder-directed correction: `apps/web`'s shipped
+  navbar (`Header.tsx` / `navigation.ts`) is a text-label nav built
+  without instruction, off-canon from the Figma icon navbars (`header 4`
+  / `header 7`). Phase 1 makes the Figma icon navbars complete — Figma
+  design only, `apps/web` NOT touched.** Report:
+  `docs/sprint-2-navbar-icon-set-complete-report.md`. Decision Log
+  **#159–#161** added.
+  - **Desktop — Clubs icon added to `header 4` (`2838:3502`, 48
+    instances) and `header 7` (`2841:4104`, 9 instances)**, appended to
+    the shared content-nav row (`Frame 5858`), kept in sync. Glyph: a
+    **shield / club-crest** outline (Decision Log #159 — no Clubs icon
+    existed to reuse; the 5 existing nav icons are bespoke hand-drawn
+    navy line-art on a `brand/green-tint` 12% square, and the new one
+    matches that treatment exactly — `brand/navy` 1.5px stroke, round
+    caps, 31×31 r3 green-tint square). Route target `/clubs`.
+  - **Mobile — new standalone `Bottom Navigation — Mobile` component
+    (`5863:9505`)**: 428×64, `color/background/surface` ground, 1px
+    `color/icon/inactive` top divider, `SPACE_BETWEEN` row of the **same
+    6 glyphs as desktop** (5 cloned verbatim from `header 4`'s nav row +
+    `clubs`), icon-only. `header 4 — mobile` / `header 7 — mobile` are
+    64px bars with no room for the content nav inline (confirmed). The
+    file's only existing mobile primary-nav is a **one-off text-label
+    Navigation Drawer** (`5703:8320`) — not a component, no Clubs entry;
+    a bottom bar was chosen over extending it or cramming the top bar
+    (Decision Log #160). Two reference example frames (`5864:9505` /
+    `5864:9592`) show the top-navbar + bottom-nav pairing per auth state.
+  - **Auth cluster — confirmed correct on all four variants, nothing
+    fixed.** The brief's premise (that `Component 20` / `2838:3579` on
+    `header 4` is "a bare, unstyled ellipse placeholder") was **stale**:
+    it's a real instance of the `Avatar` `COMPONENT_SET` (`5685:9241`,
+    `Has Unread=false`, photo image fill), established by PR #113–#115 /
+    Decision Log #99–#103 (109 live instances file-wide). `header 4` /
+    `header 4 — mobile` show messages-glyph + `Avatar`; `header 7` /
+    `header 7 — mobile` show the `Login` button. Runtime `header 4` ↔
+    `header 7` switching is a **Phase 2 code task**, not a design gap.
+  - **`Old — Mobile App Nav Icons` (`2230:4328`) dead-check**: 2 live
+    instances, **both on the `dump` scratch page**, zero on page `0:1` —
+    treated as fully dead; its older 7-icon set was **not** reused (mobile
+    nav matches the *current* 6-icon desktop set).
+  - **Standing rules**: `brand/navy` / `brand/green` / `brand/green-tint`
+    12% / `color/background/surface` / `color/icon/inactive` only — no
+    `brand/green-tint-28`, no new colours; Light mode only; **0 unbound /
+    0 off-palette paints** on every authored node (the shield's
+    `createNodeFromSvg` output was explicitly re-bound during
+    construction, per the known unbound-black-stroke gotcha).
+  - **PHASE 2 (separate `figma-to-code` follow-up, `apps/web`)**: replace
+    `Header.tsx` / `navigation.ts` with the icon navbar, wire
+    `Bottom Navigation — Mobile` on mobile, add `/clubs` to the nav
+    (Decision Log #156), and implement runtime auth-state switching.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
