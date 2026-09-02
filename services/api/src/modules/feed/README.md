@@ -738,3 +738,73 @@ Full `services/api` suite after this PR: **29 suites / 262 tests, 0
 failures** (up from 28/208 measured immediately before this branch's
 changes — see `CLAUDE.md`'s Sprint 2 status bullet for the corrected,
 directly re-measured baseline this PR started from).
+
+---
+
+## Per-caller viewer state on `GET /posts/feed` + `GET /posts/:id` (`sprint-2/feed-per-user-flags`, closes Decision Log #153)
+
+`GET /posts/feed` and `GET /posts/:id` now return three extra booleans
+per post, telling the **calling user** their own relationship to it:
+
+- `isLiked` — a `Like` row exists for `(callerId, postId)`
+- `isSaved` — a `SavedPost` row exists for `(callerId, postId)`
+- `author.isFollowing` — a `Follow` row exists for `(followerId: callerId,
+  followeeId: post.authorId)`
+
+None are stored columns — they're computed per request. The raw
+`POST_SELECT` / `FeedPost` type is unchanged; the returned shape is the
+new intersection type `FeedPostWithViewerState`.
+
+### Why this was a real gap
+
+`GET /posts/feed`'s payload could tell you a post's `likeCount` but not
+whether *you* were one of those likers — so `apps/web`'s `PostCard.tsx`
+had to render every like/save/follow control in its default state on
+load and after every refresh, correcting only for actions taken in the
+current session (Decision Log #153). This closes that.
+
+### No N+1
+
+`getFeed` → `attachViewerState(userId, posts)`:
+
+- zero-post page → returns `[]`, **issues no lookups** (no empty-`IN`
+  queries).
+- otherwise **three batched queries** (`Promise.all`):
+  `like.findMany({ where: { userId, postId: { in: postIds } } })`,
+  the same for `savedPost`, and
+  `follow.findMany({ where: { followerId: userId, followeeId: { in: otherAuthorIds } } })`
+  where `otherAuthorIds` is the **deduped** author set **minus the
+  caller** — a self-follow row can't exist (`UsersService.followUser`
+  rejects it), so the caller's own posts get `isFollowing: false` with
+  nothing queried, and if the whole page is the caller's own the follow
+  query is skipped.
+- one `.map` over the page attaches the flags from three `Set`s.
+
+`getPostById(postId, userId)` — one row, so three unique-key `findUnique`
+existence checks (again `Promise.all`, again skipping the follow check
+for an own post). `NotFoundException` for a missing post is still thrown
+**before** any viewer-state lookup.
+
+### Controller change
+
+`feed.controller.ts` `getById` gained `@CurrentUser() user:
+AccessTokenPayload` and passes `user.sub` to `getPostById` — a
+handler-signature change (it was `@Param('id')`-only). `JwtAuthGuard`
+already attaches `request.user`; no new guard wiring.
+
+### Deliberately not enriched
+
+- `createPost` (`POST /posts`) — a brand-new post: all three flags are
+  trivially `false`. Left returning the raw shape.
+- `getSavedPosts` (`GET /users/:id/saved-posts`) — `isSaved` would be
+  trivially `true`; `isLiked` / `isFollowing` would need the same
+  enrichment. Flagged in a comment on `SAVED_POST_SELECT`; the
+  saved-posts screen isn't built yet.
+
+### Sibling gap flagged, not fixed
+
+`GET /clubs` (`ClubsService.listClubs` → `ClubSummary`) has the identical
+shape of gap — no per-user `joined` / `isMember` field, only the
+join/leave action responses carry membership state. Out of scope for
+Decision Log #153; recorded as a new Decision Log candidate in the PR
+report.

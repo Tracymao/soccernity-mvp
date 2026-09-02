@@ -227,7 +227,7 @@ describe('FeedController (HTTP layer)', () => {
   });
 
   describe('GET /posts/:id', () => {
-    it('returns the post (JwtAuthGuard only, GuardianConsentGuard never queried)', async () => {
+    it('returns the post (JwtAuthGuard only, GuardianConsentGuard never queried) and passes the caller id through (Decision Log #153)', async () => {
       currentUser = PENDING_MINOR;
       feedService.getPostById.mockResolvedValue({ id: 'post-1', contentText: 'Hello' });
 
@@ -235,6 +235,9 @@ describe('FeedController (HTTP layer)', () => {
 
       expect(response.body.id).toBe('post-1');
       expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      // @CurrentUser() is now injected on this route so the service can
+      // compute per-caller isLiked / isSaved / author.isFollowing.
+      expect(feedService.getPostById).toHaveBeenCalledWith('post-1', PENDING_MINOR.sub);
     });
 
     it('propagates a 404 from FeedService for a non-existent post', async () => {

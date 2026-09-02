@@ -3667,6 +3667,52 @@ Full reasoning for every choice above: Build Plan Section 5.
     `/signup`, `/login` all HTTP 200. No real browser/Playwright check
     available in this environment — same ceiling as every prior
     `apps/web` PR.
+- **`sprint-2/feed-per-user-flags` (backend-api, 2026-09-02) resolves
+  Decision Log #153 — `services/api` only, `apps/web` untouched.** Report:
+  `docs/sprint-2-feed-per-user-flags-report.md`.
+  - **`GET /posts/feed` and `GET /posts/:id` now return per-caller
+    `isLiked` / `isSaved` and `author.isFollowing`** — all computed per
+    request from the caller's own `Like` / `SavedPost` / `Follow` rows,
+    **none stored**. New exported type `FeedPostWithViewerState` =
+    `FeedPost & { isLiked; isSaved; author: … & { isFollowing } }` — the
+    raw `FeedPost` / `POST_SELECT` are unchanged (the fields are an
+    intersection on top, not columns).
+  - **No N+1.** `getFeed` enriches a whole page via a new private
+    `attachViewerState()` doing **three batched `findMany({ where: { …: {
+    in: [...] } } })` queries** in `Promise.all` (like by `postId`, saved
+    by `postId`, follow by deduped author id) — a zero-post page issues
+    zero lookups; `isFollowing` is a hard `false` for the caller's own
+    posts with nothing queried (self-follow rows can't exist), and the
+    follow query is skipped entirely if the whole page is the caller's
+    own posts. `getPostById` uses three unique-key `findUnique` checks
+    for the single row, same own-post skip.
+  - **`feed.controller.ts` `getById` gained `@CurrentUser() user` →
+    `getPostById(id, user.sub)`** — a handler-signature change (the route
+    was `@Param('id')`-only before); `JwtAuthGuard` already attaches
+    `request.user`, no new guard wiring.
+  - **Deliberately not enriched (flagged in-code + report):** `POST
+    /posts` (`createPost`) and `GET /users/:id/saved-posts`
+    (`getSavedPosts`) still return the raw `FeedPost` shape. For a
+    freshly created post all three are trivially `false`; for saved
+    posts `isSaved` is trivially `true` and the screen isn't built yet —
+    both left as small follow-ups, out of #153's Feed-read scope.
+  - **`apps/web` NOT touched.** Dropping `PostCard.tsx`'s documented
+    session-local workaround (and consuming the new fields) is the
+    separate frontend follow-up this PR unblocks.
+  - **New Decision Log candidate raised in the report, NOT fixed:** `GET
+    /clubs` (`ClubsService.listClubs` → `ClubSummary`) has the identical
+    gap — no per-user `joined` / `isMember` field, only the join/leave
+    action responses carry membership state. Same fix pattern would
+    apply (batched `_ClubMembership` existence check on the list
+    payload). Out of scope here (Clubs isn't part of #153).
+  - **Verification**: `nest build` + `npm run lint` clean; `npx jest`
+    (full unit suite) **35 suites / 415 tests, 0 failures** (up from
+    34/356 at `sprint-2/comment-delete` — `feed.service.spec.ts` +~10
+    for the viewer-state cases, plus the drift since that measurement);
+    `npm run test:e2e` unchanged (no e2e touches `GET /posts/feed` or
+    `GET /posts/:id`, and the change is plain `findMany`/`findUnique` —
+    none of `test/README.md`'s add-an-e2e triggers apply). Decision Log
+    #153's Status cell got a `RESOLVED` forward-pointer in the same PR.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

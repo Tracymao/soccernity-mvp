@@ -16,7 +16,12 @@ function buildPrismaMock() {
     },
     like: {
       create: jest.fn(),
-      findUnique: jest.fn(),
+      // findUnique / findMany default to "no row" / "no rows" so every
+      // existing getFeed / getPostById test keeps passing without having
+      // to stub the viewer-state lookups added for Decision Log #153 —
+      // tests that DO care about isLiked override these.
+      findUnique: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
       delete: jest.fn(),
     },
     comment: {
@@ -28,7 +33,15 @@ function buildPrismaMock() {
     savedPost: {
       create: jest.fn(),
       delete: jest.fn(),
-      findMany: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
+    // Decision Log #153: getFeed / getPostById now resolve
+    // author.isFollowing from the caller's Follow rows. Same default-to-
+    // empty rationale as `like` above.
+    follow: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue(null),
     },
     // Added for notification wiring (sprint-2/follow-and-notifications):
     // likePost/addComment now call tx.notification.create(...) inside
@@ -308,24 +321,172 @@ describe('FeedService', () => {
       expect(callArgs.select).not.toHaveProperty('likes');
       expect(callArgs.select).not.toHaveProperty('savedBy');
     });
+
+    // --- Decision Log #153: per-caller viewer state on GET /posts/feed ---
+
+    it('attaches isLiked / isSaved / author.isFollowing per post for a mixed page', async () => {
+      const prisma = buildPrismaMock();
+      const rows = [
+        buildPostRow({ id: 'p-liked-followed', authorId: 'author-x' }),
+        buildPostRow({ id: 'p-saved-unfollowed', authorId: 'author-y' }),
+        buildPostRow({ id: 'p-nothing', authorId: 'author-z' }),
+      ];
+      (prisma.post.findMany as jest.Mock).mockResolvedValue(rows);
+      (prisma.like.findMany as jest.Mock).mockResolvedValue([{ postId: 'p-liked-followed' }]);
+      (prisma.savedPost.findMany as jest.Mock).mockResolvedValue([{ postId: 'p-saved-unfollowed' }]);
+      (prisma.follow.findMany as jest.Mock).mockResolvedValue([{ followeeId: 'author-x' }]);
+      const service = new FeedService(prisma);
+
+      const page = await service.getFeed('viewer-1', { limit: 10 });
+
+      const byId = Object.fromEntries(page.items.map((p) => [p.id, p]));
+      expect(byId['p-liked-followed']).toMatchObject({ isLiked: true, isSaved: false });
+      expect(byId['p-liked-followed'].author.isFollowing).toBe(true);
+      expect(byId['p-saved-unfollowed']).toMatchObject({ isLiked: false, isSaved: true });
+      expect(byId['p-saved-unfollowed'].author.isFollowing).toBe(false);
+      expect(byId['p-nothing']).toMatchObject({ isLiked: false, isSaved: false });
+      expect(byId['p-nothing'].author.isFollowing).toBe(false);
+    });
+
+    it('batches the viewer-state lookups: exactly one findMany per relation, keyed on the page\'s ids (no N+1)', async () => {
+      const prisma = buildPrismaMock();
+      const rows = [
+        buildPostRow({ id: 'p1', authorId: 'author-a' }),
+        buildPostRow({ id: 'p2', authorId: 'author-b' }),
+        buildPostRow({ id: 'p3', authorId: 'author-a' }),
+      ];
+      (prisma.post.findMany as jest.Mock).mockResolvedValue(rows);
+      const service = new FeedService(prisma);
+
+      await service.getFeed('viewer-1', { limit: 10 });
+
+      expect(prisma.like.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.savedPost.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.follow.findMany).toHaveBeenCalledTimes(1);
+      expect((prisma.like.findMany as jest.Mock).mock.calls[0][0]).toEqual({
+        where: { userId: 'viewer-1', postId: { in: ['p1', 'p2', 'p3'] } },
+        select: { postId: true },
+      });
+      // authorIds deduped; the caller is never queried as a followee.
+      expect((prisma.follow.findMany as jest.Mock).mock.calls[0][0]).toEqual({
+        where: { followerId: 'viewer-1', followeeId: { in: ['author-a', 'author-b'] } },
+        select: { followeeId: true },
+      });
+    });
+
+    it('reports isFollowing: false for the caller\'s OWN posts and never puts the caller in the follow lookup', async () => {
+      const prisma = buildPrismaMock();
+      const rows = [
+        buildPostRow({ id: 'own-1', authorId: 'viewer-1' }),
+        buildPostRow({ id: 'other-1', authorId: 'author-x' }),
+      ];
+      (prisma.post.findMany as jest.Mock).mockResolvedValue(rows);
+      // A bogus self-follow row that must NOT flip isFollowing true for own-1.
+      (prisma.follow.findMany as jest.Mock).mockResolvedValue([
+        { followeeId: 'viewer-1' },
+        { followeeId: 'author-x' },
+      ]);
+      const service = new FeedService(prisma);
+
+      const page = await service.getFeed('viewer-1', { limit: 10 });
+      const byId = Object.fromEntries(page.items.map((p) => [p.id, p]));
+
+      expect(byId['own-1'].author.isFollowing).toBe(false);
+      expect(byId['other-1'].author.isFollowing).toBe(true);
+      expect((prisma.follow.findMany as jest.Mock).mock.calls[0][0].where.followeeId.in).toEqual(['author-x']);
+    });
+
+    it('skips ALL three viewer-state lookups entirely when the page has zero posts', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new FeedService(prisma);
+
+      const page = await service.getFeed('viewer-1', {});
+
+      expect(page.items).toEqual([]);
+      expect(prisma.like.findMany).not.toHaveBeenCalled();
+      expect(prisma.savedPost.findMany).not.toHaveBeenCalled();
+      expect(prisma.follow.findMany).not.toHaveBeenCalled();
+    });
+
+    it('skips only the follow lookup when every post on the page is the caller\'s own', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findMany as jest.Mock).mockResolvedValue([
+        buildPostRow({ id: 'own-1', authorId: 'viewer-1' }),
+        buildPostRow({ id: 'own-2', authorId: 'viewer-1' }),
+      ]);
+      const service = new FeedService(prisma);
+
+      await service.getFeed('viewer-1', {});
+
+      expect(prisma.like.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.savedPost.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.follow.findMany).not.toHaveBeenCalled();
+    });
   });
 
   describe('getPostById', () => {
-    it('returns the post when it exists', async () => {
+    it('returns the post, with default viewer state, when it exists and the caller has no like/save/follow rows', async () => {
       const prisma = buildPrismaMock();
-      const row = buildPostRow();
+      const row = buildPostRow(); // authorId: 'author-1'
       (prisma.post.findUnique as jest.Mock).mockResolvedValue(row);
       const service = new FeedService(prisma);
 
-      await expect(service.getPostById('post-1')).resolves.toEqual(row);
+      await expect(service.getPostById('post-1', 'viewer-1')).resolves.toEqual({
+        ...row,
+        isLiked: false,
+        isSaved: false,
+        author: { ...row.author, isFollowing: false },
+      });
     });
 
-    it('throws NotFoundException, not a silent null, for a non-existent id', async () => {
+    it('throws NotFoundException, not a silent null, for a non-existent id (before any viewer-state lookup)', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
       const service = new FeedService(prisma);
 
-      await expect(service.getPostById('does-not-exist')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.getPostById('does-not-exist', 'viewer-1')).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.like.findUnique).not.toHaveBeenCalled();
+      expect(prisma.savedPost.findUnique).not.toHaveBeenCalled();
+      expect(prisma.follow.findUnique).not.toHaveBeenCalled();
+    });
+
+    // --- Decision Log #153: per-caller viewer state on GET /posts/:id ---
+    it('reports isLiked / isSaved / author.isFollowing from the caller\'s own Like / SavedPost / Follow rows', async () => {
+      const prisma = buildPrismaMock();
+      const row = buildPostRow({ authorId: 'author-1' });
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(row);
+      (prisma.like.findUnique as jest.Mock).mockResolvedValue({ id: 'like-1' });
+      (prisma.savedPost.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.follow.findUnique as jest.Mock).mockResolvedValue({ id: 'follow-1' });
+      const service = new FeedService(prisma);
+
+      const result = await service.getPostById('post-1', 'viewer-1');
+
+      expect(result.isLiked).toBe(true);
+      expect(result.isSaved).toBe(false);
+      expect(result.author.isFollowing).toBe(true);
+      expect(prisma.like.findUnique).toHaveBeenCalledWith({
+        where: { userId_postId: { userId: 'viewer-1', postId: 'post-1' } },
+        select: { id: true },
+      });
+      expect(prisma.follow.findUnique).toHaveBeenCalledWith({
+        where: { followerId_followeeId: { followerId: 'viewer-1', followeeId: 'author-1' } },
+        select: { id: true },
+      });
+    });
+
+    it('forces author.isFollowing to false for the caller\'s own post without issuing a follow lookup', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(buildPostRow({ authorId: 'viewer-1' }));
+      // Even if a (bogus) self-follow row somehow existed, it must not be consulted.
+      (prisma.follow.findUnique as jest.Mock).mockResolvedValue({ id: 'should-not-be-read' });
+      const service = new FeedService(prisma);
+
+      const result = await service.getPostById('post-1', 'viewer-1');
+
+      expect(result.author.isFollowing).toBe(false);
+      expect(prisma.follow.findUnique).not.toHaveBeenCalled();
     });
   });
 
