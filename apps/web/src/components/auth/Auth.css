@@ -23,6 +23,9 @@
  * new code.
  */
 
+/* Renders under AuthChrome (logo-only Top Bar) -- Decision Log #172 --
+ * which keeps AppShell's 32px content padding, so this card gets the same
+ * surrounding gutter it always had. */
 .sn-auth {
   display: flex;
   align-items: stretch;

@@ -7,13 +7,16 @@
  * value here now references the --picker-* custom properties set inline
  * from clubPickerThemeVars.ts instead. Do not hardcode hex here.
  *
- * Shell note (same precedent as GuardianConsent.css / VerifyEmail.css /
- * SignupSplitScreen.css): the Figma frames draw their own full-bleed top
- * bar with an embedded wordmark, but this app always renders the shared
- * site Header via AppShell -- so this component now renders its own
+ * Shell note (same approach as GuardianConsent.css / VerifyEmail.css):
+ * the Figma frames draw their own full-bleed top bar with an embedded
+ * wordmark, but this component renders inside RegisterStep's success
+ * view, which is under AppShell's site Header -- so it renders its own
  * full-bleed dark shell (a sibling of SignupSplitScreen, not nested
  * inside it) using the same negative-margin technique to cancel
- * AppShell's content padding. */
+ * AppShell's content padding. (RegisterStep itself, on the /signup
+ * route, now renders under the AuthChrome logo-only Top Bar --
+ * Decision Log #172 -- but this success-view step keeps its own
+ * full-bleed shell regardless.) */
 
 .club-picker-page {
   min-height: calc(100vh - 90px);

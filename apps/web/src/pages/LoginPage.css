@@ -5,15 +5,20 @@
  * (407:844) uses raw indigo (#4F46E5) for its primary button/links rather
  * than a Soccernity Theme token. Indigo is mapped to --sn-brand-navy
  * (buttons) and --sn-brand-green (links) below instead of being carried
- * over -- flagged there for human confirmation. */
+ * over -- flagged there for human confirmation.
+ *
+ * This screen renders under AuthChrome (logo-only Top Bar, 90px), not
+ * AppShell -- Decision Log #172. AuthChrome keeps AppShell's 32px content
+ * padding, so the negative-margin full-bleed technique below is unchanged;
+ * only the chrome height (90px Top Bar) differs. */
 
 .sn-login {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 48px;
   align-items: stretch;
-  min-height: calc(100vh - 84px - 64px); /* header height + AppShell's 32px*2 padding */
-  margin: -32px; /* offset AppShell.css's .sn-app-shell__content padding for a full-bleed panel */
+  min-height: calc(100vh - 90px - 64px); /* AuthChrome Top Bar (90px) + its 32px*2 content padding */
+  margin: -32px; /* offset AuthChrome.css's .sn-auth-chrome__content padding for a full-bleed panel */
   background-color: var(--sn-background-surface);
 }
 

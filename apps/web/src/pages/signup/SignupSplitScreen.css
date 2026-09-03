@@ -1,10 +1,15 @@
 /* Colour values reference the --signup-* custom properties set inline from
  * authThemeVars.ts (itself sourced from packages/shared's design tokens) --
- * do not hardcode hex here. */
+ * do not hardcode hex here.
+ *
+ * Renders under AuthChrome (logo-only Top Bar, 90px), not AppShell --
+ * Decision Log #172. AuthChrome keeps AppShell's 32px content padding, so
+ * the `margin: -32px` full-bleed technique is unchanged; only the chrome
+ * height differs. */
 
 .signup-split {
   display: flex;
-  min-height: calc(100vh - 84px);
+  min-height: calc(100vh - 90px);
   margin: -32px;
   background-color: var(--signup-bg);
   color: var(--signup-text-primary);
@@ -44,16 +49,6 @@
     max-width: none;
     padding: 40px 24px;
   }
-}
-
-.signup-split__logo {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  text-decoration: none;
-  color: var(--signup-brand-green);
-  font: 600 17px "Montserrat", sans-serif;
-  margin-bottom: 48px;
 }
 
 .signup-split__eyebrow {

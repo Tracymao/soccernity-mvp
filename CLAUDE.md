@@ -4212,6 +4212,53 @@ Full reasoning for every choice above: Build Plan Section 5.
     pattern as PRs #98 / #102 / #110 / #130). No `apps/web` or
     `services/api` code touched. Not merged — founder's call after
     review.
+- **`sprint-2/auth-pages-topbar` (figma-to-code, 2026-09-03) — the four
+  core auth routes (`/login`, `/signup`, `/forgot-password`,
+  `/reset-password`) now render under a logo-only "Top Bar — Soccernity"
+  instead of the full site `Header`. `apps/web` only.** This resolves a
+  long-standing Figma-vs-shipped-code conflict `LoginPage.tsx` /
+  `AuthLayout.tsx` / `SignupSplitScreen.tsx` had each flagged since
+  Sprint 1 as "pending human confirmation" — the founder confirmed these
+  four screens get the same simple logo bar the Figma Guardian Consent /
+  Verify Email / Club Picker frames already draw (spec pulled from the
+  "Top Bar — Soccernity" component, Figma node `5146:6636`: 90px tall,
+  `color/background/surface` fill, 1px `color/icon/inactive` bottom
+  border, logo mark + "Soccernity" wordmark only). **Decision Log #172.**
+  - **Approach: a pathless layout route, not a conditional inside
+    AppShell.** New `apps/web/src/layout/AuthChrome.tsx` (renders
+    `<AuthTopBar/>` + `<Outlet/>`) + `AuthTopBar.tsx`; `router.tsx` moves
+    the four routes out of the `path: "/"` / `<AppShell>` tree into a
+    sibling `element: <AuthChrome/>` route. Cleaner than a
+    route-sniffing branch in AppShell (no `useLocation` string matching,
+    the two chromes stay separate components) and avoids the negative-
+    margin shell hack `ClubPickerStep.tsx` uses.
+  - **`AuthChrome.__content` deliberately keeps AppShell's 32px content
+    padding**, so `LoginPage.css` / `SignupSplitScreen.css` /
+    `ClubPickerStep.css`'s existing `margin: -32px` full-bleed technique
+    is untouched — only the chrome height changed (stale `84px` header-
+    height math in those two files corrected to the real `90px`).
+    `SignupSplitScreen.tsx` no longer draws its own wordmark lockup (it
+    would double up under the Top Bar); `AuthLayout.tsx`'s "start below
+    the Header as a stopgap" reasoning is rewritten as the now-intended
+    layout. `/guardian-consent`, `/guardian-consent/confirm`,
+    `/verify-email`, `/profile` are deliberately NOT changed — they stay
+    under AppShell; their CSS cross-references to the old "AuthLayout /
+    SignupSplitScreen already flag this" precedent were updated so no
+    stale "still an open question" comment remains.
+  - `LoginPage.tsx`'s "flag for human review" layout comment is rewritten
+    to record the decision (matching `navigation.ts`'s `DECISION LOG
+    #165` pattern). The separate *design-token* flag in `LoginPage.tsx`
+    (indigo `#4F46E5` → navy/green mapping) is a different open question
+    and was left.
+  - **Verification**: `npx tsc --noEmit` exit 0; `npx vitest run` — **13
+    files / 86 tests, 0 failures** (up from 12/84 — new
+    `AuthChrome.test.tsx`, 2 tests; no existing test changed); `npx vite
+    build` exit 0. Dev-server smoke test: `/login`, `/signup`,
+    `/forgot-password`, `/reset-password` all HTTP 200. A temporary
+    vitest spec (deleted before commit) mounted the real router at all
+    four paths and confirmed each renders the Top Bar, no `Primary` nav,
+    and zero `console.error`. No real browser/Playwright check available
+    — same ceiling as every prior `apps/web` PR.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

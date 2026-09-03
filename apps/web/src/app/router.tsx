@@ -19,13 +19,19 @@
 // ever opted into here, so v8's removal of the `future.v8_*` flag set
 // required no changes to this file.
 //
-// F2-F7: add your route as a child of the root AppShell route below --
-// you do NOT need to touch AppShell, Header, or main.tsx to do this.
-// Replace the corresponding placeholder page file in src/pages instead
-// of adding a new route path, unless your screen genuinely needs a new
-// path not listed here (in which case, add it here too).
+// Add your route as a child of the root AppShell route below -- you do
+// NOT need to touch AppShell, Header, or main.tsx to do this. Replace the
+// corresponding placeholder page file in src/pages instead of adding a
+// new route path, unless your screen genuinely needs a new path not
+// listed here (in which case, add it here too).
+//
+// EXCEPTION: the four core auth routes (/login, /signup, /forgot-password,
+// /reset-password) are children of AuthChrome, not AppShell -- they get
+// the logo-only "Top Bar -- Soccernity" instead of the full site Header
+// (Build Plan Decision Log #172; see AuthChrome.tsx / LoginPage.tsx).
 import { createBrowserRouter } from "react-router";
 import AppShell from "../layout/AppShell";
+import AuthChrome from "../layout/AuthChrome";
 import HomePage from "../pages/HomePage";
 import SportsHubPage from "../pages/SportsHubPage";
 import BlogPage from "../pages/BlogPage";
@@ -45,6 +51,18 @@ import ProfilePage from "../pages/ProfilePage";
 import NotFoundPage from "../pages/NotFoundPage";
 
 export const router = createBrowserRouter([
+  {
+    // Core auth routes -- logo-only Top Bar, NOT the site Header. Pathless
+    // layout route: children below resolve to /login, /signup, etc. See
+    // AuthChrome.tsx and Build Plan Decision Log #172.
+    element: <AuthChrome />,
+    children: [
+      { path: "login", element: <LoginPage /> }, // F2
+      { path: "signup", element: <SignupPage /> }, // F3 (age gate + signup)
+      { path: "forgot-password", element: <ForgotPasswordPage /> }, // F4
+      { path: "reset-password", element: <ResetPasswordPage /> }, // F4
+    ],
+  },
   {
     path: "/",
     element: <AppShell />,
@@ -74,11 +92,11 @@ export const router = createBrowserRouter([
       { path: "clubs", element: <ClubsPage /> },
       { path: "clubs/:id", element: <ClubFanPage /> },
 
-      // Auth / onboarding flow -- F2 through F6.
-      { path: "login", element: <LoginPage /> }, // F2
-      { path: "signup", element: <SignupPage /> }, // F3 (age gate + signup)
-      { path: "forgot-password", element: <ForgotPasswordPage /> }, // F4
-      { path: "reset-password", element: <ResetPasswordPage /> }, // F4
+      // Auth-flow routes that stay under AppShell (built full-bleed within
+      // its content area -- see each page's CSS header comment). The core
+      // auth routes /login, /signup, /forgot-password and /reset-password
+      // are NOT here -- they're children of AuthChrome above.
+      //
       // F5: /guardian-consent is the MINOR's own authenticated status view
       // (GET /auth/guardian-consent/status); /guardian-consent/confirm is
       // the new, separate, public route for the GUARDIAN's own

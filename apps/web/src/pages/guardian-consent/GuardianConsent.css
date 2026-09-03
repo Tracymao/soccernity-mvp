@@ -3,15 +3,17 @@
  * Colour values reference the --consent-* custom properties set inline
  * from consentThemeVars.ts -- do not hardcode hex here.
  *
- * Layout note (same deviation AuthLayout.tsx/SignupSplitScreen.tsx already
- * flagged for their own Figma frames): both source frames (5108:6629,
- * 5108:6630, 5108:6631) draw their own full-bleed top bar with an embedded
- * Soccernity wordmark. This app always renders the shared site Header
- * above routed content (src/layout/AppShell.tsx) -- duplicating a second
+ * Layout note: both source frames (5108:6629, 5108:6630, 5108:6631) draw
+ * their own full-bleed top bar with an embedded Soccernity wordmark. This
+ * route renders under AppShell, which renders the shared site Header above
+ * routed content (src/layout/AppShell.tsx) -- duplicating a second
  * wordmark bar here would double up under it. Built to render *within*
  * AppShell's content area instead, using a negative margin to cancel its
  * padding so the dark background still reads as full-bleed below the real
- * header, mirroring signup-split's own `margin: -32px` precedent exactly.
+ * header. (The four core auth routes -- /login, /signup, /forgot-password,
+ * /reset-password -- take a different approach: the AuthChrome logo-only
+ * Top Bar, Decision Log #172. /guardian-consent is deliberately NOT one
+ * of them and stays under AppShell.)
  */
 
 .consent-page {
