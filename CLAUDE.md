@@ -4169,6 +4169,49 @@ Full reasoning for every choice above: Build Plan Section 5.
   rewritten to start with "Resolved by the founder:". **Verification**:
   `npx tsc --noEmit` exit 0; `npx vitest run` — 12 files / 84 tests, 0
   failures; `npx vite build` exit 0.
+- **`sprint-2/blog-sports-navbar-retrofit` (figma-design-system,
+  2026-09-03) brings four legacy pre-redesign frames onto the canonical
+  navbar and documents the Create Post overlay context — Figma design
+  only, no app code (`BlogPage.tsx` / `SportsHubPage.tsx` are still
+  `PlaceholderPage` stubs, so there is nothing to convert).** Full
+  detail: `docs/sprint-2-blog-sports-navbar-retrofit-report.md`.
+  - **Blog Page Desktop (`1009:128`)** — hand-built header hidden;
+    instances `header 4` (visible, `5932:10661`) + `header 7` (hidden,
+    `5932:10752`) added. **Blog Page Mobile (`41:4`)** — stale hamburger
+    (`43:8`) + old logo (`359:493`) hidden; `header 4 — mobile` (visible,
+    resized 428→375, `5932:10832`) + `header 7 — mobile` (hidden,
+    `5932:10853`) added. Blog has one frame per breakpoint (unlike
+    Sports' frame-per-auth-state), so each Blog frame carries both
+    variants, logged-out hidden — Decision Log #169.
+  - **Sports Page desktop** — confirmed `205:2` (logged-out) and
+    `1009:673` (logged-in) are the **canonical** desktop
+    Sports/Livescores frames (no newer replacement; the match-centre
+    detail frames `632:943`/`640:3737`/`667:1952`/`756:11`/`756:6433`
+    are a separate legacy set, out of scope). Old header chrome hidden;
+    `205:2` → `header 7` (`5931:10492`), `1009:673` → `header 4`
+    (`5931:10572`).
+  - **Create Post compose frames (`5701:8328`, `5818:8962`,
+    `5818:8997`)** — the brief's premise that `5818:9031` layers a sheet
+    over a feed background was inaccurate: `5818:9031` is a standalone
+    post-creation feed-state frame (mobile equivalent of desktop
+    `2496:4462`) with a real `header 4 — mobile` navbar. The 3 compose
+    frames correctly follow the file's `App Bar — Create Post` sub-view
+    convention (same as `Community — Post View / Profile — Mobile`) and
+    take no site navbar. Added canvas caption notes (`5933:10771/2/3`)
+    above each naming the background screen (`5701:8239`) + navbar
+    (`5386:6576`). `5818:9031` itself untouched. Decision Log #170.
+  - 0 unbound / 0 off-palette / 0 `brand/green-tint-28` on every
+    authored node (the 3 avatar `IMAGE` fills inside `header 4` /
+    `header 4 — mobile` are pre-existing shared-component debt). New
+    Decision Log candidates **#169–#171** (#171 = `Blog Page Mobile` is
+    375px wide, non-canonical).
+  - The Figma writes were produced by the `figma-design-system` agent
+    (no shell that session); the branch, commit, docx Decision Log
+    transcription (#169–#171, now live in Build Plan Section 9) and PR
+    were finalised in a follow-up session with shell access (same
+    pattern as PRs #98 / #102 / #110 / #130). No `apps/web` or
+    `services/api` code touched. Not merged — founder's call after
+    review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
