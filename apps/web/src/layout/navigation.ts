@@ -8,13 +8,14 @@
 // "Soccernity-MVP" file weZWWqggy9j13eX8bhFgs6). Icon order there is:
 // Sports Hub, Blog, Community, Leaderboard, Bants, Clubs.
 //
-// DECISION LOG #165 -- resolved in this task: the sports-news/blog pillar
-// is labelled "Blog" everywhere in code from here on (nav label, drawer
-// text, icon aria-label). The Figma vocabulary is unanimously "Blog"; the
-// only holdout was the now-archived text-label header's "NEWS" text. The
-// /news route path and NewsPage.tsx filename are internal identifiers,
-// deliberately left unchanged -- renaming them is a larger, separate
-// change (see this PR's report / Decision Log #165).
+// DECISION LOG #165 -- fully resolved: "Blog" is the label and the
+// internal identifier for this content pillar everywhere. The founder's
+// final call is that the page is not news-specific -- it's the general
+// write-up section covering every content type, including sponsored
+// articles for revenue. An earlier PR already set the user-facing "Blog"
+// label (nav item + drawer item); the rename of the internal `/news`
+// route path and NewsPage.tsx -> `/blog` and BlogPage.tsx is now done
+// too, so nothing named "news" remains for this pillar.
 import navSportsHub from "../assets/icons/nav-sports-hub.svg";
 import navBlog from "../assets/icons/nav-blog.svg";
 import navCommunity from "../assets/icons/nav-community.svg";
@@ -37,7 +38,7 @@ export interface NavItem {
 
 export const primaryNavItems: NavItem[] = [
   { label: "Sports Hub", to: "/sports-hub", icon: navSportsHub, tinted: true },
-  { label: "Blog", to: "/news", icon: navBlog },
+  { label: "Blog", to: "/blog", icon: navBlog },
   { label: "Community", to: "/community", icon: navCommunity },
   { label: "Leaderboard", to: "/leaderboard", icon: navLeaderboard },
   { label: "Bants", to: "/banter", icon: navBants },
@@ -64,7 +65,7 @@ export const drawerNavItems: DrawerNavItem[] = [
   { label: "Home", to: "/" },
   { label: "Community", to: "/community" },
   { label: "Sports Hub", to: "/sports-hub" },
-  { label: "Blog", to: "/news" },
+  { label: "Blog", to: "/blog" },
   { label: "Bants", to: "/banter" },
   { label: "Leaderboard", to: "/leaderboard" },
   { label: "Clubs", to: "/clubs" },
