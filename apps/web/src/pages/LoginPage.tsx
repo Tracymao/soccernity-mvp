@@ -20,19 +20,18 @@
 // against Sprint D's intent, or send this frame back through
 // figma-design-system for a proper retouch pass.
 //
-// Layout note (flag for human review): the Figma frame is a full-bleed,
-// two-column 1440x900 screen with its own embedded wordmark -- it reads
-// as a standalone auth screen, not one meant to sit under the main site
-// Header (which duplicates the wordmark and would show a "Login" nav
-// button while already on /login). Per F1's router.tsx, every route
-// (including this one) renders inside AppShell's <Outlet />, and this PR
-// was scoped to not touch routing/AppShell structure. This screen is
-// therefore built to lay out responsively *within* that shell rather than
-// as a fixed-size full-viewport takeover, and does not repeat the
-// Header's wordmark. Whether auth routes should get a chrome-free shell
-// variant is a decision for whoever owns F3-F5 (Signup/Forgot/Reset also
-// route through the same shell) or a follow-up ticket, not something to
-// decide unilaterally in this PR.
+// Layout note -- DECISION LOG #172, resolved: this and the three other
+// core auth screens (/signup, /forgot-password, /reset-password) do NOT
+// render under the full site Header. The founder confirmed they get the
+// simple logo-only "Top Bar -- Soccernity" instead -- the same bar the
+// Figma Guardian Consent, Verify Email and Club Picker frames already
+// draw. The full Header's content-icon nav and logged-in/out auth
+// cluster are noise on a pre-session screen, and it duplicated the
+// wordmark / showed a "Login" affordance while already on /login. These
+// four routes are now children of AuthChrome (src/layout/AuthChrome.tsx),
+// not AppShell, in src/app/router.tsx. This screen stays a responsive
+// two-column layout that sizes itself against the 90px Top Bar; it does
+// not repeat the Top Bar's wordmark.
 import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { AuthApiError, login } from "../api/auth";

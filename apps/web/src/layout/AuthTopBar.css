@@ -1,0 +1,26 @@
+/* "Top Bar -- Soccernity" (Figma node 5146:6636). Colour values reference
+ * the global --sn-* custom properties from src/theme/applyTheme.ts
+ * (mirroring packages/shared's design tokens) -- do not hardcode hex. */
+
+.sn-auth-topbar {
+  display: flex;
+  align-items: center;
+  height: 90px;
+  padding: 0 40px;
+  background-color: var(--sn-background-surface);
+  border-bottom: 1px solid var(--sn-icon-inactive);
+}
+
+.sn-auth-topbar__logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.sn-auth-topbar__wordmark {
+  font-family: "Montserrat", sans-serif;
+  font-weight: 600;
+  font-size: 17.5px;
+  color: var(--sn-brand-navy);
+}

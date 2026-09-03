@@ -2,15 +2,16 @@
  * derived from Figma nodes 5143:6635 (Verifying), 5143:6648 (Verified),
  * 5143:6661 (Link Invalid Or Expired), 5143:6674 (Missing Token).
  *
- * Layout note (same deviation GuardianConsent.css / SignupSplitScreen.css
- * already flagged for their own Figma frames): the source frames each
- * draw their own full-bleed top bar with an embedded Soccernity wordmark,
- * but this app always renders the shared site Header above every routed
- * page (src/layout/AppShell.tsx) -- duplicating a second wordmark bar
- * here would double up under it. Built to render *within* AppShell's
- * content area instead, using a negative margin to cancel its padding so
- * the dark background still reads as full-bleed below the real header,
- * mirroring consent-page's own `margin: -32px` precedent exactly.
+ * Layout note (same approach GuardianConsent.css / ClubPickerStep.css
+ * take): the source frames each draw their own full-bleed top bar with an
+ * embedded Soccernity wordmark, but this route renders under AppShell,
+ * which renders the shared site Header above routed content
+ * (src/layout/AppShell.tsx) -- duplicating a second wordmark bar here
+ * would double up under it. Built to render *within* AppShell's content
+ * area instead, using a negative margin to cancel its padding so the dark
+ * background still reads as full-bleed below the real header. (The four
+ * core auth routes use the AuthChrome logo-only Top Bar instead --
+ * Decision Log #172 -- but /verify-email is not one of them.)
  *
  * Colour values reference the --verify-* custom properties set inline
  * from verifyEmailThemeVars.ts -- do not hardcode hex here. */
