@@ -28,7 +28,7 @@ import { createBrowserRouter } from "react-router";
 import AppShell from "../layout/AppShell";
 import HomePage from "../pages/HomePage";
 import SportsHubPage from "../pages/SportsHubPage";
-import NewsPage from "../pages/NewsPage";
+import BlogPage from "../pages/BlogPage";
 import LeaderboardPage from "../pages/LeaderboardPage";
 import CommunityPage from "../pages/CommunityPage";
 import ClubsPage from "../pages/ClubsPage";
@@ -60,7 +60,7 @@ export const router = createBrowserRouter([
       // Content nav (Community / Sports Hub pillars -- see Header's
       // primaryNavItems in src/layout/navigation.ts).
       { path: "sports-hub", element: <SportsHubPage /> },
-      { path: "news", element: <NewsPage /> },
+      { path: "blog", element: <BlogPage /> },
       { path: "leaderboard", element: <LeaderboardPage /> },
       // The authenticated feed -- Sprint 2's functional core (Feed +
       // Follow, Build Plan Section 4.3 / 4.2). See CommunityPage.tsx.

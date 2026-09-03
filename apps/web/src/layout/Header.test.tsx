@@ -81,7 +81,7 @@ describe("navigation config", () => {
       "Bants",
       "Clubs",
     ]);
-    expect(primaryNavItems.find((i) => i.label === "Blog")?.to).toBe("/news");
+    expect(primaryNavItems.find((i) => i.label === "Blog")?.to).toBe("/blog");
     expect(primaryNavItems.find((i) => i.label === "Clubs")?.to).toBe("/clubs");
   });
 
@@ -120,7 +120,7 @@ describe("Header -- logged out", () => {
 
   it("renders a 'Blog' nav link and no 'News' link", () => {
     renderHeader();
-    expect(screen.getByRole("link", { name: "Blog" }).getAttribute("href")).toBe("/news");
+    expect(screen.getByRole("link", { name: "Blog" }).getAttribute("href")).toBe("/blog");
     expect(screen.queryByRole("link", { name: "News" })).toBeNull();
   });
 
@@ -193,7 +193,7 @@ describe("Header -- logged in (mobile)", () => {
     expect(rowLabels).toEqual(drawerNavItems.map((i) => i.label));
 
     expect(within(nav).getByRole("link", { name: "Clubs" }).getAttribute("href")).toBe("/clubs");
-    expect(within(nav).getByRole("link", { name: "Blog" }).getAttribute("href")).toBe("/news");
+    expect(within(nav).getByRole("link", { name: "Blog" }).getAttribute("href")).toBe("/blog");
     // Messages / Notifications / Settings -- no route yet (Decision Log #166).
     expect(within(nav).queryByRole("link", { name: "Messages" })).toBeNull();
     expect(within(nav).getByText("Settings").getAttribute("aria-disabled")).toBe("true");

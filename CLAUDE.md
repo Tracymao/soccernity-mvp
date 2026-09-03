@@ -4093,9 +4093,11 @@ Full reasoning for every choice above: Build Plan Section 5.
     `clearStoredSession()` + `navigate("/")`.
   - **Decision Log #165 RESOLVED**: `"Blog"` is the canonical label
     everywhere in `apps/web` code (nav label, drawer text, icon
-    aria-label). The `/news` route path and `NewsPage.tsx` filename are
-    internal identifiers, deliberately unchanged — a fuller rename is a
-    larger separate change, flagged not done.
+    aria-label). The `/news` route path and `NewsPage.tsx` filename were
+    left as internal identifiers by this PR — a fuller rename flagged as
+    a larger separate change. **That rename is now done — see
+    `sprint-2/blog-news-rename` below: `/news` → `/blog`, `NewsPage.tsx`
+    → `BlogPage.tsx`, nothing named "news" remains for this pillar.**
   - **New judgment calls flagged (Build Plan Decision Log #166–#168, no
     code fix here)**: **#166** — `/messages`, `/notifications`,
     `/settings` have no route in `router.tsx`; those nav items (and the
@@ -4145,6 +4147,28 @@ Full reasoning for every choice above: Build Plan Section 5.
     / 84 tests, 0 failures** (up from 12/79, no existing test changed);
     dev-server smoke test `/`, `/community`, `/clubs` all HTTP 200. No
     real browser/Playwright check available.
+- **`sprint-2/blog-news-rename` (figma-to-code, 2026-09-03) completes
+  Decision Log #165 — `apps/web` only, `services/api` NOT touched.**
+  The founder's final call: "Blog" is the label AND the internal
+  identifier for this content pillar, because the page is not
+  news-specific — it's the general write-up section covering every
+  content type, including sponsored articles for revenue. The
+  user-facing "Blog" label (nav item + drawer item) was already correct
+  from `sprint-2/navbar-phase-2-icon-nav-and-auth-state`; this PR renames
+  the internal `/news` route path → `/blog` and `apps/web/src/pages/NewsPage.tsx`
+  → `BlogPage.tsx` (`git mv`, component `NewsPage` → `BlogPage`, still a
+  `PlaceholderPage` stub — not converted to a real screen). Updated:
+  `router.tsx` (import + path + element), `navigation.ts` (both `to:`
+  values + the DL #165 header comment), `Header.test.tsx` (three `/news`
+  assertions). Grep confirms zero `NewsPage` / `/news` references remain
+  in `apps/web/src` for this pillar (the unrelated "Trending News"
+  sample sidebar in `CommunityPage.tsx` and `CommunityPage.css`, and the
+  `content-ops` agent's generic "blog/news articles" phrasing, are
+  different concepts and were left). `services/api` has no route/CORS/
+  redirect reference to `/news`. Build Plan Decision Log #165 Status cell
+  rewritten to start with "Resolved by the founder:". **Verification**:
+  `npx tsc --noEmit` exit 0; `npx vitest run` — 12 files / 84 tests, 0
+  failures; `npx vite build` exit 0.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
