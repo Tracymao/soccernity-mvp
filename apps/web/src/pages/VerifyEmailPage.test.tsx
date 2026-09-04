@@ -33,7 +33,11 @@ function renderVerifyPage(searchParams = "?token=real-token-123") {
 
 describe("VerifyEmailPage", () => {
   it("auto-fires POST /auth/verify-email on mount when a token is present", () => {
-    vi.mocked(verifyEmail).mockResolvedValueOnce({ verified: true, userId: "user-1" });
+    vi.mocked(verifyEmail).mockResolvedValueOnce({
+      verified: true,
+      userId: "user-1",
+      guardianConsentStatus: "not_applicable",
+    });
 
     renderVerifyPage();
 
@@ -48,14 +52,52 @@ describe("VerifyEmailPage", () => {
     expect(verifyEmail).not.toHaveBeenCalled();
   });
 
-  it("renders the Verified state after a successful POST /auth/verify-email", async () => {
-    vi.mocked(verifyEmail).mockResolvedValueOnce({ verified: true, userId: "user-1" });
+  it("renders the Verified state after a successful POST /auth/verify-email for a non-minor (guardianConsentStatus: not_applicable)", async () => {
+    vi.mocked(verifyEmail).mockResolvedValueOnce({
+      verified: true,
+      userId: "user-1",
+      guardianConsentStatus: "not_applicable",
+    });
 
     renderVerifyPage();
 
-    expect(await screen.findByText(/email verified/i)).not.toBeNull();
+    const heading = await screen.findByText("Email verified");
+    expect(heading).not.toBeNull();
     const cta = screen.getByRole("link", { name: /continue to soccernity/i }) as HTMLAnchorElement;
     expect(cta.getAttribute("href")).toBe("/profile");
+    // Never the distinct pending-consent copy.
+    expect(screen.queryByText(/approval still pending/i)).toBeNull();
+  });
+
+  it("renders the Verified state after a successful POST /auth/verify-email for a minor whose guardian already confirmed", async () => {
+    vi.mocked(verifyEmail).mockResolvedValueOnce({
+      verified: true,
+      userId: "user-1",
+      guardianConsentStatus: "confirmed",
+    });
+
+    renderVerifyPage();
+
+    expect(await screen.findByText("Email verified")).not.toBeNull();
+    expect(screen.queryByText(/approval still pending/i)).toBeNull();
+  });
+
+  it("renders a genuinely distinct state -- not the ordinary Verified state -- for a minor whose guardian consent is still pending (Decision Log #38)", async () => {
+    vi.mocked(verifyEmail).mockResolvedValueOnce({
+      verified: true,
+      userId: "user-1",
+      guardianConsentStatus: "pending",
+    });
+
+    renderVerifyPage();
+
+    expect(await screen.findByText(/approval still pending/i)).not.toBeNull();
+    // Never claims full/ordinary access.
+    expect(screen.queryByText("Email verified")).toBeNull();
+    expect(screen.queryByRole("link", { name: /continue to soccernity/i })).toBeNull();
+
+    const cta = screen.getByRole("link", { name: /check my guardian consent status/i }) as HTMLAnchorElement;
+    expect(cta.getAttribute("href")).toBe("/guardian-consent");
   });
 
   it("renders a generic error state on a rejected/failed verification call, without leaking which reason", async () => {
@@ -68,5 +110,27 @@ describe("VerifyEmailPage", () => {
     expect(await screen.findByText(/no longer valid/i)).not.toBeNull();
     const alert = screen.getByRole("alert");
     expect(alert.textContent).toMatch(/invalid or has expired/i);
+  });
+
+  it("renders a real, enabled mailto: support link on the error state, not a disabled button (Decision Log #37)", async () => {
+    vi.mocked(verifyEmail).mockRejectedValueOnce(
+      new AuthApiError("This verification link is invalid or has expired."),
+    );
+
+    renderVerifyPage();
+
+    const supportLink = (await screen.findByRole("link", {
+      name: /contact support/i,
+    })) as HTMLAnchorElement;
+    expect(supportLink.getAttribute("href")).toBe("mailto:support@soccernity.com?subject=Email%20verification%20help");
+    expect(supportLink.hasAttribute("disabled")).toBe(false);
+  });
+
+  it("renders a real, enabled mailto: support link on the missing-token state, not a disabled button (Decision Log #37)", () => {
+    renderVerifyPage("");
+
+    const supportLink = screen.getByRole("link", { name: /contact support/i }) as HTMLAnchorElement;
+    expect(supportLink.getAttribute("href")).toBe("mailto:support@soccernity.com?subject=Email%20verification%20help");
+    expect(supportLink.hasAttribute("disabled")).toBe(false);
   });
 });

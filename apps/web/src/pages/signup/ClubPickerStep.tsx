@@ -23,20 +23,24 @@
 // created" text that used to live in that nesting -- no existing caller
 // passes it, so this is backward compatible.
 //
-// FIGMA-VS-SHIPPED-CODE CONFLICT #1 (kept, not fixed -- see this PR's
-// report): the Figma frames label the idle "Load More" button just "Load
-// more", but the already-shipped, tested behavior here uses "Load more
-// clubs" -- kept verbatim since ClubPickerStep.test.tsx's own assertions
-// depend on that exact text and this task's brief is explicit that only
-// markup/CSS classes change here, not behavior (which includes visible
-// text a test locks in).
+// FIGMA-VS-SHIPPED-CODE CONFLICT #1 -- RESOLVED (Decision Log #40,
+// sprint-2/verify-email-support-and-consent-view): the "Load more clubs"
+// button now matches the Figma frame's "Load more" exactly.
 //
-// FIGMA-VS-SHIPPED-CODE CONFLICT #2 (kept, not fixed -- deliberately
-// reproduced per this task's own brief): the empty-state card uses the
-// identical "No clubs match that filter." string for both "zero clubs
-// total" and "filter matched nothing" -- the Figma frame's own Design
-// Notes flag this same ambiguity as inherited from shipped code, not
-// something to split into two messages here.
+// FIGMA-VS-SHIPPED-CODE CONFLICT #2 -- RESOLVED (Decision Log #40): the
+// single "No clubs match that filter." string used to cover both "zero
+// clubs total" and "filter matched nothing" -- now split into two
+// distinct messages, matching the real Figma "Club Picker -- 6 No Clubs
+// Available Yet" frame (built for Decision Log #137,
+// sprint-2/decision-log-133-137-followup): "No clubs available yet."
+// (verbatim per that frame's own copy, quoted directly in
+// docs/sprint-2-decision-log-133-137-followup-report.md section 6 -- no
+// dedicated node id was recorded in that report, so the exact wording was
+// sourced from its quoted text rather than a fresh Figma read) for the
+// catalogue-genuinely-empty case (`clubs.length === 0`, regardless of
+// whether a filter is active), and the original "No clubs match that
+// filter." kept for the filter-matched-nothing case (`clubs.length > 0`
+// but `visibleClubs.length === 0`).
 //
 // RegisterDto.clubId's server-side "auto-join on signup" capability
 // (sprint-2/auto-join-on-signup) is deliberately NOT used by this
@@ -171,7 +175,9 @@ export default function ClubPickerStep({ accessToken, onDone, confirmationMessag
           )}
 
           {!loading && !loadError && visibleClubs.length === 0 && (
-            <p className="club-picker__status">No clubs match that filter.</p>
+            <p className="club-picker__status">
+              {clubs.length === 0 ? "No clubs available yet." : "No clubs match that filter."}
+            </p>
           )}
 
           {!loading && visibleClubs.length > 0 && (
@@ -240,7 +246,7 @@ export default function ClubPickerStep({ accessToken, onDone, confirmationMessag
               onClick={handleLoadMore}
               disabled={loadingMore}
             >
-              {loadingMore ? "Loading…" : "Load more clubs"}
+              {loadingMore ? "Loading…" : "Load more"}
             </button>
           )}
 

@@ -239,9 +239,18 @@ export async function resendGuardianConsentRequest(email: string): Promise<{ mes
 // an invalid, expired, or already-used token all land on the same
 // generic 400 message, mirroring the backend's own trust model exactly.
 
+// `guardianConsentStatus` is additive, from `sprint-2/verify-email-consent-
+// status-field` (Decision Log #38) -- mirrors
+// services/api/src/modules/auth/registration/registration.service.ts's own
+// `VerifyEmailResult` type exactly, including its own reasoning for staying
+// a plain `string` rather than a narrower union (the real values today are
+// 'not_applicable' | 'pending' | 'confirmed', but a future guardian-decline
+// flow, Decision Log #34, would add a fourth without this type needing to
+// change). VerifyEmailPage.tsx is the one caller that branches on it.
 export interface VerifyEmailResponse {
   verified: true;
   userId: string;
+  guardianConsentStatus: string;
 }
 
 export async function verifyEmail(token: string): Promise<VerifyEmailResponse> {
