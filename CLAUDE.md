@@ -4329,6 +4329,50 @@ Full reasoning for every choice above: Build Plan Section 5.
     Page mobile` `87:80` — same Blog section, never navbar-retrofitted,
     mobile still 375px — need the same split treatment).
   - Not merged — founder's call after review.
+- **`sprint-2/admin-panel-structural-pass` (figma-design-system,
+  2026-09-04) was briefed as a coordinated 6-item Admin Panel structural
+  pass (Decision Log #49/#50/#51/#53/#146/#147/#151); it landed **Item 6
+  only** and delivered a full executable plan + 29-screen inventory for
+  the rest. Figma design only, no app code.** Report:
+  `docs/sprint-2-admin-panel-structural-pass-report.md`. Figma writes by
+  the agent (no shell); branch/commit/docx/PR finalised in a follow-up
+  session.
+  - **Item 6 — Calendar token retrofit (DONE, DL #53 partially
+    resolved).** The `calendar 2` variant (`2365:2034`) of `Calendar for
+    scheduled task` (`2365:2033`) — the *only* variant instanced anywhere
+    in the file, on `Contest - Schedule Task` (`5403:6753`) — is fully
+    token-bound: 66 paints rebound to `Soccernity Theme` Light tokens
+    (`color/text/primary` / `secondary` / `on-navy`, `brand/navy`,
+    `color/icon/inactive`, `color/background/surface`), audit after
+    **103 bound / 0 unbound-visible**. 5 paints deliberately left unbound
+    and disclosed: 4 `opacity:0` adjacent-month day numerals + 1 frosted
+    90%-white panel — a bound paint takes the *token's* alpha, which made
+    the invisible days visible; reverted to exact originals. Verified via
+    isolated + in-context screenshots, no layout shift. The un-instanced
+    `calendar 1` variant (`2363:2242`) is still unbound — **DL #178**.
+  - **Items 1–5 — planned, NOT executed.** The agent judged the Admin
+    Shell componentization (Item 2) a ~45–55-call structural refactor
+    across 29 heterogeneous screens (2 shell topologies, 4 frame heights)
+    with real content-clipping risk, and Items 1/3/4/5 all depend on it —
+    the same reason PRs #102/#110/#130/#131 were each their own focused
+    pass. **Founder confirmed: dispatch Item 2 as its own dedicated
+    session, then 1/3/4/5 + #178 as its fast-follow (DL #180).** The
+    executable build+swap plan (component model: 10-variant `Active` set +
+    `Show Action Button` boolean + `Action Label` text prop) and the full
+    29-screen inventory are in the report §2 / §7.
+  - **Founder picks made so the #180 session doesn't re-stall:** icons
+    (**DL #179**) — Moderation `el:ban-circle` → **`carbon:gavel`**,
+    Contest pennant → **`carbon:trophy`**, Users `fi:A_users` →
+    **`carbon:user--multiple`** (also closes **DL #147**), Articles →
+    `carbon:document`, rest per report §1.2. Frame-height rule
+    (**DL #177**) — **1184px is a FLOOR, not a hard clamp**: grow the 16
+    screens at 1024 up to 1184; `Admin — Appeal Review` (1234) and
+    `Admin — Create Competition` (1530) stay at their content-driven
+    heights, nothing forced shorter.
+  - **New Decision Log candidates #177–#180** (transcribed to Build Plan
+    Section 9; forward-pointers appended to #49/#50/#51/#53/#147/#151).
+    #146 unchanged (already resolved by PR #131).
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
