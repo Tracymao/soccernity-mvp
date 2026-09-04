@@ -4640,6 +4640,60 @@ Full reasoning for every choice above: Build Plan Section 5.
   - Forward-pointer appended to **#38**'s Status cell in Build Plan
     Section 9.
   - Not merged — founder's call after review.
+- **`sprint-2/verify-email-support-and-consent-view` (figma-to-code,
+  2026-09-04) closes out three related, previously-open Verify Email /
+  auth-flow items — Decision Log #37, the frontend half of #38, and #40
+  — `apps/web` only.** Depended on `sprint-2/verify-email-consent-status-field`
+  (merged first).
+  - **#37 — real support destination.** The founder confirmed
+    `support@soccernity.com`. "Contact support" on both the Link Invalid
+    Or Expired and Missing Token states is now a real, enabled
+    `mailto:support@soccernity.com?subject=Email%20verification%20help`
+    link (plain subject prefill only, no body, per the task's own "keep
+    it simple" brief) — replacing the disabled placeholder button and its
+    explanatory tooltip. Test coverage confirms the link is real and
+    enabled on both states.
+  - **#38 (frontend half) — distinct pending-consent-minor view.**
+    `VerifyEmailPage.tsx` now branches on the real, additive
+    `guardianConsentStatus` field: a minor whose status is `'pending'`
+    renders a genuinely distinct `verified-pending-consent` state — own
+    heading ("Email verified — approval still pending"), own three-item
+    explanation list, CTA linking to `/guardian-consent` — never the
+    ordinary Verified state's "you're all set" framing or its `/profile`
+    CTA. **Figma checked directly before building anything**
+    (`get_design_context` on "Verify Email — 2 Verified", `5143:6648`):
+    confirmed it renders one single generic Verified layout with no
+    consent-status branch anywhere — no dedicated frame exists for this
+    state (matching PR #107's own prior finding that this was left
+    founder-blocked/never-designed). **Built as a CONSERVATIVE INTERIM
+    DESIGN, explicitly flagged as such in a code comment** — reuses the
+    ordinary Verified state's icon/card/button CSS scaffolding (the email
+    genuinely was verified) but with entirely distinct copy, never
+    claiming full access. Should be replaced wholesale, not patched, if a
+    real Figma frame for this state is ever designed.
+    `apps/web/src/api/auth.ts`'s `VerifyEmailResponse` gained
+    `guardianConsentStatus: string`, mirroring the backend's
+    `VerifyEmailResult` type exactly.
+  - **#40 — ClubPickerStep text fixes.** Button: `"Load more clubs"` →
+    **`"Load more"`**, matching Figma. Empty-state message split into two
+    real, distinct cases: catalogue-genuinely-empty (`clubs.length ===
+    0`, regardless of filter) now reads **`"No clubs available yet."`**
+    — sourced verbatim from the real Figma "Club Picker — 6 No Clubs
+    Available Yet" frame built for Decision Log #137
+    (`sprint-2/decision-log-133-137-followup`), quoted directly from that
+    PR's own report since no node ID was recorded there for a fresh
+    Figma re-read — and the original **`"No clubs match that filter."`**
+    kept for the genuine filter-matched-nothing case
+    (`visibleClubs.length === 0` but `clubs.length > 0`).
+    `ClubPickerStep.test.tsx` updated with no stale assertions left on
+    either the old button text or the old single empty-state message.
+  - **Verified, re-run independently in this session**: `npx tsc
+    --noEmit` exit 0; `npx vitest run` **13 files / 86 → 92 tests, 0
+    failures**, exit 0; `npx vite build` exit 0, clean bundle; `npm run
+    lint` exit 0.
+  - Forward-pointers appended to **#37**, **#38**, and **#40**'s Status
+    cells in Build Plan Section 9.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
