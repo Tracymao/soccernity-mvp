@@ -4476,6 +4476,45 @@ Full reasoning for every choice above: Build Plan Section 5.
   - **New Decision Log candidates #185–#187** (transcribed to Build Plan
     Section 9); forward-pointer appended to #144.
   - Not merged — founder's call after review.
+- **`sprint-2/create-post-contest-tab-states` (figma-design-system,
+  2026-09-04) designs both visibility states of the Create Post
+  mode-tab row, closing Decision Log #148. Figma design only, no app
+  code (the runtime condition depends on the Contest data model, which
+  doesn't exist yet — nothing here is buildable in code today).** Report:
+  `docs/sprint-2-create-post-contest-tab-states-report.md`.
+  - **The founder's decision (#148): the tab row's visibility is driven
+    by whether an ACTIVE CONTEST currently exists** — not by which
+    composer mode the user has selected. Not a user-controlled toggle.
+  - **Active-contest state: `Community — Create Post — Mobile — Active
+    Contest` (`5982:10905`)** — clone of base `5701:8328`, no visible
+    content change (tab row present, "Create a Post" active, exactly as
+    already built), given its own independent identity as "what renders
+    when a contest is active."
+  - **No-active-contest state: `Community — Create Post — Mobile — No
+    Active Contest` (`5982:10932`)** — clone of `5701:8328` with the
+    Mode Tabs row **genuinely removed** (real deletion, not hidden or
+    disabled); the frame's own VERTICAL auto-layout reflowed Content up
+    with zero dead gap, hugging the frame from 457px down to 402px —
+    verified via before/after screenshots.
+  - **Caption note per frame** (`5982:10959` on the active-contest frame,
+    `5982:10960` on the no-active-contest frame), matching the exact
+    style of the Create Post overlay-context notes from
+    `sprint-2/blog-sports-navbar-retrofit` (`5933:10771–3`) — both state
+    plainly that "is there an active contest right now?" has no backend
+    to run against (no Contest/Competition entities/endpoints exist in
+    `services/api`) and is **NOT YET BUILDABLE**.
+  - **Paint audit**: active-contest subtree 23/23 bound; no-active-contest
+    subtree 18/18 bound; both caption notes 1/1 bound. **0 unbound, 0
+    off-palette, 0 `brand/green-tint-28`, 0 new colours** across
+    everything authored.
+  - **New Decision Log candidate #188**: the active-contest check itself
+    has no data source — same category of gap as #157/#70–#73/#134,
+    flagged as its own line item so `figma-to-code` has one canonical
+    entry to check before ever attempting to wire this condition. Open,
+    blocked on the Contest/Competition data model.
+  - Forward-pointer appended to **#148**'s Status cell in Build Plan
+    Section 9; new row **#188** added.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
