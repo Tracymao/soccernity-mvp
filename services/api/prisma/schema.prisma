@@ -502,10 +502,45 @@ model Category {
   articles Article[]
 }
 
+// sprint-2/admin-console-account-entity — Decision Log #54's resolution:
+// the Admin Console needs a real, separate account/auth data model, NOT
+// User with a role check bolted on. AdminUser already existed in this
+// schema (original Section 3 entity, Admin & Operations Console pillar)
+// but only carried {id, email, role, articles} — enough to attribute an
+// Article, never enough to actually log an admin/moderator in or back a
+// real "Admin Profile" screen (Full name / Email / Role / Phone).
+// Deliberately kept the existing name/id space rather than introducing a
+// second, competing "AdminAccount" model — Article.authorAdmin already
+// points at this model, and Section 3 already spec'd this entity under
+// this name; renaming it would be unrelated churn to an existing spec'd
+// entity, not something this PR's brief asked for. Flagged as the actual
+// Decision Log candidate this surfaces: #54's own framing ("an
+// admin-account data model that doesn't exist") was not quite accurate —
+// a minimal one already did — the real gap was that it was never fleshed
+// out or given its own auth path, both of which this PR now builds.
 model AdminUser {
   id       String    @id @default(uuid())
   email    String    @unique
+  // sprint-2/admin-console-account-entity additions below — genuine
+  // schema additions beyond Section 3's original AdminUser field list,
+  // flagged per CLAUDE.md's "the data model is a fixed spec" rule rather
+  // than added silently.
+  passwordHash  String
+  fullName      String
+  phone         String?
+  // "active" | "deactivated" — mirrors User.accountStatus's existing
+  // string-enum convention. No self-service deactivate/reactivate
+  // endpoint exists for AdminUser in this PR (nothing in the Admin
+  // Profile screen asks for one) — this field exists so a future
+  // superadmin-facing "suspend this admin/moderator" action (or a
+  // manual DB flip) can instantly block login without deleting the row
+  // or losing Article.authorAdmin/Report-reviewer attribution history.
+  // AdminAuthService.login() checks this the same way AuthService.login()
+  // checks User.accountStatus.
+  accountStatus String    @default("active")
   role     String // editor | moderator | superadmin
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   articles Article[]
 }
 

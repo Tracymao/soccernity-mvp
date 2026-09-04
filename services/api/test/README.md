@@ -186,6 +186,34 @@ see the remaining gaps listed below.
   deliberately has **no** e2e coverage — see `auth/README.md`'s matching
   entry for why (a plain Prisma read, none of the three e2e-worthy
   categories this file's own guiding principle above lists apply).
+- `admin-auth-isolation.e2e-spec.ts` (added by
+  `sprint-2/admin-console-account-entity`, Decision Log #54) — a fourth
+  reason to add an e2e spec, alongside this file's own three-item guiding
+  principle above: proving a security property that depends on the whole,
+  really-bootstrapped app, not just one class in isolation. Confirms,
+  against a real, single `AppModule` instance and real Postgres/Redis:
+  `AdminAuthFoundationModule`'s and `AuthFoundationModule`'s two
+  independently-configured `JwtService` instances (`ADMIN_JWT_SECRET` vs
+  `JWT_SECRET`) and two disjoint-Redis-namespace refresh-token stores
+  (`admin:refresh:*` vs `auth:refresh:*`) genuinely cannot validate/
+  consume each other's tokens — a real User access token is rejected by
+  every `AdminJwtAuthGuard`-protected route, a real admin access token is
+  rejected by `JwtAuthGuard`-protected User routes, and a real refresh
+  token from either side is rejected by the other side's `/refresh`
+  endpoint. Also covers the full admin login → profile view/edit →
+  change-password → other-sessions-revoked round trip, generic-message
+  login rejection (unknown email / wrong password / deactivated account),
+  and a real unique-email constraint violation on `AdminUser`. Three
+  `describe` blocks, each with its own app instance — the same
+  `account-lifecycle.e2e-spec.ts` precedent (see that file's own
+  bullet above) for budgeting real HTTP calls to the
+  `@AuthRateLimit()`-decorated `/admin/auth/login` route across a shared
+  in-memory `AuthThrottlerGuard` bucket. The cross-authentication block
+  spends **zero** real HTTP calls on any rate-limited route at all —
+  every token it needs is minted directly via `app.get(AdminTokenService)`/
+  `app.get(TokenService)`, since the guard behavior under test there
+  doesn't depend on login/register themselves. See `modules/admin/
+  README.md` for the full architecture writeup this spec proves.
 
 **A real, discovered gap, not a production bug when found — flagged then,
 now fixed at the source but the test workaround itself deliberately

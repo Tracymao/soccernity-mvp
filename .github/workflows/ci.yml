@@ -41,6 +41,13 @@ jobs:
       # full explanation. Obviously-fake, test-only value: must never
       # match any real deployment secret.
       JWT_SECRET: ci-test-only-jwt-secret-do-not-use-in-any-real-environment
+      # sprint-2/admin-console-account-entity — same requirement as
+      # JWT_SECRET above (admin-auth-foundation.module.ts's own
+      # JwtModule.registerAsync has no fallback), added proactively this
+      # time rather than waiting for a first failing CI run to surface it.
+      # Deliberately a different value from JWT_SECRET — that difference
+      # is part of what admin-auth-isolation.e2e-spec.ts proves.
+      ADMIN_JWT_SECRET: ci-test-only-admin-jwt-secret-do-not-use-in-any-real-environment
     services:
       postgres:
         image: postgres:16

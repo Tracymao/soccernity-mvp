@@ -12,6 +12,7 @@ import { UsersModule } from './modules/users/users.module';
 import { FeedModule } from './modules/feed/feed.module';
 import { ClubsModule } from './modules/clubs/clubs.module';
 import { AccountDeletionModule } from './modules/account-deletion/account-deletion.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -72,11 +73,17 @@ import { AccountDeletionModule } from './modules/account-deletion/account-deleti
     // Log #42. No route: registers AccountDeletionSweepService's daily
     // @Cron() job only. See modules/account-deletion/README.md.
     AccountDeletionModule,
+    // sprint-2/admin-console-account-entity — Decision Log #54. Admin
+    // Console account/auth/profile slice ONLY: POST /admin/auth/login,
+    // /admin/auth/refresh, /admin/auth/logout, /admin/auth/change-password,
+    // GET/PATCH /admin/profile. Section 4.8's moderation-queue endpoints
+    // (the rest of the "AdminModule // Sprint 5" placeholder this replaces)
+    // remain unbuilt — see modules/admin/README.md.
+    AdminModule,
     // BanterModule,        // Sprint 3
     // MessagingModule,     // Sprint 3
     // NotificationsModule, // Sprint 3
     // SportsModule,        // Sprint 4
-    // AdminModule,         // Sprint 5
     // GrassrootsModule,    // Sprint 5
     // SearchModule,        // Sprint 6
     // LeaderboardModule,   // Sprint 6
