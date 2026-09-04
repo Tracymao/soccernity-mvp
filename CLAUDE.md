@@ -4741,6 +4741,70 @@ Full reasoning for every choice above: Build Plan Section 5.
   - Forward-pointers appended to **#173**, **#174**, and **#175**'s
     Status cells in Build Plan Section 9.
   - Not merged — founder's call after review.
+- **`sprint-2/articles-page-split-and-navbar` (figma-screen-builder,
+  2026-09-04) gives Articles Page the identical treatment
+  `sprint-2/blog-split-and-pinned-post-mobile` gave Blog Page, resolving
+  Decision Log #176 — net-new frame creation, correctly routed to
+  `figma-screen-builder`, Figma design only.**
+  - **Four new frames, one navbar instance each, visible**: `Articles
+    Page Desktop — Logged In` (`5997:10905`, `header 4` /
+    `2838:3502`) and `— Logged Out` (`5997:11224`, `header 7` /
+    `2841:4104`), both 1440×4657; `Articles Page Mobile — Logged In`
+    (`6000:11346`, `header 4 — mobile` / `5386:6576`) and `— Logged Out`
+    (`6000:11377`, `header 7 — mobile` / `5386:6575`), both genuinely
+    **390px** (Decision Log #86). Placed continuing the Blog row at the
+    same y baseline with the row's established 200px gap, zero overlaps.
+    **Independently re-verified via screenshot in this finalising
+    session** — `header 4`/`header 7` render the correct logged-in
+    (messages icon + avatar) / logged-out (Login button) chrome on
+    desktop, and `header 4 — mobile`/`header 7 — mobile` do the same on
+    mobile.
+  - **Mobile reflow deliberately used a different method than Blog's own
+    pass, for a stated, evidence-based reason**: a throwaway drift test
+    proved Blog's `frame.resize()` approach would corrupt this specific
+    content (188/278 nodes drifted, one SCALE-constrained vector nested
+    in a top-level GROUP actually stretched) — so content was
+    **reparented into a fresh 390px shell** instead (cloning preserves
+    internal geometry exactly; cross-frame `appendChild` doesn't trigger
+    constraint resolution), verified with zero geometry mismatches. The
+    reflow *result* still matches Blog's own approach: content column
+    kept at 335px, shifted uniformly +8px (margins 28 left / 27 right).
+  - **A real brief-premise error was caught, not followed blindly** —
+    logged as **Decision Log #194**. The task brief described mobile's
+    legacy chrome as "a legacy `Group 103` logo lockup"; this was wrong.
+    The real logo lockup is `Group 102` (`359:503`); the nodes actually
+    named `Group 103` are **content** (`384:3`, the Login-via
+    social-icon row; `437:3022`, the footer Soccernity wordmark
+    instance) that must not be deleted. Following the brief literally
+    would have deleted the footer wordmark. **Independently re-verified
+    via raw node metadata in this finalising session**: both real
+    content nodes survive on the new mobile frames (`437:3022`'s
+    equivalent instance correctly repositioned +8px), and only the
+    actual logo lockup was removed.
+  - **Legacy chrome removed (not hidden), matching Blog**: desktop
+    `Group 7` (a live, still-visible "Home / Community / Livescores /
+    About Us" text nav, flagged as **Decision Log #196** — distinct from
+    `Header/header 5`, already archived in PR #147, meaning this frame
+    was live-rendering off-canon navigation right up until this PR) plus
+    its own logo lockup; mobile `bx:menu` hamburger plus `Group 102`.
+  - **`54:434` and `87:80` archived, not deleted** — hidden +
+    `ARCHIVED — ` (em-dash) prefix, all children intact. **Independently
+    re-verified via raw node metadata in this finalising session.**
+    Reference check before archiving: scanned all ~110k nodes on page
+    `0:1` for prototype reactions or derived instances targeting either
+    node — zero found for both.
+  - **New Decision Log candidates #195, #197, #198** (all flagged, none
+    fixed, out of this task's scope): #195 — the Blog/Articles section
+    banner (`5942:12065`) doesn't yet cover the four new frames (~5,620px
+    short); #197 — naming question, whether these should be renamed
+    `Blog — Article Detail — Logged In/Out` rather than `Articles
+    Page ...`, since Blog Page is the section's index/listing and these
+    are single-article detail pages; #198 — desktop top whitespace
+    (221px navbar-to-content gap, inherited unchanged from the original,
+    vs. Blog Desktop's own 81px).
+  - Forward-pointer appended to **#176**'s Status cell; new rows
+    **#194–#198** added, in Build Plan Section 9.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
