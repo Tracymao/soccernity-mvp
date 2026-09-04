@@ -3,6 +3,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { RedisModule } from '../../../redis/redis.module';
 import { ClubsModule } from '../../clubs/clubs.module';
 import { AuthFoundationModule } from '../auth-foundation.module';
+import { GuardianConsentModule } from '../guardian-consent/guardian-consent.module';
 import { EmailVerificationTokenStore } from './email-verification/email-verification-token.store';
 import { RegistrationEmailService } from './email/registration-email.service';
 import { RegistrationController } from './registration.controller';
@@ -25,8 +26,15 @@ import { RegistrationService } from './registration.service';
 // when club pages themselves shipped in PR #58. No circularity risk:
 // ClubsModule imports AuthFoundationModule (not AuthRegistrationModule),
 // same as this module already does directly.
+//
+// GuardianConsentModule imported (sprint-2/verify-email-consent-status-field,
+// Decision Log #38) so RegistrationService can inject GuardianConsentService
+// and reuse getConsentStatusForUser() rather than re-deriving guardian
+// consent status a second, parallel way. No circularity risk: like
+// ClubsModule, GuardianConsentModule does not import AuthRegistrationModule
+// (or any module that does) — see guardian-consent.module.ts's own comment.
 @Module({
-  imports: [AuthFoundationModule, RedisModule, ClubsModule],
+  imports: [AuthFoundationModule, RedisModule, ClubsModule, GuardianConsentModule],
   controllers: [RegistrationController],
   providers: [PrismaService, RegistrationService, EmailVerificationTokenStore, RegistrationEmailService],
 })

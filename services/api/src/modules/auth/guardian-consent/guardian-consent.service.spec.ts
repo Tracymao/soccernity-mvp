@@ -336,4 +336,32 @@ describe('GuardianConsentService', () => {
       expect(prisma.guardian.findUnique).toHaveBeenCalledTimes(2);
     });
   });
+
+  // Decision Log #38 (sprint-2/verify-email-consent-status-field):
+  // getConsentStatusForUser is the shared method both getConsentStatus()
+  // above and POST /auth/verify-email (RegistrationService, a different
+  // module entirely) call — unlike getConsentStatus(), it returns `null`
+  // instead of throwing when there's no Guardian row.
+  describe('getConsentStatusForUser', () => {
+    it('returns the same shape getConsentStatus returns, for a guardian row that exists', async () => {
+      const { service, guardian } = buildService({
+        guardian: buildFakeGuardian({ consentStatus: 'pending', consentTimestamp: null }),
+      });
+
+      const result = await service.getConsentStatusForUser(guardian!.minorUserId);
+
+      expect(result).toEqual({
+        consentStatus: 'pending',
+        guardianEmail: guardian!.email,
+        canResend: true,
+        consentTimestamp: null,
+      });
+    });
+
+    it('returns null (not a 404) when there is no Guardian row for this user', async () => {
+      const { service } = buildService({ guardian: null });
+
+      await expect(service.getConsentStatusForUser('non-minor-user-id')).resolves.toBeNull();
+    });
+  });
 });

@@ -883,3 +883,75 @@ this file's own established standard for that:
   DEFAULT 'active'`, applied and verified against both the local dev
   database and (via `test/global-setup.ts`, automatically) the
   `soccernity_test` e2e database.
+
+## Status update — `guardianConsentStatus` on `POST /auth/verify-email` (`sprint-2/verify-email-consent-status-field`, Decision Log #38)
+
+`POST /auth/verify-email`'s response gained a third field,
+`guardianConsentStatus`, alongside the pre-existing `verified`/`userId` —
+additive, neither existing field renamed or removed. This closes the
+specific gap `sprint-1/f7-club-picker-code`'s report flagged and left open:
+`{ verified, userId }` carried no way for `apps/web`'s `VerifyEmailPage.tsx`
+to tell a fully-verified user apart from a verified-but-still-restricted-
+pending minor, so every verified user landed on the same generic "Verified"
+state regardless of guardian-consent status.
+
+**Values**: `'not_applicable'` (non-minor, or — treated identically, since
+this is a data-invariant question unrelated to the token being verified —
+a minor with no `Guardian` row at all) | `'pending'` | `'confirmed'`, the
+latter two being `Guardian.consentStatus`'s own real, current value,
+untouched. Typed as a plain `string` on `RegistrationService.VerifyEmailResult`
+(not a narrower union), deliberately mirroring
+`GuardianConsentStatusResponse.consentStatus`'s own established convention
+in `guardian-consent.service.ts` — see that type's comment for why (a
+future value, e.g. Decision Log #34's still-unbuilt guardian-decline flow
+adding `'declined'`, shouldn't require a type change here to pass through).
+
+**Reused, not reinvented**: `GuardianConsentService.getConsentStatusForUser`
+(`guardian-consent/guardian-consent.service.ts`) — previously `private`,
+already the method `getConsentStatus()` (the `GET
+/auth/guardian-consent/status` handler) itself calls — was made `public`
+and is now injected directly into `RegistrationService` via
+`GuardianConsentModule`'s new `exports: [GuardianConsentService]`. There is
+exactly one place in this codebase that queries `Guardian` by
+`minorUserId` and shapes the result; `RegistrationService.verifyEmail`
+calls it and maps its `null` return (no `Guardian` row) to the
+`'not_applicable'` sentinel — it does not re-query `Guardian` itself, and a
+test in `registration.service.spec.ts` proves this directly (the mocked
+`PrismaService` fake has no `guardian.findUnique` wired up at all; a direct
+query would throw rather than silently pass).
+
+**No circularity**: `GuardianConsentModule` importing into
+`AuthRegistrationModule` (`registration.module.ts`) follows the exact same
+shape as the pre-existing `ClubsModule` import for `sprint-2/auto-join-on-signup`
+— neither module imports anything that imports `AuthRegistrationModule`
+back.
+
+**Verification**: mocked suite before this change (measured directly, by
+stashing this branch's changes and re-running against a clean checkout of
+`sprint-2/verify-email-consent-status-field`'s base) — **42 suites / 481
+tests, 0 failures**; after — **42 suites / 489 tests, 0 failures** (8 new:
+2 in `guardian-consent.service.spec.ts`, 4 in `registration.service.spec.ts`,
+2 net-new in `registration.controller.spec.ts`, whose existing
+`verify-email` success test was also extended in place to assert the new
+field rather than only adding new cases). `npm run test:e2e` was not
+re-run — this change is a plain `findUnique`-backed enrichment with no raw
+SQL, no transaction/isolation-level reasoning, and no novel Prisma relation
+or constraint (`test/README.md`'s own three e2e triggers), matching the
+precedent already established for `GET /auth/guardian-consent/status`
+itself, which has no e2e coverage for the identical reason (see this
+file's own "Status update" note on `test/account-lifecycle.e2e-spec.ts`
+above). `nest build` and `npm run lint` both clean.
+
+**Safeguarding fields untouched**: `User.isMinor`, `User.guardianId`
+(n/a — this schema links `Guardian.minorUserId` → `User`, not the reverse;
+no `User.guardianId` column exists to touch),
+`Guardian.consentStatus`/`consentToken`/`consentTimestamp` are read-only in
+every line this change touches — nothing here writes to any of them.
+
+**Decision Log candidate, not resolved here**: `Guardian.consentStatus`'s
+only two real values today are `'pending'`/`'confirmed'` — if Decision Log
+#34's guardian-decline endpoint ever ships and adds a `'declined'` value,
+someone needs to decide what `guardianConsentStatus` on this endpoint
+should show for that case (pass it through as-is, matching this field's
+current "mirror the raw column" design, or collapse it into `'pending'`
+for the frontend's purposes). Not decided or guessed at in this PR.

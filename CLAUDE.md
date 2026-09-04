@@ -4599,6 +4599,47 @@ Full reasoning for every choice above: Build Plan Section 5.
   - Forward-pointer appended to **#54**'s Status cell in Build Plan
     Section 9.
   - Not merged — founder's call after review.
+- **`sprint-2/verify-email-consent-status-field` (backend-api,
+  2026-09-04) adds `guardianConsentStatus` to `POST /auth/verify-email`'s
+  response, resolving the backend half of Decision Log #38 — `services/api`
+  only, `apps/web` untouched.** Report: `services/api/src/modules/auth/README.md`'s
+  matching status-update entry.
+  - **New response shape, additive**: `{ verified: true, userId,
+    guardianConsentStatus }` — `guardianConsentStatus` is `'not_applicable'`
+    (not a minor, or a minor with a missing `Guardian` row — a
+    data-invariant case, not a real product state), `'pending'`, or
+    `'confirmed'`. `verified`/`userId` unchanged.
+  - **Reused, not reinvented**: sourced from
+    `GuardianConsentService.getConsentStatusForUser()` — extracted out of
+    the exact method `GET /auth/guardian-consent/status` itself already
+    used internally (made `public`, not duplicated), so there is exactly
+    one place in the codebase that queries `Guardian`-by-`minorUserId` and
+    shapes the result. `GuardianConsentModule` now `exports:
+    [GuardianConsentService]`; `AuthRegistrationModule` imports it —
+    cross-module DI, no circularity (neither module imports the other,
+    confirmed in both modules' own comments). Typed as a plain `string`,
+    mirroring `GuardianConsentStatusResponse.consentStatus`'s own existing
+    convention, so a future value (e.g. a Decision Log #34 `'declined'`
+    state) doesn't need a type change here too.
+  - **Verified, re-run independently in this session**: mocked suite
+    **42 suites / 481 tests → 42 suites / 489 tests, 0 failures** (8 new);
+    e2e suite **not re-run** (no files under `test/` touched — a plain
+    `findUnique`-backed enrichment, no raw SQL/transaction/novel relation,
+    matching the existing no-e2e precedent already set for `GET
+    /auth/guardian-consent/status` itself); `nest build` and `npm run
+    lint` both clean. **`User`/`Guardian` safeguarding fields
+    (`isMinor`/`consentStatus`/`consentToken`/`consentTimestamp`)
+    confirmed untouched — zero `schema.prisma` diff.**
+  - **NOT resolved by this PR**: the frontend half.
+    `VerifyEmailPage.tsx` does not yet branch on this new field — #38's
+    "should a pending-consent minor see a different post-verification
+    view" question is now unblocked, not closed. A future `'declined'`
+    `consentStatus` value's display here (pass through vs. collapse into
+    `'pending'`) is also left open, flagged in
+    `registration.service.ts`'s own comment.
+  - Forward-pointer appended to **#38**'s Status cell in Build Plan
+    Section 9.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
