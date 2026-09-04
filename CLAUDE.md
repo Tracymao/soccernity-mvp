@@ -4373,6 +4373,68 @@ Full reasoning for every choice above: Build Plan Section 5.
     Section 9; forward-pointers appended to #49/#50/#51/#53/#147/#151).
     #146 unchanged (already resolved by PR #131).
   - Not merged — founder's call after review.
+- **`sprint-2/design-cleanup-tokens-renames` (figma-design-system,
+  2026-09-04) — housekeeping: legacy-frame deletion, the first
+  shadow/elevation token, a nav rename, and a Decision Log status-word
+  sweep. Figma design only, no app code.** Figma writes by the agent (no
+  shell); branch/commit/docx/PR finalised in a follow-up session. Report:
+  `docs/sprint-2-design-cleanup-tokens-renames-report.md`.
+  - **Archived Message frames deleted (DL #114, now Resolved).** The 4
+    `ARCHIVED —` legacy Message frames (`1871:2762`, `2025:8112`,
+    `2067:3006`, `2067:3176`) were reference-checked across all ~110k
+    nodes on page `0:1` (prototype reactions, derived instances,
+    overlay/scroll targets) and deleted. Only inbound reference was an
+    archived→archived prototype link, deleted with them. The 6 canonical
+    Message frames are untouched. The 5 archived Community mobile frames
+    are still archived (out of scope here).
+  - **First shadow/elevation token (DL #118, now Resolved).** New COLOR
+    variable **`color/shadow/elevated`** (`Soccernity Theme`,
+    `VariableID:5973:2` — Light `brand/navy` #282E65 @ 14%, Dark
+    `#0D0F21` @ 45% = the existing `color/background/page` Dark value,
+    scope `EFFECT_COLOR`) + effect style **`elevation/menu`**
+    (`DROP_SHADOW` x0 y4 blur16 spread0, colour bound to the variable).
+    A true FLOAT/EFFECT variable for the geometry was rejected — only
+    blur/offset/spread bind to FLOAT vars, which the COLOR-only
+    collection doesn't have. **The `Soccernity Theme` collection is now
+    14 COLOR variables** (13 → 14). Applied to: Message Actions Menu
+    (`5706:8270`, the fake 1px `color/icon/inactive` shadow-border
+    removed); the 4 account-dropdown menu components (`2841:5361`,
+    `2841:5363`, `5685:9300`, `5685:9312` — 20 per-row `DROP_SHADOW`s
+    rebound off `#000000` @ 25%); `Banter post menu setting`
+    (`2459:10077`); the Competition-selector study menu (`5176:6659`).
+    Left intact + flagged: the date-picker 4-layer `#130A2E` panel
+    shadows (a single bound colour would flatten the ramp — **DL #182**);
+    the drawer panel `5870:10692` (no elevation at all — **DL #183**);
+    the account-dropdown per-row (vs container) shadow structure
+    (**DL #181**); the `calendar 2` `#969696` shadow (folded into the
+    **DL #178** calendar-retrofit session).
+  - **Bants/Banter nav rename (DL #163 remaining half, now fully
+    Resolved).** Nav chrome only: `banter` → **`Bants`** (`2838:3560`,
+    `header 4`, propagates to ~60 instances) and `Group 831` → **`Bants`**
+    (`2841:4158`, `header 7`). Drawer already read "Bants"; mobile
+    navbars carry no content-nav row. Content-section "Banter…" frames
+    (Banter homepage, Banter Rooms, the `Filter Tabs (All / My Bants)`
+    component, etc.) deliberately untouched — same scoping precedent as
+    the Blog/News rename (**DL #165**). `header 7`'s other generically
+    named nav items (`Group 833` Sports Hub, `Group 830` Blog) flagged
+    as **DL #184**.
+  - **Decision Log status-word sweep.** 16 rows whose Status still began
+    "Open" despite carrying full resolution/supersession text later in
+    the cell had the leading word corrected to **Resolved** (#97, #102,
+    #103, #110, #114, #118, #137, #146, #153, #155, #156, #158, #168) or
+    **Superseded** (#93, #96, #160) — same stale-prefix bug #165 had
+    before it was fixed; only the leading word changed, resolution text
+    untouched. **#155/#156** (persistent Clubs page + navbar entry point)
+    corrected the same way from earlier navbar work. **#163** reworded to
+    close both halves. **Two founder confirmations written fresh:**
+    **#159** — the shield/club-crest Clubs navbar glyph is final, no
+    further glyph exploration (the shared-icon-library question stays
+    open under DL #49/#179); **#149** — the mobile H2H/Standing
+    navy-for-draw / green / `semantic/alert` scheme is canonical, desktop's
+    off-palette amber is now the flagged deviation.
+  - **New Decision Log candidates #181–#184** (transcribed to Build Plan
+    Section 9); forward-pointers appended to #114/#118/#163/#178.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
@@ -4387,10 +4449,15 @@ Full reasoning for every choice above: Build Plan Section 5.
 - `use_figma` operates on whatever the Figma desktop app currently has open locally — a completely separate connection from key-based reads like `get_metadata`. If a read via file key returns real content but `use_figma` doesn't match, the desktop app almost certainly has the wrong file or page active, not a permissions or data problem. Confirm the correct file is open and frontmost before trusting any `use_figma` result.
 - This file has one real Figma variable collection: **`Soccernity Theme`**
   (`VariableCollectionId:5096:2`), modes **Light** (`5096:0`, default) /
-  **Dark** (`5096:1`), **13** COLOR variables — Sprint D created the original
-  ten, PR #96 added `color/text/on-navy` and `brand/off-white`, and PR #114
+  **Dark** (`5096:1`), **14** COLOR variables — Sprint D created the original
+  ten, PR #96 added `color/text/on-navy` and `brand/off-white`, PR #114
   added `semantic/alert` (`VariableID:5670:8226`, `#FA0606`, Light=Dark,
-  Decision Log #99). Confirm this
+  Decision Log #99), and `sprint-2/design-cleanup-tokens-renames` added
+  `color/shadow/elevated` (`VariableID:5973:2`, Light `brand/navy` @ 14% /
+  Dark `#0D0F21` @ 45%, scope `EFFECT_COLOR`, Decision Log #118) — the
+  file's first shadow token, paired with a new **effect style**
+  `elevation/menu` (`DROP_SHADOW` x0 y4 blur16 spread0) that binds its
+  colour to that variable. Confirm this
   directly (`get_variable_defs` / `figma.variables.getLocalVariableCollectionsAsync()`)
   before assuming any brief's claim about whether variables exist in this file
   — one already has gotten this wrong (`sprint-2/homepage-rebuild`'s second
