@@ -57,6 +57,14 @@ describe('RegistrationService', () => {
       assertClubExists: jest.fn().mockResolvedValue(undefined),
       joinClub: jest.fn().mockResolvedValue({ clubId: 'club-1', joined: true, memberCount: 1 }),
     };
+    // Decision Log #38 (sprint-2/verify-email-consent-status-field):
+    // mocked at the same GuardianConsentService.getConsentStatusForUser
+    // boundary RegistrationService.verifyEmail actually calls — defaults
+    // to `null` (no Guardian row / not a minor), matching how most
+    // verifyEmail tests below don't care about guardian consent at all.
+    const guardianConsentService = {
+      getConsentStatusForUser: jest.fn().mockResolvedValue(null),
+    };
 
     const service = new RegistrationService(
       prisma as any,
@@ -66,6 +74,7 @@ describe('RegistrationService', () => {
       emailService as any,
       config as any,
       clubsService as any,
+      guardianConsentService as any,
     );
 
     return {
@@ -77,6 +86,7 @@ describe('RegistrationService', () => {
       emailService,
       config,
       clubsService,
+      guardianConsentService,
     };
   }
 
@@ -349,6 +359,67 @@ describe('RegistrationService', () => {
       emailVerificationTokenStore.verifyAndConsume.mockResolvedValueOnce(null);
 
       await expect(service.verifyEmail('bad-token')).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    // Decision Log #38 (sprint-2/verify-email-consent-status-field): the
+    // three real response-shape cases apps/web's VerifyEmailPage.tsx needs
+    // to branch on.
+    describe('guardianConsentStatus (Decision Log #38)', () => {
+      it('is "not_applicable" for a non-minor (no Guardian row at all)', async () => {
+        const { service, emailVerificationTokenStore, guardianConsentService } = buildService();
+        emailVerificationTokenStore.verifyAndConsume.mockResolvedValueOnce('adult-1');
+        guardianConsentService.getConsentStatusForUser.mockResolvedValueOnce(null);
+
+        const result = await service.verifyEmail('a-real-token');
+
+        expect(guardianConsentService.getConsentStatusForUser).toHaveBeenCalledWith('adult-1');
+        expect(result).toEqual({ userId: 'adult-1', guardianConsentStatus: 'not_applicable' });
+      });
+
+      it('is "confirmed" for a minor whose guardian has already confirmed consent', async () => {
+        const { service, emailVerificationTokenStore, guardianConsentService } = buildService();
+        emailVerificationTokenStore.verifyAndConsume.mockResolvedValueOnce('minor-confirmed-1');
+        guardianConsentService.getConsentStatusForUser.mockResolvedValueOnce({
+          consentStatus: 'confirmed',
+          guardianEmail: 'guardian@example.com',
+          canResend: false,
+          consentTimestamp: new Date('2026-01-05T12:00:00.000Z'),
+        });
+
+        const result = await service.verifyEmail('a-real-token');
+
+        expect(result).toEqual({ userId: 'minor-confirmed-1', guardianConsentStatus: 'confirmed' });
+      });
+
+      it('is "pending" for a minor whose guardian consent is still pending', async () => {
+        const { service, emailVerificationTokenStore, guardianConsentService } = buildService();
+        emailVerificationTokenStore.verifyAndConsume.mockResolvedValueOnce('minor-pending-1');
+        guardianConsentService.getConsentStatusForUser.mockResolvedValueOnce({
+          consentStatus: 'pending',
+          guardianEmail: 'guardian@example.com',
+          canResend: true,
+          consentTimestamp: null,
+        });
+
+        const result = await service.verifyEmail('a-real-token');
+
+        expect(result).toEqual({ userId: 'minor-pending-1', guardianConsentStatus: 'pending' });
+      });
+
+      it('reuses GuardianConsentService.getConsentStatusForUser rather than querying Guardian itself', async () => {
+        const { service, prisma, emailVerificationTokenStore, guardianConsentService } = buildService();
+        emailVerificationTokenStore.verifyAndConsume.mockResolvedValueOnce('user-1');
+
+        await service.verifyEmail('a-real-token');
+
+        expect(guardianConsentService.getConsentStatusForUser).toHaveBeenCalledWith('user-1');
+        // RegistrationService's own mocked Prisma fake only wires up
+        // guardian.create (needed by register()'s own tests) — no
+        // guardian.findUnique at all. If verifyEmail ever queried Guardian
+        // directly instead of going through GuardianConsentService, this
+        // would throw a TypeError rather than silently pass.
+        expect((prisma.guardian as { findUnique?: unknown }).findUnique).toBeUndefined();
+      });
     });
   });
 });

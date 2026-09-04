@@ -140,6 +140,42 @@ export class GuardianConsentService {
     await this.emailService.sendGuardianConsentEmail(updated.email, updated.consentToken, user.displayName);
   }
 
+  // Sprint 2 / sprint-2/verify-email-consent-status-field (Decision Log
+  // #38): the shared source of truth both GET /auth/guardian-consent/status
+  // (below) and POST /auth/verify-email (RegistrationService.verifyEmail,
+  // via cross-module injection — see guardian-consent.module.ts's
+  // `exports`) derive a caller's guardian-consent state from. Extracted
+  // out of getConsentStatus() specifically so there is exactly ONE place
+  // that queries Guardian-by-minorUserId and shapes the result — not two
+  // parallel implementations that could drift. Public (not private)
+  // specifically so RegistrationService can call it directly rather than
+  // this class growing a second, narrower wrapper method per caller.
+  //
+  // Returns `null` rather than throwing when no Guardian row exists —
+  // unlike getConsentStatus() below, this method's callers need to
+  // distinguish "no guardian-consent flow applies to this user at all"
+  // (the ordinary case for every non-minor) from an error, so the
+  // throw-a-404 decision is left to whichever caller actually wants it
+  // (getConsentStatus does; verifyEmail does not, since email verification
+  // must never fail because of a downstream data-invariant question that
+  // has nothing to do with the token being verified).
+  async getConsentStatusForUser(minorUserId: string): Promise<GuardianConsentStatusResponse | null> {
+    const guardian = await this.prisma.guardian.findUnique({ where: { minorUserId } });
+    if (!guardian) {
+      return null;
+    }
+
+    return {
+      consentStatus: guardian.consentStatus,
+      guardianEmail: guardian.email,
+      // Mirrors resendConsent()'s own gate exactly (`consentStatus !==
+      // 'pending'` -> no resend) so the frontend never has to re-derive
+      // this business rule itself.
+      canResend: guardian.consentStatus === 'pending',
+      consentTimestamp: guardian.consentTimestamp,
+    };
+  }
+
   // GET /auth/guardian-consent/status. `minorUserId` is the CALLER's own
   // id, taken from the verified JWT (`sub`) by the controller — never a
   // path param, and this route is deliberately JwtAuthGuard-only, NOT
@@ -156,19 +192,11 @@ export class GuardianConsentService {
   // established convention (see ClubsService.assertClubExists,
   // UsersService.assertUserExists).
   async getConsentStatus(minorUserId: string): Promise<GuardianConsentStatusResponse> {
-    const guardian = await this.prisma.guardian.findUnique({ where: { minorUserId } });
-    if (!guardian) {
+    const status = await this.getConsentStatusForUser(minorUserId);
+    if (!status) {
       throw new NotFoundException('No guardian consent record exists for this account');
     }
 
-    return {
-      consentStatus: guardian.consentStatus,
-      guardianEmail: guardian.email,
-      // Mirrors resendConsent()'s own gate exactly (`consentStatus !==
-      // 'pending'` -> no resend) so the frontend never has to re-derive
-      // this business rule itself.
-      canResend: guardian.consentStatus === 'pending',
-      consentTimestamp: guardian.consentTimestamp,
-    };
+    return status;
   }
 }

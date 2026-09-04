@@ -5,6 +5,7 @@ import { Guardian, User } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ClubsService } from '../../clubs/clubs.service';
 import { computeConsentTokenExpiresAt } from '../guardian-consent/consent-token.constants';
+import { GuardianConsentService } from '../guardian-consent/guardian-consent.service';
 import { PasswordService } from '../password/password.service';
 import { TokenService } from '../token/token.service';
 import { TokenPair } from '../token/token.types';
@@ -18,6 +19,36 @@ export interface RegisterResult {
   guardian: Guardian | null;
   tokens: TokenPair;
 }
+
+// Sprint 2 / sprint-2/verify-email-consent-status-field (Decision Log
+// #38). POST /auth/verify-email needs to let a minor's own frontend tell
+// apart "fully verified, no consent gate applies" from "still
+// restricted-pending" right after the email-verification step, without a
+// second round-trip to GET /auth/guardian-consent/status.
+//
+// Deliberately a plain `string`, not a narrower TypeScript union — this
+// mirrors GuardianConsentStatusResponse.consentStatus's own established
+// convention (guardian-consent.service.ts) of typing the real DB column's
+// value as `string` rather than hardcoding a union that would go stale
+// the moment a new value (e.g. Decision Log #34's still-unbuilt
+// guardian-decline flow, which would add a 'declined' state) is added to
+// the schema. The three values this endpoint can actually produce today:
+//   - 'not_applicable' — a synthesized value (never stored anywhere): the
+//     caller is not a minor, or is a minor with no Guardian row (a
+//     data-invariant violation RegistrationService should never produce,
+//     but not guaranteed by a DB constraint — treated the same as "not
+//     applicable" here, deliberately, since email verification must
+//     never fail over a downstream consent-data question unrelated to the
+//     token being verified; contrast with getConsentStatus()'s own 404 in
+//     guardian-consent.service.ts, which is the right behavior for ITS
+//     endpoint but wrong for this one).
+//   - 'pending' | 'confirmed' — Guardian.consentStatus's real, current
+//     value, straight from GuardianConsentService.getConsentStatusForUser
+//     (never re-derived independently — see that method's own comment).
+export type VerifyEmailResult = {
+  userId: string;
+  guardianConsentStatus: string;
+};
 
 // Build Plan Section 4.1 (POST /auth/register, POST /auth/verify-email),
 // Section 5.7 (auth spec) and Section 8.3 (guardian-consent flow, steps
@@ -38,6 +69,7 @@ export class RegistrationService {
     private readonly emailService: RegistrationEmailService,
     private readonly config: ConfigService,
     private readonly clubsService: ClubsService,
+    private readonly guardianConsentService: GuardianConsentService,
   ) {}
 
   async register(dto: RegisterDto): Promise<RegisterResult> {
@@ -171,7 +203,7 @@ export class RegistrationService {
     return { user, guardian, tokens };
   }
 
-  async verifyEmail(token: string): Promise<{ userId: string }> {
+  async verifyEmail(token: string): Promise<VerifyEmailResult> {
     const userId = await this.emailVerificationTokenStore.verifyAndConsume(token);
     if (!userId) {
       throw new BadRequestException('Invalid or expired verification token');
@@ -182,6 +214,16 @@ export class RegistrationService {
       data: { verificationStatus: 'verified' },
     });
 
-    return { userId };
+    // Decision Log #38: reuses GuardianConsentService.getConsentStatusForUser
+    // — the exact same query/shape GET /auth/guardian-consent/status itself
+    // is built on — rather than a second, independent way of deriving
+    // consent status. `null` (no Guardian row) covers both "not a minor"
+    // and the data-invariant-violation case identically; see
+    // VerifyEmailResult's own comment for why that's the right behavior
+    // here specifically.
+    const consentStatus = await this.guardianConsentService.getConsentStatusForUser(userId);
+    const guardianConsentStatus = consentStatus ? consentStatus.consentStatus : 'not_applicable';
+
+    return { userId, guardianConsentStatus };
   }
 }

@@ -28,9 +28,26 @@ import { GuardianConsentService } from './guardian-consent.service';
 // also needs AuthFoundationModule -- for JwtAuthGuard's DI graph this
 // time. Already imported here (for AuthThrottlerGuard above), so no new
 // import was required.
+//
+// GuardianConsentService is exported (sprint-2/verify-email-consent-status-field,
+// Decision Log #38) so AuthRegistrationModule can inject it and reuse
+// getConsentStatusForUser() from POST /auth/verify-email, rather than
+// RegistrationService re-querying Guardian and re-deriving consentStatus
+// itself. This is the one deliberate exception to this module's own
+// stated convention (above) of declaring a local PrismaService instead of
+// cross-module DI -- that convention is about not duplicating
+// PrismaService instances, not a rule against ever sharing a genuinely
+// shared piece of business logic; duplicating the actual
+// consent-status-computation logic a second time is exactly what Decision
+// Log #38 asked this PR not to do. No circularity risk: this module does
+// not import AuthRegistrationModule (or any module that does) -- it only
+// reaches directly into registration/email/registration-email.service.ts
+// for a single class, the same "own instance, no module import" pattern
+// used elsewhere in this file.
 @Module({
   imports: [ConfigModule, AuthFoundationModule],
   controllers: [GuardianConsentController],
   providers: [GuardianConsentService, PrismaService, RegistrationEmailService],
+  exports: [GuardianConsentService],
 })
 export class GuardianConsentModule {}

@@ -37,11 +37,18 @@ export class RegistrationController {
     return toRegisterResponse(result);
   }
 
+  // Decision Log #38: `guardianConsentStatus` is additive alongside the
+  // pre-existing `verified`/`userId` fields, not a replacement for either
+  // — see RegistrationService.VerifyEmailResult's own comment for the
+  // full shape/value reasoning. This lets a minor's own frontend
+  // (VerifyEmailPage.tsx) tell a fully-verified user apart from a
+  // verified-but-still-restricted-pending one without a second
+  // round-trip to GET /auth/guardian-consent/status.
   @Post('verify-email')
   @HttpCode(HttpStatus.OK)
   async verifyEmail(@Body() dto: VerifyEmailDto) {
-    const { userId } = await this.registrationService.verifyEmail(dto.token);
-    return { verified: true, userId };
+    const { userId, guardianConsentStatus } = await this.registrationService.verifyEmail(dto.token);
+    return { verified: true, userId, guardianConsentStatus };
   }
 }
 

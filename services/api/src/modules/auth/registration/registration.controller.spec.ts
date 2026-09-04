@@ -148,15 +148,59 @@ describe('RegistrationController (HTTP layer)', () => {
   });
 
   describe('POST /auth/verify-email', () => {
-    it('returns 200 and the verified flag on success', async () => {
-      registrationService.verifyEmail.mockResolvedValueOnce({ userId: 'user-1' });
+    it('returns 200 and the verified flag on success (non-minor, "not_applicable")', async () => {
+      registrationService.verifyEmail.mockResolvedValueOnce({
+        userId: 'user-1',
+        guardianConsentStatus: 'not_applicable',
+      });
 
       const response = await request(app.getHttpServer())
         .post('/auth/verify-email')
         .send({ token: 'a-real-token' })
         .expect(200);
 
-      expect(response.body).toEqual({ verified: true, userId: 'user-1' });
+      expect(response.body).toEqual({
+        verified: true,
+        userId: 'user-1',
+        guardianConsentStatus: 'not_applicable',
+      });
+    });
+
+    // Decision Log #38: the two minor cases, at the HTTP layer.
+    it('returns guardianConsentStatus "confirmed" for a minor whose guardian already confirmed', async () => {
+      registrationService.verifyEmail.mockResolvedValueOnce({
+        userId: 'minor-1',
+        guardianConsentStatus: 'confirmed',
+      });
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/verify-email')
+        .send({ token: 'a-real-token' })
+        .expect(200);
+
+      expect(response.body).toEqual({
+        verified: true,
+        userId: 'minor-1',
+        guardianConsentStatus: 'confirmed',
+      });
+    });
+
+    it('returns guardianConsentStatus "pending" for a minor whose guardian consent is still pending', async () => {
+      registrationService.verifyEmail.mockResolvedValueOnce({
+        userId: 'minor-2',
+        guardianConsentStatus: 'pending',
+      });
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/verify-email')
+        .send({ token: 'a-real-token' })
+        .expect(200);
+
+      expect(response.body).toEqual({
+        verified: true,
+        userId: 'minor-2',
+        guardianConsentStatus: 'pending',
+      });
     });
 
     it('maps an invalid-token BadRequestException to 400', async () => {
