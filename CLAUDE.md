@@ -4515,6 +4515,90 @@ Full reasoning for every choice above: Build Plan Section 5.
   - Forward-pointer appended to **#148**'s Status cell in Build Plan
     Section 9; new row **#188** added.
   - Not merged — founder's call after review.
+- **`sprint-2/admin-console-account-entity` (backend-api, 2026-09-04)
+  gives the Admin Console a genuinely separate account/auth/profile data
+  model, resolving Decision Log #54 — `services/api` only, no Figma/
+  `apps/web` code touched.** Report: `services/api/src/modules/admin/README.md`.
+  - **A real finding, not assumed: `AdminUser` already existed.** #54's
+    own framing ("an admin-account data model that does not exist") was
+    not quite accurate — `AdminUser` was already one of Section 3's
+    original 20 entities (`Article.authorAdmin`'s target), but only
+    carried `{id, email, role, articles}`, nowhere near enough to log an
+    admin in or back the real "Full name / Email / Role / Phone" Admin
+    Profile screen. **Decision: extend `AdminUser` in place** (new
+    `passwordHash`, `fullName`, `phone`, `accountStatus` — mirroring
+    `User.accountStatus`'s `"active"`/`"deactivated"` string-enum
+    convention — `createdAt`, `updatedAt`), rather than inventing a
+    second, competing `AdminAccount` model — `Article.authorAdmin`
+    already points at this name and Section 3 already spec'd it under
+    this name. Migration: `20260904175008_extend_admin_user_for_admin_console`,
+    applied cleanly to both dev and test databases.
+  - **Genuinely separate login/session path, not `User`+role** — the
+    task's own hard requirement. New `AdminTokenService`/
+    `AdminRefreshTokenStore`/`AdminJwtAuthGuard` mirror
+    `TokenService`/`RefreshTokenStore`/`JwtAuthGuard`'s shape and Section
+    5.7's security posture, but never share an instance, a signing
+    secret, or a Redis key namespace with the User-facing versions: own
+    `JwtService` keyed on `ADMIN_JWT_SECRET` (never `JWT_SECRET` — the
+    actual cryptographic proof of isolation), an `aud: "admin-console"`
+    discriminator claim as defense-in-depth, and a disjoint
+    `admin:refresh:*` Redis namespace (vs. `auth:refresh:*`). Only
+    genuinely generic, stateless pieces are reused: `PasswordService`
+    (its own separate provider instance), the plain-`Error`
+    refresh-token-failure classes, `RedisModule`/`AuthRateLimitModule`
+    (both already multiply-imported infra), and the DTO shapes
+    (re-exported under `Admin*` names). **The motivating reason this
+    matters, not a hypothetical**: `schema.prisma`'s own comment on
+    `User.role` has always listed `"admin"` as a theoretical value, even
+    though no endpoint has ever set it (confirmed by grep) — a shared
+    signing secret would have meant a future bug ever setting
+    `User.role = "admin"` could forge a valid-looking admin session
+    purely by role string, with nothing structurally preventing it. The
+    separate secret closes that off completely.
+  - **Endpoints**: `POST /admin/auth/login` (no guard, `@AuthRateLimit()`,
+    same non-enumeration/dummy-hash posture as `POST /auth/login`),
+    `POST /admin/auth/refresh` (no guard), `POST /admin/auth/logout` (no
+    guard, optional bearer for `allSessions`), `POST
+    /admin/auth/change-password` (`AdminJwtAuthGuard`, requires current
+    password, revokes every other session on success), `GET
+    /admin/profile` / `PATCH /admin/profile` (`AdminJwtAuthGuard` — PATCH
+    edits `fullName`/`phone` only, `role`/`email`/`accountStatus` are
+    never self-editable, rejected outright by the global
+    `ValidationPipe`'s `forbidNonWhitelisted`).
+  - **Cross-authentication proven impossible in both directions, not
+    just argued** — new `test/admin-auth-isolation.e2e-spec.ts` boots the
+    real, unmocked `AppModule` against real Postgres/Redis and confirms:
+    a real User access token is rejected by every
+    `AdminJwtAuthGuard`-protected route; a real admin access token is
+    rejected by `JwtAuthGuard`-protected User routes; a real User refresh
+    token is rejected at `/admin/auth/refresh`; a real admin refresh
+    token is rejected at `/auth/refresh`.
+  - **Verified, all re-measured directly, not estimated**: mocked suite
+    **35 → 42 suites / 419 → 481 tests, 0 failures**; e2e suite
+    **8 → 9 suites / 58 → 65 tests, 0 failures**; `nest build` and
+    `npm run lint` both clean. **`User`'s safeguarding fields
+    (`isMinor`/`guardianId`/`consentStatus`/`consentToken`/
+    `consentTimestamp`) confirmed untouched** — the schema diff touches
+    only `AdminUser`.
+  - **Still unbuilt, unchanged by this PR**: Section 4.8's
+    moderation-queue endpoints (Report review, appeal handling — Decision
+    Log #138's "a second admin/moderator reviews an appeal" rule still
+    has no code to attach to) remain Sprint 5 scope.
+  - **New Decision Log candidates #189–#193** (all in
+    `modules/admin/README.md`, transcribed to Build Plan Section 9 in
+    this finalising session): **#189** Section 4.8's moderation-queue
+    endpoints still unbuilt (unchanged scope, tracked so it isn't
+    rediscovered); **#190** no admin-specific rate limit beyond the
+    shared `'auth'` bucket; **#191** no self-service admin/moderator
+    registration endpoint — accounts are provisioned via direct DB
+    insert by design, bootstrapping the first admin is a real, unresolved
+    access-control question; **#192** email is read-only via `PATCH
+    /admin/profile` (judgment call, mirrors `UpdateUserDto`'s precedent);
+    **#193** `AdminUser.accountStatus` has no endpoint that writes it yet
+    (parked for future admin-management work).
+  - Forward-pointer appended to **#54**'s Status cell in Build Plan
+    Section 9.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
