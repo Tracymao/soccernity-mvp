@@ -4805,6 +4805,77 @@ Full reasoning for every choice above: Build Plan Section 5.
   - Forward-pointer appended to **#176**'s Status cell; new rows
     **#194–#198** added, in Build Plan Section 9.
   - Not merged — founder's call after review.
+- **`sprint-2/admin-shell-componentization` (figma-design-system,
+  2026-09-04) does Item 2 ONLY of the coordinated Admin Panel structural
+  pass, dispatched as its own dedicated session per Decision Log #180 and
+  the prior `sprint-2/admin-panel-structural-pass` report's explicit
+  recommendation. Figma design only, no app code.** Report:
+  `docs/sprint-2-admin-shell-componentization-report.md`. Figma writes by
+  the agent (no shell); branch/commit/docx/PR finalised in a follow-up
+  session.
+  - **Admin Shell componentization is DONE.** One `COMPONENT_SET` named
+    "Admin Shell" (`6014:12948`), parked off-canvas, replaces the old
+    7-loose-node shell (2 topologies — 17 GROUP-wrapped screens at
+    655px nav block / SPACE_BETWEEN, 12 loose-FRAME screens at 806px nav
+    block / MIN) across **all 29** Admin Panel screens. 10-value `Active`
+    variant property (Dashboard / Articles / Users / Moderation /
+    Categories / Contest / Competitions / Media / Settings / None), plus
+    `Show Action Button` (boolean) and `Action Label` (text) component
+    properties. Internal constraints (sidebar wash STRETCH, nav block
+    STRETCH + internal SPACE_BETWEEN so the nav list stays top-anchored
+    and Settings stays bottom-pinned, everything else MIN) tested at
+    1024px and 1530px before the swap — confirmed to support all 4 real
+    frame heights in use (1024/1184/1234/1530) with no per-screen rework.
+  - **Every one of the 29 screens' content geometry verified
+    byte-identical before vs. after the swap, with zero deviation** — no
+    screen needed a fix. A separate final structural audit confirmed
+    exactly one clean instance and zero stray old-shell nodes on every
+    screen. Each instance faithfully replicates that screen's own
+    pre-existing `Active`/button state (live-read at swap time, not taken
+    from the prior report's Item 5 KEEP/LOSE *recommendations*, which
+    describe a not-yet-executed future state) — **no button
+    visibility/label was changed anywhere in this pass**, and **no
+    screen's height was changed** (Item 3 remains a separate follow-up).
+    Icon glyphs and labels were not touched, including the reference
+    screen's own pre-existing empty/invisible icon bugs (`fi:A_users`,
+    `el:ban-circle` — Decision Log #147/#179 territory, correctly left
+    for Item 1).
+  - **A new, previously-undocumented Figma rendering bug was found and
+    fixed mid-build (Decision Log #199).** A paint bound to a variable
+    that does not itself carry alpha (`brand/navy`, a plain opaque RGB)
+    combined with a separate fractional paint-level opacity silently
+    resets to `opacity: 1` specifically at `createInstance()` time — a
+    sharper, new finding than this project's existing "a bound paint
+    takes its alpha from the variable" gotcha, which only described
+    `setBoundVariableForPaint()`-time behavior. Found on the sidebar wash
+    (`Rectangle 223`, originally a 12%-opacity `brand/navy` tint,
+    rendering solid navy on every instance); fixed on all 10 variants by
+    using a literal unbound paint at the same resolved value/opacity —
+    same visual result, no new colour. Alpha-carrying tokens
+    (`brand/green-tint`, `color/text/secondary`) were confirmed
+    unaffected by the same bug. File-wide audit for other occurrences of
+    this pattern is flagged, not attempted.
+  - **Two discrepancies against the prior report/brief found and
+    flagged, not silently resolved**: `5569:7813` (Admin — Competition
+    Created (Success)) was listed as one of "4 scrim screens" but has no
+    `Scrim` node at all — swapped with the generic (non-scrim) procedure,
+    passed normally. The 3 Moderation screens (`5794:8635`, `5796:8635`,
+    `5796:8753`) currently show their action button as visible, labelled
+    "Add Member" (leftover from whatever screen they were originally
+    cloned from) — contradicting the prior report's "no primary action
+    today" description; preserved exactly as found per this pass's
+    explicit no-button-changes instruction, flagged for whoever picks up
+    Item 5 next.
+  - Forward-pointer appended to **#180**'s Status cell; new row **#199**
+    added, in Build Plan Section 9.
+  - **Items 1 (icon standardization), 3 (height normalization), 4
+    (sidebar geometry unification beyond what Item 2's own SPACE_BETWEEN
+    fix already gives for free), 5 (top-bar action button KEEP/LOSE), and
+    Decision Log #178 (the un-instanced `calendar 1` variant) remain
+    open** — each now a much smaller, focused operation (per-instance
+    property edits or one edit on the shared component) once dispatched,
+    per Decision Log #180's own reasoning.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
