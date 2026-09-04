@@ -4259,6 +4259,76 @@ Full reasoning for every choice above: Build Plan Section 5.
     four paths and confirmed each renders the Top Bar, no `Primary` nav,
     and zero `console.error`. No real browser/Playwright check available
     — same ceiling as every prior `apps/web` PR.
+- **`sprint-2/blog-split-and-pinned-post-mobile` (figma-screen-builder,
+  2026-09-04) splits the Blog section into one frame per auth state and
+  builds the missing mobile "normal pinned post" feed screen — Figma
+  design only, no app code (`BlogPage.tsx` is still a `PlaceholderPage`
+  stub, so there is nothing to convert).** Figma writes by the
+  `figma-screen-builder` agent (no shell that session); branch, commit,
+  docx Decision Log transcription (#169–#171 forward-pointers + new
+  #173–#176) and PR finalised in a follow-up session with shell access.
+  Full detail: `docs/sprint-2-blog-split-and-pinned-post-mobile-report.md`.
+  **Resolves Decision Log #169 and #171, closes #170's follow-up.**
+  - **Task 1 — Blog split (DL #169).** `Blog Page Desktop` (`1009:128`)
+    and `Blog Page Mobile` (`41:4`) each carried BOTH navbar variants
+    (`header 4` visible + `header 7` hidden) on one frame — PR #151's
+    compromise. Now one frame per auth state, matching Sports:
+    **Blog Page Desktop — Logged In (`5953:10771`, `header 4`)**,
+    **— Logged Out (`5953:11364`, `header 7`)**,
+    **Blog Page Mobile — Logged In (`5956:10960`, `header 4 — mobile`)**,
+    **— Logged Out (`5956:11331`, `header 7 — mobile`)**. Each carries
+    exactly one navbar instance, visible; the opposite variant is
+    **removed, not hidden** (Sports' convention). The dead already-hidden
+    legacy header chrome PR #151 left in place was also dropped from the
+    new frames (kept intact in the archived originals). Originals
+    `1009:128` / `41:4` **archived** — hidden + `ARCHIVED — ` prefix
+    (em-dash, the file's own 12-precedent convention, not the brief's
+    hyphen — flagged). Blog section banner `5942:12065` widened to cover
+    the new frames.
+  - **Task 1 — 375→390 mobile reflow (DL #171).** Both new Blog mobile
+    frames are **390px** (canonical), the 375px original archived.
+    **Content column kept at 335px and re-centred (margins 28/27), NOT
+    stretched to 350px** — widening the six legacy absolute-layout groups
+    would distort the hero photos ~4.5% horizontally and re-wrap text; a
+    true 350px column is a deliberate rebuild, flagged if wanted (report
+    candidate G). Two real `use_figma` bugs hit and fixed mid-task, worth
+    folding into the Figma-notes gotchas: (1) `frame.resize()` applies
+    child **constraints** even on absolute-layout frames — GROUPs have no
+    `constraints` property (their leaves do), so a widen silently drifts
+    children; (2) a leaf's `.x` inside a GROUP is *frame*-relative, not
+    group-relative. Both bad clones were deleted and rebuilt with exact
+    geometry restoration.
+  - **Task 2 — Community — Home Feed with Normal Pinned Post — Mobile
+    (`5956:12797`)**, closing DL #170's follow-up. Desktop had two
+    pinned-post feed-context variants (`2496:4462` contest / `2565:3951`
+    normal); mobile had only the contest one (`5818:9031`). Built from
+    `5818:9031` verbatim — same 390px, same navbar: **instance
+    `5956:12798` → component `5386:6576` (`header 4 — mobile`), in set
+    `2824:4309`, identical to `5818:9031`'s** (a feed *state*, not a
+    compose sub-view, so it takes the site navbar). The only real
+    difference between the desktop normal and contest feed variants is
+    the pin-badge label (confirmed by walking both subtrees, not assumed)
+    — the badge went `Contest post` → **`Pinned post`** (leading-space
+    `" post"` on desktop `2565:3951` is a truncated-looking label; used
+    the clean string on the new frame, left desktop alone — DL #173,
+    same shape as DL #92). **0 unbound / 0 off-palette** on this frame.
+  - **Paint audit:** 0 `brand/green-tint-28`, 0 new colours, 0 overlaps
+    everywhere. The pinned-post frame is fully clean; the four Blog
+    frames carry 40 (desktop) / 6 (mobile) inherited `#d9d9d9` paints —
+    **cloned, not authored**, deliberately left. This surfaced that
+    PR #111's "Blog is token-clean" was incomplete (**DL #174**),
+    including one *visible* defect: an unlabelled 294×67 grey pill in the
+    desktop Blog footer (`5953:11228` / `5953:11821`), where mobile has a
+    "Soccernity." wordmark — likely a missing wordmark placeholder.
+  - **New Decision Log candidates #173–#176** (transcribed to Build Plan
+    Section 9 in this PR): #173 (badge copy divergence desktop vs mobile),
+    #174 (Blog-section `#d9d9d9` debt + the visible footer pill), #175
+    (pre-existing 7px headline/body collision in Blog mobile article
+    cards — proven inherited, byte-identical geometry to the archived
+    375px original), #176 (`Articles Page Desktop` `54:434` / `Articles
+    Page mobile` `87:80` — same Blog section, never navbar-retrofitted,
+    mobile still 375px — need the same split treatment).
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
@@ -4273,8 +4343,10 @@ Full reasoning for every choice above: Build Plan Section 5.
 - `use_figma` operates on whatever the Figma desktop app currently has open locally — a completely separate connection from key-based reads like `get_metadata`. If a read via file key returns real content but `use_figma` doesn't match, the desktop app almost certainly has the wrong file or page active, not a permissions or data problem. Confirm the correct file is open and frontmost before trusting any `use_figma` result.
 - This file has one real Figma variable collection: **`Soccernity Theme`**
   (`VariableCollectionId:5096:2`), modes **Light** (`5096:0`, default) /
-  **Dark** (`5096:1`), 12 COLOR variables — Sprint D created the original ten,
-  PR #96 added `color/text/on-navy` and `brand/off-white`. Confirm this
+  **Dark** (`5096:1`), **13** COLOR variables — Sprint D created the original
+  ten, PR #96 added `color/text/on-navy` and `brand/off-white`, and PR #114
+  added `semantic/alert` (`VariableID:5670:8226`, `#FA0606`, Light=Dark,
+  Decision Log #99). Confirm this
   directly (`get_variable_defs` / `figma.variables.getLocalVariableCollectionsAsync()`)
   before assuming any brief's claim about whether variables exist in this file
   — one already has gotten this wrong (`sprint-2/homepage-rebuild`'s second
