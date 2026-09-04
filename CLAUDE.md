@@ -4874,7 +4874,88 @@ Full reasoning for every choice above: Build Plan Section 5.
     Decision Log #178 (the un-instanced `calendar 1` variant) remain
     open** — each now a much smaller, focused operation (per-instance
     property edits or one edit on the shared component) once dispatched,
-    per Decision Log #180's own reasoning.
+    per Decision Log #180's own reasoning. **All five are now DONE — see
+    the next bullet.**
+  - Not merged — founder's call after review.
+- **`sprint-2/admin-panel-fast-follow` (figma-design-system, 2026-09-05)
+  is the fast-follow to `sprint-2/admin-shell-componentization` (merged)
+  — Items 1/3/4/5 from the original structural-pass report, plus
+  Decision Log #178. Figma design only, no app code.** Report:
+  `docs/sprint-2-admin-panel-fast-follow-report.md`. Figma writes by the
+  agent (no shell); branch/commit/docx/PR finalised in a follow-up
+  session. **Decision Log #180 is now fully closed** — all of Items
+  1/3/4/5 plus #178 are done, not just planned.
+  - **Precondition re-verified live first** (per the task's own mandatory
+    first step): the `Admin Shell` COMPONENT_SET (`6014:12948`) and its
+    29 instances confirmed to actually exist before any work began.
+  - **Item 1 — icon standardization on Carbon (Decision Log #49/#147/
+    #179), DONE.** All 9 sidebar nav icons redrawn once on the shared
+    component and inherited by all 29 screens: Dashboard → `carbon:
+    dashboard`, Articles → `carbon:document`, Users → `carbon:user--
+    multiple` (**closes Decision Log #147** — the old `fi:A_users`
+    rendered as empty/invisible fills; the new glyph has real solid
+    fills), Moderation → `carbon:gavel` (founder-approved), Categories →
+    `carbon:categories`, Contest → `carbon:trophy` (founder-approved),
+    Competitions → renamed only to `carbon:chart-column` (geometry was
+    already correct per PR #131), Media → `carbon:image`, Settings →
+    `carbon:settings`. Applied across all 9 nav-row slots × 10 `Active`
+    variants (90 icon-row edits), active/inactive coloring read live per
+    row, not assumed. **A real Figma bug was found and fixed**:
+    `figma.union()`/`figma.subtract()` discard input shapes' own fills,
+    resetting the result to default gray — fixed by re-setting `.fills`
+    on the resulting boolean node itself (Decision Log #201, a new
+    Figma-authoring gotcha for the standing notes).
+  - **Item 3 — frame height (Decision Log #50, via #177's "1184 is a
+    floor" resolution), DONE.** 16 screens grown 1024→1184 (15 plain +
+    1 scrim/modal screen — `Settings - Delete Role`, `5403:7205` — whose
+    scrim and confirm dialog were explicitly resized/recentered to
+    match), all confirmed zero content-geometry drift. `Admin — Appeal
+    Review` (1234) and `Admin — Create Competition` (1530) confirmed
+    left untouched, not shrunk.
+  - **Item 4 — sidebar geometry unification (Decision Log #151),
+    CONFIRMED, not redone.** Settings correctly pins to the sidebar's
+    bottom on all 3 required height variants (already-1184, just-grown
+    1024→1184, and the 1530 screen) via the componentized shell's own
+    `SPACE_BETWEEN` nav-block constraint from `sprint-2/admin-shell-
+    componentization` — no component-level fix was needed.
+  - **Item 5 — top-bar action button KEEP/LOSE (Decision Log #51),
+    DONE.** Applied to all 29 screens: 10 KEEP (9 original list items +
+    Moderation Queue's founder-resolved two-button special case), 16
+    LOSE (every claimed in-content submit button — e.g. "Submit Post",
+    "Save Changes", the 3 Moderation action buttons — verified to
+    genuinely exist before its top-bar button was removed; none needed
+    the leave-alone fallback), 3 already-removed (Dashboard, Media
+    Preview, Admin Profile) unchanged. **Admin — Moderation Queue**
+    (`5794:8635`) got its founder-resolved two-button treatment: `Show
+    Action Button=true`/`Action Label="Filter"` on the shared component
+    slot, plus a new standalone `Button — Export Queue` (`6073:14056`)
+    added directly into the screen's own `Content > Top Row`. **A real,
+    pre-existing layout defect was found and flagged, not fixed**
+    (Decision Log #200): this screen's own `Content`/`Table` frames
+    (`y=45`–`424`) fully overlap and render on top of the shared shell's
+    persistent top-bar row (`y=186`–`227`), so the correctly-configured
+    "Filter" button is structurally invisible — pre-existing, unrelated
+    to this session's own edits, and not fixed here since repositioning
+    a screen's content is layout redesign beyond this task's "toggle the
+    shared component" scope. The same root-cause structure exists on
+    `Admin — Report Detail & Action`/`Admin — Appeal Review` but produces
+    no visible defect there since both are `Show Action Button=false`.
+  - **Decision Log #178 — `calendar 1` retrofit, DONE**, closing it out
+    fully alongside `calendar 2`'s earlier retrofit (Decision Log #53).
+    `calendar 1` (`2363:2242`) reconciled node-by-node against `calendar
+    2`'s already-completed treatment (its structure differs slightly, not
+    a literal clone) and bound to the same `Soccernity Theme` Light
+    tokens. Final count: **100 bound / 4 unbound-visible (disclosed) / 1
+    unbound-hidden (disclosed)** — the same 4+1 disclosed shape as
+    `calendar 2`'s own precedent (opacity-0 trailing-day numerals + one
+    frosted panel that a bound paint would force to full opacity). One
+    disclosed judgment call: the time-picker's neutral-grey text (no
+    matching neutral token in this file) was bound to `color/text/
+    secondary` as the closest real semantic match, a small visible hue
+    shift disclosed rather than silently made.
+  - Forward-pointers appended to **#49, #50, #51, #53, #147, #151, #179,
+    #180**'s Status cells; new rows **#200, #201** added, in Build Plan
+    Section 9.
   - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
