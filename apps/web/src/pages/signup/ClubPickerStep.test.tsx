@@ -129,11 +129,32 @@ describe("ClubPickerStep", () => {
     renderStep();
     await screen.findByText("Riverside FC");
 
-    fireEvent.click(screen.getByRole("button", { name: /load more clubs/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^load more$/i }));
 
     await waitFor(() => expect(listClubs).toHaveBeenCalledWith("test-token", "cursor-1"));
     expect(await screen.findByText("Harbour United")).not.toBeNull();
-    expect(screen.queryByRole("button", { name: /load more clubs/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^load more$/i })).toBeNull();
+  });
+
+  it("shows the catalogue-empty message when GET /clubs returns zero clubs (Decision Log #40)", async () => {
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
+
+    renderStep();
+
+    expect(await screen.findByText("No clubs available yet.")).not.toBeNull();
+    expect(screen.queryByText("No clubs match that filter.")).toBeNull();
+  });
+
+  it("shows the filter-matched-nothing message when clubs are loaded but the filter excludes all of them (Decision Log #40)", async () => {
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [CLUB_A, CLUB_B], nextCursor: null });
+
+    renderStep();
+    await screen.findByText("Riverside FC");
+
+    fireEvent.change(screen.getByLabelText(/filter clubs by name/i), { target: { value: "no such club" } });
+
+    expect(await screen.findByText("No clubs match that filter.")).not.toBeNull();
+    expect(screen.queryByText("No clubs available yet.")).toBeNull();
   });
 
   it("renders a club the caller already belongs to (joined: true from GET /clubs) in the Joined state on first paint, no click (Decision Log #154)", async () => {

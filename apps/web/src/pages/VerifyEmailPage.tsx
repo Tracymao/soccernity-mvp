@@ -23,26 +23,32 @@
 // authenticated destination that exists right now, so the CTA routes
 // there instead of "/".
 //
-// OPEN PRODUCT DECISION, carried forward rather than resolved here (see
-// this PR's own report): the Verified state's "Under-18 accounts may
-// still be waiting" row is a disclosure only. { verified, userId } (the
-// real POST /auth/verify-email response shape) carries no consent-status
-// field to branch on, and nothing here redirects a pending-consent minor
-// to a different view -- every successful verification renders this same
-// state regardless of isMinor/consent status. Whether it should route
-// differently for a pending-consent minor is left open, matching the
-// merged design PR's own report.
+// PENDING-CONSENT-MINOR STATE -- RESOLVED (Decision Log #38,
+// sprint-2/verify-email-support-and-consent-view): `POST
+// /auth/verify-email` now returns an additive `guardianConsentStatus`
+// field (see VerifyEmailResult in registration.service.ts and
+// VerifyEmailResponse in ../api/auth.ts). A minor whose
+// `guardianConsentStatus === 'pending'` now gets a genuinely distinct
+// render branch (see the `verified-pending-consent` status below) instead
+// of the ordinary Verified state's "full access" framing. Checked Figma
+// directly before building anything (get_design_context on "Verify Email
+// -- 2 Verified", 5143:6648): it renders one single generic Verified
+// layout with no consent-status branch anywhere -- there is still no
+// dedicated Figma frame for this state, confirming CLAUDE.md's own
+// documented history (PR #107 lists it as a founder-blocked, never-
+// designed product decision). The `verified-pending-consent` block below
+// is therefore a CONSERVATIVE INTERIM DESIGN, built without a matching
+// Figma source, not a finished Figma-sourced screen -- see its own inline
+// comment further down for the full detail, matching this project's
+// established "flagged, not invented as if real" discipline (see e.g.
+// EditProfileModal.tsx's disabled unbacked fields, or how ClubPickerStep
+// was flagged before it had a real Figma screen).
 //
-// RECOVERY-AFFORDANCE GAP (flagged, not silently resolved): the Figma
-// frames for states 3 and 4 both show a secondary "Contact support"
-// button, but no resend-verification endpoint and no support/contact
-// destination (mailto, /contact route, etc.) exist anywhere in this
-// codebase (grepped services/api/src for "resend" -- the only hit is the
-// unrelated POST /auth/guardian-consent/resend; grepped apps/web/src for
-// "mailto:"/"support@"/"contact" -- zero matches). Rendered here as a
-// disabled button rather than a dead link or a button bound to nothing --
-// visually present (matching the Figma layout), but explicitly inert, not
-// pretending to work.
+// RECOVERY-AFFORDANCE GAP -- RESOLVED (Decision Log #37,
+// sprint-2/verify-email-support-and-consent-view): the founder has
+// confirmed the real support destination, `support@soccernity.com`. The
+// "Contact support" button on states 3 and 4 is now a real, enabled
+// `mailto:` link rather than a disabled placeholder.
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { verifyEmail, AuthApiError } from "../api/auth";
@@ -51,10 +57,13 @@ import "./verify-email/VerifyEmail.css";
 
 const GENERIC_ERROR_MESSAGE = "This verification link is invalid or has expired.";
 
-const NO_SUPPORT_CHANNEL_TITLE =
-  "There is no dedicated support contact yet -- please try the link from your email again, or reach out through wherever you originally signed up.";
+// Decision Log #37: real support destination, confirmed by the founder.
+// A plain subject prefill only -- no body -- per this task's own "keep it
+// simple, don't over-engineer" guidance; the person can add whatever
+// context they need once their email client opens.
+const SUPPORT_MAILTO_HREF = "mailto:support@soccernity.com?subject=Email%20verification%20help";
 
-type Status = "verifying" | "verified" | "error" | "missing";
+type Status = "verifying" | "verified" | "verified-pending-consent" | "error" | "missing";
 
 const WHAT_HAPPENS_NEXT = [
   {
@@ -68,6 +77,27 @@ const WHAT_HAPPENS_NEXT = [
   {
     title: "Under-18 accounts may still be waiting",
     body: "If a guardian approval is still pending, some features stay switched off until it is approved.",
+  },
+];
+
+// PENDING-CONSENT-MINOR STATE content -- see this file's own header
+// comment for why this whole branch is a conservative, non-Figma-sourced
+// interim design (Decision Log #38). Deliberately distinct from
+// WHAT_HAPPENS_NEXT above, not a copy of it with one row swapped -- this
+// state must never claim the same "you're all set" framing the ordinary
+// Verified state uses.
+const PENDING_CONSENT_STEPS = [
+  {
+    title: "Your email address is confirmed",
+    body: "You will not be asked to verify this address again.",
+  },
+  {
+    title: "Your account is still restricted",
+    body: "Your guardian has not yet approved your account. Some features stay switched off until they do.",
+  },
+  {
+    title: "Check your live status any time",
+    body: "See exactly what is switched off, and resend the approval request, from your guardian consent status page.",
   },
 ];
 
@@ -114,8 +144,12 @@ export default function VerifyEmailPage() {
     setStatus("verifying");
 
     verifyEmail(token)
-      .then(() => {
-        if (!cancelled) setStatus("verified");
+      .then((result) => {
+        if (cancelled) return;
+        // Decision Log #38: branch on the real, additive
+        // guardianConsentStatus field rather than always rendering the
+        // ordinary "you're all set" Verified state.
+        setStatus(result.guardianConsentStatus === "pending" ? "verified-pending-consent" : "verified");
       })
       .catch((error) => {
         if (cancelled) return;
@@ -176,6 +210,54 @@ export default function VerifyEmailPage() {
           </>
         )}
 
+        {/* CONSERVATIVE INTERIM DESIGN -- no Figma frame exists for this
+            state (see this file's own header comment, Decision Log #38).
+            Deliberately reuses the ordinary Verified state's icon/card/
+            button scaffolding and CSS classes -- the email genuinely was
+            verified, so the same success icon is honest here -- but the
+            heading, body copy, list content, and CTA are all distinct:
+            this branch must never claim full access ("you can sign in...
+            from now on" / "Continue to Soccernity") the way the ordinary
+            Verified state does. Links to the real, existing
+            /guardian-consent route (GuardianConsentPage.tsx), where the
+            minor can see their live status and trigger a resend -- never
+            re-derives or guesses that status here. */}
+        {status === "verified-pending-consent" && (
+          <>
+            <div className="verify-icon-circle verify-icon-circle--success" aria-hidden="true">
+              ✓
+            </div>
+            <div className="verify-header">
+              <h1 className="verify-heading">Email verified — approval still pending</h1>
+              <p className="verify-subheading">
+                Your email address is confirmed, but your account is still waiting on your guardian&rsquo;s
+                approval. It stays restricted until they approve it.
+              </p>
+            </div>
+            <div className="verify-card">
+              <p className="verify-card__title">What this means right now</p>
+              <div className="verify-list">
+                {PENDING_CONSENT_STEPS.map((row, index) => (
+                  <div className="verify-row" key={row.title}>
+                    <span className="verify-row__icon" aria-hidden="true">
+                      {index + 1}
+                    </span>
+                    <div className="verify-row__text">
+                      <p className="verify-row__title">{row.title}</p>
+                      <p className="verify-row__body">{row.body}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="verify-actions">
+              <Link to="/guardian-consent" className="verify-button verify-button--primary">
+                Check my guardian consent status
+              </Link>
+            </div>
+          </>
+        )}
+
         {status === "error" && (
           <>
             <div className="verify-icon-circle verify-icon-circle--neutral" aria-hidden="true">
@@ -207,14 +289,9 @@ export default function VerifyEmailPage() {
               <Link to="/login" className="verify-button verify-button--primary">
                 Back to sign in
               </Link>
-              <button
-                type="button"
-                className="verify-button verify-button--secondary"
-                disabled
-                title={NO_SUPPORT_CHANNEL_TITLE}
-              >
+              <a href={SUPPORT_MAILTO_HREF} className="verify-button verify-button--secondary">
                 Contact support
-              </button>
+              </a>
             </div>
           </>
         )}
@@ -251,14 +328,9 @@ export default function VerifyEmailPage() {
               <Link to="/login" className="verify-button verify-button--primary">
                 Back to sign in
               </Link>
-              <button
-                type="button"
-                className="verify-button verify-button--secondary"
-                disabled
-                title={NO_SUPPORT_CHANNEL_TITLE}
-              >
+              <a href={SUPPORT_MAILTO_HREF} className="verify-button verify-button--secondary">
                 Contact support
-              </button>
+              </a>
             </div>
           </>
         )}

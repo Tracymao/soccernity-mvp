@@ -221,11 +221,6 @@
   border: 1px solid var(--verify-icon-inactive);
 }
 
-.verify-button--secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .verify-status-message {
   font: 400 16px/1.6 "Inter", sans-serif;
   color: var(--verify-text-secondary);
