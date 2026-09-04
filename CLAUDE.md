@@ -4694,6 +4694,53 @@ Full reasoning for every choice above: Build Plan Section 5.
   - Forward-pointers appended to **#37**, **#38**, and **#40**'s Status
     cells in Build Plan Section 9.
   - Not merged — founder's call after review.
+- **`sprint-2/blog-badge-token-collision-fixes` (figma-design-system,
+  2026-09-04) fixes three issues on the four existing Blog frames from
+  `sprint-2/blog-split-and-pinned-post-mobile` — `5953:10771` (Desktop,
+  Logged In), `5953:11364` (Desktop, Logged Out), `5956:10960` (Mobile,
+  Logged In), `5956:11331` (Mobile, Logged Out). Figma design only, no
+  app code.**
+  - **#173 — pinned-post badge copy, resolved.** Desktop node
+    `2565:4178` (inside `2565:3951`) confirmed to read `" post"` (leading
+    space, verified before editing) and fixed to **`"Pinned post"`**,
+    matching the sibling `"Contest post"` badge and the mobile frame
+    `5956:12797`'s own already-correct label. Independently re-verified
+    via screenshot in this finalising session.
+  - **#174 — Blog-section `#d9d9d9` token debt, resolved for the 4 named
+    Blog Page frames only.** Re-audited directly: **92** `#d9d9d9` paints
+    found (not the ~46 estimated in the brief); **90** are image-backing
+    placeholder plates, rebound to `brand/green-tint` (resolving the
+    token's real RGB/alpha before binding, per this file's own gotcha) —
+    the PR #128 precedent. The remaining **2** are the visible 294×67
+    footer pill (one in each desktop frame's own footer group) —
+    confirmed by the founder to be a missing wordmark, not decoration —
+    **deleted and replaced with a real "Soccernity." text node**, styled
+    from the mobile footer's own wordmark (Montserrat ExtraBold, bound to
+    `color/text/on-navy`), scaled 15px → 30px matching this page's
+    established 2x mobile→desktop type-scale ratio. **Final re-audit: 0
+    unbound/off-palette paints remain in any of the 4 frames** —
+    independently re-confirmed via screenshot (clean white-on-navy
+    "Soccernity." wordmark, correctly centered) in this finalising
+    session. **Still open, out of this PR's scope**: the 5 `#d9d9d9`
+    paints on Articles Page Desktop (`54:434`) and 4 on Articles Page
+    mobile (`87:80`) that #174's own Decision-needed text also named —
+    only the 4 Blog Page frames were in scope here.
+  - **#175 — text collision fix, resolved.** Fixed on all **36** affected
+    article-row instances across both mobile frames (18 per frame — 6
+    sections × 3 secondary cards each), found systematically rather than
+    just the first instance. Confirmed each headline/body pair's parent
+    is a plain `GROUP` (not auto-layout) before choosing a fix, per this
+    file's own gotcha about auto-layout children silently overriding
+    manual `y` edits. Fix: each instance's body-copy `y` set to exactly
+    `headline.y + headline.height` — every instance had exactly a 7px
+    overlap before and 0px after. Available vertical space in this legacy
+    layout is tight, so headline/body now sit flush rather than with
+    extra breathing room — a bigger layout change was judged out of
+    scope. Independently re-verified via screenshot (three visible
+    article cards, no overlap) in this finalising session.
+  - Forward-pointers appended to **#173**, **#174**, and **#175**'s
+    Status cells in Build Plan Section 9.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
