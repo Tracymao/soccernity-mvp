@@ -4435,6 +4435,47 @@ Full reasoning for every choice above: Build Plan Section 5.
   - **New Decision Log candidates #181–#184** (transcribed to Build Plan
     Section 9); forward-pointers appended to #114/#118/#163/#178.
   - Not merged — founder's call after review.
+- **`sprint-2/bants-mobile-categories-view` (figma-screen-builder,
+  2026-09-04) builds the one net-new screen that closes Decision Log
+  #144 — the second Bants mobile categories-view state. Figma design
+  only, no app code (Bants has no backend; `/banter-rooms*` is unbuilt
+  Sprint 3 work — `figma-to-code` must not wire this screen to data).**
+  Report: `docs/sprint-2-bants-mobile-categories-view-report.md`.
+  - **New frame: `Bants — Search Filter (Categories) — My Bants —
+    Mobile` (`5980:10881`)**, 390×758, in the Bants mobile row. Navbar
+    instance **`5980:10882` → component `5386:6576` (`header 4 —
+    mobile`)** — matches `5650:8221`'s and `5650:8161`'s own navbar
+    (logged-in variant; "My Bants" is authenticated by definition).
+  - **Built by cloning `5650:8221`** (mobile Search Filter Categories)
+    and swapping to the My Bants state: the `Filter Tabs` instance
+    (`5980:10912`) moved via `setProperties` to variant `2459:4839`
+    (My Bants active — the same variant `5650:8161` uses), and the list
+    replaced with clones of the two canonical user's-own rows from
+    `5650:8161`. Desktop reference `2459:12447` was investigated —
+    it renders near-blank because a full-bleed 100%-opaque white
+    rectangle occludes the page under the Filter dialog; diffing it
+    against sibling `2459:10083` showed **the only real delta is which
+    Categories pill is selected**, so the mobile delta is
+    correspondingly narrow. No copy / label / count / empty state
+    invented. Not reproduced: the modal presentation (`5650:8221`
+    already flattens the identical dialog inline), Date/Tag fields (they
+    live on `5803:8876` — mobile splits the desktop modal into a filter
+    *panel* and a *results* screen, **DL #187**), and the desktop's 12
+    lorem placeholder rows.
+  - **Paint audit:** 62 paints / 61 bound / **1 unbound** (the shared
+    navbar-instance avatar `IMAGE` fill, known-acceptable) / 0
+    off-palette / 0 `brand/green-tint-28` / 0 new colours. 0 overlaps.
+  - **DL #144 fully closed on the design side** — every desktop Bants
+    frame now has a mobile counterpart (full mapping in the report §6).
+    Still open, not closed by this: Bants *desktop* debt — **DL #185**
+    (both desktop "search filter — categories" frames occlude their own
+    page with an opaque white scrim), **DL #186** (the desktop filter
+    dialog's divider `2459:14472` still carries unbound `#034694`
+    club-crest blue — outside PR #99's sweep), plus pre-existing #98.
+    Both #185/#186 recommended for a scoped `figma-design-system` pass.
+  - **New Decision Log candidates #185–#187** (transcribed to Build Plan
+    Section 9); forward-pointer appended to #144.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
