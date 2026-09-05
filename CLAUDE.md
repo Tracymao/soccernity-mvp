@@ -5289,6 +5289,45 @@ Full reasoning for every choice above: Build Plan Section 5.
     several other scattered gotchas named inline elsewhere in this file
     remain a real, disclosed follow-up sweep, not done here.
   - Not merged — founder's call after review.
+- **`sprint-2/footer-standardization` (figma-design-system, 2026-09-05)
+  replaces every non-canonical footer file-wide with the canonical footer
+  established on the Home Page rebuild (Decision Log #46) — a scoped edit
+  pass on existing frames, no new screens, no app code.** Report:
+  `docs/sprint-2-footer-standardization-report.md`. New Decision Log
+  **#209**.
+  - **24 footer instances replaced**: 22 "Footer — Soccernity Global"
+    instances on Leaderboard/Contest/Competition-tab frames (desktop +
+    mobile) — confirmed live to carry a structurally older pattern
+    (plain-text social labels with no icons, an extra "Cookie Policy"
+    link the canonical set doesn't have, no hairline rule, no logo mark
+    in the wordmark) — plus **2 compact 96px-tall "Footer" stubs** on
+    Sports/Livescores mobile (Logged Out `5647:8166`, Logged In
+    `5647:8315`), confirmed to be genuinely missing the social bar and
+    full legal-links row entirely.
+  - **"Footer Action" nodes (unrelated button bars) and Admin Panel
+    frames were checked live and confirmed to need no exclusion** — none
+    carried the old pattern to begin with.
+  - **Method note, a real adaptation of this file's own precedent**: all
+    24 target parent frames are genuine `VERTICAL` auto-layout
+    (`primaryAxisSizingMode: AUTO`), unlike the absolute-layout/GROUP
+    content the `frame.resize()`-on-GROUPs gotcha (see "Figma-authoring
+    gotchas" above) was found on — so no manual resize/reposition math
+    or reparent-into-a-fresh-shell trick was needed. Cloning the
+    canonical footer, `insertChild`-ing it at the old footer's exact
+    index, then removing the old footer let each frame's own height grow
+    automatically via its own hug sizing (desktop +85px, mobile +86px,
+    the two Sports Hub mobile frames +322px — the largest single growth,
+    since their old footer was the compact stub). `5171:6633`'s 4th
+    child (`ANNOTATIONS — design documentation, not shipped UI`, sitting
+    after the footer) was confirmed to keep its position after the swap.
+  - **Verified**: every new footer's bound-variable set (`brand/green`,
+    `color/text/on-navy`, `color/icon/inactive`, `brand/navy`) matches
+    the canonical footer's own bindings exactly; screenshots clean on a
+    sample from every family (Leaderboard desktop + mobile, Contest,
+    Empty State, both full Sports Hub mobile states); a file-wide sweep
+    for any remaining `"Footer — Soccernity Global"` or bare `"Footer"`
+    (non-Action) instance returned **zero matches**.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
