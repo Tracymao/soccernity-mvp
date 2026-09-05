@@ -1,8 +1,11 @@
 import { Controller, Delete, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { FeedQueryDto } from '../feed/dto/feed-query.dto';
+import { FeedService } from '../feed/feed.service';
 import { CurrentUser } from '../auth/guards/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
 import { ClubsService } from './clubs.service';
+import { ListClubMembersQueryDto } from './dto/list-club-members-query.dto';
 import { ListClubsQueryDto } from './dto/list-clubs-query.dto';
 
 // Build Plan Section 4.4 (Club & Banter Service) — the club subset only:
@@ -11,7 +14,14 @@ import { ListClubsQueryDto } from './dto/list-clubs-query.dto';
 // here — see clubs/README.md.
 @Controller('clubs')
 export class ClubsController {
-  constructor(private readonly clubsService: ClubsService) {}
+  constructor(
+    private readonly clubsService: ClubsService,
+    // sprint-2/club-fan-page-backend: GET /clubs/:id/feed reuses
+    // FeedService.getClubFeed so the club feed's shape/pagination/viewer
+    // state matches GET /posts/feed exactly. ClubsModule imports
+    // FeedModule (which now exports FeedService) — no circular import.
+    private readonly feedService: FeedService,
+  ) {}
 
   // JwtAuthGuard only — argued fresh for this resource, not inherited
   // from GET /posts/feed or GET /users/:id/followers's own guard
@@ -46,6 +56,47 @@ export class ClubsController {
   @UseGuards(JwtAuthGuard)
   async getById(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
     return this.clubsService.getClubById(id, user.sub);
+  }
+
+  // GET /clubs/:id/feed (sprint-2/club-fan-page-backend, closes the
+  // backend half of Decision Log #157). The club fan-page feed: every
+  // Post whose clubPageId matches, newest-first, keyset-paginated. NOT
+  // the same as GET /posts/feed (Section 4.3), which is scoped to the
+  // caller's own posts + follows and never reads Post.clubPageId — see
+  // feed/README.md point 2. Response shape is identical though
+  // (FeedPostWithViewerState — isLiked / isSaved / author.isFollowing,
+  // Decision Log #153), because this delegates to FeedService.
+  //
+  // JwtAuthGuard only — reading a club's feed is no more
+  // safety-sensitive than reading the club catalog (GET /clubs) or
+  // GET /posts/feed itself, both JwtAuthGuard-only. assertClubExists
+  // first so a non-existent :id is a 404, matching GET /clubs/:id.
+  //
+  // A more specific path than GET /clubs/:id (an extra segment), so it
+  // never collides with that route regardless of declaration order.
+  @Get(':id/feed')
+  @UseGuards(JwtAuthGuard)
+  async clubFeed(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Query() query: FeedQueryDto,
+  ) {
+    await this.clubsService.assertClubExists(id);
+    return this.feedService.getClubFeed(id, user.sub, query);
+  }
+
+  // GET /clubs/:id/members (sprint-2/club-fan-page-backend). The club
+  // fan-page roster — see ClubsService.getClubMembers for the schema
+  // judgment call (roster = ClubPage.members, not the unbuilt
+  // "represented club" field), the restricted-pending-minor exclusion,
+  // and the alphabetical keyset pagination. JwtAuthGuard only, same
+  // reasoning as GET /clubs / GET /clubs/:id above — no @CurrentUser()
+  // needed (unlike GET /clubs, this endpoint has no per-caller field in
+  // its response).
+  @Get(':id/members')
+  @UseGuards(JwtAuthGuard)
+  async members(@Param('id') id: string, @Query() query: ListClubMembersQueryDto) {
+    return this.clubsService.getClubMembers(id, query);
   }
 
   // JwtAuthGuard only — argued fresh, not inherited from POST /posts's

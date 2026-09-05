@@ -425,6 +425,108 @@ describe('FeedService', () => {
     });
   });
 
+  // GET /clubs/:id/feed (sprint-2/club-fan-page-backend, Decision Log
+  // #157) — delegates to the same paginate+attachViewerState pipeline as
+  // getFeed, so these tests focus on the one real difference (the WHERE
+  // clause is a flat `clubPageId` filter, not the own-posts-plus-follows
+  // OR) plus confirming the shared shape/cursor/viewer-state behavior
+  // still holds through this entry point.
+  describe('getClubFeed', () => {
+    it('scopes strictly to posts whose clubPageId matches — not the caller\'s follows', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new FeedService(prisma);
+
+      await service.getClubFeed('club-1', 'user-1', {});
+
+      const callArgs = (prisma.post.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArgs.where).toEqual({ clubPageId: 'club-1' });
+      expect(callArgs.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
+      expect(callArgs.take).toBe(FEED_DEFAULT_PAGE_SIZE + 1);
+    });
+
+    it('clamps a limit above FEED_MAX_PAGE_SIZE', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new FeedService(prisma);
+
+      await service.getClubFeed('club-1', 'user-1', { limit: 9999 });
+
+      expect((prisma.post.findMany as jest.Mock).mock.calls[0][0].take).toBe(FEED_MAX_PAGE_SIZE + 1);
+    });
+
+    it('ANDs a cursor filter with the clubPageId scope and builds a nextCursor from the last kept row', async () => {
+      const prisma = buildPrismaMock();
+      const rows = [
+        buildPostRow({ id: 'post-3', clubPageId: 'club-1', createdAt: new Date('2026-08-03T00:00:00.000Z') }),
+        buildPostRow({ id: 'post-2', clubPageId: 'club-1', createdAt: new Date('2026-08-02T00:00:00.000Z') }),
+        buildPostRow({ id: 'post-1', clubPageId: 'club-1', createdAt: new Date('2026-08-01T00:00:00.000Z') }),
+      ];
+      (prisma.post.findMany as jest.Mock).mockResolvedValue(rows);
+      const service = new FeedService(prisma);
+      const cursor = encodeFeedCursor({ createdAt: new Date('2026-08-09T00:00:00.000Z'), id: 'post-9' });
+
+      const page = await service.getClubFeed('club-1', 'user-1', { cursor, limit: 2 });
+
+      const callArgs = (prisma.post.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArgs.where.AND[0]).toEqual({ clubPageId: 'club-1' });
+      expect(callArgs.where.AND[1]).toEqual({
+        OR: [
+          { createdAt: { lt: new Date('2026-08-09T00:00:00.000Z') } },
+          { createdAt: new Date('2026-08-09T00:00:00.000Z'), id: { lt: 'post-9' } },
+        ],
+      });
+      expect(page.items.map((p) => p.id)).toEqual(['post-3', 'post-2']);
+      expect(page.nextCursor).toBe(
+        encodeFeedCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), id: 'post-2' }),
+      );
+    });
+
+    it('rejects a malformed cursor with a 400 before touching Prisma', async () => {
+      const prisma = buildPrismaMock();
+      const service = new FeedService(prisma);
+
+      await expect(service.getClubFeed('club-1', 'user-1', { cursor: 'garbage' })).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(prisma.post.findMany).not.toHaveBeenCalled();
+    });
+
+    it('attaches per-caller isLiked / isSaved / author.isFollowing exactly as getFeed does', async () => {
+      const prisma = buildPrismaMock();
+      const rows = [
+        buildPostRow({ id: 'p-a', authorId: 'author-x', clubPageId: 'club-1' }),
+        buildPostRow({ id: 'p-b', authorId: 'viewer-1', clubPageId: 'club-1' }),
+      ];
+      (prisma.post.findMany as jest.Mock).mockResolvedValue(rows);
+      (prisma.like.findMany as jest.Mock).mockResolvedValue([{ postId: 'p-a' }]);
+      (prisma.savedPost.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.follow.findMany as jest.Mock).mockResolvedValue([{ followeeId: 'author-x' }]);
+      const service = new FeedService(prisma);
+
+      const page = await service.getClubFeed('club-1', 'viewer-1', { limit: 10 });
+      const byId = Object.fromEntries(page.items.map((p) => [p.id, p]));
+
+      expect(byId['p-a']).toMatchObject({ isLiked: true, isSaved: false });
+      expect(byId['p-a'].author.isFollowing).toBe(true);
+      // The caller's own post in the club feed: isFollowing false, never queried.
+      expect(byId['p-b'].author.isFollowing).toBe(false);
+      expect((prisma.follow.findMany as jest.Mock).mock.calls[0][0].where.followeeId.in).toEqual(['author-x']);
+    });
+
+    it('skips all viewer-state lookups when the club has no posts', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new FeedService(prisma);
+
+      const page = await service.getClubFeed('club-1', 'viewer-1', {});
+
+      expect(page).toEqual({ items: [], nextCursor: null });
+      expect(prisma.like.findMany).not.toHaveBeenCalled();
+      expect(prisma.follow.findMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getPostById', () => {
     it('returns the post, with default viewer state, when it exists and the caller has no like/save/follow rows', async () => {
       const prisma = buildPrismaMock();

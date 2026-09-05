@@ -14,9 +14,17 @@ import { SavedPostsController } from './saved-posts.controller';
 // Imports AuthFoundationModule so JwtAuthGuard and GuardianConsentGuard
 // resolve via DI, same pattern UsersModule established in Sprint 1 —
 // see users.module.ts.
+// FeedService is exported (sprint-2/club-fan-page-backend) so ClubsModule
+// can inject it for GET /clubs/:id/feed — the club-scoped feed reuses
+// FeedService.getClubFeed rather than reimplementing POST_SELECT /
+// attachViewerState / the feed cursor in ClubsService. Same
+// export-a-service-for-cross-module-DI pattern ClubsModule itself already
+// uses for AuthRegistrationModule (auto-join on signup). No circular
+// import: ClubsModule imports FeedModule, FeedModule imports neither.
 @Module({
   imports: [AuthFoundationModule],
   controllers: [FeedController, SavedPostsController],
   providers: [FeedService, PrismaService],
+  exports: [FeedService],
 })
 export class FeedModule {}

@@ -1,6 +1,7 @@
 import { ExecutionContext, INestApplication, NotFoundException, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
+import { FeedService } from '../feed/feed.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ClubsController } from './clubs.controller';
 import { ClubsService } from './clubs.service';
@@ -15,8 +16,13 @@ describe('ClubsController (HTTP layer)', () => {
   const clubsService = {
     listClubs: jest.fn(),
     getClubById: jest.fn(),
+    getClubMembers: jest.fn(),
+    assertClubExists: jest.fn(),
     joinClub: jest.fn(),
     leaveClub: jest.fn(),
+  };
+  const feedService = {
+    getClubFeed: jest.fn(),
   };
 
   const CALLER = { sub: 'user-1', role: 'fan' };
@@ -24,7 +30,10 @@ describe('ClubsController (HTTP layer)', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [ClubsController],
-      providers: [{ provide: ClubsService, useValue: clubsService }],
+      providers: [
+        { provide: ClubsService, useValue: clubsService },
+        { provide: FeedService, useValue: feedService },
+      ],
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({
@@ -131,6 +140,60 @@ describe('ClubsController (HTTP layer)', () => {
 
       expect(clubsService.joinClub).toHaveBeenCalledWith('user-1', 'club-1');
       expect(clubsService.getClubById).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('GET /clubs/:id/feed', () => {
+    it('asserts the club exists, then delegates to FeedService.getClubFeed with the caller id + query', async () => {
+      clubsService.assertClubExists.mockResolvedValue(undefined);
+      feedService.getClubFeed.mockResolvedValue({ items: [], nextCursor: null });
+
+      await request(app.getHttpServer()).get('/clubs/club-1/feed?limit=5&cursor=abc').expect(200);
+
+      expect(clubsService.assertClubExists).toHaveBeenCalledWith('club-1');
+      expect(feedService.getClubFeed).toHaveBeenCalledWith('club-1', CALLER.sub, { limit: 5, cursor: 'abc' });
+    });
+
+    it('propagates a 404 from assertClubExists and never calls FeedService', async () => {
+      clubsService.assertClubExists.mockRejectedValue(new NotFoundException('Club not found'));
+
+      await request(app.getHttpServer()).get('/clubs/missing/feed').expect(404);
+      expect(feedService.getClubFeed).not.toHaveBeenCalled();
+    });
+
+    it('rejects a limit above the max page size with 400 before any service call', async () => {
+      await request(app.getHttpServer()).get('/clubs/club-1/feed?limit=999').expect(400);
+      expect(clubsService.assertClubExists).not.toHaveBeenCalled();
+      expect(feedService.getClubFeed).not.toHaveBeenCalled();
+    });
+
+    it('does not collide with GET /clubs/:id (the club-1 detail route)', async () => {
+      clubsService.assertClubExists.mockResolvedValue(undefined);
+      feedService.getClubFeed.mockResolvedValue({ items: [], nextCursor: null });
+
+      await request(app.getHttpServer()).get('/clubs/club-1/feed').expect(200);
+      expect(clubsService.getClubById).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('GET /clubs/:id/members', () => {
+    it('delegates to ClubsService.getClubMembers with the id + query (no @CurrentUser)', async () => {
+      clubsService.getClubMembers.mockResolvedValue({ items: [], nextCursor: null });
+
+      await request(app.getHttpServer()).get('/clubs/club-1/members?limit=3').expect(200);
+
+      expect(clubsService.getClubMembers).toHaveBeenCalledWith('club-1', { limit: 3 });
+    });
+
+    it('propagates a 404 from ClubsService for a non-existent club', async () => {
+      clubsService.getClubMembers.mockRejectedValue(new NotFoundException('Club not found'));
+
+      await request(app.getHttpServer()).get('/clubs/missing/members').expect(404);
+    });
+
+    it('rejects a non-integer limit with 400', async () => {
+      await request(app.getHttpServer()).get('/clubs/club-1/members?limit=abc').expect(400);
+      expect(clubsService.getClubMembers).not.toHaveBeenCalled();
     });
   });
 

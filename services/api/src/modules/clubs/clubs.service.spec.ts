@@ -17,6 +17,12 @@ function buildPrismaMock() {
       findFirst: jest.fn().mockResolvedValue(null),
       update: jest.fn(),
     },
+    // getClubMembers (sprint-2/club-fan-page-backend) reads the roster
+    // via user.findMany, filtered to ClubPage.members minus
+    // restricted-pending minors.
+    user: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     // $executeRaw backs joinClub()'s raw "INSERT ... ON CONFLICT DO
     // NOTHING" against the implicit _ClubMembership join table — see
     // clubs.service.ts's own comment for why this, and not a P2002 catch
@@ -215,6 +221,89 @@ describe('ClubsService', () => {
       const service = new ClubsService(prisma);
       await expect(service.getClubById('missing', 'user-1')).rejects.toThrow(NotFoundException);
       expect(prisma.clubPage.findFirst).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getClubMembers', () => {
+    const memberRow = (id: string, displayName: string) => ({ id, displayName });
+
+    it('throws NotFoundException for a non-existent club, before querying users', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue(null);
+
+      const service = new ClubsService(prisma);
+      await expect(service.getClubMembers('missing', {})).rejects.toThrow(NotFoundException);
+      expect((prisma as unknown as { user: { findMany: jest.Mock } }).user.findMany).not.toHaveBeenCalled();
+    });
+
+    it('queries ClubPage.members for this club, excludes restricted-pending minors, and orders by displayName asc, id asc', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue({ id: 'club-1' });
+      (prisma as unknown as { user: { findMany: jest.Mock } }).user.findMany.mockResolvedValue([
+        memberRow('u-1', 'Ada Lovelace'),
+      ]);
+
+      const service = new ClubsService(prisma);
+      const result = await service.getClubMembers('club-1', {});
+
+      const callArgs = (prisma as unknown as { user: { findMany: jest.Mock } }).user.findMany.mock.calls[0][0];
+      expect(callArgs.where.AND).toEqual([
+        { clubMemberships: { some: { id: 'club-1' } } },
+        { OR: [{ isMinor: false }, { guardian: { consentStatus: 'confirmed' } }] },
+      ]);
+      expect(callArgs.orderBy).toEqual([{ displayName: 'asc' }, { id: 'asc' }]);
+      expect(callArgs.select).toEqual({ id: true, displayName: true });
+      expect(result).toEqual({ items: [memberRow('u-1', 'Ada Lovelace')], nextCursor: null });
+    });
+
+    it('never selects email / isMinor / passwordHash on a roster entry', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue({ id: 'club-1' });
+
+      const service = new ClubsService(prisma);
+      await service.getClubMembers('club-1', {});
+
+      const select = (prisma as unknown as { user: { findMany: jest.Mock } }).user.findMany.mock.calls[0][0].select;
+      expect(select).not.toHaveProperty('email');
+      expect(select).not.toHaveProperty('isMinor');
+      expect(select).not.toHaveProperty('passwordHash');
+    });
+
+    it('builds a nextCursor (displayName, id) from the last kept row when a lookahead row exists', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue({ id: 'club-1' });
+      (prisma as unknown as { user: { findMany: jest.Mock } }).user.findMany.mockResolvedValue([
+        memberRow('u-1', 'Ada'),
+        memberRow('u-2', 'Bo'), // lookahead
+      ]);
+
+      const service = new ClubsService(prisma);
+      const result = await service.getClubMembers('club-1', { limit: 1 });
+
+      expect(result.items).toEqual([memberRow('u-1', 'Ada')]);
+      expect(result.nextCursor).toBe(encodeClubCursor({ name: 'Ada', id: 'u-1' }));
+    });
+
+    it('applies the cursor as a strict "after this (displayName, id)" filter ANDed with the club + visibility filters', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue({ id: 'club-1' });
+      const cursor = encodeClubCursor({ name: 'Ada', id: 'u-1' });
+
+      const service = new ClubsService(prisma);
+      await service.getClubMembers('club-1', { cursor });
+
+      const where = (prisma as unknown as { user: { findMany: jest.Mock } }).user.findMany.mock.calls[0][0].where;
+      expect(where.AND[2]).toEqual({
+        OR: [{ displayName: { gt: 'Ada' } }, { displayName: 'Ada', id: { gt: 'u-1' } }],
+      });
+    });
+
+    it('rejects a malformed cursor with a 400', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue({ id: 'club-1' });
+
+      const service = new ClubsService(prisma);
+      await expect(service.getClubMembers('club-1', { cursor: 'not-valid' })).rejects.toThrow();
     });
   });
 

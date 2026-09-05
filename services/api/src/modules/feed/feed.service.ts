@@ -195,12 +195,65 @@ export class FeedService {
       ? { AND: [scopeFilter, this.buildCursorFilter(query.cursor)] }
       : scopeFilter;
 
-    // Keyset pagination (Section 5.5) ordered most-recent-first:
-    // createdAt desc, id desc as the tiebreaker for rows sharing the
-    // same createdAt timestamp — see cursor.util.ts and
-    // feed-query.dto.ts for the full reasoning. take: limit + 1 is the
-    // standard "fetch one extra row" trick to know whether a next page
-    // exists without a separate COUNT() query.
+    return this.paginatePostsWithViewerState(where, limit, userId);
+  }
+
+  // GET /clubs/:id/feed (sprint-2/club-fan-page-backend) — the
+  // club-scoped counterpart of getFeed(), closing the backend half of
+  // Decision Log #157. Section 4.3's GET /posts/feed is scoped to the
+  // caller's own posts + follows and deliberately never reads
+  // Post.clubPageId (see getFeed()'s own scope comment / feed/README.md
+  // point 2); this is the club fan-page feed — every Post whose
+  // clubPageId matches, newest-first, regardless of whether the caller
+  // follows the author.
+  //
+  // Lives on FeedService (not ClubsService) so it reuses POST_SELECT,
+  // attachViewerState (Decision Log #153 — isLiked / isSaved /
+  // author.isFollowing), buildCursorFilter, and the feed cursor util
+  // as-is: the response is the exact same FeedPage /
+  // FeedPostWithViewerState shape GET /posts/feed returns, which is what
+  // "paginated consistently with GET /posts/feed" means in practice.
+  // ClubsController owns the /clubs/:id/feed route and calls
+  // ClubsService.assertClubExists(id) before this runs, so a
+  // non-existent club is a 404 (matching GET /clubs/:id); this method
+  // itself does not re-check and would simply return an empty page for
+  // an unknown clubPageId.
+  //
+  // No restricted-pending-minor content leak on this feed: POST /posts
+  // is GuardianConsentGuard-gated (Decision Log #21), so a
+  // restricted-pending minor has no posts to surface here in the first
+  // place — nothing analogous to ClubsService.getClubMembers's roster
+  // filter is needed.
+  async getClubFeed(clubPageId: string, userId: string, query: FeedQueryDto): Promise<FeedPage> {
+    const limit = Math.min(query.limit ?? FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE);
+
+    const scopeFilter: Prisma.PostWhereInput = { clubPageId };
+    const where: Prisma.PostWhereInput = query.cursor
+      ? { AND: [scopeFilter, this.buildCursorFilter(query.cursor)] }
+      : scopeFilter;
+
+    return this.paginatePostsWithViewerState(where, limit, userId);
+  }
+
+  // Shared "fetch limit+1 posts newest-first, trim the lookahead row,
+  // build nextCursor from the last kept row, attach viewer state"
+  // pipeline — getFeed() and getClubFeed() now differ only in their
+  // WHERE clause. Factored once here for the same reason
+  // UsersService.toFollowPage was (two callers, identical shape); the
+  // per-caller inline repetition getComments()/getSavedPosts() still
+  // use is fine for their single callers, this isn't a push to unify
+  // those too.
+  //
+  // Keyset pagination (Section 5.5) ordered most-recent-first: createdAt
+  // desc, id desc as the tiebreaker for rows sharing the same createdAt
+  // timestamp — see cursor.util.ts and feed-query.dto.ts. take: limit + 1
+  // is the standard "fetch one extra row" trick to know whether a next
+  // page exists without a separate COUNT() query.
+  private async paginatePostsWithViewerState(
+    where: Prisma.PostWhereInput,
+    limit: number,
+    userId: string,
+  ): Promise<FeedPage> {
     const rows = await this.prisma.post.findMany({
       where,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
