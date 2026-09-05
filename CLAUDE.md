@@ -5710,6 +5710,45 @@ Full reasoning for every choice above: Build Plan Section 5.
     mode only. Paint audit — mobile 0 unbound; desktop 1 (pre-existing
     `#d9d9d9` shell cover-plate, inherited by every Settings frame).
   - Not merged — founder's call after review.
+- **`sprint-2/club-fan-page-design` (figma-design-system /
+  figma-screen-builder, 2026-09-05) extends `Club — Fan Page` desktop
+  (`5841:9365`) + mobile (`5841:9431`) from their minimal placeholder
+  state into the real page — a club feed + a member roster. Figma
+  design only, no app code. Advances (does not close) Decision Log
+  #157.** Report: `docs/sprint-2-club-fan-page-design-report.md`.
+  Decision Log **#216** added; forward-pointer on **#157**.
+  - **Header section carried forward UNCHANGED** on both frames — back
+    link, club badge / name / `league • country` / member-count, and
+    the Join button. Only the stale "Member posts and a full member
+    list aren't part of club pages yet" scope note is removed (both are
+    now designed).
+  - **Club feed** — a "Club feed" section with post cards **cloned from
+    the Community — Home Feed post-card pattern**
+    (`Community — Home Feed — Mobile` `5701:8239`); illustrative member
+    social posts (dummy data, same convention as every other
+    pre-backend screen). **This closes the DESIGN side of Decision Log
+    #157** — the club-scoped-posts endpoint still does not exist
+    (`GET /posts/feed` never reads `Post.clubPageId`); `figma-to-code`
+    must NOT wire the feed to real data until it does. **No composer**
+    designed (no club-post-creation endpoint).
+  - **Member roster** — a "Members" section: rows adapted from the
+    post-card author-identity block (avatar + display name + `@handle`)
+    + a secondary "Follow" button (`POST /users/:id/follow` is real).
+    The roster is conceptually "users whose represented club is this
+    club" — that field/endpoint doesn't exist yet either (Decision Log
+    #74). Dummy members. **"View all members →" has no destination
+    screen** (a dedicated full-roster screen isn't built) — flagged,
+    not wired. The Admin `Users - team members` table (`917:218`) was
+    checked and rejected as the base (moderation table — ban/delete
+    actions, no avatars).
+  - **Out of scope, founder-confirmed:** club announcements, fixtures,
+    any other content — no data source, none designed.
+  - Token discipline: no new colour, no `brand/green-tint-28`, Light
+    mode only; both frames **0 unbound paints**. Post cards carry
+    Montserrat (Community feed convention); new chrome uses Inter
+    (Club Fan Page header type). On-canvas
+    `Club — Fan Page — Design Notes` annotation added.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
