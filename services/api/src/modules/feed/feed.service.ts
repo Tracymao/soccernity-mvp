@@ -46,6 +46,25 @@ const POST_SELECT = {
 
 export type FeedPost = Prisma.PostGetPayload<{ select: typeof POST_SELECT }>;
 
+// sprint-2/account-deactivation-backend (Decision Log #221). Every
+// post-reading surface (GET /posts/feed, GET /clubs/:id/feed,
+// GET /posts/:id) filters to posts whose author is currently "active":
+// a deactivated (or pending_deletion) account's content must not appear
+// to anyone else while it's in that state. Reactivation is a pure
+// accountStatus flip back to "active" (AuthService.reactivateAccount),
+// so a reactivated user's posts reappear automatically with no
+// per-post backfill. The caller of getFeed()/getClubFeed()/getPostById()
+// is always an active user (login/JwtAuthGuard both reject non-active
+// accounts and deactivation revokes every session), so this filter can
+// never hide the caller's OWN posts. `active` — not `NOT deactivated` —
+// is deliberate: a pending_deletion account's content is equally "should
+// not be shown", and this does not modify the deletion flow itself (the
+// sweep / cascade / ConsentAuditRecord are untouched), only read
+// visibility, which was a latent gap.
+const ACTIVE_AUTHOR_POST_FILTER: Prisma.PostWhereInput = {
+  author: { accountStatus: 'active' },
+};
+
 // What GET /posts/feed and GET /posts/:id actually return to a client:
 // the raw post plus three per-request-user-computed booleans (Decision
 // Log #153). None of them are stored columns — they're derived, per
@@ -207,7 +226,10 @@ export class FeedService {
     const limit = Math.min(query.limit ?? FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE);
 
     const scopeFilter: Prisma.PostWhereInput = {
-      OR: [{ authorId: userId }, { author: { followedBy: { some: { followerId: userId } } } }],
+      AND: [
+        ACTIVE_AUTHOR_POST_FILTER,
+        { OR: [{ authorId: userId }, { author: { followedBy: { some: { followerId: userId } } } }] },
+      ],
     };
 
     const where: Prisma.PostWhereInput = query.cursor
@@ -242,11 +264,13 @@ export class FeedService {
   // is GuardianConsentGuard-gated (Decision Log #21), so a
   // restricted-pending minor has no posts to surface here in the first
   // place — nothing analogous to ClubsService.getClubMembers's roster
-  // filter is needed.
+  // filter is needed. Deactivated-author posts ARE filtered, though
+  // (ACTIVE_AUTHOR_POST_FILTER, Decision Log #221) — a deactivated user
+  // may well have posted to a club page while active.
   async getClubFeed(clubPageId: string, userId: string, query: FeedQueryDto): Promise<FeedPage> {
     const limit = Math.min(query.limit ?? FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE);
 
-    const scopeFilter: Prisma.PostWhereInput = { clubPageId };
+    const scopeFilter: Prisma.PostWhereInput = { clubPageId, ...ACTIVE_AUTHOR_POST_FILTER };
     const where: Prisma.PostWhereInput = query.cursor
       ? { AND: [scopeFilter, this.buildCursorFilter(query.cursor)] }
       : scopeFilter;
@@ -360,7 +384,15 @@ export class FeedService {
   // forced false without a lookup for the caller's own post, same as
   // attachViewerState().
   async getPostById(postId: string, userId: string): Promise<FeedPostWithViewerState> {
-    const post = await this.prisma.post.findUnique({ where: { id: postId }, select: POST_SELECT });
+    // findFirst (not findUnique) so ACTIVE_AUTHOR_POST_FILTER (Decision
+    // Log #221) applies: a post whose author is deactivated /
+    // pending_deletion is treated as not-found here, exactly as it's
+    // absent from GET /posts/feed — the "hide via 404" convention this
+    // codebase already uses for restricted content.
+    const post = await this.prisma.post.findFirst({
+      where: { id: postId, ...ACTIVE_AUTHOR_POST_FILTER },
+      select: POST_SELECT,
+    });
     if (!post) {
       throw new NotFoundException('Post not found');
     }

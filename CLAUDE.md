@@ -5968,6 +5968,63 @@ Full reasoning for every choice above: Build Plan Section 5.
     deactivation variant; a reactivation confirm (reactivation is
     non-destructive, left one-tap).
   - Not merged — founder's call after review.
+- **`sprint-2/account-deactivation-backend` (backend-api, 2026-09-06) is
+  the backend half of the account-deactivation feature (pairs with the
+  Figma half, Decision Log #220 / `sprint-2/account-deactivation-design`).
+  Founder explicitly authorised resuming backend work. Decision Log #221.
+  `services/api` only.** Full detail:
+  `docs/sprint-2-account-deactivation-backend-report.md` and
+  `services/api/src/modules/auth/README.md`'s matching Status update.
+  - **Schema confirmed live, NOT changed — no new field, no migration.**
+    `User.accountStatus` (`"active"` | `"deactivated"` |
+    `"pending_deletion"`, default `"active"`, migration `20260823011617`)
+    and `User.pendingDeletionAt` already exist. `"deactivated"` **is**
+    the "inactive" state; renaming to `"inactive"` was rejected (shipped,
+    referenced by tests + `AccountDeletionSweepService`). Deactivate /
+    reactivate endpoints unchanged.
+  - **New `POST /auth/delete-inactive-account`** (unauthenticated,
+    `{email, password}`, `@AuthRateLimit()`, `204`) — a deactivated
+    account has every session revoked so it can't reach the
+    `JwtAuthGuard`-protected `POST /auth/delete-account`; this is the
+    counterpart reached from the "Inactive Account" screen's Delete path.
+    Only a genuinely `"deactivated"` account is accepted (active /
+    pending_deletion / unknown / wrong-password → generic `"Invalid
+    credentials"`). **Delegates to the same new private
+    `AuthService.startPendingDeletion()` the authenticated
+    `deleteAccount()` now also uses** — `accountStatus →
+    "pending_deletion"`, `pendingDeletionAt = now()`, sessions revoked —
+    so `AccountDeletionSweepService`'s 30-day grace → hard-delete →
+    cascade → `ConsentAuditRecord` retention (Decision Log #42/#44)
+    applies byte-identically with **zero duplicated deletion logic**.
+    **The deletion flow itself is untouched.**
+  - **"An inactive account should not appear" — read-visibility filters
+    on `accountStatus = 'active'`** (`'active'`, not `NOT 'deactivated'`,
+    so `pending_deletion` is also hidden; visibility-only, doesn't touch
+    the deletion flow; all filters reverse on reactivation with no
+    backfill): `GET /posts/feed` + `GET /clubs/:id/feed` +
+    `GET /posts/:id` (`findUnique` → `findFirst`, 404s a
+    deactivated-author post); `GET /clubs/:id/members` roster;
+    `GET /users/:id/followers`/`following` (target 404s like a
+    restricted-pending minor, AND list entries filtered).
+  - **Flagged, not built:** *search* — no people-search endpoint exists,
+    noted as a requirement for whoever builds it. *Leaderboard* —
+    `GET /leaderboard` unbuilt (Sprint 6); note added to
+    `leaderboard/README.md` that the future `SUM(PointsLedgerEntry)`
+    aggregation must exclude non-active users (ledger rows keep accruing
+    and stay correct on reactivation — filter the rollup, not the write).
+    *Deliberate non-changes:* `GET /posts/:id/comments` (filtering a
+    mid-thread comment drifts `Post.commentCount`; no comment-visibility
+    spec) and `GET /users/:id/saved-posts` (caller's own private
+    bookmark list, Decision Log #22).
+  - **Verification:** mocked suite **46 suites / 584 tests, 0 failures**
+    (+15); e2e **11 suites / 81 tests, 0 failures** — new
+    `test/account-deactivation.e2e-spec.ts` runs the full `deactivate →
+    reactivate → deactivate → delete-from-inactive → +31-day sweep →
+    real hard-delete` sequence against real Postgres, plus feed /
+    single-post / follower-graph visibility-and-reversal. Zero
+    `schema.prisma` diff; safeguarding fields untouched. `nest build` +
+    `npm run lint` clean.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

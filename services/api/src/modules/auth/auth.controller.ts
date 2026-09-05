@@ -7,6 +7,7 @@ import { AuthRateLimit } from './rate-limit/auth-rate-limit.decorator';
 import { AuthResponse, TokenPairResponse } from './auth-response.mapper';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeactivateAccountDto } from './dto/deactivate-account.dto';
+import { DeleteInactiveAccountDto } from './dto/delete-inactive-account.dto';
 import { LoginDto } from './dto/login.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { ReactivateAccountDto } from './dto/reactivate-account.dto';
@@ -97,5 +98,21 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async reactivateAccount(@Body() dto: ReactivateAccountDto): Promise<AuthResponse> {
     return this.authService.reactivateAccount(dto.email, dto.password);
+  }
+
+  // POST /auth/delete-inactive-account (sprint-2/account-deactivation-backend).
+  // The unauthenticated Delete path from the "Inactive Account" screen
+  // (Decision Log #220). Unauthenticated for the same reason
+  // reactivate-account is — a deactivated account has no session — and
+  // rate-limited for the same reason: it verifies credentials.
+  // 204 No Content, matching the authenticated POST /auth/delete-account.
+  // Only a genuinely "deactivated" account is accepted; every other case
+  // (active, pending_deletion, unknown email, wrong password) gets the
+  // generic "Invalid credentials" — see auth.service.ts.
+  @AuthRateLimit()
+  @Post('delete-inactive-account')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteInactiveAccount(@Body() dto: DeleteInactiveAccountDto): Promise<void> {
+    await this.authService.deleteInactiveAccount(dto.email, dto.password);
   }
 }

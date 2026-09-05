@@ -812,3 +812,12 @@ user: AccessTokenPayload`, mirroring exactly what PR #136 did for
 Updating `apps/web/src/api/clubs.ts`'s `ClubSummary` type and wherever
 club "joined" state is currently locally tracked is a separate follow-up
 — the same two-PR split Decision Log #153 used.
+
+## Status update — roster excludes inactive accounts (`sprint-2/account-deactivation-backend`, Decision Log #221)
+
+`VISIBLE_CLUB_MEMBER_FILTER` (used by `GET /clubs/:id/members`) gains
+`accountStatus: 'active'` alongside the existing restricted-pending-minor
+`OR` clause. A user who joined a club fan page while active and then
+deactivated no longer surfaces by `displayName` in the roster. Same
+`memberCount`-can-exceed-the-visible-roster note as the restricted-pending
+case (Decision Log #217); reverses on reactivation.

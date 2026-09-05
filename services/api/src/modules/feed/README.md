@@ -838,3 +838,18 @@ change to `getFeed`'s scope — `getFeed` still never reads `Post.clubPageId`.
 Full detail (guard choice, no restricted-pending-minor filter needed,
 scope-is-clubPageId-alone) in `clubs/README.md`'s "Club fan-page feed +
 roster" section.
+
+## Status update — inactive-author filter (`sprint-2/account-deactivation-backend`, Decision Log #221)
+
+`getFeed`, `getClubFeed` and `getPostById` now AND an
+`ACTIVE_AUTHOR_POST_FILTER` (`author: { accountStatus: 'active' }`) into
+their query: a deactivated or `pending_deletion` author's posts must not
+appear to anyone else. `getPostById` switched `findUnique` → `findFirst`
+for this and 404s such a post (the "hide via 404" convention). The
+caller of all three is always an active account (login / `JwtAuthGuard`
+reject non-active, deactivation revokes every session), so the filter
+can never hide the caller's own posts. Reverses automatically on
+reactivation — no per-post backfill. `GET /posts/:id/comments` is a
+deliberate non-change (filtering a mid-thread comment drifts
+`Post.commentCount`, and Section 4.3 has no comment-visibility model);
+`getSavedPosts` is unchanged (the caller's own private bookmark list).

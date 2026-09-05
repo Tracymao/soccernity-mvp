@@ -236,7 +236,7 @@ describe('ClubsService', () => {
       expect((prisma as unknown as { user: { findMany: jest.Mock } }).user.findMany).not.toHaveBeenCalled();
     });
 
-    it('queries ClubPage.members for this club, excludes restricted-pending minors, and orders by displayName asc, id asc', async () => {
+    it('queries ClubPage.members for this club, excludes restricted-pending minors and non-active accounts, and orders by displayName asc, id asc', async () => {
       const prisma = buildPrismaMock();
       (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue({ id: 'club-1' });
       (prisma as unknown as { user: { findMany: jest.Mock } }).user.findMany.mockResolvedValue([
@@ -247,9 +247,15 @@ describe('ClubsService', () => {
       const result = await service.getClubMembers('club-1', {});
 
       const callArgs = (prisma as unknown as { user: { findMany: jest.Mock } }).user.findMany.mock.calls[0][0];
+      // Decision Log #221: deactivated / pending_deletion members are
+      // filtered out too (accountStatus: 'active'), alongside the
+      // restricted-pending-minor OR clause.
       expect(callArgs.where.AND).toEqual([
         { clubMemberships: { some: { id: 'club-1' } } },
-        { OR: [{ isMinor: false }, { guardian: { consentStatus: 'confirmed' } }] },
+        {
+          accountStatus: 'active',
+          OR: [{ isMinor: false }, { guardian: { consentStatus: 'confirmed' } }],
+        },
       ]);
       expect(callArgs.orderBy).toEqual([{ displayName: 'asc' }, { id: 'asc' }]);
       expect(callArgs.select).toEqual({ id: true, displayName: true });

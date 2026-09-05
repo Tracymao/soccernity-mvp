@@ -102,7 +102,18 @@ export interface ClubMemberPage {
 // (which counts raw _ClubMembership rows) — acceptable, memberCount is
 // explicitly "not authoritative in isolation" per its own schema comment,
 // and restricted-pending minors joining clubs is an edge case.
+//
+// sprint-2/account-deactivation-backend (Decision Log #221): the roster
+// also excludes deactivated / pending_deletion accounts (accountStatus
+// !== 'active'). A deactivated user may have joined a club fan page while
+// active (POST /clubs/:id/join is JwtAuthGuard-only), and their
+// displayName should not surface in a roster readable by any
+// authenticated caller — the same "an inactive account should not
+// appear" principle behind the feed and follow-list filters. The same
+// memberCount-can-be-larger-than-the-visible-roster note above applies;
+// reactivation makes the entry reappear with no backfill.
 const VISIBLE_CLUB_MEMBER_FILTER: Prisma.UserWhereInput = {
+  accountStatus: 'active',
   OR: [{ isMinor: false }, { guardian: { consentStatus: 'confirmed' } }],
 };
 
