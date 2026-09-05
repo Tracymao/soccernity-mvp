@@ -5039,6 +5039,83 @@ Full reasoning for every choice above: Build Plan Section 5.
     takes its alpha from the variable" (Decision Log #199) and "boolean
     operations discard input fills" (Decision Log #201) gotchas.
   - Not merged — founder's call after review.
+- **`sprint-2/legal-pages-navbar-retrofit` (figma-screen-builder,
+  2026-09-05) closes Decision Log #202 — Contact Us, Terms of Service,
+  and Privacy Policy each get the same navbar-variant split Blog and
+  Articles already had. Net-new frame creation, correctly routed to
+  `figma-screen-builder`. Figma design only, no app code.** Report:
+  `docs/sprint-2-legal-pages-navbar-retrofit-report.md`. **This session
+  was interrupted mid-task by a session rate limit** right after the 6
+  desktop frames were built; on resume, live state was re-verified before
+  any further writes (8 frames confirmed correct, 4 mobile frames
+  confirmed genuinely missing, zero broken/orphaned intermediate state)
+  rather than trusting the pre-interruption summary — nothing was
+  rebuilt or duplicated.
+  - **12 new frames** (not 18 — the original task brief's own summary
+    line double-counted the archived frames; built to the brief's literal
+    step-by-step spec instead, which matches the Blog/Articles precedent
+    exactly): Desktop — Logged In/Out (1440px, `header 4`/`header 7`) and
+    Mobile — Logged In/Out (rebuilt at the canonical **390px**, not the
+    original 375px, `header 4 — mobile`/`header 7 — mobile`) for each of
+    the 3 pages. **6 old originals archived** (hidden + `ARCHIVED — `
+    em-dash prefix, not deleted), each reference-checked first (0 inbound
+    reactions, 0 outbound, 0 nested components, not a flow start on any
+    of the 6 — nothing was broken).
+  - **Confirmed, not assumed, that these pages need the full
+    content-icon navbar, not the auth Top Bar**: the footer links to all
+    three (`Link — Terms of Service`/`Privacy Policy`/`Contact Us`) live
+    on the canonical logged-out homepage (Decision Log #46/#152) AND
+    recur on multiple logged-in surfaces (Sports Page logged-in, Community
+    post view, Search page) — both auth states are genuinely reachable,
+    matching Blog/Sports Hub's own justification, not the narrow
+    Decision Log #172 auth-flow scope.
+  - **The mobile 375→390 reflow method was tested before being committed
+    to, not assumed**: a throwaway `frame.resize()` on a clone drifted 5
+    of 18 children by four different amounts and stretched one (Figma
+    resolves each `GROUP` leaf's own constraints independently during a
+    parent resize) — rejected. Used the same reparent-into-a-fresh-shell
+    approach the Articles session used, re-derived independently on this
+    content rather than inherited, with zero drift anomalies confirmed
+    across all 6 mobile frames afterward (full subtree, node-by-node).
+  - **Desktop needed zero content repositioning** — all three legal
+    desktop frames already had content starting at exactly the y that
+    yields the canonical 81px navbar gap. **Mobile gap: 80px**, matching
+    Blog/Articles on both breakpoints.
+  - **Paint audit: 770 bound / 6 unbound / 0 off-palette-besides-the-6 /
+    0 `brand/green-tint-28` / 0 new colours / 0 overlaps.** The 6
+    unbound paints are all the same node in the same place across the 6
+    desktop frames — the exact 294×67 `#D9D9D9` missing-"Soccernity."-
+    wordmark pill Decision Log #174 already found and fixed on Blog Page
+    Desktop (and left open on Articles) — **deliberately not
+    force-bound to hit a "0 unbound" count**, since that would disguise
+    a missing wordmark as a deliberate grey block. Flagged as **Decision
+    Log #204** for one scoped follow-up covering all remaining families
+    at once.
+  - **Five more Decision Log candidates raised, none fixed here**: **#203
+    — the Terms of Service/Privacy Policy body copy is Lorem ipsum**,
+    flagged as the one that matters most (a real DPIA/GDPR/NDPA
+    safeguarding item per non-negotiable #2, blocking `figma-to-code`
+    conversion of these two screens until real, counsel-reviewed copy
+    exists via `safeguarding-drafter`); **#205** — an orphaned page-level
+    `Contact Dropdown` group (`87:250`) sitting outside any frame,
+    needing a rebuild-or-delete decision; **#206** — no section banner
+    exists over this row, unlike Blog/Articles; **#207** — stale
+    "Copyright © 2022" text on both footers, the same defect class the
+    homepage rebuild already fixed elsewhere; **#208** — no prototype
+    wiring on the new navbars (consistent with the rest of the file, not
+    a regression, but now newly possible since the link targets exist).
+  - Forward-pointer appended to **#202**'s Status cell; new rows
+    **#203–#208** added, in Build Plan Section 9.
+  - **New Figma-authoring gotcha for the standing notes, corroborating
+    the Articles session's independent finding on different content**:
+    `frame.resize()` applies each leaf's own constraints even on a
+    `layoutMode: NONE` (absolute-layout) frame, and `GROUP`s have no
+    constraints of their own, so their leaves resolve independently and
+    drift by differing amounts. Reparenting children into a fresh,
+    correctly-sized shell (then re-asserting each child's snapshotted
+    `x`/`y`) is the safe way to change a frame's width without corrupting
+    absolute-positioned legacy content.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
