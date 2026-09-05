@@ -1,0 +1,268 @@
+/* Blog -- Article Detail. Figma source: 5997:10905 / 5997:11224 (desktop)
+ * and 6000:11346 / 6000:11377 (mobile), "Soccernity-MVP"
+ * (weZWWqggy9j13eX8bhFgs6). Light theme, --sn-* tokens only. No site
+ * footer rendered (same as BlogPage / SportsHubPage). */
+
+.article-detail {
+  max-width: 1040px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.article-detail__back {
+  align-self: flex-start;
+  color: var(--sn-text-secondary);
+  font: 600 14px "Inter", sans-serif;
+  text-decoration: none;
+}
+
+.article-detail__title {
+  margin: 0;
+  color: var(--sn-text-primary);
+  font: 800 clamp(26px, 3.4vw, 44px)/1.2 "Montserrat", "Inter", sans-serif;
+}
+
+.article-detail__meta {
+  margin: 0;
+  color: var(--sn-text-secondary);
+  font: 500 14px "Inter", sans-serif;
+}
+
+.article-share {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--sn-text-secondary);
+  font: 500 14px "Inter", sans-serif;
+}
+
+.article-share__icon {
+  font-size: 18px;
+  color: var(--sn-brand-navy);
+}
+
+.article-detail__hero {
+  aspect-ratio: 1031 / 521;
+  border-radius: 25px;
+  background: var(--sn-green-tint-12);
+  margin: 8px 0 16px;
+}
+
+.article-detail__body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.article-detail__body p {
+  margin: 0;
+  color: var(--sn-text-secondary);
+  font: 400 16px/1.7 "Inter", sans-serif;
+}
+
+/* --- missing state -------------------------------------------------- */
+
+.article-detail--missing {
+  align-items: flex-start;
+  gap: 12px;
+  padding-top: 24px;
+}
+
+.article-detail__missing-copy {
+  margin: 0;
+  color: var(--sn-text-secondary);
+  font: 400 15px "Inter", sans-serif;
+}
+
+/* --- comments ------------------------------------------------------- */
+
+.article-comments {
+  margin-top: 24px;
+  padding: 28px;
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.article-comments__title {
+  margin: 0;
+  color: var(--sn-text-primary);
+  font: 700 22px "Montserrat", "Inter", sans-serif;
+}
+
+.article-comments__note {
+  margin: 0;
+  color: var(--sn-text-secondary);
+  font: 400 14px/1.6 "Inter", sans-serif;
+}
+
+.article-comment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 560px;
+}
+
+.article-comment-form__label {
+  color: var(--sn-text-primary);
+  font: 600 13px "Inter", sans-serif;
+}
+
+.article-comment-form input,
+.article-comment-form textarea {
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: 400 14px "Inter", sans-serif;
+  background: var(--sn-background-page);
+  color: var(--sn-text-primary);
+  resize: vertical;
+}
+
+.article-comment-form input:disabled,
+.article-comment-form textarea:disabled {
+  background: var(--sn-green-tint-12);
+  cursor: not-allowed;
+}
+
+.article-comment-form__submit {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 10px 28px;
+  border: none;
+  border-radius: 8px;
+  background: var(--sn-brand-navy);
+  color: #fff;
+  font: 600 14px "Inter", sans-serif;
+}
+
+.article-comment-form__submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.article-comment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.article-comment {
+  display: flex;
+  gap: 14px;
+}
+
+.article-comment__avatar {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--sn-green-tint-12);
+}
+
+.article-comment__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.article-comment__head {
+  margin: 0;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.article-comment__author {
+  color: var(--sn-text-primary);
+  font: 600 15px "Inter", sans-serif;
+}
+
+.article-comment__time {
+  color: var(--sn-text-secondary);
+  font: 400 12px "Inter", sans-serif;
+}
+
+.article-comment__text {
+  margin: 0;
+  color: var(--sn-text-secondary);
+  font: 400 14px/1.6 "Inter", sans-serif;
+}
+
+.article-comment__actions {
+  margin: 0;
+  display: flex;
+  gap: 16px;
+  color: var(--sn-text-secondary);
+  font: 500 13px "Inter", sans-serif;
+}
+
+.article-comments__sample-caption {
+  margin: 0;
+  color: var(--sn-text-secondary);
+  font: 400 12px "Inter", sans-serif;
+}
+
+/* --- related ------------------------------------------------------- */
+
+.article-related {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.article-related__title {
+  margin: 0;
+  color: var(--sn-text-primary);
+  font: 800 clamp(22px, 2.4vw, 32px) "Montserrat", "Inter", sans-serif;
+}
+
+.article-related__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 28px;
+}
+
+.article-related-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.article-related-card__media {
+  aspect-ratio: 390 / 246;
+  border-radius: 20px;
+  background: var(--sn-green-tint-12);
+}
+
+.article-related-card__title {
+  margin: 0;
+  color: var(--sn-text-primary);
+  font: 800 19px/1.35 "Montserrat", "Inter", sans-serif;
+}
+
+.article-related-card__excerpt {
+  margin: 0;
+  color: var(--sn-text-secondary);
+  font: 500 14px/1.5 "Inter", sans-serif;
+}
+
+.article-related-card__date {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--sn-text-secondary);
+  font: 500 13px "Inter", sans-serif;
+}
