@@ -5461,6 +5461,91 @@ Full reasoning for every choice above: Build Plan Section 5.
     environment — same verification ceiling as every prior `apps/web`
     PR.
   - Not merged — founder's call after review.
+- **`sprint-2/blog-articles-to-code` (figma-to-code, 2026-09-05)
+  converts `BlogPage.tsx` from a `PlaceholderPage` stub to a real
+  listing page and adds a new `ArticleDetailPage.tsx` (route
+  `/blog/:articleId`) — `apps/web` only, `services/api` untouched. This
+  is the last main-nav pillar left as a stub.** Report:
+  `docs/sprint-2-blog-articles-to-code-report.md`.
+  - **Backend state, confirmed live first, not assumed**: there is NO
+    blog / article / content module anywhere in
+    `services/api/src/modules` (unlike `sports`/`banter`, which at least
+    have placeholder READMEs), and Build Plan Section 4 defines no blog
+    endpoint. The `Article` entity exists in `schema.prisma` (one of
+    Section 3's original 20) but has zero reads/writes. So every article,
+    category, comment and date is illustrative dummy content
+    (`apps/web/src/pages/blog/blogData.ts`) — the same convention
+    `SportsHubPage.tsx` / `CommunityPage.tsx` already use, with an
+    on-page disclosure note. The two Figma exemplars (the "Zaha
+    double..." featured card, the "Kane joins 250 club..." secondary
+    card) are kept verbatim; the rest are illustrative in the same
+    register so the category tabs and per-category sections render.
+  - **Source of truth**: the 4-frame auth-state × device split —
+    `Blog Page Desktop — Logged In` (`5953:10771`) / `— Logged Out`
+    (`5953:11364`), `Blog Page Mobile — Logged In` (`5956:10960`) /
+    `— Logged Out` (`5956:11331`); `Blog — Article Detail Desktop —
+    Logged In` (`5997:10905`) / `— Logged Out` (`5997:11224`),
+    `Blog — Article Detail Mobile — Logged In` (`6000:11346`) /
+    `— Logged Out` (`6000:11377`). Frame names confirmed against the
+    founder's live Figma rename (Decision Log #197 — they are "Blog —
+    Article Detail ...", so the component is `ArticleDetailPage`, not
+    `ArticlesPage`).
+  - **NO login gate on either page** — both Blog and Article Detail have
+    a Logged In and a Logged Out canonical frame with identical body
+    content; only the navbar variant differs, and the shared `Header`
+    already renders the right chrome. Same precedent as `SportsHubPage`
+    / `BlogPage`'s own same-content-both-states reasoning.
+  - **BlogPage**: navy hero banner ("Feel The Passion, Enjoy the
+    Game."), "Search Topics" box, category tab row (All / Premier League
+    / La Liga / Champions League / NPFL / More). "All" renders a
+    "Trending Topics" featured section plus one section per league; a
+    specific tab renders just that league's section. Each section = a
+    featured card (image-left, category badge, navy title, excerpt,
+    date) + a responsive grid of secondary cards + a "See More" toggle.
+    The search box filters the dummy list client-side (title/excerpt
+    substring) with an empty state — there is no real query. Every card
+    `<Link>`s to `/blog/:articleId`. No site footer rendered (same as
+    `SportsHubPage` / `LeaderboardPage` — the Figma frame carries one,
+    but the shared chrome is Header-only).
+  - **ArticleDetailPage** (`/blog/:articleId`): back link, title, meta
+    ("Posted by Admin · date · time"), a static "Share via:" row
+    (non-interactive — sharing a dummy article is meaningless), a hero
+    image placeholder, the article body paragraphs, a "Join the
+    discussion" section, and a "More Trending News" strip of 3 other
+    articles (never itself). **The comment composer is rendered but
+    fully disabled** (Name / Comment / Comment button) with an
+    explanatory note — there is no comments endpoint and no social
+    sign-in flow; the sample thread is captioned "Sample — not real
+    comments". Same "render it, visibly disabled, never faked as
+    working" discipline `EditProfileModal.tsx` applies. An unknown
+    `:articleId` renders an honest "Article not found" state with a link
+    back to `/blog`, never a crash (mirrors `ClubFanPage.tsx`'s 404
+    handling).
+  - **Decision Log #212 added** (Build Plan Section 9): the task brief's
+    instruction to preserve a **"Pinned post" badge (Decision Log
+    #173)** on Blog does not apply — that badge lives on the *Community*
+    home-feed frames (`2565:3951` / `5956:12797`), **not on any Blog
+    Page frame**, and has never been converted to code (it's a
+    Figma-only detail for a future `CommunityPage` pass). The Blog
+    frames use a "Trending Topics" featured card with a *category* badge
+    ("Premier League"), which is what was built. `CommunityPage.tsx` was
+    not touched. Also flagged there: the same "no blog backend" gap
+    (`Article` entity, no module/endpoint) that blocks wiring any of
+    this to real data, and the deliberate no-footer choice.
+  - **Judgment calls**: route `/blog/:articleId` (added to `router.tsx`
+    as a child of `AppShell`); a "← Blog" back link on the detail page
+    (not in Figma, matches `ClubFanPage.tsx`'s "← Clubs" precedent); the
+    5 identical per-category sections in the Figma frame are rendered
+    from distinct-enough dummy data rather than literally duplicated 5×.
+  - **Verified**: `npx tsc --noEmit` clean; `npm run lint` clean;
+    `npx vitest run` — **18 files / 119 tests, 0 failures** (up from
+    16/110 — `BlogPage.test.tsx` +5, `ArticleDetailPage.test.tsx` +4, no
+    existing test changed); `npm run build` clean production bundle.
+    Dev-server smoke test: `/`, `/blog`, `/blog/zaha-double-crystal-palace`,
+    `/blog/does-not-exist`, `/community` all HTTP 200, no console errors.
+    No real browser/Playwright check available in this environment —
+    same verification ceiling as every prior `apps/web` PR.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

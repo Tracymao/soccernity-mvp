@@ -35,6 +35,7 @@ import AuthChrome from "../layout/AuthChrome";
 import HomePage from "../pages/HomePage";
 import SportsHubPage from "../pages/SportsHubPage";
 import BlogPage from "../pages/BlogPage";
+import ArticleDetailPage from "../pages/blog/ArticleDetailPage";
 import LeaderboardPage from "../pages/LeaderboardPage";
 import CommunityPage from "../pages/CommunityPage";
 import ClubsPage from "../pages/ClubsPage";
@@ -79,6 +80,10 @@ export const router = createBrowserRouter([
       // primaryNavItems in src/layout/navigation.ts).
       { path: "sports-hub", element: <SportsHubPage /> },
       { path: "blog", element: <BlogPage /> },
+      // Blog -- Article Detail (Figma "Blog -- Article Detail ..." frames,
+      // Decision Log #197). Dummy content -- no blog backend exists. See
+      // ../pages/blog/ArticleDetailPage.tsx.
+      { path: "blog/:articleId", element: <ArticleDetailPage /> },
       { path: "leaderboard", element: <LeaderboardPage /> },
       // The authenticated feed -- Sprint 2's functional core (Feed +
       // Follow, Build Plan Section 4.3 / 4.2). See CommunityPage.tsx.
