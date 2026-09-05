@@ -5180,6 +5180,115 @@ Full reasoning for every choice above: Build Plan Section 5.
   document additionally requires actual legal counsel sign-off (the
   blank sign-off block at the end of the file) before any of its content
   can be treated as final, per the agent's standing boundary.
+- **`sprint-2/decision-log-204-208-cleanup` (figma-design-system, 2026-09-05)
+  closes Decision Log #204, #205, #207, #208, and folds #199/#201 into a
+  new standing Figma-authoring gotchas section — a scoped edit pass on
+  existing frames, no new screens. #206 was investigated and found to
+  already be resolved, not left open by this pass.** Full detail:
+  `docs/sprint-2-decision-log-204-208-cleanup-report.md`.
+  - **#204 — missing "Soccernity." footer wordmark pill, RESOLVED.** The
+    same defect Decision Log #174 fixed on the 4 Blog Page desktop frames
+    (a 294×67 `#D9D9D9` grey pill that should be a real "Soccernity." text
+    node) was found and fixed identically on **8 live frames**: all 6 new
+    Legal page desktop frames (Contact Us / Terms of Service / Privacy
+    Policy × Logged In/Out) plus **2 live frames the task brief's own node
+    IDs (`54:434`/`87:80`) were stale for** — those IDs are now the
+    archived, hidden originals (superseded by `sprint-2/articles-page-
+    split-and-navbar`); the real live equivalent needing the fix was
+    **`Blog — Article Detail Desktop — Logged In/Out`** (`5997:10905` /
+    `5997:11224`), confirmed by checking live rather than trusting the
+    brief. File-wide paint audit after the fix: **0 remaining live/visible**
+    294×67 `#D9D9D9` wordmark-pill instances — the 5 that do still exist
+    (`1009:603`, `85:63`, `87:214`, `102:374`, `104:460`) all sit inside
+    already-archived, hidden top-level frames and were deliberately left
+    untouched, matching this project's established archived-content
+    precedent.
+  - **#205 — rebuild the orphaned Contact Dropdown as a real connected
+    open-state, RESOLVED with one disclosed plugin-API limitation.** The
+    orphaned `87:250` (415×330, sized for a since-replaced narrower field)
+    was rebuilt as two new standalone components — **`Contact Category
+    Dropdown — Desktop`** (`6130:14653`, widened to 1030px to match the
+    real field on `Contact Us Desktop — Logged In/Out`) and **`— Mobile`**
+    (`6130:14664`, 318px, 2x-scaled down to match the mobile field's own
+    12px label size) — preserving the exact 5 options verbatim (Technical
+    issues / Editorial Complaints / Data / Livescores Issues / Suggestions
+    / Enquiries/Feedback), same fills/opacity/divider treatment as the
+    original, screenshot-verified clean. Wired via `ON_CLICK` →
+    `OPEN_OVERLAY` (`setReactionsAsync`) from all 4 frames' chevron
+    triggers, confirmed persisted on a fresh read. **Disclosed limitation**:
+    `overlayPositionType` is read-only on a `COMPONENT` node via the plugin
+    API (confirmed by direct attempt — `"read-only property on COMPONENT
+    node"`), and `overlayRelativePosition` (the offset that would anchor the
+    dropdown directly under the field, the same mechanism the avatar→
+    account-dropdown wiring uses) only takes effect when the destination's
+    `overlayPositionType` is `MANUAL` — so the reaction is real and
+    functional, but the dropdown currently opens at its default `CENTER`
+    position rather than anchored under the field. **Flagged as a new
+    Decision Log candidate**: whoever has Figma desktop UI access needs to
+    flip both dropdown components' Prototype-tab "Overlay position type" to
+    Manual (a one-checkbox job, the same class of API gap Decision Log #103
+    already found for `overlayBackgroundInteraction`), after which the
+    already-computed relative-offset math in the report can be applied. The
+    orphan `87:250` was reference-checked (0 inbound reactions/instances
+    file-wide) and then deleted, not archived — it was never a real screen.
+  - **#206 — section banner over the Legal pages row: investigated, ALREADY
+    RESOLVED, no action taken.** The task brief's premise ("never had one")
+    did not hold up against direct verification: **`Rectangle 194`
+    (`1869:2735`)** already exists, is visible, is bound to the same
+    `color/text/on-green` variable (which resolves to navy in Light mode)
+    Blog's own banner uses, and already spans the live Legal Pages row
+    (`-19926` to `-5946`) with margin on both sides — paired with the
+    pre-existing **"Company pages"** text label (`1870:2736`) sitting
+    directly within its band. Screenshot-confirmed. No duplicate banner was
+    built. This closes #206 as a stale/incorrect premise, not as new work.
+  - **#207 — stale "Copyright © 2022" footer text, RESOLVED for all live
+    content.** File-wide sweep found **32 total instances** (not scoped
+    per-page); **22 live, visible instances** updated to 2026 (Sports Page
+    ×2, Blog Page Desktop/Mobile ×4, Blog — Article Detail Desktop/Mobile
+    ×4, all 12 Legal page frames), verified via the canonical
+    load-font→mutate→return recipe. **10 instances inside already-archived,
+    hidden frames deliberately left untouched**, matching the same
+    archived-content precedent #204 used — a disclosed judgment call, not
+    an oversight. A broader safety sweep for any other stray "2022"
+    confirmed every other hit is an unrelated sample date (article publish
+    dates, match dates, admin dashboard placeholder data) — correctly out
+    of this year-correction's scope, left untouched. Only the year digits
+    changed; entity name and rights-reserved language untouched.
+  - **#208 — footer link wiring, RESOLVED for all live content.** A fresh
+    file-wide scan found **263 occurrences** of the 3 exact strings (not
+    the 203 the task brief carried over from #202's older scan — re-verified
+    live rather than trusted, consistent with this project's standing
+    practice). Of those: **189 wired** to the correct new Legal page frame,
+    branching by breakpoint (desktop/mobile, by frame width) and auth state
+    (Logged In/Logged Out, by explicit frame name where available — Sports
+    Page, Blog, Article Detail, and all 12 Legal frames — or by direct
+    Decision Log cross-reference where the name doesn't say so explicitly:
+    Leaderboard/Contest/Competition family → Logged In per **Decision Log
+    #129**; the canonical Home Page frames → Logged Out per **Decision Log
+    #46/#152**; Community/Bants family screens → Logged In per the
+    site-wide login-gating **Decision Log #152** establishes); **46 skipped**
+    (the 10 archived frames, left untouched per precedent); **28 correctly
+    left unwired** — same-type self-references (a "Contact Us" link, or in
+    several cases the page's own H1 heading that happens to literally say
+    "Contact Us", sitting on the Contact Us page itself) that Figma's own
+    `NAVIGATE` action correctly rejects (`"for NAVIGATE actions,
+    destinations must be a different top-level frame"`) — confirmed this is
+    the right outcome, not a bug to work around. Wired via `ON_CLICK` →
+    `NAVIGATE` (matching this file's own existing Notification-row-to-
+    Notification-Centre pattern, not `OPEN_OVERLAY` — a full page
+    navigation, not a dropdown). Spot-checked across breakpoints/auth
+    states/sections (Sports Page logged-out/in, Leaderboard Mobile, Bants
+    homepage) via fresh reads confirming exact destination IDs.
+  - **Documentation**: #199 and #201 folded into a new **"Figma-authoring
+    gotchas"** subsection under CLAUDE.md's own "Figma notes" section — that
+    section did not actually exist before this session, despite at least
+    five prior sessions each saying a gotcha "belongs in the file's standing
+    Figma notes." Only #199, #201, and the `frame.resize()`-on-GROUPs
+    gotcha this cleanup task's own brief pointed at (which also did not
+    actually live in a real standing-notes section yet) are consolidated;
+    several other scattered gotchas named inline elsewhere in this file
+    remain a real, disclosed follow-up sweep, not done here.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
@@ -5210,6 +5319,58 @@ Full reasoning for every choice above: Build Plan Section 5.
   agent caught it by checking live rather than trusting the brief). Full
   variable/value table in `docs/sprint-2-homepage-rebuild-report.md` §0.1 and
   `docs/sprint-2-homepage-rebuild-variables-report.md` §2.
+
+### Figma-authoring gotchas
+
+**This subsection did not exist before `sprint-2/decision-log-204-208-cleanup`,
+despite at least five prior sessions each independently finding a gotcha and
+writing "belongs in the file's standing Figma notes" or "recommend folding
+into the file-wide Figma-notes gotcha list" — the exact drift this project's
+own "Keeping this file current" section exists to prevent.** Decision Log
+#199 and #201 were the two most recently flagged as explicitly still open
+pending this fold-in; both are closed by their entry here. The other
+scattered gotchas named inline in individual session bullets throughout
+"Where things stand" (the variable-bound-paint-takes-its-alpha-from-the-
+variable rule, the manually-set-`.y`-on-an-`AUTO`-positioned-auto-layout-
+child rule, etc.) were **not** swept into this list by this pass — only
+#199, #201, and the `frame.resize()`-on-GROUPs gotcha this same cleanup
+session's own task text pointed at (which, on inspection, also did not
+actually live in a real standing-notes section yet) are consolidated here.
+A full sweep of the remaining scattered gotchas into this section is a
+real, still-open follow-up, not done by this entry.
+
+- **`frame.resize()` on a `layoutMode: NONE` (absolute-layout) frame applies
+  each leaf's own constraints, and `GROUP`s have no constraints of their
+  own** — their leaves resolve independently and drift by differing amounts
+  when the parent frame is resized. Reparenting children into a fresh,
+  correctly-sized shell (then re-asserting each child's snapshotted `x`/`y`)
+  is the safe way to change a frame's width without corrupting
+  absolute-positioned legacy content. Found independently by both the
+  Articles Page split and `sprint-2/legal-pages-navbar-retrofit` sessions on
+  different content, corroborating each other.
+- **A paint bound to a variable that does not itself carry alpha (e.g.
+  `brand/navy`, a plain opaque RGB), combined with a separate fractional
+  paint-level `opacity`, silently resets to `opacity: 1` specifically at
+  `createInstance()` time** — not only at `setBoundVariableForPaint()`
+  construction time, which is the only timing this file's notes previously
+  covered. Variables that carry their own alpha (`brand/green-tint`,
+  `color/text/secondary`) are unaffected. Fix: use a literal, unbound paint
+  at the same resolved value/opacity instead of a bound one for that specific
+  paint — same visual result, no new colour introduced, immune to the bug.
+  Found on the Admin Shell sidebar wash (Decision Log #199,
+  `sprint-2/admin-shell-componentization`). No exhaustive file-wide audit
+  for other occurrences of this exact pattern has been done.
+- **`figma.union()` / `figma.subtract()` (and presumably
+  `figma.intersect()`/`figma.exclude()`) discard the input shapes' own
+  fills**, resetting the resulting `BOOLEAN_OPERATION` node to Figma's own
+  default gray (`#D9D9D9`) regardless of what colour the input primitives
+  were filled with. The fix must be applied to the resulting boolean node
+  itself, not its now-irrelevant, consumed input primitives — always
+  re-verify with a screenshot after any boolean operation, since this
+  produces no error, only a silently wrong colour. Found while building the
+  8 new Admin Shell nav icons (Decision Log #201,
+  `sprint-2/admin-panel-fast-follow`) — all 8 initially rendered pale gray
+  before this was caught.
 
 ## The eight agents, and the order they run in
 
