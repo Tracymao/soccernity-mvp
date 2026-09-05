@@ -5546,6 +5546,77 @@ Full reasoning for every choice above: Build Plan Section 5.
     No real browser/Playwright check available in this environment —
     same verification ceiling as every prior `apps/web` PR.
   - Not merged — founder's call after review.
+- **`sprint-2/shared-footer-layout` (figma-to-code, 2026-09-05) extracts
+  the site footer into a shared component and wires it via a new layout
+  route — `apps/web` only, `services/api` untouched. Decision Log #213.**
+  Report: `docs/sprint-2-shared-footer-layout-report.md`.
+  - **`apps/web` now has THREE layout wrappers, not two. New pages pick
+    one:**
+    - **`AuthChrome`** (`src/layout/AuthChrome.tsx`) — logo-only Top Bar,
+      no site Header. The four core auth routes only (Decision Log #172).
+    - **`AppShell` direct child** (`src/layout/AppShell.tsx`) — site
+      `Header` + routed content, **no footer**. Community, Clubs,
+      ClubFanPage, Banter, and the guardian-consent / profile /
+      verify-email flows (their Figma frames have no footer — confirmed
+      live).
+    - **`FooterLayout`** (`src/layout/FooterLayout.tsx`, a pathless
+      layout route nested under `AppShell`) — `Header` + content +
+      shared `<Footer />`. Home, Sports Hub, Leaderboard, Blog, Article
+      Detail (their canonical Figma frames carry the standardized footer
+      — Decision Log #209/#210). This is the `AuthChrome` split's mirror,
+      one layer deeper.
+  - **The founder decided the footer belongs in a shared component, not
+    copy-pasted per page.** A live audit found this wasn't just cleanup:
+    only `HomePage.tsx` had a footer (written inline), yet Sports Hub /
+    Leaderboard / Blog / Article Detail all have the same canonical
+    footer in their own Figma frame and never got one when they were
+    converted from stubs (PR #171/#172) — their PRs disclosed the
+    omission as "matching convention," but the convention was incomplete
+    for those four.
+  - **`Footer.tsx` is built to the CANONICAL Figma footer (desktop
+    `5213:6816` / mobile `5543:7662`), NOT a copy of HomePage's inline
+    one — which had drifted.** Re-verified live before extracting: the
+    inline version was missing the logo mark, the entire 6-icon social
+    bar (facebook / instagram / twitter / Tik Tok / YouTube / LinkedIn),
+    the green bullet separators on the legal links, and the horizontal
+    rule. The shared component adds all of them. Social icon SVGs
+    downloaded from Figma into `src/assets/icons/social-*.svg` (green
+    fill baked in, same convention as `nav-blog.svg`); the logo mark
+    reuses the existing `soccernity-logo-mark.svg` (same asset `Header` /
+    `AuthTopBar` use). Legal links and social icons render as
+    non-interactive `<span>`s — there are no `/terms`, `/privacy`,
+    `/contact` routes yet (legal pages unconverted, blocked on Decision
+    Log #203) and Soccernity has no published social accounts; they
+    become real links when those targets exist. The Figma 1px rule binds
+    `--sn-icon-inactive` (navy @ 15%, invisible on a navy ground) — the
+    shared component uses white @ 15% to preserve the intent, flagged in
+    Decision Log #213.
+  - **HomePage.tsx's inline `<footer>` JSX and its `.home-footer*` CSS
+    are removed** — `FooterLayout` now renders it once, wrapping the
+    page. `HomePage`'s `.home { margin: -32px }` full-bleed is untouched;
+    `Footer.css` breaks out of `AppShell`'s 32px padding with its own
+    negative margins (same technique), so the navy ground still runs
+    edge-to-edge and, on HomePage, the small margin collapse against the
+    navy closing section is seamless.
+  - **Legal pages (Contact Us / ToS / Privacy Policy) have no React
+    implementation yet** (blocked on Decision Log #203). When that
+    conversion runs, adding those routes as `FooterLayout` children is
+    all that's needed for them to pick up the shared footer — their
+    Figma frames carry it (Decision Log #202 retrofit).
+  - **Verified**: `npx tsc --noEmit` clean; `npm run lint` clean;
+    `npm run build` clean; `npx vitest run` — **19 files / 123 tests, 0
+    failures** (up from 18/119 — new `src/layout/Footer.test.tsx`, 4
+    tests; **no existing test changed** — the footer moved but its
+    content didn't, and no page test asserted on footer content). A
+    throwaway spec (deleted before commit) rendered the **real**
+    `src/app/router.tsx` at all 12 routes and confirmed exactly one
+    `<footer>` on the five `FooterLayout` pages and zero on Community /
+    Clubs / ClubFanPage / Banter / profile / verify-email / 404.
+    Dev-server smoke test: `/`, `/sports-hub`, `/leaderboard`, `/blog`,
+    `/blog/:id`, `/community`, `/clubs`, `/banter` all HTTP 200. No real
+    browser/Playwright check available — same ceiling as every prior
+    `apps/web` PR.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

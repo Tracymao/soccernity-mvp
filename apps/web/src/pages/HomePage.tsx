@@ -304,19 +304,9 @@ export default function HomePage() {
         </div>
       </section>
 
-      <footer className="home-footer">
-        <div className="home-footer__brand">Soccernity</div>
-        <nav className="home-footer__links" aria-label="Footer">
-          <span>Terms of Service</span>
-          <span>Privacy Policy</span>
-          <span>Privacy Settings</span>
-          <span>Contact Us</span>
-        </nav>
-        <p className="home-footer__legal">
-          Copyright &copy; 2026 Soccernity. All rights reserved. The information contained in Soccernity may not be
-          published, broadcast, rewritten, or redistributed without the prior written authority of Soccernity.
-        </p>
-      </footer>
+      {/* The site footer is rendered by FooterLayout (src/layout/
+          FooterLayout.tsx), not inline here -- see src/app/router.tsx and
+          Decision Log #213. */}
     </div>
   );
 }
