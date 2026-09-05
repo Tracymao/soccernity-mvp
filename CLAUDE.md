@@ -5328,6 +5328,59 @@ Full reasoning for every choice above: Build Plan Section 5.
     for any remaining `"Footer — Soccernity Global"` or bare `"Footer"`
     (non-Action) instance returned **zero matches**.
   - Not merged — founder's call after review.
+- **`sprint-2/legacy-footer-template-replacement` (figma-design-system,
+  2026-09-05) replaces a SECOND, previously-undiscovered legacy footer
+  template — internally named `Group 47` (desktop) / `Group 55` (mobile),
+  never wrapped in a node literally named "Footer" — found live on Blog,
+  Blog Article Detail, all 3 Legal pages, and Sports Hub desktop (22
+  frames total). Missed by every earlier "Footer"-named sweep (#174,
+  #204, #209) precisely because of that naming gap.** Report:
+  `docs/sprint-2-legacy-footer-template-replacement-report.md`. New
+  Decision Log **#210**, explicitly not a duplicate of #204/#209.
+  - **Confirmed defects**: 0 hairline divider anywhere; 0 of 6 social
+    icons on desktop instances, only 3 of 6 (Facebook/Instagram/Twitter)
+    on mobile; every single instance had a **duplicated "Terms of
+    Service" label** in the Legal Links row's 4th slot — strong
+    circumstantial evidence (matching the sibling "Footer — Soccernity
+    Global" template's identical 5-slot order, whose 4th slot is
+    "Cookie Policy") that this was meant to say "Cookie Policy" before a
+    copy-paste error, though moot since the canonical 4-link footer has
+    no 5th slot at all; bare "Soccernity." wordmark text with no logo
+    icon on 10 of 12 desktop instances.
+  - **Sports Page's `Group 103` wordmark investigated against Decision
+    Log #194 and confirmed NOT a recurrence** — `437:3011` is a
+    genuinely correct logo+text lockup, a different, coincidentally
+    same-named node from the one #194 flagged elsewhere.
+  - **A real dangling-wordmark risk was found and fixed**: on the two
+    Article Detail Mobile frames, the old footer's wordmark was a
+    separate sibling instance sitting outside the `Group 55` boundary
+    (not embedded inside it, unlike every other instance) — identified
+    and deleted alongside the old footer so it didn't float on top of
+    the new canonical footer.
+  - **Method note, a disclosed deviation from the brief's suggested
+    reparent-into-fresh-shell approach, backed by a direct empirical
+    test**: all 22 parents are `layoutMode: NONE` (absolute layout), but
+    the known `frame.resize()`-on-GROUPs drift bug (see "Figma-authoring
+    gotchas" above) was specifically reproduced on **width**-axis
+    resizes in prior sessions — this task only needed a **height**
+    change. Before touching any real target, a height-only resize was
+    tested on two representative frames (one simple, one with 556 total
+    descendant nodes) with a full before/after/revert deep-snapshot —
+    **zero drift in every node checked**, since every relevant node here
+    already carries `vertical: "MIN"` constraints. Proceeded with a
+    direct per-frame resize using an exact computed delta (new footer
+    height − old footer height) rather than the heavier reparent
+    technique or a hardcoded height assumption — the latter correctly
+    handled two Article Detail Mobile frames whose old footer wasn't
+    flush against the frame's bottom edge (139px of trailing content
+    existed below it).
+  - **Verified**: bound-paint set on every new footer matches canonical
+    exactly; screenshots clean across every family including both
+    Article Detail Mobile frames re-checked specifically for the
+    dangling-wordmark risk; a file-wide sweep found 10 remaining
+    "Group 47"/"Group 55" matches, all confirmed inside already-archived,
+    hidden frames — zero live instances remain.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
