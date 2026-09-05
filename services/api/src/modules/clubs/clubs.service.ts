@@ -2,6 +2,11 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { decodeClubCursor, encodeClubCursor } from './cursor.util';
+import {
+  CLUB_MEMBERS_DEFAULT_PAGE_SIZE,
+  CLUB_MEMBERS_MAX_PAGE_SIZE,
+  ListClubMembersQueryDto,
+} from './dto/list-club-members-query.dto';
 import { CLUBS_DEFAULT_PAGE_SIZE, CLUBS_MAX_PAGE_SIZE, ListClubsQueryDto } from './dto/list-clubs-query.dto';
 
 // Response shape for every GET /clubs and GET /clubs/:id entry (Build
@@ -10,10 +15,9 @@ import { CLUBS_DEFAULT_PAGE_SIZE, CLUBS_MAX_PAGE_SIZE, ListClubsQueryDto } from 
 // already applied to feed/comment lists (see feed.service.ts's
 // POST_SELECT comment): a club with thousands of members returned
 // inline on every page would be exactly the unbounded payload that
-// discipline exists to prevent. Section 4.4 has no `GET
-// /clubs/:id/members` endpoint either, so there's no substitute route
-// this omission is deferring to — member data simply isn't exposed by
-// this module at all yet.
+// discipline exists to prevent. Member data is served by the dedicated,
+// separately-paginated GET /clubs/:id/members roster endpoint
+// (getClubMembers, sprint-2/club-fan-page-backend), never inline here.
 const CLUB_SELECT = {
   id: true,
   name: true,
@@ -56,6 +60,51 @@ export interface JoinState {
   joined: boolean;
   memberCount: number;
 }
+
+// GET /clubs/:id/members roster entry (sprint-2/club-fan-page-backend).
+// Deliberately the same { id, displayName }-only shape
+// UsersService.FOLLOW_USER_SELECT and FeedService.POST_AUTHOR_SELECT
+// already established for "what any other user sees about someone else"
+// — re-declared here rather than imported (both of those are private,
+// unexported consts in other modules). No email, phone, dateOfBirth,
+// isMinor, verificationStatus, or passwordHash ever leaves Postgres via
+// this select. `@handle` / avatar aren't here because `User` has no such
+// column (parked backend requirements, Decision Log #58) — the Figma
+// roster's handle text is decorative, same as everywhere else.
+const CLUB_MEMBER_SELECT = {
+  id: true,
+  displayName: true,
+} as const;
+
+export type ClubMember = Prisma.UserGetPayload<{ select: typeof CLUB_MEMBER_SELECT }>;
+
+export interface ClubMemberPage {
+  items: ClubMember[];
+  nextCursor: string | null;
+}
+
+// Roster visibility filter: exclude restricted-pending minors from the
+// member list (CLAUDE.md non-negotiable #1; Build Plan Section 8.3 — "the
+// minor's account exists but is restricted" and a minor's profile is not
+// visible outside the guardian relationship before consent is recorded).
+// A restricted-pending minor CAN join a club fan page (POST /clubs/:id/join
+// is JwtAuthGuard-only, not GuardianConsentGuard — see this file's guard
+// reasoning), so without this they'd surface by displayName in a roster
+// readable by any authenticated caller — the same category of leak
+// UsersService.assertFollowGraphVisible closes for a restricted-pending
+// minor's own follower/following graph (Decision Log #31/#41).
+//
+// "Not restricted-pending" = a non-minor, OR a minor whose Guardian row
+// exists AND has consentStatus 'confirmed'. A minor with a pending
+// guardian, or (the data-invariant case) no Guardian row at all, is
+// excluded. Consequence, flagged in clubs/README.md and Decision Log
+// #217: the visible roster length can be smaller than ClubPage.memberCount
+// (which counts raw _ClubMembership rows) — acceptable, memberCount is
+// explicitly "not authoritative in isolation" per its own schema comment,
+// and restricted-pending minors joining clubs is an edge case.
+const VISIBLE_CLUB_MEMBER_FILTER: Prisma.UserWhereInput = {
+  OR: [{ isMinor: false }, { guardian: { consentStatus: 'confirmed' } }],
+};
 
 @Injectable()
 export class ClubsService {
@@ -175,6 +224,72 @@ export class ClubsService {
     if (!club) {
       throw new NotFoundException('Club not found');
     }
+  }
+
+  // GET /clubs/:id/members (sprint-2/club-fan-page-backend). The club
+  // fan-page roster — the users in `ClubPage.members` (the many-to-many
+  // POST /clubs/:id/join populates and `memberCount` caches), minus
+  // restricted-pending minors (VISIBLE_CLUB_MEMBER_FILTER above).
+  //
+  // Schema judgment call, flagged (Decision Log #217): the Club — Fan
+  // Page design's roster is captioned "users whose represented club is
+  // this club," but there is no represented-club field or endpoint —
+  // Decision Log #74's selector is designed, not built, and
+  // User.clubAffiliationId (the closest existing column) is written by
+  // nothing. `ClubPage.members` is the only populated club-membership
+  // mechanism that exists, it is what `memberCount` counts and what the
+  // Fan Page header shows, so the roster is fan-page membership. When
+  // represented-club lands, whether the roster should show fans vs.
+  // representers is a real open question — flagged, not pre-decided.
+  //
+  // Keyset pagination (Section 5.5) alphabetically by displayName, `id`
+  // as the tiebreaker — the same "no timestamp on the model, order by
+  // name" approach GET /clubs itself uses (User has no per-club "joined
+  // at" timestamp; the implicit _ClubMembership table has only its A/B
+  // id columns). Reuses clubs/cursor.util.ts's { name, id } envelope
+  // verbatim (name = displayName), no third cursor shape invented.
+  //
+  // JwtAuthGuard only (ClubsController) — reading a roster is no more
+  // safety-sensitive than GET /clubs or GET /clubs/:id, same reasoning
+  // as those.
+  async getClubMembers(clubId: string, query: ListClubMembersQueryDto): Promise<ClubMemberPage> {
+    await this.assertClubExists(clubId);
+
+    const limit = Math.min(query.limit ?? CLUB_MEMBERS_DEFAULT_PAGE_SIZE, CLUB_MEMBERS_MAX_PAGE_SIZE);
+
+    const filters: Prisma.UserWhereInput[] = [
+      { clubMemberships: { some: { id: clubId } } },
+      VISIBLE_CLUB_MEMBER_FILTER,
+    ];
+    if (query.cursor) filters.push(this.buildMemberCursorFilter(query.cursor));
+
+    const rows = await this.prisma.user.findMany({
+      where: { AND: filters },
+      orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+      take: limit + 1,
+      select: CLUB_MEMBER_SELECT,
+    });
+
+    const hasMore = rows.length > limit;
+    const trimmed = hasMore ? rows.slice(0, limit) : rows;
+    const last = trimmed[trimmed.length - 1];
+    const nextCursor =
+      hasMore && last ? encodeClubCursor({ name: last.displayName, id: last.id }) : null;
+
+    return { items: trimmed, nextCursor };
+  }
+
+  private buildMemberCursorFilter(rawCursor: string): Prisma.UserWhereInput {
+    const cursor = decodeClubCursor(rawCursor);
+    // Ascending-order (alphabetical) "after this (displayName, id)"
+    // filter — the User-model counterpart of buildCursorFilter above
+    // (which does the same for ClubPage.name).
+    return {
+      OR: [
+        { displayName: { gt: cursor.name } },
+        { displayName: cursor.name, id: { gt: cursor.id } },
+      ],
+    };
   }
 
   // POST /clubs/:id/join. See clubs/README.md's "verified Prisma

@@ -5749,6 +5749,90 @@ Full reasoning for every choice above: Build Plan Section 5.
     (Club Fan Page header type). On-canvas
     `Club — Fan Page — Design Notes` annotation added.
   - Not merged — founder's call after review.
+- **`sprint-2/club-fan-page-backend` (backend-api, 2026-09-05) builds the
+  backend the Club — Fan Page design (PR #176 / `sprint-2/club-fan-page-design`)
+  needs — `services/api` only, no `apps/web`. Closes the backend half of
+  Decision Log #157; adds Decision Log #217.** Report:
+  `services/api/src/modules/clubs/README.md`'s "Club fan-page feed +
+  roster" section.
+  - **`GET /clubs/:id/feed` — the club fan-page feed.** Every `Post`
+    whose `clubPageId` matches, newest-first, keyset-paginated. **Not**
+    `GET /posts/feed` (Section 4.3), which is scoped to the caller's own
+    posts + follows and deliberately never reads `Post.clubPageId`
+    (`feed/README.md` point 2) — `getFeed`'s scope is unchanged, this is
+    a separate route. Route lives on `ClubsController` but **delegates to
+    a new `FeedService.getClubFeed`** — `ClubsModule` now imports
+    `FeedModule` (which now `exports: [FeedService]`; no import cycle),
+    so the response shape is **identical to `GET /posts/feed`**:
+    `{ items: FeedPostWithViewerState[], nextCursor }`, per-caller
+    `isLiked`/`isSaved`/`author.isFollowing` (Decision Log #153)
+    included. `getFeed` and `getClubFeed` now share a private
+    `paginatePostsWithViewerState` helper (they differ only in the WHERE
+    clause). `JwtAuthGuard` only (reading, same as `GET /clubs` /
+    `GET /posts/feed`); `ClubsService.assertClubExists(id)` runs first so
+    a non-existent club is a 404. No restricted-pending-minor content
+    filter needed — `POST /posts` is `GuardianConsentGuard`-gated
+    (Decision Log #21), so a restricted-pending minor has no posts in any
+    feed. Scope is `clubPageId` alone, not intersected with membership (a
+    club page shows its posts to anyone who can open it).
+  - **`GET /clubs/:id/members` — the club roster (Decision Log #217).**
+    Keyset-paginated, `{ id, displayName }` per entry (the same narrow
+    select `FOLLOW_USER_SELECT` uses; no `@handle`/avatar — no such
+    `User` column, Decision Log #58). **Two real judgment calls, both
+    flagged as Decision Log #217, not silently resolved:**
+    - **Roster = `ClubPage.members`, NOT a "represented club" field.**
+      The design captions it "users whose represented club is this
+      club," but confirmed live: there is no represented-club field or
+      endpoint (Decision Log #74's selector is designed, not built;
+      `User.clubAffiliationId` is written by nothing). `ClubPage.members`
+      (the `_ClubMembership` m2m `POST /clubs/:id/join` populates and
+      `memberCount` caches) is the only populated club-membership
+      mechanism — and what the Fan Page header's count already shows —
+      so the roster is fan-page membership. When represented-club lands,
+      whether the roster shows fans vs. representers is a genuine open
+      question, not pre-decided.
+    - **Restricted-pending minors are excluded from the roster** (filter:
+      non-minor OR `guardian.consentStatus === 'confirmed'`), per
+      CLAUDE.md non-negotiable #1 / Build Plan Section 8.3 and the same
+      intent as `UsersService.assertFollowGraphVisible` (Decision Log
+      #31/#41) — a restricted-pending minor *can* join a club (`POST
+      /clubs/:id/join` is `JwtAuthGuard`-only), so without this their
+      `displayName` would surface to any authenticated caller.
+      Consequence, accepted: the visible roster can be shorter than
+      `ClubPage.memberCount` (raw row count) — `memberCount` is "not
+      authoritative in isolation" per its own schema comment. **Known
+      inconsistency, flagged not fixed:** `GET /users/:id/followers` /
+      `/following` do NOT filter restricted-pending minors from their
+      *list entries* (only hide the whole graph when the profile owner
+      `:id` is one) — whether those should match this roster's behavior
+      is open.
+    - Alphabetical keyset pagination by `displayName` (`id` tiebreaker) —
+      `User` has no per-club "joined at" timestamp (the implicit
+      `_ClubMembership` table has only its `A`/`B` id columns), same
+      "no timestamp, order by name" approach `GET /clubs` uses; reuses
+      `clubs/cursor.util.ts`'s `{ name, id }` cursor verbatim.
+      `JwtAuthGuard` only.
+  - **Verification** — all re-measured, not estimated. Mocked suite:
+    **42 suites / 508 tests, 0 failures** (up from 489 — `feed.service.spec.ts`
+    +6 for `getClubFeed`, `clubs.service.spec.ts` +6 for `getClubMembers`,
+    `clubs.controller.http.spec.ts` +7 for the two new routes, which now
+    also provides a mocked `FeedService`). e2e suite (real Postgres via
+    docker-compose): **9 suites / 71 tests, 0 failures** (up from 65 —
+    `test/clubs.e2e-spec.ts` +6, no new spec file; the new block exercises
+    the club feed's `clubPageId` filter + real viewer state, and the
+    roster against a genuinely-seeded restricted-pending minor member,
+    a confirmed-consent minor member, and real keyset pagination —
+    category 3 of `test/README.md`'s guiding principle, a Prisma relation
+    filter over the implicit `_ClubMembership` join table). `nest build`
+    + `npm run lint` clean. `User`/`Guardian` safeguarding fields
+    untouched — **zero `schema.prisma` diff** (no migration; both
+    endpoints are plain reads).
+  - `apps/web` NOT touched — wiring the Club — Fan Page screen's feed +
+    roster to these endpoints is the separate `figma-to-code` follow-up
+    this unblocks (`ClubFanPage.tsx` currently renders neither; its scope
+    note "Member posts and a full member list aren't part of club pages
+    yet" in the code will need updating then).
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

@@ -463,4 +463,247 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
       expect(after.body.joined).toBe(false);
     });
   });
+
+  // sprint-2/club-fan-page-backend — Decision Log #157 (backend half) +
+  // #217. GET /clubs/:id/feed reads Post.clubPageId (which GET
+  // /posts/feed deliberately never does); GET /clubs/:id/members reads
+  // the real ClubPage.members m2m (_ClubMembership) with a
+  // restricted-pending-minor exclusion. Both are real DB reads worth
+  // proving against Postgres (category 3 — a Prisma relation filter over
+  // an implicit join table — from test/README.md's guiding principle).
+  describe('GET /clubs/:id/feed + GET /clubs/:id/members (Decision Log #157/#217)', () => {
+    async function seedClubPost(authorId: string, clubPageId: string, contentText: string) {
+      const prisma = getTestPrismaClient();
+      return prisma.post.create({ data: { authorId, clubPageId, contentText, mediaUrls: [] } });
+    }
+
+    async function addMember(clubId: string, userId: string) {
+      const prisma = getTestPrismaClient();
+      await prisma.clubPage.update({
+        where: { id: clubId },
+        data: { members: { connect: { id: userId } }, memberCount: { increment: 1 } },
+      });
+    }
+
+    async function seedRestrictedPendingMinorMember(
+      label: string,
+      clubId: string,
+    ): Promise<{ userId: string }> {
+      const prisma = getTestPrismaClient();
+      const user = await prisma.user.create({
+        data: {
+          email: `e2e-clubs-minor-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
+          passwordHash: 'unused-in-this-e2e-spec-file',
+          displayName: `Zzz Minor ${label}`, // sorts last, so it's never the trimmed lookahead row
+          dateOfBirth: new Date('2015-01-01'),
+          isMinor: true,
+          guardian: {
+            create: {
+              name: 'Guardian Name',
+              email: `guardian-${label}-${Date.now()}@example.com`,
+              relationship: 'Parent',
+              consentStatus: 'pending',
+              consentToken: `tok-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              consentTokenExpiresAt: new Date(Date.now() + 72 * 3600 * 1000),
+            },
+          },
+        },
+      });
+      await prisma.clubPage.update({
+        where: { id: clubId },
+        data: { members: { connect: { id: user.id } }, memberCount: { increment: 1 } },
+      });
+      return { userId: user.id };
+    }
+
+    it('GET /clubs/:id/feed returns only posts whose clubPageId matches, newest-first, with per-caller viewer state', async () => {
+      const prisma = getTestPrismaClient();
+      const club = await prisma.clubPage.create({ data: { name: 'Feed FC', memberCount: 0 } });
+      const otherClub = await prisma.clubPage.create({ data: { name: 'Other FC', memberCount: 0 } });
+      const author = await createUser('feed-author');
+      const viewer = await createUser('feed-viewer');
+
+      const older = await seedClubPost(author.userId, club.id, 'older club post');
+      const newer = await seedClubPost(author.userId, club.id, 'newer club post');
+      await seedClubPost(author.userId, otherClub.id, 'different club, must not appear');
+      await prisma.post.create({
+        data: { authorId: author.userId, contentText: 'no club at all', mediaUrls: [] },
+      });
+
+      // viewer likes the newer club post and follows the author
+      await request(app.getHttpServer())
+        .post(`/posts/${newer.id}/like`)
+        .set('Authorization', `Bearer ${viewer.accessToken}`)
+        .expect(200);
+      await request(app.getHttpServer())
+        .post(`/users/${author.userId}/follow`)
+        .set('Authorization', `Bearer ${viewer.accessToken}`)
+        .expect(200);
+
+      const res = await request(app.getHttpServer())
+        .get(`/clubs/${club.id}/feed`)
+        .set('Authorization', `Bearer ${viewer.accessToken}`)
+        .expect(200);
+
+      expect(res.body.items.map((p: { id: string }) => p.id)).toEqual([newer.id, older.id]);
+      const newerItem = res.body.items[0];
+      expect(newerItem.isLiked).toBe(true);
+      expect(newerItem.isSaved).toBe(false);
+      expect(newerItem.author.isFollowing).toBe(true);
+      expect(newerItem.author).not.toHaveProperty('passwordHash');
+      expect(newerItem.author).not.toHaveProperty('isMinor');
+    });
+
+    it('GET /clubs/:id/feed keyset-paginates (limit + cursor) consistently with GET /posts/feed', async () => {
+      const prisma = getTestPrismaClient();
+      const club = await prisma.clubPage.create({ data: { name: 'Paginate FC', memberCount: 0 } });
+      const author = await createUser('feed-page-author');
+
+      const ids: string[] = [];
+      for (let i = 0; i < 3; i++) {
+        const p = await seedClubPost(author.userId, club.id, `club post ${i}`);
+        ids.push(p.id);
+      }
+      // Newest-first order is the reverse of insertion order.
+      const expectedOrder = [...ids].reverse();
+
+      const page1 = await request(app.getHttpServer())
+        .get(`/clubs/${club.id}/feed?limit=2`)
+        .set('Authorization', `Bearer ${author.accessToken}`)
+        .expect(200);
+      expect(page1.body.items.map((p: { id: string }) => p.id)).toEqual(expectedOrder.slice(0, 2));
+      expect(page1.body.nextCursor).toEqual(expect.any(String));
+
+      const page2 = await request(app.getHttpServer())
+        .get(`/clubs/${club.id}/feed?limit=2&cursor=${encodeURIComponent(page1.body.nextCursor)}`)
+        .set('Authorization', `Bearer ${author.accessToken}`)
+        .expect(200);
+      expect(page2.body.items.map((p: { id: string }) => p.id)).toEqual(expectedOrder.slice(2));
+      expect(page2.body.nextCursor).toBeNull();
+    });
+
+    it('GET /clubs/:id/feed 404s for a non-existent club, and requires auth', async () => {
+      const { accessToken } = await createUser('feed-404');
+      await request(app.getHttpServer())
+        .get('/clubs/does-not-exist/feed')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(404);
+      await request(app.getHttpServer()).get('/clubs/does-not-exist/feed').expect(401);
+    });
+
+    it('GET /clubs/:id/members returns the roster (alphabetical), excluding restricted-pending minors', async () => {
+      const prisma = getTestPrismaClient();
+      const club = await prisma.clubPage.create({ data: { name: 'Roster FC', memberCount: 0 } });
+      const caller = await createUser('roster-caller');
+
+      // Two adult members + the caller, plus one restricted-pending minor member.
+      const alice = await prisma.user.create({
+        data: {
+          email: `roster-alice-${Date.now()}@example.com`,
+          passwordHash: 'x',
+          displayName: 'Alice Adult',
+          dateOfBirth: new Date('1990-01-01'),
+          isMinor: false,
+        },
+      });
+      const bob = await prisma.user.create({
+        data: {
+          email: `roster-bob-${Date.now()}@example.com`,
+          passwordHash: 'x',
+          displayName: 'Bob Adult',
+          dateOfBirth: new Date('1990-01-01'),
+          isMinor: false,
+        },
+      });
+      await addMember(club.id, alice.id);
+      await addMember(club.id, bob.id);
+      const minor = await seedRestrictedPendingMinorMember('roster', club.id);
+
+      const res = await request(app.getHttpServer())
+        .get(`/clubs/${club.id}/members`)
+        .set('Authorization', `Bearer ${caller.accessToken}`)
+        .expect(200);
+
+      const ids = res.body.items.map((m: { id: string }) => m.id);
+      expect(ids).toEqual([alice.id, bob.id]); // alphabetical by displayName, minor excluded
+      expect(ids).not.toContain(minor.userId);
+      expect(res.body.items[0]).toEqual({ id: alice.id, displayName: 'Alice Adult' });
+      // memberCount still counts the raw membership rows (all 3), only the
+      // *visible* roster is filtered — documented in Decision Log #217.
+      const clubRow = await prisma.clubPage.findUniqueOrThrow({ where: { id: club.id } });
+      expect(clubRow.memberCount).toBe(3);
+    });
+
+    it('GET /clubs/:id/members includes a minor whose guardian consent is confirmed', async () => {
+      const prisma = getTestPrismaClient();
+      const club = await prisma.clubPage.create({ data: { name: 'Consented FC', memberCount: 0 } });
+      const caller = await createUser('consented-caller');
+
+      const minor = await prisma.user.create({
+        data: {
+          email: `consented-minor-${Date.now()}@example.com`,
+          passwordHash: 'x',
+          displayName: 'Consented Minor',
+          dateOfBirth: new Date('2015-01-01'),
+          isMinor: true,
+          guardian: {
+            create: {
+              name: 'G',
+              email: `g-${Date.now()}@example.com`,
+              relationship: 'Parent',
+              consentStatus: 'confirmed',
+              consentToken: `tok-c-${Date.now()}`,
+              consentTokenExpiresAt: new Date(Date.now() + 72 * 3600 * 1000),
+              consentTimestamp: new Date(),
+            },
+          },
+        },
+      });
+      await addMember(club.id, minor.id);
+
+      const res = await request(app.getHttpServer())
+        .get(`/clubs/${club.id}/members`)
+        .set('Authorization', `Bearer ${caller.accessToken}`)
+        .expect(200);
+      expect(res.body.items.map((m: { id: string }) => m.id)).toContain(minor.id);
+    });
+
+    it('GET /clubs/:id/members keyset-paginates and 404s for a non-existent club', async () => {
+      const prisma = getTestPrismaClient();
+      const club = await prisma.clubPage.create({ data: { name: 'MembersPage FC', memberCount: 0 } });
+      const caller = await createUser('members-page-caller');
+
+      for (const name of ['Amy', 'Ben', 'Cara']) {
+        const u = await prisma.user.create({
+          data: {
+            email: `mp-${name}-${Date.now()}@example.com`,
+            passwordHash: 'x',
+            displayName: name,
+            dateOfBirth: new Date('1990-01-01'),
+            isMinor: false,
+          },
+        });
+        await addMember(club.id, u.id);
+      }
+
+      const page1 = await request(app.getHttpServer())
+        .get(`/clubs/${club.id}/members?limit=2`)
+        .set('Authorization', `Bearer ${caller.accessToken}`)
+        .expect(200);
+      expect(page1.body.items.map((m: { displayName: string }) => m.displayName)).toEqual(['Amy', 'Ben']);
+      expect(page1.body.nextCursor).toEqual(expect.any(String));
+
+      const page2 = await request(app.getHttpServer())
+        .get(`/clubs/${club.id}/members?limit=2&cursor=${encodeURIComponent(page1.body.nextCursor)}`)
+        .set('Authorization', `Bearer ${caller.accessToken}`)
+        .expect(200);
+      expect(page2.body.items.map((m: { displayName: string }) => m.displayName)).toEqual(['Cara']);
+      expect(page2.body.nextCursor).toBeNull();
+
+      await request(app.getHttpServer())
+        .get('/clubs/does-not-exist/members')
+        .set('Authorization', `Bearer ${caller.accessToken}`)
+        .expect(404);
+    });
+  });
 });

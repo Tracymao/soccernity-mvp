@@ -807,4 +807,34 @@ already attaches `request.user`; no new guard wiring.
 shape of gap — no per-user `joined` / `isMember` field, only the
 join/leave action responses carry membership state. Out of scope for
 Decision Log #153; recorded as a new Decision Log candidate in the PR
-report.
+report. **RESOLVED — `sprint-2/clubs-joined-flag`, Decision Log #154.**
+
+---
+
+## `FeedService.getClubFeed` — the club fan-page feed (`sprint-2/club-fan-page-backend`, closes the backend half of Decision Log #157)
+
+`GET /clubs/:id/feed` (the route lives on `ClubsController`, not here —
+it's `/clubs`-prefixed) is the club fan-page feed: every `Post` whose
+`clubPageId` matches, newest-first. `ClubsModule` imports `FeedModule`
+(which now `exports: [FeedService]`) and delegates to
+`FeedService.getClubFeed(clubPageId, userId, query)`.
+
+Why it lives on `FeedService` and not `ClubsService`: so it reuses
+`POST_SELECT`, `attachViewerState` (Decision Log #153), `buildCursorFilter`,
+and the feed cursor util unchanged — the response is the **exact same**
+`FeedPage` / `FeedPostWithViewerState` shape `GET /posts/feed` returns.
+`getFeed` and `getClubFeed` now differ only in their WHERE clause
+(`{ clubPageId }` vs. the own-posts-plus-follows `OR`) and share a private
+`paginatePostsWithViewerState` helper — the same "two callers, identical
+shape, factor once" call `UsersService.toFollowPage` made; `getComments` /
+`getSavedPosts` keep their own inline repetition (single callers).
+
+This is a **genuine addition beyond Section 4.3/4.4's literal endpoint
+list** — `GET /posts/feed`'s own scope comment / point 2 above flagged
+exactly this ("club-page membership is deliberately NOT part of
+`getFeed`'s scope... a Decision Log candidate for whoever builds
+`ClubPage` membership flows"). `getClubFeed` is a separate route, not a
+change to `getFeed`'s scope — `getFeed` still never reads `Post.clubPageId`.
+Full detail (guard choice, no restricted-pending-minor filter needed,
+scope-is-clubPageId-alone) in `clubs/README.md`'s "Club fan-page feed +
+roster" section.
