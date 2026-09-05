@@ -5922,6 +5922,52 @@ Full reasoning for every choice above: Build Plan Section 5.
     and the Leaderboard Contest tab (#211's dummy table) to these
     endpoints is the separate `figma-to-code` follow-up this unblocks.
   - Not merged — founder's call after review.
+- **`sprint-2/account-deactivation-design` (figma-design-system,
+  2026-09-06) completes the account deactivation / reactivation /
+  deletion flow in Figma — verify-then-build pass, Figma design only, no
+  app/backend code. Decision Log #220.** Full detail:
+  `docs/sprint-2-account-deactivation-design-report.md`.
+  - **Found complete, left alone:** the `Inactive Account` screen
+    (desktop `1662:2782` / mobile `5780:8679`) already presents Reactivate
+    (green primary) and Delete (secondary) as genuinely distinct, separate
+    actions on both breakpoints (brief item 2 — no change).
+  - **Found incomplete, built:** `Settings — Deactivate Account (Intro)`
+    (desktop `2924:7358` / mobile `5695:8262`) was informational only — a
+    lone "Deactivate" button, no confirm/cancel, no password field — and
+    its "What to know" copy wrongly implied restoration is capped at "30
+    days after deactivation", contradicting the founder's confirmed flow
+    (deactivation is **indefinite**; the 30-day clock starts only on
+    delete, matching shipped `POST /auth/deactivate-account` /
+    `reactivate-account` / `delete-account`). Copy corrected on both
+    Intro frames; the button relabelled **"Deactivate" → "Continue"**;
+    new **`Settings — Deactivate Account (Confirm)`** — desktop
+    `6213:15640` + mobile `6213:15617` — password re-entry (backend
+    requires re-auth), a "What happens" explainer, explicit **Cancel /
+    Deactivate account** actions.
+  - **Found missing, built:** choosing "Delete" from the Inactive Account
+    screen led nowhere and disclosed no grace period. New **`Inactive
+    Account — Delete (Confirm)`** — desktop `6217:14677` + mobile
+    `6215:14657` — states the 30-day grace explicitly ("Sign back in
+    within 30 days to cancel… After 30 days… permanently deleted and
+    can't be recovered"), password re-entry (matching `POST
+    /auth/delete-account`), **Cancel / Delete account** actions.
+  - **Off-palette housekeeping** on the two frames touched: desktop
+    Intro's unbound raw-red (`#ED1C24`) "Deactivate" button → `brand/navy`
+    (it was never `semantic/alert`, just stale hardcoded red — the mobile
+    Intro was already navy); desktop Inactive's unbound raw-grey/raw-red
+    "Delete Account" button → `color/background/surface` + `color/icon/inactive`
+    outline + `color/text/primary` text, matching the already-clean mobile
+    treatment. Destructive buttons stay **navy, not red** per the
+    established Settings-mobile decision (white on `semantic/alert` = 4.12:1,
+    fails AA). `ON_CLICK → NAVIGATE` wiring added for the forward path +
+    Cancel backs. New authored paints: 0 unbound / 0 off-palette / 0
+    `brand/green-tint-28`; the 2 residual unbound paints are pre-existing
+    inherited shell/watermark plates. Light mode only.
+  - **Not built, flagged:** post-action success/status states ("account
+    deactivated" / "deletion scheduled — N days left"); a guardian/minor
+    deactivation variant; a reactivation confirm (reactivation is
+    non-destructive, left one-tap).
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
