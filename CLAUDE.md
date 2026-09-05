@@ -5617,6 +5617,57 @@ Full reasoning for every choice above: Build Plan Section 5.
     browser/Playwright check available — same ceiling as every prior
     `apps/web` PR.
   - Not merged — founder's call after review.
+- **`sprint-2/create-post-desktop-and-auth-navbar-fixes`
+  (figma-design-system, 2026-09-05) — scoped edit + 2 new frames within
+  the existing Create Post desktop family; navbar catch-up on Create
+  Post desktop and the core auth pages. Figma design only, no app code.**
+  Report: `docs/sprint-2-create-post-desktop-and-auth-navbar-fixes-report.md`.
+  Decision Log **#214** added.
+  - **Part 1 — Create Post desktop parity.** Built the 2 states desktop
+    was missing vs. mobile, cloned from the (now-fixed) `2008:655` in the
+    page-with-modal-overlay pattern (not a 390-wide modal): **Create
+    Post — Desktop — Active Contest** (`6171:14797` — "Create a Post |
+    Contest ①" tabs present, matching mobile `5982:10905`) and **—
+    No Active Contest** (`6171:16994` — Contest tab + count badge
+    removed, matching mobile `5982:10932`). Judgment call, flagged (DL
+    #214d): on No-Active-Contest the "Create a Post" label + its
+    tab-style accent underline is kept as the modal heading — a desktop
+    modal needs a title; mobile's header-less composer doesn't translate
+    1:1.
+  - **Part 2 — Create Post desktop navbar.** All 5 desktop Create Post
+    frames (`2008:655`, `2009:2913`, `2009:5168` + the 2 new) now carry a
+    real **`Navbar — header 4`** instance (of `2838:3502`, logged-in web
+    nav — Create Post requires auth), 1440×90, at z-index 0 so it sits
+    under the modal scrim exactly as the hand-drawn bar did. On the 3
+    existing frames, 9 hand-drawn nav nodes each (`Rectangle 109` bar +
+    loose `Group` logo + fake search + fake `Group 258` icon row + fake
+    avatar/notification/message cluster) were removed. Z-order
+    re-verified: nav idx 0, scrim idx 92, modal idx 93 — identical
+    layering to before.
+  - **Part 3 — auth-page navbar.** All 12 Login / Register / Forgot
+    Password / Forgot Password — Link Sent / Reset Password / Reset
+    Password — Success frames (desktop + mobile) had the full logged-out
+    `header 7` / `header 7 — mobile` instance replaced with a clone of
+    the Verify Email `Top Bar — Soccernity` frame (**there is no
+    `Top Bar — Soccernity` component** — each Verify Email frame carries
+    its own copy; desktop `5143:6636` 1440×90, mobile `5531:7265`
+    390×90). Figma was simply behind the shipped app —
+    `AuthChrome`/`AuthTopBar` (Decision Log #172, PR #152) has rendered
+    the logo-only Top Bar for exactly these routes for months. Mobile
+    keeps the **90px** Top Bar height (matching Verify Email mobile and
+    the shipped 90px `AuthTopBar`, not the old 64px mobile nav); content
+    has clearance, nothing overlaps. Final sweep: **zero `header 7`
+    instances remain on any of the 12**. **Verify Email (all 8 states)
+    and Guardian Consent (intentionally mixed — split-panel + distinct
+    "Minor Account" status bar) re-verified live and deliberately left
+    untouched.**
+  - **Left in place, flagged (DL #214):** every auth frame's form body
+    still contains a hidden (`visible = false`), inert secondary
+    `Group 103` / `Logo` wordmark lockup — the shipped `SignupSplitScreen`
+    no longer renders these. They cause no double-logo and no overlap
+    (all hidden). Deleting the dead nodes from Figma is an optional micro
+    follow-up, not done here.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
