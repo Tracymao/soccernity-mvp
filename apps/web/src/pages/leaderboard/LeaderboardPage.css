@@ -1,0 +1,338 @@
+/* Leaderboard. Figma source: 5171:6633, "Soccernity-MVP"
+ * (weZWWqggy9j13eX8bhFgs6). Light theme --sn-* tokens only, matching
+ * ClubsPage.css / CommunityPage.css. Rank-medal colours follow Decision
+ * Log #69: palette-only (green / navy / green-tint+navy outline), no
+ * gold/silver/bronze iconography. "On-navy" white text below is a literal
+ * #fff, the same disclosed exception HomePage.css uses -- the app's token
+ * map has no --sn-text-on-navy equivalent. */
+
+.lb-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.lb-status {
+  font: 400 15px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  padding: 48px 0;
+  text-align: center;
+  margin: 0;
+}
+
+.lb-status--inline {
+  padding: 12px 16px;
+  text-align: left;
+  background: var(--sn-green-tint-12);
+  border-radius: 8px;
+}
+
+/* --- header ------------------------------------------------------- */
+
+.lb-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.lb-title {
+  font: 600 34px/1.3 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.lb-subtitle {
+  font: 400 16px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 6px 0 0;
+}
+
+.lb-meta {
+  text-align: right;
+  font: 400 13px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.lb-meta p {
+  margin: 0;
+}
+
+.lb-meta__muted {
+  opacity: 0.8;
+}
+
+/* --- board tabs ----------------------------------------------------- */
+
+.lb-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+}
+
+.lb-tab {
+  border: none;
+  background: transparent;
+  padding: 10px 4px;
+  font: 600 15px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.lb-tab--active {
+  color: var(--sn-brand-navy);
+  border-bottom-color: var(--sn-brand-green);
+}
+
+/* --- filter bar ------------------------------------------------------ */
+
+.lb-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding: 16px;
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 12px;
+}
+
+.lb-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lb-filter__label {
+  font: 600 11px "Inter", sans-serif;
+  letter-spacing: 0.04em;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+.lb-segmented {
+  display: flex;
+  background: var(--sn-background-page);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.lb-segment {
+  border: none;
+  background: transparent;
+  padding: 8px 16px;
+  font: 600 14px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.lb-segment--active {
+  background: var(--sn-brand-navy);
+  color: #fff;
+}
+
+.lb-dropdown {
+  height: 43px;
+  padding: 0 14px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+  background: var(--sn-background-page);
+  color: var(--sn-text-primary);
+  font: 400 14px "Inter", sans-serif;
+  min-width: 200px;
+}
+
+.lb-dropdown:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- table ------------------------------------------------------------ */
+
+.lb-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.lb-table th {
+  text-align: left;
+  font: 600 11px "Inter", sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sn-text-secondary);
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+}
+
+.lb-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+  font: 400 15px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  vertical-align: middle;
+}
+
+.lb-row:last-child td {
+  border-bottom: none;
+}
+
+.lb-row--you {
+  background: var(--sn-green-tint-12);
+}
+
+.lb-empty {
+  text-align: center;
+  color: var(--sn-text-secondary);
+  padding: 32px 16px;
+}
+
+.lb-player {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lb-avatar {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sn-green-tint-12);
+  color: var(--sn-brand-navy);
+  font: 600 14px "Inter", sans-serif;
+}
+
+.lb-player__text {
+  display: flex;
+  flex-direction: column;
+}
+
+.lb-player__name {
+  font: 600 15px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lb-player__handle {
+  font: 400 13px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.lb-you-tag {
+  font: 600 11px "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+  background: var(--sn-green-tint-28);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.lb-points {
+  font: 600 15px "Inter", sans-serif;
+}
+
+.lb-change {
+  font: 500 14px "Inter", sans-serif;
+}
+
+.lb-change--up {
+  color: var(--sn-brand-green);
+}
+
+.lb-change--down {
+  color: var(--sn-brand-navy);
+}
+
+.lb-change--flat {
+  color: var(--sn-text-secondary);
+}
+
+/* Rank medals -- ranks 1-3 only, Decision Log #69: palette-only, no
+ * gold/silver/bronze. */
+.lb-medal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font: 700 14px "Inter", sans-serif;
+}
+
+.lb-medal--1 {
+  background: var(--sn-brand-green);
+  color: #fff;
+}
+
+.lb-medal--2 {
+  background: var(--sn-brand-navy);
+  color: #fff;
+}
+
+.lb-medal--3 {
+  background: var(--sn-green-tint-28);
+  color: var(--sn-brand-navy);
+  border: 1px solid var(--sn-brand-navy);
+}
+
+/* --- footer bits ------------------------------------------------------- */
+
+.lb-pagination {
+  font: 400 13px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+  text-align: center;
+}
+
+.lb-note {
+  font: 400 13px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .lb-header {
+    flex-direction: column;
+  }
+
+  .lb-meta {
+    text-align: left;
+  }
+
+  .lb-table thead {
+    display: none;
+  }
+
+  .lb-table,
+  .lb-table tbody,
+  .lb-table tr,
+  .lb-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .lb-row {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--sn-icon-inactive);
+  }
+
+  .lb-table td {
+    border-bottom: none;
+    padding: 4px 0;
+  }
+}
