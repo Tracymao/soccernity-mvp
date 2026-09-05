@@ -744,8 +744,9 @@ restricted-pending minor member (with `memberCount` still counting all 3
 raw rows), **includes** a minor whose guardian consent is `confirmed`, and
 keyset-paginates + 404s.
 Mocked suite: **42 suites / 508 tests, 0 failures** (up from 489). e2e
-suite: **9 suites / N tests, 0 failures** (`test/clubs.e2e-spec.ts`: 13 →
-19 tests; no new spec file).
+suite: **9 suites / 71 tests, 0 failures** (`test/clubs.e2e-spec.ts`:
+13 → 19 tests; no new spec file — 71 is the directly-measured current
+full-e2e total).
 
 ---
 

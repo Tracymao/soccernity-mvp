@@ -5817,8 +5817,10 @@ Full reasoning for every choice above: Build Plan Section 5.
     +6 for `getClubFeed`, `clubs.service.spec.ts` +6 for `getClubMembers`,
     `clubs.controller.http.spec.ts` +7 for the two new routes, which now
     also provides a mocked `FeedService`). e2e suite (real Postgres via
-    docker-compose): **9 suites / 71 tests, 0 failures** (up from 65 —
-    `test/clubs.e2e-spec.ts` +6, no new spec file; the new block exercises
+    docker-compose): **9 suites / 71 tests, 0 failures**
+    (`test/clubs.e2e-spec.ts` went 13 → 19 tests, no new spec file; the
+    prior documented full-e2e total had drifted, so treat 71 as the
+    directly-measured current figure — the new block exercises
     the club feed's `clubPageId` filter + real viewer state, and the
     roster against a genuinely-seeded restricted-pending minor member,
     a confirmed-consent minor member, and real keyset pagination —
