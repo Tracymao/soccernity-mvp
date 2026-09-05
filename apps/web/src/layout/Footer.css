@@ -1,0 +1,125 @@
+/* Shared site footer. Figma source: canonical "Footer" frame 5213:6816
+ * (desktop) / 5543:7662 (mobile), "Soccernity-MVP"
+ * (weZWWqggy9j13eX8bhFgs6). Light-theme, navy ground, white content.
+ *
+ * The token map (src/theme/applyTheme.ts) has no --sn-text-on-navy, so
+ * white on navy is spelled #fff -- the same precedent HomePage.css set.
+ * Figma binds the 1px rule to --sn-icon-inactive (navy @ 15%), which is
+ * invisible on a navy ground; a white @ 15% rule preserves the intent
+ * (see Decision Log #213). */
+
+.sn-footer {
+  /* Break out of AppShell's 32px content padding so the navy ground runs
+   * edge-to-edge, the same negative-margin technique HomePage.css /
+   * SignupSplitScreen.css already use. 24px top margin gives a gap below
+   * ordinary centred pages (Sports Hub / Leaderboard / Blog / Article
+   * Detail); on HomePage its -32px root margin collapses that to a small
+   * seamless overlap into the navy closing section. */
+  margin: 24px -32px -32px;
+  padding: 48px clamp(20px, 7vw, 100px) 40px;
+  background: var(--sn-brand-navy);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  text-align: center;
+}
+
+.sn-footer__wordmark {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sn-footer__logo-mark {
+  display: block;
+}
+
+.sn-footer__wordmark span {
+  font: 600 20px "Montserrat", "Inter", sans-serif;
+  color: #fff;
+}
+
+/* --- social bar --------------------------------------------------- */
+
+.sn-footer__socials {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 20px 36px;
+}
+
+.sn-footer__social {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.sn-footer__social img {
+  display: block;
+  width: 24px;
+  height: 24px;
+}
+
+.sn-footer__social span {
+  font: 600 10px "Montserrat", "Inter", sans-serif;
+  color: #fff;
+}
+
+/* --- legal links ------------------------------------------------- */
+
+.sn-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px 56px;
+}
+
+.sn-footer__link {
+  position: relative;
+  padding-left: 14px;
+  font: 600 15px "Montserrat", "Inter", sans-serif;
+  color: #fff;
+}
+
+.sn-footer__link::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sn-brand-green);
+}
+
+/* --- rule + legal text ----------------------------------------- */
+
+.sn-footer__rule {
+  width: 100%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.sn-footer__legal {
+  margin: 0;
+  max-width: 1294px;
+  font: 400 11px/1.6 "Montserrat", "Inter", sans-serif;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+@media (max-width: 640px) {
+  .sn-footer__socials {
+    gap: 16px 24px;
+  }
+
+  .sn-footer__links {
+    gap: 12px 28px;
+  }
+}

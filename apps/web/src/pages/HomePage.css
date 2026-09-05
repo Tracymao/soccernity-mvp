@@ -16,8 +16,7 @@
   margin: -32px;
 }
 
-.home section,
-.home footer {
+.home section {
   padding-left: clamp(20px, 7vw, 100px);
   padding-right: clamp(20px, 7vw, 100px);
 }
@@ -568,39 +567,6 @@
   margin: 0 0 4px;
 }
 
-/* --- footer --------------------------------------------- */
-
-.home-footer {
-  background: var(--sn-brand-navy);
-  padding-top: 48px;
-  padding-bottom: 40px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 24px;
-  text-align: center;
-}
-
-.home-footer__brand {
-  font: 600 20px "Montserrat", "Inter", sans-serif;
-  color: #fff;
-}
-
-.home-footer__links {
-  display: flex;
-  gap: 40px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.home-footer__links span {
-  font: 600 15px "Montserrat", "Inter", sans-serif;
-  color: #fff;
-}
-
-.home-footer__legal {
-  font: 400 11px/1.6 "Montserrat", "Inter", sans-serif;
-  color: rgba(255, 255, 255, 0.72);
-  max-width: 900px;
-  margin: 0;
-}
+/* The site footer moved to a shared component (src/layout/Footer.tsx),
+ * rendered by FooterLayout -- see src/app/router.tsx and Decision Log
+ * #213. Its styles live in src/layout/Footer.css. */

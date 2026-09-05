@@ -31,6 +31,7 @@
 // (Build Plan Decision Log #172; see AuthChrome.tsx / LoginPage.tsx).
 import { createBrowserRouter } from "react-router";
 import AppShell from "../layout/AppShell";
+import FooterLayout from "../layout/FooterLayout";
 import AuthChrome from "../layout/AuthChrome";
 import HomePage from "../pages/HomePage";
 import SportsHubPage from "../pages/SportsHubPage";
@@ -68,25 +69,41 @@ export const router = createBrowserRouter([
     path: "/",
     element: <AppShell />,
     children: [
-      // "/" is the logged-out marketing landing page (Decision Log #46:
-      // canonical Figma frame 5204:6728). Decision Log #152: a signed-in
-      // visitor is redirected to /community from inside HomePage itself
-      // (it checks getStoredAccessToken() and renders <Navigate> when a
-      // session exists) -- there is no separate authenticated-homepage
-      // route or design.
-      { index: true, element: <HomePage /> },
+      {
+        // FooterLayout -- pathless layout route that renders the shared
+        // <Footer /> after the page. Its children are EXACTLY the routes
+        // whose canonical Figma frame carries the standardized site footer
+        // (Decision Log #209/#210/#213): Home, Sports Hub, Leaderboard,
+        // Blog, Article Detail. Everything else stays a direct AppShell
+        // child below and renders with no footer -- Community / Clubs /
+        // ClubFanPage / Banter have no footer in their Figma frames
+        // (confirmed live), and the guardian-consent / profile /
+        // verify-email flows are full-bleed forms. See FooterLayout.tsx.
+        element: <FooterLayout />,
+        children: [
+          // "/" is the logged-out marketing landing page (Decision Log
+          // #46: canonical Figma frame 5204:6728). Decision Log #152: a
+          // signed-in visitor is redirected to /community from inside
+          // HomePage itself (it checks getStoredAccessToken() and renders
+          // <Navigate> when a session exists) -- there is no separate
+          // authenticated-homepage route or design.
+          { index: true, element: <HomePage /> },
 
-      // Content nav (Community / Sports Hub pillars -- see Header's
-      // primaryNavItems in src/layout/navigation.ts).
-      { path: "sports-hub", element: <SportsHubPage /> },
-      { path: "blog", element: <BlogPage /> },
-      // Blog -- Article Detail (Figma "Blog -- Article Detail ..." frames,
-      // Decision Log #197). Dummy content -- no blog backend exists. See
-      // ../pages/blog/ArticleDetailPage.tsx.
-      { path: "blog/:articleId", element: <ArticleDetailPage /> },
-      { path: "leaderboard", element: <LeaderboardPage /> },
+          // Content nav (see Header's primaryNavItems in
+          // src/layout/navigation.ts).
+          { path: "sports-hub", element: <SportsHubPage /> },
+          { path: "blog", element: <BlogPage /> },
+          // Blog -- Article Detail (Figma "Blog -- Article Detail ..."
+          // frames, Decision Log #197). Dummy content -- no blog backend
+          // exists. See ../pages/blog/ArticleDetailPage.tsx.
+          { path: "blog/:articleId", element: <ArticleDetailPage /> },
+          { path: "leaderboard", element: <LeaderboardPage /> },
+        ],
+      },
+
       // The authenticated feed -- Sprint 2's functional core (Feed +
-      // Follow, Build Plan Section 4.3 / 4.2). See CommunityPage.tsx.
+      // Follow, Build Plan Section 4.3 / 4.2). See CommunityPage.tsx. No
+      // footer -- not in the Figma frame.
       { path: "community", element: <CommunityPage /> },
       { path: "banter", element: <BanterPage /> },
       // Persistent Club Pages (Build Plan Section 6 Sprint 2 "Club
