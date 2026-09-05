@@ -4957,6 +4957,88 @@ Full reasoning for every choice above: Build Plan Section 5.
     #180**'s Status cells; new rows **#200, #201** added, in Build Plan
     Section 9.
   - Not merged — founder's call after review.
+- **`sprint-2/articles-cleanup-moderation-fix-hygiene` (figma-design-
+  system, 2026-09-05) is a mixed cleanup pass — three Articles/Blog-
+  section findings (Decision Log #195/#196/#198) plus the real
+  Moderation Queue layout bug (Decision Log #200), plus a docx
+  status-word correction sweep. Figma design only, no app code.** Report:
+  `docs/sprint-2-articles-cleanup-moderation-fix-report.md`. Figma writes
+  by the agent (no shell); branch/commit/docx/PR finalised in a
+  follow-up session. **Two of the four Figma items turned out to have
+  stale premises, caught by verifying live rather than trusting the
+  brief** — the same discipline this project's sessions have
+  consistently applied.
+  - **Decision Log #195 (section banner coverage) — RESOLVED, no action
+    needed.** Live measurement found the Blog/Articles banner
+    (`5942:12065`) already covers all 4 Article Detail frames with
+    ~1,687px to spare on each side, a symmetric strip around the whole
+    section — the original "~5,620px short" estimate didn't match the
+    live file. No resize performed.
+  - **Decision Log #196 (legacy text nav sweep) — RESOLVED for the 2
+    named frames, new candidate raised for what the sweep actually
+    found.** The two "Blog — Article Detail Desktop" frames had nothing
+    to hide — their own `Group 7` legacy nav was already removed (not
+    hidden) by the prior `sprint-2/articles-page-split-and-navbar`
+    session. A genuine file-wide sweep (14,419 text nodes scanned) found
+    the real gap instead: **3 live, never-retrofitted legacy text-nav
+    instances** — Contact Us Desktop (`87:158`), Terms of Service Desktop
+    (`102:340`), Privacy Policy Desktop (`104:444`), each still carrying
+    the exact pre-redesign `Group 7` nav + old-style logo lockup, plus
+    their 3 mobile counterparts using an old `bx:menu` hamburger instead
+    of the canonical mobile navbar. None of these 6 frames has ever been
+    touched by any navbar-retrofit pass in this project's history —
+    flagged as **Decision Log #202**, a scoped follow-up to give them the
+    same `header 4`/`header 7` treatment every other section already has.
+    Nothing on these 3 pages was fixed in this pass — find-and-report
+    only, per the task's own instruction.
+  - **Decision Log #198 (desktop top whitespace) — RESOLVED.** Both
+    "Blog — Article Detail Desktop" frames' gap (navbar bottom to real
+    content) tightened from 221px to 81px, matching Blog Page Desktop's
+    own measured convention exactly (verified live, not assumed).
+    Content shifted up 140px; each frame's height was also reduced by
+    the same 140px — a disclosed judgment call beyond the literal ask —
+    to keep the footer flush at the bottom rather than leaving a new
+    empty band. Verified: no overlap, footer flush, both auth states
+    clean.
+  - **Decision Log #200 (Moderation Queue button/table overlap) —
+    RESOLVED, a real bug, not just documentation.** Live coordinates were
+    re-derived against the componentized shell instance (`6044:14064`),
+    not trusted from the older fast-follow report. The Table
+    (`5794:8718`) was repositioned to sit 9px below the shared shell's
+    top-bar row, matching the measured Articles/Categories convention.
+    **A new Figma-authoring gotcha was found and worked around**:
+    manually setting `.y` on an `AUTO`-positioned child of an auto-layout
+    frame is silently discarded by Figma's own layout engine (no error
+    thrown) — fixed by switching the affected children (`Table`, a
+    spacer, the "Callout — Appeal Routing" panel) to `ABSOLUTE`
+    positioning first. Verified: the Table no longer overlaps the
+    "Filter" or "Export Queue" buttons, both now clearly visible.
+    `Admin — Report Detail & Action`/`Admin — Appeal Review` share the
+    identical root cause but were deliberately left untouched — both have
+    `Show Action Button = false`, so there's no visible defect there
+    today.
+  - **Docx status-word correction sweep, done alongside the Figma work**:
+    leading "Open" flipped to "Resolved" on **#49, #50, #51, #147, #151**
+    (each already carried a full resolution block appended by the prior
+    `sprint-2/admin-panel-fast-follow` PR, but the leading word was still
+    stale) and on **#195, #196, #198, #200** (resolved by this pass's own
+    Figma work, above). **#197 rewritten in full**: the founder resolved
+    the naming question herself by renaming the 4 Article Detail frames
+    directly in Figma to "Blog — Article Detail Desktop/Mobile — Logged
+    In/Logged Out" (confirmed live) — the docx now records that
+    resolution instead of the stale "naming-only question... no
+    functional impact" text. New row **#202** added for the 6
+    never-retrofitted legacy-nav frames found above.
+  - **New Figma-authoring gotcha for the standing notes**: a manually-set
+    `.y` on a normal (`AUTO`-positioned) child of an auto-layout frame is
+    silently discarded/recomputed by Figma's own layout engine — work
+    around it by setting `layoutPositioning = 'ABSOLUTE'` on that child
+    first (re-asserting size via `.resize()`, since `STRETCH`/
+    `layoutAlign` no longer applies once a child goes absolute), then
+    setting `x`/`y`. Distinct from the already-documented "bound paint
+    takes its alpha from the variable" (Decision Log #199) and "boolean
+    operations discard input fills" (Decision Log #201) gotchas.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
