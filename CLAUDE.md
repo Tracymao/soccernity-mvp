@@ -5667,6 +5667,48 @@ Full reasoning for every choice above: Build Plan Section 5.
     no longer renders these. They cause no double-logo and no overlap
     (all hidden). Deleting the dead nodes from Figma is an optional micro
     follow-up, not done here.
+  - Merged as PR #174.
+- **`sprint-2/privacy-settings-design` (figma-design-system /
+  figma-screen-builder, 2026-09-05) designs a new Privacy Settings page,
+  desktop + mobile — the destination for the currently-unlinked
+  "Privacy Settings" footer legal link. Figma design only, no app code.**
+  Report: `docs/sprint-2-privacy-settings-design-report.md`. Decision
+  Log **#215** added.
+  - **New frames**: `Settings — Privacy` (`6178:14437`, cloned from
+    `Settings — Overview` `2905:4798`) and `Settings — Privacy — Mobile`
+    (`6185:14547`, cloned from `Settings — Overview — Mobile`
+    `5607:7813`), reusing the family's nav-rail, list-row,
+    `Settings Toggle` component (`5694:8219`) and section-header
+    patterns; nav rail shows "Privacy and safety" active. Plus an
+    on-canvas `Privacy Settings — Design Notes` annotation (`6191:15563`).
+  - **Rows** (both viewports): Public profile (toggle On) · Download my
+    data (chevron, request-style — no export/DSAR endpoint exists yet) ·
+    Account status (chevron → `ON_CLICK NAVIGATE` to Settings —
+    Deactivate Account (Intro) `2924:7358` / `5695:8262`) · Guardian
+    approval — **under-18 only**, read-only "Approved" pill + "Change
+    guardian email ›" link → Guardian Consent 11 (`5498:7164` /
+    `5501:8536`) · Marketing emails — **disabled "Coming soon" row**.
+  - **Two scope judgment calls, both flagged in the design note + DL
+    #215, not silent omissions:**
+    - **Cookie / local-storage preferences — deferred, NOT built.** The
+      counsel-review risk register (item #15,
+      `docs/legal-copy-draft-tos-privacy-policy.md`) records the
+      cookie/local-storage audit hasn't happened; a toggle for something
+      unaudited would misrepresent what's true. Add once the audit
+      exists.
+    - **Marketing / email opt-out — disabled "Coming soon" row, not a
+      working toggle.** Verified live: `services/api` sends only
+      transactional email (verification, guardian-consent,
+      password-reset via Postmark); no marketing/newsletter capability
+      exists anywhere. Becomes a real toggle if/when marketing email is
+      introduced.
+  - **OPEN, not resolved:** relationship between this new "Privacy" page
+    and the existing `Settings — Privacy & Safety` screen (`2922:5382` /
+    `5649:8092` — who-can-see-your-posts / who-can-DM-you interaction
+    controls). Merge / nest / keep-separate is a founder IA call.
+  - Token discipline: no new colour, no `brand/green-tint-28`, Light
+    mode only. Paint audit — mobile 0 unbound; desktop 1 (pre-existing
+    `#d9d9d9` shell cover-plate, inherited by every Settings frame).
   - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
