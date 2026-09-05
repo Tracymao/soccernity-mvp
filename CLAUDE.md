@@ -5381,6 +5381,86 @@ Full reasoning for every choice above: Build Plan Section 5.
     "Group 47"/"Group 55" matches, all confirmed inside already-archived,
     hidden frames — zero live instances remain.
   - Not merged — founder's call after review.
+- **`sprint-2/leaderboard-banter-sportshub-to-code` (figma-to-code,
+  2026-09-05) converts LeaderboardPage.tsx, BanterPage.tsx, and
+  SportsHubPage.tsx from `PlaceholderPage` stubs to real, working
+  `apps/web` code — the last three stubs on the main nav.** No
+  `services/api` code touched. Sequencing rule honoured: all three Figma
+  frames (Leaderboard `5171:6633`, Bants homepage `2256:6802` + search
+  result `2448:2179`, Sports Page `1009:673`) were confirmed live before
+  writing any code, not assumed from memory of past design sessions.
+  - **Backend state, confirmed live before building, not assumed**: the
+    `leaderboard`, `banter`, and `sports` backend modules are each still
+    a bare `README.md` placeholder ("Not yet implemented") — Sprint 6,
+    Sprint 3, and Sprint 4 respectively. No `GET /leaderboard`,
+    Contest/Competition, room, or fixtures endpoint exists anywhere;
+    `LeaderboardEntry`/`BanterRoom`/`MatchData` are schema-only models
+    with zero live reads or writes. Per the standing paused-backend rule,
+    none of these three pages' domain content (rankings, rooms, scores)
+    is wired to a real endpoint — all of it is illustrative dummy data in
+    a co-located `*Data.ts` file per page, the exact same disclosed
+    convention `HomePage.tsx`'s own `FIXTURES`/`TALENT_CLIPS` constants
+    already use, for the identical reason.
+  - **LeaderboardPage — login required, no logged-out view** (Decision
+    Log #129): a `no-session` state prompts to log in and calls nothing,
+    matching `ClubsPage.tsx`. Board Tabs (Overall / Contest / Competition,
+    Decision Log #71–72), a 4-dimension filter bar (SCOPE Global/By club,
+    CLUB, COMPETITION TYPE — Competition tab only, TIME PERIOD
+    Weekly/All-time), a ranked table with palette-only rank medals for
+    top 3 (Decision Log #69: green/navy/green-tint+navy-outline, no
+    gold/silver/bronze) and a "You" tag row, and a generic
+    RANK/PLAYER/CLUB/&lt;metric&gt;/SCORE Competition-tab shell (metric =
+    Accuracy for Prediction, Votes for Commentary, Decision Log #72) are
+    all built and filter/tab-interactive. **One piece of real data**: the
+    CLUB filter's dropdown options come from the caller's actual `GET
+    /clubs` response filtered to `joined: true` (Decision Log #154) —
+    genuine live membership data, not dummy content. **Two disclosed
+    judgment calls, new Decision Log #211**: (1) the single
+    explicitly-selected "represented club" Decision Log #74/#128
+    describes has no live schema field or endpoint yet — wired as a
+    typed local-state stub (defaults to the first real joined club,
+    changeable in the UI, never persisted) rather than blocking the page,
+    per this task's own explicit instruction; (2) the real Contest
+    mechanic's four phases (Vacant → three weekly-fill states → Live
+    Level-1 Final → Crowned, Decision Log #70) are **not** all
+    reproduced — a materially larger scope than this first conversion
+    pass — the Contest tab ships as one illustrative representative
+    state instead, flagged in-code and in the Decision Log rather than
+    silently cut.
+  - **BanterPage — login required** (Decision Log #152's site-wide
+    login-gating for the Community/Bants family): mirrors
+    `CommunityPage.tsx`'s no-session handling exactly. Real data: the
+    caller's own display name via `GET /users/:id` (same pattern
+    `CommunityPage.tsx`'s composer uses). Illustrative dummy data: the
+    Banter Rooms list, Trending News, Fixtures, and Suggested-follows
+    rails — same "Sample" disclosure discipline as `CommunityPage.tsx`'s
+    own side rails. A client-side-only search filters the dummy room
+    list (matching the "Bants - search result" frame's "Result showing
+    for X" pattern, real matching against illustrative data rather than a
+    real query). Includes the mobile categories-view pattern already
+    built in Figma (Decision Log #144) as an All / My Bants tab — "My
+    Bants" has no real room-membership data to filter by, so it shows the
+    same illustrative list with an explicit disclosure note rather than
+    fabricating a membership computation.
+  - **SportsHubPage — no login gate**, unlike the other two: Figma has
+    both a Logged In (`1009:673`) and Logged Out (`205:2`) canonical
+    frame with identical content, and the shared `Header` already renders
+    the correct chrome either way (same precedent as `BlogPage`). League
+    sidebar (client-side filter + search), a match list (client-side
+    filtered by league) with live/HT/FT status pills, and a "Most Recent
+    Stories" aside are all built against dummy data (Decision Log #6
+    still open, blocks Sprint 4) — an explicit on-page disclosure note
+    says so.
+  - **Verified**: `npx tsc --noEmit` clean; `npm run lint` clean;
+    `npx vitest run` — **16 files / 110 tests, 0 failures** (up from
+    13/92 — `LeaderboardPage.test.tsx` +8, `BanterPage.test.tsx` +5,
+    `SportsHubPage.test.tsx` +5, no existing test changed); `npx vite
+    build` clean production bundle. Dev-server smoke test: `/`,
+    `/leaderboard`, `/banter`, `/sports-hub`, `/community`, `/clubs` all
+    HTTP 200. No real browser/Playwright check available in this
+    environment — same verification ceiling as every prior `apps/web`
+    PR.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
