@@ -10,7 +10,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
   // Pooled connection (via Neon's PgBouncer in production) — what the
   // running app uses for normal query traffic. See DIRECT_URL below and
   // Decision Log #26 (Build Plan Section 9 / CLAUDE.md) for why these two
@@ -29,16 +29,16 @@ datasource db {
 // ---------- Community ----------
 
 model User {
-  id                String    @id @default(uuid())
-  email             String    @unique
-  phone             String?
-  passwordHash      String
-  displayName       String
-  dateOfBirth       DateTime
-  isMinor           Boolean   @default(false)
-  role              String    @default("fan") // fan | player | admin
+  id                 String   @id @default(uuid())
+  email              String   @unique
+  phone              String?
+  passwordHash       String
+  displayName        String
+  dateOfBirth        DateTime
+  isMinor            Boolean  @default(false)
+  role               String   @default("fan") // fan | player | admin
   verificationStatus String   @default("unverified")
-  createdAt         DateTime  @default(now())
+  createdAt          DateTime @default(now())
 
   // Sprint 1 / sprint-1/f5-f6-missing-endpoints — a genuine addition beyond
   // Section 3's literal User field list, flagged as a Decision Log
@@ -52,7 +52,7 @@ model User {
   // own comment; no hard-delete of this row happens anywhere yet, pending
   // a real retention/erasure policy decision this PR deliberately does not
   // make unilaterally).
-  accountStatus     String    @default("active")
+  accountStatus String @default("active")
 
   // sprint-2/account-deletion-sweep — a genuine addition beyond Section
   // 3's literal User field list, flagged per CLAUDE.md's "the data model
@@ -67,7 +67,7 @@ model User {
   pendingDeletionAt DateTime?
 
   // Safeguarding — required per Build Plan Section 8.3. Do not remove.
-  guardian          Guardian?
+  guardian Guardian?
 
   // Single, narrowly-scoped "this is my club" declared-identity field —
   // a grassroots-player-identity concept, distinct from fan-page
@@ -85,20 +85,29 @@ model User {
   // the full reasoning on why this is the mechanism "join" uses, and
   // why it had to be given an explicit relation name to work correctly
   // at all.
-  clubMemberships   ClubPage[] @relation("ClubMembership")
+  clubMemberships ClubPage[] @relation("ClubMembership")
 
-  posts             Post[]
-  comments          Comment[]
-  savedPosts        SavedPost[]
-  likes             Like[]
-  followedBy        Follow[]        @relation("followee")
-  following         Follow[]        @relation("follower")
-  notifications     Notification[]
-  reportsFiled      Report[]        @relation("reporter")
-  messagesSent      Message[]
-  createdTeams      GrassrootsTeam[]
-  resultsEntered    Result[]
-  leaderboardEntry  LeaderboardEntry[]
+  posts            Post[]
+  comments         Comment[]
+  savedPosts       SavedPost[]
+  likes            Like[]
+  followedBy       Follow[]           @relation("followee")
+  following        Follow[]           @relation("follower")
+  notifications    Notification[]
+  reportsFiled     Report[]           @relation("reporter")
+  messagesSent     Message[]
+  createdTeams     GrassrootsTeam[]
+  resultsEntered   Result[]
+  leaderboardEntry LeaderboardEntry[]
+
+  // sprint-2/contest-data-model-backend (Decision Log #218/#219). All four
+  // are onDelete: Cascade on their own FK side (below) -- matching
+  // Decision Log #44 (cascade), so AccountDeletionSweepService's single
+  // tx.user.delete() keeps working with no per-table handling added.
+  contestEntries   ContestEntry[]
+  contestRoundWins ContestRoundWinner[]
+  contestStandings ContestStanding[]
+  pointsLedger     PointsLedgerEntry[]
 
   // sprint-2/account-deletion-sweep -- backs AccountDeletionSweepService's
   // own query (accountStatus = 'pending_deletion' AND pendingDeletionAt
@@ -110,8 +119,8 @@ model User {
 // Build Plan Section 8.3. consent_status must be "confirmed" before a
 // minor's profile becomes visible outside the guardian relationship.
 model Guardian {
-  id                     String    @id @default(uuid())
-  minorUserId            String    @unique
+  id                    String    @id @default(uuid())
+  minorUserId           String    @unique
   // sprint-2/account-deletion-cascade -- DELIBERATELY left as the
   // implicit default (RESTRICT on Postgres when no onDelete is given),
   // NOT changed to Cascade alongside every other User-referencing
@@ -128,14 +137,14 @@ model Guardian {
   // successful hard-delete, undermining the whole reason
   // ConsentAuditRecord exists. This omission is deliberate, confirmed
   // unchanged by this PR -- not an oversight.
-  minorUser              User      @relation(fields: [minorUserId], references: [id])
-  name                   String
-  email                  String
-  relationship           String
-  consentStatus          String    @default("pending") // pending | confirmed
-  consentToken           String    @unique
-  consentTokenExpiresAt  DateTime
-  consentTimestamp       DateTime?
+  minorUser             User      @relation(fields: [minorUserId], references: [id])
+  name                  String
+  email                 String
+  relationship          String
+  consentStatus         String    @default("pending") // pending | confirmed
+  consentToken          String    @unique
+  consentTokenExpiresAt DateTime
+  consentTimestamp      DateTime?
 }
 
 // sprint-2/account-deletion-sweep, implementing Decision Log #42's
@@ -193,7 +202,7 @@ model ConsentAuditRecord {
 }
 
 model ClubPage {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   name        String
   league      String?
   country     String?
@@ -209,7 +218,7 @@ model ClubPage {
   // leave/unjoin endpoint (contrast with follow/like/save, which are
   // all POST+DELETE pairs) — see clubs/README.md's "join-only, no
   // leave" gap.
-  memberCount Int      @default(0)
+  memberCount Int     @default(0)
 
   // Real, verified fix to a pre-existing bug in this field, found while
   // building POST /clubs/:id/join (sprint-2/club-pages) — flagged as a
@@ -232,7 +241,7 @@ model ClubPage {
   // clubAffiliation (paired with affiliatedPlayers below) disambiguate
   // the two into genuinely separate relations — this migration creates
   // a real `_ClubMembership` implicit join table for the first time.
-  members     User[]   @relation("ClubMembership")
+  members User[] @relation("ClubMembership")
 
   // Reverse side of User.clubAffiliation, required by Prisma for the
   // relation to resolve at all now that it has its own explicit name
@@ -241,7 +250,7 @@ model ClubPage {
   // club" endpoint, and none is added speculatively here.
   affiliatedPlayers User[] @relation("ClubAffiliation")
 
-  posts       Post[]
+  posts Post[]
 }
 
 // sprint-2/account-deletion-cascade -- createdBy is now Cascade (Decision
@@ -256,58 +265,58 @@ model ClubPage {
 // with existing fixtures would otherwise hit the exact same RESTRICT wall
 // this PR fixes for Post/Comment/Like.
 model GrassrootsTeam {
-  id            String    @id @default(uuid())
-  name          String
-  city          String
-  leagueType    String // informal | school | academy
-  createdById   String
+  id           String    @id @default(uuid())
+  name         String
+  city         String
+  leagueType   String // informal | school | academy
+  createdById  String
   // Decision Log #44 (cascade) -- see account-deletion/README.md.
-  createdBy     User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
-  verified      Boolean   @default(false)
-  fixturesHome  Fixture[] @relation("teamA")
-  fixturesAway  Fixture[] @relation("teamB")
+  createdBy    User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  verified     Boolean   @default(false)
+  fixturesHome Fixture[] @relation("teamA")
+  fixturesAway Fixture[] @relation("teamB")
 }
 
 model Fixture {
-  id            String          @id @default(uuid())
-  teamAId       String
-  teamA         GrassrootsTeam  @relation("teamA", fields: [teamAId], references: [id])
-  teamBId       String?
-  teamB         GrassrootsTeam? @relation("teamB", fields: [teamBId], references: [id])
-  scheduledAt   DateTime
-  venue         String?
-  status        String          @default("scheduled") // scheduled | live | full_time
-  result        Result?
+  id          String          @id @default(uuid())
+  teamAId     String
+  teamA       GrassrootsTeam  @relation("teamA", fields: [teamAId], references: [id])
+  teamBId     String?
+  teamB       GrassrootsTeam? @relation("teamB", fields: [teamBId], references: [id])
+  scheduledAt DateTime
+  venue       String?
+  status      String          @default("scheduled") // scheduled | live | full_time
+  result      Result?
 }
 
 model Result {
-  id            String   @id @default(uuid())
-  fixtureId     String   @unique
-  fixture       Fixture  @relation(fields: [fixtureId], references: [id])
-  scoreA        Int
-  scoreB        Int
-  enteredById   String
+  id          String   @id @default(uuid())
+  fixtureId   String   @unique
+  fixture     Fixture  @relation(fields: [fixtureId], references: [id])
+  scoreA      Int
+  scoreB      Int
+  enteredById String
   // Decision Log #44 (cascade) -- see account-deletion/README.md.
-  enteredBy     User     @relation(fields: [enteredById], references: [id], onDelete: Cascade)
-  enteredAt     DateTime @default(now())
+  enteredBy   User     @relation(fields: [enteredById], references: [id], onDelete: Cascade)
+  enteredAt   DateTime @default(now())
 }
 
 model Post {
-  id            String    @id @default(uuid())
-  authorId      String
+  id           String        @id @default(uuid())
+  authorId     String
   // Decision Log #44 (cascade) -- see account-deletion/README.md.
   // Deleting a Post this way then needs to keep cascading into its own
   // children (Comment.post/SavedPost.post/Like.post below) for a User
   // delete to actually complete when someone else has commented/saved/
   // liked this post -- those three relations carry onDelete: Cascade
   // too, for exactly this reason, not independently of this decision.
-  author        User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  contentText   String
-  mediaUrls     String[]
-  clubPageId    String?
-  clubPage      ClubPage? @relation(fields: [clubPageId], references: [id])
-  banterRoomId  String?
-  banterRoom    BanterRoom? @relation(fields: [banterRoomId], references: [id])
+  author       User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  contentText  String
+  mediaUrls    String[]
+  clubPageId   String?
+  clubPage     ClubPage?     @relation(fields: [clubPageId], references: [id])
+  banterRoomId String?
+  banterRoom   BanterRoom?   @relation(fields: [banterRoomId], references: [id])
   // Denormalized cache for feed-rendering performance (avoids a COUNT()
   // per post on every feed load). Must be incremented/decremented
   // transactionally alongside Like row creation/deletion by whichever
@@ -315,7 +324,12 @@ model Post {
   // Section 4.3) — never trust this in isolation as authoritative, and
   // it should be recomputable via Like.count({ where: { postId } }) if
   // it ever drifts from the real Like rows.
-  likeCount     Int       @default(0)
+  // sprint-2/contest-data-model-backend — a Post can be submitted AS one
+  // Contest entry (the "Create a Post — For Contest" flow). At most one
+  // entry per Post (ContestEntry.postId is @unique). onDelete: Cascade on
+  // that side, so deleting a Post takes its entry with it.
+  contestEntry ContestEntry?
+  likeCount    Int           @default(0)
   // Same denormalized-cache obligation as likeCount immediately above:
   // must be incremented transactionally alongside Comment row creation
   // by whichever code path implements POST /posts/:id/comments (Build
@@ -330,11 +344,11 @@ model Post {
   // Comment row's deletion, using the same updateMany-with-a-floor-guard
   // (commentCount: { gt: 0 }) pattern unlikePost() already established
   // for likeCount — see feed.service.ts.
-  commentCount  Int       @default(0)
-  createdAt     DateTime  @default(now())
-  comments      Comment[]
-  savedBy       SavedPost[]
-  likes         Like[]
+  commentCount Int           @default(0)
+  createdAt    DateTime      @default(now())
+  comments     Comment[]
+  savedBy      SavedPost[]
+  likes        Like[]
 }
 
 model Comment {
@@ -398,17 +412,17 @@ model Notification {
 }
 
 model SavedPost {
-  id       String   @id @default(uuid())
-  userId   String
+  id      String   @id @default(uuid())
+  userId  String
   // Decision Log #44 (cascade) -- see account-deletion/README.md.
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  postId   String
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId  String
   // sprint-2/account-deletion-cascade -- load-bearing for #44 the same
   // way Comment.post is (see that model's comment): a Post cascading
   // away from its author's User delete must keep cascading into
   // SavedPost rows saved by OTHER users too, or the whole delete aborts.
-  post     Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  savedAt  DateTime @default(now())
+  post    Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  savedAt DateTime @default(now())
 
   @@unique([userId, postId])
 }
@@ -417,17 +431,17 @@ model SavedPost {
 // Section 4.3). Post.likeCount stays as a denormalized cache alongside
 // this — see the comment there.
 model Like {
-  id        String   @id @default(uuid())
-  userId    String
+  id      String   @id @default(uuid())
+  userId  String
   // Decision Log #44 (cascade) -- see account-deletion/README.md.
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  postId    String
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId  String
   // sprint-2/account-deletion-cascade -- load-bearing for #44 the same
   // way Comment.post is (see that model's comment): a Post cascading
   // away from its author's User delete must keep cascading into Like
   // rows from OTHER users too, or the whole delete aborts.
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  likedAt   DateTime @default(now())
+  post    Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  likedAt DateTime @default(now())
 
   @@unique([userId, postId])
 }
@@ -519,8 +533,8 @@ model Category {
 // a minimal one already did — the real gap was that it was never fleshed
 // out or given its own auth path, both of which this PR now builds.
 model AdminUser {
-  id       String    @id @default(uuid())
-  email    String    @unique
+  id            String    @id @default(uuid())
+  email         String    @unique
   // sprint-2/admin-console-account-entity additions below — genuine
   // schema additions beyond Section 3's original AdminUser field list,
   // flagged per CLAUDE.md's "the data model is a fixed spec" rule rather
@@ -538,34 +552,212 @@ model AdminUser {
   // AdminAuthService.login() checks this the same way AuthService.login()
   // checks User.accountStatus.
   accountStatus String    @default("active")
-  role     String // editor | moderator | superadmin
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  articles Article[]
+  role          String // editor | moderator | superadmin
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  articles      Article[]
 }
 
 // ---------- Sports Hub (cached from the licensed sports-data vendor — Decision Log #6) ----------
 
 model MatchData {
-  id            String   @id @default(uuid())
-  externalRef   String   @unique
-  competition   String
-  teams         String[]
-  score         String?
-  status        String // scheduled | live | full_time
-  kickoffTime   DateTime
+  id          String   @id @default(uuid())
+  externalRef String   @unique
+  competition String
+  teams       String[]
+  score       String?
+  status      String // scheduled | live | full_time
+  kickoffTime DateTime
 }
 
 // ---------- Play & Compete (leaderboard only — MVP scope, Build Plan Section 2.1) ----------
 
+// The MATERIALISED leaderboard rollup (Build Plan Section 4.9,
+// GET /leaderboard?period=). Recalculated on a schedule (Section 3's own
+// note) from PointsLedgerEntry below. That rollup job + the GET
+// /leaderboard endpoint are Sprint 6 — NOT built by
+// sprint-2/contest-data-model-backend, which builds only the ledger this
+// table would be computed from. Left exactly as Section 3 specified it.
 model LeaderboardEntry {
-  id      String @id @default(uuid())
-  userId  String
+  id     String @id @default(uuid())
+  userId String
   // Decision Log #44 (cascade) -- see account-deletion/README.md.
-  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  points  Int    @default(0)
-  rank    Int?
-  period  String // e.g. "2026-W33"
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  points Int    @default(0)
+  rank   Int?
+  period String // e.g. "2026-W33"
 
   @@unique([userId, period])
+}
+
+// ---------- Play & Compete: Contest (weekly skill-challenge cycle) ----------
+//
+// sprint-2/contest-data-model-backend — Decision Log #218 (schema) and
+// #219 (scoring weights). Build Plan Section 3 has NO Contest/Competition
+// entity at all — confirmed absent, not stubbed (Decision Log #188). This
+// is genuinely new architecture, authorised by the founder for this task
+// and anticipated by Decision Log #61 (monthly phases), #70 (weeks-1–3
+// progressive fill), #71 (Contest is its own board tab), #130 (points
+// model), and #188 (the active-contest check the Create Post mode-tab
+// needs). See services/api/src/modules/contest/README.md.
+//
+// The broader "Competition" umbrella (Decision Log #72/#73 — admin-created
+// Prediction / Commentary types with per-type SCORE columns) is
+// DELIBERATELY NOT modelled here: still Build Plan Section 2.2-deferred
+// ("Prediction & commentary challenges ... Phase 2"), and the Contest
+// mechanic is the one with real designed screens and a real user flow
+// today. PointsLedgerEntry.source reserves 'competition_result' for it.
+
+// One monthly Contest cycle. Runs as 3 weekly rounds (weeks 1–3), then a
+// week-4 "Level 1 Final" ranking phase, then crowning — Decision Log
+// #61/#70. Phases (vacant / week_1 / weeks_1_2 / weeks_1_3 / final_live /
+// crowned) are DERIVED (ContestService.derivePhase) from `status` plus
+// how many rounds are judged — never stored, so they can't drift.
+//
+// Status transitions are explicit admin actions
+// (POST /admin/contest/cycles* — ContestAdminController), never a
+// scheduler. Cron-driven auto-advance is Sprint 6 hardening, out of scope
+// here. At most one cycle may be non-"completed" at a time (enforced in
+// ContestService.createCycle, not by a DB constraint — a partial unique
+// index on a string literal isn't worth it).
+model ContestCycle {
+  id            String    @id @default(uuid())
+  title         String
+  // active     — weekly rounds (weeks 1–3) accepting entries / being judged
+  // final      — week-4 "Level 1 Final" live-ranking phase (DL #61 state 2)
+  // completed  — monthly top-3 crowned (DL #61 state 3), archived
+  status        String    @default("active")
+  startsAt      DateTime
+  endsAt        DateTime
+  // Set by POST .../final/open and POST .../crown respectively — the
+  // timestamps the derived phase and the Leaderboard "Crowned" state read.
+  finalOpenedAt DateTime?
+  crownedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  rounds    ContestRound[]
+  entries   ContestEntry[]
+  standings ContestStanding[]
+
+  @@index([status])
+}
+
+// One weekly round (week 1, 2 or 3) within a cycle.
+model ContestRound {
+  id         String       @id @default(uuid())
+  cycleId    String
+  cycle      ContestCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  weekNumber Int // 1 | 2 | 3
+  // open   — within [opensAt, closesAt] and accepting entries
+  // judged — closed, weekly top-3 winners recorded (ContestRoundWinner)
+  status     String       @default("open")
+  opensAt    DateTime
+  closesAt   DateTime
+  judgedAt   DateTime?
+  createdAt  DateTime     @default(now())
+
+  entries ContestEntry[]
+  winners ContestRoundWinner[]
+
+  @@unique([cycleId, weekNumber])
+}
+
+// A Post submitted AS a Contest entry, into the round open at submission
+// time. Decision Log #218 judgment call: ONE entry per user per weekly
+// round (@@unique([roundId, userId])) — "entries per player" is a
+// Competition field (DL #73), not spec'd for Contest, but one entry per
+// week is the natural reading of a weekly skill challenge and keeps
+// "weekly winners: top 3" unambiguous.
+model ContestEntry {
+  id          String       @id @default(uuid())
+  cycleId     String
+  cycle       ContestCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  roundId     String
+  round       ContestRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  postId      String       @unique
+  post        Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  // Denormalised author (= post.authorId) — backs the per-round one-entry
+  // rule and "my entries" reads without a Post join. Cascade per DL #44.
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  submittedAt DateTime     @default(now())
+
+  winner ContestRoundWinner?
+
+  @@unique([roundId, userId])
+}
+
+// The weekly top-3 for one round — written when the round is judged
+// (POST /admin/contest/cycles/:id/rounds/:week/results). `position` is
+// 1|2|3 and MAY repeat within a round: Decision Log #61(c) renders ties
+// as two rows sharing an ordinal, so there is no @@unique([roundId,
+// position]) — only one winner row per entry.
+model ContestRoundWinner {
+  id        String       @id @default(uuid())
+  roundId   String
+  round     ContestRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  entryId   String       @unique
+  entry     ContestEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  // Denormalised (= entry.userId). Cascade per DL #44.
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  position  Int // 1 | 2 | 3 (ties allowed)
+  createdAt DateTime     @default(now())
+}
+
+// The monthly crowned top-3 (Decision Log #61 state 3 / #69 medals) —
+// written by POST /admin/contest/cycles/:id/crown. `position` ties
+// allowed, same as ContestRoundWinner.
+model ContestStanding {
+  id        String       @id @default(uuid())
+  cycleId   String
+  cycle     ContestCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  position  Int // 1 | 2 | 3 (ties allowed)
+  createdAt DateTime     @default(now())
+
+  @@unique([cycleId, userId])
+}
+
+// Append-only points ledger — one row per point-earning event.
+// sprint-2/contest-data-model-backend, Decision Log #219 (the scoring
+// weights the founder delegated to backend-api in Decision Log #130).
+//
+// The Leaderboard's ranking integer (Build Plan Section 4.9 / DL #130) is
+// SUM(points) over a time window, per represented club (DL #128). That
+// aggregation, the GET /leaderboard endpoint, and the scheduled
+// LeaderboardEntry rollup are ALL Sprint 6 — not built here. This table
+// is the primitive they read.
+//
+// points may be negative in principle (nothing writes a negative today);
+// engagement points are awarded once per distinct event and never
+// revoked — see points.constants.ts.
+model PointsLedgerEntry {
+  id         String   @id @default(uuid())
+  userId     String
+  // Cascade per DL #44 — the sweep's tx.user.delete() must keep working.
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // engagement_post | engagement_like | engagement_follow
+  //   | contest_weekly_win | contest_monthly_crown
+  // ('competition_result' reserved for DL #73's unbuilt Competition system.)
+  source     String
+  // The domain row this award is for — a Post id (engagement), a
+  // ContestRound id (weekly win) or a ContestCycle id (crown). A plain
+  // string, NOT a foreign key: the ledger is an audit trail that must
+  // outlive whatever it references, the same reasoning as
+  // ConsentAuditRecord.minorUserId.
+  refId      String
+  points     Int
+  // Snapshot of the user's represented club at award time — NULL for now
+  // (Decision Log #74/#128: the represented-club field/endpoint doesn't
+  // exist yet). When it lands, the award sites should populate this so a
+  // historical per-club Leaderboard can filter on it. Flagged follow-up.
+  clubId     String?
+  occurredAt DateTime @default(now())
+
+  // Idempotency backstop: one award per (source, refId, user). A repeat
+  // like on the same post, or re-running round judging, cannot double-pay.
+  @@unique([source, refId, userId])
+  @@index([userId, occurredAt])
 }

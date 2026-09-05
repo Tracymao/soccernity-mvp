@@ -2519,12 +2519,21 @@ Full reasoning for every choice above: Build Plan Section 5.
     what `User.clubAffiliationId` was always for (nothing writes it
     today) — or a decision that `clubAffiliationId` IS this. Ties to the
     open Leaderboard club-axis question. (Decision Log #74)
-  - **Competition / Contest data model** — competition entities (name,
-    type, scoring mechanism, entry window), entries, votes, weekly
-    rounds, Level-1 field, points ledger. Needed before `figma-to-code`
-    can build any Leaderboard board (Overall / Contest / Competition) or
-    the Admin Create Competition screen (`5566:8033`). (Decision Log
-    #70–#73; still founder-blocked)
+  - **Competition / Contest data model** — **the CONTEST half is now
+    built** (`sprint-2/contest-data-model-backend`, backend-api,
+    2026-09-05 — Decision Log #218/#219): `ContestCycle` /
+    `ContestRound` / `ContestEntry` / `ContestRoundWinner` /
+    `ContestStanding` / `PointsLedgerEntry`, the weekly-phase state
+    machine, `GET /contest/current` (the active-contest query the Create
+    Post mode-tab needs, #188), `POST /contest/entries`, and the admin
+    state-machine transitions. The **COMPETITION half** (admin-created
+    Prediction / Commentary types, the Admin Create Competition screen
+    `5566:8033`, votes) is **still parked** — Build Plan Section 2.2
+    defers it; `PointsLedgerEntry.source` reserves `competition_result`.
+    Also still parked: `GET /leaderboard` + the `LeaderboardEntry`
+    rollup (Sprint 6), and the represented-club dimension on the ledger
+    (`clubId` column exists, always `null`). (Decision Log #70–#73,
+    #128–#130, #188; #218/#219 for what's built)
 - **`sprint-2/retrofit-screen-build-guardian-email-home-contest` is a
   combined audit-and-build pass over four sections — Guardian Consent,
   Email Verification, Homepage/Leaderboard, and Contest** (Figma design
@@ -5834,6 +5843,84 @@ Full reasoning for every choice above: Build Plan Section 5.
     this unblocks (`ClubFanPage.tsx` currently renders neither; its scope
     note "Member posts and a full member list aren't part of club pages
     yet" in the code will need updating then).
+  - Not merged — founder's call after review.
+- **`sprint-2/contest-data-model-backend` (backend-api, 2026-09-05)
+  builds the Contest weekly-cycle mechanic + the points-scoring ledger —
+  genuinely new architecture the founder authorised for this task
+  (Decision Log #188 confirmed NO backend model existed). `services/api`
+  only. Decision Log #218 (schema) + #219 (scoring weights) added;
+  forward-pointers on #61/#70/#71/#130/#188.** Report:
+  `services/api/src/modules/contest/README.md` and
+  `services/api/src/modules/points/README.md`.
+  - **New models** (migration
+    `20260905223054_add_contest_data_model_and_points_ledger`):
+    `ContestCycle` (`status` active→final→completed), `ContestRound`
+    (weeks 1–3, `open`→`judged`), `ContestEntry` (a `Post` submitted AS
+    an entry — `@@unique([roundId, userId])` one per user per week,
+    `@unique(postId)`), `ContestRoundWinner`, `ContestStanding`,
+    `PointsLedgerEntry` (append-only). All new `User` FKs are
+    `onDelete: Cascade` (Decision Log #44) so the account-deletion sweep
+    keeps working untouched. **Zero change to `User`/`Guardian`
+    safeguarding fields.**
+  - **The phase state machine** — `ContestService.derivePhase(status,
+    judgedRoundCount)` is **pure, never reads the clock**: `vacant` →
+    `week_1` → `weeks_1_2` → `weeks_1_3` (driven by judging weekly rounds
+    **in sequence**) → `final_live` (status `final`) → `crowned` (status
+    `completed`). Maps 1:1 to Decision Log #61/#70's Figma states.
+  - **`GET /contest/current`** (`JwtAuthGuard`) — **resolves Decision Log
+    #188**: returns `isAcceptingEntries` (true iff a cycle is `active`
+    AND a round is open within its window) plus the derived phase,
+    weekly winners so far, monthly standings (crowned only), and the
+    caller's own entry in the open round. The exact data the Create Post
+    "For Contest" mode-tab and the Leaderboard Contest tab both need.
+  - **`POST /contest/entries`** `{ postId }` (`JwtAuthGuard` +
+    `GuardianConsentGuard`) — submits an already-created `Post` (the
+    composer creates it via `POST /posts` first, so that stays the single
+    post-creation path). Consent-gated per Decision Log #21's broad
+    "posting" reading + defence-in-depth.
+  - **`GET /contest/cycles/:id`** (`JwtAuthGuard`) — one cycle in full,
+    for the "past months" view.
+  - **Admin** (`AdminJwtAuthGuard`, the separate `ADMIN_JWT_SECRET`
+    path): `POST /admin/contest/cycles` (create → `active`),
+    `.../rounds/:week/results` (judge a week + award weekly-win points),
+    `.../final/open`, `.../crown` (+ award crown points). A user token
+    cannot reach any of these (proven by e2e).
+  - **Scoring weights (Decision Log #219 — the real judgment call the
+    founder delegated in #130)**, as named constants in
+    `points/points.constants.ts`: baseline engagement — **post 3, like 1,
+    follow 1**, rewarding *actions taken* not popularity received (so the
+    board isn't a follower-count race — matters for a scout-visibility
+    tool with minors on it, #45); contest — **weekly win 50/30/20,
+    monthly crown 250/150/100** by position, cumulative. Ratio: a crown ≈
+    83 posts, so contest performance dominates volume but a non-competitor
+    still climbs. **Engagement points are awarded once per distinct
+    target and never revoked** (like→unlike→re-like = 1 point total);
+    re-judging a round can't double-pay (ledger
+    `@@unique([source, refId, userId])`).
+  - **Engagement wiring**: `FeedService.createPost`/`likePost` and
+    `UsersService.followUser` write a `PointsLedgerEntry` directly inside
+    their existing transaction callbacks (via `awardPoints`, a plain
+    function — same precedent as the notification wiring, no
+    cross-module `PointsService` injection). `createPost` gained a
+    `$transaction` wrapper (was a bare `create`).
+  - **Still parked / OUT** (flagged, not built): the Competition umbrella
+    (#72/#73 — Prediction/Commentary, Admin Create Competition) — Build
+    Plan 2.2-deferred, `source: 'competition_result'` reserved; `GET
+    /leaderboard` + the `LeaderboardEntry` rollup (Sprint 6); the
+    represented-club dimension (`PointsLedgerEntry.clubId` exists, always
+    `null` — #74/#128); per-day engagement caps / anti-spam.
+  - **Verification** — re-measured. Mocked suite: **46 suites / 569
+    tests, 0 failures** (up from 489 — 4 new spec files; `feed`/`users`
+    specs updated for the ledger writes). e2e (real Postgres): **10
+    suites / 77 tests, 0 failures** (up from 71 — new
+    `test/contest.e2e-spec.ts` drives one cycle through **every** phase,
+    asserting the derived phase and exact `PointsLedgerEntry` totals at
+    each step, plus engagement points through the real feed/user
+    endpoints). `account-deletion-sweep.e2e-spec.ts` still green (new
+    cascade FKs). `nest build` + `npm run lint` clean.
+  - `apps/web` NOT touched — wiring the Create Post mode-tab (#148/#188)
+    and the Leaderboard Contest tab (#211's dummy table) to these
+    endpoints is the separate `figma-to-code` follow-up this unblocks.
   - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
