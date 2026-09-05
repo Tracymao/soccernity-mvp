@@ -381,20 +381,20 @@ describe('UsersService', () => {
 
     it('scopes getFollowers to Follow rows where followeeId = :id, ordered most-recent-first', async () => {
       const prisma = buildPrismaMock();
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1', accountStatus: 'active' });
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
       const service = new UsersService(prisma);
 
       await service.getFollowers('user-1', {});
 
       const callArgs = (prisma.follow.findMany as jest.Mock).mock.calls[0][0];
-      expect(callArgs.where).toEqual({ followeeId: 'user-1' });
+      expect(callArgs.where).toEqual({ followeeId: 'user-1', follower: { is: { accountStatus: 'active' } } });
       expect(callArgs.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
     });
 
     it('returns the embedded follower as the minimal {id, displayName} shape, no passwordHash/isMinor', async () => {
       const prisma = buildPrismaMock();
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1', accountStatus: 'active' });
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([buildFollowRow()]);
       const service = new UsersService(prisma);
 
@@ -409,7 +409,7 @@ describe('UsersService', () => {
 
     it('paginates getFollowers with a nextCursor when more rows exist than the limit', async () => {
       const prisma = buildPrismaMock();
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1', accountStatus: 'active' });
       const rows = [
         buildFollowRow({ id: 'follow-3', createdAt: new Date('2026-08-03T00:00:00.000Z') }),
         buildFollowRow({ id: 'follow-2', createdAt: new Date('2026-08-02T00:00:00.000Z') }),
@@ -428,7 +428,7 @@ describe('UsersService', () => {
 
     it('returns nextCursor: null when fewer rows exist than the limit', async () => {
       const prisma = buildPrismaMock();
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1', accountStatus: 'active' });
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([buildFollowRow()]);
       const service = new UsersService(prisma);
 
@@ -440,7 +440,7 @@ describe('UsersService', () => {
 
     it('applies a cursor filter (createdAt < cursor OR createdAt = cursor AND id < cursor.id) to getFollowers', async () => {
       const prisma = buildPrismaMock();
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1', accountStatus: 'active' });
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
       const service = new UsersService(prisma);
       const cursor = encodeFeedCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), id: 'follow-2' });
@@ -450,6 +450,7 @@ describe('UsersService', () => {
       const callArgs = (prisma.follow.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.where).toEqual({
         followeeId: 'user-1',
+        follower: { is: { accountStatus: 'active' } },
         OR: [
           { createdAt: { lt: new Date('2026-08-02T00:00:00.000Z') } },
           { createdAt: new Date('2026-08-02T00:00:00.000Z'), id: { lt: 'follow-2' } },
@@ -468,14 +469,14 @@ describe('UsersService', () => {
 
     it('scopes getFollowing to Follow rows where followerId = :id, and returns the embedded followee', async () => {
       const prisma = buildPrismaMock();
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1', accountStatus: 'active' });
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([buildFollowRow()]);
       const service = new UsersService(prisma);
 
       const page = await service.getFollowing('user-1', {});
 
       const callArgs = (prisma.follow.findMany as jest.Mock).mock.calls[0][0];
-      expect(callArgs.where).toEqual({ followerId: 'user-1' });
+      expect(callArgs.where).toEqual({ followerId: 'user-1', followee: { is: { accountStatus: 'active' } } });
       expect(page.items).toEqual([{ id: 'followee-1', displayName: 'Followee One' }]);
     });
   });
@@ -489,7 +490,7 @@ describe('UsersService', () => {
   describe('getFollowers / getFollowing restricted-pending target visibility', () => {
     it('getFollowers 404s when :id is a minor with no Guardian row at all', async () => {
       const prisma = buildPrismaMock();
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true, accountStatus: 'active' });
       (prisma.guardian.findUnique as jest.Mock).mockResolvedValue(null);
       const service = new UsersService(prisma);
 
@@ -499,7 +500,7 @@ describe('UsersService', () => {
 
     it('getFollowers 404s when :id is a minor with consentStatus still pending', async () => {
       const prisma = buildPrismaMock();
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true, accountStatus: 'active' });
       (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'pending' });
       const service = new UsersService(prisma);
 
@@ -509,7 +510,7 @@ describe('UsersService', () => {
 
     it('getFollowers succeeds when :id is a minor with confirmed consent', async () => {
       const prisma = buildPrismaMock();
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true, accountStatus: 'active' });
       (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'confirmed' });
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
       const service = new UsersService(prisma);
@@ -520,7 +521,7 @@ describe('UsersService', () => {
 
     it('getFollowers succeeds and never queries Guardian when :id is not a minor', async () => {
       const prisma = buildPrismaMock();
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'adult-1', isMinor: false });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'adult-1', isMinor: false, accountStatus: 'active' });
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
       const service = new UsersService(prisma);
 
@@ -530,7 +531,7 @@ describe('UsersService', () => {
 
     it('getFollowing 404s when :id is a minor with consentStatus still pending', async () => {
       const prisma = buildPrismaMock();
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true, accountStatus: 'active' });
       (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'pending' });
       const service = new UsersService(prisma);
 
@@ -540,7 +541,7 @@ describe('UsersService', () => {
 
     it('getFollowing succeeds when :id is a minor with confirmed consent', async () => {
       const prisma = buildPrismaMock();
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true, accountStatus: 'active' });
       (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'confirmed' });
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
       const service = new UsersService(prisma);
@@ -551,7 +552,7 @@ describe('UsersService', () => {
 
     it('Guardian is looked up by minorUserId with a fresh Postgres read, never trusted from a cached/stale value', async () => {
       const prisma = buildPrismaMock();
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true, accountStatus: 'active' });
       (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'confirmed' });
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
       const service = new UsersService(prisma);
@@ -571,12 +572,62 @@ describe('UsersService', () => {
       // the minor is asking about themselves," matching option (a)'s
       // "regardless of caller" requirement.
       const prisma = buildPrismaMock();
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true, accountStatus: 'active' });
       (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'pending' });
       const service = new UsersService(prisma);
 
       expect(service.getFollowers.length).toBe(2); // (userId, query) -- no caller/actor param
       await expect(service.getFollowers('minor-1', {})).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  // sprint-2/account-deactivation-backend (Decision Log #221). A
+  // deactivated / pending_deletion TARGET's follower/following graph is
+  // hidden entirely (404, same as a non-existent user), and any
+  // follower/followee who has since deactivated is filtered out of an
+  // active target's list.
+  describe('getFollowers / getFollowing deactivated-account visibility', () => {
+    it('getFollowers 404s when :id is a deactivated account, before any Guardian or follow lookup', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        id: 'gone-1',
+        isMinor: false,
+        accountStatus: 'deactivated',
+      });
+      const service = new UsersService(prisma);
+
+      await expect(service.getFollowers('gone-1', {})).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.guardian.findUnique).not.toHaveBeenCalled();
+      expect(prisma.follow.findMany).not.toHaveBeenCalled();
+    });
+
+    it('getFollowing 404s when :id is a pending_deletion account', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        id: 'gone-2',
+        isMinor: false,
+        accountStatus: 'pending_deletion',
+      });
+      const service = new UsersService(prisma);
+
+      await expect(service.getFollowing('gone-2', {})).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.follow.findMany).not.toHaveBeenCalled();
+    });
+
+    it('filters deactivated followers out of an active target\'s follower list via the query', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        id: 'user-1',
+        isMinor: false,
+        accountStatus: 'active',
+      });
+      (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new UsersService(prisma);
+
+      await service.getFollowers('user-1', {});
+
+      const callArgs = (prisma.follow.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArgs.where.follower).toEqual({ is: { accountStatus: 'active' } });
     });
   });
 });

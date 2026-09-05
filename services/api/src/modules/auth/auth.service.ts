@@ -136,20 +136,71 @@ export class AuthService implements OnModuleInit {
   }
 
   // POST /auth/delete-account. Same password-re-entry requirement as
-  // deactivateAccount. Sets accountStatus = "pending_deletion" and
-  // pendingDeletionAt = now() — deliberately does NOT hard-delete the
-  // User row itself. Decision Log #42 (Build Plan Section 9) resolved
-  // the retention/erasure policy this comment used to describe as an
-  // open Decision Log candidate: a 30-day grace period from
-  // pendingDeletionAt, after which AccountDeletionSweepService
-  // (sprint-2/account-deletion-sweep, see account-deletion/README.md)
-  // hard-deletes the row on its own schedule — this endpoint only starts
-  // that clock, it never deletes anything itself. Revokes every session,
-  // same reasoning as deactivation.
+  // deactivateAccount. Delegates the state change to the shared
+  // startPendingDeletion() below — this handler is only the
+  // authenticated-caller gate (a valid JWT + a re-entered password).
   async deleteAccount(userId: string, password: string): Promise<void> {
     const user = await this.assertPasswordCorrect(userId, password);
+    await this.startPendingDeletion(user.id);
+  }
+
+  // POST /auth/delete-inactive-account (sprint-2/account-deactivation-backend).
+  // The unauthenticated counterpart of deleteAccount, for a user who has
+  // already deactivated and therefore has NO valid session to reach the
+  // JwtAuthGuard-protected POST /auth/delete-account with — exactly the
+  // same reason reactivateAccount() below is unauthenticated. Reached
+  // from the "Inactive Account" screen's Delete path (Decision Log #220,
+  // sprint-2/account-deactivation-design).
+  //
+  // Credential verification uses the identical fixed-dummy-hash timing
+  // posture as login()/reactivateAccount() so an unknown email costs the
+  // same real argon2id work as a known one. Only a genuinely
+  // "deactivated" account can be deleted via this path:
+  //
+  //   - "active" → rejected with the generic "Invalid credentials". An
+  //     active user has a session and MUST use the authenticated
+  //     POST /auth/delete-account; this unauthenticated route is not a
+  //     shortcut around that gate, and we don't confirm to an
+  //     unauthenticated caller that an active account exists at this
+  //     email.
+  //   - "pending_deletion" → same generic rejection. The clock is
+  //     already running; this endpoint never re-starts it (that would
+  //     silently push the 30-day mark out) and never confirms the state.
+  //   - unknown email / wrong password → same generic rejection.
+  //
+  // On success it calls the SAME startPendingDeletion() the authenticated
+  // deleteAccount() does — accountStatus → "pending_deletion",
+  // pendingDeletionAt = now(), sessions revoked — so
+  // AccountDeletionSweepService's 30-day grace + hard-delete + cascade +
+  // ConsentAuditRecord retention (Decision Log #42/#44) then applies
+  // byte-for-byte identically, with zero duplicated deletion logic. The
+  // deletion flow itself is untouched by this PR.
+  async deleteInactiveAccount(email: string, password: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const hashToCheck = user?.passwordHash ?? this.dummyPasswordHash;
+    const passwordValid = await this.passwordService.verify(hashToCheck, password);
+
+    if (!user || !passwordValid || user.accountStatus !== 'deactivated') {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    await this.startPendingDeletion(user.id);
+  }
+
+  // The single place accountStatus flips to "pending_deletion". Sets
+  // pendingDeletionAt = now() (the 30-day grace period
+  // AccountDeletionSweepService measures from — see schema.prisma's
+  // comment on the field) and revokes every session, same reasoning as
+  // deactivation: a deletion request that leaves current tokens working
+  // is meaningless. Deliberately does NOT hard-delete the User row —
+  // Decision Log #42 resolved that as a 30-day-grace-then-sweep flow
+  // (sprint-2/account-deletion-sweep, account-deletion/README.md); this
+  // method only ever starts that clock. Shared by deleteAccount()
+  // (authenticated) and deleteInactiveAccount() (unauthenticated) so the
+  // two entry points can never drift.
+  private async startPendingDeletion(userId: string): Promise<void> {
     await this.prisma.user.update({
-      where: { id: user.id },
+      where: { id: userId },
       data: { accountStatus: 'pending_deletion', pendingDeletionAt: new Date() },
     });
     await this.tokenService.revokeAllSessionsForUser(userId);

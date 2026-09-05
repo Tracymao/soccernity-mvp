@@ -11,6 +11,9 @@ function buildPrismaMock() {
       create: jest.fn(),
       findMany: jest.fn(),
       findUnique: jest.fn(),
+      // getPostById uses findFirst (not findUnique) so the active-author
+      // relation filter can apply — Decision Log #221.
+      findFirst: jest.fn().mockResolvedValue(null),
       update: jest.fn(),
       updateMany: jest.fn(),
     },
@@ -217,7 +220,7 @@ describe('FeedService', () => {
   });
 
   describe('getFeed', () => {
-    it('scopes to the caller\'s own posts plus posts by users they follow', async () => {
+    it('scopes to the caller\'s own posts plus posts by users they follow, all AND-ed with an active-author filter', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
       const service = new FeedService(prisma);
@@ -225,10 +228,18 @@ describe('FeedService', () => {
       await service.getFeed('user-1', {});
 
       const callArgs = (prisma.post.findMany as jest.Mock).mock.calls[0][0];
+      // Decision Log #221: deactivated/pending_deletion authors are
+      // excluded — the scope filter is now
+      // (active author) AND (own posts OR followed authors).
       expect(callArgs.where).toEqual({
-        OR: [
-          { authorId: 'user-1' },
-          { author: { followedBy: { some: { followerId: 'user-1' } } } },
+        AND: [
+          { author: { accountStatus: 'active' } },
+          {
+            OR: [
+              { authorId: 'user-1' },
+              { author: { followedBy: { some: { followerId: 'user-1' } } } },
+            ],
+          },
         ],
       });
     });
@@ -468,7 +479,11 @@ describe('FeedService', () => {
       await service.getClubFeed('club-1', 'user-1', {});
 
       const callArgs = (prisma.post.findMany as jest.Mock).mock.calls[0][0];
-      expect(callArgs.where).toEqual({ clubPageId: 'club-1' });
+      // Decision Log #221: club feed also excludes deactivated authors.
+      expect(callArgs.where).toEqual({
+        clubPageId: 'club-1',
+        author: { accountStatus: 'active' },
+      });
       expect(callArgs.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
       expect(callArgs.take).toBe(FEED_DEFAULT_PAGE_SIZE + 1);
     });
@@ -497,7 +512,10 @@ describe('FeedService', () => {
       const page = await service.getClubFeed('club-1', 'user-1', { cursor, limit: 2 });
 
       const callArgs = (prisma.post.findMany as jest.Mock).mock.calls[0][0];
-      expect(callArgs.where.AND[0]).toEqual({ clubPageId: 'club-1' });
+      expect(callArgs.where.AND[0]).toEqual({
+        clubPageId: 'club-1',
+        author: { accountStatus: 'active' },
+      });
       expect(callArgs.where.AND[1]).toEqual({
         OR: [
           { createdAt: { lt: new Date('2026-08-09T00:00:00.000Z') } },
@@ -559,7 +577,7 @@ describe('FeedService', () => {
     it('returns the post, with default viewer state, when it exists and the caller has no like/save/follow rows', async () => {
       const prisma = buildPrismaMock();
       const row = buildPostRow(); // authorId: 'author-1'
-      (prisma.post.findUnique as jest.Mock).mockResolvedValue(row);
+      (prisma.post.findFirst as jest.Mock).mockResolvedValue(row);
       const service = new FeedService(prisma);
 
       await expect(service.getPostById('post-1', 'viewer-1')).resolves.toEqual({
@@ -570,9 +588,20 @@ describe('FeedService', () => {
       });
     });
 
+    it('scopes the lookup to an active author (Decision Log #221) and 404s a post whose author is deactivated', async () => {
+      const prisma = buildPrismaMock();
+      // findFirst returns null because the active-author filter excluded it.
+      (prisma.post.findFirst as jest.Mock).mockResolvedValue(null);
+      const service = new FeedService(prisma);
+
+      await expect(service.getPostById('post-1', 'viewer-1')).rejects.toBeInstanceOf(NotFoundException);
+      const callArgs = (prisma.post.findFirst as jest.Mock).mock.calls[0][0];
+      expect(callArgs.where).toEqual({ id: 'post-1', author: { accountStatus: 'active' } });
+    });
+
     it('throws NotFoundException, not a silent null, for a non-existent id (before any viewer-state lookup)', async () => {
       const prisma = buildPrismaMock();
-      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.post.findFirst as jest.Mock).mockResolvedValue(null);
       const service = new FeedService(prisma);
 
       await expect(service.getPostById('does-not-exist', 'viewer-1')).rejects.toBeInstanceOf(NotFoundException);
@@ -585,7 +614,7 @@ describe('FeedService', () => {
     it('reports isLiked / isSaved / author.isFollowing from the caller\'s own Like / SavedPost / Follow rows', async () => {
       const prisma = buildPrismaMock();
       const row = buildPostRow({ authorId: 'author-1' });
-      (prisma.post.findUnique as jest.Mock).mockResolvedValue(row);
+      (prisma.post.findFirst as jest.Mock).mockResolvedValue(row);
       (prisma.like.findUnique as jest.Mock).mockResolvedValue({ id: 'like-1' });
       (prisma.savedPost.findUnique as jest.Mock).mockResolvedValue(null);
       (prisma.follow.findUnique as jest.Mock).mockResolvedValue({ id: 'follow-1' });
@@ -608,7 +637,7 @@ describe('FeedService', () => {
 
     it('forces author.isFollowing to false for the caller\'s own post without issuing a follow lookup', async () => {
       const prisma = buildPrismaMock();
-      (prisma.post.findUnique as jest.Mock).mockResolvedValue(buildPostRow({ authorId: 'viewer-1' }));
+      (prisma.post.findFirst as jest.Mock).mockResolvedValue(buildPostRow({ authorId: 'viewer-1' }));
       // Even if a (bogus) self-follow row somehow existed, it must not be consulted.
       (prisma.follow.findUnique as jest.Mock).mockResolvedValue({ id: 'should-not-be-read' });
       const service = new FeedService(prisma);

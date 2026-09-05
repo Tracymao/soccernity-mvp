@@ -81,6 +81,19 @@ export interface FollowPage {
   nextCursor: string | null;
 }
 
+// sprint-2/account-deactivation-backend (Decision Log #221). getFollowers/
+// getFollowing filter their LIST ENTRIES to active accounts too, not just
+// the target :id (assertFollowGraphVisible handles the target): a
+// follower/followee who has since deactivated should not surface by
+// displayName in someone else's follower/following list. Same principle
+// as ACTIVE_AUTHOR_POST_FILTER in feed.service.ts and the accountStatus
+// clause added to clubs.service.ts's VISIBLE_CLUB_MEMBER_FILTER.
+// Reactivation (a plain accountStatus flip) makes the entry reappear with
+// no backfill. There is no follower/following COUNT field anywhere in
+// schema.prisma, so unlike a comment/member count there is nothing here
+// that can visibly "drift" from the filtered list.
+const ACTIVE_FOLLOW_ENTRY_FILTER = { accountStatus: 'active' } as const;
+
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -153,9 +166,18 @@ export class UsersService {
   private async assertFollowGraphVisible(userId: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, isMinor: true },
+      select: { id: true, isMinor: true, accountStatus: true },
     });
     if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    // sprint-2/account-deactivation-backend (Decision Log #221): a
+    // deactivated (or pending_deletion) TARGET's social graph is hidden
+    // entirely, same 404-not-403 treatment as a restricted-pending minor
+    // below and a non-existent user above — a deactivated account's
+    // profile is not browsable while it's in that state. Checked before
+    // the minor branch because it applies regardless of age.
+    if (user.accountStatus !== 'active') {
       throw new NotFoundException('User not found');
     }
     if (!user.isMinor) {
@@ -286,9 +308,11 @@ export class UsersService {
 
     const limit = Math.min(query.limit ?? FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE);
 
-    const where: Prisma.FollowWhereInput = query.cursor
-      ? { followeeId: userId, ...this.buildFollowCursorFilter(query.cursor) }
-      : { followeeId: userId };
+    const where: Prisma.FollowWhereInput = {
+      followeeId: userId,
+      follower: { is: ACTIVE_FOLLOW_ENTRY_FILTER },
+      ...(query.cursor ? this.buildFollowCursorFilter(query.cursor) : {}),
+    };
 
     const rows = await this.prisma.follow.findMany({
       where,
@@ -308,9 +332,11 @@ export class UsersService {
 
     const limit = Math.min(query.limit ?? FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE);
 
-    const where: Prisma.FollowWhereInput = query.cursor
-      ? { followerId: userId, ...this.buildFollowCursorFilter(query.cursor) }
-      : { followerId: userId };
+    const where: Prisma.FollowWhereInput = {
+      followerId: userId,
+      followee: { is: ACTIVE_FOLLOW_ENTRY_FILTER },
+      ...(query.cursor ? this.buildFollowCursorFilter(query.cursor) : {}),
+    };
 
     const rows = await this.prisma.follow.findMany({
       where,

@@ -33,6 +33,7 @@ describe('AuthController (HTTP layer)', () => {
     deactivateAccount: jest.fn(),
     deleteAccount: jest.fn(),
     reactivateAccount: jest.fn(),
+    deleteInactiveAccount: jest.fn(),
   };
 
   const tokenPairResponse = {
@@ -328,6 +329,42 @@ describe('AuthController (HTTP layer)', () => {
         .expect(400);
 
       expect(authService.reactivateAccount).not.toHaveBeenCalled();
+    });
+  });
+
+  // sprint-2/account-deactivation-backend (Decision Log #221) — the
+  // unauthenticated Delete path from the "Inactive Account" screen.
+  describe('POST /auth/delete-inactive-account', () => {
+    it('returns 204 and delegates to authService with { email, password }', async () => {
+      authService.deleteInactiveAccount.mockResolvedValueOnce(undefined);
+
+      await request(app.getHttpServer())
+        .post('/auth/delete-inactive-account')
+        .send({ email: 'player@example.com', password: 'the-real-password' })
+        .expect(204);
+
+      expect(authService.deleteInactiveAccount).toHaveBeenCalledWith(
+        'player@example.com',
+        'the-real-password',
+      );
+    });
+
+    it('rejects a body missing password with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/delete-inactive-account')
+        .send({ email: 'player@example.com' })
+        .expect(400);
+
+      expect(authService.deleteInactiveAccount).not.toHaveBeenCalled();
+    });
+
+    it('rejects an invalid email with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/delete-inactive-account')
+        .send({ email: 'not-an-email', password: 'the-real-password' })
+        .expect(400);
+
+      expect(authService.deleteInactiveAccount).not.toHaveBeenCalled();
     });
   });
 });

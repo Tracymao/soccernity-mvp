@@ -528,4 +528,125 @@ describe('AuthService', () => {
       await expect(authService.refresh(session.refreshToken)).rejects.toThrow(UnauthorizedException);
     });
   });
+
+  // sprint-2/account-deactivation-backend (Decision Log #221). The
+  // unauthenticated Delete path from the "Inactive Account" screen —
+  // { email, password }, no JWT, because a deactivated account has none.
+  // Delegates to the SAME startPendingDeletion() deleteAccount() uses, so
+  // the 30-day-grace deletion flow is byte-identical afterwards.
+  describe('deleteInactiveAccount', () => {
+    async function seedDeactivated() {
+      const harness = await buildHarness();
+      const passwordHash = await harness.passwordService.hash('the-real-password');
+      harness.prisma.seed('a@example.com', {
+        id: 'user-1',
+        role: 'fan',
+        passwordHash,
+        accountStatus: 'deactivated',
+      });
+      return harness;
+    }
+
+    it('flips a deactivated account to pending_deletion and sets pendingDeletionAt, without deleting the row', async () => {
+      const { authService, prisma } = await seedDeactivated();
+      const before = Date.now();
+
+      await authService.deleteInactiveAccount('a@example.com', 'the-real-password');
+
+      const after = Date.now();
+      const row = await prisma.user.findUnique({ where: { email: 'a@example.com' } });
+      expect(row).not.toBeNull();
+      expect(row!.accountStatus).toBe('pending_deletion');
+      const recordedAt = row!.pendingDeletionAt!.getTime();
+      expect(recordedAt).toBeGreaterThanOrEqual(before);
+      expect(recordedAt).toBeLessThanOrEqual(after);
+    });
+
+    it('normalizes the email to lowercase before matching (Decision Log #16)', async () => {
+      const { authService, prisma } = await seedDeactivated();
+
+      await authService.deleteInactiveAccount('A@EXAMPLE.com', 'the-real-password');
+
+      const row = await prisma.user.findUnique({ where: { email: 'a@example.com' } });
+      expect(row!.accountStatus).toBe('pending_deletion');
+    });
+
+    it('rejects a wrong password with the generic message and does not touch accountStatus', async () => {
+      const { authService, prisma } = await seedDeactivated();
+
+      await expect(
+        authService.deleteInactiveAccount('a@example.com', 'wrong-password'),
+      ).rejects.toThrow('Invalid credentials');
+
+      const row = await prisma.user.findUnique({ where: { email: 'a@example.com' } });
+      expect(row!.accountStatus).toBe('deactivated');
+    });
+
+    it('rejects an unknown email with the generic message (and still does real argon2 work — no early return)', async () => {
+      const { authService } = await seedDeactivated();
+
+      await expect(
+        authService.deleteInactiveAccount('nobody@example.com', 'the-real-password'),
+      ).rejects.toThrow('Invalid credentials');
+    });
+
+    it('refuses to delete an ACTIVE account via this unauthenticated path (must use POST /auth/delete-account)', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('the-real-password');
+      prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash }); // accountStatus defaults to 'active'
+
+      await expect(
+        authService.deleteInactiveAccount('a@example.com', 'the-real-password'),
+      ).rejects.toThrow('Invalid credentials');
+
+      const row = await prisma.user.findUnique({ where: { email: 'a@example.com' } });
+      expect(row!.accountStatus).toBe('active');
+    });
+
+    it('refuses to re-process a pending_deletion account (never re-starts the 30-day clock)', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('the-real-password');
+      const originalPendingAt = new Date('2026-08-01T00:00:00.000Z');
+      prisma.seed('a@example.com', {
+        id: 'user-1',
+        role: 'fan',
+        passwordHash,
+        accountStatus: 'pending_deletion',
+        pendingDeletionAt: originalPendingAt,
+      });
+
+      await expect(
+        authService.deleteInactiveAccount('a@example.com', 'the-real-password'),
+      ).rejects.toThrow('Invalid credentials');
+
+      const row = await prisma.user.findUnique({ where: { email: 'a@example.com' } });
+      expect(row!.pendingDeletionAt!.getTime()).toBe(originalPendingAt.getTime());
+    });
+
+    it('revokes every existing session on success (via the shared startPendingDeletion path)', async () => {
+      const { authService, prisma, tokenService } = await seedDeactivated();
+      // A leftover session on a deactivated account (the tokenService
+      // doesn't itself gate on accountStatus) — delete-from-inactive must
+      // still revoke it, same as deleteAccount / deactivateAccount do.
+      const leftover = await tokenService.issueTokenPair('user-1', 'fan');
+
+      await authService.deleteInactiveAccount('a@example.com', 'the-real-password');
+
+      await expect(authService.refresh(leftover.refreshToken.token)).rejects.toThrow(UnauthorizedException);
+      const row = await prisma.user.findUnique({ where: { email: 'a@example.com' } });
+      expect(row!.accountStatus).toBe('pending_deletion');
+    });
+
+    it('a pending_deletion account created via this path is NOT undone by reactivate-account', async () => {
+      const { authService, prisma } = await seedDeactivated();
+
+      await authService.deleteInactiveAccount('a@example.com', 'the-real-password');
+
+      await expect(
+        authService.reactivateAccount('a@example.com', 'the-real-password'),
+      ).rejects.toThrow('Invalid credentials');
+      const row = await prisma.user.findUnique({ where: { email: 'a@example.com' } });
+      expect(row!.accountStatus).toBe('pending_deletion');
+    });
+  });
 });

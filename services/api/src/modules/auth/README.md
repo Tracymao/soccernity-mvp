@@ -955,3 +955,88 @@ someone needs to decide what `guardianConsentStatus` on this endpoint
 should show for that case (pass it through as-is, matching this field's
 current "mirror the raw column" design, or collapse it into `'pending'`
 for the frontend's purposes). Not decided or guessed at in this PR.
+
+## Status update — account deactivation: delete-from-inactive + read-visibility (`sprint-2/account-deactivation-backend`, Decision Log #221)
+
+Backend half of the account-deactivation feature (the Figma half is
+Decision Log #220, `sprint-2/account-deactivation-design`). Founder
+explicitly authorised resuming backend work for this task.
+
+**Schema — confirmed live, NOT changed.** `User.accountStatus`
+(`"active"` | `"deactivated"` | `"pending_deletion"`, default `"active"`,
+migration `20260823011617`) and `User.pendingDeletionAt` already exist
+(`sprint-1/f5-f6-missing-endpoints` + `sprint-2/account-deletion-sweep`).
+No new field, no migration. `"deactivated"` **is** the "inactive" state
+the design flow needs; renaming it to `"inactive"` was rejected —
+it is already shipped and referenced by `auth.service.spec.ts`,
+`account-lifecycle.e2e-spec.ts`, and `AccountDeletionSweepService`'s own
+`WHERE accountStatus = 'pending_deletion'` query. `deactivateAccount` /
+`reactivateAccount` are unchanged.
+
+**New endpoint — `POST /auth/delete-inactive-account`.** A deactivated
+account has every session revoked (`deactivateAccount` →
+`tokenService.revokeAllSessionsForUser`), so it has no JWT to reach the
+`JwtAuthGuard`-protected `POST /auth/delete-account`. This is the
+unauthenticated counterpart, reached from the "Inactive Account" screen's
+Delete path:
+
+- Body `{ email, password }` (`DeleteInactiveAccountDto`), `@AuthRateLimit()`,
+  `204 No Content` — same posture as `POST /auth/reactivate-account`.
+- Same fixed-dummy-hash timing safety as `login()` / `reactivateAccount()`.
+- **Only a genuinely `"deactivated"` account is accepted.** `"active"`
+  (must use the authenticated route — it has a session), `"pending_deletion"`
+  (clock already running; this endpoint never re-starts it), unknown
+  email, wrong password → all get the generic `"Invalid credentials"`.
+- **No duplicated deletion logic.** `deleteAccount()` (authenticated) and
+  `deleteInactiveAccount()` (unauthenticated) both call the same new
+  private `AuthService.startPendingDeletion(userId)` — the single place
+  `accountStatus` flips to `"pending_deletion"`: sets `pendingDeletionAt =
+  now()`, revokes every session. `AccountDeletionSweepService`'s 30-day
+  grace → hard-delete → cascade → `ConsentAuditRecord` retention
+  (Decision Log #42/#44) then applies byte-identically. **The deletion
+  flow itself is untouched.**
+
+**Read-visibility — "an inactive account should not appear."** Every
+existing read surface that could surface a deactivated (or
+`pending_deletion`) user's content/identity to someone else now filters
+on `accountStatus = 'active'`. `'active'` — not `NOT 'deactivated'` — is
+deliberate, so `pending_deletion` content is equally hidden; this is
+visibility-only and does not modify the deletion flow. All filters
+**reverse automatically on reactivation** (a plain `accountStatus` flip
+back to `'active'`) with no per-row backfill.
+
+| Surface | Change |
+| --- | --- |
+| `GET /posts/feed`, `GET /clubs/:id/feed` | `ACTIVE_AUTHOR_POST_FILTER` (`feed.service.ts`) AND-ed into the scope `where`. |
+| `GET /posts/:id` | `findUnique` → `findFirst` with the same filter; a deactivated-author post is a 404 ("hide via 404" convention). |
+| `GET /clubs/:id/members` | `VISIBLE_CLUB_MEMBER_FILTER` (`clubs.service.ts`) gains `accountStatus: 'active'` alongside the existing restricted-pending-minor `OR` clause. |
+| `GET /users/:id/followers`, `/following` | Target: `assertFollowGraphVisible` 404s a deactivated `:id` (same as a restricted-pending minor). Entries: `follower`/`followee` filtered to `accountStatus: 'active'`. |
+
+**Flagged, not built:**
+- **Search** — no people-search endpoint exists anywhere. Whoever builds
+  it must filter non-active accounts.
+- **Leaderboard** — `GET /leaderboard` is unbuilt (Sprint 6). Note added
+  to `leaderboard/README.md`: the future `SUM(PointsLedgerEntry.points)`
+  aggregation must exclude non-active users. Ledger rows keep accruing
+  for a deactivated user and are correct on reactivation — the filter is
+  on the rollup, not the write.
+- **Deliberate non-changes:** `GET /posts/:id/comments` (a comment
+  mid-thread on someone else's still-visible post; filtering it drifts
+  `Post.commentCount` and Section 4.3 has no comment-visibility model)
+  and `GET /users/:id/saved-posts` (the caller's own private bookmark
+  list, Decision Log #22).
+
+**Safeguarding fields untouched** — zero `schema.prisma` diff;
+`User.isMinor` / `Guardian.consentStatus` / `consentToken` /
+`consentTimestamp` are read-only in every line touched.
+
+**Verification** — mocked suite **46 suites / 584 tests, 0 failures**
+(+15: `auth.service.spec.ts` +9 for `deleteInactiveAccount`,
+`auth.controller.http.spec.ts` +3, `users.service.spec.ts` +3, plus
+updated `feed.service.spec.ts` / `clubs.service.spec.ts` `where`-shape
+assertions and a new `getPostById` deactivated-author case). e2e **11
+suites / 81 tests, 0 failures** — new `test/account-deactivation.e2e-spec.ts`:
+the full `deactivate → reactivate → deactivate → delete-from-inactive →
++31-day sweep → real hard-delete` sequence against real Postgres, plus a
+feed / single-post / follower-list visibility-and-reversal check.
+`nest build` and `npm run lint` clean.

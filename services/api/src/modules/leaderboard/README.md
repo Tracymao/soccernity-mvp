@@ -33,3 +33,18 @@ isn't:
    `period`) from the ledger.
 4. A place to apply anti-gaming caps on engagement contribution (see
    `../points/README.md`'s flagged follow-up).
+5. **Exclude non-active accounts from the ranking** (Decision Log #221,
+   `sprint-2/account-deactivation-backend`). Decision Log #221 makes an
+   inactive account's content disappear from every read surface that
+   *does* exist today (feed, single post, club roster, follower/following
+   lists). The Leaderboard is the one named "an inactive account should
+   not appear" surface that has no code yet — so the requirement is
+   parked here: whatever aggregation this module builds
+   (`SUM(PointsLedgerEntry.points)` per user, or the `LeaderboardEntry`
+   recompute job) must filter its user set to `User.accountStatus =
+   'active'`. `PointsLedgerEntry` rows keep accruing for a deactivated
+   user (deactivation removes nothing) and stay correct on reactivation —
+   so this is a filter on the *read/rollup*, not a change to how the
+   ledger is written. A minor absent from the data because they're
+   restricted-pending (Decision Log #45) is a separate, already-recorded
+   exclusion.

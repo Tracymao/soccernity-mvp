@@ -605,3 +605,15 @@ Also covered by committed Jest suites (unit + HTTP-layer):
 Full `services/api` suite after this PR: **30 suites / 304 tests, 0
 failures** (up from 29/262 measured immediately before this branch's
 changes).
+
+## Status update — inactive-account follow-graph visibility (`sprint-2/account-deactivation-backend`, Decision Log #221)
+
+`assertFollowGraphVisible` now also 404s when the target `:id` is a
+deactivated / `pending_deletion` account — the same treatment a
+restricted-pending minor already gets, checked before the minor branch
+since it applies regardless of age. Separately, `getFollowers` /
+`getFollowing` filter their **list entries** to `accountStatus: 'active'`
+(`follower: { is: {...} }` / `followee: { is: {...} }`), so a
+follower/followee who has since deactivated drops out of an active
+target's list. There is no follower/following count field, so nothing
+can visibly drift from the filtered list. Reverses on reactivation.
