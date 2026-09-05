@@ -5096,7 +5096,10 @@ Full reasoning for every choice above: Build Plan Section 5.
     flagged as the one that matters most (a real DPIA/GDPR/NDPA
     safeguarding item per non-negotiable #2, blocking `figma-to-code`
     conversion of these two screens until real, counsel-reviewed copy
-    exists via `safeguarding-drafter`); **#205** — an orphaned page-level
+    exists via `safeguarding-drafter`) — **see the dedicated
+    `sprint-2/legal-copy-draft-tos-privacy` bullet immediately below for
+    what unblocks it; #203 itself is still open, pending counsel**;
+    **#205** — an orphaned page-level
     `Contact Dropdown` group (`87:250`) sitting outside any frame,
     needing a rebuild-or-delete decision; **#206** — no section banner
     exists over this row, unlike Blog/Articles; **#207** — stale
@@ -5116,6 +5119,67 @@ Full reasoning for every choice above: Build Plan Section 5.
     `x`/`y`) is the safe way to change a frame's width without corrupting
     absolute-positioned legacy content.
   - Not merged — founder's call after review.
+- **`sprint-2/legal-copy-draft-tos-privacy` (safeguarding-drafter,
+  2026-09-05) drafts real Terms of Service and Privacy Policy copy for
+  the two placeholder-Lorem-ipsum screens Decision Log #203 flagged —
+  `docs/legal-copy-draft-tos-privacy-policy.md`. This PR does NOT close
+  #203 and does not touch Figma or application code — it is a
+  first-pass draft only, per `CLAUDE.md` non-negotiable #2, and #203
+  remains open until Soccernity's legal counsel actually signs off.**
+  Grounded directly in Build Plan Section 8 (8.1 DPIA outline, 8.2
+  retention skeleton, 8.3 guardian-consent flow, 8.4 moderation/appeals),
+  Section 3's data model, and the live Decision Log (#4, #8, #10, #19,
+  #21, #31, #34, #37, #38, #40, #41, #42, #44, #45, #55, #58, #60, #128–
+  #130, #138, #153–#155) — not a generic legal template. Both documents
+  accurately reflect what the product actually does as of Sprint 2: the
+  under-18 guardian-consent flow with its 72-hour token TTL and
+  guardian-email-change-restarts-the-flow behaviour; the restricted-pending
+  state's real scope (no public profile, no DMs from unverified accounts,
+  read-only Banter Rooms, no posting/commenting per Decision Log #21, no
+  followers/following visibility per #41, absence from the Leaderboard
+  per #45); the age-5 hard signup floor (#19); the 30-day-grace-then-hard-
+  delete-cascade account-deletion mechanism, including the deliberate
+  exception that keeps a separate `ConsentAuditRecord` for a further 6
+  months (#42, #44); the real named processors (Postmark, S3-compatible
+  storage, Sentry — wired but not live, Render/Neon/Upstash hosting);
+  and the Leaderboard's real-display-names-for-minors decision (#45),
+  disclosed as a planned feature since the Leaderboard has no backend
+  yet. **Every retention period, age threshold, and factual policy
+  claim is marked `[PROPOSAL]` or `[OPEN — Decision Log #N]`, per the
+  agent's standing draft-only boundary** — matching the convention
+  `docs/sprint-1-dpia-outline-draft.md` already established. **Decision
+  Log #4 (jurisdictional scope beyond UK GDPR/NDPA 2023) is explicitly
+  NOT resolved by this draft** — both documents are written against UK
+  GDPR + Nigeria NDPA 2023 as a working baseline (matching Decision Log
+  #10's own grounding and the Phase 1 Nigeria/England launch markets),
+  flagged throughout as not a finding that no broader regime applies.
+  **A genuine sizing problem was found and flagged, not silently
+  absorbed by cutting content**: at a rough capacity estimate (method
+  disclosed in the document's own Section 0), the desktop body text box
+  (`6114:14250`, ~1059×1084px) holds roughly 1,000–1,150 words without
+  scrolling, and the mobile box (`6116:14616`, ~335×2865px) roughly
+  900–1,050 words — the draft ToS runs ~2,400 words and the draft
+  Privacy Policy ~3,600 words, both realistically necessary given the
+  guardian-consent, retention, and public-visibility disclosures a
+  minors' platform actually has to make. Flagged for whoever inserts
+  this into Figma: the safe fix is a scrollable body region or a resized
+  frame, not compressing the legal text to fit — a new Decision Log
+  candidate for a future `figma-design-system` pass once counsel-approved
+  copy exists. **New Decision Log candidates raised, all in the
+  document's own Part C, none resolved there**: no guardian
+  decline/withdrawal endpoint exists (ties to #34); no retention rule
+  for an account left restricted-pending indefinitely; no non-user
+  reporting route for content depicting non-users; cross-border
+  data-location assessment for the named processors still open; whether
+  the Leaderboard's real-names-for-minors decision needs its own
+  dedicated safeguarding review before that feature launches; who
+  exercises a minor's data-subject rights and how a minor/guardian
+  disagreement is handled; NDPA 2023 cross-check on the 6-month
+  consent-record retention window (UK-GDPR-derived reasoning, not yet
+  Nigeria-confirmed). Not merged — founder's call, and this specific
+  document additionally requires actual legal counsel sign-off (the
+  blank sign-off block at the end of the file) before any of its content
+  can be treated as final, per the agent's standing boundary.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
