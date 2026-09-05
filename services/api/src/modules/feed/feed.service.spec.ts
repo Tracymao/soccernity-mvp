@@ -52,6 +52,14 @@ function buildPrismaMock() {
     notification: {
       create: jest.fn(),
     },
+    // sprint-2/contest-data-model-backend (Decision Log #219): createPost
+    // and likePost now write a baseline-engagement PointsLedgerEntry
+    // inside their transaction callbacks (via awardPoints). Every test
+    // that exercises either runs through this mock whether or not it
+    // asserts on points, so it must exist unconditionally.
+    pointsLedgerEntry: {
+      create: jest.fn(),
+    },
   } as unknown as PrismaService;
 
   // FeedService uses interactive transactions ($transaction(async (tx)
@@ -108,6 +116,26 @@ describe('FeedService', () => {
         select: expect.objectContaining({ contentText: true, author: expect.anything() }),
       });
       expect(result).toEqual(row);
+    });
+
+    it('awards the creator a baseline-engagement point (source engagement_post), keyed on the new post id, at the post createdAt (Decision Log #219)', async () => {
+      const prisma = buildPrismaMock();
+      const row = buildPostRow({ id: 'post-77', createdAt: new Date('2026-08-09T10:00:00.000Z') });
+      (prisma.post.create as jest.Mock).mockResolvedValue(row);
+
+      const service = new FeedService(prisma);
+      await service.createPost('author-1', { contentText: 'Great match today' });
+
+      expect((prisma as unknown as { pointsLedgerEntry: { create: jest.Mock } }).pointsLedgerEntry.create).toHaveBeenCalledWith({
+        data: {
+          userId: 'author-1',
+          source: 'engagement_post',
+          refId: 'post-77',
+          points: 3,
+          clubId: null,
+          occurredAt: new Date('2026-08-09T10:00:00.000Z'),
+        },
+      });
     });
 
     it('leaves likeCount and commentCount untouched (schema default 0) — this slice never creates a Like or Comment', async () => {
@@ -693,6 +721,9 @@ describe('FeedService', () => {
         data: { likeCount: { decrement: 1 } },
       });
       expect(result).toEqual({ postId: 'post-1', liked: false, likeCount: 0 });
+      // Decision Log #219: engagement points are never revoked — unlike
+      // does NOT touch the ledger (no negative row, no delete).
+      expect((prisma as unknown as { pointsLedgerEntry: { create: jest.Mock } }).pointsLedgerEntry.create).not.toHaveBeenCalled();
     });
 
     it('is idempotent (no-op, no error) when unliking a post that was never liked', async () => {
@@ -820,6 +851,19 @@ describe('FeedService', () => {
         await service.likePost('self-1', 'post-1');
 
         expect(prisma.notification.create).not.toHaveBeenCalled();
+        // ...but the liker still earns their own baseline-engagement
+        // point, even on their own post (Decision Log #219 — the point is
+        // for the ACT of liking, self-notification is a separate concern).
+        expect((prisma as unknown as { pointsLedgerEntry: { create: jest.Mock } }).pointsLedgerEntry.create).toHaveBeenCalledWith({
+          data: {
+            userId: 'self-1',
+            source: 'engagement_like',
+            refId: 'post-1',
+            points: 1,
+            clubId: null,
+            occurredAt: expect.any(Date),
+          },
+        });
       });
 
       it('creates exactly one Notification row across a like followed by a duplicate (idempotent) like', async () => {

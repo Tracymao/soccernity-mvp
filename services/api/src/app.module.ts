@@ -13,6 +13,7 @@ import { FeedModule } from './modules/feed/feed.module';
 import { ClubsModule } from './modules/clubs/clubs.module';
 import { AccountDeletionModule } from './modules/account-deletion/account-deletion.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { ContestModule } from './modules/contest/contest.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -80,6 +81,13 @@ import { AdminModule } from './modules/admin/admin.module';
     // (the rest of the "AdminModule // Sprint 5" placeholder this replaces)
     // remain unbuilt — see modules/admin/README.md.
     AdminModule,
+    // sprint-2/contest-data-model-backend — Decision Log #218/#219. The
+    // Contest weekly-cycle data model + scoring ledger + the
+    // active-contest query (Decision Log #61/#70/#71/#130/#188). New
+    // architecture the founder authorised ahead of the Sprint 6
+    // Leaderboard build; the Leaderboard aggregation / GET /leaderboard
+    // itself is still Sprint 6. See modules/contest/README.md.
+    ContestModule,
     // BanterModule,        // Sprint 3
     // MessagingModule,     // Sprint 3
     // NotificationsModule, // Sprint 3

@@ -1,6 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ENGAGEMENT_POINTS } from '../points/points.constants';
+import { awardPoints } from '../points/points.util';
 import { decodeFeedCursor, encodeFeedCursor } from './cursor.util';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreatePostDto } from './dto/create-post.dto';
@@ -147,15 +149,32 @@ export class FeedService {
     }
 
     try {
-      return await this.prisma.post.create({
-        data: {
-          authorId,
-          contentText: dto.contentText,
-          mediaUrls: dto.mediaUrls ?? [],
-          clubPageId: dto.clubPageId,
-          banterRoomId: dto.banterRoomId,
-        },
-        select: POST_SELECT,
+      // Wrapped in a transaction (previously a bare create) so the
+      // baseline-engagement points award lands atomically with the Post
+      // — sprint-2/contest-data-model-backend, Decision Log #219. Same
+      // "write the ledger row in the same tx as the thing it pays for"
+      // discipline the like/follow/contest award sites use. refId is the
+      // new post id (always unique, so the ledger @@unique never fires
+      // here); occurredAt is the post's own createdAt, not write time.
+      return await this.prisma.$transaction(async (tx) => {
+        const post = await tx.post.create({
+          data: {
+            authorId,
+            contentText: dto.contentText,
+            mediaUrls: dto.mediaUrls ?? [],
+            clubPageId: dto.clubPageId,
+            banterRoomId: dto.banterRoomId,
+          },
+          select: POST_SELECT,
+        });
+        await awardPoints(tx, {
+          userId: authorId,
+          source: 'engagement_post',
+          refId: post.id,
+          points: ENGAGEMENT_POINTS.POST_CREATED,
+          occurredAt: post.createdAt,
+        });
+        return post;
       });
     } catch (err) {
       // A clubPageId/banterRoomId that's well-formed at the DTO layer
@@ -437,6 +456,19 @@ export class FeedService {
             data: { userId: post.authorId, type: 'like', payloadRefId: postId },
           });
         }
+        // Baseline-engagement point for the LIKER (the action-taker, not
+        // the post author) — sprint-2/contest-data-model-backend,
+        // Decision Log #219. Only reached on a genuine first like (a
+        // duplicate like throws P2002 on tx.like.create above and this
+        // whole callback rolls back), and the ledger's own
+        // @@unique([source, refId, userId]) is a backstop so a
+        // like → unlike → re-like never re-awards.
+        await awardPoints(tx, {
+          userId,
+          source: 'engagement_like',
+          refId: postId,
+          points: ENGAGEMENT_POINTS.LIKE_GIVEN,
+        });
       });
     } catch (err) {
       if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')) {

@@ -3,6 +3,8 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { decodeFeedCursor, encodeFeedCursor } from '../feed/cursor.util';
 import { FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE, FeedQueryDto } from '../feed/dto/feed-query.dto';
+import { ENGAGEMENT_POINTS } from '../points/points.constants';
+import { awardPoints } from '../points/points.util';
 import { UpdateUserDto } from './dto/update-user.dto';
 
 // Fields returned for the authenticated user's OWN profile. Notably:
@@ -201,6 +203,17 @@ export class UsersService {
         await tx.follow.create({ data: { followerId, followeeId } });
         await tx.notification.create({
           data: { userId: followeeId, type: 'follow', payloadRefId: followerId },
+        });
+        // Baseline-engagement point for the FOLLOWER (the action-taker) —
+        // sprint-2/contest-data-model-backend, Decision Log #219. Only
+        // reached on a genuine first follow (a duplicate throws P2002 on
+        // tx.follow.create above and rolls this back); the ledger's own
+        // @@unique([source, refId, userId]) backstops re-follow.
+        await awardPoints(tx, {
+          userId: followerId,
+          source: 'engagement_follow',
+          refId: followeeId,
+          points: ENGAGEMENT_POINTS.FOLLOW_MADE,
         });
       });
     } catch (err) {

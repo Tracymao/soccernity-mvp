@@ -21,6 +21,12 @@ function buildPrismaMock() {
     notification: {
       create: jest.fn(),
     },
+    // sprint-2/contest-data-model-backend (Decision Log #219): followUser
+    // now writes a baseline-engagement PointsLedgerEntry for the follower
+    // inside its transaction callback (via awardPoints).
+    pointsLedgerEntry: {
+      create: jest.fn(),
+    },
   } as unknown as PrismaService;
 
   // Same interactive-transaction mock shape as feed.service.spec.ts's own
@@ -194,7 +200,36 @@ describe('UsersService', () => {
       expect(prisma.notification.create).toHaveBeenCalledWith({
         data: { userId: 'followee-1', type: 'follow', payloadRefId: 'follower-1' },
       });
+      // Decision Log #219: the FOLLOWER (action-taker) earns a
+      // baseline-engagement point, keyed on the followee id.
+      expect((prisma as unknown as { pointsLedgerEntry: { create: jest.Mock } }).pointsLedgerEntry.create).toHaveBeenCalledWith({
+        data: {
+          userId: 'follower-1',
+          source: 'engagement_follow',
+          refId: 'followee-1',
+          points: 1,
+          clubId: null,
+          occurredAt: expect.any(Date),
+        },
+      });
       expect(result).toEqual({ following: true });
+    });
+
+    it('does not award a points row on a duplicate (idempotent) follow', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'followee-1' });
+      const dup = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: '5.0.0',
+      });
+      (prisma.follow.create as jest.Mock).mockRejectedValue(dup);
+      const service = new UsersService(prisma);
+
+      await service.followUser('follower-1', 'followee-1');
+
+      // tx.follow.create threw before awardPoints was reached — the whole
+      // callback rolled back.
+      expect((prisma as unknown as { pointsLedgerEntry: { create: jest.Mock } }).pointsLedgerEntry.create).not.toHaveBeenCalled();
     });
 
     it('the Notification recipient is the followee, never the follower (actor)', async () => {
