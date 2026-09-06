@@ -5585,10 +5585,16 @@ Full reasoning for every choice above: Build Plan Section 5.
       live).
     - **`FooterLayout`** (`src/layout/FooterLayout.tsx`, a pathless
       layout route nested under `AppShell`) — `Header` + content +
-      shared `<Footer />`. Home, Sports Hub, Leaderboard, Blog, Article
+      shared `<Footer />`. Home, Sports Hub, Blog, Article
       Detail (their canonical Figma frames carry the standardized footer
       — Decision Log #209/#210). This is the `AuthChrome` split's mirror,
-      one layer deeper.
+      one layer deeper. **Leaderboard was removed from this set** — the
+      founder decided the Leaderboard must NOT carry the site footer, and
+      the footer was removed from all 20 Leaderboard-family Figma frames
+      (Decision Log #227); `LeaderboardPage.tsx` still sits under
+      `FooterLayout` in code today and needs moving to a direct `AppShell`
+      child in a `figma-to-code` follow-up so the shipped page stops
+      rendering `<Footer/>`.
   - **The founder decided the footer belongs in a shared component, not
     copy-pasted per page.** A live audit found this wasn't just cleanup:
     only `HomePage.tsx` had a footer (written inline), yet Sports Hub /
@@ -6397,6 +6403,63 @@ Full reasoning for every choice above: Build Plan Section 5.
   order assertion (`feed-reactions.e2e-spec.ts` compares with `.sort()`;
   confirmed by grep). Not merged.
   Report: `docs/sprint-2-fix-flaky-clubs-feed-pagination-test-report.md`.
+- **`sprint-2/leaderboard-footer-removal-and-contest-rules-modal`
+  (figma-design-system, 2026-09-06) — Figma design only, no app/backend
+  code. Two founder-directed changes.** Report:
+  `docs/sprint-2-leaderboard-footer-removal-and-contest-rules-modal-report.md`.
+  Decision Log **#227** added; forward-pointers on **#209** and **#213**.
+  - **Part 1 — the site footer was removed from the Leaderboard
+    (founder decision, reversing its inclusion under Decision Log
+    #209/#213).** Removed from **all 20 "Leaderboard —" prefixed Figma
+    frames** — the 2 canonical Leaderboard frames (`5171:6633` desktop /
+    `5540:7264` mobile) plus every Contest-tab weekly-fill/live/crowned
+    state, the Empty State (filtered), and the Competition-tab
+    Prediction/Commentary states, desktop and mobile. Every parent is
+    `VERTICAL` auto-layout `primaryAxisSizingMode=AUTO`, so deleting the
+    footer child let each frame's height shrink automatically — no manual
+    resize, no orphaned gap (screenshot-verified on 4 representative
+    frames; a page-wide reaction scan confirmed nothing pointed into the
+    1,060 removed footer descendant nodes). `Table Footer — Pagination`
+    (`5174:6734` / `5540:7480`) was NOT touched — name collision only,
+    it's the table's pagination row. **FLAGGED, not removed:**
+    `Contest — Weekly Results (Top 3)` desktop (`5528:7260`) + mobile
+    (`5545:7394`) carry the byte-identical #209 footer clone but are
+    Contest-section frames, not Leaderboard-family — founder to confirm
+    whether the reversal extends to them (every other Contest-section
+    frame is already footer-free).
+  - **`apps/web` consequence — flagged, out of scope for this Figma
+    PR:** Decision Log #213 put `LeaderboardPage.tsx` under `FooterLayout`
+    *because* its Figma frame carried the footer. That's now false — a
+    `figma-to-code` follow-up must move `LeaderboardPage` out of
+    `FooterLayout` to a direct `AppShell` child so the shipped Leaderboard
+    page stops rendering `<Footer/>`. **Leaderboard is no longer part of
+    the "carries the site footer" page set** — that set is now Home,
+    Sports Hub, Blog, Article Detail.
+  - **Part 2 — "Contest rules ›" link + Contest Rules modal.** A
+    `Contest rules ›` chevron link (matching the existing
+    `View leaderboard ›` convention, `brand/navy` fill) added to
+    Contest — Details — Mobile (`5801:8635`, after `View leaderboard ›`)
+    and Contest Details desktop (`2155:1062`, below the Join Contest
+    button — desktop has no `View leaderboard ›` link, a pre-existing
+    desktop/mobile inconsistency, flagged not fixed). Two new modal-state
+    frames — `Contest — Rules — Modal — Desktop` (`6241:14657`) and
+    `— Mobile` (`6241:14677`) — full-frame scrim+dialog compositions
+    matching the file's existing modal convention (`Contest - Delete
+    Task` etc.). Each dialog: title, `×` close, divider, and a
+    `clipsContent` + `overflowDirection=VERTICAL` scrollable body holding
+    ONE clearly-labelled dashed placeholder block (`[PLACEHOLDER —
+    founder to supply final Contest Rules copy before this ships]`,
+    dashed `brand/navy` border on `brand/green-tint`) — styled so it
+    cannot be mistaken for real content the way Decision Log #203's Lorem
+    ipsum was. **Modal scope, founder's explicit call: the real Contest
+    Rules copy is written and owned by the founder directly — no
+    legal-counsel review track for this content, unlike the ToS / Privacy
+    Policy.** Scrim = two stacked `color/icon/inactive` fills (~28% navy);
+    `elevation/menu` effect on the dialog; 0 unbound / 0 off-palette / 0
+    `brand/green-tint-28` / 0 new colours on every authored node.
+    Prototype wiring: link → NAVIGATE → modal; modal Close + Scrim →
+    NAVIGATE → back to Contest Details.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
