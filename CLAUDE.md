@@ -6747,6 +6747,16 @@ Full reasoning for every choice above: Build Plan Section 5.
     files / 44 tests, 0 failures**; tsc / lint / build clean.
     `docs/sprint-2-admin-users-stub-report.md`.
   - PR opened, not merged — founder's call.
+  - **`sprint-2/admin-media-stub` (PR 7, 2026-09-06 — stacks on PR 6).**
+    Media library / preview / upload (Figma `361:553` / `396:442` /
+    `916:2362` + `917:24`) converted as disclosed stubs — no
+    `GET /admin/media` / `POST /admin/media/upload` **and no file
+    storage** (Section 4.8; S3 wired-not-live). Sample table + working
+    links; empty preview pane; disabled upload form. New routes
+    `/media/preview`, `/media/upload`. **Decision Log #237.** apps/admin
+    vitest **13 files / 47 tests, 0 failures**; tsc / lint / build clean.
+    `docs/sprint-2-admin-media-stub-report.md`.
+  - PR opened, not merged — founder's call.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

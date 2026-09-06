@@ -25,6 +25,9 @@ import CreateArticlePage from "../pages/articles/CreateArticlePage";
 import CategoriesPage from "../pages/categories/CategoriesPage";
 import AddCategoryPage from "../pages/categories/AddCategoryPage";
 import UsersPage from "../pages/users/UsersPage";
+import MediaLibraryPage from "../pages/media/MediaLibraryPage";
+import MediaPreviewPage from "../pages/media/MediaPreviewPage";
+import MediaUploadPage from "../pages/media/MediaUploadPage";
 import ModerationQueuePage from "../pages/moderation/ModerationQueuePage";
 import ReportDetailPage from "../pages/moderation/ReportDetailPage";
 import AppealReviewPage from "../pages/moderation/AppealReviewPage";
@@ -40,8 +43,6 @@ const BACKEND_NOTES = {
     "Partly backed: POST /admin/contest/{cycles, cycles/:id/rounds/:week/results, cycles/:id/final/open, cycles/:id/crown} exist (Decision Log #218/#219), but there is no admin read endpoint and the Figma 'task' screens do not map to the ContestCycle/ContestRound model.",
   competitions:
     "No competitions admin endpoint exists — the Competition umbrella is parked (Decision Log #72/#73, Build Plan Section 2.2).",
-  media:
-    "No GET /admin/media or POST /admin/media/upload endpoints exist yet, and no file storage is configured (Build Plan Section 4.8).",
   settings:
     "No admin role-management endpoint exists — AdminUser.role is a fixed enum and there is no self-service admin/role provisioning (Decision Log #191).",
 } as const;
@@ -76,7 +77,10 @@ export const adminRoutes: RouteObject[] = [
           { path: "categories/new", element: <AddCategoryPage /> },
           { path: "contest", element: placeholder("Contest", "contest") },
           { path: "competitions", element: placeholder("Competitions", "competitions") },
-          { path: "media", element: placeholder("Media", "media") },
+          // Stubs (sprint-2/admin-media-stub) — no media backend + no file storage.
+          { path: "media", element: <MediaLibraryPage /> },
+          { path: "media/preview", element: <MediaPreviewPage /> },
+          { path: "media/upload", element: <MediaUploadPage /> },
           { path: "settings", element: placeholder("Settings", "settings") },
           // Real screen (sprint-2/admin-profile-and-password) — GET/PATCH
           // /admin/profile + POST /admin/auth/change-password are built
