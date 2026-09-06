@@ -6025,6 +6025,67 @@ Full reasoning for every choice above: Build Plan Section 5.
     `schema.prisma` diff; safeguarding fields untouched. `nest build` +
     `npm run lint` clean.
   - Not merged — founder's call after review.
+- **`sprint-2/auth-navbar-delete-account-privacy-consolidation`
+  (figma-design-system, 2026-09-06) is four founder-directed Auth Pages /
+  Settings changes — Figma design only, no app/backend code, no
+  `figma-to-code` (explicitly blocked until this merges). Decision Log
+  #222; forward-pointers on #214, #215.** Full detail:
+  `docs/sprint-2-auth-navbar-delete-account-privacy-consolidation-report.md`.
+  - **Part 1 — Create Profile navbar.** `Create Profile desktop`
+    (`1498:2303`) and `mobile` (`1629:2449`) were the last Auth Pages
+    frames on the full logged-in `header 4` nav. Swapped for a clone of
+    Login's `Top Bar — Soccernity` (desktop 1440×90, mobile 390×90);
+    mobile content shifted +26px to preserve the navbar-to-heading gap.
+    Closes the Create Profile ambiguity #214 flagged.
+  - **Part 2 — direct Delete Account flow.** New **`Settings — Delete
+    Account (Confirm)`** — desktop `6225:14789`, mobile `6225:15024` —
+    cloned from `Settings — Deactivate Account (Confirm)` for the Settings
+    chrome, restructured to the Inactive-Account `Delete (Confirm)`
+    content pattern (heading + the 30-day-grace body verbatim from
+    `6215:14657` + password re-entry + Cancel/Delete, **no** separate
+    "what happens" card). Genuinely distinct frames, not a variant of the
+    Deactivate Intro. Reached **directly** from a new "Delete Account" row
+    in the Account section of `Settings — Overview` (desktop `2905:4798` +
+    mobile `5607:7813`) and from a "Delete account ›" inline link on the
+    Privacy page (Part 3) — a **parallel** path, NOT gated behind
+    deactivating first. Cancel → Settings — Overview; Delete → no reaction
+    (no success screen exists, matching the Inactive-Account treatment).
+  - **Part 3 — Privacy / Privacy & Safety consolidation.** Founder
+    decision: merge into ONE page named **"Privacy"**, keeping
+    `6178:14437` / `6185:14547` canonical. The two `Privacy & Safety` rows
+    merged in as rows on the Privacy page — **Your Post** → Sensitive
+    Media (`2926:8996` / `5696:8261`), **Direct Message** → Read Receipts
+    (`2926:8764` / `5696:8241`); destination sub-pages not rebuilt. The
+    **Account status** row now shows "Active" + two inline links
+    ("Deactivate account ›" → `2924:7358` / `5695:8262`, "Delete account
+    ›" → the new confirm screen) — both reachable, not just deactivate.
+    `Settings — Privacy & Safety` (desktop + mobile) **archived**
+    (`ARCHIVED —` prefix, hidden). 22 inbound references to the old
+    desktop P&S frame handled — 21 "Privacy and safety" nav items + 2
+    sub-page `arrow-back` buttons repointed to `6178:14437`, 1 self-nav
+    removed; mobile P&S had 0 inbound refs. The `Privacy Settings — Design
+    Notes` frame's "OPEN — P&S relationship" note rewritten to "RESOLVED".
+    **Nav-label mismatch flagged, not fixed:** the left-nav item still
+    reads "Privacy and safety" (shared component, ~40 instances) while the
+    page is now "Privacy".
+  - **Part 4 — "Privacy Settings" footer link removed entirely** (founder:
+    remove, don't relink) from **all 48** canonical-footer `Legal Links`
+    frames file-wide (link + its bullet; desktop rows re-centered after
+    the 668→473 shrink; mobile keep 350px FIXED). Every Legal Links row is
+    now `Terms of Service · Privacy Policy · Contact Us`. Verified 0/48
+    retain a Privacy Settings child. **Left, flagged:** ~15 legacy `Group
+    358` footers on never-retrofitted screens (Bants/Community/Search/Edit
+    Profile) still carry an unwired "Privacy Settings" text link — folds
+    into the legacy-footer-retrofit backlog; 10 more inside archived
+    frames left per precedent.
+  - **`figma-to-code` for the queued Privacy Settings → code work must
+    build against the consolidated Privacy page** (`6178:14437` /
+    `6185:14547`) — now including the Your Post / Direct Message rows and
+    the dual Account-status links — not the narrower PR #175 scope, and
+    must not expect a separate `Settings — Privacy & Safety` screen.
+  - Token discipline: no new colour, no `brand/green-tint-28`, Light mode
+    only; every new node is a clone of an existing bound element.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
