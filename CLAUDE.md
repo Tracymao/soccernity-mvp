@@ -6714,6 +6714,17 @@ Full reasoning for every choice above: Build Plan Section 5.
     #233.** apps/admin vitest **9 files / 38 tests, 0 failures**; tsc /
     lint / build clean. `docs/sprint-2-admin-moderation-stub-report.md`.
   - PR opened, not merged — founder's call.
+  - **`sprint-2/admin-dashboard-stub` (PR 4, 2026-09-06 — stacks on PR
+    3).** Dashboard (Figma `110:5`) converted as a disclosed stub — no
+    `GET /admin/dashboard/stats` (Build Plan Section 4.8). 4 stat cards
+    (values render `—`), a by-league breakdown, a CSS bar-sketch chart
+    placeholder captioned "Sample — chart not wired to data" (not a real
+    chart lib), a Latest Posts sample table. `routes.test.tsx`'s generic
+    placeholder assertion moved `/dashboard` → `/settings`. **Decision
+    Log #234.** apps/admin vitest **10 files / 39 tests, 0 failures**;
+    tsc / lint / build clean.
+    `docs/sprint-2-admin-dashboard-stub-report.md`.
+  - PR opened, not merged — founder's call.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

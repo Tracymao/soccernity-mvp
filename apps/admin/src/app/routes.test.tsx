@@ -66,11 +66,12 @@ describe("adminRoutes (integration)", () => {
     window.localStorage.setItem("sn_admin_refresh_token", "ref-1");
     vi.mocked(getAdminProfile).mockResolvedValue(PROFILE);
 
-    renderAt("/dashboard");
+    // /settings is still an AdminSectionPlaceholder (converted in a later PR)
+    renderAt("/settings");
 
     await waitFor(() => expect(screen.getByText("Ada Lovelace")).not.toBeNull());
     expect(screen.getByText(/designed in Figma but not yet built/i)).not.toBeNull();
-    expect(screen.getByText(/GET \/admin\/dashboard\/stats/)).not.toBeNull();
+    expect(screen.getByText(/role-management endpoint exists/i)).not.toBeNull();
   });
 
   it("shows a not-found state for an unknown authenticated path", async () => {
