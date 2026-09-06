@@ -6783,6 +6783,29 @@ Full reasoning for every choice above: Build Plan Section 5.
     apps/admin vitest **15 files / 52 tests, 0 failures**; tsc / lint /
     build clean. `docs/sprint-2-admin-contest-report.md`.
   - PR opened, not merged — founder's call.
+  - **`sprint-2/admin-settings-roles-stub` (PR 10 of 10, FINAL,
+    2026-09-06 — stacks on PR 9).** Roles list / Add / Edit / Delete Role
+    (Figma `1658:2303` / `1658:2456` / `1658:2592` / `5403:7205`)
+    converted as disclosed stubs — no role-management endpoint (Decision
+    Log #191); "Add a New Role" really creates an admin account
+    (provisioned by direct DB insert). Delete Role navy not red. New
+    routes `/settings/roles/{new,edit,delete}`. **Decision Log #240.**
+    - **The ~10-PR Admin Console conversion is complete. All 10 sidebar
+      sections now have real screens** — Profile + Change Password fully
+      wired (`/admin/profile` + `/admin/auth/change-password`, Decision
+      Log #54); the other 8 as honest disclosed stubs (their Section 4.8
+      endpoints don't exist). `AdminSectionPlaceholder.tsx` deleted (no
+      route needs it). Full dev-server smoke: all 16 routes + a 404 path
+      → HTTP 200, clean log. apps/admin vitest **16 files / 55 tests, 0
+      failures**; tsc / lint / build clean.
+      `docs/sprint-2-admin-settings-roles-stub-report.md` has the full
+      PR 1–10 table. **Still open: Decision Log #239** — a working
+      Contest admin console needs a coordinated backend
+      (`GET /admin/contest/*` read endpoint) + design + code pass;
+      backend for Dashboard/Articles/Users/Moderation/Categories/Media
+      is Sprint 5 / Section 4.8 work, each stub PR swaps to real data
+      when its endpoints land.
+  - PR opened, not merged — founder's call.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
