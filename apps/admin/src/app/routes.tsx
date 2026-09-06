@@ -19,6 +19,7 @@ import AdminShell from "../layout/AdminShell";
 import RequireAdminAuth from "../auth/RequireAdminAuth";
 import AdminLoginPage from "../pages/AdminLoginPage";
 import AdminProfilePage from "../pages/AdminProfilePage";
+import DashboardPage from "../pages/DashboardPage";
 import ModerationQueuePage from "../pages/moderation/ModerationQueuePage";
 import ReportDetailPage from "../pages/moderation/ReportDetailPage";
 import AppealReviewPage from "../pages/moderation/AppealReviewPage";
@@ -30,7 +31,6 @@ import AdminNotFound from "../pages/AdminNotFound";
 // operator on each placeholder so nobody is misled about what the console
 // can do once a screen is "converted".
 const BACKEND_NOTES = {
-  dashboard: "No GET /admin/dashboard/stats endpoint exists yet (Build Plan Section 4.8).",
   articles:
     "No POST/PATCH /admin/articles endpoints exist yet, and Section 4.8 defines no articles list endpoint.",
   users: "No GET/PATCH /admin/users endpoints exist yet (Build Plan Section 4.8).",
@@ -58,7 +58,8 @@ export const adminRoutes: RouteObject[] = [
         element: <AdminShell />,
         children: [
           { index: true, element: <Navigate to="/dashboard" replace /> },
-          { path: "dashboard", element: placeholder("Dashboard", "dashboard") },
+          // Stub (sprint-2/admin-dashboard-stub) — no GET /admin/dashboard/stats.
+          { path: "dashboard", element: <DashboardPage /> },
           { path: "articles", element: placeholder("Articles", "articles") },
           { path: "users", element: placeholder("Users", "users") },
           // Stub screens (sprint-2/admin-moderation-stub) — no
