@@ -18,6 +18,7 @@ import { createBrowserRouter, Navigate, type RouteObject } from "react-router-do
 import AdminShell from "../layout/AdminShell";
 import RequireAdminAuth from "../auth/RequireAdminAuth";
 import AdminLoginPage from "../pages/AdminLoginPage";
+import AdminProfilePage from "../pages/AdminProfilePage";
 import AdminSectionPlaceholder from "../pages/AdminSectionPlaceholder";
 import AdminNotFound from "../pages/AdminNotFound";
 
@@ -41,8 +42,6 @@ const BACKEND_NOTES = {
     "No GET /admin/media or POST /admin/media/upload endpoints exist yet, and no file storage is configured (Build Plan Section 4.8).",
   settings:
     "No admin role-management endpoint exists — AdminUser.role is a fixed enum and there is no self-service admin/role provisioning (Decision Log #191).",
-  profile:
-    "GET/PATCH /admin/profile ARE built (Decision Log #54). The editable Admin Profile screen is the next PR (sprint-2/admin-profile-and-password); the signed-in admin's name/role already shows in the sidebar.",
 } as const;
 
 function placeholder(title: string, key: keyof typeof BACKEND_NOTES) {
@@ -67,7 +66,10 @@ export const adminRoutes: RouteObject[] = [
           { path: "competitions", element: placeholder("Competitions", "competitions") },
           { path: "media", element: placeholder("Media", "media") },
           { path: "settings", element: placeholder("Settings", "settings") },
-          { path: "profile", element: placeholder("Admin Profile", "profile") },
+          // Real screen (sprint-2/admin-profile-and-password) — GET/PATCH
+          // /admin/profile + POST /admin/auth/change-password are built
+          // (Decision Log #54).
+          { path: "profile", element: <AdminProfilePage /> },
           { path: "*", element: <AdminNotFound /> },
         ],
       },

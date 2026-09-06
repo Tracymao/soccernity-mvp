@@ -90,3 +90,27 @@ export async function adminLogout(refreshToken: string, accessToken: string | nu
 export function getAdminProfile(): Promise<AdminSummary> {
   return adminFetch<AdminSummary>("/admin/profile");
 }
+
+// PATCH /admin/profile — AdminJwtAuthGuard. Only `fullName` / `phone` are
+// self-editable; `role` / `email` / `accountStatus` are rejected outright
+// by the server's ValidationPipe (services/api update-admin-profile.dto.ts)
+// AND its service allowlist — this client never sends them.
+export interface UpdateAdminProfileInput {
+  fullName?: string;
+  phone?: string;
+}
+
+export function updateAdminProfile(input: UpdateAdminProfileInput): Promise<AdminSummary> {
+  return adminFetch<AdminSummary>("/admin/profile", { method: "PATCH", body: input });
+}
+
+// POST /admin/auth/change-password — AdminJwtAuthGuard. Requires the
+// current password; on success the server revokes every OTHER admin
+// session for this account (same mechanism as
+// AuthService.changePassword). Returns 204.
+export function changeAdminPassword(currentPassword: string, newPassword: string): Promise<void> {
+  return adminFetch<void>("/admin/auth/change-password", {
+    method: "POST",
+    body: { currentPassword, newPassword },
+  });
+}
