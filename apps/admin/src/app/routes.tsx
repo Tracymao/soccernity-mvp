@@ -20,6 +20,10 @@ import RequireAdminAuth from "../auth/RequireAdminAuth";
 import AdminLoginPage from "../pages/AdminLoginPage";
 import AdminProfilePage from "../pages/AdminProfilePage";
 import DashboardPage from "../pages/DashboardPage";
+import ArticlesPage from "../pages/articles/ArticlesPage";
+import CreateArticlePage from "../pages/articles/CreateArticlePage";
+import CategoriesPage from "../pages/categories/CategoriesPage";
+import AddCategoryPage from "../pages/categories/AddCategoryPage";
 import ModerationQueuePage from "../pages/moderation/ModerationQueuePage";
 import ReportDetailPage from "../pages/moderation/ReportDetailPage";
 import AppealReviewPage from "../pages/moderation/AppealReviewPage";
@@ -31,10 +35,7 @@ import AdminNotFound from "../pages/AdminNotFound";
 // operator on each placeholder so nobody is misled about what the console
 // can do once a screen is "converted".
 const BACKEND_NOTES = {
-  articles:
-    "No POST/PATCH /admin/articles endpoints exist yet, and Section 4.8 defines no articles list endpoint.",
   users: "No GET/PATCH /admin/users endpoints exist yet (Build Plan Section 4.8).",
-  categories: "No POST /admin/categories endpoint exists yet (Build Plan Section 4.8).",
   contest:
     "Partly backed: POST /admin/contest/{cycles, cycles/:id/rounds/:week/results, cycles/:id/final/open, cycles/:id/crown} exist (Decision Log #218/#219), but there is no admin read endpoint and the Figma 'task' screens do not map to the ContestCycle/ContestRound model.",
   competitions:
@@ -60,7 +61,9 @@ export const adminRoutes: RouteObject[] = [
           { index: true, element: <Navigate to="/dashboard" replace /> },
           // Stub (sprint-2/admin-dashboard-stub) — no GET /admin/dashboard/stats.
           { path: "dashboard", element: <DashboardPage /> },
-          { path: "articles", element: placeholder("Articles", "articles") },
+          // Stubs (sprint-2/admin-articles-categories-stub) — no articles/categories backend.
+          { path: "articles", element: <ArticlesPage /> },
+          { path: "articles/new", element: <CreateArticlePage /> },
           { path: "users", element: placeholder("Users", "users") },
           // Stub screens (sprint-2/admin-moderation-stub) — no
           // moderation-queue backend exists (Sprint 5, Decision Log
@@ -68,7 +71,8 @@ export const adminRoutes: RouteObject[] = [
           { path: "moderation", element: <ModerationQueuePage /> },
           { path: "moderation/reports/:id", element: <ReportDetailPage /> },
           { path: "moderation/appeals/:id", element: <AppealReviewPage /> },
-          { path: "categories", element: placeholder("Categories", "categories") },
+          { path: "categories", element: <CategoriesPage /> },
+          { path: "categories/new", element: <AddCategoryPage /> },
           { path: "contest", element: placeholder("Contest", "contest") },
           { path: "competitions", element: placeholder("Competitions", "competitions") },
           { path: "media", element: placeholder("Media", "media") },

@@ -95,6 +95,21 @@
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+/* An enabled link styled as a button — for navigating BETWEEN stub
+ * screens (the destination route exists, it just isn't wired to data).
+ * Distinct from StubButton, which is a genuinely inert action. */
+.admin-stub__linkbtn {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 500;
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
 }
 
 .admin-stub__sample-caption {
