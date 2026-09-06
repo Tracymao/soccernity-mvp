@@ -1,0 +1,692 @@
+/* Contest admin console — Figma nodes 6266–6278 (Decision Log #242/#243).
+ * Light mode only; every colour is a --sn-* token. Blocked / destructive
+ * actions are navy, not red (no destructive token — non-negotiable #3). */
+
+.ct-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1100px;
+}
+
+.ct-top-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.ct-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.ct-loading,
+.ct-error {
+  color: var(--sn-text-secondary);
+  font-size: 14px;
+}
+
+.ct-error {
+  padding: 10px 12px;
+  border: 1px solid var(--sn-brand-navy);
+  border-radius: 4px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-weight: 600;
+}
+
+/* cards */
+
+.ct-card {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ct-card__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ct-card__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.ct-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-size: 13px;
+  color: var(--sn-text-secondary);
+}
+
+.ct-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.ct-divider {
+  height: 1px;
+  background-color: var(--sn-icon-inactive);
+}
+
+/* pills + phase strip */
+
+.ct-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: lowercase;
+}
+
+.ct-pill--strong {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.ct-pill--soft {
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+}
+
+.ct-phase-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ct-phase-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+
+.ct-phase-chip--active {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+  font-weight: 600;
+}
+
+.ct-phase-chip--past {
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+}
+
+.ct-phase-chip--future {
+  background-color: var(--sn-background-surface);
+  border-color: var(--sn-icon-inactive);
+  color: var(--sn-text-secondary);
+}
+
+/* primary action row */
+
+.ct-action-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ct-action-hint {
+  font-size: 13px;
+  color: var(--sn-text-secondary);
+}
+
+/* buttons */
+
+.ct-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.ct-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.ct-btn--primary {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.ct-btn--outline {
+  background-color: var(--sn-background-surface);
+  border-color: var(--sn-brand-navy);
+  color: var(--sn-text-primary);
+}
+
+.ct-btn--sm {
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+.ct-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sn-brand-navy);
+  cursor: pointer;
+}
+
+.ct-link--muted {
+  color: var(--sn-text-secondary);
+  cursor: default;
+  font-weight: 500;
+}
+
+.ct-back {
+  font-size: 13px;
+}
+
+.ct-back a {
+  color: var(--sn-brand-navy);
+  font-weight: 600;
+}
+
+/* table */
+
+.ct-table {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.ct-table__row {
+  display: grid;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 20px;
+  font-size: 13px;
+}
+
+.ct-table__row--head {
+  background-color: var(--sn-green-tint-12);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+.ct-rounds .ct-table__row {
+  grid-template-columns: 48px 1fr 96px 72px 150px 130px;
+}
+
+.ct-history .ct-table__row {
+  grid-template-columns: 1.6fr 1.4fr 100px 110px 130px 140px;
+}
+
+.ct-cell--primary {
+  color: var(--sn-text-primary);
+  font-weight: 600;
+}
+
+.ct-cell--secondary {
+  color: var(--sn-text-secondary);
+}
+
+/* entry cards (Judge Week) */
+
+.ct-entry {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.ct-entry--dim {
+  opacity: 0.6;
+}
+
+.ct-entry__thumb {
+  flex: 0 0 132px;
+  min-height: 92px;
+  border-radius: 6px;
+  background-color: var(--sn-green-tint-12);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--sn-text-primary);
+  text-align: center;
+  padding: 8px;
+}
+
+.ct-entry__thumb--none {
+  background-color: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  color: var(--sn-text-secondary);
+}
+
+.ct-entry__thumb small {
+  font-size: 11px;
+  color: var(--sn-text-secondary);
+}
+
+.ct-entry__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ct-entrant {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.ct-entrant__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.ct-entrant__time {
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.ct-entry__text {
+  font-size: 13px;
+  color: var(--sn-text-primary);
+  word-break: break-word;
+}
+
+.ct-entry__post-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+  flex-wrap: wrap;
+}
+
+.ct-entry__selector {
+  flex: 0 0 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ct-selector-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: var(--sn-text-secondary);
+}
+
+/* position chips */
+
+.ct-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ct-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--sn-icon-inactive);
+  background-color: var(--sn-background-surface);
+  color: var(--sn-text-secondary);
+  cursor: pointer;
+}
+
+.ct-chip:disabled {
+  cursor: default;
+}
+
+.ct-chip--selected {
+  background-color: var(--sn-brand-navy);
+  border-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+  font-weight: 600;
+}
+
+.ct-static-pos {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+/* panels (weekly winners / monthly standings) */
+
+.ct-panels {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.ct-panel {
+  flex: 1 1 320px;
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.ct-panel__head {
+  background-color: var(--sn-green-tint-12);
+  padding: 14px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ct-panel__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.ct-panel__sub {
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.ct-panel__row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 20px;
+  font-size: 13px;
+  color: var(--sn-text-primary);
+}
+
+.ct-panel__empty {
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ct-panel__empty strong {
+  font-size: 13px;
+  color: var(--sn-text-primary);
+}
+
+.ct-panel__empty span {
+  font-size: 13px;
+  color: var(--sn-text-secondary);
+}
+
+/* callouts / banners */
+
+.ct-callout {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background-color: var(--sn-green-tint-12);
+  font-size: 13px;
+  color: var(--sn-text-primary);
+}
+
+.ct-callout__bar {
+  flex: 0 0 3px;
+  align-self: stretch;
+  min-height: 20px;
+  border-radius: 2px;
+  background-color: var(--sn-brand-navy);
+}
+
+.ct-callout--alert .ct-callout__bar {
+  background-color: var(--sn-brand-navy);
+}
+
+.ct-callout p {
+  margin: 0;
+}
+
+/* forms (Start a Cycle) */
+
+.ct-form-card {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ct-form-section-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.ct-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ct-field__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+}
+
+.ct-field input {
+  padding: 12px 14px;
+  border: none;
+  border-radius: 6px;
+  background-color: var(--sn-green-tint-12);
+  font: inherit;
+  font-size: 14px;
+  color: var(--sn-text-primary);
+}
+
+.ct-field input:disabled {
+  opacity: 0.6;
+}
+
+.ct-field input:focus {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 1px;
+}
+
+.ct-field__hint {
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.ct-date-row {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.ct-date-row .ct-field {
+  flex: 1 1 260px;
+}
+
+.ct-radio-option {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--sn-icon-inactive);
+  background-color: var(--sn-background-surface);
+  cursor: pointer;
+}
+
+.ct-radio-option--on {
+  background-color: var(--sn-green-tint-12);
+  border-color: transparent;
+}
+
+.ct-radio-option__label strong {
+  display: block;
+  font-size: 14px;
+  color: var(--sn-text-primary);
+}
+
+.ct-radio-option__label span {
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.ct-week-windows {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ct-week-windows__row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.ct-week-windows__row > span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+  padding-bottom: 12px;
+}
+
+.ct-preview {
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ct-preview__row {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+}
+
+.ct-preview__row strong {
+  width: 72px;
+  color: var(--sn-text-primary);
+}
+
+.ct-preview__row span {
+  color: var(--sn-text-secondary);
+}
+
+.ct-form-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* confirm card (Open the Final) */
+
+.ct-confirm {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 640px;
+}
+
+.ct-confirm__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.ct-confirm__body {
+  font-size: 14px;
+  color: var(--sn-text-primary);
+}
+
+/* finalist / standing rows (Crown Winners) */
+
+.ct-finalists {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ct-finalist {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  padding: 14px 20px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ct-finalist__copy {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.ct-finalist__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.ct-finalist__placings {
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.ct-actions-card {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  padding: 18px 20px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ct-actions-card__hint {
+  flex: 1 1 260px;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
