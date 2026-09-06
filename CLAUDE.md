@@ -6854,6 +6854,59 @@ Full reasoning for every choice above: Build Plan Section 5.
     endpoints) are next.** `apps/admin`'s Contest section stays a
     disclosed stub until Task 3.
   - PR opened, not merged — founder's call.
+- **`sprint-2/admin-contest-screens` (figma-screen-builder, 2026-09-06) is
+  Task 2 of 3 resolving Decision Log #239 — the real Contest admin console
+  screens, designed against the state machine rather than the stale "task"
+  model. Figma design only, no app/backend code. Decision Log #242.** Report:
+  `docs/sprint-2-admin-contest-screens-report.md`. Figma writes by the agent
+  (no shell that session); branch/commit/docx transcription/PR finalised in a
+  follow-up session (same pattern as PRs #98/#102/#110/#130).
+  - **16 desktop screens + 1 design-notes frame** on page `0:1`, in three rows:
+    a **6-state Contest Console hub** (`GET /admin/contest/current` — No Cycle,
+    Vacant, Weeks In Progress, All Weeks Judged, Final Live, Crowned; `week_1`
+    and `weeks_1_2` share one frame, being structurally identical), **Start a
+    Cycle ×3** (auto windows / explicit `rounds[]` / the real 409 block),
+    **Judge Week ×4** (open round, already-judged read-only, the *supported*
+    empty-`winners` "thin week", and the sequential-judging block), **Open the
+    Final (Confirm)**, **Crown Winners**, **Cycle History**, and the notes frame.
+  - **Crown Winners lists DISTINCT users, not the 9 weekly winners** —
+    `CrownCycleDto` takes `userId` and rejects a repeated user, so 9 weekly
+    placings collapse to 6 finalists. Designing one row per weekly winner
+    would have produced a screen that cannot submit.
+  - **No "delete cycle" screen exists anywhere** — no endpoint, and a cycle
+    cannot be deleted or re-judged. This is the single biggest departure from
+    the archived frames, which had a Delete Task screen.
+  - **No frame renders a field the backend does not return** (checked against
+    `contest.types.ts` and all three DTOs). Blocked states carry the backend's
+    real message strings.
+  - All 16 screens use a real **`Admin Shell` `6014:12948`** instance,
+    `Active=Contest`, `Show Action Button=false` (Decision Log #51 — every
+    screen has an in-content primary). Light mode only. **0 unbound / 0
+    off-palette / 0 `brand/green-tint-28` / 0 new colours on every authored
+    node** — proven by the shell-less notes frame auditing at 0, with the
+    per-frame 48 unbound confirmed to be the Admin Shell component's own
+    pre-existing debt. Blocked/destructive buttons are **navy**;
+    `semantic/alert` appears only as a non-text indicator bar.
+  - **A real placement bug was caught by the overlap check**: the parked
+    `Admin Shell` COMPONENT_SET occupies `x 37943–53343, y −16153 → −14929`,
+    and a whole row had been built on top of it. Two rows relocated; final
+    check 0 overlaps.
+  - **The 9 stale frames** (`2363:2244`, `2363:3446`, `5403:6640`,
+    `5403:6753`, `5403:6866`, `5403:6979`, `5403:7092`, `5405:8277`,
+    `5405:8390`) were reference-checked across **all 123,335 page nodes** —
+    0 inbound references, none a flow start — then hidden, `ARCHIVED — `
+    prefixed and moved to an archive strip. **Not deleted.**
+  - **Caught before archiving, not after:** archiving `Contest - Schedule
+    Task` would have dropped the twice-retrofitted `Calendar for scheduled
+    task` component (Decision Log #53, #178) to zero instances. It is instead
+    **reused** as the open-state date picker on the Custom Weekly Windows
+    screen. Still flagged for `figma-design-system`: the `calendar 2` variant
+    is now at zero instances, and the calendar's internal sample month still
+    reads "January 2022".
+  - **Decision Log #239 stays Open** — Task 3 (`figma-to-code`) must wire
+    `apps/admin`'s Contest section to these screens and the four write
+    endpoints. Until then that section remains a disclosed stub.
+  - PR opened, not merged — founder's call.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
