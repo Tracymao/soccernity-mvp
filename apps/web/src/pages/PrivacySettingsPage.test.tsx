@@ -88,7 +88,7 @@ describe("PrivacySettingsPage", () => {
     expect(getGuardianConsentStatus).not.toHaveBeenCalled();
   });
 
-  it("links Account status actions to the deactivate / delete stub routes", async () => {
+  it("links Account status actions to the deactivate / delete routes", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
     vi.mocked(getUser).mockResolvedValueOnce(ADULT);
 

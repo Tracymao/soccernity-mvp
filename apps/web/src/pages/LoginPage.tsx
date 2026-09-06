@@ -73,6 +73,15 @@ export default function LoginPage() {
 
       navigate("/");
     } catch (error) {
+      // A deactivated account (credentials were correct -- see
+      // src/api/auth.ts's login()). Hand the known-good email + password
+      // to the Inactive Account interstitial via in-memory router state
+      // (never persisted, never in the URL) so "Activate account" there
+      // can call POST /auth/reactivate-account without re-prompting.
+      if (error instanceof AuthApiError && error.code === "account_deactivated") {
+        navigate("/account/inactive", { state: { email: email.trim(), password } });
+        return;
+      }
       setFormError(
         error instanceof AuthApiError
           ? error.message
