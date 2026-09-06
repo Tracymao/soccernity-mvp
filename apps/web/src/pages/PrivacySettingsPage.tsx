@@ -33,10 +33,10 @@
 //     backend, and the Figma destination sub-pages (2926:8996 /
 //     2926:8764) are not converted. Rows disabled.
 //   - Account status — "Deactivate account" / "Delete account" link to
-//     /settings/deactivate and /settings/delete-account, real routes
-//     that are PlaceholderPage stubs today (the K1/K2/K3 deactivation-
-//     flow screens are designed + backend-complete but not yet
-//     converted). Founder chose stub routes over disabled rows here.
+//     /settings/deactivate and /settings/delete-account, real, built
+//     flows as of sprint-2/account-deactivation-to-code (Decision Log
+//     #220/#221/#222). Both are parallel paths — delete is not gated
+//     behind deactivating first.
 //   - Guardian approval — REAL. GET /auth/guardian-consent/status. Shown
 //     only for minors; a 404 from that endpoint means "not a minor" and
 //     the row is hidden. "Change guardian email" has no endpoint

@@ -6295,6 +6295,84 @@ Full reasoning for every choice above: Build Plan Section 5.
     entry + judged winners only); the "past months" view (`GET
     /contest/cycles/:id` client exists but no UI consumes it yet).
   - Not merged — founder's call after review.
+- **`sprint-2/account-deactivation-to-code` (figma-to-code, 2026-09-06)
+  converts the account deactivation / deletion / reactivation flow into
+  real `apps/web` code — K1's design (Decision Log #220) + K2's endpoints
+  (Decision Log #221) + the direct-delete path (Decision Log #222). The
+  three routes were `PlaceholderPage` stubs (or absent) until this PR;
+  no `services/api` code touched.** Report:
+  `docs/sprint-2-account-deactivation-to-code-report.md`.
+  - **`/settings/deactivate` — `DeactivateAccountPage.tsx`.** Two Figma
+    frames (Intro `2924:7358` → Confirm `6213:15640`) as one route with
+    an internal `intro`/`confirm` step. Intro states deactivation is
+    **indefinite** (the corrected K1 copy — no 30-day expiry on
+    deactivation itself); "Continue" → password-re-entry confirm →
+    `POST /auth/deactivate-account`. On success `clearStoredSession()`
+    runs immediately (the endpoint revokes every session), a
+    read-the-message success state shows, then a 2.5s redirect to
+    `/login` (the same shape `EditProfileModal.tsx`'s own older inline
+    "Manage Account" panel uses — that panel is left in place as a
+    second entry point).
+  - **`/settings/delete-account` — `DeleteAccountPage.tsx`.** The direct
+    (parallel, not deactivate-gated) delete path from
+    `PrivacySettingsPage`'s "Account status" row (Figma `6225:14789`,
+    Decision Log #222). Single confirm screen: the 30-day-grace copy
+    (quoted from the frame) + password re-entry + Cancel/Delete →
+    `POST /auth/delete-account` (`pending_deletion`, **not** a hard
+    delete). **Slightly beyond the literal K1 brief** ("Settings
+    deactivation UI + the Inactive Account screen"), built anyway
+    because it was a live stub linked from a shipped page with the
+    design + backend already done — flagged in the report.
+  - **`/account/inactive` — `InactiveAccountPage.tsx`** (under
+    `AuthChrome`'s Top Bar, not the site Header — the person is not
+    authenticated; the Figma frames' logged-in navbar would be wrong,
+    same reasoning as Decision Log #172, flagged). The **login-time
+    interstitial**: `LoginPage` detects a deactivated account
+    (`AuthApiError` with `code: "account_deactivated"` — see Decision
+    Log #225) and `navigate`s here, passing the (verified-correct)
+    `{ email, password }` via **in-memory react-router `location.state`**
+    (never persisted, never in the URL; a refresh/direct-visit loses it
+    and redirects to `/login`). "Activate account" → `POST
+    /auth/reactivate-account` with the carried creds → stores the
+    returned tokens (as `LoginPage` does) → `/`. "Delete account" → the
+    Figma "Delete (Confirm)" sub-step (`6217:14677`) which re-asks for
+    the password as a deliberate friction step → `POST
+    /auth/delete-inactive-account` → 30-day-grace message → `/login`.
+    The Figma Inactive frame has no password field precisely because the
+    password is already known from the login attempt.
+  - **`api/auth.ts`:** new `reactivateAccount()` (returns the
+    `LoginResponse` token shape) and `deleteInactiveAccount()`; new
+    optional `code` on `AuthApiError`; `login()` now reads the 401 body
+    and, on a message matching `/deactivat/i`, throws `code:
+    "account_deactivated"`. **Decision Log #225 added** — the
+    message-string match is the only signal the backend gives today; a
+    dedicated response code / 403 on `AuthService.login` would be more
+    robust (small backend follow-up, no user-facing bug).
+  - **Orphaned `src/pages/PlaceholderPage.tsx` deleted** — its last two
+    consumers (the deactivate/delete stub routes) are now real pages;
+    nothing else imported it.
+  - **Verification**: `npx tsc --noEmit`, `npm run lint`, `npm run
+    build` all clean; `npx vitest run` — **26 files / 166 tests, 0
+    failures** (up from 22/146 — `DeactivateAccountPage.test.tsx` +6,
+    `DeleteAccountPage.test.tsx` +6, `InactiveAccountPage.test.tsx` +7,
+    and `account/accountLifecycle.test.tsx` +1: a full single-`MemoryRouter`
+    UI walk of **deactivate → login-rejected → interstitial → reactivate
+    → deactivate again → login-rejected → delete-from-inactive →
+    locked-out**, mirroring `services/api`'s
+    `test/account-deactivation.e2e-spec.ts`). Dev-server smoke test `/`,
+    `/login`, `/account/inactive`, `/settings/deactivate`,
+    `/settings/delete-account`, `/settings/privacy` all HTTP 200. No
+    real browser/Playwright check available — same ceiling as every
+    prior `apps/web` PR.
+  - **Not built (flagged):** post-action success/status *screens* (a
+    "deletion scheduled — N days left" surface if a person signs in
+    during the grace window — the interim message + redirect covers the
+    brief's "don't imply it's instant" requirement); a guardian/minor
+    deactivation variant; a reactivation confirm step. `EditProfileModal.tsx`'s
+    inline "Manage Account" deactivate/delete panel now duplicates these
+    dedicated routes — left as a valid secondary entry point, a possible
+    consolidation follow-up.
+  - Not merged — pushed, PR opened, founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

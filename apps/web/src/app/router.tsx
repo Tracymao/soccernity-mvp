@@ -52,7 +52,9 @@ import GuardianConsentConfirmPage from "../pages/GuardianConsentConfirmPage";
 import VerifyEmailPage from "../pages/VerifyEmailPage";
 import ProfilePage from "../pages/ProfilePage";
 import PrivacySettingsPage from "../pages/PrivacySettingsPage";
-import PlaceholderPage from "../pages/PlaceholderPage";
+import DeactivateAccountPage from "../pages/settings/DeactivateAccountPage";
+import DeleteAccountPage from "../pages/settings/DeleteAccountPage";
+import InactiveAccountPage from "../pages/InactiveAccountPage";
 import NotFoundPage from "../pages/NotFoundPage";
 
 export const router = createBrowserRouter([
@@ -66,6 +68,13 @@ export const router = createBrowserRouter([
       { path: "signup", element: <SignupPage /> }, // F3 (age gate + signup)
       { path: "forgot-password", element: <ForgotPasswordPage /> }, // F4
       { path: "reset-password", element: <ResetPasswordPage /> }, // F4
+      // Login-time interstitial for a deactivated ("inactive") account:
+      // reached only from LoginPage, which passes { email, password } via
+      // in-memory router state. Activate -> POST /auth/reactivate-account;
+      // Delete -> POST /auth/delete-inactive-account. Figma "Inactive
+      // Account" 1662:2782 -> "— Delete (Confirm)" 6217:14677 (Decision
+      // Log #220/#221). See InactiveAccountPage.tsx.
+      { path: "account/inactive", element: <InactiveAccountPage /> },
     ],
   },
   {
@@ -147,31 +156,14 @@ export const router = createBrowserRouter([
       // Bar, not the site footer.
       { path: "settings", element: <Navigate to="/settings/privacy" replace /> },
       { path: "settings/privacy", element: <PrivacySettingsPage /> },
-      // Account status → these two are real routes, wired from the
-      // Privacy page's "Account status" row, but PlaceholderPage stubs
-      // for now: the K1/K2/K3 account-deactivation-flow screens (Figma
-      // 2924:7358 / 6213:15640 / 6225:14789; backend POST
-      // /auth/deactivate-account + /auth/delete-account, both merged)
-      // are not yet converted. Founder chose stub routes over disabled
-      // links or building those screens in this PR.
-      {
-        path: "settings/deactivate",
-        element: (
-          <PlaceholderPage
-            title="Deactivate account"
-            owner="figma-to-code — account deactivation flow (Decision Log #220/#221)"
-          />
-        ),
-      },
-      {
-        path: "settings/delete-account",
-        element: (
-          <PlaceholderPage
-            title="Delete account"
-            owner="figma-to-code — account deletion flow (Decision Log #220/#221/#222)"
-          />
-        ),
-      },
+      // Account status → wired from PrivacySettingsPage's "Account
+      // status" row. Deactivate (Figma 2924:7358 -> 6213:15640, Decision
+      // Log #220/#221) and Delete (Figma 6225:14789, Decision Log #222)
+      // are the two parallel paths -- delete is NOT gated behind
+      // deactivating first. Converted by
+      // sprint-2/account-deactivation-to-code.
+      { path: "settings/deactivate", element: <DeactivateAccountPage /> },
+      { path: "settings/delete-account", element: <DeleteAccountPage /> },
       // Added during a Sprint 1 cleanup review -- was missing entirely,
       // not a pre-existing placeholder. See VerifyEmailPage.tsx.
       { path: "verify-email", element: <VerifyEmailPage /> }, // F7

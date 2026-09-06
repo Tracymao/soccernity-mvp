@@ -104,14 +104,22 @@ export interface RegisterResponse {
 // `cause`) would just be duplication. `status` and `cause` are both
 // optional debugging metadata, not control flow -- a request can supply
 // either, both, or neither.
+//
+// `code` is a machine-readable discriminator for the rare case where a
+// caller DOES need to branch on the *kind* of failure rather than just
+// show `.message`. The only value in use today is "account_deactivated"
+// (login() -> LoginPage.tsx routes to the Inactive Account interstitial),
+// added by sprint-2/account-deactivation-to-code.
 export class AuthApiError extends Error {
   readonly status?: number;
+  readonly code?: string;
   readonly cause?: unknown;
 
-  constructor(message: string, options?: { status?: number; cause?: unknown }) {
+  constructor(message: string, options?: { status?: number; code?: string; cause?: unknown }) {
     super(message);
     this.name = "AuthApiError";
     this.status = options?.status;
+    this.code = options?.code;
     this.cause = options?.cause;
   }
 }
@@ -134,6 +142,27 @@ export async function login(payload: LoginRequest): Promise<LoginResponse> {
   }
 
   if (!response.ok) {
+    // A deactivated account: the backend (AuthService.login) returns a
+    // 401 whose message mentions "deactivated", and it does so ONLY
+    // AFTER the password has verified -- so reaching this branch means
+    // the credentials were correct and the account is simply switched
+    // off. Surface that as a distinct `code` so LoginPage can route to
+    // the Inactive Account interstitial (Activate / Delete) instead of
+    // showing a "wrong password" error.
+    //
+    // Message-string matching is the only signal the backend gives for
+    // this today (both cases are a bare 401). A dedicated response code
+    // or a 403 would be more robust -- flagged as a backend follow-up
+    // (Decision Log #225).
+    const body = (await response.json().catch(() => null)) as { message?: unknown } | null;
+    const backendMessage = typeof body?.message === "string" ? body.message : "";
+    if (response.status === 401 && /deactivat/i.test(backendMessage)) {
+      throw new AuthApiError("This account has been deactivated.", {
+        status: 401,
+        code: "account_deactivated",
+      });
+    }
+
     let message = "Something went wrong signing you in.";
     if (response.status === 401) {
       message = "That email and password don't match.";
@@ -350,6 +379,72 @@ export async function deleteAccount(accessToken: string, password: string): Prom
 
   if (!response.ok) {
     const message = response.status === 401 ? "That password is incorrect." : "Couldn't process that request.";
+    throw new AuthApiError(message, { status: response.status });
+  }
+}
+
+// POST /auth/reactivate-account -- UNAUTHENTICATED, { email, password }
+// (a deactivated account has no session to authenticate with). On
+// success the backend flips accountStatus "deactivated" -> "active" and
+// returns the SAME AuthResponse shape POST /auth/login does (tokens +
+// user) -- so a caller stores the tokens exactly like LoginPage does and
+// the person is signed straight in. An already-"active" account with the
+// right credentials is treated as a plain login (also 200); a
+// "pending_deletion" account or a wrong password both get the generic
+// 401 "Invalid credentials" (non-enumeration -- see auth.service.ts).
+export async function reactivateAccount(email: string, password: string): Promise<LoginResponse> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/reactivate-account`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    const message =
+      response.status === 401
+        ? "We couldn't reactivate this account. The password may be wrong, or the account is scheduled for deletion."
+        : "Couldn't reactivate your account. Please try again shortly.";
+    throw new AuthApiError(message, { status: response.status });
+  }
+
+  return (await response.json()) as LoginResponse;
+}
+
+// POST /auth/delete-inactive-account -- UNAUTHENTICATED, { email,
+// password }. The Delete path from the Inactive Account screen: a
+// deactivated account has no session to reach the JwtAuthGuard-protected
+// POST /auth/delete-account, so this route re-verifies credentials
+// itself. It does NOT hard-delete -- it sets accountStatus =
+// "pending_deletion" + pendingDeletionAt (the exact same server path as
+// deleteAccount()), starting the 30-day grace clock
+// (AccountDeletionSweepService, Decision Log #42/#44). 204 on success;
+// any failure (wrong password, account not actually "deactivated",
+// account already "pending_deletion") gets a generic 401. Callers MUST
+// present 30-day-grace copy, never "your account has been deleted".
+export async function deleteInactiveAccount(email: string, password: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/delete-inactive-account`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    const message =
+      response.status === 401 ? "That password is incorrect." : "Couldn't process that request.";
     throw new AuthApiError(message, { status: response.status });
   }
 }
