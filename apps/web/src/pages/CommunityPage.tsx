@@ -28,8 +28,9 @@
 // Session is read directly via src/lib/session.ts (no AuthContext exists
 // yet -- see that file's header comment).
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { getFeed, FeedApiError, type FeedPost } from "../api/feed";
+import { getCurrentContest, type CurrentContestResponse } from "../api/contest";
 import { getUser, type UserProfile } from "../api/users";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
 import PostCard from "./community/PostCard";
@@ -71,12 +72,29 @@ function initialsFor(name: string): string {
 export default function CommunityPage() {
   const token = getStoredAccessToken();
   const decoded = token ? decodeAccessToken(token) : null;
+  const [searchParams] = useSearchParams();
+  // /community?compose=contest deep-links the composer into contest mode (used by the
+  // Contest page's "Enter this week" CTA). Ignored if no contest is accepting entries.
+  const composeContest = searchParams.get("compose") === "contest";
 
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [contest, setContest] = useState<CurrentContestResponse | null>(null);
+
+  // GET /contest/current -- drives the composer's mode-tab row (Decision Log #148/#188).
+  // Non-critical: a failure just means no Contest tab, so it's swallowed like the
+  // profile fetch, not part of the feed load path.
+  const loadContest = useCallback(async () => {
+    if (!token) return;
+    try {
+      setContest(await getCurrentContest(token));
+    } catch {
+      setContest(null);
+    }
+  }, [token]);
 
   const loadFeed = useCallback(async () => {
     if (!token || !decoded) {
@@ -100,7 +118,8 @@ export default function CommunityPage() {
     } catch {
       /* non-fatal -- composer falls back to a generic avatar */
     }
-  }, [token, decoded?.sub]);
+    await loadContest();
+  }, [token, decoded?.sub, loadContest]);
 
   useEffect(() => {
     loadFeed();
@@ -183,6 +202,8 @@ export default function CommunityPage() {
           <PostComposer
             accessToken={token}
             authorName={profile?.displayName ?? "You"}
+            contest={contest}
+            initialMode={composeContest ? "contest" : "post"}
             onCreated={(post) =>
               // POST /posts doesn't return the per-caller viewer-state
               // fields (Decision Log #153); for a post you just created
@@ -192,6 +213,7 @@ export default function CommunityPage() {
                 ...prev,
               ])
             }
+            onContestSubmitted={loadContest}
           />
         )}
 

@@ -38,6 +38,7 @@ import SportsHubPage from "../pages/SportsHubPage";
 import BlogPage from "../pages/BlogPage";
 import ArticleDetailPage from "../pages/blog/ArticleDetailPage";
 import LeaderboardPage from "../pages/LeaderboardPage";
+import ContestPage from "../pages/ContestPage";
 import CommunityPage from "../pages/CommunityPage";
 import ClubsPage from "../pages/ClubsPage";
 import ClubFanPage from "../pages/ClubFanPage";
@@ -100,6 +101,13 @@ export const router = createBrowserRouter([
           // exists. See ../pages/blog/ArticleDetailPage.tsx.
           { path: "blog/:articleId", element: <ArticleDetailPage /> },
           { path: "leaderboard", element: <LeaderboardPage /> },
+          // "This month's Contest" — how it works, the current week's task,
+          // the caller's own entry status, weekly/monthly winners. Wired to
+          // GET /contest/current (sprint-2/contest-data-model-backend).
+          // Reached via the Leaderboard Contest tab's "View this week's
+          // contest ›" connector and the composer's contest-mode success
+          // message. Figma 2155:1062. See ../pages/ContestPage.tsx.
+          { path: "contest", element: <ContestPage /> },
         ],
       },
 

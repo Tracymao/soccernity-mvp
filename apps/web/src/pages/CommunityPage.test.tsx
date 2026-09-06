@@ -32,8 +32,60 @@ vi.mock("../api/users", async () => {
   };
 });
 
+vi.mock("../api/contest", async () => {
+  const actual = await vi.importActual<typeof import("../api/contest")>("../api/contest");
+  return {
+    ...actual,
+    getCurrentContest: vi.fn(),
+    submitContestEntry: vi.fn(),
+  };
+});
+
 import { getFeed, createPost, likePost } from "../api/feed";
 import { getUser } from "../api/users";
+import { getCurrentContest, submitContestEntry, type CurrentContestResponse } from "../api/contest";
+
+function noContest(): CurrentContestResponse {
+  return {
+    cycle: null,
+    phase: null,
+    isAcceptingEntries: false,
+    activeRound: null,
+    rounds: [],
+    weeklyWinners: [],
+    monthlyStandings: [],
+    callerEntry: null,
+  };
+}
+
+function openContest(overrides: Partial<CurrentContestResponse> = {}): CurrentContestResponse {
+  return {
+    cycle: {
+      id: "cycle-1",
+      title: "September Contest",
+      status: "active",
+      startsAt: new Date().toISOString(),
+      endsAt: new Date().toISOString(),
+      finalOpenedAt: null,
+      crownedAt: null,
+    },
+    phase: "week_1",
+    isAcceptingEntries: true,
+    activeRound: {
+      id: "round-2",
+      weekNumber: 2,
+      status: "open",
+      opensAt: new Date().toISOString(),
+      closesAt: new Date(Date.now() + 86400000).toISOString(),
+      judgedAt: null,
+    },
+    rounds: [],
+    weeklyWinners: [],
+    monthlyStandings: [],
+    callerEntry: null,
+    ...overrides,
+  };
+}
 
 function base64UrlEncode(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -68,11 +120,14 @@ beforeEach(() => {
   vi.mocked(createPost).mockReset();
   vi.mocked(likePost).mockReset();
   vi.mocked(getUser).mockReset();
+  vi.mocked(getCurrentContest).mockReset();
+  vi.mocked(getCurrentContest).mockResolvedValue(noContest());
+  vi.mocked(submitContestEntry).mockReset();
 });
 
-function renderPage() {
+function renderPage(path = "/community") {
   render(
-    <MemoryRouter initialEntries={["/community"]}>
+    <MemoryRouter initialEntries={[path]}>
       <CommunityPage />
     </MemoryRouter>,
   );
@@ -144,6 +199,70 @@ describe("CommunityPage", () => {
     renderPage();
     await screen.findByText(/first goal of the season/i);
     expect(screen.queryByRole("button", { name: "Follow" })).toBeNull();
+  });
+
+  it("shows no Contest tab in the composer when no contest is accepting entries", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    vi.mocked(getFeed).mockResolvedValueOnce({ items: [], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValueOnce({ displayName: "Ada Player" } as never);
+    vi.mocked(getCurrentContest).mockResolvedValue(noContest());
+
+    renderPage();
+    await screen.findByText(/your feed is quiet/i);
+
+    expect(screen.queryByRole("tab", { name: /contest/i })).toBeNull();
+  });
+
+  it("submits a contest entry: POST /posts then POST /contest/entries with the new post's id", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    vi.mocked(getFeed).mockResolvedValueOnce({ items: [], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValueOnce({ displayName: "Ada Player" } as never);
+    vi.mocked(getCurrentContest).mockResolvedValue(openContest());
+    vi.mocked(createPost).mockResolvedValueOnce(
+      post({ id: "entry-post", authorId: "user-1", contentText: "my skill clip caption" }) as never,
+    );
+    vi.mocked(submitContestEntry).mockResolvedValueOnce({
+      id: "ce-1",
+      cycleId: "cycle-1",
+      roundId: "round-2",
+      weekNumber: 2,
+      postId: "entry-post",
+      submittedAt: new Date().toISOString(),
+    });
+
+    renderPage("/community?compose=contest");
+    await screen.findByText(/your feed is quiet/i);
+
+    // Deep-linked into contest mode (GET /contest/current resolves after the feed).
+    const caption = await screen.findByLabelText(/caption for your contest entry/i);
+    expect(screen.getByRole("tab", { name: /contest/i }).getAttribute("aria-selected")).toBe("true");
+
+    fireEvent.change(caption, { target: { value: "my skill clip caption" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit entry/i }));
+
+    await waitFor(() =>
+      expect(createPost).toHaveBeenCalledWith(expect.any(String), { contentText: "my skill clip caption" }),
+    );
+    await waitFor(() => expect(submitContestEntry).toHaveBeenCalledWith(expect.any(String), "entry-post"));
+    // The entry post is also prepended to the normal feed.
+    expect(await screen.findByText("my skill clip caption")).not.toBeNull();
+    expect(await screen.findByText(/your entry is in for this week/i)).not.toBeNull();
+  });
+
+  it("shows an 'already entered' state in contest mode when callerEntry is set", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    vi.mocked(getFeed).mockResolvedValueOnce({ items: [], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValueOnce({ displayName: "Ada Player" } as never);
+    vi.mocked(getCurrentContest).mockResolvedValue(
+      openContest({ callerEntry: { roundId: "round-2", weekNumber: 2, postId: "p9" } }),
+    );
+
+    renderPage("/community?compose=contest");
+    await screen.findByText(/your feed is quiet/i);
+
+    fireEvent.click(await screen.findByRole("tab", { name: /contest/i }));
+    expect(await screen.findByText(/entered this week.s contest \(week 2\)/i)).not.toBeNull();
+    expect(screen.queryByRole("button", { name: /submit entry/i })).toBeNull();
   });
 
   it("renders like / save / follow in their already-acted state on initial load from the API's per-caller fields (Decision Log #153)", async () => {
