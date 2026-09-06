@@ -6738,6 +6738,15 @@ Full reasoning for every choice above: Build Plan Section 5.
     files / 43 tests, 0 failures**; tsc / lint / build clean.
     `docs/sprint-2-admin-articles-categories-stub-report.md`.
   - PR opened, not merged — founder's call.
+  - **`sprint-2/admin-users-stub` (PR 6, 2026-09-06 — stacks on PR 5).**
+    Users (Figma `917:218`) converted as a disclosed stub — no
+    `GET/PATCH /admin/users` (Section 4.8). Sample table (Username / Date
+    Joined / Status / block-delete actions) + disabled Add Member; an
+    on-screen note repeats Decision Log #142 (platform-user list, not
+    role management). **Decision Log #236.** apps/admin vitest **12
+    files / 44 tests, 0 failures**; tsc / lint / build clean.
+    `docs/sprint-2-admin-users-stub-report.md`.
+  - PR opened, not merged — founder's call.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
