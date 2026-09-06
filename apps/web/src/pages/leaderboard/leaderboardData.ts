@@ -55,19 +55,11 @@ export const OVERALL_ROWS: LeaderboardRow[] = [
 
 export const TOTAL_RANKED_PLAYERS = 12480;
 
-// Contest tab — a single illustrative "weekly winners so far" state.
-// NOTE: the real Contest mechanic has four distinct phases (Vacant ->
-// weekly-fill x3 -> Live Level-1 Final -> Crowned monthly winners,
-// Decision Log #70) built as separate Figma frames. Reproducing all four
-// states is a materially larger scope than this first conversion pass —
-// deliberately not attempted here, flagged in LeaderboardPage.tsx's own
-// comment and in this PR's Decision Log entry. One representative state
-// is shown instead.
-export const CONTEST_ROWS: LeaderboardRow[] = [
-  { rank: 1, name: "Emeka John", handle: "@mekaa", club: "Ikoyi Rovers FC", weeklyChange: null, points: 512 },
-  { rank: 2, name: "Chukwu James", handle: "@chukwuj", club: "Surulere United", weeklyChange: null, points: 498 },
-  { rank: 3, name: "Ngozi Okafor", handle: "@ngozio", club: "Ajegunle Stars FC", weeklyChange: null, points: 470 },
-];
+// NOTE: the Contest tab is NO LONGER dummy data — it is wired to
+// GET /contest/current (sprint-2/contest-posting-flow-to-code), rendering
+// the real derived phase and real weekly/monthly winners. See
+// LeaderboardPage.tsx's ContestBoard. Only the Overall and Competition
+// boards below remain illustrative (Sprint 6 / Decision Log #72-73).
 
 export type CompetitionType = "prediction" | "commentary";
 

@@ -6206,6 +6206,95 @@ Full reasoning for every choice above: Build Plan Section 5.
     HTTP 200. No real browser/Playwright check available — same ceiling
     as every prior `apps/web` PR.
   - Not merged — founder's call after review.
+- **`sprint-2/contest-posting-flow-to-code` (figma-to-code, 2026-09-06)
+  wires the "Create a Post — For Contest" flow to the real Contest
+  endpoints from `sprint-2/contest-data-model-backend` (PR #178), builds
+  a `/contest` page, and makes the Leaderboard Contest tab real —
+  `apps/web` only, no `services/api` code. Depended on PR G
+  (`sprint-2/create-post-desktop-and-auth-navbar-fixes`, #174) and PR J1
+  (#178), both merged. Report:
+  `docs/sprint-2-contest-posting-flow-to-code-report.md`. Resolves the
+  frontend half of Decision Log #148 and #188; updates #211.**
+  - **New `apps/web/src/api/contest.ts`** — client for `GET
+    /contest/current`, `POST /contest/entries`, `GET /contest/cycles/:id`,
+    mirroring `services/api/src/modules/contest/contest.types.ts` (Date
+    fields typed as the ISO strings they serialise to). Own
+    `ContestApiError` with `status`, Bearer auth, same shape as
+    `api/feed.ts` / `api/clubs.ts`.
+  - **`PostComposer.tsx` — the "Create a Post | Contest" mode-tab row
+    (Figma 5818:8997 / 5982:10905/10932 / desktop 2009:2913 /
+    6171:14797/16994).** Shown **iff** `GET /contest/current` reports
+    `isAcceptingEntries` (cycle `active` AND a round open right now —
+    Decision Log #188's exact flag). No contest accepting entries → the
+    composer is exactly the plain post form, no tabs (Figma "No Active
+    Contest"). Contest mode: caption → `POST /posts` → `POST
+    /contest/entries` with the new post's id (so `POST /posts` stays the
+    single post-creation path — its `GuardianConsentGuard` / validation /
+    notification wiring is not duplicated). `callerEntry` drives a
+    "you've already entered this week" panel instead of the form. A 403
+    on either call → the existing restricted-pending message. If `POST
+    /posts` succeeds but the entry submission fails, the post is still
+    shown in the feed with an honest "your post was published but…"
+    note. `/community?compose=contest` deep-links contest mode (used by
+    the Contest page CTA) — applied via an effect since `GET
+    /contest/current` resolves after mount.
+  - **Attachment restriction — UI-affordance only, correctly scoped.**
+    Contest mode shows a single disabled "Upload a video" affordance
+    (contest entries are video-skill challenges); plain post mode keeps
+    the disabled "photo / video / poll" row. There is **no** media-upload
+    endpoint anywhere in Section 4 and this PR adds none — `CreatePostDto`'s
+    `mediaUrls` allowlist is unchanged, `POST /contest/entries` takes only
+    `{ postId }`, and there is no server-side media-type check. Confirmed
+    by grep that `PostComposer` is the only composer in `apps/web` (used
+    only by `CommunityPage`); club/banter/other post types and the feed
+    read-side (`PostCard`'s `mediaUrls` rendering) are untouched.
+  - **New `/contest` page (`ContestPage.tsx` + `contest/ContestPage.css`,
+    Figma 2155:1062).** Login-gated (Decision Log #129, like Leaderboard).
+    Wired to `GET /contest/current`: "This month's Contest" + cycle
+    title, static "How Contest works" copy, a phase-derived "this week's
+    task" section (`activeRound.closesAt` when accepting entries), the
+    caller's own `callerEntry` status or an "Enter this week's contest" →
+    `/community?compose=contest` CTA, the real `weeklyWinners` /
+    `monthlyStandings` lists, and a "View the Contest leaderboard →" →
+    `/leaderboard?tab=contest` link. Under `FooterLayout` (Leaderboard-
+    adjacent, footer in the Figma frame). Not added to nav — reached via
+    the composer's contest-mode success message and the Leaderboard
+    connector, matching how the Figma frame is reached.
+  - **Leaderboard Contest tab is now REAL (updates Decision Log #211).**
+    `LeaderboardPage.tsx`'s Contest tab was a single dummy
+    "weekly winners" table (`CONTEST_ROWS`, now deleted from
+    `leaderboardData.ts`). It is now wired to `GET /contest/current`
+    (`ContestBoard` component): a phase banner
+    (`vacant`/`week_1`/`weeks_1_2`/`weeks_1_3`/`final_live`/`crowned`),
+    the real `weeklyWinners` (WEEKLY ROUND | WINNER) or `monthlyStandings`
+    (RANK medal | PLAYER, `crowned` only) tables, a vacant status card,
+    and the "View this week's contest ›" connector → `/contest`
+    (Decision Log #61/#70/#71). Winner rows carry no club/points field
+    from the endpoint, so the Figma "CLUB" / "WEEKLY POINTS" columns are
+    **omitted, not faked** (same discipline as `ProfilePage.tsx`'s
+    unbacked fields). `?tab=contest` deep-links the tab. The **Overall
+    and Competition boards stay illustrative** (Sprint 6 / Decision Log
+    #72/#73) — unchanged; a small note now says so on the Competition
+    board. A failed `GET /contest/current` degrades to a soft in-tab
+    message, never blocks the Overall board.
+  - **Verification:** `npx tsc --noEmit`, `npm run lint`, `npm run build`
+    all clean; `npx vitest run` — **22 files / 146 tests, 0 failures**
+    (up from 20/132 — new `ContestPage.test.tsx` +4,
+    `contest/ContestFlow.test.tsx` +1 full-path walk,
+    `CommunityPage.test.tsx` +3, `LeaderboardPage.test.tsx` net +3, one
+    stale dummy-Contest-rows test replaced). `ContestFlow.test.tsx`
+    threads one created post id through submission → Contest-page
+    appearance → Leaderboard-Contest-tab appearance. Dev-server smoke
+    test `/`, `/community`, `/contest`, `/leaderboard`,
+    `/leaderboard?tab=contest`, `/community?compose=contest` all HTTP
+    200. No real browser/Playwright check available — same ceiling as
+    every prior `apps/web` PR.
+  - **Still not wired (flagged, no endpoint):** an actual video upload;
+    a gallery of a round's entries (`GET /contest/current` has no
+    list-round-entries endpoint — the Contest page shows the caller's own
+    entry + judged winners only); the "past months" view (`GET
+    /contest/cycles/:id` client exists but no UI consumes it yet).
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

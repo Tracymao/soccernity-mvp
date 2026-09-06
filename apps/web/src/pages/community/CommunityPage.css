@@ -159,6 +159,57 @@
   gap: 12px;
 }
 
+/* Mode tabs -- shown only while a contest is accepting entries (Decision
+ * Log #148). Mirrors the Figma "Mode Tabs" row on the Create Post frames. */
+.composer__tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+  margin: -4px 0 4px;
+}
+
+.composer__tab {
+  border: none;
+  background: none;
+  padding: 4px 0 10px;
+  font: 400 14px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.composer__tab--active {
+  color: var(--sn-text-primary);
+  font-weight: 600;
+  border-bottom-color: var(--sn-brand-green);
+}
+
+.composer__tab-badge {
+  background: var(--sn-brand-navy);
+  color: #fff;
+  border-radius: 10px;
+  padding: 1px 8px;
+  font: 600 12px "Inter", sans-serif;
+}
+
+.composer__contest-done {
+  font: 400 13px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  background: var(--sn-green-tint-12);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 0;
+}
+
+.composer__contest-done a {
+  color: var(--sn-brand-green);
+  font-weight: 600;
+}
+
 .composer__row {
   display: flex;
   gap: 12px;

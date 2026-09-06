@@ -1,0 +1,136 @@
+/* Contest page. Figma source: 2155:1062 ("Contest" details frame),
+ * "Soccernity-MVP" (weZWWqggy9j13eX8bhFgs6). Light-theme --sn-* tokens
+ * only, matching LeaderboardPage.css / CommunityPage.css. */
+
+.contest-page {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.contest-status {
+  font: 400 15px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  padding: 48px 0;
+  text-align: center;
+  margin: 0;
+}
+
+.contest-status--error {
+  color: var(--sn-brand-navy);
+}
+
+.contest-hero__eyebrow {
+  font: 600 13px "Inter", sans-serif;
+  letter-spacing: 0.02em;
+  color: var(--sn-brand-navy);
+  margin: 0 0 4px;
+}
+
+.contest-hero__title {
+  font: 600 34px/1.2 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.contest-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.contest-section__title {
+  font: 600 16px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.contest-section__body {
+  font: 400 15px/1.7 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.contest-phase__pill {
+  display: inline-block;
+  background: var(--sn-green-tint-12);
+  color: var(--sn-brand-navy);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font: 600 13px "Inter", sans-serif;
+}
+
+.contest-cta {
+  align-self: flex-start;
+  background: var(--sn-brand-navy);
+  color: #fff;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font: 600 14px "Inter", sans-serif;
+  text-decoration: none;
+}
+
+.contest-entry--done {
+  background: var(--sn-green-tint-12);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font: 400 14px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.contest-winners {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contest-winner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.contest-winner__avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--sn-green-tint-12);
+  color: var(--sn-brand-navy);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 13px "Inter", sans-serif;
+  flex-shrink: 0;
+}
+
+.contest-winner__name {
+  font: 600 14px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  flex: 1;
+  min-width: 0;
+}
+
+.contest-winner__round {
+  font: 400 13px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.contest-footnote {
+  margin: 0;
+  font: 600 14px "Inter", sans-serif;
+}
+
+.contest-footnote a {
+  color: var(--sn-brand-green);
+  text-decoration: none;
+}

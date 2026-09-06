@@ -17,7 +17,49 @@ vi.mock("../api/clubs", async () => {
   };
 });
 
+vi.mock("../api/contest", async () => {
+  const actual = await vi.importActual<typeof import("../api/contest")>("../api/contest");
+  return {
+    ...actual,
+    getCurrentContest: vi.fn(),
+  };
+});
+
 import { listClubs } from "../api/clubs";
+import { getCurrentContest } from "../api/contest";
+import type { CurrentContestResponse } from "../api/contest";
+
+function contestResponse(overrides: Partial<CurrentContestResponse> = {}): CurrentContestResponse {
+  return {
+    cycle: {
+      id: "cycle-1",
+      title: "September Contest",
+      status: "active",
+      startsAt: new Date().toISOString(),
+      endsAt: new Date().toISOString(),
+      finalOpenedAt: null,
+      crownedAt: null,
+    },
+    phase: "week_1",
+    isAcceptingEntries: true,
+    activeRound: {
+      id: "round-2",
+      weekNumber: 2,
+      status: "open",
+      opensAt: new Date().toISOString(),
+      closesAt: new Date(Date.now() + 3 * 86400000).toISOString(),
+      judgedAt: null,
+    },
+    rounds: [],
+    weeklyWinners: [
+      { weekNumber: 1, position: 1, userId: "u1", displayName: "Emeka John", entryId: "e1", postId: "p1" },
+      { weekNumber: 1, position: 2, userId: "u2", displayName: "Chukwu James", entryId: "e2", postId: "p2" },
+    ],
+    monthlyStandings: [],
+    callerEntry: null,
+    ...overrides,
+  };
+}
 
 function base64UrlEncode(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -61,11 +103,13 @@ beforeEach(() => {
   window.sessionStorage.clear();
   window.localStorage.clear();
   vi.mocked(listClubs).mockReset();
+  vi.mocked(getCurrentContest).mockReset();
+  vi.mocked(getCurrentContest).mockResolvedValue(contestResponse());
 });
 
-function renderPage() {
+function renderPage(path = "/leaderboard") {
   render(
-    <MemoryRouter initialEntries={["/leaderboard"]}>
+    <MemoryRouter initialEntries={[path]}>
       <LeaderboardPage />
     </MemoryRouter>,
   );
@@ -90,18 +134,62 @@ describe("LeaderboardPage", () => {
     expect(listClubs).toHaveBeenCalledWith(expect.any(String));
   });
 
-  it("switches to the Contest tab and shows Contest rows instead of Overall", async () => {
+  it("switches to the Contest tab and shows the real weekly winners from GET /contest/current", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
 
     renderPage();
-    await screen.findByText("Emeka John");
+    await screen.findByText("Adeniyi Christiana"); // an Overall-only row
 
     fireEvent.click(screen.getByRole("tab", { name: "Contest" }));
 
-    // Contest's dummy table has only 3 rows and no "Sarah Bello" (Overall-only row).
-    expect(screen.queryByText("Sarah Bello")).toBeNull();
-    expect(screen.getAllByText("Emeka John").length).toBeGreaterThan(0);
+    // Overall-only rows gone; real weekly winners shown.
+    expect(screen.queryByText("Adeniyi Christiana")).toBeNull();
+    expect(screen.getByText("Chukwu James")).not.toBeNull();
+    expect(screen.getAllByText(/Week 1/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/view this week.s contest/i).length).toBeGreaterThan(0);
+  });
+
+  it("deep-links straight to the Contest tab with ?tab=contest", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
+
+    renderPage("/leaderboard?tab=contest");
+
+    expect(await screen.findByText("Chukwu James")).not.toBeNull();
+    expect(screen.getByRole("tab", { name: "Contest" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("shows the crowned monthly standings when the contest is completed", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
+    vi.mocked(getCurrentContest).mockResolvedValue(
+      contestResponse({
+        phase: "crowned",
+        isAcceptingEntries: false,
+        monthlyStandings: [
+          { position: 1, userId: "u1", displayName: "Emeka John" },
+          { position: 2, userId: "u2", displayName: "Chukwu James" },
+        ],
+      }),
+    );
+
+    renderPage("/leaderboard?tab=contest");
+
+    expect(await screen.findByText(/monthly winners decided/i)).not.toBeNull();
+    expect(screen.getByText(/1st.*Monthly winner/)).not.toBeNull();
+  });
+
+  it("shows a vacant state when a contest is running but no round has been judged yet", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
+    vi.mocked(getCurrentContest).mockResolvedValue(
+      contestResponse({ phase: "vacant", weeklyWinners: [] }),
+    );
+
+    renderPage("/leaderboard?tab=contest");
+
+    expect(await screen.findByText(/first weekly round is running now/i)).not.toBeNull();
   });
 
   it("switches to the Competition tab and toggles between Prediction and Commentary", async () => {
