@@ -6767,6 +6767,22 @@ Full reasoning for every choice above: Build Plan Section 5.
     apps/admin vitest **14 files / 49 tests, 0 failures**; tsc / lint /
     build clean. `docs/sprint-2-admin-competitions-stub-report.md`.
   - PR opened, not merged — founder's call.
+  - **`sprint-2/admin-contest` (PR 9, 2026-09-06 — stacks on PR 8).**
+    All 9 Contest admin screens (Figma `2363:2244` / `2363:3446` /
+    `5403:6640` / `5403:6753` / `5403:6866` / `5403:6979` / `5403:7092` /
+    `5405:8277` / `5405:8390`) converted as disclosed stubs — **not wired
+    to any endpoint**. The Figma "task" model has no backend entity
+    (backend = `ContestCycle`/`ContestRound`); the 4 real
+    `POST /admin/contest/*` write endpoints (Decision Log #218/#219) have
+    no admin read endpoint and no screen. `Create cycle` alone was
+    deliberately NOT wired (it strands the admin — rejects on an active
+    cycle, no judge/final/crown UI, no read). **Decision Log #239 (Open —
+    flagged)**: a working Contest admin console needs a coordinated
+    backend (`GET /admin/contest/*`) + design + code pass. New routes
+    `/contest/tasks/{new,edit,schedule,search,delete,scheduled}`.
+    apps/admin vitest **15 files / 52 tests, 0 failures**; tsc / lint /
+    build clean. `docs/sprint-2-admin-contest-report.md`.
+  - PR opened, not merged — founder's call.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
