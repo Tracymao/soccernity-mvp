@@ -6613,6 +6613,65 @@ Full reasoning for every choice above: Build Plan Section 5.
     report's §6. **No consolidation PR should start until these are
     answered.**
   - PR opened, not merged — founder's call.
+- **The Admin & Operations Console (`apps/admin`) is being converted from
+  its 29 designed Figma screens to real React code, ahead of Sprint 5 by
+  founder decision — the same call the backend `admin` module got
+  (Decision Log #54). Split into ~10 small independently-reviewable PRs;
+  the shape and ordering are confirmed with the founder.** The full plan,
+  backend-backing audit, and per-section stub-vs-real breakdown are in the
+  PR 1 report — `docs/sprint-2-admin-foundation-shell-auth-report.md`.
+  Backend reality, verified live against Build Plan Section 4.8 +
+  `services/api/src/modules/admin/README.md`: **only `/admin/auth/*`,
+  `GET/PATCH /admin/profile` (Decision Log #54), and the write-only
+  `/admin/contest/*` state machine (Decision Log #218/#219) exist.**
+  Dashboard, Articles, Users, Moderation (Sprint 5, Decision Log
+  #135/#189), Categories, Competitions (parked, Decision Log #72/#73),
+  Media, and Settings/role-management all have **no backing endpoint** —
+  those screens convert as honest disclosed "designed, not built" stubs.
+  - **`sprint-2/admin-foundation-shell-auth` (PR 1, figma-design-system —
+    one-time cross-assignment to figma-to-code work, founder-directed;
+    same precedent as PRs #98/#102/#110/#130 the other direction, 2026-09-06)
+    ships the foundation the other 9 PRs build on — no section screen is
+    converted here.** `apps/admin` went from a one-`<div>` scaffold to:
+    the **Admin Shell** (sidebar + top bar, from Figma `6014:12948` —
+    260px navy-12% sidebar, logo, signed-in identity block, 8-item nav,
+    Settings pinned bottom, active=navy/white); **isolated admin auth**
+    (own `sn_admin_*` localStorage keys, own `AdminAuthContext`, own
+    `adminClient` with transparent 401→`POST /admin/auth/refresh` retry —
+    **never** imports or reuses `apps/web`'s token/session code, and
+    `apps/admin` is a separate Vite build that can't resolve it anyway);
+    a plain **login screen** (no Figma frame exists among the 29 — built
+    plainly and flagged, Decision Log #231(a)); **routing** (`adminRoutes`
+    + `router`, react-router-dom 6 — `apps/admin` deliberately stays on
+    React 18 / Router 6, off `apps/web`'s upgrades); and
+    **`AdminSectionPlaceholder`** — the honest per-section "designed in
+    Figma, not built in this app yet" state that also names the backend
+    gap, which PRs 3–10 replace one section at a time.
+  - **Real end-to-end wiring in PR 1**: `POST /admin/auth/login` (login),
+    `POST /admin/auth/logout` (best-effort), `POST /admin/auth/refresh`
+    (transparent), and `GET /admin/profile` on boot — the last hydrates
+    the sidebar's real name/role **and** validates the stored token (a
+    401 that can't refresh lands on `/login`, not a half-authenticated
+    shell). Calling `GET /admin/profile` here overlaps PR 2's scope
+    slightly, deliberately, so the shell never ships a hardcoded name
+    (Decision Log #231(d)).
+  - **Decision Log #231** records the seven small judgment calls (plain
+    login screen; isolated auth; the disclosed-stub pattern; the profile
+    overlap; Montserrat loaded as a web font unlike `apps/web`;
+    `--sn-text-on-navy` kept local rather than promoted to
+    `@soccernity/shared`; sidebar wash as a literal navy-12%, matching
+    Decision Log #199).
+  - **Verification**: `apps/admin` vitest **7 files / 28 tests, 0
+    failures** (`adminSession`, `adminClient` refresh-retry,
+    `AdminAuthContext` boot/login/logout, `RequireAdminAuth`,
+    `AdminLoginPage`, `AdminShell`, and an `app/routes` integration test
+    mounting the real tree via `useRoutes`); `npx tsc --noEmit`,
+    `npm run lint`, `npm run build` (full workspace) all clean;
+    dev-server smoke test served `/` and `/login`. No real
+    browser/Playwright check available — same ceiling as every `apps/web`
+    figma-to-code PR. `apps/admin`'s eslintrc was updated to match
+    `apps/web`'s (`@typescript-eslint/no-unused-vars`).
+  - PR opened, not merged — founder's call.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

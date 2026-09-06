@@ -1,7 +1,20 @@
-// Placeholder root component for the Admin & Operations Console
-// (Log Book Section 6.6). Real screens land here in Sprint 5 —
-// this pillar is already fully designed in Figma; work here is
-// conversion via figma-to-code, not new design.
+// App root for the Admin & Operations Console (Log Book Section 6.6).
+//
+// This pillar is already fully designed in Figma (29 screens, all
+// instancing the shared "Admin Shell" component). Work here is
+// figma-to-code conversion, sprint by sprint — see CLAUDE.md "Where
+// things stand right now" for which sections are converted.
+//
+// Do not hand-build a section screen here — add it as a route element in
+// src/app/routes.tsx, replacing its <AdminSectionPlaceholder>.
+import { RouterProvider } from "react-router-dom";
+import { AdminAuthProvider } from "./auth/AdminAuthContext";
+import { router } from "./app/routes";
+
 export default function App() {
-  return <div>Soccernity Admin — scaffold. See CLAUDE.md.</div>;
+  return (
+    <AdminAuthProvider>
+      <RouterProvider router={router} />
+    </AdminAuthProvider>
+  );
 }

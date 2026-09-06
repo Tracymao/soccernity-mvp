@@ -3,7 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Soccernity</title>
+    <title>Soccernity Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- The Admin Shell Figma design (node 6014:12948) is set in Montserrat
+         throughout. apps/web relies on a system-installed Montserrat and
+         falls back silently; the Admin Console loads it explicitly so the
+         internal ops tool renders as designed regardless of the operator's
+         OS. -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
     <div id="root"></div>
