@@ -150,10 +150,13 @@ describe("Header -- logged in (desktop)", () => {
     expect(within(menu).getByRole("menuitem", { name: "Profile" }).getAttribute("href")).toBe(
       "/profile",
     );
-    // Notification + Settings have no route yet -> disabled, not links.
+    // Notification has no route yet -> disabled, not a link.
     expect(within(menu).queryByRole("link", { name: "Notification" })).toBeNull();
     expect(within(menu).getByText("Notification").getAttribute("aria-disabled")).toBe("true");
-    expect(within(menu).getByText("Settings").getAttribute("aria-disabled")).toBe("true");
+    // Settings resolves as of sprint-2/privacy-settings-to-code (-> /settings).
+    expect(within(menu).getByRole("menuitem", { name: "Settings" }).getAttribute("href")).toBe(
+      "/settings",
+    );
     expect(within(menu).getByRole("menuitem", { name: "Log out" })).not.toBeNull();
     expect(screen.queryByRole("dialog", { name: "Navigation" })).toBeNull();
   });
@@ -194,9 +197,10 @@ describe("Header -- logged in (mobile)", () => {
 
     expect(within(nav).getByRole("link", { name: "Clubs" }).getAttribute("href")).toBe("/clubs");
     expect(within(nav).getByRole("link", { name: "Blog" }).getAttribute("href")).toBe("/blog");
-    // Messages / Notifications / Settings -- no route yet (Decision Log #166).
+    // Messages / Notifications -- no route yet (Decision Log #166).
     expect(within(nav).queryByRole("link", { name: "Messages" })).toBeNull();
-    expect(within(nav).getByText("Settings").getAttribute("aria-disabled")).toBe("true");
+    // Settings resolves as of sprint-2/privacy-settings-to-code (-> /settings).
+    expect(within(nav).getByRole("link", { name: "Settings" }).getAttribute("href")).toBe("/settings");
     expect(within(drawer).getByRole("button", { name: "Log out" })).not.toBeNull();
   });
 

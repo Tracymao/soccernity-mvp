@@ -72,7 +72,12 @@ export const drawerNavItems: DrawerNavItem[] = [
   { label: "Messages", to: "/messages", available: false },
   { label: "Notifications", to: "/notifications", available: false },
   { label: "Profile", to: "/profile" },
-  { label: "Settings", to: "/settings", available: false },
+  // /settings resolves (redirects to /settings/privacy, the one built
+  // Settings screen) as of sprint-2/privacy-settings-to-code. Only the
+  // Privacy category is real — the others render disabled on the page —
+  // but the account still has a reachable Settings entry now rather than
+  // an orphan page (the gap Decision Log #156 flagged for Clubs).
+  { label: "Settings", to: "/settings" },
 ];
 
 // Desktop account dropdown -- from the Figma "Dropdown menu/notification
@@ -84,5 +89,5 @@ export const drawerNavItems: DrawerNavItem[] = [
 export const accountMenuItems: DrawerNavItem[] = [
   { label: "Profile", to: "/profile" },
   { label: "Notification", to: "/notifications", available: false },
-  { label: "Settings", to: "/settings", available: false },
+  { label: "Settings", to: "/settings" },
 ];

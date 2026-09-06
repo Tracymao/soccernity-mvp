@@ -40,7 +40,11 @@ const SOCIALS: { label: string; icon: string }[] = [
   { label: "LinkedIn", icon: socialLinkedin },
 ];
 
-const LEGAL_LINKS = ["Terms of Service", "Privacy Policy", "Privacy Settings", "Contact Us"];
+// "Privacy Settings" was removed from the canonical Figma footer file-wide
+// in Decision Log #222 (founder: "remove, don't relink") -- dropped here
+// too, in sprint-2/privacy-settings-to-code, to keep the code footer in
+// step. Result everywhere: Terms of Service · Privacy Policy · Contact Us.
+const LEGAL_LINKS = ["Terms of Service", "Privacy Policy", "Contact Us"];
 
 export default function Footer() {
   return (

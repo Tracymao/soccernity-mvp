@@ -1,0 +1,256 @@
+/* Privacy Settings (PrivacySettingsPage.tsx). Figma source: frames
+ * 6178:14437 (desktop) / 6185:14547 (mobile), "Soccernity-MVP"
+ * (weZWWqggy9j13eX8bhFgs6), the CONSOLIDATED Privacy page from
+ * sprint-2/auth-navbar-delete-account-privacy-consolidation (Decision
+ * Log #222).
+ *
+ * Colour values reference the app-wide --sn-* custom properties from
+ * src/theme/applyTheme.ts — do not hardcode hex. Light theme, the app's
+ * single active mode, matching ClubsPage.css / ProfilePage.css. The
+ * design's "Top Bar — Soccernity" is NOT reproduced — AppShell already
+ * renders the shared site Header, same as every other routed page. */
+
+.privacy-page {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* --- status messages (shared shape with Clubs / Profile) ----------- */
+
+.privacy-status {
+  font: 400 15px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  padding: 48px 0;
+  text-align: center;
+  margin: 0;
+}
+
+.privacy-status--error {
+  color: var(--sn-brand-navy);
+}
+
+/* --- head: "Settings" + category rail ----------------------------- */
+
+.privacy-page__head {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.privacy-page__heading {
+  font: 700 30px/1.3 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.privacy-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.privacy-cats__item {
+  font: 400 14px "Montserrat", "Inter", sans-serif;
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: var(--sn-text-primary);
+}
+
+.privacy-cats__item--current {
+  background: var(--sn-brand-navy);
+  /* on-navy: no --sn-text-on-navy token exists — same disclosed
+     exception as BanterPage.css / HomePage.css. */
+  color: #fff;
+}
+
+.privacy-cats__item--disabled {
+  color: var(--sn-text-secondary);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* --- Privacy section --------------------------------------------- */
+
+.privacy-section {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.privacy-section__head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.privacy-section__title {
+  font: 700 18px/1.3 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.privacy-section__subtitle {
+  font: 400 14px/1.5 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+/* --- rows ------------------------------------------------------- */
+
+.privacy-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+.privacy-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.privacy-row__icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--sn-brand-navy);
+}
+
+.privacy-row--disabled .privacy-row__icon,
+.privacy-row--disabled .privacy-row__title,
+.privacy-row--disabled .privacy-row__desc {
+  color: var(--sn-text-secondary);
+}
+
+.privacy-row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.privacy-row__title {
+  font: 600 18px/1.3 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.privacy-row__desc {
+  font: 400 14px/1.5 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.privacy-row__note {
+  font: 400 13px/1.5 "Inter", sans-serif;
+  font-style: italic;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.privacy-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 2px;
+}
+
+.privacy-row__link {
+  font: 600 13px "Montserrat", "Inter", sans-serif;
+  color: var(--sn-brand-green);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.privacy-row__link--disabled {
+  color: var(--sn-text-secondary);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.privacy-row__chevron {
+  flex-shrink: 0;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--sn-text-secondary);
+  align-self: center;
+}
+
+/* --- pills ---------------------------------------------------- */
+
+.privacy-pill {
+  font: 600 11px "Montserrat", "Inter", sans-serif;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--sn-green-tint-12);
+  color: var(--sn-text-secondary);
+  white-space: nowrap;
+}
+
+.privacy-pill--approved {
+  background: var(--sn-brand-green);
+  /* The Figma frame uses white here; the app's own convention (see
+     ClubJoinButton) is navy-on-green, which also passes AA — followed
+     here, flagged as a divergence from the frame in this PR's report. */
+  color: var(--sn-text-on-green);
+}
+
+/* --- visual (non-functional) toggle -------------------------- */
+
+.privacy-toggle {
+  flex-shrink: 0;
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--sn-icon-inactive);
+  position: relative;
+  align-self: center;
+  opacity: 0.6;
+}
+
+.privacy-toggle--on {
+  background: var(--sn-brand-green);
+}
+
+.privacy-toggle__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--sn-brand-navy);
+}
+
+.privacy-toggle--on .privacy-toggle__knob {
+  left: auto;
+  right: 2px;
+}
+
+/* --- narrow screens ----------------------------------------- */
+
+@media (max-width: 560px) {
+  .privacy-rows {
+    gap: 28px;
+  }
+
+  .privacy-row__title {
+    font-size: 16px;
+  }
+}
