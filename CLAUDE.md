@@ -6671,6 +6671,31 @@ Full reasoning for every choice above: Build Plan Section 5.
     browser/Playwright check available — same ceiling as every `apps/web`
     figma-to-code PR. `apps/admin`'s eslintrc was updated to match
     `apps/web`'s (`@typescript-eslint/no-unused-vars`).
+  - PR #192 opened, not merged — founder's call.
+  - **`sprint-2/admin-profile-and-password` (PR 2, figma-design-system,
+    2026-09-06 — stacks on PR 1, reviewer merges #192 first) converts the
+    editable Admin Profile screen (Figma `5403:7327`) + Change Password —
+    the ONLY Admin Console area with real end-to-end backend
+    (`GET/PATCH /admin/profile` + `POST /admin/auth/change-password`,
+    Decision Log #54).** `/profile` now renders the real page (was a
+    placeholder). View mode = Full name / Email / Role / Phone read-only +
+    Edit Profile / Change Password actions. **Edit mode edits fullName +
+    phone only** — Email and Role render shown-but-locked with a disclosed
+    "changed by a superadmin, not here" note (the `PATCH /admin/profile`
+    allowlist). **Change Password has no Figma frame** (the screen only
+    has the button) — built plainly as an inline panel with client-side
+    match + `>=8` checks; success copy states the backend's real
+    behaviour (every other admin session revoked). `AdminAuthContext`
+    gained `applyProfile()` so a successful edit updates the shell's
+    identity block without a refetch. **Decision Log #232** records the 6
+    judgment calls (change-password plain; edit locked email/role;
+    role display-label map `editor|moderator|superadmin` →
+    Editor/Moderator/Super Admin; the Figma 100px value-box height
+    softened to a min-height; initials avatar not the Figma photo;
+    `applyProfile`). Verification: apps/admin vitest **8 files / 35
+    tests, 0 failures** (`AdminProfilePage.test.tsx` +7); tsc / lint /
+    build clean; dev-server smoke served `/profile`. Full detail:
+    `docs/sprint-2-admin-profile-and-password-report.md`.
   - PR opened, not merged — founder's call.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and

@@ -42,6 +42,9 @@ interface AdminAuthContextValue {
   admin: AdminSummary | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Adopt a fresh AdminSummary (e.g. after PATCH /admin/profile) so the
+   *  shell's identity block reflects it without a refetch. */
+  applyProfile: (profile: AdminSummary) => void;
 }
 
 const AdminAuthContext = createContext<AdminAuthContextValue | null>(null);
@@ -121,9 +124,13 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     setStatus("unauthenticated");
   }, []);
 
+  const applyProfile = useCallback((profile: AdminSummary) => {
+    setAdmin(profile);
+  }, []);
+
   const value = useMemo<AdminAuthContextValue>(
-    () => ({ status, admin, login, logout }),
-    [status, admin, login, logout],
+    () => ({ status, admin, login, logout, applyProfile }),
+    [status, admin, login, logout, applyProfile],
   );
 
   return <AdminAuthContext.Provider value={value}>{children}</AdminAuthContext.Provider>;
