@@ -6427,7 +6427,10 @@ Full reasoning for every choice above: Build Plan Section 5.
     (`5545:7394`) carry the byte-identical #209 footer clone but are
     Contest-section frames, not Leaderboard-family — founder to confirm
     whether the reversal extends to them (every other Contest-section
-    frame is already footer-free).
+    frame is already footer-free). **RESOLVED — see
+    `sprint-2/contest-weekly-results-footer-removal` below (Decision Log
+    #229): the founder confirmed it extends; both footers are now
+    removed.**
   - **`apps/web` consequence — flagged, out of scope for this Figma
     PR:** Decision Log #213 put `LeaderboardPage.tsx` under `FooterLayout`
     *because* its Figma frame carried the footer. That's now false — a
@@ -6513,6 +6516,36 @@ Full reasoning for every choice above: Build Plan Section 5.
     `/community`, and an unmatched path all HTTP 200. No real
     browser/Playwright check available — same ceiling as every prior
     `apps/web` PR.
+  - Not merged — founder's call after review.
+- **`sprint-2/contest-weekly-results-footer-removal` (figma-design-system,
+  2026-09-06) closes the one gap PR #187 (Decision Log #227) flagged and
+  left open — Figma design only, no app/backend code.** Report:
+  `docs/sprint-2-contest-weekly-results-footer-removal-report.md`.
+  Decision Log **#229** added; forward-pointer on **#227**.
+  - PR #187 removed the site footer from all 20 `Leaderboard —` prefixed
+    frames but deliberately left `Contest — Weekly Results (Top 3)`
+    desktop (`5528:7260`) + mobile (`5545:7394`) — their names start
+    `Contest —`, outside that PR's name filter — and flagged them for
+    founder confirmation. **Founder confirmed the reversal extends to
+    them**: they are a Leaderboard Contest-tab display state (weekly
+    top-3, winners advance to the Week 4 Level 1 final), not the
+    standalone Contest details/task page family.
+  - Both footer clones removed (`6143:1648` desktop / `6143:1724`
+    mobile, 106 descendant nodes, the same `Footer (cloned from Pass 1
+    5191:6735 …)` template). Both parents are `VERTICAL` auto-layout
+    `primaryAxisSizingMode=AUTO`, so each frame auto-shrank to
+    content-bottom — 951→637 desktop, 1652→1234 mobile — no manual
+    resize, no orphaned gap, screenshot-verified before/after.
+    Page-wide reaction scan clean. `Table Footer — Pagination`
+    (`5174:6734` / `5540:7480`) not touched.
+  - **Final sweep: 0 of the 26 Leaderboard/Contest-family frames on page
+    `0:1` still carry a site footer.** The `carries the site footer`
+    page set is unchanged — Home, Sports Hub, Blog, Article Detail, and
+    the 404 page (`FooterLayout`); the Leaderboard/Contest family is
+    fully footer-free.
+  - No code change needed — `LeaderboardPage.tsx` was already moved out
+    of `FooterLayout` by PR #188 (Decision Log #228); no `apps/web`
+    route corresponds to this Contest-tab display state.
   - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
