@@ -389,4 +389,117 @@ describe('Contest e2e: the weekly-progression state machine + points ledger', ()
       expect(await totalPoints(fan.userId)).toBe(2); // like once + follow once, never re-awarded
     });
   });
+
+  // ------------------------------------------------------------------
+  // Admin read endpoints — sprint-2/admin-contest-read-endpoints
+  // (Decision Log #241, Task 1 of 3 resolving Decision Log #239).
+  //
+  // The core operational loop: an admin cannot judge a week without
+  // first SEEING which entries exist and their ids. This drives a real
+  // cycle: create -> real user entries via real POST /contest/entries
+  // -> GET /admin/contest/cycles/:id surfaces the real entryIds ->
+  // judge with those ids -> the read now shows winner positions ->
+  // GET /admin/contest/current tracks the phase. Asserted against the
+  // real Postgres tables, not just the HTTP response echo.
+  // ------------------------------------------------------------------
+  describe('admin read endpoints', () => {
+    it('surfaces real entryIds for judging, then reflects winner positions; /current tracks the phase; /cycles lists history', async () => {
+      const admin = await adminToken();
+      const a = await createUser('adm-a');
+      const b = await createUser('adm-b');
+      const prisma = getTestPrismaClient();
+
+      const cycleId: string = (
+        await request(app.getHttpServer()).post('/admin/contest/cycles').set(auth(admin)).send(cyclePayload()).expect(201)
+      ).body.cycle.id;
+
+      // two real users enter week 1 through the real user endpoint
+      const postA = await seedPost(a.userId);
+      const postB = await seedPost(b.userId);
+      await request(app.getHttpServer()).post('/contest/entries').set(auth(a.accessToken)).send({ postId: postA }).expect(201);
+      await request(app.getHttpServer()).post('/contest/entries').set(auth(b.accessToken)).send({ postId: postB }).expect(201);
+
+      // ---- GET /admin/contest/cycles/:id shows the entries + real ids
+      const detail = await request(app.getHttpServer())
+        .get(`/admin/contest/cycles/${cycleId}`)
+        .set(auth(admin))
+        .expect(200);
+      const week1 = detail.body.rounds.find((r: { weekNumber: number }) => r.weekNumber === 1);
+      expect(week1.entryCount).toBe(2);
+      expect(week1.entries).toHaveLength(2);
+      const entryA = week1.entries.find((e: { entrant: { userId: string } }) => e.entrant.userId === a.userId);
+      const entryB = week1.entries.find((e: { entrant: { userId: string } }) => e.entrant.userId === b.userId);
+      expect(entryA.entrant.displayName).toBe('Contest adm-a');
+      expect(entryA.post.id).toBe(postA);
+      expect(entryA.post).toHaveProperty('contentText');
+      expect(entryA.post).toHaveProperty('mediaUrls');
+      expect(entryA.position).toBeNull();
+
+      // the entryIds are real: they match the real ContestEntry rows
+      const realEntries = await prisma.contestEntry.findMany({ where: { cycleId }, select: { id: true, userId: true } });
+      expect(new Set(realEntries.map((e) => e.id))).toEqual(new Set([entryA.entryId, entryB.entryId]));
+
+      // ---- judge week 1 using the ids the read just gave us
+      await request(app.getHttpServer())
+        .post(`/admin/contest/cycles/${cycleId}/rounds/1/results`)
+        .set(auth(admin))
+        .send({ winners: [{ entryId: entryA.entryId, position: 1 }, { entryId: entryB.entryId, position: 2 }] })
+        .expect(201);
+
+      // ---- the read now shows the winner-position join
+      const afterJudge = await request(app.getHttpServer())
+        .get(`/admin/contest/cycles/${cycleId}`)
+        .set(auth(admin))
+        .expect(200);
+      const judgedWeek1 = afterJudge.body.rounds.find((r: { weekNumber: number }) => r.weekNumber === 1);
+      expect(judgedWeek1.status).toBe('judged');
+      const positions = Object.fromEntries(
+        judgedWeek1.entries.map((e: { entryId: string; position: number | null }) => [e.entryId, e.position]),
+      );
+      expect(positions[entryA.entryId]).toBe(1);
+      expect(positions[entryB.entryId]).toBe(2);
+      // matches the real ContestRoundWinner rows
+      const realWinners = await prisma.contestRoundWinner.findMany({
+        where: { entry: { cycleId } },
+        select: { entryId: true, position: true },
+      });
+      expect(realWinners).toEqual(
+        expect.arrayContaining([
+          { entryId: entryA.entryId, position: 1 },
+          { entryId: entryB.entryId, position: 2 },
+        ]),
+      );
+
+      // ---- GET /admin/contest/current tracks the running cycle + phase
+      const current = await request(app.getHttpServer()).get('/admin/contest/current').set(auth(admin)).expect(200);
+      expect(current.body.cycle.id).toBe(cycleId);
+      expect(current.body.phase).toBe('week_1');
+      expect(current.body.rounds.find((r: { weekNumber: number }) => r.weekNumber === 1).entries).toHaveLength(2);
+
+      // ---- GET /admin/contest/cycles lists it (history), newest first
+      const list = await request(app.getHttpServer()).get('/admin/contest/cycles').set(auth(admin)).expect(200);
+      expect(list.body.items[0].cycle.id).toBe(cycleId);
+      expect(list.body.items[0].phase).toBe('week_1');
+      expect(list.body.items[0].rounds.find((r: { weekNumber: number }) => r.weekNumber === 1).entryCount).toBe(2);
+      // the list is a short summary — no per-entry array
+      expect(list.body.items[0].rounds[0]).not.toHaveProperty('entries');
+    });
+
+    it('404 for an unknown cycle id; all-null /current when no cycle exists; a USER token is rejected', async () => {
+      const admin = await adminToken();
+      const user = await createUser('adm-authcheck');
+
+      await request(app.getHttpServer())
+        .get('/admin/contest/cycles/00000000-0000-4000-8000-000000000000')
+        .set(auth(admin))
+        .expect(404);
+
+      const current = await request(app.getHttpServer()).get('/admin/contest/current').set(auth(admin)).expect(200);
+      expect(current.body).toEqual({ cycle: null, phase: null, rounds: [], weeklyWinners: [], monthlyStandings: [] });
+
+      // a valid USER access token cannot reach the admin read surface
+      await request(app.getHttpServer()).get('/admin/contest/cycles').set(auth(user.accessToken)).expect(401);
+      await request(app.getHttpServer()).get('/admin/contest/current').expect(401);
+    });
+  });
 });

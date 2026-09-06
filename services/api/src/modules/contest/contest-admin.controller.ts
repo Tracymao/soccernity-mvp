@@ -1,4 +1,4 @@
-import { Body, Controller, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
 import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
 import { ContestService } from './contest.service';
 import { CreateCycleDto } from './dto/create-cycle.dto';
@@ -25,6 +25,34 @@ import { RoundResultsDto } from './dto/round-results.dto';
 @UseGuards(AdminJwtAuthGuard)
 export class ContestAdminController {
   constructor(private readonly contestService: ContestService) {}
+
+  // -----------------------------------------------------------------
+  // Read surface — sprint-2/admin-contest-read-endpoints (Decision Log
+  // #241, Task 1 of 3 resolving Decision Log #239). Nothing returned
+  // the entry/user ids the WRITE endpoints below consume; an admin
+  // could not see the running cycle, its phase, who entered a round, or
+  // what each entrant submitted. These three GETs close that.
+  // AdminJwtAuthGuard is inherited from the class decorator.
+  //
+  // `current` is declared before `cycles/:id` so Nest never matches the
+  // literal "current" segment against the `:id` param (same ordering
+  // discipline ContestController uses for its own routes).
+  // -----------------------------------------------------------------
+
+  @Get('cycles')
+  async listCycles() {
+    return this.contestService.listCyclesForAdmin();
+  }
+
+  @Get('current')
+  async currentCycle() {
+    return this.contestService.getCurrentContestForAdmin();
+  }
+
+  @Get('cycles/:id')
+  async cycleDetail(@Param('id') id: string) {
+    return this.contestService.getCycleByIdForAdmin(id);
+  }
 
   @Post('cycles')
   async createCycle(@Body() dto: CreateCycleDto) {

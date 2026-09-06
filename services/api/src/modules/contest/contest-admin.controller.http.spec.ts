@@ -1,4 +1,10 @@
-import { ConflictException, ExecutionContext, INestApplication, ValidationPipe } from '@nestjs/common';
+import {
+  ConflictException,
+  ExecutionContext,
+  INestApplication,
+  NotFoundException,
+  ValidationPipe,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
@@ -12,6 +18,9 @@ describe('ContestAdminController (HTTP layer)', () => {
     recordRoundResults: jest.fn(),
     openFinal: jest.fn(),
     crownCycle: jest.fn(),
+    listCyclesForAdmin: jest.fn(),
+    getCycleByIdForAdmin: jest.fn(),
+    getCurrentContestForAdmin: jest.fn(),
   };
 
   beforeAll(async () => {
@@ -38,6 +47,34 @@ describe('ContestAdminController (HTTP layer)', () => {
   });
 
   afterEach(() => jest.clearAllMocks());
+
+  // ---- read surface (sprint-2/admin-contest-read-endpoints, DL #241) ----
+
+  it('GET /admin/contest/cycles returns the service list', async () => {
+    contestService.listCyclesForAdmin.mockResolvedValue({ items: [{ cycle: { id: 'cyc-1' }, phase: 'week_1' }] });
+    const res = await request(app.getHttpServer()).get('/admin/contest/cycles').expect(200);
+    expect(res.body.items).toHaveLength(1);
+    expect(contestService.listCyclesForAdmin).toHaveBeenCalledTimes(1);
+  });
+
+  it('GET /admin/contest/current returns the service response, no :id collision', async () => {
+    contestService.getCurrentContestForAdmin.mockResolvedValue({ cycle: null, phase: null, rounds: [] });
+    await request(app.getHttpServer()).get('/admin/contest/current').expect(200);
+    expect(contestService.getCurrentContestForAdmin).toHaveBeenCalledTimes(1);
+    expect(contestService.getCycleByIdForAdmin).not.toHaveBeenCalled();
+  });
+
+  it('GET /admin/contest/cycles/:id forwards the id and does not hit the list handler', async () => {
+    contestService.getCycleByIdForAdmin.mockResolvedValue({ cycle: { id: 'cyc-7' }, phase: 'crowned', rounds: [] });
+    await request(app.getHttpServer()).get('/admin/contest/cycles/cyc-7').expect(200);
+    expect(contestService.getCycleByIdForAdmin).toHaveBeenCalledWith('cyc-7');
+    expect(contestService.listCyclesForAdmin).not.toHaveBeenCalled();
+  });
+
+  it('GET /admin/contest/cycles/:id propagates a 404 from the service', async () => {
+    contestService.getCycleByIdForAdmin.mockRejectedValue(new NotFoundException('Contest cycle not found'));
+    await request(app.getHttpServer()).get('/admin/contest/cycles/missing').expect(404);
+  });
 
   it('POST /admin/contest/cycles validates the DTO (missing title -> 400)', async () => {
     await request(app.getHttpServer())
@@ -105,5 +142,48 @@ describe('ContestAdminController (HTTP layer)', () => {
     expect(contestService.crownCycle).toHaveBeenCalledWith('cyc-1', {
       standings: [{ userId: '11111111-1111-4111-8111-111111111111', position: 1 }],
     });
+  });
+});
+
+// The read routes are AdminJwtAuthGuard-protected via the class decorator
+// — proven here by denying the guard and asserting every GET is 403,
+// service untouched (sprint-2/admin-contest-read-endpoints, DL #241).
+describe('ContestAdminController — read routes are guarded', () => {
+  let app: INestApplication;
+  const contestService = {
+    listCyclesForAdmin: jest.fn(),
+    getCycleByIdForAdmin: jest.fn(),
+    getCurrentContestForAdmin: jest.fn(),
+    createCycle: jest.fn(),
+    recordRoundResults: jest.fn(),
+    openFinal: jest.fn(),
+    crownCycle: jest.fn(),
+  };
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({
+      controllers: [ContestAdminController],
+      providers: [{ provide: ContestService, useValue: contestService }],
+    })
+      .overrideGuard(AdminJwtAuthGuard)
+      .useValue({ canActivate: () => false })
+      .compile();
+    app = moduleRef.createNestApplication();
+    await app.init();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it.each([
+    ['/admin/contest/cycles'],
+    ['/admin/contest/current'],
+    ['/admin/contest/cycles/cyc-1'],
+  ])('GET %s is 403 when the admin guard denies, service never called', async (path) => {
+    await request(app.getHttpServer()).get(path).expect(403);
+    expect(contestService.listCyclesForAdmin).not.toHaveBeenCalled();
+    expect(contestService.getCycleByIdForAdmin).not.toHaveBeenCalled();
+    expect(contestService.getCurrentContestForAdmin).not.toHaveBeenCalled();
   });
 });

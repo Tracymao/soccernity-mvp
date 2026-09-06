@@ -119,6 +119,60 @@ POST /admin/contest/cycles/:id/crown              'final' → 'completed', phase
   cycle (Decision Log #61: the finalists ARE the weekly winners); awards
   `CONTEST_MONTHLY_CROWN_POINTS[position]`.
 
+### Admin read surface — `sprint-2/admin-contest-read-endpoints` (Decision Log #241, Task 1 of 3 resolving Decision Log #239)
+
+The four transitions above take `entryId` / `userId` arrays, but nothing
+ever *returned* those ids — there was no admin read endpoint at all. An
+admin could not see which cycle was running, its phase, who entered a
+round, or what post/video each entrant submitted, so judging a week from
+a UI was impossible. Three `AdminJwtAuthGuard` GETs on the same
+controller close that (a User access token cannot reach them):
+
+```
+GET /admin/contest/cycles        every cycle, newest first (by createdAt) — "cycle history"
+GET /admin/contest/current       the running cycle (active|final), else the most-recently completed one
+GET /admin/contest/cycles/:id    one cycle in full incl. every round's entries — 404 if unknown
+```
+
+- **`GET /admin/contest/cycles`** → `{ items: AdminContestCycleListItem[] }`.
+  Each item is the same shape as the user-side `ContestCycleDetailResponse`
+  (reuses `derivePhase` + the `to*Summary` helpers) plus a per-round
+  `entryCount` (a `_count`, no rows pulled). **No pagination** — a monthly
+  cycle is ~12 rows/year, keyset paging would be premature; if it's ever
+  needed, follow the `feed`/`contest` cursor conventions. It is a *short*
+  summary: no per-entry `entries` array (that is the detail endpoint's job).
+- **`GET /admin/contest/cycles/:id`** → `AdminContestCycleDetailResponse` —
+  everything `ContestCycleDetailResponse` returns, plus for **each round**
+  its full `entries` array: `entryId`, `submittedAt`, `entrant { userId,
+  displayName }`, `post { id, contentText, mediaUrls, createdAt, likeCount,
+  commentCount }` (the same narrow set `feed`'s `POST_SELECT` exposes — the
+  real `Post` field is `contentText`, not `body`), and `position` (this
+  entry's `ContestRoundWinner.position` if it placed, else `null` — the
+  winner-position join via the `ContestEntry.winner` back-relation). 404
+  for an unknown id, matching the user-side `getCycleById`.
+- **`GET /admin/contest/current`** → `AdminCurrentContestResponse` — the
+  same detail shape, resolved with the identical fallback logic as the
+  user-side `getCurrentContest` (running cycle first, then most-recently
+  `completed`). `cycle`/`phase` are `null` and the arrays empty **only**
+  when no `ContestCycle` has ever been created.
+
+Implementation reuses `CYCLE_GRAPH_INCLUDE`: `ADMIN_CYCLE_LIST_INCLUDE`
+spreads it and adds `rounds._count.entries`; `ADMIN_CYCLE_DETAIL_INCLUDE`
+spreads it and adds `rounds.entries` with the entrant / post / winner
+sub-selects. Nothing about phase derivation or summary shaping is
+reinvented.
+
+**Safeguarding — confirmed in code, no filter added.** A restricted-pending
+minor can never appear in these reads: a `ContestEntry.userId` is always
+its `Post.authorId`, `POST /posts` is `GuardianConsentGuard`-gated, and
+`POST /contest/entries` is too — so such a minor has no `Post` and hence
+no `ContestEntry`. `Guardian.consentStatus` only ever moves
+`pending → confirmed` (grep-confirmed: the sole write is in
+`guardian-consent.service.ts`), and `dateOfBirth`/`isMinor` are immutable
+after registration, so an entry valid at submission can't retroactively
+become a restricted minor's. No real path exists to filter, so per the
+task brief none was added.
+
 ## Points wiring
 
 `ContestService` calls `awardPoints` (from `../points/points.util`, a

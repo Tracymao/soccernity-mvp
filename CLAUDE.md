@@ -6806,6 +6806,54 @@ Full reasoning for every choice above: Build Plan Section 5.
       is Sprint 5 / Section 4.8 work, each stub PR swaps to real data
       when its endpoints land.
   - PR opened, not merged — founder's call.
+- **`sprint-2/admin-contest-read-endpoints` (backend-api, 2026-09-06)
+  begins resolving Decision Log #239 — Task 1 of 3 (backend read
+  endpoints). `services/api` only, zero `schema.prisma` diff (plain
+  reads, no migration), `User`/`Guardian` safeguarding fields
+  untouched.** Report:
+  `docs/sprint-2-admin-contest-read-endpoints-report.md`; Decision Log
+  **#241** added, forward-pointer appended to **#239** (which stays
+  Open). Three `AdminJwtAuthGuard` GETs on the existing
+  `ContestAdminController` — the 4 write endpoints consumed
+  `entryId`/`userId` arrays but nothing ever returned them, so judging a
+  week from a UI was impossible:
+  - `GET /admin/contest/cycles` — every cycle, newest first by
+    `createdAt`. **Plain list, no pagination** (~12 rows/year; documented
+    judgment call). A *short* summary: per-round `entryCount`, no
+    per-entry array.
+  - `GET /admin/contest/cycles/:id` — everything the user-side
+    `ContestCycleDetailResponse` returns PLUS each round's full
+    `entries[]`: `entryId`, `submittedAt`, `entrant {userId,
+    displayName}`, `post {id, contentText, mediaUrls, createdAt,
+    likeCount, commentCount}` (matches `feed`'s `POST_SELECT` — the real
+    `Post` field is `contentText`, not the brief's `body`, flagged), and
+    `position: number | null` via the `ContestEntry.winner`
+    back-relation. 404 for an unknown id.
+  - `GET /admin/contest/current` — same detail shape, running cycle then
+    most-recently `completed`; all-null only when no cycle ever created.
+  - Reuses `CYCLE_GRAPH_INCLUDE` + `derivePhase` + the `to*Summary`
+    helpers (`ADMIN_CYCLE_LIST_INCLUDE` / `ADMIN_CYCLE_DETAIL_INCLUDE`
+    spread it, add `rounds._count.entries` / `rounds.entries`).
+  - **Safeguarding: confirmed in code, no minor filter added** — a
+    restricted-pending minor can't create a `Post` or a `ContestEntry`
+    (both `GuardianConsentGuard`-gated), `Guardian.consentStatus` only
+    ever moves `pending → confirmed` (grep-confirmed, no reversal path),
+    `dateOfBirth`/`isMinor` immutable post-registration. No real path to
+    filter.
+  - Verification: `nest build` + `npm run lint` clean; mocked suite **46
+    suites / 584 → 598 tests, 0 failures**; e2e suite **11 suites / 81 →
+    83 tests, 0 failures** (`test/contest.e2e-spec.ts` +2 — drives
+    create → real `POST /contest/entries` → the read surfaces real
+    `entryId`s asserted against real `ContestEntry` rows → judge with
+    those ids → the read shows winner positions asserted against real
+    `ContestRoundWinner` rows → `/current` tracks phase → `/cycles`
+    lists history).
+  - **Tasks 2 (figma-screen-builder — cycle/round/judge/final/crown
+    workflow screens against these response shapes) and 3 (figma-to-code
+    — wire `apps/admin`'s Contest section to the read + the 4 write
+    endpoints) are next.** `apps/admin`'s Contest section stays a
+    disclosed stub until Task 3.
+  - PR opened, not merged — founder's call.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
