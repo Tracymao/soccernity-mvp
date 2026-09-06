@@ -5585,16 +5585,17 @@ Full reasoning for every choice above: Build Plan Section 5.
       live).
     - **`FooterLayout`** (`src/layout/FooterLayout.tsx`, a pathless
       layout route nested under `AppShell`) — `Header` + content +
-      shared `<Footer />`. Home, Sports Hub, Blog, Article
-      Detail (their canonical Figma frames carry the standardized footer
-      — Decision Log #209/#210). This is the `AuthChrome` split's mirror,
-      one layer deeper. **Leaderboard was removed from this set** — the
-      founder decided the Leaderboard must NOT carry the site footer, and
-      the footer was removed from all 20 Leaderboard-family Figma frames
-      (Decision Log #227); `LeaderboardPage.tsx` still sits under
-      `FooterLayout` in code today and needs moving to a direct `AppShell`
-      child in a `figma-to-code` follow-up so the shipped page stops
-      rendering `<Footer/>`.
+      shared `<Footer />`. **Now exactly: Home, Sports Hub, Blog, Article
+      Detail, and the 404 page** (Decision Log #209/#210/#213 for the
+      first four; #228 added the 404 — standard error-page recovery
+      pattern). This is the `AuthChrome` split's mirror, one layer deeper.
+      **Leaderboard and Contest are NOT in this set** (Decision Log
+      #227/#228): the founder decided the Leaderboard must not carry the
+      site footer (footer also removed from all 20 Leaderboard-family
+      Figma frames), and the Contest details frame (`2155:1062`) never
+      had one even though `FooterLayout`'s old comment claimed it did —
+      both are now direct `AppShell` children (`sprint-2/fix-footer-placement-and-contest-rules-modal`,
+      PR N).
   - **The founder decided the footer belongs in a shared component, not
     copy-pasted per page.** A live audit found this wasn't just cleanup:
     only `HomePage.tsx` had a footer (written inline), yet Sports Hub /
@@ -6459,6 +6460,59 @@ Full reasoning for every choice above: Build Plan Section 5.
     `brand/green-tint-28` / 0 new colours on every authored node.
     Prototype wiring: link → NAVIGATE → modal; modal Close + Scrim →
     NAVIGATE → back to Contest Details.
+  - Merged as PR #187.
+- **`sprint-2/fix-footer-placement-and-contest-rules-modal` (figma-to-code,
+  2026-09-06) — `apps/web` only, no `services/api`. Three site-footer
+  route-placement fixes + wiring the Contest Rules modal.** Report:
+  `docs/sprint-2-fix-footer-placement-and-contest-rules-modal-report.md`.
+  Decision Log **#228** added; forward-pointers on **#227** and **#213**.
+  - **`router.tsx`:** `contest` and `leaderboard` moved OUT of the
+    `FooterLayout` pathless route to direct `AppShell` children (alongside
+    community/banter/clubs) — they now render with **no site footer**.
+    `/contest` was rendering `<Footer/>` incorrectly (its Figma frame
+    `2155:1062` has none, and `FooterLayout.tsx`'s own comment documented
+    the opposite); `/leaderboard` per the founder decision in Decision Log
+    #227. The **`{ path: "*" }` 404 route moved INTO `FooterLayout`** so
+    `NotFoundPage` renders with the footer (error-page recovery pattern).
+    React Router ranks by specificity across the whole config regardless
+    of nesting, so moving the splat changes no matching — proven by a new
+    `src/app/router.test.tsx` that mounts the **real** route tree via
+    `createMemoryRouter(routes)`: an unmatched path still 404s (now with
+    footer), `/` and `/sports-hub` still show the footer, `/leaderboard`
+    and `/contest` render their no-session prompt with no footer,
+    `/community` still resolves with no footer. `routes` is now exported
+    separately from `router` for that test.
+  - **`FooterLayout.tsx`'s header comment rewritten** to the corrected
+    list (Home, Sports Hub, Blog, Article Detail, 404 — Leaderboard and
+    Contest removed). `LeaderboardPage.tsx` / `ContestPage.tsx` confirmed
+    to carry **no** hardcoded footer-adjacent spacing or layout assumption
+    (`.lb-page` / `.contest-page` are flex columns with `gap`; the
+    `.lb-contest__footer` class and a `/* footer bits */` CSS comment are
+    internal page bits, not the site footer — left as-is for a minimal
+    diff).
+  - **Contest Rules modal wired.** New `src/pages/contest/ContestRulesModal.tsx`
+    (+ `.css`) follows `EditProfileModal.tsx`'s overlay + card pattern
+    (scrim `onClick` to close, card `stopPropagation`) plus `role="dialog"`
+    / `aria-modal` / `aria-labelledby` / Escape-to-close / focus the close
+    button on open. Body renders the **exact Figma placeholder** — a
+    dashed `--sn-brand-navy` border on `--sn-green-tint-12` containing
+    `[PLACEHOLDER — founder to supply final Contest Rules copy before this
+    ships]` + the "no legal-counsel review track" sub-line + the scroll
+    caption. **No real rules copy was written and the "founder to supply"
+    marking is deliberately kept visible** — per Decision Log #227 this
+    ships with the placeholder (founder owns the copy, no counsel-review
+    track, unlike ToS/Privacy). `ContestPage.tsx` gets a `Contest rules ›`
+    `<button>` (in-page overlay, not navigation) styled as the same
+    chevron link as `View the Contest leaderboard →`, toggled via local
+    `rulesOpen` state.
+  - **Verified:** `npx tsc --noEmit`, `npm run lint`, `npm run build` all
+    clean; `npx vitest run` — **27 files / 177 tests, 0 failures** (up
+    from 26/166 — `router.test.tsx` +8, `ContestPage.test.tsx` +3 for the
+    modal open/close/placeholder-visible cases; no existing test changed).
+    Dev-server smoke test: `/`, `/leaderboard`, `/contest`, `/sports-hub`,
+    `/community`, and an unmatched path all HTTP 200. No real
+    browser/Playwright check available — same ceiling as every prior
+    `apps/web` PR.
   - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
