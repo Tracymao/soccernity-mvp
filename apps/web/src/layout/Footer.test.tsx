@@ -19,7 +19,7 @@ describe("Footer", () => {
     );
   }
 
-  it("renders the canonical footer content: wordmark, 6 socials, 4 legal links, copyright", () => {
+  it("renders the canonical footer content: wordmark, 6 socials, 3 legal links, copyright", () => {
     renderFooter();
 
     const footer = screen.getByRole("contentinfo");
@@ -28,7 +28,8 @@ describe("Footer", () => {
     for (const label of ["facebook", "instagram", "twitter", "Tik Tok", "YouTube", "LinkedIn"]) {
       expect(within(footer).getByText(label)).toBeTruthy();
     }
-    for (const link of ["Terms of Service", "Privacy Policy", "Privacy Settings", "Contact Us"]) {
+    // "Privacy Settings" removed to match Decision Log #222 (sprint-2/privacy-settings-to-code).
+    for (const link of ["Terms of Service", "Privacy Policy", "Contact Us"]) {
       expect(within(footer).getByText(link)).toBeTruthy();
     }
     expect(within(footer).getByText(/Copyright . 2026 Soccernity\. All rights reserved/i)).toBeTruthy();

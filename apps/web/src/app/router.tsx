@@ -29,7 +29,7 @@
 // /reset-password) are children of AuthChrome, not AppShell -- they get
 // the logo-only "Top Bar -- Soccernity" instead of the full site Header
 // (Build Plan Decision Log #172; see AuthChrome.tsx / LoginPage.tsx).
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Navigate } from "react-router";
 import AppShell from "../layout/AppShell";
 import FooterLayout from "../layout/FooterLayout";
 import AuthChrome from "../layout/AuthChrome";
@@ -50,6 +50,8 @@ import GuardianConsentPage from "../pages/GuardianConsentPage";
 import GuardianConsentConfirmPage from "../pages/GuardianConsentConfirmPage";
 import VerifyEmailPage from "../pages/VerifyEmailPage";
 import ProfilePage from "../pages/ProfilePage";
+import PrivacySettingsPage from "../pages/PrivacySettingsPage";
+import PlaceholderPage from "../pages/PlaceholderPage";
 import NotFoundPage from "../pages/NotFoundPage";
 
 export const router = createBrowserRouter([
@@ -128,6 +130,40 @@ export const router = createBrowserRouter([
       { path: "guardian-consent", element: <GuardianConsentPage /> }, // F5
       { path: "guardian-consent/confirm", element: <GuardianConsentConfirmPage /> }, // F5
       { path: "profile", element: <ProfilePage /> }, // F6
+
+      // Settings. /settings/privacy is the only real Settings screen in
+      // code so far (the CONSOLIDATED "Settings — Privacy" Figma page,
+      // Decision Log #222) — a bare /settings redirects to it. Build
+      // Plan Section 6 defers the rest of the Settings area to Sprint
+      // 3/6. No footer — the Settings Figma frames carry their own Top
+      // Bar, not the site footer.
+      { path: "settings", element: <Navigate to="/settings/privacy" replace /> },
+      { path: "settings/privacy", element: <PrivacySettingsPage /> },
+      // Account status → these two are real routes, wired from the
+      // Privacy page's "Account status" row, but PlaceholderPage stubs
+      // for now: the K1/K2/K3 account-deactivation-flow screens (Figma
+      // 2924:7358 / 6213:15640 / 6225:14789; backend POST
+      // /auth/deactivate-account + /auth/delete-account, both merged)
+      // are not yet converted. Founder chose stub routes over disabled
+      // links or building those screens in this PR.
+      {
+        path: "settings/deactivate",
+        element: (
+          <PlaceholderPage
+            title="Deactivate account"
+            owner="figma-to-code — account deactivation flow (Decision Log #220/#221)"
+          />
+        ),
+      },
+      {
+        path: "settings/delete-account",
+        element: (
+          <PlaceholderPage
+            title="Delete account"
+            owner="figma-to-code — account deletion flow (Decision Log #220/#221/#222)"
+          />
+        ),
+      },
       // Added during a Sprint 1 cleanup review -- was missing entirely,
       // not a pre-existing placeholder. See VerifyEmailPage.tsx.
       { path: "verify-email", element: <VerifyEmailPage /> }, // F7

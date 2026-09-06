@@ -2497,6 +2497,21 @@ Full reasoning for every choice above: Build Plan Section 5.
   - **Endpoint support to write the four fields above** — extend
     `PATCH /users/:id` (or a dedicated create-profile endpoint) once the
     columns exist. (Decision Log #58)
+  - **Profile-visibility field + endpoint + read-side enforcement** — a
+    `User.isProfilePublic` (or similar) column, `PATCH /users/:id`
+    support, and enforcement across the feed / profile / follower-graph
+    reads. Backs the **Public profile** toggle on the Privacy Settings
+    page, currently rendered disabled. The control users would most
+    expect to work. (Decision Log #223)
+  - **Data-export / DSAR endpoint** — a `POST /users/:id/data-export`
+    (request-style, emails a link). Backs "Download my data" on the
+    Privacy Settings page (disabled today). Named as a data-subject
+    right in `docs/legal-copy-draft-tos-privacy-policy.md`. (Decision
+    Log #223)
+  - **Post-visibility + DM-permission models** — the interaction-privacy
+    backend behind the Privacy Settings page's "Your Post" / "Direct
+    Message" rows (disabled today); also needs the Figma sub-pages
+    (`2926:8996` / `2926:8764`) converted. (Decision Log #222/#223)
   - **Guardian decline endpoint** — no decline/reject route exists, only
     confirm. Needed by the Consent Declined screens. (Decision Log #34)
   - **Change-guardian-email endpoint** — must implement the Decision Log
@@ -6083,8 +6098,77 @@ Full reasoning for every choice above: Build Plan Section 5.
     `6185:14547`) — now including the Your Post / Direct Message rows and
     the dual Account-status links — not the narrower PR #175 scope, and
     must not expect a separate `Settings — Privacy & Safety` screen.
+    **Done — see `sprint-2/privacy-settings-to-code` below.**
   - Token discipline: no new colour, no `brand/green-tint-28`, Light mode
     only; every new node is a clone of an existing bound element.
+  - Merged as PR #181.
+- **`sprint-2/privacy-settings-to-code` (figma-to-code, 2026-09-06)
+  converts the consolidated `Settings — Privacy` page (Decision Log #222 —
+  `6178:14437` desktop / `6185:14547` mobile) into a real React page +
+  route. `apps/web` only, no `services/api` code. Decision Log #223.**
+  Report: `docs/sprint-2-privacy-settings-to-code-report.md`.
+  - **First Settings route in `apps/web`.** Build Plan Section 6 defers
+    Settings to Sprint 3/6; no Settings page existed in code. Route
+    `/settings/privacy` → `PrivacySettingsPage`; a bare `/settings`
+    redirects to it. Direct `AppShell` child, no footer (the Settings
+    Figma frames carry their own Top Bar). Layout/tokens reuse
+    `ClubsPage` / `ProfilePage`'s `--sn-*` light-theme pattern — the
+    desktop frame's left profile mini-card and Trending-News/Suggested
+    sidebars are static lorem-ipsum with no Section 4 endpoint (same as
+    `ProfilePage`'s own frame) and are **not** reproduced.
+  - **Disclosed-stub discipline** (CLAUDE.md + the task's own "flag
+    rather than fake") — every control with no backend renders visibly,
+    **disabled, with a note**: Public profile toggle (no `User`
+    visibility column, `UpdateUserDto` = `displayName` + `phone` only);
+    "Download my data" (no data-export/DSAR endpoint anywhere); "Your
+    Post" / "Direct Message" (no post-visibility or DM-permission
+    backend, and the Figma sub-pages `2926:8996` / `2926:8764` aren't
+    converted); "Change guardian email" ("Coming soon" — the same gap
+    `GuardianConsentPage.tsx` already flags, no `PATCH`-guardian-email
+    endpoint / Decision Log #60).
+  - **Real wiring:** the **Guardian approval** row uses `GET
+    /auth/guardian-consent/status` (`api/auth.ts`
+    `getGuardianConsentStatus`), shown only for minors (`isMinor` from
+    `GET /users/:id`); a 404 from the status endpoint = not a minor =
+    row hidden; pill `confirmed`→"Approved" / `pending`→"Pending"; the
+    row links to `/guardian-consent`. **Account status** shows "Active"
+    (definitionally true — a deactivated/`pending_deletion` account has
+    revoked sessions and can't authenticate) with two real `<Link>`s to
+    `/settings/deactivate` and `/settings/delete-account` — real routes
+    but `PlaceholderPage` **stubs** today (the K1/K2/K3
+    account-deactivation-flow screens, Figma `2924:7358` / `6225:14789`,
+    backend `POST /auth/deactivate-account` + `/auth/delete-account`
+    both merged, aren't converted yet; the founder chose stub routes
+    over disabled links or building those screens here). Marketing
+    emails row rendered as designed (disabled "Coming soon" —
+    `services/api` sends only transactional email).
+  - **Nav entry point (judgment call, flagged):** `navigation.ts`'s
+    `Settings` items in `accountMenuItems` (desktop account dropdown) +
+    `drawerNavItems` (mobile drawer) were `available: false` — flipped
+    to available now that `/settings` resolves, so the page isn't an
+    orphan like Clubs was (Decision Log #156). `Header.test.tsx`
+    updated.
+  - **Footer drift fix:** `Footer.tsx` still listed "Privacy Settings"
+    as a non-interactive legal link — removed to match Decision Log #222
+    Part 4 (founder: "remove, don't relink"); code footer legal links
+    are now `Terms of Service · Privacy Policy · Contact Us`.
+  - **Divergences from the Figma (flagged):** the "Approved" pill uses
+    navy-on-green (`--sn-text-on-green`, the `ClubJoinButton` convention,
+    AA-passing) not the frame's white-on-green.
+  - **Backend gaps surfaced (Decision Log #223, none fixed — `apps/web`
+    PR):** `User` profile-visibility field + `PATCH` support + read-side
+    enforcement; `POST /users/:id/data-export` (DSAR, named in the
+    Privacy Policy draft); change-guardian-email / restart-consent
+    endpoint (Decision Log #60); post-visibility + DM-permission models
+    + converting the two interaction-privacy sub-pages.
+  - **Verification:** `npx tsc --noEmit`, `npm run lint`, `npm run
+    build` all clean; `npx vitest run` — **20 files / 132 tests, 0
+    failures** (up from 19/123 — new `PrivacySettingsPage.test.tsx` +9;
+    `Header.test.tsx` / `Footer.test.tsx` updated, no net count change);
+    dev-server smoke test `/`, `/settings`, `/settings/privacy`,
+    `/settings/deactivate`, `/settings/delete-account`, `/profile` all
+    HTTP 200. No real browser/Playwright check available — same ceiling
+    as every prior `apps/web` PR.
   - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
