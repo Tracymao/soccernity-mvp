@@ -1,0 +1,115 @@
+/* Contest Rules modal. Figma source: "Contest — Rules — Modal — Desktop"
+ * (6241:14657) / "— Mobile" (6241:14677), "Soccernity-MVP"
+ * (weZWWqggy9j13eX8bhFgs6). Light-theme --sn-* tokens only, matching
+ * ContestPage.css / EditProfileModal.css. */
+
+.contest-rules-overlay {
+  position: fixed;
+  inset: 0;
+  /* Figma scrim: ~28% navy (two stacked color/icon/inactive fills). The
+   * token map has no navy-with-alpha, so this is a literal — the same
+   * disclosed exception EditProfileModal.css makes for its own scrim. */
+  background-color: rgba(40, 46, 101, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.contest-rules-modal {
+  width: 100%;
+  max-width: 560px;
+  background-color: var(--sn-background-surface);
+  border-radius: 16px;
+  /* Figma elevation/menu: DROP_SHADOW 0 4 16, color/shadow/elevated
+   * (navy @ 14%). */
+  box-shadow: 0 4px 16px 0 rgba(40, 46, 101, 0.14);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 64px);
+}
+
+.contest-rules-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 20px 16px 28px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+  flex-shrink: 0;
+}
+
+.contest-rules-modal__title {
+  font: 600 20px "Inter", sans-serif;
+  margin: 0;
+  color: var(--sn-text-primary);
+}
+
+.contest-rules-modal__close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--sn-text-primary);
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.contest-rules-modal__body {
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.contest-rules-placeholder {
+  background: var(--sn-green-tint-12);
+  border: 1.5px dashed var(--sn-brand-navy);
+  border-radius: 10px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contest-rules-placeholder__lead {
+  font: 600 14px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.contest-rules-placeholder__note {
+  font: 400 13px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.contest-rules-modal__scroll-note {
+  font: 400 12px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  .contest-rules-modal {
+    max-width: 340px;
+  }
+
+  .contest-rules-modal__header {
+    padding: 18px 12px 14px 20px;
+  }
+
+  .contest-rules-modal__title {
+    font-size: 17px;
+  }
+
+  .contest-rules-modal__body {
+    padding: 20px;
+  }
+}

@@ -29,7 +29,7 @@
 // /reset-password) are children of AuthChrome, not AppShell -- they get
 // the logo-only "Top Bar -- Soccernity" instead of the full site Header
 // (Build Plan Decision Log #172; see AuthChrome.tsx / LoginPage.tsx).
-import { createBrowserRouter, Navigate } from "react-router";
+import { createBrowserRouter, Navigate, type RouteObject } from "react-router";
 import AppShell from "../layout/AppShell";
 import FooterLayout from "../layout/FooterLayout";
 import AuthChrome from "../layout/AuthChrome";
@@ -57,7 +57,9 @@ import DeleteAccountPage from "../pages/settings/DeleteAccountPage";
 import InactiveAccountPage from "../pages/InactiveAccountPage";
 import NotFoundPage from "../pages/NotFoundPage";
 
-export const router = createBrowserRouter([
+// Exported separately from `router` so tests can mount the real route tree
+// via createMemoryRouter(routes, ...) without a browser history.
+export const routes: RouteObject[] = [
   {
     // Core auth routes -- logo-only Top Bar, NOT the site Header. Pathless
     // layout route: children below resolve to /login, /signup, etc. See
@@ -85,12 +87,15 @@ export const router = createBrowserRouter([
         // FooterLayout -- pathless layout route that renders the shared
         // <Footer /> after the page. Its children are EXACTLY the routes
         // whose canonical Figma frame carries the standardized site footer
-        // (Decision Log #209/#210/#213): Home, Sports Hub, Leaderboard,
-        // Blog, Article Detail. Everything else stays a direct AppShell
-        // child below and renders with no footer -- Community / Clubs /
-        // ClubFanPage / Banter have no footer in their Figma frames
-        // (confirmed live), and the guardian-consent / profile /
-        // verify-email flows are full-bleed forms. See FooterLayout.tsx.
+        // (Decision Log #209/#210/#213), plus the 404 page (Decision Log
+        // #228 -- standard error-page recovery pattern): Home, Sports Hub,
+        // Blog, Article Detail, 404. Everything else stays a direct
+        // AppShell child below and renders with no footer -- Community /
+        // Clubs / ClubFanPage / Banter / Leaderboard / Contest have no
+        // footer in their Figma frames (Leaderboard and Contest were
+        // moved out per Decision Log #227/#228; confirmed live for the
+        // rest), and the guardian-consent / profile / verify-email flows
+        // are full-bleed forms. See FooterLayout.tsx.
         element: <FooterLayout />,
         children: [
           // "/" is the logged-out marketing landing page (Decision Log
@@ -109,14 +114,14 @@ export const router = createBrowserRouter([
           // frames, Decision Log #197). Dummy content -- no blog backend
           // exists. See ../pages/blog/ArticleDetailPage.tsx.
           { path: "blog/:articleId", element: <ArticleDetailPage /> },
-          { path: "leaderboard", element: <LeaderboardPage /> },
-          // "This month's Contest" — how it works, the current week's task,
-          // the caller's own entry status, weekly/monthly winners. Wired to
-          // GET /contest/current (sprint-2/contest-data-model-backend).
-          // Reached via the Leaderboard Contest tab's "View this week's
-          // contest ›" connector and the composer's contest-mode success
-          // message. Figma 2155:1062. See ../pages/ContestPage.tsx.
-          { path: "contest", element: <ContestPage /> },
+
+          // 404. A genuinely unmatched path under "/" falls through to
+          // this splat (React Router ranks by specificity across the whole
+          // config regardless of nesting depth, so every real route above
+          // and below still wins its own path). Lives here, under
+          // FooterLayout, so the error page gets the site footer for
+          // recovery links -- Decision Log #228.
+          { path: "*", element: <NotFoundPage /> },
         ],
       },
 
@@ -132,6 +137,20 @@ export const router = createBrowserRouter([
       // Navbar entry point yet — Decision Log #156 is still open.
       { path: "clubs", element: <ClubsPage /> },
       { path: "clubs/:id", element: <ClubFanPage /> },
+
+      // Leaderboard + Contest -- direct AppShell children, NO site footer.
+      // Both were moved out of FooterLayout: the founder decided the
+      // Leaderboard must not carry the site footer (Decision Log #227,
+      // sprint-2/leaderboard-footer-removal-and-contest-rules-modal), and
+      // the Contest details frame (Figma 2155:1062) never had one --
+      // FooterLayout's old comment documented the opposite (Decision Log
+      // #228). LeaderboardPage: login-gated, Contest tab wired to
+      // GET /contest/current (Decision Log #129/#61/#70/#71).
+      // ContestPage: "this month's Contest", reached via the Leaderboard
+      // Contest tab connector and the composer's contest-mode success
+      // message. See LeaderboardPage.tsx / ContestPage.tsx.
+      { path: "leaderboard", element: <LeaderboardPage /> },
+      { path: "contest", element: <ContestPage /> },
 
       // Auth-flow routes that stay under AppShell (built full-bleed within
       // its content area -- see each page's CSS header comment). The core
@@ -167,8 +186,10 @@ export const router = createBrowserRouter([
       // Added during a Sprint 1 cleanup review -- was missing entirely,
       // not a pre-existing placeholder. See VerifyEmailPage.tsx.
       { path: "verify-email", element: <VerifyEmailPage /> }, // F7
-
-      { path: "*", element: <NotFoundPage /> },
+      // NOTE: the "*" 404 route lives under FooterLayout above (so the
+      // error page gets the site footer -- Decision Log #228), not here.
     ],
   },
-]);
+];
+
+export const router = createBrowserRouter(routes);

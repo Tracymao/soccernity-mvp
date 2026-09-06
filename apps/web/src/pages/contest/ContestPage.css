@@ -134,3 +134,14 @@
   color: var(--sn-brand-green);
   text-decoration: none;
 }
+
+/* "Contest rules ›" opens an in-page modal, so it's a <button>, styled to
+ * read as the same chevron link as its siblings. */
+.contest-footnote__link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--sn-brand-green);
+  font: 600 14px "Inter", sans-serif;
+}

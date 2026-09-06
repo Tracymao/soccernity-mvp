@@ -24,6 +24,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { getCurrentContest, type CurrentContestResponse, type ContestPhase } from "../api/contest";
 import { getStoredAccessToken } from "../lib/session";
+import ContestRulesModal from "./contest/ContestRulesModal";
 import "./contest/ContestPage.css";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
@@ -85,6 +86,7 @@ export default function ContestPage() {
   const token = getStoredAccessToken();
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [data, setData] = useState<CurrentContestResponse | null>(null);
+  const [rulesOpen, setRulesOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!token) {
@@ -204,8 +206,20 @@ export default function ContestPage() {
       )}
 
       <p className="contest-footnote">
+        {/* Figma: "Contest rules ›" chevron link (6245:14767 desktop /
+            6245:14768 mobile), same convention as "View leaderboard ›".
+            Opens the rules modal (Decision Log #227) — a <button>, not a
+            link, since it opens an in-page overlay rather than navigating. */}
+        <button type="button" className="contest-footnote__link" onClick={() => setRulesOpen(true)}>
+          Contest rules &rsaquo;
+        </button>
+      </p>
+
+      <p className="contest-footnote">
         <Link to="/leaderboard?tab=contest">View the Contest leaderboard &rarr;</Link>
       </p>
+
+      {rulesOpen && <ContestRulesModal onClose={() => setRulesOpen(false)} />}
     </div>
   );
 }
