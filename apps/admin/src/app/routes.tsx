@@ -24,6 +24,7 @@ import ArticlesPage from "../pages/articles/ArticlesPage";
 import CreateArticlePage from "../pages/articles/CreateArticlePage";
 import CategoriesPage from "../pages/categories/CategoriesPage";
 import AddCategoryPage from "../pages/categories/AddCategoryPage";
+import UsersPage from "../pages/users/UsersPage";
 import ModerationQueuePage from "../pages/moderation/ModerationQueuePage";
 import ReportDetailPage from "../pages/moderation/ReportDetailPage";
 import AppealReviewPage from "../pages/moderation/AppealReviewPage";
@@ -35,7 +36,6 @@ import AdminNotFound from "../pages/AdminNotFound";
 // operator on each placeholder so nobody is misled about what the console
 // can do once a screen is "converted".
 const BACKEND_NOTES = {
-  users: "No GET/PATCH /admin/users endpoints exist yet (Build Plan Section 4.8).",
   contest:
     "Partly backed: POST /admin/contest/{cycles, cycles/:id/rounds/:week/results, cycles/:id/final/open, cycles/:id/crown} exist (Decision Log #218/#219), but there is no admin read endpoint and the Figma 'task' screens do not map to the ContestCycle/ContestRound model.",
   competitions:
@@ -64,7 +64,8 @@ export const adminRoutes: RouteObject[] = [
           // Stubs (sprint-2/admin-articles-categories-stub) — no articles/categories backend.
           { path: "articles", element: <ArticlesPage /> },
           { path: "articles/new", element: <CreateArticlePage /> },
-          { path: "users", element: placeholder("Users", "users") },
+          // Stub (sprint-2/admin-users-stub) — no GET/PATCH /admin/users.
+          { path: "users", element: <UsersPage /> },
           // Stub screens (sprint-2/admin-moderation-stub) — no
           // moderation-queue backend exists (Sprint 5, Decision Log
           // #135/#189); layout reproduced, nothing actionable.
