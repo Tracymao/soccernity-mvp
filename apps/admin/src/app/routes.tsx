@@ -28,6 +28,8 @@ import UsersPage from "../pages/users/UsersPage";
 import MediaLibraryPage from "../pages/media/MediaLibraryPage";
 import MediaPreviewPage from "../pages/media/MediaPreviewPage";
 import MediaUploadPage from "../pages/media/MediaUploadPage";
+import CreateCompetitionPage from "../pages/competitions/CreateCompetitionPage";
+import CompetitionCreatedPage from "../pages/competitions/CompetitionCreatedPage";
 import ModerationQueuePage from "../pages/moderation/ModerationQueuePage";
 import ReportDetailPage from "../pages/moderation/ReportDetailPage";
 import AppealReviewPage from "../pages/moderation/AppealReviewPage";
@@ -41,8 +43,6 @@ import AdminNotFound from "../pages/AdminNotFound";
 const BACKEND_NOTES = {
   contest:
     "Partly backed: POST /admin/contest/{cycles, cycles/:id/rounds/:week/results, cycles/:id/final/open, cycles/:id/crown} exist (Decision Log #218/#219), but there is no admin read endpoint and the Figma 'task' screens do not map to the ContestCycle/ContestRound model.",
-  competitions:
-    "No competitions admin endpoint exists — the Competition umbrella is parked (Decision Log #72/#73, Build Plan Section 2.2).",
   settings:
     "No admin role-management endpoint exists — AdminUser.role is a fixed enum and there is no self-service admin/role provisioning (Decision Log #191).",
 } as const;
@@ -76,7 +76,9 @@ export const adminRoutes: RouteObject[] = [
           { path: "categories", element: <CategoriesPage /> },
           { path: "categories/new", element: <AddCategoryPage /> },
           { path: "contest", element: placeholder("Contest", "contest") },
-          { path: "competitions", element: placeholder("Competitions", "competitions") },
+          // Stubs (sprint-2/admin-competitions-stub) — Competition umbrella parked (Decision Log #72/#73).
+          { path: "competitions", element: <CreateCompetitionPage /> },
+          { path: "competitions/created", element: <CompetitionCreatedPage /> },
           // Stubs (sprint-2/admin-media-stub) — no media backend + no file storage.
           { path: "media", element: <MediaLibraryPage /> },
           { path: "media/preview", element: <MediaPreviewPage /> },

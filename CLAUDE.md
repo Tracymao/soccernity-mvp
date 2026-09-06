@@ -6757,6 +6757,16 @@ Full reasoning for every choice above: Build Plan Section 5.
     vitest **13 files / 47 tests, 0 failures**; tsc / lint / build clean.
     `docs/sprint-2-admin-media-stub-report.md`.
   - PR opened, not merged — founder's call.
+  - **`sprint-2/admin-competitions-stub` (PR 8, 2026-09-06 — stacks on
+    PR 7).** Create Competition / Competition Created (Figma `5566:8033`
+    / `5569:7813`) converted as disclosed stubs — no competitions admin
+    endpoint anywhere; the Competition umbrella is parked (Build Plan
+    2.2, Decision Log #72/#73). Create form fully reproduced + disabled;
+    success screen shown for design fidelity with a "not reachable"
+    note. New route `/competitions/created`. **Decision Log #238.**
+    apps/admin vitest **14 files / 49 tests, 0 failures**; tsc / lint /
+    build clean. `docs/sprint-2-admin-competitions-stub-report.md`.
+  - PR opened, not merged — founder's call.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
