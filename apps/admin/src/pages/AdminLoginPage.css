@@ -1,0 +1,109 @@
+.admin-login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background-color: var(--sn-green-tint-12);
+}
+
+.admin-login__card {
+  width: 100%;
+  max-width: 380px;
+  background-color: var(--sn-background-surface);
+  border-radius: 8px;
+  padding: 40px 32px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 16px rgba(40, 46, 101, 0.14);
+}
+
+.admin-login__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.admin-login__logo {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+
+.admin-login__wordmark {
+  font-weight: 600;
+  font-size: 20px;
+  color: var(--sn-text-primary);
+}
+
+.admin-login__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.admin-login__subtitle {
+  margin: 6px 0 20px;
+  font-size: 14px;
+  color: var(--sn-text-secondary);
+}
+
+/* No invented error/denial hue — the same call apps/web's auth screens
+ * make (Auth.css: "A real error/denial token is a figma-design-system
+ * decision, not one to make unilaterally in a screen PR"). Navy text on a
+ * low-alpha navy wash with a border, plus the message text itself
+ * carrying the information (WCAG 1.4.1). */
+.admin-login__error {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--sn-brand-navy);
+  border-radius: 4px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.admin-login__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--sn-text-primary);
+}
+
+.admin-login__field input {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--sn-text-primary);
+  background-color: var(--sn-background-surface);
+}
+
+.admin-login__field input:focus {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 1px;
+}
+
+.admin-login__submit {
+  margin-top: 8px;
+  height: 42px;
+  border: none;
+  border-radius: 4px;
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.admin-login__submit:disabled {
+  opacity: 0.7;
+  cursor: default;
+}

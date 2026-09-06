@@ -1,0 +1,198 @@
+/* Admin Shell — from Figma node 6014:12948 (Active variants). Colours are
+ * Soccernity Theme tokens only (var(--sn-*)); no new palette. */
+
+.admin-shell {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--sn-background-page);
+}
+
+/* ---- Sidebar ---------------------------------------------------------- */
+
+.admin-shell__sidebar {
+  flex: 0 0 260px;
+  width: 260px;
+  /* Figma sidebar fill is rgba(40,46,101,0.12) — brand navy at 12%. There
+   * is no navy-tint token (the only 12% wash token, --sn-green-tint-12,
+   * is green); a literal keeps it exact without inventing a token. This
+   * is the same call AdminShell/Admin-shell work in Figma made (Decision
+   * Log #199). */
+  background-color: rgba(40, 46, 101, 0.12);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.admin-shell__brand {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 45px 0 0 41px;
+}
+
+.admin-shell__logo {
+  width: 34px;
+  height: 34px;
+  display: block;
+}
+
+.admin-shell__wordmark {
+  font-weight: 600;
+  font-size: 24px;
+  color: var(--sn-text-primary);
+}
+
+.admin-shell__identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 34px 0 0 23px;
+  padding-right: 16px;
+}
+
+.admin-shell__avatar {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.admin-shell__identity-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-shell__identity-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--sn-text-primary);
+}
+
+.admin-shell__identity-role {
+  font-size: 12px;
+  color: var(--sn-text-primary);
+}
+
+/* ---- Nav ------------------------------------------------------------- */
+
+.admin-nav {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  margin-top: 52px;
+  padding-bottom: 49px;
+}
+
+.admin-nav__group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 260px;
+  padding: 10px;
+  background-color: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+  font-weight: 500;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.admin-nav__item--active {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.admin-nav__icon {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  display: inline-block;
+}
+
+/* Mask recolour: the glyph takes the nav item's text colour (navy when
+ * inactive, white when active) via currentColor. */
+.admin-nav__icon--mask {
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+/* carbon:chart-column — three bars, drawn in CSS to match the Figma
+ * shell (which draws them as rectangles, not an exported glyph). */
+.admin-nav__bars {
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2.5px;
+}
+
+.admin-nav__bars i {
+  display: block;
+  width: 4.5px;
+  border-radius: 1.2px;
+  background-color: currentColor;
+}
+
+.admin-nav__bars i:nth-child(1) {
+  height: 10px;
+}
+.admin-nav__bars i:nth-child(2) {
+  height: 16px;
+}
+.admin-nav__bars i:nth-child(3) {
+  height: 13px;
+}
+
+.admin-nav__label {
+  line-height: normal;
+}
+
+/* ---- Content region ------------------------------------------------- */
+
+.admin-shell__main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background-color: var(--sn-background-page);
+}
+
+.admin-shell__topbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 45px 41px 0;
+}
+
+.admin-shell__logout {
+  height: 39px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 4px;
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.admin-shell__content {
+  flex: 1 1 auto;
+  padding: 40px 41px 64px;
+}
