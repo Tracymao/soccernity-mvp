@@ -13,7 +13,7 @@ function p2002(target: string[]): Prisma.PrismaClientKnownRequestError {
 
 function buildMock() {
   const prisma = {
-    contestCycle: { findFirst: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+    contestCycle: { findFirst: jest.fn(), findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
     contestRound: { findFirst: jest.fn(), update: jest.fn() },
     contestEntry: { findUnique: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]), create: jest.fn() },
     contestRoundWinner: { create: jest.fn() },
@@ -543,6 +543,153 @@ describe('ContestService', () => {
       expect(res.rounds).toHaveLength(3);
       expect(res.weeklyWinners[0]).toMatchObject({ weekNumber: 1, position: 1, displayName: 'Nina', postId: 'p-9' });
       expect(res.monthlyStandings).toEqual([{ position: 1, userId: 'u-9', displayName: 'Nina' }]);
+    });
+  });
+
+  // ------------------------------------------------------------------
+  // Admin read surface — sprint-2/admin-contest-read-endpoints (DL #241)
+  // ------------------------------------------------------------------
+
+  // An admin-detail-graph entry (round.entries[n]): entrant + submitted
+  // post + optional winner back-relation.
+  function entry(over: Partial<Record<string, unknown>> = {}) {
+    return {
+      id: 'e-1',
+      userId: 'u-1',
+      submittedAt: new Date('2026-09-03T09:00:00.000Z'),
+      user: { displayName: 'Alice' },
+      post: {
+        id: 'post-1',
+        contentText: 'my keepie-uppie clip',
+        mediaUrls: ['https://cdn.example/clip-1.mp4'],
+        createdAt: new Date('2026-09-03T08:55:00.000Z'),
+        likeCount: 4,
+        commentCount: 1,
+      },
+      winner: null,
+      ...over,
+    };
+  }
+  // A round for the admin LIST graph (carries _count.entries).
+  function listRound(week: number, over: Partial<Record<string, unknown>> = {}) {
+    return { ...round(week, over), _count: { entries: (over._count as { entries: number })?.entries ?? 0 } };
+  }
+  // A round for the admin DETAIL graph (carries entries[]).
+  function detailRound(week: number, entries: ReturnType<typeof entry>[] = [], over: Partial<Record<string, unknown>> = {}) {
+    return { ...round(week, over), entries };
+  }
+
+  describe('listCyclesForAdmin', () => {
+    it('returns every cycle newest-first with phase + per-round entry counts', async () => {
+      const prisma = buildMock();
+      (prisma.contestCycle.findMany as jest.Mock).mockResolvedValue([
+        graphCycle({
+          id: 'cyc-new',
+          status: 'active',
+          rounds: [
+            listRound(1, { status: 'judged', _count: { entries: 3 }, winners: [{ entryId: 'e-1', position: 1, userId: 'u-9', user: { displayName: 'Nina' }, entry: { postId: 'p-9' } }] }),
+            listRound(2, { _count: { entries: 1 } }),
+            listRound(3, { _count: { entries: 0 } }),
+          ],
+        }),
+        graphCycle({ id: 'cyc-old', status: 'completed', crownedAt: new Date(), rounds: [], standings: [{ position: 1, userId: 'u-9', user: { displayName: 'Nina' } }] }),
+      ]);
+
+      const res = await new ContestService(prisma).listCyclesForAdmin();
+
+      expect((prisma.contestCycle.findMany as jest.Mock).mock.calls[0][0].orderBy).toEqual({ createdAt: 'desc' });
+      expect(res.items).toHaveLength(2);
+      expect(res.items[0].cycle.id).toBe('cyc-new');
+      expect(res.items[0].phase).toBe('week_1');
+      expect(res.items[0].rounds.map((r) => r.entryCount)).toEqual([3, 1, 0]);
+      expect(res.items[0].weeklyWinners[0]).toMatchObject({ weekNumber: 1, displayName: 'Nina' });
+      expect(res.items[1].cycle.id).toBe('cyc-old');
+      expect(res.items[1].monthlyStandings).toEqual([{ position: 1, userId: 'u-9', displayName: 'Nina' }]);
+    });
+
+    it('returns an empty items array when no cycle exists', async () => {
+      const prisma = buildMock();
+      (prisma.contestCycle.findMany as jest.Mock).mockResolvedValue([]);
+      expect(await new ContestService(prisma).listCyclesForAdmin()).toEqual({ items: [] });
+    });
+  });
+
+  describe('getCycleByIdForAdmin', () => {
+    it('404 for a missing cycle', async () => {
+      const prisma = buildMock();
+      (prisma.contestCycle.findUnique as jest.Mock).mockResolvedValue(null);
+      await expect(new ContestService(prisma).getCycleByIdForAdmin('nope')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('exposes each round\'s full entries array — entryId, entrant, post, and the winner-position join', async () => {
+      const prisma = buildMock();
+      const winning = entry({ id: 'e-win', userId: 'u-a', user: { displayName: 'Ada' }, winner: { position: 1 } });
+      const alsoRan = entry({ id: 'e-2', userId: 'u-b', user: { displayName: 'Ben' }, winner: null });
+      (prisma.contestCycle.findUnique as jest.Mock).mockResolvedValue(
+        graphCycle({
+          status: 'active',
+          rounds: [detailRound(1, [winning, alsoRan], { status: 'judged' }), detailRound(2, []), detailRound(3, [])],
+        }),
+      );
+
+      const res = await new ContestService(prisma).getCycleByIdForAdmin('cyc-1');
+
+      expect(res.rounds[0].entryCount).toBe(2);
+      expect(res.rounds[0].entries).toEqual([
+        {
+          entryId: 'e-win',
+          submittedAt: winning.submittedAt,
+          entrant: { userId: 'u-a', displayName: 'Ada' },
+          post: {
+            id: 'post-1',
+            contentText: 'my keepie-uppie clip',
+            mediaUrls: ['https://cdn.example/clip-1.mp4'],
+            createdAt: winning.post.createdAt,
+            likeCount: 4,
+            commentCount: 1,
+          },
+          position: 1,
+        },
+        expect.objectContaining({ entryId: 'e-2', position: null }),
+      ]);
+      expect(res.rounds[1].entries).toEqual([]);
+      expect(res.rounds[1].entryCount).toBe(0);
+    });
+  });
+
+  describe('getCurrentContestForAdmin', () => {
+    it('resolves the running (active/final) cycle first, with full entries', async () => {
+      const prisma = buildMock();
+      (prisma.contestCycle.findFirst as jest.Mock).mockResolvedValueOnce(
+        graphCycle({ status: 'final', rounds: [detailRound(1, [entry()], { status: 'judged' }), detailRound(2, [], { status: 'judged' }), detailRound(3, [], { status: 'judged' })] }),
+      );
+
+      const res = await new ContestService(prisma).getCurrentContestForAdmin();
+      expect(res.phase).toBe('final_live');
+      expect(res.rounds[0].entries[0].entrant.displayName).toBe('Alice');
+    });
+
+    it('falls back to the most-recently completed cycle when none is running', async () => {
+      const prisma = buildMock();
+      (prisma.contestCycle.findFirst as jest.Mock)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(graphCycle({ status: 'completed', crownedAt: new Date(), rounds: [] }));
+
+      const res = await new ContestService(prisma).getCurrentContestForAdmin();
+      expect(res.phase).toBe('crowned');
+      expect((prisma.contestCycle.findFirst as jest.Mock).mock.calls[1][0].where).toEqual({ status: 'completed' });
+    });
+
+    it('returns an all-null response when no cycle has ever existed', async () => {
+      const prisma = buildMock();
+      (prisma.contestCycle.findFirst as jest.Mock).mockResolvedValue(null);
+      expect(await new ContestService(prisma).getCurrentContestForAdmin()).toEqual({
+        cycle: null,
+        phase: null,
+        rounds: [],
+        weeklyWinners: [],
+        monthlyStandings: [],
+      });
     });
   });
 });

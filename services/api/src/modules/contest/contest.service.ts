@@ -16,6 +16,12 @@ import { CreateCycleDto } from './dto/create-cycle.dto';
 import { CrownCycleDto } from './dto/crown-cycle.dto';
 import { RoundResultsDto } from './dto/round-results.dto';
 import {
+  AdminContestCycleDetailResponse,
+  AdminContestCycleListItem,
+  AdminContestCycleListResponse,
+  AdminContestEntry,
+  AdminContestRoundDetail,
+  AdminCurrentContestResponse,
   ContestCycleDetailResponse,
   ContestCycleSummary,
   ContestPhase,
@@ -49,6 +55,60 @@ const CYCLE_GRAPH_INCLUDE = {
 } satisfies Prisma.ContestCycleInclude;
 
 type CycleWithGraph = Prisma.ContestCycleGetPayload<{ include: typeof CYCLE_GRAPH_INCLUDE }>;
+
+// sprint-2/admin-contest-read-endpoints (Decision Log #241). The admin
+// read surface reuses CYCLE_GRAPH_INCLUDE and layers on what only an
+// admin needs:
+//
+//  - the list (GET /admin/contest/cycles) adds a per-round entry COUNT
+//    (`_count`, cheap — no rows pulled).
+//  - the detail views (GET /admin/contest/cycles/:id and .../current)
+//    add each round's full `entries`, each with its entrant, the
+//    submitted Post (the same narrow field set feed's POST_SELECT
+//    exposes), and — via the ContestEntry.winner back-relation — the
+//    winning position, if any. This is the only place entryIds surface.
+const ADMIN_CYCLE_LIST_INCLUDE = {
+  ...CYCLE_GRAPH_INCLUDE,
+  rounds: {
+    ...CYCLE_GRAPH_INCLUDE.rounds,
+    include: {
+      ...CYCLE_GRAPH_INCLUDE.rounds.include,
+      _count: { select: { entries: true } },
+    },
+  },
+} satisfies Prisma.ContestCycleInclude;
+
+const ADMIN_CYCLE_DETAIL_INCLUDE = {
+  ...CYCLE_GRAPH_INCLUDE,
+  rounds: {
+    ...CYCLE_GRAPH_INCLUDE.rounds,
+    include: {
+      ...CYCLE_GRAPH_INCLUDE.rounds.include,
+      entries: {
+        orderBy: { submittedAt: 'asc' },
+        include: {
+          user: { select: { displayName: true } },
+          post: {
+            select: {
+              id: true,
+              contentText: true,
+              mediaUrls: true,
+              createdAt: true,
+              likeCount: true,
+              commentCount: true,
+            },
+          },
+          // The weekly-winner back-relation (ContestEntry.winner) — set
+          // when this entry placed in its round's judged top 3.
+          winner: { select: { position: true } },
+        },
+      },
+    },
+  },
+} satisfies Prisma.ContestCycleInclude;
+
+type AdminCycleListGraph = Prisma.ContestCycleGetPayload<{ include: typeof ADMIN_CYCLE_LIST_INCLUDE }>;
+type AdminCycleDetailGraph = Prisma.ContestCycleGetPayload<{ include: typeof ADMIN_CYCLE_DETAIL_INCLUDE }>;
 
 @Injectable()
 export class ContestService {
@@ -153,6 +213,65 @@ export class ContestService {
       weeklyWinners: this.toWeeklyWinners(graph),
       monthlyStandings: this.toStandings(graph),
     };
+  }
+
+  // -------------------------------------------------------------------
+  // Admin read surface — sprint-2/admin-contest-read-endpoints
+  // (Decision Log #241). All AdminJwtAuthGuard-only (ContestAdminController).
+  //
+  // Safeguarding: these reads expose entrant displayNames + submitted
+  // post text, but a restricted-pending minor can never appear here. A
+  // ContestEntry's userId is always its Post's authorId, POST /posts is
+  // GuardianConsentGuard-gated, and POST /contest/entries is too — so a
+  // restricted-pending minor has no Post and therefore no ContestEntry.
+  // Guardian.consentStatus only ever moves pending -> confirmed (no
+  // reversal path anywhere in the codebase) and dateOfBirth/isMinor are
+  // immutable post-registration, so an entry that was valid at
+  // submission time cannot retroactively become a restricted minor's.
+  // No minor filter is applied — there is no real path to filter.
+  // -------------------------------------------------------------------
+
+  // GET /admin/contest/cycles
+  async listCyclesForAdmin(): Promise<AdminContestCycleListResponse> {
+    const cycles = await this.prisma.contestCycle.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: ADMIN_CYCLE_LIST_INCLUDE,
+    });
+    return { items: cycles.map((cycle) => this.toAdminCycleListItem(cycle)) };
+  }
+
+  // GET /admin/contest/cycles/:id
+  async getCycleByIdForAdmin(cycleId: string): Promise<AdminContestCycleDetailResponse> {
+    const cycle = await this.prisma.contestCycle.findUnique({
+      where: { id: cycleId },
+      include: ADMIN_CYCLE_DETAIL_INCLUDE,
+    });
+    if (!cycle) {
+      throw new NotFoundException('Contest cycle not found');
+    }
+    return this.toAdminCycleDetail(cycle);
+  }
+
+  // GET /admin/contest/current — same resolution as getCurrentContest:
+  // the running cycle (active/final), else the most-recently completed
+  // one, else an all-null response.
+  async getCurrentContestForAdmin(): Promise<AdminCurrentContestResponse> {
+    const cycle =
+      (await this.prisma.contestCycle.findFirst({
+        where: { status: { in: ['active', 'final'] } },
+        orderBy: { createdAt: 'desc' },
+        include: ADMIN_CYCLE_DETAIL_INCLUDE,
+      })) ??
+      (await this.prisma.contestCycle.findFirst({
+        where: { status: 'completed' },
+        orderBy: { crownedAt: 'desc' },
+        include: ADMIN_CYCLE_DETAIL_INCLUDE,
+      }));
+
+    if (!cycle) {
+      return { cycle: null, phase: null, rounds: [], weeklyWinners: [], monthlyStandings: [] };
+    }
+    return this.toAdminCycleDetail(cycle);
   }
 
   // -------------------------------------------------------------------
@@ -508,6 +627,56 @@ export class ContestService {
     return graph.standings
       .map((s) => ({ position: s.position, userId: s.userId, displayName: s.user.displayName }))
       .sort((a, b) => a.position - b.position);
+  }
+
+  // ---- admin read shaping (Decision Log #241) ----------------------
+
+  private toAdminCycleListItem(graph: AdminCycleListGraph): AdminContestCycleListItem {
+    return {
+      cycle: this.toCycleSummary(graph),
+      phase: ContestService.derivePhase(graph.status, this.judgedCount(graph)),
+      rounds: graph.rounds.map((r) => ({
+        ...this.toRoundSummary(r),
+        entryCount: r._count.entries,
+      })),
+      weeklyWinners: this.toWeeklyWinners(graph),
+      monthlyStandings: this.toStandings(graph),
+    };
+  }
+
+  private toAdminCycleDetail(graph: AdminCycleDetailGraph): AdminContestCycleDetailResponse {
+    return {
+      cycle: this.toCycleSummary(graph),
+      phase: ContestService.derivePhase(graph.status, this.judgedCount(graph)),
+      rounds: graph.rounds.map((r) => this.toAdminRoundDetail(r)),
+      weeklyWinners: this.toWeeklyWinners(graph),
+      monthlyStandings: this.toStandings(graph),
+    };
+  }
+
+  private toAdminRoundDetail(round: AdminCycleDetailGraph['rounds'][number]): AdminContestRoundDetail {
+    return {
+      ...this.toRoundSummary(round),
+      entryCount: round.entries.length,
+      entries: round.entries.map((e) => this.toAdminEntry(e)),
+    };
+  }
+
+  private toAdminEntry(entry: AdminCycleDetailGraph['rounds'][number]['entries'][number]): AdminContestEntry {
+    return {
+      entryId: entry.id,
+      submittedAt: entry.submittedAt,
+      entrant: { userId: entry.userId, displayName: entry.user.displayName },
+      post: {
+        id: entry.post.id,
+        contentText: entry.post.contentText,
+        mediaUrls: entry.post.mediaUrls,
+        createdAt: entry.post.createdAt,
+        likeCount: entry.post.likeCount,
+        commentCount: entry.post.commentCount,
+      },
+      position: entry.winner?.position ?? null,
+    };
   }
 
   private p2002Target(err: Prisma.PrismaClientKnownRequestError): string[] {

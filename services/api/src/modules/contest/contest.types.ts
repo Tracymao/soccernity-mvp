@@ -79,3 +79,95 @@ export interface ContestCycleDetailResponse {
   weeklyWinners: ContestWinnerSummary[];
   monthlyStandings: ContestStandingSummary[];
 }
+
+// ===================================================================
+// Admin read surface — sprint-2/admin-contest-read-endpoints
+// (Decision Log #241, Task 1 of 3 resolving Decision Log #239).
+//
+// The 4 admin WRITE endpoints (POST /admin/contest/cycles,
+// .../rounds/:week/results, .../final/open, .../crown) take entryId /
+// userId arrays but nothing ever returned those ids. An admin could not
+// see which cycle is running, who entered a round, or what each entrant
+// submitted — so judging a week was impossible from a UI. These three
+// GETs (all AdminJwtAuthGuard, on ContestAdminController) close that.
+// ===================================================================
+
+// A ContestRoundSummary plus the number of entries submitted into it —
+// the "cycle history" list needs the count but not the per-entry detail.
+export interface AdminContestRoundSummary extends ContestRoundSummary {
+  entryCount: number;
+}
+
+// One item in GET /admin/contest/cycles. Same shape as
+// ContestCycleDetailResponse (reuses the exact to*Summary helpers) plus
+// per-round entryCount — a "short summary", NOT the full per-entry
+// `entries` array (that is the detail endpoint's job).
+export interface AdminContestCycleListItem {
+  cycle: ContestCycleSummary;
+  phase: ContestPhase;
+  rounds: AdminContestRoundSummary[];
+  weeklyWinners: ContestWinnerSummary[];
+  monthlyStandings: ContestStandingSummary[];
+}
+
+// GET /admin/contest/cycles — every cycle, newest first (by createdAt).
+// A plain list, no pagination: a monthly cycle means ~12 rows/year, so
+// keyset paging would be premature. If it ever needs paging, follow the
+// contest/feed cursor conventions (see contest/README.md).
+export interface AdminContestCycleListResponse {
+  items: AdminContestCycleListItem[];
+}
+
+// One contest entry, as an admin sees it for judging — the only place
+// `entryId` becomes visible. `post.contentText` matches feed's
+// POST_SELECT (the Post model's real field is `contentText`, not
+// `body`). `position` is this entry's ContestRoundWinner.position if it
+// won its round, else null (the winner-position join).
+export interface AdminContestEntry {
+  entryId: string;
+  submittedAt: Date;
+  entrant: {
+    userId: string;
+    displayName: string;
+  };
+  post: {
+    id: string;
+    contentText: string;
+    mediaUrls: string[];
+    createdAt: Date;
+    likeCount: number;
+    commentCount: number;
+  };
+  position: number | null;
+}
+
+// A round in the admin detail view — the base summary + entryCount + the
+// full `entries` array (the operational core for judging).
+export interface AdminContestRoundDetail extends ContestRoundSummary {
+  entryCount: number;
+  entries: AdminContestEntry[];
+}
+
+// GET /admin/contest/cycles/:id — everything ContestCycleDetailResponse
+// returns, plus each round's full `entries` array. 404 if the id is
+// unknown (same as the user-side getCycleById).
+export interface AdminContestCycleDetailResponse {
+  cycle: ContestCycleSummary;
+  phase: ContestPhase;
+  rounds: AdminContestRoundDetail[];
+  weeklyWinners: ContestWinnerSummary[];
+  monthlyStandings: ContestStandingSummary[];
+}
+
+// GET /admin/contest/current — the same detail shape, resolved for the
+// running cycle ('active' | 'final') or, failing that, the most-recently
+// 'completed' one (mirrors the user-side getCurrentContest resolution).
+// `cycle` / `phase` are null and the arrays empty ONLY when no
+// ContestCycle has ever been created.
+export interface AdminCurrentContestResponse {
+  cycle: ContestCycleSummary | null;
+  phase: ContestPhase | null;
+  rounds: AdminContestRoundDetail[];
+  weeklyWinners: ContestWinnerSummary[];
+  monthlyStandings: ContestStandingSummary[];
+}
