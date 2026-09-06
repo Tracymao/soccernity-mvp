@@ -6547,6 +6547,72 @@ Full reasoning for every choice above: Build Plan Section 5.
     of `FooterLayout` by PR #188 (Decision Log #228); no `apps/web`
     route corresponds to this Contest-tab display state.
   - Not merged — founder's call after review.
+- **`sprint-2/settings-family-consolidation-audit-docs` (figma-design-system,
+  2026-09-06) is an AUDIT ONLY of the whole user-facing Settings family —
+  no Figma frame was touched, nothing renamed/moved/archived, no
+  consolidation started.** Full report:
+  `docs/sprint-2-settings-family-consolidation-audit-report.md`. Build
+  Plan **Decision Log #230** added, blocking further Settings work until
+  the 10 flagged items below are resolved by the founder.
+  - **Real count: 40 live Settings-family frames** (20 desktop + 20
+    mobile), not the "22 duplicate Settings Figma frames" Build Plan
+    Section 7 still names as an MVP launch blocker — that number is stale
+    and slightly mis-frames the problem. Plus 2 already-archived
+    (`ARCHIVED — Settings — Privacy & Safety` `2922:5382` / `5649:8092`)
+    and 4 Admin Panel `Settings - …` frames (hyphen-named, role
+    management, a different pillar — out of scope).
+  - **The top-level IA is already consistent** — every desktop frame
+    carries the identical 5-section left nav rail (Account · Security &
+    account access · Privacy & safety · Notifications · Display, language
+    & region), each highlighting its own section. The rail is the
+    de-facto hub and needs no fixing; the mess is the redundant
+    intermediate screens and competing sub-hubs beneath it.
+  - **2 genuine duplicate clusters** (confirmed structural role overlap,
+    not name similarity): (1) **Security** — `Settings — Security &
+    Account` (`2922:5143` / `5649:8074`) is a dead-end one-row
+    intermediate whose only row leads to `Settings — Security Overview`
+    (`2926:8056` / `5695:8279`), the real page — report recommends
+    archiving the intermediate (exactly the pattern the brief predicted).
+    (2) **Notifications** — `Settings — Notification Preferences (By
+    Type)` (`2922:5602` / `5649:8116`, rows *Filter / Preference*, no
+    matching leaf frames) and `Settings — Notification Preferences`
+    (`2926:9721` / `5696:8340`, rows *Push / Email*, leaves exist) are
+    two competing entry screens to two different mental models — report
+    recommends keeping the Push/Email one, extending it to 4 rows, and
+    archiving the other.
+  - **Root cause of the "duplicate frames" blocker: the 20 desktop
+    frames are independent `FRAME` copies (43 children each), NOT
+    instances of a component**, of one shell that also renders an
+    irrelevant Community-style left sidebar (profile card, Trending News,
+    Suggested follows) on every Settings screen. Every copy/content fix
+    has had to be made ~20 times (PRs #116–#119 each re-swept the same
+    class of debt one frame at a time). Consolidation must componentize
+    the shell and drop that sidebar, not just merge the ~8 overlapping
+    frames.
+  - **1 mislabelled role:** `Settings — Overview` (`2905:4798` /
+    `5607:7813`) is not a landing/overview screen — it is the **Account
+    section page** (nav shows "Account" active, panel titled "Account").
+    No dedicated top-level Settings landing exists anywhere.
+  - **Not duplication, real gaps:** the Display section hub
+    (`2922:5832` / `5649:8140`) lists 4 rows (Accessibility, Display,
+    Language, Data Usage) with **zero destination sub-page frames**; and
+    the mobile IA is inconsistent — `Overview — Mobile` and `Privacy —
+    Mobile` embed the 5-row hub list, every other mobile section frame
+    uses a `‹ Settings` back bar with no list.
+  - **Proposed final page list in the report: 32 frames kept (re-based
+    on a shared shell), 4 archived, 10 renamed for role clarity** — plus
+    optional new work (4 Display leaves, possibly a standalone mobile
+    hub) flagged separately.
+  - **10 decisions flagged for founder sign-off, none resolved** —
+    section-2 name, section-4 name, which Notifications hub survives,
+    `Mute New Accounts` scope/name, `Notifications (Mute & Filter)`
+    split, the mobile navigation model, whether Settings needs a
+    dedicated top-level landing, the Account Info password-gate screen,
+    whether the Display leaves get built now, and removing the Community
+    sidebar from the Settings pillar. Full reasoning for each is in the
+    report's §6. **No consolidation PR should start until these are
+    answered.**
+  - PR opened, not merged — founder's call.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
