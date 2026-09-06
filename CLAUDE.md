@@ -6372,7 +6372,31 @@ Full reasoning for every choice above: Build Plan Section 5.
     inline "Manage Account" deactivate/delete panel now duplicates these
     dedicated routes — left as a valid secondary entry point, a possible
     consolidation follow-up.
-  - Not merged — pushed, PR opened, founder's call after review.
+  - Merged as PR #185.
+- **`sprint-2/fix-flaky-clubs-feed-pagination-test` (backend-api,
+  2026-09-06) is a TEST-ONLY fix — no production code, no schema change,
+  no feed-behaviour change.** `test/clubs.e2e-spec.ts`'s
+  `GET /clubs/:id/feed` order assertions seeded 3 posts in a tight loop
+  with no explicit `createdAt`, relying on `Post.createdAt`'s
+  `@default(now())`; when two landed in the same millisecond, their
+  order fell to `FeedService`'s `createdAt desc, id desc` keyset
+  tiebreaker's *second* key — `Post.id`, a random `uuid()` — producing
+  an intermittent CI failure on the keyset-pagination test (line ~574).
+  It was blocking PR #185's required `Run e2e tests` check even though
+  #185 never touches `services/api`. `seedClubPost()` now assigns an
+  explicit, strictly-increasing `createdAt` (a closure-level seed clock,
+  +10ms per post) so the order-asserting tests never depend on clock
+  resolution. **The `createdAt desc, id desc` tiebreaker itself
+  (`feed.service.ts`, shared by `GET /posts/feed`) is unchanged** — the
+  same-millisecond non-determinism it carries in production is flagged
+  as **Decision Log #226** (cosmetic, DL #153/#154-class, low priority —
+  a monotonic sequence column on `Post` is the likely fix), not fixed
+  here. Verified: full e2e suite green **twice in a row — 11 suites / 81
+  tests, 0 failures** each run (`npm run test:e2e`, real Postgres/Redis
+  via docker-compose). No other e2e file seeds posts in a loop with an
+  order assertion (`feed-reactions.e2e-spec.ts` compares with `.sort()`;
+  confirmed by grep). Not merged.
+  Report: `docs/sprint-2-fix-flaky-clubs-feed-pagination-test-report.md`.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

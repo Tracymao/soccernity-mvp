@@ -472,9 +472,31 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
   // proving against Postgres (category 3 — a Prisma relation filter over
   // an implicit join table — from test/README.md's guiding principle).
   describe('GET /clubs/:id/feed + GET /clubs/:id/members (Decision Log #157/#217)', () => {
+    // Post.createdAt is `@default(now())` and Post.id is `@default(uuid())`
+    // (random -- no relation to insertion order). Two posts created in the
+    // same millisecond by a tight seeding loop tie on createdAt, and
+    // FeedService's `orderBy: [{ createdAt: 'desc' }, { id: 'desc' }]`
+    // tiebreaker then falls to a random UUID -- making the relative-order
+    // assertions in this describe block flaky (observed in CI on the
+    // keyset-pagination test). Every seeded post therefore gets an
+    // explicit, strictly-increasing createdAt, spaced 10ms apart -- far
+    // past any realistic clock resolution. The seed clock is closure-level
+    // so it stays monotonic across every call and every test in this
+    // block; reset-database between tests clears the rows, not this
+    // counter.
+    //
+    // This is a TEST-DETERMINISM fix only. The `createdAt desc, id desc`
+    // tiebreaker is a pre-existing convention shared with GET /posts/feed
+    // and is deliberately NOT changed here -- the underlying same-
+    // millisecond edge case is flagged as Build Plan Decision Log #226,
+    // not fixed.
+    let seedClock = new Date('2026-09-01T00:00:00.000Z').getTime();
     async function seedClubPost(authorId: string, clubPageId: string, contentText: string) {
       const prisma = getTestPrismaClient();
-      return prisma.post.create({ data: { authorId, clubPageId, contentText, mediaUrls: [] } });
+      seedClock += 10;
+      return prisma.post.create({
+        data: { authorId, clubPageId, contentText, mediaUrls: [], createdAt: new Date(seedClock) },
+      });
     }
 
     async function addMember(clubId: string, userId: string) {

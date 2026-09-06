@@ -98,7 +98,17 @@ see the remaining gaps listed below.
   exactly one row exists and `ClubPage.memberCount` is exactly one higher
   than its starting value, not two. Also covers two different users
   joining the same club, the real (unmocked) `JwtAuthGuard` 401 case, and
-  a real 404 for a non-existent club id.
+  a real 404 for a non-existent club id. The `GET /clubs/:id/feed` block
+  (added by `sprint-2/club-fan-page-backend`) asserts feed ordering;
+  because `Post.createdAt` is `@default(now())` and `Post.id` is a random
+  `uuid()`, its `seedClubPost()` helper assigns an **explicit,
+  strictly-increasing `createdAt`** (10ms apart) so those order
+  assertions never depend on same-millisecond clock resolution falling
+  through to the `createdAt desc, id desc` tiebreaker's random-`id`
+  second key — a CI flake fixed in
+  `sprint-2/fix-flaky-clubs-feed-pagination-test` (Build Plan Decision
+  Log #226). Any new e2e that seeds multiple posts and asserts on their
+  relative order must do the same.
 - `feed-reactions.e2e-spec.ts` (added by sprint-2/e2e-coverage-expansion)
   — `FeedService.likePost`/`unlikePost`/`addComment`/`savePost`/
   `unsavePost` against real Postgres: the `Like` row + `Post.likeCount`
