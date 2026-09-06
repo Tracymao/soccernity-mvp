@@ -6725,6 +6725,19 @@ Full reasoning for every choice above: Build Plan Section 5.
     tsc / lint / build clean.
     `docs/sprint-2-admin-dashboard-stub-report.md`.
   - PR opened, not merged — founder's call.
+  - **`sprint-2/admin-articles-categories-stub` (PR 5, 2026-09-06 —
+    stacks on PR 4).** Articles list / Create New Post / Categories list
+    / Add Category (Figma `123:56` / `124:313` / `128:488` / `138:93`)
+    converted as disclosed stubs — no `POST/PATCH /admin/articles`, no
+    `POST /admin/categories`, no list endpoint for either (Section 4.8),
+    no image storage. Lists show a sample table + a working navy link to
+    the create screen; create screens reproduce every field disabled.
+    New routes `/articles/new`, `/categories/new`. Added
+    `.admin-stub__linkbtn` (enabled link-as-button for navigating
+    between stub screens). **Decision Log #235.** apps/admin vitest **11
+    files / 43 tests, 0 failures**; tsc / lint / build clean.
+    `docs/sprint-2-admin-articles-categories-stub-report.md`.
+  - PR opened, not merged — founder's call.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
