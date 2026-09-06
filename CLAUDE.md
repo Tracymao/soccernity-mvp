@@ -6696,6 +6696,23 @@ Full reasoning for every choice above: Build Plan Section 5.
     tests, 0 failures** (`AdminProfilePage.test.tsx` +7); tsc / lint /
     build clean; dev-server smoke served `/profile`. Full detail:
     `docs/sprint-2-admin-profile-and-password-report.md`.
+  - PR #193 opened (stacks on #192), not merged — founder's call.
+  - **`sprint-2/admin-moderation-stub` (PR 3, 2026-09-06 — stacks on PR
+    2).** The 3 Moderation screens (Figma `5794:8635` / `5796:8635` /
+    `5796:8753`) converted as **disclosed stubs** — no moderation-queue
+    backend exists (Sprint 5, Decision Log #135/#189). Layout reproduced
+    (Open Reports / Appeals tabs + report table; Report Detail's 4
+    moderator actions Dismiss/Remove/Warn/Suspend — navy not red;
+    Appeal Review's Uphold/Overturn), every control `disabled`, a dashed
+    banner names the missing endpoint. The **Decision Log #138**
+    appeal-routing rule (a second admin/moderator reviews an appeal,
+    never the original) and the **Section 8.4** both-parties-notified
+    rule are rendered as visible on-screen copy so the Sprint 5 backend
+    PR inherits the IA. Introduces the shared stub primitives
+    (`src/components/stub/AdminStub.tsx`) that PRs 4–10 reuse. New routes
+    `/moderation/reports/:id`, `/moderation/appeals/:id`. **Decision Log
+    #233.** apps/admin vitest **9 files / 38 tests, 0 failures**; tsc /
+    lint / build clean. `docs/sprint-2-admin-moderation-stub-report.md`.
   - PR opened, not merged — founder's call.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
