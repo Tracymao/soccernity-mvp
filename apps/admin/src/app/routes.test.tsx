@@ -1,6 +1,6 @@
 // Integration smoke test: mount the REAL route tree (adminRoutes) via
 // useRoutes under a plain <MemoryRouter>, with the real AdminAuthProvider,
-// mocking only the network. Confirms the shell + guard + placeholders
+// mocking only the network. Confirms the shell + guard + section screens
 // wire together and nothing throws on a real navigation.
 //
 // useRoutes (not createMemoryRouter) is used deliberately — the routes
@@ -61,17 +61,16 @@ describe("adminRoutes (integration)", () => {
     );
   });
 
-  it("renders the shell + a section placeholder for an authenticated admin", async () => {
+  it("renders the shell + a section screen for an authenticated admin", async () => {
     window.localStorage.setItem("sn_admin_access_token", "acc-1");
     window.localStorage.setItem("sn_admin_refresh_token", "ref-1");
     vi.mocked(getAdminProfile).mockResolvedValue(PROFILE);
 
-    // /settings is still an AdminSectionPlaceholder (converted in a later PR)
     renderAt("/settings");
 
     await waitFor(() => expect(screen.getByText("Ada Lovelace")).not.toBeNull());
-    expect(screen.getByText(/designed in Figma but not yet built/i)).not.toBeNull();
-    expect(screen.getByText(/role-management endpoint exists/i)).not.toBeNull();
+    // Settings/Roles is a disclosed stub — banner names the missing backend
+    expect(screen.getByText(/no admin role-management endpoint/i)).not.toBeNull();
   });
 
   it("shows a not-found state for an unknown authenticated path", async () => {

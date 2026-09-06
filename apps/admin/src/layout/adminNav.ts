@@ -5,10 +5,10 @@
 // and committed under src/assets/icons (normalised to `currentColor` so
 // the active/inactive treatment is pure CSS).
 //
-// Every `path` here has a route in src/app/routes.tsx. As of PR 1 all of
-// them render <AdminSectionPlaceholder> — an honest "designed in Figma,
-// not built in this app yet" state. Later figma-to-code PRs replace the
-// placeholder one section at a time; the nav does not change.
+// Every `path` here has a route in src/app/routes.tsx. Profile + Change
+// Password are fully wired; the rest are disclosed stubs (their endpoints
+// don't exist yet). A stub's PR swaps it for real data when its endpoints
+// land; the nav does not change.
 import navDashboard from "../assets/icons/nav-dashboard.svg";
 import navArticles from "../assets/icons/nav-articles.svg";
 import navUsers from "../assets/icons/nav-users.svg";

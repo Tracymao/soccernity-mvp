@@ -1,10 +1,12 @@
 // Route table for apps/admin.
 //
-// PR 1 (sprint-2/admin-foundation-shell-auth) ships: /login (public), the
-// authenticated shell, and every section route pointing at
-// <AdminSectionPlaceholder> — an honest "designed in Figma, not built
-// here yet" state. Later figma-to-code PRs replace each section's element
-// with its real conversion; the paths and the nav do not change.
+// As of the ~10-PR Admin Console conversion (sprint-2/admin-*), every one
+// of the 10 sidebar sections has a real screen: Profile + Change Password
+// are fully wired to /admin/profile + /admin/auth/change-password
+// (Decision Log #54); the rest are honest disclosed stubs (their backend
+// endpoints don't exist yet — Section 4.8 is mostly unbuilt). A stub's PR
+// swaps it for real data when its endpoints land; the paths and the nav
+// do not change.
 //
 // `adminRoutes` (the RouteObject[]) is exported separately from `router`
 // so a test can mount the real tree via createMemoryRouter — the same
@@ -39,24 +41,12 @@ import {
   ContestDeleteTaskPage,
   ContestTaskScheduledPage,
 } from "../pages/contest/ContestTaskFormPages";
+import SettingsRolesPage from "../pages/settings/SettingsRolesPage";
+import { AddRolePage, EditRolePage, DeleteRolePage } from "../pages/settings/RoleFormPages";
 import ModerationQueuePage from "../pages/moderation/ModerationQueuePage";
 import ReportDetailPage from "../pages/moderation/ReportDetailPage";
 import AppealReviewPage from "../pages/moderation/AppealReviewPage";
-import AdminSectionPlaceholder from "../pages/AdminSectionPlaceholder";
 import AdminNotFound from "../pages/AdminNotFound";
-
-// Backend state per section, verified against Build Plan Section 4.8 and
-// services/api/src/modules/admin/README.md (PR 1 research). Shown to the
-// operator on each placeholder so nobody is misled about what the console
-// can do once a screen is "converted".
-const BACKEND_NOTES = {
-  settings:
-    "No admin role-management endpoint exists — AdminUser.role is a fixed enum and there is no self-service admin/role provisioning (Decision Log #191).",
-} as const;
-
-function placeholder(title: string, key: keyof typeof BACKEND_NOTES) {
-  return <AdminSectionPlaceholder title={title} backendNote={BACKEND_NOTES[key]} />;
-}
 
 export const adminRoutes: RouteObject[] = [
   { path: "/login", element: <AdminLoginPage /> },
@@ -99,7 +89,11 @@ export const adminRoutes: RouteObject[] = [
           { path: "media", element: <MediaLibraryPage /> },
           { path: "media/preview", element: <MediaPreviewPage /> },
           { path: "media/upload", element: <MediaUploadPage /> },
-          { path: "settings", element: placeholder("Settings", "settings") },
+          // Stubs (sprint-2/admin-settings-roles-stub) — no role-management endpoint (Decision Log #191).
+          { path: "settings", element: <SettingsRolesPage /> },
+          { path: "settings/roles/new", element: <AddRolePage /> },
+          { path: "settings/roles/edit", element: <EditRolePage /> },
+          { path: "settings/roles/delete", element: <DeleteRolePage /> },
           // Real screen (sprint-2/admin-profile-and-password) — GET/PATCH
           // /admin/profile + POST /admin/auth/change-password are built
           // (Decision Log #54).
