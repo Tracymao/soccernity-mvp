@@ -6621,13 +6621,17 @@ Full reasoning for every choice above: Build Plan Section 5.
   backend-backing audit, and per-section stub-vs-real breakdown are in the
   PR 1 report — `docs/sprint-2-admin-foundation-shell-auth-report.md`.
   Backend reality, verified live against Build Plan Section 4.8 +
-  `services/api/src/modules/admin/README.md`: **only `/admin/auth/*`,
-  `GET/PATCH /admin/profile` (Decision Log #54), and the write-only
-  `/admin/contest/*` state machine (Decision Log #218/#219) exist.**
+  `services/api/src/modules/admin/README.md`: **`/admin/auth/*`,
+  `GET/PATCH /admin/profile` (Decision Log #54), and the full
+  `/admin/contest/*` surface — the write state machine (Decision Log
+  #218/#219) plus the read endpoints (Decision Log #241) — exist.**
   Dashboard, Articles, Users, Moderation (Sprint 5, Decision Log
   #135/#189), Categories, Competitions (parked, Decision Log #72/#73),
   Media, and Settings/role-management all have **no backing endpoint** —
   those screens convert as honest disclosed "designed, not built" stubs.
+  **The Contest section is the exception among the non-auth sections: it
+  is fully wired** (`sprint-2/admin-contest-to-code`, Decision Log #243 —
+  closes #239).
   - **`sprint-2/admin-foundation-shell-auth` (PR 1, figma-design-system —
     one-time cross-assignment to figma-to-code work, founder-directed;
     same precedent as PRs #98/#102/#110/#130 the other direction, 2026-09-06)
@@ -6799,12 +6803,12 @@ Full reasoning for every choice above: Build Plan Section 5.
       → HTTP 200, clean log. apps/admin vitest **16 files / 55 tests, 0
       failures**; tsc / lint / build clean.
       `docs/sprint-2-admin-settings-roles-stub-report.md` has the full
-      PR 1–10 table. **Still open: Decision Log #239** — a working
-      Contest admin console needs a coordinated backend
-      (`GET /admin/contest/*` read endpoint) + design + code pass;
-      backend for Dashboard/Articles/Users/Moderation/Categories/Media
-      is Sprint 5 / Section 4.8 work, each stub PR swaps to real data
-      when its endpoints land.
+      PR 1–10 table. **Decision Log #239 is now CLOSED** — the Contest
+      section is real (the 3-task arc: read endpoints #241, Figma screens
+      #242, code wiring #243 / `sprint-2/admin-contest-to-code`). Backend
+      for Dashboard/Articles/Users/Moderation/Categories/Media is still
+      Sprint 5 / Section 4.8 work, each stub PR swaps to real data when
+      its endpoints land.
   - PR opened, not merged — founder's call.
 - **`sprint-2/admin-contest-read-endpoints` (backend-api, 2026-09-06)
   begins resolving Decision Log #239 — Task 1 of 3 (backend read
@@ -6848,11 +6852,12 @@ Full reasoning for every choice above: Build Plan Section 5.
     those ids → the read shows winner positions asserted against real
     `ContestRoundWinner` rows → `/current` tracks phase → `/cycles`
     lists history).
-  - **Tasks 2 (figma-screen-builder — cycle/round/judge/final/crown
-    workflow screens against these response shapes) and 3 (figma-to-code
-    — wire `apps/admin`'s Contest section to the read + the 4 write
-    endpoints) are next.** `apps/admin`'s Contest section stays a
-    disclosed stub until Task 3.
+  - **Tasks 2 and 3 are now both done** — Task 2 (`sprint-2/admin-contest-screens`,
+    Decision Log #242) designed the Figma screens; Task 3
+    (`sprint-2/admin-contest-to-code`, Decision Log #243) wired `apps/admin`'s
+    Contest section to the read + the 4 write endpoints. **Decision Log #239
+    is CLOSED.** This paragraph is left for the historical record of what
+    Task 1 itself shipped.
   - PR opened, not merged — founder's call.
 - **`sprint-2/admin-contest-screens` (figma-screen-builder, 2026-09-06) is
   Task 2 of 3 resolving Decision Log #239 — the real Contest admin console
@@ -6903,9 +6908,61 @@ Full reasoning for every choice above: Build Plan Section 5.
     screen. Still flagged for `figma-design-system`: the `calendar 2` variant
     is now at zero instances, and the calendar's internal sample month still
     reads "January 2022".
-  - **Decision Log #239 stays Open** — Task 3 (`figma-to-code`) must wire
-    `apps/admin`'s Contest section to these screens and the four write
-    endpoints. Until then that section remains a disclosed stub.
+  - **Decision Log #239 is now CLOSED** — Task 3 (`sprint-2/admin-contest-to-code`,
+    see the next bullet) wired `apps/admin`'s Contest section to these screens
+    and the four write endpoints.
+  - PR opened, not merged — founder's call.
+- **`sprint-2/admin-contest-to-code` (figma-to-code, 2026-09-06) is Task 3
+  of 3 — it CLOSES Decision Log #239. `apps/admin` only, no `services/api`
+  / `apps/web`.** Report: `docs/sprint-2-admin-contest-to-code-report.md`.
+  Decision Log **#243** added; **#239** flipped Open → Resolved with a
+  forward-pointer to the full `#241 + #242 + #243` arc.
+  - **`apps/admin`'s Contest section is now real** — the disclosed-stub
+    "task"-model family (`ContestTasksPage` / `ContestTaskFormPages` /
+    `contestBackendNote` / the old `contest.test.tsx`) is **deleted**, and
+    the 7 `/contest/tasks/*` stub routes are replaced with 7 real routes
+    against the actual `cycle → 3 weekly rounds → open final → crown` state
+    machine.
+  - **New `apps/admin/src/api/contest.ts`** — mirrors
+    `services/api/src/modules/contest/contest.types.ts`'s `Admin*` shapes,
+    all via `adminFetch` (isolated admin auth, transparent 401→refresh).
+  - **`ContestConsolePage` (route `/contest`) is the phase-branching hub
+    (`GET /admin/contest/current`) and the ONLY entry point to the write
+    actions** — its phase-contextual primary routes to Judge week N
+    (`vacant`/`week_1`/`weeks_1_2`) / Open the final (`weeks_1_3`) / Crown
+    winners (`final_live`) / Start a new cycle (`crowned`), so the
+    sequential-judging rule is enforced by the UI's shape before any 409.
+    `GET /admin/contest/current` falling back to the most-recently completed
+    cycle is why the `crowned` state is a real reachable screen.
+  - **`ContestStartCyclePage`** (`/contest/cycles/new` — `POST
+    /admin/contest/cycles`; auto three-7-day-windows or explicit `rounds[]`;
+    the real 409 renders as a blocked state with a forward action).
+    **`ContestJudgeWeekPage`** (`/contest/cycles/:id/rounds/:week` — `GET`
+    cycle + `POST .../rounds/:week/results`; open-round position selector,
+    already-judged read-only, the *supported* empty-`winners` "thin week",
+    and the out-of-sequence block, all driven by the round's real state not
+    a query param). **`ContestOpenFinalPage`** (`/contest/cycles/:id/final/open`)
+    and **`ContestCrownWinnersPage`** (`/contest/cycles/:id/crown` — finalist
+    pool DEDUPLICATED by `userId` per `CrownCycleDto`; min-1 required, ties
+    allowed). **`ContestHistoryPage`** (`/contest/history` — `GET
+    /admin/contest/cycles`). **`ContestCycleDetailPage`** (`/contest/cycles/:id`
+    — read-only past-cycle view; a real 404 renders an honest not-found
+    state). Nav unchanged (`contest` item stays `/contest`).
+  - **Judgment calls**: Open the Final + Crown Winners are dedicated routes
+    (both still reached only from the hub), not in-page modals; date fields
+    are native `<input type="date">` → full-ISO on send; the cycle-detail
+    page reuses `CycleOverview` with a `readOnly` prop; no "delete cycle"
+    screen (no endpoint, a cycle can't be deleted or re-judged).
+  - **Grep-confirmed: zero `ContestTask` / `contestBackendNote` /
+    `Target entry count` / `Hashtag` / `/contest/tasks` / `Task name`
+    references remain in `apps/admin/src`.**
+  - **Verification**: `apps/admin` vitest **16 files / 66 tests, 0 failures**
+    (`contest.test.tsx` 3 → 14 — every hub phase branch, create-cycle + 409,
+    judge-week position assign + submit + empty thin week, crown deduped
+    pool, 404); `npx tsc --noEmit`, `npm run lint`, `npm run build`
+    (`@soccernity/admin`) all clean; dev-server smoke test all 7 Contest
+    routes → HTTP 200, clean log. No real browser/Playwright check
+    available — same ceiling as every prior `apps/admin` figma-to-code PR.
   - PR opened, not merged — founder's call.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
