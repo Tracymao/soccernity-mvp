@@ -1,13 +1,19 @@
 // Clubs API client -- Build Plan Section 4.4 (club subset).
 //
-// Both GET /clubs and POST /clubs/:id/join are JwtAuthGuard-only
+// Every route is JwtAuthGuard-only
 // (services/api/src/modules/clubs/clubs.controller.ts) -- every call here
 // requires a real access token. There is no public/unauthenticated
-// clubs-list route (see sprint-2/club-picker-ui's PR description for why
-// that matters for where this client is used).
+// clubs route (see sprint-2/club-picker-ui's PR description for why that
+// matters for where this client is used).
 //
 // Shape mirrors services/api/src/modules/clubs/clubs.service.ts's
-// ClubSummaryWithViewerState / ClubPageResult / JoinState exactly.
+// ClubSummaryWithViewerState / ClubPageResult / JoinState / ClubMemberPage
+// exactly. GET /clubs/:id/feed (sprint-2/club-fan-page-backend) delegates
+// server-side to FeedService.getClubFeed, so its response is the exact
+// FeedPage shape api/feed.ts already models -- imported from there rather
+// than redeclared.
+import type { FeedPage } from "./feed";
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
 
 export interface ClubSummary {
@@ -34,6 +40,25 @@ export interface JoinClubResult {
   clubId: string;
   joined: boolean;
   memberCount: number;
+}
+
+// GET /clubs/:id/members roster entry. Mirrors services/api
+// clubs.service.ts's ClubMember exactly: { id, displayName } only. There
+// is NO @handle / avatar field (no such `User` column -- Decision Log
+// #58; the Figma roster's "@handle" text is decorative), and NO
+// per-caller `isFollowing` flag (unlike GET /posts/feed's author, which
+// carries one -- Decision Log #153). The roster server-side already
+// excludes restricted-pending minors and deactivated accounts
+// (Decision Log #217/#221), so the visible list can be shorter than the
+// club's memberCount.
+export interface ClubMember {
+  id: string;
+  displayName: string;
+}
+
+export interface ClubMemberPage {
+  items: ClubMember[];
+  nextCursor: string | null;
 }
 
 export class ClubsApiError extends Error {
@@ -87,6 +112,59 @@ export async function getClubById(accessToken: string, clubId: string): Promise<
   }
 
   return (await response.json()) as ClubSummary;
+}
+
+// GET /clubs/:id/feed -- the club fan-page feed: every Post whose
+// clubPageId matches, newest-first, keyset-paginated (default 20 / max
+// 50). NOT the same as GET /posts/feed (that one is the caller's own
+// posts + follows and never reads clubPageId) -- but the server delegates
+// to FeedService, so the response shape is identical: a FeedPage with the
+// per-caller isLiked / isSaved / author.isFollowing viewer state
+// (Decision Log #153). JwtAuthGuard-only; a non-existent :id is a 404.
+export async function getClubFeed(
+  accessToken: string,
+  clubId: string,
+  cursor?: string,
+): Promise<FeedPage> {
+  const url = new URL(`${API_BASE_URL}/clubs/${clubId}/feed`);
+  if (cursor) url.searchParams.set("cursor", cursor);
+
+  let response: Response;
+  try {
+    response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  } catch {
+    throw new ClubsApiError("Couldn't reach the Soccernity server.");
+  }
+
+  if (!response.ok) {
+    throw new ClubsApiError(`Couldn't load this club's feed (${response.status}).`, { status: response.status });
+  }
+
+  return (await response.json()) as FeedPage;
+}
+
+// GET /clubs/:id/members -- the club roster, paginated alphabetically by
+// displayName. JwtAuthGuard-only; a non-existent :id is a 404.
+export async function getClubMembers(
+  accessToken: string,
+  clubId: string,
+  cursor?: string,
+): Promise<ClubMemberPage> {
+  const url = new URL(`${API_BASE_URL}/clubs/${clubId}/members`);
+  if (cursor) url.searchParams.set("cursor", cursor);
+
+  let response: Response;
+  try {
+    response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  } catch {
+    throw new ClubsApiError("Couldn't reach the Soccernity server.");
+  }
+
+  if (!response.ok) {
+    throw new ClubsApiError(`Couldn't load this club's members (${response.status}).`, { status: response.status });
+  }
+
+  return (await response.json()) as ClubMemberPage;
 }
 
 export async function joinClub(accessToken: string, clubId: string): Promise<JoinClubResult> {

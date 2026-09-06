@@ -5772,7 +5772,8 @@ Full reasoning for every choice above: Build Plan Section 5.
     Montserrat (Community feed convention); new chrome uses Inter
     (Club Fan Page header type). On-canvas
     `Club — Fan Page — Design Notes` annotation added.
-  - Not merged — founder's call after review.
+  - Merged as PR #176. **Converted to code by `sprint-2/club-fan-page-to-code`
+    — see below.**
 - **`sprint-2/club-fan-page-backend` (backend-api, 2026-09-05) builds the
   backend the Club — Fan Page design (PR #176 / `sprint-2/club-fan-page-design`)
   needs — `services/api` only, no `apps/web`. Closes the backend half of
@@ -5857,7 +5858,42 @@ Full reasoning for every choice above: Build Plan Section 5.
     roster to these endpoints is the separate `figma-to-code` follow-up
     this unblocks (`ClubFanPage.tsx` currently renders neither; its scope
     note "Member posts and a full member list aren't part of club pages
-    yet" in the code will need updating then).
+    yet" in the code will need updating then). **Done — see
+    `sprint-2/club-fan-page-to-code` below.**
+  - Merged as PR #177.
+- **`sprint-2/club-fan-page-to-code` (figma-to-code, 2026-09-06) wires
+  `ClubFanPage.tsx`'s club feed + member roster to the PR #177 endpoints,
+  matching the PR #176 design. `apps/web` only. Decision Log #157 is now
+  Resolved on all three sides (design #216 / backend / frontend); #224
+  added.** Report: `docs/sprint-2-club-fan-page-to-code-report.md`.
+  - **`api/clubs.ts`:** new `getClubFeed` (`GET /clubs/:id/feed` →
+    `FeedPage`, type imported from `api/feed.ts` since the server delegates
+    to `FeedService`) and `getClubMembers` (`GET /clubs/:id/members` →
+    `{ items: { id, displayName }[], nextCursor }`).
+  - **`ClubFanPage.tsx`:** header block unchanged; the "Member posts and a
+    full member list aren't part of club pages yet" scope note is
+    **removed**. New **Club feed** section renders each post via the reused
+    Community `PostCard` (verbatim — real like/comment/save/follow;
+    `CommunityPage.css` imported for `.post*` styles), cursor "Load more".
+    New **Members** section renders a roster via a new `ClubMemberRow`
+    (initials avatar + name + a Follow/Following toggle →
+    `POST`/`DELETE /users/:id/follow`; own row has no Follow button). Feed
+    + roster load independently (`Promise.allSettled`) — a failure in
+    either shows a soft in-section message, never breaks the header.
+  - **Flagged (see report + Decision Log #224):** `GET /clubs/:id/members`
+    has no per-caller `isFollowing` (unlike `GET /posts/feed`'s author),
+    so a roster Follow button always starts "Follow" and self-corrects
+    in-session — idempotent, harmless, same class of gap as Decision Log
+    #153/#154. The Figma "View all members →" has no destination screen,
+    so it's rendered as an in-place "Load more members". No club-post
+    composer (no club-scoped post-creation flow designed). Roster rows
+    show name only (no `@handle` column exists).
+  - **Verification:** `npx tsc --noEmit`, `npm run lint`, `npm run build`
+    all clean; `npx vitest run` — **20 files / 135 tests, 0 failures** (up
+    from 20/132 — `ClubFanPage.test.tsx` 7 → 10, the "reproduces the scope
+    note verbatim" test removed); dev-server smoke test `/`, `/clubs`,
+    `/clubs/:id`, `/community` all HTTP 200. No real browser/Playwright
+    check available — same ceiling as every prior `apps/web` PR.
   - Not merged — founder's call after review.
 - **`sprint-2/contest-data-model-backend` (backend-api, 2026-09-05)
   builds the Contest weekly-cycle mechanic + the points-scoring ledger —
