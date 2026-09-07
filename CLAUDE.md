@@ -6763,6 +6763,63 @@ Full reasoning for every choice above: Build Plan Section 5.
   - Figma writes by the agent (no shell that session); branch, commit, docx
     Decision Log transcription and PR finalised in a follow-up session with
     shell access.
+  - PR #206 opened, not merged — founder's call.
+- **`sprint-2/settings-display-leaves` (figma-screen-builder, 2026-09-07) is
+  PR 3 of 6 in the Settings-family consolidation (Decision Log #230) and
+  executes founder decision #10 — the four Display, Language & Region leaf
+  screens. Figma design only, no app/backend code. Stacks on PR 2. This is the
+  LAST Phase A PR: Phase A (#7/#8/#10) is complete and PRs 1–3 go to the founder
+  before Phase B.** Report: `docs/sprint-2-settings-display-leaves-report.md`.
+  Decision Log **#246** added; forward-pointer on **#230**, which **stays Open**
+  — **7 of the 10 founder decisions remain**.
+  - **8 new frames**, closing the audit's finding that the Display hub listed 4
+    rows with **no destination frames anywhere**: `Settings — Accessibility`
+    (`6304:15181`) / `— Mobile` (`6303:15173`); `Settings — Display`
+    (`6304:15329`) / `— Mobile` (`6303:15221`); `Settings — Language`
+    (`6304:15471`) / `— Mobile` (`6303:15262`); `Settings — Data Usage`
+    (`6304:15615`) / `— Mobile` (`6303:15307`).
+  - **Desktop leaves built WITHOUT the Community sidebar** (decision #4, same as
+    PR 2's landing) — 5 direct children each, zero sidebar-content text hits on
+    all four. Rail active = **"Display, Language & Region"** via the set's real
+    `clicked display` variant. Mobile leaves clone `5696:8213`'s shell verbatim.
+  - **8 reactions added to the two hub frames** (`2922:5832` / `5649:8140`) —
+    the only existing-frame edits. Each hub row was **identified by reading its
+    own text, not by index**, because the desktop rows are generically named
+    `Frame 5915`/`5917`/`5918`/`5919`. All read back from fresh handles.
+  - **A real content finding rather than a padding exercise:** Display was first
+    built with Text size + Display density, but the hub's own pre-existing copy
+    turned out to already assign **"contrast, motion and text size" to
+    Accessibility** and scope Display to **"how content is laid out"**. Keeping
+    Text size on both would have duplicated a control across sibling leaves just
+    to stop Display looking thin. It was removed, leaving one honest row plus a
+    wayfinding cross-reference — and **Display therefore does not justify its own
+    leaf. Recommend merging it into Accessibility (4 leaves → 3); founder call,
+    both frames built and wired either way.**
+  - **No backend exists for any of the four** — no motion/contrast/text-scale
+    store, no i18n layer, no data-saver or media-quality API. Every control is a
+    design-only stub for `figma-to-code` to render disabled with a "not wired"
+    note (`PrivacySettingsPage.tsx` precedent). **No light/dark theme toggle was
+    designed** — deliberately, since the app ships light-only and a theme switch
+    would contradict an established decision rather than merely lack a backend.
+    Language's three non-English entries are illustrative and say so **on the
+    frame itself**, not only in the report.
+  - **Audit, authored vs inherited stated separately:** authored — **133 paints,
+    133 bound, 0 unbound / 0 off-palette / 0 `brand/green-tint-28` / 0 new
+    colours / 0 overlaps** across all 8 frames. Inherited debt — **4 unbound**,
+    one per desktop frame, all the shared Navbar's avatar `IMAGE` fill, not
+    editable from an instance and deliberately not force-bound; mobile **0**.
+  - **Flagged, not fixed:** the Display-merge recommendation; the cloned rail's
+    inherited targets still pointing at `2922:5143`/`2922:5602`, both slated for
+    archival in PR 5 (a file-wide re-point affecting ~20 frames); rail labels now
+    applied as instance overrides on a fifth frame family, which **PR 6 should
+    replace with a component-level fix on `Frame 5904` (`2906:7170`) and then
+    strip**; and neither section banner covering the new rows (now 12 frames
+    across Phase A).
+  - Two `use_figma` authoring gotchas hit and folded into the standing
+    "Figma-authoring gotchas" list above (`forEach` + `await`; `query()` rejects
+    non-ASCII / em-dash).
+  - Figma writes by the agent (no shell that session); branch, commit, docx
+    Decision Log transcription and PR finalised in a follow-up session.
   - PR opened, not merged — founder's call.
 - **The Admin & Operations Console (`apps/admin`) is being converted from
   its 29 designed Figma screens to real React code, ahead of Sprint 5 by
@@ -7197,6 +7254,21 @@ real, still-open follow-up, not done by this entry.
   8 new Admin Shell nav icons (Decision Log #201,
   `sprint-2/admin-panel-fast-follow`) — all 8 initially rendered pale gray
   before this was caught.
+- **`await` inside a `Array.prototype.forEach` callback is a no-op / syntax
+  error** in the `use_figma` environment — the callback is not async, so an
+  `await` there either throws or is silently ignored and the loop races
+  ahead. Use `for…of` or an indexed `for` loop whenever the body awaits.
+  Found in `sprint-2/settings-display-leaves` (Decision Log #246).
+- **`node.query()` / `figma.currentPage.query()` selectors reject non-ASCII
+  characters** — `query('FRAME[name*=Row — ]')` fails with
+  `Invalid selector: unexpected character (0xe2)` on the em-dash. This bites
+  in this file specifically because **the em-dash is the house naming
+  convention** ("Settings — …", "Nav Row — …"). Use
+  `findAll(n => n.name.indexOf('Row ') === 0)` (or an `.includes()`
+  predicate) instead. The same session confirmed **`use_figma` rolls a
+  failed run's writes back atomically** — a partially-built frame from a
+  selector that threw mid-run did not persist (verified by reading the
+  canvas before retrying, not assumed). Decision Log #246.
 
 ## The eight agents, and the order they run in
 
