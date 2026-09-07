@@ -6610,8 +6610,91 @@ Full reasoning for every choice above: Build Plan Section 5.
     dedicated top-level landing, the Account Info password-gate screen,
     whether the Display leaves get built now, and removing the Community
     sidebar from the Settings pillar. Full reasoning for each is in the
-    report's §6. **No consolidation PR should start until these are
-    answered.**
+    report's §6.
+  - **RESOLVED — the founder answered all 10 (2026-09-06), plus authorised
+    the structural shell-componentization fix. Execution is now underway
+    as 6 sequential PRs (`sprint-2/settings-*`) — see the bullets
+    immediately below. #230 itself stays Open until PR 6
+    (componentization) flips it and closes Build Plan Section 7's
+    "22 duplicate Settings frames" blocker.** The 10 resolutions, in
+    brief: (1) section-2 label "Security & Account Settings" everywhere;
+    (2) section-4 label "Notification Preferences"; (3) Notifications
+    survivor hub is D15/M15 (`2926:9721` / `5696:8340`), extended to 4
+    rows (Push · Email · Filters · Muted accounts), archive D14/M14
+    (`2922:5602` / `5649:8116`); (4/5) rename "Mute New Accounts" →
+    "Muted accounts", split "Notifications (Mute & Filter)" — the
+    quality-filter becomes a "Filters" leaf, its "Mute notifications"
+    nav row removed, muting reached only via the Muted-accounts leaf;
+    (6/7) mobile nav = a standalone hub screen (option a) — build
+    "Settings — Menu — Mobile" and strip the inline hub-lists from
+    Overview/Privacy mobile; (8) build a genuinely new top-level Settings
+    landing, desktop **and** mobile as **separate** frames (founder
+    clarification 2026-09-07), rename "Settings — Overview" (D1/M1) →
+    "Settings — Account"; (9) Account Info password gate unchanged;
+    (10) remove the Community-style left sidebar from every surviving
+    Settings frame. The 6-PR split: PR 1 `settings-mobile-menu-hub`
+    (#7); PR 2 `settings-landing-screen` (#8); PR 3
+    `settings-display-leaves` (#10); PR 4
+    `settings-duplicate-clusters-consolidation` (#1/#2/#3/#5/#6); PR 5
+    `settings-community-sidebar-removal` (#4 + strip inline hub-lists);
+    PR 6 `settings-shell-componentization` (structural — nav rail as a
+    real component, content panel as a slot).
+  - PR opened, not merged — founder's call.
+- **`sprint-2/settings-mobile-menu-hub` (figma-screen-builder, 2026-09-06) is
+  PR 1 of 6 in the Settings-family consolidation (Decision Log #230), and
+  executes founder decision #7 only — ONE net-new Figma frame, no app/backend
+  code, no existing frame touched.** Report:
+  `docs/sprint-2-settings-mobile-menu-hub-report.md`. Decision Log **#244**
+  added; forward-pointer on **#230**, which **stays Open** (9 of the 10 founder
+  decisions still unexecuted).
+  - **New frame `Settings — Menu — Mobile` (`6289:15068`)**, 390 × 551
+    (Decision Log #86), Light mode only. The mobile equivalent of the shipped
+    `/settings` route — this **resolves the audit's §6.6 mobile-navigation
+    question as option (a)**: a standalone hub screen routing to section
+    sub-pages, matching the shipped `/settings` → `/settings/privacy` shape,
+    not a long scroll or a hub list repeated on every section page.
+  - **5 rows, each `ON_CLICK → NAVIGATE` wired to a node ID** (not a name, so
+    PR 2's planned rename of `5607:7813` can't break them), all read back from
+    fresh handles to confirm persistence and all destinations confirmed live as
+    real top-level frames: Account → `5607:7813`, Security & Account Settings →
+    `5695:8279`, Privacy → `6185:14547`, Notification Preferences →
+    `5696:8340`, Display, Language & Region → `5649:8140`. Labels apply founder
+    decisions **#2**/**#3** verbatim, so they intentionally differ from the
+    stale labels still on the existing inline `Category Nav` — PR 5 aligns
+    those. Rows 2–5 are clones of row 1, so every binding/font/sizing mode is
+    inherited rather than re-authored.
+  - **A real pre-existing bug was found and routed around rather than
+    inherited**: the chevrons inside the existing `Category Nav` on
+    `6185:14547` / `5607:7813` bind their stroke to `color/text/on-navy`
+    (**white**), so four of the five are effectively **invisible** on their
+    white rows. This frame clones the correctly `brand/navy`-bound chevron from
+    `6186:14569` instead. The bug is **flagged for PR 5**, not fixed here —
+    those are existing frames this PR is forbidden to touch.
+  - **Judgment calls, all disclosed rather than silently applied:** no back
+    affordance (the two existing hub-list-bearing frames have none; the leaf
+    `Back to Settings` pattern would be circular on the hub itself; and the real
+    mobile entry point, `Navigation Drawer — Mobile` `5870:10689`, is an
+    **overlay**, which cannot be a `NAVIGATE` destination — flagged for founder
+    review instead of invented); no icon column (follows the icon-less
+    `Category Nav` rather than inventing 5 section glyphs); the cloned
+    chevron's inherited **unbound** opaque-white icon-box fill was dropped to
+    `[]` rather than force-bound, so the 0-unbound count is genuine and not
+    cosmetically satisfied; frame appended to the **end** of the mobile Settings
+    row (`x 4939`, same 500px pitch, same `y −8642` baseline) rather than
+    inserted at its head, since inserting would require moving existing frames.
+  - **Audit, measured node-by-node, not estimated:** 40 nodes / 22 visible
+    paints / **22 bound, 0 unbound, 0 off-palette, 0 `brand/green-tint-28`, 0
+    new colours**; **0 frame overlaps**; no clash with the parked Admin Shell
+    zone; **0 Community-style sidebar content** (checked programmatically
+    against the frame's full text inventory, not just visually).
+  - **Flagged, not fixed:** the invisible-chevron bug above; the back-affordance
+    question; `Section Title — Settings (Mobile)` (`5698:8239`) covering only
+    `x −4751 → −2085` while the mobile Settings row now runs to `x 5329`
+    (**pre-existing**, same class as Decision Log #195/#206); and the hub
+    sitting at the end of the row rather than its head.
+  - Figma writes by the agent (no shell that session); branch, commit, docx
+    Decision Log transcription and PR finalised in a follow-up session with
+    shell access — same pattern as PRs #98 / #102 / #110 / #130 / #151.
   - PR opened, not merged — founder's call.
 - **The Admin & Operations Console (`apps/admin`) is being converted from
   its 29 designed Figma screens to real React code, ahead of Sprint 5 by
