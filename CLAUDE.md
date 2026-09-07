@@ -6695,6 +6695,74 @@ Full reasoning for every choice above: Build Plan Section 5.
   - Figma writes by the agent (no shell that session); branch, commit, docx
     Decision Log transcription and PR finalised in a follow-up session with
     shell access — same pattern as PRs #98 / #102 / #110 / #130 / #151.
+  - PR #205 opened, not merged — founder's call.
+- **`sprint-2/settings-landing-screen` (figma-screen-builder, 2026-09-07) is
+  PR 2 of 6 in the Settings-family consolidation (Decision Log #230) and
+  executes founder decision #8 — the top-level Settings landing. Figma design
+  only, no app/backend code. Stacks on PR 1 (`sprint-2/settings-mobile-menu-hub`).**
+  Report: `docs/sprint-2-settings-landing-screen-report.md`. Decision Log **#245**
+  added; forward-pointer on **#230**, which **stays Open** (8 of the 10 founder
+  decisions remain unexecuted).
+  - Per the founder's 2026-09-07 clarification the landing is **two separate
+    frames**, not one shared frame, and distinct from PR 1's menu hub:
+    **`Settings — Overview` (`6295:15068`)**, 1440 × 2517 desktop, and
+    **`Settings — Overview — Mobile` (`6297:15173`)**, 390 × 408 (Decision Log
+    #86).
+  - **The desktop landing is built in the standard Settings shell but
+    deliberately WITHOUT the Community-style left sidebar** (decision #4), so it
+    is not born with debt PR 5 would immediately have to remove. Proof it was
+    never cloned: **5 direct children against the source shell's 43**, and a
+    text sweep for `@christine001` / `Trending News` / `Suggested` /
+    `Followers` / `View profile` / bio / location returns **zero hits**.
+  - **The nav rail's "active section = none" uses the set's real resting
+    variants** (on `Frame 5904` `2906:7170`), not a hand-restyled copy of the
+    active state. Rail labels apply founder decisions **#2**/**#3** verbatim as
+    **instance-level text overrides**, so the set's other ~90 instances across
+    the file are untouched.
+  - **A real layout trap was found and fixed rather than shipped:** each rail
+    variant hard-codes a per-row `itemSpacing` (245/100/173/215/81) tuned to its
+    *original* label width, so the longer decision #2/#3 labels would have
+    pushed the chevrons out of their rows. Rows were switched to
+    `SPACE_BETWEEN`/`itemSpacing: 0`; all five chevrons now sit at exactly
+    `x 305`, verified.
+  - **Renames (the one existing-frame edit, coupled to decision #8):**
+    `2905:4798` → **`Settings — Account`**, `5607:7813` → **`Settings — Account
+    — Mobile`** — closing the audit's finding that "Settings — Overview" was
+    mislabelled and was really the Account section page. **PR 1's Account row
+    was wired by node ID and survived**, confirmed by reading the reaction back
+    after the rename; a family sweep found 43 uniquely-named frames, no
+    duplicates.
+  - **11 reactions wired, every one read back from a fresh handle**, all
+    destinations confirmed live as real top-level frames. The 5 desktop content
+    rows were cloned from PR 1 and therefore **arrived carrying PR 1's mobile
+    targets** — explicitly cleared and re-wired to the desktop frames, so no
+    desktop row silently points at a mobile screen. The mobile landing's one
+    prominent `brand/green-tint` "All settings" card routes to
+    `Settings — Menu — Mobile` (`6289:15068`); it deliberately does **not**
+    repeat the 5-section list, since it is the `/settings` root and the hub is
+    one tap deeper.
+  - **Audit, measured node-by-node, authored vs. inherited stated separately:**
+    authored — desktop **27/27 bound**, mobile **17/17 bound**, both **0
+    unbound / 0 off-palette / 0 `brand/green-tint-28` / 0 new colours**, **0
+    overlaps**, no Admin-zone clash. Inherited component-instance debt —
+    desktop **1 unbound**, the shared Navbar's avatar `IMAGE` fill, which is
+    **not editable from an instance and was deliberately not force-bound**;
+    mobile **0**.
+  - **Disclosed judgment calls:** the desktop landing keeps the canonical
+    rail/content x-positions and the family's canonical 2517px height, leaving
+    an empty left gutter — matching what all 19 other desktop frames will look
+    like once PR 5 strips their sidebars, so PR 6 can componentize all 20
+    uniformly rather than reconciling one re-balanced outlier. The identity row
+    shows only backed fields (`displayName`, `email`) — no follower counts, bio,
+    location or `@handle` (no backing column, Decision Log #58).
+  - **Flagged, not fixed:** neither section banner covers the new frames (same
+    pre-existing gap PR 1 flagged, now affecting 4 frames); the invisible
+    white-bound `Category Nav` chevrons (PR 5); and the ~19 other desktop frames
+    still showing the stale rail labels — which should be fixed at the component
+    level, not by 19 more instance overrides.
+  - Figma writes by the agent (no shell that session); branch, commit, docx
+    Decision Log transcription and PR finalised in a follow-up session with
+    shell access.
   - PR opened, not merged — founder's call.
 - **The Admin & Operations Console (`apps/admin`) is being converted from
   its 29 designed Figma screens to real React code, ahead of Sprint 5 by
