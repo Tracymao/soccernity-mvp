@@ -6695,7 +6695,7 @@ Full reasoning for every choice above: Build Plan Section 5.
   - Figma writes by the agent (no shell that session); branch, commit, docx
     Decision Log transcription and PR finalised in a follow-up session with
     shell access — same pattern as PRs #98 / #102 / #110 / #130 / #151.
-  - PR #205 opened, not merged — founder's call.
+  - Merged as PR #205.
 - **`sprint-2/settings-landing-screen` (figma-screen-builder, 2026-09-07) is
   PR 2 of 6 in the Settings-family consolidation (Decision Log #230) and
   executes founder decision #8 — the top-level Settings landing. Figma design
@@ -6763,7 +6763,7 @@ Full reasoning for every choice above: Build Plan Section 5.
   - Figma writes by the agent (no shell that session); branch, commit, docx
     Decision Log transcription and PR finalised in a follow-up session with
     shell access.
-  - PR #206 opened, not merged — founder's call.
+  - Merged as PR #206.
 - **`sprint-2/settings-display-leaves` (figma-screen-builder, 2026-09-07) is
   PR 3 of 6 in the Settings-family consolidation (Decision Log #230) and
   executes founder decision #10 — the four Display, Language & Region leaf
@@ -6820,6 +6820,62 @@ Full reasoning for every choice above: Build Plan Section 5.
     non-ASCII / em-dash).
   - Figma writes by the agent (no shell that session); branch, commit, docx
     Decision Log transcription and PR finalised in a follow-up session.
+  - Merged as PR #207. **Phase A (#7/#8/#10) complete.**
+- **`sprint-2/settings-duplicate-clusters-consolidation` (figma-design-system,
+  2026-09-07) is PR 4 of 6 in the Settings-family consolidation (Decision Log
+  #230) and executes founder decisions #1/#2/#3/#5/#6 — the duplicate-cluster
+  resolution. Figma design only, no app/backend code. First Phase B PR.** Report:
+  `docs/sprint-2-settings-duplicate-clusters-consolidation-report.md`. Decision
+  Log **#247** added; forward-pointer on **#230**, which **stays Open** — after
+  this PR only decision **#4** (Community sidebar removal, PR 5) and structural
+  **#11** (shell componentization, PR 6) remain.
+  - **Renamed 6 frames:** `Settings — Security Overview` (`2926:8056`) →
+    **`Settings — Security & Account Settings`**; `Settings — Mute New Accounts`
+    (`2926:9482`) → **`Settings — Muted accounts`**; `Settings — Notifications
+    (Mute & Filter)` (`2926:9230`) → **`Settings — Filters`** (each + its
+    `— Mobile` pair). `Settings — Notification Preferences` (D15/M15) confirmed
+    **kept** (decision #3).
+  - **Archived 4 frames** (reference-checked → re-pointed → hidden →
+    `ARCHIVED —` prefixed → moved to a new Settings archive strip at
+    `y −13500`, **0 overlaps**, not deleted): the redundant Security one-row
+    intermediate D8/M8 (`2922:5143` / `5649:8074`) and the losing Notifications
+    competing hub D14/M14 (`2922:5602` / `5649:8116`). D8's blurb was ported
+    into D9's intro (`2926:8166` — previously the flagged "See information about
+    your account" junk *and* hidden; now carries D8's copy and is visible).
+    **M8/M14 had zero inbound references** — the PR 1 mobile menu hub already
+    targeted the survivors directly.
+  - **Rail target re-point was per-frame, NOT component-set level** — confirmed
+    the `Frame 5904` set (`2906:7170`) variants carry only `ON_HOVER → CHANGE_TO`;
+    every `ON_CLICK → NAVIGATE` is an instance override. **51 reaction edits**,
+    exactly matching a full page scan's 51 hits, all read back from fresh
+    handles: 21 × rail "security" rows → D9, 21 × rail "notification" rows → D15,
+    D16's `arrow-back` → D15, D9's/D15's now-self-referential rail rows +
+    `arrow-back` reactions removed, 4 dead refs inside already-hidden frames
+    cleaned. `ON_HOVER` reactions preserved. **Final scan: 0 nodes reference any
+    archived frame.**
+  - **Notification Preferences hub extended 2 → 4 rows** (decision #1), desktop
+    + mobile: Push (→ D17, existing) · Email (→ D18, existing) · **Filters**
+    (new → D16) · **Muted accounts** (new → D19). Mobile's Push/Email rows were
+    also **unwired** and got their reactions added. New rows cloned from the
+    existing pattern, pinned right with `SPACE_BETWEEN` (the same rail layout
+    trap PR 2 hit), navy-bound chevron, fresh accurate descriptions (the source
+    Push/Email rows carry pre-existing 2FA-boilerplate junk in their
+    clipped/hidden description nodes — flagged, not fixed).
+  - **"Mute notifications ›" nav row removed from D16 + M16** (decision #6) —
+    row + reaction deleted, quality-filter control only remains; D16/M16
+    heading aligned "Filter" → "Filters", D16 junk subtitle replaced to match
+    M16.
+  - **Audit:** 4 authored nodes, **12 paints / 12 bound / 0 unbound / 0
+    off-palette / 0 `brand/green-tint-28` / 0 new colours**, **0 overlaps**.
+    Screenshot-verified D15/M15, D16/M16, D9, and re-pointed rails.
+  - **Flagged, not fixed:** D15/M15 on-screen heading still "Preferences" and
+    D9/M9 still "Security" (heading↔rail-label alignment is PR 6); desktop hub
+    rows' descriptions clipped/invisible (pre-existing); D9's + D15's
+    `arrow-back` now carry no reaction (self-nav invalid — could point at the
+    PR 2 landing later); ~24 frames' rail *labels* still stale (PR 6,
+    component-level, strip the PR-2/PR-3 instance overrides at the same time).
+  - Figma writes by the agent (no shell that session); branch, commit, docx
+    Decision Log transcription (#247) and PR finalised in a follow-up session.
   - PR opened, not merged — founder's call.
 - **The Admin & Operations Console (`apps/admin`) is being converted from
   its 29 designed Figma screens to real React code, ahead of Sprint 5 by
