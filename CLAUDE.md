@@ -6876,6 +6876,53 @@ Full reasoning for every choice above: Build Plan Section 5.
     component-level, strip the PR-2/PR-3 instance overrides at the same time).
   - Figma writes by the agent (no shell that session); branch, commit, docx
     Decision Log transcription (#247) and PR finalised in a follow-up session.
+  - Merged as PR #208.
+- **`sprint-2/settings-community-sidebar-removal` (figma-design-system,
+  2026-09-07) is PR 5 of 6 in the Settings-family consolidation (Decision Log
+  #230) and executes founder decision #4 — remove the Community-style left
+  sidebar from every surviving Settings frame — plus the coupled mobile
+  inline-hub-list strip and the D9/D15 arrow-back fix. Figma design only, no
+  app/backend code.** Report:
+  `docs/sprint-2-settings-community-sidebar-removal-report.md`. Decision Log
+  **#248** added; forward-pointer on **#230**, which **stays Open** — after this
+  PR **only structural #11 (componentize the shell), i.e. PR 6, remains**.
+  - **Community sidebar deleted from all 18 live desktop Settings frames**
+    (D1–D7, D9–D13, D15–D20, post-PR-4 names) — the profile card ("Adeniyi
+    Christiana / @christine001", follower/following/post counts, "View
+    profile"), "Trending News" and "Suggested" follows, which were **36 loose
+    absolute-positioned children per frame** (not a container). **648 nodes
+    total**; each frame 43 → 7 children; **guarded per frame** (require
+    `childCount 43` / exactly 36 name-matched / exactly 1 leftover content
+    panel) — all 18 passed; **post-removal text-sweep 0 hits on every frame**.
+    Nav rail kept at `x 344`, content panel at `x 688` — **no re-balance** (PR
+    6).
+  - **Mobile: checked all 18 live mobile section frames — 0 Community sidebars**
+    (all `childCount 2`); desktop-only problem, stated not assumed.
+  - **Excluded and verified sidebar-free, untouched:** PR 2's `Settings —
+    Overview` desktop (`6295:15068`) + mobile (`6297:15173`) landings — they
+    carry the sample name "Adeniyi Christiana" only (PR 2's deliberate
+    `displayName` identity row, **not** the sidebar — no counts/bio/Trending/
+    Suggested/View-profile); PR 3's 4 Display desktop leaves; PR 1/PR 3's 6
+    Phase-A mobile frames.
+  - **Coupled: inline 5-row `Category Nav` hub list stripped from
+    `Settings — Account — Mobile` (`5607:7813`) and `Settings — Privacy —
+    Mobile` (`6185:14547`)** (audit §2 M1/M11) — plus their now-redundant
+    standalone "Settings" title; a wired `‹ Settings` back bar added
+    (`→ 6289:15068`, PR 1's mobile menu hub) matching every other mobile
+    section frame. **This also disposes of the invisible white-bound
+    `Category Nav` chevron bug on those 2 frames** (list is gone).
+  - **D9/D15 arrow-backs (PR 4 left them action-less)** wired
+    `ON_CLICK → NAVIGATE → 6295:15068` (desktop Settings landing).
+  - **Audit:** 0 authored paint (deletions + clones of already-bound nodes),
+    0 unbound / 0 off-palette / 0 `brand/green-tint-28` / 0 new colours, 0
+    overlaps. Screenshot-verified D1/D9/D11/D15/D20 + M1/M11.
+  - **Flagged, not fixed:** empty left band on all 18 desktop frames (intended
+    interim state — PR 6 re-balances all at once); PR 2's landings' identity-row
+    sample name matched the sweep regex but is not a regression; `Settings —
+    Account — Mobile`'s "See information about your account" subtitle junk
+    (pre-existing); rail labels + D9/D15/D15-hub headings still stale (PR 6).
+  - Figma writes by the agent (no shell that session); branch, commit, docx
+    Decision Log transcription (#248) and PR finalised in a follow-up session.
   - PR opened, not merged — founder's call.
 - **The Admin & Operations Console (`apps/admin`) is being converted from
   its 29 designed Figma screens to real React code, ahead of Sprint 5 by
