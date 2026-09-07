@@ -6611,12 +6611,15 @@ Full reasoning for every choice above: Build Plan Section 5.
     whether the Display leaves get built now, and removing the Community
     sidebar from the Settings pillar. Full reasoning for each is in the
     report's §6.
-  - **RESOLVED — the founder answered all 10 (2026-09-06), plus authorised
-    the structural shell-componentization fix. Execution is now underway
-    as 6 sequential PRs (`sprint-2/settings-*`) — see the bullets
-    immediately below. #230 itself stays Open until PR 6
-    (componentization) flips it and closes Build Plan Section 7's
-    "22 duplicate Settings frames" blocker.** The 10 resolutions, in
+  - **RESOLVED (design half) — the founder answered all 10 (2026-09-06),
+    plus authorised the structural shell-componentization fix; all 6 PRs
+    (`sprint-2/settings-*`, Decision Log #244–#249) are merged. #230's
+    design half is complete and Build Plan Section 7's "22 duplicate
+    Settings frames" blocker is closed structurally. The `figma-to-code`
+    conversion of the consolidated Settings set (only `/settings/privacy`
+    is shipped today), the left-gutter reclaim, and the Display-leaf
+    merge question (audit §3/§6.9) are the flagged follow-ups — see the
+    PR 6 bullet below.** The 10 resolutions, in
     brief: (1) section-2 label "Security & Account Settings" everywhere;
     (2) section-4 label "Notification Preferences"; (3) Notifications
     survivor hub is D15/M15 (`2926:9721` / `5696:8340`), extended to 4
@@ -6638,8 +6641,9 @@ Full reasoning for every choice above: Build Plan Section 5.
     `settings-duplicate-clusters-consolidation` (#1/#2/#3/#5/#6); PR 5
     `settings-community-sidebar-removal` (#4 + strip inline hub-lists);
     PR 6 `settings-shell-componentization` (structural — nav rail as a
-    real component, content panel as a slot).
-  - PR opened, not merged — founder's call.
+    real component). PRs 1–5 merged (#205, #206, #207, #208, #209);
+    PR 6 opened last. Decision Log #244–#249.
+  - Merged as PR #191.
 - **`sprint-2/settings-mobile-menu-hub` (figma-screen-builder, 2026-09-06) is
   PR 1 of 6 in the Settings-family consolidation (Decision Log #230), and
   executes founder decision #7 only — ONE net-new Figma frame, no app/backend
@@ -6923,7 +6927,80 @@ Full reasoning for every choice above: Build Plan Section 5.
     (pre-existing); rail labels + D9/D15/D15-hub headings still stale (PR 6).
   - Figma writes by the agent (no shell that session); branch, commit, docx
     Decision Log transcription (#248) and PR finalised in a follow-up session.
+  - Merged as PR #209.
+- **`sprint-2/settings-shell-componentization` (figma-design-system, 2026-09-07)
+  is PR 6 of 6 — the FINAL PR — in the Settings-family consolidation (Decision
+  Log #230), executing structural finding #11. Figma design only, no app/backend
+  code. Decision Log #230 is now RESOLVED for the design half; Build Plan Section
+  7's "22 duplicate Settings frames" blocker is closed structurally.** Report:
+  `docs/sprint-2-settings-shell-componentization-report.md`. Decision Log **#249**
+  added; **#230** flipped to Resolved (design half) with a forward-pointer;
+  Build Plan Section 7 paragraphs updated.
+  - **New `Settings Shell` COMPONENT_SET (`6339:16094`)**, parked off-canvas at
+    `x 20000, y −16000` (no Admin-zone clash). `Active` variant — Account
+    (default) / Security / Privacy / Notifications / Display / None. Contains the
+    header-4 navbar + `Frame 5910` nav rail + `Line 106`/`Line 107` dividers —
+    **not** the content panel. Baked in: decision #2/#3 rail labels, the real
+    `click…`/`clicked…` active-state variant, `SPACE_BETWEEN` chevron alignment
+    (all chevrons `x 305`), inherited `ON_HOVER`.
+  - **NAVIGATE targets are per-instance, not baked** — **Figma rejects `NAVIGATE`
+    reactions on any descendant of a `COMPONENT`** (invalid prototype source,
+    same family as DL #103). Set as instance overrides on each frame's shell
+    instance, matching the pre-existing file convention (PR 4: every rail
+    `ON_CLICK → NAVIGATE` is already an instance override). `ON_HOVER` preserved;
+    the frame's own active section skipped (no self-NAVIGATE).
+  - **All 23 live desktop Settings frames re-based** (18 section/leaf frames +
+    PR 2 landing + 4 PR 3 Display leaves) — 4 shell nodes deleted, one
+    `Settings Shell` instance appended per frame. **Content-panel geometry
+    verified byte-identical before→after on all 23, zero deviation.** PR 2/PR 3
+    instance-override labels superseded (their hand-built rails deleted).
+  - **`Frame 5904` set (`2906:7170`) deliberately NOT edited** — its only
+    live-frame instances are now inside the shell (correct labels); stale
+    variant labels remain only in archived frames.
+  - **Headings fixed:** D9/M9 "Security" → "Security & Account Settings";
+    D15/M15 "Preferences" → "Notification Preferences".
+  - **Left-gutter:** KEEP (rail `x 344`), applied uniformly via the component —
+    all 23 frames geometrically identical. Reclaiming the empty band is a cheap
+    component-level follow-up, flagged not done.
+  - **Section banners widened** to span the live rows — desktop text `2930:10458`
+    (`w 10707`, centered) + its backing strip `Rectangle 350` (resized to match,
+    previously-unbound navy fill **bound to `brand/navy`**); mobile text
+    `5698:8239` (`w 10580`, centered). Detached PR 3 Display-leaf rows still
+    uncovered (PR 3's own flag).
+  - **Mobile: new `Settings Back Bar — Mobile` component (`6348:16292`)** swapped
+    onto all 22 live mobile section/leaf frames (bars were structurally uniform),
+    each wired `→ 6289:15068`, closing PR 5's "some wired, some not" gap. Full
+    mobile Top-Bar/Content componentization deferred.
+  - **Audit:** `Settings Shell` set 508/508 paints bound, 0 unbound / 0
+    off-palette / 0 `brand/green-tint-28` / 0 new colours; back-bar component
+    2/2 bound. Everything else was deletion / clone-of-bound-node / variant swap
+    / reaction override / text edit. 0 overlaps introduced. Screenshot-verified
+    all 6 `Active` states + M1/M9/M15 + both banners.
+  - **Flagged, not fixed:** left-gutter reclaim; Display-leaf rows have no banner
+    marker; `Frame 5904` set stale labels (archived-only impact); mobile
+    Top-Bar/Content not componentized; D15 subtitle + Push/Email 2FA-boilerplate
+    row descriptions (pre-existing junk, text-hygiene scope); navbar avatar
+    `IMAGE` fill (shared-component debt); **Display-merge question still open**
+    (Display stays a 4th leaf). **The `figma-to-code` conversion of the
+    consolidated Settings set is the remaining work to fully close Section 7's
+    criterion — only `/settings/privacy` is shipped today.**
+  - **`use_figma` gotchas hit** (folded into the standing "Figma-authoring
+    gotchas" list above): `NAVIGATE` reactions rejected on `COMPONENT`
+    descendants; `clone()` parents under `figma.currentPage` (which resets to
+    the cover page each call) not the original's parent; `setProperties()`
+    invalidates the node handle for a following `.reactions =` set;
+    `component.clone()` drops nested-instance reaction overrides.
+  - Figma writes by the agent (no shell that session); branch, commit, docx
+    Decision Log transcription (#249 + #230 flip + Section 7 edits) and PR
+    finalised in a follow-up session.
   - PR opened, not merged — founder's call.
+  - **The 6-PR Settings-family consolidation is complete for design.** Full arc:
+    PR 1 #244 (mobile menu hub) · PR 2 #245 (landing + D1/M1 rename) · PR 3 #246
+    (4 Display leaves) · PR 4 #247 (duplicate clusters) · PR 5 #248 (Community
+    sidebar removal) · PR 6 #249 (shell componentization). **Decision Log #230
+    RESOLVED (design half).** Remaining: `figma-to-code` conversion of the
+    consolidated set; the left-gutter reclaim; the Display-leaf merge founder
+    call.
 - **The Admin & Operations Console (`apps/admin`) is being converted from
   its 29 designed Figma screens to real React code, ahead of Sprint 5 by
   founder decision — the same call the backend `admin` module got
@@ -7372,6 +7449,28 @@ real, still-open follow-up, not done by this entry.
   failed run's writes back atomically** — a partially-built frame from a
   selector that threw mid-run did not persist (verified by reading the
   canvas before retrying, not assumed). Decision Log #246.
+- **`NAVIGATE` reactions cannot be set on any descendant of a `COMPONENT`**
+  (a variant, or a standalone component) — Figma rejects with *"the source
+  may not be a valid prototype source … destinations must be a different
+  top-level frame"*. Same family as the `OPEN_OVERLAY`-destination limit in
+  Decision Log #103. Set `NAVIGATE` as a **per-instance override** on each
+  instance instead; `ON_HOVER → CHANGE_TO` is fine on component descendants.
+  Decision Log #249 (`sprint-2/settings-shell-componentization`).
+- **`node.clone()` parents the clone under `figma.currentPage`, not under
+  the original's parent** — and `figma.currentPage` **resets to the first
+  (cover) page on each `use_figma` call**. Clones can silently land on the
+  cover page; `page.appendChild()` them back onto `0:1` before any operation
+  that requires same-page nodes (e.g. `combineAsVariants`). Decision Log #249.
+- **`instance.setProperties({...})` invalidates the node handle** — a
+  `.reactions =` (or other mutation) on the *same* handle immediately after
+  fails ("invalid prototype source"). Re-fetch the node from its stable
+  parent (by index) between a variant swap and any further mutation.
+  Decision Log #249.
+- **`component.clone()` drops instance-level reaction overrides on nested
+  instances** — inherited reactions (e.g. `ON_HOVER` from an underlying
+  variant component) survive the clone, but overrides you set on a nested
+  instance do not. Re-apply nested-instance reactions explicitly on every
+  cloned variant. Decision Log #249.
 
 ## The eight agents, and the order they run in
 
