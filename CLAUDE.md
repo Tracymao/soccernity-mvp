@@ -7000,7 +7000,71 @@ Full reasoning for every choice above: Build Plan Section 5.
     sidebar removal) · PR 6 #249 (shell componentization). **Decision Log #230
     RESOLVED (design half).** Remaining: `figma-to-code` conversion of the
     consolidated set; the left-gutter reclaim; the Display-leaf merge founder
-    call.
+    call. **PR 7 (`sprint-2/settings-mobile-shell-componentization`, DL #252)
+    then did the deferred mobile half — see the bullet directly below.**
+- **`sprint-2/settings-mobile-shell-componentization` (figma-design-system,
+  2026-09-08) is PR 7 — the deferred mobile counterpart to PR 6's desktop
+  `Settings Shell`. Resolves Decision Log #251; recorded as #252. Figma design
+  only, no app/backend code, no merge.** Report:
+  `docs/sprint-2-settings-mobile-shell-componentization-report.md`. PR 6
+  componentized the desktop shell and built `Settings Back Bar — Mobile`
+  (`6348:16292`) but explicitly deferred full mobile Top-Bar componentization —
+  this is that pass.
+  - **New `Settings Top Bar — Mobile` COMPONENT (`6360:16337`)** — plain
+    component, no variants (logo-only, mirrors the Back Bar component), parked
+    off-canvas at `x 20000, y −12800`, forming a column with the desktop
+    `Settings Shell` (`y −16000`) and the mobile Back Bar (`y −13000`); 0
+    overlaps, no Admin-zone clash.
+  - **Split decision: Top Bar as its own component; Back Bar left as PR 6's
+    separate component — NOT combined.** The two mobile chrome pieces sit at
+    different tree depths in different parents (Top Bar is a frame-level sibling
+    of `Content`; the Back Bar is `Content`'s first child), so combining them
+    would force relocating the Back Bar out of `Content` and shifting every
+    auto-layout child — a content-panel geometry change. Mirrors the desktop
+    precedent, which componentizes the chrome, not the content panel.
+  - **Scope: 24 mobile Settings frames** carry the hand-built Top Bar (all of
+    them). DL #251's "22" was PR 6's Back Bar scope — the 22 frames that *have*
+    a back bar, i.e. all except `Settings — Menu — Mobile` (`6289:15068`) and
+    `Settings — Overview — Mobile` (`6297:15173`). Not a count correction, two
+    different scopes.
+  - **The one forced decision — the Top Bar bottom border was inconsistent:**
+    6 frames (hub/landing/edit) carried a 1px `color/icon/inactive` bottom
+    hairline identical to every other `Top Bar — Soccernity` in the file (auth,
+    Verify Email, Club Picker, Guardian Consent mobile — all per DL #172); 18
+    frames had no stroke at all. **Baked in the canonical hairline** — the 18
+    borderless frames were the anomaly. Net effect: a ~15%-opacity navy hairline
+    appears under the logo bar on 18 mobile Settings frames (token-correctness
+    fix); the 6 that had it are byte-identical.
+  - **All 24 frames re-based** (`createInstance` → `insertChild(0)` → replicate
+    the old Top Bar's `AUTO`/`FILL`/`FIXED`/`STRETCH` layout props → `remove()`
+    old; `Content` never touched). Verified before→after on all 24: Content
+    relative position `(0,64)` unchanged; Content absolute bbox identical;
+    Content subtree geometric fingerprint (every descendant's abs bbox,
+    sorted+hashed) + descendant count identical (`allMatch: true`, zero
+    mismatches); `child[0]` now an INSTANCE of the new component; `childCount`
+    stays 2. Orphan check: 0 leftover Top Bar FRAME nodes. Instance count:
+    exactly 24 page-wide. Reference-check before removal: scanned all 121,798
+    page nodes for any reaction / flow start / derived instance targeting the 24
+    old Top Bar frames or their 96 descendants — zero hits (child frames
+    replaced in place, nothing archived).
+  - **Label re-audit (DL #251 point 2):** full text sweep of all 24 Content
+    panels against 9 stale consolidated-section-label patterns — **zero stale
+    hits.** PR 6's M9 heading (`5695:8279` "Security & Account Settings") and
+    M15 heading (`5696:8340` "Notification Preferences") held; the other 22
+    mobile frames were already correct. Nothing to fix.
+  - **Audit:** component — 4 paints, 4 bound (`color/background/surface`,
+    `color/icon/inactive`, `brand/green`, `brand/navy`), 0 unbound / 0
+    off-palette / 0 `brand/green-tint-28` / 0 new colours. Screenshot-verified
+    6 representative frames including one that gained the hairline and the
+    back-bar-less Menu hub.
+  - **Not touched:** desktop `Settings Shell` (`6339:16094`) and
+    `Settings Back Bar — Mobile` (`6348:16292`) — read only, confirmed
+    unchanged. `Content` panel — never touched, not componentized, exactly as
+    the desktop shell leaves the desktop content panel. `figma-to-code`
+    conversion of the consolidated Settings set is still the flagged separate
+    follow-up (`apps/mobile` has no application code, so this pass carries no
+    code impact today).
+  - PR opened, not merged — founder's call.
 - **The Admin & Operations Console (`apps/admin`) is being converted from
   its 29 designed Figma screens to real React code, ahead of Sprint 5 by
   founder decision — the same call the backend `admin` module got
