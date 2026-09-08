@@ -7665,6 +7665,60 @@ Full reasoning for every choice above: Build Plan Section 5.
     debt, deliberately left. All 5 live instances of the set verified appearance-unchanged. 0 frame
     overlaps. Light mode only.
   - Not merged — founder's call after review.
+- **`sprint-5/grassroots-teams-browse` (figma-screen-builder, 2026-09-08) designs the Grassroots
+  "Browse Teams" screen desktop + mobile, adds a `Nav — Grassroots` row to the mobile Navigation
+  Drawer, and wires the four dangling "← Teams" links — closing Decision Log #258. Figma design
+  only, no app/backend code.** Report: `docs/sprint-5-grassroots-teams-browse-report.md`. Decision Log
+  **#265–#267** added; **#258** flipped to Resolved.
+  - **Two new frames:** `Grassroots — 11 Browse Teams — Desktop` (`6402:18078`, 1440×1758, `x 17720 /
+    y 32800`) and `— Mobile` (`6404:18180`, 390×1447, `x 5000 / y 35600`), continuing each Grassroots
+    row at its own measured pitch. **Layout from `Clubs — Browse`** (header / search / card list /
+    `Button — Load More` cloned verbatim so bindings are inherited); **chrome from Grassroots** — a real
+    `header 4` / `header 4 — mobile` instance, **not** the logo-only Top Bar Clubs — Browse uses,
+    matching the public team pages this screen links to and from. Same layout-from-Clubs /
+    chrome-from-Grassroots divergence Decision Log #253 made one layer down; #156's "logo bar until nav
+    is decided" rationale no longer applies now Grassroots has a nav home (**#265**).
+  - **Four real divergences from Clubs — Browse, each backed by the schema:** search is a **city**
+    field mapping to `GET /teams?city=`'s server-side equality filter, not a client-side name filter
+    (Section 4.5 defines no team-name search); **no Join/Leave action** — `GrassrootsTeam` has no
+    membership concept, so the whole card is the click target; **both empty states designed** ("No
+    teams in {city} yet" / "No teams registered yet" — a gap Clubs — Browse still has); monogram not a
+    crest (no badge field, #253), with the verified / community-unverified badges cloned verbatim from
+    frames 9 and 10.
+  - **`Nav — Grassroots` (`6401:18075`)** cloned from `Nav — Clubs` and inserted directly after it in
+    the `Navigation Drawer — Mobile` component (`5870:10689`) — a **flat sibling row, adjacency not
+    nesting**, since no drawer-nesting pattern exists in this file (**#267** raises whether it should).
+  - **Three brief premises were measured and corrected rather than followed (#266):** `Panel` is a
+    `VERTICAL` auto-layout frame, so rows below reflowed automatically — no manual 48px shift needed;
+    **`Panel`/`Scrim`/the component were NOT grown by 48px** — content bottom moves 731 → 779 against a
+    FIXED 844 height (usable 820), so it already fits with 41px spare, and growing a 390×844
+    full-screen overlay to 892 would make it overhang the viewport it covers; and the component has
+    **1** live instance, not ~46 (that is `header 4 — mobile`'s count, the drawer's *trigger*) — that
+    one instance inherited cleanly. Separately, the section banner (`x −2048 → 19456`) was measured and
+    **already covers** the extended desktop row (`x 0 → 19160`) — not resized.
+  - **12 reactions wired, every one read back from a fresh handle:** the four "← Teams" links
+    (`6373:17537`, `6374:17504`, `6379:17774`, `6379:17871`) → the matching Browse Teams frame, and all
+    eight team cards → a public team page. Small disclosed improvement on the brief: the Marina Boys FC
+    card points at frame 10 (its own unverified team page) rather than frame 9, so the verified card
+    opens the verified page and the unverified card the unverified one.
+  - **Audit, measured node-by-node: 121 authored paints, 0 unbound, 0 off-palette, 0
+    `brand/green-tint-28`, 0 new colours, Light mode only, 0 overlaps** (strict pairwise AABB against
+    all 539 page `0:1` children, 1,076 comparisons, no type exclusions). The only residual is the
+    shared navbar instance's avatar `IMAGE` fill — pre-existing component debt, deliberately not
+    force-bound.
+  - **One real fill bug found and fixed in-pass, with a reusable lesson:** `Clubs — Browse`'s four cards
+    are not structurally uniform — card 3's logo slot is a `Club Logo — Placeholder (no logoUrl)`
+    variant with no text child, bound to `color/icon/inactive` instead of `brand/green-tint`. Cloned
+    forward it rendered as a grey tile among three green ones. All four monogram tiles + texts were
+    normalised. **The wrong fill was correctly variable-bound the whole time — a binding audit proves
+    provenance, not correctness; cloned repeated content still needs a screenshot.**
+  - **Flagged, NOT built:** a Grassroots item in the **desktop** icon navbar (#258 scoped the entry to
+    the mobile drawer specifically; a shared `header 4`/`header 7` glyph the way Clubs got its shield in
+    #159 is a separate `figma-design-system` task — annotated on the frame itself); the
+    `{ label: "Grassroots", to: "/grassroots", available: false }` mirror in
+    `apps/web/src/layout/navigation.ts` (a small `figma-to-code` follow-up, matching how Messages and
+    Notifications are handled per #166); and drawer group-nesting (**#267**).
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
@@ -7799,6 +7853,21 @@ real, still-open follow-up, not done by this entry.
   property default — Figma migrates the manual override into the property
   value, preserving appearance (verified on the Grassroots-desktop calendar
   instances, DL #262).
+- **A repeated card/row list cloned from another screen is not necessarily
+  structurally uniform — don't index into children positionally, and
+  re-audit cloned fills for *semantic* correctness, not just binding.**
+  Cloning `Clubs — Browse`'s four visually-identical cards threw
+  `TypeError: cannot set property 'characters' of undefined` because one
+  card's logo slot was a different variant (`Club Logo — Placeholder (no
+  logoUrl)`) with no text child; that same card's tile was also bound to
+  the wrong token (`color/icon/inactive` rather than `brand/green-tint`) —
+  a correctly-bound but semantically wrong paint that a "0 unbound / 0
+  off-palette" audit passes silently. Prefer `findOne(n => n.type ===
+  'TEXT')` with a clone-a-donor fallback over `children[0]`, and always
+  screenshot cloned repeated content. Found in
+  `sprint-5/grassroots-teams-browse` (DL #265). (Also re-confirmed there,
+  already under DL #246: `use_figma` rolls a failed run's writes back
+  atomically — the `TypeError` left zero partial writes on the canvas.)
 
 ## The eight agents, and the order they run in
 
