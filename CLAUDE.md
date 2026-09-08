@@ -7464,6 +7464,83 @@ Full reasoning for every choice above: Build Plan Section 5.
     machine the result flow depends on has no endpoint today. `backend-api` should also resolve
     #254/#255 (and confirm #256) before wiring `GrassrootsModule`.
   - Not merged — founder's call after review.
+- **`sprint-5/grassroots-records-service` (backend-api, 2026-09-08) builds
+  the full Grassroots Records Service (Build Plan Section 4.5) in
+  `services/api` — the first Sprint 5 backend work, ahead of the rest of
+  Sprint 5 by founder decision (same call the `admin` module / Decision
+  Log #54 and the Contest data model / Decision Log #218 got). Resolves
+  Decision Log #254 (no status-transition endpoint) and #255 (no
+  permission model + Result race). `GrassrootsModule` is now wired into
+  `app.module.ts`. Report: `services/api/src/modules/grassroots/README.md`;
+  Decision Log #259.**
+  - **Zero `schema.prisma` diff — no migration.** The `GrassrootsTeam` /
+    `Fixture` / `Result` models (Section 3) already carry everything
+    needed: the permission model joins through `teamA`/`teamB.createdById`,
+    the status machine uses the existing `Fixture.status` string
+    (`scheduled | live | full_time`). The only schema change is tightened
+    `//` comments on those three models. `User` / `Guardian` safeguarding
+    fields untouched — confirmed by a comment-only schema diff.
+  - **All 7 Section 4.5 endpoints** (`POST /teams`, `GET /teams?city=`,
+    `GET /teams/:id`, `GET /teams/:id/fixtures`, `POST /fixtures`,
+    `GET /fixtures/:id`, `POST /fixtures/:id/result`) **plus `PATCH
+    /fixtures/:id/status`** — a dedicated narrow sub-resource resolving
+    #254 (not a general `PATCH /fixtures/:id`, not a derived rule: `live`
+    is a real "Start match" action). Two controllers
+    (`GrassrootsTeamsController` / `GrassrootsFixturesController`), one
+    `GrassrootsService`, mirroring the `clubs` module layout + cursor-util
+    pattern.
+  - **Permission matrix (Decision Log #255, founder-approved judgment
+    calls):** `POST /teams` → any consent-confirmed user (becomes
+    `createdById`); `POST /fixtures` → `createdById` of **`teamA` only**
+    (alternative "either team's creator" considered, not chosen —
+    scheduling is done from the organiser's own team context);
+    `POST /fixtures/:id/result` **and** `PATCH /fixtures/:id/status` →
+    `createdById` of **either team**; all GET reads → any authenticated
+    user. **404 (resource existence) is always settled before 403 (authz)**
+    — mirrors `FeedService.deleteComment`; a non-manager never learns the
+    fixture's status (403 fires before the 409 status check). The four
+    write endpoints are `JwtAuthGuard` + `GuardianConsentGuard` (Decision
+    Log #21's broad Section 5.7 "posting" reading — organiser actions
+    produce public-facing records); GET reads are `JwtAuthGuard`-only —
+    relaxing them to logged-out access is flagged for the founder (ties to
+    #258), not decided here.
+  - **Status machine (#254):** `scheduled → live` ("Start match"),
+    `live → full_time` ("End match" with no score), and
+    `scheduled|live → full_time` via `POST /fixtures/:id/result`.
+    Everything else (any backwards move, `full_time → *`, a no-op
+    same-status PATCH, `scheduled → full_time` via PATCH) is a **409
+    naming the current and requested status**; `PATCH {status:"scheduled"}`
+    is a **400** at the DTO layer.
+  - **"First write is final" — the Result race (#255):** `Result.fixtureId`
+    is `@unique`. `POST /fixtures/:id/result` runs its pre-checks
+    (404 → 403 → "result already exists" 409 → "wrong status" 409, in that
+    order so the informative message wins), then inside one interactive
+    `$transaction` re-reads the fixture, 409s if a `Result` now exists,
+    creates it with `enteredById: caller`, and moves the fixture to
+    `full_time`. A genuine concurrent race hits **P2002** on
+    `result.create` and is re-thrown as the **same 409, never a 500** —
+    the same belt-and-braces pattern as `FeedService.likePost`. **There is
+    no amend/dispute path in MVP** — result correction is a **parked
+    founder candidate** (documented in the README).
+  - **`GET /teams?city=` does NOT close Decision Log #258** — a real query
+    surface now exists, but there is still no browse screen and no
+    Grassroots entry point in the navbar/drawer; the public team page's
+    "← Teams" link points nowhere. Same shape as #156 for Clubs. **#256**
+    is now designed-and-backed as `teamBId: null` ("Opponent TBC",
+    `CreateFixtureDto.teamBId` optional); **#256/#257/#258 stay open**.
+  - **Verification, re-measured directly:** mocked unit suite **46 → 48
+    suites / 598 → 654 tests, 0 failures** (`grassroots.service.spec.ts`
+    +36, `grassroots.controller.http.spec.ts` +20); e2e suite (real
+    Postgres via docker-compose) **11 → 12 suites / 83 → 100 tests, 0
+    failures** (new `test/grassroots.e2e-spec.ts` — permission checks
+    against real rows, the full `scheduled → PATCH live → POST result →
+    full_time` machine verified against Postgres at each step, the genuine
+    concurrent race via `Promise.all` asserting exactly one 200 + one 409
+    with one consistent persisted `Result`, "first write is final"
+    sequential, "Opponent TBC" `teamBId: null`, keyset pagination on both
+    list endpoints, no organiser PII on `GET /teams/:id`). `nest build` +
+    `npm run lint` clean.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

@@ -14,6 +14,7 @@ import { ClubsModule } from './modules/clubs/clubs.module';
 import { AccountDeletionModule } from './modules/account-deletion/account-deletion.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { ContestModule } from './modules/contest/contest.module';
+import { GrassrootsModule } from './modules/grassroots/grassroots.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -88,11 +89,18 @@ import { ContestModule } from './modules/contest/contest.module';
     // Leaderboard build; the Leaderboard aggregation / GET /leaderboard
     // itself is still Sprint 6. See modules/contest/README.md.
     ContestModule,
+    // sprint-5/grassroots-records-service — Section 4.5 (Grassroots
+    // Records Service), full: POST /teams, GET /teams, GET /teams/:id,
+    // GET /teams/:id/fixtures, POST /fixtures, GET /fixtures/:id,
+    // POST /fixtures/:id/result, plus PATCH /fixtures/:id/status
+    // (Decision Log #254). Permission model + "first write is final"
+    // result race resolve Decision Log #255. Zero schema diff / no
+    // migration. See modules/grassroots/README.md.
+    GrassrootsModule,
     // BanterModule,        // Sprint 3
     // MessagingModule,     // Sprint 3
     // NotificationsModule, // Sprint 3
     // SportsModule,        // Sprint 4
-    // GrassrootsModule,    // Sprint 5
     // SearchModule,        // Sprint 6
     // LeaderboardModule,   // Sprint 6
   ],

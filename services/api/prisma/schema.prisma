@@ -253,17 +253,33 @@ model ClubPage {
   posts Post[]
 }
 
-// sprint-2/account-deletion-cascade -- createdBy is now Cascade (Decision
-// Log #44), but Fixture.teamAId (below) referencing THIS model is still
-// RESTRICT and deliberately untouched by this PR: GrassrootsModule isn't
-// wired into app.module.ts yet (Sprint 5, commented out) and has no
-// controller/service, so no live endpoint can create a GrassrootsTeam,
-// Fixture, or Result row today -- this chain is unreachable in practice.
-// Flagged here, not silently left inconsistent: whoever builds Grassroots
-// endpoints should revisit Fixture.teamAId/teamBId and Result.fixtureId
-// under this same cascade principle then, since a User who created a team
-// with existing fixtures would otherwise hit the exact same RESTRICT wall
-// this PR fixes for Post/Comment/Like.
+// sprint-5/grassroots-records-service (Section 4.5) — GrassrootsModule is
+// now wired into app.module.ts. The PERMISSION MODEL for this feature is
+// enforced entirely by joining through `createdById` (Decision Log #255):
+//   - POST /fixtures       -> caller must be teamA.createdById
+//   - POST /fixtures/:id/result, PATCH /fixtures/:id/status
+//                          -> caller must be teamA.createdById OR
+//                             (teamBId set) teamB.createdById
+//   - POST /teams          -> createdById = caller
+// GET reads (team, fixture, list) are JwtAuthGuard-only. The four write
+// endpoints are additionally GuardianConsentGuard-gated (Decision Log
+// #21). No permission column was added — no schema change. See
+// modules/grassroots/README.md for the full matrix.
+//
+// sprint-2/account-deletion-cascade -- createdBy is Cascade (Decision Log
+// #44), but Fixture.teamAId/teamBId (below) referencing THIS model, and
+// Result.fixtureId (below) referencing Fixture, are still RESTRICT and
+// deliberately UNCHANGED by sprint-5/grassroots-records-service: that PR
+// builds only the read/write endpoints (zero schema diff by design), and
+// the account-deletion hard-delete sweep (Decision Log #42/#44) is a
+// separate concern. Whoever revisits account-deletion cascade coverage
+// should bring Fixture.teamAId/teamBId + Result.fixtureId under the #44
+// cascade principle then, exactly as the pre-existing note here already
+// flagged -- a User who created a team with existing fixtures would
+// otherwise hit the RESTRICT wall #44 fixes for Post/Comment/Like. Still
+// unreachable via the deletion sweep in practice only because
+// GrassrootsTeam.createdBy IS Cascade while its children are not, so the
+// FK block surfaces there first.
 model GrassrootsTeam {
   id           String    @id @default(uuid())
   name         String
@@ -281,20 +297,42 @@ model Fixture {
   id          String          @id @default(uuid())
   teamAId     String
   teamA       GrassrootsTeam  @relation("teamA", fields: [teamAId], references: [id])
+  // Nullable = the "Opponent to be confirmed" state (Decision Log #256):
+  // Section 3 has no free-text opponent-name field, so an unregistered
+  // opponent is recorded as teamBId = null and rendered "Opponent TBC".
+  // POST /fixtures rejects teamBId === teamAId.
   teamBId     String?
   teamB       GrassrootsTeam? @relation("teamB", fields: [teamBId], references: [id])
   scheduledAt DateTime
   venue       String?
+  // Status machine (sprint-5/grassroots-records-service, Decision Log
+  // #254). A new fixture is always "scheduled". Legal forward moves:
+  //   scheduled --("Start match", PATCH /fixtures/:id/status)--> live
+  //   live      --("End match",   PATCH /fixtures/:id/status)--> full_time
+  //   scheduled|live --(POST /fixtures/:id/result)-----------> full_time
+  // Every other transition (backwards, full_time -> anything, a no-op
+  // same-status PATCH, scheduled -> full_time via PATCH) is a 409.
+  // Enforced in GrassrootsService, not by a DB constraint. There is no
+  // "postponed"/"cancelled" value -- flagged open, not added.
   status      String          @default("scheduled") // scheduled | live | full_time
   result      Result?
 }
 
 model Result {
   id          String   @id @default(uuid())
+  // @unique -> at most one Result per Fixture. This is the "first write
+  // is final" backstop (sprint-5/grassroots-records-service, Decision Log
+  // #255): POST /fixtures/:id/result creates this row inside an
+  // interactive transaction and 409s if one already exists; a genuine
+  // concurrent race that passes both pre-checks hits this constraint
+  // (Prisma P2002) and is re-thrown as the same 409, never a 500. There
+  // is NO amend/dispute endpoint in MVP -- correction is a parked founder
+  // candidate (see grassroots/README.md).
   fixtureId   String   @unique
   fixture     Fixture  @relation(fields: [fixtureId], references: [id])
   scoreA      Int
   scoreB      Int
+  // = the caller of POST /fixtures/:id/result (a creator of either team).
   enteredById String
   // Decision Log #44 (cascade) -- see account-deletion/README.md.
   enteredBy   User     @relation(fields: [enteredById], references: [id], onDelete: Cascade)
