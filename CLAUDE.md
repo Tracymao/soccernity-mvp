@@ -7786,6 +7786,71 @@ Full reasoning for every choice above: Build Plan Section 5.
     `/community`, `/clubs` all HTTP 200. No real browser/Playwright check
     available — same ceiling as every prior `apps/web` PR.
   - Not merged — founder's call after review.
+- **`sprint-5/grassroots-conversion-organiser` (figma-to-code, 2026-09-08)
+  is PR 2 of 2 — the authenticated Grassroots organiser flows in `apps/web`
+  (register team / schedule fixture / manage a fixture and log its result).
+  Branches off PR 1 (`sprint-5/grassroots-conversion-read`), `apps/web`
+  only. Decision Log #271; forward-pointer on #270.** Report:
+  `docs/sprint-5-grassroots-conversion-organiser-report.md`. `api/grassroots.ts`
+  is **unchanged** from PR 1 (all 8 endpoints were shipped there).
+  - **3 new routes, all `AppShell` children, no site footer:**
+    `/grassroots/register` (`POST /teams` — Figma frames 1-2),
+    `/grassroots/:teamId/fixtures/new` (`GET /teams/:id` + `POST /fixtures`
+    — frames 3-5), and **`/grassroots/fixtures/:fixtureId` — ONE
+    status-driven route** covering frames 6/7/8 (`GET /fixtures/:id`,
+    `PATCH /fixtures/:id/status`, `POST /fixtures/:id/result`), matching
+    the backend's single `scheduled → live → full_time` machine. `register`
+    and `fixtures` are static segments and outrank `:teamId` in React
+    Router v8's ranking — no collision.
+  - **`GrassrootsTeamPage` (from PR 1) gained an organiser toolbar** — a
+    "Schedule a fixture" link + per-fixture "Manage" links — shown when the
+    access token's `sub` === `team.createdById` (`GET /teams/:id` returns
+    `createdById`). Display-only; every write is server-enforced (#255).
+    Figma deliberately did NOT design this conditionally (#253 §6.7 —
+    "nothing tells the client whether the viewer is the organiser"), but
+    in code the data does.
+  - **Status-machine UI:** only `scheduled → live` ("Start match") and
+    `live → full_time` (via logging the result) are offered; an
+    **illegal-transition 409 is surfaced VERBATIM** ("A fixture cannot
+    move from X to Y") — not hidden behind a disabled button — and
+    triggers a refetch so the page catches up (#254).
+  - **Result 409 ("first write is final", #255)** is treated as an
+    **expected, explained outcome** — a status notice + a refetch to show
+    the score that was actually recorded — not a red error.
+  - **Both 403 kinds distinguished:** `GuardianConsentGuard` (server
+    message matches `/guardian consent/i`) → an inline link to
+    `/guardian-consent`, mirroring `PostComposer.tsx`; `ForbiddenException`
+    (not the team's organiser) → the server's own message. Shared helper:
+    `src/pages/grassroots/errors.ts` `isAwaitingConsent()`.
+  - **Opponent selection is a 3-way choice** — a registered team (search
+    by city via `GET /teams?city=`, excluding your own) / a free-text
+    `opponentName` / "decide later" — so the `teamBId` XOR `opponentName`
+    400 (#256/#260) is unreachable from the UI.
+  - **`scheduledAt` is a native `<input type="date">` + `<input
+    type="time">` combined client-side.** The Figma reuses the shared
+    Calendar component (#257), which has no React equivalent in this app —
+    flagged, not reproduced.
+  - **`GrassrootsFixturePage` cannot client-side guard who the fixture's
+    manager is** — `GET /fixtures/:id` returns no `createdById` — so it
+    renders the manage UI for any signed-in user and surfaces the server's
+    403. In practice the page is reached from the team-page organiser
+    toolbar or the schedule confirmation, so the visitor is nearly always
+    the organiser. Flagged.
+  - **Verification:** `npx tsc --noEmit` / `npm run lint` / `npm run build`
+    all clean; `apps/web` vitest **32 files / 215 tests, 0 failures** (+3
+    files, +20 tests — `GrassrootsRegisterTeamPage` +5,
+    `GrassrootsScheduleFixturePage` +6, `GrassrootsFixturePage` +7,
+    `GrassrootsTeamPage` +2); dev-server smoke test `/`, `/grassroots`,
+    `/grassroots/register`, `/grassroots/:id`, `/grassroots/:id/fixtures/new`,
+    `/grassroots/fixtures/:id`, `/community` all HTTP 200. No real
+    browser/Playwright check available.
+  - **The Grassroots feature is now fully wired into `apps/web`** — the
+    full arc: design (#253/#261/#265/#266) → backend (#254/#255/#256/#259/#260)
+    → read-only frontend (#270) → organiser frontend (#271). Still open,
+    unchanged: #266's desktop icon-navbar Grassroots glyph
+    (`figma-design-system` shared-component task); #257 (the Figma calendar
+    component's own debt).
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

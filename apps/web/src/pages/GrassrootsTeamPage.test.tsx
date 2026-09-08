@@ -16,6 +16,13 @@ vi.mock("../api/grassroots", async () => {
 
 import { getTeamById, getTeamFixtures } from "../api/grassroots";
 
+// A decodable fake JWT so the organiser check (team.createdById === the
+// token's `sub`) can run. A plain "test-token" is not decodable, so with
+// it the page always renders as a non-organiser (no toolbar).
+function tokenFor(sub: string): string {
+  return `x.${btoa(JSON.stringify({ sub, role: "user" }))}.y`;
+}
+
 const SURULERE: GrassrootsTeam = {
   id: "team-s",
   name: "Surulere United",
@@ -203,5 +210,40 @@ describe("GrassrootsTeamPage", () => {
 
     expect(await screen.findByRole("alert")).not.toBeNull();
     expect(screen.getByRole("alert").textContent).toMatch(/couldn.t load this team/i);
+  });
+
+  it("shows the organiser a 'Schedule a fixture' link and per-fixture 'Manage' links", async () => {
+    window.sessionStorage.setItem("sn_access_token", tokenFor("org-1")); // === createdById
+    vi.mocked(getTeamById).mockResolvedValueOnce(SURULERE);
+    vi.mocked(getTeamFixtures).mockReset().mockResolvedValueOnce({
+      items: [fixture({ id: "u1" })],
+      nextCursor: null,
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Surulere United" })).not.toBeNull();
+    expect(screen.getAllByRole("link", { name: "Schedule a fixture" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Schedule a fixture" })[0].getAttribute("href")).toBe(
+      "/grassroots/team-s/fixtures/new",
+    );
+    expect(screen.getByRole("link", { name: "Manage" }).getAttribute("href")).toBe(
+      "/grassroots/fixtures/u1",
+    );
+  });
+
+  it("does NOT show organiser affordances to a non-organiser viewer", async () => {
+    window.sessionStorage.setItem("sn_access_token", tokenFor("someone-else"));
+    vi.mocked(getTeamById).mockResolvedValueOnce(SURULERE);
+    vi.mocked(getTeamFixtures).mockReset().mockResolvedValueOnce({
+      items: [fixture({ id: "u1" })],
+      nextCursor: null,
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Surulere United" })).not.toBeNull();
+    expect(screen.queryByRole("link", { name: "Schedule a fixture" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Manage" })).toBeNull();
   });
 });

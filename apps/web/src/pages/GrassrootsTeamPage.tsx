@@ -45,7 +45,7 @@ import {
   type Fixture,
   type GrassrootsTeam,
 } from "../api/grassroots";
-import { getStoredAccessToken } from "../lib/session";
+import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
 import "./grassroots/GrassrootsPage.css";
 
 type LoadState = "loading" | "loaded" | "error" | "not-found" | "no-session";
@@ -129,6 +129,11 @@ function StatusPill({ status }: { status: Fixture["status"] }) {
 export default function GrassrootsTeamPage() {
   const { teamId } = useParams<{ teamId: string }>();
   const token = getStoredAccessToken();
+  // Display-convenience only (never a trust boundary — the server enforces
+  // the organiser check on every write). GET /teams/:id returns
+  // createdById, and the access token's `sub` IS the user id, so we can
+  // show the organiser their own schedule/manage affordances.
+  const myId = token ? decodeAccessToken(token)?.sub : null;
 
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [team, setTeam] = useState<GrassrootsTeam | null>(null);
@@ -237,6 +242,14 @@ export default function GrassrootsTeamPage() {
     .filter((f) => f.result == null)
     .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
 
+  // The organiser (the person who registered this team) gets the
+  // schedule / manage affordances the Figma team page deliberately did
+  // NOT design conditionally (Decision Log #253 §6.7 — "nothing tells the
+  // client whether the viewer is the organiser"). In code we DO know:
+  // GET /teams/:id returns createdById and the token's `sub` is the user
+  // id. Still display-only — every write is server-enforced (#255).
+  const isOrganiser = myId != null && team.createdById === myId;
+
   return (
     <div className="grassroots-team">
       <Link to="/grassroots" className="grassroots-back">
@@ -260,6 +273,17 @@ export default function GrassrootsTeamPage() {
         </div>
       </div>
 
+      {isOrganiser && (
+        <div className="grassroots-team__organiser">
+          <Link
+            to={`/grassroots/${team.id}/fixtures/new`}
+            className="grassroots-btn grassroots-btn--primary grassroots-btn--inline"
+          >
+            Schedule a fixture
+          </Link>
+        </div>
+      )}
+
       <hr className="grassroots-team__divider" />
 
       {fixturesState === "loading" && (
@@ -278,9 +302,18 @@ export default function GrassrootsTeamPage() {
         <div className="grassroots-empty">
           <p className="grassroots-empty__title">No fixtures yet</p>
           <p className="grassroots-empty__body">
-            {team.name} has not scheduled any matches. Fixtures and results appear here as soon as the team&rsquo;s
-            organiser adds them.
+            {isOrganiser
+              ? `${team.name} has no matches yet. Schedule one to start logging fixtures and results.`
+              : `${team.name} has not scheduled any matches. Fixtures and results appear here as soon as the team's organiser adds them.`}
           </p>
+          {isOrganiser && (
+            <Link
+              to={`/grassroots/${team.id}/fixtures/new`}
+              className="grassroots-btn grassroots-btn--primary grassroots-btn--inline"
+            >
+              Schedule a fixture
+            </Link>
+          )}
         </div>
       )}
 
@@ -309,6 +342,11 @@ export default function GrassrootsTeamPage() {
                   </span>
                 </span>
                 <StatusPill status={fixture.status} />
+                {isOrganiser && (
+                  <Link to={`/grassroots/fixtures/${fixture.id}`} className="grassroots-fixture__manage">
+                    Manage
+                  </Link>
+                )}
               </li>
             ))}
           </ul>
