@@ -7416,6 +7416,54 @@ Full reasoning for every choice above: Build Plan Section 5.
     routes → HTTP 200, clean log. No real browser/Playwright check
     available — same ceiling as every prior `apps/admin` figma-to-code PR.
   - PR opened, not merged — founder's call.
+- **`sprint-5/grassroots-record-keeping-screens` (figma-screen-builder, 2026-09-08) designs the
+  Grassroots Record-Keeping feature (Build Plan Sprint 5, Section 4.5) — 21 brand-new Figma frames,
+  the first screens this feature has ever had. Figma design only, no app/backend code;
+  `GrassrootsModule` is still unwired in `services/api`.** Report:
+  `docs/sprint-5-grassroots-record-keeping-screens-report.md`. Decision Log **#253–#258** added
+  (#253 resolved-design; #254–#258 open).
+  - **Parked in a fresh row on page `0:1`** — desktop at `y 32800` (`x 0 → 17520`), 390px mobile at
+    `y 35600` (`x 0 → 4890`), plus a section caption at `y 32280`. The band below `y 32000` was
+    verified empty beforehand (page content ends at `y 30577`) and a full pairwise AABB test against
+    every page `0:1` child afterwards returned **0 clashes**. Clear of both parked component zones.
+  - **Four flows, desktop + mobile each:** team registration (`6367:16407`/`6375:17591`,
+    `6368:16495`/`6375:17646`); fixture entry (`6369:16675`/`6376:17631`, plus a dedicated
+    Opponent-TBD state `6371:16908`/`6376:17711`, and `6368:16610`/`6377:17671`); result logging
+    across the real `scheduled → live → full_time` machine (`6372:17141`/`6377:17724`,
+    `6372:17259`/`6378:17711`, `6373:17321`/`6378:17776`); and the public team page in both
+    `verified` variants (`6373:17444`/`6379:17751` verified, `6374:17501`/`6379:17868` unverified
+    with the no-fixtures empty state). Plus `Grassroots — Design Notes` (`6380:17791`).
+  - **Reused, not rebuilt:** `header 4` (`2838:3502`) ×10, `header 4 — mobile` (`5386:6576`) ×10
+    resized to 390, and `Calendar for scheduled task`/`calendar 2` (`2365:2034`) ×2. Form language
+    from `Guardian Details Capture` (`5108:6627`); public page from `Club — Fan Page` (`5841:9365`)
+    but **deliberately withholding licensed-club chrome** (no crest, no Join, no feed) so a
+    self-registered team never reads as official. Built fresh: score stepper, three-state fixture
+    status pill, "Opponent TBC" placeholder, verified/community-unverified badges.
+  - **Audit, measured node-by-node: 861 authored paints, 0 unbound, 0 off-palette, 0
+    `brand/green-tint-28`, 0 new colours, 0 overlaps.** The only 8 inherited unbound paints are the
+    four `opacity: 0` adjacent-month numerals inside each calendar instance — pre-existing debt
+    already disclosed under Decision Log #53/#178, deliberately left rather than force-bound.
+    Primary *and* destructive buttons are `brand/navy` (PR #100 precedent — no destructive token
+    exists, non-negotiable #3); `semantic/alert` appears exactly once as a non-text LIVE dot (#149).
+  - **A brief premise was wrong and was corrected rather than followed:** the reused calendar is
+    **not** date-only — it carries an internal "Set time" row and its own Cancel/Schedule buttons
+    from its Admin dialog context, which duplicate the host form's time field and primary CTA. Both
+    are hidden as an **instance-level** override; the shared component is deliberately not edited
+    from a screen-design task (**#257**, which also records that it has no mobile variant at 687px
+    fixed, and that its sample month still reads "January 2022").
+  - **Seven schema gaps confirmed and three more found, all flagged not filled:** no team
+    badge/photo field (monogram used); no free-text opponent name (`teamBId = null` / "Opponent TBC"
+    is the only option — **#256**); `scheduledAt` is one DateTime; no League/season entity; `Result`
+    is final-score-only; **no permission model and a first-write-wins race on the `@unique` Result
+    row (#255)**; no `postponed`/`cancelled` status; **NEW — Section 4.5 defines no endpoint that
+    changes `Fixture.status`, so "Start match" has no backing endpoint at all (#254)**; NEW — the
+    calendar has no mobile variant (#257); **NEW — no teams browse screen and no Grassroots nav
+    entry point, so `GET /teams?city=` has no surface and "← Teams" points nowhere (#258, the same
+    shape as #156 for Clubs)**.
+  - **`figma-to-code` must not build these screens until at least #254 is resolved** — the status
+    machine the result flow depends on has no endpoint today. `backend-api` should also resolve
+    #254/#255 (and confirm #256) before wiring `GrassrootsModule`.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
