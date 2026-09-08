@@ -7582,6 +7582,51 @@ Full reasoning for every choice above: Build Plan Section 5.
     fully-TBD path still stores both columns `null`). `nest build` +
     `npm run lint` clean.
   - Not merged — founder's call after review.
+- **`sprint-5/grassroots-opponent-name-design` (figma-design-system,
+  2026-09-08) wires the free-text away-opponent name (`Fixture.opponentName`,
+  backend half / Decision Log #260) into the Grassroots Figma frames — the
+  design half of Decision Log #256. Figma design only, no app/backend code.
+  Decision Log #261; #256 is now fully Resolved (backend #260 + design
+  #261).** No Bash this session — branch, commit, docx transcription, this
+  bullet and the PR finalised in a follow-up session (same pattern as PRs
+  #98/#102/#110/#130/#151). Report:
+  `docs/sprint-5-grassroots-opponent-name-design-report.md`.
+  - **Frame 4 "Schedule Fixture (Opponent TBD)" — desktop `6371:16908` +
+    mobile `6376:17711`:** added an **"Opponent name (optional)"** text
+    input, cloned from frame 3's `Field — Venue (optional)` (`6369:16966` /
+    `6376:17703`) so every token binding is inherited, placeholder "e.g.
+    Riverside FC", placed under the "Opponent" label above the existing
+    "Opponent to be confirmed" checkbox. **Frame not renamed, flow not
+    restructured — additive field only.** Callout, checkbox helper and the
+    schema annotation reworded to explain: leave the name blank and the
+    fixture shows "Opponent TBC" until a name is added; the
+    `teamBId` XOR `opponentName` (or neither) contract recorded on-frame.
+    Both frames auto-hug, so they grew (1564→1680, 1180→1370) with padding
+    intact.
+  - **Frame 9 "Public Team Page (Verified)" — desktop `6373:17444` +
+    mobile `6379:17751`:** fixture row 2's "v Opponent TBC" → **"v Riverside
+    FC"**; the outlined `?` monogram tile **kept** (unregistered opponent,
+    no crest); row/monogram frames + schema annotations renamed/reworded.
+  - **Design Notes `6380:17791`:** FLAG 2 and the #256 candidate reworded
+    to RESOLVED, the schema-field→UI mapping row and flow-map line updated,
+    a new #261 note added stating "Opponent TBC" is a frontend display
+    fallback (the API returns raw `opponentName: string | null`, per DL
+    #260 / the backend README).
+  - **Frames 5, 6, 7, 8, 10 (D+M) checked node-by-node and left
+    unchanged** — each depicts a registered-opponent fixture (Ikorodu
+    Rangers) or an empty team page (Marina Boys FC); no "Opponent TBC" /
+    `?` tile present. **No frame outside {4, 9, Design Notes} touched.**
+  - **Audit:** 8 authored solid paints, **all variable-bound, 0 unbound /
+    0 off-palette / 0 `brand/green-tint-28` / 0 new colours**, Light mode
+    only, **0 frame overlaps**. The navbar avatar `IMAGE` fill on the
+    `header 4` instances is pre-existing shared-component debt, not
+    force-bound.
+  - **`figma-to-code` owns the fallback:** show `opponentName` when
+    present; render the literal "Opponent TBC" only when both `teamBId`
+    and `opponentName` are null. Grassroots has no `apps/web` screens yet,
+    so no conversion here. #257 (calendar component) / #258 (teams browse
+    screen + nav entry) untouched, still open.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
