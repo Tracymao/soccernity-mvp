@@ -7846,11 +7846,9 @@ Full reasoning for every choice above: Build Plan Section 5.
     browser/Playwright check available.
   - **The Grassroots feature is now fully wired into `apps/web`** — the
     full arc: design (#253/#261/#265/#266) → backend (#254/#255/#256/#259/#260)
-    → read-only frontend (#270) → organiser frontend (#271). Still open,
-    unchanged: #266's desktop icon-navbar Grassroots glyph
-    (`figma-design-system` shared-component task — **now done, see the
-    next bullet / Decision Log #272**; the `primaryNavItems` code mirror
-    is its own figma-to-code follow-up); #257 (the Figma calendar
+    → read-only frontend (#270) → organiser frontend (#271), plus the
+    desktop icon-navbar glyph (design #272, code mirror #273 — see the
+    two bullets below). Still open, unchanged: #257 (the Figma calendar
     component's own debt).
   - Not merged — founder's call after review.
 - **`sprint-5/grassroots-desktop-navbar-glyph` (figma-design-system,
@@ -7905,12 +7903,43 @@ Full reasoning for every choice above: Build Plan Section 5.
     variable-bound; **0 unbound, 0 off-palette, 0 `brand/green-tint-28`,
     0 new colours, Light mode only, 0 overlaps**. The two `— mobile`
     variants and the mobile Navigation Drawer were not touched.
-  - **figma-to-code follow-up (recorded, not built):** add
-    `{ label: "Grassroots", to: "/grassroots", icon: navGrassroots,
-    tinted: true }` to `primaryNavItems` in
-    `apps/web/src/layout/navigation.ts` (position 7, after Clubs) and
-    export the glyph to `src/assets/icons/nav-grassroots.svg`. The
-    canonical order/style landed here is what that PR converts verbatim.
+  - **figma-to-code follow-up:** the `primaryNavItems` code mirror in
+    `apps/web/src/layout/navigation.ts` + the glyph SVG export — **now
+    done, see the next bullet / Decision Log #273.**
+  - Not merged — founder's call after review.
+- **`sprint-5/grassroots-navbar-glyph-code` (figma-to-code, 2026-09-08)
+  mirrors the Decision Log #272 desktop navbar glyph into `apps/web`
+  code — the figma-to-code follow-up #272 recorded. `apps/web` only, no
+  `services/api` / Figma. Decision Log #273; forward-pointer on #272.**
+  - **`apps/web/src/assets/icons/nav-grassroots.svg`** — exported from
+    Figma node `6412:18190` ("corner-flag (Grassroots)") via
+    `download_assets`: a bare 24×24 navy (`#282E65` = `brand/navy`)
+    stroke glyph (`M8.5 21V3M4 21H14M8.5 3.5L20 6.75L8.5 10V3.5Z`), **no
+    green-tint tile baked in** — matching `nav-clubs.svg` /
+    `nav-sports-hub.svg` exactly. The tint tile is applied in CSS by
+    `Header.tsx`'s `sn-header__nav-icon--tinted` wrap.
+  - **`navigation.ts`** — `navGrassroots` imported alongside the other 6
+    nav icons; `{ label: "Grassroots", to: "/grassroots", icon:
+    navGrassroots, tinted: true }` added as the **7th and last**
+    `primaryNavItems` entry, after Clubs — the canonical order and
+    tinted style #272 landed, verbatim. `tinted: true` because the
+    exported SVG is a bare stroke glyph (same as Sports Hub / Clubs,
+    Decision Log #159). The stale drawer comment about the desktop glyph
+    being "a separate figma-design-system task ... NOT added to
+    primaryNavItems" was rewritten.
+  - **`Header.test.tsx`** — the canonical-icon-order test extended to 7
+    labels; the old `"does NOT add Grassroots to the desktop icon nav"`
+    test inverted to assert it IS the last item (tinted, → `/grassroots`);
+    the stale `"six icon nav links"` test name → `"seven"`. **Mobile
+    Navigation Drawer NOT touched** — its Grassroots entry was already
+    added by #270. The Figma file NOT touched.
+  - **Verification:** `npx tsc --noEmit`, `npm run lint`, `npm run
+    build` all clean; `npx vitest run` — **32 files / 215 tests, 0
+    failures** (no test-count change; 3 existing `Header.test.tsx`
+    assertions updated in place); dev-server smoke test `/`,
+    `/grassroots`, `/community`, `/clubs` all HTTP 200. No real
+    browser/Playwright check available — same ceiling as every prior
+    `apps/web` PR.
   - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and

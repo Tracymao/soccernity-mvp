@@ -72,7 +72,7 @@ beforeEach(() => {
 });
 
 describe("navigation config", () => {
-  it("is the canonical Figma icon order: Sports Hub, Blog, Community, Leaderboard, Bants, Clubs", () => {
+  it("is the canonical Figma icon order: Sports Hub, Blog, Community, Leaderboard, Bants, Clubs, Grassroots", () => {
     expect(primaryNavItems.map((i) => i.label)).toEqual([
       "Sports Hub",
       "Blog",
@@ -80,6 +80,7 @@ describe("navigation config", () => {
       "Leaderboard",
       "Bants",
       "Clubs",
+      "Grassroots",
     ]);
     expect(primaryNavItems.find((i) => i.label === "Blog")?.to).toBe("/blog");
     expect(primaryNavItems.find((i) => i.label === "Clubs")?.to).toBe("/clubs");
@@ -100,8 +101,8 @@ describe("navigation config", () => {
       "Leaderboard",
       "Clubs",
       // Grassroots sits directly after Clubs — adjacency, not nesting
-      // (Decision Log #266); mobile drawer only, no desktop icon-navbar
-      // entry yet.
+      // (Decision Log #266). The desktop icon-navbar now carries it too
+      // (Decision Log #272).
       "Grassroots",
       "Messages",
       "Notifications",
@@ -117,13 +118,16 @@ describe("navigation config", () => {
     expect(grassroots?.available).toBeUndefined();
   });
 
-  it("does NOT add Grassroots to the desktop icon nav (Decision Log #266)", () => {
-    expect(primaryNavItems.some((i) => i.label === "Grassroots")).toBe(false);
+  it("adds Grassroots as the last desktop icon-nav item, tinted, -> /grassroots (Decision Log #272)", () => {
+    const grassroots = primaryNavItems[primaryNavItems.length - 1];
+    expect(grassroots.label).toBe("Grassroots");
+    expect(grassroots.to).toBe("/grassroots");
+    expect(grassroots.tinted).toBe(true);
   });
 });
 
 describe("Header -- logged out", () => {
-  it("renders the six icon nav links and a Login button, no avatar", () => {
+  it("renders the seven icon nav links and a Login button, no avatar", () => {
     renderHeader();
 
     for (const item of primaryNavItems) {
