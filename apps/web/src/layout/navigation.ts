@@ -6,7 +6,14 @@
 // the canonical Figma icon nav from the "header 4" / "header 7" variants
 // of the Header COMPONENT_SET (nodes 2838:3502 / 2841:4104,
 // "Soccernity-MVP" file weZWWqggy9j13eX8bhFgs6). Icon order there is:
-// Sports Hub, Blog, Community, Leaderboard, Bants, Clubs.
+// Sports Hub, Blog, Community, Leaderboard, Bants, Clubs, Grassroots.
+//
+// DECISION LOG #272 -- the "grassroots" icon was appended (7th, last,
+// after Clubs) to the shared Web app Navbar COMPONENT_SET on both live
+// desktop variants (header 4 / header 7). This file is the 1:1 code
+// mirror of that component; the entry below matches the canonical order
+// and the tinted (bare-stroke-glyph-in-a-green-tint-tile) style landed
+// there verbatim -- same treatment as Clubs (Decision Log #159).
 //
 // DECISION LOG #165 -- fully resolved: "Blog" is the label and the
 // internal identifier for this content pillar everywhere. The founder's
@@ -22,6 +29,7 @@ import navCommunity from "../assets/icons/nav-community.svg";
 import navLeaderboard from "../assets/icons/nav-leaderboard.svg";
 import navBants from "../assets/icons/nav-bants.svg";
 import navClubs from "../assets/icons/nav-clubs.svg";
+import navGrassroots from "../assets/icons/nav-grassroots.svg";
 
 export interface NavItem {
   label: string;
@@ -43,6 +51,12 @@ export const primaryNavItems: NavItem[] = [
   { label: "Leaderboard", to: "/leaderboard", icon: navLeaderboard },
   { label: "Bants", to: "/banter", icon: navBants },
   { label: "Clubs", to: "/clubs", icon: navClubs, tinted: true },
+  // Grassroots Record-Keeping (Build Plan Section 4.5). 7th icon, last,
+  // after Clubs -- mirrors the Figma header 4 / header 7 order landed by
+  // Decision Log #272. `tinted: true`: the exported SVG is a bare navy
+  // stroke glyph, so the green-tint tile is applied in CSS (same as
+  // Sports Hub and Clubs).
+  { label: "Grassroots", to: "/grassroots", icon: navGrassroots, tinted: true },
 ];
 
 export interface DrawerNavItem {
@@ -69,13 +83,11 @@ export const drawerNavItems: DrawerNavItem[] = [
   { label: "Bants", to: "/banter" },
   { label: "Leaderboard", to: "/leaderboard" },
   { label: "Clubs", to: "/clubs" },
-  // Grassroots Record-Keeping (Build Plan Section 4.5). Mobile-drawer
-  // entry only for now — Decision Log #266 deliberately scoped the nav
-  // entry point to the drawer and left the desktop icon-navbar glyph
-  // (a shared header 4 / header 7 component change) as a separate
-  // figma-design-system task, so this is NOT added to primaryNavItems.
-  // Decision Log #266's own "code mirror" follow-up, resolved by
-  // sprint-5/grassroots-conversion-read (Decision Log #270).
+  // Grassroots Record-Keeping (Build Plan Section 4.5). Decision Log
+  // #266 first scoped the nav entry point to the drawer only; the
+  // desktop icon-navbar glyph followed as its own figma-design-system
+  // task (Decision Log #272) and is now mirrored into primaryNavItems
+  // above.
   { label: "Grassroots", to: "/grassroots" },
   { label: "Messages", to: "/messages", available: false },
   { label: "Notifications", to: "/notifications", available: false },
