@@ -7627,6 +7627,44 @@ Full reasoning for every choice above: Build Plan Section 5.
     so no conversion here. #257 (calendar component) / #258 (teams browse
     screen + nav entry) untouched, still open.
   - Not merged — founder's call after review.
+- **`sprint-5/grassroots-calendar-component-fix` (figma-design-system, 2026-09-08) fixes the shared
+  `Calendar for scheduled task` component set (`2365:2033`) so the Grassroots Record-Keeping frames
+  can reuse it cleanly — resolves Decision Log #257 (and the long-flagged "January 2022" sample
+  month). Figma design only, no app/backend code.** Report:
+  `docs/sprint-5-grassroots-calendar-component-fix-report.md`. Decision Log **#262–#264** added; #257
+  rewritten to Resolved; #258 (teams-browse screen + Grassroots nav entry) unaffected, stays Open.
+  - **New BOOLEAN component property `Show Time & Actions`** (key `Show Time & Actions#6392:0`,
+    default `true`) on the set, bound to `Group 825.visible` in every variant — hides the redundant
+    inherited "Set time" row (hours/minutes/seconds + AM/PM) and the Cancel/Schedule buttons with one
+    discoverable toggle instead of a raw per-instance override. **Shipped without auto-collapse**: the
+    calendar body is absolute-layout; an instance that toggles it off does one manual `resize()`
+    (~300px single-column / ~242px `calendar 2`) — same "don't restructure a working absolute layout"
+    discipline as DL #53/#178. Figma **auto-migrated** the two Grassroots-desktop instances'
+    pre-existing manual `visible:false` overrides into the property, so those out-of-scope frames were
+    verified byte-unchanged and not edited.
+  - **New variant `Property 1=calendar 2 — mobile`** (`6393:17791`, 308px single-column, cloned from
+    `calendar 1`'s structure) for 390px frames. **The axis `Property 1` was deliberately NOT renamed
+    to a semantic `Size` property**: the task allowed it only on the premise `calendar 1` is
+    un-instanced, but `calendar 1` gained a live instance in `sprint-2/admin-contest-screens` (DL
+    #242, `6281:16383`), so both existing values have live instances and renaming the axis against 4+
+    live instances is the exact multi-hazard operation the DL #67 navbar precedent chose to avoid.
+    Kept `Property 1`, added the value the DL #67 way. `calendar 1` kept (can't retire — instanced).
+    Semantic `Size` axis logged as a future refactor (DL #263). Mobile variant kept at 308px rather
+    than widened to fill the 350px column — widening needs re-pitching 42 absolutely-positioned day
+    cells, no UX gain.
+  - **"January 2022" → "Month YYYY"** on all three variants (neutral non-dated placeholder; layer
+    renamed to "Month label"; fill still bound to `brand/navy`) — DL #264.
+  - **Grassroots mobile frames 3 & 4** (`6376:17631` / `6376:17711`) now embed an inline instance of
+    the new mobile variant (`6397:17793` / `6397:17935`, `Show Time & Actions=false`, 308×300) in
+    `Field — Match date` instead of the plain date-field workaround; the stale "no mobile variant"
+    annotations were rewritten. Both frames grew ~255px taller (expected for an inline calendar,
+    matches desktop proportions); no overlaps.
+  - **Audit:** the mobile variant's paint audit is identical to `calendar 1`'s baseline — 0
+    newly-introduced unbound / off-palette / `brand/green-tint-28` / new-colour paints; the 15
+    unbound (5 per variant) are exactly the disclosed DL #53/#178 opacity-0-numeral + frosted-panel
+    debt, deliberately left. All 5 live instances of the set verified appearance-unchanged. 0 frame
+    overlaps. Light mode only.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
@@ -7746,6 +7784,21 @@ real, still-open follow-up, not done by this entry.
   variant component) survive the clone, but overrides you set on a nested
   instance do not. Re-apply nested-instance reactions explicitly on every
   cloned variant. Decision Log #249.
+- **`component.clone()` on a variant `COMPONENT` also drops
+  `componentPropertyReferences` on its child nodes that point to a
+  set-level property key.** Cloning a variant to seed a new variant, then
+  `set.appendChild(clone)`, produced a clone whose child (`Group 825`) had
+  `componentPropertyReferences: {}` even though the source variant's same
+  child was bound to a set-level property key. Re-apply the reference on
+  the clone's child after the append. Distinct from the nested-instance
+  *reaction* drop above — this is a `componentPropertyReferences` binding
+  on a plain child node. Found in `sprint-5/grassroots-calendar-component-fix`
+  (Decision Log #263). **Reassuring companion finding:** adding a BOOLEAN
+  component property bound to `node.visible` on an existing set does NOT
+  force instances that already carry a manual `visible` override to the
+  property default — Figma migrates the manual override into the property
+  value, preserving appearance (verified on the Grassroots-desktop calendar
+  instances, DL #262).
 
 ## The eight agents, and the order they run in
 
