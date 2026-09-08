@@ -1,0 +1,461 @@
+/* Grassroots Record-Keeping — Browse Teams (GrassrootsPage.tsx) and the
+ * Public Team Page (GrassrootsTeamPage.tsx). Figma source: frames
+ * 6402:18078 / 6404:18180 (Browse), 6373:17444 / 6374:17501 and their
+ * mobile pairs (Team Page), "Soccernity-MVP" (weZWWqggy9j13eX8bhFgs6),
+ * from sprint-5/grassroots-teams-browse (Decision Log #265/#266) and
+ * sprint-5/grassroots-record-keeping-screens (Decision Log #253/#261).
+ *
+ * Colour values reference the app-wide --sn-* custom properties from
+ * src/theme/applyTheme.ts — do not hardcode hex. Light theme, the app's
+ * single active mode, matching ClubsPage.css / CommunityPage.css. The
+ * design's own "header 4" navbar is NOT reproduced here — AppShell
+ * already renders the shared site Header, same as every routed page.
+ *
+ * Shares its shape with ClubsPage.css deliberately (browse list + a
+ * one-entity detail page), but is a separate file: Grassroots diverges
+ * on cards (no Join button, whole card is a link), badges (verified /
+ * unverified), and the fixture/result rows the team page adds. */
+
+.grassroots-page,
+.grassroots-team {
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* --- status messages (shared shape with Clubs / Community / Profile) -- */
+
+.grassroots-status {
+  font: 400 15px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  padding: 48px 0;
+  text-align: center;
+  margin: 0;
+}
+
+.grassroots-status--error {
+  color: var(--sn-brand-navy);
+}
+
+/* --- Browse: header + search --------------------------------------- */
+
+.grassroots-page__header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.grassroots-page__title {
+  font: 600 34px/1.3 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.grassroots-page__subtitle {
+  font: 400 16px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.grassroots-search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  padding: 0 18px;
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+}
+
+.grassroots-search__icon {
+  flex-shrink: 0;
+  color: var(--sn-text-secondary);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.grassroots-search__input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  font: 400 15px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.grassroots-search__input::placeholder {
+  color: var(--sn-text-secondary);
+}
+
+.grassroots-search__hint {
+  font: 400 13px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: -12px 0 0;
+}
+
+/* --- Browse: team list ------------------------------------------- */
+
+.grassroots-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.grassroots-card {
+  display: block;
+  padding: 16px 20px;
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.grassroots-card__row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.grassroots-card__monogram {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 20px "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+  background: var(--sn-green-tint-12);
+}
+
+.grassroots-card__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.grassroots-card__name {
+  font: 600 16px/1.4 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.grassroots-card__meta {
+  font: 400 14px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+/* --- verified / unverified badge --------------------------------- */
+
+.grassroots-badge {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font: 600 10px/1 "Inter", sans-serif;
+  letter-spacing: 0.6px;
+  margin-top: 2px;
+}
+
+.grassroots-badge--verified {
+  background: var(--sn-brand-green);
+  color: var(--sn-text-on-green);
+  border: 1px solid transparent;
+}
+
+.grassroots-badge--unverified {
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  color: var(--sn-text-secondary);
+}
+
+/* --- Load more (shared with Clubs) ------------------------------- */
+
+.grassroots-load-more {
+  height: 50px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sn-text-primary);
+  font: 600 15px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.grassroots-load-more:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* --- empty-state cards ----------------------------------------- */
+
+.grassroots-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 52px 36px;
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.grassroots-empty__title {
+  font: 700 18px/1.3 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.grassroots-empty__body {
+  font: 400 14px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+  max-width: 420px;
+}
+
+/* --- Team Page: back link + identity --------------------------- */
+
+.grassroots-back {
+  font: 600 14px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  text-decoration: none;
+  align-self: flex-start;
+}
+
+.grassroots-team__identity {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.grassroots-team__monogram {
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 30px "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+  background: var(--sn-green-tint-12);
+}
+
+.grassroots-team__text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.grassroots-team__name {
+  font: 700 32px/1.25 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.grassroots-team__meta {
+  font: 400 15px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.grassroots-team__divider {
+  border: none;
+  height: 1px;
+  background: var(--sn-icon-inactive);
+  margin: 0;
+  width: 100%;
+}
+
+/* --- Team Page: fixture + result sections --------------------- */
+
+.grassroots-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.grassroots-section__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.grassroots-section__title {
+  flex: 1;
+  min-width: 0;
+  font: 700 18px/1.3 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.grassroots-section__count {
+  font: 400 13px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.grassroots-fixtures {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.grassroots-fixture {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--sn-icon-inactive);
+}
+
+.grassroots-fixture:first-child {
+  border-top: none;
+}
+
+.grassroots-fixture__date {
+  flex-shrink: 0;
+  width: 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+}
+
+.grassroots-fixture__day {
+  font: 600 12px/1.3 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.grassroots-fixture__time {
+  font: 400 12px/1.3 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.grassroots-fixture__opponent {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.grassroots-fixture__crest {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 13px "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+  background: var(--sn-green-tint-12);
+}
+
+/* the "?" tile for a free-text / TBC opponent (no crest) */
+.grassroots-fixture__crest--none {
+  background: transparent;
+  border: 1px solid var(--sn-icon-inactive);
+  color: var(--sn-text-secondary);
+}
+
+.grassroots-fixture__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.grassroots-fixture__name {
+  font: 600 14px/1.4 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.grassroots-fixture__venue {
+  font: 400 11px/1.4 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.grassroots-fixture__score {
+  flex-shrink: 0;
+  font: 700 17px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+/* --- status pill --------------------------------------------- */
+
+.grassroots-pill {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font: 600 11px/1 "Inter", sans-serif;
+  letter-spacing: 0.6px;
+  background: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+}
+
+.grassroots-pill--full-time {
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  color: var(--sn-text-secondary);
+}
+
+.grassroots-pill--live {
+  background: var(--sn-brand-green);
+  color: var(--sn-text-on-green);
+}
+
+.grassroots-pill__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sn-brand-navy);
+}
+
+/* --- narrow screens ----------------------------------------- */
+
+@media (max-width: 560px) {
+  .grassroots-team__identity {
+    gap: 14px;
+  }
+
+  .grassroots-team__name {
+    font-size: 24px;
+  }
+
+  .grassroots-fixture {
+    flex-wrap: wrap;
+  }
+
+  .grassroots-fixture__date {
+    width: 100%;
+    flex-direction: row;
+    gap: 8px;
+  }
+}

@@ -7719,6 +7719,73 @@ Full reasoning for every choice above: Build Plan Section 5.
     `apps/web/src/layout/navigation.ts` (a small `figma-to-code` follow-up, matching how Messages and
     Notifications are handled per #166); and drawer group-nesting (**#267**).
   - Not merged — founder's call after review.
+- **`sprint-5/grassroots-conversion-read` (figma-to-code, 2026-09-08) is PR 1
+  of 2 wiring Grassroots Record-Keeping into `apps/web` — the read-only
+  surfaces (Browse Teams + Public Team Page), the API client, the routes,
+  and the mobile Navigation Drawer entry. `apps/web` only, no `services/api`
+  / Figma. Decision Log #270; forward-pointer on #266.** Report:
+  `docs/sprint-5-grassroots-conversion-read-report.md`. Grassroots was fully
+  designed (Decision Log #253/#261/#265/#266) and fully backed
+  (`GrassrootsModule`, #254/#255/#256/#259/#260) but had zero `apps/web`
+  presence until this PR.
+  - **New `src/api/grassroots.ts`** — the full client, **all 8** Section 4.5
+    endpoints (`createTeam`/`listTeams`/`getTeamById`/`getTeamFixtures`/
+    `createFixture`/`getFixtureById`/`logResult`/`updateFixtureStatus`), so PR
+    2 adds no lines to it. Mirrors `api/clubs.ts`/`api/feed.ts` (shared
+    `authedFetch`, `GrassrootsApiError` with `.status`, cursor pagination);
+    the write functions surface the server's own error message verbatim
+    (PR 2 needs it to tell a 403-"you may only manage…" from a 409-"already
+    recorded"). Plus `opponentLabel()` — the "Opponent TBC" fallback
+    (registered `teamB` name → free-text `opponentName` → literal "Opponent
+    TBC") owned client-side, since the API never returns it (#260/#261).
+  - **`GrassrootsPage` (`/grassroots`)** — Browse Teams (Figma `6402:18078`),
+    structurally `ClubsPage` with four divergences from #265: search is a
+    **city** filter that **debounced-re-queries the server** (`GET
+    /teams?city=` is a server-side equality filter, not a client name
+    filter); **no Join/Leave** (the whole card is a `<Link>`); **both empty
+    states** ("No teams in {city} yet" vs "No teams registered yet");
+    monogram + verified/unverified badge (no crest field).
+  - **`GrassrootsTeamPage` (`/grassroots/:teamId`)** — Public Team Page
+    (Figma `6373:17444`/`6374:17501`). `GET /teams/:id` + `GET
+    /teams/:id/fixtures`, fixtures split client-side into **Upcoming**
+    (`result == null`, soonest-first) and **Results** (`result != null`,
+    most-recent-first); **Won/Drew/Lost and the `{ours} – {theirs}` score
+    derived from this team's side** of the fixture's single `Result` row
+    (`scoreA`/`scoreB` picked by whether `:teamId` is `teamAId`) — no stored
+    outcome/points/standings model (#253). Free-text/TBC opponents get an
+    outlined `?` no-crest tile. A 404 team → an honest "Team not found"
+    state.
+  - **Both pages are `AppShell` children with NO site footer**, and
+    **`JwtAuthGuard`-only, not public** (Decision Log #269) — a no-session
+    visit shows a login prompt and never calls the API, even though Figma
+    names frame 9 a "Public Team Page". Same `ClubsPage`/`ClubFanPage`
+    precedent.
+  - **`{ label: "Grassroots", to: "/grassroots" }` added to `drawerNavItems`**
+    (`src/layout/navigation.ts`) directly after `Clubs`, `available`
+    defaulting true — **this closes #266's "code mirror" follow-up**. The
+    line was never present (it was flagged as `available: false`-shaped work
+    left undone); shipped as `available: true` since the route now exists.
+    **NOT added to `primaryNavItems`** — the desktop icon-navbar glyph is
+    still #266's separate `figma-design-system` shared-component task.
+  - **`semantic/alert` is not a web token** (`packages/shared` doesn't export
+    it to `apps/web`) — the `LIVE` status pill uses `--sn-brand-green` + a
+    small `--sn-brand-navy` dot instead of the Figma's red `semantic/alert`
+    dot (#149). Flagged, one place to revisit if the web token set gains it.
+  - **PR 2 — `sprint-5/grassroots-conversion-organiser`** (branches off this
+    branch, Decision Log #271): register team / schedule fixture (incl. the
+    Opponent-TBD state) / manage fixture / log result across the
+    `scheduled → live → full_time` status machine — surfacing the "first
+    write is final" 409 as an expected outcome, the illegal-transition 409
+    verbatim (not a silently-disabled button), and both 403 kinds
+    (consent-guard → link to `/guardian-consent`; not-your-team → the server
+    message).
+  - **Verification:** `npx tsc --noEmit` / `npm run lint` / `npm run build`
+    all clean; `apps/web` vitest **29 files / 195 tests, 0 failures** (+2
+    files, +19 tests — `GrassrootsPage` +6, `GrassrootsTeamPage` +11,
+    `Header` +2); dev-server smoke test `/`, `/grassroots`, `/grassroots/:id`,
+    `/community`, `/clubs` all HTTP 200. No real browser/Playwright check
+    available — same ceiling as every prior `apps/web` PR.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
