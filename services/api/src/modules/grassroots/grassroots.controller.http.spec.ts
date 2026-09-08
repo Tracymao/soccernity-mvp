@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ExecutionContext,
   ForbiddenException,
@@ -164,6 +165,52 @@ describe('Grassroots controllers (HTTP layer)', () => {
         scheduledAt: '2026-10-01T14:00:00.000Z',
       });
       expect(consentGuardCalls).toBe(1);
+    });
+
+    it('passes a free-text opponentName through to the service (Decision Log #256)', async () => {
+      grassroots.createFixture.mockResolvedValue({ id: 'f-1' });
+      await request(app.getHttpServer())
+        .post('/fixtures')
+        .send({
+          teamAId: '11111111-1111-4111-8111-111111111111',
+          opponentName: 'Riverside FC',
+          scheduledAt: '2026-10-01T14:00:00.000Z',
+        })
+        .expect(201);
+      expect(grassroots.createFixture).toHaveBeenCalledWith('user-1', {
+        teamAId: '11111111-1111-4111-8111-111111111111',
+        opponentName: 'Riverside FC',
+        scheduledAt: '2026-10-01T14:00:00.000Z',
+      });
+    });
+
+    it('rejects an opponentName longer than 120 chars with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/fixtures')
+        .send({
+          teamAId: '11111111-1111-4111-8111-111111111111',
+          opponentName: 'x'.repeat(121),
+          scheduledAt: '2026-10-01T14:00:00.000Z',
+        })
+        .expect(400);
+      expect(grassroots.createFixture).not.toHaveBeenCalled();
+    });
+
+    it('propagates the service 400 when both teamBId and opponentName are supplied', async () => {
+      grassroots.createFixture.mockRejectedValue(
+        new BadRequestException(
+          'Provide either a registered opponent team or an opponent name, not both.',
+        ),
+      );
+      await request(app.getHttpServer())
+        .post('/fixtures')
+        .send({
+          teamAId: '11111111-1111-4111-8111-111111111111',
+          teamBId: '22222222-2222-4222-8222-222222222222',
+          opponentName: 'Riverside FC',
+          scheduledAt: '2026-10-01T14:00:00.000Z',
+        })
+        .expect(400);
     });
 
     it('rejects a non-UUID teamAId with 400', async () => {

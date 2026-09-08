@@ -297,14 +297,27 @@ model Fixture {
   id          String          @id @default(uuid())
   teamAId     String
   teamA       GrassrootsTeam  @relation("teamA", fields: [teamAId], references: [id])
-  // Nullable = the "Opponent to be confirmed" state (Decision Log #256):
-  // Section 3 has no free-text opponent-name field, so an unregistered
-  // opponent is recorded as teamBId = null and rendered "Opponent TBC".
-  // POST /fixtures rejects teamBId === teamAId.
-  teamBId     String?
-  teamB       GrassrootsTeam? @relation("teamB", fields: [teamBId], references: [id])
-  scheduledAt DateTime
-  venue       String?
+  // teamBId XOR opponentName (or neither):
+  //   - teamBId set          -> the away side is a registered Soccernity team.
+  //   - opponentName set      -> the away side is NOT on Soccernity; its name
+  //                              is persisted free-text (Decision Log #256),
+  //                              e.g. "Riverside FC".
+  //   - both null             -> the "Opponent to be confirmed" state,
+  //                              rendered publicly as "Opponent TBC".
+  // "Both set" is rejected at the API layer (POST /fixtures -> 400), not by a
+  // DB constraint. POST /fixtures also rejects teamBId === teamAId. The
+  // "Opponent TBC" display fallback (when both are absent) is a frontend
+  // concern -- the API returns the raw fields only.
+  teamBId      String?
+  teamB        GrassrootsTeam? @relation("teamB", fields: [teamBId], references: [id])
+  // Free-text away-opponent name for a fixture whose opponent is not a
+  // registered Soccernity team (Decision Log #256, backend half by
+  // sprint-5/grassroots-opponent-name). Set only via POST /fixtures; there
+  // is no PATCH /fixtures/:id, so an already-created fully-TBD fixture
+  // cannot be renamed yet (flagged follow-up).
+  opponentName String?
+  scheduledAt  DateTime
+  venue        String?
   // Status machine (sprint-5/grassroots-records-service, Decision Log
   // #254). A new fixture is always "scheduled". Legal forward moves:
   //   scheduled --("Start match", PATCH /fixtures/:id/status)--> live
