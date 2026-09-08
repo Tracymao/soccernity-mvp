@@ -7848,8 +7848,69 @@ Full reasoning for every choice above: Build Plan Section 5.
     full arc: design (#253/#261/#265/#266) → backend (#254/#255/#256/#259/#260)
     → read-only frontend (#270) → organiser frontend (#271). Still open,
     unchanged: #266's desktop icon-navbar Grassroots glyph
-    (`figma-design-system` shared-component task); #257 (the Figma calendar
+    (`figma-design-system` shared-component task — **now done, see the
+    next bullet / Decision Log #272**; the `primaryNavItems` code mirror
+    is its own figma-to-code follow-up); #257 (the Figma calendar
     component's own debt).
+  - Not merged — founder's call after review.
+- **`sprint-5/grassroots-desktop-navbar-glyph` (figma-design-system,
+  2026-09-08) adds the Grassroots icon to the desktop icon navbar,
+  closing DL #266's desktop-glyph follow-up (1). Figma design only — no
+  `apps/web` code (that's a figma-to-code follow-up). Decision Log #272.**
+  Report: `docs/sprint-5-grassroots-desktop-navbar-glyph-report.md`.
+  - **New 7th nav icon on both live desktop variants of the shared
+    `Web app Navbar` COMPONENT_SET (`2824:4309`) — `Property 1=header 4`
+    (`2838:3502`) and `Property 1=header 7` (`2841:4104`).** Icon order:
+    Sports Hub · Blog · Community · Leaderboard · Bants · Clubs ·
+    **Grassroots** (last, after Clubs — mirroring the mobile drawer's own
+    DL #265/#266 placement). `→ /grassroots`.
+  - **The brief's premise that `Frame 5858` (the icon row) is "NOT
+    auto-layout" was wrong.** It, its `Frame 5881` wrapper (h4), and both
+    component roots are all auto-layout — `header 4` root is
+    `SPACE_BETWEEN` (so the avatar cluster's x is computed, not
+    authored); `header 7`'s Login button is `layoutPositioning: ABSOLUTE`.
+    So the 7th icon was a clean **append** to the `itemSpacing: 30`, HUG
+    `Frame 5858` — zero manual repositioning, zero `resize()`, no
+    `frame.resize()`-on-GROUPs risk. Row grew 383.41 → 444.41px in both
+    variants; clearance to the h4 avatar cluster is ~310px and to the h7
+    Login button ~290px — no collision; search bar untouched (growth is
+    rightward only).
+  - **Glyph: tinted style** (bare navy stroke glyph in a `brand/green-tint`
+    12% r3 tile), built by **cloning the `clubs` group and swapping the
+    inner vector** — so the tile + its `brand/green-tint` binding, the
+    24×24 clip frame, and the `brand/navy` 1.5px stroke binding are all
+    inherited verbatim. Same separated pattern DL #159 set for Clubs (and
+    the case `navigation.ts`'s `tinted?: boolean` flag exists for), not
+    the legacy baked-in artwork of Blog/Community/Leaderboard/Bants.
+  - **Shape: a corner flag** (pole + triangular pennant + short ground
+    line) — the clearest "grassroots / park football" mark, distinct from
+    all six neighbours (ball / article / people / ID-card / chat /
+    checkered shield). Drawn fresh via `createVector`, strokes explicitly
+    re-bound to `brand/navy` after creation (per the standing
+    `createVector` unbound-stroke gotcha). Pitch-outline was the
+    considered alternative, ruled out (rounded-rect-in-a-rounded-tile
+    reads muddy; says "venue" more than "grassroots").
+  - **Propagation verified, not assumed:** `clubs` (added to this exact
+    `Frame 5858` by PR #144) is present on all 103 desktop instances, so
+    the append precedent is proven. After the edit, the `grassroots`
+    child + row width 444.41 were confirmed on 6 representative instances
+    — plain (Leaderboard), `fills`-overridden (Contest voting), a recent
+    PR #174 frame (Create Post), a nested `Settings Shell` instance, and
+    two `header 7` frames — all rendering the icon correctly. (Curiosity,
+    not a blocker: the legacy hidden `home` slot is on the main component
+    but on zero instances — it predates the current component lineage;
+    `clubs`/`grassroots` are unaffected.)
+  - **Audit:** the two new solid paints per variant (tile fill →
+    `brand/green-tint` @ 12%, glyph stroke → `brand/navy`) are both
+    variable-bound; **0 unbound, 0 off-palette, 0 `brand/green-tint-28`,
+    0 new colours, Light mode only, 0 overlaps**. The two `— mobile`
+    variants and the mobile Navigation Drawer were not touched.
+  - **figma-to-code follow-up (recorded, not built):** add
+    `{ label: "Grassroots", to: "/grassroots", icon: navGrassroots,
+    tinted: true }` to `primaryNavItems` in
+    `apps/web/src/layout/navigation.ts` (position 7, after Clubs) and
+    export the glyph to `src/assets/icons/nav-grassroots.svg`. The
+    canonical order/style landed here is what that PR converts verbatim.
   - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
