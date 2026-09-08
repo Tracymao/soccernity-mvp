@@ -189,7 +189,7 @@ describe('Grassroots Records Service e2e (Section 4.5)', () => {
         .expect(400);
     });
 
-    it('stores teamBId = null for the "Opponent TBC" state (Decision Log #256)', async () => {
+    it('stores teamBId = null AND opponentName = null for the fully-TBD "Opponent TBC" state (Decision Log #256)', async () => {
       const org = await createUser('fx-tbc');
       const teamA = await createTeam(org.accessToken);
 
@@ -200,10 +200,62 @@ describe('Grassroots Records Service e2e (Section 4.5)', () => {
         .expect(201);
       expect(res.body.teamBId).toBeNull();
       expect(res.body.teamB).toBeNull();
+      expect(res.body.opponentName).toBeNull();
 
       const prisma = getTestPrismaClient();
       const row = await prisma.fixture.findUniqueOrThrow({ where: { id: res.body.id } });
       expect(row.teamBId).toBeNull();
+      expect(row.opponentName).toBeNull();
+    });
+  });
+
+  // ---------- Free-text opponent name (Decision Log #256, backend half) ----------
+
+  describe('POST /fixtures — free-text opponentName', () => {
+    it('persists a trimmed opponentName (teamBId null) and round-trips it through both fixture reads', async () => {
+      const org = await createUser('fx-opp-name');
+      const teamA = await createTeam(org.accessToken, { name: 'Home FC' });
+
+      const created = await request(server())
+        .post('/fixtures')
+        .set('Authorization', `Bearer ${org.accessToken}`)
+        .send({ teamAId: teamA, opponentName: '  Riverside FC  ', scheduledAt: '2026-10-01T14:00:00.000Z' })
+        .expect(201);
+      expect(created.body.teamBId).toBeNull();
+      expect(created.body.teamB).toBeNull();
+      expect(created.body.opponentName).toBe('Riverside FC');
+
+      const prisma = getTestPrismaClient();
+      const row = await prisma.fixture.findUniqueOrThrow({ where: { id: created.body.id } });
+      expect(row.opponentName).toBe('Riverside FC');
+
+      const byId = await request(server())
+        .get(`/fixtures/${created.body.id}`)
+        .set('Authorization', `Bearer ${org.accessToken}`)
+        .expect(200);
+      expect(byId.body.opponentName).toBe('Riverside FC');
+
+      const teamFixtures = await request(server())
+        .get(`/teams/${teamA}/fixtures`)
+        .set('Authorization', `Bearer ${org.accessToken}`)
+        .expect(200);
+      expect(teamFixtures.body.items[0].opponentName).toBe('Riverside FC');
+    });
+
+    it('400s when both teamBId and opponentName are supplied', async () => {
+      const orgA = await createUser('fx-both-a');
+      const orgB = await createUser('fx-both-b');
+      const teamA = await createTeam(orgA.accessToken, { name: 'A FC' });
+      const teamB = await createTeam(orgB.accessToken, { name: 'B FC' });
+
+      await request(server())
+        .post('/fixtures')
+        .set('Authorization', `Bearer ${orgA.accessToken}`)
+        .send({ teamAId: teamA, teamBId: teamB, opponentName: 'Riverside FC', scheduledAt: '2026-10-01T14:00:00.000Z' })
+        .expect(400);
+
+      const prisma = getTestPrismaClient();
+      expect(await prisma.fixture.count()).toBe(0);
     });
   });
 

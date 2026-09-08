@@ -64,6 +64,10 @@ const FIXTURE_SELECT = {
   id: true,
   teamAId: true,
   teamBId: true,
+  // Free-text away-opponent name (Decision Log #256). `string | null` — the
+  // API never renders the "Opponent TBC" fallback; that stays a frontend
+  // concern. Deliberately NOT on FIXTURE_AUTHZ_SELECT (not permission-relevant).
+  opponentName: true,
   scheduledAt: true,
   venue: true,
   status: true,
@@ -214,6 +218,16 @@ export class GrassrootsService {
       throw new BadRequestException('A fixture cannot have the same team on both sides');
     }
 
+    // teamBId XOR opponentName (or neither) — the cross-field rule for the
+    // away side (Decision Log #256). An empty/whitespace-only opponentName
+    // is treated as absent (never stored as "").
+    const opponentName = dto.opponentName?.trim() || undefined;
+    if (dto.teamBId !== undefined && opponentName !== undefined) {
+      throw new BadRequestException(
+        'Provide either a registered opponent team or an opponent name, not both.',
+      );
+    }
+
     const teamA = await this.prisma.grassrootsTeam.findUniqueOrThrow({
       where: { id: dto.teamAId },
       select: { createdById: true },
@@ -226,6 +240,8 @@ export class GrassrootsService {
       data: {
         teamAId: dto.teamAId,
         teamBId: dto.teamBId ?? null,
+        // null (not "") when absent or whitespace-only.
+        opponentName: opponentName ?? null,
         scheduledAt: new Date(dto.scheduledAt),
         venue: dto.venue ?? null,
         // status stays at its @default('scheduled').

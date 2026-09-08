@@ -11,16 +11,19 @@ Backs the Figma design in
 #253). Resolves **Decision Log #254** (no status-transition endpoint) and
 **Decision Log #255** (no permission model + Result race).
 
-**Zero `schema.prisma` diff — no migration.** The `GrassrootsTeam` /
-`Fixture` / `Result` models (Section 3) already carry every field this
-module needs. The permission model is enforced entirely by joining through
-`teamA`/`teamB.createdById`; the status machine uses the existing
-`Fixture.status` string (`scheduled | live | full_time`). The only
-`schema.prisma` change in this PR is tightened `//` comments documenting
-the permission rule and the status machine on those three models.
+The original `sprint-5/grassroots-records-service` PR had **zero
+`schema.prisma` diff**. The follow-up `sprint-5/grassroots-opponent-name`
+(backend-api, 2026-09-08) adds exactly one nullable column,
+`Fixture.opponentName` (migration
+`20260908143301_add_fixture_opponent_name` — a single additive
+`ALTER TABLE "Fixture" ADD COLUMN "opponentName" TEXT;`) — see
+["Free-text opponent name"](#free-text-opponent-name-decision-log-256)
+below. The permission model is still enforced entirely by joining through
+`teamA`/`teamB.createdById`; the status machine still uses the existing
+`Fixture.status` string (`scheduled | live | full_time`).
 
-`User` / `Guardian` safeguarding fields are untouched (confirmed by
-schema diff).
+`User` / `Guardian` safeguarding fields are untouched — only `Fixture`
+changes (confirmed by schema diff).
 
 ---
 
@@ -35,7 +38,7 @@ Decision Log #254):
 | `GET /teams?city=` | `JwtAuthGuard` | Browse teams, keyset-paginated alphabetically by name; optional exact-match `city` filter. |
 | `GET /teams/:id` | `JwtAuthGuard` | One team. 404 if missing. **No organiser PII** (no nested `User`, no email — only `createdById`). |
 | `GET /teams/:id/fixtures` | `JwtAuthGuard` | The team's fixtures (as teamA or teamB), keyset-paginated newest-scheduled-first, each with `status` + `result`. 404 if team missing. |
-| `POST /fixtures` | `JwtAuthGuard` + `GuardianConsentGuard` | Schedule a fixture. **Authz: caller must be `createdById` of `teamA`.** `teamBId` optional (null = "Opponent TBC", Decision Log #256). |
+| `POST /fixtures` | `JwtAuthGuard` + `GuardianConsentGuard` | Schedule a fixture. **Authz: caller must be `createdById` of `teamA`.** Away side = `teamBId` XOR `opponentName` (or neither — "Opponent TBC"). Decision Log #256. |
 | `GET /fixtures/:id` | `JwtAuthGuard` | One fixture with `status`, both teams (minimal shape), `result` if present. 404 if missing. |
 | `POST /fixtures/:id/result` | `JwtAuthGuard` + `GuardianConsentGuard` | Log the final score. **Authz: caller must be `createdById` of `teamA` OR (`teamBId` set) `teamB`.** "First write is final" — see below. Moves the fixture to `full_time`. `HttpCode(200)`. |
 | `PATCH /fixtures/:id/status` | `JwtAuthGuard` + `GuardianConsentGuard` | Change the fixture status (`scheduled -> live`, `live -> full_time`). **Authz: same as result.** Decision Log #254. |
@@ -81,6 +84,64 @@ never leaked to a non-manager (403 fires before the 409 status check).
    MVP".** Correction/dispute is a parked founder candidate (below).
 6. **`GET /teams?city=` existing does NOT resolve Decision Log #258** — see
    below.
+
+---
+
+## Free-text opponent name (Decision Log #256)
+
+`sprint-5/grassroots-opponent-name` (backend-api, 2026-09-08) resolves the
+**backend half** of Decision Log #256 (the Figma design half was already
+done by `sprint-5/grassroots-record-keeping-screens`). An opponent that is
+not a registered Soccernity team now persists as a typed name — e.g.
+"Riverside FC" — not just the `teamBId = null` "Opponent TBC" placeholder.
+
+**`Fixture.opponentName String?`** — nullable, no default. Migration
+`20260908143301_add_fixture_opponent_name`, a single additive
+`ALTER TABLE "Fixture" ADD COLUMN "opponentName" TEXT;`.
+
+The away side of a fixture is **exactly one of three states** —
+`teamBId` XOR `opponentName`, or neither:
+
+| Input to `POST /fixtures` | Result |
+|---|---|
+| `teamBId` set, no `opponentName` | valid — registered opponent; `opponentName` stored as `null` |
+| `opponentName` set, no `teamBId` | valid — free-text opponent; the **trimmed** string is stored |
+| both `teamBId` and a non-empty `opponentName` | **400** — `"Provide either a registered opponent team or an opponent name, not both."` |
+| neither | valid — fully-TBD fixture (unchanged from before) |
+
+Enforcement details:
+
+- `CreateFixtureDto.opponentName` is `@IsOptional() @IsString()
+  @MaxLength(120)`. There is **no `@Transform` trim** — this module's DTOs
+  use no transform convention (`create-team.dto.ts` is plain
+  class-validator too). Trimming + the empty/whitespace-only → absent
+  normalisation happens in `GrassrootsService.createFixture`.
+- An `opponentName` that is empty or **whitespace-only after trimming** is
+  treated as absent: persisted as `null`, never `""`. (A whitespace-only
+  `opponentName` supplied alongside `teamBId` is therefore *not* "both
+  set" — the fixture is created.)
+- The cross-field 400 fires in `createFixture` right after the existing
+  `teamBId === teamAId` check, before the create (and before the teamA-
+  creator 403 — consistent with how the `teamBId === teamAId` 400 already
+  orders relative to authz).
+- `opponentName: true` is on the shared `FIXTURE_SELECT`, so it flows
+  through **every** fixture-returning path (`POST /fixtures`,
+  `GET /fixtures/:id`, `GET /teams/:id/fixtures`,
+  `PATCH /fixtures/:id/status`, `POST /fixtures/:id/result`). It is
+  **deliberately not** on `FIXTURE_AUTHZ_SELECT` (not permission-relevant).
+
+**The API returns the raw field (`string | null`) only — it does NOT
+render an "Opponent TBC" fallback string.** That display fallback (when
+both `teamB` and `opponentName` are absent) is a **frontend concern**;
+`figma-to-code` owns it.
+
+### Parked: renaming the opponent of an existing fixture
+
+There is **no general `PATCH /fixtures/:id`**, so naming the opponent of an
+*already-created* fully-TBD fixture has no endpoint. Scope here is
+`POST /fixtures` only — a rename endpoint was deliberately not added.
+Flagged as a follow-up candidate for the founder (alongside the parked
+result-correction/dispute question above).
 
 ---
 

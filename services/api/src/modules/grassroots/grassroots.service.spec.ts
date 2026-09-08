@@ -202,9 +202,101 @@ describe('GrassrootsService', () => {
 
       const data = (prisma.fixture.create as jest.Mock).mock.calls[0][0].data;
       expect(data.teamBId).toBeNull();
+      expect(data.opponentName).toBeNull();
       expect(data.venue).toBeNull();
       expect(data).not.toHaveProperty('status'); // relies on the @default('scheduled')
       expect(data.scheduledAt).toEqual(new Date('2026-10-01T14:00:00.000Z'));
+    });
+
+    // ---------- opponentName cross-field rule (Decision Log #256) ----------
+
+    it('400s when BOTH teamBId and a non-empty opponentName are supplied', async () => {
+      const prisma = buildPrismaMock();
+      armTeamExists(prisma, { a: true, b: true });
+
+      const service = new GrassrootsService(prisma);
+      await expect(
+        service.createFixture('user-1', {
+          teamAId: 'a',
+          teamBId: 'b',
+          opponentName: 'Riverside FC',
+          scheduledAt: '2026-10-01T14:00:00.000Z',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.fixture.create).not.toHaveBeenCalled();
+    });
+
+    it('team-only (no opponentName): stores opponentName as null', async () => {
+      const prisma = buildPrismaMock();
+      armTeamExists(prisma, { a: true, b: true });
+      (prisma.grassrootsTeam.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdById: 'user-1' });
+      (prisma.fixture.create as jest.Mock).mockResolvedValue({ id: 'f-1' });
+
+      const service = new GrassrootsService(prisma);
+      await service.createFixture('user-1', {
+        teamAId: 'a',
+        teamBId: 'b',
+        scheduledAt: '2026-10-01T14:00:00.000Z',
+      });
+
+      const data = (prisma.fixture.create as jest.Mock).mock.calls[0][0].data;
+      expect(data.teamBId).toBe('b');
+      expect(data.opponentName).toBeNull();
+    });
+
+    it('name-only (no teamBId): stores the trimmed opponentName, teamBId null', async () => {
+      const prisma = buildPrismaMock();
+      armTeamExists(prisma, { a: true });
+      (prisma.grassrootsTeam.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdById: 'user-1' });
+      (prisma.fixture.create as jest.Mock).mockResolvedValue({ id: 'f-1' });
+
+      const service = new GrassrootsService(prisma);
+      await service.createFixture('user-1', {
+        teamAId: 'a',
+        opponentName: '  Riverside FC  ',
+        scheduledAt: '2026-10-01T14:00:00.000Z',
+      });
+
+      const data = (prisma.fixture.create as jest.Mock).mock.calls[0][0].data;
+      expect(data.teamBId).toBeNull();
+      expect(data.opponentName).toBe('Riverside FC');
+    });
+
+    it('whitespace-only opponentName is treated as absent — stored as null, not "" (fully-TBD fixture)', async () => {
+      const prisma = buildPrismaMock();
+      armTeamExists(prisma, { a: true });
+      (prisma.grassrootsTeam.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdById: 'user-1' });
+      (prisma.fixture.create as jest.Mock).mockResolvedValue({ id: 'f-1' });
+
+      const service = new GrassrootsService(prisma);
+      await service.createFixture('user-1', {
+        teamAId: 'a',
+        opponentName: '   ',
+        scheduledAt: '2026-10-01T14:00:00.000Z',
+      });
+
+      const data = (prisma.fixture.create as jest.Mock).mock.calls[0][0].data;
+      expect(data.teamBId).toBeNull();
+      expect(data.opponentName).toBeNull();
+    });
+
+    it('a whitespace-only opponentName alongside teamBId is NOT "both set" — the fixture is created (name treated absent)', async () => {
+      const prisma = buildPrismaMock();
+      armTeamExists(prisma, { a: true, b: true });
+      (prisma.grassrootsTeam.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdById: 'user-1' });
+      (prisma.fixture.create as jest.Mock).mockResolvedValue({ id: 'f-1' });
+
+      const service = new GrassrootsService(prisma);
+      await service.createFixture('user-1', {
+        teamAId: 'a',
+        teamBId: 'b',
+        opponentName: '   ',
+        scheduledAt: '2026-10-01T14:00:00.000Z',
+      });
+
+      const data = (prisma.fixture.create as jest.Mock).mock.calls[0][0].data;
+      expect(data.teamBId).toBe('b');
+      expect(data.opponentName).toBeNull();
     });
   });
 

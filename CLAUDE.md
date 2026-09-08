@@ -7541,6 +7541,47 @@ Full reasoning for every choice above: Build Plan Section 5.
     list endpoints, no organiser PII on `GET /teams/:id`). `nest build` +
     `npm run lint` clean.
   - Not merged — founder's call after review.
+- **`sprint-5/grassroots-opponent-name` (backend-api, 2026-09-08) resolves
+  the backend half of Decision Log #256 — a free-text away-opponent name
+  for a fixture whose opponent is not a registered Soccernity team.
+  `services/api` only, no Figma/frontend. Report:
+  `services/api/src/modules/grassroots/README.md`; Decision Log #260.**
+  - **`Fixture.opponentName String?`** — one nullable column, migration
+    `20260908143301_add_fixture_opponent_name` (a single additive
+    `ALTER TABLE "Fixture" ADD COLUMN "opponentName" TEXT;`). **Only
+    `Fixture` changes** — confirmed by schema diff; `User` / `Guardian`
+    safeguarding fields untouched.
+  - **The away side of a fixture is now exactly one of three states —
+    `teamBId` XOR `opponentName`, or neither.** `POST /fixtures` gains an
+    optional `opponentName` (`@IsOptional() @IsString() @MaxLength(120)`;
+    trimmed and empty/whitespace-only treated as absent → stored `null`,
+    never `""` — normalised in `GrassrootsService.createFixture` since
+    this module's DTOs use no `@Transform` convention). Cross-field rule,
+    enforced in `createFixture` after the `teamBId === teamAId` check:
+    both provided → **400** ("Provide either a registered opponent team
+    or an opponent name, not both."); `teamBId` only → valid, `opponentName`
+    `null`; `opponentName` only → valid, trimmed string stored; neither →
+    valid (fully-TBD fixture, unchanged).
+  - `opponentName: true` added to the shared `FIXTURE_SELECT`, so it flows
+    through every fixture-returning path (`POST /fixtures`, `GET
+    /fixtures/:id`, `GET /teams/:id/fixtures`, `PATCH /fixtures/:id/status`,
+    `POST /fixtures/:id/result`); deliberately **not** on
+    `FIXTURE_AUTHZ_SELECT`. The API returns the raw field (`string | null`)
+    only — **the "Opponent TBC" display fallback stays a frontend concern**
+    (`figma-to-code` owns it).
+  - **Flagged, not built:** there is no general `PATCH /fixtures/:id`, so
+    naming the opponent of an *already-created* fully-TBD fixture has no
+    endpoint — scope here is `POST /fixtures` only; a rename endpoint was
+    deliberately not added. #257/#258 unaffected and stay open.
+  - **Verification, re-measured directly:** mocked unit suite **48 suites
+    / 654 → 662 tests, 0 failures** (`grassroots.service.spec.ts` +5,
+    `grassroots.controller.http.spec.ts` +3); e2e suite (real Postgres via
+    docker-compose) **12 suites / 100 → 102 tests, 0 failures** (new
+    `test/grassroots.e2e-spec.ts` cases — trimmed `opponentName` round-trips
+    through both fixture reads, both-set → 400 with zero rows persisted,
+    fully-TBD path still stores both columns `null`). `nest build` +
+    `npm run lint` clean.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
