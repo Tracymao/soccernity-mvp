@@ -44,6 +44,9 @@ import ClubsPage from "../pages/ClubsPage";
 import ClubFanPage from "../pages/ClubFanPage";
 import GrassrootsPage from "../pages/GrassrootsPage";
 import GrassrootsTeamPage from "../pages/GrassrootsTeamPage";
+import GrassrootsRegisterTeamPage from "../pages/GrassrootsRegisterTeamPage";
+import GrassrootsScheduleFixturePage from "../pages/GrassrootsScheduleFixturePage";
+import GrassrootsFixturePage from "../pages/GrassrootsFixturePage";
 import BanterPage from "../pages/BanterPage";
 import LoginPage from "../pages/LoginPage";
 import SignupPage from "../pages/SignupPage";
@@ -140,19 +143,31 @@ export const routes: RouteObject[] = [
       { path: "clubs", element: <ClubsPage /> },
       { path: "clubs/:id", element: <ClubFanPage /> },
 
-      // Grassroots Record-Keeping (Build Plan Section 4.5). /grassroots
-      // browses registered teams (GET /teams?city=); /grassroots/:teamId
-      // is a team's public page — its fixtures + results (GET /teams/:id,
-      // GET /teams/:id/fixtures). Both are read-only surfaces converting
-      // Figma frames 9-11 (Decision Log #253/#261/#265). The organiser
-      // flows (register / schedule / manage a fixture) are a separate
-      // follow-up PR. No site footer — not in the Figma frames.
-      // Grassroots GET endpoints are JwtAuthGuard-only, not public
-      // (Decision Log #269); see GrassrootsPage.tsx. Nav entry point:
-      // the mobile drawer only for now (Decision Log #266) — no desktop
-      // icon-navbar glyph yet.
+      // Grassroots Record-Keeping (Build Plan Section 4.5). No site footer
+      // — not in the Figma frames. Grassroots GET endpoints are
+      // JwtAuthGuard-only, not public (Decision Log #269); see
+      // GrassrootsPage.tsx. Nav entry point: the mobile drawer only for
+      // now (Decision Log #266) — no desktop icon-navbar glyph yet.
+      //
+      //   /grassroots                      browse teams (GET /teams?city=)
+      //   /grassroots/:teamId              a team's public page + fixtures
+      //   /grassroots/register             register a team (POST /teams)
+      //   /grassroots/:teamId/fixtures/new schedule a fixture (POST /fixtures)
+      //   /grassroots/fixtures/:fixtureId  manage / log a fixture, status-
+      //                                    driven for frames 6/7/8
+      //
+      // `register` and `fixtures` are static segments and outrank the
+      // `:teamId` param in React Router v8's specificity ranking, so
+      // /grassroots/register and /grassroots/fixtures/:id never resolve
+      // to GrassrootsTeamPage. The read-only surfaces landed in
+      // sprint-5/grassroots-conversion-read (Decision Log #270); the
+      // organiser flows here are sprint-5/grassroots-conversion-organiser
+      // (Decision Log #271).
       { path: "grassroots", element: <GrassrootsPage /> },
+      { path: "grassroots/register", element: <GrassrootsRegisterTeamPage /> },
+      { path: "grassroots/fixtures/:fixtureId", element: <GrassrootsFixturePage /> },
       { path: "grassroots/:teamId", element: <GrassrootsTeamPage /> },
+      { path: "grassroots/:teamId/fixtures/new", element: <GrassrootsScheduleFixturePage /> },
 
       // Leaderboard + Contest -- direct AppShell children, NO site footer.
       // Both were moved out of FooterLayout: the founder decided the
