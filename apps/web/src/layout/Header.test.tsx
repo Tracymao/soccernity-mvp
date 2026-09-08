@@ -90,7 +90,7 @@ describe("navigation config", () => {
     expect(drawerNavItems.some((i) => i.label === "News")).toBe(false);
   });
 
-  it("drawer order matches the Figma Navigation Drawer (Decision Log #162)", () => {
+  it("drawer order matches the Figma Navigation Drawer (Decision Log #162/#266)", () => {
     expect(drawerNavItems.map((i) => i.label)).toEqual([
       "Home",
       "Community",
@@ -99,11 +99,26 @@ describe("navigation config", () => {
       "Bants",
       "Leaderboard",
       "Clubs",
+      // Grassroots sits directly after Clubs — adjacency, not nesting
+      // (Decision Log #266); mobile drawer only, no desktop icon-navbar
+      // entry yet.
+      "Grassroots",
       "Messages",
       "Notifications",
       "Profile",
       "Settings",
     ]);
+  });
+
+  it("the Grassroots drawer item points at /grassroots and is available", () => {
+    const grassroots = drawerNavItems.find((i) => i.label === "Grassroots");
+    expect(grassroots?.to).toBe("/grassroots");
+    // `available` omitted => defaults to true (route exists in router.tsx).
+    expect(grassroots?.available).toBeUndefined();
+  });
+
+  it("does NOT add Grassroots to the desktop icon nav (Decision Log #266)", () => {
+    expect(primaryNavItems.some((i) => i.label === "Grassroots")).toBe(false);
   });
 });
 

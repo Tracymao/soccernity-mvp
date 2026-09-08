@@ -69,6 +69,14 @@ export const drawerNavItems: DrawerNavItem[] = [
   { label: "Bants", to: "/banter" },
   { label: "Leaderboard", to: "/leaderboard" },
   { label: "Clubs", to: "/clubs" },
+  // Grassroots Record-Keeping (Build Plan Section 4.5). Mobile-drawer
+  // entry only for now — Decision Log #266 deliberately scoped the nav
+  // entry point to the drawer and left the desktop icon-navbar glyph
+  // (a shared header 4 / header 7 component change) as a separate
+  // figma-design-system task, so this is NOT added to primaryNavItems.
+  // Decision Log #266's own "code mirror" follow-up, resolved by
+  // sprint-5/grassroots-conversion-read (Decision Log #270).
+  { label: "Grassroots", to: "/grassroots" },
   { label: "Messages", to: "/messages", available: false },
   { label: "Notifications", to: "/notifications", available: false },
   { label: "Profile", to: "/profile" },

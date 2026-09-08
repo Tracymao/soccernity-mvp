@@ -42,6 +42,8 @@ import ContestPage from "../pages/ContestPage";
 import CommunityPage from "../pages/CommunityPage";
 import ClubsPage from "../pages/ClubsPage";
 import ClubFanPage from "../pages/ClubFanPage";
+import GrassrootsPage from "../pages/GrassrootsPage";
+import GrassrootsTeamPage from "../pages/GrassrootsTeamPage";
 import BanterPage from "../pages/BanterPage";
 import LoginPage from "../pages/LoginPage";
 import SignupPage from "../pages/SignupPage";
@@ -137,6 +139,20 @@ export const routes: RouteObject[] = [
       // Navbar entry point yet — Decision Log #156 is still open.
       { path: "clubs", element: <ClubsPage /> },
       { path: "clubs/:id", element: <ClubFanPage /> },
+
+      // Grassroots Record-Keeping (Build Plan Section 4.5). /grassroots
+      // browses registered teams (GET /teams?city=); /grassroots/:teamId
+      // is a team's public page — its fixtures + results (GET /teams/:id,
+      // GET /teams/:id/fixtures). Both are read-only surfaces converting
+      // Figma frames 9-11 (Decision Log #253/#261/#265). The organiser
+      // flows (register / schedule / manage a fixture) are a separate
+      // follow-up PR. No site footer — not in the Figma frames.
+      // Grassroots GET endpoints are JwtAuthGuard-only, not public
+      // (Decision Log #269); see GrassrootsPage.tsx. Nav entry point:
+      // the mobile drawer only for now (Decision Log #266) — no desktop
+      // icon-navbar glyph yet.
+      { path: "grassroots", element: <GrassrootsPage /> },
+      { path: "grassroots/:teamId", element: <GrassrootsTeamPage /> },
 
       // Leaderboard + Contest -- direct AppShell children, NO site footer.
       // Both were moved out of FooterLayout: the founder decided the
