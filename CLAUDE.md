@@ -118,7 +118,12 @@ Full reasoning for every choice above: Build Plan Section 5.
   actually attach it to — that's Sprint 3 work, not a Sprint 1 gap.
   (The guard's first live attachment to a real route ended up being
   none of those three — see the Sprint 2 bullet below: `POST /posts`,
-  justified by Section 5.7 rather than step 5's own list.) Three
+  justified by Section 5.7 rather than step 5's own list. The
+  Banter-Rooms one of the three is now real too —
+  `sprint-3/banter-rooms-backend` attaches `GuardianConsentGuard` to
+  `POST`/`DELETE /banter-rooms/:id/join` and `POST
+  /banter-rooms/:id/posts`; see that bullet near the end of this
+  section.) Three
   follow-up PRs closed out remaining Decision Log candidates: DTO
   validation (#25, Decision Log #11), email case normalization (#32,
   Decision Log #16), and wiring Postmark as the real email provider
@@ -510,7 +515,10 @@ Full reasoning for every choice above: Build Plan Section 5.
   Section 4.3 has no `DELETE /posts/:id/comments/:commentId`, so
   nothing removes a `Comment` row; whoever adds comment deletion later
   must add that decrement then. **Still nothing in Section 4.4 is
-  built**: `/clubs*` and `/banter-rooms*` remain unbuilt — Sprint 2's
+  built** *(true as of PR #54 only — both halves have since shipped:
+  `/clubs*` in Sprint 2, `/banter-rooms*` in
+  `sprint-3/banter-rooms-backend`, see that bullet near the end of this
+  section)*: `/clubs*` and `/banter-rooms*` remain unbuilt — Sprint 2's
   club-page work and Sprint 3's Banter Rooms are both separate,
   upcoming PRs, not implied by Section 4.3 now being complete. Test
   suite after slice two's changes: 29 suites / 262 tests, 0 failures
@@ -7941,6 +7949,126 @@ Full reasoning for every choice above: Build Plan Section 5.
     browser/Playwright check available — same ceiling as every prior
     `apps/web` PR.
   - Not merged — founder's call after review.
+- **`sprint-3/banter-rooms-backend` (backend-api, 2026-09-09) builds the
+  Banter Rooms backend — Build Plan Section 4.4's `/banter-rooms` half,
+  the first Sprint 3 backend work, ahead of the rest of Sprint 3 by
+  founder decision (same call `admin` / Decision Log #54, the Contest
+  data model / #218, and `grassroots` / #259 all got). `services/api`
+  only — `BanterPage.tsx`'s existing disclosed frontend stub is
+  untouched; a later `figma-to-code` pass wires it. Decision Log #275
+  (built) + #276 (deliberately not built). `BanterModule` is now wired
+  into `app.module.ts`.**
+  - **One new model, one migration.** `BanterRoom` (Section 3) had
+    `memberCount` but no join table, so nothing recorded *which* users
+    joined a room — and "My Bants" (Section 6, Sprint 3) needs exactly
+    that. **`BanterRoomMember`** (migration
+    `20260909003336_add_banter_room_member`) — an **explicit** join model
+    (`@@unique([userId, banterRoomId])`, a `joinedAt` timestamp, both FKs
+    `onDelete: Cascade` per Decision Log #44), the exact shape of
+    `Like`/`SavedPost`/`Follow`. Deliberately **not** an implicit Prisma
+    m2m like `ClubPage.members`/`_ClubMembership` — that route caused a
+    real silent-relation-merge bug and forced `ClubsService.joinClub`
+    into raw `$executeRaw` (this Prisma version doesn't throw on a
+    duplicate implicit-m2m `connect`). An explicit model gives `joinRoom`
+    a plain **P2002-catch** idempotency mechanism (identical to
+    `FeedService.likePost`) and a real column to keyset-paginate "My
+    Bants" by. `joinedAt` is a flagged addition beyond Section 3's
+    literal field list — same flag `Like.likedAt`/`SavedPost.savedAt`/
+    `Follow.createdAt` carry. `BanterRoom.createdBy` stays a bare
+    `String` (not a `User` `@relation`) — making it an FK would pull room
+    creation into the #44 cascade scope for no MVP benefit. **`User` /
+    `Guardian` safeguarding fields untouched** — schema diff is one new
+    model + two mechanical reverse-relation arrays + tightened `//`
+    comments. `AccountDeletionSweepService` needs no change (Postgres-
+    level cascade; its `P2003` catch is never hit here — proven by a
+    real `User` hard-delete e2e test).
+  - **Endpoints.** Section 4.4 lists `GET /banter-rooms`, `GET
+    /banter-rooms/:id`, `POST /banter-rooms`, `POST
+    /banter-rooms/:id/topics`, `GET /banter-rooms/search?q=`. Built: all
+    of those **except `POST /banter-rooms/:id/topics`** (no `Topic`
+    entity in Section 3, `scopeType: 'topic'` is a room *category* not a
+    room *having* topics — Decision Log #276, not invented). Plus, from
+    Section 6's Sprint 3 description + the new membership table +
+    `Post.banterRoomId` existing for room-scoped posts (all flagged the
+    same way `GrassrootsController` flagged `PATCH /fixtures/:id/status` /
+    Decision Log #254): **`POST`/`DELETE /banter-rooms/:id/join`**,
+    **`GET /banter-rooms/mine`** ("My Bants", keyset by `joinedAt desc`),
+    **`GET /banter-rooms/:id/posts`** (the room feed) and **`POST
+    /banter-rooms/:id/posts`** (post into a room). `GET /banter-rooms` +
+    `/search` share one `BanterService.listRooms` — optional
+    `?scopeType=` exact filter + optional `?q=` name substring (ILIKE),
+    the `GrassrootsPage`/`?city=` server-side-filter precedent; both
+    carry a per-caller `joined` boolean (Decision Log #154 pattern,
+    batched — no N+1). Room feed + room posting **delegate to
+    `FeedService`** (`getBanterRoomFeed` — one new WHERE clause on the
+    shared `paginatePostsWithViewerState` pipeline, identical `FeedPage`
+    shape to `GET /posts/feed`; and `createPost` with `banterRoomId` set
+    — the single post-creation path, engagement-points award and all),
+    exactly as `GET /clubs/:id/feed` does. No parallel post CRUD in this
+    module. `BanterModule` imports `FeedModule` (exports `FeedService`) —
+    no cycle.
+  - **Permission model (Decision Log #275), default + reasoning stated,
+    same discipline as Grassroots #255:**
+    - **Room creation is open to any authenticated, consent-confirmed
+      user** (`createdBy` = caller), `JwtAuthGuard` +
+      `GuardianConsentGuard` — mirrors `POST /teams`: a public-facing
+      named record is "posting"-class under Section 5.7's broad reading
+      (Decision Log #21). There is **no admin/moderator role** in the
+      user-facing guards to restrict it to, and the Figma Banter frames
+      show users creating rooms. **Flagged, not resolved:** whether room
+      creation should later be moderator-gated or rate-limited (an
+      unbounded supply of user-named public rooms on a minors' platform
+      is a real spam/safeguarding surface).
+    - **Join / leave / post ARE `GuardianConsentGuard`-gated** — a
+      deliberate divergence from `POST /clubs/:id/join` (`JwtAuthGuard`
+      only). Section 5.7 **and** Section 8.3 step 5 both name "joining a
+      Banter Room" *literally*, unlike a `ClubPage` fan-page join (which
+      `clubs/README.md` argued is neither a Banter Room nor a Community
+      Group). A restricted-pending minor can browse rooms and read room
+      feeds; they cannot create, join, leave, or post.
+    - **Posting requires room membership (403 otherwise)** — "join a room
+      to participate", the only reading of Section 8.3 step 5's
+      "read-only [without participating]" that makes sense. Flagged as a
+      judgment call.
+    - **The creator is auto-joined** on `POST /banter-rooms`
+      (`memberCount` starts at 1, member row written in the same
+      transaction) — "create a group → you're in it". Flagged.
+    - **404 before 403** everywhere (the `FeedService.deleteComment` /
+      Grassroots convention).
+  - **`memberCount` discipline** — a denormalized cache, same obligation
+    as `Post.likeCount` / `ClubPage.memberCount`. Every `BanterRoomMember`
+    create/delete is paired with the counter mutation inside one
+    interactive `$transaction`: `joinRoom` catches P2002 (duplicate →
+    idempotent, increment never runs); `leaveRoom` does `findUnique`
+    first (never-joined caller → no-op 200, not 404), then delete +
+    `updateMany({ memberCount: { gt: 0 } })` floor guard + P2025 catch
+    (`ClubsService.leaveClub` / `FeedService.unlikePost` pattern).
+  - **Verification, all re-measured directly.** Mocked suite **48 → 50
+    suites / 662 → 698 tests, 0 failures** (`banter.service.spec.ts` +
+    `banter.controller.http.spec.ts`, 36 new — `PrismaService` **and**
+    `FeedService` mocked; covers DTO validation, guard wiring, route
+    ordering (`/search`, `/mine` not shadowed by `/:id`), the
+    P2002/P2025 idempotency branches, the creator auto-join, and that
+    `postToRoom` forwards to `FeedService.createPost` with `banterRoomId`
+    set). e2e suite **12 → 13 suites / 102 → 113 tests, 0 failures**
+    (`test/banter.e2e-spec.ts`, real Postgres via docker-compose — the
+    new `BanterRoomMember` `@@unique`/cascade constraint, `memberCount`
+    never drifting/going negative across a real
+    `join → join → leave → leave → join` cycle, a concurrent double-join
+    `Promise.all` → exactly one row + `memberCount` +1, the real
+    `GuardianConsentGuard` blocking a restricted-pending minor from
+    create/join/post while allowing browse/read, the room feed reading
+    `Post.banterRoomId` — which `GET /posts/feed` never does — the
+    non-member 403 on posting, and a real `User` hard-delete cascading
+    `BanterRoomMember` rows away). `nest build` + `npm run lint` clean.
+  - **Still nothing else in Section 4.4 is affected** — the `/clubs`
+    subset is unchanged. **Decision Log #276 stays open**: `POST
+    /banter-rooms/:id/topics` (no `Topic` entity) and a `scopeRef` target
+    field on `BanterRoom` are both schema additions beyond Section 3's
+    literal model — a founder / Decision Log call, and neither blocks the
+    Sprint 3 Banter Rooms scope as shipped.
+  - PR opened, not merged — founder's call after review. Full detail:
+    `services/api/src/modules/banter/README.md`.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

@@ -87,6 +87,11 @@ model User {
   // at all.
   clubMemberships ClubPage[] @relation("ClubMembership")
 
+  // sprint-3/banter-rooms-backend — the reverse side of
+  // BanterRoomMember.user (see that model). Mechanical array field
+  // required by Prisma; no business data of its own.
+  banterRoomMemberships BanterRoomMember[]
+
   posts            Post[]
   comments         Comment[]
   savedPosts       SavedPost[]
@@ -423,12 +428,57 @@ model Comment {
 }
 
 model BanterRoom {
-  id          String @id @default(uuid())
-  name        String
-  scopeType   String // club | league | country | topic
-  createdBy   String
+  id        String @id @default(uuid())
+  name      String
+  // club | league | country | topic. A bare category label only — there
+  // is deliberately NO scope-target field (which club / which league):
+  // sprint-3/banter-rooms-backend treats scopeType as a filterable
+  // category and `name` as free text. A genuine "which Arsenal room"
+  // needs a scopeRef/scopeName addition — flagged as a Decision Log
+  // candidate in banter/README.md, not built.
+  scopeType String
+  // The user who created the room. Kept as a bare String (not a User
+  // @relation) exactly as Section 3 scaffolded it — making it a real FK
+  // would pull room creation into the Decision Log #44 account-deletion
+  // cascade scope for no MVP benefit. Flagged in banter/README.md.
+  createdBy String
+  // Denormalized cache of members.count(), the same discipline as
+  // Post.likeCount / ClubPage.memberCount. sprint-3/banter-rooms-backend
+  // keeps this in sync transactionally alongside every BanterRoomMember
+  // create/delete (BanterService.joinRoom / leaveRoom / createRoom) —
+  // never trust it in isolation; recomputable via
+  // BanterRoomMember.count({ where: { banterRoomId } }).
   memberCount Int    @default(0)
   posts       Post[]
+  // sprint-3/banter-rooms-backend — the membership join table that
+  // Section 3 never gave BanterRoom, without which "My Bants" (Build
+  // Plan Section 6, Sprint 3) is impossible. An explicit join model
+  // (not an implicit Prisma m2m like ClubPage.members) so joinRoom can
+  // use a P2002-catch for idempotency — exactly like Like/Follow — and
+  // avoid the raw $executeRaw the implicit-m2m _ClubMembership forced on
+  // ClubsService.joinClub.
+  members BanterRoomMember[]
+}
+
+// sprint-3/banter-rooms-backend — per-user Banter Room membership,
+// backing POST/DELETE /banter-rooms/:id/join and GET /banter-rooms/mine
+// ("My Bants"). Mirrors Like / SavedPost / Follow's exact shape: an
+// explicit join model with @@unique on the pair, a joinedAt timestamp
+// (keyset pagination for "My Bants" needs a real column to order by —
+// same reason Like.likedAt / SavedPost.savedAt / Follow.createdAt exist,
+// all flagged additions beyond Section 3's literal field list, this one
+// too). Both FKs onDelete: Cascade per Decision Log #44 — a user delete
+// cascades these rows away with no per-table handling in
+// AccountDeletionSweepService.
+model BanterRoomMember {
+  id           String     @id @default(uuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  banterRoomId String
+  banterRoom   BanterRoom @relation(fields: [banterRoomId], references: [id], onDelete: Cascade)
+  joinedAt     DateTime   @default(now())
+
+  @@unique([userId, banterRoomId])
 }
 
 model Conversation {
