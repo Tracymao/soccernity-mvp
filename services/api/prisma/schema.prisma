@@ -482,10 +482,39 @@ model BanterRoomMember {
 }
 
 model Conversation {
-  id             String    @id @default(uuid())
+  id             String   @id @default(uuid())
   participantIds String[]
-  createdAt      DateTime  @default(now())
-  messages       Message[]
+
+  // sprint-3/messaging-direct-messaging (Decision Log #277) -- two
+  // genuine additions beyond Section 3's literal Conversation field
+  // list, flagged per CLAUDE.md's "the data model is a fixed spec"
+  // rule; both founder-approved.
+  //
+  // participantKey: a deterministic key for the participant SET (the
+  // participant ids sorted and ':'-joined), @unique so
+  // POST /conversations's find-or-create is race-safe -- two concurrent
+  // "start a conversation with the same person" requests can't create
+  // two rows, because the second create hits a P2002 and is caught,
+  // then re-reads the existing row. The exact idempotency mechanism
+  // Like.@@unique([userId, postId]) gives FeedService.likePost. Set once
+  // at creation, never mutated: participants don't change in MVP, and
+  // DMs are strictly 2-party (see messaging/README.md -- group
+  // conversations are out of scope, this shape supports 2 participants).
+  participantKey String @unique
+
+  // lastMessageAt: GET /conversations orders the caller's inbox by most
+  // recent activity. Conversation had only createdAt, so a chatty old
+  // thread would have sunk below a newer idle one. Seeded to createdAt
+  // on creation, bumped to the new message's sentAt on every send --
+  // inside the same interactive transaction as the Message row, so the
+  // two can never land independently. Keyset-paginated
+  // (lastMessageAt desc, id desc).
+  lastMessageAt DateTime @default(now())
+
+  createdAt DateTime  @default(now())
+  messages  Message[]
+
+  @@index([lastMessageAt])
 }
 
 model Message {
@@ -499,6 +528,13 @@ model Message {
   mediaUrl       String?
   sentAt         DateTime     @default(now())
   readAt         DateTime?
+
+  // sprint-3/messaging-direct-messaging -- GET /conversations/:id/messages
+  // filters by conversationId and keyset-paginates newest-first
+  // (sentAt desc, id desc); PATCH /conversations/:id/read filters by
+  // conversationId + senderId + readAt. Postgres does not auto-index
+  // foreign keys, so this is added explicitly.
+  @@index([conversationId, sentAt])
 }
 
 model Notification {

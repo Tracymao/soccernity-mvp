@@ -8069,6 +8069,93 @@ Full reasoning for every choice above: Build Plan Section 5.
     Sprint 3 Banter Rooms scope as shipped.
   - PR opened, not merged — founder's call after review. Full detail:
     `services/api/src/modules/banter/README.md`.
+- **`sprint-3/messaging-direct-messaging` (backend-api, 2026-09-09) builds
+  the Direct Messaging backend — Build Plan Section 4.7's Messaging slice,
+  the second Sprint 3 backend wave alongside Banter Rooms. `services/api`
+  only; nothing in `apps/web` consumes it yet (a later `figma-to-code`
+  pass wires the recipient picker (Decision Log #139) and the conversation
+  views). `MessagingModule` is now wired into `app.module.ts`. Decision
+  Log #277.** Full detail:
+  `services/api/src/modules/messaging/README.md`.
+  - **Schema — two founder-approved additive columns on `Conversation`**
+    (migration
+    `20260909090000_add_conversation_participant_key_and_last_message_at`;
+    `Message` unchanged bar one added index; `User`/`Guardian`
+    safeguarding fields untouched — flagged per CLAUDE.md's "the data
+    model is a fixed spec" rule). **`participantKey String @unique`** =
+    the participant ids sorted + `:`-joined, a deterministic key for the
+    participant *set*, so `POST /conversations`'s find-or-create is
+    race-safe via a `P2002` catch — the exact idempotency mechanism
+    `Like.@@unique([userId, postId])` gives `FeedService.likePost`.
+    **`lastMessageAt DateTime @default(now())`** = inbox ordering
+    (`Conversation` had only `createdAt`); seeded to `createdAt`, bumped
+    to the new message's `sentAt` on every send **inside the same
+    interactive transaction as the `Message` insert** so it can't drift.
+    Same denormalized-field precedent as `Follow.createdAt` /
+    `BanterRoomMember.joinedAt`. No GIN index on `participantIds` (none
+    anywhere in this codebase — btree-only like every other list
+    endpoint; flagged as the natural first optimization if `Conversation`
+    grows).
+  - **Endpoints**: `GET`/`POST /conversations`, `GET`/`POST
+    /conversations/:id/messages` (Section 4.7's literal four), plus
+    **`PATCH /conversations/:id/read`** — an addition beyond Section 4.7,
+    added the same way `BanterController` added `POST`/`DELETE
+    /banter-rooms/:id/join`, modelled on `PATCH /notifications/read-all`
+    from the same Section 4.7. Conversation-level (mark the whole thread
+    read), not per-message. All keyset-paginated, opaque cursor, default
+    20 / max 50 (Section 5.5); the message list pages **newest-first**
+    (`sentAt desc, id desc`), matching `GET /clubs/:id/feed`.
+  - **`POST /conversations` is find-or-create** — one canonical thread
+    per pair. **201 on create, 200 when an existing thread is returned**
+    (a clean "did I start this or resume it" signal). Self-recipient →
+    400. **DMs are strictly 2-party** — `StartConversationDto` takes one
+    `recipientId`; `Conversation.participantIds` being a `String[]` in
+    Section 3 is a forward-compat shape (and what makes `participantKey` a
+    set key), **not** a mandate for group chat (Section 6 Sprint 3 says
+    "send and receive *a DM*"; Message pillar Figma + recipient picker
+    are 1:1; `Message.readAt` is a single timestamp). Group conversations
+    are a flagged Decision Log candidate.
+  - **Restricted-pending enforcement (Decision Log #12) — both
+    directions, no new guard.** *Sending* (`POST /conversations`, `POST
+    .../messages`) → `GuardianConsentGuard` on the controller (Section
+    5.7 names "messaging"). *Receiving* (being the `recipientId` on `POST
+    /conversations`) → `MessagingService.assertRecipientMessageable`, a
+    service-level check on the **target**, structurally identical to
+    `UsersService.assertFollowGraphVisible` (a guard only inspects the
+    caller) — a restricted-pending minor recipient is a **404**,
+    indistinguishable from a non-existent user. Scope is guardian consent
+    **only** (`isMinor` + `Guardian.consentStatus`), never email
+    `verificationStatus`, per #12's explicit resolution. `POST
+    .../messages` into an *existing* conversation needs only the sender's
+    guard — and that guard can never actually fire there (a conversation
+    can only have been created between two non-restricted users, and
+    consent status never moves backward); kept for defence-in-depth.
+    **Decision Log #221**: can't start a conversation with a
+    deactivated/`pending_deletion` recipient (404); an *existing*
+    conversation whose other party later deactivated is **not** filtered
+    (a private 1:1 record, not public content — deliberate, flagged for a
+    stricter follow-up if wanted).
+  - **No `Notification` on message send** (no `message` type in the enum,
+    not on the follow/like/comment trigger list — a Notification Centre
+    PR candidate); no engagement points (private, gameable).
+  - **Verification, re-measured**: mocked suite **50 → 52 suites / 698 →
+    728 tests, 0 failures** (`messaging.service.spec.ts` +
+    `messaging.controller.http.spec.ts`, 30 new); e2e suite (real
+    Postgres via docker-compose) **13 → 14 suites / 113 → 127 tests, 0
+    failures** (`test/messaging.e2e-spec.ts` — `participantKey @unique`
+    makes find-or-create return the same row from either direction, two
+    concurrent starts → exactly one row; the transactional `lastMessageAt`
+    bump; the `participantIds: { has }` inbox filter + ordering +
+    `unreadCount` + preview + `PATCH .../read` clearing it; keyset
+    pagination on both list endpoints; #12 both directions against real
+    `Guardian` rows; #221 deactivated recipient; the account-deletion
+    cascade — `Message` rows gone, `Conversation` survives). `nest build`
+    + `npm run lint` clean.
+  - **Not built, flagged (none block Sprint 3 messaging)**: `GET
+    /conversations/:id` single-conversation metadata; group
+    conversations; `message` → `Notification` wiring; orphaned-`Conversation`
+    cleanup on user hard-delete.
+  - PR opened, not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

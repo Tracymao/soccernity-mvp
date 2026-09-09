@@ -16,6 +16,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { ContestModule } from './modules/contest/contest.module';
 import { GrassrootsModule } from './modules/grassroots/grassroots.module';
 import { BanterModule } from './modules/banter/banter.module';
+import { MessagingModule } from './modules/messaging/messaging.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -106,7 +107,15 @@ import { BanterModule } from './modules/banter/banter.module';
     // /banter-rooms/:id/topics is deliberately NOT built (no Topic
     // entity) — see modules/banter/README.md and the Decision Log.
     BanterModule,
-    // MessagingModule,     // Sprint 3
+    // sprint-3/messaging-direct-messaging — Build Plan Section 4.7
+    // (Messaging slice): GET/POST /conversations, GET/POST
+    // /conversations/:id/messages, plus PATCH /conversations/:id/read.
+    // Two additive Conversation columns (participantKey @unique,
+    // lastMessageAt — migration 20260909090000), Decision Log #277.
+    // DMs are strictly 2-party; restricted-pending minors are blocked
+    // from both sending and receiving (Decision Log #12). See
+    // modules/messaging/README.md.
+    MessagingModule,
     // NotificationsModule, // Sprint 3
     // SportsModule,        // Sprint 4
     // SearchModule,        // Sprint 6
