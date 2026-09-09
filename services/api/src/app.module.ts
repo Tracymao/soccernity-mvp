@@ -15,6 +15,7 @@ import { AccountDeletionModule } from './modules/account-deletion/account-deleti
 import { AdminModule } from './modules/admin/admin.module';
 import { ContestModule } from './modules/contest/contest.module';
 import { GrassrootsModule } from './modules/grassroots/grassroots.module';
+import { BanterModule } from './modules/banter/banter.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -97,7 +98,14 @@ import { GrassrootsModule } from './modules/grassroots/grassroots.module';
     // result race resolve Decision Log #255. Zero schema diff / no
     // migration. See modules/grassroots/README.md.
     GrassrootsModule,
-    // BanterModule,        // Sprint 3
+    // sprint-3/banter-rooms-backend — Section 4.4 (Club & Banter
+    // Service), the /banter-rooms half: create/list/search/get rooms,
+    // join/leave, GET /banter-rooms/mine ("My Bants"), and POST/GET
+    // /banter-rooms/:id/posts (delegating to FeedService). One new model,
+    // BanterRoomMember (migration 20260909003336). POST
+    // /banter-rooms/:id/topics is deliberately NOT built (no Topic
+    // entity) — see modules/banter/README.md and the Decision Log.
+    BanterModule,
     // MessagingModule,     // Sprint 3
     // NotificationsModule, // Sprint 3
     // SportsModule,        // Sprint 4

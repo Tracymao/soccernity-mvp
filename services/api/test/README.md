@@ -225,6 +225,36 @@ see the remaining gaps listed below.
   doesn't depend on login/register themselves. See `modules/admin/
   README.md` for the full architecture writeup this spec proves.
 
+- `banter.e2e-spec.ts` (added by `sprint-3/banter-rooms-backend`,
+  Decision Log #275) — Build Plan Section 4.4 (Banter Rooms half). Hits
+  guiding-principle triggers #2 (transaction reasoning) and #3 (a
+  genuinely new Prisma relation/constraint): the new `BanterRoomMember`
+  model, its `@@unique([userId, banterRoomId])`, and its
+  `onDelete: Cascade` FKs — never run against a real Postgres before this
+  PR. Proves against a live database: `BanterRoom.memberCount`
+  incremented/decremented transactionally alongside the member row and
+  never drifting or going negative across a real
+  `join → join → leave → leave → join` cycle (verified against both the
+  cached counter and `BanterRoomMember.count()`); a genuine concurrent
+  double-join (`Promise.all`) landing exactly one row and `memberCount`
+  incremented exactly once; the real `GuardianConsentGuard` blocking a
+  restricted-pending minor from creating/joining/posting while still
+  letting them browse and read room feeds; `POST /banter-rooms/:id/posts`
+  → `FeedService.createPost` writing a real `Post.banterRoomId` that the
+  room feed (`GET /banter-rooms/:id/posts`) reads (a column
+  `GET /posts/feed` deliberately never touches); the non-member 403 on
+  posting; and a real `User` hard-delete cascading `BanterRoomMember`
+  rows away (the DL #44 operation `AccountDeletionSweepService`
+  performs). Users are seeded directly via Prisma + a real
+  `TokenService`-minted token (`createUser` / `createRestrictedMinor`) —
+  a speed choice, not a rate-limit workaround (no Banter route carries
+  `@AuthRateLimit()`); every request still exercises the real
+  `JwtAuthGuard` → `TokenService.verifyAccessToken` and, for writes, the
+  real `GuardianConsentGuard`. The mocked unit suite
+  (`src/modules/banter/*.spec.ts`) covers the DTO validation, guard
+  wiring, route ordering (`/search`, `/mine` not shadowed by `/:id`), and
+  the P2002/P2025 idempotency branches.
+
 **A real, discovered gap, not a production bug when found — flagged then,
 now fixed at the source but the test workaround itself deliberately
 left in place:** writing `feed-reactions.e2e-spec.ts`/`follow.e2e-spec.ts`/

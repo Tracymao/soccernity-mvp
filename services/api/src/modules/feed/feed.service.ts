@@ -278,10 +278,42 @@ export class FeedService {
     return this.paginatePostsWithViewerState(where, limit, userId);
   }
 
+  // GET /banter-rooms/:id/posts (sprint-3/banter-rooms-backend) — the
+  // Banter Room feed, the room-scoped counterpart of getClubFeed().
+  // Every Post whose banterRoomId matches, newest-first, keyset-
+  // paginated, identical FeedPage / FeedPostWithViewerState shape to GET
+  // /posts/feed and GET /clubs/:id/feed. Section 4.3's GET /posts/feed
+  // is scoped to the caller's own posts + follows and deliberately never
+  // reads Post.banterRoomId (getFeed()'s own scope comment) — this is
+  // the room's own feed.
+  //
+  // BanterController.roomFeed calls BanterService.assertRoomExists(id)
+  // before this runs, so a non-existent room is a 404 (matching GET
+  // /banter-rooms/:id); this method itself does not re-check and would
+  // return an empty page for an unknown banterRoomId. No restricted-
+  // pending-minor content leak: POST /banter-rooms/:id/posts is
+  // GuardianConsentGuard-gated, so such a minor has no room posts to
+  // surface. Deactivated-author posts ARE filtered
+  // (ACTIVE_AUTHOR_POST_FILTER, Decision Log #221).
+  async getBanterRoomFeed(
+    banterRoomId: string,
+    userId: string,
+    query: FeedQueryDto,
+  ): Promise<FeedPage> {
+    const limit = Math.min(query.limit ?? FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE);
+
+    const scopeFilter: Prisma.PostWhereInput = { banterRoomId, ...ACTIVE_AUTHOR_POST_FILTER };
+    const where: Prisma.PostWhereInput = query.cursor
+      ? { AND: [scopeFilter, this.buildCursorFilter(query.cursor)] }
+      : scopeFilter;
+
+    return this.paginatePostsWithViewerState(where, limit, userId);
+  }
+
   // Shared "fetch limit+1 posts newest-first, trim the lookahead row,
   // build nextCursor from the last kept row, attach viewer state"
-  // pipeline — getFeed() and getClubFeed() now differ only in their
-  // WHERE clause. Factored once here for the same reason
+  // pipeline — getFeed(), getClubFeed() and getBanterRoomFeed() differ
+  // only in their WHERE clause. Factored once here for the same reason
   // UsersService.toFollowPage was (two callers, identical shape); the
   // per-caller inline repetition getComments()/getSavedPosts() still
   // use is fine for their single callers, this isn't a push to unify
