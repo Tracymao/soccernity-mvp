@@ -9064,6 +9064,77 @@ real, still-open follow-up, not done by this entry.
     Groups content below the chrome (Group Grid, Filter Bar, Group Feed,
     Members roster, Create-a-Group form) were left untouched.
   - PR opened, not merged — founder's call after review.
+- **`sprint-3/notifications-read-api` (backend-api, 2026-09-13) builds the
+  Notifications READ SIDE — Build Plan Section 4.7. `services/api` only,
+  no Figma/`apps/web` touched. Decision Log #290.** Report:
+  `services/api/src/modules/notifications/README.md`.
+  - **Design problem confirmed and solved**: `Notification.payloadRefId`
+    is a bare, type-dependent string with no FK and no stored actor — a
+    client can't render "X liked your post" from a row alone. Read every
+    one of the 7 trigger call sites first (`users.service.ts` for
+    `follow`, `feed.service.ts` for `like`/`comment`,
+    `messaging.service.ts` for `message`, `grassroots.service.ts` for
+    `fixture_scheduled`/`result_logged`, `contest.service.ts` for
+    `contest_win`) to confirm exactly what `payloadRefId` means per type,
+    rather than assuming.
+  - **Option (a) chosen: server-side resolution, batched by type.** `GET
+    /notifications` resolves each row's `payloadRefId` into a
+    type-specific structured `data` object — never pre-rendered English
+    (copy stays a frontend concern, since Decision Log #279 already
+    finalized exact per-type wording in Figma). At most 5 extra queries
+    per page regardless of page size (Posts; Conversations plus one
+    combined User lookup covering both follow-actors and
+    message-other-participants; Fixtures; ContestCycles), matching the
+    batching discipline `FeedService.attachViewerState` /
+    `MessagingService.toConversationViews` already established — never
+    one query per row.
+  - **A real, disclosed limitation, NOT fixed here**: `like`/`comment`
+    notifications have no actor anywhere in the schema —
+    `payloadRefId` is the `Post`, not the liker/commenter — so those two
+    types can only ever resolve to "what was liked/commented on", never
+    "who did it", from current data. Fixing this needs a new `actorId`
+    column written by the `like`/`comment` trigger call sites, which is
+    explicitly out of this PR's read-side-only scope; flagged as a new
+    open Decision Log candidate in the module's own README, not resolved
+    in the docx.
+  - **Endpoints**: `GET /notifications` (`JwtAuthGuard` only, implicitly
+    self-scoped like `GET /contest/current`; keyset pagination reusing the
+    exact `(createdAt desc, id desc)` shape every other list endpoint
+    uses, as this module's own cursor-util copy — the established
+    per-module-cursor convention, not a cross-module import; also returns
+    `unreadCount`), `GET /notifications/unread-count` (a dedicated
+    lightweight `{ unreadCount }` endpoint — one `COUNT` query — because
+    the Navbar badge renders on every page and shouldn't pay for a
+    resolved page just to show a count), `PATCH /notifications/:id/read`
+    (not-found-or-not-owned → 404, never 403 — the established
+    don't-leak-existence convention; idempotent), `PATCH
+    /notifications/read-all` (`{ markedRead }`, mirroring
+    `MessagingService.markConversationRead`'s own shape).
+  - **Every `data` field is nullable** — `payloadRefId` is not an FK, so a
+    referenced row can be gone (a hard account-deletion cascade, Decision
+    Log #44) by the time this reads it; a stale notification degrades to
+    `data: null` rather than erroring. Deliberately NOT filtered: a
+    notification whose actor/other-participant has since deactivated
+    (not hard-deleted) is still shown, consistent with Decision Log
+    #221's existing "private record, not public content" precedent for
+    DM threads.
+  - **None of the 7 existing trigger call sites were touched.**
+  - **Verification, freshly re-measured both before and after (not
+    assumed from a prior recorded figure)**: mocked suite 52 suites / 738
+    tests, 0 failures → 54 suites / 764 tests, 0 failures (26 new, 2 new
+    suites — `notifications.service.spec.ts`,
+    `notifications.controller.http.spec.ts`). No e2e spec added — this
+    module is plain `findMany`/`count`/`update` calls with no raw SQL, no
+    transaction/isolation-level reasoning, and no novel Prisma relation,
+    the exact class of change `test/README.md`'s own guiding principle
+    keeps at the mocked layer. `npx tsc --noEmit`, `npm run lint`, and
+    `npx nest build` all clean.
+  - **Not built here, by design**: `GET /notifications/:id`; an `actorId`
+    column for `like`/`comment` (see above); any Figma or `apps/web`
+    change — converting the already-finalized Notification Centre design
+    (Decision Log #279) against these endpoints is a separate
+    `figma-to-code` follow-up.
+  - PR opened, not merged — founder's call after review.
 
 ## The eight agents, and the order they run in
 

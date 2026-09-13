@@ -17,6 +17,7 @@ import { ContestModule } from './modules/contest/contest.module';
 import { GrassrootsModule } from './modules/grassroots/grassroots.module';
 import { BanterModule } from './modules/banter/banter.module';
 import { MessagingModule } from './modules/messaging/messaging.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -116,7 +117,13 @@ import { MessagingModule } from './modules/messaging/messaging.module';
     // from both sending and receiving (Decision Log #12). See
     // modules/messaging/README.md.
     MessagingModule,
-    // NotificationsModule, // Sprint 3
+    // sprint-3/notifications-read-api — Build Plan Section 4.7, the
+    // Notifications READ-SIDE only: GET /notifications, GET
+    // /notifications/unread-count, PATCH /notifications/:id/read, PATCH
+    // /notifications/read-all. Resolves Decision Log #87/#278's
+    // Notification rows into ready-to-render data server-side (batched,
+    // no N+1) — see modules/notifications/README.md for the full design.
+    NotificationsModule,
     // SportsModule,        // Sprint 4
     // SearchModule,        // Sprint 6
     // LeaderboardModule,   // Sprint 6
