@@ -8664,7 +8664,54 @@ real, still-open follow-up, not done by this entry.
     the founder's own DL #1 ruling that these are distinct features, so
     a new top-level nav entry is this design's own inclination but
     **not** a decision — the same explicit founder-call treatment
-    Grassroots' own nav placement got (DL #258).
+    Grassroots' own nav placement got (DL #258). **Now resolved — see the
+    `sprint-3/nav-drawer-groups-dropdown` bullet directly below (Decision
+    Log #282): the founder decided Groups does not get a navbar icon at
+    all, it goes into the account dropdown/drawer instead.**
+  - Not merged — founder's call after review.
+- **`sprint-3/nav-drawer-groups-dropdown` (figma-design-system, 2026-09-13)
+  is a founder nav decision, not a design proposal — resolves Community
+  Groups' navigation-placement question (Decision Log #281) and removes a
+  redundant row from the mobile drawer. Figma design only, no app/backend
+  code. Decision Log #282; forward-pointer appended to #281.**
+  - **Home removed from `Navigation Drawer — Mobile` (`5870:10689`)** —
+    the drawer is opened via the avatar and the header logo already links
+    home (working in code, same precedent as DL #162), so the row was
+    redundant. `Nav — Home` (`5870:10704`) deleted; every row from
+    Community through Settings shifted up 48px to close the gap
+    (Community 140 → Settings 620).
+  - **Community Groups gets no navbar icon.** A new `Nav — Groups` row
+    (`6465:19596`) was cloned from **`Nav — Clubs`**, not Grassroots — so
+    it inherits from the same template Grassroots' own row was itself
+    cloned from (Decision Log #265), rather than cloning a clone.
+    Inserted after Settings at y=668, in the account cluster
+    (Profile/Notifications/Settings), not the content-pillar cluster.
+    Because one row was removed above this point and one added below it,
+    the pre-existing Space/Divider/Log-out tail landed back at its exact
+    original position (716/730/735) — verified, not assumed, via a
+    screenshot and a metadata re-read.
+  - **Both account dropdown components** — `Dropdown menu/no
+    notification` (`2841:5361`) and `Dropdown menu/notification on`
+    (`2841:5363`) — gained a `Groups` row, each cloned from that
+    component's own Settings row, inserted after Settings (y=108) and
+    before Log out (pushed to y=144); each component's height grew
+    142→176. **The hidden `Message` row was left exactly as-is**, still
+    hidden, per the brief.
+  - **Nothing designed for Scouting or Academy** — no icons, no
+    placeholder frames; both remain Phase 2 / undesigned (Decision Log
+    #3). Standing policy recorded in the Decision Log instead: the
+    7-icon `Web app Navbar` COMPONENT_SET (`2824:4309`, untouched by this
+    PR) is closed to new features by default going forward — Scouting
+    and Academy each get one of the two remaining reserved slots once
+    they exist and are designed; everything else (a new pillar, a new
+    account-adjacent feature) defaults to the account dropdown/drawer,
+    following the Groups precedent this PR sets, not the navbar.
+  - **Paint audit**: every fill on both new node families is a clone of
+    an already-bound node (`brand/navy` text/marker fills, confirmed via
+    `boundVariables.color` on the drawer row and both dropdown rows) — 0
+    unbound, 0 off-palette, 0 `brand/green-tint-28`, 0 new colours,
+    Light mode only, 0 overlaps (screenshot-verified on all three
+    components).
   - Not merged — founder's call after review.
 
 ## The eight agents, and the order they run in
