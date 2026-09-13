@@ -8239,10 +8239,85 @@ Full reasoning for every choice above: Build Plan Section 5.
     isolation-level reasoning), which is exactly the class of change
     `test/README.md`'s own guiding principle says stays at the mocked
     layer. Flagged for whoever next runs the real e2e suite to confirm
-    it still passes unchanged. `apps/web` and Figma untouched — a later
-    `figma-to-code` pass resolves each `payloadRefId` per-type for
-    display.
+    it still passes unchanged. `apps/web` and Figma untouched at the time —
+    the Figma half is now done, see
+    `sprint-3/notification-centre-design-finalize` below.
   - PR opened, not merged — founder's call after review.
+- **`sprint-3/notification-centre-design-finalize` (figma-screen-builder,
+  2026-09-13) finalizes the Notification Centre design — the design half
+  of Decision Log #87, left "Proposed, not settled" by
+  `sprint-2/screen-builds-notification-centre` and now resolved alongside
+  the backend half (Decision Log #278,
+  `sprint-3/notification-triggers-message-fixture-contest`). Figma design
+  only, no app/backend code. Decision Log #279; forward-pointer on #87.**
+  Full detail: Build Plan Section 9's #279 entry and the Notification
+  Centre's own on-canvas Design Notes frame.
+  - **Icon-disc treatment for the four new types, all reused from
+    existing file icons, none newly drawn**: the Navbar messages glyph
+    for `message` (a real sender, so it keeps the same avatar-initials
+    pattern as follow/like/comment — the only one of the four that does);
+    the Grassroots corner-flag icon for `fixture_scheduled`; `mdi:
+    whistle-outline` for `result_logged`, rebound from `color/icon/
+    inactive` (15% navy — its native binding elsewhere, too faint for an
+    active notification) to solid `brand/navy` for legibility; the
+    existing `carbon:trophy` for `contest_win`. The three
+    team/event-centric types (fixture_scheduled, result_logged,
+    contest_win) sit on a `brand/green-tint` disc — the empty state's own
+    "Icon Disc" pattern — visually distinct from the white avatar-initials
+    circle follow/like/comment/message use, since none of the three has a
+    person to put an initial to.
+  - **One exemplar row per new type, not exhaustive duplication**: added
+    to both **List — Unread** (`message`, `fixture_scheduled`) and **List
+    — Read** (`result_logged`, `contest_win`) on both the desktop and
+    mobile Feed frames — 4 new rows per breakpoint, 8 total. Both `List`
+    containers and every parent up to the outer frame are genuine
+    auto-layout, so all four frames (desktop/mobile × feed) grew and
+    reflowed automatically with zero manual repositioning.
+  - **Page-header subtitle and empty-state body copy, both breakpoints,
+    now name all seven real types** — "Follows, likes, comments,
+    messages, fixtures, results and Contest wins." (subtitle); the
+    empty-state body extended to match.
+  - **Founder decision (per the task brief): yes to a coming-soon
+    affordance.** A new, lighter second line sits below the empty state's
+    main body copy — "More notification types — mentions, deeper Bants
+    and Contest activity — are on the way." — naming only real, plausible
+    future categories (matching Decision Log #87's own "NOT designed:
+    mention notifications, Banter-specific types" list), not a roadmap
+    dump, and promising no date.
+  - **The Design Notes frame's DL #87 note flips OPEN → RESOLVED** (green
+    pill, matching the BUILT notes' own treatment), rewritten to record
+    the seven-type set, the four new `payloadRefId` conventions, and the
+    self-notification-guard reasoning per new trigger — all already true
+    in the shipped backend (PR #278) — plus the explicit exclusions
+    (moderation-report-actioned, leaderboard rank/milestone, @mention,
+    guardian-consent-change). The "Copy discipline" note is rewritten to
+    record the coming-soon decision. **DL #88 (the Navbar bell/overlay
+    workaround) and DL #86 (canonical mobile width) notes are deliberately
+    left untouched** — both out of this task's explicit scope.
+  - **Nothing designed for moderation-report-actioned or
+    leaderboard-milestone** — both still have no backend to produce them.
+  - **Token discipline**: no new colour, no `brand/green-tint-28`; every
+    new fill binds to an existing `Soccernity Theme` Light-mode variable
+    (`brand/green-tint`, `brand/navy`). **One disclosed, non-rendering
+    finding, not fixed here**: the reused `carbon:trophy` icon's internal
+    boolean-operation input shapes (`Rectangle`/`Subtract`/`Ellipse`)
+    carry their own unbound literal fills — pre-existing component debt
+    on every use of this icon file-wide (the outer boolean-op node's own
+    fill is correctly bound to `brand/navy` and is what actually renders;
+    the inputs are non-rendering remnants of Figma's own boolean-op
+    behavior, the same category Decision Log #201 already documented).
+  - **A real mid-task bug, found and fixed, folded into the standing
+    Figma-authoring gotchas**: `setBoundVariableForPaint` given a literal
+    placeholder base colour (e.g. `{r:0,g:0,b:0}`) sometimes renders the
+    literal instead of the bound variable's resolved value — reproduced
+    directly (two icon-disc rows rendered solid opaque black despite a
+    verified-correct variable binding) and fixed by resolving each
+    token's real Light-mode RGB+alpha once and passing *that* as the base
+    literal before binding, the same fix this file's standing gotcha list
+    already prescribes for a flat placeholder colour — confirmed here to
+    also apply when the placeholder is fully unrelated to the target
+    colour (not just visibly-wrong gray).
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
@@ -8392,6 +8467,26 @@ real, still-open follow-up, not done by this entry.
   `sprint-5/grassroots-teams-browse` (DL #265). (Also re-confirmed there,
   already under DL #246: `use_figma` rolls a failed run's writes back
   atomically — the `TypeError` left zero partial writes on the canvas.)
+- **`setBoundVariableForPaint(paint, 'color', variable)` can leave the
+  paint rendering the literal placeholder colour you passed in, even
+  though the binding metadata itself is genuinely correct** — reproduced
+  directly: two icon-disc rows, built with a `{r:0,g:0,b:0}` (black)
+  placeholder base paint bound to `brand/green-tint`, rendered solid
+  opaque black in the screenshot despite `avatar.fills[0].
+  boundVariables.color.id` correctly reporting the right variable ID both
+  immediately after assignment and on a later independent read. Two
+  sibling rows built the exact same call but with a *resolved* base paint
+  (the variable's own Light-mode RGB+alpha, fetched via
+  `variable.valuesByMode[modeId]`) rendered correctly from the first
+  screenshot. Fix: always resolve the token's real current-mode RGB(+A)
+  once and pass *that* as the base literal before binding — never a
+  placeholder, not even `{0,0,0}` — corroborating the scattered
+  "generic grey placeholder renders as visibly grey" gotcha already noted
+  inline in the `sprint-2/all-sections-followup-mobile-field-audit`
+  bullet elsewhere in this file (not yet swept into this consolidated
+  list), now confirmed to also apply when the placeholder is a
+  *different* colour from the target, not just a visibly-wrong shade of
+  the same family. Found in `sprint-3/notification-centre-design-finalize`.
 
 ## The eight agents, and the order they run in
 
