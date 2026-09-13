@@ -102,21 +102,17 @@ export interface DrawerNavItem {
 //
 // DECISION LOG #282 -- "Home" removed. The drawer is opened via the
 // avatar and the header logo already links home (working in code, same
-// precedent as #162), so the row was redundant. That PR's own Figma edit
-// is the source of truth for the reflow; this is its 1:1 code mirror.
+// precedent as #162), so the row was redundant.
+//
+// DECISION LOG #287/#288 -- "Profile" removed as its own row. The
+// founder folded profile navigation into the "Signed in as" identity
+// block instead (NavDrawer.tsx now wraps it in a NavLink to /profile),
+// reclaiming a row the same way #282 reclaimed one by dropping Home.
+// This array is the 1:1 code mirror of the live Figma component's own
+// row order -- pulled fresh from Figma for this PR, not carried over
+// from the pre-#287 order minus Profile.
 export const drawerNavItems: DrawerNavItem[] = [
   { label: "Community", to: "/community" },
-  { label: "Sports Hub", to: "/sports-hub" },
-  { label: "Blog", to: "/blog" },
-  { label: "Bants", to: "/banter" },
-  { label: "Leaderboard", to: "/leaderboard" },
-  { label: "Clubs", to: "/clubs" },
-  // Grassroots Record-Keeping (Build Plan Section 4.5). Decision Log
-  // #266 first scoped the nav entry point to the drawer only; the
-  // desktop icon-navbar glyph followed as its own figma-design-system
-  // task (Decision Log #272) and is now mirrored into primaryNavItems
-  // above.
-  { label: "Grassroots", to: "/grassroots" },
   // /messages now resolves (sprint-3/banter-messaging-to-code, Decision
   // Log #277 -- MessagingModule) -- same "flip available once the route
   // exists" precedent Clubs/Grassroots/Settings each got. Notifications
@@ -124,19 +120,29 @@ export const drawerNavItems: DrawerNavItem[] = [
   // Log #279) but has no apps/web conversion yet.
   { label: "Messages", to: "/messages" },
   { label: "Notifications", to: "/notifications", available: false },
-  { label: "Profile", to: "/profile" },
+  { label: "Sports Hub", to: "/sports-hub" },
+  { label: "Blog", to: "/blog" },
+  { label: "Bants", to: "/banter" },
+  { label: "Leaderboard", to: "/leaderboard" },
+  { label: "Clubs", to: "/clubs" },
+  // Community Groups (Decision Log #1, #281) does not get a navbar icon
+  // -- the founder placed it in the account surface instead (Decision Log
+  // #282). `available: false`: Decision Log #281 is design-only, no
+  // apps/web route exists yet -- same "flip once the route exists"
+  // precedent as Grassroots/Messages/Settings below.
+  { label: "Groups", to: "/groups", available: false },
+  // Grassroots Record-Keeping (Build Plan Section 4.5). Decision Log
+  // #266 first scoped the nav entry point to the drawer only; the
+  // desktop icon-navbar glyph followed as its own figma-design-system
+  // task (Decision Log #272) and is now mirrored into primaryNavItems
+  // above.
+  { label: "Grassroots", to: "/grassroots" },
   // /settings resolves (redirects to /settings/privacy, the one built
   // Settings screen) as of sprint-2/privacy-settings-to-code. Only the
   // Privacy category is real — the others render disabled on the page —
   // but the account still has a reachable Settings entry now rather than
   // an orphan page (the gap Decision Log #156 flagged for Clubs).
   { label: "Settings", to: "/settings" },
-  // Community Groups (Decision Log #1, #281) does not get a navbar icon
-  // -- the founder placed it in the account surface instead (Decision Log
-  // #282). `available: false`: Decision Log #281 is design-only, no
-  // apps/web route exists yet -- same "flip once the route exists"
-  // precedent as Grassroots/Messages/Settings above.
-  { label: "Groups", to: "/groups", available: false },
 ];
 
 // Desktop account dropdown -- from the Figma "Dropdown menu/notification

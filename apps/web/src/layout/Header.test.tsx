@@ -109,26 +109,24 @@ describe("navigation config", () => {
     expect(drawerNavItems.some((i) => i.label === "News")).toBe(false);
   });
 
-  it("drawer order matches the Figma Navigation Drawer (Decision Log #162/#266/#282)", () => {
+  it("drawer order matches the live Figma Navigation Drawer (Decision Log #162/#266/#282/#287/#288)", () => {
     expect(drawerNavItems.map((i) => i.label)).toEqual([
       "Community",
+      "Messages",
+      "Notifications",
       "Sports Hub",
       "Blog",
       "Bants",
       "Leaderboard",
       "Clubs",
-      // Grassroots sits directly after Clubs — adjacency, not nesting
-      // (Decision Log #266). The desktop icon-navbar now carries it too
-      // (Decision Log #272).
-      "Grassroots",
-      "Messages",
-      "Notifications",
-      "Profile",
-      "Settings",
-      // Groups sits after Settings, in the account cluster, not the
-      // content-pillar cluster (Decision Log #282).
       "Groups",
+      "Grassroots",
+      "Settings",
     ]);
+  });
+
+  it("does NOT have a Profile row -- folded into the identity block instead (Decision Log #287/#288)", () => {
+    expect(drawerNavItems.some((i) => i.label === "Profile")).toBe(false);
   });
 
   it("does NOT have a Home row (Decision Log #282 -- the header logo already links home)", () => {
@@ -364,5 +362,35 @@ describe("Header -- drawer identity block (Decision Log #168)", () => {
 
     await within(drawer).findByText("Adeniyi Christiana");
     expect(within(drawer).queryByText((content) => content.includes("@"))).toBeNull();
+  });
+
+  it("wraps the identity block in a link to /profile, whether the fetch succeeded or is still pending (Decision Log #287/#288)", async () => {
+    vi.mocked(getUser).mockResolvedValueOnce(BASE_PROFILE);
+    const drawer = openDrawer();
+    await within(drawer).findByText("Adeniyi Christiana");
+
+    expect(within(drawer).getByRole("link", { name: "Adeniyi Christiana" }).getAttribute("href")).toBe(
+      "/profile",
+    );
+  });
+
+  it("navigates to /profile and closes the drawer when the identity block is clicked", async () => {
+    vi.mocked(getUser).mockResolvedValueOnce(BASE_PROFILE);
+    const drawer = openDrawer();
+    await within(drawer).findByText("Adeniyi Christiana");
+
+    fireEvent.click(within(drawer).getByRole("link", { name: "Adeniyi Christiana" }));
+
+    expect(screen.getByTestId("pathname").textContent).toBe("/profile");
+    expect(screen.queryByRole("dialog", { name: "Navigation" })).toBeNull();
+  });
+
+  it("the identity block still links to /profile in the generic fallback state (fetch pending)", () => {
+    vi.mocked(getUser).mockReturnValueOnce(new Promise<never>(() => {}));
+    const drawer = openDrawer();
+
+    expect(within(drawer).getByRole("link", { name: "Signed in" }).getAttribute("href")).toBe(
+      "/profile",
+    );
   });
 });

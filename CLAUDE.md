@@ -8966,6 +8966,52 @@ real, still-open follow-up, not done by this entry.
     the founder had already rearranged it.
   - **Verified** via a screenshot of the full drawer instance: clean
     reflow, no gaps, no overlaps.
+  - Not merged — founder's call after review. **Code half now closed —
+    see the `sprint-3/nav-drawer-profile-entry-point-code` bullet
+    directly below (Decision Log #288).**
+- **`sprint-3/nav-drawer-profile-entry-point-code` (figma-to-code,
+  2026-09-13) closes the code half of Decision Log #287 — `apps/web`
+  only, no Figma/backend code. Decision Log #288; forward-pointer
+  appended to #287.**
+  - **Pulled the live `Navigation Drawer — Mobile` (`5870:10689`) row
+    order directly from Figma before touching any code**, per this
+    task's own instruction not to reorder from memory or an old
+    screenshot. Confirmed order (nav items only, Log out excluded as an
+    action rendered separately): Community, Messages, Notifications,
+    Sports Hub, Blog, Bants, Leaderboard, Clubs, Groups, Grassroots,
+    Settings. **This does not match the pre-#287 code order minus
+    Profile** — `navigation.ts`'s `drawerNavItems` had already drifted
+    from the live Figma order (the founder had rearranged the whole
+    drawer directly, independent of the Profile-removal question), so
+    reordering from the old array would have been wrong.
+  - **`navigation.ts`**: `drawerNavItems` reordered to the exact
+    sequence above, with the `"Profile"` entry removed entirely — no
+    route or availability flag on any other item touched.
+  - **`NavDrawer.tsx`**: the existing "Signed in as" identity block
+    (avatar + displayName + decorative @handle) is now wrapped in a
+    `NavLink` to `/profile` with `onClick={onClose}` — the same
+    convention every other drawer row already uses — in both the
+    loaded-profile state and the generic "Signed in" fallback (pending
+    or failed fetch), so profile navigation always works regardless of
+    fetch state.
+  - **`NavDrawer.css`** gained one line, `text-decoration: none` on
+    `.sn-drawer__identity`, matching `.sn-drawer__link`'s own existing
+    rule — necessary because the class now styles an anchor, not a
+    `div`, and would otherwise inherit an underline through its child
+    spans.
+  - **Desktop `AccountDropdown`/`accountMenuItems` untouched by design**
+    — no equivalent identity block to fold Profile into, so Profile
+    stays its own row there, unchanged.
+  - `Header.test.tsx`'s drawer-order assertion updated to the live
+    Figma order above; one new test confirms no `"Profile"` row exists;
+    three new tests cover the identity-block link (href resolves to
+    `/profile` in both the loaded-profile and generic-fallback states,
+    and clicking it navigates to `/profile` and closes the drawer).
+  - **Verified**: `apps/web` vitest — **37 files / 259 tests, 0
+    failures** (up from 37/255 — 4 new tests, no existing test
+    removed); `npx tsc --noEmit` clean; `npm run lint` clean; `npm run
+    build` clean production bundle; dev-server smoke test on
+    `/community` and `/profile`, both real HTTP 200.
   - Not merged — founder's call after review.
 
 ## The eight agents, and the order they run in
