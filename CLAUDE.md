@@ -8864,6 +8864,59 @@ real, still-open follow-up, not done by this entry.
     not shipped UI, per established precedent); **0
     `brand/green-tint-28`**; Light mode only, no new colour.
   - Not merged — founder's call after review.
+- **`sprint-3/coming-soon-scouting-academy-to-code` (figma-to-code,
+  2026-09-13) is the code half of Decision Log #284/#285 — wires the
+  Scouting/Academy navbar icons to a real destination and converts the
+  reusable Coming Soon screen into `apps/web` code. `apps/web` only, no
+  Figma/backend code. Decision Log #286; forward-pointers appended to
+  #284 and #285.**
+  - **Two new real icon assets**, exported directly from the Figma
+    glyph nodes the navbar icons actually use (`6472:18581` /
+    `6472:18589`, inside the shared `Web app Navbar` COMPONENT_SET) —
+    `nav-scouting.svg` (binoculars) / `nav-academy.svg` (graduation
+    cap) — matching `nav-clubs.svg`/`nav-grassroots.svg`'s exact
+    convention, never hand-drawn. `navigation.ts`'s `primaryNavItems`
+    gained two real, available-by-default entries — `{ label:
+    "Scouting", to: "/scouting" }` / `{ label: "Academy", to:
+    "/academy" }`, both `tinted: true` — appended after Grassroots, the
+    canonical order Decision Log #284 landed in Figma (9 icons total).
+    **Deliberately NOT added to the mobile Navigation Drawer or the
+    account dropdown** — navbar only, per the standing policy #284/#282
+    both state (unlike Community Groups).
+  - **One new reusable `ComingSoonPage` component**
+    (`src/pages/ComingSoonPage.tsx`), converted from Decision Log
+    #285's four Figma frames (`6477:20050`/`20402`/`20677`/`20764`) —
+    icon disc (`coming-soon-icon.svg`, also a real exported asset, not
+    hand-drawn), `COMING SOON` badge, a `featureName` prop as its
+    **only** variable content, the fixed generic sub-line verbatim from
+    the frame's own text node, and a `"Back to Soccernity"` CTA to `/`.
+    **One component, not two duplicated page files** — `router.tsx`
+    adds `/scouting` and `/academy`, both rendering `<ComingSoonPage
+    featureName="..." />` configured differently.
+  - **Both routes nested under `FooterLayout`, not a direct `AppShell`
+    child** — the Coming Soon Figma frames carry the canonical site
+    footer (Decision Log #209/#210/#213), the same reason Home/Sports
+    Hub/Blog/Article Detail sit there. `FooterLayout.tsx`'s own
+    route-list comment and `router.test.tsx`'s FooterLayout-membership
+    test were both updated to include them. **No login gate on
+    either route** — like Blog/Sports Hub, the Figma content is
+    identical regardless of auth state and has nothing depending on the
+    caller's identity; the shared Header already renders the correct
+    chrome either way.
+  - **`Header.test.tsx` updated for the new 9-icon canonical order**
+    (was 7) and gained dedicated cases: Scouting/Academy are the last
+    two items, both tinted, pointing at `/scouting`/`/academy`; neither
+    appears in `drawerNavItems` or `accountMenuItems`.
+  - **Verified**: `apps/web` vitest — **37 files / 255 tests, 0
+    failures** (up from 36/253 — new `ComingSoonPage.test.tsx`, 4
+    cases; `router.test.tsx` +3; `Header.test.tsx` net +2, no existing
+    test removed); `npx tsc --noEmit` clean; `npm run lint` clean;
+    `npm run build` clean production bundle. Dev-server smoke test:
+    `/`, `/scouting`, `/academy`, `/sports-hub`, `/community`, `/clubs`
+    all real HTTP 200, clean log. No real browser/Playwright check
+    available in this environment — same verification ceiling as every
+    prior `apps/web` figma-to-code PR.
+  - Not merged — founder's call after review.
 
 ## The eight agents, and the order they run in
 

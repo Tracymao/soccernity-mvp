@@ -6,7 +6,8 @@
 // the canonical Figma icon nav from the "header 4" / "header 7" variants
 // of the Header COMPONENT_SET (nodes 2838:3502 / 2841:4104,
 // "Soccernity-MVP" file weZWWqggy9j13eX8bhFgs6). Icon order there is:
-// Sports Hub, Blog, Community, Leaderboard, Bants, Clubs, Grassroots.
+// Sports Hub, Blog, Community, Leaderboard, Bants, Clubs, Grassroots,
+// Scouting, Academy.
 //
 // DECISION LOG #272 -- the "grassroots" icon was appended (7th, last,
 // after Clubs) to the shared Web app Navbar COMPONENT_SET on both live
@@ -14,6 +15,21 @@
 // mirror of that component; the entry below matches the canonical order
 // and the tinted (bare-stroke-glyph-in-a-green-tint-tile) style landed
 // there verbatim -- same treatment as Clubs (Decision Log #159).
+//
+// DECISION LOG #284 -- "scouting" and "academy" were appended (8th and
+// 9th, last, after Grassroots) to the same COMPONENT_SET, on both live
+// desktop variants -- the two icons the standing nav policy explicitly
+// reserved as exceptions when Community Groups went to the account
+// dropdown/drawer instead (Decision Log #282). The 9-icon set is now
+// closed to further additions by default. Both point at a shared
+// ComingSoonPage (Decision Log #285) rendered with a different
+// `featureName` -- see router.tsx's /scouting and /academy routes --
+// since neither pillar has any real screen yet (Decision Log #3, Phase 2,
+// not MVP-blocking). Mirrored here as real, available entries (not
+// `available: false`) since both routes exist as of this same PR --
+// unlike Grassroots/Messages/Settings, which were flipped on separately
+// once their real routes landed, there's no reason to stage this one:
+// the destination page and the nav entry ship together.
 //
 // DECISION LOG #165 -- fully resolved: "Blog" is the label and the
 // internal identifier for this content pillar everywhere. The founder's
@@ -30,6 +46,8 @@ import navLeaderboard from "../assets/icons/nav-leaderboard.svg";
 import navBants from "../assets/icons/nav-bants.svg";
 import navClubs from "../assets/icons/nav-clubs.svg";
 import navGrassroots from "../assets/icons/nav-grassroots.svg";
+import navScouting from "../assets/icons/nav-scouting.svg";
+import navAcademy from "../assets/icons/nav-academy.svg";
 
 export interface NavItem {
   label: string;
@@ -57,6 +75,12 @@ export const primaryNavItems: NavItem[] = [
   // stroke glyph, so the green-tint tile is applied in CSS (same as
   // Sports Hub and Clubs).
   { label: "Grassroots", to: "/grassroots", icon: navGrassroots, tinted: true },
+  // Scouting and Academy (Decision Log #284/#285) -- the navbar's last
+  // two reserved slots. Both a bare navy stroke glyph, tinted the same
+  // way as Sports Hub/Clubs/Grassroots. Both route to the same
+  // ComingSoonPage component, configured with a different feature name.
+  { label: "Scouting", to: "/scouting", icon: navScouting, tinted: true },
+  { label: "Academy", to: "/academy", icon: navAcademy, tinted: true },
 ];
 
 export interface DrawerNavItem {

@@ -72,7 +72,7 @@ beforeEach(() => {
 });
 
 describe("navigation config", () => {
-  it("is the canonical Figma icon order: Sports Hub, Blog, Community, Leaderboard, Bants, Clubs, Grassroots", () => {
+  it("is the canonical Figma icon order: Sports Hub, Blog, Community, Leaderboard, Bants, Clubs, Grassroots, Scouting, Academy", () => {
     expect(primaryNavItems.map((i) => i.label)).toEqual([
       "Sports Hub",
       "Blog",
@@ -81,9 +81,27 @@ describe("navigation config", () => {
       "Bants",
       "Clubs",
       "Grassroots",
+      "Scouting",
+      "Academy",
     ]);
     expect(primaryNavItems.find((i) => i.label === "Blog")?.to).toBe("/blog");
     expect(primaryNavItems.find((i) => i.label === "Clubs")?.to).toBe("/clubs");
+  });
+
+  it("adds Scouting and Academy as the last two desktop icon-nav items, tinted, pointing at /scouting and /academy (Decision Log #284)", () => {
+    const scouting = primaryNavItems[primaryNavItems.length - 2];
+    const academy = primaryNavItems[primaryNavItems.length - 1];
+    expect(scouting.label).toBe("Scouting");
+    expect(scouting.to).toBe("/scouting");
+    expect(scouting.tinted).toBe(true);
+    expect(academy.label).toBe("Academy");
+    expect(academy.to).toBe("/academy");
+    expect(academy.tinted).toBe(true);
+  });
+
+  it("does NOT add Scouting or Academy to the mobile drawer or account dropdown (navbar only, Decision Log #284)", () => {
+    expect(drawerNavItems.some((i) => i.label === "Scouting" || i.label === "Academy")).toBe(false);
+    expect(accountMenuItems.some((i) => i.label === "Scouting" || i.label === "Academy")).toBe(false);
   });
 
   it("labels the news/blog pillar 'Blog', never 'News' (Decision Log #165)", () => {
@@ -137,8 +155,8 @@ describe("navigation config", () => {
     expect(grassroots?.available).toBeUndefined();
   });
 
-  it("adds Grassroots as the last desktop icon-nav item, tinted, -> /grassroots (Decision Log #272)", () => {
-    const grassroots = primaryNavItems[primaryNavItems.length - 1];
+  it("adds Grassroots as a tinted desktop icon-nav item, -> /grassroots (Decision Log #272), before Scouting/Academy (Decision Log #284)", () => {
+    const grassroots = primaryNavItems[primaryNavItems.length - 3];
     expect(grassroots.label).toBe("Grassroots");
     expect(grassroots.to).toBe("/grassroots");
     expect(grassroots.tinted).toBe(true);
@@ -146,7 +164,7 @@ describe("navigation config", () => {
 });
 
 describe("Header -- logged out", () => {
-  it("renders the seven icon nav links and a Login button, no avatar", () => {
+  it("renders the nine icon nav links and a Login button, no avatar", () => {
     renderHeader();
 
     for (const item of primaryNavItems) {
