@@ -48,6 +48,10 @@ import GrassrootsRegisterTeamPage from "../pages/GrassrootsRegisterTeamPage";
 import GrassrootsScheduleFixturePage from "../pages/GrassrootsScheduleFixturePage";
 import GrassrootsFixturePage from "../pages/GrassrootsFixturePage";
 import BanterPage from "../pages/BanterPage";
+import BanterRoomPage from "../pages/BanterRoomPage";
+import MessagesPage from "../pages/MessagesPage";
+import NewConversationPage from "../pages/messages/NewConversationPage";
+import ConversationPage from "../pages/messages/ConversationPage";
 import LoginPage from "../pages/LoginPage";
 import SignupPage from "../pages/SignupPage";
 import ForgotPasswordPage from "../pages/ForgotPasswordPage";
@@ -135,6 +139,27 @@ export const routes: RouteObject[] = [
       // footer -- not in the Figma frame.
       { path: "community", element: <CommunityPage /> },
       { path: "banter", element: <BanterPage /> },
+      // Banter Room -- a single room's feed + posting (Build Plan Section
+      // 4.4, BanterModule -- Decision Log #275/#276). No Figma frame
+      // exists for this screen (the Bants frames only show the room
+      // LIST); built plain and flagged -- see BanterRoomPage.tsx's own
+      // header comment.
+      { path: "banter/:roomId", element: <BanterRoomPage /> },
+
+      // Direct Messaging (Build Plan Section 4.7, MessagingModule --
+      // sprint-3/messaging-direct-messaging, Decision Log #277). No site
+      // footer -- the Message pillar Figma frames carry none, matching
+      // Community/Clubs/Banter. `new` is a static segment and outrank the
+      // `:conversationId` param in React Router v8's specificity ranking
+      // (the same Grassroots register/fixtures precedent), so
+      // /messages/new never resolves to ConversationPage.
+      //
+      //   /messages                        inbox (GET /conversations)
+      //   /messages/new                    recipient picker (Decision Log #139)
+      //   /messages/:conversationId        one thread, send + read
+      { path: "messages", element: <MessagesPage /> },
+      { path: "messages/new", element: <NewConversationPage /> },
+      { path: "messages/:conversationId", element: <ConversationPage /> },
       // Persistent Club Pages (Build Plan Section 6 Sprint 2 "Club
       // Pages"). /clubs browses the catalogue (GET /clubs); /clubs/:id
       // is a single club's fan page (GET /clubs/:id). Both convert

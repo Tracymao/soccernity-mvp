@@ -160,6 +160,13 @@ describe("Header -- logged in (desktop)", () => {
     expect(screen.queryByRole("link", { name: "Login" })).toBeNull();
   });
 
+  it("the top-bar messages icon is a real, enabled link to /messages (Decision Log #277)", () => {
+    renderHeader();
+    const messages = screen.getByRole("link", { name: "Messages" });
+    expect(messages.getAttribute("href")).toBe("/messages");
+    expect(messages.getAttribute("aria-disabled")).toBeNull();
+  });
+
   it("opens the account dropdown (not the drawer) with Profile / Notification / Settings / Log out", () => {
     renderHeader();
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
@@ -216,8 +223,12 @@ describe("Header -- logged in (mobile)", () => {
 
     expect(within(nav).getByRole("link", { name: "Clubs" }).getAttribute("href")).toBe("/clubs");
     expect(within(nav).getByRole("link", { name: "Blog" }).getAttribute("href")).toBe("/blog");
-    // Messages / Notifications -- no route yet (Decision Log #166).
-    expect(within(nav).queryByRole("link", { name: "Messages" })).toBeNull();
+    // Messages now resolves (sprint-3/banter-messaging-to-code, Decision
+    // Log #277); Notifications still doesn't (Decision Log #166 stays
+    // half-open -- the Notification Centre design has no apps/web
+    // conversion yet).
+    expect(within(nav).getByRole("link", { name: "Messages" }).getAttribute("href")).toBe("/messages");
+    expect(within(nav).queryByRole("link", { name: "Notifications" })).toBeNull();
     // Settings resolves as of sprint-2/privacy-settings-to-code (-> /settings).
     expect(within(nav).getByRole("link", { name: "Settings" }).getAttribute("href")).toBe("/settings");
     expect(within(drawer).getByRole("button", { name: "Log out" })).not.toBeNull();

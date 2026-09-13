@@ -9,33 +9,53 @@
 // stored access token renders a "log in" prompt and never calls
 // anything.
 //
-// BACKEND STATE, confirmed live before writing this: services/api/src/
-// modules/banter/README.md is a placeholder only ("Sprint 3... Not yet
-// implemented") -- there is no room list, post, or search endpoint. The
-// room list, trending topics, fixtures and suggested-follows below are
-// all illustrative dummy content (see ./banter/banterData.ts), the same
-// discipline CommunityPage.tsx applies to its own unbacked side rails.
-// The ONE real piece of data is the caller's own profile card (name),
-// fetched via GET /users/:id the same way CommunityPage.tsx's composer
-// does.
+// UPDATED (sprint-3/banter-messaging-to-code): the room list is now REAL.
+// BanterModule is merged in services/api (sprint-3/banter-rooms-backend;
+// Decision Log #275/#276) -- api/banter.ts hits GET /banter-rooms,
+// GET /banter-rooms/search, GET /banter-rooms/mine, POST /banter-rooms,
+// POST/DELETE /banter-rooms/:id/join. Clicking a room goes to
+// /banter/:roomId (BanterRoomPage.tsx) -- the room feed + posting, which
+// has no dedicated Figma frame (flagged there, built plain, same
+// precedent as ClubFanPage/EditProfileModal's "no screen exists, built
+// plain" convention).
 //
-// The search box filters the dummy room list client-side only -- there
-// is no search endpoint to call (Decision Log matches the "Bants - search
-// result" frame's own "Result showing for X" pattern, reproduced with
-// real client-side matching against illustrative data rather than a real
-// query). A category filter (All / My Bants) is included per the mobile
-// categories-view already built in Figma (Decision Log #144) -- "My
-// Bants" has no membership data to filter by (no live room-membership
-// endpoint), so it renders the same illustrative list with a disclosure
-// note rather than fabricating a membership computation.
-import { useEffect, useState } from "react";
-import { Link } from "react-router";
+// STILL DUMMY DATA (unchanged, no endpoint exists for any of this): the
+// caller's own profile card is the one real piece in the left rail (name
+// via GET /users/:id, unchanged); Trending News, Fixtures (Decision Log
+// #6) and Suggested are all illustrative sample content -- see
+// ./banter/banterData.ts's own header comment.
+//
+// SEARCH: "All" rooms uses the REAL server-side ?q= filter
+// (GET /banter-rooms, debounced 300ms -- GrassrootsPage's own city-filter
+// precedent), since a real search endpoint now exists. "My Bants" has no
+// server-side q param (GET /banter-rooms/mine takes none) -- that tab
+// filters the already-loaded "mine" page client-side instead, the same
+// judgment call ClubsPage.tsx makes for its own client-side name filter.
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router";
+import {
+  listRooms,
+  getMyRooms,
+  createRoom,
+  BanterApiError,
+  type BanterRoom,
+  type BanterRoomScopeType,
+} from "../api/banter";
 import { getUser, type UserProfile } from "../api/users";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
-import { ROOMS, TRENDS, FIXTURES, SUGGESTED } from "./banter/banterData";
+import BanterJoinButton from "./banter/BanterJoinButton";
+import { TRENDS, FIXTURES, SUGGESTED } from "./banter/banterData";
 import "./banter/BanterPage.css";
 
+type LoadState = "loading" | "loaded" | "error" | "no-session";
 type Category = "all" | "mine";
+
+const SCOPE_OPTIONS: { value: BanterRoomScopeType; label: string }[] = [
+  { value: "club", label: "Club" },
+  { value: "league", label: "League" },
+  { value: "country", label: "Country" },
+  { value: "topic", label: "Topic" },
+];
 
 function initialsFor(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -44,13 +64,31 @@ function initialsFor(name: string): string {
   return `${parts[0][0] ?? ""}${parts[parts.length - 1][0] ?? ""}`.toUpperCase();
 }
 
+function scopeLabel(scopeType: BanterRoomScopeType): string {
+  return SCOPE_OPTIONS.find((o) => o.value === scopeType)?.label ?? scopeType;
+}
+
 export default function BanterPage() {
   const token = getStoredAccessToken();
   const decoded = token ? decodeAccessToken(token) : null;
+  const navigate = useNavigate();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [query, setQuery] = useState("");
   const [category, setCategory] = useState<Category>("all");
+  const [queryInput, setQueryInput] = useState("");
+  const [activeQuery, setActiveQuery] = useState("");
+
+  const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [rooms, setRooms] = useState<BanterRoom[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createName, setCreateName] = useState("");
+  const [createScope, setCreateScope] = useState<BanterRoomScopeType>("topic");
+  const [createPending, setCreatePending] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token || !decoded) return;
@@ -67,6 +105,93 @@ export default function BanterPage() {
     };
   }, [token, decoded?.sub]);
 
+  const load = useCallback(
+    async (cat: Category, q: string) => {
+      if (!token) {
+        setLoadState("no-session");
+        return;
+      }
+      setLoadState("loading");
+      try {
+        const trimmed = q.trim();
+        const page =
+          cat === "mine" ? await getMyRooms(token) : await listRooms(token, trimmed ? { q: trimmed } : undefined);
+        setRooms(page.items);
+        setCursor(page.nextCursor);
+        setActiveQuery(trimmed);
+        setLoadState("loaded");
+      } catch {
+        setLoadState("error");
+      }
+    },
+    [token],
+  );
+
+  // Switching category always starts a fresh, unfiltered fetch for that
+  // category -- selectCategory() (below) clears queryInput at the same
+  // time, so this and the debounce effect never race.
+  useEffect(() => {
+    load(category, "");
+  }, [category, token, load]);
+
+  // Debounced re-query as the search box is typed, "All" only (a real
+  // server round trip -- GrassrootsPage's own city-filter precedent).
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!token || category !== "all") return;
+    if (queryInput.trim() === activeQuery) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => load("all", queryInput), 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [queryInput, activeQuery, category, token, load]);
+
+  function selectCategory(next: Category) {
+    if (next === category) return;
+    setCategory(next);
+    setQueryInput("");
+  }
+
+  async function loadMore() {
+    if (!token || !cursor || loadingMore) return;
+    setLoadingMore(true);
+    setLoadMoreError(null);
+    try {
+      const page =
+        category === "mine"
+          ? await getMyRooms(token, cursor)
+          : await listRooms(token, { cursor, ...(activeQuery ? { q: activeQuery } : {}) });
+      setRooms((prev) => [...prev, ...page.items]);
+      setCursor(page.nextCursor);
+    } catch (err) {
+      setLoadMoreError(err instanceof BanterApiError ? err.message : "Couldn't load more rooms.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  function applyToggle(roomId: string, next: { joined: boolean; memberCount: number }) {
+    setRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, joined: next.joined, memberCount: next.memberCount } : r)));
+  }
+
+  async function handleCreate(e: FormEvent) {
+    e.preventDefault();
+    if (!token || createPending) return;
+    const name = createName.trim();
+    if (!name) return;
+    setCreatePending(true);
+    setCreateError(null);
+    try {
+      const room = await createRoom(token, { name, scopeType: createScope });
+      navigate(`/banter/${room.id}`);
+    } catch (err) {
+      setCreateError(err instanceof BanterApiError ? err.message : "Couldn't create that room.");
+    } finally {
+      setCreatePending(false);
+    }
+  }
+
   if (!token || !decoded) {
     return (
       <div className="banter-status" role="status">
@@ -75,8 +200,10 @@ export default function BanterPage() {
     );
   }
 
-  const term = query.trim().toLowerCase();
-  const visibleRooms = term ? ROOMS.filter((r) => r.name.toLowerCase().includes(term)) : ROOMS;
+  const term = queryInput.trim().toLowerCase();
+  // "All" rooms are already server-filtered by activeQuery; "My Bants"
+  // has no server-side q param, so it's filtered client-side here.
+  const visibleRooms = category === "mine" && term ? rooms.filter((r) => r.name.toLowerCase().includes(term)) : rooms;
   const displayName = profile?.displayName ?? "You";
 
   return (
@@ -122,11 +249,59 @@ export default function BanterPage() {
           <p className="banter-hero__lede">
             Have fun, create and engage in conversations around your favourite teams, events and players.
           </p>
-          <button type="button" className="banter-hero__cta" disabled>
-            Create a room
-          </button>
-          <p className="banter-hero__note">Room creation isn&rsquo;t wired up yet — Sprint 3 backend scope.</p>
+          {!createOpen && (
+            <button type="button" className="banter-hero__cta" onClick={() => setCreateOpen(true)}>
+              Create a room
+            </button>
+          )}
         </div>
+
+        {createOpen && (
+          <form className="banter-create" onSubmit={handleCreate}>
+            <label className="banter-create__field">
+              Room name
+              <input
+                type="text"
+                value={createName}
+                onChange={(e) => setCreateName(e.target.value)}
+                placeholder="e.g. Chelsea vs Arsenal — Matchday Chat"
+                minLength={2}
+                maxLength={120}
+                required
+              />
+            </label>
+            <label className="banter-create__field">
+              Scope
+              <select value={createScope} onChange={(e) => setCreateScope(e.target.value as BanterRoomScopeType)}>
+                {SCOPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="banter-create__actions">
+              <button type="submit" className="banter-create__submit" disabled={createPending || !createName.trim()}>
+                {createPending ? "Creating…" : "Create room"}
+              </button>
+              <button
+                type="button"
+                className="banter-create__cancel"
+                onClick={() => {
+                  setCreateOpen(false);
+                  setCreateError(null);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+            {createError && (
+              <p className="banter-create__error" role="alert">
+                {createError}
+              </p>
+            )}
+          </form>
+        )}
 
         <div className="banter-search">
           <span className="banter-search__icon" aria-hidden="true">
@@ -135,16 +310,16 @@ export default function BanterPage() {
           <input
             type="search"
             className="banter-search__input"
-            placeholder="Search club, league, country, etc."
-            aria-label="Search Bants rooms"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            placeholder={category === "mine" ? "Filter your rooms by name" : "Search rooms by name"}
+            aria-label={category === "mine" ? "Filter your rooms by name" : "Search rooms by name"}
+            value={queryInput}
+            onChange={(e) => setQueryInput(e.target.value)}
           />
         </div>
 
         {term && (
           <p className="banter-search-result">
-            Result showing for &ldquo;{query}&rdquo; ({visibleRooms.length})
+            Result showing for &ldquo;{queryInput}&rdquo; ({visibleRooms.length})
           </p>
         )}
 
@@ -154,7 +329,7 @@ export default function BanterPage() {
             role="tab"
             aria-selected={category === "all"}
             className={category === "all" ? "banter-category banter-category--active" : "banter-category"}
-            onClick={() => setCategory("all")}
+            onClick={() => selectCategory("all")}
           >
             All
           </button>
@@ -163,34 +338,66 @@ export default function BanterPage() {
             role="tab"
             aria-selected={category === "mine"}
             className={category === "mine" ? "banter-category banter-category--active" : "banter-category"}
-            onClick={() => setCategory("mine")}
+            onClick={() => selectCategory("mine")}
           >
             My Bants
           </button>
         </div>
 
-        {category === "mine" && (
+        {loadState === "loading" && (
           <p className="banter-status banter-status--inline" role="status">
-            Room membership isn&rsquo;t tracked yet — showing all rooms.
+            Loading rooms…
           </p>
         )}
 
-        <ul className="banter-room-list">
-          {visibleRooms.length === 0 && <li className="banter-empty">No rooms match that search.</li>}
-          {visibleRooms.map((room) => (
-            <li key={room.id} className="banter-room">
-              <span className="banter-room__avatar" aria-hidden="true">
-                {initialsFor(room.name)}
-              </span>
-              <span className="banter-room__text">
-                <span className="banter-room__name">{room.name}</span>
-                <span className="banter-room__meta">
-                  {room.scope} &middot; {room.memberCount.toLocaleString("en-GB")} members
-                </span>
-              </span>
-            </li>
-          ))}
-        </ul>
+        {loadState === "error" && (
+          <p className="banter-status banter-status--inline" role="alert">
+            Couldn&rsquo;t load rooms. Please try again shortly.
+          </p>
+        )}
+
+        {loadState === "loaded" && (
+          <ul className="banter-room-list">
+            {visibleRooms.length === 0 && (
+              <li className="banter-empty">
+                {category === "mine" ? "You haven't joined any rooms yet." : "No rooms match that search."}
+              </li>
+            )}
+            {visibleRooms.map((room) => (
+              <li key={room.id} className="banter-room">
+                <Link to={`/banter/${room.id}`} className="banter-room__link">
+                  <span className="banter-room__avatar" aria-hidden="true">
+                    {initialsFor(room.name)}
+                  </span>
+                  <span className="banter-room__text">
+                    <span className="banter-room__name">{room.name}</span>
+                    <span className="banter-room__meta">
+                      {scopeLabel(room.scopeType)} &middot; {room.memberCount.toLocaleString("en-GB")} members
+                    </span>
+                  </span>
+                </Link>
+                <BanterJoinButton
+                  accessToken={token}
+                  roomId={room.id}
+                  joined={room.joined}
+                  onToggled={(next) => applyToggle(room.id, next)}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {cursor && loadState === "loaded" && (
+          <button type="button" className="banter-load-more" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? "Loading…" : "Load more"}
+          </button>
+        )}
+
+        {loadMoreError && (
+          <p className="banter-status banter-status--inline" role="alert">
+            {loadMoreError}
+          </p>
+        )}
       </div>
 
       <div className="banter__right">

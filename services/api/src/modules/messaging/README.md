@@ -149,15 +149,22 @@ has `displayName: null` and `lastMessage: null`. Acceptable for MVP; a
 cleanup pass over orphaned `Conversation` rows is a possible follow-up.
 `GET /conversations` handles it gracefully (never throws).
 
-## No `Notification` on message send
+## `Notification` on message send — wired, and now cleared on read
 
-There is no `message` type in `Notification.type` (`follow | comment |
-like | reply | system`), and message-send isn't on the established
-follow/like/comment trigger list (`sprint-2/follow-and-notifications`).
-A DM thread has its own unread mechanism (`unreadCount` / `readAt`).
-Wiring message → `Notification` is a candidate for the Sprint 3
-Notification Centre PR. No engagement points either (DMs are private and
-rewarding them would be trivially gameable).
+**Updated by `sprint-3/notification-triggers-message-fixture-contest`
+(DL #278) and `sprint-3/banter-messaging-to-code` (this PR) — the two
+paragraphs this section used to have are both stale, corrected in
+place.** `sendMessage` (above) now writes a `type: 'message'`
+`Notification` for the other participant, collapsed to one unread row
+per conversation rather than one per message. `markConversationRead`
+(above) now also clears that same Notification when the recipient opens
+the thread — the frontend has no dedicated notifications endpoint to do
+this itself (`notifications/README.md` is still a placeholder), so this
+is the only place in the whole codebase that can mark a `message`
+Notification read. A DM thread's own unread mechanism (`unreadCount` /
+`readAt`) is unaffected — the two are independent facts about the same
+action, not one derived from the other. No engagement points on message
+send (DMs are private and rewarding them would be trivially gameable).
 
 ## Not built (flagged)
 
@@ -165,16 +172,22 @@ rewarding them would be trivially gameable).
   Section 4.7; the client gets conversation metadata from the list or the
   `POST` response. Trivial to add if a screen needs it.
 - **Group conversations** (DL #277(b)).
-- **`message` → `Notification` wiring** (Notification Centre PR).
 - **Orphaned-`Conversation` cleanup** on user hard-delete.
 
 ## Tests
 
-- **Mocked unit** (`src/modules/messaging/*.spec.ts`, 30 tests) — DTO
-  validation, guard wiring (consent guard on exactly the two write
+- **Mocked unit** (`src/modules/messaging/*.spec.ts`, **34** tests, up
+  from the 30 recorded when this file was first written — `sprint-3/
+  notification-triggers-message-fixture-contest` added 3 for the
+  message-Notification-creation branch and never updated this count;
+  `sprint-3/banter-messaging-to-code` adds 1 more for the read-clearing
+  fix and corrects the number here rather than letting it drift again)
+  — DTO validation, guard wiring (consent guard on exactly the two write
   routes), the 201/200 split, the `P2002` find-or-create path, cursor
   filters, `toConversationViews` batching, all four
-  restricted-pending/deactivated recipient branches.
+  restricted-pending/deactivated recipient branches, the message
+  Notification create/collapse/no-self-notify branches, and
+  `markConversationRead` clearing that same Notification.
 - **Real Postgres e2e** (`test/messaging.e2e-spec.ts`, 14 tests) — the
   `participantKey @unique` constraint (find-or-create returns the same
   row from either direction; two concurrent starts → exactly one row);

@@ -271,9 +271,11 @@ export class MessagingService {
   // recipient doesn't already have an UNREAD Notification for
   // type: 'message' + payloadRefId: conversationId -- i.e. one "you have
   // unread messages here" entry per conversation, not per message.
-  // Nothing currently marks these read when the conversation itself is
-  // read (markConversationRead only touches Message.readAt) -- a real,
-  // flagged gap, not fixed here; see messaging/README.md.
+  // markConversationRead (below) now clears this same Notification when
+  // the recipient opens the thread -- see its own comment for why this
+  // was fixed there rather than via a dedicated notifications endpoint
+  // (sprint-3/banter-messaging-to-code, closing the gap this comment used
+  // to flag; see messaging/README.md).
   //
   // No engagement points (private, and rewarding private messages would
   // be trivially gameable).
@@ -324,8 +326,24 @@ export class MessagingService {
   // The UX operation is "I opened the thread"; per-message read isn't
   // needed for MVP and Message.readAt is a single timestamp (only
   // coherent for 2 parties). Mirrors PATCH /notifications/read-all
-  // (Section 4.7). Idempotent — a second call marks 0. One statement, no
-  // transaction needed. Not content creation, so JwtAuthGuard only.
+  // (Section 4.7). Idempotent — a second call marks 0. Not content
+  // creation, so JwtAuthGuard only.
+  //
+  // ALSO clears the collapsed 'message' Notification (sprint-3/
+  // banter-messaging-to-code, closing the gap sendMessage's own comment
+  // above flagged): the frontend has no notifications endpoint to call
+  // at all (notifications/README.md is still a bare placeholder), so
+  // this is the only real place that can ever mark that Notification
+  // read — there is no separate PATCH /notifications/:id/read a client
+  // could hit instead. Scoped to `userId: callerId` (never the other
+  // participant's own unrelated Notification row) + the exact
+  // type/payloadRefId sendMessage writes. Two independent updateMany
+  // calls, not one $transaction: unlike likeCount/commentCount this
+  // isn't a cache that can drift out of sync with a source-of-truth row
+  // — Message.readAt and Notification.read are two separate,
+  // independently-idempotent facts about the same real-world action, and
+  // either succeeding without the other is harmless (the reader can
+  // reopen the thread, or the Notification is stale-but-inert).
   async markConversationRead(
     conversationId: string,
     callerId: string,
@@ -335,6 +353,16 @@ export class MessagingService {
     const result = await this.prisma.message.updateMany({
       where: { conversationId, senderId: { not: callerId }, readAt: null },
       data: { readAt: new Date() },
+    });
+
+    await this.prisma.notification.updateMany({
+      where: {
+        userId: callerId,
+        type: 'message',
+        payloadRefId: conversationId,
+        read: false,
+      },
+      data: { read: true },
     });
 
     return { conversationId, markedRead: result.count };
