@@ -8917,6 +8917,56 @@ real, still-open follow-up, not done by this entry.
     available in this environment — same verification ceiling as every
     prior `apps/web` figma-to-code PR.
   - Not merged — founder's call after review.
+- **`figma-design-system/nav-drawer-profile-entry-point` (figma-design-system,
+  2026-09-13) removes the standalone `Nav — Profile` row from
+  `Navigation Drawer — Mobile` (`5870:10689`) and makes the "Signed in
+  as" identity block the profile entry point itself. Figma design only,
+  no app/backend code. Decision Log #287.** Founder decision: reclaim a
+  row in the mobile drawer by folding Profile navigation into the
+  existing "Signed in as" block — the same "reclaim space" reasoning as
+  the earlier Home-row removal (Decision Log #231).
+  - **`Nav — Profile` (`5870:10725`) deleted.** `Panel` (`5870:10692`)
+    is genuine `VERTICAL` auto-layout (`itemSpacing: 4`,
+    `primaryAxisSizingMode: FIXED`, height 844), so every row below
+    reflowed upward by 48px automatically — Community 188→140 through
+    Log out 735→687 — with zero manual repositioning. Panel child count
+    19→18.
+  - **A premise in this task's own brief was checked and found
+    inaccurate, not trusted**: it described every other row in this
+    drawer as already carrying per-instance NAVIGATE reactions (the
+    Decision Log #249 convention). Live inspection of both the master
+    component and its one live instance (`5874:10690`, inside
+    `Community — Home Feed (Navigation Drawer Open) — Mobile`) found
+    **zero reactions on every nav row** — Profile, Community, Clubs,
+    Grassroots, Groups, Settings, Log out all carried `reactions: []`.
+    That per-instance-override convention is real, but lives on a
+    different component family (the desktop Settings Shell / account
+    dropdown / Navbar avatar, Decision Log #100/#101/#249) — not this
+    drawer, whose rows are visual-only in Figma with real routing
+    implemented in `apps/web` code.
+  - **Also found**: the old "Profile 1" node id (`1455:4362`) cited
+    elsewhere in this project's own history has since been renamed to
+    "User's post feed" and is no longer a top-level Profile screen —
+    the real mobile Profile destination is `Community — Profile —
+    Mobile` (`5702:8250`).
+  - **Given no existing per-row wiring to match**, an `ON_CLICK →
+    NAVIGATE` reaction targeting `5702:8250` was added as a fresh,
+    disclosed instance override on the one live instance's "Signed in
+    as" node (`I5874:10690;5870:10697`) — confirmed persisted via a
+    fresh read after the write. **Flagged, not silently absorbed**:
+    because NAVIGATE reactions cannot be set on a `COMPONENT`'s own
+    descendants (the same Decision Log #249 limitation), this wiring
+    lives only on the one existing instance — any future new instance
+    of this drawer master will need the identical override reapplied by
+    hand, the same limitation already documented for the desktop
+    avatar→dropdown wiring (Decision Log #100/#101).
+  - **Desktop account dropdown untouched** — it has no equivalent
+    "Signed in as" block to fold Profile into, so Profile stays its own
+    row there. Every other row's order in this drawer left exactly as
+    the founder had already rearranged it.
+  - **Verified** via a screenshot of the full drawer instance: clean
+    reflow, no gaps, no overlaps.
+  - Not merged — founder's call after review.
 
 ## The eight agents, and the order they run in
 
