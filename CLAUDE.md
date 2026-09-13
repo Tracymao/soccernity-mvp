@@ -9013,6 +9013,57 @@ real, still-open follow-up, not done by this entry.
     build` clean production bundle; dev-server smoke test on
     `/community` and `/profile`, both real HTTP 200.
   - Not merged — founder's call after review.
+- **`figma-design-system/community-groups-navbar-swap` (figma-design-system,
+  2026-09-13) swaps Community Groups' provisional chrome for the real Navbar,
+  now that Decision Log #282 has resolved the feature's nav placement (account
+  dropdown/drawer, no navbar icon) — the reason Decision Log #281 used a
+  logo-only placeholder in the first place. Figma design only, no app/backend
+  code. Decision Log #289.**
+  - **All 12 Community Groups frames** (Browse, Browse – No Groups Match
+    Filter, Browse – No Groups Yet for This City, Group Page – Not Joined,
+    Group Page – Joined, Create a Group, each desktop + mobile) had their
+    provisional `Top Bar — Soccernity` frame (logo-only, 1440×90 desktop /
+    390×64 mobile) deleted and replaced with a real instance of the current
+    `Web app Navbar` COMPONENT_SET (`2824:4309`): `header 4` (`2838:3502`,
+    1440×90) on desktop, `header 4 — mobile` (`5386:6576`, natively 428×64,
+    resized to 390×64 matching the `sprint-3/coming-soon-scouting-academy-to-code`
+    precedent) on mobile.
+  - **Logged-in variant only on all 12, not a Logged-In/Logged-Out split —
+    a disclosed judgment call, not silently decided.** Community Groups' own
+    Design Notes state the restricted-pending-minor precedent applies
+    (implying `JwtAuthGuard`-only, login-required), matching Clubs/Grassroots,
+    neither of which got a Logged-Out variant either. A 24-frame Logged-Out
+    split is a flagged follow-up if wanted, not built here. The real Navbar
+    carries all 9 nav icons (Sports Hub, Blog, Community, Leaderboard, Bants,
+    Clubs, Grassroots, Scouting, Academy — post-#272/#284/#286) and confirms
+    zero Groups icon belongs there, consistent with #282.
+  - **Height match verified, not assumed**: the provisional Top Bar and the
+    real Navbar are identically 90px (desktop) / 64px (mobile) tall on every
+    one of the 12 frames — confirmed via metadata before any write, then
+    re-confirmed after the swap via a node-by-node bounding-box check on all
+    12 frames (zero overlap between Navbar and Content Column/Content on
+    every one, exactly 2 children per frame post-swap, no orphan nodes left
+    behind). **No manual repositioning of any frame's content was needed or
+    performed.**
+  - **The avatar-opens-account-dropdown wiring (Decision Log #100/#101) was
+    deliberately NOT added to any of the 12 new instances** — consistent
+    with file-wide norm (only 2 of ~95+ `header 4`/`header 4 — mobile`
+    instances file-wide carry that per-instance override; every other
+    instance, including these 12, shows the avatar without click-to-dropdown
+    behavior). Not a new gap this PR introduced.
+  - **Visually verified via screenshots on all 12 frames**: clean render, no
+    clipping or overlap on the search bar, filter controls, both empty
+    states, the group identity block, feed, member roster, or Create a Group
+    form on any frame.
+  - **Grassroots and Banter Rooms checked in passing, per this task's own
+    instruction, and found NOT to still be using the provisional pattern** —
+    Grassroots' own Figma frames already reused the real `header 4`/
+    `header 4 — mobile` Navbar from the start (per its own PR report);
+    nothing to flag there. Neither feature was touched by this PR.
+  - The Navbar component itself, Grassroots, Banter, and all Community
+    Groups content below the chrome (Group Grid, Filter Bar, Group Feed,
+    Members roster, Create-a-Group form) were left untouched.
+  - PR opened, not merged — founder's call after review.
 
 ## The eight agents, and the order they run in
 
