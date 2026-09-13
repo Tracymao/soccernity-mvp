@@ -16,6 +16,11 @@
 //   - `profile` is null while Header's fetch is in flight, and stays null
 //     if that fetch fails -- either way this falls back to the generic
 //     "Signed in" row, so the drawer's navigation always works.
+//   - DECISION LOG #287/#288: the identity block IS the profile entry
+//     point -- there is no separate "Nav -- Profile" row anymore. Wrapped
+//     in a NavLink to /profile, same onClick={onClose} convention every
+//     other drawer row uses, whether the fetch succeeded, is pending, or
+//     failed.
 //
 // Messages / Notifications / Settings have no route in src/app/router.tsx
 // yet (Decision Log #166) -- rendered non-navigating and visibly
@@ -71,7 +76,7 @@ export default function NavDrawer({ onClose, onLogout, profile }: NavDrawerProps
           <span className="sn-drawer__wordmark">Soccernity</span>
         </div>
 
-        <div className="sn-drawer__identity">
+        <NavLink to="/profile" className="sn-drawer__identity" onClick={onClose}>
           {profile ? (
             <>
               <span className="sn-drawer__avatar" aria-hidden="true">
@@ -85,7 +90,7 @@ export default function NavDrawer({ onClose, onLogout, profile }: NavDrawerProps
               <span className="sn-drawer__signed-in">Signed in</span>
             </>
           )}
-        </div>
+        </NavLink>
 
         <nav className="sn-drawer__nav" aria-label="Primary">
           {drawerNavItems.map((item) =>
