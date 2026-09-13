@@ -8595,6 +8595,77 @@ real, still-open follow-up, not done by this entry.
     200, clean log. No real browser/Playwright check available — same
     ceiling as every prior `apps/web` PR.
   - Not merged — founder's call after review.
+- **`sprint-3/community-groups-design` (figma-screen-builder, 2026-09-13)
+  designs Community Groups (Sprint 3, Decision Log #1) — the first Figma
+  screens this feature has ever had. Figma design only, no app/backend
+  code; no schema exists yet either (a future `backend-api` pass builds
+  it from this design, same as Grassroots' own precedent). Decision Log
+  #281; forward-pointer appended to #1 and to Section 6's Sprint 3 task
+  text.** Report: `docs/sprint-3-community-groups-design-report.md`.
+  - **13 new frames + a Design Notes frame**, parked at `y ≥ 37500` on
+    page `0:1` (verified 0 overlaps against every existing top-level
+    node): Browse (D `6450:18580` / M `6455:18580`), Browse — No Groups
+    Match Filter (`6452:18580` / `6456:18580`), Browse — No Groups Yet
+    for This City (`6452:18692` / `6456:18667`), Group Page — Not Joined
+    (`6453:18580` / `6457:18580`), Group Page — Joined (`6454:18580` /
+    `6458:18580`), Create a Group (`6454:18709` / `6458:18701`), Design
+    Notes (`6459:18580`). **Confirmed no Community Groups frame existed
+    anywhere in the file before this task** (a depth-first name search
+    turned up only the DL #1 annotation note itself, `5116:6659`).
+  - **Grouping dimensions: City, Position Played, Career Track** — the
+    exact three the founder named resolving DL #1. "Fantasy league"
+    (named in Log Book Section 6.1's original description) was
+    deliberately **not** added as a 4th dimension — flagged instead as
+    a real open question, since it's time-boxed with its own standings
+    and reads closer to the Contest/Competition pillar than to a
+    durable-attribute interest group.
+  - **Visually distinct from both neighbouring features, by design, not
+    assumption**: Banter Rooms browses as a full-width room-list with
+    `Filter Tabs (All/My Bants)` and forum language — untouched, not
+    opened for edit. The existing Community main feed (`1306:7148`/
+    `7149`, DL #152) is a single authenticated feed with a composer and
+    suggestion rails — also untouched. Community Groups is instead a
+    3-across card-grid directory with a combinable City/Position/
+    Career-Track filter bar (modelled on Leaderboard's own combinable-
+    filter pattern) and has **no composer anywhere, even on a joined
+    group's own page**. Browse cards carry no Join button (unlike Clubs
+    — Browse) — membership lives only on the group page itself.
+  - **Reused, not rebuilt**: the logo-only `Top Bar — Soccernity` (same
+    provisional chrome Clubs — Browse used before DL #156), Club — Fan
+    Page's header+feed+roster layout pattern for the individual group
+    page (with the roster's `@handle` line deliberately **removed** —
+    no `User.username` column exists, DL #58 — rather than reproducing
+    an unbacked field), and Leaderboard's combinable-filter-bar pattern.
+  - **Paint audit: 854 authored paints, 854 bound, 0 unbound, 0
+    off-palette, 0 `brand/green-tint-28`, 0 new colours** — a genuine 0
+    with no disclosed reused-component-debt exception (avoided by using
+    the logo-only Top Bar instead of the shared `header 4` navbar, which
+    would have pulled in that navbar's own known avatar `IMAGE`-fill
+    debt).
+  - **Restricted-pending minors**: applied the existing platform default
+    (browse/read `JwtAuthGuard`-only; create/join/post would need
+    `GuardianConsentGuard`) per DL #21/#275/Section 5.7 — stated as
+    applying existing precedent, not a new rule.
+  - **No group post composer designed**, even in the Joined state —
+    mirrors Club — Fan Page's own no-composer state (DL #157, no scoped
+    post-creation endpoint exists for this feature either).
+  - **Five judgment calls flagged, none silently decided** (all on the
+    Design Notes frame and in the report): who may create a group (open
+    to any consent-confirmed user in the design, but the unbounded-
+    user-named-public-groups spam/safeguarding surface — same category
+    already flagged for Banter Room creation, DL #275 — is named as a
+    real concern); content moderation (ordinary post moderation assumed
+    for posts, but group **names** are a genuinely new, uncovered
+    surface); group size limits (none designed); the fantasy-league
+    4th-dimension question above; and **navigation placement — left
+    fully open, not designed here**. There is no existing nav home (the
+    current 7-icon desktop nav + drawer have Community and Bants but
+    nothing for this); nesting under either would directly contradict
+    the founder's own DL #1 ruling that these are distinct features, so
+    a new top-level nav entry is this design's own inclination but
+    **not** a decision — the same explicit founder-call treatment
+    Grassroots' own nav placement got (DL #258).
+  - Not merged — founder's call after review.
 
 ## The eight agents, and the order they run in
 
