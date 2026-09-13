@@ -8750,6 +8750,62 @@ real, still-open follow-up, not done by this entry.
     `/clubs`, `/grassroots` all HTTP 200, clean log — `/groups` itself
     was not requested since no route was added for it, by design.
   - Not merged — founder's call after review.
+- **`sprint-3/navbar-scouting-academy-icons` (figma-design-system,
+  2026-09-13) builds the Scouting and Academy icons on the shared desktop
+  navbar — the two slots the standing nav policy (Decision Log #282)
+  explicitly reserved as exceptions to "the navbar is closed to new
+  features." Figma design only, no app/backend code. Decision Log #284.**
+  Report: `docs/sprint-3-navbar-scouting-academy-icons-report.md`.
+  - **Verified live before any edit, per the task's own instruction not to
+    assume the DL #272 Grassroots precedent transfers**: `Frame 5858` (the
+    icon row) is genuine `HORIZONTAL` auto-layout (`HUG`×`HUG`,
+    `itemSpacing: 30`) on both live variants, `header 4` (`2838:3502`) and
+    `header 7` (`2841:4104`) — confirmed via `layoutMode`/
+    `primaryAxisSizingMode` directly. **The two variants are protected
+    from overflow by two different mechanisms, checked separately**:
+    `header 4`'s root is `primaryAxisAlignItems: SPACE_BETWEEN` against a
+    fixed 1440px width, pinning the `AUTO`-positioned avatar cluster
+    (`Frame 5880`) to the right as the row's gap shrinks; `header 7`'s
+    Login button (`Frame 5805`) is `layoutPositioning: ABSOLUTE`, fully
+    decoupled from the row's flow.
+  - **Two new tinted-style icons** (31×31 `brand/green-tint` @12% tile +
+    24×24 `brand/navy`-stroke glyph — matching Clubs (DL #159) and
+    Grassroots (DL #272), not the five baked-in-artwork icons): **Scouting**
+    (binoculars) and **Academy** (graduation cap with tassel). Built via
+    `figma.createNodeFromSvg` (the DL #159 Apple-mark precedent), every
+    descendant vector re-bound to `VariableID:5096:4`/`5096:5` rather than
+    left as literal SVG colour. Appended last, after `grassroots`, on both
+    `Frame 5858` instances (`2838:3517` / `2841:4115`). Order now: Sports
+    Hub · Blog · Community · Leaderboard · Bants · Clubs · Grassroots ·
+    **Scouting** · **Academy**.
+  - **Growth and clearance, re-measured after building, not predicted and
+    left unchecked**: row 444.41px → 566.41px on both variants; clearance
+    to the avatar cluster (`header 4`) 309.3px → 187.3px, to the Login
+    button (`header 7`) ~290px → 168.0px — both confirmed clean via
+    full-navbar screenshots, no overlap, no clipping.
+  - **Propagation verified** across all 8 live `header 7` instances and a
+    diverse 7-frame sample of the 95 live `header 4` instances (Settings,
+    Create Post, Leaderboard, Contest, Grassroots, Sports Page, Homepage,
+    Blog, Article Detail, the 3 Legal pages) — all show both icons
+    correctly, identical 566.41px row width. One instance inside the
+    already-archived, hidden `ARCHIVED — Blog Page Desktop (superseded by
+    ...)` frame did not update — confirmed pre-existing, out-of-scope
+    archived content, not a propagation gap. Zero stray top-level nodes
+    left on the page after construction.
+  - **Explicitly not done**: no Coming Soon destination screen (that's
+    `figma-screen-builder`'s separate, parallel task — neither icon has
+    prototype `NAVIGATE` wiring yet); the mobile Navigation Drawer and
+    both account dropdown components untouched (Scouting/Academy are
+    navbar-only, unlike Community Groups, DL #282); no Discover- or
+    Careers-pillar schema/backend/code touched — non-negotiable #4 and
+    Decision Log #3 (Phase 2, not MVP-blocking) stand unchanged.
+  - **Standing policy confirmed in writing**: the 9-icon `Web app Navbar`
+    COMPONENT_SET is now fully populated and closed to further additions
+    by default. Scouting and Academy were its last two reserved slots. Any
+    future pillar or account-adjacent feature defaults to the account
+    dropdown/drawer (the Community Groups precedent, DL #282), not the
+    navbar.
+  - Not merged — founder's call after review.
 
 ## The eight agents, and the order they run in
 
