@@ -168,6 +168,7 @@
 }
 
 .sn-header__avatar {
+  position: relative;
   width: 31px;
   height: 31px;
   padding: 0;
@@ -180,4 +181,20 @@
 .sn-header__avatar:focus-visible {
   outline: 2px solid var(--sn-brand-green);
   outline-offset: 2px;
+}
+
+/* "Has Unread" indicator (Figma Avatar component, Decision Log #99/#103).
+ * Substitutes brand/green for the Figma-bound semantic/alert -- that
+ * token isn't exposed to apps/web (packages/shared/src/tokens has no
+ * semantic-alert entry), the same substitution the Grassroots LIVE
+ * indicator already made rather than hardcoding a new colour. */
+.sn-header__avatar-dot {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background-color: var(--sn-brand-green);
+  border: 1.5px solid var(--sn-background-surface);
 }

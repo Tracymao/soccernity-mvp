@@ -4,12 +4,13 @@
 // 2841:5363, "Soccernity-MVP" file weZWWqggy9j13eX8bhFgs6): Profile,
 // Notification, Settings, Log out.
 //
-// - Notification and Settings have no route in src/app/router.tsx yet
-//   (Decision Log #166) -- rendered non-navigating and visibly disabled
-//   rather than as links to the 404 page.
-// - The Figma "Notification" row shows an unread-count badge; no
-//   unread-count source exists in this codebase, so it renders without a
-//   number (Decision Log #167).
+// - Settings has no route in src/app/router.tsx yet (Decision Log #166)
+//   -- rendered non-navigating and visibly disabled rather than as a link
+//   to the 404 page.
+// - The Figma "Notification" row's unread-count badge is now real
+//   (sprint-3/notification-centre-to-code, Decision Log #291) -- `Header`
+//   fetches it (GET /notifications/unread-count) and passes it down here,
+//   the same way it already passes `profile` to NavDrawer.
 import { Link } from "react-router";
 import { accountMenuItems } from "./navigation";
 import "./AccountDropdown.css";
@@ -19,9 +20,11 @@ interface AccountDropdownProps {
   onNavigate: () => void;
   /** Clears the session and redirects -- owned by Header. */
   onLogout: () => void;
+  /** From Header's GET /notifications/unread-count fetch. */
+  unreadCount: number;
 }
 
-export default function AccountDropdown({ onNavigate, onLogout }: AccountDropdownProps) {
+export default function AccountDropdown({ onNavigate, onLogout, unreadCount }: AccountDropdownProps) {
   return (
     <div className="sn-account-dropdown" role="menu" aria-label="Account">
       {accountMenuItems.map((item) =>
@@ -44,6 +47,9 @@ export default function AccountDropdown({ onNavigate, onLogout }: AccountDropdow
             onClick={onNavigate}
           >
             {item.label}
+            {item.to === "/notifications" && unreadCount > 0 && (
+              <span className="sn-account-dropdown__badge">{unreadCount}</span>
+            )}
           </Link>
         ),
       )}

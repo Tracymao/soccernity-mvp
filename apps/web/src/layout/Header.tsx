@@ -24,12 +24,28 @@
 // token, so it runs once per session -- not on every drawer open/close.
 // A pending or failed fetch leaves `profile` null, which NavDrawer
 // renders as its generic "Signed in" fallback.
+//
+// Decision Log #291 (sprint-3/notification-centre-to-code): Header also
+// fetches the caller's unread notification count (GET
+// /notifications/unread-count -- a single COUNT query, cheap enough for
+// this) and re-fetches it on every navigation (keyed on
+// [accessToken, location.key], unlike the profile fetch's once-per-
+// session key) so the avatar dot and the account menus' badge reflect a
+// notification just read on /notifications once the user navigates away
+// from it. `unreadCount` drives both the avatar's "Has Unread" dot
+// (Figma's Avatar component, Decision Log #99/#103 -- substituting
+// brand/green for the Figma-bound semantic/alert, since that token isn't
+// exposed to apps/web, the same substitution the Grassroots LIVE
+// indicator already made) and the numeric badge on the account
+// dropdown / drawer's Notification(s) row (Figma's navy count-pill,
+// Decision Log #88).
 import { useEffect, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import logoMark from "../assets/icons/soccernity-logo-mark.svg";
 import searchIcon from "../assets/icons/search.svg";
 import messagesIcon from "../assets/icons/messages.svg";
 import { getUser, type UserProfile } from "../api/users";
+import { getUnreadCount } from "../api/notifications";
 import { clearStoredSession, decodeAccessToken, getStoredAccessToken } from "../lib/session";
 import { primaryNavItems } from "./navigation";
 import { useIsMobile } from "./useIsMobile";
@@ -50,6 +66,7 @@ export default function Header() {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Close any open overlay when the route changes or the session ends.
   useEffect(() => {
@@ -85,6 +102,26 @@ export default function Header() {
       cancelled = true;
     };
   }, [accessToken]);
+
+  // Re-fetched on every navigation (not just once per session, unlike the
+  // profile fetch above) -- see the header comment for why.
+  useEffect(() => {
+    if (!accessToken) {
+      setUnreadCount(0);
+      return;
+    }
+    let cancelled = false;
+    getUnreadCount(accessToken)
+      .then((count) => {
+        if (!cancelled) setUnreadCount(count);
+      })
+      .catch(() => {
+        if (!cancelled) setUnreadCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, location.key]);
 
   function handleLogout() {
     clearStoredSession();
@@ -157,9 +194,15 @@ export default function Header() {
               aria-haspopup="menu"
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((open) => !open)}
-            />
+            >
+              {unreadCount > 0 && <span className="sn-header__avatar-dot" aria-hidden="true" />}
+            </button>
             {menuOpen && !isMobile && (
-              <AccountDropdown onNavigate={() => setMenuOpen(false)} onLogout={handleLogout} />
+              <AccountDropdown
+                onNavigate={() => setMenuOpen(false)}
+                onLogout={handleLogout}
+                unreadCount={unreadCount}
+              />
             )}
           </div>
         ) : (
@@ -170,7 +213,12 @@ export default function Header() {
       </div>
 
       {menuOpen && isMobile && (
-        <NavDrawer onClose={() => setMenuOpen(false)} onLogout={handleLogout} profile={profile} />
+        <NavDrawer
+          onClose={() => setMenuOpen(false)}
+          onLogout={handleLogout}
+          profile={profile}
+          unreadCount={unreadCount}
+        />
       )}
     </header>
   );

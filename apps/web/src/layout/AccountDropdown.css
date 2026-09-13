@@ -16,7 +16,10 @@
 }
 
 .sn-account-dropdown__item {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   width: 100%;
   padding: 9px 12px;
   border: none;
@@ -28,6 +31,20 @@
   text-align: left;
   text-decoration: none;
   color: var(--sn-text-primary);
+}
+
+.sn-account-dropdown__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background-color: var(--sn-brand-navy);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 a.sn-account-dropdown__item,

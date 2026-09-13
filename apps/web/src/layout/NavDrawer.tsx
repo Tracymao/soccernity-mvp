@@ -22,9 +22,11 @@
 //     other drawer row uses, whether the fetch succeeded, is pending, or
 //     failed.
 //
-// Messages / Notifications / Settings have no route in src/app/router.tsx
-// yet (Decision Log #166) -- rendered non-navigating and visibly
-// disabled.
+// Groups / Settings have no route in src/app/router.tsx yet (Decision Log
+// #166) -- rendered non-navigating and visibly disabled. Notifications
+// now resolves (sprint-3/notification-centre-to-code, Decision Log #291)
+// and carries the same real unread-count badge AccountDropdown shows,
+// from the same Header-owned fetch.
 import { useEffect } from "react";
 import { NavLink } from "react-router";
 import logoMark from "../assets/icons/soccernity-logo-mark.svg";
@@ -42,6 +44,8 @@ interface NavDrawerProps {
    * pending / if it failed. Null => the generic "Signed in" fallback.
    */
   profile?: UserProfile | null;
+  /** From Header's GET /notifications/unread-count fetch. */
+  unreadCount?: number;
 }
 
 // Same pattern as ProfilePage.tsx / PostCard.tsx (a third small local
@@ -53,7 +57,7 @@ function initialsFor(displayName: string): string {
   return `${parts[0][0] ?? ""}${parts[parts.length - 1][0] ?? ""}`.toUpperCase();
 }
 
-export default function NavDrawer({ onClose, onLogout, profile }: NavDrawerProps) {
+export default function NavDrawer({ onClose, onLogout, profile, unreadCount = 0 }: NavDrawerProps) {
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
@@ -113,7 +117,10 @@ export default function NavDrawer({ onClose, onLogout, profile }: NavDrawerProps
                 }
                 onClick={onClose}
               >
-                {item.label}
+                <span>{item.label}</span>
+                {item.to === "/notifications" && unreadCount > 0 && (
+                  <span className="sn-drawer__badge">{unreadCount}</span>
+                )}
               </NavLink>
             ),
           )}

@@ -9133,7 +9133,100 @@ real, still-open follow-up, not done by this entry.
     column for `like`/`comment` (see above); any Figma or `apps/web`
     change — converting the already-finalized Notification Centre design
     (Decision Log #279) against these endpoints is a separate
-    `figma-to-code` follow-up.
+    `figma-to-code` follow-up, now done — see the
+    `sprint-3/notification-centre-to-code` bullet directly below.
+  - Merged as PR #239.
+- **`sprint-3/notification-centre-to-code` (figma-to-code, 2026-09-13)
+  converts the finalized Notification Centre design (Decision Log #279)
+  into real `apps/web` code against the read-side endpoints PR #239 built
+  (Decision Log #290), and wires the Navbar avatar's "Has Unread" state
+  plus the account dropdown/drawer's numeric badge to the real
+  unread-count mechanism, closing Decision Log #167 and #87's remaining
+  code half. No backend or Figma touched — the two frames
+  (`5640:7815`/`5643:8003` feed, `5642:7898` empty state) were re-fetched
+  live via `get_design_context` before building, not assumed from the
+  Decision Log #279 summary alone. Decision Log #291; forward-pointers on
+  #279 and #290.**
+  - **New `src/api/notifications.ts`** — the full client
+    (`listNotifications`/`getUnreadCount`/`markNotificationRead`/
+    `markAllNotificationsRead`), mirroring `api/messaging.ts`'s exact
+    shape (own `NotificationsApiError`, Bearer auth, cursor pagination).
+    `NotificationData` is a discriminated-by-`type` union of structured
+    objects (`{ actor }`, `{ post }`, `{ conversationId,
+    otherParticipant }`, `{ fixture }`, `{ cycle }`) — deliberately not
+    pre-rendered strings, matching Decision Log #290's own denormalization
+    decision that copy stays this app's concern.
+  - **New `NotificationCentrePage.tsx` (route `/notifications`, no site
+    footer — not in the Figma frame, matching Community/Clubs/Grassroots/
+    Banter).** All/Unread tabs, NEW/EARLIER grouping by read status
+    (matching the actual fetched JSX — unread rows white/green-tint avatar
+    + green dot, read rows green-tint/white with no dot — not just the
+    Design Notes frame's generic summary), Mark-all-as-read, Load more.
+    **The Unread tab is a client-side filter over already-loaded items** —
+    `GET /notifications` has no server-side unread-only query param
+    (`NotificationsQueryDto` only takes `cursor`/`limit`) — flagged, not a
+    backend change in this PR, the same discipline `ClubsPage`'s
+    client-side name filter already established.
+  - **Per-type icon-disc treatment, confirmed against the real fetched
+    JSX, not the summary**: `follow` → real actor initials (payloadRefId
+    IS the actor); `message` → the Navbar messages glyph (already
+    imported), links to `/messages/:conversationId`; `fixture_scheduled` →
+    the Grassroots corner-flag icon (already imported), `result_logged` →
+    a newly-exported `mdi:whistle-outline` icon, both link to
+    `/grassroots/fixtures/:fixtureId`; `contest_win` → a newly-exported
+    `carbon:trophy` icon, links to `/contest`. Two new icon assets
+    (`notif-whistle.svg`, `notif-trophy.svg`) plus the empty-state's bell
+    icon (`notif-bell.svg`) were exported directly from their Figma glyph
+    nodes via `download_assets` (the clean vector-layer SVG, not the
+    whole-scene "export" render, which came back wrapping the icon in the
+    entire frame's background/groups) — never hand-drawn, matching this
+    project's standing figma-to-code discipline.
+  - **Two real, disclosed divergences from the Figma sample data, forced
+    by the backend's own confirmed limits (Decision Log #290), not
+    invented here**: `like`/`comment` rows render "**Someone** liked/
+    commented on your post" — the established generic-fallback pattern
+    this app already uses for missing identity data (`NavDrawer`'s
+    "Signed in" row, the ghost-participant "?" initials) — instead of
+    Figma's illustrative actor name, since the backend has confirmed no
+    actor is ever resolvable for those two types. `contest_win` renders
+    only "you won a round in {cycle title}", not Figma's illustrative
+    "you placed 1st this week", since `payloadRefId` is deliberately keyed
+    to `cycleId` only (no round/position). `data: null` (a stale/orphaned
+    `payloadRefId`) renders a generic "This notification is no longer
+    available." row rather than erroring.
+  - **Absolute timestamps** (`toLocaleString`), matching
+    `MessagesPage.tsx`/`ConversationPage.tsx`'s own established
+    convention — not Figma's illustrative relative-time copy ("2 hours
+    ago"), which this app has no existing utility for and doesn't
+    introduce one for here.
+  - **Header.tsx now fetches real unread count** (`GET
+    /notifications/unread-count`) — re-fetched on every navigation
+    (`[accessToken, location.key]`), unlike the profile fetch's
+    once-per-session key, so the badge reflects a notification just read
+    on `/notifications` once the user navigates away. Drives a real dot on
+    the Navbar avatar — **substituting `brand/green` for the Figma-bound
+    `semantic/alert`**, since that token isn't exposed to `apps/web`
+    (`packages/shared/src/tokens` has no semantic-alert entry) — the same
+    substitution the Grassroots LIVE indicator already made rather than
+    hardcoding a new colour. Also drives a real navy count-pill badge
+    (closing Decision Log #167) on **both** the account dropdown's and the
+    mobile drawer's Notification(s) row — extending slightly beyond the
+    literal ask of "the account dropdown's numeric badge" to include the
+    drawer too, for parity between the two surfaces the same avatar opens;
+    a disclosed judgment call, not silently assumed.
+  - **`navigation.ts`**: `{ label: "Notifications", to: "/notifications"
+    }` flipped `available: true` in both `accountMenuItems` and
+    `drawerNavItems` — same "flip once the route exists" precedent as
+    Messages/Clubs/Grassroots/Settings.
+  - **Verified**: `npx tsc --noEmit`, `npm run lint`, `npm run build` all
+    clean; `apps/web` vitest — freshly re-measured baseline **37 suites /
+    259 tests, 0 failures** → **38 suites / 276 tests, 0 failures** (17
+    new — `NotificationCentrePage.test.tsx` +14; `Header.test.tsx` +3,
+    covering the real badge/dot and correcting two now-stale
+    Notification-row-is-disabled assertions the DL #167/#166 era left
+    behind). Dev-server smoke test: `/`, `/notifications`, `/community`
+    all real HTTP 200. No real browser/Playwright check available in this
+    environment — same ceiling as every prior `apps/web` PR.
   - PR opened, not merged — founder's call after review.
 
 ## The eight agents, and the order they run in

@@ -113,13 +113,13 @@ export interface DrawerNavItem {
 // from the pre-#287 order minus Profile.
 export const drawerNavItems: DrawerNavItem[] = [
   { label: "Community", to: "/community" },
-  // /messages now resolves (sprint-3/banter-messaging-to-code, Decision
-  // Log #277 -- MessagingModule) -- same "flip available once the route
-  // exists" precedent Clubs/Grassroots/Settings each got. Notifications
-  // stays disabled: the Notification Centre design is finalised (Decision
-  // Log #279) but has no apps/web conversion yet.
   { label: "Messages", to: "/messages" },
-  { label: "Notifications", to: "/notifications", available: false },
+  // /notifications now resolves (sprint-3/notification-centre-to-code,
+  // Decision Log #291 -- NotificationCentrePage.tsx, converting the
+  // finalized design from Decision Log #279) -- same "flip available once
+  // the route exists" precedent Messages/Clubs/Grassroots/Settings each
+  // got.
+  { label: "Notifications", to: "/notifications" },
   { label: "Sports Hub", to: "/sports-hub" },
   { label: "Blog", to: "/blog" },
   { label: "Bants", to: "/banter" },
@@ -147,17 +147,20 @@ export const drawerNavItems: DrawerNavItem[] = [
 
 // Desktop account dropdown -- from the Figma "Dropdown menu/notification
 // on" component (node 2841:5363): Profile, Notification, Settings, Groups,
-// Log out. The Figma "Notification" row carries an unread-count badge;
-// there is no unread-count source anywhere in this codebase (no
-// notifications API client exists), so it renders without a number --
-// Decision Log #167. Log out is rendered separately as an action.
+// Log out. The Figma "Notification" row carries an unread-count badge --
+// now real (sprint-3/notification-centre-to-code, Decision Log #291),
+// rendered by AccountDropdown.tsx itself via api/notifications.ts's
+// getUnreadCount, not from this array (DrawerNavItem has no numeric-badge
+// field -- adding one here would mean every OTHER consumer of this array,
+// including NavDrawer's non-Notification rows, has to account for a field
+// that's meaningless to them). Log out is rendered separately as an
+// action.
 //
 // Groups (Decision Log #1, #281) landed here rather than the navbar per
-// Decision Log #282; `available: false` since it's design-only, same
-// precedent as Notification above.
+// Decision Log #282; `available: false` since it's design-only.
 export const accountMenuItems: DrawerNavItem[] = [
   { label: "Profile", to: "/profile" },
-  { label: "Notification", to: "/notifications", available: false },
+  { label: "Notification", to: "/notifications" },
   { label: "Settings", to: "/settings" },
   { label: "Groups", to: "/groups", available: false },
 ];

@@ -18,7 +18,13 @@ vi.mock("../api/users", async () => {
   return { ...actual, getUser: vi.fn() };
 });
 
+vi.mock("../api/notifications", async () => {
+  const actual = await vi.importActual<typeof import("../api/notifications")>("../api/notifications");
+  return { ...actual, getUnreadCount: vi.fn() };
+});
+
 import { getUser } from "../api/users";
+import { getUnreadCount } from "../api/notifications";
 
 const TOKEN_KEY = "sn_access_token";
 
@@ -69,6 +75,11 @@ beforeEach(() => {
   window.localStorage.clear();
   setViewport(1200);
   vi.mocked(getUser).mockReset();
+  vi.mocked(getUnreadCount).mockReset();
+  // Default to 0 unless a test overrides it -- keeps every pre-existing
+  // test's assertions (no badge, no dot) true without having to touch
+  // each one individually.
+  vi.mocked(getUnreadCount).mockResolvedValue(0);
 });
 
 describe("navigation config", () => {
@@ -211,9 +222,11 @@ describe("Header -- logged in (desktop)", () => {
     expect(within(menu).getByRole("menuitem", { name: "Profile" }).getAttribute("href")).toBe(
       "/profile",
     );
-    // Notification has no route yet -> disabled, not a link.
-    expect(within(menu).queryByRole("link", { name: "Notification" })).toBeNull();
-    expect(within(menu).getByText("Notification").getAttribute("aria-disabled")).toBe("true");
+    // Notification now resolves (sprint-3/notification-centre-to-code,
+    // Decision Log #291).
+    expect(within(menu).getByRole("menuitem", { name: "Notification" }).getAttribute("href")).toBe(
+      "/notifications",
+    );
     // Settings resolves as of sprint-2/privacy-settings-to-code (-> /settings).
     expect(within(menu).getByRole("menuitem", { name: "Settings" }).getAttribute("href")).toBe(
       "/settings",
@@ -225,10 +238,28 @@ describe("Header -- logged in (desktop)", () => {
     expect(screen.queryByRole("dialog", { name: "Navigation" })).toBeNull();
   });
 
-  it("shows no fabricated notification count on the Notification row (Decision Log #167)", () => {
+  it("shows no unread badge or avatar dot when the unread count is 0 (Decision Log #291)", async () => {
     renderHeader();
+    await waitFor(() => expect(getUnreadCount).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
-    expect(screen.getByText("Notification").textContent).toBe("Notification");
+
+    expect(screen.getByRole("menuitem", { name: "Notification" }).textContent).toBe("Notification");
+    expect(document.querySelector(".sn-header__avatar-dot")).toBeNull();
+  });
+
+  it("calls getUnreadCount with the caller's own access token", async () => {
+    renderHeader();
+    await waitFor(() => expect(getUnreadCount).toHaveBeenCalledWith("header.payload.sig"));
+  });
+
+  it("shows a real unread badge on the account dropdown's Notification row, and the avatar dot, when the count is > 0 (Decision Log #291)", async () => {
+    vi.mocked(getUnreadCount).mockResolvedValue(3);
+    renderHeader();
+    await waitFor(() => expect(document.querySelector(".sn-header__avatar-dot")).not.toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
+
+    const row = screen.getByRole("menuitem", { name: /Notification/ });
+    expect(within(row).getByText("3")).not.toBeNull();
   });
 
   it("logs out: clears the session and navigates to /", () => {
@@ -261,18 +292,29 @@ describe("Header -- logged in (mobile)", () => {
 
     expect(within(nav).getByRole("link", { name: "Clubs" }).getAttribute("href")).toBe("/clubs");
     expect(within(nav).getByRole("link", { name: "Blog" }).getAttribute("href")).toBe("/blog");
-    // Messages now resolves (sprint-3/banter-messaging-to-code, Decision
-    // Log #277); Notifications still doesn't (Decision Log #166 stays
-    // half-open -- the Notification Centre design has no apps/web
-    // conversion yet).
+    // Messages (Decision Log #277) and Notifications (Decision Log #291)
+    // both resolve now.
     expect(within(nav).getByRole("link", { name: "Messages" }).getAttribute("href")).toBe("/messages");
-    expect(within(nav).queryByRole("link", { name: "Notifications" })).toBeNull();
+    expect(within(nav).getByRole("link", { name: "Notifications" }).getAttribute("href")).toBe(
+      "/notifications",
+    );
     // Settings resolves as of sprint-2/privacy-settings-to-code (-> /settings).
     expect(within(nav).getByRole("link", { name: "Settings" }).getAttribute("href")).toBe("/settings");
     // Groups (Decision Log #1/#281/#282) has no route yet -> disabled, not a link.
     expect(within(nav).queryByRole("link", { name: "Groups" })).toBeNull();
     expect(within(nav).getByText("Groups").getAttribute("aria-disabled")).toBe("true");
     expect(within(drawer).getByRole("button", { name: "Log out" })).not.toBeNull();
+  });
+
+  it("shows a real unread badge on the drawer's Notifications row when the count is > 0 (Decision Log #291)", async () => {
+    vi.mocked(getUnreadCount).mockResolvedValue(2);
+    renderHeader();
+    await waitFor(() => expect(getUnreadCount).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
+
+    const drawer = screen.getByRole("dialog", { name: "Navigation" });
+    const row = await within(drawer).findByRole("link", { name: /Notifications/ });
+    expect(within(row).getByText("2")).not.toBeNull();
   });
 
   it("closes the drawer when the scrim is clicked", () => {

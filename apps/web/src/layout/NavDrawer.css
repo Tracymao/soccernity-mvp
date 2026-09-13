@@ -88,7 +88,10 @@
 }
 
 .sn-drawer__link {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 12px;
   border-radius: 8px;
   font-family: "Montserrat", sans-serif;
@@ -104,8 +107,25 @@
 }
 
 .sn-drawer__link--disabled {
+  display: block;
   color: var(--sn-text-secondary);
   cursor: not-allowed;
+}
+
+/* Real unread-count badge on the Notifications row (Decision Log #291) --
+ * same navy count-pill treatment as AccountDropdown's own badge. */
+.sn-drawer__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background-color: var(--sn-brand-navy);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .sn-drawer__divider {
