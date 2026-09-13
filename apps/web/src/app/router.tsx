@@ -47,6 +47,7 @@ import GrassrootsTeamPage from "../pages/GrassrootsTeamPage";
 import GrassrootsRegisterTeamPage from "../pages/GrassrootsRegisterTeamPage";
 import GrassrootsScheduleFixturePage from "../pages/GrassrootsScheduleFixturePage";
 import GrassrootsFixturePage from "../pages/GrassrootsFixturePage";
+import ComingSoonPage from "../pages/ComingSoonPage";
 import BanterPage from "../pages/BanterPage";
 import BanterRoomPage from "../pages/BanterRoomPage";
 import MessagesPage from "../pages/MessagesPage";
@@ -123,6 +124,18 @@ export const routes: RouteObject[] = [
           // frames, Decision Log #197). Dummy content -- no blog backend
           // exists. See ../pages/blog/ArticleDetailPage.tsx.
           { path: "blog/:articleId", element: <ArticleDetailPage /> },
+
+          // Scouting / Academy -- the navbar's last two reserved slots
+          // (Decision Log #284), both pointed at the same reusable
+          // ComingSoonPage component (Decision Log #285), configured with
+          // a different feature name rather than two duplicated page
+          // files. Under FooterLayout: the Figma "Coming Soon" frames
+          // carry the canonical site footer, same as Home/Sports Hub/
+          // Blog/Article Detail. No login gate -- like Blog/Sports Hub,
+          // the content is identical regardless of auth state, and the
+          // shared Header already renders the correct chrome either way.
+          { path: "scouting", element: <ComingSoonPage featureName="Scouting" /> },
+          { path: "academy", element: <ComingSoonPage featureName="Academy" /> },
 
           // 404. A genuinely unmatched path under "/" falls through to
           // this splat (React Router ranks by specificity across the whole
