@@ -8712,6 +8712,43 @@ real, still-open follow-up, not done by this entry.
     unbound, 0 off-palette, 0 `brand/green-tint-28`, 0 new colours,
     Light mode only, 0 overlaps (screenshot-verified on all three
     components).
+  - Not merged — founder's call after review. **Code half now done — see
+    the `sprint-3/nav-groups-code` bullet directly below (Decision Log
+    #283).**
+- **`sprint-3/nav-groups-code` (figma-to-code, 2026-09-13) mirrors
+  `sprint-3/nav-drawer-groups-dropdown`'s Figma nav-surface decision into
+  `apps/web` — `navigation.ts` only, no Figma/backend code. Decision Log
+  #283; forward-pointer appended to #282.**
+  - **`navigation.ts`**: removed `{ label: "Home", to: "/" }` from
+    `drawerNavItems` — grep-confirmed nothing else in `apps/web/src`
+    referenced it besides `Header.test.tsx`. Added `{ label: "Groups",
+    to: "/groups", available: false }` to both `accountMenuItems` (after
+    Settings) and `drawerNavItems` (after Settings, at the end of the
+    array — Log out is rendered separately below it in both components),
+    matching Decision Log #282's own Figma placement exactly.
+    `available: false` because Decision Log #281 is design-only — no
+    `/groups` route exists in `router.tsx` — the same "flip once the
+    route exists" precedent already used for Grassroots/Messages/
+    Notifications while their routes were pending.
+  - **`AccountDropdown.tsx`/`NavDrawer.tsx` deliberately untouched** —
+    the existing `available === false` disabled-row branch (a
+    non-navigating, `aria-disabled` span, Decision Log #166's pattern)
+    already renders Groups correctly with zero code change to either
+    component.
+  - **Nothing added for Scouting or Academy** — neither has a route, a
+    page, or a Figma frame to point a placeholder at.
+  - **`Header.test.tsx`**: the canonical drawer-order assertion drops
+    Home and appends Groups after Settings; three new tests confirm Home
+    is gone and that Groups renders disabled, pointed at `/groups`, in
+    both the drawer and the account dropdown; the two existing
+    render-level tests were each extended with a Groups assertion rather
+    than duplicated.
+  - **Verified**: `apps/web` vitest — **36 suites / 247 tests, 0
+    failures** (up from 36/244 — 3 new tests, no existing test removed);
+    `npx tsc --noEmit` clean; `npm run lint` clean; `npm run build`
+    clean production bundle. Dev-server smoke test: `/`, `/community`,
+    `/clubs`, `/grassroots` all HTTP 200, clean log — `/groups` itself
+    was not requested since no route was added for it, by design.
   - Not merged — founder's call after review.
 
 ## The eight agents, and the order they run in

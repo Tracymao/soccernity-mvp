@@ -10,7 +10,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router";
 import Header from "./Header";
-import { primaryNavItems, drawerNavItems } from "./navigation";
+import { primaryNavItems, drawerNavItems, accountMenuItems } from "./navigation";
 import type { UserProfile } from "../api/users";
 
 vi.mock("../api/users", async () => {
@@ -91,9 +91,8 @@ describe("navigation config", () => {
     expect(drawerNavItems.some((i) => i.label === "News")).toBe(false);
   });
 
-  it("drawer order matches the Figma Navigation Drawer (Decision Log #162/#266)", () => {
+  it("drawer order matches the Figma Navigation Drawer (Decision Log #162/#266/#282)", () => {
     expect(drawerNavItems.map((i) => i.label)).toEqual([
-      "Home",
       "Community",
       "Sports Hub",
       "Blog",
@@ -108,7 +107,27 @@ describe("navigation config", () => {
       "Notifications",
       "Profile",
       "Settings",
+      // Groups sits after Settings, in the account cluster, not the
+      // content-pillar cluster (Decision Log #282).
+      "Groups",
     ]);
+  });
+
+  it("does NOT have a Home row (Decision Log #282 -- the header logo already links home)", () => {
+    expect(drawerNavItems.some((i) => i.label === "Home")).toBe(false);
+    expect(drawerNavItems.some((i) => i.to === "/")).toBe(false);
+  });
+
+  it("the Groups drawer item points at /groups and is disabled (Decision Log #1/#281/#282)", () => {
+    const groups = drawerNavItems.find((i) => i.label === "Groups");
+    expect(groups?.to).toBe("/groups");
+    expect(groups?.available).toBe(false);
+  });
+
+  it("the Groups account-dropdown item points at /groups and is disabled (Decision Log #1/#281/#282)", () => {
+    const groups = accountMenuItems.find((i) => i.label === "Groups");
+    expect(groups?.to).toBe("/groups");
+    expect(groups?.available).toBe(false);
   });
 
   it("the Grassroots drawer item points at /grassroots and is available", () => {
@@ -167,7 +186,7 @@ describe("Header -- logged in (desktop)", () => {
     expect(messages.getAttribute("aria-disabled")).toBeNull();
   });
 
-  it("opens the account dropdown (not the drawer) with Profile / Notification / Settings / Log out", () => {
+  it("opens the account dropdown (not the drawer) with Profile / Notification / Settings / Groups / Log out", () => {
     renderHeader();
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
 
@@ -183,6 +202,9 @@ describe("Header -- logged in (desktop)", () => {
     expect(within(menu).getByRole("menuitem", { name: "Settings" }).getAttribute("href")).toBe(
       "/settings",
     );
+    // Groups (Decision Log #1/#281/#282) has no route yet -> disabled, not a link.
+    expect(within(menu).queryByRole("link", { name: "Groups" })).toBeNull();
+    expect(within(menu).getByText("Groups").getAttribute("aria-disabled")).toBe("true");
     expect(within(menu).getByRole("menuitem", { name: "Log out" })).not.toBeNull();
     expect(screen.queryByRole("dialog", { name: "Navigation" })).toBeNull();
   });
@@ -231,6 +253,9 @@ describe("Header -- logged in (mobile)", () => {
     expect(within(nav).queryByRole("link", { name: "Notifications" })).toBeNull();
     // Settings resolves as of sprint-2/privacy-settings-to-code (-> /settings).
     expect(within(nav).getByRole("link", { name: "Settings" }).getAttribute("href")).toBe("/settings");
+    // Groups (Decision Log #1/#281/#282) has no route yet -> disabled, not a link.
+    expect(within(nav).queryByRole("link", { name: "Groups" })).toBeNull();
+    expect(within(nav).getByText("Groups").getAttribute("aria-disabled")).toBe("true");
     expect(within(drawer).getByRole("button", { name: "Log out" })).not.toBeNull();
   });
 
