@@ -448,6 +448,21 @@ export class ContestService {
           refId: round.id,
           points: CONTEST_WEEKLY_WIN_POINTS[winner.position],
         });
+        // contest_win Notification (Decision Log #87's audit) -- one row
+        // per ContestRoundWinner created, i.e. per weekly winner, NOT the
+        // monthly ContestStanding crown (crownCycle is a separate method
+        // and out of this trigger's scope per the task brief). No
+        // self-notification guard needed: this whole method only runs
+        // behind AdminJwtAuthGuard (a completely separate AdminUser auth
+        // domain, Decision Log #189-193) -- there is no identity overlap
+        // between the admin actor and the User being notified.
+        // payloadRefId is cycleId, not roundId/entryId: GET
+        // /contest/cycles/:id is the only single-resource read endpoint
+        // that exists today, so it's the one payloadRefId value a future
+        // display pass can actually resolve without a new endpoint.
+        await tx.notification.create({
+          data: { userId: entry.userId, type: 'contest_win', payloadRefId: cycleId },
+        });
       }
     });
 

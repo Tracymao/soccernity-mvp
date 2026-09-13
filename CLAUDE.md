@@ -8137,7 +8137,9 @@ Full reasoning for every choice above: Build Plan Section 5.
     stricter follow-up if wanted).
   - **No `Notification` on message send** (no `message` type in the enum,
     not on the follow/like/comment trigger list — a Notification Centre
-    PR candidate); no engagement points (private, gameable).
+    PR candidate); no engagement points (private, gameable). **This gap
+    is now closed — see
+    `sprint-3/notification-triggers-message-fixture-contest` below.**
   - **Verification, re-measured**: mocked suite **50 → 52 suites / 698 →
     728 tests, 0 failures** (`messaging.service.spec.ts` +
     `messaging.controller.http.spec.ts`, 30 new); e2e suite (real
@@ -8153,8 +8155,93 @@ Full reasoning for every choice above: Build Plan Section 5.
     + `npm run lint` clean.
   - **Not built, flagged (none block Sprint 3 messaging)**: `GET
     /conversations/:id` single-conversation metadata; group
-    conversations; `message` → `Notification` wiring; orphaned-`Conversation`
-    cleanup on user hard-delete.
+    conversations; `message` → `Notification` wiring (**now built — see
+    `sprint-3/notification-triggers-message-fixture-contest` below**);
+    orphaned-`Conversation` cleanup on user hard-delete.
+  - PR opened, not merged — founder's call after review.
+- **`sprint-3/notification-triggers-message-fixture-contest`
+  (backend-api, 2026-09-13) resolves Decision Log #87's "is
+  follow/like/comment the permanent MVP notification-type set" question
+  — founder decision: no, audit every built module for genuine
+  notification-worthy events and wire all of them now. `services/api`
+  only, no Figma/`apps/web` touched. Decision Log #278; forward-pointer
+  on #87.** Full detail in each module's own trigger-site comment
+  (`messaging/messaging.service.ts`, `grassroots/grassroots.service.ts`,
+  `contest/contest.service.ts`).
+  - **The audit found exactly four real, ready events** beyond the
+    existing follow/like/comment set: `message` (a DM is received,
+    `MessagingService.sendMessage`), `fixture_scheduled` (someone
+    schedules a fixture against your registered team, only when the away
+    side is a real registered team — `GrassrootsService.createFixture`),
+    `result_logged` (a result is submitted for your fixture, notifying
+    the **other** team's creator, never the submitter —
+    `GrassrootsService.logResult`), and `contest_win` (you win a weekly
+    `ContestRoundWinner` round — **not** the monthly `ContestStanding`
+    crown, which stays out of this trigger's scope —
+    `ContestService.recordRoundResults`). **Explicitly excluded, per the
+    founder**: moderation-report-actioned (blocked on DPIA R8/R9,
+    Decision Log #250), leaderboard rank/milestone (`GET /leaderboard`
+    is unbuilt, Sprint 6), any @mention-based notification (no
+    mention-parsing exists anywhere in this app — new scope, not a
+    trigger wire), and guardian-consent-change (a founder call: that's
+    an account-security alert, not a Notification Centre item —
+    `ConsentAuditRecord` is untouched).
+  - **All four triggers wired at the exact point the underlying action
+    commits, inside the same interactive `$transaction` as the row that
+    causes the event** — the identical pattern
+    `FeedService.likePost`/`addComment` and `UsersService.followUser`
+    already use.
+  - **`message` is COLLAPSED, not one row per message** — a new
+    `Notification` is only created if the recipient doesn't already have
+    an **unread** row for `type: 'message'` + `payloadRefId:
+    conversationId`, so a busy back-and-forth thread produces one "you
+    have unread messages here" entry, not a flood that duplicates `GET
+    /conversations`'s own live `unreadCount`/`lastMessage` preview.
+    **Flagged, not fixed**: nothing currently clears these when the
+    conversation itself is read (`markConversationRead` only touches
+    `Message.readAt`), a real gap left for a future pass.
+  - **Self-notification guarded on every trigger, argued per-trigger, not
+    assumed**: `message` is structurally impossible (`Conversation` is
+    always exactly 2 distinct participants — self-recipient 400's at
+    `startConversation`) but guarded anyway, for consistency.
+    `fixture_scheduled`/`result_logged` have a real risk the schema does
+    **not** prevent: one person can be `createdById` of both `teamA` and
+    two *different* registered teams, so `teamAId !== teamBId` alone
+    doesn't rule out the recipient being the actor — both triggers skip
+    the notification when the computed recipient equals the caller.
+    `contest_win` needs no guard at all: `recordRoundResults` runs behind
+    the completely separate `AdminUser`/`AdminJwtAuthGuard` auth domain
+    (Decision Log #189–193), so there is no identity overlap between the
+    admin actor and the `User` winners being notified.
+  - **`payloadRefId` conventions, each chosen for what's actually
+    resolvable today without a new endpoint**: `conversationId`
+    (`message` → `GET /conversations/:id/messages`); `fixtureId`
+    (`fixture_scheduled`/`result_logged` → `GET /fixtures/:id`);
+    `cycleId`, not `roundId`/`entryId` (`contest_win` — `GET
+    /contest/cycles/:id` is the only single-resource read endpoint that
+    exists on the Contest module today; `roundId`/`entryId` have no
+    dedicated fetch endpoint and would strand a future display pass).
+  - **`schema.prisma`'s `Notification.type` comment updated** to the real
+    seven-value set (`follow | like | comment | message |
+    fixture_scheduled | result_logged | contest_win`) — the old `reply` /
+    `system` values are dropped, grep-confirmed neither was ever actually
+    implemented anywhere. No schema/migration change beyond the comment.
+  - **Verification**: mocked suite **52 suites / 728 → 737 tests, 0
+    failures** (9 new — 3 in `messaging.service.spec.ts`, 6 in
+    `grassroots.service.spec.ts` (3 `createFixture` + 3 `logResult`); the
+    `contest.service.spec.ts` case was extended in place with additional
+    assertions, no new test — no new suite); `nest build` + `npm run
+    lint` clean. **e2e
+    suite not run** — the local Docker daemon wasn't available in this
+    session, and no `test/` file was touched anyway: every change here
+    is a conditional `notification.create` added inside an *existing*,
+    already-e2e-covered transaction (no new raw SQL, no new relation, no
+    isolation-level reasoning), which is exactly the class of change
+    `test/README.md`'s own guiding principle says stays at the mocked
+    layer. Flagged for whoever next runs the real e2e suite to confirm
+    it still passes unchanged. `apps/web` and Figma untouched — a later
+    `figma-to-code` pass resolves each `payloadRefId` per-type for
+    display.
   - PR opened, not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and

@@ -256,17 +256,34 @@ export class MessagingService {
   // every other content-creation route, and documented as such in
   // messaging/README.md.
   //
-  // No Notification row (there is no `message` type in the Notification
-  // enum, and it's not on the established follow/like/comment trigger
-  // list — a candidate for the Sprint 3 Notification Centre PR). No
-  // engagement points (private, and rewarding private messages would be
-  // trivially gameable).
+  // message Notification (Decision Log #87's audit,
+  // sprint-3/notification-triggers-message-fixture-contest): recipient is
+  // the OTHER participant in this strictly-2-party conversation
+  // (Conversation.participantIds always has exactly 2 distinct entries --
+  // self-recipient is 400'd at startConversation). Guarded defensively
+  // against self-notification anyway (`recipientId !== senderId`), for
+  // consistency with every other trigger in this codebase.
+  //
+  // Collapsed, not one row per message: a busy back-and-forth thread
+  // would otherwise flood the recipient's Notification Centre with one
+  // row per message, duplicating GET /conversations's own live
+  // unreadCount/lastMessage preview. A new row is only created if the
+  // recipient doesn't already have an UNREAD Notification for
+  // type: 'message' + payloadRefId: conversationId -- i.e. one "you have
+  // unread messages here" entry per conversation, not per message.
+  // Nothing currently marks these read when the conversation itself is
+  // read (markConversationRead only touches Message.readAt) -- a real,
+  // flagged gap, not fixed here; see messaging/README.md.
+  //
+  // No engagement points (private, and rewarding private messages would
+  // be trivially gameable).
   async sendMessage(
     conversationId: string,
     senderId: string,
     dto: SendMessageDto,
   ): Promise<MessageView> {
-    await this.assertParticipant(conversationId, senderId);
+    const conversation = await this.assertParticipant(conversationId, senderId);
+    const recipientId = conversation.participantIds.find((id) => id !== senderId) ?? null;
 
     return this.prisma.$transaction(async (tx) => {
       const message = await tx.message.create({
@@ -282,6 +299,22 @@ export class MessagingService {
         where: { id: conversationId },
         data: { lastMessageAt: message.sentAt },
       });
+      if (recipientId !== null && recipientId !== senderId) {
+        const existingUnread = await tx.notification.findFirst({
+          where: {
+            userId: recipientId,
+            type: 'message',
+            payloadRefId: conversationId,
+            read: false,
+          },
+          select: { id: true },
+        });
+        if (!existingUnread) {
+          await tx.notification.create({
+            data: { userId: recipientId, type: 'message', payloadRefId: conversationId },
+          });
+        }
+      }
       return message;
     });
   }

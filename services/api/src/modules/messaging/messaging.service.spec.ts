@@ -41,6 +41,10 @@ function buildPrismaMock() {
     guardian: {
       findUnique: jest.fn(),
     },
+    notification: {
+      create: jest.fn(),
+      findFirst: jest.fn(),
+    },
   } as unknown as PrismaService;
 
   (prisma as unknown as { $transaction: jest.Mock }).$transaction = jest.fn(
@@ -291,6 +295,45 @@ describe('MessagingService', () => {
         service.sendMessage('convo-1', CALLER, { contentText: 'hi' }),
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(p().message.create).not.toHaveBeenCalled();
+    });
+
+    // Decision Log #87 — message Notification wiring.
+
+    it('creates a message Notification for the OTHER participant when none exists yet', async () => {
+      p().conversation.findUnique.mockResolvedValue(conversationRow());
+      p().message.create.mockResolvedValue({ id: 'm-1', sentAt: new Date() });
+      p().notification.findFirst.mockResolvedValue(null);
+
+      await service.sendMessage('convo-1', CALLER, { contentText: 'hi' });
+
+      expect(p().notification.findFirst).toHaveBeenCalledWith({
+        where: { userId: RECIPIENT, type: 'message', payloadRefId: 'convo-1', read: false },
+        select: { id: true },
+      });
+      expect(p().notification.create).toHaveBeenCalledWith({
+        data: { userId: RECIPIENT, type: 'message', payloadRefId: 'convo-1' },
+      });
+    });
+
+    it('does NOT create a second message Notification while an unread one already exists for this conversation (collapsed, not one row per message)', async () => {
+      p().conversation.findUnique.mockResolvedValue(conversationRow());
+      p().message.create.mockResolvedValue({ id: 'm-2', sentAt: new Date() });
+      p().notification.findFirst.mockResolvedValue({ id: 'existing-notif-1' });
+
+      await service.sendMessage('convo-1', CALLER, { contentText: 'again' });
+
+      expect(p().notification.create).not.toHaveBeenCalled();
+    });
+
+    it('never targets the sender as the Notification recipient', async () => {
+      p().conversation.findUnique.mockResolvedValue(conversationRow());
+      p().message.create.mockResolvedValue({ id: 'm-3', sentAt: new Date() });
+      p().notification.findFirst.mockResolvedValue(null);
+
+      await service.sendMessage('convo-1', CALLER, { contentText: 'hi' });
+
+      const callArgs = p().notification.create.mock.calls[0][0];
+      expect(callArgs.data.userId).not.toBe(CALLER);
     });
   });
 

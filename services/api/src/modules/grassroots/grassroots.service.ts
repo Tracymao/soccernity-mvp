@@ -236,17 +236,51 @@ export class GrassrootsService {
       throw new ForbiddenException('You may only create fixtures for a team you registered');
     }
 
-    return this.prisma.fixture.create({
-      data: {
-        teamAId: dto.teamAId,
-        teamBId: dto.teamBId ?? null,
-        // null (not "") when absent or whitespace-only.
-        opponentName: opponentName ?? null,
-        scheduledAt: new Date(dto.scheduledAt),
-        venue: dto.venue ?? null,
-        // status stays at its @default('scheduled').
-      },
-      select: FIXTURE_SELECT,
+    // teamB's createdById, needed only to pick the fixture_scheduled
+    // Notification recipient below — stays null when the away side is a
+    // free-text opponentName (no registered team, so no one to notify).
+    let teamBCreatedById: string | null = null;
+    if (dto.teamBId !== undefined) {
+      const teamB = await this.prisma.grassrootsTeam.findUniqueOrThrow({
+        where: { id: dto.teamBId },
+        select: { createdById: true },
+      });
+      teamBCreatedById = teamB.createdById;
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const fixture = await tx.fixture.create({
+        data: {
+          teamAId: dto.teamAId,
+          teamBId: dto.teamBId ?? null,
+          // null (not "") when absent or whitespace-only.
+          opponentName: opponentName ?? null,
+          scheduledAt: new Date(dto.scheduledAt),
+          venue: dto.venue ?? null,
+          // status stays at its @default('scheduled').
+        },
+        select: FIXTURE_SELECT,
+      });
+
+      // fixture_scheduled Notification (Decision Log #87's audit) --
+      // recipient is teamB's organiser, only when teamB is a real
+      // registered team (a free-text opponentName has no user to
+      // notify). Guarded against self-notification: the schema does not
+      // stop one person from being createdById of BOTH teamA and teamB
+      // (two different teams they registered themselves), in which case
+      // teamAId !== teamBId is true but the recipient would still be the
+      // actor -- skipped in that case.
+      if (teamBCreatedById !== null && teamBCreatedById !== userId) {
+        await tx.notification.create({
+          data: {
+            userId: teamBCreatedById,
+            type: 'fixture_scheduled',
+            payloadRefId: fixture.id,
+          },
+        });
+      }
+
+      return fixture;
     });
   }
 
@@ -366,6 +400,23 @@ export class GrassrootsService {
           },
         });
         await tx.fixture.update({ where: { id: fixtureId }, data: { status: 'full_time' } });
+
+        // result_logged Notification (Decision Log #87's audit) --
+        // recipient is the OTHER team's organiser, never the submitter.
+        // `fixture` here is FIXTURE_AUTHZ_SELECT's shape, loaded before
+        // this transaction by loadFixtureForAuthz. Skipped when there's
+        // no registered teamB (free-text opponent -- no one to notify)
+        // or when the same person manages both teams (self-notification,
+        // since "the other side" would still resolve to the actor).
+        const otherManagerId =
+          userId === fixture.teamA.createdById
+            ? fixture.teamB?.createdById ?? null
+            : fixture.teamA.createdById;
+        if (otherManagerId !== null && otherManagerId !== userId) {
+          await tx.notification.create({
+            data: { userId: otherManagerId, type: 'result_logged', payloadRefId: fixtureId },
+          });
+        }
 
         return tx.fixture.findUniqueOrThrow({ where: { id: fixtureId }, select: FIXTURE_SELECT });
       });
