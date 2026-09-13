@@ -542,7 +542,15 @@ model Notification {
   userId       String
   // Decision Log #44 (cascade) -- see account-deletion/README.md.
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type         String // follow | comment | like | reply | system
+  // sprint-3/notification-triggers-message-fixture-contest (Decision Log
+  // #87): the permanent MVP set, all wired -- follow (users.service.ts),
+  // like | comment (feed.service.ts), message (messaging.service.ts,
+  // collapsed to one unread row per conversation, not per message),
+  // fixture_scheduled | result_logged (grassroots.service.ts), contest_win
+  // (contest.service.ts, one per ContestRoundWinner row, not the monthly
+  // ContestStanding crown). `reply` / `system` (this comment's previous
+  // wording) were never actually implemented anywhere -- dropped.
+  type         String // follow | like | comment | message | fixture_scheduled | result_logged | contest_win
   payloadRefId String?
   read         Boolean  @default(false)
   createdAt    DateTime @default(now())

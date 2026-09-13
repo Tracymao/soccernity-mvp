@@ -20,6 +20,7 @@ function buildMock() {
     contestStanding: { create: jest.fn() },
     pointsLedgerEntry: { create: jest.fn() },
     post: { findUnique: jest.fn() },
+    notification: { create: jest.fn() },
   } as unknown as PrismaService;
   (prisma as unknown as { $transaction: jest.Mock }).$transaction = jest.fn((fn: (tx: unknown) => unknown) => fn(prisma));
   return prisma;
@@ -356,6 +357,15 @@ describe('ContestService', () => {
       expect(ledgerCalls).toEqual([
         expect.objectContaining({ userId: 'winner-1', source: 'contest_weekly_win', refId: 'rd-1', points: 50 }),
         expect.objectContaining({ userId: 'winner-2', source: 'contest_weekly_win', refId: 'rd-1', points: 30 }),
+      ]);
+      // contest_win Notification (Decision Log #87) — one row per
+      // ContestRoundWinner created, keyed by cycleId (the one
+      // single-resource read endpoint that exists today), never roundId
+      // or entryId.
+      const notificationCalls = (prisma.notification.create as jest.Mock).mock.calls.map((c) => c[0].data);
+      expect(notificationCalls).toEqual([
+        { userId: 'winner-1', type: 'contest_win', payloadRefId: 'cyc-1' },
+        { userId: 'winner-2', type: 'contest_win', payloadRefId: 'cyc-1' },
       ]);
     });
   });
