@@ -75,8 +75,12 @@ export interface DrawerNavItem {
 // "Navigation Drawer -- Mobile" COMPONENT (node 5870:10689), the
 // canonical mobile-web primary nav (Decision Log #162). Log out is an
 // action, rendered separately below the divider.
+//
+// DECISION LOG #282 -- "Home" removed. The drawer is opened via the
+// avatar and the header logo already links home (working in code, same
+// precedent as #162), so the row was redundant. That PR's own Figma edit
+// is the source of truth for the reflow; this is its 1:1 code mirror.
 export const drawerNavItems: DrawerNavItem[] = [
-  { label: "Home", to: "/" },
   { label: "Community", to: "/community" },
   { label: "Sports Hub", to: "/sports-hub" },
   { label: "Blog", to: "/blog" },
@@ -103,16 +107,27 @@ export const drawerNavItems: DrawerNavItem[] = [
   // but the account still has a reachable Settings entry now rather than
   // an orphan page (the gap Decision Log #156 flagged for Clubs).
   { label: "Settings", to: "/settings" },
+  // Community Groups (Decision Log #1, #281) does not get a navbar icon
+  // -- the founder placed it in the account surface instead (Decision Log
+  // #282). `available: false`: Decision Log #281 is design-only, no
+  // apps/web route exists yet -- same "flip once the route exists"
+  // precedent as Grassroots/Messages/Settings above.
+  { label: "Groups", to: "/groups", available: false },
 ];
 
 // Desktop account dropdown -- from the Figma "Dropdown menu/notification
-// on" component (node 2841:5363): Profile, Notification, Settings, Log
-// out. The Figma "Notification" row carries an unread-count badge; there
-// is no unread-count source anywhere in this codebase (no notifications
-// API client exists), so it renders without a number -- Decision Log
-// #167. Log out is rendered separately as an action.
+// on" component (node 2841:5363): Profile, Notification, Settings, Groups,
+// Log out. The Figma "Notification" row carries an unread-count badge;
+// there is no unread-count source anywhere in this codebase (no
+// notifications API client exists), so it renders without a number --
+// Decision Log #167. Log out is rendered separately as an action.
+//
+// Groups (Decision Log #1, #281) landed here rather than the navbar per
+// Decision Log #282; `available: false` since it's design-only, same
+// precedent as Notification above.
 export const accountMenuItems: DrawerNavItem[] = [
   { label: "Profile", to: "/profile" },
   { label: "Notification", to: "/notifications", available: false },
   { label: "Settings", to: "/settings" },
+  { label: "Groups", to: "/groups", available: false },
 ];
