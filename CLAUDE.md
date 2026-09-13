@@ -8805,6 +8805,64 @@ real, still-open follow-up, not done by this entry.
     future pillar or account-adjacent feature defaults to the account
     dropdown/drawer (the Community Groups precedent, DL #282), not the
     navbar.
+  - Merged as PR #233.
+- **`sprint-3/coming-soon-screen-scouting-academy` (figma-screen-builder,
+  2026-09-13) designs the reusable Coming Soon template DL #284 flagged as
+  a separate follow-up — one generic screen, not two bespoke ones, for
+  Scouting and Academy (and every future Phase 2 pillar that later gets a
+  navbar slot). Figma design only, no app/backend code. Decision Log
+  #285.** Report: `docs/sprint-3-coming-soon-screen-report.md`.
+  - **Five new frames**, parked at `y ≥ 40000` on page `0:1` (clear of the
+    Community Groups mobile row): `Coming Soon — Desktop — Logged In`
+    (`header 4`, 1440×1005), `— Desktop — Logged Out` (cloned, navbar
+    swapped to `header 7`), `— Mobile — Logged In` (`header 4 — mobile`,
+    built fresh at mobile scale, 390×980), `— Mobile — Logged Out`
+    (cloned, navbar swapped to `header 7 — mobile`), and a `— Design
+    Notes` annotation frame.
+  - **Four screens, not two — flagged, not silently decided**: the task's
+    literal ask was "desktop + mobile," but the Scouting/Academy icons
+    exist on **both** `header 4` and `header 7` (DL #284), and every other
+    page reachable from both navbar states in this file (Blog, Article
+    Detail, Sports Hub, the 3 Legal pages) gets the full auth-state ×
+    breakpoint split — built the same way here rather than leaving this
+    as the one inconsistent page in the file.
+  - **Content, identical across all four, genuinely generic**: a neutral
+    tinted clock-glyph icon (not a feature illustration), a fixed `COMING
+    SOON` badge pill, **the one variable slot** — a text layer named
+    `Feature Name`, set to `"Scouting"` as the worked example — a fixed
+    generic sub-line ("This feature is part of our Phase 2 roadmap and
+    isn't built yet. Check back soon."), and a generic "Back to
+    Soccernity" CTA. No fake screenshots or fabricated feature previews
+    for either pillar — nothing to show yet, per non-negotiable #4.
+  - **Real chrome, not provisional**: `Navbar header 4`/`header 7` and
+    `header 4 — mobile`/`header 7 — mobile`, plus the canonical Footer
+    (`5213:6816` desktop / `5543:7662` mobile, cloned) — not the logo-only
+    Top Bar Grassroots/Community Groups used before their nav placement
+    was decided (DL #258/#282), since this screen is reachable from the
+    real navbar today.
+  - **A real bug found and fixed during the build, not inherited**: the
+    mobile Navbar component (`header 4 — mobile`/`header 7 — mobile`) is
+    natively 428px wide, not the canonical 390px (DL #86) — both mobile
+    frames initially overflowed (Login button and avatar/messages cluster
+    clipped past the frame edge), caught by screenshot, fixed by
+    explicitly resizing each navbar instance to 390×64, re-verified clean
+    — called out in the Design Notes frame as a step any future page
+    cloning this navbar must not skip.
+  - **Not wired, and correctly so**: neither navbar icon has a prototype
+    `NAVIGATE` reaction to this screen — the `scouting`/`academy` icon
+    groups (DL #284) live inside the `header 4`/`header 7` **master
+    components**, not instances, and Figma rejects `NAVIGATE` reactions on
+    `COMPONENT` descendants (DL #249) — routing for these icons is
+    code-side (`apps/web/src/layout/navigation.ts`), matching every other
+    navbar icon, noted explicitly so it isn't mistaken for a gap.
+  - **Verified**: zero overlaps via a strict pairwise AABB test against
+    all 559 existing top-level page nodes plus among the 5 new frames (one
+    real overlap found between the Design Notes frame and Desktop — Logged
+    Out, fixed by repositioning, re-verified clean); **0 unbound / 0
+    off-palette SOLID paints across the 4 shipped screens** (the Design
+    Notes frame's own 10 unbound paints are expected — annotation content,
+    not shipped UI, per established precedent); **0
+    `brand/green-tint-28`**; Light mode only, no new colour.
   - Not merged — founder's call after review.
 
 ## The eight agents, and the order they run in
