@@ -142,18 +142,14 @@ export default function Header() {
       <div className="sn-header__auth">
         {hasSession ? (
           <div className="sn-header__account">
-            {/* Messages: no /messages route yet (Decision Log #166) --
-                shown for parity with the Figma "header 4" cluster but
-                inert until that route exists. */}
-            <button
-              type="button"
-              className="sn-header__messages"
-              aria-label="Messages (not available yet)"
-              title="Not available yet"
-              disabled
-            >
+            {/* Messages: /messages now resolves (sprint-3/banter-
+                messaging-to-code, Decision Log #277) -- closes the
+                messages half of Decision Log #166. Notifications (the
+                account-dropdown row) stays inert -- separate module, no
+                apps/web conversion yet. */}
+            <Link to="/messages" className="sn-header__messages" aria-label="Messages">
               <img src={messagesIcon} alt="" width={26} height={25} />
-            </button>
+            </Link>
             <button
               type="button"
               className="sn-header__avatar"

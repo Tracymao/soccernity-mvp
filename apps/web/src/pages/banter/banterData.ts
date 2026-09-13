@@ -1,32 +1,16 @@
-// Illustrative dummy data for BanterPage.tsx.
+// Illustrative dummy data for BanterPage.tsx -- the side-rail content
+// ONLY. The room list itself is now REAL (sprint-3/banter-messaging-to-
+// code, api/banter.ts) -- BanterModule is merged in services/api
+// (sprint-3/banter-rooms-backend; Decision Log #275/#276), so the
+// BanterRoomSummary/ROOMS constants that used to live here are gone.
 //
-// Backend state, confirmed live before writing this: services/api/src/
-// modules/banter/README.md is a placeholder only ("Build target:
-// Sprint 3... Not yet implemented"). The `BanterRoom` model exists in
-// prisma/schema.prisma (name, scopeType, createdBy, memberCount, posts)
-// but has zero live reads or writes anywhere -- no controller, no
-// service. Everything below is hardcoded to match the Figma frames'
-// own dummy content ("Bants homepage - All feed" 2256:6802 and
-// "Bants - search result" 2448:2179), the same "dummy data ahead of the
+// TRENDS / FIXTURES / SUGGESTED remain hardcoded: there is still no
+// news, fixtures (Decision Log #6) or people-suggestion endpoint
+// anywhere in Build Plan Section 4 -- the same "dummy data ahead of a
 // still-open backend blocker" convention CommunityPage.tsx's own
-// SAMPLE_TRENDS/SAMPLE_SUGGESTIONS/SAMPLE_NEWS constants use.
-export interface BanterRoomSummary {
-  id: string;
-  name: string;
-  scope: string; // club | league | country | topic, matches BanterRoom.scopeType's shape
-  memberCount: number;
-}
-
-export const ROOMS: BanterRoomSummary[] = [
-  { id: "room-1", name: "Chelsea vs Arsenal — Matchday Chat", scope: "Club rivalry", memberCount: 5230 },
-  { id: "room-2", name: "Manchester United Faithful", scope: "Club", memberCount: 4110 },
-  { id: "room-3", name: "NPFL Weekly Roundup", scope: "League", memberCount: 2870 },
-  { id: "room-4", name: "Europa League Nights", scope: "Competition", memberCount: 1990 },
-  { id: "room-5", name: "Grassroots Sunday League Talk", scope: "Topic", memberCount: 1420 },
-  { id: "room-6", name: "Transfer Window Watch", scope: "Topic", memberCount: 3305 },
-  { id: "room-7", name: "Lagos Derby Day", scope: "Club rivalry", memberCount: 980 },
-];
-
+// SAMPLE_TRENDS/SAMPLE_SUGGESTIONS/SAMPLE_NEWS constants use, matching
+// the Figma frames' own dummy content ("Bants homepage - All feed"
+// 2256:6802 and "Bants - search result" 2448:2179).
 export const TRENDS = [
   { topic: "Ronaldo", meta: "2,500 posts" },
   { topic: "Manchester United", meta: "2,325 posts" },

@@ -160,8 +160,7 @@
   padding: 0;
   border: none;
   background: transparent;
-  cursor: not-allowed;
-  opacity: 0.55;
+  cursor: pointer;
 }
 
 .sn-header__messages img {

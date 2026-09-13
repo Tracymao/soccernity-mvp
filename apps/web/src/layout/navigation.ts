@@ -89,7 +89,12 @@ export const drawerNavItems: DrawerNavItem[] = [
   // task (Decision Log #272) and is now mirrored into primaryNavItems
   // above.
   { label: "Grassroots", to: "/grassroots" },
-  { label: "Messages", to: "/messages", available: false },
+  // /messages now resolves (sprint-3/banter-messaging-to-code, Decision
+  // Log #277 -- MessagingModule) -- same "flip available once the route
+  // exists" precedent Clubs/Grassroots/Settings each got. Notifications
+  // stays disabled: the Notification Centre design is finalised (Decision
+  // Log #279) but has no apps/web conversion yet.
+  { label: "Messages", to: "/messages" },
   { label: "Notifications", to: "/notifications", available: false },
   { label: "Profile", to: "/profile" },
   // /settings resolves (redirects to /settings/privacy, the one built

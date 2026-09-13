@@ -44,6 +44,7 @@ function buildPrismaMock() {
     notification: {
       create: jest.fn(),
       findFirst: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
   } as unknown as PrismaService;
 
@@ -356,6 +357,21 @@ describe('MessagingService', () => {
       p().message.updateMany.mockResolvedValue({ count: 0 });
       const result = await service.markConversationRead('convo-1', CALLER);
       expect(result.markedRead).toBe(0);
+    });
+
+    // sprint-3/banter-messaging-to-code — closes the gap sendMessage's own
+    // comment flagged: nothing marked the collapsed 'message' Notification
+    // read when the conversation itself was opened.
+    it('also clears the caller\'s own unread "message" Notification for this conversation', async () => {
+      p().conversation.findUnique.mockResolvedValue(conversationRow());
+      p().message.updateMany.mockResolvedValue({ count: 2 });
+
+      await service.markConversationRead('convo-1', CALLER);
+
+      expect(p().notification.updateMany).toHaveBeenCalledWith({
+        where: { userId: CALLER, type: 'message', payloadRefId: 'convo-1', read: false },
+        data: { read: true },
+      });
     });
   });
 });

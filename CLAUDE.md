@@ -8487,6 +8487,114 @@ real, still-open follow-up, not done by this entry.
   list), now confirmed to also apply when the placeholder is a
   *different* colour from the target, not just a visibly-wrong shade of
   the same family. Found in `sprint-3/notification-centre-design-finalize`.
+- **`sprint-3/banter-messaging-to-code` (figma-to-code, 2026-09-13) wires
+  both Banter Rooms and Direct Messaging into `apps/web` — both backends
+  were fully built and tested (`BanterModule` DL #275/#276,
+  `MessagingModule` DL #277) but had zero frontend presence:
+  `BanterPage.tsx` was still a disclosed sample-data stub and Messaging
+  had no page, route, or client at all. Also closes a real backend gap
+  with founder sign-off — see below. Decision Log **#280**;
+  forward-pointers appended to **#139, #166, #275, #277**.**
+  - **New `api/banter.ts`** — the full client (create/list/search/mine/
+    join/leave/post-to-room), mirroring `api/grassroots.ts`'s shape
+    (own `BanterApiError`, `errorMessageFrom`, cursor pagination).
+    **`BanterPage.tsx` rewritten to real data** — `banterData.ts`'s
+    dummy `ROOMS` constant is gone; the room list, join/leave and room
+    creation are all real. **Search judgment call**: "All" switched
+    from the old client-side-only filter to the real server-side `?q=`
+    filter (`GET /banter-rooms`, debounced 300ms — the `GrassrootsPage`
+    city-filter precedent), since a real search endpoint now exists;
+    "My Bants" stays a client-side filter over the loaded
+    `GET /banter-rooms/mine` page, since that route takes no `q` param.
+    Trending News / Fixtures (Decision Log #6) / Suggested remain
+    illustrative — unchanged, no endpoint exists for any of them.
+  - **New `BanterRoomPage.tsx` (`/banter/:roomId`)** — a single room's
+    feed + posting. **No Figma frame exists for this screen** (the
+    Bants frames only ever show the room *list*) — built plain and
+    flagged, the same "no dedicated screen exists, built plain"
+    precedent `ClubFanPage.tsx`/`EditProfileModal.tsx` already
+    established. Reuses the real `PostCard.tsx` for the room feed
+    (`GET /banter-rooms/:id/posts` — identical `FeedPage` shape to
+    `GET /posts/feed`, since `BanterController` delegates server-side
+    to `FeedService.getBanterRoomFeed`) and a plain, contentText-only
+    composer (`POST /banter-rooms/:id/posts`) — membership-gated
+    server-side, rendered as a "Join this room to post in it." prompt
+    for a non-member rather than a broken form.
+  - **New `api/messaging.ts`** — the full client covering every
+    `messaging.service.ts` endpoint (start/find conversation, list
+    conversations, list/send messages, mark-read), same conventions.
+  - **New `MessagesPage.tsx` (`/messages`)** — the inbox
+    (`GET /conversations`), each row showing the other participant's
+    real name, a last-message preview, and a real per-caller
+    `unreadCount`; a hard-deleted other participant (Decision Log #44's
+    cascade) renders "Deleted user" rather than crashing.
+  - **New `NewConversationPage.tsx` (`/messages/new`)** — the recipient
+    picker, converting Decision Log #139's design. **Search judgment
+    call, flagged**: no people-search endpoint exists anywhere in
+    Section 4, so the search field is a client-side filter over the
+    caller's own `GET /users/:id/following` page (the only "who can I
+    message" data source that exists) — labelled "Search people you
+    follow", never implying a site-wide directory. Selecting a person
+    calls the real, idempotent `POST /conversations` (find-or-create).
+  - **New `ConversationPage.tsx` (`/messages/:conversationId`)** — the
+    thread. `GET /conversations/:id/messages` returns newest-first
+    (matching `GET /clubs/:id/feed`'s direction); each page is reversed
+    here so the screen reads oldest-at-top, newest-at-bottom, and "Load
+    earlier messages" *prepends* the next (older) page. **Thread-header
+    identity is a genuine, disclosed limitation**: there is no
+    `GET /conversations/:id` (`messaging/README.md`'s own "Not built"
+    list) and `Message` itself carries only an opaque `senderId`, never
+    a display name — so `MessagesPage.tsx`/`NewConversationPage.tsx`
+    both pass `otherParticipant` via router `state` on navigation, and
+    a direct visit / hard refresh (no state) falls back to a generic
+    "Conversation" heading rather than inventing a name. `PATCH
+    /conversations/:id/read` fires once, non-blocking, right after the
+    thread's first page loads.
+  - **Nav wiring**: `navigation.ts`'s `Messages` drawer item flipped
+    `available: true` (same precedent as Clubs/Grassroots/Settings);
+    `Header.tsx`'s top-bar messages icon is now a real, enabled `Link`
+    to `/messages` — **closes the messages half of Decision Log #166**
+    (Notifications stays disabled — separate module, no `apps/web`
+    conversion of the finalised Notification Centre design yet).
+  - **A real backend gap closed, with founder sign-off (the one
+    exception to this PR's otherwise `apps/web`-only scope)**:
+    `messaging.service.ts`'s own `sendMessage` comment had flagged that
+    nothing ever marked the collapsed `'message'` `Notification` read
+    when the recipient opened the conversation — and there is no
+    notifications endpoint at all for a frontend to call instead
+    (`notifications/README.md` is still a bare placeholder).
+    `markConversationRead` now also runs one additional, tightly-scoped
+    `notification.updateMany` (`userId: callerId, type: 'message',
+    payloadRefId: conversationId, read: false → true`) in the exact
+    same request `ConversationPage.tsx` already calls on thread-open —
+    no new endpoint, no schema change, no Figma touched.
+    `messaging/README.md`'s stale "No `Notification` on message send"
+    section (it predated `sprint-3/notification-triggers-message-
+    fixture-contest`'s actual wiring) is corrected in place in the same
+    PR, along with its test count (30 → 34, since that same trigger PR
+    added 3 tests here and never updated this line — another instance
+    of the drift this file's own "Keeping this file current" section
+    describes).
+  - **Verified**: `services/api` mocked suite **52 suites / 738 tests, 0
+    failures** (up from 737 — 1 new `messaging.service.spec.ts` case);
+    `nest build` + `npm run lint` clean. **e2e suite not re-run** — no
+    Docker in this session; the change is a second, independent
+    `updateMany` inside an already-e2e-covered request (no new raw SQL,
+    relation, or isolation-level reasoning), the same class of change
+    `test/README.md`'s own guiding principle keeps at the mocked layer
+    — flagged for whoever next runs the real e2e suite to confirm
+    `messaging.e2e-spec.ts` still passes unchanged (14 tests,
+    untouched). `apps/web`: `npx tsc --noEmit` clean, `npm run lint`
+    clean, `npm run build` clean, `npx vitest run` **36 files / 244
+    tests, 0 failures** (up from 32/215 — `BanterPage.test.tsx`
+    rewritten 5→8 tests for the real client, new `BanterRoomPage.test.tsx`
+    +6, `MessagesPage.test.tsx` +6, `NewConversationPage.test.tsx` +5,
+    `ConversationPage.test.tsx` +8, `Header.test.tsx` +1).
+    Dev-server smoke test: `/`, `/banter`, `/banter/:roomId`,
+    `/messages`, `/messages/new`, `/messages/:conversationId` all HTTP
+    200, clean log. No real browser/Playwright check available — same
+    ceiling as every prior `apps/web` PR.
+  - Not merged — founder's call after review.
 
 ## The eight agents, and the order they run in
 
