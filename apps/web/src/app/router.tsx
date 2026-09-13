@@ -61,6 +61,7 @@ import GuardianConsentPage from "../pages/GuardianConsentPage";
 import GuardianConsentConfirmPage from "../pages/GuardianConsentConfirmPage";
 import VerifyEmailPage from "../pages/VerifyEmailPage";
 import ProfilePage from "../pages/ProfilePage";
+import NotificationCentrePage from "../pages/NotificationCentrePage";
 import PrivacySettingsPage from "../pages/PrivacySettingsPage";
 import DeactivateAccountPage from "../pages/settings/DeactivateAccountPage";
 import DeleteAccountPage from "../pages/settings/DeleteAccountPage";
@@ -235,6 +236,12 @@ export const routes: RouteObject[] = [
       { path: "guardian-consent", element: <GuardianConsentPage /> }, // F5
       { path: "guardian-consent/confirm", element: <GuardianConsentConfirmPage /> }, // F5
       { path: "profile", element: <ProfilePage /> }, // F6
+
+      // Notification Centre (Build Plan Section 4.7, NotificationsModule —
+      // sprint-3/notifications-read-api, Decision Log #290) converting the
+      // finalized Figma design (Decision Log #279). No site footer — not
+      // in the Figma frame, matching Community/Clubs/Grassroots/Banter.
+      { path: "notifications", element: <NotificationCentrePage /> },
 
       // Settings. /settings/privacy is the only real Settings screen in
       // code so far (the CONSOLIDATED "Settings — Privacy" Figma page,

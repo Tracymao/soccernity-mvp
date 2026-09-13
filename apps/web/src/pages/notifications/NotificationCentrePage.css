@@ -1,0 +1,303 @@
+/* Notification Centre (NotificationCentrePage.tsx). Figma source:
+ * 5640:7815 (desktop) / 5643:8003 (mobile), 5642:7898 / 5642:7997 (empty
+ * state), "Soccernity-MVP" (weZWWqggy9j13eX8bhFgs6), finalized by
+ * sprint-3/notification-centre-design-finalize (Decision Log #279).
+ *
+ * Colour values reference the app-wide --sn-* custom properties from
+ * src/theme/applyTheme.ts — do not hardcode hex. Light theme only,
+ * matching every other converted page.
+ *
+ * Note: this app's `--sn-background-page` and `--sn-background-surface`
+ * are both #FFFFFF (see packages/shared/src/tokens/index.ts) — there is
+ * no web token for Figma's brand/off-white page background (Decision Log
+ * #96 — a genuinely new token that was never mirrored into
+ * packages/shared). `--sn-background-page` is used as the closest
+ * existing substitute, the same substitution every other converted page
+ * in this app already makes (grep any of them for "background-page").
+ * Consequence: "read" rows need an explicit border to stay visually
+ * separated from the page, since the two backgrounds are identical here —
+ * matching the border already used on GrassrootsPage/ClubsPage's own
+ * white cards for the same reason. */
+
+.notif-page {
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.notif-status {
+  font: 400 15px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  padding: 48px 0;
+  text-align: center;
+  margin: 0;
+}
+
+.notif-status--error {
+  color: var(--sn-brand-navy);
+}
+
+/* --- header ------------------------------------------------------ */
+
+.notif-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.notif-page__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notif-page__title {
+  font: 600 34px/1.3 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.notif-page__subtitle {
+  font: 400 16px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.notif-mark-all {
+  flex-shrink: 0;
+  padding: 12px 18px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sn-text-primary);
+  font: 600 15px "Inter", sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.notif-mark-all:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- tabs ---------------------------------------------------------- */
+
+.notif-tabs {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.notif-tab {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 8px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font: 600 15px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.notif-tab--active {
+  color: var(--sn-text-primary);
+  border-bottom-color: var(--sn-brand-green);
+}
+
+.notif-tab__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--sn-brand-navy);
+  color: white;
+  font: 600 12px "Inter", sans-serif;
+}
+
+/* --- group labels + list ------------------------------------------ */
+
+.notif-group-label {
+  font: 600 12px "Inter", sans-serif;
+  letter-spacing: 1px;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.notif-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.notif-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 16px 20px;
+  border-radius: 12px;
+  border: none;
+  text-align: left;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.notif-row--unread {
+  background: var(--sn-green-tint-12);
+}
+
+.notif-row--read {
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+}
+
+.notif-row__avatar {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 16px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.notif-row__avatar--unread {
+  background: var(--sn-background-surface);
+}
+
+.notif-row__avatar--read {
+  background: var(--sn-green-tint-12);
+}
+
+.notif-row__avatar--icon {
+  background: var(--sn-green-tint-12);
+}
+
+.notif-row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.notif-row__text {
+  font: 400 15px/1.4 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.notif-row__text strong {
+  font-weight: 600;
+}
+
+.notif-row__text--gone {
+  color: var(--sn-text-secondary);
+  font-style: italic;
+}
+
+.notif-row__timestamp {
+  font: 400 13px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.notif-row__dot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--sn-brand-green);
+}
+
+/* --- load more ------------------------------------------------------ */
+
+.notif-load-more {
+  height: 50px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sn-text-primary);
+  font: 600 15px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.notif-load-more:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* --- empty state ------------------------------------------------- */
+
+.notif-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  padding: 56px 64px;
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 16px;
+  text-align: center;
+}
+
+.notif-empty__icon {
+  width: 88px;
+  height: 88px;
+  border-radius: 44px;
+  background: var(--sn-green-tint-12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notif-empty__title {
+  font: 600 26px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.notif-empty__body {
+  font: 400 16px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  max-width: 440px;
+  margin: 0;
+}
+
+.notif-empty__soon {
+  font: 400 13px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  max-width: 440px;
+  margin: 0;
+}
+
+.notif-empty__cta {
+  padding: 16px 28px;
+  border: none;
+  border-radius: 6px;
+  background: var(--sn-brand-navy);
+  color: white;
+  font: 600 15px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .notif-page__header {
+    flex-direction: column;
+  }
+
+  .notif-empty {
+    padding: 40px 24px;
+  }
+}
