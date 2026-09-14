@@ -1,50 +1,327 @@
 # leaderboard module
 
 Build target: Sprint 6 — Section 4.9 of the MVP Build Plan
-(`GET /leaderboard?period=`).
+(`GET /leaderboard?period=`). **Now built**, ahead of the rest of
+Sprint 6, by `sprint-6/leaderboard-read-rollup` (Build Plan Decision Log
+#292) — the same "run one Sprint N module early" pattern
+`admin`/`contest`/`grassroots`/`banter`/`messaging`/`notifications`/
+`community-groups` all already used in this codebase.
 
-**Not yet implemented** — placeholder so the sprint owner is visible in
-the file tree.
+## What this module does NOT do
 
-## What already exists as of sprint-2/contest-data-model-backend
+Read this before anything else — it's easy to over-read "Leaderboard
+module" as more than it is:
 
-The **inputs** to this module are now real, even though the module itself
-isn't:
+- It does **not** aggregate `PointsLedgerEntry` on read. `GET
+  /leaderboard` reads exclusively from the materialized
+  `LeaderboardEntry` table. A period the rollup hasn't touched yet
+  returns an empty page (`{ items: [], nextCursor: null }`), not an
+  error and not an on-demand backfill.
+- It does **not** touch `FeedService`, `UsersService`, or
+  `ContestService` (the point-award writers, via `points/points.util.ts`'s
+  `awardPoints`) — this module is read/rollup only.
+- It does **not** support club-scoped filtering. `PointsLedgerEntry.clubId`
+  stays `null` for every row (Decision Log #74/#128 — the represented-club
+  field/endpoint doesn't exist yet), and there is no `?clubId=` query
+  param on `GET /leaderboard`.
+- It does **not** build the Competition board (Prediction/Commentary
+  types, Decision Log #72/#73) — Build Plan Section 2.2 defers it.
+- It does **not** touch `apps/web` or Figma. `LeaderboardPage.tsx`'s
+  Overall board is still illustrative dummy data
+  (`sprint-2/contest-posting-flow-to-code` already wired its Contest tab
+  to the real Contest endpoints, but not this one) — wiring it to this
+  real endpoint is a separate `figma-to-code` follow-up.
 
-- **`PointsLedgerEntry`** (`schema.prisma`, `../points/`) — the
-  append-only ledger of every point-earning event. Decision Log #219
-  fixed the weights. Written today by `FeedService` (post / like),
-  `UsersService` (follow) and `ContestService` (weekly wins, monthly
-  crown).
-- **`LeaderboardEntry`** (Section 3's own model) — the *materialised*
-  rollup this module's `GET /leaderboard` will serve. Still empty;
-  nothing writes it yet.
+## Period handling — ISO-8601 week, no library
 
-## What Sprint 6 still has to build here
+`GET /leaderboard?period=` and the rollup both key on an ISO-8601 week
+string, `"YYYY-Www"` (e.g. `"2026-W33"`). All the date math lives in
+`iso-week.util.ts`, hand-rolled with plain `Date`/UTC methods:
 
-1. The aggregation: `SUM(PointsLedgerEntry.points)` for a user over a time
-   window (`occurredAt`), and — per Decision Log #128 — filtered to the
-   user's **represented club** (a field/endpoint that does **not exist
-   yet**; `PointsLedgerEntry.clubId` is the forward-compatible column,
-   currently always `null`).
-2. `GET /leaderboard?period=` — `JwtAuthGuard`-only (Decision Log #129:
-   the Leaderboard requires login, no logged-out view).
-3. The scheduled job that recomputes `LeaderboardEntry` (rank + points per
-   `period`) from the ledger.
-4. A place to apply anti-gaming caps on engagement contribution (see
-   `../points/README.md`'s flagged follow-up).
-5. **Exclude non-active accounts from the ranking** (Decision Log #221,
-   `sprint-2/account-deactivation-backend`). Decision Log #221 makes an
-   inactive account's content disappear from every read surface that
-   *does* exist today (feed, single post, club roster, follower/following
-   lists). The Leaderboard is the one named "an inactive account should
-   not appear" surface that has no code yet — so the requirement is
-   parked here: whatever aggregation this module builds
-   (`SUM(PointsLedgerEntry.points)` per user, or the `LeaderboardEntry`
-   recompute job) must filter its user set to `User.accountStatus =
-   'active'`. `PointsLedgerEntry` rows keep accruing for a deactivated
-   user (deactivation removes nothing) and stay correct on reactivation —
-   so this is a filter on the *read/rollup*, not a change to how the
-   ledger is written. A minor absent from the data because they're
-   restricted-pending (Decision Log #45) is a separate, already-recorded
-   exclusion.
+- **No date library was added.** Confirmed via
+  `grep -n "date-fns\|dayjs\|luxon\|moment" package.json` that this repo
+  has zero date-library dependency anywhere, and
+  `contest.service.ts`'s own `resolveRoundWindows` already hand-rolls its
+  own date arithmetic with plain `Date`/UTC methods — adding a dependency
+  for ~80 lines of well-tested, self-contained week arithmetic would be a
+  bigger footprint than the arithmetic itself.
+- **Every computation is exclusively UTC** — `Date.UTC`/`getUTC*`/
+  `setUTC*`, never a local-time accessor. This mirrors
+  `account-deletion-sweep.service.ts`'s own documented lesson: that
+  service's `purgeExpiredConsentAuditRecords` originally used `setMonth`
+  (local time) and silently drifted its cutoff by an hour across a DST
+  boundary; `setUTCMonth` fixed it. Mixing local-time and UTC date math
+  in the same file is exactly the class of bug that produced that one.
+- `getIsoWeekPeriod(date)` — the period containing `date`, via the
+  standard ISO-8601 rule: find the Thursday of the same Mon–Sun week,
+  that Thursday's *own* calendar year is the ISO year (which can differ
+  from `date`'s own calendar year — the classic example, `2008-12-29`, a
+  Monday, is `2009-W01`), and the week number counts Thursdays from 1
+  January of that ISO year.
+- `parseIsoWeekPeriod(period)` — parses **and validates**: rejects a
+  malformed string, and rejects an out-of-range week (`week > 52` for a
+  year with only 52 ISO weeks, `week > 53` otherwise) via
+  `isoYearHasWeek53(isoYear)` (a year has a 53rd week iff 1 January is a
+  Thursday, or the year is a leap year and 1 January is a Wednesday) —
+  so `"2025-W53"` (2025 genuinely has only 52 ISO weeks) is a real 400,
+  not silently accepted and misinterpreted. Throws
+  `BadRequestException`, not a generic `Error` — this is reached directly
+  from `GET /leaderboard`'s own `?period=` query param, so a malformed
+  value is a client input error (400), not a server fault.
+- `getIsoWeekBoundaries(period)` — the `[start, end)` UTC boundary
+  (that week's own Monday 00:00:00 UTC, through the following Monday
+  00:00:00 UTC, exclusive) — the exact window the rollup filters
+  `PointsLedgerEntry.occurredAt` against.
+- `getPreviousIsoWeekPeriod(period)` — the period immediately before
+  `period`, re-derived by walking back 7 days from `period`'s own Monday
+  and re-running `getIsoWeekPeriod` on the result, rather than naively
+  decrementing the week number — week 1 of a year does not precede from
+  a "week 0"; it precedes from the *prior* ISO year's week 52 or 53, and
+  the re-derivation handles that for free.
+
+**Every test fixture for this file was hand-derived independently of the
+implementation**, via plain weekday arithmetic anchored on the widely
+documented ISO-8601 facts that `2009-01-01` is a Thursday and
+`2024-01-01` is a Monday — not generated by running the code and
+asserting on its own output (which would only prove internal
+consistency, not correctness). See `iso-week.util.spec.ts` for the full
+derivation chain, including the classic `2008-12-29 → 2009-W01` /
+`2010-01-01 → 2009-W53` year-boundary examples.
+
+## Rollup mechanism
+
+`LeaderboardRollupService` runs on `@Cron('0 */15 * * * *')` — every 15
+minutes. The installed `@nestjs/schedule`'s `CronExpression` enum has no
+`EVERY_15_MINUTES` member (confirmed directly against
+`cron-expression.enum.d.ts` — the nearest built-ins are
+`EVERY_10_MINUTES`/`EVERY_30_MINUTES`); the literal cron string above
+matches those two members' own `"0 */N * * * *"` shape exactly, so it
+neither over- nor under-shoots the requested cadence.
+`ScheduleModule.forRoot()` is already registered once, globally, in
+`app.module.ts` (`AccountDeletionModule`'s own precedent) — this module
+needs no scheduling infra of its own.
+
+Each tick calls `rollupPeriod` for **both** the current ISO week and the
+immediately-preceding one:
+
+```ts
+async runRollup(now: Date = new Date()): Promise<void> {
+  const currentPeriod = getCurrentIsoWeekPeriod(now);
+  const previousPeriod = getPreviousIsoWeekPeriod(currentPeriod);
+  await this.rollupPeriod(currentPeriod);
+  await this.rollupPeriod(previousPeriod);
+}
+```
+
+Recomputing the previous period too is deliberately cheap insurance
+against the period-boundary edge case (a `PointsLedgerEntry` row awarded
+in the last few minutes of a week, read by a tick that lands just after
+the Monday-00:00-UTC rollover) rather than building separate
+finalization/backfill logic — re-running the same idempotent upsert on
+an already-settled period is a harmless no-op (identical values in,
+identical values out).
+
+`now` is an explicit parameter with a real-clock default, exactly like
+`AccountDeletionSweepService.sweepPendingDeletions(now)` — so tests can
+prove period-boundary behavior deterministically without mocking global
+time. `@Cron()` itself always calls `runRollup()` with no arguments,
+which the default parameter covers.
+
+### `rollupPeriod(period)` — the raw SQL
+
+Prisma's query builder cannot express a `GROUP BY` combined with a
+window function (`RANK() OVER (...)`) — the exact class of gap
+`clubs.service.ts`'s own raw, parameterized `$executeRaw`/`$queryRaw`
+precedent in this codebase exists for (there, the implicit
+`_ClubMembership` join table's `INSERT ... ON CONFLICT`; here, a
+`GROUP BY` + window-function aggregation). One raw, parameterized
+`$queryRaw`, structured as a CTE:
+
+```sql
+WITH aggregated AS (
+  SELECT
+    ple."userId" AS "userId",
+    CAST(
+      LEAST(
+        COALESCE(SUM(CASE WHEN ple.source IN (<engagement sources>) THEN ple.points ELSE 0 END), 0),
+        100  -- ENGAGEMENT_POINTS_CAP_PER_PERIOD
+      )
+      + COALESCE(SUM(CASE WHEN ple.source NOT IN (<engagement sources>) THEN ple.points ELSE 0 END), 0)
+    AS INTEGER) AS "totalPoints"
+  FROM "PointsLedgerEntry" ple
+  INNER JOIN "User" u ON u.id = ple."userId"
+  WHERE ple."occurredAt" >= <period start> AND ple."occurredAt" < <period end>
+    AND u."accountStatus" = 'active'
+  GROUP BY ple."userId"
+)
+SELECT "userId", "totalPoints", CAST(RANK() OVER (ORDER BY "totalPoints" DESC) AS INTEGER) AS "rank"
+FROM aggregated
+WHERE "totalPoints" > 0
+```
+
+Why a CTE, not one flat query: Postgres does not allow a `SELECT` list
+expression to reference another expression's own alias at the same
+query level — the window function's `ORDER BY` needs the
+*already-capped* total, which is itself a multi-line `CASE`/`SUM`/`LEAST`
+expression. Aggregating first in `aggregated`, then ranking over its
+`totalPoints` *output column* in the outer `SELECT`, sidesteps that
+restriction entirely rather than repeating the capped-total expression
+twice.
+
+`::INTEGER` casts on both computed columns: Postgres's `SUM(int)` and
+`RANK()` both return `bigint` (`int8`) by default, which node-postgres
+(and therefore Prisma's `$queryRaw`) would otherwise hand back as a JS
+`bigint`, not a `number`. Every real point total is far inside the
+safe-integer range, so casting down to a genuine SQL `INTEGER` keeps the
+JS side a plain `number` with no `bigint` handling needed anywhere in
+this module.
+
+`WHERE "totalPoints" > 0` in the outer query: a user with zero
+`PointsLedgerEntry` rows in the window never appears in `aggregated` at
+all (the `INNER JOIN` only groups rows that exist) — this filter is the
+belt-and-braces case where every source happened to sum to zero, so no
+zero-point `LeaderboardEntry` row is ever materialized.
+
+Each aggregated row is then upserted via plain Prisma (not more raw
+SQL — Prisma's query builder can express "insert or update on a unique
+key" natively):
+
+```ts
+for (const row of aggregated) {
+  await this.prisma.leaderboardEntry.upsert({
+    where: { userId_period: { userId: row.userId, period } },
+    update: { points: row.totalPoints, rank: row.rank },
+    create: { userId: row.userId, period, points: row.totalPoints, rank: row.rank },
+  });
+}
+```
+
+**Deliberately not wrapped in one `$transaction` across every row** —
+each upsert is independently idempotent (re-running with identical input
+reproduces identical output), so a partial failure mid-loop just means
+fewer rows are current until the next 15-minute tick catches up, not a
+correctness problem for any individual row.
+
+## The anti-gaming cap
+
+`ENGAGEMENT_POINTS_CAP_PER_PERIOD = 100`, in this module's own
+`leaderboard.constants.ts` — **deliberately not added to
+`points/points.constants.ts`**. That file is the write side's own set of
+constants (`points.util.ts`'s `awardPoints`, called from
+`FeedService`/`UsersService`/`ContestService`); the cap is exclusively a
+read-side/rollup concern, and `points.constants.ts`'s own comment already
+anticipated this: *"A per-day cap and spam-pattern detection are a
+flagged follow-up, not built here — the Sprint 6 Leaderboard aggregation
+is the natural place to cap engagement contribution at read time
+anyway."*
+
+Applied to the summed contribution from `engagement_post`/
+`engagement_like`/`engagement_follow` **only**, via `LEAST(SUM(...), 100)`
+in the raw SQL, added to the **uncapped** sum of everything else (today:
+`contest_weekly_win`, `contest_monthly_crown`; `competition_result` is
+reserved and unused). Contest points are never capped.
+
+**Why 100**: Decision Log #219's own ratio rationale established that a
+monthly crown (250 points) should dominate ~83 posts of baseline
+engagement, and the smallest weekly-win payout (20, for 3rd place) should
+dominate ~7 posts — a board driven by unbounded engagement volume would
+break that. 100 points is roughly 2x a single 3rd-place weekly win (20)
+and under half of the smallest 1st-place weekly win (50), so a user
+cannot out-earn even one real Contest placement through engagement spam
+alone. At the same time, 100 points (~33 posts at 3 each, ~100 likes, or
+~100 follows within one ISO week) comfortably exceeds what a real single
+user does in a week of genuine, unspammed use — the cap targets spam
+volume, not ordinary participation.
+
+## Active-account exclusion (Decision Log #221)
+
+Applied at **both** stages, matching the same "primary write-side
+exclusion, defensive read-side exclusion" shape
+`sprint-2/account-deactivation-backend` already established for feed/
+club/follow-graph reads:
+
+1. **Primary — the rollup.** The raw SQL's own `INNER JOIN "User" u ...
+   AND u."accountStatus" = 'active'` means a deactivated or
+   `pending_deletion` user's `PointsLedgerEntry` rows are simply never
+   included in a fresh rollup — their `LeaderboardEntry` row for the
+   periods a rollup tick just ran is not written or updated at all.
+2. **Defensive — the read.** `GET /leaderboard`'s own query also filters
+   `user: { accountStatus: 'active' }` (mirroring `feed.service.ts`'s
+   `ACTIVE_AUTHOR_POST_FILTER` / `users.service.ts`'s
+   `ACTIVE_FOLLOW_ENTRY_FILTER` exactly), so a user who deactivates in the
+   gap between two 15-minute rollup ticks disappears from reads
+   **immediately**, with no dependency on rollup cadence.
+
+### Stale rows
+
+Because the rollup only upserts rows for currently-active users, a user
+who deactivates simply stops being touched by future rollup ticks —
+their last-computed `LeaderboardEntry` row lingers in Postgres with a
+stale points/rank value until the read-time filter above hides it. This
+is expected and fine; **no explicit deletion or separate cleanup job was
+built**, matching this task's own explicit instruction. `PointsLedgerEntry`
+rows keep accruing for a deactivated user regardless (deactivation
+removes nothing — Decision Log #221's own established behavior), so a
+reactivated user's next rollup tick picks their real total back up with
+no backfill needed.
+
+## `GET /leaderboard`
+
+`JwtAuthGuard`-only — no `GuardianConsentGuard` (reading the board is not
+a "posting"-class action under Section 5.7), and no logged-out view at
+all (Decision Log #129, already established for the Contest tab). No
+`@CurrentUser()` — the response carries no per-caller field, matching
+`GET /clubs`/`GET /banter-rooms`'s "reading a directory isn't
+caller-scoped" shape, not `GET /posts/feed`'s viewer-state shape
+(Decision Log #153/#154/#275).
+
+Keyset pagination: `(rank ASC, userId ASC)` — `rank` alone is not a
+unique tiebreak, since `RANK() OVER (ORDER BY points DESC)` deliberately
+gives two tied users the same rank (Decision Log #61(c): ties are
+allowed), so `userId` is the tiebreaker, mirroring every other two-column
+cursor in this codebase. Default page size 20 / max 50 per Section 5.5,
+same opaque-base64-cursor convention as every other list endpoint here.
+Postgres's own default null ordering already puts `NULL` values last on
+an ascending sort (the opposite of MySQL's default) — no explicit `NULLS
+LAST` was needed for a hypothetical null-`rank` row, though in practice
+no materialized row ever has one (the rollup never upserts a row without
+a real `rank` from the window function).
+
+Response shape:
+
+```ts
+interface LeaderboardEntryView {
+  userId: string;
+  displayName: string;
+  points: number;
+  rank: number;
+}
+interface LeaderboardPage {
+  items: LeaderboardEntryView[];
+  nextCursor: string | null;
+}
+```
+
+## Verification
+
+Mocked suite (this PR): 4 new suites, 58 new tests — `iso-week.util.spec.ts`
+(31, the ISO-week date math, both directions, hand-derived fixtures
+including year-boundary cases), `leaderboard.service.spec.ts` (14, the
+read side — period default/validation, active-account filter, ordering,
+pagination shape, cursor decode/encode), `leaderboard-rollup.service.spec.ts`
+(9, the write side — upsert-per-row shape, empty-period handling, the raw
+query's own boundary params and SQL-text assertions, the current+previous
+period cron behavior including the ISO-year-boundary case), and
+`leaderboard.controller.http.spec.ts` (7, `JwtAuthGuard` wiring and DTO
+validation). See `CLAUDE.md`'s matching status bullet for exact
+before/after suite counts.
+
+e2e (real Postgres, `test/leaderboard.e2e-spec.ts`, 14 tests) — the
+raw SQL's own genuine correctness against a live engine, which no mock
+can prove: the cap (including the mixed
+capped-engagement-plus-uncapped-contest case on the *same* user), both
+active-account exclusion stages (a fresh rollup never writing a
+deactivated user's row at all, and a *stale* already-written row being
+hidden at read time after the user later deactivates), period isolation,
+ties sharing a rank, rollup idempotency across repeated runs, and full
+keyset pagination across 5 users with no gaps or duplicates.
