@@ -92,6 +92,17 @@ model User {
   // required by Prisma; no business data of its own.
   banterRoomMemberships BanterRoomMember[]
 
+  // sprint-3/community-groups-backend (Decision Log #281) — the two
+  // reverse sides CommunityGroup/CommunityGroupMember need. Mechanical
+  // array fields required by Prisma; no business data of their own.
+  // `createdCommunityGroups` is CommunityGroup.createdBy's reverse side
+  // (a real FK from the start — unlike BanterRoom.createdBy, which
+  // Section 3 scaffolded as a bare String, CommunityGroup has no Section
+  // 3 precedent to defer to, so createdById is cascade-FK'd per Decision
+  // Log #44 from day one).
+  createdCommunityGroups     CommunityGroup[]
+  communityGroupMemberships CommunityGroupMember[]
+
   posts            Post[]
   comments         Comment[]
   savedPosts       SavedPost[]
@@ -479,6 +490,101 @@ model BanterRoomMember {
   joinedAt     DateTime   @default(now())
 
   @@unique([userId, banterRoomId])
+}
+
+// sprint-3/community-groups-backend — Build Plan Sprint 3, Decision Log
+// #281 (figma-screen-builder design: `sprint-3/community-groups-design`).
+// A durable-attribute interest group — grouped by at least one of City /
+// Position Played / Career Track (a "fantasy league" 4th dimension was
+// explicitly considered and left out — see community-groups/README.md and
+// Decision Log #281 item 4). Distinct from BanterRoom (a scope-category
+// room, no lasting attribute) and ClubPage (a licensed-club fan page) —
+// Section 5.7's safety-sensitive-action list names "joining a Banter Room
+// **or Community Group**" literally (see clubs.controller.ts's own guard
+// comment quoting this), which is the direct textual referent this model
+// finally gives a schema to.
+//
+// Unlike BanterRoom (which Section 3 already scaffolded with a bare
+// createdBy String), this model has NO prior Section 3 precedent to defer
+// to at all — it is a genuine, flagged addition beyond Section 3's
+// literal 20-entity list (Decision Log #281). Built WITH its membership
+// join table (CommunityGroupMember, below) from the very first PR — not
+// retroactively, the mistake banter/README.md's own "Schema change"
+// section documents BanterRoom/BanterRoomMember making (BanterRoom shipped
+// with memberCount and no join table at all, so "My Bants" was impossible
+// until a follow-up PR added one). Deliberately not repeated here.
+model CommunityGroup {
+  id   String @id @default(uuid())
+  name String
+
+  // name.trim().toLowerCase(), @unique — the one deliberate, lightweight
+  // anti-spam safeguard for Decision Log #281's flagged item 1 ("who may
+  // create a group" — see community-groups/README.md's Permission model
+  // section for the full resolution). Enforced at creation as a clear
+  // 409, never a raw P2002 surfaced to the client. Everything else
+  // (moderation queue, group size limits, a creation rate-limit beyond
+  // whatever platform-wide throttling already exists) is deliberately
+  // NOT built — flagged as open Decision Log candidates, the same
+  // "flagged, not built" precedent Decision Log #255/#275 already set for
+  // their own analogous Grassroots/Banter Room questions.
+  nameNormalized String @unique
+
+  // At least one of the three grouping dimensions must be present —
+  // enforced at the DTO/service layer
+  // (CreateCommunityGroupDto.atLeastOneDimension + defence-in-depth in
+  // CommunityGroupsService.createGroup), never a DB CHECK constraint —
+  // this codebase's established convention for cross-field rules (see
+  // Fixture's teamBId/opponentName XOR rule, enforced in
+  // GrassrootsService.createFixture, not in this schema). All three stay
+  // nullable so a group can specify any subset without inventing
+  // placeholder values for the rest.
+  city           String?
+  positionPlayed String?
+  careerTrack    String?
+
+  createdById String
+  // Decision Log #44 (cascade) — see account-deletion/README.md. A real
+  // FK from day one (unlike BanterRoom.createdBy's bare String, which
+  // Section 3 itself scaffolded that way) since this model has no prior
+  // schema to defer to.
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  // Denormalized cache of members.count() — same discipline as
+  // Post.likeCount / ClubPage.memberCount / BanterRoom.memberCount
+  // (Decision Log #199/#275). Starts at 1: the creator is auto-joined
+  // (CommunityGroupsService.createGroup), the same "create a group ->
+  // you're in it" precedent BanterService.createRoom already set. Never
+  // trust it in isolation — recomputable via
+  // CommunityGroupMember.count({ where: { communityGroupId } }).
+  memberCount Int @default(1)
+
+  createdAt DateTime @default(now())
+
+  members CommunityGroupMember[]
+}
+
+// sprint-3/community-groups-backend — per-user Community Group
+// membership, backing POST/DELETE /community-groups/:id/join and
+// GET /community-groups/:id/members. Shipped in the SAME PR as
+// CommunityGroup above (see that model's own comment on why this matters)
+// — the exact shape of BanterRoomMember / Like / SavedPost / Follow: an
+// explicit join model (never an implicit Prisma m2m — see
+// ClubPage.members' own comment on the real silent-relation-merge bug
+// that route caused) with @@unique on the pair for P2002-catch
+// idempotency, and a joinedAt timestamp (flagged addition beyond "nothing
+// to diverge from" — the same Section 5.5 "a list endpoint needs a real
+// column to order by" reasoning Like.likedAt / SavedPost.savedAt /
+// Follow.createdAt / BanterRoomMember.joinedAt already carry). Both FKs
+// onDelete: Cascade per Decision Log #44.
+model CommunityGroupMember {
+  id               String         @id @default(uuid())
+  userId           String
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  communityGroupId String
+  communityGroup   CommunityGroup @relation(fields: [communityGroupId], references: [id], onDelete: Cascade)
+  joinedAt         DateTime       @default(now())
+
+  @@unique([userId, communityGroupId])
 }
 
 model Conversation {

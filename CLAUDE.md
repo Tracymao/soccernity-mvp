@@ -8318,6 +8318,141 @@ Full reasoning for every choice above: Build Plan Section 5.
     also apply when the placeholder is fully unrelated to the target
     colour (not just visibly-wrong gray).
   - Not merged — founder's call after review.
+- **`sprint-3/community-groups-backend` (backend-api, 2026-09-14) builds
+  Community Groups — Build Plan Sprint 3, the feature the design pass
+  (`sprint-3/community-groups-design`, Decision Log #281) had already
+  designed but the schema/endpoints for it never existed. `services/api`
+  only — no Figma/`apps/web` touched; a later `figma-to-code` pass wires
+  the already-finalized design to these endpoints. `CommunityGroupsModule`
+  is now wired into `app.module.ts`. Decision Log #292 (schema/permission
+  resolution) + #293 (the join-vs-leave guard judgment call).**
+  - **Two new models, shipped together in this SAME PR** (migration
+    `20260914000000_add_community_group_and_member`) — **the explicit
+    lesson this task was briefed not to repeat**: `BanterRoom` shipped
+    with `memberCount` and no join table at all, so `BanterRoomMember`
+    had to be added *retroactively* once "My Bants" needed it
+    (`banter/README.md`'s own "Schema change" section documents that
+    mistake). Community Groups has no such excuse — neither model had any
+    Section 3 precedent at all, so both are genuinely new (a flagged
+    addition beyond Section 3's literal 20-entity list, per CLAUDE.md's
+    "the data model is a fixed spec" rule), and `CommunityGroupMember` was
+    built from day one. `CommunityGroup` = `id, name, nameNormalized
+    @unique, city?, positionPlayed?, careerTrack?, createdById (real FK
+    -> User, onDelete: Cascade per Decision Log #44 — unlike
+    BanterRoom.createdBy's bare String, which Section 3 itself scaffolded
+    that way), memberCount @default(1), createdAt`. `CommunityGroupMember`
+    = the exact shape of `BanterRoomMember`/`Like`/`SavedPost`/`Follow` —
+    an **explicit** join model (never an implicit Prisma m2m — see
+    `ClubPage.members`'s own real silent-relation-merge-bug precedent),
+    `@@unique([userId, communityGroupId])` for P2002-catch idempotency, a
+    `joinedAt` timestamp (flagged addition, same "a list endpoint needs a
+    real column to order by" reasoning `Like.likedAt`/`Follow.createdAt`/
+    `BanterRoomMember.joinedAt` already carry), both FKs `onDelete:
+    Cascade`. **`User`/`Guardian` safeguarding fields untouched** — the
+    only `User` model change is two mechanical reverse-relation array
+    fields, confirmed via a clean, purely-additive schema diff (two
+    `CREATE TABLE`s, two unique indexes, three FKs, zero `ALTER`/`DROP` on
+    any existing table).
+  - **`nameNormalized` (`name.trim().toLowerCase()`, `@unique`) is the
+    ONE deliberate anti-spam safeguard** — a duplicate name (case- and
+    whitespace-insensitive) is a real `409`, proven against a genuine
+    concurrent double-create race (the loser gets a clean `409` via a
+    `P2002`-catch, never a raw 500). Everything else — moderation queue,
+    group-size limits, a creation rate-limit beyond whatever
+    platform-wide throttling already exists, role-gating creation — is
+    **deliberately left open**, the same "flagged, not built" precedent
+    Decision Log #255/#275 already set for their own analogous
+    Grassroots/Banter Room questions.
+  - **Decision Log #281 flagged item 1 ("who may create a group")
+    resolved: any consent-confirmed authenticated user, default** — same
+    as `POST /teams` (#255) and `POST /banter-rooms` (#275).
+  - **A genuinely new DTO-level custom validator, per this task's own
+    explicit brief** — `IsAtLeastOneDimensionPresent`
+    (`dto/at-least-one-dimension.validator.ts`), enforcing "at least one
+    of city/positionPlayed/careerTrack" via a real `class-validator`
+    `registerDecorator`. Flagged as a deliberate divergence from this
+    codebase's established convention for cross-field rules (service-layer
+    enforcement — see `GrassrootsService.createFixture`'s
+    `teamBId`/`opponentName` XOR check), confirmed via grep to be the
+    first `registerDecorator`/`ValidatorConstraint` usage anywhere in
+    `services/api/src`.
+  - **Guard reasoning: Section 5.7 literally names "joining a Banter Room
+    or Community Group"** (`clubs.controller.ts`'s own guard comment
+    already quotes this exact phrase, arguing a `ClubPage` fan-page join
+    is neither of those two named things). This model is the first schema
+    this codebase has ever given to the second half of that phrase — so
+    create/join are `JwtAuthGuard` + `GuardianConsentGuard`-gated **without
+    the interpretive "posting"-class reading Decision Log #21/#275 needed**
+    for Banter Room creation — arguably a *stronger* textual case than
+    Banter Rooms' own.
+  - **`DELETE /community-groups/:id/join` — the leave-guard judgment call,
+    argued explicitly (Decision Log #293), not silently inherited from
+    either of two competing precedents.** `ClubsService.leaveClub` is
+    `JwtAuthGuard`-only, but its own reasoning is narrow: a `ClubPage`
+    join is "neither a Banter Room nor a Community Group" — the exact
+    carve-out that does **not** apply to this model.
+    `BanterService.leaveRoom` is `GuardianConsentGuard`-gated (leaving is
+    the reverse of the literally-named "joining a Banter Room" action).
+    **Resolution: follows `BanterService.leaveRoom`'s precedent** — same
+    guard pair as join. Practical consequence, flagged: since both
+    join *and* leave are consent-gated, a restricted-pending minor can
+    never actually reach `CommunityGroupMember` membership through the
+    real API at all — the roster-visibility filter (below) is therefore
+    pure defence-in-depth for this model, unlike `ClubsService`'s own
+    filter (where a restricted-pending minor genuinely *can* join a
+    `ClubPage`, since that join is `JwtAuthGuard`-only).
+  - **Endpoints**: `POST /community-groups`, `GET /community-groups`
+    (newest-first keyset — `createdAt desc, id desc`, a judgment call
+    diverging from `ClubPage`/`BanterRoom`'s own alphabetical ordering
+    since `CommunityGroup`, unlike those two, has a real `createdAt`
+    column — three optional combinable equality filters:
+    `?city=&positionPlayed=&careerTrack=`, per-caller `joined` batched, no
+    N+1, Decision Log #154/#275 pattern), `GET /community-groups/:id`,
+    `POST`/`DELETE /community-groups/:id/join` (idempotent, transactional
+    `memberCount` pairing, floor-guarded `>= 0`), `GET
+    /community-groups/:id/members` (mirrors `GET /clubs/:id/members`
+    exactly — alphabetical keyset by `displayName`, restricted-pending
+    minors AND non-`active` accounts excluded, same
+    `VISIBLE_CLUB_MEMBER_FILTER` logic re-declared locally). **404 before
+    403 everywhere** (`FeedService.deleteComment`/Grassroots/Banter
+    convention).
+  - **Deliberately NOT built, confirmed by direct grep before finishing**:
+    any group-post-composer or group-feed endpoint (`CommunityGroupsModule`
+    does not import `FeedModule` at all — mirrors Club — Fan Page's own
+    no-composer state, per the design's Design Notes frame) and any
+    moderation/report endpoint for group names (flagged item 2, open).
+  - **Verification, all re-measured directly, not estimated.** Docker
+    Desktop was not running at task start in this sandboxed environment;
+    started successfully after several minutes and a WSL2-backend retry,
+    so **both suites were genuinely run this time, not skipped.** Mocked
+    suite: **54 suites / 764 tests, 0 failures -> 56 suites / 796 tests, 0
+    failures** (2 new suites, 32 new tests — `community-groups.service.spec.ts`,
+    `community-groups.controller.http.spec.ts`). e2e suite (real Postgres
+    via docker-compose, migration baselined onto a pre-existing dev
+    container via `prisma migrate resolve --applied` for the 13
+    already-applied migrations, then a real `prisma migrate deploy`
+    applying the new one cleanly): **14 suites / 127 tests, 0 failures ->
+    15 suites / 140 tests, 0 failures** (1 new suite, 13 new tests —
+    `test/community-groups.e2e-spec.ts`, covering the
+    `@@unique([userId, communityGroupId])` constraint, the `nameNormalized`
+    `@@unique` constraint under a genuine concurrent double-create race, a
+    genuine concurrent double-join via `Promise.all` producing exactly one
+    row, a full join/join/leave/leave/join cycle never drifting or going
+    negative, combinable-filter + newest-first pagination, alphabetical
+    roster pagination, the restricted-pending-minor roster-exclusion proof
+    (seeded directly via Prisma, since the real join path is
+    consent-gated), and the account-deletion cascade removing
+    `CommunityGroupMember` rows while leaving the group and other members
+    intact). **A real bug was found and fixed during this verification,
+    disclosed rather than silently corrected**: the e2e spec's own
+    `createGroup()` test helper defaulted `city: over.city ?? 'Lagos'`
+    unconditionally, so a group meant to have NO city at all (only
+    `careerTrack`) silently got `city: 'Lagos'` anyway — a test-data bug,
+    not a service bug, caught by the combinable-filter test itself
+    returning the wrong group. Fixed to only default `city` when the
+    caller supplied no dimension at all. `nest build` + `npm run lint`
+    both clean.
+  - Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
