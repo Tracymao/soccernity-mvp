@@ -8452,7 +8452,13 @@ Full reasoning for every choice above: Build Plan Section 5.
     returning the wrong group. Fixed to only default `city` when the
     caller supplied no dimension at all. `nest build` + `npm run lint`
     both clean.
-  - Not merged — founder's call after review.
+  - **Merged as PR #241** — this bullet's own text previously said "Not
+    merged — founder's call after review"; corrected here in place once
+    the merge was confirmed directly against `git log` on `main`, per this
+    file's own "Keeping this file current" rule (a status bullet is only
+    as good as the merge state it records). See
+    `sprint-3/community-groups-frontend` below for the frontend half this
+    backend PR unblocked.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
@@ -9363,6 +9369,152 @@ real, still-open follow-up, not done by this entry.
     all real HTTP 200. No real browser/Playwright check available in this
     environment — same ceiling as every prior `apps/web` PR.
   - PR opened, not merged — founder's call after review.
+- **`sprint-3/community-groups-frontend` (figma-to-code, 2026-09-14) wires
+  Community Groups into `apps/web` — the already-designed
+  (`sprint-3/community-groups-design`, Decision Log #281) and
+  already-backed (`sprint-3/community-groups-backend`, PR #241, Decision
+  Log #292/#293) feature had zero frontend presence until this PR. Closes
+  the remaining code half of Decision Log #281. `apps/web` only — no
+  Figma/`services/api` touched. Decision Log #294.**
+  - **New `src/api/community-groups.ts`** — the full client, all 6
+    endpoints (`createCommunityGroup`/`listCommunityGroups`/
+    `getCommunityGroupById`/`getCommunityGroupMembers`/
+    `joinCommunityGroup`/`leaveCommunityGroup`), mirroring `api/clubs.ts`/
+    `api/grassroots.ts`/`api/banter.ts` (own `CommunityGroupsApiError`
+    with `.status`, `errorMessageFrom` for the guardian-consent-403/
+    duplicate-name-409 exact text, cursor pagination). Plus
+    `dimensionBadges()` (renders whichever of city/positionPlayed/
+    careerTrack a group actually carries — the backend allows more than
+    one to be set even though the Create form only ever submits one) and
+    `DIMENSION_LABELS`.
+  - **Three new routes, all direct `AppShell` children with NO site
+    footer** (not in the Figma frames, matching Clubs/Grassroots/Banter):
+    `/groups` (`CommunityGroupsPage.tsx`, Browse — `GET
+    /community-groups`), `/groups/new` (`CreateCommunityGroupPage.tsx` —
+    `POST /community-groups`), `/groups/:groupId`
+    (`CommunityGroupPage.tsx` — `GET /community-groups/:id` +
+    `GET /community-groups/:id/members`). `new` is a static segment and
+    outranks `:groupId` in React Router v8's specificity ranking (the
+    same Grassroots register/fixtures precedent), so `/groups/new` never
+    resolves to the group page. All three require a session (every
+    endpoint is `JwtAuthGuard`-gated at minimum) — a no-session visit
+    renders the established "log in to…" prompt and never calls the API.
+  - **Browse**: the 3 combinable dimension filters (city/positionPlayed/
+    careerTrack) are plain text inputs that debounce-re-query the server
+    (300ms, the `GrassrootsPage` city-filter precedent) — **not** the
+    "collapsed dropdown" the Figma frame shows, since no endpoint returns
+    the distinct values in use and the DTO itself explicitly does not
+    enforce a fixed allow-list (flagged, disclosed in-code, not silently
+    diverged from). The "Search groups by name" field stays
+    client-side-only over the loaded page (`GET /community-groups` has no
+    name-search param), the same `ClubsPage` discipline. **Two Figma
+    empty states, both built**, chosen by how many dimension filters are
+    active: exactly one → "No groups in {value} yet" + a "Create the
+    first group" CTA (frame 3); two or more → "No groups match those
+    filters" + "Reset filters" (frame 2, whose own copy explains a group
+    is designed to carry exactly one dimension in practice). Two further,
+    undesigned cases get plain messages: zero filters and a genuinely
+    empty catalogue → "No groups yet."; the client-side name filter
+    matching nothing → "No groups match that name." All four are
+    disclosed judgment calls. The Figma "· 248 groups" filter-summary
+    count is **not** reproduced — `GET /community-groups` has no
+    total-count field (only `items`/`nextCursor`, Section 5.5 keyset
+    discipline), so a true total isn't knowable without fetching every
+    page. Browse cards render **no Join button** (per the design — join
+    lives only on the group page).
+  - **Group Page**: header (monogram, name, dimension badge(s), member
+    count, a "✓ Joined" pill when `joined`), a `GroupJoinButton` (new,
+    same "act, then trust the real response" shape `ClubJoinButton`
+    uses), and a paginated roster (`GroupMemberRow`, new — identical
+    shape to `ClubMemberRow`: initials avatar + name + a Follow/Following
+    toggle with no per-caller `isFollowing` field, so it starts "Follow"
+    and self-corrects in-session, the same known Decision Log #153-class
+    gap `ClubMemberRow` already flags). A real 404 renders an honest
+    "Group not found" state. **Both `POST` and `DELETE
+    /community-groups/:id/join` are `GuardianConsentGuard`-gated**
+    (unlike Clubs' `JwtAuthGuard`-only join/leave) — a restricted-pending
+    minor's click surfaces the guardian-consent message with a link to
+    `/guardian-consent`, via a new `community-groups/errors.ts`
+    (`isAwaitingConsent`, mirroring `grassroots/errors.ts`).
+  - **Create a Group**: name + a "Group type" segmented control (City /
+    Position / Career track) that swaps a single value field below it,
+    submitting **exactly one** dimension — the DTO itself accepts "at
+    least one," but the Figma form's own copy ("One dimension only…")
+    only ever shows one field at a time, and this mirrors that. Surfaces
+    the guardian-consent 403 the same way, and the duplicate-name 409
+    (`"A Community Group with this name already exists"`) inline
+    verbatim. On success, navigates straight to the new group's own page
+    (no separate Figma confirmation frame exists — the creator is
+    auto-joined server-side, so the group page's own "Joined" pill is the
+    confirmation). **The Figma form's "Short description (optional)"
+    field is deliberately NOT rendered** — confirmed by reading
+    `CommunityGroup` in `schema.prisma` directly: there is no description
+    column anywhere in the model, so unlike `ProfilePage`'s disabled Bio/
+    Location fields (real, planned-but-unbuilt `User` columns), this
+    field has no eventual endpoint to wire to at all. The "No group photo
+    or logo" callout **is** reproduced verbatim — real, already-written
+    Figma copy citing the same Decision Log #58 precedent.
+  - **NO post-composer or group-feed UI was built anywhere, including on
+    the Group Page's Joined state** — matching the explicit task
+    instruction and `community-groups.controller.ts`'s own header
+    comment ("no group-post-composer or group-feed endpoint…
+    `CommunityGroupsModule` does not import `FeedModule` at all").
+    **Flagged Figma-vs-instruction conflict, disclosed rather than
+    silently resolved**: both Group Page frames (4 "Not Joined" and 5
+    "Joined") were re-fetched live from Figma before writing any code and
+    genuinely DO render a "Group feed" section with two illustrative
+    sample posts — this was not assumed from the earlier design-report
+    summary. `CommunityGroupPage.tsx`'s own header comment records this
+    explicitly: the backend comment's "mirrors Club — Fan Page's own
+    no-composer state" comparison only holds for the composer half, since
+    Club — Fan Page DOES have a real `GET /clubs/:id/feed` reading actual
+    `Post` rows via `Post.clubPageId` — `CommunityGroupMember` has no
+    relation to `Post` at all, so there is no real data this illustrative
+    section could ever be wired to. No feed section was built on either
+    state.
+  - **`navigation.ts`**: `{ label: "Groups", to: "/groups" }` flipped
+    `available: true` (by omitting the flag) in **both**
+    `accountMenuItems` and `drawerNavItems` — the same "flip once the
+    route exists" precedent as Clubs/Grassroots/Messages/Notifications/
+    Settings. **Not** added to `primaryNavItems` (the desktop icon
+    navbar) — Decision Log #282 explicitly placed Groups in the account
+    dropdown/drawer only, and that placement was already correctly
+    implemented before this PR; only the boolean needed flipping.
+    `Header.test.tsx`'s Groups-related assertions updated from
+    "disabled, not a link" to "a real link to /groups" in both the
+    desktop dropdown and mobile drawer tests.
+  - **Verified, all re-measured directly**: `npx tsc --noEmit`, `npm run
+    lint`, `npm run build` all clean (one real lint fix needed along the
+    way — an `eslint-disable-next-line react-hooks/exhaustive-deps`
+    comment referenced a rule this project's eslint config doesn't
+    register at all, since the `react-hooks` plugin isn't installed here;
+    removed, matching `GrassrootsPage.tsx`'s own `useEffect(() => {
+    load(...) }, [load])` pattern instead of suppressing a nonexistent
+    rule). `apps/web` vitest — **38 suites / 276 tests, 0 failures → 41
+    suites / 300 tests, 0 failures** (3 new suites, 24 new tests —
+    `CommunityGroupsPage.test.tsx` 8, `CommunityGroupPage.test.tsx` 10,
+    `CreateCommunityGroupPage.test.tsx` 6; no existing test file
+    changed). Dev-server smoke test: `/`, `/community`, `/clubs`,
+    `/grassroots`, `/groups`, `/groups/new`, `/groups/abc123` all real
+    HTTP 200, clean log. No real browser/Playwright check available in
+    this environment — same verification ceiling as every prior
+    `apps/web` figma-to-code PR.
+  - **This closes Decision Log #281's remaining frontend half — Community
+    Groups is now fully wired end to end (design → backend → frontend),
+    the same three-step arc Grassroots and Banter Rooms both already
+    completed.** Cross-checked against this file's own running Sprint 3
+    log before claiming Sprint 3 itself is done: Banter Rooms (backend +
+    frontend), Direct Messaging (backend + frontend), Notification Centre
+    (backend + frontend), and now Community Groups (backend + frontend)
+    all appear complete here. **Stated with an explicit caveat, not as an
+    unconditional claim**: this session did not independently re-open the
+    live Build Plan Section 6 docx to re-verify Sprint 3's own literal
+    "done when" exit criterion — only this file's own accumulated log was
+    checked, and that log has gone stale before (see this file's own
+    "Keeping this file current" section). Whoever finalizes/merges this
+    PR should do that direct docx check before formally declaring Sprint
+    3 closed.
+  - Not merged — founder's call after review.
 
 ## The eight agents, and the order they run in
 

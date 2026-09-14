@@ -127,10 +127,10 @@ export const drawerNavItems: DrawerNavItem[] = [
   { label: "Clubs", to: "/clubs" },
   // Community Groups (Decision Log #1, #281) does not get a navbar icon
   // -- the founder placed it in the account surface instead (Decision Log
-  // #282). `available: false`: Decision Log #281 is design-only, no
-  // apps/web route exists yet -- same "flip once the route exists"
-  // precedent as Grassroots/Messages/Settings below.
-  { label: "Groups", to: "/groups", available: false },
+  // #282). Now resolves (sprint-3/community-groups-frontend,
+  // CommunityGroupsPage.tsx) -- `available` omitted, same "flip once the
+  // route exists" precedent as Grassroots/Messages/Settings below.
+  { label: "Groups", to: "/groups" },
   // Grassroots Record-Keeping (Build Plan Section 4.5). Decision Log
   // #266 first scoped the nav entry point to the drawer only; the
   // desktop icon-navbar glyph followed as its own figma-design-system
@@ -157,10 +157,10 @@ export const drawerNavItems: DrawerNavItem[] = [
 // action.
 //
 // Groups (Decision Log #1, #281) landed here rather than the navbar per
-// Decision Log #282; `available: false` since it's design-only.
+// Decision Log #282; now resolves (sprint-3/community-groups-frontend).
 export const accountMenuItems: DrawerNavItem[] = [
   { label: "Profile", to: "/profile" },
   { label: "Notification", to: "/notifications" },
   { label: "Settings", to: "/settings" },
-  { label: "Groups", to: "/groups", available: false },
+  { label: "Groups", to: "/groups" },
 ];

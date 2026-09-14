@@ -145,16 +145,17 @@ describe("navigation config", () => {
     expect(drawerNavItems.some((i) => i.to === "/")).toBe(false);
   });
 
-  it("the Groups drawer item points at /groups and is disabled (Decision Log #1/#281/#282)", () => {
+  it("the Groups drawer item points at /groups and is available (Decision Log #1/#281/#282, sprint-3/community-groups-frontend)", () => {
     const groups = drawerNavItems.find((i) => i.label === "Groups");
     expect(groups?.to).toBe("/groups");
-    expect(groups?.available).toBe(false);
+    // `available` omitted => defaults to true (route exists in router.tsx).
+    expect(groups?.available).toBeUndefined();
   });
 
-  it("the Groups account-dropdown item points at /groups and is disabled (Decision Log #1/#281/#282)", () => {
+  it("the Groups account-dropdown item points at /groups and is available (Decision Log #1/#281/#282, sprint-3/community-groups-frontend)", () => {
     const groups = accountMenuItems.find((i) => i.label === "Groups");
     expect(groups?.to).toBe("/groups");
-    expect(groups?.available).toBe(false);
+    expect(groups?.available).toBeUndefined();
   });
 
   it("the Grassroots drawer item points at /grassroots and is available", () => {
@@ -231,9 +232,9 @@ describe("Header -- logged in (desktop)", () => {
     expect(within(menu).getByRole("menuitem", { name: "Settings" }).getAttribute("href")).toBe(
       "/settings",
     );
-    // Groups (Decision Log #1/#281/#282) has no route yet -> disabled, not a link.
-    expect(within(menu).queryByRole("link", { name: "Groups" })).toBeNull();
-    expect(within(menu).getByText("Groups").getAttribute("aria-disabled")).toBe("true");
+    // Groups now resolves (sprint-3/community-groups-frontend, Decision
+    // Log #1/#281/#282) -> a real link.
+    expect(within(menu).getByRole("menuitem", { name: "Groups" }).getAttribute("href")).toBe("/groups");
     expect(within(menu).getByRole("menuitem", { name: "Log out" })).not.toBeNull();
     expect(screen.queryByRole("dialog", { name: "Navigation" })).toBeNull();
   });
@@ -300,9 +301,9 @@ describe("Header -- logged in (mobile)", () => {
     );
     // Settings resolves as of sprint-2/privacy-settings-to-code (-> /settings).
     expect(within(nav).getByRole("link", { name: "Settings" }).getAttribute("href")).toBe("/settings");
-    // Groups (Decision Log #1/#281/#282) has no route yet -> disabled, not a link.
-    expect(within(nav).queryByRole("link", { name: "Groups" })).toBeNull();
-    expect(within(nav).getByText("Groups").getAttribute("aria-disabled")).toBe("true");
+    // Groups now resolves (sprint-3/community-groups-frontend, Decision
+    // Log #1/#281/#282) -> a real link.
+    expect(within(nav).getByRole("link", { name: "Groups" }).getAttribute("href")).toBe("/groups");
     expect(within(drawer).getByRole("button", { name: "Log out" })).not.toBeNull();
   });
 
