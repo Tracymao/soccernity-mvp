@@ -19,6 +19,7 @@ import { BanterModule } from './modules/banter/banter.module';
 import { MessagingModule } from './modules/messaging/messaging.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { CommunityGroupsModule } from './modules/community-groups/community-groups.module';
+import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -136,9 +137,19 @@ import { CommunityGroupsModule } from './modules/community-groups/community-grou
     // scope, mirroring Club — Fan Page's own no-composer state. See
     // modules/community-groups/README.md.
     CommunityGroupsModule,
+    // sprint-6/leaderboard-read-rollup — Build Plan Section 4.9. GET
+    // /leaderboard?period= (JwtAuthGuard-only, Decision Log #129), reading
+    // exclusively from the materialized LeaderboardEntry table, plus a
+    // @Cron(EVERY_15_MINUTES) LeaderboardRollupService that recomputes
+    // both the current and immediately-preceding ISO-week period from
+    // PointsLedgerEntry via a raw RANK() OVER (...) aggregation. Applies
+    // a 100-point-per-period cap to summed engagement contribution only
+    // (never to Contest points) and excludes non-active accounts at both
+    // rollup and read time (Decision Log #221). See
+    // modules/leaderboard/README.md.
+    LeaderboardModule,
     // SportsModule,        // Sprint 4
     // SearchModule,        // Sprint 6
-    // LeaderboardModule,   // Sprint 6
   ],
 })
 export class AppModule {}
