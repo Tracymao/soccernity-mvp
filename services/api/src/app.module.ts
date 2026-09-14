@@ -18,6 +18,7 @@ import { GrassrootsModule } from './modules/grassroots/grassroots.module';
 import { BanterModule } from './modules/banter/banter.module';
 import { MessagingModule } from './modules/messaging/messaging.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { CommunityGroupsModule } from './modules/community-groups/community-groups.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -124,6 +125,17 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     // Notification rows into ready-to-render data server-side (batched,
     // no N+1) — see modules/notifications/README.md for the full design.
     NotificationsModule,
+    // sprint-3/community-groups-backend — Build Plan Sprint 3, Decision
+    // Log #281 (design by `sprint-3/community-groups-design`). Full
+    // endpoint set: POST /community-groups, GET /community-groups, GET
+    // /community-groups/:id, POST/DELETE /community-groups/:id/join, GET
+    // /community-groups/:id/members. Two new models,
+    // CommunityGroup + CommunityGroupMember, both shipped in this SAME
+    // PR (not retroactively, unlike BanterRoom/BanterRoomMember). No
+    // group-post-composer / group-feed endpoint — deliberately out of
+    // scope, mirroring Club — Fan Page's own no-composer state. See
+    // modules/community-groups/README.md.
+    CommunityGroupsModule,
     // SportsModule,        // Sprint 4
     // SearchModule,        // Sprint 6
     // LeaderboardModule,   // Sprint 6
