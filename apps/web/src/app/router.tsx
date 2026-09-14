@@ -47,6 +47,9 @@ import GrassrootsTeamPage from "../pages/GrassrootsTeamPage";
 import GrassrootsRegisterTeamPage from "../pages/GrassrootsRegisterTeamPage";
 import GrassrootsScheduleFixturePage from "../pages/GrassrootsScheduleFixturePage";
 import GrassrootsFixturePage from "../pages/GrassrootsFixturePage";
+import CommunityGroupsPage from "../pages/CommunityGroupsPage";
+import CommunityGroupPage from "../pages/CommunityGroupPage";
+import CreateCommunityGroupPage from "../pages/CreateCommunityGroupPage";
 import ComingSoonPage from "../pages/ComingSoonPage";
 import BanterPage from "../pages/BanterPage";
 import BanterRoomPage from "../pages/BanterRoomPage";
@@ -207,6 +210,27 @@ export const routes: RouteObject[] = [
       { path: "grassroots/fixtures/:fixtureId", element: <GrassrootsFixturePage /> },
       { path: "grassroots/:teamId", element: <GrassrootsTeamPage /> },
       { path: "grassroots/:teamId/fixtures/new", element: <GrassrootsScheduleFixturePage /> },
+
+      // Community Groups (Build Plan Sprint 3, Decision Log #281 --
+      // CommunityGroupsModule, sprint-3/community-groups-backend). No site
+      // footer -- not in the Figma frames, matching Clubs/Grassroots/
+      // Banter. GET routes are JwtAuthGuard-only, not public; see
+      // CommunityGroupsPage.tsx. Nav entry point: the account
+      // dropdown/drawer only, NOT the desktop icon navbar (Decision Log
+      // #282 -- the founder placed Groups in the account surface, unlike
+      // Clubs/Grassroots).
+      //
+      //   /groups              browse (GET /community-groups)
+      //   /groups/new          create a group (POST /community-groups)
+      //   /groups/:groupId     a group's page (GET /community-groups/:id)
+      //
+      // `new` is a static segment and outranks the `:groupId` param in
+      // React Router v8's specificity ranking (the same Grassroots
+      // register/fixtures precedent), so /groups/new never resolves to
+      // CommunityGroupPage.
+      { path: "groups", element: <CommunityGroupsPage /> },
+      { path: "groups/new", element: <CreateCommunityGroupPage /> },
+      { path: "groups/:groupId", element: <CommunityGroupPage /> },
 
       // Leaderboard + Contest -- direct AppShell children, NO site footer.
       // Both were moved out of FooterLayout: the founder decided the
