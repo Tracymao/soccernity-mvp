@@ -24,6 +24,7 @@ import { ModerationModule } from './modules/moderation/moderation.module';
 import { AdminContentModule } from './modules/admin-content/admin-content.module';
 import { AdminUsersModule } from './modules/admin-users/admin-users.module';
 import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module';
+import { MediaModule } from './modules/media/media.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -140,6 +141,23 @@ import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.
     // this codebase; see modules/admin-dashboard/README.md's Decision
     // Log candidate.
     AdminDashboardModule,
+    // sprint-5/admin-media-storage-backend — Section 4.8 (Admin Service),
+    // the Media library half: GET /admin/media, POST
+    // /admin/media/upload — AdminJwtAuthGuard + AdminRolesGuard('editor',
+    // 'superadmin'), mirroring AdminContentModule's role split (media is
+    // an authoring tool). Real multipart upload (multer via
+    // FileInterceptor, 50MB cap) against a new, provider-agnostic
+    // StorageService abstraction (src/storage/) — S3-compatible,
+    // configured entirely through env vars (S3_ENDPOINT/S3_REGION/
+    // S3_BUCKET/S3_ACCESS_KEY/S3_SECRET_KEY) so it runs unmodified
+    // against AWS S3, Cloudflare R2, Backblaze B2, or DigitalOcean
+    // Spaces — no vendor chosen yet, a Decision Log candidate, mirroring
+    // Decision Log #26's own hosting reasoning. MediaAsset gained `key`
+    // (migration 20260915162308_add_media_asset_key), a genuine schema
+    // addition beyond Section 3's original field list — see
+    // modules/media/README.md. Live-bucket upload is UNVERIFIED pending
+    // real provider credentials — tests inject a fake StorageService.
+    MediaModule,
     // sprint-2/contest-data-model-backend — Decision Log #218/#219. The
     // Contest weekly-cycle data model + scoring ledger + the
     // active-contest query (Decision Log #61/#70/#71/#130/#188). New

@@ -1,0 +1,283 @@
+/* Media admin screens (Build Plan Section 4.8 — Figma nodes 361:553 /
+ * 396:442 / 916:2362 / 917:24), backed by
+ * sprint-5/admin-media-storage-backend. Light mode only; every colour is
+ * a --sn-* token. Destructive/blocking actions are navy, not red — no
+ * destructive token exists (non-negotiable #3), same convention
+ * pages/content/content.css / pages/moderation/moderation.css use. */
+
+.med-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1100px;
+}
+
+.med-back {
+  font-size: 13px;
+}
+
+.med-back a {
+  color: var(--sn-brand-navy);
+  font-weight: 600;
+}
+
+.med-action-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.med-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.med-tab {
+  background: none;
+  border: none;
+  padding: 8px 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sn-text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.med-tab--active {
+  color: var(--sn-text-primary);
+  border-bottom-color: var(--sn-brand-navy);
+}
+
+.med-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sn-text-secondary);
+}
+
+.med-loading,
+.med-error {
+  color: var(--sn-text-secondary);
+  font-size: 14px;
+}
+
+.med-error {
+  padding: 10px 12px;
+  border: 1px solid var(--sn-brand-navy);
+  border-radius: 4px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-weight: 600;
+}
+
+.med-card {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.med-card__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.med-field {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.med-field__label {
+  color: var(--sn-text-secondary);
+}
+
+.med-field__value {
+  color: var(--sn-text-primary);
+  font-weight: 600;
+}
+
+/* table */
+
+.med-table {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.med-table__row {
+  display: grid;
+  grid-template-columns: 1.6fr 180px 110px 110px;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 20px;
+  font-size: 13px;
+}
+
+.med-table__row--head {
+  background-color: var(--sn-green-tint-12);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+.med-cell--primary {
+  color: var(--sn-text-primary);
+  font-weight: 600;
+}
+
+.med-cell--secondary {
+  color: var(--sn-text-secondary);
+}
+
+.med-cell--truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* pills */
+
+.med-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: lowercase;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+}
+
+/* links + buttons */
+
+.med-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sn-brand-navy);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.med-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.med-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.med-btn--primary {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.med-btn--outline {
+  background-color: var(--sn-background-surface);
+  border-color: var(--sn-brand-navy);
+  color: var(--sn-text-primary);
+}
+
+.med-btn--sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+/* upload picker */
+
+.med-dropzone {
+  max-width: 480px;
+  padding: 32px;
+  border-radius: 10px;
+  border: 1px dashed var(--sn-icon-inactive);
+  background: var(--sn-green-tint-12);
+  text-align: center;
+  color: var(--sn-text-secondary);
+  font-size: 13px;
+}
+
+.med-dropzone input[type="file"] {
+  margin-top: 12px;
+}
+
+.med-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 480px;
+}
+
+.med-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background-color: var(--sn-background-surface);
+  font-size: 13px;
+}
+
+.med-file-row__status {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.med-file-row__status--pending {
+  color: var(--sn-text-secondary);
+}
+
+.med-file-row__status--uploading {
+  color: var(--sn-text-secondary);
+}
+
+.med-file-row__status--done {
+  color: var(--sn-brand-navy);
+}
+
+.med-file-row__status--failed {
+  color: var(--sn-text-primary);
+}
+
+/* preview */
+
+.med-preview {
+  width: 100%;
+  max-width: 480px;
+  aspect-ratio: 16 / 10;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--sn-green-tint-12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.med-preview img,
+.med-preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}

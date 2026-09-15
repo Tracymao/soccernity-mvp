@@ -43,6 +43,13 @@ export function installAdminAuthBridge(next: AdminAuthBridge | null): void {
 
 interface RequestOptions {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+  /**
+   * A plain JSON-serializable body, OR a real `FormData` (sprint-5/admin-media-storage-frontend
+   * — the multipart upload `POST /admin/media/upload` needs) — a
+   * FormData body skips both the `Content-Type: application/json`
+   * header (the browser sets its own multipart boundary automatically)
+   * and `JSON.stringify`, see `rawRequest` below.
+   */
   body?: unknown;
   /** Attach the admin bearer token and refresh-retry on 401. Default true. */
   auth?: boolean;
@@ -70,14 +77,18 @@ function messageFromBody(body: unknown, fallback: string): string {
 }
 
 async function rawRequest(path: string, options: RequestOptions, accessToken: string | null): Promise<Response> {
+  const isFormData = options.body instanceof FormData;
   const headers: Record<string, string> = { ...(options.headers ?? {}) };
-  if (options.body !== undefined) headers["Content-Type"] = "application/json";
+  // A FormData body must NOT set Content-Type itself — fetch/the browser
+  // computes the real multipart boundary and sets the header for us;
+  // overriding it here would break the boundary the server expects.
+  if (options.body !== undefined && !isFormData) headers["Content-Type"] = "application/json";
   if (options.auth !== false && accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
 
   return fetch(`${API_BASE_URL}${path}`, {
     method: options.method ?? (options.body !== undefined ? "POST" : "GET"),
     headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    body: options.body !== undefined ? (isFormData ? (options.body as FormData) : JSON.stringify(options.body)) : undefined,
   });
 }
 
