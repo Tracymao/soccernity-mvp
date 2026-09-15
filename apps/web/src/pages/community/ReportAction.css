@@ -1,0 +1,110 @@
+/* ReportAction.tsx — no Figma frame exists for this (see that file's own
+ * header comment); built plainly, matching the surrounding post/comment
+ * chrome's tokens. */
+
+.report-action__trigger {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: 500 12px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.report-action__trigger:hover {
+  color: var(--sn-brand-navy);
+}
+
+.report-action__done {
+  font: 500 12px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.report-action {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+}
+
+.report-action__menu {
+  padding: 4px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+  background: var(--sn-background-surface);
+}
+
+.report-action__menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: 500 12px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+.report-action__menu-item:hover {
+  background: var(--sn-green-tint-12);
+}
+
+.report-action__menu-item--cancel {
+  color: var(--sn-text-secondary);
+}
+
+.report-action__target {
+  margin: 0;
+  font: 600 12px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.report-action__textarea {
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: 400 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  background: var(--sn-background-page);
+  resize: vertical;
+  min-height: 56px;
+}
+
+.report-action__buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.report-action__submit {
+  background: var(--sn-brand-navy);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font: 600 12px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.report-action__submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.report-action__cancel {
+  background: none;
+  border: 1px solid var(--sn-icon-inactive);
+  color: var(--sn-text-secondary);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font: 600 12px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.report-action__error {
+  font: 400 12px/1.4 "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+  margin: 0;
+}

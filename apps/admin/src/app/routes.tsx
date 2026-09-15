@@ -62,9 +62,14 @@ export const adminRoutes: RouteObject[] = [
           { path: "articles/new", element: <CreateArticlePage /> },
           // Stub (sprint-2/admin-users-stub) — no GET/PATCH /admin/users.
           { path: "users", element: <UsersPage /> },
-          // Stub screens (sprint-2/admin-moderation-stub) — no
-          // moderation-queue backend exists (Sprint 5, Decision Log
-          // #135/#189); layout reproduced, nothing actionable.
+          // Real screens (sprint-5/admin-moderation-queue-frontend) — wired
+          // to GET/PATCH /admin/moderation/reports* (Sprint 5, built by
+          // sprint-5/admin-moderation-queue-backend, Decision Log
+          // #135/#189/#138). No GET /reports/:id exists, so Report Detail
+          // and Appeal Review are reached via a router `state` handoff from
+          // this queue's own "Review" link, with a bounded fallback fetch
+          // for a direct visit — see api/moderation.ts's own Decision Log
+          // candidate #4 comment.
           { path: "moderation", element: <ModerationQueuePage /> },
           { path: "moderation/reports/:id", element: <ReportDetailPage /> },
           { path: "moderation/appeals/:id", element: <AppealReviewPage /> },

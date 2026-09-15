@@ -29,6 +29,7 @@ import {
   type FeedPost,
 } from "../../api/feed";
 import { followUser, unfollowUser, UsersApiError } from "../../api/users";
+import ReportAction from "./ReportAction";
 
 function initialsFor(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -193,6 +194,18 @@ export default function PostCard({ post, accessToken, currentUserId }: PostCardP
             {following ? "Following" : "Follow"}
           </button>
         )}
+        {!isOwnPost && (
+          <div className="post__report">
+            <ReportAction
+              accessToken={accessToken}
+              triggerLabel="Report"
+              targets={[
+                { label: "Report post", targetType: "post", targetId: post.id },
+                { label: "Report user", targetType: "user", targetId: post.authorId },
+              ]}
+            />
+          </div>
+        )}
       </div>
 
       <p className="post__body">{post.contentText}</p>
@@ -254,6 +267,13 @@ export default function PostCard({ post, accessToken, currentUserId }: PostCardP
                 <span className="comment__time">{relativeTime(c.createdAt)}</span>
               </span>
               <p className="comment__body">{c.contentText}</p>
+              {c.authorId !== currentUserId && (
+                <ReportAction
+                  accessToken={accessToken}
+                  targets={[{ label: "Report comment", targetType: "comment", targetId: c.id }]}
+                  triggerLabel="Report"
+                />
+              )}
             </div>
           ))}
           {commentsLoading && <p className="community-status">Loading comments…</p>}

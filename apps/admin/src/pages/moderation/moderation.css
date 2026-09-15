@@ -1,0 +1,247 @@
+/* Moderation admin screens (Figma nodes 5794:8635 / 5796:8635 / 5796:8753
+ * — Decision Log #135/#189, backed by
+ * sprint-5/admin-moderation-queue-backend). Light mode only; every colour
+ * is a --sn-* token. Destructive/blocking actions are navy, not red — no
+ * destructive token exists (non-negotiable #3), same convention
+ * pages/contest/contest.css uses. */
+
+.mod-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1100px;
+}
+
+.mod-back {
+  font-size: 13px;
+}
+
+.mod-back a {
+  color: var(--sn-brand-navy);
+  font-weight: 600;
+}
+
+.mod-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.mod-tab {
+  background: none;
+  border: none;
+  padding: 8px 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sn-text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.mod-tab--active {
+  color: var(--sn-text-primary);
+  border-bottom-color: var(--sn-brand-navy);
+}
+
+.mod-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sn-text-secondary);
+}
+
+.mod-loading,
+.mod-error {
+  color: var(--sn-text-secondary);
+  font-size: 14px;
+}
+
+.mod-error {
+  padding: 10px 12px;
+  border: 1px solid var(--sn-brand-navy);
+  border-radius: 4px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-weight: 600;
+}
+
+.mod-card {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mod-card__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+/* table */
+
+.mod-table {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.mod-table__row {
+  display: grid;
+  grid-template-columns: 100px 90px 1.6fr 100px 110px 90px;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 20px;
+  font-size: 13px;
+}
+
+.mod-table__row--head {
+  background-color: var(--sn-green-tint-12);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+.mod-cell--primary {
+  color: var(--sn-text-primary);
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.mod-cell--secondary {
+  color: var(--sn-text-secondary);
+}
+
+.mod-cell--truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* pills */
+
+.mod-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: lowercase;
+}
+
+.mod-pill--strong {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.mod-pill--soft {
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+}
+
+/* links + buttons */
+
+.mod-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sn-brand-navy);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.mod-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.mod-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.mod-btn--primary {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.mod-btn--outline {
+  background-color: var(--sn-background-surface);
+  border-color: var(--sn-brand-navy);
+  color: var(--sn-text-primary);
+}
+
+.mod-btn--sm {
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+.mod-action-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* callouts */
+
+.mod-callout {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  background-color: var(--sn-green-tint-12);
+  border-radius: 8px;
+}
+
+.mod-callout__bar {
+  flex: 0 0 3px;
+  border-radius: 2px;
+  background-color: var(--sn-brand-navy);
+  align-self: stretch;
+}
+
+.mod-callout p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sn-text-primary);
+  line-height: 1.5;
+}
+
+.mod-callout code {
+  font-size: 12px;
+}
+
+/* field readout (Report Detail / Appeal Review) */
+
+.mod-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mod-field__label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--sn-text-secondary);
+}
+
+.mod-field__value {
+  font-size: 14px;
+  color: var(--sn-text-primary);
+  word-break: break-word;
+}
