@@ -51,7 +51,16 @@ model User {
   // NOT reversible via any endpoint in this PR — see AuthService.deleteAccount's
   // own comment; no hard-delete of this row happens anywhere yet, pending
   // a real retention/erasure policy decision this PR deliberately does not
-  // make unilaterally).
+  // make unilaterally) | "suspended" (sprint-5/admin-users-dashboard-backend
+  // — ADMIN-imposed only, via PATCH /admin/users/:id, and deliberately
+  // distinct from "deactivated": a suspension must NOT be reversible via
+  // the self-service POST /auth/reactivate-account path the way a
+  // self-deactivation is — AuthService.reactivateAccount/login both
+  // treat "suspended" the same generic-message way they already treat
+  // "pending_deletion", and only PATCH /admin/users/:id can move a
+  // suspended account back to "active". See
+  // modules/admin-users/README.md's Decision Log candidate for the full
+  // reasoning.
   accountStatus String @default("active")
 
   // sprint-2/account-deletion-sweep — a genuine addition beyond Section

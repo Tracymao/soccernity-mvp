@@ -9967,6 +9967,107 @@ real, still-open follow-up, not done by this entry.
     this Python-level round-trip is the actual verification ceiling
     here, not a LibreOffice-specific confirmation — stated plainly
     rather than claimed as something it isn't.
+- **`sprint-5/admin-users-dashboard-backend` (backend-api, 2026-09-15)
+  builds the last two zero-backend Admin Console pieces flagged in
+  Sprint 5 — platform-user management and the Dashboard — as two new
+  top-level modules, `admin-users` and `admin-dashboard`, sequenced
+  together per the task brief (two of the Dashboard's three real stats
+  are `User`-table reads the Users module already touches). Stated back
+  both judgment calls the task brief asked for, before building either.**
+  - **Decision 1 — a new, ADMIN-only `User.accountStatus` value,
+    `"suspended"`**, distinct from the self-service `"deactivated"`
+    (which is reversible via `POST /auth/reactivate-account`, exactly
+    the property an admin-imposed block must NOT have). **A real,
+    confirmed gap this closed, not a hypothetical one**: tracing every
+    `accountStatus` branch in `AuthService` against the new value found
+    that `reactivateAccount()` would have silently reactivated a
+    suspended user (it only ever checked for `"pending_deletion"`), and
+    `deactivateAccount()`/`deleteAccount()` had no `accountStatus` check
+    on the caller at all — a suspended user with a still-live access
+    token could self-deactivate, then later self-reactivate via the
+    now-fixed `reactivateAccount()`, a two-step escape from suspension.
+    **Both fixed**: `reactivateAccount()` now rejects `"suspended"` the
+    same generic way it already rejects `"pending_deletion"`;
+    `deactivateAccount()`/`deleteAccount()` now reject a suspended
+    caller outright. `login()` needed no code change — its existing
+    `!== 'active'` generic branch already covered it, extended in
+    comment only. Zero schema migration — `accountStatus` is a plain
+    `String`, comment-only update on `schema.prisma`.
+  - **Decision 2 — admin-triggered delete skips the self-service 30-day
+    grace period entirely** (a moderation action, not a self-service
+    request). Reuses `AccountDeletionSweepService.hardDeleteUser`
+    directly — made `public` (was `private`) specifically for this
+    second caller — rather than re-implementing the Guardian-snapshot +
+    `ConsentAuditRecord` + cascade sequence a second time. One deletion
+    primitive, two entry points: the scheduled sweep (unchanged,
+    30-days-past-due `pending_deletion` rows only) and this module
+    (immediate, via `PATCH /admin/users/:id { status: "deleted" }`,
+    which reads `{ deleted: true, id }` back — nothing left to report
+    about a now-gone row).
+  - **`GET`/`PATCH /admin/users`** — `AdminJwtAuthGuard` +
+    `AdminRolesGuard('moderator', 'superadmin')` on the whole
+    controller (mirrors `AdminModerationController`'s shape, not
+    `AdminArticlesController`'s `'editor', 'superadmin'`) — managing
+    platform users is moderation-adjacent, `AdminUser`'s own "actions
+    Reports" job, not the editorial one. `PATCH` covers exactly one
+    action per call: `active`, `suspended`, or `deleted`; an admin may
+    move any user into `active`/`suspended` from whatever their current
+    status is (including undoing an accidental self-deletion request
+    within the grace window — clearing a stale `pendingDeletionAt` in
+    the same write).
+  - **`GET /admin/dashboard/stats`** — `AdminJwtAuthGuard` ONLY, no role
+    gate, a deliberate divergence from every other Section 4.8
+    controller: the Dashboard is the Admin Console's own landing screen
+    for every role, and its stats straddle both the Users
+    (moderator/superadmin) and Articles (editor/superadmin) jobs.
+    **Real**: New Users (`User.createdAt` within the current UTC
+    calendar month — `month.util.ts`'s `startOfCurrentMonthUtc`,
+    DST-safe like `account-deletion-sweep.service.ts`'s own
+    `setUTCMonth` precedent), Total Articles Published
+    (`Article.count({status: 'published'})`), Community Users
+    (unfiltered `User.count()`). **`totalVisits` is always an explicit
+    `null`** — never a faked `0`, never a dropped key — flagged as its
+    own, larger Decision Log candidate: no page-view/visit-tracking
+    model or middleware exists anywhere in this codebase, and building
+    one is real, unscoped new architecture deliberately left out of this
+    PR's scope, per the task brief's own "don't scope-creep into
+    pageview tracking" instruction. `DashboardPage.tsx`'s "New users by
+    league" breakdown and "Latest posts" table stay sample data too —
+    neither was in the task brief's own named stat list.
+  - **Frontend**: `UsersPage.tsx` is now real (list + Block/Unblock +
+    a two-step inline delete confirm, never a bare irreversible click);
+    `DashboardPage.tsx` shows the three real stats with the fourth
+    staying "—". `ModerationQueuePage.tsx`'s own stale callout ("no
+    account-suspension mechanism wired up yet") is corrected in place —
+    a real mechanism now exists on the Users screen, but actioning a
+    report as `"Suspend User"` does NOT automatically call it (a
+    separate, cross-module decision deliberately left open, noted in
+    `admin-users/README.md` rather than wired unilaterally).
+  - **A real e2e spec was added** (`test/admin-users.e2e-spec.ts`) —
+    hits `test/README.md`'s fourth e2e trigger
+    (`admin-auth-isolation.e2e-spec.ts`'s own precedent: a security
+    property spanning the whole, really-bootstrapped app). Proves, real
+    Postgres/Redis: a suspend really revokes a real refresh token
+    (`POST /auth/refresh` rejects it); a delete really removes the
+    `User` row immediately (no `pending_deletion` limbo); and — the two
+    tests this file exists for — a real `POST /auth/login` and a real
+    `POST /auth/reactivate-account` both genuinely reject a suspended
+    account end to end, budgeted at exactly 2 of the shared
+    5-requests/60s `'auth'`-bucket calls so one app instance suffices.
+    No e2e spec added for `admin-dashboard` — reasoning stated in its
+    own README (plain `count()` aggregates, none of `test/README.md`'s
+    three triggers apply, same conclusion `admin-content/README.md`
+    already reached for an analogous module).
+  - **Verification, all re-measured directly**: `services/api` mocked
+    suite **67 suites / 949 tests → 72 suites / 982 tests, 0 failures**
+    (5 new suites, plus 4 new tests added to the existing
+    `auth.service.spec.ts`); e2e suite **17 suites / 161 tests → 18
+    suites / 170 tests, 0 failures** (every pre-existing e2e suite
+    re-run and still green alongside the new file). `nest build` +
+    `npm run lint` both clean. `apps/admin` **16 suites / 87 tests → 16
+    suites / 100 tests, 0 failures**; `tsc --noEmit`/`lint`/production
+    build all clean.
+  - Not merged — founder's call after review.
 
 ## The eight agents, and the order they run in
 

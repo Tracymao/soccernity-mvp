@@ -360,3 +360,23 @@ record, not to be read as describing current behavior:**
   sweep's transactional ordering (delete `Guardian` before `User`) is
   still what makes the hard-delete succeed, not a cascade doing it for
   free.
+
+## Status update — `hardDeleteUser` made public, a second caller (`sprint-5/admin-users-dashboard-backend`)
+
+`hardDeleteUser` (private since this module's own first PR) is now
+`public` — `AdminUsersService.updateUserStatus`'s `"deleted"` branch
+calls it directly for an admin-triggered **immediate** delete,
+deliberately skipping the 30-day grace period `sweepPendingDeletions`
+waits for (a moderation action, not a self-service request — see
+`admin-users/README.md`'s own Decision Log candidate #2 for the full
+reasoning). This is reuse of the exact same Guardian-snapshot +
+`ConsentAuditRecord` + cascade-delete sequence, not a second
+implementation — one primitive, two entry points now: the scheduled
+sweep (unchanged, still only ever acts on genuinely 30-days-past-due
+`pending_deletion` rows) and the new admin path (on demand, any account,
+any current `accountStatus`). `sweepPendingDeletions`/`runDailySweep`
+themselves are untouched by this PR. See that method's own updated
+comment for the caller-responsibility note (a real, irreversible hard
+delete with no confirmation step of its own — the caller owns
+authorization/confirmation, here `AdminRolesGuard` plus the admin having
+already chosen "delete" in the Users console).

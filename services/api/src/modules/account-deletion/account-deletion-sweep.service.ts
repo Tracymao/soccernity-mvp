@@ -34,6 +34,16 @@ import { PrismaService } from '../../prisma/prisma.service';
 //    delete-account request" math only holds if this second clock
 //    starts at hard-delete time, not at the (possibly years-earlier)
 //    original consent-confirmation time.
+//
+// sprint-5/admin-users-dashboard-backend — hardDeleteUser (below) now has
+// a SECOND caller: AdminUsersService.updateUserStatus, for an
+// admin-triggered immediate deletion that deliberately SKIPS the 30-day
+// grace period entirely (a moderation action, not a self-service
+// request — see that module's own README for the Decision Log
+// candidate). sweepPendingDeletions/runDailySweep above are UNCHANGED —
+// they still only ever act on genuinely 30-days-past-due
+// "pending_deletion" rows; the admin path never goes through either of
+// them, it calls the same underlying hardDeleteUser primitive directly.
 const GRACE_PERIOD_DAYS = 30;
 const CONSENT_AUDIT_RETENTION_MONTHS = 6;
 
@@ -165,7 +175,21 @@ export class AccountDeletionSweepService {
   // same transaction are rolled back too, so that unexpected case is
   // never left with the Guardian row (or its safeguarding audit trail)
   // already gone while the User row survives.
-  private async hardDeleteUser(userId: string, isMinor: boolean): Promise<void> {
+  //
+  // sprint-5/admin-users-dashboard-backend — made PUBLIC (was private)
+  // specifically so AdminUsersService can call this exact same primitive
+  // directly for an admin-triggered IMMEDIATE delete (skipping the
+  // 30-day grace period sweepPendingDeletions above waits for — see that
+  // PR's own Decision Log candidate on why the grace period is
+  // deliberately skipped for a moderation action). This is the same
+  // Guardian-snapshot + cascade-delete sequence either way; only the
+  // caller and the timing differ. Callers outside this module must still
+  // never call this on a whim — it is a real, irreversible hard delete
+  // with no further confirmation step of its own; the caller is
+  // responsible for its own authorization/confirmation gate (here:
+  // AdminRolesGuard + the admin having already chosen "delete" in the
+  // Users console).
+  async hardDeleteUser(userId: string, isMinor: boolean): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       if (isMinor) {
         const guardian = await tx.guardian.findUnique({

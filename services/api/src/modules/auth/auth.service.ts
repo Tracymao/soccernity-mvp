@@ -60,16 +60,26 @@ export class AuthService implements OnModuleInit {
     // specific, actionable message pointing at reactivateAccount() below;
     // pending_deletion deliberately does NOT (see deleteAccount()'s own
     // comment on why that state has no self-service undo in this PR).
+    // sprint-5/admin-users-dashboard-backend: 'suspended' (an
+    // ADMIN-imposed status) deliberately follows pending_deletion's
+    // treatment here, NOT deactivated's — the whole point of a separate
+    // 'suspended' value is that it is NOT user-reversible, and revealing
+    // a distinct "you're suspended" message would only be meaningfully
+    // different from a generic one if it pointed at a real self-service
+    // next step, which does not exist for this state (only
+    // PATCH /admin/users/:id can move a suspended account back to
+    // active). Same reasoning as pending_deletion, extended to a second
+    // state.
     if (user.accountStatus === 'deactivated') {
       throw new UnauthorizedException(
         'This account has been deactivated. Use POST /auth/reactivate-account to restore it.',
       );
     }
     if (user.accountStatus !== 'active') {
-      // Covers 'pending_deletion' (and any future non-'active' state) —
-      // deliberately the same generic message as a wrong password/email,
-      // not a distinct one, since this PR does not build a self-service
-      // undo path for pending_deletion.
+      // Covers 'pending_deletion', 'suspended' (and any future non-'active'
+      // state) — deliberately the same generic message as a wrong
+      // password/email, not a distinct one, since neither state has a
+      // self-service undo path this PR builds or should build.
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -131,6 +141,22 @@ export class AuthService implements OnModuleInit {
   // this is a required consequence, not scope creep.
   async deactivateAccount(userId: string, password: string): Promise<void> {
     const user = await this.assertPasswordCorrect(userId, password);
+    // sprint-5/admin-users-dashboard-backend: a SUSPENDED account must not
+    // be able to self-deactivate. Without this check, a suspended user
+    // holding a still-valid (not yet expired) access token from before
+    // PATCH /admin/users/:id revoked their sessions could call this
+    // endpoint, flip their own accountStatus to 'deactivated', and then
+    // later self-reactivate via POST /auth/reactivate-account (which
+    // DOES allow reactivating a 'deactivated' account) — silently
+    // escaping an admin-imposed suspension through a state this PR's own
+    // Decision Log candidate explicitly requires to be NOT
+    // user-reversible. Checked after password verification (same
+    // ordering as login()'s own deactivated/pending_deletion checks),
+    // and deliberately the same generic message login() gives a
+    // suspended account, for the identical reasoning.
+    if (user.accountStatus === 'suspended') {
+      throw new UnauthorizedException('Invalid credentials');
+    }
     await this.prisma.user.update({ where: { id: user.id }, data: { accountStatus: 'deactivated' } });
     await this.tokenService.revokeAllSessionsForUser(userId);
   }
@@ -141,6 +167,14 @@ export class AuthService implements OnModuleInit {
   // authenticated-caller gate (a valid JWT + a re-entered password).
   async deleteAccount(userId: string, password: string): Promise<void> {
     const user = await this.assertPasswordCorrect(userId, password);
+    // sprint-5/admin-users-dashboard-backend: same reasoning as
+    // deactivateAccount's own 'suspended' guard immediately above — a
+    // suspended account moving itself to 'pending_deletion' would be an
+    // un-reviewed state transition an admin never chose, using a
+    // leftover still-valid token in the brief window before it expires.
+    if (user.accountStatus === 'suspended') {
+      throw new UnauthorizedException('Invalid credentials');
+    }
     await this.startPendingDeletion(user.id);
   }
 
@@ -228,12 +262,30 @@ export class AuthService implements OnModuleInit {
   // that state. Whether a deletion request should ever have a
   // self-service undo window at all is exactly the open question this
   // PR's Decision Log candidate raises — see auth/README.md.
+  //
+  // sprint-5/admin-users-dashboard-backend: a "suspended" account is ALSO
+  // explicitly excluded below, for the same reason "pending_deletion" is
+  // — this closes a real gap the introduction of "suspended" would
+  // otherwise have opened, not a hypothetical one. Before this fix, only
+  // "pending_deletion" was rejected up front, and the ternary further
+  // down only ever special-cased "deactivated" → "active" — a
+  // "suspended" user would have fallen through BOTH checks unchanged
+  // (activeUser = user, still "suspended") and still been issued a
+  // working token pair by the line below, silently undoing an
+  // admin-imposed suspension through this self-service endpoint. Found
+  // by tracing every accountStatus branch in this method against the
+  // new value, not assumed safe by default.
   async reactivateAccount(email: string, password: string): Promise<AuthResponse> {
     const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     const hashToCheck = user?.passwordHash ?? this.dummyPasswordHash;
     const passwordValid = await this.passwordService.verify(hashToCheck, password);
 
-    if (!user || !passwordValid || user.accountStatus === 'pending_deletion') {
+    if (
+      !user ||
+      !passwordValid ||
+      user.accountStatus === 'pending_deletion' ||
+      user.accountStatus === 'suspended'
+    ) {
       throw new UnauthorizedException('Invalid credentials');
     }
 

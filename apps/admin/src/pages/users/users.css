@@ -1,0 +1,217 @@
+/* Users admin screen (Figma node 917:218 — Decision Log #142, backed by
+ * sprint-5/admin-users-dashboard-backend). Light mode only; every colour
+ * is a --sn-* token. Destructive/blocking actions are navy, not red — no
+ * destructive token exists (non-negotiable #3), same convention
+ * pages/content/content.css / pages/moderation/moderation.css use. */
+
+.us-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1100px;
+}
+
+.us-action-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.us-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.us-tab {
+  background: none;
+  border: none;
+  padding: 8px 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sn-text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.us-tab--active {
+  color: var(--sn-text-primary);
+  border-bottom-color: var(--sn-brand-navy);
+}
+
+.us-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sn-text-secondary);
+}
+
+.us-loading,
+.us-error {
+  color: var(--sn-text-secondary);
+  font-size: 14px;
+}
+
+.us-error {
+  padding: 10px 12px;
+  border: 1px solid var(--sn-brand-navy);
+  border-radius: 4px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-weight: 600;
+}
+
+.us-row-error {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.us-card {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.us-card__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+/* table */
+
+.us-table {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.us-table__row {
+  display: grid;
+  grid-template-columns: 1.4fr 130px 110px 220px;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 20px;
+  font-size: 13px;
+}
+
+.us-table__row--head {
+  background-color: var(--sn-green-tint-12);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+.us-cell--primary {
+  color: var(--sn-text-primary);
+  font-weight: 600;
+}
+
+.us-cell--secondary {
+  color: var(--sn-text-secondary);
+}
+
+.us-cell--truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* pills */
+
+.us-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: lowercase;
+}
+
+.us-pill--strong {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.us-pill--soft {
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+}
+
+/* actions */
+
+.us-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.us-actions__row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.us-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sn-brand-navy);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.us-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.us-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.us-btn--outline {
+  background-color: var(--sn-background-surface);
+  border-color: var(--sn-brand-navy);
+  color: var(--sn-text-primary);
+}
+
+.us-btn--primary {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.us-btn--sm {
+  padding: 10px 20px;
+  font-size: 14px;
+  align-self: flex-start;
+}
+
+.us-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.us-confirm span {
+  font-size: 12px;
+  color: var(--sn-text-primary);
+}

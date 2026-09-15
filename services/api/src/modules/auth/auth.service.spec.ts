@@ -529,6 +529,75 @@ describe('AuthService', () => {
     });
   });
 
+  // sprint-5/admin-users-dashboard-backend — a new, ADMIN-only
+  // accountStatus value ('suspended', set via PATCH /admin/users/:id,
+  // outside AuthService entirely). These tests seed a user directly with
+  // accountStatus: 'suspended' (there is no AuthService method that
+  // produces it — that's the whole point) and prove every self-service
+  // path treats it as genuinely non-user-reversible, including the two
+  // real gaps this PR found and closed (reactivateAccount and
+  // deactivateAccount/deleteAccount previously had no 'suspended' guard
+  // at all, since the value didn't exist before this PR).
+  describe("'suspended' accounts (sprint-5/admin-users-dashboard-backend)", () => {
+    it('login() rejects a suspended account with the same generic message pending_deletion gets', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('the-real-password');
+      prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash, accountStatus: 'suspended' });
+
+      await expect(authService.login('a@example.com', 'the-real-password')).rejects.toThrow(
+        'Invalid credentials',
+      );
+    });
+
+    // The real bug this PR found and fixed: before this test existed (and
+    // before reactivateAccount()'s own 'suspended' check was added), a
+    // suspended user could call this endpoint and be issued a fresh,
+    // working token pair — silently undoing an admin-imposed suspension.
+    it('reactivateAccount() does NOT reactivate a suspended account, even with correct credentials', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('the-real-password');
+      prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash, accountStatus: 'suspended' });
+
+      await expect(authService.reactivateAccount('a@example.com', 'the-real-password')).rejects.toThrow(
+        'Invalid credentials',
+      );
+
+      const stillSuspended = await prisma.user.findUnique({ where: { email: 'a@example.com' } });
+      expect(stillSuspended!.accountStatus).toBe('suspended');
+    });
+
+    // The second real bug this PR found and fixed: without this guard, a
+    // suspended user holding a still-valid (not-yet-expired) access token
+    // could self-deactivate, then later self-reactivate via
+    // reactivateAccount() (which DOES allow reactivating a 'deactivated'
+    // account) — a two-step escape from an admin-imposed suspension.
+    it('deactivateAccount() rejects a suspended caller', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('the-real-password');
+      prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash, accountStatus: 'suspended' });
+
+      await expect(authService.deactivateAccount('user-1', 'the-real-password')).rejects.toThrow(
+        UnauthorizedException,
+      );
+
+      const stillSuspended = await prisma.user.findUnique({ where: { email: 'a@example.com' } });
+      expect(stillSuspended!.accountStatus).toBe('suspended');
+    });
+
+    it('deleteAccount() rejects a suspended caller', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('the-real-password');
+      prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash, accountStatus: 'suspended' });
+
+      await expect(authService.deleteAccount('user-1', 'the-real-password')).rejects.toThrow(
+        UnauthorizedException,
+      );
+
+      const stillSuspended = await prisma.user.findUnique({ where: { email: 'a@example.com' } });
+      expect(stillSuspended!.accountStatus).toBe('suspended');
+    });
+  });
+
   // sprint-2/account-deactivation-backend (Decision Log #221). The
   // unauthenticated Delete path from the "Inactive Account" screen —
   // { email, password }, no JWT, because a deactivated account has none.
