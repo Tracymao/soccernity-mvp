@@ -375,6 +375,24 @@
   color: var(--sn-text-secondary);
 }
 
+.post__report {
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* Float the expanded menu/reason form over the header rather than
+ * stretching the flex row's height — only in the post-head context; the
+ * per-comment usage stays inline (see ReportAction.css). */
+.post__report .report-action,
+.post__report .report-action__menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 1;
+  width: 220px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
 .post__body {
   font: 400 15px/1.6 "Inter", sans-serif;
   color: var(--sn-text-primary);
