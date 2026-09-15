@@ -9514,7 +9514,13 @@ real, still-open follow-up, not done by this entry.
     "Keeping this file current" section). Whoever finalizes/merges this
     PR should do that direct docx check before formally declaring Sprint
     3 closed.
-  - Not merged — founder's call after review.
+  - **Merged as PR #242** — this bullet's own text previously said "Not
+    merged — founder's call after review"; corrected here in place once
+    the merge was confirmed directly against `git log` on `main`, per
+    this file's own "Keeping this file current" rule (same correction
+    the `sprint-3/community-groups-backend` and
+    `sprint-6/leaderboard-read-rollup` bullets already made for
+    themselves).
 - **`sprint-6/leaderboard-read-rollup` (backend-api, 2026-09-14) builds
   the Leaderboard read-side + rollup — Build Plan Section 4.9, Sprint 6,
   the first Sprint 6 backend work, run ahead of the rest of Sprint 6 by
@@ -9669,16 +9675,18 @@ real, still-open follow-up, not done by this entry.
   `20260915003318_add_report_moderation_fields`, a real hand-run `prisma
   migrate dev` against both dev and test databases) plus two mechanical
   `AdminUser` reverse relations — a genuine schema addition beyond
-  Section 3's original six-field `Report` list, flagged not silent.**
+  Section 3's original six-field `Report` list, flagged as **Decision
+  Log #296**, not silent.**
   Merged as PR #244. Full detail: `services/api/src/modules/moderation/README.md`.
   - **`POST /reports` and `POST /reports/:id/appeal`** — `JwtAuthGuard`
     only, deliberately **not** `GuardianConsentGuard`-gated: a
     restricted-pending minor must still be able to report abuse directed
     at them and appeal a decision made against them. Both are genuine
     spec-gap additions (Section 4 defines neither route literally) —
-    flagged as Decision Log candidates, built anyway per Section 8.4's
-    own workflow text (without a submission route nothing could ever
-    create a `Report` row at all).
+    flagged as **Decision Log #295** (together with the review-side
+    `PATCH /admin/moderation/reports/:id/appeal` route below), built
+    anyway per Section 8.4's own workflow text (without a submission
+    route nothing could ever create a `Report` row at all).
   - **`GET`/`PATCH /admin/moderation/reports*`** — `AdminJwtAuthGuard` +
     a brand-new `AdminRolesGuard`/`@AdminRoles(...)` — this codebase's
     **first role-gated admin route** (`moderator`/`superadmin` only, not
@@ -9728,9 +9736,10 @@ real, still-open follow-up, not done by this entry.
     via a router `state` handoff from the queue's own "Review" link, with
     a bounded `findReportById` fallback (re-lists and searches
     client-side, capped at 5 pages) for a direct visit/refresh — flagged
-    as **Decision Log candidate #4** (moderation module) rather than
-    silently adding a new backend endpoint out of a frontend-only PR's
-    scope.
+    as **Decision Log #300** (this PR's own internal "candidate #4"
+    reference, formally numbered in the same doc-hygiene pass that added
+    #295–#302) rather than silently adding a new backend endpoint out of
+    a frontend-only PR's scope.
   - **`apps/web`**: a file-wide Figma text search confirmed **no
     report/flag UI was ever designed** anywhere in the file for posts,
     comments, or profiles — so a minimal, disclosed `ReportAction`
@@ -9743,8 +9752,8 @@ real, still-open follow-up, not done by this entry.
     surface it obviously belongs on yet (`moderation_decision`
     notifications aren't resolved to anything renderable by
     `NotificationsService` — see the Notification Centre's own per-type
-    icon-disc treatment, which doesn't cover this type); flagged as a
-    separate follow-up, not silently skipped.
+    icon-disc treatment, which doesn't cover this type); flagged as
+    **Decision Log #301**, a separate follow-up, not silently skipped.
   - **Verification**: `apps/admin` **16 suites / 78 tests, 0 failures**
     (up from 66); `apps/web` **43 suites / 311 tests, 0 failures** (up
     from 300); both `tsc --noEmit`/lint clean, both production builds
@@ -9770,19 +9779,20 @@ real, still-open follow-up, not done by this entry.
     had no timestamp at all, and `ArticlesPage.tsx`'s "Date" column /
     both list endpoints' keyset pagination need one; `CategoriesPage.tsx`'s
     own Figma design already renders a Status column with both values,
-    which `Category` had no field to back. Migration
+    which `Category` had no field to back — flagged together as
+    **Decision Log #298**. Migration
     `20260915135512_add_article_category_admin_fields` — a real hand-run
     `prisma migrate dev` confirmed this applies cleanly against both the
     dev and test databases, matching PR #244's own bar. `User`/`Guardian`
     safeguarding fields untouched.
-  - **Three more Decision Log candidates, flagged and built anyway,
-    same shape as moderation's own two**: `GET /admin/articles` and `GET
-    /admin/categories` (Section 4.8 defines no GET for either resource —
-    without one, an admin could create articles/categories but never see
-    them) and `PATCH /admin/categories/:id` (no literal spec line either,
-    but `CategoriesPage.tsx`'s Status column needs a real toggle behind
-    it — see "no category-deletion route" below for why this, not a
-    DELETE, is the right primitive).
+  - **Three more Decision Log candidates (#297), flagged and built
+    anyway, same shape as moderation's own #295**: `GET /admin/articles`
+    and `GET /admin/categories` (Section 4.8 defines no GET for either
+    resource — without one, an admin could create articles/categories
+    but never see them) and `PATCH /admin/categories/:id` (no literal
+    spec line either, but `CategoriesPage.tsx`'s Status column needs a
+    real toggle behind it — see "no category-deletion route" below for
+    why this, not a DELETE, is the right primitive).
   - **The GET role-gating question, checked against the real code rather
     than assumed**: the task brief that dispatched this work asked
     whether `GET /admin/articles`/`GET /admin/categories` should be
@@ -9798,7 +9808,9 @@ real, still-open follow-up, not done by this entry.
     'superadmin')` at the class level, GET included, not just the two
     mutating routes. Reasoning stated in full in
     `admin-content/README.md`'s own "Who may view" section, not silently
-    decided either way.
+    decided either way — logged as **Decision Log #299**, status
+    Resolved (a reasoned, already-implemented decision, not an open
+    question).
   - **No per-author edit restriction on `PATCH /admin/articles/:id`** —
     a deliberate, disclosed choice: any `editor`/`superadmin` may edit
     any article (the shared-newsroom model most CMSes use), unlike
@@ -9852,7 +9864,109 @@ real, still-open follow-up, not done by this entry.
     → 16 suites / 87 tests, 0 failures** (9 new tests, same test file —
     the old 4-test stub suite was replaced in place); `tsc --noEmit`/
     lint clean; production build clean.
-  - Not merged — founder's call after review.
+  - **Merged as PR #246** — this bullet's own text previously said "Not
+    merged — founder's call after review"; corrected here in place once
+    the merge was confirmed directly against `git log` on `main`,
+    same correction as the #242/#243 bullets above. **Seven Decision
+    Log candidates this PR and its `sprint-5/admin-moderation-queue-*`
+    siblings each flagged (the two `POST /reports`/appeal routes and
+    the `Report` schema extension from PR #244; `GET /admin/articles`,
+    `GET /admin/categories`, `PATCH /admin/categories/:id` and the
+    `Article`/`Category` schema additions from this PR; the GET
+    role-gating decision on `AdminArticlesController`/
+    `AdminCategoriesController`; and PR #245's missing `GET
+    /reports/:id` workaround plus its report-submission-UI decision)
+    are now formally logged as Decision Log #295–#301, with a matching
+    re-verification of #250's DPIA R8/R9 status as #302** — see the
+    `docs/decision-log-moderation-admin-content-backfill` bullet
+    directly below for the full detail.
+- **`docs/decision-log-moderation-admin-content-backfill` (docx +
+  CLAUDE.md only, no app/backend code, 2026-09-15) is a doc-hygiene pass
+  over the three merged Sprint 5 PRs above (`sprint-5/admin-moderation-
+  queue-backend` #244, `sprint-5/admin-moderation-queue-frontend` #245,
+  `sprint-5/admin-articles-categories-backend` #246) — run only after
+  confirming all three were genuinely merged (`git log`/`git fetch` on
+  `origin/main`, not assumed from a stale local branch), per the task's
+  own instruction not to document state that isn't real yet.**
+  - **Corrected two stale "Not merged" merge-status lines** — PR #242
+    (`sprint-3/community-groups-frontend`) and PR #246 itself, both
+    confirmed genuinely merged into `origin/main` (`#243` had already
+    been self-corrected by an earlier pass). This file's own "Keeping
+    this file current" section exists precisely to stop this kind of
+    drift from compounding — found here because it was checked directly
+    rather than trusted.
+  - **Seven Decision Log candidates, formally logged as #295–#301,
+    pulling the exact reasoning from each PR's own README/commit rather
+    than re-deriving it**, per the task's own explicit instruction: #295
+    (`POST /reports` + `POST`/`PATCH /reports/:id/appeal` as genuine
+    spec-gap route additions, PR #244); #296 (the `Report` schema
+    extension — `reviewedByAdminId`/`actionTaken`/the appeal-trail
+    fields, PR #244); #297 (`GET /admin/articles`, `GET
+    /admin/categories`, `PATCH /admin/categories/:id` as genuine
+    spec-gap route additions, PR #246); #298 (`Article.createdAt`/
+    `Category.createdAt`/`Category.status` schema additions, PR #246);
+    #299 (the GET role-gating decision mirroring moderation's own
+    class-level `AdminRolesGuard` shape exactly, PR #246 — logged
+    **Resolved**, since it's an already-reasoned, already-implemented
+    decision, not an open question); #300 (PR #245's missing `GET
+    /reports/:id` — the router-`state`-handoff-plus-bounded-fallback
+    workaround, formalizing that PR's own internal "Decision Log
+    candidate #4" reference); #301 (PR #245's report-submission-UI
+    decision — a plainly-built `ReportAction` component wired into
+    `PostCard.tsx` since no Figma frame ever existed for report/flag UI,
+    with appeal-submission UI deliberately left unbuilt as a named
+    follow-up).
+  - **Decision Log #250 re-verified against the live repo, not assumed
+    stale or assumed still accurate either way — logged as #302.**
+    Grep-confirmed `apps/admin/src/pages/users/UsersPage.tsx` and
+    `.../settings/SettingsRolesPage.tsx` are still genuine `// STUB`
+    files (unchanged by any of the three PRs above), so #250's item (1)
+    is only *partially* resolved — the Moderation third of its
+    three-screen claim is now real, Users/Roles are not. Re-read
+    `schema.prisma`'s live `Report`/`AdminUser` models directly (not
+    assumed from memory) to confirm DPIA items (2) R8
+    (`Report.reporterId` still a required FK to `User`, so a non-user
+    still has no report route) and (3) R9 (`AdminUser.role` still a flat
+    `editor | moderator | superadmin` with no child-report staff
+    restriction or escalation path) are both **still genuinely open** —
+    neither PR #244 nor #245 touched either gap, confirmed rather than
+    guessed. Item (4) (no severity field, no append-only audit-trail
+    entity across multiple action/appeal cycles) is also confirmed still
+    open, per `moderation/README.md`'s own disclosed limitation.
+  - **Forward-pointers appended** (this file's own established
+    convention for any PR whose text resolves/closes/supersedes an
+    earlier entry) to Decision Log **#135** and **#189** (both now
+    resolved by #244/#245 — #189 was literally the entry PR #244
+    closes) and to **#250** (its item (1) now partially resolved, R8/R9
+    confirmed still open) — all three cross-references live in the docx
+    itself, not just here.
+  - **Numbering note**: `#293`/`#294` are already referenced by number
+    in this file's own `sprint-3/community-groups-backend` and
+    `sprint-3/community-groups-frontend` bullets (the join-vs-leave
+    guard judgment call, and that PR's own closing Decision Log entry)
+    but were never actually transcribed into the docx table — the docx's
+    real highest entry before this pass was `#292`
+    (`sprint-6/leaderboard-read-rollup`). **Deliberately left
+    untouched, not silently filled in** — out of this pass's explicit
+    scope (PR #244/#245/#246 only), and filling them in here risked
+    guessing at content a different PR's own author should write. New
+    entries in this pass start at `#295` specifically to avoid colliding
+    with those two already-claimed-but-untranscribed numbers. Flagged so
+    a future sweep transcribes `#293`/`#294` under their own already-
+    committed numbers rather than rediscovering the gap from scratch.
+  - **Verification**: `docs/Soccernity_MVP_Build_Plan_v1.7.docx` round-
+    tripped through a full close/reopen with `python-docx` after every
+    edit (301 rows in the Decision Log table — 1 header + 300 data rows,
+    `#1`–`#302` with exactly `#293`/`#294` missing as the flagged,
+    deliberate gap above, zero duplicates); the file's own zip container
+    was also independently checked with `zipfile.testzip()` (no bad
+    entries) and all 10 tables/242 paragraphs were walked end to end
+    with no parse errors. **No LibreOffice binary is available in this
+    environment** (checked directly — no `soffice`/`libreoffice`
+    executable anywhere on `PATH` or the common install directories), so
+    this Python-level round-trip is the actual verification ceiling
+    here, not a LibreOffice-specific confirmation — stated plainly
+    rather than claimed as something it isn't.
 
 ## The eight agents, and the order they run in
 
