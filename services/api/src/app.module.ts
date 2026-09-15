@@ -22,6 +22,8 @@ import { CommunityGroupsModule } from './modules/community-groups/community-grou
 import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
 import { AdminContentModule } from './modules/admin-content/admin-content.module';
+import { AdminUsersModule } from './modules/admin-users/admin-users.module';
+import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -112,6 +114,32 @@ import { AdminContentModule } from './modules/admin-content/admin-content.module
     // genuine schema additions beyond Section 3's original field lists,
     // see modules/admin-content/README.md.
     AdminContentModule,
+    // sprint-5/admin-users-dashboard-backend — Section 4.8 (Admin
+    // Service), the platform-user management half. GET/PATCH
+    // /admin/users — AdminJwtAuthGuard + AdminRolesGuard('moderator',
+    // 'superadmin'), mirroring ModerationModule's own role split (this
+    // is moderation-adjacent, not an editor's job). PATCH covers
+    // active<->suspended transitions and an immediate admin-triggered
+    // delete (reusing AccountDeletionSweepService.hardDeleteUser
+    // directly, skipping the self-service 30-day grace period). New
+    // User.accountStatus value "suspended" — deliberately NOT
+    // user-reversible, unlike "deactivated" (a real gap this PR also
+    // closed in AuthService.reactivateAccount — see that file's own
+    // comment). See modules/admin-users/README.md.
+    AdminUsersModule,
+    // sprint-5/admin-users-dashboard-backend (same PR) — Section 4.8's
+    // Dashboard line, GET /admin/dashboard/stats. A separate module from
+    // AdminUsersModule on purpose (a cross-model aggregate-reporting
+    // concern, not user management), same "one module per Section 4.8
+    // sub-resource" precedent as Moderation/AdminContent/AdminUsers.
+    // Real aggregates for New Users (this calendar month), Total
+    // Articles Published, and Community Users (total User count). Total
+    // Visits and the visitor-statistics chart are DELIBERATELY OMITTED
+    // from the response, not faked as zero/null-rendered-as-real — no
+    // page-view/visit-tracking model or middleware exists anywhere in
+    // this codebase; see modules/admin-dashboard/README.md's Decision
+    // Log candidate.
+    AdminDashboardModule,
     // sprint-2/contest-data-model-backend — Decision Log #218/#219. The
     // Contest weekly-cycle data model + scoring ledger + the
     // active-contest query (Decision Log #61/#70/#71/#130/#188). New

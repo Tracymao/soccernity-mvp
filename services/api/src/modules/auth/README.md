@@ -1040,3 +1040,43 @@ the full `deactivate → reactivate → deactivate → delete-from-inactive →
 +31-day sweep → real hard-delete` sequence against real Postgres, plus a
 feed / single-post / follower-list visibility-and-reversal check.
 `nest build` and `npm run lint` clean.
+
+## Status update — a new, ADMIN-only `accountStatus` value, `"suspended"` (`sprint-5/admin-users-dashboard-backend`)
+
+`modules/admin-users/` (built by the same PR) needed a way for an admin
+to block a user that is genuinely **not** user-reversible — unlike
+`"deactivated"`, which `POST /auth/reactivate-account` exists
+specifically to undo. See `admin-users/README.md`'s "Decision Log
+candidate #1" for the full reasoning on why `"suspended"` is a new value
+rather than a reuse of `"deactivated"`.
+
+**Two real gaps in this file, found and closed, not assumed safe by
+default** — found by tracing every `accountStatus` branch in this
+service against the new value before shipping it:
+
+1. `reactivateAccount()` only ever excluded `"pending_deletion"` up
+   front; a `"suspended"` user would have fallen through unchanged and
+   still been issued a working token pair, silently undoing an
+   admin-imposed suspension. **Fixed** — `"suspended"` now gets the same
+   exclusion, same generic `"Invalid credentials"` message.
+2. `deactivateAccount()`/`deleteAccount()` had no `accountStatus` check
+   on the caller at all. A suspended user with a still-live access token
+   (the brief window before `PATCH /admin/users/:id`'s own session
+   revocation naturally expires it) could self-deactivate, then later
+   self-reactivate via the now-fixed `reactivateAccount()` — a two-step
+   escape from suspension. **Fixed** — both methods now reject a
+   suspended caller outright, checked after password verification (same
+   ordering as `login()`'s own checks).
+
+`login()` needed no code change — its existing `accountStatus !==
+'active'` generic-message branch already covered any future non-`active`
+value; only its comment was extended to say so explicitly.
+
+**Zero schema migration** — `accountStatus` is a plain `String`
+(`@default("active")`), so adding a fourth value is a `schema.prisma`
+comment update only.
+
+**Verification** — see `admin-users/README.md`'s own Testing section for
+the full before/after counts (this file's changes are covered by a new
+describe block in `auth.service.spec.ts`, counted in that same PR-wide
+total, not measured separately).

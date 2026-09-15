@@ -175,9 +175,12 @@ export default function ModerationQueuePage() {
         <div className="mod-callout">
           <span className="mod-callout__bar" aria-hidden />
           <p>
-            Recording an action on a report does not by itself enforce it — there is no
-            content-removal or account-suspension mechanism wired up yet (Build Plan Section 4.8).
-            Actioning a report only records the decision and notifies both parties.
+            Recording an action on a report does not by itself enforce it — there is still no
+            content-removal mechanism. A real account-suspension mechanism now exists
+            (<code>PATCH /admin/users/:id</code>, Users), but actioning a report as
+            &ldquo;Suspend User&rdquo; here does not automatically call it — a moderator suspends a
+            reported user separately, on the Users screen, if the decision warrants it. Actioning a
+            report only records the decision and notifies both parties.
           </p>
         </div>
       </div>
