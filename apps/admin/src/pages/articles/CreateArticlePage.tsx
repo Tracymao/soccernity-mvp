@@ -7,11 +7,20 @@
 // no module/endpoints yet) doesn't exist, and Article has no image
 // relation at all, per this PR's own explicit scope. Ships once the
 // Media library backend exists.
+//
+// No Figma frame designs a publish/draft choice on this screen (the
+// original "Submit Post" button just POSTs, and CreateArticleDto's own
+// `status` is optional, defaulting server-side to 'draft') — the single
+// button is split into two ("Save as Draft" / "Publish") rather than
+// inventing a checkbox, matching this project's established "no design
+// exists, build plainly and flag it" precedent (AdminProfilePage.tsx's
+// Change Password panel, PR #245's ReportAction component). Both call
+// the same createArticle(), differing only in the `status` sent.
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { AdminApiError } from "../../api/adminClient";
-import { createArticle, listCategories, type Category } from "../../api/adminContent";
+import { createArticle, listCategories, type ArticleStatus, type Category } from "../../api/adminContent";
 import { useAsyncData } from "../content/adminContentShared";
 import "../content/content.css";
 
@@ -27,23 +36,26 @@ export default function CreateArticlePage() {
   const [body, setBody] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  // Which target status is currently in flight — null when idle. Tracked
+  // per-status (not a plain boolean) so only the button that was actually
+  // clicked shows its own "…ing" label while the other stays disabled.
+  const [saving, setSaving] = useState<ArticleStatus | null>(null);
 
   const canSubmit = title.trim().length > 0 && body.trim().length > 0 && categoryId.length > 0;
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (status: ArticleStatus) => {
     setError(null);
     if (!canSubmit) {
       setError("Title, article body, and category are all required.");
       return;
     }
-    setSaving(true);
+    setSaving(status);
     try {
-      const created = await createArticle({ title: title.trim(), body: body.trim(), categoryId });
+      const created = await createArticle({ title: title.trim(), body: body.trim(), categoryId, status });
       navigate("/articles", { state: { createdArticleId: created.id } });
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Couldn't create the article. Please try again.");
-      setSaving(false);
+      setSaving(null);
     }
   };
 
@@ -62,17 +74,21 @@ export default function CreateArticlePage() {
 
         <label className="ac-field">
           <span>Title</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={300} disabled={saving} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={300} disabled={saving !== null} />
         </label>
 
         <label className="ac-field">
           <span>Article body</span>
-          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={10} disabled={saving} />
+          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={10} disabled={saving !== null} />
         </label>
 
         <label className="ac-field">
           <span>Category</span>
-          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} disabled={saving || loadingCategories}>
+          <select
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+            disabled={saving !== null || loadingCategories}
+          >
             <option value="">{loadingCategories ? "Loading categories…" : "Select category…"}</option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
@@ -99,8 +115,21 @@ export default function CreateArticlePage() {
         </div>
 
         <div className="ac-action-row">
-          <button type="button" className="ac-btn ac-btn--primary" onClick={handleSubmit} disabled={saving || !canSubmit}>
-            {saving ? "Submitting…" : "Submit Post"}
+          <button
+            type="button"
+            className="ac-btn ac-btn--outline"
+            onClick={() => handleSubmit("draft")}
+            disabled={saving !== null || !canSubmit}
+          >
+            {saving === "draft" ? "Saving…" : "Save as Draft"}
+          </button>
+          <button
+            type="button"
+            className="ac-btn ac-btn--primary"
+            onClick={() => handleSubmit("published")}
+            disabled={saving !== null || !canSubmit}
+          >
+            {saving === "published" ? "Publishing…" : "Publish"}
           </button>
         </div>
       </div>

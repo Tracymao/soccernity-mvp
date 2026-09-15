@@ -19,6 +19,7 @@ vi.mock("../../api/adminContent", async (importOriginal) => {
 import {
   listArticles,
   createArticle,
+  updateArticle,
   listCategories,
   createCategory,
   updateCategory,
@@ -34,6 +35,7 @@ afterEach(cleanup);
 beforeEach(() => {
   vi.mocked(listArticles).mockReset();
   vi.mocked(createArticle).mockReset();
+  vi.mocked(updateArticle).mockReset();
   vi.mocked(listCategories).mockReset();
   vi.mocked(createCategory).mockReset();
   vi.mocked(updateCategory).mockReset();
@@ -84,6 +86,60 @@ describe("ArticlesPage", () => {
     expect(link.getAttribute("href")).toBe("/articles/new");
   });
 
+  it("publishes a draft article via PATCH and reflects the result inline", async () => {
+    vi.mocked(listArticles).mockResolvedValue({ items: [article()], nextCursor: null });
+    vi.mocked(updateArticle).mockResolvedValue({
+      ...article(),
+      body: "A body",
+      status: "published",
+      publishedAt: "2026-09-15T00:00:00.000Z",
+    });
+
+    render(
+      <MemoryRouter>
+        <ArticlesPage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+
+    await waitFor(() => expect(updateArticle).toHaveBeenCalledWith("article-1", { status: "published" }));
+    expect(await screen.findByText("published")).not.toBeNull();
+    expect(await screen.findByRole("button", { name: "Unpublish" })).not.toBeNull();
+  });
+
+  it("unpublishes a published article via PATCH", async () => {
+    vi.mocked(listArticles).mockResolvedValue({ items: [article({ status: "published" })], nextCursor: null });
+    vi.mocked(updateArticle).mockResolvedValue({ ...article({ status: "draft" }), body: "A body" });
+
+    render(
+      <MemoryRouter>
+        <ArticlesPage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Unpublish" }));
+
+    await waitFor(() => expect(updateArticle).toHaveBeenCalledWith("article-1", { status: "draft" }));
+    expect(await screen.findByRole("button", { name: "Publish" })).not.toBeNull();
+  });
+
+  it("surfaces a real backend error on a failed publish toggle without losing the row", async () => {
+    vi.mocked(listArticles).mockResolvedValue({ items: [article()], nextCursor: null });
+    vi.mocked(updateArticle).mockRejectedValue(new AdminApiError(500, "Server error"));
+
+    render(
+      <MemoryRouter>
+        <ArticlesPage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+
+    expect(await screen.findByText("Server error")).not.toBeNull();
+    expect(screen.getByText("Zaha double helps Crystal Palace ease past Villa")).not.toBeNull();
+  });
+
   it("filters by status when a tab is clicked", async () => {
     vi.mocked(listArticles).mockResolvedValue({ items: [], nextCursor: null });
 
@@ -128,7 +184,7 @@ describe("ArticlesPage", () => {
 });
 
 describe("CreateArticlePage", () => {
-  it("loads active categories and creates an article", async () => {
+  it("loads active categories and saves an article as a draft", async () => {
     vi.mocked(listCategories).mockResolvedValue({ items: [category()], nextCursor: null });
     vi.mocked(createArticle).mockResolvedValue({
       ...article(),
@@ -147,14 +203,51 @@ describe("CreateArticlePage", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Article body" }), { target: { value: "A body" } });
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "category-1" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "Submit Post" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save as Draft" }));
 
     await waitFor(() =>
-      expect(createArticle).toHaveBeenCalledWith({ title: "A title", body: "A body", categoryId: "category-1" }),
+      expect(createArticle).toHaveBeenCalledWith({
+        title: "A title",
+        body: "A body",
+        categoryId: "category-1",
+        status: "draft",
+      }),
     );
   });
 
-  it("keeps Submit disabled until title/body/category are all filled", async () => {
+  it("publishes a new article immediately via the Publish button", async () => {
+    vi.mocked(listCategories).mockResolvedValue({ items: [category()], nextCursor: null });
+    vi.mocked(createArticle).mockResolvedValue({
+      ...article(),
+      status: "published",
+      body: "A body",
+    });
+
+    render(
+      <MemoryRouter>
+        <CreateArticlePage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(listCategories).toHaveBeenCalledWith({ status: "active", limit: 50 }));
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Title" }), { target: { value: "A title" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Article body" }), { target: { value: "A body" } });
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "category-1" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+
+    await waitFor(() =>
+      expect(createArticle).toHaveBeenCalledWith({
+        title: "A title",
+        body: "A body",
+        categoryId: "category-1",
+        status: "published",
+      }),
+    );
+  });
+
+  it("keeps both Save as Draft and Publish disabled until title/body/category are all filled", async () => {
     vi.mocked(listCategories).mockResolvedValue({ items: [category()], nextCursor: null });
 
     render(
@@ -164,7 +257,8 @@ describe("CreateArticlePage", () => {
     );
 
     await waitFor(() => expect(listCategories).toHaveBeenCalled());
-    expect(screen.getByRole("button", { name: "Submit Post" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Save as Draft" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Publish" }).hasAttribute("disabled")).toBe(true);
   });
 
   it("renders the image-upload control disabled with a disclosed note", async () => {
