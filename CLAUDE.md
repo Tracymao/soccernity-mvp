@@ -10349,6 +10349,152 @@ real, still-open follow-up, not done by this entry.
     (the admin account, category, and two articles) were deleted from
     the local dev database afterward — pre-existing seed data from other
     sessions was left untouched.
+  - **Merged as PR #252** — this bullet's own text previously said "Not
+    merged — founder's call after review"; corrected here in place once
+    the merge was confirmed directly against `git log` on `main`, same
+    correction as the `sprint-3/community-groups-*`/`sprint-6/leaderboard-
+    read-rollup` bullets above already made for themselves. The prior
+    session's own follow-up ticket for wiring `apps/web` to this feed
+    (`sprint-4/public-articles-frontend`) was checked against this
+    already-merged commit and found to be a genuine no-op — `api/blog.ts`,
+    `BlogPage.tsx`, and `ArticleDetailPage.tsx` were all already wired to
+    real data by this PR's own commit; nothing further was built or
+    branched for that follow-up ticket.
+- **`sprint-4/sports-hub-highlightly-data-redesign` (figma-screen-builder,
+  2026-09-16) redesigns all 10 desktop + 10 mobile Sports Hub screens
+  against Highlightly's confirmed data categories (Decision Log #6), and
+  adds two brand-new sections — Match Momentum and Live Commentary,
+  desktop + mobile. Figma design only, no app/backend code. Decision Log
+  #6 gets a founder-resolution forward-pointer (Highlightly is the
+  selected vendor, design-side only — no backend integration exists
+  yet); #149 gets a correction forward-pointer; #311–#322 added.**
+  **Routing note**: this task was explicitly routed to
+  `figma-screen-builder` by founder decision, a one-time exception to the
+  standard `figma-design-system`/`figma-screen-builder` split — the work
+  is substantial new data-content enrichment of already-built screens,
+  judged closer to screen-building than a token retouch. Full detail:
+  `docs/sprint-4-sports-hub-highlightly-data-redesign-report.md`.
+  - **Three ticket premises checked live and corrected, not assumed**:
+    (1) **10 mobile frames exist, not 8** — the brief missed PR #112's two
+    `Sports/Livescores — Mobile` frames. (2) **The screens were not "bare
+    placeholder content."** All 18 Highlightly team-stat categories
+    already existed on Match/1H/2H Statistics; H2H and Lineups were
+    already substantially built. Only **Video** matched the brief's
+    description (one grey rectangle). The genuinely missing piece was
+    **player-level box scores**, which is what was built, rather than
+    padding out duplicate stat rows. (3) **Standing already had a FORM
+    column** — but with off-palette `#d3f502` (lime) and `#cfcfcf` (grey)
+    chips; mobile Standing had no FORM column at all, which was the real
+    gap there.
+  - **4 new frames**: Match Momentum desktop (`6508:21059`) — a 90-bar
+    minute-by-minute attacking-danger chart, navy above the centre line
+    for home / green below for away, modelled directly on Flashscore's
+    own Match Momentum feature, with half-time divider, minute axis,
+    timestamped event markers, and peak-pressure summary cards. Live
+    Commentary desktop (`6508:21321`) — an 18-entry, newest-first,
+    timestamped feed covering every event type named in the brief (goals,
+    assists, cards, substitutions, VAR decisions, penalties, injury-time
+    additions). **Explicitly framed on-screen as an automated event feed,
+    not editorial commentary** — a persistent on-screen note states this
+    directly ("There is no commentator and no editorial narration."), and
+    the design carries no byline, no attributed author, no prose-style
+    narration, no personality treatment anywhere. Plus Match Momentum —
+    Mobile (`6514:21081`) and Live Commentary — Mobile (`6514:21296`).
+  - **16 existing frames enriched**: Video desktop (`760:11533`) and
+    mobile (`5821:9009`) rebuilt from one grey rectangle into a full
+    clip-type system (7-type filter row, clip grid/list, geo-restriction
+    indicator using a navy pill + `semantic/alert` dot, not a red badge —
+    white-on-alert fails AA at that size). Match/1H/2H Statistics
+    (desktop `640:3737`/`667:151`/`667:1511`, mobile
+    `5822:9075`/`5823:9108`/`5823:9317`) gained an 11-player box-score
+    table (MIN/G/A/SHOTS/ON TARGET/PASSES/PASS%/TACKLES/FOULS) plus a
+    substitutes-used block. Lineups (desktop `667:1952`, mobile
+    `5825:9207`) gained a real-time substitutions timeline (MIN/TEAM/
+    OFF/ON) and a typo fix (`SUBTITUTES` → `SUBSTITUTES`). H2H (desktop
+    `756:11`, mobile `5824:9174`) gained an aggregate head-to-head record
+    card (last-10 W/D/L tally, proportional split bar, goal aggregates).
+    Standing (desktop `756:6433`) had **100 form chips** rebound from
+    off-palette lime/grey to the established palette-compliant W/D/L
+    scheme (Decision Log #149); Standing — Mobile (`5821:9068`) gained a
+    genuinely new FORM column (14 rows × 5 chips), with two rounds of
+    column rebalancing to avoid colliding with PTS. Match Details (+
+    Mobile, `632:943`/`5820:8976`) got the extended sub-tab row (below)
+    as the entry point into the two new sections.
+  - **Information architecture**: Momentum and Live Commentary are added
+    as **Level-2 sub-tabs under Match** (`Match Summary | Statistics |
+    Lineups | Momentum | Commentary`), not Level-1 siblings of H2H/
+    Standings/Video — both are in-match content. Rebuilt on 5 desktop +
+    5 mobile frames; mobile sub-tab type/spacing was tightened
+    (12px→11px) to fit five tabs inside the 390px convention rather than
+    allow horizontal-scroll clipping (the active tab could fall out of
+    view). Sports Page (Logged Out/In) was deliberately left structurally
+    unchanged — navigation into the new content follows the file's
+    existing Sports Page → Match Details → sub-tabs pattern.
+  - **A real, disclosed correction to Decision Log #149**: that entry's
+    "off-palette yellow/amber for draws and mid-table" on the desktop
+    H2H/Standing screens turned out to be **club-crest trademark
+    artwork** (399 `#dba111` paints traced directly inside the Liverpool/
+    Chelsea crest vectors on H2H alone), not a UI colour choice — there
+    was no off-palette amber in the desktop UI itself. The real
+    UI-level off-palette values were the form-guide chips'
+    `#d3f502`/`#cfcfcf` fills, now fixed. #149's own Status cell in the
+    docx carries the forward-pointer.
+  - **A genuine debt item found and deliberately left unfixed, flagged as
+    Decision Log #312**: `#8f8f8f` @10% stat-bar-track rectangles (×108
+    across the 3 desktop statistics screens) are real, non-crest,
+    off-palette, unbound UI colour not covered by PR #111's flag/crest/
+    jersey-art disclosure — left alone since token/housekeeping work is
+    explicitly out of this ticket's scope (`figma-design-system`'s
+    domain), same discipline as every other cross-routed task in this
+    project.
+  - **Player RATING scoped in during design, then removed** (Decision Log
+    #313) — ratings are a derived metric not named in Highlightly's
+    confirmed category list (possession, shots, corners, fouls, cards,
+    passes, box scores), so it was flagged rather than shipped on
+    assumption. **Fast-follow exclusions honoured exactly as scoped**:
+    no Top Scorers screen (Highlightly endpoint support unconfirmed), no
+    match-specific notification/alert-preference UI (blocked on a
+    separate unresolved Notification Centre reuse investigation), and
+    nothing SportMonks-exclusive (xG, Pressure Index, shot maps, Expected
+    Lineups) was designed against data that doesn't exist.
+  - **Paint/token audit, measured node-by-node across 73 authored
+    subtrees**: 2,363 nodes scanned, **2,212 bound / 0 unbound / 0
+    off-palette / 0 `brand/green-tint-28` / 0 new colours**, 0 frame
+    overlaps (checked against every page child before AND after creating
+    the 4 new frames), Light mode only. Two real layout bugs were caught
+    by screenshot and fixed before shipping: a mobile Standing PTS/form
+    column collision (root-caused to `TEXT` nodes with
+    `textAutoResize: WIDTH_AND_HEIGHT` silently ignoring `resize()` —
+    fixed by setting `textAutoResize = 'NONE'` first, a new authoring
+    gotcha worth folding into the standing list), and a 17px section-band/
+    sub-tab overlap on the two new desktop frames (Level-2 screens need
+    the band at y=790, not Level-1's y=710).
+  - **Every match data point across all touched/new screens is one
+    internally consistent illustrative fixture** (Liverpool 1–3 Chelsea —
+    same goals, cards, subs, and VAR calls reused verbatim across
+    Momentum's event markers, Live Commentary, the Lineups substitutions
+    timeline, the player box scores, and the Video clip titles), so
+    whoever eventually wires this can use it as a single reference
+    dataset. **Flagged as Decision Log #321, explicitly blocking
+    `figma-to-code`**: no `services/api` sports/fixtures module or
+    Highlightly API client exists yet, and `MatchData` has zero live
+    reads — none of these screens may be wired to real data until that
+    backend integration is built as its own separate task.
+  - **New Decision Log candidates #311–#322 added** (Build Plan Section
+    9) covering: the 8 desktop match-centre frames with no navbar at all
+    (#311, a `figma-design-system` follow-up, PR #151 already left this
+    legacy set out of scope); the `#8f8f8f` stat-bar-track debt (#312);
+    the deferred player-rating question (#313); pre-existing legacy
+    score-header crest artwork rendering outside its own reported bounds
+    on every match-centre frame (#314); the #149 correction (#315,
+    Resolved); the Live-Commentary newest-first ordering (#316, Resolved
+    design); the mobile sub-tab type/spacing reduction (#317, Resolved
+    design); the Momentum/Commentary Level-2 IA placement (#318, Resolved
+    design); the geo-restriction navy-pill treatment (#319, Resolved
+    design); the two-different-meanings-per-column palette trade-off on
+    Standing (#320, Resolved design); the all-dummy-data/backend-blocked
+    status (#321, Open); and the no-prototype-wiring-added note (#322,
+    Resolved design).
   - Not merged — founder's call after review.
 
 ## The eight agents, and the order they run in
