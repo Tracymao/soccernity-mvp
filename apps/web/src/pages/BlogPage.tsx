@@ -4,7 +4,8 @@
 // articles). Figma source: "Blog Page Desktop -- Logged In" (5953:10771)
 // / "-- Logged Out" (5953:11364) and their mobile counterparts
 // (5956:10960 / 5956:11331), "Soccernity-MVP" file
-// (weZWWqggy9j13eX8bhFgs6). Route: /blog.
+// (weZWWqggy9j13eX8bhFgs6). Route: /blog. The Figma frames themselves
+// needed no redesign for this pass -- backend-plus-wiring only.
 //
 // NO LOGIN REQUIRED. Like SportsHubPage, the Blog section has both a
 // Logged In and a Logged Out canonical Figma frame with identical body
@@ -12,57 +13,66 @@
 // Header already renders the correct logged-in/out chrome. This page's
 // own content is the same either way.
 //
-// BACKEND STATE, confirmed live before writing this: there is NO blog /
-// article / content module anywhere in services/api/src/modules, and
-// Build Plan Section 4 defines no blog endpoint. The `Article` entity
-// exists in prisma/schema.prisma but has zero reads/writes. Every
-// article, category and date rendered here is illustrative dummy content
-// (see ./blog/blogData.ts) -- the same discipline SportsHubPage.tsx
-// applies for the identical reason. The category tabs and the search box
-// filter that dummy list client-side only; there is no real query.
+// REAL DATA (sprint-4/public-blog-articles-feed, services/api/src/
+// modules/blog/): GET /articles and GET /categories, both genuinely
+// public -- no Authorization header is ever sent (see ../api/blog.ts).
+// The category tabs come from GET /categories (active only); selecting
+// a specific tab re-queries GET /articles?categorySlug= for that
+// category's own published articles rather than filtering client-side,
+// since a category can have articles beyond the "All" tab's own single
+// loaded page. The "All" tab's Trending Topics + per-category grouping
+// below IS a client-side grouping over that one loaded page -- Section
+// 4's own page-size convention (default 20) caps how many articles this
+// view can group per visit; the Figma design has no "Load more"
+// affordance for Blog, so this is a disclosed, deliberate limitation for
+// now, not a bug.
 //
-// NOTE on the task brief's "pinned-post badge says 'Pinned post'"
-// (Decision Log #173): that badge lives on the *Community* home-feed
-// frames (2565:3951 / 5956:12797), not on any Blog Page frame -- see this
-// PR's Decision Log entry. The Blog frames use a "Trending Topics"
-// featured card with a category badge ("Premier League"), which is what
-// is reproduced below.
-import { useMemo, useState } from "react";
+// Article images stay non-functional placeholder boxes -- there is no
+// Article-to-MediaAsset relation (deferred, see modules/blog/README.md's
+// Decision Log candidate #2), so nothing here has a real image URL to
+// render.
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { ARTICLES, CATEGORIES, articlesByCategory, type Article } from "./blog/blogData";
+import { listArticles, listCategories, type ArticleSummary, type Category } from "../api/blog";
 import "./blog/BlogPage.css";
 
-function ArticleTimestamp({ date }: { date: string }) {
+type LoadState = "loading" | "loaded" | "error";
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function ArticleTimestamp({ publishedAt }: { publishedAt: string }) {
   return (
     <span className="blog-card__date">
       <span aria-hidden="true">&#128337;</span>
-      {date}
+      {formatDate(publishedAt)}
     </span>
   );
 }
 
-function FeaturedCard({ article }: { article: Article }) {
+function FeaturedCard({ article }: { article: ArticleSummary }) {
   return (
     <Link to={`/blog/${article.id}`} className="blog-featured">
       <span className="blog-featured__media" aria-hidden="true" />
       <div className="blog-featured__body">
-        <span className="blog-badge">{article.categoryLabel}</span>
+        <span className="blog-badge">{article.category.name}</span>
         <h3 className="blog-featured__title">{article.title}</h3>
         <p className="blog-featured__excerpt">{article.excerpt}</p>
-        <ArticleTimestamp date={article.date} />
+        <ArticleTimestamp publishedAt={article.publishedAt} />
       </div>
     </Link>
   );
 }
 
-function ArticleCard({ article }: { article: Article }) {
+function ArticleCard({ article }: { article: ArticleSummary }) {
   return (
     <Link to={`/blog/${article.id}`} className="blog-card">
       <span className="blog-card__media" aria-hidden="true" />
       <div className="blog-card__body">
         <h3 className="blog-card__title">{article.title}</h3>
         <p className="blog-card__excerpt">{article.excerpt}</p>
-        <ArticleTimestamp date={article.date} />
+        <ArticleTimestamp publishedAt={article.publishedAt} />
       </div>
     </Link>
   );
@@ -70,7 +80,7 @@ function ArticleCard({ article }: { article: Article }) {
 
 const SECONDARY_PER_SECTION = 6;
 
-function CategorySection({ heading, articles }: { heading: string; articles: Article[] }) {
+function CategorySection({ heading, articles }: { heading: string; articles: ArticleSummary[] }) {
   const [expanded, setExpanded] = useState(false);
   if (articles.length === 0) return null;
 
@@ -97,37 +107,94 @@ function CategorySection({ heading, articles }: { heading: string; articles: Art
   );
 }
 
+const ALL_CATEGORY_ID = "all";
+
 export default function BlogPage() {
-  const [activeCategory, setActiveCategory] = useState("all");
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [activeCategory, setActiveCategory] = useState<string>(ALL_CATEGORY_ID);
   const [search, setSearch] = useState("");
 
+  const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [allArticles, setAllArticles] = useState<ArticleSummary[]>([]);
+
+  const [categoryLoadState, setCategoryLoadState] = useState<LoadState>("loaded");
+  const [categoryArticles, setCategoryArticles] = useState<ArticleSummary[]>([]);
+
+  // Categories + the "All" tab's first page load once on mount.
+  useEffect(() => {
+    let cancelled = false;
+    setLoadState("loading");
+    (async () => {
+      try {
+        const [categoryPage, articlePage] = await Promise.all([listCategories(), listArticles()]);
+        if (cancelled) return;
+        setCategories(categoryPage.items);
+        setAllArticles(articlePage.items);
+        setLoadState("loaded");
+      } catch {
+        if (!cancelled) setLoadState("error");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Selecting a specific category tab re-queries GET
+  // /articles?categorySlug= for that category's own published articles
+  // (Section 4's "filterable by categoryId/category slug") rather than
+  // filtering the "All" tab's single loaded page client-side.
+  useEffect(() => {
+    if (activeCategory === ALL_CATEGORY_ID) return;
+    const category = categories.find((c) => c.id === activeCategory);
+    if (!category) return;
+
+    let cancelled = false;
+    setCategoryLoadState("loading");
+    (async () => {
+      try {
+        const page = await listArticles({ categorySlug: category.slug });
+        if (!cancelled) {
+          setCategoryArticles(page.items);
+          setCategoryLoadState("loaded");
+        }
+      } catch {
+        if (!cancelled) setCategoryLoadState("error");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCategory, categories]);
+
   const term = search.trim().toLowerCase();
+  const currentArticles = activeCategory === ALL_CATEGORY_ID ? allArticles : categoryArticles;
 
   const searchResults = useMemo(() => {
     if (!term) return null;
-    const base = articlesByCategory(activeCategory);
-    return base.filter(
+    return currentArticles.filter(
       (a) => a.title.toLowerCase().includes(term) || a.excerpt.toLowerCase().includes(term),
     );
-  }, [term, activeCategory]);
+  }, [term, currentArticles]);
 
   // Category sections shown when browsing (not searching). "all" shows a
-  // "Trending Topics" block plus one section per league; a specific tab
-  // shows just that league's section.
+  // "Trending Topics" block (the loaded page, unfiltered) plus one
+  // section per category, grouped client-side from that same page; a
+  // specific tab shows just that category's own server-filtered section.
   const sections = useMemo(() => {
-    if (activeCategory === "all") {
-      const trending: { heading: string; articles: Article[] } = {
-        heading: "Trending Topics",
-        articles: ARTICLES,
-      };
-      const perCategory = CATEGORIES.filter((c) => c.id !== "all")
-        .map((c) => ({ heading: c.label, articles: articlesByCategory(c.id) }))
+    if (activeCategory === ALL_CATEGORY_ID) {
+      const trending = { heading: "Trending Topics", articles: allArticles };
+      const perCategory = categories
+        .map((c) => ({ heading: c.name, articles: allArticles.filter((a) => a.category.id === c.id) }))
         .filter((s) => s.articles.length > 0);
       return [trending, ...perCategory];
     }
-    const cat = CATEGORIES.find((c) => c.id === activeCategory);
-    return [{ heading: cat?.label ?? "Articles", articles: articlesByCategory(activeCategory) }];
-  }, [activeCategory]);
+    const category = categories.find((c) => c.id === activeCategory);
+    return [{ heading: category?.name ?? "Articles", articles: categoryArticles }];
+  }, [activeCategory, allArticles, categories, categoryArticles]);
+
+  const isSpecificCategoryLoading = activeCategory !== ALL_CATEGORY_ID && categoryLoadState === "loading";
+  const isSpecificCategoryError = activeCategory !== ALL_CATEGORY_ID && categoryLoadState === "error";
 
   return (
     <div className="blog">
@@ -151,7 +218,16 @@ export default function BlogPage() {
       </div>
 
       <div className="blog-tabs" role="tablist" aria-label="Article categories">
-        {CATEGORIES.map((c) => (
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeCategory === ALL_CATEGORY_ID}
+          className={activeCategory === ALL_CATEGORY_ID ? "blog-tab blog-tab--active" : "blog-tab"}
+          onClick={() => setActiveCategory(ALL_CATEGORY_ID)}
+        >
+          All
+        </button>
+        {categories.map((c) => (
           <button
             key={c.id}
             type="button"
@@ -160,31 +236,55 @@ export default function BlogPage() {
             className={activeCategory === c.id ? "blog-tab blog-tab--active" : "blog-tab"}
             onClick={() => setActiveCategory(c.id)}
           >
-            {c.label}
+            {c.name}
           </button>
         ))}
       </div>
 
-      {searchResults ? (
-        <section className="blog-section">
-          <h2 className="blog-section__title">Results for &ldquo;{search.trim()}&rdquo;</h2>
-          {searchResults.length === 0 ? (
-            <p className="blog-empty">No articles match that search.</p>
-          ) : (
-            <div className="blog-grid">
-              {searchResults.map((a) => (
-                <ArticleCard key={a.id} article={a} />
-              ))}
-            </div>
-          )}
-        </section>
-      ) : (
-        sections.map((s) => <CategorySection key={s.heading} heading={s.heading} articles={s.articles} />)
+      {loadState === "loading" && (
+        <p className="blog-empty" role="status">
+          Loading articles&hellip;
+        </p>
       )}
 
+      {loadState === "error" && (
+        <p className="blog-empty" role="alert">
+          Couldn&rsquo;t load articles. Please try again shortly.
+        </p>
+      )}
+
+      {loadState === "loaded" &&
+        (searchResults ? (
+          <section className="blog-section">
+            <h2 className="blog-section__title">Results for &ldquo;{search.trim()}&rdquo;</h2>
+            {isSpecificCategoryLoading ? (
+              <p className="blog-empty" role="status">
+                Loading articles&hellip;
+              </p>
+            ) : searchResults.length === 0 ? (
+              <p className="blog-empty">No articles match that search.</p>
+            ) : (
+              <div className="blog-grid">
+                {searchResults.map((a) => (
+                  <ArticleCard key={a.id} article={a} />
+                ))}
+              </div>
+            )}
+          </section>
+        ) : isSpecificCategoryLoading ? (
+          <p className="blog-empty" role="status">
+            Loading articles&hellip;
+          </p>
+        ) : isSpecificCategoryError ? (
+          <p className="blog-empty" role="alert">
+            Couldn&rsquo;t load articles for this category. Please try again shortly.
+          </p>
+        ) : (
+          sections.map((s) => <CategorySection key={s.heading} heading={s.heading} articles={s.articles} />)
+        ))}
+
       <p className="blog-disclosure">
-        Articles are illustrative &mdash; the blog does not have a content backend yet (no article endpoint exists in
-        Build Plan Section 4).
+        Article images aren&rsquo;t available yet &mdash; the Blog has no image upload/storage wiring for articles.
       </p>
     </div>
   );
