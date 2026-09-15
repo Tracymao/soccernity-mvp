@@ -8,11 +8,22 @@ Admin Console account/auth/profile slice is now built.** This closes the
 Admin Profile screen implying an admin-account data model that didn't
 have the fields or auth path to back it) and resolves Decision Log #54.
 
-**Still Sprint 5 scope, unbuilt**: Build Plan Section 4.8's
-moderation-queue endpoints (Report review, appeal handling — Decision Log
-#138's "a second admin/moderator reviews an appeal" rule has no code to
-attach to yet). This module will grow to cover that when Sprint 5 starts;
-nothing in Section 4.8 beyond account/auth/profile is built here.
+**Sprint 5's moderation-queue endpoints are now built too — in a
+separate module, not this one.** `sprint-5/admin-moderation-queue-backend`
+(backend-api, 2026-09-15) builds Build Plan Section 4.8's
+`GET`/`PATCH /admin/moderation/reports*` plus the two spec-gap user-facing
+routes Section 8.4's workflow text assumes exist (`POST /reports`,
+`POST /reports/:id/appeal`) in a new top-level `modules/moderation/`
+module — deliberately NOT folded into `AdminModule`, since its two
+user-facing routes are `JwtAuthGuard`-gated, a different auth domain than
+this module's own admin-only routes. Decision Log #138 ("a second
+admin/moderator reviews an appeal") is now hard-enforced in code, not
+just documented. This module (`AdminModule`) still covers ONLY
+account/auth/profile, unchanged — see `modules/moderation/README.md` for
+the full moderation-queue writeup, including this codebase's first
+role-gated admin route (`AdminRolesGuard`, now provided/exported from
+`AdminAuthFoundationModule` alongside `AdminJwtAuthGuard` for any future
+admin module to reuse).
 
 ## A real finding, not assumed: `AdminUser` already existed
 

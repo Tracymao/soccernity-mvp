@@ -100,7 +100,7 @@ model User {
   // Section 3 scaffolded as a bare String, CommunityGroup has no Section
   // 3 precedent to defer to, so createdById is cascade-FK'd per Decision
   // Log #44 from day one).
-  createdCommunityGroups     CommunityGroup[]
+  createdCommunityGroups    CommunityGroup[]
   communityGroupMemberships CommunityGroupMember[]
 
   posts            Post[]
@@ -310,9 +310,9 @@ model GrassrootsTeam {
 }
 
 model Fixture {
-  id          String          @id @default(uuid())
-  teamAId     String
-  teamA       GrassrootsTeam  @relation("teamA", fields: [teamAId], references: [id])
+  id           String          @id @default(uuid())
+  teamAId      String
+  teamA        GrassrootsTeam  @relation("teamA", fields: [teamAId], references: [id])
   // teamBId XOR opponentName (or neither):
   //   - teamBId set          -> the away side is a registered Soccernity team.
   //   - opponentName set      -> the away side is NOT on Soccernity; its name
@@ -343,8 +343,8 @@ model Fixture {
   // same-status PATCH, scheduled -> full_time via PATCH) is a 409.
   // Enforced in GrassrootsService, not by a DB constraint. There is no
   // "postponed"/"cancelled" value -- flagged open, not added.
-  status      String          @default("scheduled") // scheduled | live | full_time
-  result      Result?
+  status       String          @default("scheduled") // scheduled | live | full_time
+  result       Result?
 }
 
 model Result {
@@ -439,27 +439,27 @@ model Comment {
 }
 
 model BanterRoom {
-  id        String @id @default(uuid())
-  name      String
+  id          String             @id @default(uuid())
+  name        String
   // club | league | country | topic. A bare category label only — there
   // is deliberately NO scope-target field (which club / which league):
   // sprint-3/banter-rooms-backend treats scopeType as a filterable
   // category and `name` as free text. A genuine "which Arsenal room"
   // needs a scopeRef/scopeName addition — flagged as a Decision Log
   // candidate in banter/README.md, not built.
-  scopeType String
+  scopeType   String
   // The user who created the room. Kept as a bare String (not a User
   // @relation) exactly as Section 3 scaffolded it — making it a real FK
   // would pull room creation into the Decision Log #44 account-deletion
   // cascade scope for no MVP benefit. Flagged in banter/README.md.
-  createdBy String
+  createdBy   String
   // Denormalized cache of members.count(), the same discipline as
   // Post.likeCount / ClubPage.memberCount. sprint-3/banter-rooms-backend
   // keeps this in sync transactionally alongside every BanterRoomMember
   // create/delete (BanterService.joinRoom / leaveRoom / createRoom) —
   // never trust it in isolation; recomputable via
   // BanterRoomMember.count({ where: { banterRoomId } }).
-  memberCount Int    @default(0)
+  memberCount Int                @default(0)
   posts       Post[]
   // sprint-3/banter-rooms-backend — the membership join table that
   // Section 3 never gave BanterRoom, without which "My Bants" (Build
@@ -468,7 +468,7 @@ model BanterRoom {
   // use a P2002-catch for idempotency — exactly like Like/Follow — and
   // avoid the raw $executeRaw the implicit-m2m _ClubMembership forced on
   // ClubsService.joinClub.
-  members BanterRoomMember[]
+  members     BanterRoomMember[]
 }
 
 // sprint-3/banter-rooms-backend — per-user Banter Room membership,
@@ -547,7 +547,7 @@ model CommunityGroup {
   // FK from day one (unlike BanterRoom.createdBy's bare String, which
   // Section 3 itself scaffolded that way) since this model has no prior
   // schema to defer to.
-  createdBy User @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdBy   User   @relation(fields: [createdById], references: [id], onDelete: Cascade)
 
   // Denormalized cache of members.count() — same discipline as
   // Post.likeCount / ClubPage.memberCount / BanterRoom.memberCount
@@ -735,6 +735,46 @@ model Report {
   reason     String
   status     String   @default("open") // open | reviewed | actioned
   createdAt  DateTime @default(now())
+
+  // sprint-5/admin-moderation-queue-backend additions below -- a genuine
+  // schema addition beyond Section 3's original six-field Report list,
+  // flagged per CLAUDE.md's "the data model is a fixed spec" rule (see
+  // this PR's own Decision Log candidate write-up in
+  // modules/moderation/README.md) rather than added silently. Section 3
+  // gave Report no way to record WHO reviewed it, WHAT action was taken,
+  // or the appeal trail Section 8.4's own workflow text assumes exists
+  // ("a report is submitted... a second admin/moderator reviews the
+  // appeal", Decision Log #138).
+  //
+  // reviewedByAdminId / reviewedAt / actionTaken are set together, once,
+  // by PATCH /admin/moderation/reports/:id. actionTaken is one of
+  // content_removed | warning_issued | user_suspended | dismissed --
+  // maps onto this model's own pre-existing three-value `status` enum
+  // (dismissed -> 'reviewed', anything else -> 'actioned'), not a fourth
+  // status value. Recording the action does NOT itself enforce it --
+  // there is no soft-delete/hidden flag on Post/Comment and no
+  // admin-triggered suspend endpoint on User anywhere in this codebase
+  // yet; see moderation/README.md's disclosed-limitation note.
+  reviewedByAdminId String?
+  reviewedByAdmin   AdminUser? @relation("reportReviewedBy", fields: [reviewedByAdminId], references: [id])
+  reviewedAt        DateTime?
+  actionTaken       String? // content_removed | warning_issued | user_suspended | dismissed
+
+  // The appeal trail -- only the REPORTED user (never the reporter) may
+  // appeal, and only once a report has actually been actioned (POST
+  // /reports/:id/appeal). appealStatus is null until a reported user
+  // files one, then 'pending' until a SECOND admin/moderator (never the
+  // one in reviewedByAdminId -- Decision Log #138, hard-enforced in
+  // ModerationService, not just documented) decides 'upheld' (the
+  // original action stands) or 'overturned' (Report.status reverts to
+  // 'open', reviewedByAdminId/reviewedAt/actionTaken are cleared, so the
+  // report re-enters the open queue as if never actioned).
+  appealStatus            String? // null | pending | upheld | overturned
+  appealReason            String?
+  appealedAt              DateTime?
+  appealReviewedByAdminId String?
+  appealReviewedByAdmin   AdminUser? @relation("reportAppealReviewedBy", fields: [appealReviewedByAdminId], references: [id])
+  appealReviewedAt        DateTime?
 }
 
 model MediaAsset {
@@ -784,15 +824,15 @@ model Category {
 // a minimal one already did — the real gap was that it was never fleshed
 // out or given its own auth path, both of which this PR now builds.
 model AdminUser {
-  id            String    @id @default(uuid())
-  email         String    @unique
+  id                    String    @id @default(uuid())
+  email                 String    @unique
   // sprint-2/admin-console-account-entity additions below — genuine
   // schema additions beyond Section 3's original AdminUser field list,
   // flagged per CLAUDE.md's "the data model is a fixed spec" rule rather
   // than added silently.
-  passwordHash  String
-  fullName      String
-  phone         String?
+  passwordHash          String
+  fullName              String
+  phone                 String?
   // "active" | "deactivated" — mirrors User.accountStatus's existing
   // string-enum convention. No self-service deactivate/reactivate
   // endpoint exists for AdminUser in this PR (nothing in the Admin
@@ -802,11 +842,17 @@ model AdminUser {
   // or losing Article.authorAdmin/Report-reviewer attribution history.
   // AdminAuthService.login() checks this the same way AuthService.login()
   // checks User.accountStatus.
-  accountStatus String    @default("active")
-  role          String // editor | moderator | superadmin
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  articles      Article[]
+  accountStatus         String    @default("active")
+  role                  String // editor | moderator | superadmin
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  articles              Article[]
+  // sprint-5/admin-moderation-queue-backend -- reverse relations for
+  // Report's two new AdminUser FKs (see Report's own comment). Named
+  // explicitly (not left for Prisma to auto-name) so the two don't
+  // collide on the same generated field name.
+  reviewedReports       Report[]  @relation("reportReviewedBy")
+  appealReviewedReports Report[]  @relation("reportAppealReviewedBy")
 }
 
 // ---------- Sports Hub (cached from the licensed sports-data vendor — Decision Log #6) ----------

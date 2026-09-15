@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { RedisModule } from '../../redis/redis.module';
 import { PasswordService } from '../auth/password/password.service';
 import { AdminJwtAuthGuard } from './guards/admin-jwt-auth.guard';
+import { AdminRolesGuard } from './guards/admin-roles.guard';
 import { AdminRefreshTokenStore } from './token/admin-refresh-token.store';
 import { AdminTokenService } from './token/admin-token.service';
 
@@ -50,7 +51,13 @@ import { AdminTokenService } from './token/admin-token.service';
       }),
     }),
   ],
-  providers: [PasswordService, AdminTokenService, AdminRefreshTokenStore, AdminJwtAuthGuard],
-  exports: [PasswordService, AdminTokenService, AdminRefreshTokenStore, AdminJwtAuthGuard],
+  // sprint-5/admin-moderation-queue-backend — AdminRolesGuard added here
+  // (not just in the moderation module) so any current or future admin
+  // module that already imports this module for AdminJwtAuthGuard gets
+  // role-gating available for free. AdminRolesGuard only depends on
+  // Reflector, a globally-available Nest provider — no new imports/DI
+  // wiring needed for it to resolve.
+  providers: [PasswordService, AdminTokenService, AdminRefreshTokenStore, AdminJwtAuthGuard, AdminRolesGuard],
+  exports: [PasswordService, AdminTokenService, AdminRefreshTokenStore, AdminJwtAuthGuard, AdminRolesGuard],
 })
 export class AdminAuthFoundationModule {}

@@ -20,6 +20,7 @@ import { MessagingModule } from './modules/messaging/messaging.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { CommunityGroupsModule } from './modules/community-groups/community-groups.module';
 import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
+import { ModerationModule } from './modules/moderation/moderation.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -84,9 +85,21 @@ import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
     // Console account/auth/profile slice ONLY: POST /admin/auth/login,
     // /admin/auth/refresh, /admin/auth/logout, /admin/auth/change-password,
     // GET/PATCH /admin/profile. Section 4.8's moderation-queue endpoints
-    // (the rest of the "AdminModule // Sprint 5" placeholder this replaces)
-    // remain unbuilt — see modules/admin/README.md.
+    // are now built too, but in a separate module — see ModerationModule
+    // below and modules/admin/README.md.
     AdminModule,
+    // sprint-5/admin-moderation-queue-backend — Section 4.8 (Admin
+    // Service) + Section 8.4 (Moderation & appeals workflow). POST
+    // /reports, POST /reports/:id/appeal (both JwtAuthGuard-only —
+    // genuine spec-gap additions, Section 4 defines neither route
+    // literally), GET/PATCH /admin/moderation/reports*
+    // (AdminJwtAuthGuard + the first role-gated admin route in this
+    // codebase — moderator/superadmin only, not editor). Report gained
+    // reviewer/action/appeal-trail columns (migration
+    // 20260915003318_add_report_moderation_fields), a genuine schema
+    // addition beyond Section 3's original six-field list — see
+    // modules/moderation/README.md.
+    ModerationModule,
     // sprint-2/contest-data-model-backend — Decision Log #218/#219. The
     // Contest weekly-cycle data model + scoring ledger + the
     // active-contest query (Decision Log #61/#70/#71/#130/#188). New
