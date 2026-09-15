@@ -1,12 +1,17 @@
 // Route table for apps/admin.
 //
 // As of the ~10-PR Admin Console conversion (sprint-2/admin-*), every one
-// of the 10 sidebar sections has a real screen: Profile + Change Password
-// are fully wired to /admin/profile + /admin/auth/change-password
-// (Decision Log #54); the rest are honest disclosed stubs (their backend
-// endpoints don't exist yet — Section 4.8 is mostly unbuilt). A stub's PR
-// swaps it for real data when its endpoints land; the paths and the nav
-// do not change.
+// of the 10 sidebar sections has a real screen. Real, backend-wired
+// sections so far: Profile + Change Password (/admin/profile,
+// /admin/auth/change-password — Decision Log #54); Moderation
+// (/admin/moderation/reports* — Decision Log #135/#189/#138); Contest
+// (/admin/contest/* — Decision Log #218/#219/#241/#243); Articles +
+// Categories (/admin/articles*, /admin/categories* — this PR,
+// sprint-5/admin-articles-categories-backend). The rest (Dashboard,
+// Users, Media, Competitions, Settings/roles) are still honest disclosed
+// stubs (their backend endpoints don't exist yet). A stub's PR swaps it
+// for real data when its endpoints land; the paths and the nav do not
+// change.
 //
 // `adminRoutes` (the RouteObject[]) is exported separately from `router`
 // so a test can mount the real tree via createMemoryRouter — the same
@@ -57,7 +62,11 @@ export const adminRoutes: RouteObject[] = [
           { index: true, element: <Navigate to="/dashboard" replace /> },
           // Stub (sprint-2/admin-dashboard-stub) — no GET /admin/dashboard/stats.
           { path: "dashboard", element: <DashboardPage /> },
-          // Stubs (sprint-2/admin-articles-categories-stub) — no articles/categories backend.
+          // Real screens (sprint-5/admin-articles-categories-frontend) —
+          // wired to GET/POST /admin/articles, PATCH /admin/articles/:id
+          // (Section 4.8, built by sprint-5/admin-articles-categories-backend).
+          // Image attachment on Create Article stays a disabled stub — no
+          // Media backend exists yet.
           { path: "articles", element: <ArticlesPage /> },
           { path: "articles/new", element: <CreateArticlePage /> },
           // Stub (sprint-2/admin-users-stub) — no GET/PATCH /admin/users.
@@ -73,6 +82,10 @@ export const adminRoutes: RouteObject[] = [
           { path: "moderation", element: <ModerationQueuePage /> },
           { path: "moderation/reports/:id", element: <ReportDetailPage /> },
           { path: "moderation/appeals/:id", element: <AppealReviewPage /> },
+          // Real screens (sprint-5/admin-articles-categories-frontend) —
+          // wired to GET/POST /admin/categories, PATCH
+          // /admin/categories/:id (the Status column's own real
+          // active/inactive toggle).
           { path: "categories", element: <CategoriesPage /> },
           { path: "categories/new", element: <AddCategoryPage /> },
           // Real screens (sprint-2/admin-contest-to-code, Decision Log #243 —

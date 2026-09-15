@@ -1,0 +1,265 @@
+/* Articles/Categories admin screens (Build Plan Section 4.8 — Figma
+ * nodes 123:56 / 124:313 / 128:488 / 138:93), backed by
+ * sprint-5/admin-articles-categories-backend. Light mode only; every
+ * colour is a --sn-* token. Destructive/blocking actions are navy, not
+ * red — no destructive token exists (non-negotiable #3), same convention
+ * pages/moderation/moderation.css and pages/contest/contest.css use. */
+
+.ac-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1100px;
+}
+
+.ac-back {
+  font-size: 13px;
+}
+
+.ac-back a {
+  color: var(--sn-brand-navy);
+  font-weight: 600;
+}
+
+.ac-action-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.ac-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.ac-tab {
+  background: none;
+  border: none;
+  padding: 8px 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sn-text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.ac-tab--active {
+  color: var(--sn-text-primary);
+  border-bottom-color: var(--sn-brand-navy);
+}
+
+.ac-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sn-text-secondary);
+}
+
+.ac-loading,
+.ac-error {
+  color: var(--sn-text-secondary);
+  font-size: 14px;
+}
+
+.ac-row-error {
+  margin-top: 6px;
+}
+
+.ac-error {
+  padding: 10px 12px;
+  border: 1px solid var(--sn-brand-navy);
+  border-radius: 4px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-weight: 600;
+}
+
+.ac-card {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ac-card__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+/* table */
+
+.ac-table {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.ac-table__row {
+  display: grid;
+  grid-template-columns: 110px 1.6fr 1fr 110px 140px;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 20px;
+  font-size: 13px;
+}
+
+.ac-table__row--categories {
+  grid-template-columns: 1.6fr 130px 110px 140px;
+}
+
+.ac-table__row--head {
+  background-color: var(--sn-green-tint-12);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+.ac-cell--primary {
+  color: var(--sn-text-primary);
+  font-weight: 600;
+}
+
+.ac-cell--secondary {
+  color: var(--sn-text-secondary);
+}
+
+.ac-cell--truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* pills */
+
+.ac-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: lowercase;
+}
+
+.ac-pill--strong {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.ac-pill--soft {
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+}
+
+/* links + buttons */
+
+.ac-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sn-brand-navy);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.ac-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.ac-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.ac-btn--primary {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.ac-btn--outline {
+  background-color: var(--sn-background-surface);
+  border-color: var(--sn-brand-navy);
+  color: var(--sn-text-primary);
+}
+
+.ac-btn--sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+/* form */
+
+.ac-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ac-field span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.ac-field input,
+.ac-field textarea,
+.ac-field select {
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--sn-icon-inactive);
+  background-color: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+  font: inherit;
+}
+
+.ac-hint {
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+  font-weight: 400;
+}
+
+/* callouts */
+
+.ac-callout {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  background-color: var(--sn-green-tint-12);
+  border-radius: 8px;
+}
+
+.ac-callout__bar {
+  flex: 0 0 3px;
+  border-radius: 2px;
+  background-color: var(--sn-brand-navy);
+  align-self: stretch;
+}
+
+.ac-callout p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sn-text-primary);
+  line-height: 1.5;
+}
+
+.ac-callout code {
+  font-size: 12px;
+}
