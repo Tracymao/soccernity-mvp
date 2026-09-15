@@ -9,17 +9,46 @@
 // Logged Out canonical frame exist with identical body content, and the
 // shared Header renders the right chrome either way.
 //
-// BACKEND STATE: there is no blog/article/content module in
-// services/api -- see ./blogData.ts's header comment. The article, its
-// body, the comment thread and the "Login via" social options are all
-// illustrative placeholder content. The comment composer is rendered
-// disabled with an explanatory note (there is no comments endpoint, and
-// no social-auth flow); the sample comments are captioned as such. This
-// mirrors the "render it, but visibly disabled, never faked as working"
-// discipline EditProfileModal.tsx applies to its unbacked fields.
+// REAL DATA (sprint-4/public-blog-articles-feed, services/api/src/
+// modules/blog/): GET /articles/:id, no Authorization header. A draft
+// article and a genuinely non-existent id both 404 identically -- see
+// ../../api/blog.ts's own comment -- so this page cannot distinguish "no
+// such article" from "a real but unpublished draft," and renders the
+// same not-found state for both. The "More Trending News" strip is a
+// small, non-critical fetch of GET /articles' own first page, filtered
+// client-side to exclude the current article -- there is no
+// exclude-id/related-articles param on that endpoint.
+//
+// STILL PLACEHOLDER: the article's own body, its title and its category
+// are all real; the hero image stays a non-functional placeholder box (no
+// Article-to-MediaAsset relation -- see modules/blog/README.md), and the
+// comment composer is rendered disabled with an explanatory note (there is
+// no comments endpoint anywhere in Section 4, and no social-auth flow) --
+// the sample comments are captioned as such. This mirrors the "render it,
+// but visibly disabled, never faked as working" discipline
+// EditProfileModal.tsx applies to its own unbacked fields.
+import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router";
-import { findArticle, ARTICLES, SAMPLE_COMMENTS } from "./blogData";
+import { getArticleById, listArticles, BlogApiError, type Article, type ArticleSummary } from "../../api/blog";
+import { SAMPLE_COMMENTS } from "./blogData";
 import "./ArticleDetailPage.css";
+
+type LoadState = "loading" | "loaded" | "not-found" | "error";
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+}
+
+function bodyParagraphs(body: string): string[] {
+  return body
+    .split(/\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+}
 
 function RelatedCard({ id, title, excerpt, date }: { id: string; title: string; excerpt: string; date: string }) {
   return (
@@ -37,14 +66,67 @@ function RelatedCard({ id, title, excerpt, date }: { id: string; title: string; 
 
 export default function ArticleDetailPage() {
   const { articleId } = useParams();
-  const article = articleId ? findArticle(articleId) : undefined;
+  const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [article, setArticle] = useState<Article | null>(null);
+  const [related, setRelated] = useState<ArticleSummary[]>([]);
 
-  if (!article) {
+  useEffect(() => {
+    if (!articleId) {
+      setLoadState("not-found");
+      return;
+    }
+
+    let cancelled = false;
+    setLoadState("loading");
+    setArticle(null);
+    setRelated([]);
+
+    (async () => {
+      try {
+        const result = await getArticleById(articleId);
+        if (cancelled) return;
+        setArticle(result);
+        setLoadState("loaded");
+
+        // Related strip is non-critical -- a failure here never blocks
+        // the article itself from rendering.
+        try {
+          const page = await listArticles();
+          if (!cancelled) {
+            setRelated(page.items.filter((a) => a.id !== result.id).slice(0, 3));
+          }
+        } catch {
+          // ignore -- the related section simply stays empty
+        }
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof BlogApiError && err.status === 404) {
+          setLoadState("not-found");
+        } else {
+          setLoadState("error");
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [articleId]);
+
+  if (loadState === "loading") {
+    return (
+      <p className="article-detail" role="status">
+        Loading article&hellip;
+      </p>
+    );
+  }
+
+  if (loadState === "not-found") {
     return (
       <div className="article-detail article-detail--missing">
         <h1 className="article-detail__title">Article not found</h1>
         <p className="article-detail__missing-copy">
-          That article doesn&rsquo;t exist, or the link is wrong.
+          That article doesn&rsquo;t exist, isn&rsquo;t published, or the link is wrong.
         </p>
         <Link to="/blog" className="article-detail__back">
           &larr; Back to Blog
@@ -53,7 +135,13 @@ export default function ArticleDetailPage() {
     );
   }
 
-  const related = ARTICLES.filter((a) => a.id !== article.id).slice(0, 3);
+  if (loadState === "error" || !article) {
+    return (
+      <p className="article-detail" role="alert">
+        Couldn&rsquo;t load this article. Please try again shortly.
+      </p>
+    );
+  }
 
   return (
     <div className="article-detail">
@@ -64,7 +152,7 @@ export default function ArticleDetailPage() {
       <h1 className="article-detail__title">{article.title}</h1>
 
       <p className="article-detail__meta">
-        Posted by {article.author} &middot; {article.date} &middot; {article.time}
+        Posted by {article.author} &middot; {formatDate(article.publishedAt)} &middot; {formatTime(article.publishedAt)}
       </p>
 
       <div className="article-share" aria-hidden="true">
@@ -76,7 +164,7 @@ export default function ArticleDetailPage() {
       <div className="article-detail__hero" aria-hidden="true" />
 
       <div className="article-detail__body">
-        {article.body.map((paragraph, i) => (
+        {bodyParagraphs(article.body).map((paragraph, i) => (
           <p key={i}>{paragraph}</p>
         ))}
       </div>
@@ -86,8 +174,8 @@ export default function ArticleDetailPage() {
           Join the discussion
         </h2>
         <p className="article-comments__note">
-          Comments aren&rsquo;t available yet &mdash; the blog has no backend (no comments endpoint, no social sign-in).
-          The thread below is a sample.
+          Comments aren&rsquo;t available yet &mdash; the blog has no comments endpoint or social sign-in flow. The
+          thread below is a sample.
         </p>
 
         <form className="article-comment-form" onSubmit={(e) => e.preventDefault()}>
@@ -127,14 +215,16 @@ export default function ArticleDetailPage() {
         <p className="article-comments__sample-caption">Sample &mdash; not real comments</p>
       </section>
 
-      <section className="article-related">
-        <h2 className="article-related__title">More Trending News</h2>
-        <div className="article-related__grid">
-          {related.map((a) => (
-            <RelatedCard key={a.id} id={a.id} title={a.title} excerpt={a.excerpt} date={a.date} />
-          ))}
-        </div>
-      </section>
+      {related.length > 0 && (
+        <section className="article-related">
+          <h2 className="article-related__title">More Trending News</h2>
+          <div className="article-related__grid">
+            {related.map((a) => (
+              <RelatedCard key={a.id} id={a.id} title={a.title} excerpt={a.excerpt} date={formatDate(a.publishedAt)} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

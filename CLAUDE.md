@@ -10271,6 +10271,85 @@ real, still-open follow-up, not done by this entry.
     round-trip is the actual verification ceiling here, not a
     LibreOffice-specific confirmation — stated plainly rather than
     claimed as something it isn't.
+- **`sprint-4/public-blog-articles-feed` (backend-api + figma-to-code,
+  2026-09-15) builds Sprint 4's second deliverable (Build Plan Section
+  6) — the public-facing Blog/Articles feed — and wires `BlogPage.tsx` /
+  `ArticleDetailPage.tsx` to it, replacing their dummy-data phase.
+  Independent of the Sports Hub work (no shared code, no shared schema
+  tables). `services/api/src/modules/blog/` is a brand-new top-level
+  module, module `AdminContentModule` was NOT touched.**
+  - **Three genuinely public endpoints, no guard at all**: `GET
+    /articles?categoryId=&categorySlug=&cursor=&limit=` (published only,
+    newest-published-first), `GET /articles/:id` (a draft or a
+    non-existent id both 404 identically), `GET /categories` (active
+    only). `author` exposes only `AdminUser.fullName`, never `email` or
+    any other field. Zero `schema.prisma` diff.
+  - **Two Decision Log candidates deliberately deferred rather than
+    built, flagged not silently decided, both for the same reason —
+    making either genuinely useful would mean editing
+    `admin-content.service.ts`'s DTOs/service methods, which this
+    ticket's own brief rules out**: (1) a real `Article.excerpt` column
+    — shipped instead as a plain, unstored, word-boundary
+    `truncateExcerpt(body, 200)` computed at read time
+    (`blog/excerpt.util.ts`); (2) an `Article`-to-`MediaAsset` image
+    relation, now that the Sprint 5 Media library backend exists — a
+    schema-only field with no admin write path to ever set it would be
+    a dangling column, not a "clean, small addition" once the real
+    write-side cost is counted, so `BlogPage.tsx`/`ArticleDetailPage.tsx`
+    keep their existing non-functional placeholder media boxes. Also
+    flagged, not resolved: marking a `Category` `'inactive'` only hides
+    it from `GET /categories`'s own tab list — it does **not** filter
+    that category's already-published articles out of `GET /articles`'s
+    unfiltered "All" listing or a direct `?categoryId=` link. Full
+    reasoning for all three in `modules/blog/README.md`; none required a
+    schema migration.
+  - **Frontend**: new `apps/web/src/api/blog.ts` (this app's own
+    established `api/*.ts` client convention — a plain `fetch` wrapper,
+    a typed `BlogApiError` carrying `.status`, cursor pagination — with
+    NO Authorization header sent on any call, unlike every other client
+    in this app). `BlogPage.tsx`'s category tabs now come from `GET
+    /categories`; selecting a specific tab re-queries `GET
+    /articles?categorySlug=` for that category's own articles (rather
+    than filtering the "All" tab's single loaded page client-side, since
+    a category can have articles beyond that page) — a disclosed,
+    deliberate limitation given the Figma design has no "Load more"
+    affordance for Blog. `ArticleDetailPage.tsx`'s "More Trending News"
+    strip is a small, non-critical fetch of `GET /articles`' own first
+    page filtered client-side to exclude the current article (no
+    exclude-id/related param exists). `blogData.ts` is trimmed to just
+    `SAMPLE_COMMENTS` — comments remain explicitly out of scope (no
+    comments endpoint anywhere in Section 4), the compose box stays
+    disabled with the sample thread visibly captioned as such.
+  - **Verified, all re-measured directly**: `services/api` mocked suite
+    **75 → 78 suites / 1005 → 1034 tests, 0 failures** (3 new suites, 29
+    new tests). No e2e spec added — every `BlogService` method is a
+    plain `findMany`/`findFirst` against `Article.categoryId`/
+    `Article.authorAdminId`, both already-existing FKs, no raw SQL, no
+    transaction, no new relation/constraint — none of `test/README.md`'s
+    three e2e-add triggers apply, the same conclusion `admin-content/
+    README.md` already reached for its own analogous plain-read module.
+    `nest build` + `npm run lint` + `npx tsc --noEmit` all clean.
+    `apps/web` vitest **43 suites / 311 → 315 tests, 0 failures** (+4,
+    both existing test files rewritten against mocked
+    `../api/blog`, no new test file). `npx tsc --noEmit`, `npm run
+    lint`, and a production build all clean on both workspaces. **A real
+    manual trace was run against a live local Postgres + the real dev
+    API + the real dev frontend** (not simulated): a fresh admin editor
+    account provisioned directly via SQL (Decision Log #191 — no
+    self-service admin registration endpoint exists), a category and a
+    draft article and a published article created through the real,
+    unchanged `POST /admin/categories`/`POST /admin/articles` endpoints,
+    then confirmed live: the published article appears in `GET
+    /articles`, filterable by both `?categoryId=` and `?categorySlug=`,
+    with a genuinely truncated excerpt; the draft article's real id
+    returns the byte-identical `404 {"message":"Article not
+    found",...}` a wholly non-existent id returns; the frontend dev
+    server serves `/`, `/blog`, and both article detail routes with a
+    real HTTP 200 and no server-side errors. All verification-only rows
+    (the admin account, category, and two articles) were deleted from
+    the local dev database afterward — pre-existing seed data from other
+    sessions was left untouched.
+  - Not merged — founder's call after review.
 
 ## The eight agents, and the order they run in
 

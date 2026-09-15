@@ -25,6 +25,7 @@ import { AdminContentModule } from './modules/admin-content/admin-content.module
 import { AdminUsersModule } from './modules/admin-users/admin-users.module';
 import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module';
 import { MediaModule } from './modules/media/media.module';
+import { BlogModule } from './modules/blog/blog.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -219,6 +220,19 @@ import { MediaModule } from './modules/media/media.module';
     // rollup and read time (Decision Log #221). See
     // modules/leaderboard/README.md.
     LeaderboardModule,
+    // sprint-4/public-blog-articles-feed — Build Plan Section 4, Sprint
+    // 4's public-facing Blog/Articles feed (independent of the Sports
+    // Hub work — no shared code, no shared schema tables). GET
+    // /articles, GET /articles/:id, GET /categories — all genuinely
+    // public, no guard at all, published Articles / active Categories
+    // only. A real `excerpt` column and an Article-to-MediaAsset image
+    // relation were both considered and deliberately DEFERRED (not
+    // built) — both would require editing admin-content's own DTOs/
+    // service to give an admin a way to set them, which conflicts with
+    // this module's own explicit "don't touch admin-content" scope; see
+    // modules/blog/README.md for the full reasoning and the Decision Log
+    // candidates this flags. Zero schema.prisma diff.
+    BlogModule,
     // SportsModule,        // Sprint 4
     // SearchModule,        // Sprint 6
   ],
