@@ -6,12 +6,14 @@
 // /admin/auth/change-password — Decision Log #54); Moderation
 // (/admin/moderation/reports* — Decision Log #135/#189/#138); Contest
 // (/admin/contest/* — Decision Log #218/#219/#241/#243); Articles +
-// Categories (/admin/articles*, /admin/categories* — this PR,
-// sprint-5/admin-articles-categories-backend). The rest (Dashboard,
-// Users, Media, Competitions, Settings/roles) are still honest disclosed
-// stubs (their backend endpoints don't exist yet). A stub's PR swaps it
-// for real data when its endpoints land; the paths and the nav do not
-// change.
+// Categories (/admin/articles*, /admin/categories* — sprint-5/admin-articles-categories-backend);
+// Users + Dashboard (/admin/users*, /admin/dashboard/stats —
+// sprint-5/admin-users-dashboard-backend); Media
+// (/admin/media* — this PR, sprint-5/admin-media-storage-backend, the
+// first real file storage this codebase has ever had). The rest
+// (Competitions, Settings/roles) are still honest disclosed stubs (their
+// backend endpoints don't exist yet). A stub's PR swaps it for real data
+// when its endpoints land; the paths and the nav do not change.
 //
 // `adminRoutes` (the RouteObject[]) is exported separately from `router`
 // so a test can mount the real tree via createMemoryRouter — the same
@@ -102,9 +104,13 @@ export const adminRoutes: RouteObject[] = [
           // Stubs (sprint-2/admin-competitions-stub) — Competition umbrella parked (Decision Log #72/#73).
           { path: "competitions", element: <CreateCompetitionPage /> },
           { path: "competitions/created", element: <CompetitionCreatedPage /> },
-          // Stubs (sprint-2/admin-media-stub) — no media backend + no file storage.
+          // Real screens (sprint-5/admin-media-storage-frontend) — wired
+          // to GET/POST /admin/media*. media/preview gained a real :id
+          // param (was a bare stub route with no identity concept) —
+          // MediaLibraryPage's own row links pass a router `state`
+          // handoff, same pattern as moderation/reports/:id.
           { path: "media", element: <MediaLibraryPage /> },
-          { path: "media/preview", element: <MediaPreviewPage /> },
+          { path: "media/preview/:id", element: <MediaPreviewPage /> },
           { path: "media/upload", element: <MediaUploadPage /> },
           // Stubs (sprint-2/admin-settings-roles-stub) — no role-management endpoint (Decision Log #191).
           { path: "settings", element: <SettingsRolesPage /> },

@@ -10068,6 +10068,145 @@ real, still-open follow-up, not done by this entry.
     suites / 100 tests, 0 failures**; `tsc --noEmit`/`lint`/production
     build all clean.
   - Not merged — founder's call after review.
+- **`sprint-5/admin-media-storage-backend` (backend-api, 2026-09-15)
+  builds the Media library — the last zero-backend Admin Console piece
+  named in Sprint 5's brief — and is the first real file storage this
+  codebase has ever had. Stated back the storage abstraction's shape
+  before building, per the task brief's own instruction.**
+  - **New `StorageService` abstraction** (`src/storage/`, top-level
+    infra mirroring `RedisService`'s own shape) — an **abstract class**,
+    not a plain interface + string/Symbol token, so NestJS resolves it
+    as a real DI token (`useClass: S3StorageService`) and a unit test can
+    construct `MediaService` directly with a fake object cast `as
+    StorageService`, no `TestingModule` needed. `S3StorageService` is
+    the real implementation, configured **entirely through env vars**
+    (`S3_ENDPOINT`/`S3_REGION`/`S3_BUCKET`/`S3_ACCESS_KEY`/
+    `S3_SECRET_KEY`) against the standard AWS SDK v3 client — runs
+    unmodified against real AWS S3, Cloudflare R2, Backblaze B2, or
+    DigitalOcean Spaces. `S3_ENDPOINT` is the one var that changes
+    *behaviour*: unset targets real AWS S3 (virtual-hosted-style URLs,
+    the SDK's own default); set targets any other S3-compatible provider
+    (path-style URLs + `forcePathStyle: true`, both keyed off the same
+    check so they can never disagree). **"Wired but inactive"** —
+    the exact `isConfigured` pattern already used for
+    `EMAIL_PROVIDER_API_KEY`/`SENTRY_DSN` — but deliberately a **harder**
+    failure than either: a still-placeholder `S3_BUCKET`/etc. makes
+    `upload()`/`delete()` throw a clear 503, not a silent no-op, since
+    file upload is the actual feature here, not an optional side-channel.
+    **The actual storage provider is still unresolved — a new Decision
+    Log candidate**, mirroring Decision Log #26's own "unbundled,
+    cost-aligned for a pre-launch MVP" reasoning for hosting generally.
+  - **`GET /admin/media` + `POST /admin/media/upload`**
+    (`AdminRolesGuard('editor', 'superadmin')` on the whole controller,
+    GET included — mirrors `AdminArticlesController`'s role split, media
+    being an authoring tool, not `AdminUsersController`'s
+    `'moderator'`/`'superadmin'`). Upload is single-file multipart (field
+    `file`, 50MB cap via multer's own `limits.fileSize` — NestJS's
+    built-in `transformException` already converts a breach into a clean
+    413, no custom filter needed); `type` (`image`/`video`) is always
+    derived server-side from the file's own reported MIME type against
+    an explicit allow-list, checked before ever calling storage. `GET
+    /admin/media` is a genuine addition beyond Section 4.8's literal
+    upload-only line — same "an admin needs to see what they uploaded"
+    reasoning `AdminContentModule`'s own `GET /admin/articles` used.
+  - **`MediaAsset.key String`** — a genuine schema addition, flagged
+    (migration `20260915162308_add_media_asset_key`, applied cleanly to
+    both dev and test databases — the table was empty, no endpoint had
+    ever written to it before this PR). `url` is built from provider
+    config at upload time and would break `delete()`'s ability to locate
+    the object again if that config ever changes (a moved bucket, a
+    swapped-in CDN domain); `key` is the durable, config-independent
+    identifier. **Stored on every new row but read/written by nothing
+    else in this PR** — see "not built" below.
+  - **Key naming**: `media/<uploaderId>/<uuid>-<sanitized-original-filename>`
+    — the leading `randomUUID()` is the real collision-avoidance
+    mechanism; the sanitized trailing filename is purely for
+    human-readability in a bucket browser. A crafted `originalname` like
+    `../../etc/passwd.jpg` degrades to a harmless trailing `passwd.jpg`
+    segment (proven directly in `media.service.spec.ts`) — path
+    components and unsafe characters are stripped before use.
+  - **The "5 files" copy already in `MediaUploadPage.tsx`'s pre-existing
+    stub** ("Select up to 5 media files, each no larger than 50 MB") is
+    a **client-side selection convenience, not a batch endpoint** —
+    `POST /admin/media/upload` stays single-file (Section 4.8's own
+    literal line is singular, and so is this PR's own task-brief
+    wording), and the frontend loops sequentially over up to 5 files,
+    one call each, with per-file pending/uploading/done/failed state — a
+    disclosed judgment call, not an invented batch response shape.
+  - **A real, disclosed dependency-chain finding, not fixed**:
+    `npm install`ing `multer` (tried `^2.0.0`/`@2.4.0`/`@2.3.0`, plus a
+    forced cache-clean reinstall) kept resolving to `2.2.0` at the
+    workspace root — traced to `@nestjs/platform-express@11.2.1`'s own
+    **exact, unranged** pin on `multer: "2.2.0"`. This module's own
+    explicit dependency (`^2.3.0`) resolves correctly to a genuinely
+    separate nested copy at `services/api/node_modules/multer@2.3.0` —
+    but `FileInterceptor`'s own internal `require('multer')` (inside
+    `@nestjs/platform-express`'s own module directory) still resolves to
+    the hoisted **root** `2.2.0` copy regardless, since that's the
+    nearest `node_modules/multer` from *that* file's location. `2.2.0`
+    carries a real `npm audit`-flagged high-severity DoS advisory
+    (`GHSA-qfvm-cv95-jqjf`) that `2.3.0`+ fixes. **Not fixed here** — the
+    only real fix is bumping `@nestjs/platform-express` itself to a
+    `12.x` major (per `npm audit`'s own `fixAvailable` hint), an
+    unrelated, unscoped version bump this media-storage ticket shouldn't
+    silently bundle in — the same "flag it, don't fix it as part of an
+    unrelated PR" precedent Decision Log #20's own Tier 2/3 triage
+    already set for `multer`/`lodash`/`qs`/`body-parser`/`express`.
+    Flagged as a new Decision Log candidate for a future, dedicated
+    `@nestjs/platform-express` v12 upgrade PR.
+  - **Frontend (same PR)**: `MediaLibraryPage.tsx`/`MediaUploadPage.tsx`/
+    `MediaPreviewPage.tsx` converted from disclosed `AdminStubScreen`
+    stubs to real screens against a new `api/adminMedia.ts` client
+    (mirrors `api/adminContent.ts`'s conventions). `adminClient.ts`'s
+    `rawRequest` gained one small extension — a `FormData` body skips
+    both `JSON.stringify` and the JSON `Content-Type` header, the one
+    thing this codebase's admin client had never needed before a real
+    multipart upload. **`/media/preview` gained a real `:id` param** (was
+    a bare stub route with no identity concept); **there is no `GET
+    /admin/media/:id` anywhere in `services/api`**, so the Preview screen
+    is reached via the Library row's own router-`state` handoff, with a
+    bounded (`findMediaById`, 5-page) fallback for a direct visit/refresh
+    — the exact same workaround `ReportDetailPage.tsx`/`api/moderation.ts`
+    already established for their own identical gap. Flagged as its own
+    Decision Log candidate, not built. Real upload progress isn't
+    available through plain `fetch` (would need `XMLHttpRequest`) —
+    `MediaUploadPage.tsx`'s per-file pending/uploading/done/failed states
+    are a disclosed coarser substitute.
+  - **Verification, all re-measured directly**: `services/api` mocked
+    suite **72 suites / 982 tests → 75 suites / 1005 tests, 0 failures**
+    (3 new suites — `media.service.spec.ts`,
+    `admin-media.controller.http.spec.ts`, `s3-storage.service.spec.ts` —
+    23 new tests). e2e suite **18 suites / 170 tests, 0 failures,
+    unchanged** — re-run in full as a pure regression check after
+    applying the new migration; no e2e file added (every `MediaService`
+    method is a plain Prisma `create`/`findMany` against a model with
+    zero relations, no raw SQL, no transaction — none of
+    `test/README.md`'s three e2e-add triggers apply, same conclusion
+    `admin-content/README.md` already reached for its own analogous
+    module). `nest build` + `npm run lint` + `npx tsc --noEmit` all
+    clean. `apps/admin` **16 suites / 100 tests → 16 suites / 110 tests,
+    0 failures** (`media.test.tsx` rewritten from 3 stub-disclosure tests
+    to 13 real-data tests); `tsc --noEmit`/`lint`/production build all
+    clean; a real Vite dev server was started and `/`, `/media`,
+    `/media/upload`, `/media/preview/:id` were `curl`'d directly, all
+    real HTTP 200s (Vite's SPA fallback — same disclosed ceiling every
+    prior `apps/admin`/`apps/web` PR states; no real browser/Playwright
+    check available in this environment).
+  - **Not built, flagged**: `DELETE /admin/media/:id` (the interface's
+    own `delete()` is implemented and unit-tested per the task brief's
+    explicit ask for a complete abstraction, and `MediaAsset.key` exists
+    specifically so this is trivial to add later — but neither Section
+    4.8 nor this PR's own scope names a delete route); `GET
+    /admin/media/:id` (see the frontend bullet above); Article's own
+    image-upload wiring (`CreateArticlePage.tsx`'s "Upload Images" button
+    stays disabled — needs an `Article`-to-`MediaAsset` relation this PR
+    deliberately does not add, per its own explicit scope); no
+    magic-byte file-type sniffing (MIME validation trusts the
+    client-reported `Content-Type`, spoofable, acceptable for MVP); no
+    live-bucket verification pending real provider credentials (see the
+    storage-abstraction bullet above); the `multer@2.2.0` transitive
+    vulnerability (see the dedicated bullet above).
+  - Not merged — founder's call after review.
 
 ## The eight agents, and the order they run in
 

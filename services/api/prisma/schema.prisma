@@ -793,6 +793,21 @@ model MediaAsset {
   type       String // image | video
   size       Int
   createdAt  DateTime @default(now())
+  // sprint-5/admin-media-storage-backend addition, flagged per CLAUDE.md's
+  // "the data model is a fixed spec" rule — Section 3's original
+  // MediaAsset had `url` but no separate object-storage key. `url` is
+  // built from the provider config (endpoint/bucket/region) at upload
+  // time and would break StorageService.delete()'s ability to locate the
+  // object again if that config ever changes (a moved bucket, a CDN
+  // domain swapped in later — the same class of change Decision Log #26
+  // already anticipates for hosting generally); `key` is the durable,
+  // provider-config-independent identifier the object actually lives
+  // under. Not read or written by any endpoint in this PR (no
+  // DELETE /admin/media/:id route exists yet — see media/README.md's
+  // "What this PR does NOT do") but stored now so a future delete
+  // endpoint doesn't need a backfill migration or a fragile
+  // parse-the-key-back-out-of-the-URL workaround.
+  key        String
 }
 
 // ---------- Admin & Operations Console (Log Book Section 6.6) ----------
