@@ -1,23 +1,49 @@
 // Articles list — Figma node 123:56.
 //
-// Real data: GET /admin/articles (Build Plan Section 4.8, built by
+// Real data: GET/PATCH /admin/articles (Build Plan Section 4.8, built by
 // sprint-5/admin-articles-categories-backend). AdminRolesGuard('editor',
 // 'superadmin') on the whole endpoint — a moderator gets a real 403, so
 // this screen is only reachable by an editor/superadmin token.
 //
-// This screen only ever lists articles (GET) — PATCH /admin/articles/:id
-// (publish/unpublish) has no UI action here, per this PR's own scope
-// (neither this screen's Figma design nor the task brief calls for a
-// publish toggle) — see api/adminContent.ts's own comment on
-// updateArticle.
+// The Status column now carries a real Publish/Unpublish row action —
+// PATCH /admin/articles/:id via updateArticle() — mirroring
+// CategoriesPage.tsx's own status-toggle pattern exactly: no confirmation
+// dialog (this is a directly reversible status flip, the same class of
+// action as Categories' own Activate/Deactivate toggle, not Users'
+// irreversible Delete), and the server's own response is applied inline
+// via an overrides map rather than a full list reload.
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import AdminPageHeader from "../../layout/AdminPageHeader";
-import { listArticles, type ArticleListItem, type ArticleStatus } from "../../api/adminContent";
+import { AdminApiError } from "../../api/adminClient";
+import { listArticles, updateArticle, type ArticleListItem, type ArticleStatus } from "../../api/adminContent";
 import { formatDate, useAsyncData } from "../content/adminContentShared";
 import "../content/content.css";
 
-function ArticleRow({ article }: { article: ArticleListItem }) {
+function ArticleRow({
+  article,
+  onToggled,
+}: {
+  article: ArticleListItem;
+  onToggled: (updated: ArticleListItem) => void;
+}) {
+  const [toggling, setToggling] = useState(false);
+  const [rowError, setRowError] = useState<string | null>(null);
+  const nextStatus: ArticleStatus = article.status === "published" ? "draft" : "published";
+
+  const handleToggle = async () => {
+    setRowError(null);
+    setToggling(true);
+    try {
+      const updated = await updateArticle(article.id, { status: nextStatus });
+      onToggled(updated);
+    } catch (err) {
+      setRowError(err instanceof AdminApiError ? err.message : "Couldn't update this article.");
+    } finally {
+      setToggling(false);
+    }
+  };
+
   return (
     <div className="ac-table__row" key={article.id}>
       <span className="ac-cell--secondary">{formatDate(article.createdAt)}</span>
@@ -30,6 +56,16 @@ function ArticleRow({ article }: { article: ArticleListItem }) {
           {article.status}
         </span>
       </span>
+      <span>
+        <button type="button" className="ac-btn ac-btn--outline ac-btn--sm" onClick={handleToggle} disabled={toggling}>
+          {toggling ? "Updating…" : nextStatus === "published" ? "Publish" : "Unpublish"}
+        </button>
+        {rowError ? (
+          <p className="ac-error ac-row-error" role="alert">
+            {rowError}
+          </p>
+        ) : null}
+      </span>
     </div>
   );
 }
@@ -40,10 +76,12 @@ export default function ArticlesPage() {
   const { data, loading, error, reload } = useAsyncData(() => listArticles({ status: filter, limit: 50 }), [filter]);
 
   const [extraItems, setExtraItems] = useState<ArticleListItem[]>([]);
+  const [overrides, setOverrides] = useState<Record<string, ArticleListItem>>({});
   const [cursor, setCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  const items = data ? [...data.items, ...extraItems] : [];
+  const baseItems = data ? [...data.items, ...extraItems] : [];
+  const items = baseItems.map((a) => overrides[a.id] ?? a);
   const effectiveCursor = extraItems.length > 0 ? cursor : data?.nextCursor ?? null;
 
   async function loadMore() {
@@ -61,6 +99,7 @@ export default function ArticlesPage() {
   function switchFilter(next: ArticleStatus | "all") {
     setStatus(next);
     setExtraItems([]);
+    setOverrides({});
     setCursor(null);
   }
 
@@ -121,9 +160,14 @@ export default function ArticlesPage() {
               <span>Title</span>
               <span>Category</span>
               <span>Status</span>
+              <span aria-hidden />
             </div>
             {items.map((a) => (
-              <ArticleRow key={a.id} article={a} />
+              <ArticleRow
+                key={a.id}
+                article={a}
+                onToggled={(updated) => setOverrides((prev) => ({ ...prev, [updated.id]: updated }))}
+              />
             ))}
           </div>
         ) : null}

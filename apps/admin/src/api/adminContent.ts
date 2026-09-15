@@ -88,14 +88,10 @@ export function createArticle(dto: {
   return adminFetch<Article>("/admin/articles", { method: "POST", body: dto });
 }
 
-// PATCH /admin/articles/:id — a genuine Section 4.8 endpoint with no
-// dedicated UI action in THIS PR's frontend scope (ArticlesPage.tsx /
-// CreateArticlePage.tsx, the two screens named for the Articles side —
-// neither the task brief nor either screen's Figma design calls for a
-// publish/unpublish control). Exported here, and covered by the backend's
-// own tests, so a future screen (an Edit Article page, or a publish
-// toggle on ArticlesPage) can call it without a second client needing to
-// be written.
+// PATCH /admin/articles/:id — ArticlesPage.tsx's own Publish/Unpublish row
+// action (mirroring updateCategory's status-toggle pattern), and
+// CreateArticlePage.tsx's createArticle() call also sends `status`
+// explicitly now, via this same DTO shape.
 export function updateArticle(
   id: string,
   dto: Partial<{ title: string; body: string; categoryId: string; status: ArticleStatus }>,
