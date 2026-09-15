@@ -10067,7 +10067,13 @@ real, still-open follow-up, not done by this entry.
     `npm run lint` both clean. `apps/admin` **16 suites / 87 tests → 16
     suites / 100 tests, 0 failures**; `tsc --noEmit`/`lint`/production
     build all clean.
-  - Not merged — founder's call after review.
+  - **Merged as PR #248** — this bullet's own text previously said "Not
+    merged — founder's call after review"; corrected here in place once
+    the merge was confirmed directly against `git log` on `main`, per
+    this file's own "Keeping this file current" rule (same correction
+    the `sprint-3/community-groups-backend`/`-frontend` and
+    `sprint-6/leaderboard-read-rollup` bullets above already made for
+    themselves).
 - **`sprint-5/admin-media-storage-backend` (backend-api, 2026-09-15)
   builds the Media library — the last zero-backend Admin Console piece
   named in Sprint 5's brief — and is the first real file storage this
@@ -10206,7 +10212,65 @@ real, still-open follow-up, not done by this entry.
     live-bucket verification pending real provider credentials (see the
     storage-abstraction bullet above); the `multer@2.2.0` transitive
     vulnerability (see the dedicated bullet above).
-  - Not merged — founder's call after review.
+  - **Merged as PR #249** — this bullet's own text previously said "Not
+    merged — founder's call after review"; corrected here in place once
+    the merge was confirmed directly against `git log` on `main`, same
+    correction as the `sprint-5/admin-users-dashboard-backend` bullet
+    directly above.
+- **`docs/decision-log-users-dashboard-media-backfill` (docx + CLAUDE.md
+  only, no app code, 2026-09-15) is a doc-hygiene pass over the two
+  merged Sprint 5 PRs above (`sprint-5/admin-users-dashboard-backend`
+  #248, `sprint-5/admin-media-storage-backend` #249) — run only after
+  confirming both were genuinely merged (`git log`/`git fetch` on
+  `origin/main`, not assumed from a stale local branch), same pattern as
+  the prior `docs/decision-log-moderation-admin-content-backfill` pass
+  (which covered PRs #244–#246).**
+  - **Corrected the two stale "Not merged" merge-status lines above** for
+    PR #248 and PR #249 — both confirmed genuinely merged into
+    `origin/main`.
+  - **Eight Decision Log candidates, formally logged as #303–#310**,
+    pulling the exact reasoning from each PR's own module README rather
+    than re-deriving it: #303 (the new, ADMIN-only `User.accountStatus:
+    "suspended"` value, distinct from self-service `"deactivated"`, PR
+    #248); #304 (admin-triggered delete skipping the 30-day self-service
+    grace period entirely, PR #248 — logged **Resolved**, a reasoned,
+    already-implemented decision, not an open question); #305 (`GET
+    /admin/dashboard/stats` being reachable by every admin role, unlike
+    every other Section 4.8 controller, PR #248 — logged **Resolved**,
+    same reasoning); #306 (`totalVisits` staying an explicit `null` — no
+    page-view/visit-tracking infra exists anywhere in this codebase, PR
+    #248); #307 (the Media storage provider still being unresolved —
+    env-var-configured, S3-compatible, no vendor chosen yet, PR #249);
+    #308 (the `MediaAsset.key` schema addition, PR #249); #309 (the
+    `multer@2.2.0` high-severity DoS advisory forced by
+    `@nestjs/platform-express@11.2.1`'s exact pin — flagged, not fixed,
+    needs its own future v12-upgrade PR, PR #249); #310 (the missing
+    `GET /admin/media/:id` router-state-handoff-plus-bounded-fallback
+    workaround, PR #249 — cross-referenced against #300's own analogous
+    `GET /reports/:id` gap rather than duplicating it).
+  - **Numbering continued from the prior pass's own range** (#295–#302,
+    from `docs/decision-log-moderation-admin-content-backfill`) — the
+    real current highest entry in the docx was confirmed directly as
+    #302 before assigning #303 onward, not assumed.
+  - **`#293`/`#294` deliberately left untouched, still out of scope** —
+    referenced by number elsewhere in CLAUDE.md's own
+    `sprint-3/community-groups-*` bullets but never transcribed into the
+    docx table (the prior pass's own flagged gap); this pass did not have
+    accurate, non-guessed content for either and left them exactly as
+    flagged, per this pass's own explicit instruction not to fill them in
+    speculatively.
+  - **Verification**: `docs/Soccernity_MVP_Build_Plan_v1.7.docx` round-
+    tripped through a full close/reopen with `python-docx` after the
+    edit (309 rows in the Decision Log table — 1 header + 308 data rows,
+    `#1`–`#310` with exactly `#293`/`#294` missing as the flagged,
+    deliberate gap above, zero duplicates); the file's own zip container
+    was also independently checked with `zipfile.testzip()` (no bad
+    entries). **No LibreOffice binary is available in this environment**
+    (checked directly — no `soffice`/`libreoffice` executable anywhere on
+    `PATH` or the common install directories), so this Python-level
+    round-trip is the actual verification ceiling here, not a
+    LibreOffice-specific confirmation — stated plainly rather than
+    claimed as something it isn't.
 
 ## The eight agents, and the order they run in
 
