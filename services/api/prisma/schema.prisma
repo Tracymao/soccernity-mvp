@@ -798,6 +798,17 @@ model Article {
   authorAdmin   AdminUser @relation(fields: [authorAdminId], references: [id])
   status        String    @default("draft") // draft | published
   publishedAt   DateTime?
+  // sprint-5/admin-articles-categories-backend addition, flagged per
+  // CLAUDE.md's "the data model is a fixed spec" rule — Section 3's
+  // original Article had no timestamp at all. Needed for two real,
+  // unavoidable reasons: ArticlesPage.tsx's own "Date" column has
+  // nothing else to show for a still-draft article (publishedAt is
+  // null until publish), and GET /admin/articles (a genuine addition
+  // beyond Section 4.8's literal POST/PATCH-only line — see
+  // modules/admin-content/README.md) needs a real column to
+  // keyset-paginate by, the same gap Follow.createdAt / Like.likedAt /
+  // BanterRoomMember.joinedAt each closed for their own models.
+  createdAt DateTime @default(now())
 }
 
 model Category {
@@ -805,6 +816,21 @@ model Category {
   name     String
   slug     String    @unique
   articles Article[]
+  // sprint-5/admin-articles-categories-backend additions, both flagged
+  // per CLAUDE.md's "the data model is a fixed spec" rule — see
+  // modules/admin-content/README.md for the full reasoning.
+  // "active" | "inactive" — CategoriesPage.tsx's own Figma design
+  // already renders a Status column with both values; Category had no
+  // field to back it. Mirrors User.accountStatus / AdminUser.accountStatus's
+  // existing string-enum convention. Retiring a category (inactive)
+  // rather than deleting it is deliberate — Article.categoryId has no
+  // ON DELETE CASCADE, so a hard delete would orphan every Article
+  // referencing it; Section 4.8 also defines no category-deletion route.
+  status    String   @default("active")
+  // Same "a list endpoint needs a real column to order/page by" gap as
+  // Article.createdAt above — GET /admin/categories has nothing else to
+  // keyset-paginate on.
+  createdAt DateTime @default(now())
 }
 
 // sprint-2/admin-console-account-entity — Decision Log #54's resolution:

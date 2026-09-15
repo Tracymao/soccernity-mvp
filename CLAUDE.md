@@ -9655,7 +9655,204 @@ real, still-open follow-up, not done by this entry.
     fields untouched — zero `schema.prisma` diff** (`LeaderboardEntry`/
     `PointsLedgerEntry` are both pre-existing Section 3 models; no
     migration needed for this PR).
-  - PR opened, not merged — founder's call after review.
+  - **Merged as PR #243** — this bullet's own text previously said "PR
+    opened, not merged"; corrected here in place once the merge was
+    confirmed directly against `git log` on `main`, per this file's own
+    "Keeping this file current" rule (same correction the
+    `sprint-3/community-groups-backend` bullet above already made for
+    itself).
+- **`sprint-5/admin-moderation-queue-backend` (backend-api, 2026-09-15)
+  builds Build Plan Section 4.8 (Admin Service) + Section 8.4
+  (Moderation & appeals workflow) end to end — Sprint 5's real blocker, a
+  new top-level `moderation` module. `Report` (Section 3) gained
+  reviewer/action/appeal-trail columns (migration
+  `20260915003318_add_report_moderation_fields`, a real hand-run `prisma
+  migrate dev` against both dev and test databases) plus two mechanical
+  `AdminUser` reverse relations — a genuine schema addition beyond
+  Section 3's original six-field `Report` list, flagged not silent.**
+  Merged as PR #244. Full detail: `services/api/src/modules/moderation/README.md`.
+  - **`POST /reports` and `POST /reports/:id/appeal`** — `JwtAuthGuard`
+    only, deliberately **not** `GuardianConsentGuard`-gated: a
+    restricted-pending minor must still be able to report abuse directed
+    at them and appeal a decision made against them. Both are genuine
+    spec-gap additions (Section 4 defines neither route literally) —
+    flagged as Decision Log candidates, built anyway per Section 8.4's
+    own workflow text (without a submission route nothing could ever
+    create a `Report` row at all).
+  - **`GET`/`PATCH /admin/moderation/reports*`** — `AdminJwtAuthGuard` +
+    a brand-new `AdminRolesGuard`/`@AdminRoles(...)` — this codebase's
+    **first role-gated admin route** (`moderator`/`superadmin` only, not
+    `editor` — "an editor should not have queue access," the task
+    brief's own explicit instruction). Built as reusable infra in
+    `modules/admin/guards/` and exported from `AdminAuthFoundationModule`
+    so any future admin route needing role-gating can reuse it directly.
+    The role-gate covers **GET too**, not just the mutating routes — no
+    view-vs-mutate split anywhere in this controller, only a per-JOB
+    split (`AdminUser`'s own schema comment: "authors Articles; actions
+    Reports").
+  - **Decision Log #138** (a second admin/moderator reviews an appeal,
+    never the original reviewer) is hard-enforced in code, not just
+    documented. An overturned appeal reverses the report to `'open'`
+    while preserving `appealStatus: 'overturned'` as history (never reset
+    to `null`); `actionReport()` clears stale appeal fields on
+    re-actioning so a fresh appeal cycle isn't blocked by a prior one.
+  - **No denormalized `reportedUserId` column** — `Report.targetId` is a
+    bare string pointing at three different tables depending on
+    `targetType`, so "who is the reported user" is resolved dynamically
+    by one shared private method (`resolveReportedUserId`), used by both
+    the appeal-eligibility check and both parties' outcome notifications
+    (one new comment-only `Notification.type` value,
+    `'moderation_decision'`, written inside the same transaction as the
+    `Report` update — no migration needed, the column is a plain
+    `String`).
+  - **`actionTaken` is a recorded decision, not an enforced one** —
+    disclosed, not silently assumed: there is no soft-delete on
+    `Post`/`Comment` and no admin-triggered `User`-suspend mechanism
+    anywhere yet. Recording `content_removed`/`user_suspended` does not
+    itself remove content or suspend anyone.
+  - **Verification**: mocked suite **60 suites / 854 tests → 64 suites /
+    905 tests, 0 failures**; e2e suite (real Postgres/Redis) **16 suites
+    / 154 tests → 17 suites / 161 tests, 0 failures** — every
+    pre-existing e2e suite still passes alongside the new
+    `test/moderation.e2e-spec.ts`, which drives the full
+    report → action → appeal → second-reviewer-overturn → re-action →
+    re-appeal flow against real rows. `nest build`/`npm run lint` clean.
+- **`sprint-5/admin-moderation-queue-frontend` (figma-to-code, 2026-09-15)
+  wires the moderation queue into BOTH `apps/admin` (real screens) and
+  `apps/web` (report submission, the missing half the backend PR
+  surfaced but didn't fix). Merged as PR #245.**
+  - **`apps/admin`**: `ModerationQueuePage`/`ReportDetailPage`/
+    `AppealReviewPage` converted from disclosed stubs to real data against
+    `GET`/`PATCH /admin/moderation/reports*`. **No `GET /reports/:id`
+    exists on the backend**, so Report Detail / Appeal Review are reached
+    via a router `state` handoff from the queue's own "Review" link, with
+    a bounded `findReportById` fallback (re-lists and searches
+    client-side, capped at 5 pages) for a direct visit/refresh — flagged
+    as **Decision Log candidate #4** (moderation module) rather than
+    silently adding a new backend endpoint out of a frontend-only PR's
+    scope.
+  - **`apps/web`**: a file-wide Figma text search confirmed **no
+    report/flag UI was ever designed** anywhere in the file for posts,
+    comments, or profiles — so a minimal, disclosed `ReportAction`
+    component was built plainly (the same "no Figma frame exists, build
+    plain and flag it" precedent `AdminProfilePage.tsx`'s own Change
+    Password panel already established) and wired into `PostCard.tsx`:
+    Report post / Report user from the post header, Report comment per
+    comment — hidden on the caller's own content. **Appeal-submission UI
+    is deliberately not built** — no existing settings/notifications
+    surface it obviously belongs on yet (`moderation_decision`
+    notifications aren't resolved to anything renderable by
+    `NotificationsService` — see the Notification Centre's own per-type
+    icon-disc treatment, which doesn't cover this type); flagged as a
+    separate follow-up, not silently skipped.
+  - **Verification**: `apps/admin` **16 suites / 78 tests, 0 failures**
+    (up from 66); `apps/web` **43 suites / 311 tests, 0 failures** (up
+    from 300); both `tsc --noEmit`/lint clean, both production builds
+    clean. The full flow was independently traced against a real running
+    `services/api` + Postgres: submit report → appears in the admin's
+    Open Reports queue → actioned → reported user appeals → appears in
+    the Appeals tab (client-filtered) → the same admin is blocked from
+    reviewing their own appeal (403, Decision Log #138) → a different
+    moderator overturns it successfully. `services/api` untouched.
+- **`sprint-5/admin-articles-categories-backend` (backend-api,
+  2026-09-15) builds Sprint 5's other done-when half — Article/Category
+  management, Build Plan Section 4.8 — as its own dedicated top-level
+  `admin-content` module (deliberately separate from both `AdminModule`
+  and `ModerationModule`, since it has no user-facing routes at all).
+  Two sub-steps in one branch: backend first, then `figma-to-code`
+  wiring `apps/admin`'s existing stub screens to it — the same
+  PR-sequencing convention every other feature pair in this project
+  uses.** Full detail: `services/api/src/modules/admin-content/README.md`.
+  - **Schema**: `Article.createdAt` and `Category.createdAt`/`.status`
+    (`"active"` | `"inactive"`, default `"active"`) are genuine additions
+    beyond Section 3's original field lists, flagged per CLAUDE.md's "the
+    data model is a fixed spec" rule — Section 3's `Article`/`Category`
+    had no timestamp at all, and `ArticlesPage.tsx`'s "Date" column /
+    both list endpoints' keyset pagination need one; `CategoriesPage.tsx`'s
+    own Figma design already renders a Status column with both values,
+    which `Category` had no field to back. Migration
+    `20260915135512_add_article_category_admin_fields` — a real hand-run
+    `prisma migrate dev` confirmed this applies cleanly against both the
+    dev and test databases, matching PR #244's own bar. `User`/`Guardian`
+    safeguarding fields untouched.
+  - **Three more Decision Log candidates, flagged and built anyway,
+    same shape as moderation's own two**: `GET /admin/articles` and `GET
+    /admin/categories` (Section 4.8 defines no GET for either resource —
+    without one, an admin could create articles/categories but never see
+    them) and `PATCH /admin/categories/:id` (no literal spec line either,
+    but `CategoriesPage.tsx`'s Status column needs a real toggle behind
+    it — see "no category-deletion route" below for why this, not a
+    DELETE, is the right primitive).
+  - **The GET role-gating question, checked against the real code rather
+    than assumed**: the task brief that dispatched this work asked
+    whether `GET /admin/articles`/`GET /admin/categories` should be
+    open to every admin role or role-gated like moderation's own GET —
+    while itself assuming, inaccurately, that moderation already
+    separates view from mutate. It doesn't:
+    `AdminModerationController` applies `AdminRolesGuard('moderator',
+    'superadmin')` to its **entire** controller, GET included — no
+    view-vs-mutate split exists anywhere in this codebase's one
+    role-gated-admin precedent, only a per-JOB split. **Decision: mirror
+    that shape exactly** — `AdminArticlesController`/
+    `AdminCategoriesController` both gate `AdminRolesGuard('editor',
+    'superadmin')` at the class level, GET included, not just the two
+    mutating routes. Reasoning stated in full in
+    `admin-content/README.md`'s own "Who may view" section, not silently
+    decided either way.
+  - **No per-author edit restriction on `PATCH /admin/articles/:id`** —
+    a deliberate, disclosed choice: any `editor`/`superadmin` may edit
+    any article (the shared-newsroom model most CMSes use), unlike
+    `GrassrootsService`'s own team-scoped fixture-management restriction
+    — nothing in Section 4.8/8.4 or either Figma screen names a
+    per-author restriction for Articles, and the only existing precedent
+    for that kind of restriction in this codebase is justified by a
+    genuinely different shape of resource (two-party sports records, not
+    shared editorial content).
+  - **`publishedAt` semantics**: set to `now()` the first time `status`
+    moves to `'published'` (from `null`); reverting to `'draft'`
+    deliberately does **not** clear a previously-set `publishedAt` —
+    preserved as the historical "first went live at" record, the same
+    preserve-don't-null precedent `ModerationService.decideAppeal`
+    already set for `appealStatus`. Re-publishing a second time is a
+    no-op on the field.
+  - **`Category.slug` is always server-derived, never client-supplied**
+    (`slug.util.ts`'s `slugify()`, re-run on every rename too) — the
+    global `ValidationPipe`'s `forbidNonWhitelisted: true` rejects a
+    request body containing a `slug` key outright. A duplicate slug (an
+    effectively-duplicate name) is a clean `409`, not a raw `P2002` — the
+    same pre-check-plus-race-safe-backstop pattern
+    `CommunityGroupsService.createGroup` already established for its own
+    `nameNormalized` `@@unique` constraint.
+  - **No e2e spec added, reasoning stated rather than silently
+    omitted**: every method here is a plain `findUnique`/`findMany`/
+    `create`/`update` call — no `$transaction`, no raw SQL, no new
+    relation/constraint (`Category.slug`'s `@unique` already existed) —
+    so none of `test/README.md`'s own three e2e triggers apply, the same
+    conclusion `sprint-2/feed-per-user-flags`'s analogous
+    per-caller-viewer-state change already reached. The full e2e suite
+    was re-run as a pure regression check after applying this PR's
+    migration: **17 suites / 161 tests, 0 failures, before and after**
+    (no e2e file changed).
+  - **Frontend (`figma-to-code` half, same branch)**: `ArticlesPage.tsx`
+    (list, with a Draft/Published filter — no publish/unpublish UI action
+    in this PR's scope, so `PATCH /admin/articles/:id` has a real,
+    tested backend but no frontend caller yet, flagged rather than
+    silently built beyond the task's own named screens or silently left
+    undisclosed), `CreateArticlePage.tsx` (title/body/category, all real
+    and submittable — **image upload stays a disabled stub with a
+    disclosed note**, per this PR's own explicit scope: no Media backend
+    exists yet, even though the `MediaAsset` Prisma model itself already
+    does), `CategoriesPage.tsx` (list + a real, interactive
+    Active/Inactive status toggle per row — the actual reason `PATCH
+    /admin/categories/:id` exists), `AddCategoryPage.tsx` (create, with
+    the real 409 duplicate-name message surfaced inline).
+  - **Verification**: `services/api` mocked suite **64 suites / 905
+    tests → 67 suites / 949 tests, 0 failures** (3 new suites, 44 new
+    tests); `nest build`/lint clean. `apps/admin` **16 suites / 78 tests
+    → 16 suites / 87 tests, 0 failures** (9 new tests, same test file —
+    the old 4-test stub suite was replaced in place); `tsc --noEmit`/
+    lint clean; production build clean.
+  - Not merged — founder's call after review.
 
 ## The eight agents, and the order they run in
 

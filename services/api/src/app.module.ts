@@ -21,6 +21,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { CommunityGroupsModule } from './modules/community-groups/community-groups.module';
 import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
+import { AdminContentModule } from './modules/admin-content/admin-content.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -100,6 +101,17 @@ import { ModerationModule } from './modules/moderation/moderation.module';
     // addition beyond Section 3's original six-field list — see
     // modules/moderation/README.md.
     ModerationModule,
+    // sprint-5/admin-articles-categories-backend — Section 4.8 (Admin
+    // Service), the Article/Category management half. GET/POST
+    // /admin/articles, PATCH /admin/articles/:id, GET/POST
+    // /admin/categories, PATCH /admin/categories/:id — all
+    // AdminJwtAuthGuard + AdminRolesGuard('editor', 'superadmin') on the
+    // whole controller (see admin-articles.controller.ts's own comment
+    // for why GET is role-gated too, not left open to every admin role).
+    // Category gained `status`/`createdAt`, Article gained `createdAt` —
+    // genuine schema additions beyond Section 3's original field lists,
+    // see modules/admin-content/README.md.
+    AdminContentModule,
     // sprint-2/contest-data-model-backend — Decision Log #218/#219. The
     // Contest weekly-cycle data model + scoring ledger + the
     // active-contest query (Decision Log #61/#70/#71/#130/#188). New
