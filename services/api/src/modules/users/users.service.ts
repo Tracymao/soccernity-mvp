@@ -31,6 +31,14 @@ const OWN_PROFILE_SELECT = {
   verificationStatus: true,
   createdAt: true,
   clubAffiliationId: true,
+  // backend/team-organiser-flag — genuine addition beyond Section 3's
+  // literal User field list, flagged as a Decision Log candidate (see
+  // schema.prisma's own comment on this field and grassroots/README.md).
+  // Set once, inside GrassrootsService.createTeam's transaction, the
+  // moment POST /teams succeeds; never settable any other way. Exposed
+  // here (not a new endpoint) so apps/web can read it off the same
+  // GET /users/:id call it already makes for its own profile.
+  isTeamOrganiser: true,
 } as const;
 
 export type OwnProfile = {
@@ -44,6 +52,7 @@ export type OwnProfile = {
   verificationStatus: string;
   createdAt: Date;
   clubAffiliationId: string | null;
+  isTeamOrganiser: boolean;
 };
 
 // The ONLY place request-body fields become a Prisma `data` object for

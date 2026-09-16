@@ -22,12 +22,20 @@
 // The write endpoints are JwtAuthGuard + GuardianConsentGuard and require
 // the caller to manage one of the two teams (Decision Log #255). GET
 // /fixtures/:id returns no `createdById` (FIXTURE_TEAM_SELECT is
-// id/name/city/verified only), so this page CANNOT client-side guard who
-// the manager is — it renders the manage UI for any signed-in user and
-// surfaces the server's 403 (consent OR "you may only manage…"). In
-// practice this page is reached from the team-page organiser toolbar or
-// the schedule-fixture confirmation, so the visitor is almost always the
-// organiser. Flagged in this PR's report.
+// id/name/city/verified only), so this page CANNOT client-side guard
+// PER-FIXTURE who the manager is — that gap is still real and still
+// server-enforced as the last word either way.
+//
+// backend/team-organiser-flag narrows it, though: the manage actions
+// (Start match / Log the result / End match & save result) are now
+// gated on the caller's own User.isTeamOrganiser flag — "has this user
+// EVER registered a Grassroots team," fetched alongside the fixture. A
+// non-organiser (the common case for a random signed-in visitor who
+// followed a link) sees a read-only view with a plain note instead of
+// live action buttons, rather than a dead-end 403 after clicking. This
+// is still UI-visibility only, not per-fixture authorization — a real
+// organiser of a DIFFERENT team than either side of this fixture still
+// gets the server's own 403 on submit, same as before.
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import {
@@ -37,8 +45,9 @@ import {
   GrassrootsApiError,
   type Fixture,
 } from "../api/grassroots";
-import { getStoredAccessToken } from "../lib/session";
+import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
 import { isAwaitingConsent } from "./grassroots/errors";
+import { fetchIsTeamOrganiser } from "./grassroots/organiser";
 import "./grassroots/GrassrootsPage.css";
 
 type LoadState = "loading" | "loaded" | "error" | "not-found" | "no-session";
@@ -119,6 +128,7 @@ export default function GrassrootsFixturePage() {
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [fixture, setFixture] = useState<Fixture | null>(null);
   const [mode, setMode] = useState<Mode>("view");
+  const [isTeamOrganiser, setIsTeamOrganiser] = useState(false);
 
   const [scoreA, setScoreA] = useState(0);
   const [scoreB, setScoreB] = useState(0);
@@ -149,6 +159,14 @@ export default function GrassrootsFixturePage() {
       setLoadState("loaded");
     } catch (err) {
       setLoadState(err instanceof GrassrootsApiError && err.status === 404 ? "not-found" : "error");
+      return;
+    }
+
+    const myId = decodeAccessToken(token)?.sub;
+    if (myId) {
+      // Non-blocking — a failed profile fetch just hides manage UI, it
+      // never breaks the fixture view itself.
+      void fetchIsTeamOrganiser(token, myId).then(setIsTeamOrganiser);
     }
   }, [token, fixtureId]);
 
@@ -171,7 +189,7 @@ export default function GrassrootsFixturePage() {
   }
 
   async function startMatch() {
-    if (!token || !fixtureId || busy) return;
+    if (!token || !fixtureId || busy || !isTeamOrganiser) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -188,7 +206,7 @@ export default function GrassrootsFixturePage() {
   }
 
   async function saveResult() {
-    if (!token || !fixtureId || busy) return;
+    if (!token || !fixtureId || busy || !isTeamOrganiser) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -454,41 +472,50 @@ export default function GrassrootsFixturePage() {
       {consentNotice}
       {errorNotice}
 
-      {isLive ? (
-        <button
-          type="button"
-          className="grassroots-btn grassroots-btn--primary"
-          onClick={() => {
-            setMode("score");
-            setError(null);
-          }}
-          disabled={busy}
-        >
-          Log the result
-        </button>
-      ) : (
-        <>
+      {!isTeamOrganiser && (
+        <div className="grassroots-callout">
+          <p className="grassroots-callout__body">
+            Only a team organiser can start this match or log its result.
+          </p>
+        </div>
+      )}
+
+      {isTeamOrganiser &&
+        (isLive ? (
           <button
             type="button"
             className="grassroots-btn grassroots-btn--primary"
-            onClick={startMatch}
-            disabled={busy}
-          >
-            {busy ? "Starting…" : "Start match"}
-          </button>
-          <button
-            type="button"
-            className="grassroots-btn grassroots-btn--secondary"
             onClick={() => {
               setMode("score");
               setError(null);
             }}
             disabled={busy}
           >
-            The match has already been played — log the result
+            Log the result
           </button>
-        </>
-      )}
+        ) : (
+          <>
+            <button
+              type="button"
+              className="grassroots-btn grassroots-btn--primary"
+              onClick={startMatch}
+              disabled={busy}
+            >
+              {busy ? "Starting…" : "Start match"}
+            </button>
+            <button
+              type="button"
+              className="grassroots-btn grassroots-btn--secondary"
+              onClick={() => {
+                setMode("score");
+                setError(null);
+              }}
+              disabled={busy}
+            >
+              The match has already been played — log the result
+            </button>
+          </>
+        ))}
     </div>
   );
 }

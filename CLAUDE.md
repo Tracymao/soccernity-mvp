@@ -8466,6 +8466,62 @@ Full reasoning for every choice above: Build Plan Section 5.
     as good as the merge state it records). See
     `sprint-3/community-groups-frontend` below for the frontend half this
     backend PR unblocked.
+- **`backend/team-organiser-flag` (backend-api + figma-to-code, 2026-09-16)
+  adds `User.isTeamOrganiser Boolean @default(false)` (migration
+  `20260916190058_add_user_is_team_organiser`) — a genuine schema addition
+  beyond Section 3's literal `User` field list, flagged as a Decision Log
+  candidate per CLAUDE.md's own "fixed spec" rule (see
+  `grassroots/README.md`'s dedicated section for the full writeup).
+  Deliberately separate from `User.role`, which this PR does not touch or
+  repurpose. Set exactly once, inside the same `$transaction` as a
+  successful `POST /teams` (`GrassrootsService.createTeam`) — never
+  settable any other way, never unset. Exposed on `GET /users/:id`
+  (`UsersService.OWN_PROFILE_SELECT`/`OwnProfile`), no new endpoint.**
+  Frontend gating in `apps/web`: browsing (team list, fixture list,
+  results) stays visible to every logged-in user regardless of the flag;
+  `GrassrootsTeamPage.tsx`'s "Schedule a fixture"/"Manage" links and
+  `GrassrootsScheduleFixturePage.tsx`'s organiser gate now additionally
+  require `isTeamOrganiser` (mostly defense-in-depth alongside the
+  pre-existing per-team `createdById === myId` check — the two signals
+  are always in lockstep, since the flag flips in the same transaction
+  that creates the team). **The meaningful new gating is on
+  `GrassrootsFixturePage.tsx`** — that page's own header comment has
+  always disclosed it has no per-fixture `createdById` to check
+  client-side, so it used to render the manage buttons (Start match / Log
+  the result / End match & save result) for any signed-in visitor and
+  relied entirely on the server's 403; it now checks `isTeamOrganiser`
+  and shows a plain read-only note instead — narrower than before, though
+  still not per-fixture authorization, which stays server-enforced either
+  way. New shared helper `apps/web/src/pages/grassroots/organiser.ts`
+  (`fetchIsTeamOrganiser`, wraps `GET /users/:id`, degrades to `false` on
+  a fetch failure rather than blocking the page). **Verification, all
+  re-measured directly**: `services/api` mocked suite 83 suites / 1097 →
+  1099 tests, 0 failures; e2e suite (real Postgres) —
+  `test/grassroots.e2e-spec.ts` alone re-run at 21/21 tests, 0 failures,
+  including two new cases (a real `POST /teams` → `GET /users/:id`
+  round trip with the *same* access token proving no re-login is needed,
+  and a second-registration case proving the flag is never unset); the
+  full e2e suite was then re-run as a whole-repo regression check —
+  **19 suites / 183 → 185 tests, 0 failures**. `nest
+  build` + `npm run lint` + `npx tsc --noEmit` clean. `apps/web`: `npx
+  tsc --noEmit` / `npm run lint` / `npm run build` all clean; vitest 44
+  suites / 340 → 345 tests, 0 failures (5 new — 3 in
+  `GrassrootsFixturePage.test.tsx`, 1 each in `GrassrootsTeamPage.test.tsx`
+  and `GrassrootsScheduleFixturePage.test.tsx` — plus `UserProfile`'s now
+  -required `isTeamOrganiser` field fixed in five unrelated fixture
+  objects across `Header.test.tsx`, `BanterPage.test.tsx`,
+  `PrivacySettingsPage.test.tsx`, `EditProfileModal.test.tsx`, and
+  `ProfilePage.test.tsx` that constructed the type directly). **Manual
+  trace, stated plainly (no real browser/Playwright available in this
+  environment)**: proven via the e2e round trip above (backend) and
+  `GrassrootsTeamPage.test.tsx`'s two organiser-affordance tests, which
+  show a fresh mount with `isTeamOrganiser: false` renders no manage UI
+  even for the team's own `createdById`, and a fresh mount with
+  `isTeamOrganiser: true` shows it — proving the manage UI is driven by a
+  fresh `GET /users/:id` fetch on every mount, not a cached value, so a
+  real user navigating from the register-team confirmation to the real
+  team page picks up the flag immediately with no re-login needed.
+  Not merged — founder's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

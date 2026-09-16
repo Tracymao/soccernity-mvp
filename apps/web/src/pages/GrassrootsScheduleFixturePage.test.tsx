@@ -8,13 +8,38 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { MemoryRouter, Route, Routes } from "react-router";
 import GrassrootsScheduleFixturePage from "./GrassrootsScheduleFixturePage";
 import { GrassrootsApiError, type Fixture, type GrassrootsTeam } from "../api/grassroots";
+import type { UserProfile } from "../api/users";
 
 vi.mock("../api/grassroots", async () => {
   const actual = await vi.importActual<typeof import("../api/grassroots")>("../api/grassroots");
   return { ...actual, getTeamById: vi.fn(), listTeams: vi.fn(), createFixture: vi.fn() };
 });
 
+// backend/team-organiser-flag — the "loaded" (schedulable) state now also
+// requires the caller's own User.isTeamOrganiser (fetched via
+// GET /users/:id). Defaults to true below so the pre-existing schedule-flow
+// tests (gated on team.createdById === myId) still see the form.
+vi.mock("../api/users", () => ({ getUser: vi.fn() }));
+
 import { getTeamById, listTeams, createFixture } from "../api/grassroots";
+import { getUser } from "../api/users";
+
+function organiserProfile(overrides: Partial<UserProfile> = {}): UserProfile {
+  return {
+    id: "me",
+    email: "me@example.com",
+    phone: null,
+    displayName: "Me",
+    dateOfBirth: "2000-01-01",
+    isMinor: false,
+    role: "fan",
+    verificationStatus: "unverified",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    clubAffiliationId: null,
+    isTeamOrganiser: true,
+    ...overrides,
+  };
+}
 
 function tokenFor(sub: string): string {
   return `x.${btoa(JSON.stringify({ sub, role: "user" }))}.y`;
@@ -56,6 +81,7 @@ beforeEach(() => {
   vi.mocked(getTeamById).mockReset().mockResolvedValue(MY_TEAM);
   vi.mocked(listTeams).mockReset().mockResolvedValue({ items: [], nextCursor: null });
   vi.mocked(createFixture).mockReset();
+  vi.mocked(getUser).mockReset().mockResolvedValue(organiserProfile());
 });
 
 function renderPage(teamId = "team-s") {
@@ -77,6 +103,19 @@ describe("GrassrootsScheduleFixturePage", () => {
 
   it("blocks a non-organiser with a clear message", async () => {
     window.sessionStorage.setItem("sn_access_token", tokenFor("someone-else"));
+    renderPage();
+    expect(await screen.findByText(/only schedule fixtures for a team you registered/i)).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Schedule fixture" })).toBeNull();
+  });
+
+  // backend/team-organiser-flag: the team's own createdById alone is no
+  // longer sufficient — isTeamOrganiser must also be true. In practice the
+  // two are always in lockstep (the flag flips in the same transaction
+  // team creation does), so this exercises the defensive AND, not a real
+  // reachable-in-production gap.
+  it("blocks the team's own createdById when isTeamOrganiser is false", async () => {
+    window.sessionStorage.setItem("sn_access_token", tokenFor("me")); // === MY_TEAM.createdById
+    vi.mocked(getUser).mockResolvedValueOnce(organiserProfile({ isTeamOrganiser: false }));
     renderPage();
     expect(await screen.findByText(/only schedule fixtures for a team you registered/i)).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Schedule fixture" })).toBeNull();

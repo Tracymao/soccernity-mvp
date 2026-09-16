@@ -9,6 +9,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { MemoryRouter, Route, Routes } from "react-router";
 import GrassrootsFixturePage from "./GrassrootsFixturePage";
 import { GrassrootsApiError, type Fixture } from "../api/grassroots";
+import type { UserProfile } from "../api/users";
 
 vi.mock("../api/grassroots", async () => {
   const actual = await vi.importActual<typeof import("../api/grassroots")>("../api/grassroots");
@@ -20,7 +21,43 @@ vi.mock("../api/grassroots", async () => {
   };
 });
 
+// backend/team-organiser-flag — the manage buttons (Start match / Log the
+// result / End match & save result) are gated on the caller's own
+// User.isTeamOrganiser, fetched via GET /users/:id. Defaults to
+// isTeamOrganiser: true below so the pre-existing action-flow tests still
+// exercise the buttons; the "not an organiser" behavior gets its own
+// dedicated tests.
+vi.mock("../api/users", () => ({ getUser: vi.fn() }));
+
 import { getFixtureById, updateFixtureStatus, logResult } from "../api/grassroots";
+import { getUser } from "../api/users";
+
+// A decodable fake JWT so fetchIsTeamOrganiser has a `sub` to call
+// GET /users/:id with — a plain, non-JWT-shaped string is not decodable,
+// so with one isTeamOrganiser would stay false (the default) regardless
+// of what getUser resolves to.
+function tokenFor(sub: string): string {
+  return `x.${btoa(JSON.stringify({ sub, role: "user" }))}.y`;
+}
+
+const TOKEN = tokenFor("me");
+
+function organiserProfile(overrides: Partial<UserProfile> = {}): UserProfile {
+  return {
+    id: "me",
+    email: "me@example.com",
+    phone: null,
+    displayName: "Me",
+    dateOfBirth: "2000-01-01",
+    isMinor: false,
+    role: "fan",
+    verificationStatus: "unverified",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    clubAffiliationId: null,
+    isTeamOrganiser: true,
+    ...overrides,
+  };
+}
 
 function fixtureTeam(id: string, name: string) {
   return { id, name, city: "Lagos", verified: false };
@@ -49,6 +86,7 @@ beforeEach(() => {
   vi.mocked(getFixtureById).mockReset();
   vi.mocked(updateFixtureStatus).mockReset();
   vi.mocked(logResult).mockReset();
+  vi.mocked(getUser).mockReset().mockResolvedValue(organiserProfile());
 });
 
 function renderPage(id = "fx-1") {
@@ -69,7 +107,7 @@ describe("GrassrootsFixturePage", () => {
   });
 
   it("scheduled: starts the match via PATCH status -> live", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    window.sessionStorage.setItem("sn_access_token", TOKEN);
     vi.mocked(getFixtureById).mockResolvedValueOnce(fixture({ status: "scheduled" }));
     vi.mocked(updateFixtureStatus).mockResolvedValueOnce(fixture({ status: "live" }));
 
@@ -78,12 +116,12 @@ describe("GrassrootsFixturePage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Start match" }));
 
-    await waitFor(() => expect(updateFixtureStatus).toHaveBeenCalledWith("test-token", "fx-1", "live"));
+    await waitFor(() => expect(updateFixtureStatus).toHaveBeenCalledWith(TOKEN, "fx-1", "live"));
     expect(await screen.findByRole("heading", { name: "Match in play" })).not.toBeNull();
   });
 
   it("surfaces an illegal-transition 409 verbatim (not a silently-disabled button)", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    window.sessionStorage.setItem("sn_access_token", TOKEN);
     vi.mocked(getFixtureById)
       .mockResolvedValueOnce(fixture({ status: "scheduled" }))
       .mockResolvedValueOnce(fixture({ status: "full_time" })); // refetch after 409
@@ -102,7 +140,7 @@ describe("GrassrootsFixturePage", () => {
   });
 
   it("live: logs the result via POST /fixtures/:id/result and shows 'Result saved'", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    window.sessionStorage.setItem("sn_access_token", TOKEN);
     vi.mocked(getFixtureById).mockResolvedValueOnce(fixture({ status: "live" }));
     vi.mocked(logResult).mockResolvedValueOnce(
       fixture({
@@ -123,14 +161,14 @@ describe("GrassrootsFixturePage", () => {
     fireEvent.click(screen.getByRole("button", { name: "End match & save result" }));
 
     await waitFor(() =>
-      expect(logResult).toHaveBeenCalledWith("test-token", "fx-1", { scoreA: 2, scoreB: 1 }),
+      expect(logResult).toHaveBeenCalledWith(TOKEN, "fx-1", { scoreA: 2, scoreB: 1 }),
     );
     expect(await screen.findByRole("heading", { name: "Result saved" })).not.toBeNull();
     expect(screen.getByText(/2 – 1/)).not.toBeNull();
   });
 
   it("treats a 'first write is final' 409 on save as an expected outcome, not a generic error", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    window.sessionStorage.setItem("sn_access_token", TOKEN);
     vi.mocked(getFixtureById)
       .mockResolvedValueOnce(fixture({ status: "live" }))
       .mockResolvedValueOnce(
@@ -158,7 +196,7 @@ describe("GrassrootsFixturePage", () => {
   });
 
   it("full_time: renders the read-only result with no success framing on a plain revisit", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    window.sessionStorage.setItem("sn_access_token", TOKEN);
     vi.mocked(getFixtureById).mockResolvedValueOnce(
       fixture({
         status: "full_time",
@@ -177,7 +215,7 @@ describe("GrassrootsFixturePage", () => {
   });
 
   it("renders a 'Fixture not found' state on a 404", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    window.sessionStorage.setItem("sn_access_token", TOKEN);
     vi.mocked(getFixtureById).mockRejectedValueOnce(
       new GrassrootsApiError("Couldn't load that fixture (404).", { status: 404 }),
     );
@@ -185,5 +223,51 @@ describe("GrassrootsFixturePage", () => {
     renderPage("nope");
 
     expect(await screen.findByText(/fixture not found/i)).not.toBeNull();
+  });
+
+  // backend/team-organiser-flag: a signed-in user who has never registered
+  // a team sees the fixture read-only — no Start match / Log the result
+  // buttons anywhere, just a plain note. Server enforcement is unaffected
+  // either way; this is UI visibility only.
+  it("hides the manage buttons and shows a read-only note for a non-organiser (scheduled)", async () => {
+    window.sessionStorage.setItem("sn_access_token", TOKEN);
+    vi.mocked(getFixtureById).mockResolvedValueOnce(fixture({ status: "scheduled" }));
+    vi.mocked(getUser).mockResolvedValueOnce(organiserProfile({ isTeamOrganiser: false }));
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Match day" })).not.toBeNull();
+    expect(
+      await screen.findByText(/only a team organiser can start this match or log its result/i),
+    ).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Start match" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /already been played/i })).toBeNull();
+  });
+
+  it("hides the manage buttons for a non-organiser (live)", async () => {
+    window.sessionStorage.setItem("sn_access_token", TOKEN);
+    vi.mocked(getFixtureById).mockResolvedValueOnce(fixture({ status: "live" }));
+    vi.mocked(getUser).mockResolvedValueOnce(organiserProfile({ isTeamOrganiser: false }));
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Match in play" })).not.toBeNull();
+    expect(
+      await screen.findByText(/only a team organiser can start this match or log its result/i),
+    ).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Log the result" })).toBeNull();
+  });
+
+  it("degrades to hidden manage buttons (never blocks the fixture view) when the profile fetch fails", async () => {
+    window.sessionStorage.setItem("sn_access_token", TOKEN);
+    vi.mocked(getFixtureById).mockResolvedValueOnce(fixture({ status: "scheduled" }));
+    vi.mocked(getUser).mockRejectedValueOnce(new Error("boom"));
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Match day" })).not.toBeNull();
+    expect(
+      await screen.findByText(/only a team organiser can start this match or log its result/i),
+    ).not.toBeNull();
   });
 });

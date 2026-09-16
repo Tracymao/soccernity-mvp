@@ -25,6 +25,11 @@ function buildPrismaMock() {
     notification: {
       create: jest.fn(),
     },
+    // backend/team-organiser-flag — createTeam now flips
+    // User.isTeamOrganiser inside the same transaction as the team row.
+    user: {
+      update: jest.fn(),
+    },
   } as unknown as PrismaService;
 
   // Interactive-transaction mock: invoke the callback with the same mock
@@ -74,6 +79,21 @@ describe('GrassrootsService', () => {
       expect(select).not.toHaveProperty('createdBy');
       expect(select).not.toHaveProperty('email');
       expect(select).toEqual({ id: true, name: true, city: true, leagueType: true, createdById: true, verified: true });
+    });
+
+    it('flips User.isTeamOrganiser to true for the caller, in the same transaction as the team row', async () => {
+      const prisma = buildPrismaMock();
+      const created = { id: 't-1', name: 'Hackney Wick FC', city: 'London', leagueType: 'informal', createdById: 'user-1', verified: false };
+      (prisma.grassrootsTeam.create as jest.Mock).mockResolvedValue(created);
+
+      const service = new GrassrootsService(prisma);
+      await service.createTeam('user-1', { name: 'Hackney Wick FC', city: 'London', leagueType: 'informal' });
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { isTeamOrganiser: true },
+      });
     });
   });
 
