@@ -895,7 +895,14 @@ Full reasoning for every choice above: Build Plan Section 5.
   detail, including the exact reproduced ERESOLVE output, is in Build
   Plan Section 9's Decision Log #25 entry.
 - **Decision Log #6 (sports-data vendor) blocks Sprint 4 only** — not
-  Sprint 1. Don't hold up auth/consent work on it.
+  Sprint 1. Don't hold up auth/consent work on it. **Now resolved —
+  Highlightly is the selected vendor** (design side:
+  `sprint-4/sports-hub-highlightly-data-redesign`, PR #253; backend
+  side: `sprint-4/sports-hub-highlightly-backend`, PR #254 — see the
+  Sprint 4 status bullets further down this section for the full
+  detail, including the one genuine remaining gap: no real Highlightly
+  account/credentials exist yet, so no live vendor data has ever
+  actually flowed through the pipeline).
 - **Decision Log #9 (hosting platform) is resolved — see Decision Log
   #26.** `deploy.yml` no longer fails on purpose; see the dedicated
   bullet below for what actually changed.
@@ -10646,7 +10653,13 @@ real, still-open follow-up, not done by this entry.
     wiring; any SportMonks-exclusive data (xG, Pressure Index, ball
     coordinates); `apps/web` (the next ticket's job); the Blog/Articles
     module.
-  - Not merged — founder's call after review.
+  - **Merged as PR #254** — this bullet's own text previously said "Not
+    merged — founder's call after review"; corrected here in place once
+    the merge was confirmed directly against `git log` on a fresh
+    `origin/main` fetch, per this file's own "Keeping this file
+    current" rule (same correction the `sprint-4/public-blog-articles-feed`/
+    `sprint-4/sports-hub-highlightly-data-redesign` bullets above already
+    made for themselves).
 - **`sprint-4/sports-hub-frontend-wiring` (figma-to-code, 2026-09-16) is
   the `apps/web` wiring for both prior Sprint 4 Sports Hub tickets —
   `sprint-4/sports-hub-highlightly-data-redesign` (PR #253) and
@@ -10718,8 +10731,126 @@ real, still-open follow-up, not done by this entry.
   - **Not built, per this ticket's own explicit scope**: Top Scorers,
     match-specific notification/alert preferences, any SportMonks-only
     data (xG, Pressure Index, shot maps, Expected Lineups) — none of it,
-    no UI space left inviting them. `services/api` untouched.
-  - Not merged — founder's call after review.
+    no UI space left inviting them. `services/api` untouched. **These
+    three exclusions are consolidated into a single, independently
+    findable Decision Log entry (#336, "Sports Hub fast-follow") so they
+    aren't lost now that Sprint 4 itself is closed** — see the Sports
+    Hub status bullet a few lines below for the cross-reference.
+  - **Merged as PR #255** — this bullet's own text previously said "Not
+    merged — founder's call after review"; corrected here in place once
+    the merge was confirmed directly against `git log` on a fresh
+    `origin/main` fetch, per this file's own "Keeping this file
+    current" rule (same correction the three prior Sprint 4 bullets
+    above already made for themselves).
+- **`docs/sports-hub-fast-follow-backfill` (docx + CLAUDE.md only, no app
+  code, 2026-09-16) is the doc-hygiene pass confirming and recording
+  Sprint 4's actual closed state, run only after checking all five
+  Sports Hub / Blog tickets against a fresh `origin/main` fetch — same
+  convention as every prior doc-hygiene pass in this project.**
+  **Sprint 4 is closed.** All five Sports Hub / Blog tickets are merged —
+  `sprint-4/public-blog-articles-feed` (PR #252),
+  `sprint-4/sports-hub-highlightly-data-redesign` (PR #253),
+  `sprint-4/sports-hub-highlightly-backend` (PR #254),
+  `sprint-4/sports-hub-frontend-wiring` (PR #255), and a fifth,
+  `sprint-4/public-articles-frontend`, which turned out to be a genuine
+  no-op once checked against PR #252's own already-merged commit — its
+  `apps/web` wiring (`api/blog.ts`, `BlogPage.tsx`,
+  `ArticleDetailPage.tsx`) was already built and shipped by PR #252
+  itself, so nothing further was branched or merged for it.
+  **Build Plan Section 6's own Sprint 4 done-when criterion — "live
+  scores update correctly against a real fixture, and a full
+  match-centre drill-down works end to end for at least one league" —
+  is only PARTIALLY met, stated plainly rather than rounded up.** The
+  second half is genuinely confirmed: PR #255's own verification
+  rendered the real, unmocked `SportsHubPage`/`MatchCentrePage` against
+  the real running `services/api` backend and confirmed the full
+  drill-down (details → stats → lineups → H2H → standings) renders real
+  fetched data end to end. **The first half — "against a real
+  fixture" — is NOT confirmed.** No real Highlightly account or
+  credentials exist in this environment (services/api/src/modules/sports/README.md's
+  own "wired but inactive" disclosure, the same bar Postmark/S3/Sentry
+  each carried before their own real accounts existed) — every match
+  row exercised during verification was seeded directly into Postgres
+  via Prisma, never fetched live from Highlightly. So "a real fixture"
+  currently means "a real, well-formed row in the real schema," not "a
+  row Highlightly itself actually sent." Sprint 4 is code-complete and
+  fully wired, but its done-when criterion won't be genuinely closed
+  until a real Highlightly account exists and at least one live
+  vendor-sourced fixture has been traced end to end — tracked as
+  Decision Log #328 (the unconfirmed direct-host auth-header behaviour)
+  and #323 (the unknown paid-tier request budget), both blocking that
+  first real trace, not just cosmetic gaps.
+  - **Decision Log #330–#335 added**, backfilling everything the three
+    merged tickets flagged but hadn't yet been transcribed into the
+    live Build Plan Decision Log: #330 (the sports module's HYBRID
+    schema-design approach — normalized `MatchData` + per-sub-resource
+    JSON columns + a new `Standing` model — a genuine schema redesign,
+    Resolved/implemented); #331 (the two-layer Postgres-durable-cache +
+    Redis-stampede-guard caching/refresh strategy, Resolved/implemented);
+    #332 (the `figma-screen-builder` routing override for the Sports
+    Hub Highlightly redesign — a founder-directed one-time exception to
+    the standing `figma-design-system`/`figma-screen-builder` split,
+    logged per this project's own standing rule that routing overrides
+    must always be logged, matching the PR #102/#110/#130/#151
+    precedent); #333 (`Article.excerpt`, deferred — Blog serves a
+    computed truncation instead, Open); #334 (an `Article`-to-`MediaAsset`
+    image relation, deferred — a dangling column with no write path
+    would be worse than not adding it, Open); #335 (an inactive
+    `Category` doesn't retroactively hide its own already-published
+    articles from `GET /articles`, Open — a real product judgment call,
+    not an obvious default).
+  - **Decision Log #336 — "Sports Hub fast-follow" — added as its own
+    standalone, independently findable entry, status explicitly "Open,
+    deferred by design, not an oversight."** Consolidates the three
+    items the `sprint-4/sports-hub-highlightly-data-redesign` report's
+    own "Fast-follow exclusions" table named and every later Sprint 4
+    ticket deliberately left alone, so none of the three get
+    silently forgotten now that Sprint 4 itself is closed: **(1) Top
+    scorers** — unconfirmed at design time, now confirmed genuinely
+    absent from Highlightly's API by the backend ticket (Decision Log
+    #326) — the screen stays unbuilt/excluded; whether Soccernity ever
+    sources this from a second vendor or drops it permanently is still
+    a real, unmade founder call. **(2) Match-specific notification/alert
+    preferences** — blocked on a separate, still-unresolved investigation
+    into whether this reuses the existing Notification Centre
+    infrastructure (Decision Log #279/#290/#291) or needs its own. **(3)
+    SportMonks-exclusive data** — xG, Pressure Index, ball-coordinate
+    shot maps, Expected Lineups — literally unavailable from Highlightly,
+    the vendor actually chosen (Decision Log #6); tied to a possible
+    future vendor pivot if Soccernity ever wants this data, not
+    something Highlightly itself can ever be made to provide.
+    Cross-referenced directly from this CLAUDE.md bullet (not just the
+    docx) precisely so it surfaces on a normal sprint-status read
+    without anyone needing to know to go check the Decision Log
+    specifically for it.
+  - **Two stale "Not merged — founder's call after review" lines
+    corrected** — `sprint-4/sports-hub-highlightly-backend` (PR #254)
+    and `sprint-4/sports-hub-frontend-wiring` (PR #255), both confirmed
+    genuinely merged via `git log`/`gh pr list` on a fresh clone before
+    editing, not assumed. `sprint-4/public-blog-articles-feed` (PR
+    #252) and `sprint-4/sports-hub-highlightly-data-redesign` (PR #253)
+    already carried a correct "Merged" line from their own prior
+    self-corrections and needed no change. A third, pre-existing stale
+    line was also found and fixed while checking this section for
+    accuracy — the standalone Decision Log #6 status bullet still read
+    "blocks Sprint 4 only... don't hold up auth/consent work on it,"
+    unqualified, even though #6 has been resolved (Highlightly chosen)
+    since PR #253; a forward-pointer was added there too, both in
+    CLAUDE.md and in the docx's own #6 Status cell.
+  - **Verification**: `docs/Soccernity_MVP_Build_Plan_v1.7.docx`
+    round-tripped through a full close/reopen with `python-docx` after
+    every edit (335 rows in the Decision Log table — 1 header + 334
+    data rows, `#1`–`#336` with exactly `#293`/`#294` missing as the
+    already-flagged, deliberate gap from a prior pass — unchanged by
+    this pass, zero duplicates); the file's own zip container was
+    independently checked with `zipfile.testzip()` (no bad entries),
+    and all 10 tables / 242 body paragraphs were walked end to end with
+    no parse errors. **No LibreOffice binary is available in this
+    environment** (checked directly — no `soffice`/`libreoffice`
+    executable anywhere on `PATH` or the common install directories),
+    so this Python-level round-trip is the actual verification ceiling
+    here, same as every prior doc-hygiene pass in this project — not a
+    LibreOffice-specific confirmation.
 
 ## The eight agents, and the order they run in
 
