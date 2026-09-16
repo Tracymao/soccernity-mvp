@@ -10823,6 +10823,29 @@ real, still-open follow-up, not done by this entry.
     docx) precisely so it surfaces on a normal sprint-status read
     without anyone needing to know to go check the Decision Log
     specifically for it.
+  - **`docs/sports-data-vendor-comparison.md` (2026-09-16, docs-only, no
+    app/schema/vendor change) checks API-Football and SportMonks against
+    the exact same real-documentation standard `sports/README.md` used
+    for Highlightly** — every claim cited to a documented endpoint/entity
+    page or a generated client-struct definition, never a marketing page.
+    **Does not reopen Decision Log #6** — Highlightly stays chosen.
+    Headline finding: of Highlightly's two confirmed gaps (no batched
+    player box scores, no standings `form` field), API-Football closes
+    both with high confidence (a dedicated batched
+    `/fixtures/players?fixture=` endpoint; a `form` string already on the
+    standings row) and SportMonks closes the `form` gap the same way
+    (via a `form` include) but only *probably* closes the box-score gap
+    (a documented `lineups.details.type` nested include, described in two
+    independent sources as batched-per-player, but never observed
+    populated in an example response). Separately, and unprompted: real
+    docs show SportMonks' own video-highlights feature is currently
+    **non-functional** ("removed due to a lack of service... finding a
+    new data partner," quoted verbatim from `docs.sportmonks.com`) and
+    API-Football has **no** video/highlights capability at all — neither
+    alternative can currently deliver the highlights half of what this
+    project chose Highlightly for. NPFL coverage stays unconfirmed for
+    both, same as the original three-way flag. Full detail, every claim
+    individually sourced, in the doc itself.
   - **Two stale "Not merged — founder's call after review" lines
     corrected** — `sprint-4/sports-hub-highlightly-backend` (PR #254)
     and `sprint-4/sports-hub-frontend-wiring` (PR #255), both confirmed
