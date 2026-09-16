@@ -905,16 +905,119 @@ model AdminUser {
   appealReviewedReports Report[]  @relation("reportAppealReviewedBy")
 }
 
-// ---------- Sports Hub (cached from the licensed sports-data vendor — Decision Log #6) ----------
+// ---------- Sports Hub (cached from the licensed sports-data vendor — Decision Log #6, resolved
+// to Highlightly on the design side by the figma-screen-builder "Highlightly data redesign" pass;
+// this is the backend half — sprint-4/sports-hub-highlightly-backend) ----------
 
+// A genuine schema REDESIGN, not just an extension — flagged as a Decision Log candidate in
+// modules/sports/README.md, per CLAUDE.md's "the data model is a fixed spec" rule. Section 3's
+// original seven bare fields (externalRef/competition/teams/score/status/kickoffTime) are ALL KEPT
+// UNTOUCHED, still populated on every write, so nothing that already reads this literal shape (none
+// of it — MatchData had zero live reads before this PR, confirmed by grep) silently breaks. Every
+// field below `kickoffTime` is a genuine addition.
+//
+// Modelling approach, stated plainly per this PR's own task brief: HYBRID, not one scheme for
+// everything.
+//   - The match/fixture itself (id, teams, score, status, kickoff, league, venue) is NORMALIZED as
+//     real columns, because it's the one thing this module needs to relationally QUERY — filter by
+//     date, filter by league, filter by live status, order by kickoff time, paginate. None of that
+//     is expressible against an opaque JSON blob without either a GIN index (real added complexity
+//     for a table this small) or reading every row into the app to filter in memory.
+//   - Match statistics / lineups / events / head-to-head / highlights are all stored as JSON
+//     columns, one per sub-resource, each with its own `*UpdatedAt` timestamp. Nothing in this
+//     module (or Section 4.6's own endpoint contract) ever queries into a SINGLE FIELD of a stat
+//     row, a single player's lineup slot, or a single event — every one of Section 4.6's own GET
+//     endpoints reads and returns the WHOLE document for one match at once, and Highlightly's own
+//     API returns each of those as a whole document too (see the client — GET
+//     /statistics/{matchId}, /lineups/{matchId}, /events/{id} each return one complete array/object
+//     per call, not incremental diffs). During a live match, refreshing normalized child rows would
+//     mean diffing and upserting ~18 stat rows + 22 lineup slots + a growing events list on every
+//     poll; overwriting one JSON column is a single UPDATE, cheap regardless of how much the
+//     document's internal shape varies match-to-match (different competitions return different stat
+//     categories — a JSON column tolerates that with zero migration, a normalized StatRow table
+//     would need a stat-type catalog).
+//   - Standings is its OWN model (below), not a JSON column on MatchData, because it isn't
+//     match-scoped at all — GET /sports/standings?league= is queried by league (+ season), and one
+//     standings table covers an entire competition's worth of matches. Same "whole document
+//     overwrite" reasoning applies to ITS contents (an ordered array of every team's row) — Section
+//     4.6 never asks "give me just Arsenal's row", it asks for the whole table.
 model MatchData {
   id          String   @id @default(uuid())
   externalRef String   @unique
   competition String
   teams       String[]
   score       String?
-  status      String // scheduled | live | full_time
+  status      String // scheduled | live | full_time | postponed | cancelled — widened from the
+  // original three-value comment; Highlightly's own `state.description` genuinely reports
+  // "Postponed"/"Cancelled" outcomes a real fixture list has to represent. `statusDetail` below
+  // carries the raw upstream string (e.g. "Second half", "45+2", "Half time") for display —
+  // `status` itself stays this coarse three-bucket-plus-two-terminal-outcomes enum, since that's
+  // the only granularity any of Section 4.6's own endpoints (live-scores vs. everything else)
+  // actually branch on.
   kickoffTime DateTime
+
+  // ---- Genuine additions beyond Section 3's literal seven fields (flagged) ----
+
+  leagueId     String? // Highlightly's own league id — what GET /sports/standings?league= and the
+  // optional league filter on live-scores/fixtures actually filter by. Nullable: a match fetched
+  // before this field existed, or from a provider response missing it, still has somewhere to live.
+  leagueName   String? // display name, independent of `competition` above (kept for back-compat) so
+  // a future rename of `competition`'s own semantics doesn't have to touch this.
+  season       String?
+  round        String?
+  venue        String?
+  homeTeamId   String?
+  homeTeamName String?
+  homeTeamLogo String?
+  awayTeamId   String?
+  awayTeamName String?
+  awayTeamLogo String?
+  homeScore    Int?
+  awayScore    Int?
+  // `statusDetail` — see the `status` field's own comment above.
+  statusDetail String?
+
+  // Sub-resource documents — see this model's own header comment for why each is a whole-document
+  // JSON blob with its own independent freshness timestamp, not normalized child rows. A null value
+  // means "never fetched yet" (distinct from an empty array/object, which means "fetched, and
+  // Highlightly genuinely returned nothing" — e.g. a scheduled match with no lineup announced yet).
+  statistics          Json?
+  statisticsUpdatedAt DateTime?
+  lineups             Json?
+  lineupsUpdatedAt    DateTime?
+  // Also the source data for the momentum endpoint (Decision Log candidate, see
+  // modules/sports/README.md) — momentum is DERIVED from these events at read time, not stored as
+  // its own separate cached document. No dedicated Highlightly "momentum" endpoint is confirmed to
+  // exist (it isn't in the public API documentation), so this is the only real data available to
+  // compute it from.
+  events              Json?
+  eventsUpdatedAt     DateTime?
+  h2h                 Json?
+  h2hUpdatedAt        DateTime?
+  highlights          Json?
+  highlightsUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([kickoffTime])
+  @@index([leagueId])
+  @@index([status])
+}
+
+// One row per (league, season) — GET /sports/standings?league=&season=. `table` is the whole
+// ordered array of team rows (rank, team, played/won/drawn/lost, goalsFor/goalsAgainst/goalDiff,
+// points, form) exactly as Highlightly's own /standings response shapes it — see this model
+// family's own header comment on MatchData for why this is a JSON document, not a normalized
+// StandingRow-per-team table.
+model Standing {
+  id        String   @id @default(uuid())
+  leagueId  String
+  season    String
+  table     Json
+  updatedAt DateTime @updatedAt
+
+  @@unique([leagueId, season])
 }
 
 // ---------- Play & Compete (leaderboard only — MVP scope, Build Plan Section 2.1) ----------

@@ -10495,6 +10495,157 @@ real, still-open follow-up, not done by this entry.
     Standing (#320, Resolved design); the all-dummy-data/backend-blocked
     status (#321, Open); and the no-prototype-wiring-added note (#322,
     Resolved design).
+  - **Merged as PR #253** — this bullet's own text previously said "Not
+    merged — founder's call after review"; corrected here in place once
+    the merge was confirmed directly against `git log` on `main`, per
+    this file's own "Keeping this file current" rule (same correction
+    the `sprint-3/community-groups-*`/`sprint-6/leaderboard-read-rollup`
+    bullets above already made for themselves).
+- **`sprint-4/sports-hub-highlightly-backend` (backend-api, 2026-09-16)
+  is the backend half of the Highlightly integration Decision Log #6
+  named as resolved on the design side by the bullet just above —
+  `services/api` only, no Figma/`apps/web` touched (both explicitly out
+  of scope). `services/api/src/modules/sports` had been a placeholder
+  README with zero code, and `MatchData` had zero live reads anywhere,
+  confirmed by grep before any change. Report:
+  `docs/sprint-4-sports-hub-highlightly-backend-report.md`; module
+  writeup: `services/api/src/modules/sports/README.md`. Decision Log
+  **#323–#329** added; forward-pointer appended to **#6**'s Status
+  cell.**
+  - **Real API grounding, not guessed**: every `Raw*` wire-format type
+    and endpoint shape is checked against Highlightly's own public docs
+    (`https://highlightly.net/football-api/documentation/`) and its
+    literal example JSON, fetched live during this task via `WebSearch`/
+    `WebFetch` — confirmed base URL (`https://soccer.highlightly.net`),
+    auth header (`x-rapidapi-key`, same value whether the account is
+    direct or via RapidAPI; `x-rapidapi-host` only for the RapidAPI
+    gateway), and the real wrapper-envelope shape per endpoint
+    (`{data, pagination}` for matches/highlights, `{groups}` for
+    standings, bare arrays for statistics/events/head-to-head, a bare
+    `{homeTeam, awayTeam}` object for lineups).
+  - **Two real, disclosed Highlightly data gaps found and NOT built
+    around** — directly answering this task's own "state that back
+    clearly" instruction: (1) `GET /statistics/{matchId}` is
+    **team-level only**, no per-match player box-score endpoint exists
+    (per-player data is one-player-at-a-time via
+    `/players/{id}/statistics` — 20+ extra calls per match, not viable
+    under the confirmed 100/day free tier) — the Figma redesign's own
+    "player-level box scores" assumption doesn't survive contact with
+    the real API; `GET /sports/matches/:id/stats` returns team-level
+    stats only, no fabricated player rows. (2) `GET /standings` has **no
+    "form" (recent-results) field anywhere** in its documented row
+    shape — the Figma Standing screen's FORM column has no real data
+    source from this vendor; `GET /sports/standings` returns exactly
+    what Highlightly returns, no synthetic `form` value ever added.
+    **Also confirmed: no top-scorers endpoint exists** at all (checked
+    against the vendor's full endpoint list) — the fast-follow exclusion
+    stays excluded.
+  - **Modelling approach, stated up front per the task brief**: HYBRID —
+    `MatchData` itself normalized (real columns, needed for relational
+    filtering by date/league/live-status); statistics/lineups/events/
+    h2h/highlights each a JSON column with its own `*UpdatedAt`
+    timestamp (every Section 4.6 endpoint reads/writes a WHOLE document
+    per match, matching Highlightly's own whole-document API shape); a
+    new `Standing` model (one row per `[leagueId, season]`), not a
+    `MatchData` column, since standings aren't match-scoped. `MatchData`
+    is a genuine schema **redesign** (migration
+    `20260916083019_add_sports_hub_highlightly_data_redesign`), flagged
+    per CLAUDE.md's own "fixed spec" rule — Section 3's original seven
+    fields are all kept, still populated on every write, nothing
+    removed.
+  - **All eight Section 4.6 endpoints built, plus two genuine additions
+    (flagged, Decision Log #327)**: `GET /sports/matches/:id/momentum`
+    (pure computation over the cached `events` JSON — no Highlightly
+    momentum endpoint exists — see `momentum.util.ts`'s own "honest
+    approximation, not a licensed statistic" disclosure) and
+    `GET /sports/matches/:id/events` (the Figma redesign's "Live
+    Commentary" — an automated event feed, never editorial narration,
+    matching that design's own on-screen disclosure; newest-first per
+    that design's Decision Log #316). Every route is genuinely public —
+    no guard at all, matching `SportsHubPage.tsx`'s own already-shipped
+    no-login-gate precedent and `BlogModule`'s identical convention.
+  - **Caching/refresh strategy — two layers doing different jobs**:
+    Postgres is the durable cache-through store (every successful
+    Highlightly response upserted immediately, so a request degrades to
+    the last-known row rather than failing when the vendor is
+    unreachable or the budget is exhausted); a single Redis key per
+    resource (`SportsRefreshLock`, `SET key 1 EX <ttl> NX`) does double
+    duty as BOTH the cache-freshness gate and a cross-request stampede
+    guard — only the first of many concurrent viewers of the same live
+    match ever triggers a real upstream call. Match-list refreshes are
+    per-DATE, never per-match (one `GET /matches?date=` call covers
+    every league's matches that day; `GET /sports/live-scores` reads the
+    SAME cached rows filtered to `status='live'`, sharing today's exact
+    lock key, so live-scores triggers zero upstream calls of its own).
+    `SPORTS_DATA_MAX_REFRESH_PAGES` (default 1) bounds the worst case.
+    TTLs (60s live / 6h scheduled / 24h finished / 30min standings / 6h
+    h2h / 10min highlights) are each independently env-overridable,
+    reasoned from Highlightly's own documented refresh cadences where
+    confirmed.
+  - **Daily request-budget guard, rate-limit handled realistically**:
+    `SportsDataBudgetService` reserves one Redis `INCR` per real
+    outbound call BEFORE it fires, keyed to the current UTC day,
+    self-expiring at the next UTC midnight. `HIGHLIGHTLY_DAILY_REQUEST_BUDGET`
+    defaults to the confirmed free-tier 100/day. **Stated plainly, not
+    assumed unlimited: the real paid-tier budget is unknown** — a
+    genuine, open Decision Log candidate (#323), needing a founder
+    decision on which plan to buy before this runs in production.
+  - **`tsconfig.json` gained `"DOM"` in `lib`** — purely for `fetch`/
+    `Response`/`Headers`/`AbortController`/`RequestInit` TYPE
+    declarations (the installed `@types/node@20.19.43` does not
+    ambiently type global `fetch`, confirmed directly — no `declare
+    function fetch` anywhere in the installed package — even though the
+    real Node runtime this app requires, `engines >=22.22.0`, has had it
+    natively since Node 18). No HTTP client dependency added —
+    `HighlightlyClient` uses the runtime's own built-in `fetch`. Verified
+    to change no runtime behavior via a full clean `nest build` + the
+    complete test suite re-run, both green.
+  - **No real Highlightly credentials exist in this environment — stated
+    plainly, same disclosed-limitation bar as Postmark/S3 before their
+    own real accounts existed: no live round-trip against the real
+    Highlightly API was performed. This is unverified in practice.**
+    Every wire shape is grounded in the vendor's own public
+    documentation's literal example JSON, not a captured real response.
+    The one genuinely ambiguous case in the docs (`GET /matches/{id}`'s
+    own example wrapped in a top-level array despite being a
+    single-resource lookup) is handled defensively (accepts either
+    shape) rather than picked one way and hoped for the best.
+  - **A real e2e-vs-parallelism gotcha was hit and diagnosed directly in
+    this session, not assumed**: running the full e2e suite via a bare
+    `jest --config test/jest-e2e.config.js` (default parallel workers)
+    produced 176 failing tests from Postgres connection exhaustion
+    (`"Too many database connections opened"`), then — after limiting
+    workers — a different wave of failures from cross-test data
+    corruption, because every e2e file's own `resetDatabase()`
+    truncates the WHOLE shared test database in `beforeEach`, and
+    multiple suites running concurrently against one Postgres instance
+    stomp on each other's in-flight rows. **The real `npm run
+    test:e2e` script already runs `--runInBand`** for exactly this
+    reason — re-running via that script gave a clean, genuine
+    **19 suites / 183 tests, 0 failures** (up from 18/170 immediately
+    before this branch — 1 new suite, 13 new tests). Worth remembering
+    for any future session tempted to invoke `jest --config
+    test/jest-e2e.config.js` directly instead of the real npm script.
+  - **Verification, all real, before/after**: mocked suite **78 suites /
+    1034 tests → 83 suites / 1097 tests, 0 failures** (5 new suites, 63
+    new tests — `sports-data-budget.service.spec.ts`,
+    `highlightly-client.service.spec.ts`, `momentum.util.spec.ts`,
+    `sports.service.spec.ts`, `sports.controller.http.spec.ts`; no
+    existing test file touched); e2e suite **18 suites / 170 tests → 19
+    suites / 183 tests, 0 failures** (see the gotcha above) — the new
+    `test/sports.e2e-spec.ts` proves graceful degradation to an
+    empty/stale result (never a crash) when Highlightly is genuinely
+    unconfigured, a real `MatchData`/`Standing` row round-tripping
+    through the redesigned schema (including the home/away-by-team-id
+    stats assignment, newest-first event ordering, events-derived
+    momentum, events-derived lineup substitutions, and the real absence
+    of any `form` field on a standings row). `nest build`, `npm run
+    lint`, `npx tsc --noEmit` all clean.
+  - **Not built, explicitly out of scope per the task brief**: Top
+    Scorers (confirmed absent from the vendor); notification/alert
+    wiring; any SportMonks-exclusive data (xG, Pressure Index, ball
+    coordinates); `apps/web` (the next ticket's job); the Blog/Articles
+    module.
   - Not merged — founder's call after review.
 
 ## The eight agents, and the order they run in

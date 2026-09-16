@@ -2,6 +2,19 @@
   "compilerOptions": {
     "module": "commonjs",
     "target": "ES2021",
+    // sprint-4/sports-hub-highlightly-backend — adds "DOM" purely for its TYPE
+    // declarations (fetch/Response/Headers/AbortController/RequestInit), not for any
+    // runtime behavior. Needed because the installed @types/node@20.19.43 does not
+    // ambiently type global `fetch` (confirmed directly — no `declare function fetch`
+    // anywhere in node_modules/@types/node), even though the real Node runtime this app
+    // requires (engines >=22.22.0) has had it natively since Node 18. The alternative —
+    // adding a real HTTP client dependency (axios/got/undici) just to get types — would be
+    // a heavier, unnecessary addition for a project whose every prior external-API
+    // integration (Postmark, S3) already uses either a vendor SDK or, here, the runtime's
+    // own built-in fetch. No existing file in this codebase uses a DOM-only global (window/
+    // document/navigator) that this could silently redefine — verified via a clean
+    // `nest build` + full test suite run after adding this line.
+    "lib": ["ES2021", "DOM"],
     "declaration": true,
     "outDir": "./dist",
     "rootDir": "./src",
