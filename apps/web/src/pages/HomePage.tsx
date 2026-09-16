@@ -25,6 +25,16 @@
 // ProfilePage.tsx applies to its own unbacked Posts/Media tabs. Club
 // crests are rendered typographically (club-initial badges), also per the
 // frame -- the crest-licensing question is sidestepped by design.
+//
+// Breadth retouch (docs/homepage-breadth-retouch-report.md): the hero
+// fixture card now shows one Sports Hub fixture (Chelsea/Liverpool, the
+// same illustrative match used across the Sprint 4 Sports Hub redesign
+// per Decision Log #321) alongside the original grassroots fixture,
+// rather than grassroots alone -- still fully illustrative, same
+// Decision Log #6 reasoning. The closing CTA is relabelled "Register
+// your team" and stays pointed at /signup (the resolved answer to the
+// prior dead-CTA question -- GET /teams stays JwtAuthGuard-only, browsing
+// was never the fix; registering after signing up is).
 import { Link, Navigate } from "react-router";
 import { getStoredAccessToken } from "../lib/session";
 import "./HomePage.css";
@@ -88,8 +98,8 @@ const PILLARS = [
   },
   {
     index: "03",
-    title: "A record that travels with you",
-    body: "Log fixtures and results yourself and keep an appearance history that stays yours. Verified profiles and discovery tools arrive in a later phase.",
+    title: "The professional game, live.",
+    body: "Scores, fixtures, standings and highlights from the leagues you already follow, in the same place as the football you actually play.",
   },
 ];
 
@@ -119,7 +129,7 @@ export default function HomePage() {
         <div className="home-hero__copy">
           <span className="home-eyebrow home-eyebrow--on-navy">
             <span className="home-eyebrow__dot" aria-hidden="true" />
-            BUILT FOR GRASSROOTS FOOTBALL
+            WHERE THE WHOLE GAME LIVES
           </span>
           <h1 className="home-hero__title">
             Every match you play
@@ -127,8 +137,8 @@ export default function HomePage() {
             deserves a record.
           </h1>
           <p className="home-hero__lede">
-            Soccernity gives unaffiliated players, their teams and the communities around them a real football identity
-            &mdash; fixtures, results and a history that actually travels with you.
+            Live scores and stories from the football you watch, and a real home for the teams and communities
+            playing it every weekend.
           </p>
           <div className="home-cta-row">
             <Link to="/signup" className="home-btn home-btn--primary">
@@ -140,27 +150,55 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Illustrative live-fixture card -- no fixtures data source
-            exists (Decision Log #6). Hardcoded to match the Figma frame. */}
+        {/* Illustrative "live across Soccernity" card -- no fixtures data
+            source exists (Decision Log #6). Hardcoded to match the Figma
+            frame's two-section split (Sports Hub + Grassroots). */}
         <div className="home-hero__card" aria-hidden="true">
-          <div className="home-fixture-card__meta">
-            <span className="home-pill home-pill--live">LIVE</span>
-            <span className="home-fixture-card__league">Lagos Sunday League&nbsp;&nbsp;·&nbsp;&nbsp;Matchday 12</span>
-          </div>
-          <div className="home-fixture-card__teams">
-            <div className="home-team-row">
-              <span className="home-badge">IK</span>
-              <span className="home-team-row__name">Ikoyi Rovers FC</span>
-              <span className="home-team-row__score">2</span>
+          <div className="home-fixture-card__section">
+            <div className="home-fixture-card__meta">
+              <span className="home-pill home-pill--section-tag">SPORTS HUB</span>
+              <span className="home-fixture-card__league">Premier League&nbsp;&nbsp;·&nbsp;&nbsp;Live</span>
             </div>
-            <div className="home-team-row">
-              <span className="home-badge">SU</span>
-              <span className="home-team-row__name home-team-row__name--muted">Surulere United</span>
-              <span className="home-team-row__score home-team-row__score--muted">1</span>
+            <div className="home-fixture-card__teams">
+              <div className="home-team-row">
+                <span className="home-badge">CH</span>
+                <span className="home-team-row__name">Chelsea</span>
+                <span className="home-team-row__score">3</span>
+              </div>
+              <div className="home-team-row">
+                <span className="home-badge">LI</span>
+                <span className="home-team-row__name home-team-row__name--muted">Liverpool</span>
+                <span className="home-team-row__score home-team-row__score--muted">1</span>
+              </div>
             </div>
           </div>
+
           <div className="home-hairline" />
-          <p className="home-fixture-card__venue">Teslim Balogun Stadium&nbsp;&nbsp;·&nbsp;&nbsp;78'</p>
+
+          <div className="home-fixture-card__section">
+            <div className="home-fixture-card__meta">
+              <span className="home-pill home-pill--section-tag">GRASSROOTS</span>
+              <span className="home-fixture-card__league">Lagos Sunday League&nbsp;&nbsp;·&nbsp;&nbsp;Matchday 12</span>
+            </div>
+            <div className="home-fixture-card__teams">
+              <div className="home-team-row">
+                <span className="home-badge">IK</span>
+                <span className="home-team-row__name">Ikoyi Rovers FC</span>
+                <span className="home-team-row__score">2</span>
+              </div>
+              <div className="home-team-row">
+                <span className="home-badge">SU</span>
+                <span className="home-team-row__name home-team-row__name--muted">Surulere United</span>
+                <span className="home-team-row__score home-team-row__score--muted">1</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="home-hairline" />
+
+          <p className="home-fixture-card__venue">
+            Plus Bants, Blog stories and the community around every match.
+          </p>
         </div>
       </section>
 
@@ -292,14 +330,15 @@ export default function HomePage() {
           have had all along.
         </h2>
         <p className="home-closing__sub">
-          Free to join. Create your profile, add your team, and log your first fixture in a few minutes.
+          Free to join. Create your profile, follow the football you love, and register your team when you're ready
+          to make it official.
         </p>
         <div className="home-cta-row">
           <Link to="/signup" className="home-btn home-btn--primary">
             Create your profile
           </Link>
           <Link to="/signup" className="home-btn home-btn--ghost-on-navy">
-            Browse grassroots teams
+            Register your team
           </Link>
         </div>
       </section>

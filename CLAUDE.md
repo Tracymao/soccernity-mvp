@@ -10931,6 +10931,48 @@ real, still-open follow-up, not done by this entry.
     revisited by this pass, even though Sports Hub itself now has a
     real backend (Decision Log #254) — this specific marketing page
     stays static by design, per its own header comment.
+  - **Merged** (PR #258). See the `figma-to-code` follow-up directly
+    below for the code conversion this design pass unblocked.
+- **`figma/homepage-breadth-retouch-to-code` (figma-to-code, 2026-09-16)
+  converts the merged `figma/homepage-hero-copy-pillar3-refresh` retouch
+  (PR #258, above) into `HomePage.tsx`/`HomePage.css` — `apps/web` only,
+  no Figma/backend code.** Resolves the "Browse grassroots teams" dead
+  CTA exactly as that prior ticket's own report decided — repointed
+  conceptually at `/signup` in Figma/documentation only, no re-deciding
+  here: the CTA in code already linked to `/signup` (it always had),
+  only its **label** needed to change, to **"Register your team"**;
+  `GET /teams` stays `JwtAuthGuard`-only, no backend touched.
+  - **Copy**: hero eyebrow → "WHERE THE WHOLE GAME LIVES", hero lede,
+    pillar 3 title ("The professional game, live.") / body, and the
+    closing sub — all updated verbatim to the retouch report's own copy
+    table. Hero headline, closing headline/eyebrow, and the hero
+    secondary CTA left untouched, matching the design pass's own
+    declared scope.
+  - **Hero fixture card**: rebuilt as the two-section split the design
+    now specifies — a new `.home-fixture-card__section` wrapper (one
+    per section: meta row + team rows) separated by the existing
+    `.home-hairline`, plus a new `.home-pill--section-tag` class that
+    reuses the existing green `LIVE`-pill styling (no new colour) for
+    the `SPORTS HUB`/`GRASSROOTS` tags. Sports Hub section: Chelsea 3 –
+    Liverpool 1, "Premier League · Live" (the same illustrative Sports
+    Hub fixture used across the Sprint 4 Sports Hub redesign, Decision
+    Log #321). Grassroots section: the original Ikoyi Rovers FC 2 –
+    Surulere United 1 / "Lagos Sunday League · Matchday 12" content,
+    relocated verbatim, not rewritten. Closing caption: "Plus Bants,
+    Blog stories and the community around every match."
+  - **Everything else untouched**, per the design pass's own scope:
+    Today's Fixtures strip, Talent Clips, Trending Stories, and the
+    footer are unchanged — still the same illustrative content, still
+    blocked on Decision Log #6's "no fixtures/news endpoint" reasoning
+    for *this* static marketing page (Sports Hub itself having a real
+    backend now, Decision Log #254, doesn't change that this specific
+    page stays static by design).
+  - **Verified, real before/after counts**: `apps/web` vitest — **44
+    suites / 337 tests, 0 failures → 44 suites / 340 tests, 0 failures**
+    (3 new tests in `HomePage.test.tsx` — the retouched copy, the
+    relabelled/still-`/signup` CTA, and the two-section hero card; no
+    existing test removed). `npx tsc --noEmit`, `npm run lint`, `npm run
+    build` all clean.
   - Not merged — Temi's call after review.
 
 ## The eight agents, and the order they run in

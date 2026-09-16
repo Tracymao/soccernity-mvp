@@ -38,6 +38,36 @@ describe("HomePage", () => {
     ctas.forEach((cta) => expect(cta.getAttribute("href")).toBe("/signup"));
   });
 
+  it("relabels the closing CTA to Register your team and keeps it pointed at /signup (breadth retouch)", () => {
+    renderAt("/");
+    const cta = screen.getByRole("link", { name: /register your team/i });
+    expect(cta.getAttribute("href")).toBe("/signup");
+    expect(screen.queryByText(/browse grassroots teams/i)).toBeNull();
+  });
+
+  it("shows the retouched hero eyebrow and pillar 3 copy (breadth retouch)", () => {
+    renderAt("/");
+    expect(screen.getByText(/where the whole game lives/i)).not.toBeNull();
+    expect(screen.queryByText(/built for grassroots football/i)).toBeNull();
+    expect(screen.getByText(/the professional game, live\./i)).not.toBeNull();
+    expect(screen.queryByText(/a record that travels with you/i)).toBeNull();
+  });
+
+  it("shows a two-section Sports Hub + Grassroots hero fixture card (breadth retouch)", () => {
+    renderAt("/");
+    expect(screen.getByText("SPORTS HUB")).not.toBeNull();
+    expect(screen.getByText("GRASSROOTS")).not.toBeNull();
+    expect(screen.getByText("Chelsea")).not.toBeNull();
+    expect(screen.getByText("Liverpool")).not.toBeNull();
+    // "Ikoyi Rovers FC" / "Surulere United" also appear in the Today's
+    // Fixtures strip (FIXTURES[0]) -- the hero card relocated, not
+    // replaced, this same illustrative grassroots match, so both places
+    // render it.
+    expect(screen.getAllByText("Ikoyi Rovers FC").length).toBe(2);
+    expect(screen.getAllByText("Surulere United").length).toBe(2);
+    expect(screen.getByText(/plus bants, blog stories/i)).not.toBeNull();
+  });
+
   it("redirects a signed-in visitor to /community instead of rendering the marketing page (Decision Log #152)", () => {
     window.sessionStorage.setItem("sn_access_token", "header.payload.sig");
     renderAt("/");
