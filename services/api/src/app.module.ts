@@ -26,6 +26,7 @@ import { AdminUsersModule } from './modules/admin-users/admin-users.module';
 import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module';
 import { MediaModule } from './modules/media/media.module';
 import { BlogModule } from './modules/blog/blog.module';
+import { SportsModule } from './modules/sports/sports.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -233,7 +234,29 @@ import { BlogModule } from './modules/blog/blog.module';
     // modules/blog/README.md for the full reasoning and the Decision Log
     // candidates this flags. Zero schema.prisma diff.
     BlogModule,
-    // SportsModule,        // Sprint 4
+    // sprint-4/sports-hub-highlightly-backend — Build Plan Section 4.6 (Sports Hub / Highlightly
+    // integration), independent of the Blog module above (no shared code, no shared schema
+    // tables). GET /sports/live-scores, GET /sports/fixtures?date=, GET /sports/matches/:id (+
+    // /stats, /lineups, /h2h, /momentum, /events), GET /sports/standings?league=, GET
+    // /sports/highlights/:matchId — all genuinely public, no guard. `momentum` and `events` are
+    // genuine additions beyond Section 4.6's literal eight-endpoint list (flagged), matching what
+    // the figma-screen-builder "Highlightly data redesign" pass designed (Match Momentum, Live
+    // Commentary). MatchData gained ~20 new columns (leagueId/season/round/venue/homeTeamId/
+    // homeScore/... + five whole-document JSON columns — statistics/lineups/events/h2h/highlights,
+    // each with its own `*UpdatedAt` freshness timestamp) and a new Standing model — a genuine
+    // schema REDESIGN, not just an extension (migration
+    // 20260916083019_add_sports_hub_highlightly_data_redesign); Section 3's original seven bare
+    // fields are all kept, still populated. Two real, disclosed Highlightly data gaps found during
+    // this build (neither faked around): the vendor's own /statistics endpoint is TEAM-LEVEL ONLY
+    // (no batched per-match player box scores — the Figma redesign assumed these existed; they
+    // would need 20+ extra API calls per match to reconstruct, not viable under the confirmed
+    // 100-requests/day free tier), and /standings has no recent-"form" field at all. See
+    // modules/sports/README.md for the full design writeup — the normalized-Postgres/JSON-blob
+    // schema split, the Redis refresh-lock caching strategy (one lock per resource doubles as both
+    // the TTL cache marker and a cross-request stampede guard), and the daily request-budget guard
+    // (SportsDataBudgetService, default 100/day matching the confirmed free tier — the real
+    // paid-tier budget is a Decision Log candidate, not assumed unlimited).
+    SportsModule,
     // SearchModule,        // Sprint 6
   ],
 })
