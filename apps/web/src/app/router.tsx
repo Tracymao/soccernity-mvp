@@ -35,6 +35,7 @@ import FooterLayout from "../layout/FooterLayout";
 import AuthChrome from "../layout/AuthChrome";
 import HomePage from "../pages/HomePage";
 import SportsHubPage from "../pages/SportsHubPage";
+import MatchCentrePage from "../pages/sports-hub/MatchCentrePage";
 import BlogPage from "../pages/BlogPage";
 import ArticleDetailPage from "../pages/blog/ArticleDetailPage";
 import LeaderboardPage from "../pages/LeaderboardPage";
@@ -231,6 +232,15 @@ export const routes: RouteObject[] = [
       { path: "groups", element: <CommunityGroupsPage /> },
       { path: "groups/new", element: <CreateCommunityGroupPage /> },
       { path: "groups/:groupId", element: <CommunityGroupPage /> },
+
+      // Match Centre -- the Sports Hub match drill-down (Build Plan
+      // Section 4.6, SportsService -- sprint-4/sports-hub-frontend-wiring,
+      // Decision Log #6/#311-322). No site footer -- a detail/drill-down
+      // page, same category as ClubFanPage/GrassrootsTeamPage/ContestPage
+      // (not in FooterLayout's own route list). No login gate -- every
+      // SportsService route is genuinely public, same as SportsHubPage
+      // itself. See sports-hub/MatchCentrePage.tsx.
+      { path: "sports-hub/matches/:matchId", element: <MatchCentrePage /> },
 
       // Leaderboard + Contest -- direct AppShell children, NO site footer.
       // Both were moved out of FooterLayout: the founder decided the
