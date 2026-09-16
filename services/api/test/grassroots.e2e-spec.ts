@@ -110,6 +110,52 @@ describe('Grassroots Records Service e2e (Section 4.5)', () => {
       await request(server()).get('/teams/does-not-exist').set('Authorization', `Bearer ${accessToken}`).expect(404);
       await request(server()).post('/teams').send({ name: 'X Y', city: 'Z Z', leagueType: 'informal' }).expect(401);
     });
+
+    // backend/team-organiser-flag — proves the real Postgres round-trip a
+    // mock can't: the User.isTeamOrganiser update happens inside the SAME
+    // transaction as the GrassrootsTeam insert (createTeam(), a real
+    // interactive $transaction against Postgres), and is visible
+    // immediately afterward via GET /users/:id — with the SAME access
+    // token, no re-login — which is exactly the manual trace this
+    // feature's own frontend gating depends on.
+    it('flips User.isTeamOrganiser to true, real in Postgres, visible on GET /users/:id with no re-login', async () => {
+      const { userId, accessToken } = await createUser('organiser-flag');
+
+      const before = await request(server())
+        .get(`/users/${userId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+      expect(before.body.isTeamOrganiser).toBe(false);
+
+      await request(server())
+        .post('/teams')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ name: 'Riverside FC', city: 'London', leagueType: 'informal' })
+        .expect(201);
+
+      const after = await request(server())
+        .get(`/users/${userId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+      expect(after.body.isTeamOrganiser).toBe(true);
+
+      // Real, direct Postgres confirmation — not just trusting the HTTP
+      // response shape.
+      const prisma = getTestPrismaClient();
+      const row = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+      expect(row.isTeamOrganiser).toBe(true);
+    });
+
+    it('never sets isTeamOrganiser via a second team registration (already true, stays true — set once, never unset)', async () => {
+      const { userId, accessToken } = await createUser('organiser-flag-twice');
+
+      await createTeam(accessToken, { name: 'First FC' });
+      await createTeam(accessToken, { name: 'Second FC' });
+
+      const prisma = getTestPrismaClient();
+      const row = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+      expect(row.isTeamOrganiser).toBe(true);
+    });
   });
 
   describe('GET /teams?city=', () => {

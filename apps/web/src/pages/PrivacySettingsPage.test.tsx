@@ -42,6 +42,7 @@ const ADULT: UserProfile = {
   verificationStatus: "verified",
   createdAt: "2026-01-15T00:00:00.000Z",
   clubAffiliationId: null,
+  isTeamOrganiser: false,
 };
 
 const MINOR: UserProfile = { ...ADULT, id: "user-2", email: "minor@example.com", isMinor: true };

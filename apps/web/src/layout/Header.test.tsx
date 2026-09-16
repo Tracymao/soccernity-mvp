@@ -49,6 +49,7 @@ const BASE_PROFILE: UserProfile = {
   verificationStatus: "verified",
   createdAt: "2026-01-15T00:00:00.000Z",
   clubAffiliationId: null,
+  isTeamOrganiser: false,
 };
 
 function LocationProbe() {

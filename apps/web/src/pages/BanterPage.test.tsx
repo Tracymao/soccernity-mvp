@@ -52,6 +52,7 @@ function profile(overrides: Partial<UserProfile> = {}): UserProfile {
     verificationStatus: "verified",
     createdAt: new Date().toISOString(),
     clubAffiliationId: null,
+    isTeamOrganiser: false,
     ...overrides,
   };
 }

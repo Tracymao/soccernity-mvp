@@ -20,6 +20,14 @@ export interface UserProfile {
   verificationStatus: string;
   createdAt: string;
   clubAffiliationId: string | null;
+  // backend/team-organiser-flag -- set the moment POST /teams succeeds
+  // (services/api's GrassrootsService.createTeam), read-only here -- there
+  // is no code path in this app that writes it. Deliberately separate from
+  // `role` above, which stays exactly as inert as it already is. Drives
+  // the Grassroots create/manage-action visibility split (see
+  // pages/grassroots/organiser.ts) -- browsing stays visible to every
+  // logged-in user regardless of this flag.
+  isTeamOrganiser: boolean;
 }
 
 // PATCH /users/:id's real, confirmed field allowlist (update-user.dto.ts)

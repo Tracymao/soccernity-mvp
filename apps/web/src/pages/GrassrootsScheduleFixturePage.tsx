@@ -25,6 +25,14 @@
 // client-side guard on team.createdById === the token's `sub` so a
 // non-organiser sees a clear message instead of a dead form; the server
 // still enforces it.
+//
+// backend/team-organiser-flag: the client-side organiser guard above ANDs
+// in the caller's own User.isTeamOrganiser flag too. In practice this is
+// always true whenever team.createdById === the token's sub (the flag
+// flips in the same transaction team creation does), so it's mostly
+// defense-in-depth here — the meaningful new gating for this flag lives
+// on GrassrootsFixturePage.tsx, which has no per-fixture ownership data
+// to check at all.
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router";
 import {
@@ -38,6 +46,7 @@ import {
 } from "../api/grassroots";
 import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
 import { isAwaitingConsent } from "./grassroots/errors";
+import { fetchIsTeamOrganiser } from "./grassroots/organiser";
 import "./grassroots/GrassrootsPage.css";
 
 type LoadState = "loading" | "loaded" | "error" | "not-found" | "no-session" | "not-organiser";
@@ -84,7 +93,12 @@ export default function GrassrootsScheduleFixturePage() {
     try {
       const t = await getTeamById(token, teamId);
       setTeam(t);
-      setLoadState(myId && t.createdById === myId ? "loaded" : "not-organiser");
+      if (myId && t.createdById === myId) {
+        const isTeamOrganiser = await fetchIsTeamOrganiser(token, myId);
+        setLoadState(isTeamOrganiser ? "loaded" : "not-organiser");
+      } else {
+        setLoadState("not-organiser");
+      }
     } catch (err) {
       setLoadState(err instanceof GrassrootsApiError && err.status === 404 ? "not-found" : "error");
     }

@@ -52,6 +52,9 @@ const FULL_DB_ROW = {
   verificationStatus: 'unverified',
   createdAt: new Date('2026-01-01'),
   clubAffiliationId: null,
+  // backend/team-organiser-flag — read-only, set only by
+  // GrassrootsService.createTeam.
+  isTeamOrganiser: false,
 };
 
 // Mirrors what UsersService's Prisma `select` clause would actually
@@ -108,6 +111,19 @@ describe('UsersService', () => {
 
       await expect(service.getOwnProfile('ghost-user')).rejects.toThrow(NotFoundException);
     });
+
+    it('includes isTeamOrganiser in both the Prisma select and the response — read-only, set only by GrassrootsService.createTeam', async () => {
+      const prisma = buildPrismaMock();
+      const selected = withoutPasswordHash({ ...FULL_DB_ROW, isTeamOrganiser: true });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(selected);
+
+      const service = new UsersService(prisma);
+      const result = await service.getOwnProfile('user-1');
+
+      const callArgs = (prisma.user.findUnique as jest.Mock).mock.calls[0][0];
+      expect(callArgs.select.isTeamOrganiser).toBe(true);
+      expect(result.isTeamOrganiser).toBe(true);
+    });
   });
 
   describe('updateOwnProfile', () => {
@@ -143,6 +159,9 @@ describe('UsersService', () => {
         isMinor: true,
         role: 'admin',
         verificationStatus: 'verified',
+        // backend/team-organiser-flag — settable ONLY by
+        // GrassrootsService.createTeam, never via this endpoint.
+        isTeamOrganiser: true,
       } as never;
 
       await service.updateOwnProfile('user-1', dtoWithExtraFields);
@@ -151,6 +170,7 @@ describe('UsersService', () => {
       expect(callArgs.data).toEqual({ displayName: 'New Name' });
       expect(callArgs.data).not.toHaveProperty('isMinor');
       expect(callArgs.data).not.toHaveProperty('role');
+      expect(callArgs.data).not.toHaveProperty('isTeamOrganiser');
       expect(callArgs.data).not.toHaveProperty('verificationStatus');
     });
 

@@ -121,17 +121,34 @@ export class GrassrootsService {
   // the controller: a team page is a public-facing record, so creating one
   // is a "posting"-class action under Section 5.7's broad reading
   // (Decision Log #21).
+  //
+  // backend/team-organiser-flag: the moment team creation succeeds,
+  // User.isTeamOrganiser flips to true in the SAME transaction as the
+  // GrassrootsTeam row — never settable any other way, never unset. This
+  // is a genuine addition beyond Section 3's literal User field list,
+  // flagged as a Decision Log candidate (see the field's own schema
+  // comment and grassroots/README.md). Deliberately distinct from
+  // User.role, which this flag does not touch or repurpose.
   async createTeam(userId: string, dto: CreateTeamDto): Promise<GrassrootsTeamView> {
-    return this.prisma.grassrootsTeam.create({
-      data: {
-        name: dto.name,
-        city: dto.city,
-        leagueType: dto.leagueType,
-        createdById: userId,
-        // `verified` stays at its @default(false). No endpoint sets it in
-        // MVP — it's an operations/trust decision, not self-service.
-      },
-      select: TEAM_SELECT,
+    return this.prisma.$transaction(async (tx) => {
+      const team = await tx.grassrootsTeam.create({
+        data: {
+          name: dto.name,
+          city: dto.city,
+          leagueType: dto.leagueType,
+          createdById: userId,
+          // `verified` stays at its @default(false). No endpoint sets it in
+          // MVP — it's an operations/trust decision, not self-service.
+        },
+        select: TEAM_SELECT,
+      });
+
+      await tx.user.update({
+        where: { id: userId },
+        data: { isTeamOrganiser: true },
+      });
+
+      return team;
     });
   }
 

@@ -34,6 +34,16 @@
 // despite the "Public Team Page" Figma name — a no-session visit shows a
 // "log in" prompt and never calls the API. A missing / 404 team renders
 // an honest "Team not found" state with a link back to /grassroots.
+//
+// backend/team-organiser-flag: the "Schedule a fixture" / per-fixture
+// "Manage" affordances are gated on BOTH the existing per-team ownership
+// check (team.createdById === the token's sub) AND the caller's own
+// User.isTeamOrganiser flag (fetched alongside the team/fixtures). The
+// two signals are almost always in lockstep (isTeamOrganiser flips true
+// in the same transaction that creates a team), so this is mostly
+// defense-in-depth here — real value is that a fresh, never-organised
+// user shows manage UI nowhere in Grassroots, immediately after
+// registering their first team, without a re-login.
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import {
@@ -46,6 +56,7 @@ import {
   type GrassrootsTeam,
 } from "../api/grassroots";
 import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
+import { fetchIsTeamOrganiser } from "./grassroots/organiser";
 import "./grassroots/GrassrootsPage.css";
 
 type LoadState = "loading" | "loaded" | "error" | "not-found" | "no-session";
@@ -137,6 +148,7 @@ export default function GrassrootsTeamPage() {
 
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [team, setTeam] = useState<GrassrootsTeam | null>(null);
+  const [isTeamOrganiser, setIsTeamOrganiser] = useState(false);
 
   const [fixturesState, setFixturesState] = useState<SectionState>("loading");
   const [fixtures, setFixtures] = useState<Fixture[]>([]);
@@ -164,6 +176,12 @@ export default function GrassrootsTeamPage() {
     setTeam(teamResult);
     setLoadState("loaded");
 
+    if (myId) {
+      // Non-blocking — a failed profile fetch just hides manage UI, it
+      // never breaks the team/fixtures view.
+      void fetchIsTeamOrganiser(token, myId).then(setIsTeamOrganiser);
+    }
+
     setFixturesState("loading");
     try {
       const page = await getTeamFixtures(token, teamId);
@@ -173,7 +191,7 @@ export default function GrassrootsTeamPage() {
     } catch {
       setFixturesState("error");
     }
-  }, [token, teamId]);
+  }, [token, teamId, myId]);
 
   useEffect(() => {
     load();
@@ -248,7 +266,12 @@ export default function GrassrootsTeamPage() {
   // client whether the viewer is the organiser"). In code we DO know:
   // GET /teams/:id returns createdById and the token's `sub` is the user
   // id. Still display-only — every write is server-enforced (#255).
+  //
+  // canManage additionally requires isTeamOrganiser (backend/team-organiser-flag)
+  // — the create/manage-action visibility split this app now honors
+  // everywhere in Grassroots, not just per-team ownership.
   const isOrganiser = myId != null && team.createdById === myId;
+  const canManage = isOrganiser && isTeamOrganiser;
 
   return (
     <div className="grassroots-team">
@@ -273,7 +296,7 @@ export default function GrassrootsTeamPage() {
         </div>
       </div>
 
-      {isOrganiser && (
+      {canManage && (
         <div className="grassroots-team__organiser">
           <Link
             to={`/grassroots/${team.id}/fixtures/new`}
@@ -302,11 +325,11 @@ export default function GrassrootsTeamPage() {
         <div className="grassroots-empty">
           <p className="grassroots-empty__title">No fixtures yet</p>
           <p className="grassroots-empty__body">
-            {isOrganiser
+            {canManage
               ? `${team.name} has no matches yet. Schedule one to start logging fixtures and results.`
               : `${team.name} has not scheduled any matches. Fixtures and results appear here as soon as the team's organiser adds them.`}
           </p>
-          {isOrganiser && (
+          {canManage && (
             <Link
               to={`/grassroots/${team.id}/fixtures/new`}
               className="grassroots-btn grassroots-btn--primary grassroots-btn--inline"
@@ -342,7 +365,7 @@ export default function GrassrootsTeamPage() {
                   </span>
                 </span>
                 <StatusPill status={fixture.status} />
-                {isOrganiser && (
+                {canManage && (
                   <Link to={`/grassroots/fixtures/${fixture.id}`} className="grassroots-fixture__manage">
                     Manage
                   </Link>

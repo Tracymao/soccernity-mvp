@@ -25,6 +25,103 @@ below. The permission model is still enforced entirely by joining through
 `User` / `Guardian` safeguarding fields are untouched — only `Fixture`
 changes (confirmed by schema diff).
 
+### Team-organiser flag (`backend/team-organiser-flag`)
+
+A second follow-up, `backend/team-organiser-flag` (backend-api), adds one
+more genuine schema addition — **`User.isTeamOrganiser Boolean
+@default(false)`** (migration `20260916190058_add_user_is_team_organiser`),
+flagged the same way `Fixture.opponentName` was: beyond Section 3's literal
+`User` field list, so a real Decision Log candidate, not a silent change.
+
+**Deliberately separate from `User.role`** (`fan | player | admin`, still
+unenforced anywhere in this codebase — checked via grep before this PR, no
+route reads it as an authorization check). `isTeamOrganiser` does not touch
+or repurpose `role`; it is a single-purpose flag for one thing only: "has
+this user ever registered a Grassroots team."
+
+**Set exactly once — inside the same `$transaction` as a successful `POST
+/teams`** (`GrassrootsService.createTeam`, which is now wrapped in an
+interactive transaction: `tx.grassrootsTeam.create` then
+`tx.user.update({ where: { id: userId }, data: { isTeamOrganiser: true } })`).
+Never settable any other way, never unset — registering a second team is a
+no-op on an already-`true` flag (proven in `test/grassroots.e2e-spec.ts`),
+and there is no team-deletion endpoint anyway.
+
+**Read on `GET /users/:id`** (`UsersService.OWN_PROFILE_SELECT`/`OwnProfile`)
+— no new endpoint, `apps/web` reads it off the same profile call it already
+makes. This is a **UI-visibility convenience, never a trust boundary**:
+every Grassroots write endpoint still enforces its own real
+per-team/per-fixture organiser check server-side (Decision Log #255)
+regardless of what this flag says — `apps/web`'s
+`pages/grassroots/organiser.ts` (`fetchIsTeamOrganiser`) says so explicitly
+in its own comment.
+
+**Frontend gating** (`apps/web`, same branch): browsing (team list, fixture
+list, results) stays visible to every logged-in user regardless of the
+flag. Create/manage actions are gated on it:
+
+- `GrassrootsTeamPage.tsx` — the "Schedule a fixture" toolbar/empty-state
+  CTA and per-fixture "Manage" links now require `isOrganiser &&
+  isTeamOrganiser` (`canManage`), not just the pre-existing per-team
+  `team.createdById === myId` check. The two signals are almost always in
+  lockstep (the flag flips in the same transaction that creates the
+  team), so this is mostly defense-in-depth here.
+- `GrassrootsScheduleFixturePage.tsx` — the same AND added to its
+  `not-organiser` gate. Same defense-in-depth note as above.
+- `GrassrootsFixturePage.tsx` — the **meaningful** new gating. This page's
+  own header comment has always disclosed that `GET /fixtures/:id` returns
+  no `createdById`, so it could not client-side guard *who* the fixture's
+  manager is at all — it rendered the manage UI (Start match / Log the
+  result / End match & save result) for any signed-in user and relied
+  entirely on the server's 403. It now also checks the caller's own
+  `isTeamOrganiser` (a real, narrower signal than "signed in") and shows a
+  plain read-only note instead of live buttons when false. The per-fixture
+  gap is still real and still server-enforced either way — this narrows
+  who sees action buttons at all, it doesn't close the gap completely (a
+  real organiser of some *other* team than either side of this fixture
+  still gets the server's own 403 on submit).
+
+**Verification, all re-measured directly, not estimated**: `services/api`
+mocked suite 83 suites / 1097 → 1099 tests, 0 failures (2 new —
+`grassroots.service.spec.ts`'s "flips User.isTeamOrganiser..." test,
+`users.service.spec.ts`'s "includes isTeamOrganiser..." test). e2e suite
+(real Postgres/Redis via `docker compose up -d`, `npm run test:e2e`) —
+`test/grassroots.e2e-spec.ts` alone re-run standalone at 21/21 tests, 0
+failures, including two new cases: a real create-team-then-read round trip
+proving the flag flips true in Postgres and is visible on `GET /users/:id`
+with the *same* access token (no re-login), and a second-registration
+case proving it stays `true`, never toggled back. The **full** e2e suite
+was then re-run as a whole-repo regression check: **19 suites / 183 → 185
+tests, 0 failures** (the same 2 new tests; no other suite changed). `nest
+build` + `npm run lint` + `npx tsc --noEmit` all clean, both workspaces.
+`apps/web`: `npx tsc --noEmit` / `npm run lint` / `npm run build` all
+clean; vitest 44 suites / 340 → 345 tests, 0 failures (5 new: 3 in
+`GrassrootsFixturePage.test.tsx`, 1 in `GrassrootsTeamPage.test.tsx`, 1 in
+`GrassrootsScheduleFixturePage.test.tsx`) — plus `UserProfile`'s now
+-required `isTeamOrganiser` field fixed in five unrelated fixture objects
+(`Header.test.tsx`, `BanterPage.test.tsx`, `PrivacySettingsPage.test.tsx`,
+`EditProfileModal.test.tsx`, `ProfilePage.test.tsx`) that constructed the
+type directly.
+
+Manual trace, per this PR's own brief — stated plainly, not overclaimed
+(no real browser/Playwright is available in this environment, the same
+disclosed ceiling every prior `apps/web` PR in this project states):
+proven end to end via two layers, not a live click-through. Backend:
+`test/grassroots.e2e-spec.ts`'s new case above drives the real sequence
+— `GET /users/:id` (isTeamOrganiser: false) → `POST /teams` → the SAME
+access token's `GET /users/:id` (isTeamOrganiser: true) — against real
+Postgres via NestJS's own HTTP pipeline (supertest against the real,
+unmocked app, the same rigor a live dev server would give). Frontend:
+`GrassrootsTeamPage.test.tsx`'s two organiser-affordance tests are the
+same trace at the component level — a fresh mount with
+`isTeamOrganiser: false` (the "does NOT show..." test) shows no manage
+UI even for the team's own `createdById`, and a fresh mount with
+`isTeamOrganiser: true` (the "shows the organiser..." test) shows it —
+proving the manage UI is driven by a fresh `GET /users/:id` fetch on
+every mount, not a stale/cached value, so navigating from the
+register-team confirmation to the real team page picks up the flag with
+no re-login or token refresh needed.
+
 ---
 
 ## Endpoints

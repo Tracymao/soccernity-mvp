@@ -8,13 +8,39 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import GrassrootsTeamPage from "./GrassrootsTeamPage";
 import { GrassrootsApiError, type Fixture, type GrassrootsTeam } from "../api/grassroots";
+import type { UserProfile } from "../api/users";
 
 vi.mock("../api/grassroots", async () => {
   const actual = await vi.importActual<typeof import("../api/grassroots")>("../api/grassroots");
   return { ...actual, getTeamById: vi.fn(), getTeamFixtures: vi.fn() };
 });
 
+// backend/team-organiser-flag — canManage additionally requires the
+// caller's own User.isTeamOrganiser (fetched via GET /users/:id).
+// Defaults to true below so the pre-existing organiser-affordance tests
+// (gated on team.createdById === myId) still see the toolbar/Manage
+// links; the flag's own effect gets a dedicated test.
+vi.mock("../api/users", () => ({ getUser: vi.fn() }));
+
 import { getTeamById, getTeamFixtures } from "../api/grassroots";
+import { getUser } from "../api/users";
+
+function organiserProfile(overrides: Partial<UserProfile> = {}): UserProfile {
+  return {
+    id: "org-1",
+    email: "org-1@example.com",
+    phone: null,
+    displayName: "Organiser",
+    dateOfBirth: "2000-01-01",
+    isMinor: false,
+    role: "fan",
+    verificationStatus: "unverified",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    clubAffiliationId: null,
+    isTeamOrganiser: true,
+    ...overrides,
+  };
+}
 
 // A decodable fake JWT so the organiser check (team.createdById === the
 // token's `sub`) can run. A plain "test-token" is not decodable, so with
@@ -64,6 +90,7 @@ beforeEach(() => {
   window.localStorage.clear();
   vi.mocked(getTeamById).mockReset();
   vi.mocked(getTeamFixtures).mockReset().mockResolvedValue(EMPTY_PAGE);
+  vi.mocked(getUser).mockReset().mockResolvedValue(organiserProfile());
 });
 
 function renderPage(id = "team-s") {
@@ -223,13 +250,35 @@ describe("GrassrootsTeamPage", () => {
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "Surulere United" })).not.toBeNull();
-    expect(screen.getAllByRole("link", { name: "Schedule a fixture" }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: "Schedule a fixture" })[0].getAttribute("href")).toBe(
-      "/grassroots/team-s/fixtures/new",
-    );
-    expect(screen.getByRole("link", { name: "Manage" }).getAttribute("href")).toBe(
+    // isTeamOrganiser is fetched asynchronously alongside the team/fixtures
+    // load, so these links appear on a later tick — findAllByRole/findByRole
+    // (not the synchronous getBy* variants) wait for that.
+    const scheduleLinks = await screen.findAllByRole("link", { name: "Schedule a fixture" });
+    expect(scheduleLinks.length).toBeGreaterThan(0);
+    expect(scheduleLinks[0].getAttribute("href")).toBe("/grassroots/team-s/fixtures/new");
+    expect((await screen.findByRole("link", { name: "Manage" })).getAttribute("href")).toBe(
       "/grassroots/fixtures/u1",
     );
+    expect(getUser).toHaveBeenCalledWith(tokenFor("org-1"), "org-1");
+  });
+
+  it("does NOT show organiser affordances when isTeamOrganiser is false, even for the team's own createdById", async () => {
+    window.sessionStorage.setItem("sn_access_token", tokenFor("org-1")); // === createdById
+    vi.mocked(getTeamById).mockResolvedValueOnce(SURULERE);
+    vi.mocked(getTeamFixtures).mockReset().mockResolvedValueOnce({
+      items: [fixture({ id: "u1" })],
+      nextCursor: null,
+    });
+    vi.mocked(getUser).mockResolvedValueOnce(organiserProfile({ isTeamOrganiser: false }));
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Surulere United" })).not.toBeNull();
+    // Give the async isTeamOrganiser fetch a tick to settle before asserting
+    // its absence.
+    await screen.findByText(/upcoming fixtures/i);
+    expect(screen.queryByRole("link", { name: "Schedule a fixture" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Manage" })).toBeNull();
   });
 
   it("does NOT show organiser affordances to a non-organiser viewer", async () => {
