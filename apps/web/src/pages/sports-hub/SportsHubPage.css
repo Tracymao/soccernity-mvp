@@ -139,6 +139,7 @@
   background: var(--sn-background-page);
   border: 1px solid var(--sn-icon-inactive);
   color: var(--sn-text-secondary);
+  cursor: pointer;
 }
 
 .sh-pill--active {
@@ -164,7 +165,7 @@
 
 .sh-match {
   display: grid;
-  grid-template-columns: 56px 1fr auto auto 1fr;
+  grid-template-columns: 56px 24px 1fr auto auto 1fr 24px;
   align-items: center;
   gap: 12px;
   padding: 16px;
@@ -173,6 +174,27 @@
   border-radius: 10px;
   font: 500 15px "Inter", sans-serif;
   color: var(--sn-text-primary);
+  text-decoration: none;
+}
+
+.sh-match:hover {
+  border-color: var(--sn-brand-navy);
+}
+
+.sh-match__crest {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.sh-match__crest--mono {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sn-green-tint-12);
+  color: var(--sn-brand-navy);
+  font: 700 11px "Inter", sans-serif;
 }
 
 .sh-match__team:first-of-type {
@@ -201,16 +223,45 @@
   color: var(--sn-text-on-green);
 }
 
-.sh-status--ht,
-.sh-status--ft {
+.sh-status--ft,
+.sh-status--off {
   background: var(--sn-green-tint-12);
   color: var(--sn-brand-navy);
 }
 
-.sh-disclosure {
-  font: 400 13px "Inter", sans-serif;
+.sh-status--scheduled {
+  background: transparent;
+  border: 1px solid var(--sn-icon-inactive);
   color: var(--sn-text-secondary);
-  margin: 8px 0 0;
+}
+
+.sh-page-status {
+  font: 400 15px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  padding: 24px 0;
+  text-align: center;
+  margin: 0;
+}
+
+.sh-page-status--error {
+  color: var(--sn-brand-navy);
+}
+
+.sh-load-more {
+  align-self: center;
+  margin-top: 4px;
+  padding: 10px 24px;
+  border-radius: 8px;
+  border: 1px solid var(--sn-icon-inactive);
+  background: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+  font: 600 13px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.sh-load-more:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 /* --- stories column ----------------------------------------------------- */
@@ -253,7 +304,7 @@
   }
 
   .sh-match {
-    grid-template-columns: 48px 1fr auto auto 1fr;
+    grid-template-columns: 48px 20px 1fr auto auto 1fr 20px;
     font-size: 13px;
   }
 }

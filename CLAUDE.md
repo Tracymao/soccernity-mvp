@@ -10647,6 +10647,79 @@ real, still-open follow-up, not done by this entry.
     coordinates); `apps/web` (the next ticket's job); the Blog/Articles
     module.
   - Not merged — founder's call after review.
+- **`sprint-4/sports-hub-frontend-wiring` (figma-to-code, 2026-09-16) is
+  the `apps/web` wiring for both prior Sprint 4 Sports Hub tickets —
+  `sprint-4/sports-hub-highlightly-data-redesign` (PR #253) and
+  `sprint-4/sports-hub-highlightly-backend` (PR #254), both merged
+  before this branch was cut. `apps/web` only — `services/api` NOT
+  touched.** Report:
+  `docs/sprint-4-sports-hub-frontend-wiring-report.md`.
+  - **`SportsHubPage.tsx` is now real data.** New `api/sports.ts` client
+    (public, no auth header, same `api/blog.ts` convention). "Live" reads
+    `GET /sports/live-scores`; "Today" reads
+    `GET /sports/fixtures?date=`. No "list leagues" endpoint exists, so
+    the league sidebar accumulates leagues seen across every load
+    (picking one still leaves the sidebar browsable); selecting a league
+    re-queries the server (`?league=`), the `GrassrootsPage.tsx`
+    city-search precedent, not a client-side filter. Every match row now
+    links to its own match-centre page; real cursor-based "Load more"
+    added. The old "has not yet selected a sports-data vendor"
+    disclosure is removed (Decision Log #6 resolved). "Most Recent
+    Stories" stays illustrative sample content — no news/story endpoint
+    exists in Section 4.6.
+  - **New `MatchCentrePage.tsx` (route
+    `/sports-hub/matches/:matchId`)** — the match-centre drill-down that
+    did not exist in code before this PR. Two-level tabs matching the
+    Figma redesign's own IA (Decision Log #318): Level 1 Match | H2H |
+    Standings | Video; Level 2 (under Match) Summary | Statistics |
+    Lineups | Momentum | Commentary. Every tab's data is fetched
+    **lazily** on first activation and cached (a small generic
+    `useLazyTab` hook), the same Section 5.5 discipline
+    `ProfilePage.tsx`'s Followers/Following lists already use — verified
+    directly that landing on the default Summary tab does not trigger
+    Statistics/Lineups/Momentum/H2H/Video fetches, and that Commentary
+    reuses Summary's already-fetched events (one `getMatchEvents` call,
+    not two). No login gate (every `SportsService` route is public); no
+    site footer (a drill-down/detail page, same category as
+    ClubFanPage/GrassrootsTeamPage/ContestPage).
+  - **Two real, confirmed Highlightly data gaps honestly disclosed, not
+    papered over** (per the backend module's own README): Statistics
+    renders team-level comparisons only, with a disclosure line that
+    per-player statistics aren't available from this data source (no
+    fabricated box-score rows); Standings renders the real table with a
+    disclosure line that recent-form data isn't available (no fabricated
+    FORM chips). A match with no `league.id` shows an honest error and
+    never calls `GET /sports/standings` at all.
+  - **Verification, real before/after**: stashed every change and
+    re-ran the full suite against pristine `main` for a genuine baseline
+    — **43 suites / 315 tests, 0 failures → 44 suites / 337 tests, 0
+    failures** (+1 suite, `MatchCentrePage.test.tsx` 17 tests;
+    `SportsHubPage.test.tsx` rewritten 5→10). `tsc`/lint/build all clean.
+    **A real end-to-end manual trace against the actual local stack**:
+    confirmed graceful degradation with no real Highlightly credentials
+    configured (`GET /sports/live-scores`/`fixtures` return a clean
+    empty page, never an error); seeded one real `MatchData` row + one
+    `Standing` row directly via Prisma (the same "seed directly, no live
+    vendor account yet" precedent `sprint-4/public-blog-articles-feed`
+    used), then curl'd all 8 real endpoints and confirmed every shape
+    matched; **a genuine JS-execution smoke test** — a temporary Vitest
+    spec (deleted before commit) rendered the real, unmocked
+    `SportsHubPage`/`MatchCentrePage` against the real running backend
+    (real `fetch`, no `vi.mock`) and confirmed the full drill-down
+    (details → stats → lineups → H2H → standings) genuinely renders real
+    fetched data end to end — this is Sprint 4's own literal done-when
+    criterion, confirmed explicitly rather than assumed from
+    component-level mocked tests alone. Seeded rows deleted afterward,
+    re-confirmed empty; dev servers stopped. No real browser/Playwright
+    check was available in this environment — the real-backend Vitest
+    render plus a live dev-server HTTP smoke test (`/`, `/sports-hub`,
+    `/sports-hub/matches/:id`, `/community` all real 200s) is the actual
+    verification ceiling here, same as every prior `apps/web` PR.
+  - **Not built, per this ticket's own explicit scope**: Top Scorers,
+    match-specific notification/alert preferences, any SportMonks-only
+    data (xG, Pressure Index, shot maps, Expected Lineups) — none of it,
+    no UI space left inviting them. `services/api` untouched.
+  - Not merged — founder's call after review.
 
 ## The eight agents, and the order they run in
 
