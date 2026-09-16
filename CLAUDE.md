@@ -10874,6 +10874,64 @@ real, still-open follow-up, not done by this entry.
     so this Python-level round-trip is the actual verification ceiling
     here, same as every prior doc-hygiene pass in this project — not a
     LibreOffice-specific confirmation.
+- **`figma/homepage-hero-copy-pillar3-refresh` (figma-design-system,
+  2026-09-16) is a copy-and-hero-visual retouch of the canonical
+  homepage frame (`5204:6728`, Decision Log #46/#152) — Figma design
+  only, no app/backend code. Full detail:
+  `docs/homepage-breadth-retouch-report.md`.**
+  - **Fixed a real, confirmed inaccuracy**: pillar 3 and the closing
+    section both described player-level appearance-history logging as
+    a real feature — no such concept exists anywhere in the schema;
+    fixtures/results are team-level, logged only by a `GrassrootsTeam`'s
+    own organiser. Rewritten (hero eyebrow → "WHERE THE WHOLE GAME
+    LIVES"; hero lede; pillar 3 title/body → Sports Hub, the one real
+    pillar this page gave zero representation to even though it's been
+    live since Sprint 4; closing sub) per the ticket's own copy table.
+    Hero headline, closing headline/eyebrow, and the hero secondary CTA
+    were explicitly out of the ticket's scope and left untouched.
+  - **The closing "Browse grassroots teams" CTA was dead for a
+    logged-out visitor** (`GET /teams` is `JwtAuthGuard`-only) — the
+    founder's resolution (repoint at `/signup`, not make the endpoint
+    public) is applied: relabelled **"Register your team"**, and the
+    Figma frame itself is renamed to record the routing decision for
+    `figma-to-code`. No backend change made or proposed —
+    `GET /teams`'s guard is unchanged.
+  - **Hero fixture card redesigned**: the single grassroots-only
+    illustrative match — the most prominent visual on the page,
+    reinforcing exactly the narrow positioning this pass exists to fix
+    — is now a two-section split card (`Card — Live Across Soccernity
+    (Sports Hub + Grassroots)`): a Sports Hub section (Chelsea 3–1
+    Liverpool, reusing this file's own canonical illustrative Sports
+    Hub fixture per Decision Log #321, rather than inventing a new
+    one) and a Grassroots section (the original, unedited Ikoyi Rovers
+    FC 2–1 Surulere United content, relocated not rewritten), plus a
+    caption line nodding at Bants/Blog/community. Built by cloning the
+    card's own existing auto-layout meta-row/scoreline/hairline block
+    — the clone was taken *before* editing the original, so it
+    inherited the grassroots content verbatim with zero re-typing —
+    and the card auto-hugged its own height (236→420); the hero
+    section (`HORIZONTAL` auto-layout, `counterAxisAlignItems: CENTER`)
+    and the whole homepage frame (`VERTICAL` auto-layout) both
+    reflowed automatically with zero manual position math and zero
+    overlap with anything below.
+  - **Verified**: paint-binding audit across every touched subtree —
+    57/57 solid paints bound, 0 unbound, 0 off-palette, 0 new colours
+    (every edit mutated text on an already-bound node or cloned one,
+    never authored a fresh fill); a programmatic overlap check of the
+    homepage frame's new bounds against every other top-level page
+    node — 0 overlaps; light mode only, matching the frame's own
+    existing "Light mode only, by instruction" note. No mobile
+    counterpart exists for this Pass-2 canonical desktop frame and
+    none was requested. A new annotation note was appended to the
+    frame's own Annotation Zone documenting this pass, following the
+    file's existing per-pass documentation convention.
+  - **Not built**: Fixtures/Trending/Talent Clips content stays
+    illustrative — Decision Log #6's original "no fixtures/news
+    endpoint the homepage reads from" reasoning is unchanged and not
+    revisited by this pass, even though Sports Hub itself now has a
+    real backend (Decision Log #254) — this specific marketing page
+    stays static by design, per its own header comment.
+  - Not merged — Temi's call after review.
 
 ## The eight agents, and the order they run in
 
