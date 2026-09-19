@@ -8815,10 +8815,10 @@ Full reasoning for every choice above: Build Plan Section 5.
       (bullet below).** #342 is Resolved-implemented, with its own open sub-questions
       (a normalised `(name, city)` unique column; name+city being a weak
       identity; legacy pre-rule duplicate rows).
-    - **The web `/grassroots/register` page does not yet show the
-      `reclaimed: true` takeover notice** the API now returns — needs its own
-      `figma-to-code` frontend follow-up ticket (and probably a design frame
-      for the notice first).
+    - **The web `/grassroots/register` page now shows the `reclaimed: true`
+      takeover notice** (`sprint-5/grassroots-reclaim-notice-web`, `apps/web`
+      only): a "You're now this team's organiser" heading plus the backend's
+      own `message`, instead of "Team registered". No new Figma frame.
 - **`sprint-5/grassroots-dormant-delete-admin-only` (backend-api, 2026-09-19)
   resolves Decision Log #343. `services/api` only, zero schema diff.**
   `DELETE /teams/:id` is now **admin-only**: `AdminJwtAuthGuard` +
