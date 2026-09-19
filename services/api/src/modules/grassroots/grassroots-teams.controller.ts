@@ -1,4 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
+import { AdminRoles } from '../admin/guards/admin-roles.decorator';
+import { AdminRolesGuard } from '../admin/guards/admin-roles.guard';
 import { CurrentUser } from '../auth/guards/current-user.decorator';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -27,13 +30,20 @@ export class GrassrootsTeamsController {
     return this.grassroots.createTeam(user.sub, dto);
   }
 
-  // DELETE /teams/:id. Dormant, fixture-less teams only (409 otherwise) --
-  // see GrassrootsService.deleteDormantTeam. Same guard pair as POST
-  // /teams: it exists only to let a would-be registrant clear a dormant
-  // team out of the way of a genuinely new one.
+  // DELETE /teams/:id. ADMIN-ONLY (Decision Log #343): AdminJwtAuthGuard +
+  // AdminRolesGuard('moderator', 'superadmin') -- the separate admin-console
+  // auth domain, so a User access token never reaches it (401). A dormant
+  // team (createdById: null) has, by definition, no organiser who could
+  // authorise its own deletion, so no regular caller may. moderator, not
+  // editor: this removes a user-generated public record (AdminUser's
+  // "actions Reports" job), same role split as AdminUsersController.
+  // Dormant, fixture-less teams only (409 otherwise) -- see
+  // GrassrootsService.deleteDormantTeam. A would-be registrant no longer
+  // clears a dormant team themselves; POST /teams reclaims it instead.
   @Delete(':id')
   @HttpCode(204)
-  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
+  @UseGuards(AdminJwtAuthGuard, AdminRolesGuard)
+  @AdminRoles('moderator', 'superadmin')
   async remove(@Param('id') id: string): Promise<void> {
     await this.grassroots.deleteDormantTeam(id);
   }

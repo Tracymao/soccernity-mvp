@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { AccountDeletionSweepService } from '../src/modules/account-deletion/account-deletion-sweep.service';
+import { AdminTokenService } from '../src/modules/admin/token/admin-token.service';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
 
@@ -542,7 +543,16 @@ describe('Grassroots Records Service e2e (Section 4.5)', () => {
   // a genuinely anonymised organiser (the real AccountDeletionSweepService,
   // not a hand-set createdById = null) so the "dormant team exists in
   // practice" precondition is proven rather than assumed.
-  describe('POST /teams — dormant reclaim + DELETE /teams/:id', () => {
+  describe('POST /teams — dormant reclaim + DELETE /teams/:id (admin-only)', () => {
+    async function createAdmin(label: string, role: string): Promise<string> {
+      const prisma = getTestPrismaClient();
+      const admin = await prisma.adminUser.create({
+        data: { email: `e2e-gr-admin-${label}-${Date.now()}@example.com`, passwordHash: 'unused', fullName: `E2E ${label}`, role },
+      });
+      const { accessToken } = await app.get(AdminTokenService).issueTokenPair(admin.id, admin.role);
+      return accessToken.token;
+    }
+
     const TEAM = { name: 'Hackney Wick FC', city: 'London', leagueType: 'informal' };
 
     async function anonymiseOrganiser(userId: string): Promise<void> {
@@ -653,14 +663,15 @@ describe('Grassroots Records Service e2e (Section 4.5)', () => {
       expect(await prisma.grassrootsTeam.count()).toBe(1);
     });
 
-    it('DELETE: removes a dormant, fixture-less team; a genuinely new team can then be registered', async () => {
+    it('DELETE: an admin (moderator) removes a dormant, fixture-less team; a genuinely new team can then be registered', async () => {
       const prisma = getTestPrismaClient();
       const oldOrg = await createUser('del-old');
       const teamId = await createTeam(oldOrg.accessToken, TEAM);
       await anonymiseOrganiser(oldOrg.userId);
       const newOrg = await createUser('del-new');
+      const admin = await createAdmin('mod', 'moderator');
 
-      await request(server()).delete(`/teams/${teamId}`).set('Authorization', `Bearer ${newOrg.accessToken}`).expect(204);
+      await request(server()).delete(`/teams/${teamId}`).set('Authorization', `Bearer ${admin}`).expect(204);
       expect(await prisma.grassrootsTeam.findUnique({ where: { id: teamId } })).toBeNull();
 
       const fresh = await post(newOrg.accessToken).expect(201);
@@ -668,15 +679,36 @@ describe('Grassroots Records Service e2e (Section 4.5)', () => {
       expect(fresh.body.reclaimed).toBe(false);
     });
 
-    it('DELETE: refuses a LIVE team under any framing (including by its own organiser) — row untouched', async () => {
+    it('DELETE: a regular user is rejected (401 — a User token is not an admin token) even on a genuinely dormant team; row untouched', async () => {
+      const prisma = getTestPrismaClient();
+      const oldOrg = await createUser('nonadmin-old');
+      const teamId = await createTeam(oldOrg.accessToken, TEAM);
+      await anonymiseOrganiser(oldOrg.userId);
+      const stranger = await createUser('nonadmin-stranger');
+
+      await request(server()).delete(`/teams/${teamId}`).set('Authorization', `Bearer ${stranger.accessToken}`).expect(401);
+      await request(server()).delete(`/teams/${teamId}`).expect(401);
+      expect(await prisma.grassrootsTeam.findUnique({ where: { id: teamId } })).not.toBeNull();
+    });
+
+    it('DELETE: an admin without moderator/superadmin (editor) gets 403; row untouched', async () => {
+      const prisma = getTestPrismaClient();
+      const oldOrg = await createUser('editor-old');
+      const teamId = await createTeam(oldOrg.accessToken, TEAM);
+      await anonymiseOrganiser(oldOrg.userId);
+      const editor = await createAdmin('editor', 'editor');
+
+      await request(server()).delete(`/teams/${teamId}`).set('Authorization', `Bearer ${editor}`).expect(403);
+      expect(await prisma.grassrootsTeam.findUnique({ where: { id: teamId } })).not.toBeNull();
+    });
+
+    it('DELETE: refuses a LIVE team even for a superadmin; row untouched', async () => {
       const prisma = getTestPrismaClient();
       const org = await createUser('del-live');
       const teamId = await createTeam(org.accessToken, TEAM);
-      const other = await createUser('del-stranger');
+      const admin = await createAdmin('super', 'superadmin');
 
-      await request(server()).delete(`/teams/${teamId}`).set('Authorization', `Bearer ${other.accessToken}`).expect(409);
-      await request(server()).delete(`/teams/${teamId}`).set('Authorization', `Bearer ${org.accessToken}`).expect(409);
-
+      await request(server()).delete(`/teams/${teamId}`).set('Authorization', `Bearer ${admin}`).expect(409);
       expect((await prisma.grassrootsTeam.findUnique({ where: { id: teamId } }))!.createdById).toBe(org.userId);
     });
 
@@ -686,21 +718,21 @@ describe('Grassroots Records Service e2e (Section 4.5)', () => {
       const other = await createUser('hist-other');
       const dormantId = await createTeam(oldOrg.accessToken, TEAM);
       const otherTeamId = await createTeam(other.accessToken, { name: 'Other FC' });
-      // the dormant team is teamB of the OTHER organiser's fixture
       await request(server())
         .post('/fixtures')
         .set('Authorization', `Bearer ${other.accessToken}`)
         .send({ teamAId: otherTeamId, teamBId: dormantId, scheduledAt: '2026-10-01T14:00:00.000Z' })
         .expect(201);
       await anonymiseOrganiser(oldOrg.userId);
+      const admin = await createAdmin('hist', 'moderator');
 
-      await request(server()).delete(`/teams/${dormantId}`).set('Authorization', `Bearer ${other.accessToken}`).expect(409);
+      await request(server()).delete(`/teams/${dormantId}`).set('Authorization', `Bearer ${admin}`).expect(409);
       expect(await prisma.grassrootsTeam.findUnique({ where: { id: dormantId } })).not.toBeNull();
     });
 
-    it('DELETE: 404 for a non-existent team', async () => {
-      const org = await createUser('del-404');
-      await request(server()).delete('/teams/does-not-exist').set('Authorization', `Bearer ${org.accessToken}`).expect(404);
+    it('DELETE: 404 for a non-existent team (admin)', async () => {
+      const admin = await createAdmin('404', 'moderator');
+      await request(server()).delete('/teams/does-not-exist').set('Authorization', `Bearer ${admin}`).expect(404);
     });
   });
 });

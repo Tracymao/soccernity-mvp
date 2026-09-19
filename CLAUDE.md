@@ -8795,7 +8795,8 @@ Full reasoning for every choice above: Build Plan Section 5.
     `reclaimed` notice yet (figma-to-code follow-up).
   - **`DELETE /teams/:id` (new, 204)**: dormant teams with NO fixtures only;
     live teams are never deletable (409), teams with fixtures can only be
-    taken over. Who may call it is the open Decision Log #343.
+    taken over. Who may call it was Decision Log #343 — now resolved:
+    admin-only, see `sprint-5/grassroots-dormant-delete-admin-only` below.
   - **Verification (measured before/after)**: mocked suite 85 suites /
     1139 tests -> 85 suites / 1152 tests, 0 failures; e2e (real Postgres)
     20 suites / 203 tests -> 20 suites / 211 tests, 0 failures
@@ -8810,14 +8811,31 @@ Full reasoning for every choice above: Build Plan Section 5.
   - **Not built / flagged, tracked here (deferred by design, not oversights;
     none resolved by this entry):**
     - **Decision Log #343 (who may call the dormant-only `DELETE /teams/:id`)
-      is still genuinely OPEN** — confirmed Open in the Build Plan docx, not
-      Resolved. #342 is Resolved-implemented, with its own open sub-questions
+      was OPEN here — now RESOLVED by `sprint-5/grassroots-dormant-delete-admin-only`
+      (bullet below).** #342 is Resolved-implemented, with its own open sub-questions
       (a normalised `(name, city)` unique column; name+city being a weak
       identity; legacy pre-rule duplicate rows).
     - **The web `/grassroots/register` page does not yet show the
       `reclaimed: true` takeover notice** the API now returns — needs its own
       `figma-to-code` frontend follow-up ticket (and probably a design frame
       for the notice first).
+- **`sprint-5/grassroots-dormant-delete-admin-only` (backend-api, 2026-09-19)
+  resolves Decision Log #343. `services/api` only, zero schema diff.**
+  `DELETE /teams/:id` is now **admin-only**: `AdminJwtAuthGuard` +
+  `AdminRolesGuard('moderator', 'superadmin')` (`GrassrootsModule` imports
+  `AdminAuthFoundationModule`); the `JwtAuthGuard` + `GuardianConsentGuard`
+  pair is gone from that route. Reasoning: a dormant team (`createdById: null`)
+  has no organiser who could authorise its own deletion, so no regular caller
+  may. `moderator` not `editor` (removes a user-generated public record — same
+  split as `AdminUsersController`). A User token is a **401** (separate admin
+  auth domain), an `editor` admin a **403** — not a 403 for a plain user.
+  Dormant-and-fixture-less-only and the 409 on live teams are unchanged;
+  registrants reclaim via `POST /teams` instead. Still open: a dormant team
+  with fixtures can only be taken over. e2e (real Postgres): grassroots spec
+  now proves user 401, editor 403, moderator success on a genuinely dormant
+  (really-anonymised) team, plus live/fixture-bearing 409 and 404 for admins.
+  Verification: grassroots mocked specs 85 tests, e2e `grassroots` 31 tests,
+  0 failures; `tsc` clean. PR opened, not merged.
 - **`sprint-1/guardian-consent-decline-web` (figma-to-code, 2026-09-19)
   wires `GuardianConsentConfirmPage.tsx`'s "I do not consent" button to
   the real `POST /auth/guardian-consent/decline` (PR #261) — `apps/web`

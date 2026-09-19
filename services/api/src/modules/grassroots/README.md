@@ -416,10 +416,13 @@ leaves their team **dormant** (`createdById: null`), read-only via the existing
 - **`DELETE /teams/:id` (new, `204`).** The smallest deletion capability: only
   a **dormant** team **with no fixtures** (as teamA or teamB) may be deleted;
   anything else is `409` (a live team is never end-user-deletable, under any
-  framing), missing → `404`. Guarded `JwtAuthGuard` + `GuardianConsentGuard`;
-  who may call it is Decision Log #343 (open). Purpose: lets a registrant who
-  does not want to inherit a dormant team clear it and register a genuinely new
-  one. A dormant team *with* fixtures can only be taken over.
+  framing), missing → `404`. **Admin-only (Decision Log #343, resolved):**
+  `AdminJwtAuthGuard` + `AdminRolesGuard('moderator', 'superadmin')` — a dormant
+  team has no organiser who could authorise its own deletion, so no regular
+  caller may (a User token is a 401, an `editor` admin a 403). A registrant who
+  does not want to inherit a dormant team no longer clears it themselves;
+  `POST /teams` reclaims it. A dormant team *with* fixtures can only be taken
+  over.
 - **Tests.** Mocked: `grassroots.service.spec.ts` + `grassroots.controller.http.spec.ts`
   extended. e2e (`test/grassroots.e2e-spec.ts`): the full trace — organiser
   anonymised by the real `AccountDeletionSweepService` → new user registers the
