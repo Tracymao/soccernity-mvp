@@ -391,3 +391,38 @@ dto/                               — create-team, list-teams-query, create-fix
   `teamBId: null`; `GET /teams?city=` filter + keyset pagination;
   `GET /teams/:id/fixtures` teamA-or-teamB scope + newest-first keyset;
   no organiser PII on `GET /teams/:id`.
+
+## Status update — dormant-team reclaim + dormant-team delete (`sprint-5/grassroots-team-dormant-reclaim`)
+
+Consumes the nullable `GrassrootsTeam.createdById` introduced by the
+account-anonymisation redesign (Decision Log #341): an anonymised organiser
+leaves their team **dormant** (`createdById: null`), read-only via the existing
+403 checks. No schema change, no account-deletion code touched.
+
+- **`POST /teams` now matches before creating.** Identity key: trimmed,
+  case-insensitive `name` + `city` (no stored/normalised column — Decision Log
+  #342). Any **live** match (organiser set, including the caller's own) → `409`.
+  A **dormant** match is reassigned to the caller instead of duplicated; the
+  existing row's name/city/`leagueType`/`verified`/fixtures/results are kept
+  (the request's `leagueType` is ignored on this path) and `User.isTeamOrganiser`
+  is set as on any registration. The response gains `reclaimed: boolean` and,
+  on a takeover, a `message` — status stays `201` — so the client can tell the
+  user they took over an existing team rather than created a fresh one (the web
+  register page does not surface this yet; a `figma-to-code` follow-up).
+- **Concurrency.** A transaction-scoped `pg_advisory_xact_lock` on the
+  (name, city) key serialises racing registrations, and the reassignment is an
+  `updateMany` guarded on `createdById: null`; the loser of a race gets `409`,
+  never a duplicate row. Proven against real Postgres.
+- **`DELETE /teams/:id` (new, `204`).** The smallest deletion capability: only
+  a **dormant** team **with no fixtures** (as teamA or teamB) may be deleted;
+  anything else is `409` (a live team is never end-user-deletable, under any
+  framing), missing → `404`. Guarded `JwtAuthGuard` + `GuardianConsentGuard`;
+  who may call it is Decision Log #343 (open). Purpose: lets a registrant who
+  does not want to inherit a dormant team clear it and register a genuinely new
+  one. A dormant team *with* fixtures can only be taken over.
+- **Tests.** Mocked: `grassroots.service.spec.ts` + `grassroots.controller.http.spec.ts`
+  extended. e2e (`test/grassroots.e2e-spec.ts`): the full trace — organiser
+  anonymised by the real `AccountDeletionSweepService` → new user registers the
+  same name/city → reassigned not duplicated → new organiser creates
+  fixtures/status/results, old organiser gets 403 — plus live-duplicate 409,
+  both race cases, and every DELETE branch.

@@ -43,6 +43,17 @@ const TEAM_SELECT = {
 
 export type GrassrootsTeamView = Prisma.GrassrootsTeamGetPayload<{ select: typeof TEAM_SELECT }>;
 
+// POST /teams response: the team plus whether it was a takeover of a
+// dormant team (`reclaimed`) rather than a fresh row, with an explanatory
+// `message` on the takeover path.
+export type CreateTeamResult = GrassrootsTeamView & { reclaimed: boolean; message?: string };
+
+// Identity key for the (name, city) match: trimmed + lowercased, used only
+// to derive the advisory-lock key, never stored.
+function teamIdentityKey(name: string, city: string): string {
+  return `grassroots-team:${name.trim().toLowerCase()}|${city.trim().toLowerCase()}`;
+}
+
 // Minimal team shape embedded inside a fixture — enough to render a
 // fixture row without a second request, nothing more.
 const FIXTURE_TEAM_SELECT = {
@@ -129,26 +140,123 @@ export class GrassrootsService {
   // flagged as a Decision Log candidate (see the field's own schema
   // comment and grassroots/README.md). Deliberately distinct from
   // User.role, which this flag does not touch or repurpose.
-  async createTeam(userId: string, dto: CreateTeamDto): Promise<GrassrootsTeamView> {
+  //
+  // sprint-5/grassroots-team-dormant-reclaim: before creating, the request
+  // is matched against existing teams on (name, city), trimmed and
+  // case-insensitive (there is no normalised/unique column -- adding one
+  // would be a schema change; see the Decision Log candidate in
+  // grassroots/README.md). Outcomes:
+  //   - a LIVE match (createdById set) -> 409, a plain duplicate;
+  //   - a DORMANT match (createdById null, left behind by an anonymised
+  //     organiser, Decision Log #341) -> the existing row is reassigned to
+  //     the caller instead of a duplicate being created, and the response
+  //     says so (`reclaimed: true`) so the caller knows they took over an
+  //     existing team with its fixtures/results, not a fresh one. The
+  //     existing row's name/city/leagueType/verified are kept as they are;
+  //     the request's leagueType is ignored on this path;
+  //   - no match -> the original create path.
+  // A per-key transaction-scoped advisory lock serialises concurrent
+  // registrations of the same (name, city), so two racing requests cannot
+  // both pass the match check and create duplicates; the reassignment
+  // itself is an updateMany guarded on `createdById: null`, so even
+  // without the lock two claimants of one dormant team cannot both win.
+  async createTeam(userId: string, dto: CreateTeamDto): Promise<CreateTeamResult> {
+    const name = dto.name.trim();
+    const city = dto.city.trim();
+
     return this.prisma.$transaction(async (tx) => {
-      const team = await tx.grassrootsTeam.create({
-        data: {
-          name: dto.name,
-          city: dto.city,
-          leagueType: dto.leagueType,
-          createdById: userId,
-          // `verified` stays at its @default(false). No endpoint sets it in
-          // MVP — it's an operations/trust decision, not self-service.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${teamIdentityKey(name, city)}))`;
+
+      const matches = await tx.grassrootsTeam.findMany({
+        where: {
+          name: { equals: name, mode: 'insensitive' },
+          city: { equals: city, mode: 'insensitive' },
         },
+        orderBy: { id: 'asc' },
         select: TEAM_SELECT,
       });
+
+      if (matches.some((m) => m.createdById !== null)) {
+        throw new ConflictException('A team with this name already exists in this city');
+      }
+
+      let team: GrassrootsTeamView;
+      let reclaimed = false;
+      const dormant = matches[0];
+      if (dormant) {
+        const claimed = await tx.grassrootsTeam.updateMany({
+          where: { id: dormant.id, createdById: null },
+          data: { createdById: userId },
+        });
+        if (claimed.count === 0) {
+          throw new ConflictException('A team with this name already exists in this city');
+        }
+        team = { ...dormant, createdById: userId };
+        reclaimed = true;
+      } else {
+        team = await tx.grassrootsTeam.create({
+          data: {
+            name,
+            city,
+            leagueType: dto.leagueType,
+            createdById: userId,
+            // `verified` stays at its @default(false). No endpoint sets it in
+            // MVP -- it's an operations/trust decision, not self-service.
+          },
+          select: TEAM_SELECT,
+        });
+      }
 
       await tx.user.update({
         where: { id: userId },
         data: { isTeamOrganiser: true },
       });
 
-      return team;
+      return reclaimed
+        ? {
+            ...team,
+            reclaimed: true,
+            message:
+              'This team was already registered on Soccernity but had no organiser. You are now its organiser, and its existing fixtures and results are unchanged.',
+          }
+        : { ...team, reclaimed: false };
+    });
+  }
+
+  // DELETE /teams/:id -- the smallest team-deletion capability, existing
+  // only so a caller who does not want to take over a dormant team can
+  // clear the way for a genuinely new one. Deliberately narrow:
+  //   - DORMANT teams only (createdById null). A live team is never
+  //     end-user-deletable: 409, under any framing.
+  //   - Only a team with NO fixtures (as teamA or teamB). Fixtures/results
+  //     are other organisers' records too, so a team with history can only
+  //     be taken over via POST /teams, never deleted: 409.
+  //   - 404 (existence) settles before 409 (state), the module convention.
+  // Who may call it (currently any consent-confirmed user) is a Decision
+  // Log candidate, see grassroots/README.md.
+  async deleteDormantTeam(teamId: string): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const team = await tx.grassrootsTeam.findUnique({
+        where: { id: teamId },
+        select: { id: true, createdById: true, _count: { select: { fixturesHome: true, fixturesAway: true } } },
+      });
+      if (!team) {
+        throw new NotFoundException('Team not found');
+      }
+      if (team.createdById !== null) {
+        throw new ConflictException('Only a team with no organiser can be deleted');
+      }
+      if (team._count.fixturesHome + team._count.fixturesAway > 0) {
+        throw new ConflictException(
+          'This team has fixtures on record and cannot be deleted; register it to take it over instead',
+        );
+      }
+      // Guarded on createdById: null so a reclaim landing between the read
+      // and the delete cannot delete a now-live team.
+      const deleted = await tx.grassrootsTeam.deleteMany({ where: { id: teamId, createdById: null } });
+      if (deleted.count === 0) {
+        throw new ConflictException('Only a team with no organiser can be deleted');
+      }
     });
   }
 

@@ -8720,6 +8720,30 @@ Full reasoning for every choice above: Build Plan Section 5.
     reverse a decline; and that a third sweep tick never restarts an
     already-running deletion clock.
   - PR opened, not merged — Temi's call after review.
+- **`sprint-5/grassroots-team-dormant-reclaim` (backend-api, 2026-09-19)
+  consumes the nullable `GrassrootsTeam.createdById` that
+  `sprint-2/account-anonymization-reconsideration` (Decision Log #341)
+  introduced. `services/api` only, zero schema diff; account-deletion module
+  untouched. Decision Log #342 (resolved-implemented) + #343 (open).**
+  - **`POST /teams` matches before creating**, on trimmed case-insensitive
+    name + city. Live match -> 409. Dormant match (`createdById: null`) ->
+    reassigned to the caller instead of duplicated (existing data, fixtures
+    and results kept; request `leagueType` ignored), response gains
+    `reclaimed: boolean` + a `message` on takeover (status stays 201). A
+    per-key advisory lock plus a `createdById`-null-guarded `updateMany` make
+    concurrent registrations safe. The web register page does not show the
+    `reclaimed` notice yet (figma-to-code follow-up).
+  - **`DELETE /teams/:id` (new, 204)**: dormant teams with NO fixtures only;
+    live teams are never deletable (409), teams with fixtures can only be
+    taken over. Who may call it is the open Decision Log #343.
+  - **Verification (measured before/after)**: mocked suite 85 suites /
+    1139 tests -> 85 suites / 1152 tests, 0 failures; e2e (real Postgres)
+    20 suites / 203 tests -> 20 suites / 211 tests, 0 failures
+    (`grassroots.e2e-spec.ts`: the full trace with the organiser anonymised
+    by the real sweep -> new user reclaims -> new organiser runs
+    fixtures/status/results, old organiser gets 403; live-duplicate 409;
+    both race cases; every DELETE branch). `nest build` + lint clean.
+    PR opened, not merged.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

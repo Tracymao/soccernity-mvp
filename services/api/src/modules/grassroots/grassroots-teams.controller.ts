@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../auth/guards/current-user.decorator';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -25,6 +25,17 @@ export class GrassrootsTeamsController {
   @UseGuards(JwtAuthGuard, GuardianConsentGuard)
   async create(@CurrentUser() user: AccessTokenPayload, @Body() dto: CreateTeamDto) {
     return this.grassroots.createTeam(user.sub, dto);
+  }
+
+  // DELETE /teams/:id. Dormant, fixture-less teams only (409 otherwise) --
+  // see GrassrootsService.deleteDormantTeam. Same guard pair as POST
+  // /teams: it exists only to let a would-be registrant clear a dormant
+  // team out of the way of a genuinely new one.
+  @Delete(':id')
+  @HttpCode(204)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
+  async remove(@Param('id') id: string): Promise<void> {
+    await this.grassroots.deleteDormantTeam(id);
   }
 
   // GET /teams?city=. JwtAuthGuard only — reading a browsable catalog is

@@ -26,6 +26,7 @@ describe('Grassroots controllers (HTTP layer)', () => {
 
   const grassroots = {
     createTeam: jest.fn(),
+    deleteDormantTeam: jest.fn(),
     getTeamById: jest.fn(),
     listTeams: jest.fn(),
     listTeamFixtures: jest.fn(),
@@ -107,6 +108,23 @@ describe('Grassroots controllers (HTTP layer)', () => {
         .post('/teams')
         .send({ name: 'A B', city: 'C D', leagueType: 'academy', createdById: 'someone-else' })
         .expect(400); // forbidNonWhitelisted
+    });
+  });
+
+  describe('DELETE /teams/:id', () => {
+    it('delegates to deleteDormantTeam(id), returns 204, and the consent guard ran', async () => {
+      grassroots.deleteDormantTeam.mockResolvedValue(undefined);
+
+      await request(app.getHttpServer()).delete('/teams/t-1').expect(204);
+
+      expect(grassroots.deleteDormantTeam).toHaveBeenCalledWith('t-1');
+      expect(consentGuardCalls).toBe(1);
+    });
+
+    it('surfaces the service\'s 409 for a live or fixture-bearing team', async () => {
+      grassroots.deleteDormantTeam.mockRejectedValue(new ConflictException('Only a team with no organiser can be deleted'));
+
+      await request(app.getHttpServer()).delete('/teams/t-1').expect(409);
     });
   });
 

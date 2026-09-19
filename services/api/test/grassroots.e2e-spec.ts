@@ -2,6 +2,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { AccountDeletionSweepService } from '../src/modules/account-deletion/account-deletion-sweep.service';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
 
@@ -92,6 +93,7 @@ describe('Grassroots Records Service e2e (Section 4.5)', () => {
         leagueType: 'school',
         createdById: organiser.userId,
         verified: false,
+        reclaimed: false,
       });
 
       const get = await request(server())
@@ -533,6 +535,172 @@ describe('Grassroots Records Service e2e (Section 4.5)', () => {
         .get('/teams/does-not-exist/fixtures')
         .set('Authorization', `Bearer ${org.accessToken}`)
         .expect(404);
+    });
+  });
+  // sprint-5/grassroots-team-dormant-reclaim. Real Postgres: the (name, city)
+  // match, the guarded reassignment, and the dormant-only delete, driven from
+  // a genuinely anonymised organiser (the real AccountDeletionSweepService,
+  // not a hand-set createdById = null) so the "dormant team exists in
+  // practice" precondition is proven rather than assumed.
+  describe('POST /teams — dormant reclaim + DELETE /teams/:id', () => {
+    const TEAM = { name: 'Hackney Wick FC', city: 'London', leagueType: 'informal' };
+
+    async function anonymiseOrganiser(userId: string): Promise<void> {
+      const prisma = getTestPrismaClient();
+      await prisma.user.update({
+        where: { id: userId },
+        data: { accountStatus: 'pending_deletion', pendingDeletionAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000) },
+      });
+      const result = await app.get(AccountDeletionSweepService).sweepPendingDeletions();
+      expect(result.anonymizedUserIds).toContain(userId);
+    }
+
+    function post(token: string, body: object = TEAM) {
+      return request(server()).post('/teams').set('Authorization', `Bearer ${token}`).send(body);
+    }
+
+    it('full trace: organiser anonymised -> dormant team -> new user registers same name/city -> reassigned, not duplicated -> new organiser runs fixtures/results', async () => {
+      const prisma = getTestPrismaClient();
+      const oldOrg = await createUser('old-org');
+      const rival = await createUser('rival-org');
+      const teamId = await createTeam(oldOrg.accessToken, TEAM);
+      const rivalTeamId = await createTeam(rival.accessToken, { name: 'Rival FC' });
+      // history that must survive the takeover
+      const first = await request(server())
+        .post('/fixtures')
+        .set('Authorization', `Bearer ${oldOrg.accessToken}`)
+        .send({ teamAId: teamId, teamBId: rivalTeamId, scheduledAt: '2026-10-01T14:00:00.000Z' })
+        .expect(201);
+
+      await anonymiseOrganiser(oldOrg.userId);
+      expect((await prisma.grassrootsTeam.findUnique({ where: { id: teamId } }))!.createdById).toBeNull();
+
+      const newOrg = await createUser('new-org');
+      const res = await post(newOrg.accessToken, { name: '  hackney wick fc ', city: 'LONDON', leagueType: 'school' }).expect(201);
+
+      expect(res.body).toMatchObject({ id: teamId, createdById: newOrg.userId, reclaimed: true, name: 'Hackney Wick FC', leagueType: 'informal' });
+      expect(res.body.message).toMatch(/no organiser/);
+      expect(await prisma.grassrootsTeam.count({ where: { city: { equals: 'London', mode: 'insensitive' } } })).toBe(2); // Hackney Wick + Rival, no duplicate
+      expect((await prisma.user.findUnique({ where: { id: newOrg.userId } }))!.isTeamOrganiser).toBe(true);
+      expect(await prisma.fixture.findUnique({ where: { id: first.body.id } })).not.toBeNull();
+
+      // the new organiser can now do everything an organiser can, on the reclaimed team
+      const second = await request(server())
+        .post('/fixtures')
+        .set('Authorization', `Bearer ${newOrg.accessToken}`)
+        .send({ teamAId: teamId, teamBId: rivalTeamId, scheduledAt: '2026-10-08T14:00:00.000Z' })
+        .expect(201);
+      await request(server())
+        .patch(`/fixtures/${second.body.id}/status`)
+        .set('Authorization', `Bearer ${newOrg.accessToken}`)
+        .send({ status: 'live' })
+        .expect(200);
+      await request(server())
+        .post(`/fixtures/${second.body.id}/result`)
+        .set('Authorization', `Bearer ${newOrg.accessToken}`)
+        .send({ scoreA: 2, scoreB: 1 })
+        .expect(200);
+      // ...and it also may log a result on the pre-anonymisation fixture (teamA is now theirs)
+      await request(server())
+        .post(`/fixtures/${first.body.id}/result`)
+        .set('Authorization', `Bearer ${newOrg.accessToken}`)
+        .send({ scoreA: 1, scoreB: 1 })
+        .expect(200);
+      // the anonymised old organiser has no standing on it any more
+      await request(server())
+        .post('/fixtures')
+        .set('Authorization', `Bearer ${oldOrg.accessToken}`)
+        .send({ teamAId: teamId, scheduledAt: '2026-10-15T14:00:00.000Z' })
+        .expect(403);
+    });
+
+    it('409s on a duplicate of a LIVE team (case-insensitive, trimmed) and creates nothing', async () => {
+      const prisma = getTestPrismaClient();
+      const org = await createUser('live-org');
+      await createTeam(org.accessToken, TEAM);
+      const other = await createUser('other');
+
+      await post(other.accessToken, { name: 'HACKNEY WICK FC ', city: ' london', leagueType: 'informal' }).expect(409);
+
+      expect(await prisma.grassrootsTeam.count()).toBe(1);
+      expect((await prisma.user.findUnique({ where: { id: other.userId } }))!.isTeamOrganiser).toBe(false);
+    });
+
+    it('two concurrent claimants of one dormant team: exactly one wins, the other 409s, no duplicate row', async () => {
+      const prisma = getTestPrismaClient();
+      const oldOrg = await createUser('race-old');
+      const teamId = await createTeam(oldOrg.accessToken, TEAM);
+      await anonymiseOrganiser(oldOrg.userId);
+      const a = await createUser('race-a');
+      const b = await createUser('race-b');
+
+      const [ra, rb] = await Promise.all([post(a.accessToken), post(b.accessToken)]);
+
+      expect([ra.status, rb.status].sort()).toEqual([201, 409]);
+      expect(await prisma.grassrootsTeam.count()).toBe(1);
+      const winner = ra.status === 201 ? a : b;
+      expect((await prisma.grassrootsTeam.findUnique({ where: { id: teamId } }))!.createdById).toBe(winner.userId);
+    });
+
+    it('two concurrent registrations of a brand-new name/city: exactly one team is created', async () => {
+      const prisma = getTestPrismaClient();
+      const a = await createUser('new-a');
+      const b = await createUser('new-b');
+
+      const [ra, rb] = await Promise.all([post(a.accessToken), post(b.accessToken)]);
+
+      expect([ra.status, rb.status].sort()).toEqual([201, 409]);
+      expect(await prisma.grassrootsTeam.count()).toBe(1);
+    });
+
+    it('DELETE: removes a dormant, fixture-less team; a genuinely new team can then be registered', async () => {
+      const prisma = getTestPrismaClient();
+      const oldOrg = await createUser('del-old');
+      const teamId = await createTeam(oldOrg.accessToken, TEAM);
+      await anonymiseOrganiser(oldOrg.userId);
+      const newOrg = await createUser('del-new');
+
+      await request(server()).delete(`/teams/${teamId}`).set('Authorization', `Bearer ${newOrg.accessToken}`).expect(204);
+      expect(await prisma.grassrootsTeam.findUnique({ where: { id: teamId } })).toBeNull();
+
+      const fresh = await post(newOrg.accessToken).expect(201);
+      expect(fresh.body.id).not.toBe(teamId);
+      expect(fresh.body.reclaimed).toBe(false);
+    });
+
+    it('DELETE: refuses a LIVE team under any framing (including by its own organiser) — row untouched', async () => {
+      const prisma = getTestPrismaClient();
+      const org = await createUser('del-live');
+      const teamId = await createTeam(org.accessToken, TEAM);
+      const other = await createUser('del-stranger');
+
+      await request(server()).delete(`/teams/${teamId}`).set('Authorization', `Bearer ${other.accessToken}`).expect(409);
+      await request(server()).delete(`/teams/${teamId}`).set('Authorization', `Bearer ${org.accessToken}`).expect(409);
+
+      expect((await prisma.grassrootsTeam.findUnique({ where: { id: teamId } }))!.createdById).toBe(org.userId);
+    });
+
+    it('DELETE: refuses a dormant team that has fixtures (as either side) — history is kept, reclaim is the only route', async () => {
+      const prisma = getTestPrismaClient();
+      const oldOrg = await createUser('hist-old');
+      const other = await createUser('hist-other');
+      const dormantId = await createTeam(oldOrg.accessToken, TEAM);
+      const otherTeamId = await createTeam(other.accessToken, { name: 'Other FC' });
+      // the dormant team is teamB of the OTHER organiser's fixture
+      await request(server())
+        .post('/fixtures')
+        .set('Authorization', `Bearer ${other.accessToken}`)
+        .send({ teamAId: otherTeamId, teamBId: dormantId, scheduledAt: '2026-10-01T14:00:00.000Z' })
+        .expect(201);
+      await anonymiseOrganiser(oldOrg.userId);
+
+      await request(server()).delete(`/teams/${dormantId}`).set('Authorization', `Bearer ${other.accessToken}`).expect(409);
+      expect(await prisma.grassrootsTeam.findUnique({ where: { id: dormantId } })).not.toBeNull();
+    });
+
+    it('DELETE: 404 for a non-existent team', async () => {
+      const org = await createUser('del-404');
+      await request(server()).delete('/teams/does-not-exist').set('Authorization', `Bearer ${org.accessToken}`).expect(404);
     });
   });
 });
