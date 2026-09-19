@@ -247,14 +247,21 @@ export class MessagingService {
   // it summarizes" discipline FeedService uses for likeCount/commentCount.
   //
   // Guards: JwtAuthGuard + GuardianConsentGuard (sending = "messaging",
-  // Section 5.7). Note this guard can never actually block anyone here in
-  // practice: a conversation can only have been created between two
-  // non-restricted users (startConversation's checks guarantee it), and
-  // isMinor / Guardian.consentStatus never move backward — so no
-  // restricted-pending minor can be a participant in an existing
-  // conversation. It's kept for defence-in-depth and consistency with
-  // every other content-creation route, and documented as such in
-  // messaging/README.md.
+  // Section 5.7).
+  //
+  // CORRECTED by sprint-1/guardian-consent-decline-withdraw-expiry: this
+  // comment previously said the guard "can never actually block anyone
+  // here in practice", on the premise that isMinor / Guardian.
+  // consentStatus never move backward. consentStatus CAN now move
+  // backward — a guardian may withdraw consent on a confirmed account, or
+  // two consent requests may lapse unanswered — so a participant in an
+  // existing conversation can genuinely become restricted after the fact,
+  // and this guard will genuinely fire for them. No behaviour change was
+  // needed: blocking them is exactly the right outcome, and the guard was
+  // already written as an allowlist (consentStatus === 'confirmed'), so it
+  // handles the new 'declined' value correctly without modification. In
+  // practice such a user is doubly blocked, since refusing consent also
+  // revokes every session they hold.
   //
   // message Notification (Decision Log #87's audit,
   // sprint-3/notification-triggers-message-fixture-contest): recipient is

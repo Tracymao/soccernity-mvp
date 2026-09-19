@@ -2,7 +2,9 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AuthFoundationModule } from '../auth-foundation.module';
+import { AuthModule } from '../auth.module';
 import { RegistrationEmailService } from '../registration/email/registration-email.service';
+import { GuardianConsentExpirySweepService } from './guardian-consent-expiry-sweep.service';
 import { GuardianConsentController } from './guardian-consent.controller';
 import { GuardianConsentService } from './guardian-consent.service';
 
@@ -44,10 +46,39 @@ import { GuardianConsentService } from './guardian-consent.service';
 // reaches directly into registration/email/registration-email.service.ts
 // for a single class, the same "own instance, no module import" pattern
 // used elsewhere in this file.
+//
+// sprint-1/guardian-consent-decline-withdraw-expiry added two things:
+//
+//  - AuthModule is imported so GuardianConsentService can inject
+//    AuthService and call startPendingDeletion() when consent is declined,
+//    withdrawn, or lapses twice unanswered. This reuses the ONE primitive
+//    that flips accountStatus to "pending_deletion" rather than writing a
+//    parallel one, so AccountDeletionSweepService's existing 30-day
+//    grace/hard-delete/cascade behaviour (Decision Log #42/#44) applies
+//    unchanged. No circularity, verified against the real import graph
+//    rather than assumed: AuthModule imports ONLY AuthFoundationModule,
+//    and neither imports this module. AuthRegistrationModule -> this
+//    module -> AuthModule -> AuthFoundationModule stays acyclic too.
+//
+//  - GuardianConsentExpirySweepService, the @Cron()-driven job that acts
+//    on Guardian.consentTokenExpiresAt (which, before that PR, nothing
+//    anywhere read). ScheduleModule.forRoot() is registered once globally
+//    in app.module.ts — same as AccountDeletionModule's and
+//    LeaderboardModule's own @Cron() jobs — so it is deliberately not
+//    imported here. The sweep is intentionally NOT also exposed as an
+//    HTTP endpoint, matching AccountDeletionSweepService's precedent: a
+//    job whose end state is closing children's accounts has no business
+//    being triggerable on demand. It stays directly callable in-process,
+//    with an explicit `now`, for tests.
 @Module({
-  imports: [ConfigModule, AuthFoundationModule],
+  imports: [ConfigModule, AuthFoundationModule, AuthModule],
   controllers: [GuardianConsentController],
-  providers: [GuardianConsentService, PrismaService, RegistrationEmailService],
-  exports: [GuardianConsentService],
+  providers: [
+    GuardianConsentService,
+    GuardianConsentExpirySweepService,
+    PrismaService,
+    RegistrationEmailService,
+  ],
+  exports: [GuardianConsentService, GuardianConsentExpirySweepService],
 })
 export class GuardianConsentModule {}

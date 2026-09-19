@@ -24,3 +24,27 @@ export function getConsentTokenTtlHours(config: ConfigService): number {
 export function computeConsentTokenExpiresAt(config: ConfigService): Date {
   return new Date(Date.now() + getConsentTokenTtlHours(config) * 60 * 60 * 1000);
 }
+
+// sprint-1/guardian-consent-decline-withdraw-expiry — the withdrawal
+// token (Guardian.withdrawalToken) gets its OWN TTL, deliberately not
+// reusing getConsentTokenTtlHours above even though both default to the
+// same 72 hours today. They are different credentials authorising
+// opposite actions, and a future decision to (say) shorten the
+// withdrawal window for safeguarding reasons, or lengthen the consent
+// window on counsel's advice, should not silently move the other one
+// too. Same env-overridable shape as its sibling so neither can drift
+// from its own configured value.
+//
+// 72 hours carries exactly the same caveat DPIA finding R5 attaches to
+// the consent TTL above: a starting number, not a counsel-reviewed
+// decision.
+export const DEFAULT_WITHDRAWAL_TOKEN_TTL_HOURS = 72;
+
+export function getWithdrawalTokenTtlHours(config: ConfigService): number {
+  const configured = Number(config.get('GUARDIAN_CONSENT_WITHDRAWAL_TOKEN_TTL_HOURS'));
+  return configured > 0 ? configured : DEFAULT_WITHDRAWAL_TOKEN_TTL_HOURS;
+}
+
+export function computeWithdrawalTokenExpiresAt(config: ConfigService): Date {
+  return new Date(Date.now() + getWithdrawalTokenTtlHours(config) * 60 * 60 * 1000);
+}

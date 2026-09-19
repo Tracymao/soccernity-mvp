@@ -2,7 +2,20 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ServerClient } from 'postmark';
 
-export type RegistrationEmailTemplate = 'verify-email' | 'guardian-consent';
+// sprint-1/guardian-consent-decline-withdraw-expiry added the five
+// guardian-consent lifecycle templates below the original two. Four of
+// them go to the MINOR (not the guardian) — Build Plan Section 8.3's flow
+// only ever emailed the guardian, so a minor whose account was restricted
+// had no way to learn what had happened to it. "Notify the minor plainly
+// why" is a safeguarding requirement of that PR's brief, not a nicety.
+export type RegistrationEmailTemplate =
+  | 'verify-email'
+  | 'guardian-consent'
+  | 'guardian-consent-withdrawal-request'
+  | 'guardian-consent-declined'
+  | 'guardian-consent-withdrawn'
+  | 'guardian-consent-reminder'
+  | 'guardian-consent-expired';
 
 export interface OutboundRegistrationEmail {
   to: string;
@@ -71,6 +84,80 @@ export class RegistrationEmailService {
     });
   }
 
+  // ---------------------------------------------------------------
+  // sprint-1/guardian-consent-decline-withdraw-expiry
+  // ---------------------------------------------------------------
+
+  // To the GUARDIAN. Carries the fresh, single-use withdrawal token
+  // (Guardian.withdrawalToken) issued by
+  // POST /auth/guardian-consent/withdraw/request. Deliberately the only
+  // way that token ever reaches anyone: the request endpoint takes the
+  // MINOR's email and always responds generically, so even a caller who
+  // guessed a real minor's address learns nothing and the link itself
+  // only ever lands in the guardian's own inbox.
+  async sendGuardianWithdrawalRequestEmail(
+    to: string,
+    withdrawalToken: string,
+    minorDisplayName: string,
+  ): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: `Confirm withdrawing consent for ${minorDisplayName}'s Soccernity account`,
+      template: 'guardian-consent-withdrawal-request',
+      data: { withdrawalToken, minorDisplayName },
+    });
+  }
+
+  // To the MINOR — their guardian actively declined the request.
+  async sendConsentDeclinedEmail(to: string, minorDisplayName: string, graceDays: number): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: 'Your Soccernity account was not approved',
+      template: 'guardian-consent-declined',
+      data: { minorDisplayName, graceDays: String(graceDays) },
+    });
+  }
+
+  // To the MINOR — their guardian withdrew consent that had previously
+  // been given. Distinct copy from a plain decline: the account really
+  // did work before, and saying "was not approved" would be false.
+  async sendConsentWithdrawnEmail(to: string, minorDisplayName: string, graceDays: number): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: 'Guardian consent for your Soccernity account has been withdrawn',
+      template: 'guardian-consent-withdrawn',
+      data: { minorDisplayName, graceDays: String(graceDays) },
+    });
+  }
+
+  // To the MINOR — first expiry. Nobody has answered, and the platform has
+  // just automatically re-sent the request. This is a nudge to go and ask
+  // their guardian in person, and the one warning they get before the
+  // second lapse becomes terminal, so it says so explicitly.
+  async sendConsentReminderEmail(
+    to: string,
+    minorDisplayName: string,
+    guardianEmail: string,
+  ): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: 'Your Soccernity account is still waiting for guardian approval',
+      template: 'guardian-consent-reminder',
+      data: { minorDisplayName, guardianEmail },
+    });
+  }
+
+  // To the MINOR — second expiry. The re-sent request also lapsed
+  // unanswered, so it is treated as an implicit decline.
+  async sendConsentExpiredEmail(to: string, minorDisplayName: string, graceDays: number): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: 'Your Soccernity account was not approved in time',
+      template: 'guardian-consent-expired',
+      data: { minorDisplayName, graceDays: String(graceDays) },
+    });
+  }
+
   private async dispatch(email: OutboundRegistrationEmail): Promise<void> {
     if (!this.isConfigured) {
       this.logger.log(
@@ -122,6 +209,71 @@ function renderTextBody(template: RegistrationEmailTemplate, data: Record<string
         `Your consent code is: ${data.consentToken}\n\n` +
         `If you did not expect this email, you can safely ignore it.`
       );
+    case 'guardian-consent-withdrawal-request':
+      return (
+        `You asked to withdraw your consent for ${data.minorDisplayName}'s Soccernity account.
+
+` +
+        `Your withdrawal code is: ${data.withdrawalToken}
+
+` +
+        `Confirming will close the account and schedule it for deletion.
+
+` +
+        `If you did not request this, you can safely ignore this email — nothing changes unless the code above is used.`
+      );
+    case 'guardian-consent-declined':
+      return (
+        `Hi ${data.minorDisplayName},
+
+` +
+        `Your guardian did not approve your Soccernity account, so it cannot be activated.
+
+` +
+        `Your account has been closed and is scheduled to be permanently deleted in ${data.graceDays} days.
+
+` +
+        `If you think this was a mistake, speak to your guardian before then.`
+      );
+    case 'guardian-consent-withdrawn':
+      return (
+        `Hi ${data.minorDisplayName},
+
+` +
+        `Your guardian has withdrawn their consent for your Soccernity account, so it has been closed.
+
+` +
+        `It is scheduled to be permanently deleted in ${data.graceDays} days.
+
+` +
+        `If you think this was a mistake, speak to your guardian before then.`
+      );
+    case 'guardian-consent-reminder':
+      return (
+        `Hi ${data.minorDisplayName},
+
+` +
+        `Your Soccernity account is still waiting for your guardian to approve it, and the first request has now expired.
+
+` +
+        `We have sent a new request to ${data.guardianEmail}. Please ask them to check their email, including their spam folder.
+
+` +
+        `If this second request is not answered either, your account will be closed and scheduled for deletion.`
+      );
+    case 'guardian-consent-expired':
+      return (
+        `Hi ${data.minorDisplayName},
+
+` +
+        `Your guardian did not respond to either approval request, so your Soccernity account cannot be activated.
+
+` +
+        `Your account has been closed and is scheduled to be permanently deleted in ${data.graceDays} days.
+
+` +
+        `If you still want an account, ask your guardian to look out for the email and sign up again.`
+      );
     default:
       throw new Error(`Unknown registration email template: ${template as string}`);
   }
@@ -136,6 +288,41 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
         `<p><strong>${data.minorDisplayName}</strong> has registered for a Soccernity account and listed you as their guardian.</p>` +
         `<p>Your consent code is: <strong>${data.consentToken}</strong></p>` +
         `<p>If you did not expect this email, you can safely ignore it.</p>`
+      );
+    case 'guardian-consent-withdrawal-request':
+      return (
+        `<p>You asked to withdraw your consent for <strong>${data.minorDisplayName}</strong>'s Soccernity account.</p>` +
+        `<p>Your withdrawal code is: <strong>${data.withdrawalToken}</strong></p>` +
+        `<p>Confirming will close the account and schedule it for deletion.</p>` +
+        `<p>If you did not request this, you can safely ignore this email — nothing changes unless the code above is used.</p>`
+      );
+    case 'guardian-consent-declined':
+      return (
+        `<p>Hi ${data.minorDisplayName},</p>` +
+        `<p>Your guardian did not approve your Soccernity account, so it cannot be activated.</p>` +
+        `<p>Your account has been closed and is scheduled to be permanently deleted in <strong>${data.graceDays} days</strong>.</p>` +
+        `<p>If you think this was a mistake, speak to your guardian before then.</p>`
+      );
+    case 'guardian-consent-withdrawn':
+      return (
+        `<p>Hi ${data.minorDisplayName},</p>` +
+        `<p>Your guardian has withdrawn their consent for your Soccernity account, so it has been closed.</p>` +
+        `<p>It is scheduled to be permanently deleted in <strong>${data.graceDays} days</strong>.</p>` +
+        `<p>If you think this was a mistake, speak to your guardian before then.</p>`
+      );
+    case 'guardian-consent-reminder':
+      return (
+        `<p>Hi ${data.minorDisplayName},</p>` +
+        `<p>Your Soccernity account is still waiting for your guardian to approve it, and the first request has now expired.</p>` +
+        `<p>We have sent a new request to <strong>${data.guardianEmail}</strong>. Please ask them to check their email, including their spam folder.</p>` +
+        `<p>If this second request is not answered either, your account will be closed and scheduled for deletion.</p>`
+      );
+    case 'guardian-consent-expired':
+      return (
+        `<p>Hi ${data.minorDisplayName},</p>` +
+        `<p>Your guardian did not respond to either approval request, so your Soccernity account cannot be activated.</p>` +
+        `<p>Your account has been closed and is scheduled to be permanently deleted in <strong>${data.graceDays} days</strong>.</p>` +
+        `<p>If you still want an account, ask your guardian to look out for the email and sign up again.</p>`
       );
     default:
       throw new Error(`Unknown registration email template: ${template as string}`);
