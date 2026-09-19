@@ -17,6 +17,15 @@ import { computeConsentTokenExpiresAt, computeWithdrawalTokenExpiresAt } from '.
 // account, and collapsing them into one message would be misleading.
 export type ConsentRefusalReason = 'declined' | 'withdrawn' | 'expired';
 
+// Decision Log #338 -- what gets persisted to Guardian.consentDeclineSource.
+// A dedicated mapping (rather than reusing the reason strings) so the stored
+// audit vocabulary is stable even if the internal reason names change.
+const DECLINE_SOURCE_BY_REASON: Record<ConsentRefusalReason, string> = {
+  declined: 'guardian_explicit',
+  withdrawn: 'guardian_withdrawal',
+  expired: 'expiry_timeout',
+};
+
 // Sprint 1 / sprint-1/f5-f6-missing-endpoints — the response shape for
 // GET /auth/guardian-consent/status (see getConsentStatus below). Carries
 // exactly what Build Plan Section 8.3's Restricted Pending State and
@@ -430,6 +439,9 @@ export class GuardianConsentService {
       where: { id: params.guardianId, consentStatus: { not: 'declined' } },
       data: {
         consentStatus: 'declined',
+        // Decision Log #338 -- the one place all three refusal paths
+        // converge, so the source is recorded here and nowhere else.
+        consentDeclineSource: DECLINE_SOURCE_BY_REASON[params.reason],
         withdrawalToken: null,
         withdrawalTokenExpiresAt: null,
       },

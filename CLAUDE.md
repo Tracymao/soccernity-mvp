@@ -8699,7 +8699,9 @@ Full reasoning for every choice above: Build Plan Section 5.
     routes currently collapse into `declined`: a withdrawal *is* still
     distinguishable in `ConsentAuditRecord` (`declined` + a non-null
     `consentTimestamp`), but an active decline is **not** distinguishable
-    from a silent timeout; **#339** (contest admin exposure above);
+    from a silent timeout **(#338 is now RESOLVED — see the
+    `sprint-1/guardian-consent-decline-source` bullet later in this
+    section)**; **#339** (contest admin exposure above);
     **#340** (the three routes as a genuine spec-gap addition, and why
     the withdrawal request takes the *minor's* email — `Guardian.email`
     has no uniqueness constraint, so a guardian of two children could not
@@ -8746,6 +8748,32 @@ Full reasoning for every choice above: Build Plan Section 5.
     not merged"; corrected here in place once the merge was confirmed directly
     against `git log` on a fresh `origin/main` fetch, per this file's own
     "Keeping this file current" rule.
+- **`sprint-1/guardian-consent-decline-source` (backend-api, 2026-09-19)
+  resolves Decision Log #338 (flagged, not fixed, by
+  `sprint-1/guardian-consent-decline-withdraw-expiry`, PR #261). `services/api`
+  only.** Migration `20260919160000_guardian_consent_status_check_and_decline_source`
+  is purely additive: one nullable column plus two Postgres CHECK constraints.
+  - **`Guardian.consentStatus` is now CHECK-constrained to
+    `pending|confirmed|declined`** — a CHECK, not a Prisma enum, so the column
+    stays a plain `String` (the six sibling string-enum columns are untouched).
+  - **New `Guardian.consentDeclineSource String?`**
+    (`guardian_explicit | guardian_withdrawal | expiry_timeout`, also
+    CHECK-constrained, NULL otherwise). Written only in
+    `GuardianConsentService.refuseConsentAndScheduleDeletion()` from its existing
+    `reason` param, so decline / withdraw / expiry-sweep needed no other change;
+    first refusal wins. Existing declined rows stay NULL (cause unrecoverable).
+  - **Not changed / still open**: `ConsentAuditRecord` does NOT snapshot the
+    source, so it is lost when the 30-day sweep deletes the Guardian row —
+    whether to add it is a founder/counsel call.
+  - **Verification (before -> after)**: mocked suite 85 suites / 1152 tests
+    (1 failure — an unidentified contention-flake in that full-suite run, 825s
+    wall clock, not re-investigated) -> 85 suites / 1154 tests, 0 failures; e2e
+    (real Postgres) 20 suites / 211 tests (last recorded figure on `main`, not
+    re-run before the change) -> 20 suites / 213 tests, 0 failures (+2 real-DB
+    CHECK-constraint tests; source assertions added to the three existing
+    refusal-path tests). `tsc`, eslint, `nest build` clean; `prisma migrate
+    diff` against the migrated DB shows no drift.
+  - PR opened, not merged — Temi's call after review.
 - **`sprint-5/grassroots-team-dormant-reclaim` (backend-api, 2026-09-19)
   consumes the nullable `GrassrootsTeam.createdById` that
   `sprint-2/account-anonymization-reconsideration` (Decision Log #341)
