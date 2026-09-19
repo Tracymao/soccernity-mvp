@@ -1114,6 +1114,20 @@ All three routes and the sweep's terminal branch converge on one primitive,
 `GuardianConsentService.refuseConsentAndScheduleDeletion()`, so the resulting
 account state cannot differ between them.
 
+**Decision Log #338 (resolved, `sprint-1/guardian-consent-decline-source`).**
+That same primitive now records *why* consent was refused in
+`Guardian.consentDeclineSource` — `guardian_explicit` (decline),
+`guardian_withdrawal` (withdraw) or `expiry_timeout` (the sweep's implicit
+decline) — so an active decline is distinguishable from a silent timeout. All
+three still land as `consentStatus: 'declined'`. Two Postgres CHECK
+constraints (migration `20260919160000_guardian_consent_status_check_and_decline_source`,
+purely additive) restrict `consentStatus` to `pending|confirmed|declined` and
+`consentDeclineSource` to those three values or NULL; a String, not a Prisma
+enum, on purpose. Rows declined before the migration keep NULL (not
+recoverable). `ConsentAuditRecord` is unchanged and does **not** snapshot the
+source — so it is lost when the Guardian row is deleted by the 30-day sweep;
+whether to add it to the audit snapshot is left open.
+
 ### Why the withdrawal request takes the MINOR's email, not the guardian's
 
 It mirrors `resendConsent()` exactly, and it is the safer of the two options,

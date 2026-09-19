@@ -209,25 +209,32 @@ model Guardian {
   // (the minor stays restricted) -- but the decline/deletion path would
   // then silently never fire. A CHECK constraint on this one column
   // (NOT a Prisma enum, which would change the generated TS type at every
-  // read site and make adding a future value a migration) is the
-  // recommended fix; deliberately not introduced here, since it is a
-  // cross-cutting convention change affecting six sibling columns.
+  // read site and make adding a future value a migration) was the
+  // recommended fix -- NOW INTRODUCED by Decision Log #338 (migration
+  // 20260919160000_...), for this one safeguarding column only; the six
+  // sibling columns are unchanged.
   //
   // Audit note: ConsentAuditRecord snapshots this value verbatim, so what
   // is stored here is what survives the minor's hard-delete as consent
-  // proof. A withdrawal IS distinguishable from a plain decline in that
-  // record (withdrawal leaves consentTimestamp set from the original
-  // confirmation; a decline never sets it) -- but an active decline is
-  // NOT distinguishable from a silent timeout, since both leave it null.
-  // Flagged as part of the same Decision Log candidate: a distinct
-  // "withdrawn" / "expired" value would carry real GDPR/NDPA meaning
-  // ("consent refused" vs "consent given then revoked" vs "never
-  // answered"). Not added here -- this PR's brief scoped the new value
-  // set to "declined" alone.
-  consentStatus         String    @default("pending") // pending | confirmed | declined
+  // proof. Decision Log #338: an active decline, a withdrawal and a silent
+  // timeout are now distinguishable via consentDeclineSource below (all
+  // three still land as consentStatus 'declined'). ConsentAuditRecord's
+  // shape is unchanged and does not snapshot the source.
+  consentStatus         String    @default("pending") // pending | confirmed | declined -- CHECK-enforced
   consentToken          String    @unique
   consentTokenExpiresAt DateTime
   consentTimestamp      DateTime?
+
+  // Decision Log #338 -- WHY consentStatus is 'declined'. One of
+  // 'guardian_explicit' (guardian actively declined) | 'guardian_withdrawal'
+  // (guardian withdrew previously-given consent) | 'expiry_timeout' (nobody
+  // answered; the sweep's implicit decline). NULL for every row that is not
+  // 'declined', and for any row declined before this column existed.
+  // Written only by GuardianConsentService.refuseConsentAndScheduleDeletion().
+  // Enforced by a CHECK constraint (see migration
+  // 20260919160000_guardian_consent_status_check_and_decline_source), which
+  // Prisma cannot model -- a String, not a Prisma enum, on purpose.
+  consentDeclineSource  String?
 
   // sprint-1/guardian-consent-decline-withdraw-expiry -- records the ONE
   // automatic re-send GuardianConsentExpirySweepService performs when the

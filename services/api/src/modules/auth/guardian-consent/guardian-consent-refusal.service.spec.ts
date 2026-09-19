@@ -24,6 +24,7 @@ interface GuardianRow {
   consentAutoResentAt: Date | null;
   withdrawalToken: string | null;
   withdrawalTokenExpiresAt: Date | null;
+  consentDeclineSource: string | null;
 }
 
 interface UserRow {
@@ -49,6 +50,7 @@ function buildService(
     consentAutoResentAt: null,
     withdrawalToken: null,
     withdrawalTokenExpiresAt: null,
+    consentDeclineSource: null,
     ...overrides.guardian,
   };
 
@@ -150,6 +152,8 @@ describe('GuardianConsentService — decline', () => {
     await service.declineConsent('consent-token-1');
 
     expect(guardian.consentStatus).toBe('declined');
+    // Decision Log #338 — an active decline is recorded as such.
+    expect(guardian.consentDeclineSource).toBe('guardian_explicit');
     expect(authService.startPendingDeletion).toHaveBeenCalledWith('minor-1');
     expect(user.accountStatus).toBe('pending_deletion');
     expect(emailService.sendConsentDeclinedEmail).toHaveBeenCalledWith(
@@ -299,6 +303,7 @@ describe('GuardianConsentService — withdraw', () => {
     await ctx.service.withdrawConsent(token);
 
     expect(ctx.guardian.consentStatus).toBe('declined');
+    expect(ctx.guardian.consentDeclineSource).toBe('guardian_withdrawal');
     expect(ctx.user.accountStatus).toBe('pending_deletion');
     // Distinct copy from a plain decline — the account genuinely worked
     // before, so "was not approved" would be false.
@@ -349,6 +354,32 @@ describe('GuardianConsentService — withdraw', () => {
 });
 
 describe('GuardianConsentService — refuseConsentAndScheduleDeletion', () => {
+  it("records 'expiry_timeout' when invoked with the expired reason (the sweep's path)", async () => {
+    const { service, guardian } = buildService();
+
+    await service.refuseConsentAndScheduleDeletion({
+      guardianId: 'guardian-1',
+      minorUserId: 'minor-1',
+      reason: 'expired',
+    });
+
+    expect(guardian.consentStatus).toBe('declined');
+    expect(guardian.consentDeclineSource).toBe('expiry_timeout');
+  });
+
+  it('does not overwrite the source when a second refusal arrives (first source wins)', async () => {
+    const { service, guardian } = buildService();
+
+    await service.declineConsent('consent-token-1');
+    await service.refuseConsentAndScheduleDeletion({
+      guardianId: 'guardian-1',
+      minorUserId: 'minor-1',
+      reason: 'expired',
+    });
+
+    expect(guardian.consentDeclineSource).toBe('guardian_explicit');
+  });
+
   it('does not extend an existing deletion deadline when the account is already pending_deletion', async () => {
     // The minor had already requested deletion themselves while consent
     // was outstanding. A guardian then refuses. Re-running

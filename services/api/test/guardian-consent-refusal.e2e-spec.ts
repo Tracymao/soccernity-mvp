@@ -128,6 +128,8 @@ describe('Guardian consent refusal e2e: explicit decline -> pending_deletion -> 
 
     const guardian = await prisma.guardian.findUnique({ where: { id: seeded.guardianId } });
     expect(guardian?.consentStatus).toBe('declined');
+    // Decision Log #338 — distinguishable from a timeout.
+    expect(guardian?.consentDeclineSource).toBe('guardian_explicit');
     // A decline never sets consentTimestamp — that field means "consent
     // was given at", and this is the value ConsentAuditRecord snapshots.
     expect(guardian?.consentTimestamp).toBeNull();
@@ -242,6 +244,7 @@ describe('Guardian consent refusal e2e: withdrawal -> pending_deletion -> 30-day
 
     const withdrawn = await prisma.guardian.findUnique({ where: { id: seeded.guardianId } });
     expect(withdrawn?.consentStatus).toBe('declined');
+    expect(withdrawn?.consentDeclineSource).toBe('guardian_withdrawal');
     expect(withdrawn?.withdrawalToken).toBeNull();
     // Preserved: this is what lets ConsentAuditRecord distinguish a
     // withdrawal ('declined' + a real timestamp) from a plain decline
@@ -350,6 +353,7 @@ describe('Guardian consent refusal e2e: two lapsed requests -> implicit decline 
 
     const refused = await prisma.guardian.findUnique({ where: { id: seeded.guardianId } });
     expect(refused?.consentStatus).toBe('declined');
+    expect(refused?.consentDeclineSource).toBe('expiry_timeout');
 
     const user = await prisma.user.findUnique({ where: { id: seeded.userId } });
     expect(user?.accountStatus).toBe('pending_deletion');
@@ -407,5 +411,46 @@ describe('Guardian consent refusal e2e: two lapsed requests -> implicit decline 
     const guardian = await prisma.guardian.findUnique({ where: { id: seeded.guardianId } });
     expect(guardian?.consentAutoResentAt).toBeNull();
     expect(guardian?.consentToken).toEqual(seeded.consentToken);
+  });
+});
+
+describe('Guardian CHECK constraints (Decision Log #338, real Postgres)', () => {
+  let app: INestApplication;
+
+  beforeAll(async () => {
+    app = await createApp();
+  });
+  afterAll(async () => {
+    await app.close();
+    await disconnectTestPrismaClient();
+  });
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  it('rejects a consentStatus outside pending|confirmed|declined at the database', async () => {
+    const seeded = await seedMinorWithGuardian(app, 'check-status');
+    const prisma = getTestPrismaClient();
+
+    for (const bad of ['Declined', 'decline', 'withdrawn', '']) {
+      await expect(
+        prisma.guardian.update({ where: { id: seeded.guardianId }, data: { consentStatus: bad } }),
+      ).rejects.toThrow();
+    }
+    const row = await prisma.guardian.findUnique({ where: { id: seeded.guardianId } });
+    expect(row?.consentStatus).toBe('pending');
+  });
+
+  it('rejects an unknown consentDeclineSource but allows NULL and the three real values', async () => {
+    const seeded = await seedMinorWithGuardian(app, 'check-source');
+    const prisma = getTestPrismaClient();
+
+    await expect(
+      prisma.guardian.update({ where: { id: seeded.guardianId }, data: { consentDeclineSource: 'timeout' } }),
+    ).rejects.toThrow();
+
+    for (const ok of ['guardian_explicit', 'guardian_withdrawal', 'expiry_timeout', null]) {
+      await prisma.guardian.update({ where: { id: seeded.guardianId }, data: { consentDeclineSource: ok } });
+    }
   });
 });
