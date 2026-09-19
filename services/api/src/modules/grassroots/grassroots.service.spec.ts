@@ -8,6 +8,8 @@ function buildPrismaMock() {
   const prisma = {
     grassrootsTeam: {
       create: jest.fn(),
+      updateMany: jest.fn(),
+      deleteMany: jest.fn(),
       findUnique: jest.fn(),
       findUniqueOrThrow: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
@@ -30,6 +32,7 @@ function buildPrismaMock() {
     user: {
       update: jest.fn(),
     },
+    $executeRaw: jest.fn(),
   } as unknown as PrismaService;
 
   // Interactive-transaction mock: invoke the callback with the same mock
@@ -51,13 +54,17 @@ describe('GrassrootsService', () => {
   // ---------- Teams ----------
 
   describe('createTeam', () => {
+    const DTO = { name: 'Hackney Wick FC', city: 'London', leagueType: 'informal' } as const;
+    const LIVE = { id: 't-9', name: 'Hackney Wick FC', city: 'London', leagueType: 'informal', createdById: 'someone-else', verified: false };
+    const DORMANT = { ...LIVE, createdById: null };
+
     it('creates a team with createdById = the caller (never the body), and passes name/city/leagueType through', async () => {
       const prisma = buildPrismaMock();
       const created = { id: 't-1', name: 'Hackney Wick FC', city: 'London', leagueType: 'informal', createdById: 'user-1', verified: false };
       (prisma.grassrootsTeam.create as jest.Mock).mockResolvedValue(created);
 
       const service = new GrassrootsService(prisma);
-      const result = await service.createTeam('user-1', { name: 'Hackney Wick FC', city: 'London', leagueType: 'informal' });
+      const result = await service.createTeam('user-1', DTO);
 
       expect((prisma.grassrootsTeam.create as jest.Mock).mock.calls[0][0].data).toEqual({
         name: 'Hackney Wick FC',
@@ -65,7 +72,23 @@ describe('GrassrootsService', () => {
         leagueType: 'informal',
         createdById: 'user-1',
       });
-      expect(result).toEqual(created);
+      expect(result).toEqual({ ...created, reclaimed: false });
+    });
+
+    it('matches existing teams on trimmed, case-insensitive name + city, under an advisory lock', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.grassrootsTeam.create as jest.Mock).mockResolvedValue({});
+
+      const service = new GrassrootsService(prisma);
+      await service.createTeam('user-1', { name: '  Hackney Wick FC ', city: ' London', leagueType: 'informal' });
+
+      expect((prisma.grassrootsTeam.findMany as jest.Mock).mock.calls[0][0].where).toEqual({
+        name: { equals: 'Hackney Wick FC', mode: 'insensitive' },
+        city: { equals: 'London', mode: 'insensitive' },
+      });
+      expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+      // the trimmed values are what get stored
+      expect((prisma.grassrootsTeam.create as jest.Mock).mock.calls[0][0].data.name).toBe('Hackney Wick FC');
     });
 
     it('never selects the organiser\'s nested User / email on the response', async () => {
@@ -83,17 +106,128 @@ describe('GrassrootsService', () => {
 
     it('flips User.isTeamOrganiser to true for the caller, in the same transaction as the team row', async () => {
       const prisma = buildPrismaMock();
-      const created = { id: 't-1', name: 'Hackney Wick FC', city: 'London', leagueType: 'informal', createdById: 'user-1', verified: false };
-      (prisma.grassrootsTeam.create as jest.Mock).mockResolvedValue(created);
+      (prisma.grassrootsTeam.create as jest.Mock).mockResolvedValue({});
 
       const service = new GrassrootsService(prisma);
-      await service.createTeam('user-1', { name: 'Hackney Wick FC', city: 'London', leagueType: 'informal' });
+      await service.createTeam('user-1', DTO);
 
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-1' },
         data: { isTeamOrganiser: true },
       });
+    });
+
+    it('409s on a match whose organiser is live — no create, no reassignment, no organiser flag', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.grassrootsTeam.findMany as jest.Mock).mockResolvedValue([LIVE]);
+
+      const service = new GrassrootsService(prisma);
+      await expect(service.createTeam('user-1', DTO)).rejects.toBeInstanceOf(ConflictException);
+
+      expect(prisma.grassrootsTeam.create).not.toHaveBeenCalled();
+      expect(prisma.grassrootsTeam.updateMany).not.toHaveBeenCalled();
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('409s when the caller already organises the matching team (same rule, no special case)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.grassrootsTeam.findMany as jest.Mock).mockResolvedValue([{ ...LIVE, createdById: 'user-1' }]);
+
+      const service = new GrassrootsService(prisma);
+      await expect(service.createTeam('user-1', DTO)).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('409s if any match is live even when another match is dormant (legacy duplicates)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.grassrootsTeam.findMany as jest.Mock).mockResolvedValue([DORMANT, LIVE]);
+
+      const service = new GrassrootsService(prisma);
+      await expect(service.createTeam('user-1', DTO)).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.grassrootsTeam.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('reassigns a DORMANT match to the caller instead of creating a duplicate, and says so', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.grassrootsTeam.findMany as jest.Mock).mockResolvedValue([DORMANT]);
+      (prisma.grassrootsTeam.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+
+      const service = new GrassrootsService(prisma);
+      const result = await service.createTeam('user-1', { ...DTO, leagueType: 'school' });
+
+      expect(prisma.grassrootsTeam.create).not.toHaveBeenCalled();
+      expect(prisma.grassrootsTeam.updateMany).toHaveBeenCalledWith({
+        where: { id: 't-9', createdById: null },
+        data: { createdById: 'user-1' },
+      });
+      expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'user-1' }, data: { isTeamOrganiser: true } });
+      // existing team data is kept, the request's leagueType is ignored
+      expect(result).toMatchObject({ id: 't-9', createdById: 'user-1', leagueType: 'informal', reclaimed: true });
+      expect(result.message).toMatch(/no organiser/);
+    });
+
+    it('409s if a concurrent claimant wins the dormant team first (guarded updateMany matches 0 rows)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.grassrootsTeam.findMany as jest.Mock).mockResolvedValue([DORMANT]);
+      (prisma.grassrootsTeam.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
+
+      const service = new GrassrootsService(prisma);
+      await expect(service.createTeam('user-1', DTO)).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteDormantTeam', () => {
+    const row = (over: object = {}) => ({
+      id: 't-1',
+      createdById: null,
+      _count: { fixturesHome: 0, fixturesAway: 0 },
+      ...over,
+    });
+
+    it('deletes a dormant team with no fixtures', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.grassrootsTeam.findUnique as jest.Mock).mockResolvedValue(row());
+      (prisma.grassrootsTeam.deleteMany as jest.Mock).mockResolvedValue({ count: 1 });
+
+      await new GrassrootsService(prisma).deleteDormantTeam('t-1');
+
+      expect(prisma.grassrootsTeam.deleteMany).toHaveBeenCalledWith({ where: { id: 't-1', createdById: null } });
+    });
+
+    it('404s for a non-existent team', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.grassrootsTeam.findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(new GrassrootsService(prisma).deleteDormantTeam('nope')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('409s for a LIVE team and never deletes it', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.grassrootsTeam.findUnique as jest.Mock).mockResolvedValue(row({ createdById: 'organiser-1' }));
+
+      await expect(new GrassrootsService(prisma).deleteDormantTeam('t-1')).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.grassrootsTeam.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('409s for a dormant team that has fixtures as either side', async () => {
+      const prisma = buildPrismaMock();
+      const service = new GrassrootsService(prisma);
+
+      (prisma.grassrootsTeam.findUnique as jest.Mock).mockResolvedValue(row({ _count: { fixturesHome: 1, fixturesAway: 0 } }));
+      await expect(service.deleteDormantTeam('t-1')).rejects.toBeInstanceOf(ConflictException);
+
+      (prisma.grassrootsTeam.findUnique as jest.Mock).mockResolvedValue(row({ _count: { fixturesHome: 0, fixturesAway: 2 } }));
+      await expect(service.deleteDormantTeam('t-1')).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.grassrootsTeam.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('409s if the team is claimed between the read and the delete (guarded deleteMany matches 0 rows)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.grassrootsTeam.findUnique as jest.Mock).mockResolvedValue(row());
+      (prisma.grassrootsTeam.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+
+      await expect(new GrassrootsService(prisma).deleteDormantTeam('t-1')).rejects.toBeInstanceOf(ConflictException);
     });
   });
 
