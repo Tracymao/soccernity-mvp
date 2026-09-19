@@ -224,11 +224,32 @@ export class ContestService {
   // ContestEntry's userId is always its Post's authorId, POST /posts is
   // GuardianConsentGuard-gated, and POST /contest/entries is too — so a
   // restricted-pending minor has no Post and therefore no ContestEntry.
-  // Guardian.consentStatus only ever moves pending -> confirmed (no
-  // reversal path anywhere in the codebase) and dateOfBirth/isMinor are
-  // immutable post-registration, so an entry that was valid at
-  // submission time cannot retroactively become a restricted minor's.
-  // No minor filter is applied — there is no real path to filter.
+  // dateOfBirth/isMinor are immutable post-registration, so an entry
+  // cannot retroactively become a *minor's* entry.
+  //
+  // CORRECTED by sprint-1/guardian-consent-decline-withdraw-expiry: this
+  // comment previously also asserted that "Guardian.consentStatus only
+  // ever moves pending -> confirmed (no reversal path anywhere in the
+  // codebase)". That is no longer true. A guardian can now withdraw
+  // consent (POST /auth/guardian-consent/withdraw), moving a confirmed
+  // row to 'declined' — so an entry that WAS validly submitted by a
+  // consented minor can now, later, belong to a minor whose consent has
+  // been revoked, and this admin surface would still show their
+  // displayName and post text.
+  //
+  // Still no minor filter, but now as a deliberate, bounded judgment call
+  // rather than "there is no real path to filter":
+  //   - the exposure is admin-only (AdminJwtAuthGuard + the admin console),
+  //     not public;
+  //   - it is time-bounded by construction — withdrawal immediately puts
+  //     the account into pending_deletion, and AccountDeletionSweepService
+  //     hard-deletes it (cascading the Post and ContestEntry away
+  //     entirely) after the 30-day grace period;
+  //   - and filtering has a real cost of its own: a finalist silently
+  //     vanishing from a mid-judging cycle would leave an admin unable to
+  //     reconcile a round they had already started scoring.
+  // FLAGGED as a Decision Log candidate rather than silently resolved
+  // either way — see guardian-consent/README.md.
   // -------------------------------------------------------------------
 
   // GET /admin/contest/cycles

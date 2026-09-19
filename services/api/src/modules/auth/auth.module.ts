@@ -20,5 +20,13 @@ import { AuthService } from './auth.service';
   imports: [AuthFoundationModule],
   controllers: [AuthController],
   providers: [AuthService, PrismaService],
+  // sprint-1/guardian-consent-decline-withdraw-expiry -- AuthService is
+  // exported so GuardianConsentModule can inject it for
+  // startPendingDeletion() (a guardian declining/withdrawing consent puts
+  // the minor's account on the same deletion path POST
+  // /auth/delete-account uses). No circularity: this module imports only
+  // AuthFoundationModule, and neither it nor AuthFoundationModule imports
+  // GuardianConsentModule.
+  exports: [AuthService],
 })
 export class AuthModule {}

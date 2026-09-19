@@ -19,6 +19,10 @@ describe('GuardianConsentController (HTTP layer)', () => {
     confirmConsent: jest.fn(),
     resendConsent: jest.fn(),
     getConsentStatus: jest.fn(),
+    // sprint-1/guardian-consent-decline-withdraw-expiry
+    declineConsent: jest.fn(),
+    requestWithdrawal: jest.fn(),
+    withdrawConsent: jest.fn(),
   };
 
   beforeAll(async () => {
@@ -227,6 +231,135 @@ describe('GuardianConsentController (HTTP layer)', () => {
       );
 
       await request(app.getHttpServer()).get('/auth/guardian-consent/status').expect(404);
+    });
+  });
+
+  // -----------------------------------------------------------------
+  // sprint-1/guardian-consent-decline-withdraw-expiry
+  // -----------------------------------------------------------------
+
+  describe('POST /auth/guardian-consent/decline', () => {
+    it('returns 200 and forwards the consent token', async () => {
+      guardianConsentService.declineConsent.mockResolvedValueOnce(undefined);
+
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/decline')
+        .send({ consentToken: 'token-123' })
+        .expect(200)
+        .expect({ message: 'Guardian consent declined.' });
+
+      expect(guardianConsentService.declineConsent).toHaveBeenCalledWith('token-123');
+    });
+
+    it('rejects a missing consentToken with 400 before reaching the service', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/decline')
+        .send({})
+        .expect(400);
+
+      expect(guardianConsentService.declineConsent).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown extra property (forbidNonWhitelisted)', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/decline')
+        .send({ consentToken: 'token-123', accountStatus: 'active' })
+        .expect(400);
+
+      expect(guardianConsentService.declineConsent).not.toHaveBeenCalled();
+    });
+
+    it('surfaces the service\'s BadRequestException as a 400', async () => {
+      guardianConsentService.declineConsent.mockRejectedValueOnce(
+        new BadRequestException('Invalid or expired consent token'),
+      );
+
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/decline')
+        .send({ consentToken: 'stale' })
+        .expect(400);
+    });
+  });
+
+  describe('POST /auth/guardian-consent/withdraw/request', () => {
+    it('returns the same generic message whether or not anything matched', async () => {
+      guardianConsentService.requestWithdrawal.mockResolvedValue(undefined);
+
+      const matched = await request(app.getHttpServer())
+        .post('/auth/guardian-consent/withdraw/request')
+        .send({ email: 'minor@example.com' })
+        .expect(200);
+
+      const unmatched = await request(app.getHttpServer())
+        .post('/auth/guardian-consent/withdraw/request')
+        .send({ email: 'nobody@example.com' })
+        .expect(200);
+
+      // Non-enumeration: the two responses must be byte-identical.
+      expect(matched.body).toEqual(unmatched.body);
+      expect(matched.body.message).toMatch(/if that account/i);
+    });
+
+    it('rejects a malformed email with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/withdraw/request')
+        .send({ email: 'not-an-email' })
+        .expect(400);
+
+      expect(guardianConsentService.requestWithdrawal).not.toHaveBeenCalled();
+    });
+
+    it('is routed distinctly from POST /auth/guardian-consent/withdraw', async () => {
+      // The two withdrawal routes are a prefix of one another; this
+      // guards against a routing regression where /withdraw/request
+      // silently falls through to /withdraw (which would consume a
+      // token that was never issued).
+      guardianConsentService.requestWithdrawal.mockResolvedValueOnce(undefined);
+
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/withdraw/request')
+        .send({ email: 'minor@example.com' })
+        .expect(200);
+
+      expect(guardianConsentService.requestWithdrawal).toHaveBeenCalledTimes(1);
+      expect(guardianConsentService.withdrawConsent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /auth/guardian-consent/withdraw', () => {
+    it('returns 200 and forwards the withdrawal token', async () => {
+      guardianConsentService.withdrawConsent.mockResolvedValueOnce(undefined);
+
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/withdraw')
+        .send({ withdrawalToken: 'wd-123' })
+        .expect(200)
+        .expect({ message: 'Guardian consent withdrawn.' });
+
+      expect(guardianConsentService.withdrawConsent).toHaveBeenCalledWith('wd-123');
+    });
+
+    it('rejects a consentToken posted to the withdrawal route', async () => {
+      // The DTO field is deliberately named differently from the consent
+      // DTO's, so a frontend cannot post the wrong credential and have it
+      // silently accepted.
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/withdraw')
+        .send({ consentToken: 'token-123' })
+        .expect(400);
+
+      expect(guardianConsentService.withdrawConsent).not.toHaveBeenCalled();
+    });
+
+    it('surfaces the service\'s BadRequestException as a 400', async () => {
+      guardianConsentService.withdrawConsent.mockRejectedValueOnce(
+        new BadRequestException('Invalid or expired withdrawal token'),
+      );
+
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/withdraw')
+        .send({ withdrawalToken: 'spent' })
+        .expect(400);
     });
   });
 });

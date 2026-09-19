@@ -44,7 +44,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 // they still only ever act on genuinely 30-days-past-due
 // "pending_deletion" rows; the admin path never goes through either of
 // them, it calls the same underlying hardDeleteUser primitive directly.
-const GRACE_PERIOD_DAYS = 30;
+// sprint-1/guardian-consent-decline-withdraw-expiry — EXPORTED (was a
+// private module-level const) so guardian-consent's decline/withdrawal/
+// expiry emails can state the real grace period to the minor rather than
+// hardcoding "30 days" in copy that would silently drift if this number
+// ever changed. The sweep's own behaviour is unchanged.
+export const GRACE_PERIOD_DAYS = 30;
 const CONSENT_AUDIT_RETENTION_MONTHS = 6;
 
 export interface SweepPendingDeletionsResult {

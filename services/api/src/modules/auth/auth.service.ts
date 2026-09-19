@@ -232,7 +232,20 @@ export class AuthService implements OnModuleInit {
   // method only ever starts that clock. Shared by deleteAccount()
   // (authenticated) and deleteInactiveAccount() (unauthenticated) so the
   // two entry points can never drift.
-  private async startPendingDeletion(userId: string): Promise<void> {
+  //
+  // sprint-1/guardian-consent-decline-withdraw-expiry -- made PUBLIC (was
+  // private) for a THIRD caller: GuardianConsentService, when a guardian
+  // declines or withdraws consent, or when two consent requests lapse
+  // unanswered. Exactly the same precedent, and the same reasoning, as
+  // AccountDeletionSweepService.hardDeleteUser being made public for
+  // AdminUsersService (sprint-5/admin-users-dashboard-backend): one
+  // primitive, several entry points, rather than each caller
+  // reimplementing the state transition. This method's own "single place
+  // accountStatus flips to pending_deletion" invariant is precisely why
+  // the guardian-consent path reuses it rather than writing its own
+  // user.update -- that invariant would otherwise have been broken by
+  // this PR. Callers are responsible for their own authorization gate.
+  async startPendingDeletion(userId: string): Promise<void> {
     await this.prisma.user.update({
       where: { id: userId },
       data: { accountStatus: 'pending_deletion', pendingDeletionAt: new Date() },

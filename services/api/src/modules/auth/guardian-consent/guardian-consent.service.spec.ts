@@ -113,9 +113,22 @@ function buildService(options: {
   const config = { get: () => undefined } as never;
   const emailService = { sendGuardianConsentEmail: jest.fn().mockResolvedValue(undefined) };
 
-  const service = new GuardianConsentService(prisma as never, config, emailService as never);
+  // sprint-1/guardian-consent-decline-withdraw-expiry — GuardianConsentService
+  // now also takes AuthService (for startPendingDeletion, on the
+  // decline/withdrawal/expiry paths). None of the pre-existing tests in
+  // THIS file exercise those paths, so a bare stub is enough here; the
+  // refusal paths get their own full harness and assertions in
+  // guardian-consent-refusal.service.spec.ts.
+  const authService = { startPendingDeletion: jest.fn().mockResolvedValue(undefined) };
 
-  return { service, prisma, guardiansByToken, emailService, guardian, user };
+  const service = new GuardianConsentService(
+    prisma as never,
+    config,
+    emailService as never,
+    authService as never,
+  );
+
+  return { service, prisma, guardiansByToken, emailService, authService, guardian, user };
 }
 
 describe('GuardianConsentService', () => {

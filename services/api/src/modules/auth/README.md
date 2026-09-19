@@ -1080,3 +1080,252 @@ comment update only.
 the full before/after counts (this file's changes are covered by a new
 describe block in `auth.service.spec.ts`, counted in that same PR-wide
 total, not measured separately).
+
+## Status update — guardian decline, withdrawal, and consent-expiry resolution (`sprint-1/guardian-consent-decline-withdraw-expiry`, Decision Log #34)
+
+Closes a real, long-standing gap in the Section 8.3 flow. Before this branch
+`Guardian.consentStatus` only ever moved `pending -> confirmed`: there was no
+way for a guardian to say no, no way to take back a yes, and — despite DPIA
+finding R5 adding `Guardian.consentTokenExpiresAt` and a manual resend
+endpoint — **nothing anywhere ever read that expiry**. Confirmed by grep
+before any code was written: the only readers of `consentTokenExpiresAt` were
+the writers that set it, plus `confirmConsent`'s own rejection check. A
+guardian who simply never answered therefore left a minor's account
+restricted-pending indefinitely, holding a child's personal data with no
+resolution path and no further contact from the platform.
+
+### What was built
+
+Three new endpoints, all following `confirmConsent`'s existing
+token-is-the-credential trust model (no guard — the guardian is not a
+Soccernity account holder), all `@AuthRateLimit()`:
+
+- **`POST /auth/guardian-consent/decline`** `{ consentToken }` — the guardian
+  says no. Only a **pending** request can be declined.
+- **`POST /auth/guardian-consent/withdraw/request`** `{ email }` — step 1 of
+  taking back consent already given. Issues a fresh, single-use
+  `Guardian.withdrawalToken` and emails it **to the guardian**.
+- **`POST /auth/guardian-consent/withdraw`** `{ withdrawalToken }` — step 2.
+
+Plus **`GuardianConsentExpirySweepService`** (`@Cron(EVERY_HOUR)`), the job
+that finally acts on `consentTokenExpiresAt`.
+
+All three routes and the sweep's terminal branch converge on one primitive,
+`GuardianConsentService.refuseConsentAndScheduleDeletion()`, so the resulting
+account state cannot differ between them.
+
+### Why the withdrawal request takes the MINOR's email, not the guardian's
+
+It mirrors `resendConsent()` exactly, and it is the safer of the two options,
+not merely the more consistent one. `User.email` is `@unique` and
+`Guardian.minorUserId` is `@unique`, so a minor's address resolves to exactly
+one Guardian row — whereas **`Guardian.email` carries no uniqueness
+constraint at all**, so a guardian of two children could not be resolved from
+their own address, and accepting it would open a brand-new enumeration
+surface against guardian addresses. It costs nothing in safety: the withdrawal
+link is only ever emailed to `Guardian.email`, so a stranger who guessed a
+real minor's address still cannot withdraw anything — they can only cause an
+email to land in the genuine guardian's inbox, the same bounded exposure
+`POST /auth/guardian-consent/resend` already carries and is rate-limited for.
+
+The UX consequence is flagged for the frontend ticket: a guardian who wants to
+withdraw must enter the child's registered email, not their own.
+
+### Distinguishing a first expiry from a second: `Guardian.consentAutoResentAt`
+
+The brief asked whether existing fields could already tell these apart. They
+almost can — `consentTokenExpiresAt` minus the configured TTL approximates
+the issue time, so comparing it against `User.createdAt` would reveal whether
+the token had ever been rotated. That was **investigated and rejected as
+genuinely unsafe**, not merely inelegant:
+
+1. it breaks silently if `GUARDIAN_CONSENT_TOKEN_TTL_HOURS` is ever changed
+   between issuance and the sweep; and
+2. more seriously, it cannot distinguish the platform's *automatic* re-send
+   from a *manual* one the minor triggered via
+   `POST /auth/guardian-consent/resend`. A minor who had manually re-sent even
+   once would look "already chased", so the very next lapse would schedule
+   their account for deletion **having never sent the automated warning at
+   all** — a real safeguarding misfire, not a cosmetic one.
+
+So: one new nullable timestamp. Deliberately **not** an `Int` counter — the
+system sends exactly one automated chase, and a counter would imply a
+configurable N-reminders policy that does not exist; the timestamp is also
+independently useful for audit. It defaults to `NULL`, so every Guardian row
+already in flight when this ships gets its one automatic re-send on the first
+sweep after deploy — **no existing pending account is fast-tracked to
+deletion**.
+
+### The two-stage escalation
+
+- **First expiry** (`consentAutoResentAt IS NULL`) — one automatic re-send,
+  through `GuardianConsentService.reissueConsentToken()`, which is the exact
+  method the manual resend endpoint uses (extracted out of `resendConsent()`
+  for this, not copied). Plus an email to the **minor** saying the request
+  lapsed, a new one has gone out, and a second silent lapse will close their
+  account. That warning is the point of staging it: nobody's account closes
+  without having been told it was about to.
+  `markAutoResent` is passed **explicitly** by both callers (`false` for a
+  manual resend, `true` for the sweep) so neither can silently acquire the
+  other's behaviour.
+- **Second expiry** (`consentAutoResentAt IS NOT NULL`) — implicit decline via
+  the same shared refusal primitive.
+
+With the default 72h TTL that is roughly six days from registration to
+closure, with one automatic chase and one explicit warning in between.
+**Hourly, not daily** (unlike `AccountDeletionSweepService`): the two stages
+chain, so any interval is added to *both* windows — a daily tick would stretch
+a 72h+72h policy to as much as eight days and make the real deadline depend on
+what time of day someone happened to register.
+
+### Reusing the deletion machinery rather than inventing state
+
+A refusal calls `AuthService.startPendingDeletion()` — **made public for this
+third caller**, the same precedent and reasoning as
+`AccountDeletionSweepService.hardDeleteUser` being made public for
+`AdminUsersService`. That method's own doc comment asserts it is "the single
+place `accountStatus` flips to `pending_deletion`"; writing a parallel
+`user.update` here would have broken that documented invariant. From that
+point the account is on the ordinary Decision Log #42/#44 path — 30-day grace,
+hard delete, cascade, `ConsentAuditRecord` retention — with **no new account
+state introduced by this PR**.
+
+Two ordering details that are load-bearing rather than incidental:
+
+- The refusal is **deliberately not a transaction**. The writes span Postgres
+  (Guardian/User) and Redis (session revocation inside
+  `startPendingDeletion`), so no single transaction could cover both. The
+  *order* is what makes a partial failure safe: the Guardian row is refused
+  first, and since every consent-enforcement site in this codebase is an
+  allowlist, a refused row is locked down platform-wide even if later steps
+  fail.
+- The refusal **skips `startPendingDeletion` if the account is already
+  `pending_deletion`** (typically because the minor requested deletion
+  themselves while consent was outstanding). Re-running it would reset
+  `pendingDeletionAt` to now and push their existing, earlier deadline out —
+  a guardian refusing consent must never have the side effect of *extending*
+  how long the platform holds a minor's data. Same reason the decline endpoint
+  is idempotent.
+
+### One necessary change to `confirmConsent`, flagged rather than slipped in
+
+The brief said not to touch confirm's own logic. Introducing `declined`
+without touching it would have left a real hole: `Guardian.consentToken` is
+`NOT NULL` and `@unique`, so it keeps resolving after a decline, and confirm's
+old `consentStatus: { not: 'confirmed' }` write-guard would have happily
+flipped a **declined** row to confirmed — silently reversing a refusal, on an
+account already scheduled for deletion, using a link emailed before the
+refusal was made. Two minimal changes: an explicit `declined` branch throwing
+a clear (non-generic — the caller already holds the real token, so there is
+nothing left to enumerate) error, and the write-guard tightened from the
+negative `{ not: 'confirmed' }` to the positive `'pending'` as the race-safe
+backstop. Both are exactly equivalent for every pre-existing case.
+
+### Safeguarding audit: every enforcement site was checked, not assumed
+
+`declined` fails safe everywhere **by construction**, verified by grepping
+every reader of `consentStatus` across `services/api/src` rather than
+reasoning about it. All five enforcement sites are **allowlists**
+(`=== 'confirmed'` / `{ consentStatus: 'confirmed' }`), never denylists
+(`=== 'pending'`): `guards/guardian-consent.guard.ts`, `clubs.service.ts`,
+`community-groups.service.ts`, `messaging.service.ts`,
+`users.service.ts`. A declined minor is therefore blocked everywhere a pending
+one is, with no changes to any of those files.
+
+That same audit found **two comments this PR makes factually wrong**, both
+corrected in place rather than left to rot:
+
+- `contest.service.ts` asserted "`Guardian.consentStatus` only ever moves
+  pending -> confirmed (no reversal path anywhere in the codebase)" as the
+  reason its admin read surface needs no minor filter. That premise is now
+  false, and the consequence is real (see the Decision Log candidate below).
+- `messaging.service.ts` asserted its `GuardianConsentGuard` "can never
+  actually block anyone here in practice". It now can — and blocking them is
+  the correct behaviour, needing no code change, precisely because the guard
+  was already written as an allowlist.
+
+`registration.service.ts`'s `VerifyEmailResult` comment had already
+anticipated this exact change ("Decision Log #34's still-unbuilt
+guardian-decline flow, which would add a 'declined' state") and typed the
+field as a plain `string` for it — so `POST /auth/verify-email` now returns
+`'declined'` correctly with **no type change needed**. Comment updated to
+record that the anticipated value now exists.
+
+### Decision Log candidates raised, not silently resolved
+
+1. **`consentStatus` has no CHECK constraint.** Adding `declined` needed no
+   column migration (it is already free-form `String`, matching the
+   string-enum convention six sibling columns use). But this is a
+   safeguarding field, and a typo'd write would land a value no reader
+   recognises — failing safe (the minor stays restricted) but silently never
+   firing the decline/deletion path. A CHECK constraint on this one column
+   (**not** a Prisma enum, which would change the generated TS type at every
+   read site) is the recommendation; not introduced here because it is a
+   cross-cutting convention change.
+2. **Granularity.** All three refusal routes store `declined`, per the brief.
+   A withdrawal *is* still distinguishable in `ConsentAuditRecord`
+   (`declined` + a non-null `consentTimestamp` from the original
+   confirmation), but an **active decline is not distinguishable from a silent
+   timeout** — both leave it null. Distinct `withdrawn` / `expired` values
+   would carry real GDPR/NDPA meaning, since this is the value preserved as
+   consent proof after the minor's hard delete.
+3. **Contest admin exposure.** A withdrawn minor's `ContestEntry` (display
+   name + post text) stays visible on the admin read surface for up to the
+   30-day grace period. Admin-only, time-bounded, and filtering has its own
+   cost (a finalist vanishing mid-judging) — so it is left as a flagged
+   judgment call, with `contest.service.ts`'s comment corrected to describe
+   the real situation.
+4. **No self-service reversal.** A guardian who declines by mistake cannot
+   un-decline; the account is already in `pending_deletion`. Whether that
+   should have an undo window is the same open question Decision Log #42
+   already raises for self-requested deletion.
+
+### Deliberately not built
+
+No guardian-facing web page for any of this — same API-contract-only scoping
+the original guardian-consent PR used. Worth noting for the frontend ticket:
+`apps/web`'s `GuardianConsentConfirmPage.tsx` currently models the Figma
+frame's "I do not consent" button as *"take no action, with an
+acknowledgement message"* **precisely because no decline endpoint existed**.
+It can now be wired to a real action. No guardian-facing withdrawal
+confirmation email either (the guardian gets the request email; only the minor
+is notified of the outcome).
+
+### Verification
+
+Real before/after, measured by stashing this branch and re-running against a
+clean checkout — not estimated:
+
+- **Mocked suite: 83 suites / 1099 tests, 0 failures -> 85 suites / 1139
+  tests, 0 failures.** Two new spec files
+  (`guardian-consent-refusal.service.spec.ts` 19,
+  `guardian-consent-expiry-sweep.service.spec.ts` 11) plus 10 new cases on the
+  existing controller spec. *Honest note on the baseline:* the first clean-
+  checkout run reported 2 failures, both in real-HTTP/real-app-bootstrap specs
+  and both under heavy contention (387s wall clock vs 47s on a quiet re-run);
+  a clean re-run was 83/1099 green. That is the documented contention-flake
+  class this repo already raised `testTimeout` to 30000ms for, not a real
+  baseline failure.
+- **e2e suite (real Postgres via docker-compose): 19 suites / 185 tests ->
+  20 suites / 193 tests, 0 failures.** Exactly one spec file added and **no
+  existing e2e file modified** (confirmed via `git status`), so the before
+  figure is exact — and it matches the last figure recorded on `main`.
+- `npx tsc --noEmit`, `npm run lint`, `npx nest build` all clean.
+- Migration `20260919132732_add_guardian_decline_withdrawal_expiry_fields`
+  applied cleanly to the dev database and (by `global-setup`) to
+  `soccernity_test`; the generated SQL is purely additive — three nullable
+  columns and two indexes, zero `ALTER`/`DROP` against anything existing.
+  Column presence re-verified directly with `psql \d "Guardian"`.
+- **`User`/`Guardian` safeguarding fields are untouched** —
+  `is_minor`/`guardian_id`/`consentStatus`/`consentToken`/`consentTimestamp`
+  all unchanged; the schema diff adds fields and a comment, removes nothing.
+
+The three paths the brief asked to be traced end to end — decline, withdrawal,
+and double-expiry — each have a real-Postgres e2e test proving the account
+lands in `pending_deletion` **and** that the pre-existing
+`AccountDeletionSweepService` then picks it up on its normal 30-day terms and
+hard-deletes it, with the `ConsentAuditRecord` snapshot written on the way
+out. The e2e also proves the 29-day/31-day grace boundary, that a withdrawal
+link is genuinely single-use (which depends on real Postgres NULL semantics, so
+a mock could not have shown it), and that a third sweep tick never restarts an
+already-running deletion clock.

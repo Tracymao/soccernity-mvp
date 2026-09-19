@@ -30,9 +30,11 @@ export interface RegisterResult {
 // mirrors GuardianConsentStatusResponse.consentStatus's own established
 // convention (guardian-consent.service.ts) of typing the real DB column's
 // value as `string` rather than hardcoding a union that would go stale
-// the moment a new value (e.g. Decision Log #34's still-unbuilt
-// guardian-decline flow, which would add a 'declined' state) is added to
-// the schema. The three values this endpoint can actually produce today:
+// the moment a new value is added to the schema. That foresight paid off
+// in sprint-1/guardian-consent-decline-withdraw-expiry, which built
+// exactly the Decision Log #34 guardian-decline flow this comment
+// anticipated: 'declined' is now a real value and NO change to this type
+// was needed. The four values this endpoint can actually produce today:
 //   - 'not_applicable' — a synthesized value (never stored anywhere): the
 //     caller is not a minor, or is a minor with no Guardian row (a
 //     data-invariant violation RegistrationService should never produce,
@@ -42,9 +44,13 @@ export interface RegisterResult {
 //     token being verified; contrast with getConsentStatus()'s own 404 in
 //     guardian-consent.service.ts, which is the right behavior for ITS
 //     endpoint but wrong for this one).
-//   - 'pending' | 'confirmed' — Guardian.consentStatus's real, current
-//     value, straight from GuardianConsentService.getConsentStatusForUser
-//     (never re-derived independently — see that method's own comment).
+//   - 'pending' | 'confirmed' | 'declined' — Guardian.consentStatus's
+//     real, current value, straight from
+//     GuardianConsentService.getConsentStatusForUser (never re-derived
+//     independently — see that method's own comment). 'declined' covers
+//     all three refusal routes (guardian declined, guardian withdrew, or
+//     two requests lapsed unanswered); a caller seeing it should expect
+//     the account to be closed and scheduled for deletion.
 export type VerifyEmailResult = {
   userId: string;
   guardianConsentStatus: string;

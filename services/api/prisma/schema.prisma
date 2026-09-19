@@ -187,10 +187,99 @@ model Guardian {
   name                  String
   email                 String
   relationship          String
-  consentStatus         String    @default("pending") // pending | confirmed
+  // sprint-1/guardian-consent-decline-withdraw-expiry -- "declined" is a
+  // NEW value added by that PR, joining the original pending|confirmed
+  // pair. It is reached three ways, all of which then transition the
+  // minor's User row to accountStatus "pending_deletion" via the one
+  // shared AuthService.startPendingDeletion() primitive:
+  //   1. the guardian actively declines   (POST /auth/guardian-consent/decline)
+  //   2. the guardian withdraws consent   (POST /auth/guardian-consent/withdraw)
+  //   3. nobody ever answers              (GuardianConsentExpirySweepService,
+  //      after the initial token AND one automatic re-send have both lapsed)
+  //
+  // NO migration was required for the value itself -- this column is
+  // already a free-form String, matching the string-enum convention
+  // User.accountStatus / User.verificationStatus / AdminUser.accountStatus
+  // / Category.status / Fixture.status / ContestCycle.status all use.
+  // FLAGGED as a real Decision Log candidate rather than silently assumed
+  // safe forever: this is a safeguarding field (CLAUDE.md non-negotiable
+  // #1), and a typo'd write ("Declined", "decline") would land a value no
+  // reader recognises. Every enforcement site today is an ALLOWLIST
+  // (=== 'confirmed'), never a denylist, so such a typo would fail SAFE
+  // (the minor stays restricted) -- but the decline/deletion path would
+  // then silently never fire. A CHECK constraint on this one column
+  // (NOT a Prisma enum, which would change the generated TS type at every
+  // read site and make adding a future value a migration) is the
+  // recommended fix; deliberately not introduced here, since it is a
+  // cross-cutting convention change affecting six sibling columns.
+  //
+  // Audit note: ConsentAuditRecord snapshots this value verbatim, so what
+  // is stored here is what survives the minor's hard-delete as consent
+  // proof. A withdrawal IS distinguishable from a plain decline in that
+  // record (withdrawal leaves consentTimestamp set from the original
+  // confirmation; a decline never sets it) -- but an active decline is
+  // NOT distinguishable from a silent timeout, since both leave it null.
+  // Flagged as part of the same Decision Log candidate: a distinct
+  // "withdrawn" / "expired" value would carry real GDPR/NDPA meaning
+  // ("consent refused" vs "consent given then revoked" vs "never
+  // answered"). Not added here -- this PR's brief scoped the new value
+  // set to "declined" alone.
+  consentStatus         String    @default("pending") // pending | confirmed | declined
   consentToken          String    @unique
   consentTokenExpiresAt DateTime
   consentTimestamp      DateTime?
+
+  // sprint-1/guardian-consent-decline-withdraw-expiry -- records the ONE
+  // automatic re-send GuardianConsentExpirySweepService performs when the
+  // original consent token lapses unanswered. This is the field that
+  // distinguishes a FIRST expiry (null -> re-send + nudge the minor) from
+  // a SECOND expiry (non-null -> treat as an implicit decline).
+  //
+  // Deliberately a nullable timestamp, not an Int counter: the system
+  // sends exactly one automated chase, and a counter would imply a
+  // configurable N-reminders policy that does not exist. The timestamp is
+  // also independently useful for audit ("when did the platform chase
+  // this?").
+  //
+  // Deriving this from existing data instead was considered and rejected
+  // as genuinely unsafe, not merely inelegant. consentTokenExpiresAt minus
+  // the configured TTL approximates the issue time, so comparing it
+  // against User.createdAt would reveal whether the token had ever been
+  // rotated -- but (a) that breaks silently if
+  // GUARDIAN_CONSENT_TOKEN_TTL_HOURS is ever changed between issuance and
+  // the sweep, and (b) it cannot distinguish this automatic re-send from a
+  // MANUAL one the minor triggered via POST /auth/guardian-consent/resend.
+  // A minor who had manually re-sent even once would therefore look
+  // "already chased", and the very next lapse would schedule their account
+  // for deletion having never sent the automated warning at all -- a real
+  // safeguarding misfire on a minors' platform, not a cosmetic one.
+  //
+  // Defaults to NULL, so every Guardian row that already exists when this
+  // ships gets its one automatic re-send on the first sweep after deploy.
+  // No existing pending account is ever fast-tracked to deletion.
+  consentAutoResentAt   DateTime?
+
+  // sprint-1/guardian-consent-decline-withdraw-expiry -- the withdrawal
+  // credential, deliberately SEPARATE from consentToken rather than
+  // reusing it. Withdrawal is only ever available once consentStatus is
+  // "confirmed", and re-using consentToken would both destroy the
+  // original consent record's token and conflate two credentials that
+  // authorise opposite actions. Issued fresh (single-use, rotated on every
+  // request) by POST /auth/guardian-consent/withdraw/request and emailed
+  // to Guardian.email -- so possession of the guardian's inbox is
+  // re-proven at withdrawal time, not inherited from a months-old consent
+  // email. Nullable because the overwhelming majority of Guardian rows
+  // never enter a withdrawal flow at all.
+  withdrawalToken          String?   @unique
+  withdrawalTokenExpiresAt DateTime?
+
+  // sprint-1/guardian-consent-decline-withdraw-expiry -- backs
+  // GuardianConsentExpirySweepService's own hourly query
+  // (consentStatus = 'pending' AND consentTokenExpiresAt <= now), so the
+  // sweep is not a full table scan. Same reasoning, and the same shape, as
+  // User.@@index([accountStatus, pendingDeletionAt]) for the account
+  // deletion sweep.
+  @@index([consentStatus, consentTokenExpiresAt])
 }
 
 // sprint-2/account-deletion-sweep, implementing Decision Log #42's
