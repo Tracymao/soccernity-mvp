@@ -8812,6 +8812,19 @@ Full reasoning for every choice above: Build Plan Section 5.
       `reclaimed: true` takeover notice** the API now returns — needs its own
       `figma-to-code` frontend follow-up ticket (and probably a design frame
       for the notice first).
+- **`sprint-1/guardian-consent-decline-web` (figma-to-code, 2026-09-19)
+  wires `GuardianConsentConfirmPage.tsx`'s "I do not consent" button to
+  the real `POST /auth/guardian-consent/decline` (PR #261) — `apps/web`
+  only.** The old "take no action" acknowledgement is gone: success shows
+  a "decision recorded" state saying the account stays closed and is
+  scheduled for deletion. New `declineGuardianConsent()` in `api/auth.ts`;
+  both it and `confirmGuardianConsent()` now pass the backend's
+  non-generic 400 messages through verbatim ("already been confirmed",
+  "declined or withdrawn") and map 429 to a rate-limit message, while the
+  backend's generic rejection still collapses to the invalid-link copy.
+  Re-declining is a server-side idempotent 200, so it shows the same
+  success state. Verification: `apps/web` vitest 44 suites / 345 tests →
+  45 suites / 353 tests, 0 failures; `tsc`, lint, build clean. Not merged.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

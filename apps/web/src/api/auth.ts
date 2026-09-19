@@ -191,10 +191,35 @@ export interface GuardianConsentStatus {
   consentTimestamp: string | null;
 }
 
-export async function confirmGuardianConsent(consentToken: string): Promise<{ message: string }> {
+// The backend's generic rejection body (unknown / rotated / expired token).
+// Anything else on a 400 from the guardian-consent routes is a deliberate,
+// non-generic message ("already confirmed", "declined or withdrawn") the
+// caller is entitled to read -- they already hold the real token, so there
+// is nothing left to enumerate -- and is passed through verbatim.
+const GENERIC_CONSENT_REJECTION = "Invalid or expired consent token";
+const INVALID_LINK_MESSAGE = "This link is invalid or has expired. Ask the account holder to resend the request.";
+
+async function guardianConsentRejection(response: Response): Promise<AuthApiError> {
+  if (response.status === 429) {
+    return new AuthApiError("Too many attempts. Please wait a minute and try again.", { status: 429 });
+  }
+  if (response.status === 400) {
+    try {
+      const body = (await response.json()) as { message?: unknown };
+      if (typeof body.message === "string" && body.message !== GENERIC_CONSENT_REJECTION) {
+        return new AuthApiError(body.message, { status: 400 });
+      }
+    } catch {
+      // Unparseable body -- fall through to the generic message.
+    }
+  }
+  return new AuthApiError(INVALID_LINK_MESSAGE, { status: response.status });
+}
+
+async function postGuardianConsentToken(path: string, consentToken: string): Promise<{ message: string }> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}/auth/guardian-consent`, {
+    response = await fetch(`${API_BASE_URL}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ consentToken }),
@@ -206,16 +231,21 @@ export async function confirmGuardianConsent(consentToken: string): Promise<{ me
   }
 
   if (!response.ok) {
-    // Deliberately generic -- matches the backend's own non-enumeration
-    // posture (guardian-consent.service.ts's confirmConsent()): an
-    // unknown, expired, or already-rotated token all land here
-    // indistinguishably.
-    throw new AuthApiError("This link is invalid or has expired. Ask the account holder to resend the request.", {
-      status: response.status,
-    });
+    throw await guardianConsentRejection(response);
   }
 
   return (await response.json()) as { message: string };
+}
+
+export function confirmGuardianConsent(consentToken: string): Promise<{ message: string }> {
+  return postGuardianConsentToken("/auth/guardian-consent", consentToken);
+}
+
+// POST /auth/guardian-consent/decline -- the guardian's real "I do not
+// consent". Unauthenticated, same trust model as confirm. Idempotent
+// server-side (re-declining is a 200), so a double-click is harmless.
+export function declineGuardianConsent(consentToken: string): Promise<{ message: string }> {
+  return postGuardianConsentToken("/auth/guardian-consent/decline", consentToken);
 }
 
 export async function getGuardianConsentStatus(accessToken: string): Promise<GuardianConsentStatus> {
