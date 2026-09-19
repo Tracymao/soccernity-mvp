@@ -25,7 +25,7 @@ export type AdminUserWriteStatus = (typeof ADMIN_USER_WRITE_STATUSES)[number];
 // writes above, plus `deleted` — a distinct DTO value, deliberately NOT
 // `pending_deletion` (see README.md's "delete" Decision Log candidate)
 // since this route hard-deletes the User row immediately, reusing
-// AccountDeletionSweepService.hardDeleteUser directly rather than
+// AccountDeletionSweepService.anonymizeUser directly rather than
 // starting (and then having to separately fast-forward) the self-service
 // grace-period flow.
 export const ADMIN_USER_ACTIONS = [...ADMIN_USER_WRITE_STATUSES, 'deleted'] as const;

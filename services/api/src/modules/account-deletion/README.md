@@ -1,5 +1,83 @@
 # account-deletion module
 
+> **CURRENT BEHAVIOUR — Decision Log #341 (`sprint-2/account-anonymization-reconsideration`)
+> supersedes Decision Log #44's cascade resolution, and #42's "hard-delete the
+> `User` row" step. Everything below the "Historical" divider describes the
+> superseded design and is kept only as a record.**
+>
+> **What happens now.** A `pending_deletion` account (self-service
+> `POST /auth/delete-account`, `POST /auth/delete-inactive-account`, or a
+> guardian refusal/expiry) gets the same 30-day grace period. At the end of it
+> `AccountDeletionSweepService.anonymizeUser` **anonymizes the `User` row in
+> place** — one atomic transaction, `accountStatus -> 'deleted'` — and **never
+> runs a `DELETE` on it**.
+>
+> **Why.** The cascade model deleted *other users'* `Comment`/`Like`/`SavedPost`
+> rows on a departing user's `Post`: a bigger erasure than "this user's own
+> footprint is gone" needs, and than GDPR Art. 17 obliges (another user's
+> comment is that user's own data). Anonymized data that can no longer be
+> attributed to a person is outside the regulation (Recital 26), and this is
+> the pattern major platforms use. It is also mechanically far safer: one
+> `UPDATE` instead of a multi-table cascading delete — the class of operation
+> that produced the `Fixture`/`Result` RESTRICT bug.
+>
+> **The transaction (`anonymizeUser`):**
+>
+> | Target | Action |
+> |---|---|
+> | `User` | `email` -> `deleted-<id>@deleted.soccernity.internal` (deterministic, unique); `phone` -> null; `displayName` -> `"[deleted user]"`; `passwordHash` -> `"!anonymized"` (not a valid argon2 string, `PasswordService.verify` returns false — defence in depth); `dateOfBirth` -> null (column is now nullable); `clubAffiliationId` -> null; `pendingDeletionAt` -> null; `accountStatus` -> `'deleted'`. `role`/`isMinor` untouched. |
+> | `GrassrootsTeam.createdById` (now nullable) | set to `null` for every team they organised. The existing `createdById !== caller -> 403` checks then make the team read-only with no new guard code (proven by e2e). |
+> | `Follow` (both directions), `Like`, `SavedPost`, `Notification` | deleted outright (ephemeral signal). `Post.likeCount` is decremented for each removed like so the denormalized cache never drifts. |
+> | `Guardian` (minors) | unchanged from #42: snapshot into `ConsentAuditRecord`, then delete the `Guardian` row. The audit record keeps its own 6-month purge clock, measured from anonymization time. |
+> | `Post`, `Comment`, `Message`, `Result` | **untouched** — their FKs keep pointing at the now-anonymized row, which is the point. |
+> | `Report` | **never touched**, regardless of investigation status. |
+>
+> **`'deleted'` vs `'pending_deletion'`.** `pending_deletion` = the 30-day grace
+> period, or held pending investigation. `'deleted'` = anonymization has run;
+> terminal. Both block login identically (generic "Invalid credentials";
+> `reactivateAccount` also rejects `deleted`). Feed read-visibility
+> (`ACTIVE_AUTHOR_POST_FILTER`) allows `'active'` **and** `'deleted'` authors so
+> an anonymized user's posts keep showing as "[deleted user]"; every other
+> surface (rosters, follow graph, leaderboard, new DMs) still requires
+> `'active'`. An admin cannot change the status of a `'deleted'` user (409).
+>
+> **RESTRICT restored.** All 15 FKs `sprint-2/account-deletion-cascade` had
+> flipped to `CASCADE` are `RESTRICT` again (migration
+> `20260919144308_account_anonymization_restrict_and_nullable`), so an
+> accidental real `DELETE FROM "User"` fails loudly. `GrassrootsTeam.createdById`
+> is nullable + `RESTRICT`. `Guardian.minorUserId` was never changed.
+> Cascades added by *later* PRs under #44's banner (`BanterRoomMember`,
+> `CommunityGroupMember`, `ContestEntry`/`ContestRoundWinner`/
+> `ContestStanding`/`PointsLedgerEntry`, `CommunityGroup.createdBy`) are left
+> as they were: inert now that no `User` row is ever deleted.
+>
+> **Investigation hold.** Before anonymizing a due account the sweep runs
+> `hasOpenInvestigation`. If a non-terminal `Report` involves the user —
+> `status = 'open'`, or `status = 'actioned' AND appealStatus = 'pending'` (an
+> overturned appeal flips back to `open`) — the account is **skipped this
+> cycle**: fully identifiable, still login-blocked via `pending_deletion`, and
+> retried every run. No new "held" flag; it is a query predicate. "Involves":
+> the user is the `reporterId`; or `targetType = 'user'` and `targetId` is them;
+> **or** `targetType` is `post`/`comment` and the target's author is them
+> (correlated `EXISTS` through `Post.authorId`/`Comment.authorId` — built
+> because it was a clean single query; Decision Log #341). The sweep result is
+> `{ anonymizedUserIds, heldUserIds }`. The admin-triggered immediate delete
+> (`PATCH /admin/users/:id {status:'deleted'}`) calls `anonymizeUser` directly
+> and deliberately skips both the grace period and the hold.
+>
+> **Flagged, not built:** no retention timer on the anonymized `'deleted'` row
+> itself (a future consideration if it is ever worth purging after N years);
+> Grassroots reassignment of a dormant team to a new organiser is a separate,
+> already-scoped follow-up; a departing user's `BanterRoomMember`/
+> `CommunityGroupMember`/`_ClubMembership` rows are not removed (rosters filter
+> non-`active` users, but `memberCount` still counts them); a hold has no
+> maximum duration; the notification rows other users hold *about* the leaver
+> now resolve to "[deleted user]".
+>
+> ---
+> ### Historical (superseded by Decision Log #341)
+>
+
 Build target: Sprint 2, `sprint-2/account-deletion-sweep` — implements
 Build Plan Section 9, **Decision Log #42** (and closes the "ARCHITECTURE
 IMPLICATION, not yet built" paragraph inside that same entry). **Extended

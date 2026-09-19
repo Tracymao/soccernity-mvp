@@ -1911,7 +1911,58 @@ Full reasoning for every choice above: Build Plan Section 5.
   Postgres, real cascade fired, not mocked) 8 suites / 54 tests, 0
   failures (the 2 stale "blocked" tests from PR #88 replaced with 5 new
   ones, including the cross-user cascade proof and the raw-SQL schema
-  checks).
+  checks). **SUPERSEDED by `sprint-2/account-anonymization-reconsideration`
+  (Decision Log #341) — see the next bullet: the cascade is reverted to
+  RESTRICT and the User row is anonymized in place instead.**
+- **`sprint-2/account-anonymization-reconsideration` (backend-api,
+  2026-09-19) SUPERSEDES Decision Log #44's cascade (and #42's "hard-delete
+  the User row" step) — `services/api` only. Decision Log #341; forward-
+  pointers on #44 and #42.** Founder reconsideration: cascade deleted OTHER
+  users' Comment/Like/SavedPost on a departing user's Post — more than "your
+  own footprint is gone" needs and more than GDPR Art. 17 obliges (Recital 26:
+  anonymized data is out of scope).
+  - **At the end of the 30-day grace period `AccountDeletionSweepService.
+    anonymizeUser` (renamed from `hardDeleteUser`) anonymizes the `User` row
+    IN PLACE in one transaction — no `DELETE` ever runs on it.** email ->
+    `deleted-<id>@deleted.soccernity.internal`, phone/dateOfBirth/
+    clubAffiliationId -> null (`User.dateOfBirth` is now nullable),
+    displayName -> `"[deleted user]"`, unusable passwordHash, new terminal
+    `accountStatus: 'deleted'` (distinct from `pending_deletion` = grace
+    period OR held; both block login the same generic way). Team
+    `GrassrootsTeam.createdById` (now nullable) -> null, so the team goes
+    dormant/read-only via the existing 403 checks (proven by e2e, no new guard
+    code). Follow/Like/SavedPost/Notification rows deleted (Post.likeCount
+    decremented). Guardian snapshot-then-delete unchanged. Post/Comment/
+    Message/Result untouched; `Report` never touched.
+  - **Migration `20260919144308_account_anonymization_restrict_and_nullable`:
+    the 15 FKs `sprint-2/account-deletion-cascade` flipped to CASCADE are
+    RESTRICT again** (a real `DELETE FROM "User"` now fails loudly — proven by
+    e2e); later-added cascades (Banter/Community-Group members, Contest,
+    Points) left alone, inert now.
+  - **Investigation hold**: before anonymizing, the sweep skips any due account
+    with a non-terminal Report (`open`, or `actioned` + `appealStatus:
+    'pending'`) where they are reporter, direct target, OR (built — clean
+    single correlated `EXISTS`) author of a reported post/comment. Held
+    accounts stay fully identifiable and login-blocked, retried every run; no
+    "held" flag. Result shape is `{ anonymizedUserIds, heldUserIds }`.
+  - Feed visibility now allows `'active'` and `'deleted'` authors so
+    anonymized users' posts survive as "[deleted user]"; other surfaces still
+    require `'active'`. Admin `PATCH` on a `'deleted'` user -> 409; admin
+    delete anonymizes immediately (skips grace + hold).
+  - **Fixture/Result RESTRICT gap: closed for the deletion path** — a team is
+    nulled, never deleted, so nothing there can be hit; no separate fix needed.
+  - **Not built / flagged**: no retention timer on the `'deleted'` row; team
+    reassignment on signup (separate ticket); Banter/Group/Club membership
+    rows of a leaver remain (rosters filter them, `memberCount` still counts
+    them); the hold has no maximum duration.
+  - **Verification (before -> after)**: mocked suite 85 suites / 1139 tests ->
+    85 suites / 1139 tests (sweep spec rewritten, +1 admin test), 0 failures;
+    e2e (real Postgres) 20 suites / 193 tests -> 20 suites / 203 tests, 0
+    failures — includes the hold proven directly (open report -> held and
+    untouched across repeat runs -> report resolved -> anonymized), and
+    User A's post with User B's comment/like/save -> post survives as
+    "[deleted user]", B's rows byte-identical. `tsc`, eslint clean.
+  - PR opened, not merged — Temi's call after review.
 - **`sprint-2/leaderboard-design-new` designs a brand-new "Leaderboard Page
   Desktop" frame (`5171:6633`) in Figma — no leaderboard screen existed
   anywhere in the file before this.** Routing note: this task was dispatched

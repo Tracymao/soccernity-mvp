@@ -61,8 +61,14 @@ export type FeedPost = Prisma.PostGetPayload<{ select: typeof POST_SELECT }>;
 // not be shown", and this does not modify the deletion flow itself (the
 // sweep / cascade / ConsentAuditRecord are untouched), only read
 // visibility, which was a latent gap.
+//
+// sprint-2/account-anonymization-reconsideration (Decision Log #341):
+// 'deleted' authors are ALSO visible. An anonymized account's posts are
+// deliberately kept (only the attribution is gone -- the row's
+// displayName is "[deleted user]"), so the filter allows 'deleted' as
+// well as 'active'. deactivated / pending_deletion / suspended stay hidden.
 const ACTIVE_AUTHOR_POST_FILTER: Prisma.PostWhereInput = {
-  author: { accountStatus: 'active' },
+  author: { accountStatus: { in: ['active', 'deleted'] } },
 };
 
 // What GET /posts/feed and GET /posts/:id actually return to a client:

@@ -142,14 +142,14 @@ describe('Guardian consent refusal e2e: explicit decline -> pending_deletion -> 
     // startPendingDeletion() primitive.
     const sweep = app.get(AccountDeletionSweepService);
     const tooEarly = await sweep.sweepPendingDeletions(new Date(Date.now() + 29 * DAY));
-    expect(tooEarly.hardDeletedUserIds).not.toContain(seeded.userId);
+    expect(tooEarly.anonymizedUserIds).not.toContain(seeded.userId);
     expect(await prisma.user.findUnique({ where: { id: seeded.userId } })).not.toBeNull();
 
     const due = await sweep.sweepPendingDeletions(new Date(Date.now() + 31 * DAY));
-    expect(due.hardDeletedUserIds).toContain(seeded.userId);
-    expect(due.blockedUserIds).toEqual([]);
+    expect(due.anonymizedUserIds).toContain(seeded.userId);
+    expect(due.heldUserIds).toEqual([]);
 
-    expect(await prisma.user.findUnique({ where: { id: seeded.userId } })).toBeNull();
+    expect((await prisma.user.findUnique({ where: { id: seeded.userId } }))?.accountStatus).toBe('deleted');
     expect(await prisma.guardian.findUnique({ where: { id: seeded.guardianId } })).toBeNull();
 
     // Decision Log #42: the consent record outlives the User row, and
@@ -261,8 +261,8 @@ describe('Guardian consent refusal e2e: withdrawal -> pending_deletion -> 30-day
 
     const sweep = app.get(AccountDeletionSweepService);
     const due = await sweep.sweepPendingDeletions(new Date(Date.now() + 31 * DAY));
-    expect(due.hardDeletedUserIds).toContain(seeded.userId);
-    expect(await prisma.user.findUnique({ where: { id: seeded.userId } })).toBeNull();
+    expect(due.anonymizedUserIds).toContain(seeded.userId);
+    expect((await prisma.user.findUnique({ where: { id: seeded.userId } }))?.accountStatus).toBe('deleted');
 
     const audit = await prisma.consentAuditRecord.findMany({
       where: { minorUserId: seeded.userId },
@@ -368,8 +368,8 @@ describe('Guardian consent refusal e2e: two lapsed requests -> implicit decline 
     // --- And the ordinary deletion sweep finishes the job.
     const deletionSweep = app.get(AccountDeletionSweepService);
     const due = await deletionSweep.sweepPendingDeletions(new Date(Date.now() + 31 * DAY));
-    expect(due.hardDeletedUserIds).toContain(seeded.userId);
-    expect(await prisma.user.findUnique({ where: { id: seeded.userId } })).toBeNull();
+    expect(due.anonymizedUserIds).toContain(seeded.userId);
+    expect((await prisma.user.findUnique({ where: { id: seeded.userId } }))?.accountStatus).toBe('deleted');
   });
 
   it('leaves a confirmed guardian alone even once its consent token has lapsed', async () => {

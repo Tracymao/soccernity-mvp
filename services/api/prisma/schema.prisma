@@ -34,7 +34,7 @@ model User {
   phone              String?
   passwordHash       String
   displayName        String
-  dateOfBirth        DateTime
+  dateOfBirth        DateTime?
   isMinor            Boolean  @default(false)
   role               String   @default("fan") // fan | player | admin
   verificationStatus String   @default("unverified")
@@ -420,9 +420,9 @@ model GrassrootsTeam {
   name         String
   city         String
   leagueType   String // informal | school | academy
-  createdById  String
-  // Decision Log #44 (cascade) -- see account-deletion/README.md.
-  createdBy    User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdById  String?
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
+  createdBy    User?      @relation(fields: [createdById], references: [id], onDelete: Restrict)
   verified     Boolean   @default(false)
   fixturesHome Fixture[] @relation("teamA")
   fixturesAway Fixture[] @relation("teamB")
@@ -482,21 +482,21 @@ model Result {
   scoreB      Int
   // = the caller of POST /fixtures/:id/result (a creator of either team).
   enteredById String
-  // Decision Log #44 (cascade) -- see account-deletion/README.md.
-  enteredBy   User     @relation(fields: [enteredById], references: [id], onDelete: Cascade)
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
+  enteredBy   User     @relation(fields: [enteredById], references: [id])
   enteredAt   DateTime @default(now())
 }
 
 model Post {
   id           String        @id @default(uuid())
   authorId     String
-  // Decision Log #44 (cascade) -- see account-deletion/README.md.
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
   // Deleting a Post this way then needs to keep cascading into its own
   // children (Comment.post/SavedPost.post/Like.post below) for a User
   // delete to actually complete when someone else has commented/saved/
   // liked this post -- those three relations carry onDelete: Cascade
   // too, for exactly this reason, not independently of this decision.
-  author       User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author       User          @relation(fields: [authorId], references: [id])
   contentText  String
   mediaUrls    String[]
   clubPageId   String?
@@ -549,10 +549,10 @@ model Comment {
   // for the full mechanical explanation and the founder's own explicit
   // "cascading Post also cascades away Comment/Like/SavedPost rows
   // written by OTHER, unrelated users" framing of this exact consequence.
-  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  post        Post     @relation(fields: [postId], references: [id])
   authorId    String
-  // Decision Log #44 (cascade) -- see account-deletion/README.md.
-  author      User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
+  author      User     @relation(fields: [authorId], references: [id])
   contentText String
   createdAt   DateTime @default(now())
 }
@@ -747,8 +747,8 @@ model Message {
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id])
   senderId       String
-  // Decision Log #44 (cascade) -- see account-deletion/README.md.
-  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
+  sender         User         @relation(fields: [senderId], references: [id])
   contentText    String
   mediaUrl       String?
   sentAt         DateTime     @default(now())
@@ -765,8 +765,8 @@ model Message {
 model Notification {
   id           String   @id @default(uuid())
   userId       String
-  // Decision Log #44 (cascade) -- see account-deletion/README.md.
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
+  user         User     @relation(fields: [userId], references: [id])
   // sprint-3/notification-triggers-message-fixture-contest (Decision Log
   // #87): the permanent MVP set, all wired -- follow (users.service.ts),
   // like | comment (feed.service.ts), message (messaging.service.ts,
@@ -784,14 +784,14 @@ model Notification {
 model SavedPost {
   id      String   @id @default(uuid())
   userId  String
-  // Decision Log #44 (cascade) -- see account-deletion/README.md.
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
+  user    User     @relation(fields: [userId], references: [id])
   postId  String
   // sprint-2/account-deletion-cascade -- load-bearing for #44 the same
   // way Comment.post is (see that model's comment): a Post cascading
   // away from its author's User delete must keep cascading into
   // SavedPost rows saved by OTHER users too, or the whole delete aborts.
-  post    Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  post    Post     @relation(fields: [postId], references: [id])
   savedAt DateTime @default(now())
 
   @@unique([userId, postId])
@@ -803,14 +803,14 @@ model SavedPost {
 model Like {
   id      String   @id @default(uuid())
   userId  String
-  // Decision Log #44 (cascade) -- see account-deletion/README.md.
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
+  user    User     @relation(fields: [userId], references: [id])
   postId  String
   // sprint-2/account-deletion-cascade -- load-bearing for #44 the same
   // way Comment.post is (see that model's comment): a Post cascading
   // away from its author's User delete must keep cascading into Like
   // rows from OTHER users too, or the whole delete aborts.
-  post    Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  post    Post     @relation(fields: [postId], references: [id])
   likedAt DateTime @default(now())
 
   @@unique([userId, postId])
@@ -819,10 +819,10 @@ model Like {
 model Follow {
   id         String   @id @default(uuid())
   followerId String
-  // Decision Log #44 (cascade) -- see account-deletion/README.md.
-  follower   User     @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
+  follower   User     @relation("follower", fields: [followerId], references: [id])
   followeeId String
-  followee   User     @relation("followee", fields: [followeeId], references: [id], onDelete: Cascade)
+  followee   User     @relation("followee", fields: [followeeId], references: [id])
   // Added ahead of GET /users/:id/followers and GET /users/:id/following
   // (Build Plan Section 4.2, Sprint 2) -- a genuine addition beyond
   // Section 3's literal field list, flagged here and in
@@ -847,8 +847,8 @@ model Follow {
 model Report {
   id         String   @id @default(uuid())
   reporterId String
-  // Decision Log #44 (cascade) -- see account-deletion/README.md.
-  reporter   User     @relation("reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
+  reporter   User     @relation("reporter", fields: [reporterId], references: [id])
   targetType String // post | user | comment
   targetId   String
   reason     String
@@ -1141,8 +1141,8 @@ model Standing {
 model LeaderboardEntry {
   id     String @id @default(uuid())
   userId String
-  // Decision Log #44 (cascade) -- see account-deletion/README.md.
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
+  user   User   @relation(fields: [userId], references: [id])
   points Int    @default(0)
   rank   Int?
   period String // e.g. "2026-W33"

@@ -233,7 +233,7 @@ describe('FeedService', () => {
       // (active author) AND (own posts OR followed authors).
       expect(callArgs.where).toEqual({
         AND: [
-          { author: { accountStatus: 'active' } },
+          { author: { accountStatus: { in: ['active', 'deleted'] } } },
           {
             OR: [
               { authorId: 'user-1' },
@@ -482,7 +482,7 @@ describe('FeedService', () => {
       // Decision Log #221: club feed also excludes deactivated authors.
       expect(callArgs.where).toEqual({
         clubPageId: 'club-1',
-        author: { accountStatus: 'active' },
+        author: { accountStatus: { in: ['active', 'deleted'] } },
       });
       expect(callArgs.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
       expect(callArgs.take).toBe(FEED_DEFAULT_PAGE_SIZE + 1);
@@ -514,7 +514,7 @@ describe('FeedService', () => {
       const callArgs = (prisma.post.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.where.AND[0]).toEqual({
         clubPageId: 'club-1',
-        author: { accountStatus: 'active' },
+        author: { accountStatus: { in: ['active', 'deleted'] } },
       });
       expect(callArgs.where.AND[1]).toEqual({
         OR: [
@@ -596,7 +596,7 @@ describe('FeedService', () => {
 
       await expect(service.getPostById('post-1', 'viewer-1')).rejects.toBeInstanceOf(NotFoundException);
       const callArgs = (prisma.post.findFirst as jest.Mock).mock.calls[0][0];
-      expect(callArgs.where).toEqual({ id: 'post-1', author: { accountStatus: 'active' } });
+      expect(callArgs.where).toEqual({ id: 'post-1', author: { accountStatus: { in: ['active', 'deleted'] } } });
     });
 
     it('throws NotFoundException, not a silent null, for a non-existent id (before any viewer-state lookup)', async () => {
