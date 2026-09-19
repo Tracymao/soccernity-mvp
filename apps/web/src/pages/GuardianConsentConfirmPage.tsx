@@ -40,23 +40,22 @@
 // / what stays off) is real, generic, non-personalized product copy from
 // the same frame and is kept.
 //
-// The Figma frame's "I do not consent" button has no matching backend
-// action either -- there is no decline/reject endpoint, only confirm.
-// Declining is therefore modeled as "take no action" (the account simply
-// stays in its existing restricted-pending state, which is already true
-// without any call), not as a button that silently does nothing when
-// clicked -- clicking it shows an explicit inline message saying exactly
-// that, rather than a no-op.
+// The Figma frame's "I do not consent" button is wired to the real
+// POST /auth/guardian-consent/decline (sprint-1/guardian-consent-decline-
+// withdraw-expiry). Declining closes the account and schedules it for
+// deletion server-side, so the success state says so plainly rather than
+// implying the account merely stays pending. The backend's non-generic
+// 400s ("already confirmed", "declined or withdrawn") are shown verbatim.
 import { useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
-import { confirmGuardianConsent, AuthApiError } from "../api/auth";
+import { confirmGuardianConsent, declineGuardianConsent, AuthApiError } from "../api/auth";
 import { darkConsentThemeVars } from "./guardian-consent/consentThemeVars";
 import "./guardian-consent/GuardianConsent.css";
 
 const GENERIC_ERROR_MESSAGE =
   "This link is invalid or has expired. Ask the account holder to resend the approval request from their account.";
 
-type Status = "idle" | "submitting" | "confirmed" | "error";
+type Status = "idle" | "submitting" | "confirmed" | "declined" | "error";
 
 const WHAT_THEY_CAN_DO = [
   {
@@ -98,7 +97,6 @@ export default function GuardianConsentConfirmPage() {
 
   const [agreed, setAgreed] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
-  const [declined, setDeclined] = useState(false);
   const [errorMessage, setErrorMessage] = useState(GENERIC_ERROR_MESSAGE);
 
   async function handleConsent(event: FormEvent) {
@@ -109,6 +107,19 @@ export default function GuardianConsentConfirmPage() {
     try {
       await confirmGuardianConsent(token);
       setStatus("confirmed");
+    } catch (error) {
+      setErrorMessage(error instanceof AuthApiError ? error.message : GENERIC_ERROR_MESSAGE);
+      setStatus("error");
+    }
+  }
+
+  async function handleDecline() {
+    if (!token) return;
+
+    setStatus("submitting");
+    try {
+      await declineGuardianConsent(token);
+      setStatus("declined");
     } catch (error) {
       setErrorMessage(error instanceof AuthApiError ? error.message : GENERIC_ERROR_MESSAGE);
       setStatus("error");
@@ -129,6 +140,14 @@ export default function GuardianConsentConfirmPage() {
             <h1 className="consent-page__heading">Thank you</h1>
             <p className="consent-status-message" role="status">
               Your approval has been recorded. The account is now active -- you can close this page.
+            </p>
+          </div>
+        ) : status === "declined" ? (
+          <div className="consent-card">
+            <h1 className="consent-page__heading">Your decision has been recorded</h1>
+            <p className="consent-status-message" role="status">
+              You have declined permission for this account. The account will stay closed and will be scheduled for
+              deletion. You can close this page.
             </p>
           </div>
         ) : (
@@ -176,15 +195,7 @@ export default function GuardianConsentConfirmPage() {
               </div>
             </div>
 
-            {declined ? (
-              <div className="consent-card consent-card--tint">
-                <p className="consent-status-message" role="status">
-                  Understood -- you don&rsquo;t need to do anything else. The account will remain restricted and
-                  pending until you decide to approve it from this same link.
-                </p>
-              </div>
-            ) : (
-              <form onSubmit={handleConsent}>
+            <form onSubmit={handleConsent}>
                 <div className="consent-card" style={{ gap: "24px" }}>
                   <div className="consent-checkbox-row">
                     <input
@@ -217,7 +228,7 @@ export default function GuardianConsentConfirmPage() {
                     <button
                       type="button"
                       className="consent-button consent-button--secondary"
-                      onClick={() => setDeclined(true)}
+                      onClick={handleDecline}
                       disabled={status === "submitting"}
                     >
                       I do not consent
@@ -225,7 +236,7 @@ export default function GuardianConsentConfirmPage() {
                   </div>
 
                   <p className="consent-footnote">
-                    Declining keeps the account restricted and pending.{" "}
+                    Declining closes the account and schedules it for deletion.{" "}
                     <span className="consent-fineprint">
                       [COPY PENDING LEGAL REVIEW -- expiry/deletion/withdrawal copy from the Figma frame is not
                       reproduced here since it isn't backed by a real policy yet.]
@@ -233,8 +244,7 @@ export default function GuardianConsentConfirmPage() {
                     Read our <Link to="/">Privacy Policy</Link>.
                   </p>
                 </div>
-              </form>
-            )}
+            </form>
           </>
         )}
       </div>
