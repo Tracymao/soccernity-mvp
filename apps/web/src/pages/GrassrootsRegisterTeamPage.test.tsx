@@ -54,7 +54,7 @@ describe("GrassrootsRegisterTeamPage", () => {
 
   it("submits POST /teams and shows the confirmation with schedule / view links", async () => {
     window.sessionStorage.setItem("sn_access_token", "test-token");
-    vi.mocked(createTeam).mockResolvedValueOnce(CREATED);
+    vi.mocked(createTeam).mockResolvedValueOnce({ ...CREATED, reclaimed: false });
 
     renderPage();
     fillForm();
@@ -75,6 +75,26 @@ describe("GrassrootsRegisterTeamPage", () => {
     expect(screen.getByRole("link", { name: "View team page" }).getAttribute("href")).toBe(
       "/grassroots/team-new",
     );
+  });
+
+  it("shows the backend's takeover message instead of 'Team registered' when reclaimed", async () => {
+    window.sessionStorage.setItem("sn_access_token", "test-token");
+    vi.mocked(createTeam).mockResolvedValueOnce({
+      ...CREATED,
+      reclaimed: true,
+      message: "This team had no organiser, so you now manage it. Its fixtures and results were kept.",
+    });
+
+    renderPage();
+    fillForm();
+    fireEvent.click(screen.getByRole("button", { name: "Register team" }));
+
+    expect(await screen.findByRole("heading", { name: /now this team.s organiser/i })).not.toBeNull();
+    expect(
+      screen.getByText("This team had no organiser, so you now manage it. Its fixtures and results were kept."),
+    ).not.toBeNull();
+    expect(screen.queryByRole("heading", { name: "Team registered" })).toBeNull();
+    expect(screen.getByRole("link", { name: "View team page" })).not.toBeNull();
   });
 
   it("keeps the Register button disabled until name and city are filled", () => {

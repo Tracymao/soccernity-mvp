@@ -22,7 +22,7 @@ import {
   leagueTypeLabel,
   GrassrootsApiError,
   type GrassrootsLeagueType,
-  type GrassrootsTeam,
+  type CreateTeamResult,
 } from "../api/grassroots";
 import { getStoredAccessToken } from "../lib/session";
 import { isAwaitingConsent } from "./grassroots/errors";
@@ -44,7 +44,7 @@ export default function GrassrootsRegisterTeamPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [awaitingConsent, setAwaitingConsent] = useState(false);
-  const [registered, setRegistered] = useState<GrassrootsTeam | null>(null);
+  const [registered, setRegistered] = useState<CreateTeamResult | null>(null);
 
   if (!token) {
     return (
@@ -84,10 +84,14 @@ export default function GrassrootsRegisterTeamPage() {
           ✓
         </span>
         <div className="grassroots-form__header">
-          <h1 className="grassroots-form__title">Team registered</h1>
+          <h1 className="grassroots-form__title">
+            {registered.reclaimed ? "You’re now this team’s organiser" : "Team registered"}
+          </h1>
           <p className="grassroots-form__lede">
-            {registered.name} is live on Soccernity. Schedule your first fixture whenever you&rsquo;re
-            ready.
+            {registered.reclaimed
+              ? (registered.message ??
+                `${registered.name} was already on Soccernity without an organiser, so you've taken it over.`)
+              : `${registered.name} is live on Soccernity. Schedule your first fixture whenever you’re ready.`}
           </p>
         </div>
         <div className="grassroots-teamchip">

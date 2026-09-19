@@ -185,9 +185,14 @@ async function errorMessageFrom(response: Response, fallback: string): Promise<s
 
 // ---------- Teams ----------
 
+// POST /teams response: the team plus `reclaimed` -- true when the caller
+// took over a dormant team (its organiser's account was anonymised)
+// instead of creating a new one, in which case `message` explains it.
+export type CreateTeamResult = GrassrootsTeam & { reclaimed: boolean; message?: string };
+
 // POST /teams -- JwtAuthGuard + GuardianConsentGuard. A 403 means the
-// caller is a restricted-pending minor.
-export async function createTeam(accessToken: string, payload: CreateTeamRequest): Promise<GrassrootsTeam> {
+// caller is a restricted-pending minor. A duplicate of a live team is a 409.
+export async function createTeam(accessToken: string, payload: CreateTeamRequest): Promise<CreateTeamResult> {
   const response = await authedFetch("/teams", accessToken, {
     method: "POST",
     body: JSON.stringify(payload),
@@ -198,7 +203,7 @@ export async function createTeam(accessToken: string, payload: CreateTeamRequest
       { status: response.status },
     );
   }
-  return (await response.json()) as GrassrootsTeam;
+  return (await response.json()) as CreateTeamResult;
 }
 
 // GET /teams?city= -- keyset-paginated alphabetically by name; `city` is a
