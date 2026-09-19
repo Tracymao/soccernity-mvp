@@ -15,6 +15,8 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
     savedPost: { deleteMany: jest.fn() },
     follow: { deleteMany: jest.fn() },
     notification: { deleteMany: jest.fn() },
+    banterRoomMember: { deleteMany: jest.fn() },
+    communityGroupMember: { deleteMany: jest.fn() },
     grassrootsTeam: { updateMany: jest.fn() },
     $executeRaw: jest.fn().mockResolvedValue(0),
     $queryRaw: jest.fn().mockResolvedValue(opts.held ? [{ found: 1 }] : []),
@@ -26,6 +28,63 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
 }
 
 describe('AccountDeletionSweepService', () => {
+  describe('anonymizeUser membership cleanup', () => {
+    it('deletes Banter/Group/Club memberships and decrements each memberCount, inside the transaction', async () => {
+      const prisma = buildPrismaMock();
+      const service = new AccountDeletionSweepService(prisma);
+
+      await service.anonymizeUser('user-1', false);
+
+      expect(prisma.banterRoomMember.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.communityGroupMember.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      const sql = (prisma.$executeRaw as unknown as jest.Mock).mock.calls.map((c) => (c[0] as string[]).join('?'));
+      expect(sql.some((q) => q.includes('UPDATE "BanterRoom"'))).toBe(true);
+      expect(sql.some((q) => q.includes('UPDATE "CommunityGroup"'))).toBe(true);
+      expect(sql.some((q) => q.includes('UPDATE "ClubPage"'))).toBe(true);
+      expect(sql.some((q) => q.includes('DELETE FROM "_ClubMembership"'))).toBe(true);
+      // counters are decremented BEFORE the membership rows disappear
+      const clubUpdate = sql.findIndex((q) => q.includes('UPDATE "ClubPage"'));
+      const clubDelete = sql.findIndex((q) => q.includes('DELETE FROM "_ClubMembership"'));
+      expect(clubUpdate).toBeLessThan(clubDelete);
+    });
+  });
+
+  describe('listStalledHolds', () => {
+    const now = new Date('2026-12-01T00:00:00.000Z');
+
+    it('queries pending_deletion users past grace + threshold and keeps only those with an open investigation', async () => {
+      const prisma = buildPrismaMock({ held: true });
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([
+        { id: 'u1', displayName: 'A', email: 'a@x.com', pendingDeletionAt: new Date('2026-06-01T00:00:00.000Z') },
+      ]);
+      const service = new AccountDeletionSweepService(prisma);
+
+      const out = await service.listStalledHolds(90, now);
+
+      // cutoff = now - (30 + 90) days
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { accountStatus: 'pending_deletion', pendingDeletionAt: { lte: new Date('2026-08-03T00:00:00.000Z') } },
+        }),
+      );
+      expect(out).toHaveLength(1);
+      // heldSince = 2026-06-01 + 30d = 2026-07-01; 153 days before 2026-12-01
+      expect(out[0]).toMatchObject({ userId: 'u1', daysHeld: 153 });
+      expect(out[0].heldSince).toEqual(new Date('2026-07-01T00:00:00.000Z'));
+    });
+
+    it('omits candidates with no open investigation and never mutates anything', async () => {
+      const prisma = buildPrismaMock({ held: false });
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([
+        { id: 'u1', displayName: 'A', email: 'a@x.com', pendingDeletionAt: new Date('2026-01-01T00:00:00.000Z') },
+      ]);
+      const service = new AccountDeletionSweepService(prisma);
+
+      expect(await service.listStalledHolds(90, now)).toEqual([]);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('sweepPendingDeletions', () => {
     it('queries only accountStatus=pending_deletion rows with pendingDeletionAt at or before a 30-day-ago cutoff', async () => {
       const prisma = buildPrismaMock();
@@ -86,7 +145,7 @@ describe('AccountDeletionSweepService', () => {
         data: { createdById: null },
       });
       // likeCount decrement runs (raw) before the Like rows are deleted
-      expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+      expect(prisma.$executeRaw).toHaveBeenCalledTimes(5); // likeCount + 3 memberCount decrements + club membership delete
       const raw = (prisma.$executeRaw as jest.Mock).mock.invocationCallOrder[0];
       const del = (prisma.like.deleteMany as jest.Mock).mock.invocationCallOrder[0];
       expect(raw).toBeLessThan(del);

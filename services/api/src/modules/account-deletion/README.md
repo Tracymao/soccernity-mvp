@@ -65,14 +65,17 @@
 > (`PATCH /admin/users/:id {status:'deleted'}`) calls `anonymizeUser` directly
 > and deliberately skips both the grace period and the hold.
 >
-> **Flagged, not built:** no retention timer on the anonymized `'deleted'` row
-> itself (a future consideration if it is ever worth purging after N years);
-> Grassroots reassignment of a dormant team to a new organiser is a separate,
-> already-scoped follow-up; a departing user's `BanterRoomMember`/
-> `CommunityGroupMember`/`_ClubMembership` rows are not removed (rosters filter
-> non-`active` users, but `memberCount` still counts them); a hold has no
-> maximum duration; the notification rows other users hold *about* the leaver
-> now resolve to "[deleted user]".
+> **Updated by `sprint-2/anonymization-followups` (Decision Log #344/#345):**
+> `anonymizeUser` now also deletes the leaver's Banter Room / Community Group /
+> Club memberships and decrements each `memberCount`. A hold still has no
+> maximum duration by design, but `GET /admin/users/held-investigations`
+> (default 90 days, tunable) surfaces stalled holds to admins. No retention
+> timer on the anonymized row, **by design** (#344): a later hard-delete would
+> fail on RESTRICT FKs or cascade away other users' content.
+>
+> **Still flagged, not built:** Grassroots dormant-team reassignment is a
+> separate follow-up; the notification rows other users hold *about* the
+> leaver now resolve to "[deleted user]".
 >
 > ---
 > ### Historical (superseded by Decision Log #341)

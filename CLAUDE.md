@@ -1983,6 +1983,12 @@ Full reasoning for every choice above: Build Plan Section 5.
     - Grassroots dormant-team reassignment is now built — see
       `sprint-5/grassroots-team-dormant-reclaim` (Decision Log #342/#343); its
       own open items are tracked in that bullet.
+- **`sprint-2/anonymization-followups` (backend-api, 2026-09-19) closes three items PR #262 (Decision Log #341) flagged as not built. `services/api` only, zero schema diff. Decision Log #344 (no purge timer, by design) + #345 (hold visibility).**
+  - **Membership rows.** `anonymizeUser`'s transaction now also deletes the user's `BanterRoomMember`, `CommunityGroupMember` and `_ClubMembership` rows and decrements each room/group/club `memberCount` by 1 (floored at 0, decrement runs before the delete) — fixed at the source, not the query. Post/Comment/Message/Result untouched.
+  - **Investigation-hold visibility.** New `GET /admin/users/held-investigations?olderThanDays=` (moderator/superadmin, read-only) lists accounts held by an open Report longer than the threshold (held-since = `pendingDeletionAt` + 30 days). Default **90 days, tunable** (`HELD_INVESTIGATION_ALERT_DAYS`). No auto-timeout, no auto-action; the hold stays unbounded by design. No `apps/admin` screen for it yet.
+  - **Retention timer: resolved as "no purge timer, by design" (Decision Log #344).** Hard-deleting the anonymized `User` row would fail on RESTRICT FKs or cascade away other users' content, the harm #341 exists to prevent; the row holds no personal data. Not an oversight.
+  - **Verification (before -> after)**: mocked suite 85 suites / 1154 tests (last recorded figure on `main`, not re-run before the change) -> 85 suites / 1161 tests, 0 failures; e2e (real Postgres) 20 suites / 213 -> 20 suites / 215 tests, 0 failures. `tsc`, eslint, `nest build` clean. One existing sweep-spec assertion (`$executeRaw` call count 1 -> 5) updated for the new statements.
+  - PR opened, not merged — Temi's call.
 - **`sprint-2/leaderboard-design-new` designs a brand-new "Leaderboard Page
   Desktop" frame (`5171:6633`) in Figma — no leaderboard screen existed
   anywhere in the file before this.** Routing note: this task was dispatched

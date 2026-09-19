@@ -5,6 +5,7 @@ import { AdminRolesGuard } from '../admin/guards/admin-roles.guard';
 import { CurrentAdmin } from '../admin/guards/current-admin.decorator';
 import { AdminAccessTokenPayload } from '../admin/token/admin-token.types';
 import { AdminUsersService } from './admin-users.service';
+import { HeldInvestigationsQueryDto } from './dto/held-investigations-query.dto';
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 
@@ -27,6 +28,12 @@ export class AdminUsersController {
   @Get()
   async list(@Query() query: ListUsersQueryDto) {
     return this.adminUsersService.listUsers(query);
+  }
+
+  // Registered before ':id' routes; GET only, so no clash regardless.
+  @Get('held-investigations')
+  async heldInvestigations(@Query() query: HeldInvestigationsQueryDto) {
+    return this.adminUsersService.listStalledHolds(query.olderThanDays);
   }
 
   @Patch(':id')
