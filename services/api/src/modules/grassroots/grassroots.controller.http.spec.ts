@@ -9,6 +9,8 @@ import {
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
+import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
+import { AdminRolesGuard } from '../admin/guards/admin-roles.guard';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GrassrootsFixturesController } from './grassroots-fixtures.controller';
@@ -23,6 +25,8 @@ describe('Grassroots controllers (HTTP layer)', () => {
   let app: INestApplication;
   const CALLER = { sub: 'user-1', role: 'fan' };
   let consentGuardCalls = 0;
+  let adminGuardCalls = 0;
+  let adminRolesGuardAllows = true;
 
   const grassroots = {
     createTeam: jest.fn(),
@@ -48,6 +52,15 @@ describe('Grassroots controllers (HTTP layer)', () => {
           return true;
         },
       })
+      .overrideGuard(AdminJwtAuthGuard)
+      .useValue({
+        canActivate: () => {
+          adminGuardCalls += 1;
+          return true;
+        },
+      })
+      .overrideGuard(AdminRolesGuard)
+      .useValue({ canActivate: () => adminRolesGuardAllows })
       .overrideGuard(GuardianConsentGuard)
       .useValue({
         canActivate: () => {
@@ -111,14 +124,27 @@ describe('Grassroots controllers (HTTP layer)', () => {
     });
   });
 
-  describe('DELETE /teams/:id', () => {
-    it('delegates to deleteDormantTeam(id), returns 204, and the consent guard ran', async () => {
+  describe('DELETE /teams/:id (admin-only, Decision Log #343)', () => {
+    beforeEach(() => {
+      adminGuardCalls = 0;
+      adminRolesGuardAllows = true;
+    });
+
+    it('delegates to deleteDormantTeam(id), returns 204, runs the admin guard and NOT the user consent guard', async () => {
       grassroots.deleteDormantTeam.mockResolvedValue(undefined);
+      const consentBefore = consentGuardCalls;
 
       await request(app.getHttpServer()).delete('/teams/t-1').expect(204);
 
       expect(grassroots.deleteDormantTeam).toHaveBeenCalledWith('t-1');
-      expect(consentGuardCalls).toBe(1);
+      expect(adminGuardCalls).toBe(1);
+      expect(consentGuardCalls).toBe(consentBefore);
+    });
+
+    it('403s when the admin role guard rejects, without calling the service', async () => {
+      adminRolesGuardAllows = false;
+      await request(app.getHttpServer()).delete('/teams/t-1').expect(403);
+      expect(grassroots.deleteDormantTeam).not.toHaveBeenCalled();
     });
 
     it('surfaces the service\'s 409 for a live or fixture-bearing team', async () => {
