@@ -1912,7 +1912,7 @@ Full reasoning for every choice above: Build Plan Section 5.
   failures (the 2 stale "blocked" tests from PR #88 replaced with 5 new
   ones, including the cross-user cascade proof and the raw-SQL schema
   checks). **SUPERSEDED by `sprint-2/account-anonymization-reconsideration`
-  (Decision Log #341) — see the next bullet: the cascade is reverted to
+  (Decision Log #341, merged as PR #262) — see the next bullet: the cascade is reverted to
   RESTRICT and the User row is anonymized in place instead.**
 - **`sprint-2/account-anonymization-reconsideration` (backend-api,
   2026-09-19) SUPERSEDES Decision Log #44's cascade (and #42's "hard-delete
@@ -1962,7 +1962,27 @@ Full reasoning for every choice above: Build Plan Section 5.
     untouched across repeat runs -> report resolved -> anonymized), and
     User A's post with User B's comment/like/save -> post survives as
     "[deleted user]", B's rows byte-identical. `tsc`, eslint clean.
-  - PR opened, not merged — Temi's call after review.
+  - **Merged as PR #262** — this bullet's own text previously said "PR opened,
+    not merged"; corrected here in place once the merge was confirmed directly
+    against `git log` on a fresh `origin/main` fetch, per this file's own
+    "Keeping this file current" rule. Decision Log #341 is Resolved/implemented,
+    with forward-pointers on #42 and #44 confirmed present in the docx.
+  - **Not built / flagged, tracked here (deferred by design, not oversights;
+    none resolved by this entry)** — each independently findable:
+    - No retention/purge timer exists for an anonymized (`'deleted'`) `User`
+      row.
+    - The investigation hold has no maximum duration — an account can
+      theoretically stay held forever if a `Report` never resolves.
+    - Banter / Community-Group / Club membership rows of an anonymized user
+      remain (rosters filter them at query time, but `memberCount` still
+      counts them).
+    - The cascades added earlier for Banter/Community-Group members, Contest
+      and Points were left unchanged by the redesign and are now inert dead
+      code paths on the `User` deletion side — a real cleanup candidate, not
+      touched.
+    - Grassroots dormant-team reassignment is now built — see
+      `sprint-5/grassroots-team-dormant-reclaim` (Decision Log #342/#343); its
+      own open items are tracked in that bullet.
 - **`sprint-2/leaderboard-design-new` designs a brand-new "Leaderboard Page
   Desktop" frame (`5171:6633`) in Figma — no leaderboard screen existed
   anywhere in the file before this.** Routing note: this task was dispatched
@@ -8572,7 +8592,10 @@ Full reasoning for every choice above: Build Plan Section 5.
   fresh `GET /users/:id` fetch on every mount, not a cached value, so a
   real user navigating from the register-team confirmation to the real
   team page picks up the flag immediately with no re-login needed.
-  Not merged — founder's call after review.
+  **Merged as PR #260** — this bullet's own text previously said "Not merged —
+  founder's call after review"; corrected here in place once the merge was
+  confirmed directly against `git log` on a fresh `origin/main` fetch, per this
+  file's own "Keeping this file current" rule.
 - **`sprint-1/guardian-consent-decline-withdraw-expiry` (backend-api,
   2026-09-19) closes a real, long-standing safeguarding gap: before it,
   `Guardian.consentStatus` only ever moved `pending -> confirmed`. There
@@ -8719,7 +8742,10 @@ Full reasoning for every choice above: Build Plan Section 5.
     semantics, so a mock could not have shown it); that confirm cannot
     reverse a decline; and that a third sweep tick never restarts an
     already-running deletion clock.
-  - PR opened, not merged — Temi's call after review.
+  - **Merged as PR #261** — this bullet's own text previously said "PR opened,
+    not merged"; corrected here in place once the merge was confirmed directly
+    against `git log` on a fresh `origin/main` fetch, per this file's own
+    "Keeping this file current" rule.
 - **`sprint-5/grassroots-team-dormant-reclaim` (backend-api, 2026-09-19)
   consumes the nullable `GrassrootsTeam.createdById` that
   `sprint-2/account-anonymization-reconsideration` (Decision Log #341)
@@ -8743,7 +8769,21 @@ Full reasoning for every choice above: Build Plan Section 5.
     by the real sweep -> new user reclaims -> new organiser runs
     fixtures/status/results, old organiser gets 403; live-duplicate 409;
     both race cases; every DELETE branch). `nest build` + lint clean.
-    PR opened, not merged.
+  - **Merged as PR #263** — this bullet's own text previously said "PR opened,
+    not merged"; corrected here in place once the merge was confirmed directly
+    against `git log` on a fresh `origin/main` fetch, per this file's own
+    "Keeping this file current" rule.
+  - **Not built / flagged, tracked here (deferred by design, not oversights;
+    none resolved by this entry):**
+    - **Decision Log #343 (who may call the dormant-only `DELETE /teams/:id`)
+      is still genuinely OPEN** — confirmed Open in the Build Plan docx, not
+      Resolved. #342 is Resolved-implemented, with its own open sub-questions
+      (a normalised `(name, city)` unique column; name+city being a weak
+      identity; legacy pre-rule duplicate rows).
+    - **The web `/grassroots/register` page does not yet show the
+      `reclaimed: true` takeover notice** the API now returns — needs its own
+      `figma-to-code` frontend follow-up ticket (and probably a design frame
+      for the notice first).
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
@@ -11251,7 +11291,10 @@ real, still-open follow-up, not done by this entry.
     relabelled/still-`/signup` CTA, and the two-section hero card; no
     existing test removed). `npx tsc --noEmit`, `npm run lint`, `npm run
     build` all clean.
-  - Not merged — Temi's call after review.
+  - **Merged as PR #259** — this bullet's own text previously said "Not merged —
+    Temi's call after review"; corrected here in place once the merge was
+    confirmed directly against `git log` on a fresh `origin/main` fetch. (PR #258's
+    bullet above already correctly said "Merged".)
 
 ## The eight agents, and the order they run in
 
