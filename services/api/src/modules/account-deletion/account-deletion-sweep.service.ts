@@ -26,8 +26,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 // identifying fields; null GrassrootsTeam.createdById on teams they
 // organised (the team goes dormant/read-only -- the existing
 // createdById !== caller -> 403 checks already do that); delete their
-// Follow / Like / SavedPost / Notification rows (ephemeral signal, not
-// content) keeping Post.likeCount honest; and, for a minor with a
+// Follow / Like / SavedPost / Notification rows and their Banter Room /
+// Community Group / Club memberships (ephemeral signal, not content)
+// keeping Post.likeCount and every memberCount honest; and, for a minor with a
 // Guardian row, snapshot into ConsentAuditRecord then delete the
 // Guardian row (Decision Log #42, unchanged -- ConsentAuditRecord keeps
 // its own 6-month purge clock, measured from anonymization time).
@@ -55,6 +56,18 @@ import { PrismaService } from '../../prisma/prisma.service';
 // real grace period rather than hardcoding it.
 export const GRACE_PERIOD_DAYS = 30;
 const CONSENT_AUDIT_RETENTION_MONTHS = 6;
+
+// Starting default for "this hold has stalled" -- tunable, a judgment
+// call (Decision Log #343-adjacent; see admin-users/README.md).
+export const HELD_INVESTIGATION_ALERT_DAYS = 90;
+
+export interface StalledHold {
+  userId: string;
+  displayName: string;
+  email: string;
+  heldSince: Date;
+  daysHeld: number;
+}
 
 export interface SweepPendingDeletionsResult {
   anonymizedUserIds: string[];
@@ -157,6 +170,42 @@ export class AccountDeletionSweepService {
     return rows.length > 0;
   }
 
+  // Accounts currently held by an open investigation for longer than
+  // `thresholdDays`. A hold has no maximum duration BY DESIGN (auto-
+  // expiring it would undermine evidence integrity), so this is the
+  // visibility half: a stalled investigation becomes an admin's problem
+  // to chase. Read-only -- never acts on the account. "Held since" is the
+  // moment the account first became due for anonymization
+  // (pendingDeletionAt + GRACE_PERIOD_DAYS); an account is listed once
+  // that moment is more than thresholdDays ago AND it still has an open
+  // investigation. Bounded by nature (only accounts with an open report
+  // past their grace period), so unpaginated.
+  async listStalledHolds(
+    thresholdDays: number = HELD_INVESTIGATION_ALERT_DAYS,
+    now: Date = new Date(),
+  ): Promise<StalledHold[]> {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const cutoff = new Date(now.getTime() - (GRACE_PERIOD_DAYS + thresholdDays) * dayMs);
+    const candidates = await this.prisma.user.findMany({
+      where: { accountStatus: 'pending_deletion', pendingDeletionAt: { lte: cutoff } },
+      select: { id: true, displayName: true, email: true, pendingDeletionAt: true },
+      orderBy: { pendingDeletionAt: 'asc' },
+    });
+    const stalled: StalledHold[] = [];
+    for (const c of candidates) {
+      if (!(await this.hasOpenInvestigation(c.id)) || !c.pendingDeletionAt) continue;
+      const heldSince = new Date(c.pendingDeletionAt.getTime() + GRACE_PERIOD_DAYS * dayMs);
+      stalled.push({
+        userId: c.id,
+        displayName: c.displayName,
+        email: c.email,
+        heldSince,
+        daysHeld: Math.floor((now.getTime() - heldSince.getTime()) / dayMs),
+      });
+    }
+    return stalled;
+  }
+
   // One transaction -- the whole anonymization happens or none of it
   // does. Public because AdminUsersService calls it directly for an
   // admin-triggered immediate delete; that caller owns its own
@@ -194,6 +243,30 @@ export class AccountDeletionSweepService {
       await tx.savedPost.deleteMany({ where: { userId } });
       await tx.follow.deleteMany({ where: { OR: [{ followerId: userId }, { followeeId: userId }] } });
       await tx.notification.deleteMany({ where: { userId } });
+
+      // Membership rows (Banter Rooms, Community Groups, Club pages) are
+      // ephemeral participation signal, the same category as Follow/Like,
+      // not authored content other users depend on. Deleting them here,
+      // at the source, keeps each denormalized memberCount honest: every
+      // affected room/group/club loses exactly 1 (each join table is
+      // unique per user+target). Same GREATEST(..., 0) floor as likeCount.
+      // ClubPage membership is an implicit m2m: "A" = ClubPage.id,
+      // "B" = User.id (see ClubsService.joinClub).
+      await tx.$executeRaw`
+        UPDATE "BanterRoom" SET "memberCount" = GREATEST("memberCount" - 1, 0)
+        WHERE "id" IN (SELECT "banterRoomId" FROM "BanterRoomMember" WHERE "userId" = ${userId})
+      `;
+      await tx.banterRoomMember.deleteMany({ where: { userId } });
+      await tx.$executeRaw`
+        UPDATE "CommunityGroup" SET "memberCount" = GREATEST("memberCount" - 1, 0)
+        WHERE "id" IN (SELECT "communityGroupId" FROM "CommunityGroupMember" WHERE "userId" = ${userId})
+      `;
+      await tx.communityGroupMember.deleteMany({ where: { userId } });
+      await tx.$executeRaw`
+        UPDATE "ClubPage" SET "memberCount" = GREATEST("memberCount" - 1, 0)
+        WHERE "id" IN (SELECT "A" FROM "_ClubMembership" WHERE "B" = ${userId})
+      `;
+      await tx.$executeRaw`DELETE FROM "_ClubMembership" WHERE "B" = ${userId}`;
 
       // Teams they organised go dormant: no organiser, so every
       // createdById-based authorization check fails closed (403).

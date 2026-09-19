@@ -11,6 +11,7 @@ describe('AdminUsersController (HTTP layer)', () => {
   const adminUsersService = {
     listUsers: jest.fn(),
     updateUserStatus: jest.fn(),
+    listStalledHolds: jest.fn(),
   };
 
   let currentAdmin: { sub: string; role: string; aud: string };
@@ -72,6 +73,26 @@ describe('AdminUsersController (HTTP layer)', () => {
 
       await request(app.getHttpServer()).get('/admin/users').expect(200);
       expect(adminUsersService.listUsers).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('GET /admin/users/held-investigations', () => {
+    it('rejects an editor with 403', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'editor', aud: 'admin-console' };
+      await request(app.getHttpServer()).get('/admin/users/held-investigations').expect(403);
+      expect(adminUsersService.listStalledHolds).not.toHaveBeenCalled();
+    });
+
+    it('passes olderThanDays through as a number for a moderator', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
+      adminUsersService.listStalledHolds.mockResolvedValue({ thresholdDays: 45, items: [] });
+      await request(app.getHttpServer()).get('/admin/users/held-investigations?olderThanDays=45').expect(200);
+      expect(adminUsersService.listStalledHolds).toHaveBeenCalledWith(45);
+    });
+
+    it('rejects a negative threshold with 400', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
+      await request(app.getHttpServer()).get('/admin/users/held-investigations?olderThanDays=-1').expect(400);
     });
   });
 

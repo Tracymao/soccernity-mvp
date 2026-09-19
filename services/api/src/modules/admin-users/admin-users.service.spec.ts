@@ -28,6 +28,7 @@ function buildDeps() {
 
   const accountDeletionSweepService = {
     anonymizeUser: jest.fn().mockResolvedValue(undefined),
+    listStalledHolds: jest.fn().mockResolvedValue([]),
   } as unknown as AccountDeletionSweepService;
 
   return { prisma, tokenService, accountDeletionSweepService };
@@ -46,6 +47,19 @@ function user(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 describe('AdminUsersService', () => {
+  describe('listStalledHolds', () => {
+    it('defaults the threshold to 90 days and only reads', async () => {
+      const { prisma, tokenService, accountDeletionSweepService } = buildDeps();
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService);
+
+      const out = await service.listStalledHolds();
+
+      expect(accountDeletionSweepService.listStalledHolds).toHaveBeenCalledWith(undefined);
+      expect(out).toEqual({ thresholdDays: 90, items: [] });
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('listUsers', () => {
     it('applies an exact-match status filter alongside the cursor', async () => {
       const { prisma, tokenService, accountDeletionSweepService } = buildDeps();

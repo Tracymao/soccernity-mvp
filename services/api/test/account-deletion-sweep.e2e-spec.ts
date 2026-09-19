@@ -662,4 +662,67 @@ describe('AccountDeletionSweepService e2e: 30-day anonymize-in-place + investiga
       expect(await prisma.consentAuditRecord.findUnique({ where: { id: old.id } })).toBeNull();
     });
   });
+
+  describe('membership cleanup + stalled-hold visibility (sprint-2/anonymization-followups)', () => {
+    it('deletes Banter/Group/Club membership rows and leaves each memberCount exactly one lower, other members untouched', async () => {
+      const prisma = getTestPrismaClient();
+      const leaver = await seedPendingDeletionUser('leaver', { pendingDeletionAt: daysAgo(31) });
+      const other = await createActiveUser('other');
+
+      const room = await prisma.banterRoom.create({
+        data: { name: 'Room', scopeType: 'topic', createdBy: other.id, memberCount: 2 },
+      });
+      await prisma.banterRoomMember.createMany({
+        data: [
+          { userId: leaver.id, banterRoomId: room.id },
+          { userId: other.id, banterRoomId: room.id },
+        ],
+      });
+      const group = await prisma.communityGroup.create({
+        data: { name: 'G', nameNormalized: `g-${Date.now()}`, city: 'Lagos', createdById: other.id, memberCount: 2 },
+      });
+      await prisma.communityGroupMember.createMany({
+        data: [
+          { userId: leaver.id, communityGroupId: group.id },
+          { userId: other.id, communityGroupId: group.id },
+        ],
+      });
+      const club = await prisma.clubPage.create({ data: { name: 'C', memberCount: 2 } });
+      await prisma.$executeRaw`INSERT INTO "_ClubMembership" ("A", "B") VALUES (${club.id}, ${leaver.id}), (${club.id}, ${other.id})`;
+
+      await sweepService.sweepPendingDeletions();
+
+      expect((await prisma.banterRoom.findUnique({ where: { id: room.id } }))!.memberCount).toBe(1);
+      expect((await prisma.communityGroup.findUnique({ where: { id: group.id } }))!.memberCount).toBe(1);
+      expect((await prisma.clubPage.findUnique({ where: { id: club.id } }))!.memberCount).toBe(1);
+      expect(await prisma.banterRoomMember.count({ where: { userId: leaver.id } })).toBe(0);
+      expect(await prisma.communityGroupMember.count({ where: { userId: leaver.id } })).toBe(0);
+      const clubRows = await prisma.$queryRaw<{ B: string }[]>`SELECT "B" FROM "_ClubMembership" WHERE "A" = ${club.id}`;
+      expect(clubRows.map((r) => r.B)).toEqual([other.id]);
+      expect(await prisma.banterRoomMember.count({ where: { userId: other.id } })).toBe(1);
+    });
+
+    it('listStalledHolds lists a hold older than the threshold, omits a fresh hold and a non-held account', async () => {
+      const prisma = getTestPrismaClient();
+      const reporter = await createActiveUser('reporter');
+      // due 130 days ago (pendingDeletionAt 160d ago) -> held ~130d
+      const stale = await seedPendingDeletionUser('stale', { pendingDeletionAt: daysAgo(160) });
+      // due 10 days ago -> held ~10d
+      const fresh = await seedPendingDeletionUser('fresh', { pendingDeletionAt: daysAgo(40) });
+      // old but no open report
+      await seedPendingDeletionUser('noreport', { pendingDeletionAt: daysAgo(200) });
+      for (const u of [stale, fresh]) {
+        await prisma.report.create({
+          data: { reporterId: reporter.id, targetType: 'user', targetId: u.id, reason: 'e2e', status: 'open' },
+        });
+      }
+
+      const out = await sweepService.listStalledHolds(90);
+
+      expect(out.map((h) => h.userId)).toEqual([stale.id]);
+      expect(out[0].daysHeld).toBeGreaterThanOrEqual(129);
+      // read-only: still pending_deletion, untouched
+      expect((await prisma.user.findUnique({ where: { id: stale.id } }))!.accountStatus).toBe('pending_deletion');
+    });
+  });
 });

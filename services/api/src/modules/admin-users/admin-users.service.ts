@@ -1,7 +1,7 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AccountDeletionSweepService } from '../account-deletion/account-deletion-sweep.service';
+import { AccountDeletionSweepService, HELD_INVESTIGATION_ALERT_DAYS } from '../account-deletion/account-deletion-sweep.service';
 import { TokenService } from '../auth/token/token.service';
 import { ADMIN_USERS_DEFAULT_PAGE_SIZE, ADMIN_USERS_MAX_PAGE_SIZE } from './admin-users.constants';
 import { decodeAdminUsersCursor, encodeAdminUsersCursor } from './cursor.util';
@@ -56,6 +56,14 @@ export class AdminUsersService {
     // is the right reuse (not a parallel deletion implementation).
     private readonly accountDeletionSweepService: AccountDeletionSweepService,
   ) {}
+
+  // GET /admin/users/held-investigations -- accounts whose deletion has
+  // been held by an open moderation Report for more than `olderThanDays`
+  // (default 90, tunable). Visibility only; no auto-action.
+  async listStalledHolds(olderThanDays?: number) {
+    const items = await this.accountDeletionSweepService.listStalledHolds(olderThanDays);
+    return { thresholdDays: olderThanDays ?? HELD_INVESTIGATION_ALERT_DAYS, items };
+  }
 
   private async assertUserExists(id: string): Promise<{ id: string; isMinor: boolean; accountStatus: string }> {
     const user = await this.prisma.user.findUnique({
