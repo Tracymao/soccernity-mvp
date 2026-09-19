@@ -123,7 +123,7 @@ import { SportsModule } from './modules/sports/sports.module';
     // 'superadmin'), mirroring ModerationModule's own role split (this
     // is moderation-adjacent, not an editor's job). PATCH covers
     // active<->suspended transitions and an immediate admin-triggered
-    // delete (reusing AccountDeletionSweepService.hardDeleteUser
+    // delete (reusing AccountDeletionSweepService.anonymizeUser
     // directly, skipping the self-service 30-day grace period). New
     // User.accountStatus value "suspended" — deliberately NOT
     // user-reversible, unlike "deactivated" (a real gap this PR also

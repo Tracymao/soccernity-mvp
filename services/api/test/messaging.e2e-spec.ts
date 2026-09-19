@@ -461,11 +461,11 @@ describe('Messaging e2e (Section 4.7, DM slice)', () => {
     });
   });
 
-  // ---------- Account deletion cascade (Decision Log #44) ----------
+  // ---------- Account anonymization (Decision Log #341, supersedes #44) ----------
 
-  it('hard-deleting a User cascades their Message rows away; the Conversation row survives', async () => {
-    const alice = await createUser('cascade-a');
-    const bob = await createUser('cascade-b');
+  it('a User row is never DELETEd on account deletion: their Message rows survive and the RESTRICT FK makes a raw delete fail loudly', async () => {
+    const alice = await createUser('anon-a');
+    const bob = await createUser('anon-b');
     const prisma = getTestPrismaClient();
     const convo = (
       await request(server()).post('/conversations').set(auth(alice.accessToken)).send({ recipientId: bob.userId }).expect(201)
@@ -476,11 +476,9 @@ describe('Messaging e2e (Section 4.7, DM slice)', () => {
       .send({ contentText: 'bye' })
       .expect(201);
 
-    await prisma.user.delete({ where: { id: alice.userId } });
+    await expect(prisma.user.delete({ where: { id: alice.userId } })).rejects.toThrow();
 
-    expect(await prisma.message.count({ where: { senderId: alice.userId } })).toBe(0);
-    // The conversation row persists (participantIds still holds alice's id —
-    // a "ghost" conversation, flagged in messaging/README.md).
+    expect(await prisma.message.count({ where: { senderId: alice.userId } })).toBe(1);
     await prisma.conversation.findUniqueOrThrow({ where: { id: convo.id } });
   });
 });

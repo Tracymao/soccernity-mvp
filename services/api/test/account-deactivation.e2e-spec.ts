@@ -142,9 +142,9 @@ describe('Account deactivation e2e: full deactivate -> reactivate -> deactivate 
     const thirtyOneDaysLater = new Date(afterDelete.pendingDeletionAt!.getTime() + 31 * 24 * 60 * 60 * 1000);
     const result = await sweepService.sweepPendingDeletions(thirtyOneDaysLater);
 
-    expect(result.hardDeletedUserIds).toContain(userId);
-    expect(result.blockedUserIds).toHaveLength(0);
-    expect(await prisma.user.findUnique({ where: { id: userId } })).toBeNull();
+    expect(result.anonymizedUserIds).toContain(userId);
+    expect(result.heldUserIds).toHaveLength(0);
+    expect((await prisma.user.findUnique({ where: { id: userId } }))?.accountStatus).toBe('deleted');
   });
 
   it('delete-from-inactive is NOT reachable for an active account (it must use the authenticated POST /auth/delete-account)', async () => {

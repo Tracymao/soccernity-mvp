@@ -185,7 +185,7 @@ describe('Admin Users e2e: role gating, suspend/reactivate/delete against real P
     expect(updated!.pendingDeletionAt).toBeNull();
   });
 
-  it('PATCH .../:id { status: "deleted" } really removes the User row from Postgres immediately, and revokes sessions', async () => {
+  it('PATCH .../:id { status: "deleted" } anonymizes the User row in place immediately (no 30-day limbo, no row DELETE), and revokes sessions', async () => {
     const moderator = await createAdmin('delete-moderator', 'moderator');
     const target = await createUser('to-delete');
 
@@ -196,10 +196,12 @@ describe('Admin Users e2e: role gating, suspend/reactivate/delete against real P
       .expect(200);
     expect(res.body).toEqual({ deleted: true, id: target.userId });
 
-    // The row is genuinely gone — no 30-day pending_deletion limbo.
+    // The row is anonymized in place (Decision Log #341) — no 30-day
+    // pending_deletion limbo, and no DELETE.
     const prisma = getTestPrismaClient();
     const gone = await prisma.user.findUnique({ where: { id: target.userId } });
-    expect(gone).toBeNull();
+    expect(gone!.accountStatus).toBe('deleted');
+    expect(gone!.displayName).toBe('[deleted user]');
 
     await request(server())
       .post('/auth/refresh')

@@ -1,41 +1,28 @@
-import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AccountDeletionSweepService } from './account-deletion-sweep.service';
+import {
+  AccountDeletionSweepService,
+  DELETED_USER_DISPLAY_NAME,
+  UNUSABLE_PASSWORD_HASH,
+  deletedUserEmail,
+} from './account-deletion-sweep.service';
 
-function buildPrismaMock() {
+function buildPrismaMock(opts: { held?: boolean } = {}) {
   const prisma = {
-    user: {
-      findMany: jest.fn(),
-      delete: jest.fn(),
-    },
-    guardian: {
-      findUnique: jest.fn(),
-      delete: jest.fn(),
-    },
-    consentAuditRecord: {
-      create: jest.fn(),
-      deleteMany: jest.fn(),
-    },
+    user: { findMany: jest.fn(), update: jest.fn().mockResolvedValue({}) },
+    guardian: { findUnique: jest.fn(), delete: jest.fn() },
+    consentAuditRecord: { create: jest.fn(), deleteMany: jest.fn() },
+    like: { deleteMany: jest.fn() },
+    savedPost: { deleteMany: jest.fn() },
+    follow: { deleteMany: jest.fn() },
+    notification: { deleteMany: jest.fn() },
+    grassrootsTeam: { updateMany: jest.fn() },
+    $executeRaw: jest.fn().mockResolvedValue(0),
+    $queryRaw: jest.fn().mockResolvedValue(opts.held ? [{ found: 1 }] : []),
   } as unknown as PrismaService;
-
-  // Same interactive-transaction mock shape as feed.service.spec.ts's own
-  // buildPrismaMock — the callback form (not the array form) needs to
-  // actually run top-to-bottom with real await/throw semantics for these
-  // tests to be meaningful, since hardDeleteUser's ordering (snapshot,
-  // then Guardian delete, then User delete) is the entire point being
-  // tested here.
   (prisma as unknown as { $transaction: jest.Mock }).$transaction = jest.fn((fn: (tx: unknown) => unknown) =>
     fn(prisma),
   );
-
   return prisma;
-}
-
-function fkRestrictError() {
-  return new Prisma.PrismaClientKnownRequestError('Foreign key constraint failed', {
-    code: 'P2003',
-    clientVersion: '5.0.0',
-  });
 }
 
 describe('AccountDeletionSweepService', () => {
@@ -44,9 +31,8 @@ describe('AccountDeletionSweepService', () => {
       const prisma = buildPrismaMock();
       (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
       const service = new AccountDeletionSweepService(prisma);
-      const now = new Date('2026-08-24T00:00:00.000Z');
 
-      await service.sweepPendingDeletions(now);
+      await service.sweepPendingDeletions(new Date('2026-08-24T00:00:00.000Z'));
 
       expect(prisma.user.findMany).toHaveBeenCalledWith({
         where: {
@@ -57,65 +43,61 @@ describe('AccountDeletionSweepService', () => {
       });
     });
 
-    it('hard-deletes a non-minor due user via a single tx.user.delete call: no Guardian lookup, no ConsentAuditRecord, and no per-table content deletion of any kind', async () => {
+    it('anonymizes a due, non-held user in place: one user.update, never a delete', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'user-1', isMinor: false }]);
       const service = new AccountDeletionSweepService(prisma);
 
       const result = await service.sweepPendingDeletions();
 
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: {
+          email: deletedUserEmail('user-1'),
+          phone: null,
+          displayName: DELETED_USER_DISPLAY_NAME,
+          passwordHash: UNUSABLE_PASSWORD_HASH,
+          dateOfBirth: null,
+          clubAffiliationId: null,
+          accountStatus: 'deleted',
+          pendingDeletionAt: null,
+        },
+      });
+      expect((prisma.user as unknown as { delete?: unknown }).delete).toBeUndefined();
       expect(prisma.guardian.findUnique).not.toHaveBeenCalled();
-      expect(prisma.consentAuditRecord.create).not.toHaveBeenCalled();
-      expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'user-1' } });
-      expect(result.hardDeletedUserIds).toEqual(['user-1']);
-      expect(result.blockedUserIds).toEqual([]);
+      expect(result).toEqual({ anonymizedUserIds: ['user-1'], heldUserIds: [] });
     });
 
-    // sprint-2/account-deletion-cascade (Decision Log #44) -- a mock
-    // can't exercise real ON DELETE CASCADE (that's a database-level
-    // concern, proven for real in account-deletion-sweep.e2e-spec.ts's
-    // cross-user cascade test), but the important behavioral claim at
-    // THIS layer is structural: hardDeleteUser issues exactly one
-    // tx.user.delete call and nothing else for a non-minor -- no
-    // per-table Post/Comment/Follow/Like/etc. deletion code exists to
-    // simulate or assert on, because none should exist. The service
-    // relies entirely on the schema's own cascade behavior, proven at
-    // the e2e layer, not on any application-level fan-out here.
-    it('does not attempt any per-table content deletion for Post/Comment/Follow/Like/etc. -- that is left entirely to the database\'s own ON DELETE CASCADE', async () => {
+    it('deletes the ephemeral rows (likes, saves, follows both directions, notifications), nulls team organiser, and never touches content tables', async () => {
       const prisma = buildPrismaMock();
-      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'user-with-content', isMinor: false }]);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'user-1', isMinor: false }]);
       const service = new AccountDeletionSweepService(prisma);
 
       await service.sweepPendingDeletions();
 
-      // The mock only ever defines user/guardian/consentAuditRecord
-      // methods (see buildPrismaMock) -- there is no post/comment/follow/
-      // like/etc. mock to call in the first place, which is itself part
-      // of the proof: nothing in AccountDeletionSweepService references
-      // those models at all.
-      expect(prisma.user.delete).toHaveBeenCalledTimes(1);
-      expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'user-with-content' } });
+      expect(prisma.like.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.savedPost.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.follow.deleteMany).toHaveBeenCalledWith({
+        where: { OR: [{ followerId: 'user-1' }, { followeeId: 'user-1' }] },
+      });
+      expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.grassrootsTeam.updateMany).toHaveBeenCalledWith({
+        where: { createdById: 'user-1' },
+        data: { createdById: null },
+      });
+      // likeCount decrement runs (raw) before the Like rows are deleted
+      expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+      const raw = (prisma.$executeRaw as jest.Mock).mock.invocationCallOrder[0];
+      const del = (prisma.like.deleteMany as jest.Mock).mock.invocationCallOrder[0];
+      expect(raw).toBeLessThan(del);
     });
 
-    it('minor with a confirmed Guardian row: snapshots a ConsentAuditRecord, deletes Guardian, then deletes User', async () => {
+    it('minor with a confirmed Guardian row: snapshots a ConsentAuditRecord, deletes Guardian, then anonymizes the User', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'minor-1', isMinor: true }]);
       (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({
         consentStatus: 'confirmed',
         consentTimestamp: new Date('2026-01-01T00:00:00.000Z'),
-      });
-      const callOrder: string[] = [];
-      (prisma.consentAuditRecord.create as jest.Mock).mockImplementation(() => {
-        callOrder.push('consentAuditRecord.create');
-        return Promise.resolve({});
-      });
-      (prisma.guardian.delete as jest.Mock).mockImplementation(() => {
-        callOrder.push('guardian.delete');
-        return Promise.resolve({});
-      });
-      (prisma.user.delete as jest.Mock).mockImplementation(() => {
-        callOrder.push('user.delete');
-        return Promise.resolve({});
       });
       const service = new AccountDeletionSweepService(prisma);
 
@@ -129,20 +111,16 @@ describe('AccountDeletionSweepService', () => {
         },
       });
       expect(prisma.guardian.delete).toHaveBeenCalledWith({ where: { minorUserId: 'minor-1' } });
-      expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'minor-1' } });
-      // Ordering matters: the audit snapshot and the Guardian delete must
-      // both happen before the User row is gone, not after.
-      expect(callOrder).toEqual(['consentAuditRecord.create', 'guardian.delete', 'user.delete']);
-      expect(result.hardDeletedUserIds).toEqual(['minor-1']);
+      const o = (m: unknown) => (m as jest.Mock).mock.invocationCallOrder[0];
+      expect(o(prisma.consentAuditRecord.create)).toBeLessThan(o(prisma.guardian.delete));
+      expect(o(prisma.guardian.delete)).toBeLessThan(o(prisma.user.update));
+      expect(result.anonymizedUserIds).toEqual(['minor-1']);
     });
 
-    it('minor with a still-pending (never confirmed) Guardian row: snapshot has consentConfirmedAt: null', async () => {
+    it('minor with a still-pending Guardian row: snapshot has consentConfirmedAt: null', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'minor-1', isMinor: true }]);
-      (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({
-        consentStatus: 'pending',
-        consentTimestamp: null,
-      });
+      (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'pending', consentTimestamp: null });
       const service = new AccountDeletionSweepService(prisma);
 
       await service.sweepPendingDeletions();
@@ -152,7 +130,7 @@ describe('AccountDeletionSweepService', () => {
       });
     });
 
-    it('minor with NO Guardian row at all: no snapshot, no Guardian delete, User row still deleted', async () => {
+    it('minor with NO Guardian row: no snapshot, no Guardian delete, User still anonymized', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'minor-1', isMinor: true }]);
       (prisma.guardian.findUnique as jest.Mock).mockResolvedValue(null);
@@ -162,63 +140,30 @@ describe('AccountDeletionSweepService', () => {
 
       expect(prisma.consentAuditRecord.create).not.toHaveBeenCalled();
       expect(prisma.guardian.delete).not.toHaveBeenCalled();
-      expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'minor-1' } });
-      expect(result.hardDeletedUserIds).toEqual(['minor-1']);
+      expect(result.anonymizedUserIds).toEqual(['minor-1']);
     });
 
-    // sprint-2/account-deletion-cascade (Decision Log #44) -- this used
-    // to be the EXPECTED, routine outcome for any user with related
-    // content (PR #88's original "leave RESTRICT in place" default).
-    // Post-cascade, every FK into User except Guardian.minorUserId is
-    // ON DELETE CASCADE, so a real P2003 here should never actually
-    // happen in normal operation -- this test now proves the DEFENSIVE
-    // FALLBACK still works (schema drift / a future RESTRICT relation
-    // added without updating this service fails safe: the account stays
-    // in pending_deletion, nothing is silently lost, the sweep doesn't
-    // crash), not that blocking is an expected result.
-    it('DEFENSIVE FALLBACK ONLY (schema-drift scenario, not expected in normal operation): a foreign-key-restrict error (P2003) on the User delete is still caught, and the account is reported as blocked rather than crashing the sweep', async () => {
-      const prisma = buildPrismaMock();
-      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'unexpectedly-blocked-1', isMinor: false }]);
-      (prisma.user.delete as jest.Mock).mockRejectedValue(fkRestrictError());
+    it('INVESTIGATION HOLD: a due user with an open involving report is skipped entirely -- no transaction, no writes', async () => {
+      const prisma = buildPrismaMock({ held: true });
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'held-1', isMinor: true }]);
       const service = new AccountDeletionSweepService(prisma);
 
       const result = await service.sweepPendingDeletions();
 
-      expect(result.blockedUserIds).toEqual(['unexpectedly-blocked-1']);
-      expect(result.hardDeletedUserIds).toEqual([]);
+      expect(result).toEqual({ anonymizedUserIds: [], heldUserIds: ['held-1'] });
+      expect((prisma as unknown as { $transaction: jest.Mock }).$transaction).not.toHaveBeenCalled();
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.guardian.delete).not.toHaveBeenCalled();
     });
 
-    it('DEFENSIVE FALLBACK ONLY: one account unexpectedly hitting P2003 does not stop the rest of the sweep from processing other due accounts', async () => {
-      const prisma = buildPrismaMock();
-      (prisma.user.findMany as jest.Mock).mockResolvedValue([
-        { id: 'unexpectedly-blocked-1', isMinor: false },
-        { id: 'eligible-1', isMinor: false },
-      ]);
-      (prisma.user.delete as jest.Mock).mockImplementation(({ where: { id } }: { where: { id: string } }) => {
-        if (id === 'unexpectedly-blocked-1') {
-          return Promise.reject(fkRestrictError());
-        }
-        return Promise.resolve({});
-      });
-      const service = new AccountDeletionSweepService(prisma);
-
-      const result = await service.sweepPendingDeletions();
-
-      expect(result.blockedUserIds).toEqual(['unexpectedly-blocked-1']);
-      expect(result.hardDeletedUserIds).toEqual(['eligible-1']);
-    });
-
-    it('rethrows a Prisma error that is NOT a P2003 foreign-key-restrict violation, rather than silently treating it as blocked', async () => {
+    it('a rejecting anonymization propagates (transaction rolled back) rather than being swallowed', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'user-1', isMinor: false }]);
-      const otherError = new Prisma.PrismaClientKnownRequestError('Something else entirely', {
-        code: 'P2025',
-        clientVersion: '5.0.0',
-      });
-      (prisma.user.delete as jest.Mock).mockRejectedValue(otherError);
+      const boom = new Error('boom');
+      (prisma.user.update as jest.Mock).mockRejectedValue(boom);
       const service = new AccountDeletionSweepService(prisma);
 
-      await expect(service.sweepPendingDeletions()).rejects.toBe(otherError);
+      await expect(service.sweepPendingDeletions()).rejects.toBe(boom);
     });
 
     it('returns empty results when nothing is due', async () => {
@@ -226,9 +171,7 @@ describe('AccountDeletionSweepService', () => {
       (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
       const service = new AccountDeletionSweepService(prisma);
 
-      const result = await service.sweepPendingDeletions();
-
-      expect(result).toEqual({ hardDeletedUserIds: [], blockedUserIds: [] });
+      expect(await service.sweepPendingDeletions()).toEqual({ anonymizedUserIds: [], heldUserIds: [] });
     });
   });
 
@@ -255,7 +198,7 @@ describe('AccountDeletionSweepService', () => {
       await service.purgeExpiredConsentAuditRecords();
 
       expect(prisma.user.findMany).not.toHaveBeenCalled();
-      expect(prisma.user.delete).not.toHaveBeenCalled();
+      expect(prisma.user.update).not.toHaveBeenCalled();
       expect(prisma.guardian.findUnique).not.toHaveBeenCalled();
       expect(prisma.guardian.delete).not.toHaveBeenCalled();
     });

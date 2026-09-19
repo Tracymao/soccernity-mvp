@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccountDeletionSweepService } from '../account-deletion/account-deletion-sweep.service';
 import { TokenService } from '../auth/token/token.service';
@@ -27,7 +27,7 @@ function buildDeps() {
   } as unknown as TokenService;
 
   const accountDeletionSweepService = {
-    hardDeleteUser: jest.fn().mockResolvedValue(undefined),
+    anonymizeUser: jest.fn().mockResolvedValue(undefined),
   } as unknown as AccountDeletionSweepService;
 
   return { prisma, tokenService, accountDeletionSweepService };
@@ -165,7 +165,7 @@ describe('AdminUsersService', () => {
   });
 
   describe('updateUserStatus — deleted (immediate, admin-triggered)', () => {
-    it('revokes sessions and calls hardDeleteUser directly, skipping the 30-day grace period', async () => {
+    it('revokes sessions and calls anonymizeUser directly, skipping the 30-day grace period', async () => {
       const { prisma, tokenService, accountDeletionSweepService } = buildDeps();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(user({ isMinor: true }));
       const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService);
@@ -173,14 +173,25 @@ describe('AdminUsersService', () => {
       const result = await service.updateUserStatus('user-1', 'admin-1', { status: 'deleted' });
 
       expect(tokenService.revokeAllSessionsForUser).toHaveBeenCalledWith('user-1');
-      expect(accountDeletionSweepService.hardDeleteUser).toHaveBeenCalledWith('user-1', true);
-      // Never touches accountStatus via a plain update -- the row is
-      // gone, not transitioned through pending_deletion first.
+      expect(accountDeletionSweepService.anonymizeUser).toHaveBeenCalledWith('user-1', true);
+      // Never touches accountStatus via a plain update here -- anonymizeUser
+      // owns the whole write.
       expect(prisma.user.update).not.toHaveBeenCalled();
       expect(result).toEqual({ deleted: true, id: 'user-1' });
     });
 
-    it('throws NotFoundException for a non-existent user and never calls hardDeleteUser', async () => {
+    it('rejects any status change on an already-deleted (anonymized) user with 409 -- it cannot be resurrected', async () => {
+      const { prisma, tokenService, accountDeletionSweepService } = buildDeps();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(user({ accountStatus: 'deleted' }));
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService);
+
+      await expect(service.updateUserStatus('user-1', 'admin-1', { status: 'active' })).rejects.toThrow(ConflictException);
+      await expect(service.updateUserStatus('user-1', 'admin-1', { status: 'deleted' })).rejects.toThrow(ConflictException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(accountDeletionSweepService.anonymizeUser).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException for a non-existent user and never calls anonymizeUser', async () => {
       const { prisma, tokenService, accountDeletionSweepService } = buildDeps();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
       const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService);
@@ -188,7 +199,7 @@ describe('AdminUsersService', () => {
       await expect(
         service.updateUserStatus('missing-user', 'admin-1', { status: 'deleted' }),
       ).rejects.toThrow(NotFoundException);
-      expect(accountDeletionSweepService.hardDeleteUser).not.toHaveBeenCalled();
+      expect(accountDeletionSweepService.anonymizeUser).not.toHaveBeenCalled();
     });
   });
 });

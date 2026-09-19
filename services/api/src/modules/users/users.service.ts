@@ -46,7 +46,7 @@ export type OwnProfile = {
   email: string;
   phone: string | null;
   displayName: string;
-  dateOfBirth: Date;
+  dateOfBirth: Date | null;
   isMinor: boolean;
   role: string;
   verificationStatus: string;

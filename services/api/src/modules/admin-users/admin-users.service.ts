@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccountDeletionSweepService } from '../account-deletion/account-deletion-sweep.service';
@@ -123,26 +123,25 @@ export class AdminUsersService {
   async updateUserStatus(userId: string, adminId: string, dto: UpdateUserStatusDto): Promise<UpdateUserStatusResult> {
     const user = await this.assertUserExists(userId);
 
+    // 'deleted' is terminal: the row has been anonymized (Decision Log
+    // #341) and its password hash can never authenticate. Letting an
+    // admin flip it to active/suspended would resurrect a blank shell.
+    if (user.accountStatus === 'deleted') {
+      throw new ConflictException('This user has already been deleted and anonymized.');
+    }
+
     if (dto.status === 'deleted') {
-      // Immediate, admin-triggered hard delete — deliberately skipping
-      // the self-service 30-day grace period (Decision Log #42) entirely,
-      // per this PR's own Decision Log candidate: this is a moderation
-      // action, not a self-service request, and there is no reason a
-      // platform-safety deletion should sit in a reversible
-      // "pending_deletion" limbo waiting for tomorrow's 3am sweep.
-      // Reuses AccountDeletionSweepService.hardDeleteUser directly (made
-      // public by this PR specifically for this second caller) rather
-      // than re-implementing the Guardian/ConsentAuditRecord snapshot +
-      // cascade-delete sequence a second time — one real deletion
-      // primitive, two entry points (the scheduled sweep, and this).
-      // Sessions are revoked first (same reasoning as every other
-      // accountStatus-changing action in this codebase): the User row is
-      // about to be gone, but a still-live, not-yet-expired access token
-      // should stop working immediately, not linger until it naturally
-      // expires.
+      // Immediate, admin-triggered anonymization -- deliberately skipping
+      // the self-service 30-day grace period (Decision Log #42) and the
+      // investigation hold (the admin has explicitly chosen this): a
+      // moderation action, not a self-service request. Since Decision
+      // Log #341 this is an in-place anonymization, NOT a row DELETE --
+      // reuses AccountDeletionSweepService.anonymizeUser, the same
+      // primitive the scheduled sweep uses. Sessions are revoked first so
+      // a still-live access token stops working immediately.
       await this.tokenService.revokeAllSessionsForUser(userId);
-      await this.accountDeletionSweepService.hardDeleteUser(userId, user.isMinor);
-      this.logger.log(`Admin ${adminId} hard-deleted user ${userId} (immediate, grace period skipped).`);
+      await this.accountDeletionSweepService.anonymizeUser(userId, user.isMinor);
+      this.logger.log(`Admin ${adminId} anonymized user ${userId} (immediate, grace period skipped).`);
       return { deleted: true, id: userId };
     }
 
