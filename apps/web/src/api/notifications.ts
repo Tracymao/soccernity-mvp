@@ -59,7 +59,10 @@ export type NotificationData =
   | { post: NotificationPost }
   | { conversationId: string; otherParticipant: NotificationOtherParticipant | null }
   | { fixture: NotificationFixture }
-  | { cycle: NotificationContestCycle };
+  | { cycle: NotificationContestCycle }
+  // age_milestone: only the milestone key (e.g. 'under_16_lifted') is
+  // resolved server-side; copy is this app's concern.
+  | { milestone: string };
 
 export interface Notification {
   id: string;

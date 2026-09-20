@@ -153,6 +153,30 @@ describe("NotificationCentrePage", () => {
     expect(await screen.findByText(/you won a round in September Contest/i)).not.toBeNull();
   });
 
+  it("renders an age_milestone notification with its real message, not the generic fallback", async () => {
+    window.sessionStorage.setItem("sn_access_token", "test-token");
+    vi.mocked(listNotifications).mockResolvedValueOnce({
+      items: [
+        {
+          id: "n-age",
+          type: "age_milestone",
+          read: false,
+          createdAt: "2026-09-20T09:00:00.000Z",
+          payloadRefId: "under_16_lifted",
+          data: { milestone: "under_16_lifted" },
+        },
+      ],
+      nextCursor: null,
+      unreadCount: 1,
+    });
+
+    renderPage();
+
+    expect(await screen.findByText(/now has access to more of Soccernity/i)).not.toBeNull();
+    expect(screen.queryByText(/no longer available/i)).toBeNull();
+    expect(screen.queryByText(/16|sixteen/i)).toBeNull();
+  });
+
   it("renders a generic message for a notification whose referenced entity is gone (data: null)", async () => {
     window.sessionStorage.setItem("sn_access_token", "test-token");
     vi.mocked(listNotifications).mockResolvedValueOnce({

@@ -128,6 +128,11 @@ function bodyFor(n: Notification): { subject: string; rest: string } {
       const cycle = data && "cycle" in data ? data.cycle : null;
       return { subject: "Contest", rest: cycle ? ` — you won a round in ${cycle.title}` : " — you won a round" };
     }
+    case "age_milestone":
+      // Plain, non-alarming, no age threshold in the copy (PR #277's
+      // under-16 UI tone). Any milestone key gets the same message: the
+      // only one the backend emits today is 'under_16_lifted'.
+      return { subject: "Your account", rest: " now has access to more of Soccernity." };
     default:
       return { subject: "Notification", rest: "" };
   }
@@ -135,7 +140,7 @@ function bodyFor(n: Notification): { subject: string; rest: string } {
 
 function RowAvatar({ notification }: { notification: Notification }) {
   const { type, data, read } = notification;
-  const usesIconDisc = type === "message" || type === "fixture_scheduled" || type === "result_logged" || type === "contest_win";
+  const usesIconDisc = type === "message" || type === "fixture_scheduled" || type === "result_logged" || type === "contest_win" || type === "age_milestone";
   const className = usesIconDisc
     ? "notif-row__avatar notif-row__avatar--icon"
     : `notif-row__avatar ${read ? "notif-row__avatar--read" : "notif-row__avatar--unread"}`;
@@ -172,6 +177,13 @@ function RowAvatar({ notification }: { notification: Notification }) {
     return (
       <span className={className}>
         <img src={notifTrophy} alt="" width={20} height={20} />
+      </span>
+    );
+  }
+  if (type === "age_milestone") {
+    return (
+      <span className={className} aria-hidden="true">
+        ✓
       </span>
     );
   }
