@@ -6,8 +6,9 @@
 
 This document is a first-pass draft produced by the `safeguarding-drafter` agent (see
 `CLAUDE.md` non-negotiable #2 and the `safeguarding-drafter` agent definition). It has **not**
-been reviewed by Soccernity's safeguarding/legal counsel — a role recorded as a priority hire
-in Inventor's Log Book Section 15 and, at the time of writing, unfilled. Nothing in this
+been approved by Soccernity's safeguarding/legal counsel. (v0.1 received counsel's "Approved
+with amendments" review on 09/09/2026; this v0.2 applies those amendments but has not itself been
+re-reviewed or signed off.) Nothing in this
 document should be read as a statement that either the Terms of Service or the Privacy Policy
 is legally sufficient, complete, or compliant with UK GDPR, Nigeria's NDPA 2023, the Online
 Safety Act, the ICO's Age Appropriate Design Code, or any other regime. **A policy is only a
@@ -40,10 +41,25 @@ question.
   Log entries #4, #8, #10, #19, #34, #37, #38, #40, #42, #44, #45, #58, #128–#130, #153–#155),
   Log Book Section 10 (safeguarding principles) and Section 24.5, `docs/sprint-1-dpia-outline-draft.md`,
   and `CLAUDE.md`'s "Where things stand" record of what is actually built as of Sprint 2.
-- **Draft date:** 2026-09-05
-- **Drafted by:** `safeguarding-drafter` agent (automated first pass)
-- **Reviewed by counsel:** NOT YET — see the sign-off block at the end of this document
-- **Version:** 0.1 (draft)
+- **Draft date:** 2026-09-05 (v0.1); revised 2026-09-20 (v0.2)
+- **Drafted by:** `safeguarding-drafter` agent (automated first pass, v0.1); v0.2 revision
+  prepared with Claude Code from the resolutions recorded below
+- **Reviewed by counsel:** v0.1 reviewed by Mrs Temiloluwa Ogundele (Temiloluwa Ogundele & Co) —
+  outcome "Approved with amendments", dated 09/09/2026. **v0.2 has not itself been re-reviewed or
+  re-signed** — see the sign-off block, which is deliberately unchanged.
+- **Version:** 0.2 (draft — still NOT APPROVED)
+- **Status:** v0.2 incorporates (a) counsel's 09/09/2026 "Approved with amendments" review,
+  (b) the founder's follow-up resolutions dated up to 19/09/2026, and (c) staleness fixes against
+  the current live repo state (guardian decline/withdrawal/expiry built; account anonymization,
+  Decision Log #341, superseding the hard-delete described in v0.1; Highlightly selected as
+  sports-data vendor, Decision Log #6).
+- **Who resolved what:** counsel — governing-law wording, removal of the non-user-reporting
+  framing from the public ToS, lawful-basis framework, the §2.3 age-declaration flow, the §10.3
+  warranty language, data-minimisation and security commitments, and the rights-response window.
+  Founder — age floor of 5 confirmed (Decision Log #19), Highlightly as vendor (#6), guardian
+  decline/withdrawal/expiry (#337–#340) and anonymization-in-place with an investigation hold
+  (#341, #344, #345), real names for minors on Leaderboard/scouting/Discover with no pseudonym
+  option (#45). Items still open are in Part C.
 
 ---
 
@@ -66,7 +82,7 @@ characters, or ~1,000–1,150 words, visible without scrolling**. The **mobile**
 **Both documents below run well past that** — the Terms of Service is roughly 2,400 words and
 the Privacy Policy roughly 3,600 words, because a grassroots platform that processes minors'
 data via a guardian-consent flow, discloses a leaderboard showing minors' real names, and
-operates a 30-day-grace-then-hard-delete-cascade account-deletion policy cannot honestly say all
+operates a 30-day-grace-then-anonymize account-deletion policy cannot honestly say all
 of that in ~1,000 words without cutting content this project's own non-negotiables require
 disclosing. **This is not this draft padding the copy** — see the per-document word counts below
 for what a reasonably complete version of each document actually needs, and treat any pressure
@@ -117,9 +133,9 @@ safeguarding and data-protection review, not a quiet extension of this document.
 
 ### 2. Eligibility and age requirements
 
-2.1. You must be at least **[PROPOSAL — currently implemented in the product as age 5; see
-Decision Log #19]** years old to create a Soccernity account at all. Soccernity will not create
-an account, under any circumstances, for anyone who declares an age below this floor.
+2.1. You must be at least **5 years old** to create a Soccernity account at all (Decision Log
+#19 — confirmed, not a proposal). Soccernity will not create an account, under any
+circumstances, for anyone who declares an age below this floor.
 
 2.2. If you are under 18, Soccernity requires the involvement of a parent or legal guardian
 before your account has full access to the platform. This applies to the full under-18 age band,
@@ -128,9 +144,12 @@ considered safety decision, not an over-reading of the law (Decision Log #8), be
 is a platform where unaffiliated adults and organisations may eventually seek to contact
 grassroots players. Full detail on how this works is in Section 3.
 
-2.3. By creating an account, you confirm that the date of birth you provide is accurate. Providing
-a false date of birth to bypass the age floor in 2.1 or the guardian-consent requirement in 2.2 is
-a breach of these Terms and may result in immediate account suspension.
+2.3. Age declaration works in three steps when you sign up: (1) you enter your date of birth;
+(2) you affirm that the date of birth you entered is accurate; and (3) you are shown a warning
+that providing a false date of birth — including to bypass the age floor in 2.1 or the
+guardian-consent requirement in 2.2 — is a breach of these Terms and may result in immediate
+account suspension. Soccernity relies on this declaration; it does not verify your age against
+identity documents.
 
 2.4. **Guardians.** If you are acting as a guardian confirming consent for a minor's account, by
 confirming consent you agree that you are that minor's parent or legal guardian (or otherwise
@@ -161,14 +180,23 @@ address (Decision Log #60). This is deliberate — a recorded or pending consent
 specific person at a specific address, and changing the address without restarting the process
 would mean the record no longer reflects who was actually asked.
 
-3.4. **[OPEN — not yet built]** There is currently no in-product way for a guardian to formally
-decline consent (as opposed to simply not responding) or to withdraw consent once given. If a
-guardian does not respond, the account simply remains restricted-pending indefinitely under the
-current implementation. **[PROPOSAL]** Counsel and the founder should decide, and this document
-should then be updated to reflect, (a) whether a guardian who wishes to withdraw consent should
-use the account deletion process described in Section 8 in the meantime, and (b) whether an
-account left unconfirmed for an extended period (a starting proposal only: 12 months) should be
-subject to its own retention/deletion rule.
+3.4. **A guardian can refuse or withdraw consent, and an unanswered request does not stay open
+forever.** There are three ways a minor's consent arrangement ends in refusal:
+
+- **Explicit decline.** While a request is pending, the guardian can decline it from the consent
+  link they were sent.
+- **Guardian-initiated withdrawal.** After giving consent, a guardian can withdraw it. They
+  request a fresh, single-use withdrawal link, which is emailed to the guardian, and follow it to
+  confirm.
+- **Implicit decline by non-response.** If the guardian does not respond, we automatically
+  re-send the request once when the first 72-hour window lapses, and warn the minor that a second
+  lapse will close the account. If the second 72-hour window also passes with no response (about
+  144 hours in total), the request is treated as declined.
+
+All three paths lead to the same outcome: the minor's account is closed to further use and
+enters the same 30-day account-deletion process described in Section 8 — nothing is decided
+differently depending on which path was taken. This also means a minor's account can no longer sit
+restricted-pending indefinitely with no resolution.
 
 ### 4. Your account
 
@@ -215,10 +243,10 @@ or a Banter Room to other users, or in a notification to a user you interacted w
 User Content before it is posted, but does operate the reporting and moderation process described
 in Section 7, and may remove content or suspend accounts that breach Section 5.
 
-6.3. If you delete a post, comment, or your own account, that content is removed from public
-view. Section 8 explains what "deleted" means in terms of how long the underlying data is
-actually retained, and what happens to other users' comments, likes, or saves on your deleted
-content.
+6.3. If you delete a post or comment, it is removed from public view. If you delete your account,
+Section 8 explains what happens to your content: it is not removed, but stays visible without
+your identity attached, because other users' replies, likes, and saves on it are not yours to
+take down with you.
 
 ### 7. Reporting, moderation, and appeals
 
@@ -236,11 +264,8 @@ one who made the original decision** — never the same reviewer (Decision Log #
 is being built into the Admin Console and is not yet fully live in the product as of this draft;
 this document will be updated once it is.
 
-7.4. **[OPEN — not built]** There is not yet a way for someone who is not a Soccernity user
-(for example, a parent whose child appears in a photo posted by someone else) to submit a report.
-**[PROPOSAL]** Counsel and product should decide whether a non-user reporting route is needed
-before this platform is considered safe for the grassroots-photography use case it explicitly
-supports.
+7.4. You may report content or behaviour that violates these Terms using the reporting tools
+provided.
 
 ### 8. Ending your account
 
@@ -249,17 +274,37 @@ you can sign back in to reactivate), or request deletion, from your account sett
 actions require you to re-enter your password as confirmation, and both immediately sign out
 every other active session on your account.
 
-8.2. Requesting deletion does not delete your account immediately. **[PROPOSAL — see the Privacy
-Policy, Section 9, for the full retention detail]** Your account enters a 30-day grace period
-during which you can still be reached and, if the platform later offers a self-service way to
-reverse it, could still change your mind; deletion is not currently reversible through the
-product once requested. After that period, your account and its associated content are
-permanently deleted, including — because of how deleting your account also removes other users'
-comments, likes, and saves on content you posted — some content contributed by other users to
-posts that no longer exist once your account is gone. See the Privacy Policy for the specific,
-narrow exception made for guardian-consent records.
+8.2. Requesting deletion does not delete your account immediately. Your account enters a 30-day
+grace period, during which you cannot log in. The request is not currently reversible through the
+product once made. **[PROPOSAL — see the Privacy Policy, Section 9, for the full retention
+detail]**
 
-8.3. Soccernity may suspend or terminate your account for a breach of these Terms, in particular
+8.3. **What happens after the 30-day grace period.** Your account record is **anonymized in
+place; it is never hard-deleted.** Your email address, phone number, date of birth, and club
+affiliation are cleared, your display name is replaced with "[deleted user]," your password is
+made unusable, and the account is marked permanently deleted. Specifically:
+
+- **Content you posted is not deleted.** Your posts, comments, messages, and match results stay
+  visible, attributed to "[deleted user]," because other users' replies, likes, and saves on that
+  content are not yours to take down with you.
+- **Signals that are yours alone are removed:** your follows, likes, saves, notifications, and
+  your memberships of groups, Banter Rooms, and club pages.
+- **If you organised a Grassroots team, the team survives — deliberately.** It goes dormant and
+  stays visible read-only, and can later be reassigned to a new user who registers the same team
+  name and city.
+- **Guardian-consent records** are handled separately; see the Privacy Policy, Section 9.
+
+8.4. **Investigation hold — a genuine exception to the 30-day timer.** If you are the reporter,
+the reported party, or the author of reported content in a moderation report that has not yet
+been resolved, anonymization is **held entirely**. Your account stays fully identifiable to
+moderators until the investigation concludes. Preserving evidence takes priority over the
+ordinary 30-day timer. During the hold you still cannot log in.
+
+8.5. **Minors.** A guardian's request to delete a minor's account supersedes the minor's own
+wishes. A minor cannot independently consent to keep, or to delete, their own account against
+their guardian's decision.
+
+8.6. Soccernity may suspend or terminate your account for a breach of these Terms, in particular
 a breach of Section 5, or where we reasonably believe an account was created in breach of the
 age or guardian-consent requirements in Sections 2–3.
 
@@ -287,8 +332,8 @@ production today.
 error-free, or available at all times.
 
 10.2. Live scores, fixtures, and news content are sourced, in part, from third-party sports-data
-providers **[OPEN — Decision Log #6, vendor not yet selected]**; we do not guarantee the accuracy
-or timeliness of that content.
+providers (our current sports-data provider is Highlightly — Decision Log #6, resolved); we do
+not guarantee the accuracy or timeliness of that content.
 
 10.3. **[PROPOSAL — standard limitation-of-liability language; drafted deliberately narrow here
 because a platform serving minors should not use broad liability waivers to avoid safeguarding
@@ -298,6 +343,13 @@ limits liability that cannot lawfully be limited, including for death or persona
 by negligence, or for any failure to meet our safeguarding obligations to minors using the
 platform.
 
+**[Counsel's truthful-information warranty and continued-use-as-acceptance wording (appended to
+§10.3 per counsel's 09/09/2026 review) was not in the material this revision was prepared from.
+It must be pasted in here verbatim before this section is treated as complete. Not paraphrased
+in this draft.]** In outline only: you warrant that the
+information you give Soccernity is truthful, and continuing to use the service after these Terms
+change constitutes acceptance of the changed Terms.
+
 ### 11. Changes to these Terms
 
 We may update these Terms from time to time. If a change materially affects your rights, or
@@ -306,12 +358,7 @@ notify you (and, for a minor's account, the linked guardian) before the change t
 
 ### 12. Governing law
 
-**[OPEN — Decision Log #4]** The governing law and jurisdiction for these Terms depend on the
-still-open question of Soccernity's overall jurisdictional scope. **[PROPOSAL]** As a starting
-point only: given the Phase 1 launch markets are Nigeria and England (Log Book Section 13),
-counsel should confirm whether these Terms should be governed by the law of England and Wales,
-by Nigerian law, or should specify different governing law depending on the user's location.
-This is not decided here.
+These Terms are governed by the laws of England and Wales. However, we also comply with all applicable data-protection and online-safety laws in the regions where the app is used, including the UK GDPR, Nigeria's NDPA 2023[, and — **[PROPOSAL — provisional, not yet a legal conclusion]** — EU GDPR and the US's COPPA where applicable].
 
 ### 13. Contact us
 
@@ -341,15 +388,7 @@ together) have over it. It should be read alongside the Terms of Service.
 operated by [Soccernity's legal entity name, registration number, and registered address — TBD;
 see the same placeholder in the Terms of Service, Section title].**
 
-**A note on scope, carried forward from the project's own DPIA draft
-(`docs/sprint-1-dpia-outline-draft.md`) rather than repeated from scratch here:** this Policy is
-written against **UK GDPR** and **Nigeria's Data Protection Act (NDPA) 2023** as the baseline —
-both regimes Soccernity has already researched and grounded its guardian-consent design in
-(Decision Log #10). **Whether Soccernity's data-protection framework needs to extend further —
-to EU GDPR, to the US's COPPA, or elsewhere — is Decision Log #4, and remains genuinely open.**
-This Policy does not assume that question is closed, and if Soccernity later serves users in a
-jurisdiction with a different legal floor, this Policy will need substantive revision, not a
-footnote.
+**A note on scope:** we comply with all applicable data-protection and online-safety laws in the regions where the app is used, including the UK GDPR, Nigeria's NDPA 2023[, and — **[PROPOSAL — provisional, not yet a legal conclusion]** — EU GDPR and the US's COPPA where applicable]. This Policy is written against UK GDPR and NDPA 2023 as the baseline, both of which Soccernity has grounded its guardian-consent design in (Decision Log #10). Whether the framework must extend further remains Decision Log #4, and counsel has not concluded on it; if Soccernity serves users under a different legal floor, this Policy will need substantive revision.
 
 ### 1. The data we collect
 
@@ -357,13 +396,10 @@ footnote.
 
 Email address, phone number (optional), password (stored as a secure hash, never in plain text),
 display name, date of birth, and — derived from date of birth — whether your account is
-classified as belonging to a minor. **[PROPOSAL — flagged for counsel, carried forward from the
-DPIA draft]** We currently store your full date of birth, not a derived age band. This is more
-data than the age-gate strictly needs to function, and counsel should consider whether a derived
-age band, retaining full date of birth only where a specific purpose requires it, would be more
-proportionate. This draft does not make that change itself — altering what the platform stores
-is a data-model decision (Build Plan Section 9), not something a policy document can do on its
-own.
+classified as belonging to a minor. **[PROPOSAL — live data-minimisation consideration, not a
+completed change]** We currently store your full date of birth. Soccernity is evaluating storing
+only an age band, rather than the full date of birth, where a feature does not need the exact
+date. No schema change has been made; that is a separate backend decision (Part C).
 
 #### 1.2 Guardian data (minors' accounts only)
 
@@ -411,14 +447,22 @@ process for minors' accounts; send you service emails (verification, password re
 consent, account status); review reports and take moderation action; calculate Leaderboard
 rankings where that feature is live; and maintain the security of the platform.
 
-**[PROPOSAL — not yet determined]** This Policy does not yet state a specific lawful basis (under
-UK GDPR) for each of the purposes above — for example, whether core service delivery relies on
-"performance of a contract" or "legitimate interests," and how that interacts with a guardian's
-consent for a minor's account. Selecting a lawful basis is a legal determination for counsel, not
-something this draft resolves. Counsel should also consider, and this draft does not assess,
-whether any category of data collected (for example, an injury mentioned in a post, or an
-inference drawn from club affiliation) could amount to special-category data under Article 9 UK
-GDPR.
+**Lawful basis (UK GDPR) — framework per counsel's 09/09/2026 review. [PROPOSAL — for counsel to
+confirm against each specific purpose]**
+
+- **Core functions** (creating and running your account, showing your content, delivering the
+  service): contract and/or legitimate interests are the primary basis.
+- **Optional features only:** consent. Consent is not the basis for core functions.
+- **Guardian consent** for a minor's account is an **additional, minor-specific safeguard**, not
+  the primary lawful basis.
+- **Safety, moderation, and fraud prevention:** legitimate interests, supported by a documented
+  balancing test.
+- **Regulatory and safeguarding escalations** (for example disclosures to law enforcement or
+  regulators): legal obligation.
+
+Special-category (Article 9) data: whether any category we collect (for example an injury
+mentioned in a post, or an inference from club affiliation) could amount to special-category data
+has not yet been mapped. That mapping is still open (Part C).
 
 ### 3. Restricted-pending accounts: what changes before and after guardian consent
 
@@ -447,24 +491,25 @@ expires after 72 hours and can be regenerated from the minor's own account-statu
 
 4.2. When the guardian follows the link, they see a plain-language explanation of what the
 minor's account can do and what data is collected, and an explicit "I consent" action. This
-action is recorded, including the time it happened. **[PROPOSAL — flagged gap, carried from the
-project's own DPIA draft]** We currently do not record *how* consent was given beyond the
-timestamp — for example, the IP address, device, or the specific wording of the consent screen
-shown at the time. If consent is ever challenged, Soccernity may need to be able to demonstrate
-how it was obtained (UK GDPR Article 7(1) places that burden on us as the controller). Counsel
-should specify the minimum additional record needed, bearing in mind that a fuller audit trail
-is itself more personal data about the guardian, not an unambiguous "collect more" answer.
+action is recorded, including the method and the time it happened. **[IN PROGRESS — not yet
+built]** The consent audit trail is being extended to also record the version of the consent
+screen shown and a minimal device-type identifier (see Part C). This is deliberately minimal: a
+fuller audit trail is itself more personal data about the guardian. We record this so we can
+demonstrate how consent was obtained if it is ever challenged (UK GDPR Article 7(1)).
 
 4.3. If a guardian's email address changes while consent is pending, submitting the new address
 **restarts this process from scratch** — the old link is invalidated, the account (re)enters the
 restricted-pending state, and a new link is sent to the new address (Decision Log #60).
 
-4.4. **[OPEN — genuinely undecided, not resolved by this draft]** There is currently no in-product
-way for a guardian to formally decline consent, or to withdraw consent once given, other than
-using the account deletion process described in Section 8. Under UK GDPR, where consent is relied
-upon as the lawful basis, withdrawal must be as easy as giving it — counsel should determine
-whether Soccernity's current mechanism (deletion, which is a different and more drastic action
-than withdrawal) satisfies that, and if not, what a dedicated withdrawal path should look like.
+4.4. **Declining and withdrawing consent.** A guardian can formally decline a pending request,
+and can withdraw consent already given, in the product (see Terms of Service, Section 3.4). There
+are three paths: (a) an explicit decline from the consent link; (b) guardian-initiated withdrawal
+through a fresh single-use link emailed to the guardian; and (c) an implicit decline if two
+consecutive 72-hour response windows (about 144 hours in total, with one automatic re-send at the
+end of the first) pass unanswered. All three converge on the same account-deletion process
+described in Section 9. A minor's account therefore cannot remain restricted-pending indefinitely
+with no resolution. Withdrawal is as easy as giving consent: a single-use link and one
+confirmation.
 
 ### 5. Who we share your data with
 
@@ -521,8 +566,9 @@ feature. This is described here so it is not a surprise:
   minor.
 - **Club pages** show your membership to other members and, depending on the club page's own
   settings, more broadly.
-- **The Leaderboard** — where this feature is live — shows real display names for all eligible
-  users, **including minors**. This is a deliberate product decision, not an oversight: the
+- **The Leaderboard, scouting, and Discover visibility** — where these features are live — show
+  real names for all eligible users, **including minors**, deliberately, with **no pseudonym
+  option**. This is a product decision, not an oversight: the
   platform's purpose is to give grassroots players visibility to scouts and clubs before formal
   scouting begins, and a pseudonymised or hidden minor would defeat that purpose for the users
   it is meant to help most (Decision Log #45). A restricted-pending minor is excluded from this
@@ -546,47 +592,55 @@ feature. This is described here so it is not a surprise:
 
 Messages you send through Soccernity's direct-messaging feature are visible to the participants
 in that conversation and to Soccernity's moderation staff where a report is made. Banter Room
-posts follow the same visibility rules as other community content. **[OPEN — flagged, not
-resolved]** The product does not currently have a rule, enforced at the data-model level,
-restricting who may initiate a direct message with a minor's account beyond the restricted-pending
-gate described in Section 3. Counsel should consider whether the current controls are sufficient
-before messaging is more broadly relied upon as a core feature.
+posts follow the same visibility rules as other community content.
+
+**[IN PROGRESS — not yet built; no protection is claimed here]** Two further protections for
+minors are being worked on and are **not** currently in place: tiered restrictions for
+under-16s (messaging, Bants, and community access limited to read-only, with a guardian-contact
+tag), and enforcement preventing an adult from initiating a direct message to a minor. Until they
+are built, the only protection is the restricted-pending gate described in Section 3. See Part C.
 
 ### 9. How long we keep your data
 
 **Every period below is a starting proposal for counsel to confirm or revise — not final policy —
 per the retention-policy skeleton in Build Plan Section 8.2, refined where the product has since
-made a concrete decision (Decision Log #42, #44).**
+made a concrete decision (Decision Log #42, #341, #344).**
 
-| Data type | Retention period | What triggers deletion |
+| Data type | Retention period | What triggers change |
 |---|---|---|
-| Active account data (profile, content, guardian-consent record while the account is active) | For as long as your account remains active | Account deletion request (see below), or a defined review at the age of majority **[PROPOSAL, not yet built]** |
-| **Account deletion — the 30-day grace period** | Your account and content are retained for **30 days** after you request deletion, in a `pending_deletion` state during which your account cannot be logged into but the request can, in principle, still be reconsidered | Automatic, scheduled deletion once the 30-day window elapses |
-| **Account deletion — after the 30-day window** | Your `User` record, and content that depends on it, is then **permanently and irreversibly deleted** — a real deletion, not de-identification. Because of how the data model is connected, this also removes other users' comments, likes, and saved-post records **on content you posted**, even though it does not touch their own accounts or their own posts | Automatic, scheduled |
-| **Guardian-consent records — the one deliberate exception** | Guardian/consent records are **not** deleted at the same time as the rest of your account. They are separately snapshotted (name, relationship, and whether/when consent was confirmed — not the full guardian record) and kept for a further **6 months** after the 30-day grace period ends (**~7 months total** from the original deletion request), specifically so Soccernity can demonstrate that valid guardian consent was obtained if it is ever challenged | Automatic, scheduled, on its own separate timer |
-| Messages between users | **[PROPOSAL]** A rolling window (a starting figure only: 12 months), reviewable by policy | Automatic purge past the window, or your own deletion of the conversation/account |
-| Moderation reports and actions | **[PROPOSAL]** Retained for longer than ordinary content, for accountability and pattern detection across repeated reports | Periodic review, not automatic deletion |
-| Media you upload (photos/videos) | Tied to the lifecycle of the post or article it belongs to | Deleted when the parent content is deleted |
+| Active account data (profile, content, guardian-consent record while the account is active) | For as long as your account remains active | Account deletion request (see below), guardian refusal of consent, or a defined review at the age of majority **[PROPOSAL, not yet built]** |
+| **Account deletion — the 30-day grace period** | Your account and content are retained for **30 days** after you request deletion, in a `pending_deletion` state during which you cannot log in | Automatic, scheduled, once the 30-day window elapses |
+| **Account deletion — after the 30-day window** | Your account record is **anonymized in place, never hard-deleted**: email, phone, date of birth, and club affiliation cleared; display name replaced with "[deleted user]"; password made unusable; account marked permanently deleted. The anonymized record has no purge timer (Decision Log #344) because it holds no personal data | Automatic, scheduled, unless an investigation hold applies |
+| **Content you posted** (posts, comments, messages, match results) | **Not deleted.** Stays visible, attributed to "[deleted user]" | — |
+| **Signals that are yours alone** (follows, likes, saves, notifications, group/room/club memberships) | Removed at anonymization | Automatic, at anonymization |
+| **Grassroots teams you organised** | The team survives: dormant, visible read-only, and reassignable to a new user who registers the same team name and city | Reclaim by a new registration of the same name and city |
+| **Investigation hold** | If you are the reporter, the reported party, or the author of reported content in an unresolved moderation report, anonymization is **held entirely** and your account stays fully identifiable to moderators | Conclusion of the investigation. No maximum duration is currently set **[OPEN]** |
+| **Guardian-consent records — separate exception** | Not deleted with the rest of your account. Separately snapshotted (relationship, and whether/when consent was confirmed — not the full guardian record) and kept a further **6 months** after the 30-day grace period ends (**~7 months total**), so Soccernity can demonstrate valid guardian consent if challenged | Automatic, on its own separate timer |
+| Messages between users | Retained; stay visible in conversations attributed to "[deleted user]" after account anonymization. A rolling retention window for messages generally is **[PROPOSAL]** (starting figure only: 12 months) | Automatic purge past the window, if adopted |
+| Moderation reports and actions | **[PROPOSAL]** Retained for longer than ordinary content, for accountability and pattern detection | Periodic review, not automatic deletion |
+| Media you upload (photos/videos) | Tied to the lifecycle of the post or article it belongs to; stays with content that remains visible | Deleted when the parent content is deleted |
 
-**On the account-deletion mechanism specifically, stated plainly because it is a genuine and
-somewhat unusual data practice worth being direct about:** deleting your account does not simply
-hide your data — after the 30-day window, it results in a real, hard deletion of your account
-record, which cascades to remove your own posts, comments, likes, follows, saves, and
-notifications, **and also removes other users' comments, likes, and saved-post records that were
-made on your own posts** (because those records depend on the post existing). Soccernity's
-position is that deleting an account should remove that person's full digital footprint from the
-platform, framed as a safety measure that benefits everyone, including minors — not a partial
-erasure that leaves fragments behind. The one deliberate exception is the guardian-consent
-snapshot described above, kept specifically so Soccernity can prove consent was properly obtained,
-for a further 6 months, and then deleted on its own separate timer. **[OPEN — Decision Log #4
-cross-check]** Whether Nigeria's NDPA 2023 expects an identical retention window for consent
-records as the UK-GDPR-derived reasoning above has not been separately confirmed by Nigerian
-counsel and should not be assumed identical without that review.
+**On account deletion specifically, stated plainly:** after the 30-day window your account is
+anonymized in place. The content you posted stays, under "[deleted user]," because other users'
+replies, likes, and saves on it are not yours to take down. Only the signals that are yours alone
+are removed. This is a deliberate design (Decision Log #341), chosen because removing a person's
+identity does not require removing other people's contributions.
 
-**[OPEN — not yet decided]** There is currently no defined retention period for a minor's account
-that never receives guardian consent at all (see Section 4.4) — it remains restricted-pending
-indefinitely under the current implementation. Counsel and the founder should decide whether such
-an account should eventually be deleted automatically, and if so, after what period.
+**Investigation hold — a genuine exception, not a technicality.** If you are the reporter, the
+reported party, or the author of reported content in a report that has not been resolved, we do
+not anonymize your account when the 30-day window ends. Your account stays fully identifiable to
+moderators until the investigation concludes, because preserving evidence takes priority over the
+ordinary 30-day timer. You still cannot log in during this time.
+
+**Guardians and minors.** A guardian's request to delete a minor's account supersedes the
+minor's own wishes. A minor cannot independently consent to keep, or delete, their own account.
+
+**[OPEN — Decision Log #4 cross-check]** Whether Nigeria's NDPA 2023 expects an identical
+retention window for consent records as the UK-GDPR-derived reasoning above has not been
+separately confirmed by Nigerian counsel and should not be assumed identical without that review.
+
+A minor's account that never receives guardian consent no longer remains restricted-pending
+indefinitely: it is closed and enters the deletion process described above (Section 4.4).
 
 ### 10. Your rights
 
@@ -608,15 +662,14 @@ one. These include the right to:
   Leaderboard's ranking is a straightforward calculation, not an automated decision "about" a
   user in this legal sense, but counsel should confirm that reading).
 
-**For a minor's account:** these rights are the minor's own rights, not automatically their
-guardian's. **[OPEN — not resolved by this draft]** Who may exercise which right on behalf of a
-minor, at what age, and how a disagreement between a minor and their guardian over exercising a
-right (for example, the minor wants to keep the account and the guardian wants it deleted) would
-be handled, is a genuine open question this draft does not have a view on and flags for counsel.
+**For a minor's account:** these rights are the minor's own. However, a guardian's request to
+delete a minor's account supersedes the minor's own wishes (Section 9). Other cases where a
+minor's and guardian's wishes differ, and at what age a minor may exercise which right alone,
+remain open for counsel (Part C).
 
-**To exercise any of these rights**, contact us at **support@soccernity.com**. **[PROPOSAL]**
-We aim to respond within one month, consistent with UK GDPR's standard timeframe; counsel should
-confirm this is also consistent with NDPA 2023's own requirements.
+**To exercise any of these rights**, contact us at **support@soccernity.com**. We respond within
+**30 days**, for consistency across jurisdictions. **[PROPOSAL]** Counsel should confirm this is
+consistent with NDPA 2023's own requirements.
 
 **You also have the right to complain to a data protection regulator** — in the UK, the
 Information Commissioner's Office (ICO); in Nigeria, the Nigeria Data Protection Commission
@@ -629,11 +682,12 @@ resolved.
 
 We take reasonable technical and organisational measures to protect your data, including secure
 password storage (passwords are never stored in plain text) and access controls on our
-moderation and administration tools. **[OPEN — flagged, not assessed]** No specific
-encryption-at-rest commitment or breach-notification procedure (including whether a breach
-affecting a minor's data triggers notification to their guardian, not only to the affected user)
-has been finalised as of this draft; this depends in part on the still-developing hosting setup
-(Decision Log #26) and is an open item for counsel.
+moderation and administration tools.
+
+**[PROPOSAL — technical standard TBD]** We commit to encryption at rest, and to a breach
+notification procedure that separately notifies a minor's guardian as well as the affected user.
+The actual technical standard has not yet been chosen; it depends in part on the still-developing
+hosting setup (Decision Log #26).
 
 ### 12. Children's privacy — summary
 
@@ -645,13 +699,10 @@ product is safe for a child to use.
 
 ### 13. Third parties depicted in content you didn't create
 
-Grassroots football photography routinely captures people — including children — who are not
-Soccernity users and have not agreed to anything in this Policy. **[OPEN — flagged, not
-resolved]** There is currently no reporting route in the product for someone who is not a
-registered user to ask for a photo of themselves or their child to be removed (see the Terms of
-Service, Section 7.4). If you believe an image or video of you or your child has been posted
-without an appropriate basis, please email **support@soccernity.com** and we will review it
-manually while a proper in-product route is built.
+Grassroots football photography routinely captures people, including children, who are not
+Soccernity users. You may report content or behaviour that violates our Terms using the
+reporting tools provided. If you believe an image or video of you or your child has been posted
+without an appropriate basis, you can also email **support@soccernity.com** and we will review it.
 
 ### 14. Changes to this Policy
 
@@ -677,10 +728,10 @@ mistaken for settled by the time this reaches counsel or gets converted into Fig
 | 2 | Soccernity's legal entity name, registration, and registered address | ToS & PP headers | Founder |
 | 3 | Lawful basis for each processing purpose under UK GDPR | PP §2 | Counsel |
 | 4 | Whether any special-category (Article 9) data is processed | PP §2 | Counsel |
-| 5 | No guardian decline/withdrawal path exists in-product | ToS §3.4; PP §4.4 | Founder + `backend-api` |
-| 6 | Consent audit trail records timestamp only, not method | PP §4.2 | Counsel |
-| 7 | No retention rule for an account stuck in restricted-pending indefinitely | ToS §3.4; PP §9 | Founder + counsel |
-| 8 | No non-user reporting route for content depicting non-users | ToS §7.4; PP §13 | Product + counsel |
+| 5 | **Resolved** — guardian decline/withdrawal/expiry built (PR #261; Decision Log #34, #337–#340) | ToS §3.4; PP §4.4 | — |
+| 6 | Consent audit trail: method + timestamp only; extension in progress (see row 17) | PP §4.2 | Counsel |
+| 7 | **Resolved** — two-stage 72h+72h expiry, then the ordinary deletion process (PR #261) | ToS §3.4; PP §4.4, §9 | — |
+| 8 | Non-user reporting: removed from the public ToS/PP per counsel; whether a route is built is a product matter | ToS §7.4; PP §13 | Product |
 | 9 | Cross-border data-location/transfer assessment for Postmark/S3/Sentry/Render/Neon/Upstash | PP §5 | Counsel |
 | 10 | Whether Leaderboard's real-names-for-minors decision needs its own dedicated safeguarding review before launch | PP §7 | Founder + counsel |
 | 11 | Encryption-at-rest and breach-notification commitments, including guardian notification | PP §11 | Counsel |
@@ -688,6 +739,15 @@ mistaken for settled by the time this reaches counsel or gets converted into Fig
 | 13 | Governing law and jurisdiction for disputes | ToS §12 | Counsel |
 | 14 | NDPA 2023 cross-check on the 6-month consent-record retention window (UK-GDPR-derived reasoning, not yet confirmed for Nigeria) | PP §9 | Nigerian counsel |
 | 15 | Cookie/local-storage audit for the actual web application | PP §6 | `backend-api`/frontend + counsel |
+| 16 | Under-16 tiered restrictions: messaging/Bants/community read-only, plus a guardian-contact tag | PP §8 | Founder + `backend-api` |
+| 17 | Consent-audit-trail enrichment: consent-screen version + minimal device-type identifier | PP §4.2 | Founder + `backend-api` |
+| 18 | Enforcement preventing an adult from initiating a DM to a minor | PP §8 | Founder + `backend-api` |
+| 19 | Special-category (Article 9) data mapping (supersedes the narrower row 4) | PP §2 | Counsel |
+| 20 | Cross-border transfer assessment (standalone restatement of row 9) | PP §5 | Counsel |
+| 21 | Encryption-at-rest and breach-notification technical standard (restates row 11) | PP §11 | Founder + `backend-api` + counsel |
+| 22 | Age band vs full date of birth (data minimisation) | PP §1.1 | Founder + `backend-api` |
+| 23 | Counsel's verbatim §10.3 truthful-information / continued-use wording still to be pasted in | ToS §10.3 | Founder |
+| 24 | Investigation hold has no maximum duration (Decision Log #345 gives visibility only) | PP §9 | Founder + counsel |
 
 ---
 
