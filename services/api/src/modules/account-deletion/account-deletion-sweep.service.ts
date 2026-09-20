@@ -216,7 +216,12 @@ export class AccountDeletionSweepService {
       if (isMinor) {
         const guardian = await tx.guardian.findUnique({
           where: { minorUserId: userId },
-          select: { consentStatus: true, consentTimestamp: true },
+          select: {
+            consentStatus: true,
+            consentTimestamp: true,
+            consentScreenVersion: true,
+            consentDeviceType: true,
+          },
         });
         // Not every minor has a Guardian row (rare edge case) -- nothing
         // to snapshot or delete then.
@@ -226,6 +231,8 @@ export class AccountDeletionSweepService {
               minorUserId: userId,
               consentStatus: guardian.consentStatus,
               consentConfirmedAt: guardian.consentTimestamp,
+              consentScreenVersion: guardian.consentScreenVersion,
+              deviceType: guardian.consentDeviceType,
             },
           });
           await tx.guardian.delete({ where: { minorUserId: userId } });

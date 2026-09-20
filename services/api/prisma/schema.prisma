@@ -236,6 +236,17 @@ model Guardian {
   consentTokenExpiresAt DateTime
   consentTimestamp      DateTime?
 
+  // Decision Log #348 (UK GDPR Art. 7(1) evidentiary record) -- captured
+  // at the SAME write as consentTimestamp (confirmConsent), because
+  // ConsentAuditRecord only exists from hard-delete time and can only
+  // snapshot what the Guardian row already holds. NULL until confirmed
+  // and for rows confirmed before this existed (never backfilled).
+  // consentScreenVersion: manually-bumped constant, see
+  // consent-screen-version.constants.ts. consentDeviceType: coarse
+  // "mobile" | "desktop" | "unknown", never the raw User-Agent.
+  consentScreenVersion  String?
+  consentDeviceType     String?
+
   // Decision Log #338 -- WHY consentStatus is 'declined'. One of
   // 'guardian_explicit' (guardian actively declined) | 'guardian_withdrawal'
   // (guardian withdrew previously-given consent) | 'expiry_timeout' (nobody
@@ -349,6 +360,11 @@ model ConsentAuditRecord {
   // not an enum, so a second consent method added later doesn't need a
   // migration to describe existing rows.
   consentMethod      String    @default("guardian-consent-link")
+  // Decision Log #348 -- snapshots of Guardian.consentScreenVersion /
+  // consentDeviceType. Nullable: rows created before this, pending rows,
+  // and confirmations predating capture have neither; never backfilled.
+  consentScreenVersion String?
+  deviceType           String? // "mobile" | "desktop" | "unknown"
   createdAt          DateTime  @default(now())
 
   @@index([createdAt])

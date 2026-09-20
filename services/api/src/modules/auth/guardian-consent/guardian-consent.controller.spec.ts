@@ -75,7 +75,22 @@ describe('GuardianConsentController (HTTP layer)', () => {
         .expect(200);
 
       expect(response.body).toEqual({ message: 'Guardian consent confirmed.' });
-      expect(guardianConsentService.confirmConsent).toHaveBeenCalledWith('a-real-token');
+      expect(guardianConsentService.confirmConsent).toHaveBeenCalledWith('a-real-token', 'unknown');
+    });
+
+    it.each([
+      ['Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148', 'mobile'],
+      ['Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0', 'desktop'],
+    ])('derives a coarse device type from the User-Agent (%s)', async (ua, expected) => {
+      guardianConsentService.confirmConsent.mockResolvedValueOnce(undefined);
+
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent')
+        .set('User-Agent', ua)
+        .send({ consentToken: 'a-real-token' })
+        .expect(200);
+
+      expect(guardianConsentService.confirmConsent).toHaveBeenCalledWith('a-real-token', expected);
     });
 
     it('returns 200 idempotently when the same token is submitted again', async () => {

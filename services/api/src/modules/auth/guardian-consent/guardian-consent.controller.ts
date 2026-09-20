@@ -1,4 +1,5 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import { classifyDeviceType } from './device-type.util';
 import { CurrentUser } from '../guards/current-user.decorator';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../token/token.types';
@@ -39,8 +40,11 @@ export class GuardianConsentController {
 
   @Post('guardian-consent')
   @HttpCode(HttpStatus.OK)
-  async confirm(@Body() dto: GuardianConsentDto): Promise<{ message: string }> {
-    await this.guardianConsentService.confirmConsent(dto.consentToken);
+  async confirm(
+    @Body() dto: GuardianConsentDto,
+    @Headers('user-agent') userAgent?: string,
+  ): Promise<{ message: string }> {
+    await this.guardianConsentService.confirmConsent(dto.consentToken, classifyDeviceType(userAgent));
     return { message: 'Guardian consent confirmed.' };
   }
 

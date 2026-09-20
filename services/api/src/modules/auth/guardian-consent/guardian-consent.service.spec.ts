@@ -1,4 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { CONSENT_SCREEN_VERSION } from './consent-screen-version.constants';
 import { GuardianConsentService } from './guardian-consent.service';
 
 // Fakes rather than @nestjs/testing's TestingModule — matches B1/B4's
@@ -77,7 +78,7 @@ function buildService(options: {
           data,
         }: {
           where: { consentToken: string; consentStatus: { not: string } };
-          data: { consentStatus: string; consentTimestamp: Date };
+          data: { consentStatus: string; consentTimestamp: Date; consentScreenVersion?: string; consentDeviceType?: string };
         }) => {
           const row = guardiansByToken.get(where.consentToken);
           if (!row || row.consentStatus === where.consentStatus.not) {
@@ -85,6 +86,7 @@ function buildService(options: {
           }
           row.consentStatus = data.consentStatus;
           row.consentTimestamp = data.consentTimestamp;
+          Object.assign(row, { consentScreenVersion: data.consentScreenVersion, consentDeviceType: data.consentDeviceType });
           return { count: 1 };
         },
       ),
@@ -133,6 +135,33 @@ function buildService(options: {
 
 describe('GuardianConsentService', () => {
   describe('confirmConsent', () => {
+    it('stamps the screen version and device type in the same write as consentTimestamp', async () => {
+      const { service, prisma, guardian } = buildService();
+
+      await service.confirmConsent(guardian!.consentToken, 'mobile');
+
+      expect(prisma.guardian.updateMany).toHaveBeenCalledTimes(1);
+      expect(prisma.guardian.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            consentStatus: 'confirmed',
+            consentScreenVersion: CONSENT_SCREEN_VERSION,
+            consentDeviceType: 'mobile',
+          }),
+        }),
+      );
+    });
+
+    it('defaults device type to unknown when the caller supplies none', async () => {
+      const { service, prisma, guardian } = buildService();
+
+      await service.confirmConsent(guardian!.consentToken);
+
+      expect(prisma.guardian.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ consentDeviceType: 'unknown' }) }),
+      );
+    });
+
     it('confirms a valid, unused token and sets consentTimestamp', async () => {
       const { service, guardiansByToken, guardian } = buildService();
 

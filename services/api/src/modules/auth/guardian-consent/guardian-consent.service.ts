@@ -5,6 +5,8 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { GRACE_PERIOD_DAYS } from '../../account-deletion/account-deletion-sweep.service';
 import { AuthService } from '../auth.service';
 import { RegistrationEmailService } from '../registration/email/registration-email.service';
+import { CONSENT_SCREEN_VERSION } from './consent-screen-version.constants';
+import { ConsentDeviceType } from './device-type.util';
 import { computeConsentTokenExpiresAt, computeWithdrawalTokenExpiresAt } from './consent-token.constants';
 
 // sprint-1/guardian-consent-decline-withdraw-expiry -- the three distinct
@@ -87,7 +89,7 @@ export class GuardianConsentService {
     private readonly authService: AuthService,
   ) {}
 
-  async confirmConsent(consentToken: string): Promise<void> {
+  async confirmConsent(consentToken: string, deviceType: ConsentDeviceType = 'unknown'): Promise<void> {
     const guardian = await this.prisma.guardian.findUnique({ where: { consentToken } });
 
     // Deliberately generic — matching RegistrationService's own
@@ -157,7 +159,13 @@ export class GuardianConsentService {
     // the only other value this line could match).
     await this.prisma.guardian.updateMany({
       where: { consentToken, consentStatus: 'pending' },
-      data: { consentStatus: 'confirmed', consentTimestamp: new Date() },
+      data: {
+        consentStatus: 'confirmed',
+        consentTimestamp: new Date(),
+        // Decision Log #348 -- same write as the timestamp, no new path.
+        consentScreenVersion: CONSENT_SCREEN_VERSION,
+        consentDeviceType: deviceType,
+      },
     });
   }
 
