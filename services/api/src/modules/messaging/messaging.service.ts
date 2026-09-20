@@ -93,6 +93,8 @@ export interface MarkReadResult {
   markedRead: number;
 }
 
+export const ADULT_TO_MINOR_DM_BLOCKED_CODE = 'adult_to_minor_dm_blocked';
+
 @Injectable()
 export class MessagingService {
   constructor(private readonly prisma: PrismaService) {}
@@ -118,10 +120,39 @@ export class MessagingService {
     callerId: string,
     recipientId: string,
   ): Promise<{ view: ConversationView; created: boolean }> {
-    await this.assertRecipientMessageable(recipientId, callerId);
+    const recipientIsMinor = await this.assertRecipientMessageable(recipientId, callerId);
 
     const ids = [callerId, recipientId].sort();
     const key = participantKey(ids);
+
+    // sprint-1/adult-to-minor-dm-block (Decision Log #347): an adult
+    // cannot CREATE a new conversation with a minor. Only creation is
+    // blocked: if the thread already exists (necessarily minor-initiated,
+    // or predating this rule) it is simply returned, and sending into it
+    // is unaffected. Minor->adult and minor->minor are allowed; the
+    // under-16 total block and guardian-consent gating apply separately.
+    const existing = await this.prisma.conversation.findUnique({
+      where: { participantKey: key },
+      select: CONVERSATION_SELECT,
+    });
+    if (existing) {
+      const [view] = await this.toConversationViews([existing], callerId);
+      return { view, created: false };
+    }
+    if (recipientIsMinor) {
+      const caller = await this.prisma.user.findUnique({
+        where: { id: callerId },
+        select: { isMinor: true },
+      });
+      if (caller && !caller.isMinor) {
+        throw new ForbiddenException({
+          statusCode: 403,
+          error: 'Forbidden',
+          code: ADULT_TO_MINOR_DM_BLOCKED_CODE,
+          message: 'Adult accounts cannot start a direct message with a minor account.',
+        });
+      }
+    }
 
     let conversation: ConversationRow;
     let created = false;
@@ -415,7 +446,7 @@ export class MessagingService {
   private async assertRecipientMessageable(
     recipientId: string,
     callerId: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (recipientId === callerId) {
       throw new BadRequestException('You cannot start a conversation with yourself');
     }
@@ -450,7 +481,7 @@ export class MessagingService {
       });
     }
     if (!user.isMinor) {
-      return;
+      return false;
     }
 
     // Guardian.minorUserId is @unique — at most one Guardian row per minor.
@@ -459,7 +490,7 @@ export class MessagingService {
       select: { consentStatus: true },
     });
     if (guardian?.consentStatus === 'confirmed') {
-      return;
+      return true;
     }
     throw new NotFoundException('User not found');
   }

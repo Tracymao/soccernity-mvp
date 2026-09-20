@@ -183,6 +183,46 @@ describe('Messaging e2e (Section 4.7, DM slice)', () => {
     });
   });
 
+  // ---------- Decision Log #347: adults cannot initiate DMs with minors ----------
+
+  describe('adult -> minor new conversation block (Decision Log #347)', () => {
+    it('adult -> confirmed minor is 403 adult_to_minor_dm_blocked (no row); minor -> adult is allowed (201); adult resuming that thread is 200; adult -> adult unaffected', async () => {
+      const adult = await createUser('dir-adult');
+      const adult2 = await createUser('dir-adult2');
+      const minor = await createMinor('dir-minor', 'confirmed');
+      const prisma = getTestPrismaClient();
+
+      const blocked = await request(server())
+        .post('/conversations')
+        .set(auth(adult.accessToken))
+        .send({ recipientId: minor.userId })
+        .expect(403);
+      expect(blocked.body).toMatchObject({ code: 'adult_to_minor_dm_blocked' });
+      expect(await prisma.conversation.count()).toBe(0);
+
+      const fromMinor = await request(server())
+        .post('/conversations')
+        .set(auth(minor.accessToken))
+        .send({ recipientId: adult.userId })
+        .expect(201);
+
+      // Existing thread: the adult may resume it (not a creation).
+      const resumed = await request(server())
+        .post('/conversations')
+        .set(auth(adult.accessToken))
+        .send({ recipientId: minor.userId })
+        .expect(200);
+      expect(resumed.body.id).toBe(fromMinor.body.id);
+
+      await request(server())
+        .post('/conversations')
+        .set(auth(adult.accessToken))
+        .send({ recipientId: adult2.userId })
+        .expect(201);
+      expect(await prisma.conversation.count()).toBe(2);
+    });
+  });
+
   // ---------- Decision Log #12: restricted-pending minors, both directions ----------
 
   describe('restricted-pending minor (Decision Log #12)', () => {
@@ -190,6 +230,7 @@ describe('Messaging e2e (Section 4.7, DM slice)', () => {
       const adult = await createUser('recv-adult');
       const pendingMinor = await createMinor('recv', 'pending');
       const confirmedMinor = await createMinor('recv-ok', 'confirmed');
+      const confirmedMinor2 = await createMinor('recv-ok2', 'confirmed');
 
       await request(server())
         .post('/conversations')
@@ -197,10 +238,11 @@ describe('Messaging e2e (Section 4.7, DM slice)', () => {
         .send({ recipientId: pendingMinor.userId })
         .expect(404);
 
-      // A minor WITH confirmed consent is messageable.
+      // A minor WITH confirmed consent is messageable (by another minor —
+      // an adult starting it is blocked, Decision Log #347).
       await request(server())
         .post('/conversations')
-        .set(auth(adult.accessToken))
+        .set(auth(confirmedMinor2.accessToken))
         .send({ recipientId: confirmedMinor.userId })
         .expect(201);
 

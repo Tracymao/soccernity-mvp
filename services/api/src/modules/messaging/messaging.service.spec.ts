@@ -155,6 +155,43 @@ describe('MessagingService', () => {
       expect(p().conversation.create).not.toHaveBeenCalled();
     });
 
+    it('403s adult -> minor NEW conversation with adult_to_minor_dm_blocked', async () => {
+      p().user.findUnique.mockImplementation(({ where }: { where: { id: string } }) =>
+        Promise.resolve(where.id === CALLER ? { isMinor: false } : activeUser({ isMinor: true })),
+      );
+      p().guardian.findUnique.mockResolvedValue({ consentStatus: 'confirmed' });
+      p().conversation.findUnique.mockResolvedValue(null);
+
+      const err = await service.startConversation(CALLER, RECIPIENT).catch((e) => e);
+      expect(err).toBeInstanceOf(ForbiddenException);
+      expect(err.getResponse()).toMatchObject({ code: 'adult_to_minor_dm_blocked' });
+      expect(p().conversation.create).not.toHaveBeenCalled();
+    });
+
+    it('allows minor -> adult and minor -> minor new conversations', async () => {
+      p().user.findUnique.mockImplementation(({ where }: { where: { id: string } }) =>
+        Promise.resolve(where.id === CALLER ? { isMinor: true } : activeUser({ isMinor: false })),
+      );
+      p().conversation.create.mockResolvedValue(conversationRow());
+      expect((await service.startConversation(CALLER, RECIPIENT)).created).toBe(true);
+
+      p().user.findUnique.mockImplementation(({ where }: { where: { id: string } }) =>
+        Promise.resolve(where.id === CALLER ? { isMinor: true } : activeUser({ isMinor: true })),
+      );
+      p().guardian.findUnique.mockResolvedValue({ consentStatus: 'confirmed' });
+      expect((await service.startConversation(CALLER, RECIPIENT)).created).toBe(true);
+    });
+
+    it('an adult resuming an EXISTING thread with a minor is not blocked (created: false)', async () => {
+      p().user.findUnique.mockResolvedValue(activeUser({ isMinor: true }));
+      p().guardian.findUnique.mockResolvedValue({ consentStatus: 'confirmed' });
+      p().conversation.findUnique.mockResolvedValue(conversationRow());
+
+      const { created } = await service.startConversation(CALLER, RECIPIENT);
+      expect(created).toBe(false);
+      expect(p().conversation.create).not.toHaveBeenCalled();
+    });
+
     it('allows a minor recipient whose guardian consent is confirmed', async () => {
       p().user.findUnique.mockResolvedValue(activeUser({ isMinor: true }));
       p().guardian.findUnique.mockResolvedValue({ consentStatus: 'confirmed' });
