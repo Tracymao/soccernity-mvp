@@ -71,6 +71,7 @@ import DeactivateAccountPage from "../pages/settings/DeactivateAccountPage";
 import DeleteAccountPage from "../pages/settings/DeleteAccountPage";
 import InactiveAccountPage from "../pages/InactiveAccountPage";
 import NotFoundPage from "../pages/NotFoundPage";
+import { TermsPage, PrivacyPage } from "../pages/legal/LegalPage";
 
 // Exported separately from `router` so tests can mount the real route tree
 // via createMemoryRouter(routes, ...) without a browser history.
@@ -296,6 +297,10 @@ export const routes: RouteObject[] = [
       // Added during a Sprint 1 cleanup review -- was missing entirely,
       // not a pre-existing placeholder. See VerifyEmailPage.tsx.
       { path: "verify-email", element: <VerifyEmailPage /> }, // F7
+      // Public legal pages: render the draft legal copy document (with its
+      // own "NOT APPROVED" banner while that status holds). No login gate.
+      { path: "terms", element: <TermsPage /> },
+      { path: "privacy", element: <PrivacyPage /> },
       // NOTE: the "*" 404 route lives under FooterLayout above (so the
       // error page gets the site footer -- Decision Log #228), not here.
     ],

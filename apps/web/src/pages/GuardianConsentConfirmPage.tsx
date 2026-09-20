@@ -241,7 +241,7 @@ export default function GuardianConsentConfirmPage() {
                       [COPY PENDING LEGAL REVIEW -- expiry/deletion/withdrawal copy from the Figma frame is not
                       reproduced here since it isn't backed by a real policy yet.]
                     </span>{" "}
-                    Read our <Link to="/">Privacy Policy</Link>.
+                    Read our <Link to="/privacy">Privacy Policy</Link>.
                   </p>
                 </div>
             </form>

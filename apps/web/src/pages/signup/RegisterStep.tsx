@@ -189,12 +189,11 @@ export default function RegisterStep({ dob, isMinor, guardianDetails }: Register
           </p>
         )}
 
-        {/* Terms/Privacy Policy are plain text, not links -- no /terms or
-            /privacy route exists anywhere in this app yet, and inventing
-            one is out of this PR's scope. */}
+        {/* /terms and /privacy render the draft legal copy (with its own
+            "not approved" banner). Open in a new tab so the form isn't lost. */}
         <p className="signup-form__fineprint">
-          By creating an account, you agree to our <span className="signup-form__accent-text">Terms</span> and have
-          read and acknowledge the <span className="signup-form__accent-text">Privacy Policy</span>.
+          By creating an account, you agree to our <a className="signup-form__accent-text" href="/terms" target="_blank" rel="noopener noreferrer">Terms</a> and have
+          read and acknowledge the <a className="signup-form__accent-text" href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
         </p>
 
         <button type="submit" className="signup-button" disabled={submitting}>
