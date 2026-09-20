@@ -157,6 +157,8 @@ describe('AccountDeletionSweepService', () => {
       (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({
         consentStatus: 'confirmed',
         consentTimestamp: new Date('2026-01-01T00:00:00.000Z'),
+        consentScreenVersion: 'v1',
+        consentDeviceType: 'mobile',
       });
       const service = new AccountDeletionSweepService(prisma);
 
@@ -167,6 +169,8 @@ describe('AccountDeletionSweepService', () => {
           minorUserId: 'minor-1',
           consentStatus: 'confirmed',
           consentConfirmedAt: new Date('2026-01-01T00:00:00.000Z'),
+          consentScreenVersion: 'v1',
+          deviceType: 'mobile',
         },
       });
       expect(prisma.guardian.delete).toHaveBeenCalledWith({ where: { minorUserId: 'minor-1' } });
@@ -179,13 +183,24 @@ describe('AccountDeletionSweepService', () => {
     it('minor with a still-pending Guardian row: snapshot has consentConfirmedAt: null', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'minor-1', isMinor: true }]);
-      (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'pending', consentTimestamp: null });
+      (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({
+        consentStatus: 'pending',
+        consentTimestamp: null,
+        consentScreenVersion: null,
+        consentDeviceType: null,
+      });
       const service = new AccountDeletionSweepService(prisma);
 
       await service.sweepPendingDeletions();
 
       expect(prisma.consentAuditRecord.create).toHaveBeenCalledWith({
-        data: { minorUserId: 'minor-1', consentStatus: 'pending', consentConfirmedAt: null },
+        data: {
+          minorUserId: 'minor-1',
+          consentStatus: 'pending',
+          consentConfirmedAt: null,
+          consentScreenVersion: null,
+          deviceType: null,
+        },
       });
     });
 

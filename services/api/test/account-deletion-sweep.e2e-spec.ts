@@ -216,7 +216,16 @@ describe('AccountDeletionSweepService e2e: 30-day anonymize-in-place + investiga
       // No more PII than necessary — Decision Log #42 rules out a full
       // Guardian mirror; the model has no name/email/relationship columns.
       expect(Object.keys(record).sort()).toEqual(
-        ['id', 'minorUserId', 'consentStatus', 'consentConfirmedAt', 'consentMethod', 'createdAt'].sort(),
+        [
+          'id',
+          'minorUserId',
+          'consentStatus',
+          'consentConfirmedAt',
+          'consentMethod',
+          'consentScreenVersion',
+          'deviceType',
+          'createdAt',
+        ].sort(),
       );
       expect(JSON.stringify(record)).not.toContain('Real Guardian Name');
       expect(JSON.stringify(record)).not.toContain('real-guardian-email@example.com');
