@@ -112,7 +112,9 @@ describe("router — match-centre carries the shared navbar (Decision Log #311)"
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("logged out: icon nav + Login (header 7), no site footer", async () => {
     await renderAt("/sports-hub/matches/abc");
