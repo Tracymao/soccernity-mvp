@@ -72,6 +72,39 @@ describe('RegistrationEmailService', () => {
       );
     });
 
+    it('renders the founder-approved guardian-minor-turned-18 copy verbatim', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-18' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example' }),
+      );
+
+      await service.sendGuardianMinorTurned18Email('g@example.com', 'Ada Lovelace', 'Grace Hopper');
+
+      const sent = mockSendEmail.mock.calls[0][0] as { Subject: string; TextBody: string; HtmlBody: string };
+      expect(sent.Subject).toBe("An update on Ada Lovelace's Soccernity account");
+      expect(sent.TextBody).toBe(
+        `Hi Grace,
+
+` +
+          `We're writing to let you know that Ada Lovelace's Soccernity account has automatically moved from a minor's account to an adult account, now that they've turned 18.
+
+` +
+          `This means the guardian consent and oversight settings you originally set up no longer apply — Ada Lovelace now manages their own account the same way any adult user does. You don't need to do anything, and this isn't a request for action.
+
+` +
+          `If you have any questions about this change, or about the account generally, you can reach us at support@soccernity.com.
+
+` +
+          `Thanks for being part of Ada Lovelace's Soccernity journey so far.
+
+` +
+          `— The Soccernity team`,
+      );
+      expect(sent.HtmlBody).toContain('<p>Hi Grace,</p>');
+      expect(sent.HtmlBody).toContain('support@soccernity.com');
+      expect(sent.HtmlBody).not.toMatch(/placeholder|verification code/i);
+    });
+
     it('catches a Postmark send failure and logs it, without rejecting or leaking the token', async () => {
       const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
       mockSendEmail.mockRejectedValueOnce(new Error('Postmark: invalid API token'));

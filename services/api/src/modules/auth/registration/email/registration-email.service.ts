@@ -161,13 +161,19 @@ export class RegistrationEmailService {
 
   // sprint-1/age-reclassification-notifications: To the GUARDIAN, purely
   // informational -- the child turned 18 and the account is no longer
-  // guardian-consent-gated. Asks nothing of them.
-  async sendGuardianMinorTurned18Email(to: string, minorDisplayName: string): Promise<void> {
+  // guardian-consent-gated. Asks nothing of them. Copy is founder-approved
+  // verbatim. Guardian.name is a single full-name column (Decision Log
+  // #63), so the greeting uses its first whitespace-delimited token.
+  async sendGuardianMinorTurned18Email(
+    to: string,
+    minorDisplayName: string,
+    guardianName: string,
+  ): Promise<void> {
     await this.dispatch({
       to,
-      subject: `${minorDisplayName} has turned 18 on Soccernity`,
+      subject: `An update on ${minorDisplayName}'s Soccernity account`,
       template: 'guardian-minor-turned-18',
-      data: { minorDisplayName },
+      data: { minorDisplayName, guardianFirstName: guardianName.trim().split(/\s+/)[0] ?? '' },
     });
   }
 
@@ -289,8 +295,22 @@ function renderTextBody(template: RegistrationEmailTemplate, data: Record<string
       );
     case 'guardian-minor-turned-18':
       return (
-        `${data.minorDisplayName} has turned 18, so their Soccernity account is no longer subject to guardian consent.\n\n` +
-        `You don't need to do anything. This is just to let you know.`
+        `Hi ${data.guardianFirstName},
+
+` +
+        `We're writing to let you know that ${data.minorDisplayName}'s Soccernity account has automatically moved from a minor's account to an adult account, now that they've turned 18.
+
+` +
+        `This means the guardian consent and oversight settings you originally set up no longer apply — ${data.minorDisplayName} now manages their own account the same way any adult user does. You don't need to do anything, and this isn't a request for action.
+
+` +
+        `If you have any questions about this change, or about the account generally, you can reach us at support@soccernity.com.
+
+` +
+        `Thanks for being part of ${data.minorDisplayName}'s Soccernity journey so far.
+
+` +
+        `— The Soccernity team`
       );
     default:
       throw new Error(`Unknown registration email template: ${template as string}`);
@@ -344,8 +364,12 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
       );
     case 'guardian-minor-turned-18':
       return (
-        `<p><strong>${data.minorDisplayName}</strong> has turned 18, so their Soccernity account is no longer subject to guardian consent.</p>` +
-        `<p>You don't need to do anything. This is just to let you know.</p>`
+        `<p>Hi ${data.guardianFirstName},</p>` +
+        `<p>We're writing to let you know that ${data.minorDisplayName}'s Soccernity account has automatically moved from a minor's account to an adult account, now that they've turned 18.</p>` +
+        `<p>This means the guardian consent and oversight settings you originally set up no longer apply — ${data.minorDisplayName} now manages their own account the same way any adult user does. You don't need to do anything, and this isn't a request for action.</p>` +
+        `<p>If you have any questions about this change, or about the account generally, you can reach us at support@soccernity.com.</p>` +
+        `<p>Thanks for being part of ${data.minorDisplayName}'s Soccernity journey so far.</p>` +
+        `<p>— The Soccernity team</p>`
       );
     default:
       throw new Error(`Unknown registration email template: ${template as string}`);

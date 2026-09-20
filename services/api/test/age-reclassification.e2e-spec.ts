@@ -290,7 +290,7 @@ describe('Age reclassification sweep e2e', () => {
       await sweep();
 
       expect(spy).toHaveBeenCalledTimes(1);
-      expect(spy).toHaveBeenCalledWith(expect.stringMatching(/^guardian-age-\d+@example\.com$/), expect.any(String));
+      expect(spy).toHaveBeenCalledWith(expect.stringMatching(/^guardian-age-\d+@example\.com$/), expect.any(String), expect.any(String));
 
       const notes = await prisma.notification.findMany();
       expect(notes).toHaveLength(1);

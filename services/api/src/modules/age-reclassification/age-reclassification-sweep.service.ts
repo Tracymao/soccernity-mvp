@@ -180,10 +180,10 @@ export class AgeReclassificationSweepService {
     try {
       const guardian = await this.prisma.guardian.findUnique({
         where: { minorUserId: userId },
-        select: { email: true },
+        select: { email: true, name: true },
       });
       if (!guardian) return;
-      await this.emailService.sendGuardianMinorTurned18Email(guardian.email, displayName);
+      await this.emailService.sendGuardianMinorTurned18Email(guardian.email, displayName, guardian.name);
     } catch (err) {
       this.logger.error(
         `Age reclassification sweep: failed to notify guardian of user ${userId} turning 18: ${(err as Error).message}`,
