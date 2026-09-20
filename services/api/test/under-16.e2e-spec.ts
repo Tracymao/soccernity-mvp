@@ -95,7 +95,8 @@ describe('Under-16 restrictions e2e', () => {
       .post('/conversations')
       .set(auth(teen.token))
       .send({ recipientId: kid.id });
-    expect(fromTeen.status).toBe(403);
+    expect(fromTeen.status).toBe(404);
+    expect(fromTeen.body).toEqual(missing.body);
 
     // 16-17 unaffected (a separate, later control -- untouched here).
     const ok = await request(server())
