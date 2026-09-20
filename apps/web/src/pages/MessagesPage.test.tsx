@@ -6,7 +6,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import MessagesPage from "./MessagesPage";
-import type { Conversation } from "../api/messaging";
+import { MessagingApiError, type Conversation } from "../api/messaging";
 
 vi.mock("../api/messaging", async () => {
   const actual = await vi.importActual<typeof import("../api/messaging")>("../api/messaging");
@@ -68,6 +68,16 @@ describe("MessagesPage", () => {
     expect(await screen.findByText("Ada Obi")).not.toBeNull();
     expect(screen.getByText("See you at training")).not.toBeNull();
     expect(screen.getByLabelText("3 unread")).not.toBeNull();
+  });
+
+  it("shows a plain, threshold-free message when the account is under-16 restricted", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    vi.mocked(listConversations).mockRejectedValueOnce(
+      new MessagingApiError("This isn't available for your account yet.", { status: 403, code: "under_16_restricted" }),
+    );
+    renderPage();
+    expect(await screen.findByText("This isn't available for your account yet.")).not.toBeNull();
+    expect(screen.queryByText(/couldn.t load your messages/i)).toBeNull();
   });
 
   it("renders the empty-inbox state with a Start a conversation link", async () => {

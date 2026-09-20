@@ -30,6 +30,7 @@ vi.mock("../api/users", async () => {
   return { ...actual, getUser: vi.fn() };
 });
 
+import { BanterApiError } from "../api/banter";
 import { listRooms, getMyRooms, createRoom, joinRoom, leaveRoom } from "../api/banter";
 import { getUser } from "../api/users";
 
@@ -208,5 +209,16 @@ describe("BanterPage", () => {
     renderPage();
 
     expect(await screen.findByText(/couldn.t load rooms/i)).not.toBeNull();
+  });
+
+  it("shows a plain, threshold-free message when the account is under-16 restricted", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    vi.mocked(getUser).mockResolvedValueOnce(profile());
+    vi.mocked(listRooms).mockRejectedValueOnce(
+      new BanterApiError("This isn't available for your account yet.", { status: 403, code: "under_16_restricted" }),
+    );
+    renderPage();
+    expect(await screen.findByText("This isn't available for your account yet.")).not.toBeNull();
+    expect(screen.queryByText(/couldn.t load rooms/i)).toBeNull();
   });
 });

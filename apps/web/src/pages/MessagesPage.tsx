@@ -24,6 +24,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { listConversations, MessagingApiError, type Conversation } from "../api/messaging";
 import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
+import { UNDER_16_MESSAGE, isUnder16Restricted } from "../lib/under16";
 import "./messages/MessagesPage.css";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
@@ -59,6 +60,7 @@ export default function MessagesPage() {
   const decoded = token ? decodeAccessToken(token) : null;
 
   const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [restricted, setRestricted] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -75,7 +77,8 @@ export default function MessagesPage() {
       setConversations(page.items);
       setCursor(page.nextCursor);
       setLoadState("loaded");
-    } catch {
+    } catch (err) {
+      setRestricted(isUnder16Restricted(err));
       setLoadState("error");
     }
   }, [token]);
@@ -124,7 +127,7 @@ export default function MessagesPage() {
 
       {loadState === "error" && (
         <p className="messages-status messages-status--error" role="alert">
-          Couldn&rsquo;t load your messages. Please try again shortly.
+          {restricted ? UNDER_16_MESSAGE : "Couldn’t load your messages. Please try again shortly."}
         </p>
       )}
 

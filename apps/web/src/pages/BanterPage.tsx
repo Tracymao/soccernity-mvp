@@ -43,6 +43,7 @@ import {
 } from "../api/banter";
 import { getUser, type UserProfile } from "../api/users";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
+import { UNDER_16_MESSAGE, isUnder16Restricted } from "../lib/under16";
 import BanterJoinButton from "./banter/BanterJoinButton";
 import { TRENDS, FIXTURES, SUGGESTED } from "./banter/banterData";
 import "./banter/BanterPage.css";
@@ -79,6 +80,7 @@ export default function BanterPage() {
   const [activeQuery, setActiveQuery] = useState("");
 
   const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [restricted, setRestricted] = useState(false);
   const [rooms, setRooms] = useState<BanterRoom[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -120,7 +122,8 @@ export default function BanterPage() {
         setCursor(page.nextCursor);
         setActiveQuery(trimmed);
         setLoadState("loaded");
-      } catch {
+      } catch (err) {
+        setRestricted(isUnder16Restricted(err));
         setLoadState("error");
       }
     },
@@ -352,7 +355,7 @@ export default function BanterPage() {
 
         {loadState === "error" && (
           <p className="banter-status banter-status--inline" role="alert">
-            Couldn&rsquo;t load rooms. Please try again shortly.
+            {restricted ? UNDER_16_MESSAGE : "Couldn’t load rooms. Please try again shortly."}
           </p>
         )}
 

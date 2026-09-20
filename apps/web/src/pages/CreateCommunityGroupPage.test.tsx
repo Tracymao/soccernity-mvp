@@ -129,6 +129,24 @@ describe("CreateCommunityGroupPage", () => {
     );
   });
 
+  it("shows a plain, threshold-free message on an under-16 restricted 403", async () => {
+    window.sessionStorage.setItem("sn_access_token", "test-token");
+    vi.mocked(createCommunityGroup).mockRejectedValueOnce(
+      new CommunityGroupsApiError("This isn't available for your account yet.", {
+        status: 403,
+        code: "under_16_restricted",
+      }),
+    );
+
+    renderPage();
+    fireEvent.change(screen.getByLabelText(/group name/i), { target: { value: "Lagos Mainland Ballers" } });
+    fireEvent.change(screen.getByLabelText(/^city \(required\)$/i), { target: { value: "Lagos" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create group" }));
+
+    expect(await screen.findByText("This isn't available for your account yet.")).not.toBeNull();
+    expect(screen.queryByRole("link", { name: /check your consent status/i })).toBeNull();
+  });
+
   it("surfaces the server's own duplicate-name 409 message inline", async () => {
     window.sessionStorage.setItem("sn_access_token", "test-token");
     vi.mocked(createCommunityGroup).mockRejectedValueOnce(

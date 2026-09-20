@@ -27,6 +27,8 @@
 //
 // Response shapes mirror services/api/src/modules/messaging/
 // messaging.service.ts's ConversationView / MessageView / *Page exactly.
+import { apiFailure } from "../lib/under16";
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
 
 export interface OtherParticipant {
@@ -86,11 +88,13 @@ export interface MarkReadResult {
 
 export class MessagingApiError extends Error {
   readonly status?: number;
+  readonly code?: string;
 
-  constructor(message: string, options?: { status?: number }) {
+  constructor(message: string, options?: { status?: number; code?: string }) {
     super(message);
     this.name = "MessagingApiError";
     this.status = options?.status;
+    this.code = options?.code;
   }
 }
 
@@ -117,13 +121,6 @@ async function authedFetch(path: string, accessToken: string, init?: AuthedFetch
 // Pull the server's own message off a NestJS error body ({ message } or
 // { message: string[] }). Same helper feed.ts / grassroots.ts / banter.ts
 // use.
-async function errorMessageFrom(response: Response, fallback: string): Promise<string> {
-  const body = await response.json().catch(() => null);
-  if (body && typeof body.message === "string") return body.message;
-  if (body && Array.isArray(body.message) && typeof body.message[0] === "string") return body.message[0];
-  return fallback;
-}
-
 // POST /conversations { recipientId } -- find-or-create the thread with
 // ONE other user. `created` distinguishes a genuinely new thread (201)
 // from an existing one that was returned instead (200) -- the recipient
@@ -138,10 +135,7 @@ export async function startConversation(
     body: JSON.stringify({ recipientId }),
   });
   if (!response.ok) {
-    throw new MessagingApiError(
-      await errorMessageFrom(response, `Couldn't start that conversation (${response.status}).`),
-      { status: response.status },
-    );
+    throw await apiFailure((m, o) => new MessagingApiError(m, o), response, `Couldn't start that conversation (${response.status}).`, true);
   }
   const conversation = (await response.json()) as Conversation;
   return { conversation, created: response.status === 201 };
@@ -155,9 +149,7 @@ export async function listConversations(accessToken: string, cursor?: string): P
 
   const response = await authedFetch(url.pathname + url.search, accessToken);
   if (!response.ok) {
-    throw new MessagingApiError(`Couldn't load your messages (${response.status}).`, {
-      status: response.status,
-    });
+    throw await apiFailure((m, o) => new MessagingApiError(m, o), response, `Couldn't load your messages (${response.status}).`, false);
   }
   return (await response.json()) as ConversationPage;
 }
@@ -176,9 +168,7 @@ export async function getMessages(
 
   const response = await authedFetch(url.pathname + url.search, accessToken);
   if (!response.ok) {
-    throw new MessagingApiError(`Couldn't load this conversation (${response.status}).`, {
-      status: response.status,
-    });
+    throw await apiFailure((m, o) => new MessagingApiError(m, o), response, `Couldn't load this conversation (${response.status}).`, false);
   }
   return (await response.json()) as MessagePage;
 }
@@ -197,10 +187,7 @@ export async function sendMessage(
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
-    throw new MessagingApiError(
-      await errorMessageFrom(response, `Couldn't send that message (${response.status}).`),
-      { status: response.status },
-    );
+    throw await apiFailure((m, o) => new MessagingApiError(m, o), response, `Couldn't send that message (${response.status}).`, true);
   }
   return (await response.json()) as Message;
 }
@@ -218,9 +205,7 @@ export async function markConversationRead(
     method: "PATCH",
   });
   if (!response.ok) {
-    throw new MessagingApiError(`Couldn't mark that conversation read (${response.status}).`, {
-      status: response.status,
-    });
+    throw await apiFailure((m, o) => new MessagingApiError(m, o), response, `Couldn't mark that conversation read (${response.status}).`, false);
   }
   return (await response.json()) as MarkReadResult;
 }

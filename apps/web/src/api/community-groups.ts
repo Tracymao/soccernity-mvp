@@ -33,6 +33,8 @@
 // Response shapes mirror services/api/src/modules/community-groups/
 // community-groups.service.ts's CommunityGroupView / JoinGroupState /
 // CommunityGroupMemberView exactly.
+import { apiFailure } from "../lib/under16";
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
 
 // GET /community-groups, GET /community-groups/:id, POST /community-groups.
@@ -99,11 +101,13 @@ export interface ListCommunityGroupsParams {
 
 export class CommunityGroupsApiError extends Error {
   readonly status?: number;
+  readonly code?: string;
 
-  constructor(message: string, options?: { status?: number }) {
+  constructor(message: string, options?: { status?: number; code?: string }) {
     super(message);
     this.name = "CommunityGroupsApiError";
     this.status = options?.status;
+    this.code = options?.code;
   }
 }
 
@@ -132,13 +136,6 @@ async function authedFetch(path: string, accessToken: string, init?: AuthedFetch
 // text (a 403 "awaiting guardian consent" vs a 409 "already exists") is
 // what tells the caller what happened. Same helper feed.ts / grassroots.ts
 // use.
-async function errorMessageFrom(response: Response, fallback: string): Promise<string> {
-  const body = await response.json().catch(() => null);
-  if (body && typeof body.message === "string") return body.message;
-  if (body && Array.isArray(body.message) && typeof body.message[0] === "string") return body.message[0];
-  return fallback;
-}
-
 // POST /community-groups -- JwtAuthGuard + GuardianConsentGuard. 403 = a
 // restricted-pending minor; 409 = a Community Group with this (normalized)
 // name already exists.
@@ -151,10 +148,7 @@ export async function createCommunityGroup(
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
-    throw new CommunityGroupsApiError(
-      await errorMessageFrom(response, `Couldn't create that group (${response.status}).`),
-      { status: response.status },
-    );
+    throw await apiFailure((m, o) => new CommunityGroupsApiError(m, o), response, `Couldn't create that group (${response.status}).`, true);
   }
   return (await response.json()) as CommunityGroup;
 }
@@ -178,7 +172,7 @@ export async function listCommunityGroups(
 
   const response = await authedFetch(url.pathname + url.search, accessToken);
   if (!response.ok) {
-    throw new CommunityGroupsApiError(`Couldn't load groups (${response.status}).`, { status: response.status });
+    throw await apiFailure((m, o) => new CommunityGroupsApiError(m, o), response, `Couldn't load groups (${response.status}).`, false);
   }
   return (await response.json()) as CommunityGroupPage;
 }
@@ -190,9 +184,7 @@ export async function listCommunityGroups(
 export async function getCommunityGroupById(accessToken: string, groupId: string): Promise<CommunityGroup> {
   const response = await authedFetch(`/community-groups/${groupId}`, accessToken);
   if (!response.ok) {
-    throw new CommunityGroupsApiError(`Couldn't load that group (${response.status}).`, {
-      status: response.status,
-    });
+    throw await apiFailure((m, o) => new CommunityGroupsApiError(m, o), response, `Couldn't load that group (${response.status}).`, false);
   }
   return (await response.json()) as CommunityGroup;
 }
@@ -209,9 +201,7 @@ export async function getCommunityGroupMembers(
 
   const response = await authedFetch(url.pathname + url.search, accessToken);
   if (!response.ok) {
-    throw new CommunityGroupsApiError(`Couldn't load this group's members (${response.status}).`, {
-      status: response.status,
-    });
+    throw await apiFailure((m, o) => new CommunityGroupsApiError(m, o), response, `Couldn't load this group's members (${response.status}).`, false);
   }
   return (await response.json()) as CommunityGroupMemberPage;
 }
@@ -221,10 +211,7 @@ export async function getCommunityGroupMembers(
 export async function joinCommunityGroup(accessToken: string, groupId: string): Promise<JoinGroupResult> {
   const response = await authedFetch(`/community-groups/${groupId}/join`, accessToken, { method: "POST" });
   if (!response.ok) {
-    throw new CommunityGroupsApiError(
-      await errorMessageFrom(response, `Couldn't join that group (${response.status}).`),
-      { status: response.status },
-    );
+    throw await apiFailure((m, o) => new CommunityGroupsApiError(m, o), response, `Couldn't join that group (${response.status}).`, true);
   }
   return (await response.json()) as JoinGroupResult;
 }
@@ -235,10 +222,7 @@ export async function joinCommunityGroup(accessToken: string, groupId: string): 
 export async function leaveCommunityGroup(accessToken: string, groupId: string): Promise<JoinGroupResult> {
   const response = await authedFetch(`/community-groups/${groupId}/join`, accessToken, { method: "DELETE" });
   if (!response.ok) {
-    throw new CommunityGroupsApiError(
-      await errorMessageFrom(response, `Couldn't leave that group (${response.status}).`),
-      { status: response.status },
-    );
+    throw await apiFailure((m, o) => new CommunityGroupsApiError(m, o), response, `Couldn't leave that group (${response.status}).`, true);
   }
   return (await response.json()) as JoinGroupResult;
 }
