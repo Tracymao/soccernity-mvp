@@ -147,8 +147,8 @@ describe('Age reclassification sweep e2e', () => {
       .post('/conversations')
       .set(auth(adult.token))
       .send({ recipientId: nowAdult.id });
-    expect(before.status).toBe(403);
-    expect(before.body.code).toBe('adult_to_minor_dm_blocked');
+    // Blocked, as an enumeration-safe 404 (same as a missing recipient).
+    expect(before.status).toBe(404);
 
     await sweep();
 
