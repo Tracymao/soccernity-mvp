@@ -226,3 +226,10 @@ imports neither). Two delegations, both the same pattern
   "My Bants" against real rows; the room feed reading `Post.banterRoomId`
   (which `GET /posts/feed` never does); and a real `User` hard-delete
   cascading `BanterRoomMember` rows away.
+
+## Under-16 restriction (sprint-1/under-16-restrictions, Decision Log #346)
+
+`isUnder16` accounts are fully blocked from Bants — every route,
+including reads, joining and posting (`Under16RestrictionGuard` +
+`@RestrictUnder16('banter')` at class level). Layered on top of
+`GuardianConsentGuard`, which stays on the write routes unchanged.

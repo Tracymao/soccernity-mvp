@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { CurrentUser } from '../auth/guards/current-user.decorator';
+import { RestrictUnder16, Under16RestrictionGuard } from '../auth/guards/under-16-restriction.guard';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
@@ -34,6 +35,11 @@ import { MessagingService } from './messaging.service';
 // MessagingService.assertRecipientMessageable blocks them from being a
 // RECIPIENT. Both directions, per #12's explicit resolution. See
 // messaging/README.md.
+// sprint-1/under-16-restrictions: whole controller off for isUnder16 accounts
+// (reads included). Class-level guards run BEFORE route-level ones, so
+// JwtAuthGuard is repeated here to attach request.user first.
+@UseGuards(JwtAuthGuard, Under16RestrictionGuard)
+@RestrictUnder16('messaging')
 @Controller('conversations')
 export class ConversationsController {
   constructor(private readonly messaging: MessagingService) {}

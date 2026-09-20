@@ -36,6 +36,17 @@ model User {
   displayName        String
   dateOfBirth        DateTime?
   isMinor            Boolean  @default(false)
+  // sprint-1/under-16-restrictions -- a genuine addition beyond Section
+  // 3's literal User field list (Decision Log candidate, see
+  // auth/README.md). A NEW, separate tier layered ON TOP of isMinor /
+  // the guardian-consent restriction, never replacing it: true whenever
+  // the declared age at registration is under 16. Set exactly where
+  // isMinor is set (RegistrationService.register, via computeIsUnder16)
+  // and, like isMinor, never rewritten afterwards. Drives the counsel-
+  // requested under-16 controls: no messaging either direction, no
+  // Banter Rooms, read-only Community Groups, guardian contact exposed
+  // on the minor's own profile.
+  isUnder16          Boolean  @default(false)
   role               String   @default("fan") // fan | player | admin
   verificationStatus String   @default("unverified")
   createdAt          DateTime @default(now())

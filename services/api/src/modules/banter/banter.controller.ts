@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../auth/guards/current-user.decorator';
+import { RestrictUnder16, Under16RestrictionGuard } from '../auth/guards/under-16-restriction.guard';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
@@ -27,6 +28,11 @@ import { MyBantsQueryDto } from './dto/my-bants-query.dto';
 // /fixtures/:id/status (Decision Log #254).
 //
 // Guard reasoning per route is inline below and in banter/README.md.
+// sprint-1/under-16-restrictions: whole controller off for isUnder16 accounts
+// (reads included). Class-level guards run BEFORE route-level ones, so
+// JwtAuthGuard is repeated here to attach request.user first.
+@UseGuards(JwtAuthGuard, Under16RestrictionGuard)
+@RestrictUnder16('banter')
 @Controller('banter-rooms')
 export class BanterController {
   constructor(private readonly banter: BanterService) {}

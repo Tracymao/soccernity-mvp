@@ -334,3 +334,10 @@ project used for Grassroots (`sprint-5/grassroots-conversion-read` /
 
 Exact before/after suite counts for this PR are recorded in
 `CLAUDE.md`'s matching Sprint 3 status bullet.
+
+## Under-16 restriction (sprint-1/under-16-restrictions, Decision Log #346)
+
+`isUnder16` accounts are read-only: `POST /community-groups` (content
+creation) is blocked with `under_16_restricted`. Reads and join/leave stay
+open (membership is not content). No group post/comment/reply endpoint
+exists, so there is nothing further to gate.

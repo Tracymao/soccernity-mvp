@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../auth/guards/current-user.decorator';
+import { RestrictUnder16, Under16RestrictionGuard } from '../auth/guards/under-16-restriction.guard';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
@@ -33,8 +34,11 @@ export class CommunityGroupsController {
   // name-uniqueness safeguard against duplicates (409) — moderation/
   // size-limits/rate-limiting are flagged open, not built. Nest's default
   // 201 is correct — this genuinely creates a resource.
+  // sprint-1/under-16-restrictions: creating a group is content creation;
+  // isUnder16 accounts are read-only. Join/leave stay open (see README).
   @Post()
-  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, Under16RestrictionGuard)
+  @RestrictUnder16('community_groups')
   async create(@CurrentUser() user: AccessTokenPayload, @Body() dto: CreateCommunityGroupDto) {
     return this.communityGroups.createGroup(user.sub, dto);
   }

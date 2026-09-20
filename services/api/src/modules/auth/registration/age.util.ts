@@ -11,6 +11,16 @@ export function computeIsMinor(dateOfBirth: Date, asOf: Date = new Date()): bool
   return calculateAge(dateOfBirth, asOf) < 18;
 }
 
+// sprint-1/under-16-restrictions: the separate, narrower tier counsel
+// asked for (messaging/Bants off, Community Groups read-only). Computed
+// exactly where and how isMinor is -- once, from the declared date of
+// birth at registration.
+export const UNDER_16_AGE = 16;
+
+export function computeIsUnder16(dateOfBirth: Date, asOf: Date = new Date()): boolean {
+  return calculateAge(dateOfBirth, asOf) < UNDER_16_AGE;
+}
+
 export function calculateAge(dateOfBirth: Date, asOf: Date = new Date()): number {
   let age = asOf.getFullYear() - dateOfBirth.getFullYear();
   const monthDiff = asOf.getMonth() - dateOfBirth.getMonth();
