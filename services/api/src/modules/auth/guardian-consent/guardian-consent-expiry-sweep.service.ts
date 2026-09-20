@@ -93,6 +93,10 @@ export class GuardianConsentExpirySweepService {
       where: {
         consentStatus: 'pending',
         consentTokenExpiresAt: { lte: now },
+        // Decision Log #349: a user since reclassified as an adult (turned
+        // 18) has an inert old request; it must never chase a guardian or
+        // auto-decline an adult into deletion.
+        minorUser: { isMinor: true },
       },
       select: {
         id: true,

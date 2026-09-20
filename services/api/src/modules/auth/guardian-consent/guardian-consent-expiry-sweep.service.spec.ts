@@ -83,7 +83,11 @@ describe('GuardianConsentExpirySweepService — scope', () => {
 
     expect(prisma.guardian.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { consentStatus: 'pending', consentTokenExpiresAt: { lte: NOW } },
+        where: {
+          consentStatus: 'pending',
+          consentTokenExpiresAt: { lte: NOW },
+          minorUser: { isMinor: true }, // Decision Log #349
+        },
       }),
     );
     expect(result.autoResentGuardianIds).toEqual(['expired']);
