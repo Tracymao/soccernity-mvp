@@ -6,10 +6,8 @@
 .contest-rules-overlay {
   position: fixed;
   inset: 0;
-  /* Figma scrim: ~28% navy (two stacked color/icon/inactive fills). The
-   * token map has no navy-with-alpha, so this is a literal — the same
-   * disclosed exception EditProfileModal.css makes for its own scrim. */
-  background-color: rgba(40, 46, 101, 0.28);
+  /* Figma color/overlay/scrim (Decision Log #353). */
+  background-color: var(--sn-overlay-scrim);
   display: flex;
   align-items: center;
   justify-content: center;

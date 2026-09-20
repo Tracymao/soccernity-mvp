@@ -15,10 +15,9 @@
   height: 100%;
   padding: 0;
   border: none;
-  /* ~28% navy -- two stacked 15% icon-inactive washes, per Decision Log
-   * #163 (a variable-bound navy paint renders solid in Figma; there is
-   * no dedicated scrim token). */
-  background-color: rgba(40, 46, 101, 0.28);
+  /* Figma color/overlay/scrim (Decision Log #353) -- replaces the old
+   * hardcoded ~28% navy literal. */
+  background-color: var(--sn-overlay-scrim);
   cursor: pointer;
 }
 
@@ -34,6 +33,14 @@
   max-width: 84vw;
   padding: 24px 20px;
   background-color: var(--sn-background-surface);
+  /* Figma elevation/overlay-right (Decision Log #352): the three
+   * elevation/overlay layers with offsets moved to x, casting onto the
+   * scrim from the panel's leading (right) edge. Ambient 2/0/6, key
+   * 8/0/24 (colour: shadow-elevated), deep 24/0/56 (colour: shadow-key). */
+  box-shadow:
+    2px 0 6px 0 var(--sn-shadow-ambient),
+    8px 0 24px 0 var(--sn-shadow-elevated),
+    24px 0 56px 0 var(--sn-shadow-key);
   overflow-y: auto;
 }
 
