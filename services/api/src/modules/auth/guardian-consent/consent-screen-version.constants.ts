@@ -14,3 +14,13 @@
 // snapshotted into ConsentAuditRecord. Rows confirmed before this existed
 // carry NULL, deliberately not backfilled with a guess.
 export const CONSENT_SCREEN_VERSION = 'v1';
+
+
+// TRIPWIRE (consent-screen-version.spec.ts): sha256 of the normalised
+// guardian-visible wording in GuardianConsentConfirmPage.tsx (see
+// consent-screen-text-hash.util.ts for exactly what is hashed). When the
+// spec fails, bump CONSENT_SCREEN_VERSION if the change alters what the
+// guardian is told/agrees to, and update this hash in the same PR. For a
+// meaning-neutral fix (e.g. a typo) update only this hash. The spec prints
+// the current hash. Deliberately not auto-bumped -- a human decides.
+export const CONSENT_SCREEN_TEXT_HASH = 'af4659695a18ca8e5f4a0b9fc37019d4cf3c36d28f28ecd02bd6422e73754929';
