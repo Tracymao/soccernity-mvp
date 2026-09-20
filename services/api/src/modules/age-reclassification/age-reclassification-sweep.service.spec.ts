@@ -15,7 +15,7 @@ function build(rows: Row[], updateCount = 1) {
   const updateMany = jest.fn().mockResolvedValue({ count: updateCount });
   const prisma = {
     user: { findMany: jest.fn().mockResolvedValue(rows.map((r) => ({ displayName: 'Kid', ...r }))) },
-    guardian: { findUnique: jest.fn().mockResolvedValue({ email: 'g@example.com' }) },
+    guardian: { findUnique: jest.fn().mockResolvedValue({ email: 'g@example.com', name: 'Grace Hopper' }) },
     notification: { create: jest.fn().mockResolvedValue({}) },
     $transaction: jest.fn(async (fn: (tx: unknown) => unknown) =>
       fn({ user: { updateMany }, ageReclassificationLog: { createMany } }),
@@ -103,7 +103,7 @@ describe('AgeReclassificationSweepService', () => {
         { id: 'a', displayName: 'Ada', dateOfBirth: new Date('2008-09-19'), isMinor: true, isUnder16: false },
       ]);
       await service.sweepReclassifications(NOW);
-      expect(email.sendGuardianMinorTurned18Email).toHaveBeenCalledWith('g@example.com', 'Ada');
+      expect(email.sendGuardianMinorTurned18Email).toHaveBeenCalledWith('g@example.com', 'Ada', 'Grace Hopper');
       expect(prisma.notification.create).not.toHaveBeenCalled();
     });
 
