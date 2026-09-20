@@ -4,6 +4,7 @@ const NOW = new Date('2026-09-20T12:00:00Z');
 
 interface Row {
   id: string;
+  displayName?: string;
   dateOfBirth: Date | null;
   isMinor: boolean;
   isUnder16: boolean;
@@ -13,13 +14,16 @@ function build(rows: Row[], updateCount = 1) {
   const createMany = jest.fn().mockResolvedValue({ count: 1 });
   const updateMany = jest.fn().mockResolvedValue({ count: updateCount });
   const prisma = {
-    user: { findMany: jest.fn().mockResolvedValue(rows) },
+    user: { findMany: jest.fn().mockResolvedValue(rows.map((r) => ({ displayName: 'Kid', ...r }))) },
+    guardian: { findUnique: jest.fn().mockResolvedValue({ email: 'g@example.com' }) },
+    notification: { create: jest.fn().mockResolvedValue({}) },
     $transaction: jest.fn(async (fn: (tx: unknown) => unknown) =>
       fn({ user: { updateMany }, ageReclassificationLog: { createMany } }),
     ),
   };
-  const service = new AgeReclassificationSweepService(prisma as never);
-  return { service, prisma, updateMany, createMany };
+  const email = { sendGuardianMinorTurned18Email: jest.fn().mockResolvedValue(undefined) };
+  const service = new AgeReclassificationSweepService(prisma as never, email as never);
+  return { service, prisma, updateMany, createMany, email };
 }
 
 describe('AgeReclassificationSweepService', () => {
@@ -91,5 +95,57 @@ describe('AgeReclassificationSweepService', () => {
       );
     const res = await service.sweepReclassifications(NOW);
     expect(res.reclassifiedUserIds).toEqual(['good']);
+  });
+
+  describe('notifications', () => {
+    it('turning 18: emails the guardian on file, no in-app notification for a user already past 16', async () => {
+      const { service, email, prisma } = build([
+        { id: 'a', displayName: 'Ada', dateOfBirth: new Date('2008-09-19'), isMinor: true, isUnder16: false },
+      ]);
+      await service.sweepReclassifications(NOW);
+      expect(email.sendGuardianMinorTurned18Email).toHaveBeenCalledWith('g@example.com', 'Ada');
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('turning 16: in-app notification only, no guardian email', async () => {
+      const { service, email, prisma } = build([
+        { id: 'b', dateOfBirth: new Date('2010-09-19'), isMinor: true, isUnder16: true },
+      ]);
+      await service.sweepReclassifications(NOW);
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: { userId: 'b', type: 'age_milestone', payloadRefId: 'under_16_lifted' },
+      });
+      expect(email.sendGuardianMinorTurned18Email).not.toHaveBeenCalled();
+    });
+
+    it('turning 18 with no Guardian row sends nothing and does not throw', async () => {
+      const { service, email, prisma } = build([
+        { id: 'c', dateOfBirth: new Date('2008-09-19'), isMinor: true, isUnder16: false },
+      ]);
+      prisma.guardian.findUnique.mockResolvedValue(null);
+      await service.sweepReclassifications(NOW);
+      expect(email.sendGuardianMinorTurned18Email).not.toHaveBeenCalled();
+    });
+
+    it('younger direction is never notified and is reported distinctly', async () => {
+      const { service, email, prisma } = build([
+        { id: 'd', dateOfBirth: new Date('2012-01-01'), isMinor: false, isUnder16: false },
+      ]);
+      const res = await service.sweepReclassifications(NOW);
+      expect(res.reclassifiedUserIds).toEqual(['d']);
+      expect(res.reclassifiedYoungerUserIds).toEqual(['d']);
+      expect(email.sendGuardianMinorTurned18Email).not.toHaveBeenCalled();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('a failing email or notification write never un-does or fails the reclassification', async () => {
+      const { service, email, prisma } = build([
+        { id: 'e', dateOfBirth: new Date('2008-09-19'), isMinor: true, isUnder16: true },
+      ]);
+      email.sendGuardianMinorTurned18Email.mockRejectedValue(new Error('postmark down'));
+      prisma.notification.create.mockRejectedValue(new Error('db blip'));
+      const res = await service.sweepReclassifications(NOW);
+      expect(res.reclassifiedUserIds).toEqual(['e']);
+    });
   });
 });

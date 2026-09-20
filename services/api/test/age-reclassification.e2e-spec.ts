@@ -270,4 +270,56 @@ describe('Age reclassification sweep e2e', () => {
     const logs = await prisma.ageReclassificationLog.findMany({ where: { userId: mis.id } });
     expect(logs).toHaveLength(2);
   });
+
+  describe('notifications (sprint-1/age-reclassification-notifications)', () => {
+    function emailSpy() {
+      const svc = app.get(AgeReclassificationSweepService) as unknown as {
+        emailService: { sendGuardianMinorTurned18Email: (...a: unknown[]) => Promise<void> };
+      };
+      return jest.spyOn(svc.emailService, 'sendGuardianMinorTurned18Email');
+    }
+
+    afterEach(() => jest.restoreAllMocks());
+
+    it('turning 18 emails the guardian (and only that); turning 16 writes an in-app notification (and only that)', async () => {
+      const prisma = getTestPrismaClient();
+      const spy = emailSpy();
+      const eighteen = await seed({ dob: dobTurned(18, 1), isMinor: true, isUnder16: false, consent: 'confirmed' });
+      const sixteen = await seed({ dob: dobTurned(16, 1), isMinor: true, isUnder16: true, consent: 'confirmed' });
+
+      await sweep();
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toHaveBeenCalledWith(expect.stringMatching(/^guardian-age-\d+@example\.com$/), expect.any(String));
+
+      const notes = await prisma.notification.findMany();
+      expect(notes).toHaveLength(1);
+      expect(notes[0]).toMatchObject({
+        userId: sixteen.id,
+        type: 'age_milestone',
+        payloadRefId: 'under_16_lifted',
+      });
+      expect(await prisma.notification.count({ where: { userId: eighteen.id } })).toBe(0);
+    });
+
+    it('a failing guardian email does not roll back the reclassification', async () => {
+      const prisma = getTestPrismaClient();
+      emailSpy().mockRejectedValue(new Error('postmark down'));
+      const u = await seed({ dob: dobTurned(18, 1), isMinor: true, isUnder16: false, consent: 'confirmed' });
+      const res = await sweep();
+      expect(res.reclassifiedUserIds).toEqual([u.id]);
+      expect(await prisma.user.findUnique({ where: { id: u.id } })).toMatchObject({ isMinor: false });
+      expect(await prisma.ageReclassificationLog.count({ where: { userId: u.id } })).toBe(1);
+    });
+
+    it('the younger direction fires neither notification and is reported for manual review', async () => {
+      const prisma = getTestPrismaClient();
+      const spy = emailSpy();
+      const mis = await seed({ dob: dobTurned(10, 30), isMinor: false, isUnder16: false, consent: 'confirmed' });
+      const res = await sweep();
+      expect(res.reclassifiedYoungerUserIds).toEqual([mis.id]);
+      expect(spy).not.toHaveBeenCalled();
+      expect(await prisma.notification.count()).toBe(0);
+    });
+  });
 });

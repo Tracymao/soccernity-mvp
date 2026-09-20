@@ -97,7 +97,9 @@ export type NotificationData =
   | { post: NotificationPost }
   | { conversationId: string; otherParticipant: NotificationOtherParticipant | null }
   | { fixture: NotificationFixture }
-  | { cycle: NotificationContestCycle };
+  | { cycle: NotificationContestCycle }
+  // age_milestone: payloadRefId is the milestone key (e.g. 'under_16_lifted').
+  | { milestone: string };
 
 export interface NotificationView {
   id: string;
@@ -408,6 +410,8 @@ export class NotificationsService {
         const cycle = lookups.cycleById.get(row.payloadRefId);
         return cycle ? { cycle } : null;
       }
+      case 'age_milestone':
+        return { milestone: row.payloadRefId };
       default:
         return null;
     }

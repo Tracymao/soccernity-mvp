@@ -15,7 +15,8 @@ export type RegistrationEmailTemplate =
   | 'guardian-consent-declined'
   | 'guardian-consent-withdrawn'
   | 'guardian-consent-reminder'
-  | 'guardian-consent-expired';
+  | 'guardian-consent-expired'
+  | 'guardian-minor-turned-18';
 
 export interface OutboundRegistrationEmail {
   to: string;
@@ -158,6 +159,18 @@ export class RegistrationEmailService {
     });
   }
 
+  // sprint-1/age-reclassification-notifications: To the GUARDIAN, purely
+  // informational -- the child turned 18 and the account is no longer
+  // guardian-consent-gated. Asks nothing of them.
+  async sendGuardianMinorTurned18Email(to: string, minorDisplayName: string): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: `${minorDisplayName} has turned 18 on Soccernity`,
+      template: 'guardian-minor-turned-18',
+      data: { minorDisplayName },
+    });
+  }
+
   private async dispatch(email: OutboundRegistrationEmail): Promise<void> {
     if (!this.isConfigured) {
       this.logger.log(
@@ -274,6 +287,11 @@ function renderTextBody(template: RegistrationEmailTemplate, data: Record<string
 ` +
         `If you still want an account, ask your guardian to look out for the email and sign up again.`
       );
+    case 'guardian-minor-turned-18':
+      return (
+        `${data.minorDisplayName} has turned 18, so their Soccernity account is no longer subject to guardian consent.\n\n` +
+        `You don't need to do anything. This is just to let you know.`
+      );
     default:
       throw new Error(`Unknown registration email template: ${template as string}`);
   }
@@ -323,6 +341,11 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
         `<p>Your guardian did not respond to either approval request, so your Soccernity account cannot be activated.</p>` +
         `<p>Your account has been closed and is scheduled to be permanently deleted in <strong>${data.graceDays} days</strong>.</p>` +
         `<p>If you still want an account, ask your guardian to look out for the email and sign up again.</p>`
+      );
+    case 'guardian-minor-turned-18':
+      return (
+        `<p><strong>${data.minorDisplayName}</strong> has turned 18, so their Soccernity account is no longer subject to guardian consent.</p>` +
+        `<p>You don't need to do anything. This is just to let you know.</p>`
       );
     default:
       throw new Error(`Unknown registration email template: ${template as string}`);

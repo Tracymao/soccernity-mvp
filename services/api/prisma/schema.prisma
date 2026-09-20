@@ -809,7 +809,7 @@ model Notification {
   // (contest.service.ts, one per ContestRoundWinner row, not the monthly
   // ContestStanding crown). `reply` / `system` (this comment's previous
   // wording) were never actually implemented anywhere -- dropped.
-  type         String // follow | like | comment | message | fixture_scheduled | result_logged | contest_win
+  type         String // follow | like | comment | message | fixture_scheduled | result_logged | contest_win | age_milestone (age-reclassification sweep, user turned 16; payloadRefId = milestone key)
   payloadRefId String?
   read         Boolean  @default(false)
   createdAt    DateTime @default(now())
