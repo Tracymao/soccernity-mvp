@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -168,13 +168,13 @@ describe('MessagingService', () => {
       );
     });
 
-    it('403s with the distinct under_16_restricted code for an under-16 recipient, even with confirmed consent', async () => {
+    it('404s an under-16 recipient, identical to a non-existent one, even with confirmed consent (DL #351)', async () => {
       mockUsers(activeUser({ isMinor: true, isUnder16: true, ...confirmed }));
       p().conversation.findUnique.mockResolvedValue(null);
 
       const err = await service.startConversation(CALLER, RECIPIENT).catch((e) => e);
-      expect(err).toBeInstanceOf(ForbiddenException);
-      expect(err.getResponse()).toMatchObject({ code: 'under_16_restricted', feature: 'messaging' });
+      expect(err).toBeInstanceOf(NotFoundException);
+      expect(err.message).toBe('User not found');
       expect(p().conversation.create).not.toHaveBeenCalled();
     });
 
