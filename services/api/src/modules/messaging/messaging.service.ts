@@ -93,8 +93,6 @@ export interface MarkReadResult {
   markedRead: number;
 }
 
-export const ADULT_TO_MINOR_DM_BLOCKED_CODE = 'adult_to_minor_dm_blocked';
-
 @Injectable()
 export class MessagingService {
   constructor(private readonly prisma: PrismaService) {}
@@ -126,7 +124,8 @@ export class MessagingService {
     const key = participantKey(ids);
 
     // sprint-1/adult-to-minor-dm-block (Decision Log #347): an adult
-    // cannot CREATE a new conversation with a minor. Only creation is
+    // cannot CREATE a new conversation with a minor (answered with the
+    // indistinguishable 404 below, not a distinct 403). Only creation is
     // blocked: if the thread already exists (necessarily minor-initiated,
     // or predating this rule) it is simply returned, and sending into it
     // is unaffected. Minor->adult and minor->minor are allowed; the
@@ -145,12 +144,12 @@ export class MessagingService {
         select: { isMinor: true },
       });
       if (caller && !caller.isMinor) {
-        throw new ForbiddenException({
-          statusCode: 403,
-          error: 'Forbidden',
-          code: ADULT_TO_MINOR_DM_BLOCKED_CODE,
-          message: 'Adult accounts cannot start a direct message with a minor account.',
-        });
+        // Enumeration prevention: the SAME 404 (same class, same message,
+        // hence same body) a non-existent / restricted-pending /
+        // deactivated recipient gets. A distinct 403 would let an adult
+        // probing ids learn "this id is a confirmed minor". The rule
+        // itself is unchanged; only what the response reveals is.
+        throw new NotFoundException('User not found');
       }
     }
 

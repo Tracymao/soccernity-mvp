@@ -155,7 +155,7 @@ describe('MessagingService', () => {
       expect(p().conversation.create).not.toHaveBeenCalled();
     });
 
-    it('403s adult -> minor NEW conversation with adult_to_minor_dm_blocked', async () => {
+    it('404s adult -> minor NEW conversation, identical to a non-existent recipient (enumeration prevention)', async () => {
       p().user.findUnique.mockImplementation(({ where }: { where: { id: string } }) =>
         Promise.resolve(where.id === CALLER ? { isMinor: false } : activeUser({ isMinor: true })),
       );
@@ -163,8 +163,12 @@ describe('MessagingService', () => {
       p().conversation.findUnique.mockResolvedValue(null);
 
       const err = await service.startConversation(CALLER, RECIPIENT).catch((e) => e);
-      expect(err).toBeInstanceOf(ForbiddenException);
-      expect(err.getResponse()).toMatchObject({ code: 'adult_to_minor_dm_blocked' });
+      expect(err).toBeInstanceOf(NotFoundException);
+      p().user.findUnique.mockResolvedValue(null);
+      const missing = await service.startConversation(CALLER, RECIPIENT).catch((e) => e);
+      // Byte-identical response to a genuinely missing recipient.
+      expect(err.getStatus()).toBe(missing.getStatus());
+      expect(err.getResponse()).toEqual(missing.getResponse());
       expect(p().conversation.create).not.toHaveBeenCalled();
     });
 

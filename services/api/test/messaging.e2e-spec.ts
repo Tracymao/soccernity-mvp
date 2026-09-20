@@ -186,7 +186,7 @@ describe('Messaging e2e (Section 4.7, DM slice)', () => {
   // ---------- Decision Log #347: adults cannot initiate DMs with minors ----------
 
   describe('adult -> minor new conversation block (Decision Log #347)', () => {
-    it('adult -> confirmed minor is 403 adult_to_minor_dm_blocked (no row); minor -> adult is allowed (201); adult resuming that thread is 200; adult -> adult unaffected', async () => {
+    it('adult -> confirmed minor is an indistinguishable 404 (no row); minor -> adult is allowed (201); adult resuming that thread is 200; adult -> adult unaffected', async () => {
       const adult = await createUser('dir-adult');
       const adult2 = await createUser('dir-adult2');
       const minor = await createMinor('dir-minor', 'confirmed');
@@ -196,8 +196,17 @@ describe('Messaging e2e (Section 4.7, DM slice)', () => {
         .post('/conversations')
         .set(auth(adult.accessToken))
         .send({ recipientId: minor.userId })
-        .expect(403);
-      expect(blocked.body).toMatchObject({ code: 'adult_to_minor_dm_blocked' });
+        .expect(404);
+      // Enumeration prevention (not a weaker rule): the block is unchanged,
+      // but the response must be byte-identical to a genuinely
+      // non-existent recipient, so an adult probing ids cannot learn
+      // "this id is a confirmed minor".
+      const missing = await request(server())
+        .post('/conversations')
+        .set(auth(adult.accessToken))
+        .send({ recipientId: '00000000-0000-4000-8000-000000000000' })
+        .expect(404);
+      expect(blocked.body).toEqual(missing.body);
       expect(await prisma.conversation.count()).toBe(0);
 
       const fromMinor = await request(server())
