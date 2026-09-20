@@ -1,6 +1,7 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UNDER_16_RESTRICTED_CODE } from '../auth/guards/under-16-restriction.guard';
 import {
   MESSAGING_DEFAULT_PAGE_SIZE,
   MESSAGING_MAX_PAGE_SIZE,
@@ -421,7 +422,7 @@ export class MessagingService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: recipientId },
-      select: { id: true, isMinor: true, accountStatus: true },
+      select: { id: true, isMinor: true, isUnder16: true, accountStatus: true },
     });
     if (!user) {
       throw new NotFoundException('User not found');
@@ -432,6 +433,21 @@ export class MessagingService {
     // the minor branch because it applies regardless of age.
     if (user.accountStatus !== 'active') {
       throw new NotFoundException('User not found');
+    }
+    // sprint-1/under-16-restrictions: an under-16 cannot RECEIVE a DM
+    // from anyone, including other minors. Deliberately a distinct 403
+    // (counsel asked for a clear, non-generic error), NOT the 404 the
+    // restricted-pending branch below uses. The message does not state
+    // the reason/age. Trade-off flagged in messaging/README.md: unlike
+    // the 404, this confirms the account exists.
+    if (user.isUnder16) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: 'Forbidden',
+        code: UNDER_16_RESTRICTED_CODE,
+        feature: 'messaging',
+        message: 'This user cannot receive direct messages.',
+      });
     }
     if (!user.isMinor) {
       return;

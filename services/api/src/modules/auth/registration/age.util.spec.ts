@@ -1,4 +1,4 @@
-import { calculateAge, computeIsMinor, isPlausibleDateOfBirth } from './age.util';
+import { calculateAge, computeIsMinor, computeIsUnder16, isPlausibleDateOfBirth } from './age.util';
 
 describe('age.util', () => {
   const asOf = new Date('2026-08-16T00:00:00.000Z');
@@ -36,6 +36,16 @@ describe('age.util', () => {
 
     it('is true for a young child (Decision Log #8: no separate 13 threshold)', () => {
       expect(computeIsMinor(new Date('2020-01-01'), asOf)).toBe(true);
+    });
+  });
+
+  describe('computeIsUnder16', () => {
+    it('is true at 15 and false at exactly 16, 17 and adults', () => {
+      expect(computeIsUnder16(new Date('2011-08-17'), asOf)).toBe(true); // turns 15 tomorrow -> age 14
+      expect(computeIsUnder16(new Date('2010-08-17'), asOf)).toBe(true); // 15, 16th birthday tomorrow
+      expect(computeIsUnder16(new Date('2010-08-16'), asOf)).toBe(false); // exactly 16 today
+      expect(computeIsUnder16(new Date('2009-01-01'), asOf)).toBe(false); // 17
+      expect(computeIsUnder16(new Date('1990-01-01'), asOf)).toBe(false);
     });
   });
 

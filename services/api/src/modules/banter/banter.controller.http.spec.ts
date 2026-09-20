@@ -2,6 +2,7 @@ import { ExecutionContext, INestApplication, ValidationPipe } from '@nestjs/comm
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
+import { Under16RestrictionGuard } from '../auth/guards/under-16-restriction.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BanterController } from './banter.controller';
 import { BanterService } from './banter.service';
@@ -47,6 +48,10 @@ describe('BanterController (HTTP layer)', () => {
           return true;
         },
       })
+      // sprint-1/under-16-restrictions: guard behaviour is covered by
+      // under-16-restriction.guard.spec.ts; here it's a pass-through.
+      .overrideGuard(Under16RestrictionGuard)
+      .useValue({ canActivate: () => true })
       .compile();
 
     app = moduleRef.createNestApplication();

@@ -9,7 +9,7 @@ import { GuardianConsentService } from '../guardian-consent/guardian-consent.ser
 import { PasswordService } from '../password/password.service';
 import { TokenService } from '../token/token.service';
 import { TokenPair } from '../token/token.types';
-import { computeIsMinor, isPlausibleDateOfBirth } from './age.util';
+import { computeIsMinor, computeIsUnder16, isPlausibleDateOfBirth } from './age.util';
 import { RegisterDto } from './dto/register.dto';
 import { EmailVerificationTokenStore } from './email-verification/email-verification-token.store';
 import { RegistrationEmailService } from './email/registration-email.service';
@@ -103,6 +103,7 @@ export class RegistrationService {
     }
 
     const isMinor = computeIsMinor(dateOfBirth);
+    const isUnder16 = computeIsUnder16(dateOfBirth);
 
     // Build Plan Section 8.3, step 2: "If the declared age is under 18,
     // the signup flow branches here: capture guardian name, email and
@@ -141,6 +142,7 @@ export class RegistrationService {
         displayName: dto.displayName,
         dateOfBirth,
         isMinor,
+        isUnder16,
       },
     });
 

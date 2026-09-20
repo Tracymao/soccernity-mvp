@@ -27,6 +27,7 @@ const OWN_PROFILE_SELECT = {
   displayName: true,
   dateOfBirth: true,
   isMinor: true,
+  isUnder16: true,
   role: true,
   verificationStatus: true,
   createdAt: true,
@@ -39,6 +40,9 @@ const OWN_PROFILE_SELECT = {
   // here (not a new endpoint) so apps/web can read it off the same
   // GET /users/:id call it already makes for its own profile.
   isTeamOrganiser: true,
+  // sprint-1/under-16-restrictions: only ever forwarded (as
+  // guardianContact) when isUnder16 -- see toOwnProfile below.
+  guardian: { select: { email: true } },
 } as const;
 
 export type OwnProfile = {
@@ -53,7 +57,25 @@ export type OwnProfile = {
   createdAt: Date;
   clubAffiliationId: string | null;
   isTeamOrganiser: boolean;
+  isUnder16: boolean;
+  // sprint-1/under-16-restrictions (counsel): present ONLY for an
+  // isUnder16 account, `null` otherwise. `email` is the GUARDIAN's
+  // address, never the minor's own (which stays private per existing
+  // policy); `label` makes that unambiguous to any caller. Only on the
+  // individual own-profile read/update -- no list/roster/feed shape
+  // selects Guardian at all.
+  guardianContact: { label: 'Guardian contact'; email: string } | null;
 };
+
+type OwnProfileRow = Omit<OwnProfile, 'guardianContact'> & { guardian: { email: string } | null };
+
+function toOwnProfile({ guardian, ...rest }: OwnProfileRow): OwnProfile {
+  return {
+    ...rest,
+    guardianContact:
+      rest.isUnder16 && guardian ? { label: 'Guardian contact', email: guardian.email } : null,
+  };
+}
 
 // The ONLY place request-body fields become a Prisma `data` object for
 // this update. An explicit allowlist, not `{ ...dto }` — even if
@@ -118,16 +140,17 @@ export class UsersService {
       // can't know the account is gone.
       throw new NotFoundException('User not found');
     }
-    return user;
+    return toOwnProfile(user);
   }
 
   async updateOwnProfile(userId: string, dto: UpdateUserDto): Promise<OwnProfile> {
     const data = toUpdateData(dto);
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id: userId },
       data,
       select: OWN_PROFILE_SELECT,
     });
+    return toOwnProfile(updated);
   }
 
   // Shared existence check for the four follow endpoints below, mirroring

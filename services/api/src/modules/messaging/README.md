@@ -196,3 +196,15 @@ send (DMs are private and rewarding them would be trivially gameable).
   clearing it; keyset pagination on both list endpoints; DL #12 both
   directions against real `Guardian` rows; DL #221 deactivated recipient;
   the account-deletion cascade (Message rows gone, Conversation survives).
+
+## Under-16 restriction (sprint-1/under-16-restrictions, Decision Log #346)
+
+Accounts with `User.isUnder16` can neither send nor receive DMs, from
+anyone (other minors included). Sender side: `Under16RestrictionGuard`
++ `@RestrictUnder16('messaging')` at class level on `ConversationsController`
+(so inbox reads are blocked too). Recipient side:
+`MessagingService.assertRecipientMessageable` throws the same
+`under_16_restricted` 403. Unlike the restricted-pending recipient's 404,
+this 403 confirms the account exists — a deliberate trade for the
+clear, non-generic error counsel asked for; the message does not state
+the age. Layered on, never replacing, `GuardianConsentGuard`.

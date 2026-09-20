@@ -55,6 +55,8 @@ const FULL_DB_ROW = {
   // backend/team-organiser-flag — read-only, set only by
   // GrassrootsService.createTeam.
   isTeamOrganiser: false,
+  isUnder16: false,
+  guardian: null as { email: string } | null,
 };
 
 // Mirrors what UsersService's Prisma `select` clause would actually
@@ -86,6 +88,29 @@ describe('UsersService', () => {
       expect(result).not.toHaveProperty('passwordHash');
       expect(result.isMinor).toBe(false);
       expect(result.verificationStatus).toBe('unverified');
+    });
+
+    it('exposes the guardian email as a labelled guardianContact ONLY for an under-16 account', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(
+        withoutPasswordHash({ ...FULL_DB_ROW, isMinor: true, isUnder16: true, guardian: { email: 'parent@example.com' } }),
+      );
+      const result = await new UsersService(prisma).getOwnProfile('user-1');
+
+      expect(result.isUnder16).toBe(true);
+      expect(result.guardianContact).toEqual({ label: 'Guardian contact', email: 'parent@example.com' });
+      expect(result).not.toHaveProperty('guardian');
+    });
+
+    it('does NOT expose guardianContact for a 16-17 minor even though a Guardian row exists', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(
+        withoutPasswordHash({ ...FULL_DB_ROW, isMinor: true, isUnder16: false, guardian: { email: 'parent@example.com' } }),
+      );
+      const result = await new UsersService(prisma).getOwnProfile('user-1');
+
+      expect(result.guardianContact).toBeNull();
+      expect(JSON.stringify(result)).not.toContain('parent@example.com');
     });
 
     it('the Prisma select clause itself never requests passwordHash', async () => {
