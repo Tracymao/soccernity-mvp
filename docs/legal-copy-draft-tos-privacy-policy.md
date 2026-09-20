@@ -7,8 +7,8 @@
 This document is a first-pass draft produced by the `safeguarding-drafter` agent (see
 `CLAUDE.md` non-negotiable #2 and the `safeguarding-drafter` agent definition). It has **not**
 been approved by Soccernity's safeguarding/legal counsel. (v0.1 received counsel's "Approved
-with amendments" review on 09/09/2026; v0.2 applied those amendments; this v0.3 adds four newly
-shipped safeguarding features on top of v0.2. Neither v0.2 nor v0.3 has itself been re-reviewed or
+with amendments" review on 09/09/2026; v0.2 applied those amendments; v0.3 added four newly
+shipped safeguarding features on top of v0.2; v0.4 corrects one factual error in v0.3. None of v0.2, v0.3 or v0.4 has itself been re-reviewed or
 signed off.) Nothing in this
 document should be read as a statement that either the Terms of Service or the Privacy Policy
 is legally sufficient, complete, or compliant with UK GDPR, Nigeria's NDPA 2023, the Online
@@ -42,14 +42,14 @@ question.
   Log entries #4, #8, #10, #19, #34, #37, #38, #40, #42, #44, #45, #58, #128–#130, #153–#155),
   Log Book Section 10 (safeguarding principles) and Section 24.5, `docs/sprint-1-dpia-outline-draft.md`,
   and `CLAUDE.md`'s "Where things stand" record of what is actually built as of Sprint 2.
-- **Draft date:** 2026-09-05 (v0.1); revised 2026-09-20 (v0.2); revised 2026-09-20 (v0.3)
+- **Draft date:** 2026-09-05 (v0.1); revised 2026-09-20 (v0.2); revised 2026-09-20 (v0.3); revised 2026-09-20 (v0.4)
 - **Drafted by:** `safeguarding-drafter` agent (automated first pass, v0.1); v0.2 and v0.3
   revisions prepared with Claude Code (v0.3 from the merged code, not from a summary)
 - **Reviewed by counsel:** v0.1 reviewed by Mrs Temiloluwa Ogundele (Temiloluwa Ogundele & Co) —
-  outcome "Approved with amendments", dated 09/09/2026. **Neither v0.2 nor v0.3 has itself been
+  outcome "Approved with amendments", dated 09/09/2026. **None of v0.2, v0.3 or v0.4 has itself been
   re-reviewed or re-signed** — see the sign-off block, which is deliberately unchanged. **v0.3's
   new material is pending its first counsel review** (see the changelog below).
-- **Version:** 0.3 (draft — still NOT APPROVED)
+- **Version:** 0.4 (draft — still NOT APPROVED)
 - **Status:** v0.2 incorporates (a) counsel's 09/09/2026 "Approved with amendments" review,
   (b) the founder's follow-up resolutions dated up to 19/09/2026, and (c) staleness fixes against
   the current live repo state (guardian decline/withdrawal/expiry built; account anonymization,
@@ -62,6 +62,10 @@ question.
   decline/withdrawal/expiry (#337–#340) and anonymization-in-place with an investigation hold
   (#341, #344, #345), real names for minors on Leaderboard/scouting/Discover with no pseudonym
   option (#45). Items still open are in Part C.
+
+### v0.4 changelog
+
+- **Correction:** the PP §9 retention-table row "Guardian-consent records — separate exception" wrongly said the post-anonymisation snapshot includes the guardian's "relationship". Per the `ConsentAuditRecord` model in `schema.prisma`, only consent status, confirmation time, consent method and (where captured) consent-screen version and device type are snapshotted; `Guardian.relationship` is not retained. No other section describing the snapshot's contents needed changing.
 
 ### v0.3 changelog — for counsel's second review (diff from v0.2 only)
 
@@ -708,7 +712,7 @@ made a concrete decision (Decision Log #42, #341, #344).**
 | **Signals that are yours alone** (follows, likes, saves, notifications, group/room/club memberships) | Removed at anonymization | Automatic, at anonymization |
 | **Grassroots teams you organised** | The team survives: dormant, visible read-only, and reassignable to a new user who registers the same team name and city | Reclaim by a new registration of the same name and city |
 | **Investigation hold** | If you are the reporter, the reported party, or the author of reported content in an unresolved moderation report, anonymization is **held entirely** and your account stays fully identifiable to moderators | Conclusion of the investigation. No maximum duration is currently set **[OPEN]** |
-| **Guardian-consent records — separate exception** | Not deleted with the rest of your account. Separately snapshotted (relationship, whether/when consent was confirmed, and — where captured — the consent-screen version and coarse device type; not the full guardian record, and never the raw browser string) and kept a further **6 months** after the 30-day grace period ends (**~7 months total**), so Soccernity can demonstrate valid guardian consent if challenged | Automatic, on its own separate timer |
+| **Guardian-consent records — separate exception** | Not deleted with the rest of your account. Separately snapshotted (the consent status, when consent was confirmed, how it was captured, and — where captured — the consent-screen version and coarse device type; not the full guardian record — the guardian's name, email and relationship to the minor are **not** retained past anonymisation — and never the raw browser string) and kept a further **6 months** after the 30-day grace period ends (**~7 months total**), so Soccernity can demonstrate valid guardian consent if challenged | Automatic, on its own separate timer |
 | **Age-reclassification log** (Decision Log #349) | One row per change to your under-18 / under-16 classification: account ID, which classification, before/after, your age at that moment (no date of birth). Kept after account anonymisation, since it is a record of a safeguarding state change | **[OPEN]** No retention period is set; whether one is needed is for counsel |
 | **Guardian record once you turn 18** | Kept, not deleted, as consent history; no longer used to restrict the account. Still subject to the anonymisation-time snapshot above if the account is later deleted | Account deletion. **[OPEN]** Whether a guardian's contact details should be minimised after 18 |
 | Messages between users | Retained; stay visible in conversations attributed to "[deleted user]" after account anonymization. A rolling retention window for messages generally is **[PROPOSAL]** (starting figure only: 12 months) | Automatic purge past the window, if adopted |
