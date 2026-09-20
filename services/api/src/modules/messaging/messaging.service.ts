@@ -1,7 +1,6 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { UNDER_16_RESTRICTED_CODE } from '../auth/guards/under-16-restriction.guard';
 import {
   MESSAGING_DEFAULT_PAGE_SIZE,
   MESSAGING_MAX_PAGE_SIZE,
@@ -486,20 +485,14 @@ export class MessagingService {
     if (user.accountStatus !== 'active') {
       throw new NotFoundException('User not found');
     }
-    // sprint-1/under-16-restrictions: an under-16 cannot RECEIVE a DM
-    // from anyone, including other minors. Deliberately a distinct 403
-    // (counsel asked for a clear, non-generic error), NOT the 404 the
-    // restricted-pending branch below uses. The message does not state
-    // the reason/age. Trade-off flagged in messaging/README.md: unlike
-    // the 404, this confirms the account exists.
+    // sprint-1/under-16-restrictions: an under-16 cannot RECEIVE a DM from
+    // anyone, including other minors. Decision Log #351 reversed Decision
+    // Log #346's distinct 403 here: it is now the same indistinguishable
+    // 404 as every other blocked path, because a distinct 403 let anyone
+    // learn in one request that an account exists and is under 16. Trade-off
+    // (less UX clarity for senders) documented in messaging/README.md.
     if (user.isUnder16) {
-      throw new ForbiddenException({
-        statusCode: 403,
-        error: 'Forbidden',
-        code: UNDER_16_RESTRICTED_CODE,
-        feature: 'messaging',
-        message: 'This user cannot receive direct messages.',
-      });
+      throw new NotFoundException('User not found');
     }
     if (!user.isMinor) {
       return false;

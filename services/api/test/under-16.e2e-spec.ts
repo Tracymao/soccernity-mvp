@@ -66,7 +66,7 @@ describe('Under-16 restrictions e2e', () => {
   }
   const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
 
-  it('messaging: an under-16 cannot start, and cannot be messaged, with the distinct code', async () => {
+  it('messaging: an under-16 cannot start, and cannot be messaged (indistinguishable 404, DL #351)', async () => {
     const adult = await seed('adult');
     const kid = await seed('under16');
     const teen = await seed('age16to17');
@@ -82,15 +82,21 @@ describe('Under-16 restrictions e2e', () => {
       .post('/conversations')
       .set(auth(adult.token))
       .send({ recipientId: kid.id });
-    expect(received.status).toBe(403);
-    expect(received.body.code).toBe('under_16_restricted');
+    // DL #351: recipient side is the same 404 as a non-existent user.
+    const missing = await request(server())
+      .post('/conversations')
+      .set(auth(adult.token))
+      .send({ recipientId: '00000000-0000-4000-8000-000000000000' });
+    expect(received.status).toBe(404);
+    expect(received.body).toEqual(missing.body);
 
     // Another minor, too.
     const fromTeen = await request(server())
       .post('/conversations')
       .set(auth(teen.token))
       .send({ recipientId: kid.id });
-    expect(fromTeen.status).toBe(403);
+    expect(fromTeen.status).toBe(404);
+    expect(fromTeen.body).toEqual(missing.body);
 
     // 16-17 unaffected (a separate, later control -- untouched here).
     const ok = await request(server())

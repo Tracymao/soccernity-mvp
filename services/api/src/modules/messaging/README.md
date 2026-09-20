@@ -203,8 +203,13 @@ Accounts with `User.isUnder16` can neither send nor receive DMs, from
 anyone (other minors included). Sender side: `Under16RestrictionGuard`
 + `@RestrictUnder16('messaging')` at class level on `ConversationsController`
 (so inbox reads are blocked too). Recipient side:
-`MessagingService.assertRecipientMessageable` throws the same
-`under_16_restricted` 403. Unlike the restricted-pending recipient's 404,
-this 403 confirms the account exists — a deliberate trade for the
-clear, non-generic error counsel asked for; the message does not state
-the age. Layered on, never replacing, `GuardianConsentGuard`.
+`MessagingService.assertRecipientMessageable` throws the same 404
+(`User not found`) as a non-existent, deactivated, restricted-pending, or
+adult->minor recipient. **Decision Log #351 reversed #346 here**: the
+recipient side used to be a distinct `under_16_restricted` 403, which let
+anyone learn in a single request that an account exists and is under 16.
+Trade-off: senders no longer get a specific reason (less UX clarity) in
+exchange for closing a direct enumeration signal on minor accounts. The
+*sender* side is unchanged (an under-16 caller still gets the clear 403
+from `Under16RestrictionGuard`; that reveals only the caller's own status).
+Layered on, never replacing, `GuardianConsentGuard`.
