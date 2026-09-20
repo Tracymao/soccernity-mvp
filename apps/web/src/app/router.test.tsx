@@ -4,7 +4,7 @@
 // empty session (Home redirects only WITH a token; Leaderboard / Contest
 // render a "log in" prompt and call nothing; Sports Hub / Blog / 404 use
 // dummy data).
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider, type RouteObject } from "react-router";
 import { routes } from "./router";
@@ -101,5 +101,30 @@ describe("router — rendered footer presence", () => {
     // CommunityPage with no session -> its own "log in" prompt, still no footer.
     expect(screen.queryByRole("contentinfo")).toBeNull();
     expect(document.querySelector("main")).not.toBeNull();
+  });
+});
+
+// Decision Log #311 (code half): the match-centre drill-down sits under
+// AppShell, so it gets the shared Header (icon nav; header 4 / header 7 by
+// session) with no per-page wiring. Data calls are stubbed to fail -- only
+// the chrome is under test.
+describe("router — match-centre carries the shared navbar (Decision Log #311)", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("logged out: icon nav + Login (header 7), no site footer", async () => {
+    await renderAt("/sports-hub/matches/abc");
+    expect(screen.getByRole("navigation", { name: "Primary" })).not.toBeNull();
+    expect(screen.getByRole("link", { name: "Login" })).not.toBeNull();
+    expect(screen.queryByRole("contentinfo")).toBeNull();
+  });
+
+  it("logged in: icon nav + account menu (header 4)", async () => {
+    window.sessionStorage.setItem("sn_access_token", "x.eyJzdWIiOiJ1MSJ9.y");
+    await renderAt("/sports-hub/matches/abc");
+    expect(screen.getByRole("navigation", { name: "Primary" })).not.toBeNull();
+    expect(screen.queryByRole("link", { name: "Login" })).toBeNull();
   });
 });
