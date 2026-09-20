@@ -7,8 +7,9 @@
 This document is a first-pass draft produced by the `safeguarding-drafter` agent (see
 `CLAUDE.md` non-negotiable #2 and the `safeguarding-drafter` agent definition). It has **not**
 been approved by Soccernity's safeguarding/legal counsel. (v0.1 received counsel's "Approved
-with amendments" review on 09/09/2026; this v0.2 applies those amendments but has not itself been
-re-reviewed or signed off.) Nothing in this
+with amendments" review on 09/09/2026; v0.2 applied those amendments; this v0.3 adds four newly
+shipped safeguarding features on top of v0.2. Neither v0.2 nor v0.3 has itself been re-reviewed or
+signed off.) Nothing in this
 document should be read as a statement that either the Terms of Service or the Privacy Policy
 is legally sufficient, complete, or compliant with UK GDPR, Nigeria's NDPA 2023, the Online
 Safety Act, the ICO's Age Appropriate Design Code, or any other regime. **A policy is only a
@@ -41,13 +42,14 @@ question.
   Log entries #4, #8, #10, #19, #34, #37, #38, #40, #42, #44, #45, #58, #128–#130, #153–#155),
   Log Book Section 10 (safeguarding principles) and Section 24.5, `docs/sprint-1-dpia-outline-draft.md`,
   and `CLAUDE.md`'s "Where things stand" record of what is actually built as of Sprint 2.
-- **Draft date:** 2026-09-05 (v0.1); revised 2026-09-20 (v0.2)
-- **Drafted by:** `safeguarding-drafter` agent (automated first pass, v0.1); v0.2 revision
-  prepared with Claude Code from the resolutions recorded below
+- **Draft date:** 2026-09-05 (v0.1); revised 2026-09-20 (v0.2); revised 2026-09-20 (v0.3)
+- **Drafted by:** `safeguarding-drafter` agent (automated first pass, v0.1); v0.2 and v0.3
+  revisions prepared with Claude Code (v0.3 from the merged code, not from a summary)
 - **Reviewed by counsel:** v0.1 reviewed by Mrs Temiloluwa Ogundele (Temiloluwa Ogundele & Co) —
-  outcome "Approved with amendments", dated 09/09/2026. **v0.2 has not itself been re-reviewed or
-  re-signed** — see the sign-off block, which is deliberately unchanged.
-- **Version:** 0.2 (draft — still NOT APPROVED)
+  outcome "Approved with amendments", dated 09/09/2026. **Neither v0.2 nor v0.3 has itself been
+  re-reviewed or re-signed** — see the sign-off block, which is deliberately unchanged. **v0.3's
+  new material is pending its first counsel review** (see the changelog below).
+- **Version:** 0.3 (draft — still NOT APPROVED)
 - **Status:** v0.2 incorporates (a) counsel's 09/09/2026 "Approved with amendments" review,
   (b) the founder's follow-up resolutions dated up to 19/09/2026, and (c) staleness fixes against
   the current live repo state (guardian decline/withdrawal/expiry built; account anonymization,
@@ -60,6 +62,39 @@ question.
   decline/withdrawal/expiry (#337–#340) and anonymization-in-place with an investigation hold
   (#341, #344, #345), real names for minors on Leaderboard/scouting/Discover with no pseudonym
   option (#45). Items still open are in Part C.
+
+### v0.3 changelog — for counsel's second review (diff from v0.2 only)
+
+v0.3 changes **only** what four safeguarding features shipped after v0.2 (merged 2026-09-20)
+require. Everything else is byte-for-byte v0.2. The features were drafted from the merged code
+(`schema.prisma`, the messaging, age-reclassification and guardian-consent modules, the
+notification renderer and the guardian email template), not from a summary. Please review the
+items below rather than re-reading the whole document.
+
+| # | Feature (PRs / Decision Log) | Sections changed |
+|---|---|---|
+| 1 | **Under-16 tier** (PR #272; web messages PR #277). New `isUnder16` flag on top of `isMinor`. Messaging fully off (send and receive), Bants (Banter Rooms) fully off including reading, Community Groups read-only for creating (joining/leaving still allowed), guardian contact shown only on the minor's own profile. | ToS new §3.5(a); PP §1.1, §1.2, §3, §7, §8 |
+| 2 | **Adult-cannot-message-minor** (PRs #273, #276, #280; Decision Log #347, #350). An adult cannot start a new conversation with a minor. Refused with a response indistinguishable from "user not found", with matched query work. Residual timing jitter is **not** eliminated (Decision Log #350). | ToS new §3.5(b); PP §8 |
+| 3 | **Consent audit trail enrichment** (PR #274; Decision Log #348). Consent evidence now also records the consent-screen version and a coarse device type. | PP §4.2, §9 (table), Part C row 17 |
+| 4 | **Age-reclassification sweep** (PRs #275, #279, #281, #282; Decision Log #349). Daily job recomputes `isMinor`/`isUnder16` from date of birth; guardian emailed at 18; in-app notice at 16; up to ~24h lag disclosed; append-only log. | ToS new §3.6; PP §1.1, §1.5, §4.5 (new), §9 (table), Part C rows 24–26 |
+
+**Counsel-approved v0.2 language that these features touch — flagged, not silently rewritten.**
+Where I have left counsel-approved wording untouched but a new feature sits in tension with it, it
+is listed here and again in Part C:
+
+- **PP §7, "Never shown publicly … your guardian's contact details."** Still true (the guardian
+  contact is not public), but under-16 accounts now see their guardian's email on their *own*
+  profile. Wording left as approved; a clarifying sentence is *added* beside it, not substituted.
+- **PP §9 / ToS §8.5, "A guardian's request to delete a minor's account supersedes the minor's
+  own wishes."** Approved wording left unchanged. Since the age sweep, guardian consent stops
+  applying at 18, but the sentence does not say so. Flagged for counsel (Part C row 26).
+- **ToS §3.2 / PP §3, restricted-pending "cannot … be messaged by or send messages to unverified
+  accounts."** Left unchanged. The live behaviour is stricter and differently shaped: a
+  restricted-pending minor cannot send, and cannot be *found* as a recipient at all (indistinguishable
+  from "user not found"). "Unverified accounts" is looser than the code. Flagged (Part C row 27).
+- **PP §8's v0.2 "[IN PROGRESS — not yet built; no protection is claimed here]" paragraph** was
+  drafting scaffolding of ours, not a counsel-approved commitment. It is *replaced*, because both
+  protections it said were unbuilt are now live. Same for the "[IN PROGRESS]" note in PP §4.2.
 
 ---
 
@@ -197,6 +232,35 @@ All three paths lead to the same outcome: the minor's account is closed to furth
 enters the same 30-day account-deletion process described in Section 8 — nothing is decided
 differently depending on which path was taken. This also means a minor's account can no longer sit
 restricted-pending indefinitely with no resolution.
+
+3.5. **Extra limits for accounts under 16, and a rule about adults contacting minors.**
+
+(a) *Under 16.* In addition to guardian consent, an account belonging to someone under 16 has
+further limits, **even after a guardian has confirmed consent**: (i) direct messaging is not
+available — the account can neither send nor receive direct messages; (ii) Bants (Banter Rooms) are
+not available, including reading them; and (iii) Community Groups are read-only in the sense that
+the account can view groups and can join or leave them, but cannot create one. These limits apply
+in addition to, not instead of, the guardian-consent requirement in 3.1–3.4 (an under-16 whose
+guardian has consented is still under-16). We may show a message that a feature is unavailable
+without saying why.
+
+(b) *Adults contacting minors.* An adult account cannot start a new direct-message conversation with
+a minor's account. Where that is attempted, the response is the same "user not found" response a
+person would get for an account that does not exist or cannot be messaged, so that the response does
+not reveal a minor's account. This rule applies to starting a conversation only: it does not end a
+conversation a minor started, and a minor may message an adult. **[PROPOSAL — see Privacy Policy
+Section 8 for the limits of this protection, stated honestly.]**
+
+3.6. **Your age status is recalculated automatically.** Soccernity re-checks, once a day, whether
+each account is under 18 and under 16, using the date of birth on the account (which we do not
+verify against identity documents — see 2.3). When an account passes 16, the under-16 limits in
+3.5(a) lift and we send an in-app notification. When an account passes 18, guardian consent stops
+applying, the account becomes an adult account, and we email the guardian on file to tell them; the
+email asks the guardian to do nothing. Because the check runs daily, **an account can stay
+under its old classification for up to about 24 hours after a birthday**; we accept and disclose
+that delay. If the date of birth on an account is later corrected so that the account would be
+younger, the stricter classification is re-applied at the next daily check and no notification is
+sent; we log these cases for manual review.
 
 ### 4. Your account
 
@@ -383,7 +447,10 @@ see the same placeholder in the Terms of Service, Section title].**
 
 Email address, phone number (optional), password (stored as a secure hash, never in plain text),
 display name, date of birth, and — derived from date of birth — whether your account is
-classified as belonging to a minor. **[PROPOSAL — live data-minimisation consideration, not a
+classified as belonging to a minor (under 18) and whether it is under 16. These two
+classifications are recalculated daily from your date of birth (Section 4.5), and each change is
+recorded in an audit log that keeps your account ID, the classification that changed, and your age
+at that moment — **not** your date of birth. **[PROPOSAL — live data-minimisation consideration, not a
 completed change]** We currently store your full date of birth. Soccernity is evaluating storing
 only an age band, rather than the full date of birth, where a feature does not need the exact
 date. No schema change has been made; that is a separate backend decision (Part C).
@@ -393,7 +460,9 @@ date. No schema change has been made; that is a separate backend decision (Part 
 If you are under 18, we also collect your parent or guardian's name, email address, and their
 relationship to you, in order to run the guardian-consent process described in Section 4.
 Guardians are themselves data subjects with respect to this information — it is processed only
-in connection with the consent flow, and is subject to the retention rules in Section 9.
+in connection with the consent flow, and is subject to the retention rules in Section 9. If the
+minor's account is under 16, the guardian's email address is also shown to that minor, and only to
+that minor, on their own profile, labelled "Guardian contact" (see Section 7).
 
 #### 1.3 Content you create
 
@@ -408,7 +477,8 @@ you log, including venue and scheduled time; and match results.
 
 #### 1.5 Engagement and ranking data
 
-Notifications generated by your activity (follows, likes, comments), and — where the Leaderboard
+Notifications generated by your activity (follows, likes, comments), and, where relevant, an
+in-app notice when your account passes an age milestone (currently, turning 16), and — where the Leaderboard
 feature is live — your points and rank. **[PROPOSAL, see Section 10]** This may include a public
 ranking that shows your real display name, including if you are a minor.
 
@@ -459,6 +529,11 @@ trust-and-safety approach in Log Book Section 10.1. **This restriction exists sp
 that a minor's data is not collected or shown more broadly than necessary before a guardian has
 had the chance to say no** — it fails closed rather than open.
 
+Separately, accounts **under 16** carry additional limits that continue after consent is confirmed
+(no direct messaging in either direction, no Bants, no creating Community Groups). These are a
+distinct tier layered on top of guardian consent and are described in Section 8 and the Terms of
+Service, Section 3.5.
+
 ### 4. The guardian-consent process, in data-protection terms
 
 4.1. When a minor registers, we ask for their guardian's name, email, and relationship to the
@@ -467,11 +542,17 @@ expires after 72 hours and can be regenerated from the minor's own account-statu
 
 4.2. When the guardian follows the link, they see a plain-language explanation of what the
 minor's account can do and what data is collected, and an explicit "I consent" action. This
-action is recorded, including the method and the time it happened. **[IN PROGRESS — not yet
-built]** The consent audit trail is being extended to also record the version of the consent
-screen shown and a minimal device-type identifier (see Part C). This is deliberately minimal: a
-fuller audit trail is itself more personal data about the guardian. We record this so we can
-demonstrate how consent was obtained if it is ever challenged (UK GDPR Article 7(1)).
+action is recorded, including the method and the time it happened. **The consent record also
+captures the version of the consent screen the guardian was shown and a coarse device type
+("mobile", "desktop" or "unknown")** (Decision Log #348). This record does **not** include the
+guardian's browser string or IP address; the device type is derived at the moment of
+confirmation and only the three-value category is kept. This is deliberately minimal: a fuller
+audit trail is itself more personal data about the guardian. We record this so we can demonstrate
+how consent was obtained if it is ever challenged (UK GDPR Article 7(1)). **[OPEN — limits, stated
+honestly]** The screen version is a label that a person updates by hand when the screen's wording
+changes materially; an automated check prompts them to, but the label is not itself proof of what
+the guardian saw. Records confirmed before this was introduced carry neither field and are not
+backfilled. The snapshot kept after account deletion (Section 9) includes both fields where present.
 
 4.3. If a guardian's email address changes while consent is pending, submitting the new address
 **restarts this process from scratch** — the old link is invalidated, the account (re)enters the
@@ -486,6 +567,22 @@ end of the first) pass unanswered. All three converge on the same account-deleti
 described in Section 9. A minor's account therefore cannot remain restricted-pending indefinitely
 with no resolution. Withdrawal is as easy as giving consent: a single-use link and one
 confirmation.
+
+4.5. **When a minor turns 16 or 18.** A daily job recalculates whether each account is under 18 and
+under 16 from its date of birth (Decision Log #349). The change takes effect immediately for the
+account's next request, including on a session that is already signed in. When an account turns
+**16**, the under-16 limits lift and the user gets an in-app notification ("Your account now has
+access to more of Soccernity"). When an account turns **18**, guardian consent stops gating the
+account, and the guardian on file receives one informational email that asks nothing of them. The
+guardian's record is **kept**, not deleted, as consent history, and a consent request that was
+still pending at 18 is left inert rather than being allowed to auto-decline an adult into deletion.
+**[OPEN — disclosed limitations]** (a) Because the job runs daily, an account can keep its old
+classification for up to about 24 hours after a birthday; we accept this. (b) Reclassification
+relies on the declared date of birth, which we do not verify. (c) If a date of birth is later
+corrected so an account becomes *younger*, the stricter classification is re-applied, no
+notification is sent, and the case is flagged for manual review. (d) Each change is written to an
+append-only log (account ID, which classification, before/after, age at that moment) that is kept
+after the account itself is anonymised, and **has no retention period set** (Part C).
 
 ### 5. Who we share your data with
 
@@ -562,7 +659,9 @@ feature. This is described here so it is not a surprise:
   from followers/following).
 - **Never shown publicly, regardless of account status:** your full date of birth, your guardian's
   contact details, your email address, your phone number, or the content of a report made about
-  or by you.
+  or by you. (One deliberate, limited exception to the guardian-contact point: for an account
+under 16, the guardian's email address is shown to that minor on their own profile, labelled
+"Guardian contact". It is not shown to any other user, in any list, roster or feed.)
 
 ### 8. Direct messages and Banter Rooms
 
@@ -570,11 +669,29 @@ Messages you send through Soccernity's direct-messaging feature are visible to t
 in that conversation and to Soccernity's moderation staff where a report is made. Banter Room
 posts follow the same visibility rules as other community content.
 
-**[IN PROGRESS — not yet built; no protection is claimed here]** Two further protections for
-minors are being worked on and are **not** currently in place: tiered restrictions for
-under-16s (messaging, Bants, and community access limited to read-only, with a guardian-contact
-tag), and enforcement preventing an adult from initiating a direct message to a minor. Until they
-are built, the only protection is the restricted-pending gate described in Section 3. See Part C.
+**Under-16 accounts.** An account under 16 cannot send or receive direct messages, cannot use
+Bants at all (reading included), and can view, join and leave Community Groups but not create
+them. These limits apply even after a guardian has confirmed consent (Decision Log #346). The
+account's own profile shows a "Guardian contact" line with the guardian's email, visible only to
+that account. **Limit, stated honestly:** when someone tries to message an under-16, they receive
+a distinct "this user cannot receive direct messages" refusal, which confirms that the account
+exists and cannot be messaged. We chose a clear message over concealment here; counsel may prefer
+the concealed form (Part C).
+
+**Adults cannot start a conversation with a minor.** If an adult tries to start a new direct
+message to a minor (16–17, guardian consent confirmed), the attempt fails with the same "user not
+found" response as a non-existent, deactivated or restricted-pending recipient, so the answer does
+not reveal that a minor's account exists (Decision Log #347). We also make the server do the same
+lookups for every such attempt, so the number of database queries does not distinguish the cases.
+**What this does not do:** it does not remove tiny differences in response time caused by ordinary
+network and database variation. Someone able to send a very large number of repeated requests at one
+target account might in principle extract a signal from that variation. We decided **not** to add
+artificial delay to every message start to hide it, because that would slow every legitimate user
+for a low-yield attack (Decision Log #350, an accepted limitation, revisited only if counsel or a
+compliance requirement demands constant-time behaviour). The rule covers **starting** a
+conversation only: an existing conversation (for example one the minor started) continues, and a
+minor may message an adult. Guardian-consent gating (Section 3) still applies to a
+restricted-pending minor in both directions.
 
 ### 9. How long we keep your data
 
@@ -591,7 +708,9 @@ made a concrete decision (Decision Log #42, #341, #344).**
 | **Signals that are yours alone** (follows, likes, saves, notifications, group/room/club memberships) | Removed at anonymization | Automatic, at anonymization |
 | **Grassroots teams you organised** | The team survives: dormant, visible read-only, and reassignable to a new user who registers the same team name and city | Reclaim by a new registration of the same name and city |
 | **Investigation hold** | If you are the reporter, the reported party, or the author of reported content in an unresolved moderation report, anonymization is **held entirely** and your account stays fully identifiable to moderators | Conclusion of the investigation. No maximum duration is currently set **[OPEN]** |
-| **Guardian-consent records — separate exception** | Not deleted with the rest of your account. Separately snapshotted (relationship, and whether/when consent was confirmed — not the full guardian record) and kept a further **6 months** after the 30-day grace period ends (**~7 months total**), so Soccernity can demonstrate valid guardian consent if challenged | Automatic, on its own separate timer |
+| **Guardian-consent records — separate exception** | Not deleted with the rest of your account. Separately snapshotted (relationship, whether/when consent was confirmed, and — where captured — the consent-screen version and coarse device type; not the full guardian record, and never the raw browser string) and kept a further **6 months** after the 30-day grace period ends (**~7 months total**), so Soccernity can demonstrate valid guardian consent if challenged | Automatic, on its own separate timer |
+| **Age-reclassification log** (Decision Log #349) | One row per change to your under-18 / under-16 classification: account ID, which classification, before/after, your age at that moment (no date of birth). Kept after account anonymisation, since it is a record of a safeguarding state change | **[OPEN]** No retention period is set; whether one is needed is for counsel |
+| **Guardian record once you turn 18** | Kept, not deleted, as consent history; no longer used to restrict the account. Still subject to the anonymisation-time snapshot above if the account is later deleted | Account deletion. **[OPEN]** Whether a guardian's contact details should be minimised after 18 |
 | Messages between users | Retained; stay visible in conversations attributed to "[deleted user]" after account anonymization. A rolling retention window for messages generally is **[PROPOSAL]** (starting figure only: 12 months) | Automatic purge past the window, if adopted |
 | Moderation reports and actions | **[PROPOSAL]** Retained for longer than ordinary content, for accountability and pattern detection | Periodic review, not automatic deletion |
 | Media you upload (photos/videos) | Tied to the lifecycle of the post or article it belongs to; stays with content that remains visible | Deleted when the parent content is deleted |
@@ -705,7 +824,7 @@ mistaken for settled by the time this reaches counsel or gets converted into Fig
 | 3 | Lawful basis for each processing purpose under UK GDPR | PP §2 | Counsel |
 | 4 | Whether any special-category (Article 9) data is processed | PP §2 | Counsel |
 | 5 | **Resolved** — guardian decline/withdrawal/expiry built (PR #261; Decision Log #34, #337–#340) | ToS §3.4; PP §4.4 | — |
-| 6 | Consent audit trail: method + timestamp only; extension in progress (see row 17) | PP §4.2 | Counsel |
+| 6 | **Resolved in code (Decision Log #348)** — consent audit trail now also records screen version and coarse device type; counsel to confirm it is sufficient for UK GDPR Art. 7(1) (see row 17) | PP §4.2 | Counsel |
 | 7 | **Resolved** — two-stage 72h+72h expiry, then the ordinary deletion process (PR #261) | ToS §3.4; PP §4.4, §9 | — |
 | 8 | Non-user reporting: removed from the public ToS/PP per counsel; whether a route is built is a product matter | ToS §7.4; PP §13 | Product |
 | 9 | Cross-border data-location/transfer assessment for Postmark/S3/Sentry/Render/Neon/Upstash | PP §5 | Counsel |
@@ -715,14 +834,18 @@ mistaken for settled by the time this reaches counsel or gets converted into Fig
 | 13 | Governing law and jurisdiction for disputes | ToS §12 | Counsel |
 | 14 | NDPA 2023 cross-check on the 6-month consent-record retention window (UK-GDPR-derived reasoning, not yet confirmed for Nigeria) | PP §9 | Nigerian counsel |
 | 15 | Cookie/local-storage audit for the actual web application | PP §6 | `backend-api`/frontend + counsel |
-| 16 | Under-16 tiered restrictions: messaging/Bants/community read-only, plus a guardian-contact tag | PP §8 | Founder + `backend-api` |
-| 17 | Consent-audit-trail enrichment: consent-screen version + minimal device-type identifier | PP §4.2 | Founder + `backend-api` |
-| 18 | Enforcement preventing an adult from initiating a DM to a minor | PP §8 | Founder + `backend-api` |
+| 16 | **Built (PR #272, Decision Log #346)** — under-16 tier. Counsel to confirm scope; the messaging refusal to an under-16 recipient is a distinct 403 that confirms the account exists (see row 25) | ToS §3.5(a); PP §8 | Counsel |
+| 17 | **Built (PR #274, Decision Log #348)** — consent-screen version (a manually bumped label, tripwire-checked) + coarse device type. Counsel to confirm sufficiency | PP §4.2 | Counsel |
+| 18 | **Built (PRs #273/#276/#280, Decision Log #347/#350)** — adult cannot start a DM with a minor; enumeration-safe; timing jitter accepted (#350) | ToS §3.5(b); PP §8 | Counsel to confirm the accepted limitation |
 | 19 | Special-category (Article 9) data mapping (supersedes the narrower row 4) | PP §2 | Counsel |
 | 20 | Cross-border transfer assessment (standalone restatement of row 9) | PP §5 | Counsel |
 | 21 | Encryption-at-rest and breach-notification technical standard (restates row 11) | PP §11 | Founder + `backend-api` + counsel |
 | 22 | Age band vs full date of birth (data minimisation) | PP §1.1 | Founder + `backend-api` |
 | 23 | Investigation hold has no maximum duration (Decision Log #345 gives visibility only) | PP §9 | Founder + counsel |
+| 24 | **Age-reclassification (Decision Log #349)**: accepted ~24h misclassification window; reliance on unverified date of birth; younger-direction corrections re-apply restrictions with no notice | ToS §3.6; PP §4.5 | Counsel |
+| 25 | Under-16 recipient refusal (403) confirms the account exists, unlike the adult→minor 404 — conceal it too? | PP §8 | Founder + counsel |
+| 26 | Guardian authority at 18: v0.2's "a guardian's request to delete a minor's account supersedes the minor's own wishes" (ToS §8.5, PP §9, counsel-approved) is silent on accounts that have since turned 18; also no retention period for the age-reclassification log, and whether the guardian's details should be minimised after 18 | ToS §8.5; PP §9 | Counsel |
+| 27 | v0.2's restricted-pending wording ("messaged by or send messages to unverified accounts", ToS §3.2 / PP §3, counsel-approved) is looser than the code, which blocks sending and hides the account as a recipient. Left unchanged, flagged | ToS §3.2; PP §3 | Counsel |
 
 ---
 
