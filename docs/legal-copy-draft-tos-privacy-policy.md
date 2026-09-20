@@ -335,20 +335,7 @@ error-free, or available at all times.
 providers (our current sports-data provider is Highlightly — Decision Log #6, resolved); we do
 not guarantee the accuracy or timeliness of that content.
 
-10.3. **[PROPOSAL — standard limitation-of-liability language; drafted deliberately narrow here
-because a platform serving minors should not use broad liability waivers to avoid safeguarding
-responsibilities.]** To the fullest extent permitted by law, Soccernity is not liable for
-indirect or consequential loss arising from your use of the service. Nothing in these Terms
-limits liability that cannot lawfully be limited, including for death or personal injury caused
-by negligence, or for any failure to meet our safeguarding obligations to minors using the
-platform.
-
-**[Counsel's truthful-information warranty and continued-use-as-acceptance wording (appended to
-§10.3 per counsel's 09/09/2026 review) was not in the material this revision was prepared from.
-It must be pasted in here verbatim before this section is treated as complete. Not paraphrased
-in this draft.]** In outline only: you warrant that the
-information you give Soccernity is truthful, and continuing to use the service after these Terms
-change constitutes acceptance of the changed Terms.
+10.3. You agree that all information you submit is truthful and that you will not misuse, manipulate, or interfere with the service. **[PROPOSAL — standard limitation-of-liability language; drafted deliberately narrow here because a platform serving minors should not use broad liability waivers to avoid safeguarding responsibilities.]** To the fullest extent permitted by law, Soccernity is not liable for indirect or consequential loss, harm, or consequences arising from your use of the service and or inaccurate information provided by you or from your use of the app in a manner that violates these Terms. Nothing in these Terms limits liability that cannot lawfully be limited, including for death or personal injury caused by negligence, or for any failure to meet our safeguarding obligations to minors using the platform. Your continued use of the Soccernity signifies your acceptance of these conditions and your responsibility to use the platform lawfully and appropriately.
 
 ### 11. Changes to these Terms
 
@@ -447,18 +434,7 @@ process for minors' accounts; send you service emails (verification, password re
 consent, account status); review reports and take moderation action; calculate Leaderboard
 rankings where that feature is live; and maintain the security of the platform.
 
-**Lawful basis (UK GDPR) — framework per counsel's 09/09/2026 review. [PROPOSAL — for counsel to
-confirm against each specific purpose]**
-
-- **Core functions** (creating and running your account, showing your content, delivering the
-  service): contract and/or legitimate interests are the primary basis.
-- **Optional features only:** consent. Consent is not the basis for core functions.
-- **Guardian consent** for a minor's account is an **additional, minor-specific safeguard**, not
-  the primary lawful basis.
-- **Safety, moderation, and fraud prevention:** legitimate interests, supported by a documented
-  balancing test.
-- **Regulatory and safeguarding escalations** (for example disclosures to law enforcement or
-  regulators): legal obligation.
+**Lawful basis (UK GDPR).** The platform's core functions rely primarily on performance of a contract and legitimate interests, with consent reserved only for optional features. For minors, guardian consent operates as an additional safeguard, not the primary lawful basis. Safety, moderation, and fraud-prevention activities are grounded in legitimate interests supported by a documented balancing test, while regulatory or safeguarding escalations rely on legal obligation. **[PROPOSAL — counsel's framework; to be confirmed against each specific purpose]**
 
 Special-category (Article 9) data: whether any category we collect (for example an injury
 mentioned in a post, or an inference from club affiliation) could amount to special-category data
@@ -746,8 +722,7 @@ mistaken for settled by the time this reaches counsel or gets converted into Fig
 | 20 | Cross-border transfer assessment (standalone restatement of row 9) | PP §5 | Counsel |
 | 21 | Encryption-at-rest and breach-notification technical standard (restates row 11) | PP §11 | Founder + `backend-api` + counsel |
 | 22 | Age band vs full date of birth (data minimisation) | PP §1.1 | Founder + `backend-api` |
-| 23 | Counsel's verbatim §10.3 truthful-information / continued-use wording still to be pasted in | ToS §10.3 | Founder |
-| 24 | Investigation hold has no maximum duration (Decision Log #345 gives visibility only) | PP §9 | Founder + counsel |
+| 23 | Investigation hold has no maximum duration (Decision Log #345 gives visibility only) | PP §9 | Founder + counsel |
 
 ---
 
