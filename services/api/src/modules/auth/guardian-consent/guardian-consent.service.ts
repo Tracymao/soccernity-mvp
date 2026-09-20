@@ -444,7 +444,14 @@ export class GuardianConsentService {
     // withdrawalToken is cleared in the same write, which is what makes a
     // withdrawal link genuinely single-use.
     const refused = await this.prisma.guardian.updateMany({
-      where: { id: params.guardianId, consentStatus: { not: 'declined' } },
+      // Decision Log #349: no-op for a user reclassified as an adult
+      // (turned 18) -- a stale Guardian row must never schedule an adult's
+      // account for deletion.
+      where: {
+        id: params.guardianId,
+        consentStatus: { not: 'declined' },
+        minorUser: { isMinor: true },
+      },
       data: {
         consentStatus: 'declined',
         // Decision Log #338 -- the one place all three refusal paths

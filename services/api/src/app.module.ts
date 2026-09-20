@@ -12,6 +12,7 @@ import { UsersModule } from './modules/users/users.module';
 import { FeedModule } from './modules/feed/feed.module';
 import { ClubsModule } from './modules/clubs/clubs.module';
 import { AccountDeletionModule } from './modules/account-deletion/account-deletion.module';
+import { AgeReclassificationModule } from './modules/age-reclassification/age-reclassification.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { ContestModule } from './modules/contest/contest.module';
 import { GrassrootsModule } from './modules/grassroots/grassroots.module';
@@ -87,6 +88,7 @@ import { SportsModule } from './modules/sports/sports.module';
     // Log #42. No route: registers AccountDeletionSweepService's daily
     // @Cron() job only. See modules/account-deletion/README.md.
     AccountDeletionModule,
+    AgeReclassificationModule,
     // sprint-2/admin-console-account-entity — Decision Log #54. Admin
     // Console account/auth/profile slice ONLY: POST /admin/auth/login,
     // /admin/auth/refresh, /admin/auth/logout, /admin/auth/change-password,

@@ -123,7 +123,9 @@ describe('AccountDeletionSweepService', () => {
         },
       });
       expect((prisma.user as unknown as { delete?: unknown }).delete).toBeUndefined();
-      expect(prisma.guardian.findUnique).not.toHaveBeenCalled();
+      // Decision Log #349: the guardian lookup is no longer gated on isMinor
+      // (a user who turned 18 may still hold a Guardian row).
+      expect(prisma.guardian.findUnique).toHaveBeenCalled();
       expect(result).toEqual({ anonymizedUserIds: ['user-1'], heldUserIds: [] });
     });
 

@@ -213,7 +213,12 @@ export class AccountDeletionSweepService {
   // already-anonymized row rewrites the same values.
   async anonymizeUser(userId: string, isMinor: boolean): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
-      if (isMinor) {
+      // Decision Log #349: no longer gated on isMinor -- a user reclassified
+      // as an adult (turned 18) may still hold a Guardian row whose consent
+      // proof must be snapshotted and the row removed like any other's.
+      // `isMinor` stays in the signature for existing callers.
+      void isMinor;
+      {
         const guardian = await tx.guardian.findUnique({
           where: { minorUserId: userId },
           select: {

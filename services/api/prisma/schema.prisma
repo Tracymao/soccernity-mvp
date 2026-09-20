@@ -1355,3 +1355,24 @@ model PointsLedgerEntry {
   @@unique([source, refId, userId])
   @@index([userId, occurredAt])
 }
+
+// Decision Log #349 (sprint-1/age-reclassification-sweep) -- append-only
+// audit of every isMinor / isUnder16 reclassification the daily
+// AgeReclassificationSweepService makes (both directions, one row per
+// field changed). A safeguarding-relevant state change, so it is durable
+// on purpose: userId is a plain string, NOT a foreign key, so the row
+// survives the account's anonymization/deletion (same stance as
+// ConsentAuditRecord.minorUserId). Holds no date of birth -- only the
+// derived age at the moment of change.
+model AgeReclassificationLog {
+  id          String   @id @default(uuid())
+  userId      String
+  field       String // "isMinor" | "isUnder16"
+  fromValue   Boolean
+  toValue     Boolean
+  ageAtChange Int
+  occurredAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([occurredAt])
+}
