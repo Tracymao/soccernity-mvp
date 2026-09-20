@@ -8,7 +8,7 @@ This document is a first-pass draft produced by the `safeguarding-drafter` agent
 `CLAUDE.md` non-negotiable #2 and the `safeguarding-drafter` agent definition). It has **not**
 been approved by Soccernity's safeguarding/legal counsel. (v0.1 received counsel's "Approved
 with amendments" review on 09/09/2026; v0.2 applied those amendments; v0.3 added four newly
-shipped safeguarding features on top of v0.2; v0.4 corrects one factual error in v0.3. None of v0.2, v0.3 or v0.4 has itself been re-reviewed or
+shipped safeguarding features on top of v0.2; v0.4 corrects one factual error in v0.3; v0.5 records one planned behaviour change to the under-16 messaging refusal. None of v0.2 to v0.5 has itself been re-reviewed or
 signed off.) Nothing in this
 document should be read as a statement that either the Terms of Service or the Privacy Policy
 is legally sufficient, complete, or compliant with UK GDPR, Nigeria's NDPA 2023, the Online
@@ -42,14 +42,14 @@ question.
   Log entries #4, #8, #10, #19, #34, #37, #38, #40, #42, #44, #45, #58, #128–#130, #153–#155),
   Log Book Section 10 (safeguarding principles) and Section 24.5, `docs/sprint-1-dpia-outline-draft.md`,
   and `CLAUDE.md`'s "Where things stand" record of what is actually built as of Sprint 2.
-- **Draft date:** 2026-09-05 (v0.1); revised 2026-09-20 (v0.2); revised 2026-09-20 (v0.3); revised 2026-09-20 (v0.4)
+- **Draft date:** 2026-09-05 (v0.1); revised 2026-09-20 (v0.2); revised 2026-09-20 (v0.3); revised 2026-09-20 (v0.4); revised 2026-09-20 (v0.5)
 - **Drafted by:** `safeguarding-drafter` agent (automated first pass, v0.1); v0.2 and v0.3
   revisions prepared with Claude Code (v0.3 from the merged code, not from a summary)
 - **Reviewed by counsel:** v0.1 reviewed by Mrs Temiloluwa Ogundele (Temiloluwa Ogundele & Co) —
-  outcome "Approved with amendments", dated 09/09/2026. **None of v0.2, v0.3 or v0.4 has itself been
+  outcome "Approved with amendments", dated 09/09/2026. **None of v0.2 to v0.5 has itself been
   re-reviewed or re-signed** — see the sign-off block, which is deliberately unchanged. **v0.3's
   new material is pending its first counsel review** (see the changelog below).
-- **Version:** 0.4 (draft — still NOT APPROVED)
+- **Version:** 0.5 (draft — still NOT APPROVED)
 - **Status:** v0.2 incorporates (a) counsel's 09/09/2026 "Approved with amendments" review,
   (b) the founder's follow-up resolutions dated up to 19/09/2026, and (c) staleness fixes against
   the current live repo state (guardian decline/withdrawal/expiry built; account anonymization,
@@ -62,6 +62,10 @@ question.
   decline/withdrawal/expiry (#337–#340) and anonymization-in-place with an investigation hold
   (#341, #344, #345), real names for minors on Leaderboard/scouting/Discover with no pseudonym
   option (#45). Items still open are in Part C.
+
+### v0.5 changelog — one item for counsel's attention
+
+- **Change of guidance, for counsel:** the under-16-recipient messaging block is being changed from a distinct 403 (`under_16_restricted`) to the same indistinguishable 404 ("User not found") already used for non-existent, deactivated, restricted-pending and adult-to-minor recipients (companion `backend-api` PR; **not yet merged when this draft was written**). Reason: the distinct 403 confirmed to any sender that an under-16 account exists at that identifier, a direct account-enumeration signal on minor accounts. **This reverses the behaviour counsel was told about when the under-16 restrictions first shipped (PR #272, Decision Log #346), so it is flagged as a second, separate item alongside the v0.4 retention-table fix.** Counsel should confirm the reversal. Part C rows 16 and 25 are updated; if the companion PR does not land, revert those two rows. No ToS/PP body wording described the 403, so no body text changed.
 
 ### v0.4 changelog
 
@@ -838,7 +842,7 @@ mistaken for settled by the time this reaches counsel or gets converted into Fig
 | 13 | Governing law and jurisdiction for disputes | ToS §12 | Counsel |
 | 14 | NDPA 2023 cross-check on the 6-month consent-record retention window (UK-GDPR-derived reasoning, not yet confirmed for Nigeria) | PP §9 | Nigerian counsel |
 | 15 | Cookie/local-storage audit for the actual web application | PP §6 | `backend-api`/frontend + counsel |
-| 16 | **Built (PR #272, Decision Log #346)** — under-16 tier. Counsel to confirm scope; the messaging refusal to an under-16 recipient is a distinct 403 that confirms the account exists (see row 25) | ToS §3.5(a); PP §8 | Counsel |
+| 16 | **Built (PR #272, Decision Log #346)** — under-16 tier. Counsel to confirm scope; the messaging refusal to an under-16 recipient was originally a distinct 403 that confirmed the account exists; being changed to the indistinguishable 404 (see row 25, v0.5 changelog) | ToS §3.5(a); PP §8 | Counsel |
 | 17 | **Built (PR #274, Decision Log #348)** — consent-screen version (a manually bumped label, tripwire-checked) + coarse device type. Counsel to confirm sufficiency | PP §4.2 | Counsel |
 | 18 | **Built (PRs #273/#276/#280, Decision Log #347/#350)** — adult cannot start a DM with a minor; enumeration-safe; timing jitter accepted (#350) | ToS §3.5(b); PP §8 | Counsel to confirm the accepted limitation |
 | 19 | Special-category (Article 9) data mapping (supersedes the narrower row 4) | PP §2 | Counsel |
@@ -847,7 +851,7 @@ mistaken for settled by the time this reaches counsel or gets converted into Fig
 | 22 | Age band vs full date of birth (data minimisation) | PP §1.1 | Founder + `backend-api` |
 | 23 | Investigation hold has no maximum duration (Decision Log #345 gives visibility only) | PP §9 | Founder + counsel |
 | 24 | **Age-reclassification (Decision Log #349)**: accepted ~24h misclassification window; reliance on unverified date of birth; younger-direction corrections re-apply restrictions with no notice | ToS §3.6; PP §4.5 | Counsel |
-| 25 | Under-16 recipient refusal (403) confirms the account exists, unlike the adult→minor 404 — conceal it too? | PP §8 | Founder + counsel |
+| 25 | **Being resolved (companion `backend-api` PR, pending merge):** under-16 recipient refusal changes from a distinct 403 (which confirmed the account exists) to the same 404 used elsewhere in messaging. Reverses guidance given to counsel at PR #272 — counsel to confirm | PP §8 | Counsel |
 | 26 | Guardian authority at 18: v0.2's "a guardian's request to delete a minor's account supersedes the minor's own wishes" (ToS §8.5, PP §9, counsel-approved) is silent on accounts that have since turned 18; also no retention period for the age-reclassification log, and whether the guardian's details should be minimised after 18 | ToS §8.5; PP §9 | Counsel |
 | 27 | v0.2's restricted-pending wording ("messaged by or send messages to unverified accounts", ToS §3.2 / PP §3, counsel-approved) is looser than the code, which blocks sending and hides the account as a recipient. Left unchanged, flagged | ToS §3.2; PP §3 | Counsel |
 
