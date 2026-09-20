@@ -59,7 +59,14 @@ const CALLER = 'caller-1';
 const RECIPIENT = 'recipient-2';
 
 function activeUser(over: Partial<Record<string, unknown>> = {}) {
-  return { id: RECIPIENT, isMinor: false, accountStatus: 'active', ...over };
+  return {
+    id: RECIPIENT,
+    isMinor: false,
+    isUnder16: false,
+    accountStatus: 'active',
+    guardian: null,
+    ...over,
+  };
 }
 
 function conversationRow(over: Partial<Record<string, unknown>> = {}) {
@@ -84,8 +91,21 @@ describe('MessagingService', () => {
   });
 
   describe('startConversation (find-or-create)', () => {
+    // The recipient (with guardian consent joined in) and the caller come
+    // back from ONE user.findMany (sprint-1/dm-enumeration-timing-parity).
+    function mockUsers(
+      recipient: Record<string, unknown> | null,
+      caller: Record<string, unknown> = { isMinor: false },
+    ) {
+      const rows: Record<string, unknown>[] = [{ id: CALLER, ...caller }];
+      if (recipient) rows.push(recipient);
+      p().user.findMany.mockResolvedValue(rows);
+    }
+    const confirmed = { guardian: { consentStatus: 'confirmed' } };
+
     it('creates a new conversation with a sorted participant set + deterministic key, returning created: true', async () => {
-      p().user.findUnique.mockResolvedValue(activeUser());
+      mockUsers(activeUser());
+      p().conversation.findUnique.mockResolvedValue(null);
       p().conversation.create.mockResolvedValue(conversationRow());
 
       const { view, created } = await service.startConversation(CALLER, RECIPIENT);
@@ -103,7 +123,8 @@ describe('MessagingService', () => {
     });
 
     it('on a P2002 (a conversation with this exact pair already exists) re-reads it and returns created: false', async () => {
-      p().user.findUnique.mockResolvedValue(activeUser());
+      mockUsers(activeUser());
+      p().conversation.findUnique.mockResolvedValue(null);
       p().conversation.create.mockRejectedValue(p2002());
       p().conversation.findUniqueOrThrow.mockResolvedValue(conversationRow());
 
@@ -120,34 +141,36 @@ describe('MessagingService', () => {
       await expect(service.startConversation(CALLER, CALLER)).rejects.toBeInstanceOf(
         BadRequestException,
       );
-      expect(p().user.findUnique).not.toHaveBeenCalled();
+      expect(p().user.findMany).not.toHaveBeenCalled();
     });
 
     it('404s for a non-existent recipient', async () => {
-      p().user.findUnique.mockResolvedValue(null);
+      mockUsers(null);
+      p().conversation.findUnique.mockResolvedValue(null);
       await expect(service.startConversation(CALLER, RECIPIENT)).rejects.toBeInstanceOf(
         NotFoundException,
       );
     });
 
     it('404s for a deactivated recipient (Decision Log #221)', async () => {
-      p().user.findUnique.mockResolvedValue(activeUser({ accountStatus: 'deactivated' }));
+      mockUsers(activeUser({ accountStatus: 'deactivated' }));
+      p().conversation.findUnique.mockResolvedValue(null);
       await expect(service.startConversation(CALLER, RECIPIENT)).rejects.toBeInstanceOf(
         NotFoundException,
       );
     });
 
     it('404s for a restricted-pending minor recipient — the "receiving" half of Decision Log #12', async () => {
-      p().user.findUnique.mockResolvedValue(activeUser({ isMinor: true }));
-      p().guardian.findUnique.mockResolvedValue({ consentStatus: 'pending' });
+      mockUsers(activeUser({ isMinor: true, guardian: { consentStatus: 'pending' } }));
+      p().conversation.findUnique.mockResolvedValue(null);
       await expect(service.startConversation(CALLER, RECIPIENT)).rejects.toBeInstanceOf(
         NotFoundException,
       );
     });
 
     it('403s with the distinct under_16_restricted code for an under-16 recipient, even with confirmed consent', async () => {
-      p().user.findUnique.mockResolvedValue(activeUser({ isMinor: true, isUnder16: true }));
-      p().guardian.findUnique.mockResolvedValue({ consentStatus: 'confirmed' });
+      mockUsers(activeUser({ isMinor: true, isUnder16: true, ...confirmed }));
+      p().conversation.findUnique.mockResolvedValue(null);
 
       const err = await service.startConversation(CALLER, RECIPIENT).catch((e) => e);
       expect(err).toBeInstanceOf(ForbiddenException);
@@ -156,15 +179,12 @@ describe('MessagingService', () => {
     });
 
     it('404s adult -> minor NEW conversation, identical to a non-existent recipient (enumeration prevention)', async () => {
-      p().user.findUnique.mockImplementation(({ where }: { where: { id: string } }) =>
-        Promise.resolve(where.id === CALLER ? { isMinor: false } : activeUser({ isMinor: true })),
-      );
-      p().guardian.findUnique.mockResolvedValue({ consentStatus: 'confirmed' });
       p().conversation.findUnique.mockResolvedValue(null);
+      mockUsers(activeUser({ isMinor: true, ...confirmed }), { isMinor: false });
 
       const err = await service.startConversation(CALLER, RECIPIENT).catch((e) => e);
       expect(err).toBeInstanceOf(NotFoundException);
-      p().user.findUnique.mockResolvedValue(null);
+      mockUsers(null);
       const missing = await service.startConversation(CALLER, RECIPIENT).catch((e) => e);
       // Byte-identical response to a genuinely missing recipient.
       expect(err.getStatus()).toBe(missing.getStatus());
@@ -172,23 +192,65 @@ describe('MessagingService', () => {
       expect(p().conversation.create).not.toHaveBeenCalled();
     });
 
+    // sprint-1/dm-enumeration-timing-parity: the response body cannot show
+    // this, so assert the DATABASE WORK directly. Every enumeration-safe
+    // 404 outcome must issue the identical reads (same count, same order,
+    // same shape); a regression that re-adds an early return or a
+    // conditional extra read on one path fails here, not silently in prod.
+    it('does identical database work for every 404 outcome (query-count parity)', async () => {
+      const scenarios: Array<[string, () => void]> = [
+        ['missing recipient', () => mockUsers(null)],
+        [
+          'adult -> confirmed minor',
+          () => mockUsers(activeUser({ isMinor: true, ...confirmed }), { isMinor: false }),
+        ],
+        [
+          'restricted-pending minor',
+          () => mockUsers(activeUser({ isMinor: true, guardian: { consentStatus: 'pending' } })),
+        ],
+        ['deactivated recipient', () => mockUsers(activeUser({ accountStatus: 'deactivated' }))],
+      ];
+
+      const fingerprints: string[] = [];
+      for (const [name, arrange] of scenarios) {
+        prisma = buildPrismaMock();
+        service = new MessagingService(prisma);
+        p().conversation.findUnique.mockResolvedValue(null);
+        arrange();
+
+        await expect(service.startConversation(CALLER, RECIPIENT)).rejects.toBeInstanceOf(
+          NotFoundException,
+        );
+
+        // Exactly one read per table, never once-vs-twice.
+        expect([name, p().user.findMany.mock.calls.length]).toEqual([name, 1]);
+        expect([name, p().user.findUnique.mock.calls.length]).toEqual([name, 0]);
+        expect([name, p().guardian.findUnique.mock.calls.length]).toEqual([name, 0]);
+        expect([name, p().conversation.findUnique.mock.calls.length]).toEqual([name, 1]);
+        expect(p().conversation.create).not.toHaveBeenCalled();
+        fingerprints.push(
+          JSON.stringify([
+            p().user.findMany.mock.calls,
+            p().conversation.findUnique.mock.calls,
+          ]),
+        );
+      }
+      // The reads are byte-identical across scenarios (same arguments).
+      expect(new Set(fingerprints).size).toBe(1);
+    });
+
     it('allows minor -> adult and minor -> minor new conversations', async () => {
-      p().user.findUnique.mockImplementation(({ where }: { where: { id: string } }) =>
-        Promise.resolve(where.id === CALLER ? { isMinor: true } : activeUser({ isMinor: false })),
-      );
+      p().conversation.findUnique.mockResolvedValue(null);
       p().conversation.create.mockResolvedValue(conversationRow());
+      mockUsers(activeUser({ isMinor: false }), { isMinor: true });
       expect((await service.startConversation(CALLER, RECIPIENT)).created).toBe(true);
 
-      p().user.findUnique.mockImplementation(({ where }: { where: { id: string } }) =>
-        Promise.resolve(where.id === CALLER ? { isMinor: true } : activeUser({ isMinor: true })),
-      );
-      p().guardian.findUnique.mockResolvedValue({ consentStatus: 'confirmed' });
+      mockUsers(activeUser({ isMinor: true, ...confirmed }), { isMinor: true });
       expect((await service.startConversation(CALLER, RECIPIENT)).created).toBe(true);
     });
 
     it('an adult resuming an EXISTING thread with a minor is not blocked (created: false)', async () => {
-      p().user.findUnique.mockResolvedValue(activeUser({ isMinor: true }));
-      p().guardian.findUnique.mockResolvedValue({ consentStatus: 'confirmed' });
+      mockUsers(activeUser({ isMinor: true, ...confirmed }));
       p().conversation.findUnique.mockResolvedValue(conversationRow());
 
       const { created } = await service.startConversation(CALLER, RECIPIENT);
@@ -197,8 +259,8 @@ describe('MessagingService', () => {
     });
 
     it('allows a minor recipient whose guardian consent is confirmed', async () => {
-      p().user.findUnique.mockResolvedValue(activeUser({ isMinor: true }));
-      p().guardian.findUnique.mockResolvedValue({ consentStatus: 'confirmed' });
+      mockUsers(activeUser({ isMinor: true, ...confirmed }), { isMinor: true });
+      p().conversation.findUnique.mockResolvedValue(null);
       p().conversation.create.mockResolvedValue(conversationRow());
 
       const { created } = await service.startConversation(CALLER, RECIPIENT);
