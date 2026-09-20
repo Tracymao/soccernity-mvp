@@ -118,10 +118,43 @@ export class MessagingService {
     callerId: string,
     recipientId: string,
   ): Promise<{ view: ConversationView; created: boolean }> {
-    const recipientIsMinor = await this.assertRecipientMessageable(recipientId, callerId);
+    if (recipientId === callerId) {
+      throw new BadRequestException('You cannot start a conversation with yourself');
+    }
 
     const ids = [callerId, recipientId].sort();
     const key = participantKey(ids);
+
+    // sprint-1/dm-enumeration-timing-parity: EVERY new-conversation
+    // attempt does exactly the same two reads, in the same order,
+    // regardless of outcome -- (1) one user.findMany covering caller AND
+    // recipient (with the recipient's guardian consent status joined in),
+    // (2) one conversation.findUnique on the participant key. The
+    // decisions (not found / restricted-pending / deactivated / under-16 /
+    // adult->minor block) are then made purely in memory. Before this, a
+    // missing recipient did 1 query, a restricted-pending minor 2, and an
+    // adult->confirmed-minor 4, a latency difference a patient prober could
+    // use to rebuild the enumeration signal the 404 body fix closed. Do not
+    // reintroduce an early return before both reads, or a conditional
+    // extra read on any one outcome.
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: [callerId, recipientId] } },
+      select: {
+        id: true,
+        isMinor: true,
+        isUnder16: true,
+        accountStatus: true,
+        guardian: { select: { consentStatus: true } },
+      },
+    });
+    const existing = await this.prisma.conversation.findUnique({
+      where: { participantKey: key },
+      select: CONVERSATION_SELECT,
+    });
+
+    const recipient = users.find((u) => u.id === recipientId);
+    const caller = users.find((u) => u.id === callerId);
+    const recipientIsMinor = this.assertRecipientMessageable(recipient);
 
     // sprint-1/adult-to-minor-dm-block (Decision Log #347): an adult
     // cannot CREATE a new conversation with a minor (answered with the
@@ -130,27 +163,15 @@ export class MessagingService {
     // or predating this rule) it is simply returned, and sending into it
     // is unaffected. Minor->adult and minor->minor are allowed; the
     // under-16 total block and guardian-consent gating apply separately.
-    const existing = await this.prisma.conversation.findUnique({
-      where: { participantKey: key },
-      select: CONVERSATION_SELECT,
-    });
     if (existing) {
       const [view] = await this.toConversationViews([existing], callerId);
       return { view, created: false };
     }
-    if (recipientIsMinor) {
-      const caller = await this.prisma.user.findUnique({
-        where: { id: callerId },
-        select: { isMinor: true },
-      });
-      if (caller && !caller.isMinor) {
-        // Enumeration prevention: the SAME 404 (same class, same message,
-        // hence same body) a non-existent / restricted-pending /
-        // deactivated recipient gets. A distinct 403 would let an adult
-        // probing ids learn "this id is a confirmed minor". The rule
-        // itself is unchanged; only what the response reveals is.
-        throw new NotFoundException('User not found');
-      }
+    if (recipientIsMinor && caller && !caller.isMinor) {
+      // Enumeration prevention: the SAME 404 (same class, same message,
+      // hence same body) a non-existent / restricted-pending /
+      // deactivated recipient gets.
+      throw new NotFoundException('User not found');
     }
 
     let conversation: ConversationRow;
@@ -442,23 +463,24 @@ export class MessagingService {
   // A restricted-pending (or non-existent, or deactivated) recipient is
   // all treated identically: 404, never a distinct 403 that would
   // confirm the account exists.
-  private async assertRecipientMessageable(
-    recipientId: string,
-    callerId: string,
-  ): Promise<boolean> {
-    if (recipientId === callerId) {
-      throw new BadRequestException('You cannot start a conversation with yourself');
-    }
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: recipientId },
-      select: { id: true, isMinor: true, isUnder16: true, accountStatus: true },
-    });
+  // Pure and synchronous on purpose (no DB access): the recipient row,
+  // including its guardian consent status, is fetched by startConversation
+  // in the same query as the caller's, so every outcome costs the same.
+  private assertRecipientMessageable(
+    user:
+      | {
+          isMinor: boolean;
+          isUnder16: boolean;
+          accountStatus: string;
+          guardian: { consentStatus: string } | null;
+        }
+      | undefined,
+  ): boolean {
     if (!user) {
       throw new NotFoundException('User not found');
     }
     // Decision Log #221: cannot start a conversation with a deactivated /
-    // pending_deletion account — same 404-not-403 treatment
+    // pending_deletion account -- same 404-not-403 treatment
     // assertFollowGraphVisible gives a non-active target. Checked before
     // the minor branch because it applies regardless of age.
     if (user.accountStatus !== 'active') {
@@ -482,13 +504,8 @@ export class MessagingService {
     if (!user.isMinor) {
       return false;
     }
-
-    // Guardian.minorUserId is @unique — at most one Guardian row per minor.
-    const guardian = await this.prisma.guardian.findUnique({
-      where: { minorUserId: recipientId },
-      select: { consentStatus: true },
-    });
-    if (guardian?.consentStatus === 'confirmed') {
+    // Guardian.minorUserId is @unique -- at most one Guardian row per minor.
+    if (user.guardian?.consentStatus === 'confirmed') {
       return true;
     }
     throw new NotFoundException('User not found');
