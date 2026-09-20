@@ -53,6 +53,7 @@ import {
   type OtherParticipant,
 } from "../../api/messaging";
 import { getStoredAccessToken, decodeAccessToken } from "../../lib/session";
+import { UNDER_16_MESSAGE, isUnder16Restricted } from "../../lib/under16";
 import "./MessagesPage.css";
 
 type LoadState = "loading" | "loaded" | "error" | "not-found" | "no-session";
@@ -80,6 +81,7 @@ export default function ConversationPage() {
   const decoded = token ? decodeAccessToken(token) : null;
 
   const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [restricted, setRestricted] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]); // ascending: oldest first, newest last
   const [olderCursor, setOlderCursor] = useState<string | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -116,6 +118,7 @@ export default function ConversationPage() {
         });
       }
     } catch (err) {
+      setRestricted(isUnder16Restricted(err));
       setLoadState(err instanceof MessagingApiError && err.status === 404 ? "not-found" : "error");
     }
   }, [token, decoded?.sub, conversationId]);
@@ -194,7 +197,7 @@ export default function ConversationPage() {
           ← Messages
         </Link>
         <p className="messages-status messages-status--error" role="alert">
-          Couldn&rsquo;t load this conversation. Please try again shortly.
+          {restricted ? UNDER_16_MESSAGE : "Couldn’t load this conversation. Please try again shortly."}
         </p>
       </div>
     );

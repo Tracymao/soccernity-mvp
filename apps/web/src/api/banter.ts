@@ -31,6 +31,8 @@
 // ROOM_SELECT / BanterRoomView / BanterRoomPage exactly.
 import type { FeedPage, CreatedPost } from "./feed";
 
+import { apiFailure } from "../lib/under16";
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
 
 // BanterRoom.scopeType allow-list (banter.constants.ts: BANTER_ROOM_SCOPE_TYPES).
@@ -69,11 +71,13 @@ export interface JoinRoomState {
 
 export class BanterApiError extends Error {
   readonly status?: number;
+  readonly code?: string;
 
-  constructor(message: string, options?: { status?: number }) {
+  constructor(message: string, options?: { status?: number; code?: string }) {
     super(message);
     this.name = "BanterApiError";
     this.status = options?.status;
+    this.code = options?.code;
   }
 }
 
@@ -99,13 +103,6 @@ async function authedFetch(path: string, accessToken: string, init?: AuthedFetch
 
 // Pull the server's own message off a NestJS error body ({ message } or
 // { message: string[] }). Same helper feed.ts / grassroots.ts use.
-async function errorMessageFrom(response: Response, fallback: string): Promise<string> {
-  const body = await response.json().catch(() => null);
-  if (body && typeof body.message === "string") return body.message;
-  if (body && Array.isArray(body.message) && typeof body.message[0] === "string") return body.message[0];
-  return fallback;
-}
-
 // POST /banter-rooms -- JwtAuthGuard + GuardianConsentGuard. A 403 means
 // the caller is a restricted-pending minor. The creator is auto-joined
 // server-side (BanterService.createRoom), so the returned room already
@@ -116,10 +113,7 @@ export async function createRoom(accessToken: string, payload: CreateBanterRoomR
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
-    throw new BanterApiError(
-      await errorMessageFrom(response, `Couldn't create that room (${response.status}).`),
-      { status: response.status },
-    );
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't create that room (${response.status}).`, true);
   }
   return (await response.json()) as BanterRoom;
 }
@@ -139,7 +133,7 @@ export async function listRooms(
 
   const response = await authedFetch(url.pathname + url.search, accessToken);
   if (!response.ok) {
-    throw new BanterApiError(`Couldn't load rooms (${response.status}).`, { status: response.status });
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't load rooms (${response.status}).`, false);
   }
   return (await response.json()) as BanterRoomPage;
 }
@@ -159,7 +153,7 @@ export async function searchRooms(
 
   const response = await authedFetch(url.pathname + url.search, accessToken);
   if (!response.ok) {
-    throw new BanterApiError(`Couldn't search rooms (${response.status}).`, { status: response.status });
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't search rooms (${response.status}).`, false);
   }
   return (await response.json()) as BanterRoomPage;
 }
@@ -173,7 +167,7 @@ export async function getMyRooms(accessToken: string, cursor?: string): Promise<
 
   const response = await authedFetch(url.pathname + url.search, accessToken);
   if (!response.ok) {
-    throw new BanterApiError(`Couldn't load your rooms (${response.status}).`, { status: response.status });
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't load your rooms (${response.status}).`, false);
   }
   return (await response.json()) as BanterRoomPage;
 }
@@ -184,7 +178,7 @@ export async function getMyRooms(accessToken: string, cursor?: string): Promise<
 export async function getRoomById(accessToken: string, roomId: string): Promise<BanterRoom> {
   const response = await authedFetch(`/banter-rooms/${roomId}`, accessToken);
   if (!response.ok) {
-    throw new BanterApiError(`Couldn't load that room (${response.status}).`, { status: response.status });
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't load that room (${response.status}).`, false);
   }
   return (await response.json()) as BanterRoom;
 }
@@ -194,10 +188,7 @@ export async function getRoomById(accessToken: string, roomId: string): Promise<
 export async function joinRoom(accessToken: string, roomId: string): Promise<JoinRoomState> {
   const response = await authedFetch(`/banter-rooms/${roomId}/join`, accessToken, { method: "POST" });
   if (!response.ok) {
-    throw new BanterApiError(
-      await errorMessageFrom(response, `Couldn't join that room (${response.status}).`),
-      { status: response.status },
-    );
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't join that room (${response.status}).`, true);
   }
   return (await response.json()) as JoinRoomState;
 }
@@ -207,10 +198,7 @@ export async function joinRoom(accessToken: string, roomId: string): Promise<Joi
 export async function leaveRoom(accessToken: string, roomId: string): Promise<JoinRoomState> {
   const response = await authedFetch(`/banter-rooms/${roomId}/join`, accessToken, { method: "DELETE" });
   if (!response.ok) {
-    throw new BanterApiError(
-      await errorMessageFrom(response, `Couldn't leave that room (${response.status}).`),
-      { status: response.status },
-    );
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't leave that room (${response.status}).`, true);
   }
   return (await response.json()) as JoinRoomState;
 }
@@ -236,10 +224,7 @@ export async function postToRoom(
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
-    throw new BanterApiError(
-      await errorMessageFrom(response, `Couldn't post in that room (${response.status}).`),
-      { status: response.status },
-    );
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't post in that room (${response.status}).`, true);
   }
   return (await response.json()) as CreatedPost;
 }
@@ -256,9 +241,7 @@ export async function getRoomFeed(accessToken: string, roomId: string, cursor?: 
 
   const response = await authedFetch(url.pathname + url.search, accessToken);
   if (!response.ok) {
-    throw new BanterApiError(`Couldn't load this room's posts (${response.status}).`, {
-      status: response.status,
-    });
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't load this room's posts (${response.status}).`, false);
   }
   return (await response.json()) as FeedPage;
 }
