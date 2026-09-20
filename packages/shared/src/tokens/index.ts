@@ -28,6 +28,10 @@ export const colors = {
     greenTint12: "rgba(123, 185, 41, 0.12)",
     greenTint28: "rgba(123, 185, 41, 0.28)",
     iconInactive: "rgba(40, 46, 101, 0.15)",
+    overlayScrim: "rgba(40, 46, 101, 0.2775)",
+    shadowAmbient: "rgba(40, 46, 101, 0.08)",
+    shadowElevated: "rgba(40, 46, 101, 0.14)",
+    shadowKey: "rgba(40, 46, 101, 0.12)",
   },
   dark: {
     brandGreen: "#7BB929",
@@ -40,5 +44,9 @@ export const colors = {
     greenTint12: "rgba(123, 185, 41, 0.20)",
     greenTint28: "rgba(123, 185, 41, 0.35)",
     iconInactive: "rgba(255, 255, 255, 0.15)",
+    overlayScrim: "rgba(13, 15, 33, 0.65)",
+    shadowAmbient: "rgba(13, 15, 33, 0.30)",
+    shadowElevated: "rgba(13, 15, 33, 0.45)",
+    shadowKey: "rgba(13, 15, 33, 0.55)",
   },
 };

@@ -28,6 +28,12 @@ const CSS_VAR_MAP: Record<keyof Palette, string> = {
   greenTint12: "--sn-green-tint-12",
   greenTint28: "--sn-green-tint-28",
   iconInactive: "--sn-icon-inactive",
+  // Overlay family (Figma color/overlay/scrim + color/shadow/*, Decision
+  // Log #352/#353).
+  overlayScrim: "--sn-overlay-scrim",
+  shadowAmbient: "--sn-shadow-ambient",
+  shadowElevated: "--sn-shadow-elevated",
+  shadowKey: "--sn-shadow-key",
 };
 
 export function applyTheme(mode: ThemeMode = "light"): void {
