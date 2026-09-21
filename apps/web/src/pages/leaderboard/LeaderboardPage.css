@@ -363,3 +363,20 @@
     padding: 4px 0;
   }
 }
+
+.lb-load-more {
+  align-self: center;
+  padding: 10px 20px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--sn-text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.lb-load-more:disabled,
+.lb-segment:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

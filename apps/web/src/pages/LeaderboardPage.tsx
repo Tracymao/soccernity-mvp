@@ -9,11 +9,18 @@
 // anything, the same shape ClubsPage.tsx / CommunityPage.tsx use.
 //
 // BACKEND STATE:
-//   - Overall + Competition boards: still illustrative. GET /leaderboard
-//     does not exist (services/api/src/modules/leaderboard/README.md ==
-//     "Sprint 6... Not yet implemented"); the Competition data model
-//     (Prediction / Commentary) does not exist either (Decision Log
-//     #72/#73). See ./leaderboard/leaderboardData.ts.
+//   - OVERALL board: REAL. Wired to GET /leaderboard (Decision Log #292,
+//     the materialized weekly rollup, refreshed every 15 minutes). The
+//     endpoint returns { userId, displayName, points, rank } per row for
+//     ONE ISO week (defaults to the current week), keyset-paginated, so the
+//     board shows the current week only and pages with "Load more". It has
+//     no club filter, no all-time period, and no per-row club or
+//     weekly-change field, so on this tab: "By club" and "All-time" are
+//     disabled with an inline note (never faked client-side), and the
+//     Club / 7-day-change columns are not rendered.
+//   - COMPETITION board: still illustrative -- the Competition data model
+//     (Prediction / Commentary) does not exist (Decision Log #72/#73). See
+//     ./leaderboard/leaderboardData.ts.
 //   - CONTEST board: REAL, as of sprint-2/contest-posting-flow-to-code.
 //     Wired to GET /contest/current (sprint-2/contest-data-model-backend),
 //     rendering the derived phase (vacant -> week_1 -> weeks_1_2 ->
@@ -40,31 +47,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { listClubs, ClubsApiError, type ClubSummary } from "../api/clubs";
 import { getCurrentContest, type CurrentContestResponse } from "../api/contest";
-import { getStoredAccessToken } from "../lib/session";
-import {
-  OVERALL_ROWS,
-  COMPETITION_ROWS,
-  TOTAL_RANKED_PLAYERS,
-  initialsFor,
-  type LeaderboardRow,
-  type CompetitionType,
-} from "./leaderboard/leaderboardData";
+import { getLeaderboard, type LeaderboardEntryView } from "../api/leaderboard";
+import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
+import { COMPETITION_ROWS, initialsFor, type CompetitionType } from "./leaderboard/leaderboardData";
 import "./leaderboard/LeaderboardPage.css";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
 type BoardTab = "overall" | "contest" | "competition";
 type Scope = "global" | "club";
 type TimePeriod = "weekly" | "all-time";
-
-function changeLabel(change: number | null): string {
-  if (change === null) return "—";
-  return change > 0 ? `+${change}` : `${change}`;
-}
-
-function changeClass(change: number | null): string {
-  if (change === null) return "lb-change lb-change--flat";
-  return change > 0 ? "lb-change lb-change--up" : "lb-change lb-change--down";
-}
 
 function medalClass(rank: number): string | null {
   if (rank === 1) return "lb-medal lb-medal--1";
@@ -229,6 +220,18 @@ export default function LeaderboardPage() {
   const [contest, setContest] = useState<CurrentContestResponse | null>(null);
   const [contestError, setContestError] = useState(false);
 
+  // Real data: the Overall board, GET /leaderboard (Decision Log #292). One
+  // page at a time; "Load more" appends the next keyset page (the ClubsPage
+  // pattern). A failed first fetch degrades to an inline message on the
+  // Overall tab only -- it never blocks the page.
+  const [overallRows, setOverallRows] = useState<LeaderboardEntryView[]>([]);
+  const [overallCursor, setOverallCursor] = useState<string | null>(null);
+  const [overallError, setOverallError] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState(false);
+
+  const myUserId = useMemo(() => (token ? (decodeAccessToken(token)?.sub ?? null) : null), [token]);
+
   const load = useCallback(async () => {
     if (!token) {
       setLoadState("no-session");
@@ -251,17 +254,35 @@ export default function LeaderboardPage() {
     } catch {
       setContestError(true);
     }
+    try {
+      const page = await getLeaderboard(token);
+      setOverallRows(page.items);
+      setOverallCursor(page.nextCursor);
+      setOverallError(false);
+    } catch {
+      setOverallError(true);
+    }
     setLoadState("loaded");
   }, [token]);
+
+  async function loadMoreOverall() {
+    if (!token || !overallCursor || loadingMore) return;
+    setLoadingMore(true);
+    setLoadMoreError(false);
+    try {
+      const page = await getLeaderboard(token, { cursor: overallCursor });
+      setOverallRows((prev) => [...prev, ...page.items]);
+      setOverallCursor(page.nextCursor);
+    } catch {
+      setLoadMoreError(true);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     load();
   }, [load]);
-
-  const representedClub = useMemo(
-    () => myClubs.find((c) => c.id === representedClubId) ?? null,
-    [myClubs, representedClubId],
-  );
 
   if (loadState === "no-session") {
     return (
@@ -279,13 +300,12 @@ export default function LeaderboardPage() {
     );
   }
 
-  const rows: LeaderboardRow[] = tab === "overall" ? OVERALL_ROWS : [];
-
-  // Club-scope filtering is applied to the (dummy) Overall dataset
-  // client-side -- there is no real per-club leaderboard query to call.
-  // Illustrative only, same disclosure as leaderboardData.ts.
-  const visibleRows =
-    scope === "club" && representedClub ? rows.filter((r) => r.club === representedClub.name) : rows;
+  // GET /leaderboard has no club or all-time support, so on the Overall tab
+  // those two options are disabled and the effective view is always
+  // Global + Weekly. Other tabs keep their existing behaviour.
+  const overall = tab === "overall";
+  const scopeValue: Scope = overall ? "global" : scope;
+  const periodValue: TimePeriod = overall ? "weekly" : timePeriod;
 
   const competitionRows = COMPETITION_ROWS[competitionType];
 
@@ -299,9 +319,11 @@ export default function LeaderboardPage() {
         <div className="lb-meta">
           <p>Points update every 15 minutes</p>
           <p className="lb-meta__muted">
-            {tab === "contest"
-              ? "Contest board — live data"
-              : "Overall & Competition boards use illustrative data — Sprint 6 scope"}
+            {tab === "competition"
+              ? "Competition board uses illustrative data — no data model yet"
+              : tab === "contest"
+                ? "Contest board — live data"
+                : "Overall board — live data, current week"}
           </p>
         </div>
       </header>
@@ -328,8 +350,8 @@ export default function LeaderboardPage() {
             <button
               type="button"
               role="radio"
-              aria-checked={scope === "global"}
-              className={scope === "global" ? "lb-segment lb-segment--active" : "lb-segment"}
+              aria-checked={scopeValue === "global"}
+              className={scopeValue === "global" ? "lb-segment lb-segment--active" : "lb-segment"}
               onClick={() => setScope("global")}
             >
               Global
@@ -337,8 +359,10 @@ export default function LeaderboardPage() {
             <button
               type="button"
               role="radio"
-              aria-checked={scope === "club"}
-              className={scope === "club" ? "lb-segment lb-segment--active" : "lb-segment"}
+              aria-checked={scopeValue === "club"}
+              disabled={overall}
+              title={overall ? "Club scope isn't supported on the Overall board yet" : undefined}
+              className={scopeValue === "club" ? "lb-segment lb-segment--active" : "lb-segment"}
               onClick={() => setScope("club")}
             >
               By club
@@ -351,7 +375,7 @@ export default function LeaderboardPage() {
           <select
             className="lb-dropdown"
             aria-label="Club"
-            disabled={scope !== "club" || myClubs.length === 0}
+            disabled={overall || scope !== "club" || myClubs.length === 0}
             value={representedClubId ?? ""}
             onChange={(e) => setRepresentedClubId(e.target.value || null)}
           >
@@ -385,8 +409,8 @@ export default function LeaderboardPage() {
             <button
               type="button"
               role="radio"
-              aria-checked={timePeriod === "weekly"}
-              className={timePeriod === "weekly" ? "lb-segment lb-segment--active" : "lb-segment"}
+              aria-checked={periodValue === "weekly"}
+              className={periodValue === "weekly" ? "lb-segment lb-segment--active" : "lb-segment"}
               onClick={() => setTimePeriod("weekly")}
             >
               Weekly
@@ -394,8 +418,10 @@ export default function LeaderboardPage() {
             <button
               type="button"
               role="radio"
-              aria-checked={timePeriod === "all-time"}
-              className={timePeriod === "all-time" ? "lb-segment lb-segment--active" : "lb-segment"}
+              aria-checked={periodValue === "all-time"}
+              disabled={overall}
+              title={overall ? "The Overall board is weekly only for now" : undefined}
+              className={periodValue === "all-time" ? "lb-segment lb-segment--active" : "lb-segment"}
               onClick={() => setTimePeriod("all-time")}
             >
               All-time
@@ -404,7 +430,14 @@ export default function LeaderboardPage() {
         </div>
       </div>
 
-      {scope === "club" && myClubs.length === 0 && (
+      {overall && (
+        <p className="lb-note">
+          The Overall board ranks this week only. Club scope and the all-time view aren&rsquo;t supported yet, so
+          those options are switched off here.
+        </p>
+      )}
+
+      {!overall && scope === "club" && myClubs.length === 0 && (
         <p className="lb-status lb-status--inline" role="status">
           {clubsError
             ? "Couldn't load your clubs — showing Global instead."
@@ -415,58 +448,59 @@ export default function LeaderboardPage() {
 
       {tab === "contest" && <ContestBoard contest={contest} contestError={contestError} />}
 
-      {tab === "overall" && (
-        <table className="lb-table">
-          <thead>
-            <tr>
-              <th scope="col">Rank</th>
-              <th scope="col">Player</th>
-              <th scope="col">Club</th>
-              <th scope="col">7-day change</th>
-              <th scope="col">Points</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleRows.length === 0 && (
+      {tab === "overall" &&
+        (overallError ? (
+          <p className="lb-status lb-status--inline" role="alert">
+            Couldn&rsquo;t load the leaderboard right now. Please try again later.
+          </p>
+        ) : (
+          <table className="lb-table">
+            <thead>
               <tr>
-                <td colSpan={5} className="lb-empty">
-                  No ranked players match this filter yet.
-                </td>
+                <th scope="col">Rank</th>
+                <th scope="col">Player</th>
+                <th scope="col">Points</th>
               </tr>
-            )}
-            {visibleRows.map((row) => (
-              <tr key={row.rank} className={row.isYou ? "lb-row lb-row--you" : "lb-row"}>
-                <td>
-                  {medalClass(row.rank) ? (
-                    <span className={medalClass(row.rank) as string} aria-hidden="true">
-                      {row.rank}
-                    </span>
-                  ) : (
-                    row.rank
-                  )}
-                </td>
-                <td>
-                  <div className="lb-player">
-                    <span className="lb-avatar" aria-hidden="true">
-                      {initialsFor(row.name)}
-                    </span>
-                    <span className="lb-player__text">
-                      <span className="lb-player__name">
-                        {row.name}
-                        {row.isYou && <span className="lb-you-tag">You</span>}
-                      </span>
-                      <span className="lb-player__handle">{row.handle}</span>
-                    </span>
-                  </div>
-                </td>
-                <td>{row.club}</td>
-                <td className={changeClass(row.weeklyChange)}>{changeLabel(row.weeklyChange)}</td>
-                <td className="lb-points">{row.points.toLocaleString("en-GB")}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            </thead>
+            <tbody>
+              {overallRows.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="lb-empty">
+                    No ranked players this week yet.
+                  </td>
+                </tr>
+              )}
+              {overallRows.map((row) => {
+                const isYou = row.userId === myUserId;
+                return (
+                  <tr key={row.userId} className={isYou ? "lb-row lb-row--you" : "lb-row"}>
+                    <td>
+                      {medalClass(row.rank) ? (
+                        <span className={medalClass(row.rank) as string} aria-hidden="true">
+                          {row.rank}
+                        </span>
+                      ) : (
+                        row.rank
+                      )}
+                    </td>
+                    <td>
+                      <div className="lb-player">
+                        <span className="lb-avatar" aria-hidden="true">
+                          {initialsFor(row.displayName)}
+                        </span>
+                        <span className="lb-player__name">
+                          {row.displayName}
+                          {isYou && <span className="lb-you-tag">You</span>}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="lb-points">{row.points.toLocaleString("en-GB")}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ))}
 
       {tab === "competition" && (
         <table className="lb-table">
@@ -518,9 +552,15 @@ export default function LeaderboardPage() {
         </p>
       )}
 
-      {tab === "overall" && (
-        <p className="lb-pagination">
-          Showing {visibleRows.length} of {TOTAL_RANKED_PLAYERS.toLocaleString("en-GB")} ranked players
+      {tab === "overall" && !overallError && overallCursor && (
+        <button type="button" className="lb-load-more" onClick={loadMoreOverall} disabled={loadingMore}>
+          {loadingMore ? "Loading…" : "Load more"}
+        </button>
+      )}
+
+      {tab === "overall" && loadMoreError && (
+        <p className="lb-status lb-status--inline" role="alert">
+          Couldn&rsquo;t load more players.
         </p>
       )}
 

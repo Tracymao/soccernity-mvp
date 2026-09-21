@@ -1,8 +1,8 @@
 // Follows ClubsPage.test.tsx / CommunityPage.test.tsx's pattern -- plain
 // DOM assertions, mocks src/api/clubs.ts rather than hitting the network,
-// session seeded directly into sessionStorage. The leaderboard ranking
-// data itself is local dummy content (leaderboardData.ts) -- there is no
-// endpoint to mock for it.
+// session seeded directly into sessionStorage. The Overall board is real
+// (api/leaderboard.ts, mocked here); the Competition board is still local
+// illustrative content (leaderboardData.ts).
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
@@ -17,6 +17,14 @@ vi.mock("../api/clubs", async () => {
   };
 });
 
+vi.mock("../api/leaderboard", async () => {
+  const actual = await vi.importActual<typeof import("../api/leaderboard")>("../api/leaderboard");
+  return {
+    ...actual,
+    getLeaderboard: vi.fn(),
+  };
+});
+
 vi.mock("../api/contest", async () => {
   const actual = await vi.importActual<typeof import("../api/contest")>("../api/contest");
   return {
@@ -27,6 +35,8 @@ vi.mock("../api/contest", async () => {
 
 import { listClubs } from "../api/clubs";
 import { getCurrentContest } from "../api/contest";
+import { getLeaderboard } from "../api/leaderboard";
+import type { LeaderboardPage as LeaderboardPageData } from "../api/leaderboard";
 import type { CurrentContestResponse } from "../api/contest";
 
 function contestResponse(overrides: Partial<CurrentContestResponse> = {}): CurrentContestResponse {
@@ -60,6 +70,15 @@ function contestResponse(overrides: Partial<CurrentContestResponse> = {}): Curre
     ...overrides,
   };
 }
+
+const LB_PAGE: LeaderboardPageData = {
+  items: [
+    { userId: "u1", displayName: "Emeka John", points: 4860, rank: 1 },
+    { userId: "u2", displayName: "Chukwu James", points: 4512, rank: 2 },
+    { userId: "user-1", displayName: "Adeniyi Christiana", points: 3102, rank: 3 },
+  ],
+  nextCursor: null,
+};
 
 function base64UrlEncode(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -105,6 +124,8 @@ beforeEach(() => {
   vi.mocked(listClubs).mockReset();
   vi.mocked(getCurrentContest).mockReset();
   vi.mocked(getCurrentContest).mockResolvedValue(contestResponse());
+  vi.mocked(getLeaderboard).mockReset();
+  vi.mocked(getLeaderboard).mockResolvedValue(LB_PAGE);
 });
 
 function renderPage(path = "/leaderboard") {
@@ -122,7 +143,7 @@ describe("LeaderboardPage", () => {
     expect(listClubs).not.toHaveBeenCalled();
   });
 
-  it("renders the Overall board with dummy ranking data once a session exists", async () => {
+  it("renders the Overall board from GET /leaderboard once a session exists", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI, PORT_HARCOURT, NOT_JOINED], nextCursor: null });
 
@@ -130,8 +151,69 @@ describe("LeaderboardPage", () => {
 
     expect(await screen.findByText("Emeka John")).not.toBeNull();
     expect(screen.getByText("Adeniyi Christiana")).not.toBeNull();
-    expect(screen.getByText("You")).not.toBeNull(); // the "You" tag on the caller's own row
+    expect(screen.getByText("4,860")).not.toBeNull();
+    expect(screen.getByText("You")).not.toBeNull(); // the caller's own row (sub === userId)
     expect(listClubs).toHaveBeenCalledWith(expect.any(String));
+    expect(getLeaderboard).toHaveBeenCalledWith(expect.any(String));
+    // No club / 7-day-change columns -- the endpoint has neither.
+    expect(screen.queryByRole("columnheader", { name: "Club" })).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: "7-day change" })).toBeNull();
+  });
+
+  it("shows an empty state when the current week has no ranked players", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
+    vi.mocked(getLeaderboard).mockResolvedValue({ items: [], nextCursor: null });
+
+    renderPage();
+
+    expect(await screen.findByText(/no ranked players this week yet/i)).not.toBeNull();
+  });
+
+  it("degrades to an inline message (page still renders) if GET /leaderboard fails", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
+    vi.mocked(getLeaderboard).mockRejectedValue(new Error("boom"));
+
+    renderPage();
+
+    expect(await screen.findByText(/couldn.t load the leaderboard right now/i)).not.toBeNull();
+    // The other boards are unaffected.
+    fireEvent.click(screen.getByRole("tab", { name: "Contest" }));
+    expect(await screen.findByText("Chukwu James")).not.toBeNull();
+  });
+
+  it("appends the next page on Load more, using the cursor", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
+    vi.mocked(getLeaderboard)
+      .mockResolvedValueOnce({ items: LB_PAGE.items, nextCursor: "cur-2" })
+      .mockResolvedValueOnce({ items: [{ userId: "u9", displayName: "Musa Ibrahim", points: 900, rank: 4 }], nextCursor: null });
+
+    renderPage();
+    await screen.findByText("Emeka John");
+    expect(screen.queryByText("Musa Ibrahim")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+
+    expect(await screen.findByText("Musa Ibrahim")).not.toBeNull();
+    expect(screen.getByText("Emeka John")).not.toBeNull(); // first page kept
+    expect(getLeaderboard).toHaveBeenLastCalledWith(expect.any(String), { cursor: "cur-2" });
+    expect(screen.queryByRole("button", { name: "Load more" })).toBeNull(); // no more pages
+  });
+
+  it("disables By club and All-time on the Overall board with a note (no fake client-side filtering)", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI], nextCursor: null });
+
+    renderPage();
+    await screen.findByText("Emeka John");
+
+    expect((screen.getByRole("radio", { name: "By club" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("radio", { name: "All-time" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole("radio", { name: "Weekly" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByText(/ranks this week only/i)).not.toBeNull();
+    expect((screen.getByLabelText("Club") as HTMLSelectElement).disabled).toBe(true);
   });
 
   it("switches to the Contest tab and shows the real weekly winners from GET /contest/current", async () => {
@@ -211,12 +293,12 @@ describe("LeaderboardPage", () => {
     expect(screen.getByRole("columnheader", { name: "Votes" })).not.toBeNull();
   });
 
-  it("populates the CLUB filter from real GET /clubs joined memberships and filters by club scope", async () => {
+  it("populates the CLUB filter from real GET /clubs joined memberships (usable on the Contest tab)", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI, PORT_HARCOURT, NOT_JOINED], nextCursor: null });
 
-    renderPage();
-    await screen.findByText("Emeka John");
+    renderPage("/leaderboard?tab=contest");
+    await screen.findByText("Chukwu James");
 
     const clubSelect = screen.getByLabelText("Club") as HTMLSelectElement;
     // Only the two `joined: true` clubs are real options -- NOT_JOINED is excluded.
@@ -226,19 +308,15 @@ describe("LeaderboardPage", () => {
     expect(optionLabels).toEqual(["Ikoyi Rovers FC", "Port Harcourt Blues"]);
 
     fireEvent.click(screen.getByRole("radio", { name: "By club" }));
-    // Default represented club is the first joined club (Ikoyi Rovers FC) --
-    // its own player, Emeka John, should still show; a Port Harcourt-only
-    // player should not.
-    expect(screen.getByText("Emeka John")).not.toBeNull();
-    expect(screen.queryByText("Abdul Yusuf")).toBeNull();
+    expect(clubSelect.disabled).toBe(false);
   });
 
-  it("shows a 'no clubs joined' message when By club is selected with zero real memberships", async () => {
+  it("shows a 'no clubs joined' message when By club is selected with zero real memberships (Contest tab)", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [NOT_JOINED], nextCursor: null });
 
-    renderPage();
-    await screen.findByText("Emeka John");
+    renderPage("/leaderboard?tab=contest");
+    await screen.findByText("Chukwu James");
 
     fireEvent.click(screen.getByRole("radio", { name: "By club" }));
 
@@ -256,12 +334,12 @@ describe("LeaderboardPage", () => {
     expect(await screen.findByText("Emeka John")).not.toBeNull();
   });
 
-  it("switches time period without crashing", async () => {
+  it("switches time period without crashing (Contest tab, where it is enabled)", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
 
-    renderPage();
-    await screen.findByText("Emeka John");
+    renderPage("/leaderboard?tab=contest");
+    await screen.findByText("Chukwu James");
 
     fireEvent.click(screen.getByRole("radio", { name: "Weekly" }));
     await waitFor(() => expect(screen.getByRole("radio", { name: "Weekly" }).getAttribute("aria-checked")).toBe("true"));
