@@ -10,8 +10,9 @@ safeguarding/legal counsel — a role recorded as a priority hire in Inventor's 
 Book Section 15 and, at the time of writing, unfilled.
 
 Nothing in this document should be read as a statement that Soccernity is
-compliant with UK GDPR, the Data Protection Act 2018, the Online Safety Act, the
-ICO Age Appropriate Design Code, or any other regime. No section of this draft has
+compliant with UK GDPR, EU GDPR, US COPPA, the Nigeria Data Protection Act 2023, the Data
+Protection Act 2018, the Online Safety Act, the ICO Age Appropriate Design Code, or any other
+regime. No section of this draft has
 been assessed for legal sufficiency by anyone qualified to do so. **A DPIA is only
 a DPIA once a competent person has completed, challenged, and signed it.** Until
 the sign-off block in Section 6 is completed, this file is working material for
@@ -25,12 +26,48 @@ belonging to the founder and counsel, which this draft deliberately does not
 resolve.
 
 - **Document:** DPIA outline, MVP Build Plan Section 8.1
-- **Sprint / PR:** Sprint 1, PR S1 (v0.1); factual refresh `docs/dpia-draft-refresh` (v0.2)
-- **Draft date:** 2026-08-16 (v0.1); revised 2026-09-20 (v0.2)
+- **Sprint / PR:** Sprint 1, PR S1 (v0.1); factual refresh `docs/dpia-draft-refresh` (v0.2); scope extension `docs/dpia-v0.3-eu-gdpr-coppa` (v0.3)
+- **Draft date:** 2026-08-16 (v0.1); revised 2026-09-20 (v0.2); revised 2026-09-21 (v0.3)
 - **Drafted by:** `safeguarding-drafter` agent (automated first pass, v0.1); v0.2 revised with
-  Claude Code, from the merged code rather than from summaries
+  Claude Code, from the merged code rather than from summaries; v0.3 likewise
 - **Reviewed by counsel:** NOT YET — see Section 6
-- **Version:** 0.2 (draft — still NOT APPROVED)
+- **Version:** 0.3 (draft — still NOT APPROVED)
+
+### Changelog — v0.2 → v0.3 (2026-09-21)
+
+**What this update is, stated plainly.** On 2026-09-21 the founder decided to extend Soccernity's
+compliance framework beyond the UK GDPR + Nigeria NDPA 2023 baseline to also cover **EU GDPR** and
+**US COPPA** (this is the input to Decision Log #4). v0.3 extends the DPIA's legal-basis and risk
+analysis to those two regimes. **It is an internal risk assessment: its job is to surface gaps, not to
+assert compliance, and it does not.** The Section 6 sign-off block is unchanged and empty
+("Reviewed by counsel: NOT YET"); Decision Log #4 is **not** closed by this document (its docx entry
+was deliberately not edited); nothing is approved. The two regime analyses below were written from the
+drafter's general knowledge of those regimes — **no statute, regulation or regulator guidance was
+retrieved or checked during this pass** (see §0 item 5) — and from a direct reading of the merged
+consent code, which is what the findings about Soccernity itself rest on.
+
+Added:
+
+1. **§2.5 EU GDPR** — Article 27 representative analysis; Article 8 member-state digital-consent-age
+   variation checked against Soccernity's under-18 guardian-consent threshold (Decision Log #8) and
+   under-16 tier (Decision Log #346). New risk **R15**.
+2. **§2.6 US COPPA** — verifiable-parental-consent standard tested against the *actual* current
+   guardian-consent mechanism, read from the code. New risk **R16**. **Headline finding: email-link
+   confirmation, as built, is very unlikely to meet COPPA's verifiable-parental-consent standard for
+   under-13s on a platform that publicly discloses children's information** (§2.6.3).
+3. **§1.6** rewritten to record the founder's scope decision; **§4** rows for R15/R16 and an amended R1
+   residual row; **§5** items 22–28; **§6** scope note.
+
+Also confirmed while reading the code (not a scope change): R1's residual row said guardian-email
+verification was "not specified anywhere yet" — still true, and now established as a *code* fact: there is
+**no check that the guardian's email differs from the child's own** (§2.6.3, finding 1).
+
+**What is not changed:** R1–R14 are unedited except as listed. R3 and R7–R11 remain unrefreshed (§0 item
+4). No lawful basis is chosen (§2.1). The public Terms/Privacy Policy draft
+(`docs/legal-copy-draft-tos-privacy-policy.md`) is **out of scope for this PR and was not touched**; it will
+need to be brought into line with whatever counsel decides here.
+
+---
 
 ### Changelog — v0.1 → v0.2 (2026-09-20)
 
@@ -108,6 +145,21 @@ Stated up front because it affects how much weight any of the below can carry.
    code is merged", not "operating in production" (no live deployment is recorded anywhere in the repo; hosting is still unverified, see §1.5). The
    remaining v0.1 material (R3, R7–R11, and the parts of §1–§2 not named in the changelog) is
    **unrefreshed** and may be stale in ways this pass did not check.
+
+5. **v0.3 sources — and a limitation specific to §2.5 / §2.6.** The Soccernity-facing findings in v0.3
+   were drafted from the merged code on `main` as of 2026-09-21:
+   `services/api/src/modules/auth/registration/registration.service.ts`, `dto/register.dto.ts`,
+   `dto/guardian-details.dto.ts`, `age.util.ts`;
+   `auth/guardian-consent/guardian-consent.service.ts`, `consent-token.constants.ts`, the `dto/*` for
+   confirm / decline / withdraw; `registration-email.service.ts`; and the web confirmation screen
+   `apps/web/src/pages/GuardianConsentConfirmPage.tsx` and age gate `AgeGateStep.tsx`. **The statements
+   about EU GDPR and COPPA, however, come from the drafting agent's general knowledge, not from a retrieved
+   source.** No regulation text, FTC document, EDPB guideline or member-state statute was fetched in this
+   pass, and the legislative position (in particular the member-state digital-consent ages in §2.5.2, the
+   COPPA Rule as amended in 2025, and which consent methods the FTC currently recognises) changes over time.
+   **[ACTION FOR REVIEW]** Counsel must verify every legal proposition in §2.5 and §2.6 against primary
+   sources before relying on any of it. Where this draft is uncertain it says so; where it is silent it has
+   not checked.
 
 ---
 
@@ -257,25 +309,27 @@ data, not user data.
 Stated here rather than buried later, because the rest of the document depends on
 them and readers should not mistake silence for resolution.
 
-**[OPEN DECISION — Decision Log #4] Jurisdictional scope beyond UK GDPR.**
-Whether Soccernity's data protection framework extends beyond UK GDPR — to EU
-GDPR, to COPPA (US), or to other regimes — is recorded as an open item in Build
-Plan Section 9 and has **not** been closed. This draft is written against UK GDPR
-concepts **as a working assumption only, because a first pass has to start
-somewhere**, and that assumption is not a finding. It is not a recommendation that
-UK-only is the right scope. Consequences counsel should note:
+**[OPEN DECISION — Decision Log #4] Jurisdictional scope beyond UK GDPR — scope extended by
+founder decision on 2026-09-21; entry still open.** Decision Log #4 recorded whether Soccernity's data
+protection framework extends beyond UK GDPR (to EU GDPR, COPPA, or other regimes) as open. On
+2026-09-21 the founder decided to extend the framework to **also cover EU GDPR and US COPPA**, alongside
+the UK GDPR + Nigeria NDPA 2023 baseline. v0.3 of this DPIA analyses both (§2.5, §2.6). That is a decision
+to *assess* those regimes, **not a finding that Soccernity complies with them**, and the Decision Log entry
+itself has not been closed or edited by this document — counsel is expected to close it once the analysis
+below has been reviewed. What was already true, and remains true:
 
-- If EU users are in scope, Article 8 GDPR sets a digital-consent age that member
-  states may set anywhere between 13 and 16, and it varies by state. A single
-  hardcoded age would be wrong somewhere.
-- If US users are in scope, COPPA applies below 13 with a materially different and
-  more prescriptive verifiable-parental-consent standard than "email to a
-  guardian." The consent flow described in Build Plan Section 8.3 may not meet it.
-- If scope is genuinely UK-only, that requires a technical and contractual means
-  of limiting the user base, which does not currently exist in the product.
-- The Online Safety Act and the ICO's Age Appropriate Design Code may impose
-  duties independently of which consent regime applies. **[ACTION FOR REVIEW]**
-  This draft does not assess either and is not competent to.
+- Article 8 GDPR sets a digital-consent age that member states may set anywhere between 13 and 16 (§2.5.2).
+  Soccernity's thresholds sit at or above the highest floor, but that is only part of the Article 8 question.
+- COPPA applies below 13 with a materially different and more prescriptive verifiable-parental-consent
+  standard than "email to a guardian." **The consent flow described in Build Plan Section 8.3 and built as
+  the guardian-consent module very likely does not meet it** — §2.6.3 sets out why, from the code.
+- There is still **no technical or contractual means of limiting the user base by country** (no geo-block,
+  no country field on `User`). The framework is therefore "extended" only in the sense that it is assessed;
+  the product neither includes nor excludes EU or US users today, which matters for §2.5.1 and §2.6.1.
+- The Online Safety Act and the ICO's Age Appropriate Design Code may impose duties independently of which
+  consent regime applies. **[ACTION FOR REVIEW]** This draft does not assess either and is not competent to.
+  The same is true of the EU Digital Services Act and US state children's-privacy and age-appropriate-design
+  statutes: named here so they are not mistaken for having been considered.
 
 **[OPEN DECISION — Decision Log #8] Regional minimum age for the age-gate.**
 `CLAUDE.md` records this as still open and as a direct blocker on Sprint 1 Auth
@@ -385,6 +439,271 @@ is present in the data model. Specifically:
   automatically the child's request. **[ACTION FOR REVIEW]** Counsel to specify
   who may exercise which right at what age, and how a conflict between child and
   guardian is handled. This draft has no view.
+
+### 2.5 EU GDPR — extension of scope (v0.3)
+
+*Draft for counsel review. Written from the drafter's general knowledge of EU GDPR, not from retrieved
+sources (§0 item 5). The Soccernity-specific facts are read from the code; the legal propositions must be
+verified.*
+
+#### 2.5.1 Does Soccernity need an Article 27 EU representative?
+
+**Facts.** Soccernity has no establishment in the Union (per the founder's instruction for this pass).
+`CLAUDE.md` records the Phase 1 launch markets as Nigeria and England; the UK is outside the EU. Nothing in
+the product distinguishes EU users, and (§1.6) there is no means of excluding them.
+
+**Reasoning offered for challenge.**
+
+- A controller with no EU establishment is within EU GDPR only through **Article 3(2)**: offering goods or
+  services to data subjects in the Union, or monitoring their behaviour there. Mere accessibility of a
+  website from the EU is generally not enough; the test is whether the controller *envisages* serving people
+  in the Union (language, currency, EU-directed marketing, references to EU users). On the facts that existed
+  before 2026-09-21 — English-language, Nigeria/England launch markets, no EU marketing — Article 3(2)(a) was
+  arguably **not** engaged, and no representative was arguably required. This DPIA does not assume that
+  reading still holds.
+- **The founder's decision to extend the framework to EU GDPR is itself the kind of fact that bears on
+  targeting.** If it means Soccernity *intends* to serve EU users — as opposed to merely assessing the
+  regime in case some arrive — Article 3(2)(a) is much more likely to apply, and with it Article 27. If it
+  means only "design to EU standards," the two are not the same thing, and the distinction is worth writing
+  down. **[ACTION FOR REVIEW]** Counsel to determine which it is, because it decides whether an
+  Article 27 representative is needed.
+- **If Article 3(2) applies, the Article 27(2) exemption is unlikely to be available.** It is limited to
+  processing that is occasional, does not involve large-scale special-category data, and is unlikely to
+  result in a risk to individuals. A platform built around children's data, public profiles and private
+  messaging is a poor fit for "unlikely to result in a risk." The drafter would not rely on the exemption.
+- **Consequences of a missing representative** include regulatory exposure independent of any data
+  incident, the representative's identity being required in the privacy notice (Article 13(1)(a)), and — a
+  practical point — the absence of a lead authority: with no EU main establishment the one-stop-shop
+  mechanism is unavailable, so supervisory authorities in each member state where users are can act.
+- **Related, not asked, but material: the same question arises for the UK.** The v0.1/v0.2 baseline is UK
+  GDPR, and England is a stated launch market. UK GDPR has its own Article 27 (UK representative) for
+  controllers with no UK establishment who target UK users. Whether Soccernity has a UK or Nigerian
+  establishment is not recorded anywhere this pass could read. **[ACTION FOR REVIEW — new]** Counsel to
+  confirm establishment and representative position for the UK as well as the EU. (Nigeria's NDPA 2023 has
+  its own registration and data-protection-officer-type obligations, not assessed here.)
+
+**Draft view (not a determination):** an EU representative is **likely to be required from the point
+Soccernity intentionally serves EU users**, and is not clearly required if EU users are merely
+incidental. The product currently cannot make that distinction operational. A representative would act as
+a contact point only — it does not take on Soccernity's liability or replace the need for compliance.
+
+#### 2.5.2 Article 8 and the member-state digital-consent age
+
+Article 8 applies **where consent is the lawful basis** for an information-society service offered directly
+to a child. Where the child is below the national digital-consent age, processing is lawful only if
+consent is given or authorised by the holder of parental responsibility, and the controller must make
+"reasonable efforts to verify" that (Article 8(2)), "taking into consideration available technology."
+Member states may set the age anywhere from 13 to 16; the default is 16.
+
+**Member-state variation — recollected, not verified.** As best the drafter recalls (and *this table must
+be checked against current national law before use*), the ages fall broadly as follows:
+
+| Digital-consent age | Member states (recollection) |
+|---|---|
+| 16 | Germany, Netherlands, Ireland, Hungary, Croatia, Luxembourg, Romania, Slovakia, Slovenia, Poland (and others taking the default) |
+| 15 | France, Czechia, Greece |
+| 14 | Italy, Spain, Austria, Bulgaria, Cyprus, Lithuania |
+| 13 | Denmark, Sweden, Finland, Belgium, Portugal, Latvia, Estonia, Malta |
+
+For context, the UK's own age under the Data Protection Act 2018 is **13**.
+
+**Soccernity's thresholds against that range — written confirmation, with its limits.**
+
+- **The guardian-consent threshold is 18** (`computeIsMinor`: `age < 18`, `age.util.ts`; Decision Log #8,
+  #10) — **above the highest national floor (16) in every member state.** Confirmed by reading the code: a
+  single number, applied regardless of country, so no EU user can fall in a band where Soccernity requires
+  *less* than the member state does.
+- **The under-16 tier** (`computeIsUnder16`: `age < 16`; Decision Log #346) is **equal to the highest
+  member-state floor (16) and above all the others.** It is a *product restriction* layered on top of the
+  guardian threshold, not a consent-age mechanism, so it does not by itself satisfy Article 8 anywhere.
+- **Neither number falls below any member state's floor.** On that narrow question — *is any Soccernity
+  threshold lower than a national digital-consent age?* — the answer is no, in every member state, on the
+  drafter's recollection of the table above. **This is not the same as "Article 8 is satisfied,"** for the
+  reasons below.
+
+**What that confirmation does not cover (flagged, not resolved):**
+
+1. **Article 8 requires *verified* parental authorisation, not just a threshold above the floor.** The
+   verification mechanism is the same weak point analysed for COPPA in §2.6.3, and the same conclusion
+   applies: nothing verifies that the person clicking the link is a parent. EDPB guidance is generally read
+   as expecting verification proportionate to risk; a public-facing social platform for children sits at the
+   higher end. **[ACTION FOR REVIEW]**
+2. **Article 8 is engaged only if consent is the basis, and §2.1 has not chosen a basis.** If core service
+   processing rests on *contract*, Article 8 is not the operative rule, but many member states restrict the
+   contractual capacity of minors, and those rules vary and were not assessed. The guardian-consent flow
+   would then be doing work under national contract law, not Article 8. Counsel to decide.
+3. **Being *above* the floor is a policy choice with a cost, not a legal ceiling.** A 16- or 17-year-old in
+   a member state whose age is 16 can lawfully consent for themselves under Article 8, yet Soccernity treats
+   them as a minor requiring a guardian. GDPR does not forbid the stricter rule, but it should be a
+   deliberate choice (Decision Log #8) rather than an artefact; R14's age-out sweep is what releases them
+   at 18.
+4. **Everything keys off self-declared date of birth (R1)** and there is no country awareness — acceptable
+   for a single-threshold design, but it means Soccernity cannot apply a *more lenient* rule anywhere,
+   and cannot evidence which member state's law applied to a given user.
+5. **There is no backend age floor.** The below-5 block (Decision Log #19) is enforced only in the web age
+   gate (`AgeGateStep.tsx`, `MINIMUM_SIGNUP_AGE = 5`); `isPlausibleDateOfBirth` in `age.util.ts` accepts
+   any non-future date up to 120 years back, and the API accepts any of them. A direct API call can register
+   a very young child. Relevant here and to COPPA (§2.6). **[ACTION FOR REVIEW]** Decision Log candidate.
+6. **Other EU obligations not assessed:** Article 12 child-appropriate transparency, Article 37 DPO
+   appointment (already noted as unassessed in §6), and the Digital Services Act's minor-protection duties
+   for online platforms.
+
+*Draft severity (R15): moderate-to-high if EU users are intentionally served; low if genuinely incidental.
+Placeholder rating for counsel.*
+
+### 2.6 US COPPA — extension of scope (v0.3)
+
+*Draft for counsel review. COPPA is 15 U.S.C. §§ 6501–6506; the operative rules are the FTC's COPPA Rule,
+16 C.F.R. Part 312. The legal propositions below are the drafter's general knowledge, not retrieved
+(§0 item 5) — in particular the **2025 amendments to the Rule** (published 2025, with a compliance
+deadline in 2026), whose exact content and dates counsel must confirm. The findings about Soccernity's
+consent mechanism are from the code and are the part this section can vouch for.*
+
+#### 2.6.1 Does COPPA apply?
+
+COPPA covers operators of commercial websites and online services that are **directed to children under
+13**, or that have **actual knowledge** that they are collecting personal information from a child under
+13. It reaches foreign operators to the extent they collect personal information from children in the
+US. Soccernity is not obviously "directed to" under-13s in the FTC's multi-factor sense, but it
+**collects a full date of birth at signup** and accepts registrants from age 5 (`MINIMUM_SIGNUP_AGE`,
+web-only — see §2.5.2 item 5). A registrant whose declared age is under 13 is, on any reasonable reading,
+a child of whom Soccernity has **actual knowledge.** COPPA's territorial hook is US-resident children;
+Soccernity cannot currently tell where a user is (§1.6). The realistic position is therefore: **if any
+US under-13 registers, COPPA applies to Soccernity as to that child**, and Soccernity cannot show it has
+prevented that. The founder's decision to extend the framework to COPPA is consistent with that reading.
+
+"Personal information" under the Rule is broad and includes a screen or user name, persistent identifiers,
+photos, video and audio containing a child's image or voice, and (per the 2025 amendments, as the drafter
+understands them) biometric identifiers. `displayName`, `Post.mediaUrls`, `MediaAsset` and `Message.mediaUrl`
+all qualify. Geolocation sufficient to identify a street or town also qualifies: whether `Fixture.venue`
+plus `GrassrootsTeam.city` reaches that is a question for counsel (see R7).
+
+**COPPA bites on the 5–12 band only.** Soccernity's guardian-consent flow covers ages 5–17 with one
+mechanism, so COPPA's stricter verification standard is relevant to the subset — declared age under 13 —
+of the population that single flow handles.
+
+#### 2.6.2 What COPPA's "verifiable parental consent" standard requires
+
+The operator must obtain verifiable parental consent **before** collecting personal information from a
+child. The standard is *reasonable efforts, taking into account available technology, to ensure that the
+person providing consent is the child's parent* — a method "reasonably calculated" to do that. The Rule
+lists methods deemed sufficient. As the drafter recalls them, they include: a signed consent form
+returned by post, fax or electronic scan; a **monetary transaction** using a credit/debit card or online
+payment system that notifies the account holder of each transaction; a **toll-free call** to trained
+personnel; a **video conference**; and a **check of government-issued ID** against a database (the ID
+deleted promptly). The FTC has also recognised knowledge-based authentication and photo-ID face-matching,
+and the 2025 amendments, as the drafter understands them, added further options. **[ACTION FOR REVIEW]**
+Counsel to confirm the current list.
+
+**"Email plus."** For operators that use children's personal information **only internally** and do **not
+"disclose"** it, the Rule has long allowed a lighter method: an email to the parent **plus an additional
+confirming step** — a follow-up call or letter, or a *delayed confirmatory email* — designed to give the
+operator reasonable assurance that the consenter is a parent. **The two conditions that matter here are
+(i) no disclosure and (ii) a second, independent confirming step.** In the Rule, "disclosure" is broad: it
+includes making a child's personal information publicly available by any means, expressly including
+through a public posting, a screen name, a chat room or message board. A platform whose purpose is public
+profiles, posts, comments and rankings discloses children's information to other users **by design.**
+
+Other COPPA duties bear on the consent flow: a **direct notice** to the parent with prescribed content
+(what is collected, that consent is wanted, how to give it, a link to the online notice, and that
+information will be deleted if there is no response); a **parent's right to review** the child's information
+and to **refuse further collection or use**; **separate consent to disclosure to third parties** where not
+integral to the service (an amendment the drafter understands is in the 2025 changes); data retention
+limits; and a written information-security programme. Each is assessed against the code in §2.6.4.
+
+#### 2.6.3 Does Soccernity's current mechanism meet that standard? — read from the code
+
+**Short answer, stated before the detail: very likely not, for under-13s, on this product.** The
+mechanism is an emailed link that the guardian clicks. Read from the code:
+
+**What the mechanism actually is.**
+`RegistrationService.register` (`registration.service.ts`) creates the `User` and, if `isMinor`, a
+`Guardian` row from the guardian `name`, `email` and `relationship` **typed in by the child**, with
+`consentToken = randomUUID()` and `consentTokenExpiresAt` = now + 72 hours (`consent-token.constants.ts`),
+and emails the token as a link. `GuardianConsentService.confirmConsent` (`POST /auth/guardian-consent`)
+takes **only the token** and, if it exists, has not expired and is `pending`, sets `consentStatus =
+'confirmed'` and records `consentTimestamp`, `consentScreenVersion` and `consentDeviceType`. The
+`consentMethod` column defaults to the literal `"guardian-consent-link"`. There is no guard on the route:
+the token *is* the credential. Decline (`POST /auth/guardian-consent/decline`) and withdrawal (a fresh
+emailed single-use token) work the same way (R4). The web screen adds a checkbox and a button
+(`GuardianConsentConfirmPage.tsx`); the checkbox is client-side only and the backend never sees it.
+
+**Findings — each a reason the method is unlikely to be "reasonably calculated" to identify a parent:**
+
+1. **The guardian's contact details are supplied by the child, unverified — and nothing prevents the child
+   supplying their own.** `GuardianDetailsDto` validates only that `email` is an email address. **There is no
+   comparison of the guardian's email to the registrant's own email anywhere in `registration.service.ts`
+   or any DTO** (confirmed by search; `Guardian.email` has no uniqueness constraint either). R1's residual
+   row in §4 already said additional friction was "not specified anywhere yet"; this is now confirmed as an
+   absence in the code. A child can approve their own account with a second address in seconds.
+2. **The single step proves inbox access, nothing more.** Clicking a link establishes that someone with
+   access to that mailbox clicked it. It does not establish that the person is a parent, an adult, or even
+   a different person from the child. The Rule's methods each add something outside the mailbox — a
+   payment instrument, a government ID, a signed document, a live human interaction. This mechanism adds
+   nothing outside the mailbox.
+3. **There is no second, independent confirming step.** Even measured against the lighter "email plus"
+   bar, the flow is a single click: no delayed confirmatory email, no call, no letter. The automatic
+   re-send (R4) re-issues the same kind of link; it is not a confirming step.
+4. **"Email plus" is unavailable anyway, because Soccernity discloses children's information.** Public
+   profiles, posts and comments, the follower graph, and a leaderboard showing real display names of minors
+   (Decision Log #45) are all disclosure in the Rule's sense (Banter Rooms and direct messaging are off for
+   under-16s under R13, but the public surfaces are not). Since the lighter method is confined to
+   internal-use-only operators, the only route open to Soccernity is one of the stronger methods.
+5. **The bearer token is a long-lived credential in a possibly shared inbox.** Valid for 72 hours
+   (re-clickable within the window for a confirmed row); guardian mailboxes are commonly shared. R5 covers
+   this; it compounds finding 2.
+6. **Consent is a single bundled yes/no.** There is no separate consent to disclosure of the child's
+   information to other users or to third parties, and the screen lists what the account can do as one
+   package. If the separate-consent-for-disclosure requirement applies as the drafter understands it, the
+   flow cannot express it.
+
+**What the mechanism does well (credit where due, not a finding of adequacy):** it fails closed (a minor
+cannot use the product until a guardian confirms — restricted-pending); the token is server-side, unguessable
+and expiring; refusal and silence both lead to deletion rather than continued access (R4); and consent
+evidence is timestamped and versioned (R6).
+
+**Verdict.** Findings 1–4 together mean the method is **very likely not** COPPA-grade verifiable parental
+consent for a child under 13 on this platform. This **confirms the earlier project analysis** that
+email-link consent was very plausibly insufficient, and adds two points that analysis did not have in code
+form: the absence of *any* guardian/child email check (finding 1), and that the "email plus" fallback is
+closed off by disclosure (finding 4). This is the drafter's reading, not a legal determination. **[ACTION
+FOR REVIEW]** Counsel to confirm.
+
+**What this means for scoping (options for counsel and the founder, none recommended here):**
+
+- **(A) Build a stronger method for under-13s** — one of the Rule's recognised methods (a payment-instrument
+  transaction, ID or KBA check, signed form, live call/video). A new backend flow with cost and friction;
+  what a COPPA-grade consent mechanism would be scoped from.
+- **(B) Remove disclosure for under-13s and use email-plus with a delayed confirming step.** Requires
+  that an under-13 have **no** public profile, posts, comments, public rank or public follower graph — a
+  material product change to core features — and even then adds a second confirming step the code does not
+  have. Not obviously compatible with the product's purpose.
+- **(C) Do not accept under-13s** (raise the floor from 5 to 13 for accounts, or exclude US under-13s).
+  Changes Decision Log #19 and the product's grassroots-youth positioning (Log Book Section 10) and needs a
+  technical way to enforce it, which does not exist (no backend floor, no country awareness).
+- **(D) Do nothing** on the basis that Soccernity does not serve US children. Only defensible if Soccernity
+  can show it does not, and it currently has no means to.
+
+#### 2.6.4 Other COPPA gaps visible in the code (secondary to §2.6.3)
+
+- **Direct notice content.** The consent email is sent from a `guardian-consent` template; its body copy was
+  not read in this pass and earlier project records describe email bodies as functional placeholders, not
+  counsel-reviewed. Whether it carries the prescribed direct-notice content is unverified. The web
+  confirmation screen shows what the account can do and what is switched off, which helps, but the notice
+  the Rule requires goes to the parent before consent. **[ACTION FOR REVIEW]**
+- **Parental right to review.** A guardian can decline or withdraw (which closes the account and starts
+  deletion). There is **no route by which a guardian can review what has been collected about the child**
+  or refuse further collection while keeping the account. Not built.
+- **Separate consent to third-party disclosure.** Not modelled (finding 6).
+- **Retention and security.** Retention is designed (R6, §2.4), but whether it satisfies COPPA's
+  "no longer than reasonably necessary" and the written-retention and written-security-programme
+  requirements is unassessed; hosting and processors are not yet live (R11, R12).
+- **No under-13-specific control.** Under-13s go through the same 5–17 flow; the only additional
+  restrictions are the under-16 tier's feature limits (R13).
+
+*Draft severity (R16): very high if US under-13s can register, which nothing prevents. Draft likelihood:
+high — a self-declared date of birth below 13 is enough to create actual knowledge. Placeholder ratings for
+counsel.*
 
 ---
 
@@ -804,6 +1123,33 @@ anonymization the row is snapshotted like any other (R6).
 
 *Draft severity: moderate. Draft likelihood: moderate. Placeholder ratings for counsel.*
 
+### R15 — EU GDPR: establishment, representative, and Article 8 verification
+
+*New in v0.3; see §2.5.* Soccernity has no EU establishment. If it intentionally serves EU users, Article
+3(2) is likely engaged and an Article 27 representative is likely required; the founder's 2026-09-21 scope
+decision bears directly on whether that is the case. Separately, although both of Soccernity's age
+thresholds (18 guardian-consent; 16 under-16 tier) sit at or above the highest member-state
+digital-consent age (16), Article 8 also requires *reasonable, technology-appropriate verification* of
+parental authorisation, which the current mechanism does not provide (R16 finding 2), and is engaged only
+if consent is the chosen lawful basis, which §2.1 has not settled. There is no country awareness in the
+product to apply or evidence any member state's rule.
+
+*Draft severity: moderate-to-high if EU users are intentionally served. Draft likelihood: moderate.
+Placeholder ratings for counsel.*
+
+### R16 — COPPA: consent mechanism unlikely to be verifiable parental consent for under-13s
+
+*New in v0.3; see §2.6, especially §2.6.3.* A child under 13 can register (nothing enforces an age floor in
+the backend; the web floor is 5), supply their own second email address as the "guardian" (no check exists),
+and self-approve by clicking a link. Soccernity has actual knowledge of the child's age. The mechanism adds
+nothing outside the mailbox to identify a parent, has no confirming second step, and the lighter "email
+plus" method is unavailable because the platform discloses children's information by design. Bundled
+single-yes consent and the absence of a guardian data-review route are secondary gaps. **Consequence: if US
+under-13s are in scope, this DPIA cannot describe R1's residual risk as anything other than unmitigated for
+that band without a stronger consent method or a scope change.**
+
+*Draft severity: very high. Draft likelihood: high. Placeholder ratings for counsel.*
+
 ---
 
 ## 4. Mitigations, cross-referenced to product controls
@@ -816,7 +1162,7 @@ entry below should be read as a claim that the mitigation is adequate.*
 | Risk | Proposed mitigation | Product control it relies on | Built today? |
 |---|---|---|---|
 | **R1** Age-gate circumvention | Age-gate as screen 1 of the six-screen flow; `User.dateOfBirth` and `User.isMinor` captured at registration; account cannot leave restricted-pending without guardian confirmation | Build Plan **Section 8.3** guardian-consent flow, screens 1–2; `CLAUDE.md` non-negotiable #1 (`is_minor`, `guardian_id`, `consent_status`) | **Code merged** (age gate, registration, consent flow, guards) — not verified live (R12) |
-| **R1** (residual) | Guardian email must differ from the child's registered email; **[PROPOSAL]** additional friction beyond self-declaration | Not specified anywhere yet — **[ACTION FOR REVIEW]** counsel to advise what verification standard the chosen jurisdiction requires, which depends on Decision Log #4 | **No** |
+| **R1** (residual) | Guardian email must differ from the child's registered email; **[PROPOSAL]** additional friction beyond self-declaration | Not specified anywhere yet — **[ACTION FOR REVIEW]** counsel to advise what verification standard the chosen jurisdiction requires, which depends on Decision Log #4. **v0.3, confirmed in code:** there is no check that the guardian's email differs from the child's, and no second confirming step (§2.6.3). Scope is now UK + NDPA + EU GDPR + COPPA, and COPPA sets a specific standard this does not meet | **No** |
 | **R1, R2, R3** | **Server-side authority rule: `is_minor` and `consent_status` are re-read from the database on every request and are NEVER trusted from a JWT claim.** A JWT is issued once and is stale by definition — a token minted before consent was withdrawn or before a moderation action would otherwise still assert the old state, and a token is client-held and therefore attacker-influenced. This is the load-bearing technical control behind every minor-specific restriction in the product | `GuardianConsentGuard` and `Under16RestrictionGuard` read `isMinor` / `isUnder16` / consent status from Postgres per request; the JWT carries only `{ sub, role }`. Covered by guard unit tests and an e2e test that reuses a pre-sweep token after a reclassification. **[ACTION FOR REVIEW]** confirm this is recorded in acceptance criteria | **Code merged** — not verified live |
 | **R2** Adult-to-minor contact | An adult cannot **create** a conversation with a minor (refused with the same 404 as a missing user); under-16s are outside DMs entirely; restricted-pending minors are closed in both directions; equal DB work across the four 404 outcomes. Refused by application code, **not** by the database (`participantIds` is still an unrelated `String[]`) | `MessagingService.startConversation` / `assertRecipientMessageable`; `Under16RestrictionGuard`; `GuardianConsentGuard` (PRs #272 / #273 / #276 / #280; Decision Log #346 / #347 / #350). **Residual, not closed:** timing jitter (#350, accepted); the under-16 recipient 403 confirms account existence; all rules key off self-declared DOB (R1); ≤~24h age-flag lag (R14); rule covers DMs only. See R2 | **Code merged** — mitigation **partial** by design |
 | **R3** Public exposure | Restricted-pending state: a minor's profile is not visible outside the guardian relationship until `consentStatus` is `confirmed` (per the `Guardian` model comment in `schema.prisma`) | Build Plan **Section 8.3** screen 5 (restricted-pending) and screen 6 (activation); `Guardian.consentStatus` | **Partially** — the field exists; the enforcing screens and endpoints do not |
@@ -832,6 +1178,8 @@ entry below should be read as a claim that the mitigation is adequate.*
 | **R12** Controls merged, not verified live | Re-run and re-sign this DPIA once controls are deployed and tested; keep DPIA review as a hard blocker | Definition of Done, Build Plan **Section 7** | N/A — process control |
 | **R13** Under-16 tier | Messaging and Banter off entirely; Community Groups creation off; guardian contact shown on own profile; distinct `under_16_restricted` code; guard fails closed if untagged | `User.isUnder16`; `Under16RestrictionGuard` + `@RestrictUnder16(feature)`; `users.service.ts` `guardianContact` (PR #272; Decision Log #346). **Open:** rests on self-declared DOB; 403 not enumeration-safe; guardian email shown to the child; 16–17 tier not built | **Code merged** — partial |
 | **R14** Age reclassification | Daily recompute of `isMinor` / `isUnder16`, both directions; append-only `AgeReclassificationLog` written in the same transaction; guardian email at 18, in-app notice at 16; `Guardian` row kept at 18 | `AgeReclassificationSweepService` (PRs #275 / #279 / #281 / #282; Decision Log #349). **Open:** ~24h lag; third-party email about an adult; guardian data retained for an adult's account; log has no retention period; younger-direction users may be stranded | **Code merged** — not verified live |
+| **R15** EU GDPR | Decide whether EU users are intentionally served; if so appoint an Article 27 representative and name them in the privacy notice; confirm the lawful basis so it is clear whether Article 8 or national contract-capacity law governs; keep thresholds ≥ 16 | `computeIsMinor` (<18), `computeIsUnder16` (<16) — both ≥ the highest member-state floor. No country field, no geo-control. **Open:** representative not appointed; verification of parental authorisation (R16); no backend age floor | **Partially** — thresholds yes; representative, country awareness, verification no |
+| **R16** COPPA VPC | One of: (A) a recognised stronger consent method for under-13s; (B) no disclosure of under-13s' information + email-plus with a delayed confirming step; (C) do not accept under-13s; (D) rely on not serving US children. **None chosen** | Current control is the emailed consent link: `RegistrationService.register`, `GuardianConsentService.confirmConsent`. **No guardian≠child email check; no second step; single bundled consent; no parent data-review route** (§2.6.3, §2.6.4). Not COPPA-grade for under-13s in the drafter's reading | **No** — current mechanism very likely insufficient; stronger method not built |
 
 ### 4.1 The safeguarding fields are load-bearing
 
@@ -867,7 +1215,7 @@ Restated in one place so nothing here is mistaken for settled.
 
 | # | Item | Status | Owner |
 |---|---|---|---|
-| 1 | **Decision Log #4** — jurisdictional scope beyond UK GDPR | **OPEN** — not decided in this draft | Founder + counsel |
+| 1 | **Decision Log #4** — jurisdictional scope beyond UK GDPR | **OPEN** — founder decided 2026-09-21 to extend the framework to EU GDPR + COPPA; this DPIA now analyses both (§2.5, §2.6) but does not close the entry. Suggested docx wording (Temi to phrase): *scope extended to EU GDPR + US COPPA per founder decision 2026-09-21; consent-mechanism gap under review; still Open* | Founder + counsel |
 | 2 | **Decision Log #8** — regional minimum age for the age-gate | **OPEN** — no number appears in this draft | Founder + counsel |
 | 3 | **Decision Log #9** — hosting platform, and therefore data location and transfers | **OPEN** — transfer risk un-assessed | Founder |
 | 4 | **Decision Log #7** — auth provider | **OPEN** — affects the JWT/server-side-authority control | Founder |
@@ -888,6 +1236,13 @@ Restated in one place so nothing here is mistaken for settled.
 | 19 | Under-16 tier scope; guardian email shown on the child's own profile; 16–17 tier unbuilt (R13) | Flagged for counsel; nothing decided | Counsel + founder |
 | 20 | Age sweep: retention of `AgeReclassificationLog`; guardian data kept past 18; turning-18 email to a guardian about an adult; younger-direction accounts with no consent path (R14) | Flagged for counsel; nothing decided | Counsel |
 | 21 | Anonymization design (retaining posts / comments / messages under "[deleted user]"; indefinite hold; no purge of the anonymized row) and Art. 17 sufficiency (§2.4) | **NOT ASSESSED** by counsel | Counsel |
+| 22 | **EU Article 27 representative** — is one required (depends on whether EU users are *intentionally* served); same question for a UK representative and Soccernity's UK/Nigeria establishment (§2.5.1) | **NOT DETERMINED** | Counsel + founder |
+| 23 | **Article 8 / national contract capacity** — which governs depends on the lawful basis; the member-state age table in §2.5.2 is recollection, unverified | **NOT ASSESSED**; table must be verified | Counsel |
+| 24 | **COPPA: guardian-consent mechanism** — very likely not verifiable parental consent for under-13s (§2.6.3); options A/B/C/D unchosen | **OPEN — finding stands pending counsel confirmation.** Drives whether a `backend-api` scoping task for a COPPA-grade flow is needed | Counsel + founder |
+| 25 | **No check that guardian email ≠ child's email; no second confirming step** (§2.6.3 findings 1, 3) | Confirmed absence in code; nothing decided | Counsel + `backend-api` |
+| 26 | **No backend age floor** — below-5 block is web-only; API accepts any past date of birth (§2.5.2 item 5) | Gap flagged; Decision Log candidate | `backend-api` + founder |
+| 27 | **COPPA secondary gaps** — direct-notice content of the consent email unverified; no parent data-review route; no separate consent to third-party disclosure (§2.6.4) | **NOT ASSESSED / not built** | Counsel + `backend-api` |
+| 28 | **Legal propositions in §2.5 / §2.6 were written from general knowledge, not retrieved sources** — 2025 COPPA amendments and member-state ages must be verified (§0 item 5) | Outstanding | Counsel |
 
 ---
 
@@ -897,10 +1252,16 @@ Restated in one place so nothing here is mistaken for settled.
 by a qualified person. An incomplete sign-off block means the document remains a
 draft, regardless of how finished the rest of it looks.*
 
+**Scope note (v0.3, 2026-09-21):** the scope this DPIA is to be signed against has been **expanded** by
+founder decision from UK GDPR + Nigeria NDPA 2023 to also include **EU GDPR** and **US COPPA**. Counsel is asked to sign
+(or decline to sign) against that wider scope. Adding two regimes increases, not reduces, what must be
+reviewed. **Reviewed by counsel: NOT YET.** Nothing in v0.3 is approved.
+
 **Confirmation required at sign-off:**
 
 - [ ] The structure has been reconciled against MVP Build Plan Section 8.1 as actually written
-- [ ] Decision Log #4 (jurisdictional scope) is closed, and this DPIA reflects the closed decision
+- [ ] Decision Log #4 (jurisdictional scope) is closed, and this DPIA reflects the closed decision (v0.3 extends scope to EU GDPR + COPPA; entry still open)
+- [ ] §2.5 (EU GDPR) and §2.6 (COPPA) have been verified against primary sources — the drafter retrieved none — and the Article 27 and COPPA consent-mechanism findings (R15, R16) have been decided
 - [ ] Decision Log #8 (minimum age) is closed, and this DPIA reflects the closed decision
 - [ ] A lawful basis has been determined for each processing purpose
 - [ ] Every **[PROPOSAL]** above has been accepted, revised, or rejected — none left undecided
@@ -947,6 +1308,8 @@ Date: ______________________________________________
 ---
 
 ## Closing statement
+
+*v0.3 (2026-09-21) note: this revision extends the assessed scope to EU GDPR and US COPPA and surfaces two new risks (R15, R16); it does not complete, advance or approve the DPIA, and its legal propositions were not verified against primary sources. The Section 6 sign-off block remains empty; "Reviewed by counsel: NOT YET."*
 
 *v0.2 (2026-09-20) note: this revision corrects factual statements against the merged code and
 adds R13 and R14; it does not complete, advance or approve the DPIA. The Section 6 sign-off
