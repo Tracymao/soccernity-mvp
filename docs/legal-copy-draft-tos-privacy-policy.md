@@ -8,7 +8,7 @@ This document is a first-pass draft produced by the `safeguarding-drafter` agent
 `CLAUDE.md` non-negotiable #2 and the `safeguarding-drafter` agent definition). It has **not**
 been approved by Soccernity's safeguarding/legal counsel. (v0.1 received counsel's "Approved
 with amendments" review on 09/09/2026; v0.2 applied those amendments; v0.3 added four newly
-shipped safeguarding features on top of v0.2; v0.4 corrects one factual error in v0.3; v0.5 records one planned behaviour change to the under-16 messaging refusal. None of v0.2 to v0.5 has itself been re-reviewed or
+shipped safeguarding features on top of v0.2; v0.4 corrects one factual error in v0.3; v0.5 records one planned behaviour change to the under-16 messaging refusal; v0.6 rewords the EU/US scope language and describes a new card-verification step for younger US children. None of v0.2 to v0.6 has itself been re-reviewed or
 signed off.) Nothing in this
 document should be read as a statement that either the Terms of Service or the Privacy Policy
 is legally sufficient, complete, or compliant with UK GDPR, Nigeria's NDPA 2023, the Online
@@ -25,7 +25,8 @@ signal that tells a reviewer what still needs a decision.
 
 This draft **does not resolve Decision Log #4** (jurisdictional scope of the safeguarding
 framework beyond UK GDPR and Nigeria's NDPA 2023 — e.g. whether EU GDPR, COPPA, or other
-regimes apply). Both documents below are written against **UK GDPR and Nigeria NDPA 2023 as a
+regimes apply). v0.6 describes the *work done so far* on the EU and US extension (see the
+changelog below); it is not a finding that any of those regimes is satisfied. Both documents below are written against **UK GDPR and Nigeria NDPA 2023 as a
 working baseline**, because Soccernity's own Decision Log #10 already grounds the guardian-consent
 flow in both, and because the founder's Phase 1 go-to-market (Log Book Section 13) launches in
 Nigeria and England specifically. That baseline is not a finding that no other regime applies —
@@ -42,14 +43,14 @@ question.
   Log entries #4, #8, #10, #19, #34, #37, #38, #40, #42, #44, #45, #58, #128–#130, #153–#155),
   Log Book Section 10 (safeguarding principles) and Section 24.5, `docs/sprint-1-dpia-outline-draft.md`,
   and `CLAUDE.md`'s "Where things stand" record of what is actually built as of Sprint 2.
-- **Draft date:** 2026-09-05 (v0.1); revised 2026-09-20 (v0.2); revised 2026-09-20 (v0.3); revised 2026-09-20 (v0.4); revised 2026-09-20 (v0.5)
+- **Draft date:** 2026-09-05 (v0.1); revised 2026-09-20 (v0.2); revised 2026-09-20 (v0.3); revised 2026-09-20 (v0.4); revised 2026-09-20 (v0.5); revised 2026-09-22 (v0.6)
 - **Drafted by:** `safeguarding-drafter` agent (automated first pass, v0.1); v0.2 and v0.3
   revisions prepared with Claude Code (v0.3 from the merged code, not from a summary)
 - **Reviewed by counsel:** v0.1 reviewed by Mrs Temiloluwa Ogundele (Temiloluwa Ogundele & Co) —
-  outcome "Approved with amendments", dated 09/09/2026. **None of v0.2 to v0.5 has itself been
+  outcome "Approved with amendments", dated 09/09/2026. **None of v0.2 to v0.6 has itself been
   re-reviewed or re-signed** — see the sign-off block, which is deliberately unchanged. **v0.3's
   new material is pending its first counsel review** (see the changelog below).
-- **Version:** 0.5 (draft — still NOT APPROVED)
+- **Version:** 0.6 (draft — still NOT APPROVED)
 - **Status:** v0.2 incorporates (a) counsel's 09/09/2026 "Approved with amendments" review,
   (b) the founder's follow-up resolutions dated up to 19/09/2026, and (c) staleness fixes against
   the current live repo state (guardian decline/withdrawal/expiry built; account anonymization,
@@ -62,6 +63,43 @@ question.
   decline/withdrawal/expiry (#337–#340) and anonymization-in-place with an investigation hold
   (#341, #344, #345), real names for minors on Leaderboard/scouting/Discover with no pseudonym
   option (#45). Items still open are in Part C.
+
+### v0.6 changelog — EU/US scope wording and card verification, for counsel's next review
+
+v0.6 changes **only** the items below; everything else is v0.5. It is written from
+`docs/sprint-1-dpia-outline-draft.md` v0.3 (§2.5, §2.6, R15, R16) and from the merged card-verification
+code (PRs #297, #298), not from general knowledge of GDPR or COPPA. It is **more cautious than v0.5, not
+less**: it describes a larger compliance surface and claims nothing about it.
+
+1. **ToS §12 and PP "A note on scope"** — the old bracket ("[PROPOSAL — provisional, not yet a legal
+   conclusion] EU GDPR and the US's COPPA where applicable") is replaced with a description of the
+   *current state*: the framework has been assessed against EU GDPR and COPPA (DPIA v0.3), additional
+   parental-consent verification has been built for the younger-child US band, and the extension is
+   still under legal review with no EU-representative determination and no COPPA determination.
+   No compliance conclusion about either regime is stated anywhere in the document. **The v0.5 sentence "we comply
+   with all applicable data-protection and online-safety laws in the regions where the app is used" is
+   also removed from both places**, because it read as a blanket compliance claim over a scope counsel
+   has not settled; counsel to confirm that removal is wanted.
+2. **ToS new §3.7 and PP new §4.6** — factual description of the card-charge verification step (who it
+   applies to, what it is, why it exists, that the charge is refunded, what is and is not stored).
+3. **Part C rows 28–31** — new open items; row 1 (Decision Log #4) reworded to say it is still open.
+
+**Still open, and not closed by anything in v0.6:**
+
+- **EU representative.** Whether an Article 27 representative is required has **not been determined**
+  (DPIA §2.5.1, R15); it turns on whether Soccernity intends to serve EU users, a counsel/founder
+  question. The UK representative/establishment position is likewise unconfirmed.
+- **COPPA.** No determination has been made. The card step is **one** of the methods the FTC Rule lists
+  for verifiable parental consent; the DPIA's other COPPA findings (notice content, parental right to
+  review, separate consent to third-party disclosure, the disclosure-by-design problem that closes off the
+  lighter "email plus" route, retention and security programme) are **not** addressed by it (DPIA §2.6.3,
+  §2.6.4, R16). The code's own comments say the control is a technical measure and not a legal conclusion.
+- **Article 8 (EU).** Verification of parental authorisation and the lawful-basis question are unresolved
+  (DPIA §2.5.2).
+- **Decision Log #4** is **not closed**. Its closure is for the founder and counsel.
+- **The card step is built but not live:** no payment-provider account or keys exist, so it has never run
+  against a real provider; until configured, a guardian in the in-scope band cannot complete consent.
+  Self-declared country is trivially bypassable by a child.
 
 ### v0.5 changelog — one item for counsel's attention
 
@@ -270,6 +308,24 @@ that delay. If the date of birth on an account is later corrected so that the ac
 younger, the stricter classification is re-applied at the next daily check and no notification is
 sent; we log these cases for manual review.
 
+3.7. **Extra verification for younger children in the United States.** Where an account is
+registered with a date of birth showing the child is **under 13**, and the country selected at
+sign-up is the **United States or was not given**, the guardian is asked to complete one further
+step **in addition to** the emailed consent link in 3.1: a small card payment. This step exists
+because an email link alone shows only that someone with access to that inbox clicked it; a card
+payment is a way of checking the person is an adult with a payment card, and is one of the
+verification methods United States children's-privacy rules describe. It does not replace the
+email link — consent is not recorded until **both** are done. The payment is a small amount
+(currently 50 US cents, subject to change) taken by our payment provider, and **is refunded
+automatically as soon as the check succeeds**; if a refund does not go through first time, we retry
+it. Soccernity does not receive or store the guardian's card details (they go directly to the
+payment provider); we keep only a reference to the transaction. Guardians of children who are 13 or
+over, or whose selected country is not the United States, are not asked for this step. The country
+is what the person **tells us**; we do not check it. **[OPEN — this step is one control among
+several that United States children's-privacy rules may require. Whether it is enough, and whether
+those rules apply to Soccernity at all, has not been determined — see Section 12 and Part C rows
+28–31.]**
+
 ### 4. Your account
 
 4.1. You are responsible for keeping your password confidential and for all activity that occurs
@@ -417,7 +473,7 @@ notify you (and, for a minor's account, the linked guardian) before the change t
 
 ### 12. Governing law
 
-These Terms are governed by the laws of England and Wales. However, we also comply with all applicable data-protection and online-safety laws in the regions where the app is used, including the UK GDPR, Nigeria's NDPA 2023[, and — **[PROPOSAL — provisional, not yet a legal conclusion]** — EU GDPR and the US's COPPA where applicable].
+These Terms are governed by the laws of England and Wales. Our data-protection framework is built around the UK GDPR and Nigeria's NDPA 2023. We have also begun extending it to assess the EU GDPR and the United States' COPPA (children's online privacy law), and as part of that work we have added an extra parental-consent verification step for younger children in the United States (see Section 3.7). **This extension is still under legal review.** We have not yet determined whether we must appoint a representative in the European Union, and we have not concluded whether or how far COPPA applies to us or what it would require. Nothing in these Terms states that we meet the requirements of EU GDPR or COPPA. **[PROPOSAL — provisional wording for counsel; see DPIA §2.5, §2.6 and Decision Log #4, which remains open.]**
 
 ### 13. Contact us
 
@@ -447,7 +503,7 @@ together) have over it. It should be read alongside the Terms of Service.
 operated by [Soccernity's legal entity name, registration number, and registered address — TBD;
 see the same placeholder in the Terms of Service, Section title].**
 
-**A note on scope:** we comply with all applicable data-protection and online-safety laws in the regions where the app is used, including the UK GDPR, Nigeria's NDPA 2023[, and — **[PROPOSAL — provisional, not yet a legal conclusion]** — EU GDPR and the US's COPPA where applicable]. This Policy is written against UK GDPR and NDPA 2023 as the baseline, both of which Soccernity has grounded its guardian-consent design in (Decision Log #10). Whether the framework must extend further remains Decision Log #4, and counsel has not concluded on it; if Soccernity serves users under a different legal floor, this Policy will need substantive revision.
+**A note on scope:** this Policy is written against UK GDPR and NDPA 2023 as the baseline, both of which Soccernity has grounded its guardian-consent design in (Decision Log #10). We have also begun extending our data-protection framework to assess the EU GDPR and the United States' COPPA (children's online privacy law; see our data-protection impact assessment, sections 2.5 and 2.6). As part of that work we have added an extra parental-consent verification step for younger children in the United States (Section 4.6). **This extension is still under legal review.** We have not determined whether we must appoint a representative in the European Union, and we have not concluded whether or how far COPPA applies to us or what it would require; the extra step is one control, not a conclusion. Nothing in this Policy states that we meet the requirements of EU GDPR or COPPA. Whether the framework must extend further remains Decision Log #4, which is **still open**; counsel has not concluded on it, and if Soccernity serves users under a different legal floor, this Policy will need substantive revision. **[PROPOSAL — provisional wording for counsel.]**
 
 ### 1. The data we collect
 
@@ -591,6 +647,29 @@ corrected so an account becomes *younger*, the stricter classification is re-app
 notification is sent, and the case is flagged for manual review. (d) Each change is written to an
 append-only log (account ID, which classification, before/after, age at that moment) that is kept
 after the account itself is anonymised, and **has no retention period set** (Part C).
+
+4.6. **Extra card verification for younger children in the United States.** For an account
+registered with a date of birth under 13 and a self-selected country of the United States (or no
+country given), the guardian must also complete a card-payment check before consent is recorded, on
+top of the emailed link in 4.1–4.2. It exists because a clicked email link shows only inbox access;
+a card transaction is a method United States children's-privacy rules recognise for confirming the
+person is an adult. **What is collected and kept:** the country the person selected (used only to
+decide whether this step applies, and not verified); a reference to the payment-provider
+transaction; whether the check passed and when; whether the refund completed; and, in the consent
+record, which method was used (email link, or email link plus card charge) and when. **What is not
+collected:** card numbers or other card details — they are entered into the payment provider's own
+form and never reach or are logged by Soccernity. **The refund:** the charge is small (currently 50
+US cents) and is refunded automatically once the check succeeds; an hourly job retries any refund
+that did not complete. After the account is anonymised (Section 9), the consent-record snapshot keeps
+the verification method and time, but **not** the transaction reference or the country. The payment
+provider is a further processor of the guardian's payment data (see Section 5 — **[OPEN: not yet
+listed there]**). **[OPEN — limits, stated honestly]** (a) The control is built but **not yet live**:
+no payment-provider account exists, so until one is configured a guardian in this group cannot
+complete consent. (b) The country is self-declared, so a child can avoid the step by selecting
+another country. (c) This step is one control; it does **not** address the other points the DPIA
+identifies for children under 13 (notice content, a parent's right to review the child's
+information, separate consent to disclosure, retention and security) and is not a determination that
+United States children's-privacy rules are met (DPIA §2.6.3–2.6.4, R16).
 
 ### 5. Who we share your data with
 
@@ -827,7 +906,7 @@ mistaken for settled by the time this reaches counsel or gets converted into Fig
 
 | # | Item | Where it appears above | Owner |
 |---|---|---|---|
-| 1 | **Decision Log #4** — jurisdictional scope beyond UK GDPR + NDPA 2023 | Throughout; ToS §12, PP intro & §10 | Founder + counsel |
+| 1 | **Decision Log #4 — still open.** Jurisdictional scope beyond UK GDPR + NDPA 2023; v0.6 describes work done, not a resolution (rows 28–31) | Throughout; ToS §12, PP intro & §10 | Founder + counsel |
 | 2 | Soccernity's legal entity name, registration, and registered address | ToS & PP headers | Founder |
 | 3 | Lawful basis for each processing purpose under UK GDPR | PP §2 | Counsel |
 | 4 | Whether any special-category (Article 9) data is processed | PP §2 | Counsel |
@@ -854,6 +933,10 @@ mistaken for settled by the time this reaches counsel or gets converted into Fig
 | 25 | **Being resolved (companion `backend-api` PR, pending merge):** under-16 recipient refusal changes from a distinct 403 (which confirmed the account exists) to the same 404 used elsewhere in messaging. Reverses guidance given to counsel at PR #272 — counsel to confirm | PP §8 | Counsel |
 | 26 | Guardian authority at 18: v0.2's "a guardian's request to delete a minor's account supersedes the minor's own wishes" (ToS §8.5, PP §9, counsel-approved) is silent on accounts that have since turned 18; also no retention period for the age-reclassification log, and whether the guardian's details should be minimised after 18 | ToS §8.5; PP §9 | Counsel |
 | 27 | v0.2's restricted-pending wording ("messaged by or send messages to unverified accounts", ToS §3.2 / PP §3, counsel-approved) is looser than the code, which blocks sending and hides the account as a recipient. Left unchanged, flagged | ToS §3.2; PP §3 | Counsel |
+| 28 | **EU representative not determined.** Whether an Article 27 representative is required depends on whether Soccernity intends to serve EU users (DPIA §2.5.1, R15); same open question for a UK representative and establishment | ToS §12; PP scope note | Founder + counsel |
+| 29 | **COPPA not determined.** Card verification (PRs #297/#298) is one FTC-listed method only; notice content, parental review right, separate disclosure consent, retention/security and the disclosure-by-design problem remain (DPIA §2.6, R16). Counsel to decide scope option A–D (DPIA §2.6.3) | ToS §3.7, §12; PP §4.6 | Counsel + founder |
+| 30 | Card step is built but **not live** (no payment-provider account/keys); self-declared country is bypassable; payment provider not yet listed as a processor in PP §5; the 50-cent figure is configurable but hardcoded in this copy; PCI-DSS self-assessment is an operational follow-up | ToS §3.7; PP §4.6, §5 | Founder + counsel |
+| 31 | v0.6 removes the blanket "we comply with all applicable data-protection and online-safety laws" sentence from ToS §12 and the PP scope note; counsel to confirm the removal and the replacement wording. Article 8 verification and lawful-basis questions (DPIA §2.5.2) also open | ToS §12; PP scope note | Counsel |
 
 ---
 
