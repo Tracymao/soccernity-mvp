@@ -105,10 +105,10 @@ describe("DeactivateAccountPage", () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
-  it("Cancel on the confirm step links back to /settings/privacy", () => {
+  it("Cancel on the confirm step links back to /settings/account", () => {
     seedSession();
     renderPage();
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    expect(screen.getByRole("link", { name: "Cancel" }).getAttribute("href")).toBe("/settings/privacy");
+    expect(screen.getByRole("link", { name: "Cancel" }).getAttribute("href")).toBe("/settings/account");
   });
 });

@@ -97,8 +97,8 @@ describe("PrivacySettingsPage", () => {
 
     const deactivate = await screen.findByRole("link", { name: /deactivate account/i });
     const del = screen.getByRole("link", { name: /delete account/i });
-    expect(deactivate.getAttribute("href")).toBe("/settings/deactivate");
-    expect(del.getAttribute("href")).toBe("/settings/delete-account");
+    expect(deactivate.getAttribute("href")).toBe("/settings/account/deactivate");
+    expect(del.getAttribute("href")).toBe("/settings/account/delete");
   });
 
   it("does not render any live control: the toggles are not real inputs", async () => {

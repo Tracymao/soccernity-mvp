@@ -1,7 +1,7 @@
 // Settings — Delete Account (direct). Figma: "Settings — Delete Account
 // (Confirm)" 6225:14789 / mobile 6225:15024, from
 // sprint-2/auth-navbar-delete-account-privacy-consolidation (Decision
-// Log #222). Route: /settings/delete-account.
+// Log #222). Route: /settings/account/delete.
 //
 // A PARALLEL path to deactivation -- NOT gated behind deactivating first
 // (PR #222 report, Part 2). Reached directly from PrivacySettingsPage's
@@ -89,7 +89,7 @@ export default function DeleteAccountPage() {
 
   return (
     <div className="acct-flow">
-      <Link to="/settings/privacy" className="acct-flow__back">
+      <Link to="/settings/account" className="acct-flow__back">
         &larr; Back to settings
       </Link>
       <h1 className="acct-heading">Delete your account?</h1>
@@ -118,7 +118,7 @@ export default function DeleteAccountPage() {
           </p>
         )}
         <div className="acct-actions">
-          <Link to="/settings/privacy" className="acct-btn acct-btn--ghost">
+          <Link to="/settings/account" className="acct-btn acct-btn--ghost">
             Cancel
           </Link>
           <button type="submit" className="acct-btn acct-btn--primary" disabled={busy}>

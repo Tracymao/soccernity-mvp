@@ -137,9 +137,9 @@ export const drawerNavItems: DrawerNavItem[] = [
   // task (Decision Log #272) and is now mirrored into primaryNavItems
   // above.
   { label: "Grassroots", to: "/grassroots" },
-  // /settings resolves (redirects to /settings/privacy, the one built
-  // Settings screen) as of sprint-2/privacy-settings-to-code. Only the
-  // Privacy category is real — the others render disabled on the page —
+  // /settings resolves (the Settings landing) as of
+  // sprint-2/settings-shell-to-code-account. Account and Privacy are real —
+  // the other sections render a "not built yet" placeholder —
   // but the account still has a reachable Settings entry now rather than
   // an orphan page (the gap Decision Log #156 flagged for Clubs).
   { label: "Settings", to: "/settings" },

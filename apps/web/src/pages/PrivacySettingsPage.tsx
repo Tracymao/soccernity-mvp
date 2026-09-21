@@ -9,7 +9,11 @@
 // Message" interaction-privacy rows. There is no separate
 // "Privacy & Safety" screen to build.
 //
-// FIRST SETTINGS ROUTE IN apps/web. Build Plan Section 6 defers the
+// Rendered inside SettingsLayout (the shell/rail, Active=Privacy) as of
+// sprint-2/settings-shell-to-code-account — this page no longer draws its
+// own "Settings" heading or category rail.
+//
+// FIRST SETTINGS ROUTE IN apps/web (historical). Build Plan Section 6 defers the
 // Settings area to Sprint 3/6, and CLAUDE.md confirms no Settings page
 // existed in code before this — there is no established "Settings family"
 // page pattern to follow. This page sets one, reusing the same --sn-*
@@ -33,7 +37,7 @@
 //     backend, and the Figma destination sub-pages (2926:8996 /
 //     2926:8764) are not converted. Rows disabled.
 //   - Account status — "Deactivate account" / "Delete account" link to
-//     /settings/deactivate and /settings/delete-account, real, built
+//     /settings/account/deactivate and /settings/account/delete, real, built
 //     flows as of sprint-2/account-deactivation-to-code (Decision Log
 //     #220/#221/#222). Both are parallel paths — delete is not gated
 //     behind deactivating first.
@@ -61,19 +65,6 @@ type GuardianState =
   | { kind: "hidden" }
   | { kind: "loaded"; status: GuardianConsentStatus }
   | { kind: "error" };
-
-// The Settings category rail (both Figma frames). Only "Privacy and
-// safety" has a route today — the others are genuinely unbuilt (not even
-// stubs), so they render disabled rather than as links to the 404 page,
-// the same treatment navigation.ts gives Messages / Notifications
-// (Decision Log #166).
-const SETTINGS_CATEGORIES = [
-  { label: "Account", current: false },
-  { label: "Security and account access", current: false },
-  { label: "Privacy and safety", current: true },
-  { label: "Notifications", current: false },
-  { label: "Display, language and region", current: false },
-];
 
 function VisualToggle({ on, label }: { on: boolean; label: string }) {
   // Purely visual, always disabled — none of this page's toggles have a
@@ -160,28 +151,6 @@ export default function PrivacySettingsPage() {
 
   return (
     <div className="privacy-page">
-      <header className="privacy-page__head">
-        <h1 className="privacy-page__heading">Settings</h1>
-        <nav className="privacy-cats" aria-label="Settings categories">
-          {SETTINGS_CATEGORIES.map((cat) =>
-            cat.current ? (
-              <span key={cat.label} className="privacy-cats__item privacy-cats__item--current" aria-current="page">
-                {cat.label}
-              </span>
-            ) : (
-              <span
-                key={cat.label}
-                className="privacy-cats__item privacy-cats__item--disabled"
-                aria-disabled="true"
-                title="Not available yet"
-              >
-                {cat.label}
-              </span>
-            ),
-          )}
-        </nav>
-      </header>
-
       <section className="privacy-section" aria-labelledby="privacy-section-title">
         <div className="privacy-section__head">
           <h2 id="privacy-section-title" className="privacy-section__title">
@@ -273,10 +242,10 @@ export default function PrivacySettingsPage() {
               <p className="privacy-row__title">Account status</p>
               <p className="privacy-row__desc">Active</p>
               <div className="privacy-row__actions">
-                <Link to="/settings/deactivate" className="privacy-row__link">
+                <Link to="/settings/account/deactivate" className="privacy-row__link">
                   Deactivate account&nbsp;›
                 </Link>
-                <Link to="/settings/delete-account" className="privacy-row__link">
+                <Link to="/settings/account/delete" className="privacy-row__link">
                   Delete account&nbsp;›
                 </Link>
               </div>

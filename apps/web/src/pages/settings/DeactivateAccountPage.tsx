@@ -1,7 +1,7 @@
 // Settings — Deactivate Account flow. Figma:
 //   "Settings — Deactivate Account (Intro)"   2924:7358 / mobile 5695:8262
 //   "Settings — Deactivate Account (Confirm)" 6213:15640 / mobile 6213:15617
-// "Soccernity-MVP" (weZWWqggy9j13eX8bhFgs6). Route: /settings/deactivate.
+// "Soccernity-MVP" (weZWWqggy9j13eX8bhFgs6). Route: /settings/account/deactivate.
 // Decision Log #220 (design) / #221 (backend). Built by
 // sprint-2/account-deactivation-to-code.
 //
@@ -103,7 +103,7 @@ export default function DeactivateAccountPage() {
     <div className="acct-flow">
       {step === "intro" ? (
         <>
-          <Link to="/settings/privacy" className="acct-flow__back">
+          <Link to="/settings/account" className="acct-flow__back">
             &larr; Back to settings
           </Link>
           <h1 className="acct-heading">Deactivate Account</h1>
@@ -162,7 +162,7 @@ export default function DeactivateAccountPage() {
               </p>
             )}
             <div className="acct-actions">
-              <Link to="/settings/privacy" className="acct-btn acct-btn--ghost">
+              <Link to="/settings/account" className="acct-btn acct-btn--ghost">
                 Cancel
               </Link>
               <button type="submit" className="acct-btn acct-btn--primary" disabled={busy}>
