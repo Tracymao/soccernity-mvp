@@ -11394,6 +11394,7 @@ real, still-open follow-up, not done by this entry.
     Temi's call after review"; corrected here in place once the merge was
     confirmed directly against `git log` on a fresh `origin/main` fetch. (PR #258's
     bullet above already correctly said "Merged".)
+- **`docs/decision-log-consistency-audit` (docs only, 2026-09-21) touched 10 Decision Log entries** (#6, #133, #141, #144, #145, #163, #166, #167, #189, #321) to fix internal contradictions, stale Status leading words and stale premises, checked only against other entries/this file (not live code); no entry's substance was re-verified. Details in the PR description.
 
 ## The eight agents, and the order they run in
 
