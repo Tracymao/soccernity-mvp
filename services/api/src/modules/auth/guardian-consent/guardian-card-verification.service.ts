@@ -95,6 +95,25 @@ export class GuardianCardVerificationService {
     return { clientSecret: intent.clientSecret, publishableKey: this.gateway.publishableKey() };
   }
 
+  // The single refund path, shared by complete() and the retry sweep so the
+  // Stripe refund call and the cardRefundedAt stamp exist in exactly one
+  // place. Idempotent: an already-refunded intent is only stamped, and
+  // refundIntent itself is idempotent per intent.
+  async refundAndRecord(guardianId: string, intent: { id: string; refunded: boolean }): Promise<void> {
+    if (!intent.refunded) {
+      await this.gateway.refundIntent(intent.id);
+    }
+    await this.prisma.guardian.update({ where: { id: guardianId }, data: { cardRefundedAt: new Date() } });
+  }
+
+  // Sweep entry point: re-read the intent from Stripe (the sweep has no
+  // consent token, and the guardian may since have confirmed or lapsed, so
+  // loadPendingGuardian's checks deliberately do not apply) and refund.
+  async retryRefund(guardianId: string, intentId: string): Promise<void> {
+    const intent = await this.gateway.retrieveIntent(intentId);
+    await this.refundAndRecord(guardianId, intent);
+  }
+
   // Called by the browser after Stripe.js confirms the payment. The server
   // never trusts the client's say-so: it re-reads the intent from Stripe.
   // Safe to call repeatedly -- if the charge succeeded but the refund failed
@@ -119,12 +138,10 @@ export class GuardianCardVerificationService {
     }
 
     if (!guardian.cardRefundedAt) {
-      if (!intent.refunded) {
-        // A failure here propagates so the guardian's retry re-attempts the
-        // refund; verification itself is already recorded above.
-        await this.gateway.refundIntent(intent.id);
-      }
-      await this.prisma.guardian.update({ where: { id: guardian.id }, data: { cardRefundedAt: new Date() } });
+      // A failure here propagates so the guardian's retry (or the
+      // CardRefundRetrySweepService) re-attempts the refund; verification
+      // itself is already recorded above.
+      await this.refundAndRecord(guardian.id, intent);
     }
 
     this.logger.log(`Card verification completed for guardian ${guardian.id} (intent ${intent.id})`);

@@ -5,6 +5,7 @@ import { PaymentsModule } from '../../../payments/payments.module';
 import { AuthFoundationModule } from '../auth-foundation.module';
 import { AuthModule } from '../auth.module';
 import { RegistrationEmailService } from '../registration/email/registration-email.service';
+import { CardRefundRetrySweepService } from './card-refund-retry-sweep.service';
 import { GuardianCardVerificationService } from './guardian-card-verification.service';
 import { GuardianConsentExpirySweepService } from './guardian-consent-expiry-sweep.service';
 import { GuardianConsentController } from './guardian-consent.controller';
@@ -79,6 +80,7 @@ import { GuardianConsentService } from './guardian-consent.service';
     GuardianConsentService,
     GuardianConsentExpirySweepService,
     GuardianCardVerificationService,
+    CardRefundRetrySweepService,
     PrismaService,
     RegistrationEmailService,
   ],
