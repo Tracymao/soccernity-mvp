@@ -4,6 +4,10 @@ import { randomUUID } from 'crypto';
 import { Guardian, User } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ClubsService } from '../../clubs/clubs.service';
+import {
+  normalizeDeclaredCountry,
+  requiresCardVerification,
+} from '../guardian-consent/card-verification-policy.util';
 import { computeConsentTokenExpiresAt } from '../guardian-consent/consent-token.constants';
 import { GuardianConsentService } from '../guardian-consent/guardian-consent.service';
 import { PasswordService } from '../password/password.service';
@@ -159,6 +163,9 @@ export class RegistrationService {
           name: dto.guardian.name,
           email: dto.guardian.email,
           relationship: dto.guardian.relationship,
+          // sprint-1/coppa-card-verification: decided once, frozen here.
+          declaredCountry: normalizeDeclaredCountry(dto.countryCode),
+          cardVerificationRequired: requiresCardVerification(dateOfBirth, dto.countryCode),
           consentToken: randomUUID(),
           // DPIA finding R5: the token is a permanent credential without
           // an expiry -- see guardian-consent/consent-token.constants.ts.

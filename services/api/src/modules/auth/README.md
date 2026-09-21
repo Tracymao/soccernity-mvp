@@ -1343,3 +1343,18 @@ out. The e2e also proves the 29-day/31-day grace boundary, that a withdrawal
 link is genuinely single-use (which depends on real Postgres NULL semantics, so
 a mock could not have shown it), and that a third sweep tick never restarts an
 already-running deletion clock.
+
+
+## Status update -- sprint-1/coppa-card-verification (2026-09-21)
+
+A technical control, not a legal conclusion (Decision Log #4 stays open).
+For a guardian whose row was flagged `cardVerificationRequired` at
+registration (child under 13 AND self-declared US, or country omitted),
+`POST /auth/guardian-consent` additionally requires a completed, refunded
+Stripe PaymentIntent charge. Routes: `POST /auth/guardian-consent/verification`,
+`/card/intent`, `/card/complete` (token-credentialed, rate-limited, body is
+only `consentToken`). Every other guardian keeps the email-link-only flow.
+`consentVerificationMethod` / `consentVerificationAt` are recorded with
+`consentTimestamp` and snapshotted into `ConsentAuditRecord`. Config:
+`STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `COPPA_VERIFICATION_AMOUNT_CENTS`
+(placeholders => 503, fail closed). Full detail in CLAUDE.md's matching bullet.

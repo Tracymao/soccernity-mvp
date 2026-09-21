@@ -17,7 +17,7 @@ import SignupSplitScreen from "./SignupSplitScreen";
 import DecorativeRings from "./DecorativeRings";
 import { darkAuthThemeVars } from "./authThemeVars";
 import { formatLongDate } from "./age";
-import { GUARDIAN_RELATIONSHIP_OPTIONS } from "./types";
+import { COUNTRY_OPTIONS, GUARDIAN_RELATIONSHIP_OPTIONS } from "./types";
 import type { AgeGateValues, GuardianDetailsValues } from "./types";
 import "./SignupSplitScreen.css";
 
@@ -40,6 +40,7 @@ export default function GuardianDetailsStep({ dob, age, initialValues, onBack, o
   const [lastName, setLastName] = useState(initialValues.lastName);
   const [email, setEmail] = useState(initialValues.email);
   const [relationship, setRelationship] = useState(initialValues.relationship);
+  const [country, setCountry] = useState(initialValues.country);
   const [error, setError] = useState<string | null>(null);
 
   function handleSubmit(event: FormEvent) {
@@ -58,8 +59,13 @@ export default function GuardianDetailsStep({ dob, age, initialValues, onBack, o
       return;
     }
 
+    if (!country) {
+      setError("Select the country you live in.");
+      return;
+    }
+
     setError(null);
-    onContinue({ firstName, lastName, email, relationship });
+    onContinue({ firstName, lastName, email, relationship, country });
   }
 
   return (
@@ -146,6 +152,30 @@ export default function GuardianDetailsStep({ dob, age, initialValues, onBack, o
               </option>
             ))}
           </select>
+        </div>
+
+        <div className="signup-form__group">
+          <label className="signup-form__label" htmlFor="guardian-country">
+            Country you live in
+          </label>
+          <select
+            id="guardian-country"
+            className="signup-form__select"
+            value={country}
+            onChange={(event) => setCountry(event.target.value)}
+          >
+            <option value="" disabled>
+              Select country
+            </option>
+            {COUNTRY_OPTIONS.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <p className="signup-form__hint">
+            Some countries ask for an extra check when a guardian approves an account for a younger child.
+          </p>
         </div>
 
         {error && (

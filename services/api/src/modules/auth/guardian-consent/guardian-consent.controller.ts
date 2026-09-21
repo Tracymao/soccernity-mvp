@@ -4,6 +4,8 @@ import { CurrentUser } from '../guards/current-user.decorator';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../token/token.types';
 import { AuthRateLimit } from '../rate-limit/auth-rate-limit.decorator';
+import { CardVerificationDto } from './dto/card-verification.dto';
+import { GuardianCardVerificationService } from './guardian-card-verification.service';
 import { DeclineGuardianConsentDto } from './dto/decline-guardian-consent.dto';
 import { GuardianConsentDto } from './dto/guardian-consent.dto';
 import { RequestConsentWithdrawalDto } from './dto/request-consent-withdrawal.dto';
@@ -36,7 +38,10 @@ import { GuardianConsentService, GuardianConsentStatusResponse } from './guardia
 // separate frontend ticket.
 @Controller('auth')
 export class GuardianConsentController {
-  constructor(private readonly guardianConsentService: GuardianConsentService) {}
+  constructor(
+    private readonly guardianConsentService: GuardianConsentService,
+    private readonly cardVerification: GuardianCardVerificationService,
+  ) {}
 
   @Post('guardian-consent')
   @HttpCode(HttpStatus.OK)
@@ -46,6 +51,30 @@ export class GuardianConsentController {
   ): Promise<{ message: string }> {
     await this.guardianConsentService.confirmConsent(dto.consentToken, classifyDeviceType(userAgent));
     return { message: 'Guardian consent confirmed.' };
+  }
+
+  // sprint-1/coppa-card-verification -- three token-credentialed routes
+  // (same trust model as confirm()) for the under-13 US card step. None
+  // accept card data: the browser talks to Stripe directly.
+  @AuthRateLimit()
+  @Post('guardian-consent/verification')
+  @HttpCode(HttpStatus.OK)
+  verification(@Body() dto: CardVerificationDto) {
+    return this.cardVerification.getRequirements(dto.consentToken);
+  }
+
+  @AuthRateLimit()
+  @Post('guardian-consent/card/intent')
+  @HttpCode(HttpStatus.OK)
+  cardIntent(@Body() dto: CardVerificationDto) {
+    return this.cardVerification.createIntent(dto.consentToken);
+  }
+
+  @AuthRateLimit()
+  @Post('guardian-consent/card/complete')
+  @HttpCode(HttpStatus.OK)
+  cardComplete(@Body() dto: CardVerificationDto) {
+    return this.cardVerification.complete(dto.consentToken);
   }
 
   // DPIA finding R5's re-send path. Rate-limited — an unlimited resend

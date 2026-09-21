@@ -121,6 +121,47 @@ describe('RegistrationService', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
+    describe('consent path selection (sprint-1/coppa-card-verification)', () => {
+      const guardianDetails = { name: 'Parent', email: 'p@example.com', relationship: 'Parent' };
+      const dobYearsAgo = (years: number) => {
+        const d = new Date();
+        d.setFullYear(d.getFullYear() - years);
+        d.setDate(d.getDate() - 30);
+        return d.toISOString();
+      };
+      const register = async (age: number, countryCode?: string) => {
+        const { service, prisma } = buildService();
+        await service.register({
+          email: 'm@example.com',
+          password: 'password123',
+          displayName: 'M',
+          dateOfBirth: dobYearsAgo(age),
+          guardian: guardianDetails,
+          ...(countryCode ? { countryCode } : {}),
+        } as any);
+        return prisma.guardian.create.mock.calls[0][0].data;
+      };
+
+      it.each([
+        ['under 13, US', 10, 'US', true],
+        ['under 13, lowercase us', 10, 'us', true],
+        ['under 13, country omitted (fail toward stronger control)', 10, undefined, true],
+        ['under 13, outside the US', 10, 'NG', false],
+        ['13-17, US', 15, 'US', false],
+        ['13-17, omitted', 15, undefined, false],
+        ['13 (30 days past birthday), US', 13, 'US', false],
+        ['12, US', 12, 'US', true],
+      ])('%s -> cardVerificationRequired=%s', async (_label, age, country, expected) => {
+        const data = await register(age as number, country as string | undefined);
+        expect(data.cardVerificationRequired).toBe(expected);
+      });
+
+      it('stores the declared country uppercased, and null when omitted', async () => {
+        expect((await register(10, 'us')).declaredCountry).toBe('US');
+        expect((await register(10)).declaredCountry).toBeNull();
+      });
+    });
+
     it('creates a minor user AND a linked Guardian row with a real consent token when guardian details are provided', async () => {
       const { service, prisma, emailService } = buildService();
 

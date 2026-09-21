@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { PaymentsModule } from '../../../payments/payments.module';
 import { AuthFoundationModule } from '../auth-foundation.module';
 import { AuthModule } from '../auth.module';
 import { RegistrationEmailService } from '../registration/email/registration-email.service';
+import { GuardianCardVerificationService } from './guardian-card-verification.service';
 import { GuardianConsentExpirySweepService } from './guardian-consent-expiry-sweep.service';
 import { GuardianConsentController } from './guardian-consent.controller';
 import { GuardianConsentService } from './guardian-consent.service';
@@ -71,11 +73,12 @@ import { GuardianConsentService } from './guardian-consent.service';
 //    being triggerable on demand. It stays directly callable in-process,
 //    with an explicit `now`, for tests.
 @Module({
-  imports: [ConfigModule, AuthFoundationModule, AuthModule],
+  imports: [ConfigModule, AuthFoundationModule, AuthModule, PaymentsModule],
   controllers: [GuardianConsentController],
   providers: [
     GuardianConsentService,
     GuardianConsentExpirySweepService,
+    GuardianCardVerificationService,
     PrismaService,
     RegistrationEmailService,
   ],

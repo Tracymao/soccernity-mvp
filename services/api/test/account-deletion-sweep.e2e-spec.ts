@@ -224,6 +224,8 @@ describe('AccountDeletionSweepService e2e: 30-day anonymize-in-place + investiga
           'consentMethod',
           'consentScreenVersion',
           'deviceType',
+          'verificationMethod',
+          'verificationAt',
           'createdAt',
         ].sort(),
       );

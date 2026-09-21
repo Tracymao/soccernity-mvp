@@ -49,6 +49,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 import { confirmGuardianConsent, declineGuardianConsent, AuthApiError } from "../api/auth";
+import CardVerificationPanel, { type CardGate } from "./guardian-consent/CardVerificationPanel";
 import { darkConsentThemeVars } from "./guardian-consent/consentThemeVars";
 import "./guardian-consent/GuardianConsent.css";
 
@@ -98,10 +99,13 @@ export default function GuardianConsentConfirmPage() {
   const [agreed, setAgreed] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState(GENERIC_ERROR_MESSAGE);
+  // sprint-1/coppa-card-verification: only "needed" blocks the consent button;
+  // the server enforces the same rule regardless.
+  const [cardGate, setCardGate] = useState<CardGate>("loading");
 
   async function handleConsent(event: FormEvent) {
     event.preventDefault();
-    if (!token || !agreed) return;
+    if (!token || !agreed || cardGate === "needed") return;
 
     setStatus("submitting");
     try {
@@ -195,6 +199,8 @@ export default function GuardianConsentConfirmPage() {
               </div>
             </div>
 
+            {token && <CardVerificationPanel token={token} onGateChange={setCardGate} />}
+
             <form onSubmit={handleConsent}>
                 <div className="consent-card" style={{ gap: "24px" }}>
                   <div className="consent-checkbox-row">
@@ -221,7 +227,7 @@ export default function GuardianConsentConfirmPage() {
                     <button
                       type="submit"
                       className="consent-button consent-button--primary"
-                      disabled={!agreed || status === "submitting"}
+                      disabled={!agreed || status === "submitting" || cardGate === "needed"}
                     >
                       {status === "submitting" ? "Submitting…" : "I consent"}
                     </button>
