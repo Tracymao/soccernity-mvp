@@ -69,6 +69,8 @@ export interface RegisterRequest {
    * (Section 3 / schema.prisma) are all server-assigned, never sent by the
    * client.
    */
+  /** sprint-1/coppa-card-verification: self-declared ISO country, minors only. */
+  countryCode?: string;
   guardian?: {
     name: string;
     email: string;
@@ -246,6 +248,54 @@ export function confirmGuardianConsent(consentToken: string): Promise<{ message:
 // server-side (re-declining is a 200), so a double-click is harmless.
 export function declineGuardianConsent(consentToken: string): Promise<{ message: string }> {
   return postGuardianConsentToken("/auth/guardian-consent/decline", consentToken);
+}
+
+// sprint-1/coppa-card-verification -- token-credentialed, unauthenticated,
+// like confirm/decline. None of these ever send or receive card data: the
+// guardian's card goes browser -> Stripe directly, and only client secrets /
+// reference state come back here.
+async function postGuardianJson<T>(path: string, consentToken: string): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ consentToken }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+  if (response.status === 503) {
+    throw new AuthApiError("Card verification isn't available right now. Please try again later.", {
+      status: 503,
+    });
+  }
+  if (!response.ok) {
+    throw await guardianConsentRejection(response);
+  }
+  return (await response.json()) as T;
+}
+
+export interface GuardianVerificationRequirements {
+  cardRequired: boolean;
+  cardVerified: boolean;
+}
+
+export function getGuardianVerificationRequirements(consentToken: string) {
+  return postGuardianJson<GuardianVerificationRequirements>("/auth/guardian-consent/verification", consentToken);
+}
+
+export function createGuardianCardIntent(consentToken: string) {
+  return postGuardianJson<{ clientSecret: string; publishableKey: string }>(
+    "/auth/guardian-consent/card/intent",
+    consentToken,
+  );
+}
+
+export function completeGuardianCardVerification(consentToken: string) {
+  return postGuardianJson<GuardianVerificationRequirements>("/auth/guardian-consent/card/complete", consentToken);
 }
 
 export async function getGuardianConsentStatus(accessToken: string): Promise<GuardianConsentStatus> {

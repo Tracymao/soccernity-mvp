@@ -247,6 +247,37 @@ model Guardian {
   consentScreenVersion  String?
   consentDeviceType     String?
 
+  // sprint-1/coppa-card-verification -- a technical control, NOT a legal
+  // conclusion (Decision Log #4 stays open). For a child who is under 13
+  // AND self-declared as US-resident (or declared no country -- fail
+  // toward the stronger control), the emailed-link confirmation is not
+  // enough on its own; the guardian must also complete a small,
+  // immediately-refunded card charge.
+  //   declaredCountry            ISO-3166 alpha-2, SELF-DECLARED at
+  //                              registration. Never IP-derived. NULL for
+  //                              adults, for legacy rows, and when omitted.
+  //   cardVerificationRequired   Decided ONCE at registration and frozen, so
+  //                              a child who turns 13 while pending is not
+  //                              silently moved to a different path. Default
+  //                              false: every pre-existing row keeps today's
+  //                              email-link-only flow untouched.
+  //   stripePaymentIntentId      A Stripe REFERENCE id only. No card data of
+  //                              any kind ever reaches or is stored by this
+  //                              service.
+  //   cardVerifiedAt / cardRefundedAt  charge succeeded / refund issued.
+  //                              verified-but-not-refunded is a real,
+  //                              retryable state (see the service).
+  //   consentVerificationMethod  audit: 'email_link' | 'email_link_plus_card_charge'
+  //                              set in the SAME write as consentTimestamp.
+  //   consentVerificationAt      that same instant.
+  declaredCountry           String?
+  cardVerificationRequired  Boolean   @default(false)
+  stripePaymentIntentId     String?
+  cardVerifiedAt            DateTime?
+  cardRefundedAt            DateTime?
+  consentVerificationMethod String?
+  consentVerificationAt     DateTime?
+
   // Decision Log #338 -- WHY consentStatus is 'declined'. One of
   // 'guardian_explicit' (guardian actively declined) | 'guardian_withdrawal'
   // (guardian withdrew previously-given consent) | 'expiry_timeout' (nobody
@@ -365,6 +396,11 @@ model ConsentAuditRecord {
   // and confirmations predating capture have neither; never backfilled.
   consentScreenVersion String?
   deviceType           String? // "mobile" | "desktop" | "unknown"
+  // sprint-1/coppa-card-verification -- snapshots of
+  // Guardian.consentVerificationMethod / consentVerificationAt. Nullable:
+  // rows confirmed before this existed and pending rows have neither.
+  verificationMethod   String?
+  verificationAt       DateTime?
   createdAt          DateTime  @default(now())
 
   @@index([createdAt])

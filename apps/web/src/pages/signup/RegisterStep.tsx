@@ -63,6 +63,7 @@ export default function RegisterStep({ dob, isMinor, guardianDetails }: Register
       dateOfBirth: toIsoDate(dob),
       ...(isMinor && guardianDetails
         ? {
+            countryCode: guardianDetails.country,
             guardian: {
               name: `${guardianDetails.firstName.trim()} ${guardianDetails.lastName.trim()}`,
               email: guardianDetails.email.trim(),

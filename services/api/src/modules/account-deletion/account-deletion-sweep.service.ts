@@ -226,6 +226,8 @@ export class AccountDeletionSweepService {
             consentTimestamp: true,
             consentScreenVersion: true,
             consentDeviceType: true,
+            consentVerificationMethod: true,
+            consentVerificationAt: true,
           },
         });
         // Not every minor has a Guardian row (rare edge case) -- nothing
@@ -238,6 +240,9 @@ export class AccountDeletionSweepService {
               consentConfirmedAt: guardian.consentTimestamp,
               consentScreenVersion: guardian.consentScreenVersion,
               deviceType: guardian.consentDeviceType,
+              // sprint-1/coppa-card-verification
+              verificationMethod: guardian.consentVerificationMethod,
+              verificationAt: guardian.consentVerificationAt,
             },
           });
           await tx.guardian.delete({ where: { minorUserId: userId } });

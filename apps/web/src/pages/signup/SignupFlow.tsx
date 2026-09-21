@@ -24,7 +24,7 @@ import type { AgeGateValues, GuardianDetailsValues } from "./types";
 type Step = "age-gate" | "guardian-details" | "register";
 
 const EMPTY_DOB: AgeGateValues = { day: "", month: "", year: "" };
-const EMPTY_GUARDIAN: GuardianDetailsValues = { firstName: "", lastName: "", email: "", relationship: "" };
+const EMPTY_GUARDIAN: GuardianDetailsValues = { firstName: "", lastName: "", email: "", relationship: "", country: "" };
 
 export default function SignupFlow() {
   const [step, setStep] = useState<Step>("age-gate");

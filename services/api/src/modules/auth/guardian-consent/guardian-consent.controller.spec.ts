@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { AuthRateLimitModule } from '../rate-limit/rate-limit.module';
 import { AuthThrottlerGuard } from '../rate-limit/auth-throttler.guard';
 import { GuardianConsentController } from './guardian-consent.controller';
+import { GuardianCardVerificationService } from './guardian-card-verification.service';
 import { GuardianConsentService } from './guardian-consent.service';
 
 const AUTHENTICATED_MINOR = { sub: 'minor-1', role: 'fan' };
@@ -24,11 +25,15 @@ describe('GuardianConsentController (HTTP layer)', () => {
     requestWithdrawal: jest.fn(),
     withdrawConsent: jest.fn(),
   };
+  const cardVerification = { getRequirements: jest.fn(), createIntent: jest.fn(), complete: jest.fn() };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [GuardianConsentController],
-      providers: [{ provide: GuardianConsentService, useValue: guardianConsentService }],
+      providers: [
+        { provide: GuardianConsentService, useValue: guardianConsentService },
+        { provide: GuardianCardVerificationService, useValue: cardVerification },
+      ],
     })
       // /auth/guardian-consent/resend carries @AuthRateLimit() (DPIA
       // finding R5) -- overridden here, same reasoning as
@@ -377,6 +382,34 @@ describe('GuardianConsentController (HTTP layer)', () => {
         .expect(400);
     });
   });
+
+  describe('card verification routes (sprint-1/coppa-card-verification)', () => {
+    it('rejects any card-data field on every card route (forbidNonWhitelisted), so raw card data can never be accepted', async () => {
+      for (const path of ['verification', 'card/intent', 'card/complete']) {
+        await request(app.getHttpServer())
+          .post(`/auth/guardian-consent/${path}`)
+          .send({ consentToken: 't', cardNumber: '4242424242424242', cvc: '123', exp: '12/30' })
+          .expect(400);
+      }
+      expect(cardVerification.getRequirements).not.toHaveBeenCalled();
+      expect(cardVerification.createIntent).not.toHaveBeenCalled();
+      expect(cardVerification.complete).not.toHaveBeenCalled();
+    });
+
+    it('delegates each route with only the consent token', async () => {
+      cardVerification.getRequirements.mockResolvedValue({ cardRequired: true, cardVerified: false });
+      cardVerification.createIntent.mockResolvedValue({ clientSecret: 'cs', publishableKey: 'pk' });
+      cardVerification.complete.mockResolvedValue({ cardRequired: true, cardVerified: true });
+
+      await request(app.getHttpServer()).post('/auth/guardian-consent/verification').send({ consentToken: 't' }).expect(200);
+      await request(app.getHttpServer()).post('/auth/guardian-consent/card/intent').send({ consentToken: 't' }).expect(200);
+      await request(app.getHttpServer()).post('/auth/guardian-consent/card/complete').send({ consentToken: 't' }).expect(200);
+
+      expect(cardVerification.getRequirements).toHaveBeenCalledWith('t');
+      expect(cardVerification.createIntent).toHaveBeenCalledWith('t');
+      expect(cardVerification.complete).toHaveBeenCalledWith('t');
+    });
+  });
 });
 
 // Separate app instance with the REAL AuthThrottlerGuard (not overridden)
@@ -395,7 +428,11 @@ describe('POST /auth/guardian-consent/resend (real rate limiting)', () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AuthRateLimitModule],
       controllers: [GuardianConsentController],
-      providers: [{ provide: GuardianConsentService, useValue: guardianConsentService }, AuthThrottlerGuard],
+      providers: [
+        { provide: GuardianConsentService, useValue: guardianConsentService },
+        { provide: GuardianCardVerificationService, useValue: { getRequirements: jest.fn(), createIntent: jest.fn(), complete: jest.fn() } },
+        AuthThrottlerGuard,
+      ],
     })
       // Same reasoning as the block above -- GET /auth/guardian-consent/status's
       // JwtAuthGuard needs overriding here too, or module compilation

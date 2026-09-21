@@ -161,6 +161,8 @@ describe('AccountDeletionSweepService', () => {
         consentTimestamp: new Date('2026-01-01T00:00:00.000Z'),
         consentScreenVersion: 'v1',
         consentDeviceType: 'mobile',
+        consentVerificationMethod: 'email_link_plus_card_charge',
+        consentVerificationAt: new Date('2026-01-01T00:00:00.000Z'),
       });
       const service = new AccountDeletionSweepService(prisma);
 
@@ -173,6 +175,8 @@ describe('AccountDeletionSweepService', () => {
           consentConfirmedAt: new Date('2026-01-01T00:00:00.000Z'),
           consentScreenVersion: 'v1',
           deviceType: 'mobile',
+          verificationMethod: 'email_link_plus_card_charge',
+          verificationAt: new Date('2026-01-01T00:00:00.000Z'),
         },
       });
       expect(prisma.guardian.delete).toHaveBeenCalledWith({ where: { minorUserId: 'minor-1' } });
@@ -190,6 +194,8 @@ describe('AccountDeletionSweepService', () => {
         consentTimestamp: null,
         consentScreenVersion: null,
         consentDeviceType: null,
+        consentVerificationMethod: null,
+        consentVerificationAt: null,
       });
       const service = new AccountDeletionSweepService(prisma);
 
@@ -202,6 +208,8 @@ describe('AccountDeletionSweepService', () => {
           consentConfirmedAt: null,
           consentScreenVersion: null,
           deviceType: null,
+          verificationMethod: null,
+          verificationAt: null,
         },
       });
     });

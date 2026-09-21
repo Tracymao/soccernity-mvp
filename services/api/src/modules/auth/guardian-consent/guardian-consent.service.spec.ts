@@ -16,6 +16,8 @@ function buildFakeGuardian(
     consentStatus: string;
     consentTokenExpiresAt: Date;
     consentTimestamp: Date | null;
+    cardVerificationRequired: boolean;
+    cardVerifiedAt: Date | null;
   }> = {},
 ) {
   return {
@@ -31,6 +33,8 @@ function buildFakeGuardian(
     // test deliberately overrides this into the past.
     consentTokenExpiresAt: new Date(Date.now() + ONE_HOUR_MS),
     consentTimestamp: null as Date | null,
+    cardVerificationRequired: false,
+    cardVerifiedAt: null as Date | null,
     ...overrides,
   };
 }
@@ -134,6 +138,40 @@ function buildService(options: {
 }
 
 describe('GuardianConsentService', () => {
+  describe('confirmConsent -- card verification gate (sprint-1/coppa-card-verification)', () => {
+    it('REFUSES an email-link confirmation when card verification is required and not done, writes nothing', async () => {
+      const g = buildFakeGuardian({ cardVerificationRequired: true, cardVerifiedAt: null });
+      const { service, prisma, guardiansByToken } = buildService({ guardian: g });
+
+      await expect(service.confirmConsent(g.consentToken, 'desktop')).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(prisma.guardian.updateMany).not.toHaveBeenCalled();
+      expect(guardiansByToken.get(g.consentToken)!.consentStatus).toBe('pending');
+    });
+
+    it('confirms once the card step is done, recording email_link_plus_card_charge at the same instant as consentTimestamp', async () => {
+      const g = buildFakeGuardian({ cardVerificationRequired: true, cardVerifiedAt: new Date() });
+      const { service, prisma } = buildService({ guardian: g });
+
+      await service.confirmConsent(g.consentToken, 'desktop');
+
+      const data = (prisma.guardian.updateMany as jest.Mock).mock.calls[0][0].data;
+      expect(data.consentVerificationMethod).toBe('email_link_plus_card_charge');
+      expect(data.consentVerificationAt).toBe(data.consentTimestamp);
+    });
+
+    it('leaves the existing path unchanged for everyone else: no card needed, method recorded as email_link', async () => {
+      const g = buildFakeGuardian({ cardVerificationRequired: false });
+      const { service, prisma } = buildService({ guardian: g });
+
+      await service.confirmConsent(g.consentToken);
+
+      const data = (prisma.guardian.updateMany as jest.Mock).mock.calls[0][0].data;
+      expect(data.consentVerificationMethod).toBe('email_link');
+      expect(data.consentStatus).toBe('confirmed');
+    });
+  });
+
   describe('confirmConsent', () => {
     it('stamps the screen version and device type in the same write as consentTimestamp', async () => {
       const { service, prisma, guardian } = buildService();

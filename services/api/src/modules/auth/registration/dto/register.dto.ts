@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsDateString, IsEmail, IsOptional, IsString, IsUUID, MinLength, ValidateNested } from 'class-validator';
+import { IsDateString, IsEmail, IsOptional, IsString, IsUUID, Matches, MinLength, ValidateNested } from 'class-validator';
 import { GuardianDetailsDto } from './guardian-details.dto';
 
 // Build Plan Section 4.1 (POST /auth/register) and Section 3 (User entity
@@ -47,4 +47,14 @@ export class RegisterDto {
   @IsOptional()
   @IsUUID()
   clubId?: string;
+
+  // sprint-1/coppa-card-verification -- SELF-DECLARED country of residence,
+  // ISO-3166 alpha-2 ("US", "NG", ...). Never IP-derived (no-IP-collection
+  // principle). Only consulted for a declared-under-13 registrant, to choose
+  // the consent path; optional so existing callers keep working, and an
+  // omitted value for an under-13 is treated as in scope (see
+  // card-verification-policy.util.ts). Case-insensitive on input.
+  @IsOptional()
+  @Matches(/^[A-Za-z]{2}$/, { message: 'countryCode must be a 2-letter ISO country code' })
+  countryCode?: string;
 }

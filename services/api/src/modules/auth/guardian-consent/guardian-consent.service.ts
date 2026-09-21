@@ -5,6 +5,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { GRACE_PERIOD_DAYS } from '../../account-deletion/account-deletion-sweep.service';
 import { AuthService } from '../auth.service';
 import { RegistrationEmailService } from '../registration/email/registration-email.service';
+import { verificationMethodFor } from './card-verification-policy.util';
 import { CONSENT_SCREEN_VERSION } from './consent-screen-version.constants';
 import { ConsentDeviceType } from './device-type.util';
 import { computeConsentTokenExpiresAt, computeWithdrawalTokenExpiresAt } from './consent-token.constants';
@@ -140,6 +141,20 @@ export class GuardianConsentService {
       );
     }
 
+    // sprint-1/coppa-card-verification -- for a guardian whose row was
+    // flagged cardVerificationRequired at registration (under 13 AND
+    // US/undeclared), the emailed link alone is NOT enough: the small
+    // refunded card charge must also have completed. The card step is an
+    // ADDITION to the link, not a replacement (defense in depth), so this
+    // gate sits after every token/expiry/status check and only ever adds a
+    // refusal. Rows with cardVerificationRequired=false (everyone else, and
+    // every legacy row) skip it and behave exactly as before.
+    if (guardian.cardVerificationRequired && !guardian.cardVerifiedAt) {
+      throw new BadRequestException(
+        'Card verification must be completed before consent can be confirmed for this account.',
+      );
+    }
+
     // updateMany + a consentStatus guard in the where clause (rather than
     // a plain update()) closes the read-then-write race between the
     // findUnique above and this write: if two requests for the same
@@ -157,11 +172,17 @@ export class GuardianConsentService {
     // positive form is the race-safe backstop for that branch, and is
     // exactly equivalent for every pre-existing case (pending was always
     // the only other value this line could match).
+    const confirmedAt = new Date();
     await this.prisma.guardian.updateMany({
       where: { consentToken, consentStatus: 'pending' },
       data: {
         consentStatus: 'confirmed',
-        consentTimestamp: new Date(),
+        consentTimestamp: confirmedAt,
+        // sprint-1/coppa-card-verification -- which consent path this
+        // guardian went through, stamped with the SAME instant as
+        // consentTimestamp (the audit trail's whole point).
+        consentVerificationMethod: verificationMethodFor(guardian.cardVerificationRequired),
+        consentVerificationAt: confirmedAt,
         // Decision Log #348 -- same write as the timestamp, no new path.
         consentScreenVersion: CONSENT_SCREEN_VERSION,
         consentDeviceType: deviceType,
