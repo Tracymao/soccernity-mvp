@@ -75,6 +75,11 @@ import SettingsMenuPage from "../pages/settings/SettingsMenuPage";
 import AccountOverviewPage from "../pages/settings/AccountOverviewPage";
 import SecurityOverviewPage from "../pages/settings/SecurityOverviewPage";
 import TwoFactorAuthPage from "../pages/settings/TwoFactorAuthPage";
+import NotificationPreferencesPage from "../pages/settings/NotificationPreferencesPage";
+import NotificationFiltersPage from "../pages/settings/NotificationFiltersPage";
+import PushNotificationsPage from "../pages/settings/PushNotificationsPage";
+import EmailNotificationsPage from "../pages/settings/EmailNotificationsPage";
+import MutedAccountsPage from "../pages/settings/MutedAccountsPage";
 import SettingsSectionPlaceholder from "../pages/settings/SettingsSectionPlaceholder";
 import InactiveAccountPage from "../pages/InactiveAccountPage";
 import NotFoundPage from "../pages/NotFoundPage";
@@ -290,11 +295,15 @@ export const routes: RouteObject[] = [
       // rail / mobile back bar). sprint-2/settings-shell-to-code-account
       // (PR 1 of a staged set) built the shell, the landing, the Account
       // section and re-parented Privacy/Deactivate/Delete.
-      // sprint-2/settings-shell-to-code-security (PR 2) builds the
+      // sprint-2/settings-shell-to-code-security (PR 2) built the
       // Security & Account Settings section (hub + Two-Factor Auth (SMS)
-      // leaf — no live backend, see TwoFactorAuthPage.tsx). Notifications /
-      // Display leaves are still follow-up PRs and render
-      // SettingsSectionPlaceholder. No site footer.
+      // leaf — no live backend, see TwoFactorAuthPage.tsx).
+      // sprint-2/settings-shell-to-code-notifications (PR 3) builds the
+      // Notification Preferences section (hub + Filters / Push / Email /
+      // Muted accounts leaves — no live backend for any of them, see
+      // NotificationPreferencesPage.tsx and its 4 leaf pages). Display is
+      // still a follow-up PR and renders SettingsSectionPlaceholder. No
+      // site footer.
       {
         path: "settings",
         element: <SettingsLayout />,
@@ -307,7 +316,11 @@ export const routes: RouteObject[] = [
           { path: "privacy", element: <PrivacySettingsPage /> },
           { path: "security", element: <SecurityOverviewPage /> },
           { path: "security/two-factor", element: <TwoFactorAuthPage /> },
-          { path: "notifications/*", element: <SettingsSectionPlaceholder section="notifications" /> },
+          { path: "notifications", element: <NotificationPreferencesPage /> },
+          { path: "notifications/filters", element: <NotificationFiltersPage /> },
+          { path: "notifications/push", element: <PushNotificationsPage /> },
+          { path: "notifications/email", element: <EmailNotificationsPage /> },
+          { path: "notifications/muted-accounts", element: <MutedAccountsPage /> },
           { path: "display/*", element: <SettingsSectionPlaceholder section="display" /> },
         ],
       },

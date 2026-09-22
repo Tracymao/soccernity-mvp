@@ -1,0 +1,117 @@
+/* Notification Preferences section — Filters / Push / Email / Muted
+ * accounts leaves. Figma source: "Settings — Filters" 2926:9230 (desktop)
+ * / "…— Mobile" 5696:8281; "Settings — Push Notifications" 2927:9954 /
+ * "…— Mobile" 5696:8364; "Settings — Email Notifications" 2927:10205 /
+ * "…— Mobile" 5696:8384; "Settings — Muted accounts" (formerly "Mute New
+ * Accounts") 2926:9482 / "…— Mobile" 5696:8307, "Soccernity-MVP"
+ * (weZWWqggy9j13eX8bhFgs6).
+ *
+ * NOTE ON FIGMA ACCESS: same disclosure as SettingsSecurityPage.css — this
+ * PR was built without live Figma MCP access. Row labels/structure are
+ * reconstructed from this codebase's own already-merged Figma session
+ * reports (chiefly docs/sprint-2-settings-family-consolidation-audit-
+ * report.md, docs/sprint-2-settings-duplicate-clusters-consolidation-
+ * report.md, docs/sprint-2-component-hygiene-toggles-nav-report.md,
+ * docs/sprint-2-mobile-settings-community-message-rebuild-report.md),
+ * not a fresh screenshot/context read. Flagged in the PR report.
+ *
+ * All four toggle-bearing controls on these frames (Quality filter, the
+ * Email sub-rows, the two "Turn on X notifications" master switches, and
+ * the three Muted-accounts rows) were unified onto the same real
+ * `Settings Toggle` component during a prior Figma pass
+ * (sprint-2/component-hygiene-toggles-nav) — so, unlike the table in that
+ * report might suggest at a glance ("square" describes the PRE-swap raw
+ * checkbox look), every row here uses the identical pill-knob toggle
+ * shape already established by SettingsSecurityPage.css's
+ * `.security-toggle` / PrivacySettingsPage.css's `.privacy-toggle`. Kept
+ * as its own scoped file (not a shared import) matching this codebase's
+ * per-section-owns-its-CSS convention.
+ *
+ * Colour values reference the app-wide --sn-* custom properties from
+ * src/theme/applyTheme.ts. Light theme only. */
+
+.notif-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.notif-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.notif-row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.notif-row__title {
+  font: 600 16px/1.3 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.notif-row__desc {
+  font: 400 14px/1.5 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.notif-row__note {
+  font: 400 13px/1.5 "Inter", sans-serif;
+  font-style: italic;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+/* A visually distinct, indented sub-list — used by Email Notifications
+   for its 3 "which kinds" rows under the master switch. */
+.notif-subrows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  padding-left: 24px;
+  border-left: 2px solid var(--sn-icon-inactive);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* --- visual (non-functional) toggle — no backend to drive any of these
+   yet; same shape as SettingsSecurityPage.css's .security-toggle --- */
+
+.notif-toggle {
+  flex-shrink: 0;
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--sn-icon-inactive);
+  position: relative;
+  align-self: center;
+  opacity: 0.6;
+}
+
+.notif-toggle__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--sn-brand-navy);
+}
+
+@media (max-width: 560px) {
+  .notif-rows,
+  .notif-subrows {
+    gap: 22px;
+  }
+}
