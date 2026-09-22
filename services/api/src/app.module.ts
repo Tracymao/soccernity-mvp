@@ -28,6 +28,7 @@ import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.
 import { MediaModule } from './modules/media/media.module';
 import { BlogModule } from './modules/blog/blog.module';
 import { SportsModule } from './modules/sports/sports.module';
+import { SearchModule } from './modules/search/search.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -259,7 +260,23 @@ import { SportsModule } from './modules/sports/sports.module';
     // (SportsDataBudgetService, default 100/day matching the confirmed free tier — the real
     // paid-tier budget is a Decision Log candidate, not assumed unlimited).
     SportsModule,
-    // SearchModule,        // Sprint 6
+    // sprint-4/search-module — Build Plan Section 4.7, resolving Decision
+    // Log #139's parked people-search need. GET /search?q=&scope=&cursor=&limit= —
+    // genuinely public, no guard at all (same precedent as BlogModule /
+    // SportsModule above). `scope` is one of 'users' | 'clubs' | 'posts',
+    // or omitted for all three grouped in the response. Matching is
+    // Prisma `contains` + `mode: 'insensitive'` (Postgres ILIKE) on
+    // User.displayName / ClubPage.name / Post.contentText — no full-text
+    // index infrastructure exists in this codebase yet, and building one
+    // is explicitly out of scope for this PR (disclosed in
+    // search.service.ts's own header comment). User/Post results exclude
+    // whatever other modules already treat as non-public: non-active
+    // accountStatus (deactivated/pending_deletion/suspended/anonymized)
+    // and restricted-pending minors, the same two filters
+    // users.service.ts's ACTIVE_FOLLOW_ENTRY_FILTER and
+    // clubs.service.ts's VISIBLE_CLUB_MEMBER_FILTER already apply. Zero
+    // schema.prisma diff. See modules/search/README.md.
+    SearchModule,
   ],
 })
 export class AppModule {}
