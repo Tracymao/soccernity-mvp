@@ -2,6 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { AccessTokenPayload } from '../auth/token/token.types';
+import { SUGGESTED_USERS_DEFAULT_LIMIT, SUGGESTED_USERS_MAX_LIMIT } from './suggested-users.constants';
 
 describe('UsersController', () => {
   function buildController() {
@@ -12,6 +13,7 @@ describe('UsersController', () => {
       unfollowUser: jest.fn().mockResolvedValue({ following: false }),
       getFollowers: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
       getFollowing: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
+      getSuggestedUsers: jest.fn().mockResolvedValue({ items: [] }),
     } as unknown as UsersService;
     const controller = new UsersController(usersService);
     return { controller, usersService };
@@ -78,6 +80,35 @@ describe('UsersController', () => {
 
       expect(usersService.unfollowUser).toHaveBeenCalledWith('user-1', 'user-2');
       expect(result).toEqual({ following: false });
+    });
+  });
+
+  describe('GET /users/suggested', () => {
+    it('uses the caller (JWT sub) as the excluded/following-anchor id, and defaults the limit', async () => {
+      const { controller, usersService } = buildController();
+      const user: AccessTokenPayload = { sub: 'user-1', role: 'fan' };
+
+      await controller.suggested(user, {});
+
+      expect(usersService.getSuggestedUsers).toHaveBeenCalledWith('user-1', SUGGESTED_USERS_DEFAULT_LIMIT);
+    });
+
+    it('clamps a limit above SUGGESTED_USERS_MAX_LIMIT before calling the service', async () => {
+      const { controller, usersService } = buildController();
+      const user: AccessTokenPayload = { sub: 'user-1', role: 'fan' };
+
+      await controller.suggested(user, { limit: SUGGESTED_USERS_MAX_LIMIT + 50 });
+
+      expect(usersService.getSuggestedUsers).toHaveBeenCalledWith('user-1', SUGGESTED_USERS_MAX_LIMIT);
+    });
+
+    it('passes a valid, in-range limit straight through', async () => {
+      const { controller, usersService } = buildController();
+      const user: AccessTokenPayload = { sub: 'user-1', role: 'fan' };
+
+      await controller.suggested(user, { limit: 3 });
+
+      expect(usersService.getSuggestedUsers).toHaveBeenCalledWith('user-1', 3);
     });
   });
 

@@ -617,3 +617,104 @@ since it applies regardless of age. Separately, `getFollowers` /
 follower/followee who has since deactivated drops out of an active
 target's list. There is no follower/following count field, so nothing
 can visibly drift from the filtered list. Reverses on reactivation.
+
+## Status update — `GET /users/suggested` (`sprint-6/suggested-people-backend`, Decision Log #139)
+
+```
+GET /users/suggested?limit=
+```
+
+The Search & Trending "Suggested" follow panel's real backend — a
+genuine addition beyond Section 4.2's literal seven-endpoint list,
+flagged as a Decision Log candidate the same way `search`/`banter`/
+`grassroots` each flagged their own additions. `JwtAuthGuard` required
+(unlike `GET /search` / `GET /trending`, both genuinely public in the
+`search` module) — this endpoint's whole job is "who is the *caller* not
+already following," which has no meaning without a caller.
+
+Declared as `@Get('suggested')` **before** `@Get(':id')` on
+`UsersController` — Nest/Express match a controller's routes in
+declaration order, so a `:id`-first ordering would let `:id`'s own
+`assertSelf`/`ForbiddenException` swallow this route entirely (`:id`
+would bind to the literal string `"suggested"`). Same static-route-
+before-dynamic-`:id` convention `BanterController` already establishes
+for `GET /banter-rooms/search` and `GET /banter-rooms/mine`.
+
+### No follower/following count field — re-confirmed, not re-added
+
+This module's own comment on `followUser` (above) already documents that
+there is no follower/following count field anywhere in `schema.prisma`,
+by deliberate choice — re-read before adding one for this endpoint, per
+this task's own brief. Nothing here adds one; a "suggested" ranking that
+needed one would be real, separate future work.
+
+### Ranking — a v1 heuristic, not a real recommendation algorithm
+
+Ordered by `createdAt desc` (most-recently-joined), `id desc` as a
+stable tiebreaker. `schema.prisma`'s `User` model has **no**
+`lastActiveAt` / `lastLoginAt` / `updatedAt` field anywhere — confirmed
+by grep before writing this (the only `DateTime` columns on `User` are
+`dateOfBirth`, `createdAt`, and `pendingDeletionAt`) — so
+"most-recently-active" is not a signal this codebase can cheaply compute
+today. `createdAt` is the only timestamp on `User` available for free,
+so that's the heuristic this ships with. **Explicitly not a real
+recommendation algorithm** (no mutual-follow graph traversal, no
+shared-club/shared-interest scoring, no engagement weighting) — revisit
+once a real activity signal exists (a dedicated `lastActiveAt` column,
+or deriving one from the most recent `Post`/`Like`/`Comment` row — both
+real future work, not attempted here).
+
+### Exclusion rules — reused, not reinvented
+
+`getSuggestedUsers` re-declares `search.service.ts`'s own
+`VISIBLE_SEARCH_USER_FILTER` inline (same "small duplicate over
+cross-module import" convention `search/README.md`'s "Exclusion rules"
+section documents — neither constant is exported from its own module):
+
+- **`accountStatus: 'active'` only** — a deactivated, `pending_deletion`,
+  `suspended`, or anonymized (`'deleted'`) account is never suggested.
+- **Restricted-pending minors excluded** — a minor with no *confirmed*
+  guardian consent is invisible here, the same "hide via absence, never
+  a distinct signal" treatment `assertFollowGraphVisible` above and
+  `search.service.ts`'s own filter already give this exact case.
+- **The caller themselves, excluded** (`id: { not: callerId }`).
+- **Every user the caller already follows, excluded**
+  (`followedBy: { none: { followerId: callerId } }` — `followedBy` is
+  `User`'s own back-relation to `Follow` as the `followee` side, so this
+  reads "no `Follow` row exists where the candidate is the followee and
+  the caller is the follower").
+
+**No user-to-user "block" feature exists anywhere in this schema** — the
+same grep `search/README.md`'s "Exclusion rules" section already
+confirms (the only "block"-adjacent surfaces are the under-16 messaging
+restriction, the adult-cannot-message-a-minor rule, and admin-imposed
+suspension, none of which is a per-pair block a list filter could
+apply). Nothing further to exclude on that front — those safeguarding
+rules are enforced at the point of *action* (starting a conversation),
+not at the point of *discovery*, the same split this module's own
+`getFollowers`/`getFollowing` already draw.
+
+### Response shape — no pagination
+
+```json
+{ "items": [ { "id": "...", "displayName": "..." }, ... ] }
+```
+
+Same `{id, displayName}`-only shape as `FOLLOW_USER_SELECT` (reused
+as-is — no `passwordHash`, `email`, `isMinor`, or `dateOfBirth` ever
+leaves Postgres via this select). `limit` alone, no `cursor` — the same
+deliberate "plain top-N cut, not a browsable/paginated catalog"
+precedent `GET /trending` already sets in the `search` module (default
+10, max 50, mirroring `TRENDING_DEFAULT_LIMIT`/`TRENDING_MAX_LIMIT`
+exactly — see `suggested-users.constants.ts`).
+
+### Verification
+
+No e2e spec was added, same conclusion `search/README.md`'s own
+"Trending topics" section and `blog`/`admin-content`/`community-groups`'s
+READMEs already reached for their own analogous modules: this is a
+plain `findMany` against `User`'s already-existing columns and FKs (the
+`followedBy` relation and the `guardian` relation both already exist and
+are already read elsewhere), no raw SQL, no transaction, no novel Prisma
+relation or constraint — none of `test/README.md`'s own three e2e-add
+triggers apply.
