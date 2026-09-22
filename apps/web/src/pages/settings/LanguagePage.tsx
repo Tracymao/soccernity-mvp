@@ -1,11 +1,11 @@
 // Language leaf. Figma: "Settings — Language" 6304:15471 (desktop) / "…—
 // Mobile" 6303:15262.
 //
-// NOTE ON FIGMA ACCESS — same disclosure as DisplaySettingsPage.tsx: this
-// PR was built without live Figma MCP access. Content reconstructed from
-// docs/sprint-2-settings-display-leaves-report.md §2 ("Language — built
-// as proposed"): a single-select list of English (UK, selected) / French
-// / Portuguese / Yoruba, plus an on-frame disclosure note.
+// VERIFIED against live Figma MCP access (sprint-2/settings-figma-verification,
+// 2026-09-22) — heading, lead, the single-select list of English (UK,
+// selected) / French / Portuguese / Yoruba, and the on-frame disclosure
+// note all match Figma verbatim on both breakpoints; no change was
+// needed.
 //
 // NO LIVE I18N BACKEND EXISTS. Checked directly: no locale column, no
 // translation files, and no language endpoint anywhere in services/api or

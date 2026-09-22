@@ -1,18 +1,19 @@
 // Push Notifications leaf. Figma: "Settings — Push Notifications"
 // 2927:9954 (desktop) / "…— Mobile" 5696:8364.
 //
-// NOTE ON FIGMA ACCESS — same disclosure as the other Notification
-// Preferences leaves: built without live Figma MCP access, reconstructed
-// from docs/sprint-2-settings-family-consolidation-audit-report.md and
-// docs/sprint-2-mobile-settings-community-message-rebuild-report.md
-// (both record this frame's exact single row, "Turn on push
-// notifications", + toggle — confirmed by
-// docs/sprint-2-settings-desktop-scaffolding-sweep-report.md as the
-// frame's only real content; its hidden "Push notification" duplicate
-// heading and dead Submit button were both deleted as never-rendered
-// scaffolding in that pass). Row description is NOT literal Figma copy —
-// no source records one — a plain, disclosed best-effort gloss, same
-// discipline as TwoFactorAuthPage.tsx.
+// VERIFIED against live Figma MCP access (sprint-2/settings-figma-verification,
+// 2026-09-22). Single row, "Turn on push notifications" + toggle, is the
+// frame's only real content on both breakpoints (matches code). Fixed:
+// lead ("Get notified on this device when something happens.", invented)
+// → mobile's real "Manage push notifications on your devices." (desktop
+// has no lead paragraph at all — heading goes straight to the row); row
+// desc ("Get a push notification on this device for new activity.",
+// invented) → the real copy both breakpoints agree on verbatim, below.
+// Desktop's own heading node reads the singular "Push notification"
+// (2927:10063) — an isolated typo against mobile's plural ("Push
+// notifications", matching this page's own rail label and h2) — plural
+// is kept, matching the already-correct code and every other reference
+// to this section.
 //
 // NO LIVE PUSH-NOTIFICATION BACKEND EXISTS. Checked directly: no device
 // token / push-subscription concept anywhere in services/api (grep across
@@ -44,14 +45,17 @@ export default function PushNotificationsPage() {
     <div className="settings-page">
       <div>
         <h2 className="settings-page__title">Push notifications</h2>
-        <p className="settings-page__lead">Get notified on this device when something happens.</p>
+        <p className="settings-page__lead">Manage push notifications on your devices.</p>
       </div>
 
       <ul className="notif-rows">
         <li className="notif-row">
           <div className="notif-row__body">
             <p className="notif-row__title">Turn on push notifications</p>
-            <p className="notif-row__desc">Get a push notification on this device for new activity.</p>
+            <p className="notif-row__desc">
+              Get push notifications to find out what&rsquo;s going on when you&rsquo;re not on
+              Soccernity. You can turn them off anytime.
+            </p>
             <p className="notif-row__note">
               Not adjustable yet — push notifications aren&rsquo;t available yet. This needs a backend
               push-delivery module first.

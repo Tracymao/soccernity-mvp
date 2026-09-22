@@ -1,22 +1,22 @@
 // Email Notifications leaf. Figma: "Settings — Email Notifications"
 // 2927:10205 (desktop) / "…— Mobile" 5696:8384.
 //
-// NOTE ON FIGMA ACCESS — same disclosure as the other Notification
-// Preferences leaves: built without live Figma MCP access, reconstructed
-// from docs/sprint-2-component-hygiene-toggles-nav-report.md and
-// docs/sprint-2-mobile-settings-community-message-rebuild-report.md,
-// which both record this frame's real row set directly: a master "Turn
-// on email notifications" toggle, plus 3 sub-rows underneath ("New
+// VERIFIED against live Figma MCP access (sprint-2/settings-figma-verification,
+// 2026-09-22). Row set matches: a master "Turn on email notifications"
+// toggle + real desc, plus 3 label-only sub-rows underneath ("New
 // notifications", "Direct messages", "Posts emailed to you") — confirmed
-// as the frame's only real content by docs/sprint-2-settings-desktop-
-// scaffolding-sweep-report.md (a hidden duplicate "Push notification"
-// row, a leaked "Email Notification"/2FA block, and a dead Submit button
-// were all deleted from this frame as never-rendered scaffolding in that
-// pass). All 4 controls were unified onto the same real `Settings
-// Toggle` pill component in a later Figma pass — see
-// SettingsNotificationsPage.css's own header note. Row descriptions are
-// NOT literal Figma copy — no source records any — a plain, disclosed
-// best-effort gloss, same discipline as TwoFactorAuthPage.tsx.
+// on BOTH breakpoints that none of the 3 sub-rows carries any description
+// text at all, so the previously-invented desc for each was removed
+// rather than corrected (SubRow.desc is now optional, rendered only when
+// present). Fixed: lead ("Get notified by email when something happens.",
+// invented) → mobile's real "Manage the emails Soccernity sends you."
+// (desktop has no lead paragraph — heading goes straight to the master
+// row); master row desc ("Get an email for new activity on your
+// account.", invented) → the real copy both breakpoints agree on
+// verbatim, below. Desktop's own heading node reads the singular "Email
+// notification" (2927:10314) — the same isolated desktop-only typo
+// pattern as PushNotificationsPage's "Push notification" — plural is
+// kept, matching mobile, the rail label, and this page's own h2.
 //
 // NO LIVE EMAIL-NOTIFICATION-PREFERENCE BACKEND EXISTS. Checked directly:
 // services/api sends only transactional email (verification,
@@ -43,21 +43,13 @@ function DisabledToggle({ label }: { label: string }) {
 interface SubRow {
   id: string;
   label: string;
-  desc: string;
+  desc?: string;
 }
 
 const SUB_ROWS: SubRow[] = [
-  {
-    id: "new-notifications",
-    label: "New notifications",
-    desc: "New follows, likes, comments, and messages.",
-  },
-  { id: "direct-messages", label: "Direct messages", desc: "New direct messages you receive." },
-  {
-    id: "posts-emailed",
-    label: "Posts emailed to you",
-    desc: "Occasional posts from people and clubs you follow.",
-  },
+  { id: "new-notifications", label: "New notifications" },
+  { id: "direct-messages", label: "Direct messages" },
+  { id: "posts-emailed", label: "Posts emailed to you" },
 ];
 
 export default function EmailNotificationsPage() {
@@ -73,14 +65,17 @@ export default function EmailNotificationsPage() {
     <div className="settings-page">
       <div>
         <h2 className="settings-page__title">Email notifications</h2>
-        <p className="settings-page__lead">Get notified by email when something happens.</p>
+        <p className="settings-page__lead">Manage the emails Soccernity sends you.</p>
       </div>
 
       <ul className="notif-rows">
         <li className="notif-row">
           <div className="notif-row__body">
             <p className="notif-row__title">Turn on email notifications</p>
-            <p className="notif-row__desc">Get an email for new activity on your account.</p>
+            <p className="notif-row__desc">
+              Get email notifications to find out what&rsquo;s going on when you&rsquo;re not on
+              Soccernity. You can turn them off anytime.
+            </p>
             <p className="notif-row__note">
               Not adjustable yet — email notification preferences aren&rsquo;t available yet. This
               needs a backend notification-preferences module first.
@@ -95,7 +90,7 @@ export default function EmailNotificationsPage() {
           <li key={r.id} className="notif-row">
             <div className="notif-row__body">
               <p className="notif-row__title">{r.label}</p>
-              <p className="notif-row__desc">{r.desc}</p>
+              {r.desc ? <p className="notif-row__desc">{r.desc}</p> : null}
             </div>
             <DisabledToggle label={r.label} />
           </li>

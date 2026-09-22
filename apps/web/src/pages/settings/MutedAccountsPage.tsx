@@ -4,16 +4,24 @@
 // #230/#247, decision #5: the screen covers three groups, not just "new
 // accounts", so "Muted accounts" fits better) / "…— Mobile" 5696:8307.
 //
-// NOTE ON FIGMA ACCESS — same disclosure as the other Notification
-// Preferences leaves: built without live Figma MCP access, reconstructed
-// from docs/sprint-2-settings-family-consolidation-audit-report.md and
-// docs/sprint-2-mobile-settings-community-message-rebuild-report.md,
-// which both record this frame's exact 3 rows directly: "People you
-// don't follow", "People who don't follow you", "People with a new
-// account" — under a "Mute notifications from people:" framing. Row
-// descriptions are NOT literal Figma copy — no source records any — a
-// plain, disclosed best-effort gloss, same discipline as
-// TwoFactorAuthPage.tsx.
+// VERIFIED against live Figma MCP access (sprint-2/settings-figma-verification,
+// 2026-09-22). Row set matches exactly: "People you don't follow",
+// "People who don't follow you", "People with a new account" — label
+// only, no row has ANY description text on either breakpoint (the
+// previously-invented per-row desc for each was removed rather than
+// corrected, same fix EmailNotificationsPage.tsx's sub-rows got; Row.desc
+// is now optional, rendered only when present). Both breakpoints' own
+// literal header node text is the STALE pre-rename "Mute notifications
+// from people" (Decision Log #230/#247 renamed the section, but the
+// frame's on-screen heading text was never updated to match — the exact
+// same drift class SecurityOverviewPage.tsx's own h2 fix already
+// corrected for its section). "Muted accounts" (already in code, matches
+// the rail label) is kept as the real h2, not the stale text. Lead fixed:
+// "Mute notifications from people:" (a made-up repurposing of that stale
+// heading text as a subtitle, with an invented trailing colon) → mobile's
+// real subtitle "Choose whose notifications you don't want to see."
+// (desktop has no separate subtitle at all — just the one stale heading
+// line, then straight into the rows).
 //
 // NO LIVE MUTE/BLOCK BACKEND EXISTS. Checked directly: no mute or block
 // concept anywhere in services/api (grep across services/api/src for
@@ -37,25 +45,13 @@ function DisabledToggle({ label }: { label: string }) {
 interface Row {
   id: string;
   label: string;
-  desc: string;
+  desc?: string;
 }
 
 const ROWS: Row[] = [
-  {
-    id: "not-following",
-    label: "People you don't follow",
-    desc: "Mute notifications from accounts you don't follow.",
-  },
-  {
-    id: "not-followers",
-    label: "People who don't follow you",
-    desc: "Mute notifications from accounts that don't follow you.",
-  },
-  {
-    id: "new-accounts",
-    label: "People with a new account",
-    desc: "Mute notifications from recently created accounts.",
-  },
+  { id: "not-following", label: "People you don't follow" },
+  { id: "not-followers", label: "People who don't follow you" },
+  { id: "new-accounts", label: "People with a new account" },
 ];
 
 export default function MutedAccountsPage() {
@@ -71,7 +67,9 @@ export default function MutedAccountsPage() {
     <div className="settings-page">
       <div>
         <h2 className="settings-page__title">Muted accounts</h2>
-        <p className="settings-page__lead">Mute notifications from people:</p>
+        <p className="settings-page__lead">
+          Choose whose notifications you don&rsquo;t want to see.
+        </p>
       </div>
 
       <ul className="notif-rows">
@@ -79,7 +77,7 @@ export default function MutedAccountsPage() {
           <li key={r.id} className="notif-row">
             <div className="notif-row__body">
               <p className="notif-row__title">{r.label}</p>
-              <p className="notif-row__desc">{r.desc}</p>
+              {r.desc ? <p className="notif-row__desc">{r.desc}</p> : null}
               <p className="notif-row__note">
                 Not adjustable yet — muting isn&rsquo;t available yet. This needs a backend
                 notification-preferences module first.
