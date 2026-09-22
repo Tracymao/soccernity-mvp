@@ -125,6 +125,10 @@ export interface FollowPage {
 // that can visibly "drift" from the filtered list.
 const ACTIVE_FOLLOW_ENTRY_FILTER = { accountStatus: 'active' } as const;
 
+export interface SuggestedUsersResult {
+  items: FollowUser[];
+}
+
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -378,6 +382,63 @@ export class UsersService {
     });
 
     return this.toFollowPage(rows, limit, (row) => row.followee);
+  }
+
+  // GET /users/suggested?limit= -- the Search & Trending "Suggested"
+  // follow panel (Build Plan Section 4.7, Decision Log #139;
+  // sprint-6/suggested-people-backend). JwtAuthGuard-required (unlike
+  // GET /search / GET /trending, both genuinely public) -- this
+  // endpoint's whole job is "who is the CALLER not already following,"
+  // which has no meaning without knowing who the caller is.
+  //
+  // Ranking is a v1 HEURISTIC, not a real recommendation algorithm --
+  // ordered by createdAt desc (most-recently-joined), tiebroken by id
+  // desc for a stable order across ties. schema.prisma's User model has
+  // NO lastActiveAt / lastLoginAt / updatedAt field anywhere (confirmed
+  // by grep before writing this -- the only DateTime columns on User are
+  // dateOfBirth, createdAt, and pendingDeletionAt), so
+  // "most-recently-active" is not a signal this codebase can cheaply
+  // compute today; createdAt is the only free timestamp available.
+  // Revisit this ordering once a real activity signal exists (e.g. a
+  // dedicated lastActiveAt column, or deriving it from the most recent
+  // Post/Like/Comment row -- both are real future work, not done here).
+  //
+  // Exclusion rules mirror search.service.ts's own
+  // VISIBLE_SEARCH_USER_FILTER exactly, re-declared inline below per this
+  // codebase's established "small duplicate over cross-module import"
+  // convention (search/README.md's "Exclusion rules" section documents
+  // the same pattern): accountStatus 'active' only (a deactivated,
+  // pending_deletion, suspended, or anonymized ('deleted') account is
+  // never suggested -- narrower than the post-author filter elsewhere,
+  // same reasoning as search's own), and a restricted-pending minor
+  // (isMinor with no CONFIRMED guardian consent) is excluded, the same
+  // "hide via absence, never a distinct signal" treatment
+  // assertFollowGraphVisible and clubs.service.ts's
+  // VISIBLE_CLUB_MEMBER_FILTER already give this exact case. The caller
+  // themselves and every user they already follow are excluded too.
+  //
+  // There is no user-to-user "block" feature anywhere in this schema
+  // (search/README.md's own "Exclusion rules" section confirms the same
+  // grep) -- nothing further to exclude on that front. That module's own
+  // split still applies here: this is a DISCOVERY-time filter ("should
+  // this person ever be suggested"), not an ACTION-time check ("am I
+  // specifically allowed to message/follow this person") -- the latter
+  // is messaging.service.ts's own assertRecipientMessageable, which this
+  // method does not duplicate.
+  async getSuggestedUsers(callerId: string, limit: number): Promise<SuggestedUsersResult> {
+    const rows = await this.prisma.user.findMany({
+      where: {
+        id: { not: callerId },
+        accountStatus: 'active',
+        OR: [{ isMinor: false }, { guardian: { consentStatus: 'confirmed' } }],
+        followedBy: { none: { followerId: callerId } },
+      },
+      select: FOLLOW_USER_SELECT,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit,
+    });
+
+    return { items: rows };
   }
 
   // Shared pagination-shaping helper for getFollowers/getFollowing --

@@ -3,7 +3,9 @@ import { CurrentUser } from '../auth/guards/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
 import { FeedQueryDto } from '../feed/dto/feed-query.dto';
+import { SuggestedUsersQueryDto } from './dto/suggested-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { SUGGESTED_USERS_DEFAULT_LIMIT, SUGGESTED_USERS_MAX_LIMIT } from './suggested-users.constants';
 import { UsersService } from './users.service';
 
 // ---------------------------------------------------------------------
@@ -46,6 +48,25 @@ import { UsersService } from './users.service';
 @UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  // GET /users/suggested?limit= — the Search & Trending "Suggested"
+  // follow panel (Build Plan Section 4.7, Decision Log #139;
+  // sprint-6/suggested-people-backend). Declared BEFORE @Get(':id') below,
+  // not after — Nest/Express match a controller's routes in declaration
+  // order, so a :id-first ordering would let :id's own
+  // ForbiddenException-on-mismatch swallow this route entirely (:id would
+  // bind to the literal string "suggested"). Same static-route-before-
+  // dynamic-:id convention BanterController already establishes for
+  // GET /banter-rooms/search and GET /banter-rooms/mine.
+  //
+  // JwtAuthGuard only (class-level, above) — see
+  // UsersService.getSuggestedUsers's own header comment for the full
+  // exclusion-rule and ranking-heuristic reasoning.
+  @Get('suggested')
+  async suggested(@CurrentUser() user: AccessTokenPayload, @Query() query: SuggestedUsersQueryDto) {
+    const limit = Math.min(query.limit ?? SUGGESTED_USERS_DEFAULT_LIMIT, SUGGESTED_USERS_MAX_LIMIT);
+    return this.usersService.getSuggestedUsers(user.sub, limit);
+  }
 
   @Get(':id')
   async getById(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {

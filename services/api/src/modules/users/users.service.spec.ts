@@ -9,6 +9,7 @@ function buildPrismaMock() {
     user: {
       findUnique: jest.fn(),
       update: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
     },
     follow: {
       create: jest.fn(),
@@ -673,6 +674,75 @@ describe('UsersService', () => {
 
       const callArgs = (prisma.follow.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.where.follower).toEqual({ is: { accountStatus: 'active' } });
+    });
+  });
+
+  describe('getSuggestedUsers', () => {
+    function suggestedRow(overrides: Partial<Record<string, unknown>> = {}) {
+      return { id: 'user-2', displayName: 'Suggested Person', ...overrides };
+    }
+
+    it('excludes the caller themselves, restricted-pending minors excluded/deactivated accounts, and already-followed users, ordered most-recently-joined-first', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new UsersService(prisma);
+
+      await service.getSuggestedUsers('caller-1', 10);
+
+      const callArgs = (prisma.user.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArgs.where).toEqual({
+        id: { not: 'caller-1' },
+        accountStatus: 'active',
+        OR: [{ isMinor: false }, { guardian: { consentStatus: 'confirmed' } }],
+        followedBy: { none: { followerId: 'caller-1' } },
+      });
+      expect(callArgs.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
+      expect(callArgs.take).toBe(10);
+    });
+
+    it('returns the minimal {id, displayName} shape, no passwordHash/isMinor/email', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([suggestedRow()]);
+      const service = new UsersService(prisma);
+
+      const result = await service.getSuggestedUsers('caller-1', 10);
+
+      expect(result.items).toEqual([{ id: 'user-2', displayName: 'Suggested Person' }]);
+
+      const callArgs = (prisma.user.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArgs.select).not.toHaveProperty('passwordHash');
+      expect(callArgs.select).not.toHaveProperty('isMinor');
+      expect(callArgs.select).not.toHaveProperty('email');
+      expect(callArgs.select).toEqual({ id: true, displayName: true });
+    });
+
+    it('passes limit straight through as a plain top-N cut — no nextCursor/pagination shape', async () => {
+      const prisma = buildPrismaMock();
+      const rows = [suggestedRow({ id: 'user-2' }), suggestedRow({ id: 'user-3' })];
+      (prisma.user.findMany as jest.Mock).mockResolvedValue(rows);
+      const service = new UsersService(prisma);
+
+      const result = await service.getSuggestedUsers('caller-1', 2);
+
+      expect(result).toEqual({
+        items: [
+          { id: 'user-2', displayName: 'Suggested Person' },
+          { id: 'user-3', displayName: 'Suggested Person' },
+        ],
+      });
+      expect(result).not.toHaveProperty('nextCursor');
+      const callArgs = (prisma.user.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArgs.take).toBe(2);
+    });
+
+    it('returns an empty list when the query finds nothing, without throwing', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new UsersService(prisma);
+
+      const result = await service.getSuggestedUsers('caller-1', 10);
+
+      expect(result).toEqual({ items: [] });
     });
   });
 });
