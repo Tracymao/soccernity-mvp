@@ -7,10 +7,11 @@
 // notifications/push and notifications/email already use for their own
 // "Push notifications" / "Email notifications" leaves.
 //
-// NOTE ON FIGMA ACCESS — same disclosure as DisplaySettingsPage.tsx: this
-// PR was built without live Figma MCP access. Content reconstructed from
-// docs/sprint-2-settings-display-leaves-report.md §2/§3 ("Display —
-// built, then deliberately reduced").
+// VERIFIED against live Figma MCP access (sprint-2/settings-figma-verification,
+// 2026-09-22) — heading, lead, the single "Display density" row (value
+// "Comfortable" + chevron, no picker screen exists to link to), and the
+// "Text size lives under Accessibility." callout all match Figma verbatim
+// on both breakpoints; no change was needed.
 //
 // A REAL, DOCUMENTED FINDING FROM THE DESIGN SESSION, NOT MADE HERE: this
 // leaf originally also carried a "Text size" row, removed once the hub's

@@ -1,11 +1,16 @@
 // Data usage leaf. Figma: "Settings — Data Usage" 6304:15615 (desktop) /
 // "…— Mobile" 6303:15307.
 //
-// NOTE ON FIGMA ACCESS — same disclosure as DisplaySettingsPage.tsx: this
-// PR was built without live Figma MCP access. Content reconstructed from
-// docs/sprint-2-settings-display-leaves-report.md §2 ("Data usage — built
-// as proposed"): Data saver (toggle, Off), Autoplay videos (toggle, On),
-// Image quality (value + chevron, no picker screen exists to link to).
+// VERIFIED against live Figma MCP access (sprint-2/settings-figma-verification,
+// 2026-09-22) — heading, lead, and all 3 rows (Data saver toggle Off,
+// Autoplay videos toggle On, Image quality value "Standard" + chevron, no
+// picker screen exists to link to) match Figma verbatim on both
+// breakpoints; no change was needed. Note: this leaf's own page title
+// reads "Data usage" (lowercase u, matches this file's h2 exactly) while
+// DisplaySettingsPage.tsx's hub row linking here reads "Data Usage"
+// (capital U) — a genuine, disclosed inconsistency between the two real
+// Figma nodes, not a typo in either file; each page keeps its own node's
+// literal text rather than forcing them to agree.
 //
 // NO LIVE DATA-SAVER / MEDIA-QUALITY BACKEND EXISTS. Checked directly: no
 // data-saver API, no media-quality setting, and no media-upload/streaming

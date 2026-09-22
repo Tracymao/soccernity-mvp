@@ -1,18 +1,20 @@
 // Two-Factor Auth (SMS) leaf. Figma: "Settings — Two-Factor Auth (SMS)"
 // 2926:8294 (desktop) / "…— Mobile" 5696:8213.
 //
-// NOTE ON FIGMA ACCESS — same disclosure as SecurityOverviewPage.tsx: this
-// PR was built without live Figma MCP access. Reconstructed from
-// docs/sprint-2-component-hygiene-toggles-nav-report.md (the two real
-// toggle rows on this frame, "Text message" / "Authentication app", and
-// their component swap to the shared `Settings Toggle` control) and
-// docs/sprint-2-settings-desktop-scaffolding-sweep-report.md (confirming
-// this frame's only OTHER piece of content — a "Submit" button — was dead,
-// hidden (visible:false) scaffolding, deleted as never-rendered; the real
-// frame has no submit action at all, just the two toggle rows). Row
-// descriptions below are NOT literal Figma copy — no source in this
-// codebase records description text for either row — they're a plain,
-// disclosed best-effort gloss, flagged in the PR report.
+// VERIFIED against live Figma MCP access (sprint-2/settings-figma-verification,
+// 2026-09-22), replacing the prior no-access reconstruction. Real copy pulled
+// directly from both nodes: desktop's two row descriptions ("Text message" /
+// "Authentication app") now match Figma verbatim — the earlier best-effort
+// gloss was wrong. Desktop carries no lead paragraph under the header at all
+// (jumps straight from the title to the two rows); mobile does have one
+// ("Choose a second way to confirm it's you when you log in."). Since this
+// app renders one shared component for both breakpoints, mobile's real copy
+// is used as the lead rather than inventing text or omitting one entirely —
+// real content from either breakpoint beats invented content. This frame's
+// only OTHER piece of content — a "Submit" button — was already confirmed
+// dead, hidden (visible:false) scaffolding, deleted in Figma before this
+// codebase's own settings-desktop-scaffolding-sweep session; the real frame
+// has no submit action at all, just the two toggle rows.
 //
 // NO LIVE 2FA BACKEND EXISTS. Checked directly: no 2FA/TOTP/SMS-verification
 // module anywhere in services/api (grep across services/api/src for
@@ -37,11 +39,15 @@ interface Row {
 }
 
 const ROWS: Row[] = [
-  { id: "sms", label: "Text message", desc: "Get a one-time code by text message when you sign in." },
+  {
+    id: "sms",
+    label: "Text message",
+    desc: "Use your mobile phone to receive a text message with an authentication code to enter when you log in to Soccernity.",
+  },
   {
     id: "app",
     label: "Authentication app",
-    desc: "Use an authenticator app to generate sign-in codes.",
+    desc: "Use your mobile authentication app to receive an authentication code to enter when you log in to Soccernity.",
   },
 ];
 
@@ -70,7 +76,7 @@ export default function TwoFactorAuthPage() {
       <div>
         <h2 className="settings-page__title">Two-factor authentication</h2>
         <p className="settings-page__lead">
-          Add a second step when you sign in, on top of your password.
+          Choose a second way to confirm it&rsquo;s you when you log in.
         </p>
       </div>
 

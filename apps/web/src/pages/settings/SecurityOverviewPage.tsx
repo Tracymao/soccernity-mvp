@@ -7,15 +7,20 @@
 // archived in Figma and is not reproduced here (matching Account's own
 // D1-not-D8 precedent).
 //
-// NOTE ON FIGMA ACCESS: this PR was built without live Figma MCP access
-// (the file's own plugin connector needs interactive re-authorization this
-// session doesn't have). Content below is reconstructed from this
-// codebase's own already-merged Figma session reports — chiefly
-// docs/sprint-2-settings-family-consolidation-audit-report.md and
-// docs/sprint-2-settings-duplicate-clusters-consolidation-report.md, which
-// record this frame's real text — rather than a fresh screenshot/context
-// read. Flagged in the PR report; not assumed to be current if the frame
-// has moved since those sessions.
+// VERIFIED against live Figma MCP access (sprint-2/settings-figma-verification,
+// 2026-09-22). Heading and lead match Figma verbatim (desktop's exact
+// sentence; mobile's own lead differs slightly — "Manage your account
+// security and how you log in." — desktop's is used since it was already
+// what's in code and both are real, present text). Row description fixed:
+// desktop doesn't render one link — it shows the row's real content across
+// TWO elements (an informational "Two-factor authentication" heading + a
+// long protect-your-account blurb, then a SEPARATE clickable "Set up
+// two-factor authentication" row below it with its own chevron). Mobile
+// renders exactly one link matching this page's own single-row structure,
+// with real desc "Add a second step when you log in" — used here instead
+// of "Set up two-factor authentication" (the old value, which was real
+// Figma text too, just from desktop's separate second row, not a
+// description under the heading label).
 //
 // Only real content: one row, "Two-factor authentication" → the
 // Two-Factor Auth (SMS) leaf (2926:8294 / 5696:8213). No other row exists
@@ -47,7 +52,7 @@ export default function SecurityOverviewPage() {
           <Link to="/settings/security/two-factor" className="settings-link">
             <span>
               <span className="settings-link__label">Two-factor authentication</span>
-              <span className="settings-link__desc">Set up two-factor authentication</span>
+              <span className="settings-link__desc">Add a second step when you log in</span>
             </span>
             <span className="settings-link__chev" aria-hidden="true">
               &rsaquo;

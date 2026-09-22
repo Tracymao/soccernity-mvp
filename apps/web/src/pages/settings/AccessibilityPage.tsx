@@ -1,12 +1,11 @@
 // Accessibility leaf. Figma: "Settings — Accessibility" 6304:15181
 // (desktop) / "…— Mobile" 6303:15173.
 //
-// NOTE ON FIGMA ACCESS — same disclosure as DisplaySettingsPage.tsx: this
-// PR was built without live Figma MCP access. Content reconstructed from
-// docs/sprint-2-settings-display-leaves-report.md §2 ("Accessibility —
-// built as proposed"), which records this frame's exact 3 rows: Reduce
-// motion (toggle), Increase contrast (toggle), Text size (value +
-// chevron, no picker screen exists to link to).
+// VERIFIED against live Figma MCP access (sprint-2/settings-figma-verification,
+// 2026-09-22) — heading, lead, and all 3 rows (Reduce motion toggle,
+// Increase contrast toggle, Text size value "Default" + chevron, no
+// picker screen exists to link to) match Figma verbatim on both
+// breakpoints; no change was needed.
 //
 // NO LIVE PREFERENCE BACKEND EXISTS. Checked directly: no motion / contrast
 // / text-scale preference concept anywhere in services/api (grep across

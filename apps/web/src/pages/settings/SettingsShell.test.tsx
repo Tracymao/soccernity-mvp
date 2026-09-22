@@ -239,7 +239,7 @@ describe("Notification Preferences section", () => {
   it("hub renders the intro blurb and all 4 rows, correctly linked", async () => {
     await renderAt("/settings/notifications");
     expect(screen.getByRole("heading", { name: "Notification Preferences" })).not.toBeNull();
-    expect(screen.getByText(/choose which notifications you get/i)).not.toBeNull();
+    expect(screen.getByText(/choose how you.d like to hear from soccernity/i)).not.toBeNull();
 
     const targets: [RegExp, string][] = [
       [/push notifications/i, "/settings/notifications/push"],

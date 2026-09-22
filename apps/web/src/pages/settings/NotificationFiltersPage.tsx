@@ -3,18 +3,20 @@
 // sprint-2/settings-duplicate-clusters-consolidation, Decision Log
 // #230/#247) / "…— Mobile" 5696:8281.
 //
-// NOTE ON FIGMA ACCESS — same disclosure as the other Notification
-// Preferences leaves: this PR was built without live Figma MCP access.
-// Reconstructed from docs/sprint-2-settings-duplicate-clusters-
-// consolidation-report.md, which records this frame's post-consolidation
-// content directly: heading "Filters", subtitle "Choose what you see in
-// your notifications.", and ONLY the quality-filter control — the frame's
-// former "Mute notifications ›" nav row was deleted in that same Figma
-// pass (decision #6). Muting is reached only via the Muted-accounts leaf
-// now, not from here. Row description below is NOT literal Figma copy —
-// it's the hub's own row-description text for this section, reused here
-// since it's the one piece of real, documented copy that describes what
-// this control does — flagged as a disclosed best-effort choice.
+// VERIFIED against live Figma MCP access (sprint-2/settings-figma-verification,
+// 2026-09-22). Heading "Filters", lead "Choose what you see in your
+// notifications.", and ONLY the quality-filter control (desktop and
+// mobile agree on all of this) — the frame's former "Mute notifications
+// ›" nav row was deleted in an earlier Figma pass (decision #6). Muting is
+// reached only via the Muted-accounts leaf, not from here. Row
+// description fixed: it previously reused the hub's own row-desc text
+// ("Choose which lower-quality notifications to filter out.") as a
+// disclosed placeholder — the leaf frame has its own real, different copy
+// (identical on desktop and mobile), now used below. The frame's trailing
+// "Learn more" is plain, unlinked text with no href on either breakpoint
+// (unlike other "Learn more" instances elsewhere in this file that ARE
+// real anchors) — deliberately omitted rather than shipped as dead text
+// with no destination, a disclosed judgment call, not an oversight.
 //
 // NO LIVE NOTIFICATION-FILTERING BACKEND EXISTS. Checked directly: no
 // notification-preferences/filter/mute concept anywhere in services/api
@@ -60,7 +62,9 @@ export default function NotificationFiltersPage() {
           <div className="notif-row__body">
             <p className="notif-row__title">Quality filter</p>
             <p className="notif-row__desc">
-              Choose which lower-quality notifications to filter out.
+              Choose to filter out content such as duplicate or automated posts. This
+              doesn&rsquo;t apply to notifications from accounts you follow or have interacted
+              with recently.
             </p>
             <p className="notif-row__note">
               Not adjustable yet — notification filtering isn&rsquo;t available yet. This needs a
