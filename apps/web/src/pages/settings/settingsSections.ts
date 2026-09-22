@@ -43,7 +43,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: "Notification Preferences",
     to: "/settings/notifications",
     description: "Choose which notifications you get, and how you get them",
-    built: false,
+    built: true,
   },
   {
     id: "display",

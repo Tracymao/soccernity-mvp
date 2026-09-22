@@ -183,13 +183,13 @@ describe("Account overview", () => {
 });
 
 describe("Unbuilt sections", () => {
-  it.each(["notifications", "display"])("/settings/%s shows the not-built placeholder", async (seg) => {
+  it.each(["display"])("/settings/%s shows the not-built placeholder", async (seg) => {
     await renderAt(`/settings/${seg}`);
     expect(screen.getByRole("status").textContent).toMatch(/not built yet/i);
   });
 
   it("deeper unbuilt paths also land on the placeholder, not a 404", async () => {
-    await renderAt("/settings/notifications/foo");
+    await renderAt("/settings/display/foo");
     expect(screen.getByRole("status").textContent).toMatch(/not built yet/i);
   });
 });
@@ -235,6 +235,104 @@ describe("Security & Account Settings section", () => {
     window.sessionStorage.clear();
     await renderAt("/settings/security/two-factor");
     expect(screen.getByText(/log in to manage two-factor authentication/i)).not.toBeNull();
+  });
+});
+
+describe("Notification Preferences section", () => {
+  it("hub renders the intro blurb and all 4 rows, correctly linked", async () => {
+    await renderAt("/settings/notifications");
+    expect(screen.getByRole("heading", { name: "Notification Preferences" })).not.toBeNull();
+    expect(screen.getByText(/choose which notifications you get/i)).not.toBeNull();
+
+    const targets: [RegExp, string][] = [
+      [/push notifications/i, "/settings/notifications/push"],
+      [/email notifications/i, "/settings/notifications/email"],
+      [/filters/i, "/settings/notifications/filters"],
+      [/muted accounts/i, "/settings/notifications/muted-accounts"],
+    ];
+    for (const [name, href] of targets) {
+      expect(screen.getByRole("link", { name }).getAttribute("href")).toBe(href);
+    }
+  });
+
+  it.each([
+    "/settings/notifications",
+    "/settings/notifications/filters",
+    "/settings/notifications/push",
+    "/settings/notifications/email",
+    "/settings/notifications/muted-accounts",
+  ])("the rail marks Notification Preferences active on %s", async (path) => {
+    await renderAt(path);
+    const current = within(rail())
+      .getAllByRole("link")
+      .filter((l) => l.getAttribute("aria-current") === "page");
+    expect(current).toHaveLength(1);
+    expect(current[0].textContent).toContain("Notification Preferences");
+  });
+
+  it("Filters leaf renders the Quality filter row, permanently disabled with a note", async () => {
+    await renderAt("/settings/notifications/filters");
+    expect(screen.getByRole("heading", { name: "Filters" })).not.toBeNull();
+    expect(screen.getByText(/choose what you see in your notifications/i)).not.toBeNull();
+    expect(screen.getByText("Quality filter")).not.toBeNull();
+    expect(screen.getByRole("img", { name: /quality filter: off \(not adjustable yet\)/i })).not.toBeNull();
+    expect(screen.getByText(/notification filtering isn.t available yet/i)).not.toBeNull();
+    // Removed "Mute notifications ›" row (Decision Log #230 decision #6) —
+    // muting is reached only via the Muted accounts leaf.
+    expect(screen.queryByText(/mute notifications/i)).toBeNull();
+  });
+
+  it("Push Notifications leaf renders one disabled toggle row", async () => {
+    await renderAt("/settings/notifications/push");
+    expect(screen.getByRole("heading", { name: "Push notifications" })).not.toBeNull();
+    expect(screen.getByText("Turn on push notifications")).not.toBeNull();
+    expect(
+      screen.getByRole("img", { name: /turn on push notifications: off \(not adjustable yet\)/i }),
+    ).not.toBeNull();
+    expect(screen.getByText(/push notifications aren.t available yet/i)).not.toBeNull();
+  });
+
+  it("Email Notifications leaf renders the master row plus 3 sub-rows, all disabled", async () => {
+    await renderAt("/settings/notifications/email");
+    expect(screen.getByRole("heading", { name: "Email notifications" })).not.toBeNull();
+    expect(screen.getByText("Turn on email notifications")).not.toBeNull();
+    for (const label of ["New notifications", "Direct messages", "Posts emailed to you"]) {
+      expect(screen.getByText(label)).not.toBeNull();
+    }
+    const toggles = screen.getAllByRole("img", { name: /off \(not adjustable yet\)/i });
+    expect(toggles).toHaveLength(4);
+  });
+
+  it("Muted accounts leaf renders all 3 rows, permanently disabled with a note each", async () => {
+    await renderAt("/settings/notifications/muted-accounts");
+    expect(screen.getByRole("heading", { name: "Muted accounts" })).not.toBeNull();
+    for (const label of [
+      "People you don't follow",
+      "People who don't follow you",
+      "People with a new account",
+    ]) {
+      expect(screen.getByText(label)).not.toBeNull();
+    }
+    const toggles = screen.getAllByRole("img", { name: /off \(not adjustable yet\)/i });
+    expect(toggles).toHaveLength(3);
+    const notes = screen.getAllByText(/muting isn.t available yet/i);
+    expect(notes).toHaveLength(3);
+  });
+
+  it("no session → log-in prompt on the hub and every leaf, no crash", async () => {
+    window.sessionStorage.clear();
+    for (const [path, message] of [
+      ["/settings/notifications", /log in to manage your notification preferences/i],
+      ["/settings/notifications/filters", /log in to manage your notification filters/i],
+      ["/settings/notifications/push", /log in to manage push notifications/i],
+      ["/settings/notifications/email", /log in to manage email notifications/i],
+      ["/settings/notifications/muted-accounts", /log in to manage muted accounts/i],
+    ] as [string, RegExp][]) {
+      window.sessionStorage.clear();
+      await renderAt(path);
+      expect(screen.getByText(message)).not.toBeNull();
+      cleanup();
+    }
   });
 });
 
