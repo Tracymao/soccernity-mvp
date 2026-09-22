@@ -29,7 +29,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: "Security & Account Settings",
     to: "/settings/security",
     description: "Two-factor authentication and account security",
-    built: false,
+    built: true,
   },
   {
     id: "privacy",

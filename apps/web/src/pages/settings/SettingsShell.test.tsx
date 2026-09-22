@@ -183,14 +183,58 @@ describe("Account overview", () => {
 });
 
 describe("Unbuilt sections", () => {
-  it.each(["security", "notifications", "display"])("/settings/%s shows the not-built placeholder", async (seg) => {
+  it.each(["notifications", "display"])("/settings/%s shows the not-built placeholder", async (seg) => {
     await renderAt(`/settings/${seg}`);
     expect(screen.getByRole("status").textContent).toMatch(/not built yet/i);
   });
 
   it("deeper unbuilt paths also land on the placeholder, not a 404", async () => {
-    await renderAt("/settings/security/two-factor");
+    await renderAt("/settings/notifications/foo");
     expect(screen.getByRole("status").textContent).toMatch(/not built yet/i);
+  });
+});
+
+describe("Security & Account Settings section", () => {
+  it("hub renders the intro blurb and the Two-factor authentication row", async () => {
+    await renderAt("/settings/security");
+    expect(screen.getByRole("heading", { name: "Security & Account Settings" })).not.toBeNull();
+    expect(screen.getByText(/manage your account.s security/i)).not.toBeNull();
+    const link = screen.getByRole("link", { name: /two-factor authentication/i });
+    expect(link.getAttribute("href")).toBe("/settings/security/two-factor");
+  });
+
+  it("the rail marks Security active on both the hub and the leaf", async () => {
+    await renderAt("/settings/security/two-factor");
+    const current = within(rail())
+      .getAllByRole("link")
+      .filter((l) => l.getAttribute("aria-current") === "page");
+    expect(current).toHaveLength(1);
+    expect(current[0].textContent).toContain("Security & Account Settings");
+  });
+
+  it("the Two-Factor Auth (SMS) leaf renders both rows, permanently disabled with a note", async () => {
+    await renderAt("/settings/security/two-factor");
+    expect(screen.getByRole("heading", { name: "Two-factor authentication" })).not.toBeNull();
+
+    for (const label of ["Text message", "Authentication app"]) {
+      expect(screen.getByText(label)).not.toBeNull();
+    }
+
+    const toggles = screen.getAllByRole("img", { name: /off \(not adjustable yet\)/i });
+    expect(toggles).toHaveLength(2);
+
+    const notes = screen.getAllByText(/two-factor authentication isn.t available yet/i);
+    expect(notes).toHaveLength(2);
+  });
+
+  it("no session → log-in prompt on both the hub and the leaf, no crash", async () => {
+    window.sessionStorage.clear();
+    await renderAt("/settings/security");
+    expect(screen.getByText(/log in to manage your account security/i)).not.toBeNull();
+    cleanup();
+    window.sessionStorage.clear();
+    await renderAt("/settings/security/two-factor");
+    expect(screen.getByText(/log in to manage two-factor authentication/i)).not.toBeNull();
   });
 });
 
