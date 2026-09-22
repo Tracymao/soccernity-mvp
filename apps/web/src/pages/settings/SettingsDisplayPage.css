@@ -1,0 +1,205 @@
+/* Display, Language & Region section — hub + Accessibility / Display
+ * (density) / Language / Data usage leaves. Figma: "Settings — Display,
+ * Language & Region" 2922:5832 (desktop hub) / "…— Mobile" 5649:8140;
+ * leaves "Settings — Accessibility" 6304:15181 / "…— Mobile" 6303:15173,
+ * "Settings — Display" 6304:15329 / "…— Mobile" 6303:15221, "Settings —
+ * Language" 6304:15471 / "…— Mobile" 6303:15262, "Settings — Data Usage"
+ * 6304:15615 / "…— Mobile" 6303:15307, "Soccernity-MVP"
+ * (weZWWqggy9j13eX8bhFgs6).
+ *
+ * NOTE ON FIGMA ACCESS: same disclosure as SettingsSecurityPage.css /
+ * SettingsNotificationsPage.css — this PR was built without live Figma
+ * MCP access. Row set/copy/structure are reconstructed from this
+ * codebase's own already-merged Figma session reports — chiefly
+ * docs/sprint-2-settings-display-leaves-report.md (the 4 leaves
+ * themselves, their rows, and the "Display doesn't justify its own leaf"
+ * finding — kept anyway per this PR's own brief, Decision Log #230
+ * resolution #9) and docs/sprint-2-notification-bell-navbar-slot-report.md
+ * (the hub's own corrected title/intro/row-description copy) — rather than
+ * a fresh screenshot/context read. Flagged in the PR report.
+ *
+ * Same visual language as SettingsSecurityPage.css / SettingsNotificationsPage.css
+ * / PrivacySettingsPage.css's established "visible, disabled, with a note"
+ * convention for a backend-pending control — kept as its own scoped file,
+ * matching every other Settings leaf's own-CSS-file precedent.
+ *
+ * Colour values reference the app-wide --sn-* custom properties from
+ * src/theme/applyTheme.ts. Light theme only. */
+
+.display-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.display-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.display-row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.display-row__title {
+  font: 600 16px/1.3 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.display-row__desc {
+  font: 400 14px/1.5 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.display-row__note {
+  font: 400 13px/1.5 "Inter", sans-serif;
+  font-style: italic;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+/* --- visual (non-functional) toggle — state signalled by BOTH colour and
+   knob position, never colour alone, same discipline as
+   PrivacySettingsPage.css's .privacy-toggle --- */
+
+.display-toggle {
+  flex-shrink: 0;
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--sn-icon-inactive);
+  position: relative;
+  align-self: center;
+  opacity: 0.6;
+}
+
+.display-toggle--on {
+  background: var(--sn-brand-green);
+}
+
+.display-toggle__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--sn-brand-navy);
+}
+
+.display-toggle--on .display-toggle__knob {
+  left: auto;
+  right: 2px;
+}
+
+/* --- "value + chevron" rows (Text size, Display density, Image quality)
+   — look like a link to a picker screen, but no such screen exists in
+   Figma and none of the three has a backend, so the row is disabled and
+   the chevron never navigates. --- */
+
+.display-row--value {
+  cursor: not-allowed;
+}
+
+.display-row__value {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: center;
+  font: 400 14px "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.display-row__chev {
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* --- a plain callout box for an on-screen disclosure (Language's
+   "illustrative only" note; Display's "text size lives under
+   Accessibility" wayfinding line) — a lighter-weight sibling of
+   SettingsLayout.css's .settings-placeholder. --- */
+
+.display-callout {
+  border: 1px solid var(--sn-icon-inactive);
+  background: var(--sn-green-tint-12);
+  border-radius: 8px;
+  padding: 14px 16px;
+  font: 400 13px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.display-callout a,
+.display-callout .display-callout__link {
+  color: var(--sn-brand-navy);
+  font-weight: 600;
+}
+
+/* --- Language's illustrative, disabled single-select list --- */
+
+.display-radio-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.display-radio {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 4px;
+  border: none;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+  background: transparent;
+  text-align: left;
+  cursor: not-allowed;
+  font: 600 15px "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.display-radio:disabled {
+  opacity: 0.85;
+}
+
+.display-radio__ring {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--sn-icon-inactive);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.display-radio--selected .display-radio__ring {
+  border-color: var(--sn-brand-green);
+}
+
+.display-radio__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--sn-brand-green);
+}
+
+@media (max-width: 560px) {
+  .display-rows {
+    gap: 22px;
+  }
+}

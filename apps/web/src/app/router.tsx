@@ -80,7 +80,11 @@ import NotificationFiltersPage from "../pages/settings/NotificationFiltersPage";
 import PushNotificationsPage from "../pages/settings/PushNotificationsPage";
 import EmailNotificationsPage from "../pages/settings/EmailNotificationsPage";
 import MutedAccountsPage from "../pages/settings/MutedAccountsPage";
-import SettingsSectionPlaceholder from "../pages/settings/SettingsSectionPlaceholder";
+import DisplaySettingsPage from "../pages/settings/DisplaySettingsPage";
+import AccessibilityPage from "../pages/settings/AccessibilityPage";
+import DisplayDensityPage from "../pages/settings/DisplayDensityPage";
+import LanguagePage from "../pages/settings/LanguagePage";
+import DataUsagePage from "../pages/settings/DataUsagePage";
 import InactiveAccountPage from "../pages/InactiveAccountPage";
 import NotFoundPage from "../pages/NotFoundPage";
 import { TermsPage, PrivacyPage } from "../pages/legal/LegalPage";
@@ -298,12 +302,18 @@ export const routes: RouteObject[] = [
       // sprint-2/settings-shell-to-code-security (PR 2) built the
       // Security & Account Settings section (hub + Two-Factor Auth (SMS)
       // leaf — no live backend, see TwoFactorAuthPage.tsx).
-      // sprint-2/settings-shell-to-code-notifications (PR 3) builds the
+      // sprint-2/settings-shell-to-code-notifications (PR 3) built the
       // Notification Preferences section (hub + Filters / Push / Email /
       // Muted accounts leaves — no live backend for any of them, see
-      // NotificationPreferencesPage.tsx and its 4 leaf pages). Display is
-      // still a follow-up PR and renders SettingsSectionPlaceholder. No
-      // site footer.
+      // NotificationPreferencesPage.tsx and its 4 leaf pages).
+      // sprint-2/settings-shell-to-code-display (PR 4, the last of the
+      // staged set) builds the Display, Language & Region section (hub +
+      // Accessibility / Display (density) / Language / Data usage
+      // leaves — no live backend for any of them, see
+      // DisplaySettingsPage.tsx and its 4 leaf pages). All 5 Decision Log
+      // #230 sections now have real screens; SettingsSectionPlaceholder
+      // has no remaining route to render and was deleted. No site
+      // footer.
       {
         path: "settings",
         element: <SettingsLayout />,
@@ -321,7 +331,11 @@ export const routes: RouteObject[] = [
           { path: "notifications/push", element: <PushNotificationsPage /> },
           { path: "notifications/email", element: <EmailNotificationsPage /> },
           { path: "notifications/muted-accounts", element: <MutedAccountsPage /> },
-          { path: "display/*", element: <SettingsSectionPlaceholder section="display" /> },
+          { path: "display", element: <DisplaySettingsPage /> },
+          { path: "display/accessibility", element: <AccessibilityPage /> },
+          { path: "display/density", element: <DisplayDensityPage /> },
+          { path: "display/language", element: <LanguagePage /> },
+          { path: "display/data-usage", element: <DataUsagePage /> },
         ],
       },
       // Old flat paths (linked from earlier builds) redirect, not 404.

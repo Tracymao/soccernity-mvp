@@ -4,8 +4,12 @@
 // ("Settings — Menu — Mobile", 6289:15068). Descriptions are the hub's
 // own one-liners (sprint-2-settings-mobile-menu-hub-report.md §3).
 //
-// `built` is true only for sections whose leaf screens exist in code.
-// The rest render SettingsSectionPlaceholder.
+// `built` was true only for sections whose leaf screens existed in code,
+// with the rest rendering SettingsSectionPlaceholder (deleted by
+// sprint-2/settings-shell-to-code-display — all 5 sections are now
+// built, so nothing renders it any more). The field is kept, unread by
+// any routing logic today, as a marker for a future 6th section landing
+// unbuilt.
 export type SettingsSectionId = "account" | "security" | "privacy" | "notifications" | "display";
 
 export interface SettingsSection {
@@ -50,7 +54,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: "Display, Language & Region",
     to: "/settings/display",
     description: "Accessibility, display, language, and data usage",
-    built: false,
+    built: true,
   },
 ];
 
