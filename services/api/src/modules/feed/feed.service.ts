@@ -133,6 +133,11 @@ export interface SaveState {
   saved: boolean;
 }
 
+export interface ViewState {
+  postId: string;
+  viewCount: number;
+}
+
 // Shape for a single GET /users/:id/saved-posts entry: the saved-at
 // timestamp plus the full embedded post (reusing POST_SELECT, same
 // field-minimization discipline as everywhere else in this module).
@@ -799,6 +804,52 @@ export class FeedService {
     }
 
     return { postId, saved: false };
+  }
+
+  // POST /posts/:id/view (sprint-4/post-view-tracking, Build Plan
+  // Section 4.3) — allowed for both logged-in and anonymous callers, per
+  // FeedController's OptionalJwtAuthGuard (not JwtAuthGuard). `userId` is
+  // the caller's `sub` when a valid token was presented, `undefined`
+  // otherwise — the controller passes it straight through as
+  // PostView.viewerId (null for an anonymous call).
+  //
+  // Same interactive-transaction shape as likePost() (see that method's
+  // own comment for why the callback form is required for the
+  // create-then-increment pair to be conditional), and the identical
+  // insert-then-catch-P2002 idempotency handling as likePost/savePost —
+  // but see PostView's own schema.prisma comment for what that
+  // idempotency actually buys here: it's real de-duplication for a
+  // logged-in viewerId (PostView.@@unique([viewerId, postId])), but a
+  // structural no-op for an anonymous one, since Postgres never treats
+  // two NULLs as equal under a unique constraint. That's a deliberate,
+  // disclosed v1 simplification, not a bug — building real
+  // anonymous-session de-duplication (a cookie/fingerprint-keyed store)
+  // is out of scope here. No notification, no points — a view is not a
+  // safety-sensitive or content-generating action the way a like/comment
+  // is, so neither of those two mechanisms applies.
+  async recordView(userId: string | undefined, postId: string): Promise<ViewState> {
+    await this.assertPostExists(postId);
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.postView.create({ data: { viewerId: userId ?? null, postId } });
+        await tx.post.update({ where: { id: postId }, data: { viewCount: { increment: 1 } } });
+      });
+    } catch (err) {
+      if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')) {
+        throw err;
+      }
+      // Already viewed by this logged-in user — fall through and report
+      // current state without having touched viewCount a second time.
+      // (Never reached for an anonymous call — see the method comment.)
+    }
+
+    return { postId, viewCount: await this.currentViewCount(postId) };
+  }
+
+  private async currentViewCount(postId: string): Promise<number> {
+    const post = await this.prisma.post.findUnique({ where: { id: postId }, select: { viewCount: true } });
+    return post?.viewCount ?? 0;
   }
 
   // GET /users/:id/saved-posts. Scope (self-only, enforced by the

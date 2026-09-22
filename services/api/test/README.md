@@ -254,6 +254,27 @@ see the remaining gaps listed below.
   (`src/modules/banter/*.spec.ts`) covers the DTO validation, guard
   wiring, route ordering (`/search`, `/mine` not shadowed by `/:id`), and
   the P2002/P2025 idempotency branches.
+- `post-view-tracking.e2e-spec.ts` (added by `sprint-4/post-view-tracking`)
+  — `POST /posts/:id/view`. Hits guiding-principle trigger #3 (a genuinely
+  novel Prisma constraint): `PostView.@@unique([viewerId, postId])` is
+  nullable on `viewerId`, and the entire "logged-in is deduplicated,
+  anonymous isn't" design rests on Postgres's real NULL-is-never-equal-to-
+  NULL unique-index semantics — exactly the kind of thing a mock's own
+  bookkeeping can't prove, since a mock would happily "enforce" uniqueness
+  on two `null` values a real unique index never would. Proves against a
+  live database: a logged-in caller's repeated view is genuinely
+  idempotent (exactly one `PostView` row, `Post.viewCount` +1 not +2); two
+  DIFFERENT anonymous calls against the SAME post both succeed as
+  DISTINCT rows and `Post.viewCount` increments on each one (the specific
+  behavior that could only be confirmed against a real unique index, not
+  assumed); a genuine concurrent double-view from the same logged-in user
+  (`Promise.all`) lands exactly one row and increments `viewCount`
+  exactly once; and a real 404 for a non-existent `postId`. The mocked
+  unit suite (`feed.service.spec.ts`'s `recordView` block,
+  `feed.controller.http.spec.ts`'s `POST /posts/:id/view` block, and
+  `optional-jwt-auth.guard.spec.ts`) covers the guard's own
+  anonymous/invalid-token/valid-token branching and the service's
+  P2002-catch/error-rethrow logic.
 
 **A real, discovered gap, not a production bug when found — flagged then,
 now fixed at the source but the test workaround itself deliberately

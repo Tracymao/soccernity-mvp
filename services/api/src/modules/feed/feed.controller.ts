@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Query
 import { CurrentUser } from '../auth/guards/current-user.decorator';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreatePostDto } from './dto/create-post.dto';
@@ -178,5 +179,24 @@ export class FeedController {
   @UseGuards(JwtAuthGuard)
   async unsave(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
     return this.feedService.unsavePost(user.sub, id);
+  }
+
+  // POST /posts/:id/view (sprint-4/post-view-tracking) — deliberately
+  // NOT JwtAuthGuard. OptionalJwtAuthGuard never rejects the request; it
+  // attaches request.user when a valid bearer token IS present and
+  // leaves it undefined otherwise, so a logged-out visitor can still
+  // register a view (see FeedService.recordView for what that split is
+  // used for — real per-user de-duplication when logged in, none for an
+  // anonymous call, a documented tradeoff). @CurrentUser() is typed
+  // `| undefined` here specifically because this route's guard doesn't
+  // guarantee it the way every other @CurrentUser() use in this
+  // controller (behind plain JwtAuthGuard) does. Same HttpCode(200)
+  // reasoning as like/save: an idempotent state-report, not a resource
+  // creation.
+  @Post(':id/view')
+  @HttpCode(200)
+  @UseGuards(OptionalJwtAuthGuard)
+  async view(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload | undefined) {
+    return this.feedService.recordView(user?.sub, id);
   }
 }
