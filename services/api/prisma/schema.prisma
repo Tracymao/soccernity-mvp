@@ -605,6 +605,9 @@ model Post {
   comments     Comment[]
   savedBy      SavedPost[]
   likes        Like[]
+  // sprint-4/trending-topics-backend (Build Plan Section 4.7, GET
+  // /trending) -- see PostHashtag below.
+  hashtags     PostHashtag[]
 }
 
 model Comment {
@@ -911,6 +914,72 @@ model Follow {
   createdAt  DateTime @default(now())
 
   @@unique([followerId, followeeId])
+}
+
+// sprint-4/trending-topics-backend -- Build Plan Section 4.7 (GET
+// /trending). No hashtag/topic model existed anywhere in this schema
+// before this PR. Hashtags are extracted from Post.contentText at
+// creation time (FeedService.createPost, via
+// search/hashtag.util.ts's recordPostHashtags) with a simple #(\w+)
+// regex scan, normalized to lowercase so "#EPL"/"#epl" group as the
+// same tag -- see search/README.md's "Trending topics" section for the
+// full extraction rule and the v1 simplifications this carries.
+model Hashtag {
+  id        String        @id @default(uuid())
+  tag       String        @unique
+  // Denormalized ALL-TIME cache -- the SAME convention Post.likeCount /
+  // Post.commentCount / ClubPage.memberCount / BanterRoom.memberCount /
+  // CommunityGroup.memberCount already establish: incremented
+  // transactionally alongside every PostHashtag row this tag gets (never
+  // decremented -- there is no Post-deletion code path anywhere in this
+  // codebase that would need to undo it), and always recomputable via
+  // PostHashtag.count({ where: { hashtagId } }) if it ever drifts.
+  // NOT what GET /trending reads from -- an all-time running total can
+  // never "decay," so the trending query aggregates PostHashtag.createdAt
+  // directly instead (see trending.service.ts). postCount exists purely
+  // as a cheap all-time popularity figure, kept alongside the source rows
+  // the same way every other denormalized counter in this schema is.
+  postCount Int           @default(0)
+  createdAt DateTime      @default(now())
+  posts     PostHashtag[]
+}
+
+// The Post <-> Hashtag join. An EXPLICIT model, never an implicit Prisma
+// m2m (see ClubPage.members's own real silent-relation-merge-bug
+// precedent this schema's own history already carries) -- a surrogate
+// `id` + `@@unique` composite, matching Like/Follow/SavedPost/
+// BanterRoomMember/CommunityGroupMember's own established shape in this
+// file rather than a composite primary key (no model anywhere in this
+// schema uses one).
+model PostHashtag {
+  id        String   @id @default(uuid())
+  postId    String
+  // No onDelete: Cascade here, matching Like.post / Comment.post /
+  // SavedPost.post's own current shape exactly -- Post rows are never
+  // hard-deleted by any code path in this codebase today (there is no
+  // DELETE /posts/:id endpoint anywhere), so this FK's implicit RESTRICT
+  // default is inert in practice, not a real constraint on anything.
+  post      Post     @relation(fields: [postId], references: [id])
+  hashtagId String
+  hashtag   Hashtag  @relation(fields: [hashtagId], references: [id])
+  // Denormalized COPY of the owning Post's own createdAt at extraction
+  // time -- not this row's own write time. The two are identical in
+  // practice today (extraction only ever runs inside
+  // FeedService.createPost's own transaction), but recording the POST's
+  // timestamp here is what makes this row's age -- and therefore the
+  // trending decay computed from it -- mean "how old is the post that
+  // used this hashtag," not "how long ago this join row happened to be
+  // written." Lets trending.service.ts window/decay directly off this
+  // table without an extra join back to Post on every read.
+  createdAt DateTime @default(now())
+
+  @@unique([postId, hashtagId])
+  // Backs GET /trending's own windowed aggregation (WHERE hashtagId
+  // grouped, createdAt within the rolling window) -- the same
+  // "@@index([foreignKeyId, timestampColumn])" shape Message's own
+  // @@index([conversationId, sentAt]) already establishes for an
+  // identical "one FK's rows, ordered/windowed by time" access pattern.
+  @@index([hashtagId, createdAt])
 }
 
 // Feeds the Admin moderation queue — Build Plan Section 8.4.
