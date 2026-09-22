@@ -76,6 +76,15 @@ function rail() {
   return screen.getByRole("navigation", { name: "Settings sections" });
 }
 
+// The Display section's own rail label ("Display, Language & Region")
+// shares words with 2 of its 4 hub-row labels ("Display", "Language"), so
+// an unscoped getByRole("link", {name: /language/i}) would also match the
+// rail's own link and throw on multiple matches. Scope row-link
+// assertions to the content panel to avoid that collision.
+function panel() {
+  return document.querySelector(".settings-panel") as HTMLElement;
+}
+
 describe("Settings shell — desktop rail", () => {
   it("renders all 5 rows with the Decision Log #230 labels", async () => {
     await renderAt("/settings/account");
@@ -179,18 +188,6 @@ describe("Account overview", () => {
     await renderAt("/settings/account/delete");
     expect(screen.getByRole("heading", { name: /delete your account/i })).not.toBeNull();
     expect(rail()).not.toBeNull();
-  });
-});
-
-describe("Unbuilt sections", () => {
-  it.each(["display"])("/settings/%s shows the not-built placeholder", async (seg) => {
-    await renderAt(`/settings/${seg}`);
-    expect(screen.getByRole("status").textContent).toMatch(/not built yet/i);
-  });
-
-  it("deeper unbuilt paths also land on the placeholder, not a 404", async () => {
-    await renderAt("/settings/display/foo");
-    expect(screen.getByRole("status").textContent).toMatch(/not built yet/i);
   });
 });
 
@@ -333,6 +330,106 @@ describe("Notification Preferences section", () => {
       expect(screen.getByText(message)).not.toBeNull();
       cleanup();
     }
+  });
+});
+
+describe("Display, Language & Region section", () => {
+  it("hub renders the intro blurb and all 4 rows, correctly linked", async () => {
+    await renderAt("/settings/display");
+    expect(screen.getByRole("heading", { name: "Display, Language & Region" })).not.toBeNull();
+    expect(screen.getByText(/manage how soccernity content is displayed to you/i)).not.toBeNull();
+
+    const targets: [RegExp, string][] = [
+      [/^Accessibility/, "/settings/display/accessibility"],
+      [/^Display/, "/settings/display/density"],
+      [/^Language/, "/settings/display/language"],
+      [/^Data usage/i, "/settings/display/data-usage"],
+    ];
+    for (const [name, href] of targets) {
+      expect(within(panel()).getByRole("link", { name }).getAttribute("href")).toBe(href);
+    }
+  });
+
+  it.each([
+    "/settings/display",
+    "/settings/display/accessibility",
+    "/settings/display/density",
+    "/settings/display/language",
+    "/settings/display/data-usage",
+  ])("the rail marks Display, Language & Region active on %s", async (path) => {
+    await renderAt(path);
+    const current = within(rail())
+      .getAllByRole("link")
+      .filter((l) => l.getAttribute("aria-current") === "page");
+    expect(current).toHaveLength(1);
+    expect(current[0].textContent).toContain("Display, Language & Region");
+  });
+
+  it("Accessibility leaf renders 2 disabled toggles and a disabled value row", async () => {
+    await renderAt("/settings/display/accessibility");
+    expect(screen.getByRole("heading", { name: "Accessibility" })).not.toBeNull();
+    for (const label of ["Reduce motion", "Increase contrast", "Text size"]) {
+      expect(screen.getByText(label)).not.toBeNull();
+    }
+    expect(screen.getAllByRole("img", { name: /off \(not adjustable yet\)/i })).toHaveLength(2);
+    expect(screen.getByText("Default")).not.toBeNull();
+  });
+
+  it("Display leaf renders one disabled value row and a cross-reference to Accessibility", async () => {
+    await renderAt("/settings/display/density");
+    expect(screen.getByRole("heading", { name: "Display" })).not.toBeNull();
+    expect(screen.getByText("Display density")).not.toBeNull();
+    expect(screen.getByText("Comfortable")).not.toBeNull();
+    const link = screen.getByRole("link", { name: /accessibility/i });
+    expect(link.getAttribute("href")).toBe("/settings/display/accessibility");
+  });
+
+  it("Language leaf renders 4 disabled radio options with English (UK) selected, and the illustrative-only note", async () => {
+    await renderAt("/settings/display/language");
+    expect(screen.getByRole("heading", { name: "Language" })).not.toBeNull();
+    const radios = screen.getAllByRole("radio");
+    expect(radios).toHaveLength(4);
+    for (const r of radios) {
+      expect((r as HTMLButtonElement).disabled).toBe(true);
+    }
+    const english = screen.getByRole("radio", { name: /english \(uk\)/i });
+    expect(english.getAttribute("aria-checked")).toBe("true");
+    for (const name of [/french/i, /portuguese/i, /yoruba/i]) {
+      expect(screen.getByRole("radio", { name }).getAttribute("aria-checked")).toBe("false");
+    }
+    expect(screen.getByText(/only english is available today/i)).not.toBeNull();
+  });
+
+  it("Data usage leaf renders Data saver off, Autoplay videos on, and a disabled Image quality value row", async () => {
+    await renderAt("/settings/display/data-usage");
+    expect(screen.getByRole("heading", { name: "Data usage" })).not.toBeNull();
+    expect(screen.getByRole("img", { name: /data saver: off \(not adjustable yet\)/i })).not.toBeNull();
+    expect(
+      screen.getByRole("img", { name: /autoplay videos: on \(not adjustable yet\)/i }),
+    ).not.toBeNull();
+    expect(screen.getByText("Image quality")).not.toBeNull();
+    expect(screen.getByText("Standard")).not.toBeNull();
+  });
+
+  it("no session → log-in prompt on the hub and every leaf, no crash", async () => {
+    window.sessionStorage.clear();
+    for (const [path, message] of [
+      ["/settings/display", /log in to manage your display, language, and region settings/i],
+      ["/settings/display/accessibility", /log in to manage accessibility settings/i],
+      ["/settings/display/density", /log in to manage display settings/i],
+      ["/settings/display/language", /log in to manage your language settings/i],
+      ["/settings/display/data-usage", /log in to manage data usage settings/i],
+    ] as [string, RegExp][]) {
+      window.sessionStorage.clear();
+      await renderAt(path);
+      expect(screen.getByText(message)).not.toBeNull();
+      cleanup();
+    }
+  });
+
+  it("a deeper unmatched path under the now-built Display section 404s, not the old placeholder", async () => {
+    await renderAt("/settings/display/foo");
+    expect(screen.getByRole("heading", { name: /page not found/i })).not.toBeNull();
   });
 });
 
