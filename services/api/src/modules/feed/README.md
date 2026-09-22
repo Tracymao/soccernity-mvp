@@ -8,7 +8,9 @@ Build target: Sprint 2 — Section 4.3 of the MVP Build Plan.
 (PR #53).** **Slice two (the remaining seven endpoints) — done, merged to
 `main` (PR #54).** **`DELETE /posts/:id/comments/:commentId` — done,
 `sprint-2/comment-delete`, a genuine addition beyond Section 4.3's
-original list, see "Comment deletion" below.**
+original list, see "Comment deletion" below.** **`POST /posts/:id/view`
+— done, `sprint-4/post-view-tracking`, also a genuine addition beyond
+Section 4.3's original list, see "View tracking" below.**
 
 Section 4.3 lists nine endpoints total:
 
@@ -853,3 +855,57 @@ reactivation — no per-post backfill. `GET /posts/:id/comments` is a
 deliberate non-change (filtering a mid-thread comment drifts
 `Post.commentCount`, and Section 4.3 has no comment-visibility model);
 `getSavedPosts` is unchanged (the caller's own private bookmark list).
+
+## `POST /posts/:id/view` — view tracking (`sprint-4/post-view-tracking`)
+
+A genuine addition beyond Section 4.3's original nine-endpoint list —
+same "spec-gap addition, flagged not silent" treatment as
+`DELETE /posts/:id/comments/:commentId` above. Motivated by the Search &
+Trending video carousel needing a real, non-fabricated view count to
+sort/display — before this PR nothing in this codebase tracked views at
+all: no `viewCount` field, no view-tracking table (confirmed by grep).
+
+**Schema**: `Post.viewCount Int @default(0)` (the same denormalized-cache
+convention as `likeCount`/`commentCount`) plus a new `PostView` model
+(`postId`, nullable `viewerId`, `createdAt`, `@@unique([viewerId,
+postId])`) — modeled directly on `Like`'s shape. See both models' own
+`schema.prisma` comments for the full reasoning.
+
+**Guard: `OptionalJwtAuthGuard`, not `JwtAuthGuard`** — a new guard
+(`guards/optional-jwt-auth.guard.ts`) that never rejects a request; it
+attaches `request.user` when a valid bearer token is present and leaves
+it `undefined` otherwise. Anonymous views are allowed by design — a view
+is worth recording whether or not the viewer is logged in, and gating it
+behind mandatory auth would undercount exactly the kind of casual,
+logged-out browsing a public-facing video carousel is meant to capture.
+No `GuardianConsentGuard` either: viewing isn't "posting, messaging,
+joining a Banter Room or Community Group" under Section 5.7's own list,
+the same category `like`/`save` already sit in, and a restricted-pending
+minor viewing a post produces no new visible content.
+
+**De-duplication — a disclosed v1 simplification, not an oversight**:
+
+- **Logged-in caller**: idempotent, via the exact insert-then-catch-P2002
+  pattern `likePost`/`savePost` already use, backed by
+  `PostView.@@unique([viewerId, postId])`. A second view call from the
+  same real user is a no-op — `viewCount` never moves past +1 for that
+  person, same guarantee a duplicate like gets.
+- **Anonymous caller**: genuinely NOT deduplicated. Postgres treats every
+  `NULL` in a unique index as distinct from every other `NULL`, so the
+  same unique constraint provides zero protection when `viewerId` is
+  `null` — every anonymous call inserts a new `PostView` row and
+  increments `Post.viewCount`. Building real anonymous-session
+  de-duplication (a cookie- or fingerprint-keyed store, tracking repeat
+  visits from the same browser without an account) is explicitly out of
+  scope here — flagged, not silently accepted.
+
+**No duration/completion tracking** — this endpoint records "was this
+post's media opened," nothing more. No watch-time, no
+partial-vs-complete distinction, a single event per (viewer, post) pair
+(or, for an anonymous caller, per call). A richer view-quality model is
+a real, deferred v2 concern.
+
+**No notification, no points awarded** — a view is neither a
+safety-sensitive action nor new user-generated content, so neither of
+`likePost`'s two side effects (notification, `awardPoints`) applies
+here.

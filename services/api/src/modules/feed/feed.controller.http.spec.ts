@@ -11,6 +11,9 @@ import * as request from 'supertest';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
+import { TokenService } from '../auth/token/token.service';
+import { AccessTokenPayload } from '../auth/token/token.types';
 import { FeedController } from './feed.controller';
 import { FeedService } from './feed.service';
 
@@ -25,6 +28,12 @@ import { FeedService } from './feed.service';
 // backed by a mocked PrismaService, so this suite is the actual proof
 // that the guard is correctly applied to POST /posts and correctly
 // absent from GET /posts/feed, not just documented as such in a comment.
+//
+// OptionalJwtAuthGuard (POST /posts/:id/view, sprint-4/post-view-
+// tracking) is ALSO left real for the same reason, backed by a mocked
+// TokenService rather than a stubbed-out guard — this is the actual
+// proof that an anonymous caller (no Authorization header) is let
+// through with req.user left undefined, not just documented as such.
 describe('FeedController (HTTP layer)', () => {
   let app: INestApplication;
   const feedService = {
@@ -38,10 +47,14 @@ describe('FeedController (HTTP layer)', () => {
     deleteComment: jest.fn(),
     savePost: jest.fn(),
     unsavePost: jest.fn(),
+    recordView: jest.fn(),
   };
   const prisma = {
     user: { findUnique: jest.fn() },
     guardian: { findUnique: jest.fn() },
+  };
+  const tokenService = {
+    verifyAccessToken: jest.fn(),
   };
 
   const ADULT = { sub: 'adult-1', role: 'fan' };
@@ -56,7 +69,9 @@ describe('FeedController (HTTP layer)', () => {
       providers: [
         { provide: FeedService, useValue: feedService },
         GuardianConsentGuard,
+        OptionalJwtAuthGuard,
         { provide: PrismaService, useValue: prisma },
+        { provide: TokenService, useValue: tokenService },
       ],
     })
       .overrideGuard(JwtAuthGuard)
@@ -499,6 +514,63 @@ describe('FeedController (HTTP layer)', () => {
       await request(app.getHttpServer()).delete('/posts/post-1/save').expect(200);
 
       expect(feedService.unsavePost).toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /posts/:id/view', () => {
+    it('records an anonymous view (no Authorization header) with 200, viewerId passed through as undefined', async () => {
+      feedService.recordView.mockResolvedValue({ postId: 'post-1', viewCount: 5 });
+
+      const response = await request(app.getHttpServer()).post('/posts/post-1/view').expect(200);
+
+      expect(response.body).toEqual({ postId: 'post-1', viewCount: 5 });
+      expect(feedService.recordView).toHaveBeenCalledWith(undefined, 'post-1');
+      expect(tokenService.verifyAccessToken).not.toHaveBeenCalled();
+    });
+
+    it('records a logged-in view when a real, valid bearer token is presented — proves OptionalJwtAuthGuard is genuinely wired, not stubbed away', async () => {
+      const payload: AccessTokenPayload = { sub: 'user-9', role: 'fan' };
+      tokenService.verifyAccessToken.mockReturnValue(payload);
+      feedService.recordView.mockResolvedValue({ postId: 'post-1', viewCount: 6 });
+
+      const response = await request(app.getHttpServer())
+        .post('/posts/post-1/view')
+        .set('Authorization', 'Bearer a.valid.token')
+        .expect(200);
+
+      expect(response.body).toEqual({ postId: 'post-1', viewCount: 6 });
+      expect(tokenService.verifyAccessToken).toHaveBeenCalledWith('a.valid.token');
+      expect(feedService.recordView).toHaveBeenCalledWith('user-9', 'post-1');
+    });
+
+    it('degrades an invalid/expired bearer token to an anonymous view (200, not 401) — the one real behavioral difference from JwtAuthGuard', async () => {
+      tokenService.verifyAccessToken.mockImplementation(() => {
+        throw new Error('Invalid or expired access token');
+      });
+      feedService.recordView.mockResolvedValue({ postId: 'post-1', viewCount: 7 });
+
+      const response = await request(app.getHttpServer())
+        .post('/posts/post-1/view')
+        .set('Authorization', 'Bearer a.bad.token')
+        .expect(200);
+
+      expect(response.body).toEqual({ postId: 'post-1', viewCount: 7 });
+      expect(feedService.recordView).toHaveBeenCalledWith(undefined, 'post-1');
+    });
+
+    it('propagates a 404 from FeedService when postId does not reference a real post', async () => {
+      feedService.recordView.mockRejectedValue(new NotFoundException('Post not found'));
+
+      await request(app.getHttpServer()).post('/posts/missing/view').expect(404);
+    });
+
+    it('is idempotent at the HTTP layer on a repeated call (still 200, FeedService owns the no-op)', async () => {
+      feedService.recordView.mockResolvedValue({ postId: 'post-1', viewCount: 5 });
+
+      await request(app.getHttpServer()).post('/posts/post-1/view').expect(200);
+      await request(app.getHttpServer()).post('/posts/post-1/view').expect(200);
+
+      expect(feedService.recordView).toHaveBeenCalledTimes(2);
     });
   });
 });

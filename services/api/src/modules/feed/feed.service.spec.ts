@@ -39,6 +39,13 @@ function buildPrismaMock() {
       findMany: jest.fn().mockResolvedValue([]),
       findUnique: jest.fn().mockResolvedValue(null),
     },
+    // sprint-4/post-view-tracking: recordView() creates a PostView row.
+    // Only `create` is exercised (there's no findUnique/delete path — see
+    // recordView()'s own comment for why P2002 is caught rather than
+    // pre-checked).
+    postView: {
+      create: jest.fn(),
+    },
     // Decision Log #153: getFeed / getPostById now resolve
     // author.isFollowing from the caller's Follow rows. Same default-to-
     // empty rationale as `like` above.
@@ -1364,6 +1371,105 @@ describe('FeedService', () => {
         where: { userId_postId: { userId: 'user-1', postId: 'post-1' } },
       });
       expect(result).toEqual({ postId: 'post-1', saved: false });
+    });
+  });
+
+  describe('recordView', () => {
+    function mockPostExists(prisma: PrismaService, exists = true) {
+      (prisma.post.findUnique as jest.Mock).mockImplementation((args: { select?: unknown }) => {
+        if (!exists) return Promise.resolve(null);
+        if (args?.select && (args.select as Record<string, unknown>).viewCount) {
+          return Promise.resolve({ viewCount: 1 });
+        }
+        return Promise.resolve({ id: 'post-1' });
+      });
+    }
+
+    it('throws NotFoundException when postId does not reference a real post', async () => {
+      const prisma = buildPrismaMock();
+      mockPostExists(prisma, false);
+      const service = new FeedService(prisma);
+
+      await expect(service.recordView('user-1', 'missing-post')).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.postView.create).not.toHaveBeenCalled();
+    });
+
+    it('creates a PostView row and increments viewCount transactionally for a logged-in caller', async () => {
+      const prisma = buildPrismaMock();
+      mockPostExists(prisma);
+      (prisma.postView.create as jest.Mock).mockResolvedValue({ id: 'view-1' });
+      (prisma.post.update as jest.Mock).mockResolvedValue({});
+      const service = new FeedService(prisma);
+
+      const result = await service.recordView('user-1', 'post-1');
+
+      expect(prisma.postView.create).toHaveBeenCalledWith({
+        data: { viewerId: 'user-1', postId: 'post-1' },
+      });
+      expect(prisma.post.update).toHaveBeenCalledWith({
+        where: { id: 'post-1' },
+        data: { viewCount: { increment: 1 } },
+      });
+      expect(result).toEqual({ postId: 'post-1', viewCount: 1 });
+    });
+
+    it('records an anonymous view with viewerId null', async () => {
+      const prisma = buildPrismaMock();
+      mockPostExists(prisma);
+      (prisma.postView.create as jest.Mock).mockResolvedValue({ id: 'view-1' });
+      (prisma.post.update as jest.Mock).mockResolvedValue({});
+      const service = new FeedService(prisma);
+
+      const result = await service.recordView(undefined, 'post-1');
+
+      expect(prisma.postView.create).toHaveBeenCalledWith({
+        data: { viewerId: null, postId: 'post-1' },
+      });
+      expect(result).toEqual({ postId: 'post-1', viewCount: 1 });
+    });
+
+    it('treats a duplicate logged-in view (P2002) as idempotent success without double-incrementing', async () => {
+      const prisma = buildPrismaMock();
+      const dupError = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: '5.0.0',
+      });
+      (prisma.post.findUnique as jest.Mock)
+        .mockResolvedValueOnce({ id: 'post-1' }) // assertPostExists
+        .mockResolvedValueOnce({ viewCount: 1 }); // currentViewCount, unchanged by this call
+      (prisma.postView.create as jest.Mock).mockRejectedValue(dupError);
+      const service = new FeedService(prisma);
+
+      const result = await service.recordView('user-1', 'post-1');
+
+      expect(prisma.post.update).not.toHaveBeenCalled();
+      expect(result).toEqual({ postId: 'post-1', viewCount: 1 });
+    });
+
+    it('rethrows an unrelated Prisma error rather than swallowing it', async () => {
+      const prisma = buildPrismaMock();
+      const otherError = new Prisma.PrismaClientKnownRequestError('Something else', {
+        code: 'P2025',
+        clientVersion: '5.0.0',
+      });
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.postView.create as jest.Mock).mockRejectedValue(otherError);
+      const service = new FeedService(prisma);
+
+      await expect(service.recordView('user-1', 'post-1')).rejects.toBe(otherError);
+    });
+
+    it('does not send a notification or award points for a view', async () => {
+      const prisma = buildPrismaMock();
+      mockPostExists(prisma);
+      (prisma.postView.create as jest.Mock).mockResolvedValue({ id: 'view-1' });
+      (prisma.post.update as jest.Mock).mockResolvedValue({});
+      const service = new FeedService(prisma);
+
+      await service.recordView('user-1', 'post-1');
+
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+      expect(prisma.pointsLedgerEntry.create).not.toHaveBeenCalled();
     });
   });
 

@@ -29,13 +29,13 @@ datasource db {
 // ---------- Community ----------
 
 model User {
-  id                 String   @id @default(uuid())
-  email              String   @unique
+  id                 String    @id @default(uuid())
+  email              String    @unique
   phone              String?
   passwordHash       String
   displayName        String
   dateOfBirth        DateTime?
-  isMinor            Boolean  @default(false)
+  isMinor            Boolean   @default(false)
   // sprint-1/under-16-restrictions -- a genuine addition beyond Section
   // 3's literal User field list (Decision Log candidate, see
   // auth/README.md). A NEW, separate tier layered ON TOP of isMinor /
@@ -46,10 +46,10 @@ model User {
   // requested under-16 controls: no messaging either direction, no
   // Banter Rooms, read-only Community Groups, guardian contact exposed
   // on the minor's own profile.
-  isUnder16          Boolean  @default(false)
-  role               String   @default("fan") // fan | player | admin
-  verificationStatus String   @default("unverified")
-  createdAt          DateTime @default(now())
+  isUnder16          Boolean   @default(false)
+  role               String    @default("fan") // fan | player | admin
+  verificationStatus String    @default("unverified")
+  createdAt          DateTime  @default(now())
 
   // Sprint 1 / sprint-1/f5-f6-missing-endpoints — a genuine addition beyond
   // Section 3's literal User field list, flagged as a Decision Log
@@ -148,6 +148,11 @@ model User {
   comments         Comment[]
   savedPosts       SavedPost[]
   likes            Like[]
+  // sprint-4/post-view-tracking -- the reverse side of PostView.viewer
+  // (see that model). Nullable on PostView's own side (an anonymous
+  // view has no viewer), so this array is simply every view a LOGGED-IN
+  // account is on record for; no business data of its own.
+  postViews        PostView[]
   followedBy       Follow[]           @relation("followee")
   following        Follow[]           @relation("follower")
   notifications    Notification[]
@@ -244,8 +249,8 @@ model Guardian {
   // consentScreenVersion: manually-bumped constant, see
   // consent-screen-version.constants.ts. consentDeviceType: coarse
   // "mobile" | "desktop" | "unknown", never the raw User-Agent.
-  consentScreenVersion  String?
-  consentDeviceType     String?
+  consentScreenVersion String?
+  consentDeviceType    String?
 
   // sprint-1/coppa-card-verification -- a technical control, NOT a legal
   // conclusion (Decision Log #4 stays open). For a child who is under 13
@@ -287,7 +292,7 @@ model Guardian {
   // Enforced by a CHECK constraint (see migration
   // 20260919160000_guardian_consent_status_check_and_decline_source), which
   // Prisma cannot model -- a String, not a Prisma enum, on purpose.
-  consentDeclineSource  String?
+  consentDeclineSource String?
 
   // sprint-1/guardian-consent-decline-withdraw-expiry -- records the ONE
   // automatic re-send GuardianConsentExpirySweepService performs when the
@@ -317,7 +322,7 @@ model Guardian {
   // Defaults to NULL, so every Guardian row that already exists when this
   // ships gets its one automatic re-send on the first sweep after deploy.
   // No existing pending account is ever fast-tracked to deletion.
-  consentAutoResentAt   DateTime?
+  consentAutoResentAt DateTime?
 
   // sprint-1/guardian-consent-decline-withdraw-expiry -- the withdrawal
   // credential, deliberately SEPARATE from consentToken rather than
@@ -375,22 +380,22 @@ model Guardian {
 // hard-delete time, not at the (possibly years-earlier) original
 // consent-confirmation time. Indexed for the sweep's own purge query.
 model ConsentAuditRecord {
-  id                 String    @id @default(uuid())
-  minorUserId        String
+  id                   String    @id @default(uuid())
+  minorUserId          String
   // Guardian.consentStatus's own value at the moment of hard-delete --
   // "pending" is a real, expected case here too (a restricted-pending
   // minor who deletes their own account before a guardian ever
   // confirms), not just "confirmed".
-  consentStatus      String
+  consentStatus        String
   // Guardian.consentTimestamp's own value, snapshotted -- null when
   // consentStatus was "pending" at hard-delete time.
-  consentConfirmedAt DateTime?
+  consentConfirmedAt   DateTime?
   // How consent was (or would have been) captured -- currently always
   // the one flow this codebase implements (Build Plan Section 8.3's
   // emailed-token confirm link, GuardianConsentModule). A plain string,
   // not an enum, so a second consent method added later doesn't need a
   // migration to describe existing rows.
-  consentMethod      String    @default("guardian-consent-link")
+  consentMethod        String    @default("guardian-consent-link")
   // Decision Log #348 -- snapshots of Guardian.consentScreenVersion /
   // consentDeviceType. Nullable: rows created before this, pending rows,
   // and confirmations predating capture have neither; never backfilled.
@@ -401,7 +406,7 @@ model ConsentAuditRecord {
   // rows confirmed before this existed and pending rows have neither.
   verificationMethod   String?
   verificationAt       DateTime?
-  createdAt          DateTime  @default(now())
+  createdAt            DateTime  @default(now())
 
   @@index([createdAt])
 }
@@ -492,7 +497,7 @@ model GrassrootsTeam {
   leagueType   String // informal | school | academy
   createdById  String?
   // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
-  createdBy    User?      @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdBy    User?     @relation(fields: [createdById], references: [id], onDelete: Restrict)
   verified     Boolean   @default(false)
   fixturesHome Fixture[] @relation("teamA")
   fixturesAway Fixture[] @relation("teamB")
@@ -601,10 +606,26 @@ model Post {
   // (commentCount: { gt: 0 }) pattern unlikePost() already established
   // for likeCount — see feed.service.ts.
   commentCount Int           @default(0)
+  // sprint-4/post-view-tracking (Build Plan Section 4.3, POST
+  // /posts/:id/view) -- same denormalized-cache convention as
+  // likeCount/commentCount above: incremented transactionally alongside
+  // PostView row creation, never trusted in isolation, and recomputable
+  // via PostView.count({ where: { postId } }) if it ever drifts. Unlike
+  // likeCount, this has NO decrement path and never will -- a view can't
+  // be "un-viewed."
+  //
+  // It is deliberately NOT always equal to PostView.count({ where: {
+  // postId } }): an anonymous view (PostView.viewerId null) increments
+  // this on EVERY call with no de-duplication at all (see PostView's own
+  // comment and FeedService.recordView) -- so this counts view EVENTS,
+  // not unique viewers, and can legitimately run ahead of the number of
+  // distinct real people who viewed the post.
+  viewCount    Int           @default(0)
   createdAt    DateTime      @default(now())
   comments     Comment[]
   savedBy      SavedPost[]
   likes        Like[]
+  views        PostView[]
   // sprint-4/trending-topics-backend (Build Plan Section 4.7, GET
   // /trending) -- see PostHashtag below.
   hashtags     PostHashtag[]
@@ -982,6 +1003,60 @@ model PostHashtag {
   @@index([hashtagId, createdAt])
 }
 
+// Backs POST /posts/:id/view (Build Plan Section 4.3) -- the view
+// tracking this project has never had until now (confirmed by grep
+// before this PR: no viewCount field, no view-tracking table anywhere).
+// Motivated by the Search & Trending video carousel needing a real,
+// non-fabricated view count to sort/display. Modeled directly on Like's
+// own shape -- a surrogate `id` + `@@unique` composite, matching
+// Like/Follow/SavedPost/PostHashtag's established convention in this
+// file over an implicit Prisma m2m or a composite primary key -- with
+// one deliberate difference: viewerId is nullable, because this
+// endpoint allows anonymous views (OptionalJwtAuthGuard, not
+// JwtAuthGuard -- see feed.controller.ts).
+//
+// De-duplication is a genuine, disclosed v1 simplification, not an
+// oversight:
+//   - Logged-in viewer (viewerId set): @@unique([viewerId, postId])
+//     makes a second view from the same user a no-op, via the exact
+//     insert-then-catch-P2002 idempotency pattern Like/SavedPost already
+//     use (see FeedService.recordView). One real person can inflate
+//     Post.viewCount by at most 1, ever.
+//   - Anonymous viewer (viewerId null): Postgres treats every NULL in a
+//     unique index as distinct from every other NULL, so this
+//     constraint provides NO de-duplication for anonymous calls at all
+//     -- each one is a genuinely new row, and Post.viewCount increments
+//     every time. Building real anonymous-session dedup (a
+//     cookie/fingerprint-keyed store) is explicitly out of scope for
+//     this PR; the tradeoff is documented here and in feed/README.md
+//     rather than silently accepted.
+//
+// This is also a v1 simplification in a second sense: it records "was
+// this post's media opened," nothing more -- no duration tracking, no
+// completion/watch-through tracking, just a single event per (viewer,
+// post) pair (or, for an anonymous caller, per call).
+model PostView {
+  id     String @id @default(uuid())
+  postId String
+  // No onDelete: Cascade here, matching Like.post / Comment.post /
+  // SavedPost.post / PostHashtag.post's own current shape exactly -- see
+  // PostHashtag's own comment for why this FK's implicit RESTRICT
+  // default is inert in practice (no DELETE /posts/:id endpoint exists
+  // anywhere in this codebase today).
+  post   Post   @relation(fields: [postId], references: [id])
+
+  // Nullable -- an anonymous view has no viewer to record. Matches
+  // GrassrootsTeam.createdById's own nullable-User-relation shape
+  // exactly (String? + User? + explicit onDelete: Restrict).
+  viewerId String?
+  // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
+  viewer   User?   @relation(fields: [viewerId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@unique([viewerId, postId])
+}
+
 // Feeds the Admin moderation queue — Build Plan Section 8.4.
 model Report {
   id         String   @id @default(uuid())
@@ -1081,14 +1156,14 @@ model Article {
   // modules/admin-content/README.md) needs a real column to
   // keyset-paginate by, the same gap Follow.createdAt / Like.likedAt /
   // BanterRoomMember.joinedAt each closed for their own models.
-  createdAt DateTime @default(now())
+  createdAt     DateTime  @default(now())
 }
 
 model Category {
-  id       String    @id @default(uuid())
-  name     String
-  slug     String    @unique
-  articles Article[]
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  articles  Article[]
   // sprint-5/admin-articles-categories-backend additions, both flagged
   // per CLAUDE.md's "the data model is a fixed spec" rule — see
   // modules/admin-content/README.md for the full reasoning.
@@ -1099,11 +1174,11 @@ model Category {
   // rather than deleting it is deliberate — Article.categoryId has no
   // ON DELETE CASCADE, so a hard delete would orphan every Article
   // referencing it; Section 4.8 also defines no category-deletion route.
-  status    String   @default("active")
+  status    String    @default("active")
   // Same "a list endpoint needs a real column to order/page by" gap as
   // Article.createdAt above — GET /admin/categories has nothing else to
   // keyset-paginate on.
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 }
 
 // sprint-2/admin-console-account-entity — Decision Log #54's resolution:

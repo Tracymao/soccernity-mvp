@@ -6,6 +6,7 @@ import { RedisModule } from '../../redis/redis.module';
 import { GuardianConsentGuard } from './guards/guardian-consent.guard';
 import { Under16RestrictionGuard } from './guards/under-16-restriction.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from './guards/optional-jwt-auth.guard';
 import { PasswordService } from './password/password.service';
 import { AuthRateLimitModule } from './rate-limit/rate-limit.module';
 import { RefreshTokenStore } from './token/refresh-token.store';
@@ -35,6 +36,12 @@ import { TokenService } from './token/token.service';
 // GuardianConsentGuard here on the same precedent, plus PrismaService
 // as its own dependency (no other provider in this module needed
 // Prisma before now) — see guards/guardian-consent.guard.ts.
+//
+// sprint-4/post-view-tracking added OptionalJwtAuthGuard here on the
+// same precedent — a guard that never rejects a request but attaches
+// request.user when a valid token IS present, for routes (POST
+// /posts/:id/view) that must stay reachable by anonymous callers. See
+// guards/optional-jwt-auth.guard.ts.
 @Module({
   imports: [
     ConfigModule,
@@ -51,7 +58,7 @@ import { TokenService } from './token/token.service';
       }),
     }),
   ],
-  providers: [PasswordService, TokenService, RefreshTokenStore, JwtAuthGuard, PrismaService, GuardianConsentGuard, Under16RestrictionGuard],
-  exports: [PasswordService, TokenService, RefreshTokenStore, JwtAuthGuard, GuardianConsentGuard, Under16RestrictionGuard],
+  providers: [PasswordService, TokenService, RefreshTokenStore, JwtAuthGuard, OptionalJwtAuthGuard, PrismaService, GuardianConsentGuard, Under16RestrictionGuard],
+  exports: [PasswordService, TokenService, RefreshTokenStore, JwtAuthGuard, OptionalJwtAuthGuard, GuardianConsentGuard, Under16RestrictionGuard],
 })
 export class AuthFoundationModule {}
