@@ -102,6 +102,12 @@ describe("router — rendered footer presence", () => {
     expect(screen.queryByRole("contentinfo")).toBeNull();
     expect(document.querySelector("main")).not.toBeNull();
   });
+
+  it("/search resolves — no session -> its own log-in prompt, no footer", async () => {
+    await renderAt("/search");
+    expect(screen.queryByRole("contentinfo")).toBeNull();
+    expect(document.querySelector("main")).not.toBeNull();
+  });
 });
 
 // Decision Log #311 (code half): the match-centre drill-down sits under

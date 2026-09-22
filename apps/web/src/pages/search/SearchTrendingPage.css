@@ -1,0 +1,352 @@
+/* Community — Search & Trending. Figma source: desktop "Search page with
+ * trending topics" (2876:4628), mobile "Community — Search & Trending —
+ * Mobile" (5780:8581), "Soccernity-MVP" file (weZWWqggy9j13eX8bhFgs6).
+ *
+ * Colour values reference the app-wide --sn-* custom properties from
+ * src/theme/applyTheme.ts -- do not hardcode hex. Light theme, matching
+ * the app's single active mode.
+ *
+ * Layout mirrors CommunityPage.css's own three-column grid (260px rail /
+ * flexible main / 300px rail, collapsing to a single column at 820px --
+ * the same MOBILE_MAX_WIDTH breakpoint useIsMobile.ts uses for the filter
+ * chip set itself). The chip row's own visual style (pill vs. underline
+ * tab) is switched purely via this same breakpoint -- SearchTrendingPage.tsx
+ * only branches the CHIP LABELS by isMobile (a real content difference,
+ * "For you/Trending/News" vs. "For you/Trending/News/Sport"), not the
+ * chip style, which this stylesheet alone decides. */
+
+.search-page {
+  display: block;
+}
+
+.search-page-status {
+  padding: 24px;
+  text-align: center;
+  color: var(--sn-text-secondary);
+  font: 500 15px "Inter", sans-serif;
+}
+
+.search-page-status a {
+  color: var(--sn-brand-navy);
+  font-weight: 600;
+}
+
+.search-page__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr) minmax(0, 300px);
+  gap: 24px;
+  max-width: 1180px;
+  margin: 0 auto;
+  align-items: start;
+}
+
+@media (max-width: 1080px) {
+  .search-page__layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 300px);
+  }
+  .search-page__rail--left {
+    display: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .search-page__layout {
+    grid-template-columns: 1fr;
+  }
+  .search-page__rail--right {
+    display: none;
+  }
+}
+
+.search-page__main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* --- search field ------------------------------------------------------
+ * A disclosed departure from the desktop Figma node -- see
+ * SearchTrendingPage.tsx's own header comment. Matches the mobile
+ * frame's real search-field treatment at every breakpoint. */
+
+.search-page__field {
+  background: var(--sn-green-tint-12);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.search-page__input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  outline: none;
+  font: 500 14px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.search-page__input::placeholder {
+  color: var(--sn-text-secondary);
+}
+
+/* --- filter chips -------------------------------------------------------
+ * Desktop default: underline tabs (2876:6953). */
+
+.search-page__filters {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+}
+
+.search-page__chip {
+  border: none;
+  background: transparent;
+  padding: 10px 4px;
+  font: 400 16px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.search-page__chip--active {
+  color: var(--sn-brand-navy);
+  font-weight: 600;
+  border-bottom-color: var(--sn-brand-navy);
+}
+
+/* Mobile: pill chips (5780:8672). */
+@media (max-width: 820px) {
+  .search-page__filters {
+    gap: 8px;
+    border-bottom: none;
+    flex-wrap: wrap;
+  }
+
+  .search-page__chip {
+    background: var(--sn-green-tint-12);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font: 600 12px "Inter", sans-serif;
+    color: var(--sn-text-secondary);
+    margin-bottom: 0;
+  }
+
+  .search-page__chip--active {
+    background: var(--sn-brand-navy);
+    color: #fff;
+    border-bottom-color: transparent;
+  }
+}
+
+/* --- placeholder slots ---------------------------------------------------
+ * Genuinely empty -- no fabricated sample content. Used both in the two
+ * side rails and inline in the main column (the video carousel). */
+
+.search-page__placeholder {
+  background: var(--sn-background-surface);
+  border: 1px dashed var(--sn-icon-inactive);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.search-page__placeholder-title {
+  font: 600 14px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0 0 4px;
+}
+
+.search-page__placeholder-note {
+  font: 400 12px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.search-page__rail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* --- status / results ---------------------------------------------------- */
+
+.search-page__status {
+  padding: 24px 0;
+  text-align: center;
+  color: var(--sn-text-secondary);
+  font: 500 14px "Inter", sans-serif;
+}
+
+.search-page__status--error {
+  color: var(--sn-brand-navy);
+}
+
+.search-page__results {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.search-page__group-title {
+  font: 700 15px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0 0 10px;
+}
+
+.search-page__group-empty {
+  font: 400 13px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.search-page__avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 13px "Montserrat", sans-serif;
+  flex-shrink: 0;
+}
+
+/* People */
+
+.search-page__user-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.search-page__user-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.search-page__user-name {
+  font: 600 14px "Montserrat", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+/* Clubs */
+
+.search-page__club-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.search-page__club-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+}
+
+.search-page__club-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.search-page__club-badge--initial {
+  background: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 15px "Montserrat", sans-serif;
+}
+
+.search-page__club-meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.search-page__club-name {
+  font: 600 14px "Montserrat", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.search-page__club-place {
+  font: 400 12px "Montserrat", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+/* Posts */
+
+.search-page__post-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.search-page__post-row {
+  background: var(--sn-background-surface);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.search-page__post-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.search-page__post-author {
+  font: 600 14px "Montserrat", sans-serif;
+  color: var(--sn-text-primary);
+  flex: 1;
+}
+
+.search-page__post-time {
+  font: 400 12px "Montserrat", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.search-page__post-text {
+  font: 400 13px "Montserrat", sans-serif;
+  color: var(--sn-text-primary);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.search-page__post-stats {
+  display: flex;
+  gap: 16px;
+  font: 600 12px "Montserrat", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.search-page__load-more {
+  align-self: flex-start;
+  border: 1px solid var(--sn-icon-inactive);
+  background: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font: 600 13px "Inter", sans-serif;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.search-page__load-more:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

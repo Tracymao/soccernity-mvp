@@ -229,13 +229,6 @@
   color: var(--sn-text-secondary);
 }
 
-.messages-recipient-hint {
-  font: 600 11px "Inter", sans-serif;
-  letter-spacing: 0.04em;
-  color: var(--sn-text-secondary);
-  margin: 0;
-}
-
 .messages-recipient-list {
   list-style: none;
   margin: 0;

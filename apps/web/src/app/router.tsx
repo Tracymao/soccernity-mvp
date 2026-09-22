@@ -41,6 +41,7 @@ import ArticleDetailPage from "../pages/blog/ArticleDetailPage";
 import LeaderboardPage from "../pages/LeaderboardPage";
 import ContestPage from "../pages/ContestPage";
 import CommunityPage from "../pages/CommunityPage";
+import SearchTrendingPage from "../pages/SearchTrendingPage";
 import ClubsPage from "../pages/ClubsPage";
 import ClubFanPage from "../pages/ClubFanPage";
 import GrassrootsPage from "../pages/GrassrootsPage";
@@ -173,6 +174,17 @@ export const routes: RouteObject[] = [
       // Follow, Build Plan Section 4.3 / 4.2). See CommunityPage.tsx. No
       // footer -- not in the Figma frame.
       { path: "community", element: <CommunityPage /> },
+      // Search & Trending (Build Plan Section 4.7's GET /search, Decision
+      // Log #139). No site footer -- not in the Figma frame (2876:4628 /
+      // 5780:8581), same as Community/Clubs/Banter. No Navbar/drawer entry
+      // point yet -- same "reachable by direct URL first, nav wiring is a
+      // flagged follow-up" precedent Clubs (#156) and Grassroots (#266)
+      // shipped under before their own nav entries landed. Only the
+      // search field + filter chip tabs are wired in this PR -- the
+      // trending topics sidebar, trending news, suggested people,
+      // fixtures, and video carousel are unbuilt placeholder slots, see
+      // SearchTrendingPage.tsx's own header comment.
+      { path: "search", element: <SearchTrendingPage /> },
       { path: "banter", element: <BanterPage /> },
       // Banter Room -- a single room's feed + posting (Build Plan Section
       // 4.4, BanterModule -- Decision Log #275/#276). No Figma frame
