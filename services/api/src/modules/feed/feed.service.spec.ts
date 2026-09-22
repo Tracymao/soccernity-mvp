@@ -63,6 +63,17 @@ function buildPrismaMock() {
     pointsLedgerEntry: {
       create: jest.fn(),
     },
+    // sprint-4/trending-topics-backend: createPost also extracts and
+    // records hashtags inside the same transaction (via
+    // recordPostHashtags, search/hashtag.util.ts). Every createPost test
+    // runs through this mock whether or not it asserts on hashtags, so
+    // both must exist unconditionally, same as pointsLedgerEntry above.
+    hashtag: {
+      upsert: jest.fn().mockResolvedValue({ id: 'hashtag-1' }),
+    },
+    postHashtag: {
+      create: jest.fn(),
+    },
   } as unknown as PrismaService;
 
   // FeedService uses interactive transactions ($transaction(async (tx)
@@ -178,6 +189,99 @@ describe('FeedService', () => {
       await expect(
         service.createPost('author-1', { contentText: 'Club post', clubPageId: 'club-1' }),
       ).resolves.toMatchObject({ clubPageId: 'club-1' });
+    });
+
+    // sprint-4/trending-topics-backend — recordPostHashtags is called
+    // from inside this same transaction (search/hashtag.util.ts). These
+    // tests exercise that call through the real, unmocked util function
+    // (only PrismaService is mocked) rather than mocking the util away,
+    // matching this file's own established style of testing FeedService
+    // end to end against a mocked Prisma client.
+    describe('hashtag extraction', () => {
+      it('extracts every distinct #hashtag from contentText, lowercased, and records one PostHashtag row per tag', async () => {
+        const prisma = buildPrismaMock();
+        const row = buildPostRow({
+          id: 'post-42',
+          contentText: 'Big win for #Chelsea today, #CHELSEA fans go wild! Also #epl news.',
+          createdAt: new Date('2026-08-09T10:00:00.000Z'),
+        });
+        (prisma.post.create as jest.Mock).mockResolvedValue(row);
+        (prisma.hashtag.upsert as jest.Mock)
+          .mockResolvedValueOnce({ id: 'hashtag-chelsea' })
+          .mockResolvedValueOnce({ id: 'hashtag-epl' });
+
+        const service = new FeedService(prisma);
+        await service.createPost('author-1', { contentText: row.contentText });
+
+        // "#Chelsea" and "#CHELSEA" both normalize to the same lowercase
+        // tag and are de-duplicated to ONE upsert call — see
+        // hashtag.util.ts's own extractHashtags() comment on why this
+        // dedupe happens before any Prisma call, not via a P2002 catch.
+        expect(prisma.hashtag.upsert).toHaveBeenCalledTimes(2);
+        expect(prisma.hashtag.upsert).toHaveBeenNthCalledWith(1, {
+          where: { tag: 'chelsea' },
+          create: { tag: 'chelsea', postCount: 1 },
+          update: { postCount: { increment: 1 } },
+          select: { id: true },
+        });
+        expect(prisma.hashtag.upsert).toHaveBeenNthCalledWith(2, {
+          where: { tag: 'epl' },
+          create: { tag: 'epl', postCount: 1 },
+          update: { postCount: { increment: 1 } },
+          select: { id: true },
+        });
+
+        expect(prisma.postHashtag.create).toHaveBeenCalledTimes(2);
+        expect(prisma.postHashtag.create).toHaveBeenNthCalledWith(1, {
+          data: { postId: 'post-42', hashtagId: 'hashtag-chelsea', createdAt: row.createdAt },
+        });
+        expect(prisma.postHashtag.create).toHaveBeenNthCalledWith(2, {
+          data: { postId: 'post-42', hashtagId: 'hashtag-epl', createdAt: row.createdAt },
+        });
+      });
+
+      it('records the PostHashtag row at the POST\'s own createdAt, never at write time', async () => {
+        const prisma = buildPrismaMock();
+        const postCreatedAt = new Date('2020-01-01T00:00:00.000Z');
+        (prisma.post.create as jest.Mock).mockResolvedValue(
+          buildPostRow({ id: 'post-1', contentText: '#throwback', createdAt: postCreatedAt }),
+        );
+
+        const service = new FeedService(prisma);
+        await service.createPost('author-1', { contentText: '#throwback' });
+
+        const callArgs = (prisma.postHashtag.create as jest.Mock).mock.calls[0][0];
+        expect(callArgs.data.createdAt).toEqual(postCreatedAt);
+      });
+
+      it('is a correct, cheap no-op for a post with no hashtags at all', async () => {
+        const prisma = buildPrismaMock();
+        (prisma.post.create as jest.Mock).mockResolvedValue(
+          buildPostRow({ contentText: 'No tags here' }),
+        );
+
+        const service = new FeedService(prisma);
+        await service.createPost('author-1', { contentText: 'No tags here' });
+
+        expect(prisma.hashtag.upsert).not.toHaveBeenCalled();
+        expect(prisma.postHashtag.create).not.toHaveBeenCalled();
+      });
+
+      it('ignores a pathologically long "word" rather than recording it as a hashtag (HASHTAG_MAX_TAG_LENGTH)', async () => {
+        const prisma = buildPrismaMock();
+        const longTag = `#${'a'.repeat(51)}`;
+        (prisma.post.create as jest.Mock).mockResolvedValue(
+          buildPostRow({ contentText: `${longTag} #ok` }),
+        );
+
+        const service = new FeedService(prisma);
+        await service.createPost('author-1', { contentText: `${longTag} #ok` });
+
+        expect(prisma.hashtag.upsert).toHaveBeenCalledTimes(1);
+        expect(prisma.hashtag.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { tag: 'ok' } }),
+        );
+      });
     });
 
     it('maps a foreign-key violation (invalid clubPageId/banterRoomId) to a 400, not a 500', async () => {

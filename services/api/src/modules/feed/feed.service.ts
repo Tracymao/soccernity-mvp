@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ENGAGEMENT_POINTS } from '../points/points.constants';
 import { awardPoints } from '../points/points.util';
+import { recordPostHashtags } from '../search/hashtag.util';
 import { decodeFeedCursor, encodeFeedCursor } from './cursor.util';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreatePostDto } from './dto/create-post.dto';
@@ -199,6 +200,15 @@ export class FeedService {
           points: ENGAGEMENT_POINTS.POST_CREATED,
           occurredAt: post.createdAt,
         });
+        // sprint-4/trending-topics-backend — same "land atomically with
+        // the Post" discipline as the points award immediately above:
+        // extracts every #hashtag in dto.contentText and records it
+        // against this post (Hashtag upsert + PostHashtag row), all
+        // inside this same transaction so a rolled-back post creation
+        // never leaves an orphaned hashtag row behind. See
+        // search/hashtag.util.ts and search/README.md's "Trending
+        // topics" section.
+        await recordPostHashtags(tx, post.id, dto.contentText, post.createdAt);
         return post;
       });
     } catch (err) {
