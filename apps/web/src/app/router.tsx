@@ -73,6 +73,8 @@ import SettingsLayout from "../pages/settings/SettingsLayout";
 import SettingsLandingPage from "../pages/settings/SettingsLandingPage";
 import SettingsMenuPage from "../pages/settings/SettingsMenuPage";
 import AccountOverviewPage from "../pages/settings/AccountOverviewPage";
+import SecurityOverviewPage from "../pages/settings/SecurityOverviewPage";
+import TwoFactorAuthPage from "../pages/settings/TwoFactorAuthPage";
 import SettingsSectionPlaceholder from "../pages/settings/SettingsSectionPlaceholder";
 import InactiveAccountPage from "../pages/InactiveAccountPage";
 import NotFoundPage from "../pages/NotFoundPage";
@@ -285,11 +287,14 @@ export const routes: RouteObject[] = [
 
       // Settings (Decision Log #230 consolidated structure). SettingsLayout
       // is the shared shell (Figma "Settings Shell" 6339:16094: desktop
-      // rail / mobile back bar). Sprint sprint-2/settings-shell-to-code-
-      // account (PR 1 of a staged set) builds the shell, the landing,
-      // the Account section and re-parents Privacy/Deactivate/Delete.
-      // Security / Notifications / Display leaves are follow-up PRs and
-      // render SettingsSectionPlaceholder. No site footer.
+      // rail / mobile back bar). sprint-2/settings-shell-to-code-account
+      // (PR 1 of a staged set) built the shell, the landing, the Account
+      // section and re-parented Privacy/Deactivate/Delete.
+      // sprint-2/settings-shell-to-code-security (PR 2) builds the
+      // Security & Account Settings section (hub + Two-Factor Auth (SMS)
+      // leaf — no live backend, see TwoFactorAuthPage.tsx). Notifications /
+      // Display leaves are still follow-up PRs and render
+      // SettingsSectionPlaceholder. No site footer.
       {
         path: "settings",
         element: <SettingsLayout />,
@@ -300,7 +305,8 @@ export const routes: RouteObject[] = [
           { path: "account/deactivate", element: <DeactivateAccountPage /> },
           { path: "account/delete", element: <DeleteAccountPage /> },
           { path: "privacy", element: <PrivacySettingsPage /> },
-          { path: "security/*", element: <SettingsSectionPlaceholder section="security" /> },
+          { path: "security", element: <SecurityOverviewPage /> },
+          { path: "security/two-factor", element: <TwoFactorAuthPage /> },
           { path: "notifications/*", element: <SettingsSectionPlaceholder section="notifications" /> },
           { path: "display/*", element: <SettingsSectionPlaceholder section="display" /> },
         ],
