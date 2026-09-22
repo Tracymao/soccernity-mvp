@@ -94,9 +94,9 @@ describe("DeleteAccountPage", () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
-  it("Cancel links back to /settings/privacy", () => {
+  it("Cancel links back to /settings/account", () => {
     seedSession();
     renderPage();
-    expect(screen.getByRole("link", { name: "Cancel" }).getAttribute("href")).toBe("/settings/privacy");
+    expect(screen.getByRole("link", { name: "Cancel" }).getAttribute("href")).toBe("/settings/account");
   });
 });

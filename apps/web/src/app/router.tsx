@@ -69,6 +69,11 @@ import NotificationCentrePage from "../pages/NotificationCentrePage";
 import PrivacySettingsPage from "../pages/PrivacySettingsPage";
 import DeactivateAccountPage from "../pages/settings/DeactivateAccountPage";
 import DeleteAccountPage from "../pages/settings/DeleteAccountPage";
+import SettingsLayout from "../pages/settings/SettingsLayout";
+import SettingsLandingPage from "../pages/settings/SettingsLandingPage";
+import SettingsMenuPage from "../pages/settings/SettingsMenuPage";
+import AccountOverviewPage from "../pages/settings/AccountOverviewPage";
+import SettingsSectionPlaceholder from "../pages/settings/SettingsSectionPlaceholder";
 import InactiveAccountPage from "../pages/InactiveAccountPage";
 import NotFoundPage from "../pages/NotFoundPage";
 import { TermsPage, PrivacyPage } from "../pages/legal/LegalPage";
@@ -278,22 +283,31 @@ export const routes: RouteObject[] = [
       // in the Figma frame, matching Community/Clubs/Grassroots/Banter.
       { path: "notifications", element: <NotificationCentrePage /> },
 
-      // Settings. /settings/privacy is the only real Settings screen in
-      // code so far (the CONSOLIDATED "Settings — Privacy" Figma page,
-      // Decision Log #222) — a bare /settings redirects to it. Build
-      // Plan Section 6 defers the rest of the Settings area to Sprint
-      // 3/6. No footer — the Settings Figma frames carry their own Top
-      // Bar, not the site footer.
-      { path: "settings", element: <Navigate to="/settings/privacy" replace /> },
-      { path: "settings/privacy", element: <PrivacySettingsPage /> },
-      // Account status → wired from PrivacySettingsPage's "Account
-      // status" row. Deactivate (Figma 2924:7358 -> 6213:15640, Decision
-      // Log #220/#221) and Delete (Figma 6225:14789, Decision Log #222)
-      // are the two parallel paths -- delete is NOT gated behind
-      // deactivating first. Converted by
-      // sprint-2/account-deactivation-to-code.
-      { path: "settings/deactivate", element: <DeactivateAccountPage /> },
-      { path: "settings/delete-account", element: <DeleteAccountPage /> },
+      // Settings (Decision Log #230 consolidated structure). SettingsLayout
+      // is the shared shell (Figma "Settings Shell" 6339:16094: desktop
+      // rail / mobile back bar). Sprint sprint-2/settings-shell-to-code-
+      // account (PR 1 of a staged set) builds the shell, the landing,
+      // the Account section and re-parents Privacy/Deactivate/Delete.
+      // Security / Notifications / Display leaves are follow-up PRs and
+      // render SettingsSectionPlaceholder. No site footer.
+      {
+        path: "settings",
+        element: <SettingsLayout />,
+        children: [
+          { index: true, element: <SettingsLandingPage /> },
+          { path: "menu", element: <SettingsMenuPage /> },
+          { path: "account", element: <AccountOverviewPage /> },
+          { path: "account/deactivate", element: <DeactivateAccountPage /> },
+          { path: "account/delete", element: <DeleteAccountPage /> },
+          { path: "privacy", element: <PrivacySettingsPage /> },
+          { path: "security/*", element: <SettingsSectionPlaceholder section="security" /> },
+          { path: "notifications/*", element: <SettingsSectionPlaceholder section="notifications" /> },
+          { path: "display/*", element: <SettingsSectionPlaceholder section="display" /> },
+        ],
+      },
+      // Old flat paths (linked from earlier builds) redirect, not 404.
+      { path: "settings/deactivate", element: <Navigate to="/settings/account/deactivate" replace /> },
+      { path: "settings/delete-account", element: <Navigate to="/settings/account/delete" replace /> },
       // Added during a Sprint 1 cleanup review -- was missing entirely,
       // not a pre-existing placeholder. See VerifyEmailPage.tsx.
       { path: "verify-email", element: <VerifyEmailPage /> }, // F7
