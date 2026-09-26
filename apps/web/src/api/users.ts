@@ -135,6 +135,25 @@ export async function getFollowing(
   return (await response.json()) as FollowPage;
 }
 
+// GET /users/suggested?limit= -- JwtAuthGuard only (users.controller.ts).
+// Returns { items: [{ id, displayName }] } -- the caller's own account,
+// anyone they already follow, non-active accounts and restricted-pending
+// minors are excluded server-side. No cursor (a small fixed top-N panel,
+// `limit` max 50), no @handle/avatar (no such `User` column, Decision Log
+// #58).
+export interface SuggestedUsersResult {
+  items: FollowUserSummary[];
+}
+
+export async function getSuggestedUsers(accessToken: string, limit?: number): Promise<SuggestedUsersResult> {
+  const qs = limit !== undefined ? `?limit=${encodeURIComponent(String(limit))}` : "";
+  const response = await authedFetch(`/users/suggested${qs}`, accessToken);
+  if (!response.ok) {
+    throw new UsersApiError(`Couldn't load suggestions (${response.status}).`, { status: response.status });
+  }
+  return (await response.json()) as SuggestedUsersResult;
+}
+
 // POST /users/:id/follow -- JwtAuthGuard only. Idempotent (following
 // someone you already follow still returns { following: true }). 400 if
 // :id is the caller's own id; 404 if :id isn't a real, visible user.

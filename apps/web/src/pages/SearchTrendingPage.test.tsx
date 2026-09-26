@@ -29,6 +29,13 @@ vi.mock("../api/sports", async () => {
 import { listArticles } from "../api/blog";
 import { listFixtures } from "../api/sports";
 
+vi.mock("../api/users", async () => {
+  const actual = await vi.importActual<typeof import("../api/users")>("../api/users");
+  return { ...actual, getSuggestedUsers: vi.fn() };
+});
+
+import { getSuggestedUsers } from "../api/users";
+
 vi.mock("../api/search", async () => {
   const actual = await vi.importActual<typeof import("../api/search")>("../api/search");
   return { ...actual, searchAll: vi.fn(), searchUsers: vi.fn(), searchClubs: vi.fn(), searchPosts: vi.fn() };
@@ -70,6 +77,8 @@ beforeEach(() => {
   vi.mocked(listArticles).mockResolvedValue({ items: [], nextCursor: null });
   vi.mocked(listFixtures).mockReset();
   vi.mocked(listFixtures).mockResolvedValue({ items: [], nextCursor: null });
+  vi.mocked(getSuggestedUsers).mockReset();
+  vi.mocked(getSuggestedUsers).mockResolvedValue({ items: [] });
 });
 
 function renderPage() {
@@ -122,15 +131,15 @@ describe("SearchTrendingPage", () => {
     expect(searchAll).not.toHaveBeenCalled();
   });
 
-  it("renders the 2 still-unbuilt regions as honest, empty placeholders on desktop — never fabricated content", () => {
+  it("renders the 1 still-unbuilt region as an honest, empty placeholder on desktop — never fabricated content", () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     setViewport(1200);
     renderPage();
 
-    expect(screen.getByText("Suggested")).not.toBeNull();
+    expect(screen.getByRole("heading", { name: "Suggested" })).not.toBeNull();
     expect(screen.getByText("Videos from Leaderboard")).not.toBeNull();
-    expect(screen.getAllByText("Not built yet — coming in a follow-up PR.").length).toBe(2);
-    // ...and the Trends for you / Trending News / Fixtures cards are real, not placeholders.
+    expect(screen.getAllByText("Not built yet — coming in a follow-up PR.").length).toBe(1);
+    // ...and the Trends for you / Trending News / Fixtures / Suggested cards are real, not placeholders.
     expect(screen.getByRole("heading", { name: "Trends for you" })).not.toBeNull();
     expect(screen.getByRole("heading", { name: "Trending News" })).not.toBeNull();
     expect(screen.getByRole("heading", { name: "Fixtures" })).not.toBeNull();
@@ -148,6 +157,7 @@ describe("SearchTrendingPage", () => {
     // No trends sidebar in the mobile Figma frame (5780:8581): not rendered, and GET /trending is never called.
     expect(screen.queryByText("Trends for you")).toBeNull();
     expect(getTrending).not.toHaveBeenCalled();
+    expect(getSuggestedUsers).not.toHaveBeenCalled();
     // ...nor a news or fixtures sidebar, so neither endpoint is called.
     expect(listArticles).not.toHaveBeenCalled();
     expect(listFixtures).not.toHaveBeenCalled();
