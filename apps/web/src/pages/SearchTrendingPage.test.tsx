@@ -9,6 +9,13 @@ import { MemoryRouter } from "react-router";
 import SearchTrendingPage from "./SearchTrendingPage";
 import { SearchApiError, type SearchAllResult } from "../api/search";
 
+vi.mock("../api/trending", async () => {
+  const actual = await vi.importActual<typeof import("../api/trending")>("../api/trending");
+  return { ...actual, getTrending: vi.fn() };
+});
+
+import { getTrending } from "../api/trending";
+
 vi.mock("../api/search", async () => {
   const actual = await vi.importActual<typeof import("../api/search")>("../api/search");
   return { ...actual, searchAll: vi.fn(), searchUsers: vi.fn(), searchClubs: vi.fn(), searchPosts: vi.fn() };
@@ -44,6 +51,8 @@ beforeEach(() => {
   vi.mocked(searchUsers).mockReset();
   vi.mocked(searchClubs).mockReset();
   vi.mocked(searchPosts).mockReset();
+  vi.mocked(getTrending).mockReset();
+  vi.mocked(getTrending).mockResolvedValue({ items: [] });
 });
 
 function renderPage() {
@@ -96,7 +105,7 @@ describe("SearchTrendingPage", () => {
     expect(searchAll).not.toHaveBeenCalled();
   });
 
-  it("renders the 5 named regions as honest, empty placeholders on desktop — never fabricated content", () => {
+  it("renders the 4 still-unbuilt regions as honest, empty placeholders on desktop — never fabricated content", () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     setViewport(1200);
     renderPage();
@@ -104,9 +113,10 @@ describe("SearchTrendingPage", () => {
     expect(screen.getByText("Trending News")).not.toBeNull();
     expect(screen.getByText("Suggested")).not.toBeNull();
     expect(screen.getByText("Videos from Leaderboard")).not.toBeNull();
-    expect(screen.getByText("Trending topics")).not.toBeNull();
     expect(screen.getByText("Fixtures")).not.toBeNull();
-    expect(screen.getAllByText("Not built yet — coming in a follow-up PR.").length).toBe(5);
+    expect(screen.getAllByText("Not built yet — coming in a follow-up PR.").length).toBe(4);
+    // ...and the Trends for you card is real, not a placeholder.
+    expect(screen.getByRole("heading", { name: "Trends for you" })).not.toBeNull();
   });
 
   it("does not render the placeholder sidebars/carousel on mobile — they aren't in that Figma frame", () => {
@@ -117,8 +127,10 @@ describe("SearchTrendingPage", () => {
     expect(screen.queryByText("Trending News")).toBeNull();
     expect(screen.queryByText("Suggested")).toBeNull();
     expect(screen.queryByText("Videos from Leaderboard")).toBeNull();
-    expect(screen.queryByText("Trending topics")).toBeNull();
     expect(screen.queryByText("Fixtures")).toBeNull();
+    // No trends sidebar in the mobile Figma frame (5780:8581): not rendered, and GET /trending is never called.
+    expect(screen.queryByText("Trends for you")).toBeNull();
+    expect(getTrending).not.toHaveBeenCalled();
   });
 
   it("does not call GET /search for a query under 2 trimmed characters", async () => {

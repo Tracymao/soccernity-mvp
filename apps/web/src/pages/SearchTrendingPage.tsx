@@ -10,7 +10,10 @@
 // comment). The trending topics sidebar, trending news, suggested
 // people, fixtures, and video carousel are all UNBUILT — rendered as
 // honest, empty <PlaceholderSlot> regions (no fabricated sample data),
-// left for separate follow-up PRs. The "For you" personalised feed
+// left for separate follow-up PRs. The desktop right-rail "Trends for
+// you" card IS built (search/TrendsForYou.tsx, wired to the public
+// GET /trending); the mobile frame has no trends sidebar, so it is not
+// mounted (and never fetches) on mobile. The "For you" personalised feed
 // content shown under the chips on both Figma frames is likewise not
 // built here — no endpoint backs it, and it wasn't part of this task's
 // scope either — so the results area shows either real search results or
@@ -61,6 +64,7 @@ import {
 } from "../api/search";
 import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
 import { useIsMobile } from "../layout/useIsMobile";
+import TrendsForYou from "./search/TrendsForYou";
 import "./search/SearchTrendingPage.css";
 
 type SearchState = "idle" | "loading" | "loaded" | "error";
@@ -374,7 +378,7 @@ export default function SearchTrendingPage() {
 
         {!isMobile && (
           <aside className="search-page__rail search-page__rail--right">
-            <PlaceholderSlot title="Trending topics" />
+            <TrendsForYou />
             <PlaceholderSlot title="Fixtures" />
           </aside>
         )}
