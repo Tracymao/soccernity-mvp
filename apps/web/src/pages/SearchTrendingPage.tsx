@@ -7,14 +7,16 @@
 // here, wired to the real GET /search (Build Plan Section 4.7,
 // api/search.ts — resolves Decision Log #139's parked people-search need
 // for NewConversationPage.tsx too, see that file's own updated header
-// comment). The trending topics sidebar, trending news, suggested
-// people, fixtures, and video carousel are all UNBUILT — rendered as
-// honest, empty <PlaceholderSlot> regions (no fabricated sample data),
-// left for separate follow-up PRs. The desktop right-rail "Trends for
-// you" card IS built (search/TrendsForYou.tsx, wired to the public
-// GET /trending); the mobile frame has no trends sidebar, so it is not
-// mounted (and never fetches) on mobile. The "For you" personalised feed
-// content shown under the chips on both Figma frames is likewise not
+// comment). Built desktop-only side cards: right-rail "Trends for you"
+// (search/TrendsForYou.tsx, public GET /trending), left-rail "Trending
+// News" (search/TrendingNewsPanel.tsx, GET /articles) and right-rail
+// "Fixtures" (search/FixturesPanel.tsx, GET /sports/fixtures); the mobile
+// frame has none of these sidebars, so they are not mounted (and never
+// fetch) on mobile. Suggested people and the video carousel are still
+// UNBUILT — rendered as honest, empty <PlaceholderSlot> regions (no
+// fabricated sample data), left for separate follow-up PRs. The "For you"
+// personalised feed content shown under the chips on both Figma frames is
+// likewise not
 // built here — no endpoint backs it, and it wasn't part of this task's
 // scope either — so the results area shows either real search results or
 // a plain "search above" prompt, never a fake feed.
@@ -65,6 +67,8 @@ import {
 import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
 import { useIsMobile } from "../layout/useIsMobile";
 import TrendsForYou from "./search/TrendsForYou";
+import TrendingNewsPanel from "./search/TrendingNewsPanel";
+import FixturesPanel from "./search/FixturesPanel";
 import "./search/SearchTrendingPage.css";
 
 type SearchState = "idle" | "loading" | "loaded" | "error";
@@ -227,7 +231,7 @@ export default function SearchTrendingPage() {
       <div className="search-page__layout">
         {!isMobile && (
           <aside className="search-page__rail search-page__rail--left">
-            <PlaceholderSlot title="Trending News" />
+            <TrendingNewsPanel />
             <PlaceholderSlot title="Suggested" />
           </aside>
         )}
@@ -379,7 +383,7 @@ export default function SearchTrendingPage() {
         {!isMobile && (
           <aside className="search-page__rail search-page__rail--right">
             <TrendsForYou />
-            <PlaceholderSlot title="Fixtures" />
+            <FixturesPanel />
           </aside>
         )}
       </div>

@@ -456,3 +456,124 @@
 .trends-card__status--error {
   color: var(--sn-brand-navy);
 }
+
+/* --- "Trending News" + "Fixtures" cards ------------------------------------
+ * Reuse the .trends-card chrome (surface, hairline border, header, refresh
+ * button, status lines, list padding) -- Figma draws the rail cards from
+ * the same 270px card treatment (2876:4633/4634/4647/4648). News row: 47x42
+ * thumbnail, 10px SemiBold headline, 8px blurb, 8px Medium date
+ * (2876:4715-4729, 4635). Fixture row: 12px Medium team names, 19px crests,
+ * 12px Medium secondary kickoff time (2876:4871+). */
+
+.news-card__row {
+  padding: 12px 8px 10px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+}
+
+.news-card__row:last-child {
+  border-bottom: none;
+}
+
+.news-card__link {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  text-decoration: none;
+  color: inherit;
+}
+
+.news-card__thumb {
+  flex-shrink: 0;
+  width: 47px;
+  height: 42px;
+  border-radius: 6px;
+  background: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 14px "Montserrat", sans-serif;
+}
+
+.news-card__text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.news-card__headline {
+  font: 600 10px "Montserrat", sans-serif;
+  color: var(--sn-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.news-card__blurb {
+  font: 400 8px "Montserrat", sans-serif;
+  color: var(--sn-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.news-card__date {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font: 500 8px "Montserrat", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.fixtures-card__row {
+  padding: 12px 8px 10px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+}
+
+.fixtures-card__row:last-child {
+  border-bottom: none;
+}
+
+.fixtures-card__link {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 19px auto 19px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.fixtures-card__team {
+  font: 500 12px "Montserrat", sans-serif;
+  color: var(--sn-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fixtures-card__team--home {
+  text-align: left;
+}
+
+.fixtures-card__team--away {
+  text-align: right;
+}
+
+.fixtures-card__crest {
+  width: 19px;
+  height: 19px;
+  object-fit: contain;
+}
+
+.fixtures-card__crest--mono {
+  border-radius: 999px;
+  background: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 10px "Montserrat", sans-serif;
+}
+
+.fixtures-card__time {
+  font: 500 12px "Montserrat", sans-serif;
+  color: var(--sn-text-secondary);
+  white-space: nowrap;
+}
