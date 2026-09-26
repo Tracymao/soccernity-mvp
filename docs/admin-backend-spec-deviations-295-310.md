@@ -1,12 +1,12 @@
 # Admin backend spec deviations — Decision Log #295–#310
 
-**Status of this document:** reference snapshot, documentation only. It changes no code and resolves no decision.
+**Status of this document:** reference snapshot. Written as documentation only; Part B was updated on 2026-09-27 to record the #309 fix.
 
 **Source of truth:** `docs/Soccernity_MVP_Build_Plan_v1.7.docx`, Section 9 (Decision Log), the table read as `d.tables[6]`. The Status text below was read from each row on `origin/main` at `8479706` (2026-09-26), not summarised from memory. If the docx changes, the docx wins and this file is stale.
 
 **Why these exist:** CLAUDE.md says the data model (Build Plan Section 3) and API contract (Section 4) are fixed specs, and that anything needed beyond them is flagged as a Decision Log candidate, not added silently. #295–#310 are the entries Sprint 5's admin, moderation, content and media backend work raised under that rule. Almost all of them were built anyway and flagged; that is the point of the log, not a defect.
 
-> **Read Part B separately.** #309 (`multer` resolving to a vulnerable version) is **not** a spec deviation. It is an unaddressed dependency hazard that sits alongside them in the Decision Log. It is deliberately kept out of Part A so it does not read as routine paperwork.
+> **Read Part B separately.** #309 (`multer` resolving to a vulnerable version) is **not** a spec deviation. It was a dependency hazard that sits alongside them in the Decision Log, and is now **Resolved** (see Part B). It is deliberately kept out of Part A so it does not read as routine paperwork.
 
 ## Status at a glance
 
@@ -28,10 +28,10 @@ The statuses are not uniform. 4 of the 16 are Resolved; 12 are Open (one of thos
 | 306 | Admin dashboard | Unbuilt feature (visit tracking) | Open |
 | 307 | Media | Storage provider decision | **Resolved** (decision only, storage not live) |
 | 308 | Media | Schema addition beyond Section 3 | Open |
-| 309 | Media | **Dependency hazard, see Part B** | **Open** |
+| 309 | Media | **Dependency hazard, see Part B** | **Resolved** (lockfile bump, 2026-09-27) |
 | 310 | Media | Missing endpoint, worked around | Open |
 
-Note on #307: it is Resolved, not Open. It was Open when Sprint 5 shipped and was resolved on 2026-09-26 by `sprint-4/media-storage-r2-decision` (PR #317). The Resolved set is therefore #299, #304, #305 and #307.
+Note on #307: it is Resolved, not Open. It was Open when Sprint 5 shipped and was resolved on 2026-09-26 by `sprint-4/media-storage-r2-decision` (PR #317). The Resolved set is therefore #299, #304, #305, #307 and #309 (#309 resolved 2026-09-27, see Part B).
 
 "Open" on the schema and route rows means "built and working, awaiting founder confirmation that the addition should be written into Section 3/4". It does not mean broken.
 
@@ -81,26 +81,30 @@ Source: [`services/api/src/modules/media/README.md`](../services/api/src/modules
 
 ---
 
-# Part B — Dependency hazard: #309 (not a spec deviation)
+# Part B — Dependency hazard: #309 (not a spec deviation) — RESOLVED 2026-09-27
 
-**WARNING: unaddressed and open.** The `POST /admin/media/upload` upload path runs on a `multer` version with known high-severity advisories. It was disclosed when Sprint 5 shipped and has not been fixed. It is included in the Decision Log alongside the deviations above, but it is a different kind of thing.
+**Resolved.** `sprint`-independent fix branch `fix/platform-express-multer-cve` moved the lockfile from `@nestjs/platform-express@11.2.1` to `11.2.6`. The upload path now loads `multer@2.4.0`. The text below is kept as the record of the hazard and the fix.
 
-**What the Decision Log entry says (Open).** `services/api` declares `"multer": "^2.3.0"` and gets a nested `multer@2.3.0`. But `FileInterceptor` does its own `require('multer')` from inside `@nestjs/platform-express`, which resolves to the hoisted **root** copy, `multer@2.2.0`, because `@nestjs/platform-express@11.2.1` pins an exact `multer: "2.2.0"`. The project's own version range therefore does not protect the upload path. Not fixed in PR #249. Source: media README, "A real, disclosed dependency-chain finding: `multer`".
+**The hazard (as disclosed when Sprint 5 shipped).** `services/api` declares `"multer": "^2.3.0"` and got a nested `multer@2.3.0`. But `FileInterceptor` does its own `require('multer')` from inside `@nestjs/platform-express`, which resolves to the hoisted **root** copy, `multer@2.2.0`, because `@nestjs/platform-express@11.2.1` pinned an exact `multer: "2.2.0"`. The project's own version range therefore did not protect the upload path. Source: media README, "A real, disclosed dependency-chain finding: `multer`".
 
-**Re-checked in this checkout on 2026-09-26 (not taken from the entry):**
+**Advisories against `multer@2.2.0`** (from `npm audit`, 2026-09-26): three high (`GHSA-wc9g-mqfw-jrwm` crafted field names; `GHSA-qfvm-cv95-jqjf` file-descriptor leak on aborted uploads; `GHSA-535w-7cp7-47q4` oversized array index in field names) and one low (`GHSA-qvfw-j98x-7q72` async `fileFilter` race). The original entry named only `GHSA-qfvm-cv95-jqjf`. Exposure was probably limited to authenticated editor/superadmin admins, since `@UseGuards(AdminJwtAuthGuard, AdminRolesGuard)` runs before the interceptor (reading, not tested), but that lowered the risk without removing it.
 
-- `npm ls multer @nestjs/platform-express` still shows `@nestjs/platform-express@11.2.1` depending on `multer@2.2.0`, alongside the direct `multer@2.3.0`. `node_modules/multer` at the repo root is `2.2.0`; `services/api/node_modules/multer` is `2.3.0`. The hazard is unchanged.
-- `npm audit` (in `services/api`) reports four advisories against the resolved `multer@2.2.0`: three high (`GHSA-wc9g-mqfw-jrwm` crafted field names; `GHSA-qfvm-cv95-jqjf` file-descriptor leak on aborted uploads; `GHSA-535w-7cp7-47q4` oversized array index in field names) and one low (`GHSA-qvfw-j98x-7q72` async `fileFilter` race). The Decision Log entry names only `GHSA-qfvm-cv95-jqjf`.
-- **Probable exposure, my reading and untested:** the route is `@UseGuards(AdminJwtAuthGuard, AdminRolesGuard)` at class level, and Nest runs guards before interceptors, so the multer code should only be reachable with a valid editor/superadmin admin token, not anonymously. That lowers the practical risk. It does not remove the hazard.
+**The stated remedy was stale.** The entry said the only fix was a `@nestjs/platform-express` 12.x major. Registry check on 2026-09-27: `@nestjs/platform-express@11.2.6` (the latest 11.x; 11.2.1 depends on `multer@2.2.0`, 11.2.6 on `multer@2.4.0`) is within the existing `^11.0.0` range, so no major bump and no `package.json` change was needed.
 
-**The entry's stated remedy looks stale.** It says the only fix is a `@nestjs/platform-express` **12.x major**. Registry metadata queried today says otherwise:
+**The fix.** `npm update @nestjs/platform-express --workspace=services/api`. Only `package-lock.json` changed.
 
-- `@nestjs/platform-express@11.2.6` depends on `multer@2.4.0`. Its peer dependencies (`@nestjs/core`/`@nestjs/common` `^11.0.0`) are satisfied by the installed 11.2.1.
-- `npm audit` reports `@nestjs/platform-express` vulnerable for `<=11.2.5` with `fixAvailable: true`, and the registry `legacy` dist-tag points at `11.2.6` (`latest` is `12.1.0`).
+| | Before | After |
+|---|---|---|
+| `@nestjs/platform-express` | 11.2.1 | 11.2.6 |
+| root `node_modules/multer` (what `FileInterceptor` loads) | 2.2.0 | **2.4.0** |
+| `services/api/node_modules/multer` (nested) | 2.3.0 | removed; deduped to root 2.4.0 |
+| `multer` in `npm audit` | 4 advisories | none |
 
-So a same-major bump to `^11.2.6` appears sufficient and may make the v12 migration unnecessary for this issue. **This was not tried.** No install, upgrade or test run was performed for this document. Whoever picks it up should confirm with a real bump plus the existing media tests before relying on it.
+Verified against the installed tree, not the declared range: `node -p "require('./node_modules/multer/package.json').version"` prints `2.4.0`, and `npm ls multer @nestjs/platform-express` shows `@nestjs/platform-express@11.2.6 -> multer@2.4.0 deduped` plus the direct `multer@2.4.0`. Also removed from the lockfile as no longer needed: `concat-stream`, `typedarray`, and nested `media-typer`/`type-is` (multer 2.4.0 no longer depends on them).
 
-**Not fixed here, by design.** This PR is documentation-only. The dependency change belongs in its own PR, in line with the "flag it, don't fix it inside an unrelated PR" precedent from Decision Log #20.
+**Tests.** `jest src/modules/media src/modules/admin`: 18 suites / 162 tests, 0 failures (includes `admin-media.controller.http.spec.ts`). `npx tsc --noEmit` and `nest build` clean. The full mocked and e2e suites were not re-run.
+
+**Still open, not part of this fix.** `npm audit` still reports other findings (e.g. `fast-xml-parser`, `image-size`, `js-yaml`), none about `multer`.
 
 ---
 

@@ -244,16 +244,13 @@ that's the nearest `node_modules/multer` from that file's own location,
 regardless of this module's own package.json range. `2.2.0` carries a
 `npm audit`-flagged high-severity DoS advisory
 (`GHSA-qfvm-cv95-jqjf`, file-descriptor leak on an aborted upload) that
-`2.3.0`+ fixes. **Not fixed in this PR** — the only real fix is bumping
-`@nestjs/platform-express` itself (currently pinned `^11.0.0`; the
-lowest version depending on a patched `multer` is a `12.x` major, per
-`npm audit`'s own `fixAvailable` hint), an unrelated, unscoped major
-version bump this media-storage ticket should not silently bundle in —
-the exact same "flag it, don't fix it as part of an unrelated PR"
-precedent Decision Log #20's own Tier 2/3 `npm audit` triage already
-established for `multer`/`lodash`/`qs`/`body-parser`/`express`. Flagged
-here as a new Decision Log candidate for a future, dedicated
-`@nestjs/platform-express` v12 upgrade PR.
+`2.3.0`+ fixes. **Not fixed in this PR** (as originally shipped). **RESOLVED 2026-09-27
+(Decision Log #309):** the real fix did not need a `12.x` major. A
+same-major lockfile update to `@nestjs/platform-express@11.2.6` (within
+`^11.0.0`) depends on `multer@2.4.0`, so the hoisted root copy that
+`FileInterceptor` loads is now `2.4.0` and the nested `2.3.0` copy is gone
+(verified against the installed tree). Only `package-lock.json` changed.
+The two paragraphs above describe the hazard as it stood at Sprint 5.
 
 ---
 
