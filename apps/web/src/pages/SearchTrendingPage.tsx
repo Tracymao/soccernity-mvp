@@ -12,10 +12,10 @@
 // News" (search/TrendingNewsPanel.tsx, GET /articles) and right-rail
 // "Fixtures" (search/FixturesPanel.tsx, GET /sports/fixtures), and left-rail
 // "Suggested" people (search/SuggestedPeoplePanel.tsx, GET /users/suggested,
-// Follow via POST /users/:id/follow); the mobile frame has none of these
-// sidebars, so they are not mounted (and never fetch) on mobile. The video
-// carousel is still UNBUILT — rendered as honest, empty <PlaceholderSlot> regions (no
-// fabricated sample data), left for separate follow-up PRs. The "For you"
+// Follow via POST /users/:id/follow) and the "Videos from Leaderboard" carousel
+// (search/VideosCarousel.tsx, GET /posts/feed filtered to video posts, views via
+// POST /posts/:id/view); the mobile frame has none of these
+// sidebars, so they are not mounted (and never fetch) on mobile. The "For you"
 // personalised feed content shown under the chips on both Figma frames is
 // likewise not
 // built here — no endpoint backs it, and it wasn't part of this task's
@@ -71,6 +71,7 @@ import TrendsForYou from "./search/TrendsForYou";
 import TrendingNewsPanel from "./search/TrendingNewsPanel";
 import FixturesPanel from "./search/FixturesPanel";
 import SuggestedPeoplePanel from "./search/SuggestedPeoplePanel";
+import VideosCarousel from "./search/VideosCarousel";
 import "./search/SearchTrendingPage.css";
 
 type SearchState = "idle" | "loading" | "loaded" | "error";
@@ -107,19 +108,6 @@ function relativeTime(iso: string): string {
   if (secs < 3600) return `${Math.floor(secs / 60)}m`;
   if (secs < 86400) return `${Math.floor(secs / 3600)}h`;
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
-
-// Honest, empty placeholder for a region this PR deliberately does not
-// build — no fabricated sample content, matching this task's own
-// instruction not to fake trending topics / trending news / suggested
-// people / fixtures / video carousel.
-function PlaceholderSlot({ title }: { title: string }) {
-  return (
-    <div className="search-page__placeholder">
-      <p className="search-page__placeholder-title">{title}</p>
-      <p className="search-page__placeholder-note">Not built yet — coming in a follow-up PR.</p>
-    </div>
-  );
 }
 
 export default function SearchTrendingPage() {
@@ -265,7 +253,7 @@ export default function SearchTrendingPage() {
             ))}
           </div>
 
-          {!isMobile && <PlaceholderSlot title="Videos from Leaderboard" />}
+          {!isMobile && <VideosCarousel />}
 
           {searchState === "idle" && (
             <p className="search-page__status" role="status">

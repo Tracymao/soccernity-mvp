@@ -26,6 +26,12 @@ vi.mock("../api/sports", async () => {
   return { ...actual, listFixtures: vi.fn() };
 });
 
+vi.mock("../api/feed", async () => {
+  const actual = await vi.importActual<typeof import("../api/feed")>("../api/feed");
+  return { ...actual, getFeed: vi.fn(), recordPostView: vi.fn() };
+});
+
+import { getFeed } from "../api/feed";
 import { listArticles } from "../api/blog";
 import { listFixtures } from "../api/sports";
 
@@ -73,6 +79,8 @@ beforeEach(() => {
   vi.mocked(searchPosts).mockReset();
   vi.mocked(getTrending).mockReset();
   vi.mocked(getTrending).mockResolvedValue({ items: [] });
+  vi.mocked(getFeed).mockReset();
+  vi.mocked(getFeed).mockResolvedValue({ items: [], nextCursor: null });
   vi.mocked(listArticles).mockReset();
   vi.mocked(listArticles).mockResolvedValue({ items: [], nextCursor: null });
   vi.mocked(listFixtures).mockReset();
@@ -131,15 +139,14 @@ describe("SearchTrendingPage", () => {
     expect(searchAll).not.toHaveBeenCalled();
   });
 
-  it("renders the 1 still-unbuilt region as an honest, empty placeholder on desktop — never fabricated content", () => {
+  it("renders all desktop side cards and the videos carousel as real components — no placeholder regions remain", () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     setViewport(1200);
     renderPage();
 
     expect(screen.getByRole("heading", { name: "Suggested" })).not.toBeNull();
     expect(screen.getByText("Videos from Leaderboard")).not.toBeNull();
-    expect(screen.getAllByText("Not built yet — coming in a follow-up PR.").length).toBe(1);
-    // ...and the Trends for you / Trending News / Fixtures / Suggested cards are real, not placeholders.
+    expect(screen.queryByText("Not built yet — coming in a follow-up PR.")).toBeNull();
     expect(screen.getByRole("heading", { name: "Trends for you" })).not.toBeNull();
     expect(screen.getByRole("heading", { name: "Trending News" })).not.toBeNull();
     expect(screen.getByRole("heading", { name: "Fixtures" })).not.toBeNull();
@@ -161,6 +168,8 @@ describe("SearchTrendingPage", () => {
     // ...nor a news or fixtures sidebar, so neither endpoint is called.
     expect(listArticles).not.toHaveBeenCalled();
     expect(listFixtures).not.toHaveBeenCalled();
+    // ...nor a videos carousel, so the feed is never fetched for it.
+    expect(getFeed).not.toHaveBeenCalled();
   });
 
   it("does not call GET /search for a query under 2 trimmed characters", async () => {

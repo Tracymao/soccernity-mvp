@@ -1,0 +1,150 @@
+/* "Videos from Leaderboard" carousel (VideosCarousel.tsx). Figma 2896:4770:
+ * white 6px-radius card, 14px SemiBold title, 10px Medium subtitle, 121x175
+ * 6px-radius tiles at a 15px gap, centered 32px play glyph, translucent
+ * white 7px SemiBold views pill at the tile's bottom-left. */
+
+.videos-card {
+  background: var(--sn-background-surface);
+  border-radius: 6px;
+  padding: 23px 10px 14px;
+  color: var(--sn-text-primary);
+}
+
+.videos-card__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: normal;
+}
+
+.videos-card__subtitle {
+  margin: 7px 0 0;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.videos-card__status {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.videos-card__retry {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--sn-brand-navy);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.videos-card__track {
+  display: flex;
+  gap: 15px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+}
+
+.videos-card__item {
+  flex: 0 0 auto;
+}
+
+.videos-card__tile {
+  position: relative;
+  display: block;
+  width: 121px;
+  height: 175px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: var(--sn-green-tint-12);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.videos-card__thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.videos-card__play {
+  position: absolute;
+  top: 72px;
+  left: 44px;
+  width: 32px;
+  height: 32px;
+}
+
+.videos-card__views {
+  position: absolute;
+  left: 10px;
+  bottom: 13px;
+  padding: 2px 5px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.38);
+  font-size: 7px;
+  font-weight: 600;
+  line-height: normal;
+  color: var(--sn-text-primary);
+  white-space: nowrap;
+}
+
+.videos-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sn-overlay-scrim);
+}
+
+.videos-modal__card {
+  position: relative;
+  width: min(420px, 92vw);
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--sn-background-surface);
+}
+
+.videos-modal__close {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  border: 0;
+  background: none;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--sn-text-primary);
+  cursor: pointer;
+}
+
+.videos-modal__video {
+  display: block;
+  width: 100%;
+  max-height: 70vh;
+  margin-top: 16px;
+  border-radius: 8px;
+  background: var(--sn-brand-navy);
+}
+
+.videos-modal__meta {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--sn-text-primary);
+}
+
+.videos-modal__caption {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}

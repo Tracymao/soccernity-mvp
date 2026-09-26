@@ -42,6 +42,11 @@ const POST_SELECT = {
   // feed/README.md.
   likeCount: true,
   commentCount: true,
+  // sprint-4/post-view-tracking's denormalized view-event counter (see
+  // schema.prisma's comment on Post.viewCount). Exposed on the shared post
+  // payload so a client can show the real count (e.g. the /search "Videos"
+  // carousel) without first having to call POST /posts/:id/view.
+  viewCount: true,
   createdAt: true,
 } as const;
 

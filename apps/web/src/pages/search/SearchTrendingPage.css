@@ -138,29 +138,6 @@
   }
 }
 
-/* --- placeholder slots ---------------------------------------------------
- * Genuinely empty -- no fabricated sample content. Used both in the two
- * side rails and inline in the main column (the video carousel). */
-
-.search-page__placeholder {
-  background: var(--sn-background-surface);
-  border: 1px dashed var(--sn-icon-inactive);
-  border-radius: 12px;
-  padding: 16px;
-}
-
-.search-page__placeholder-title {
-  font: 600 14px "Inter", sans-serif;
-  color: var(--sn-text-primary);
-  margin: 0 0 4px;
-}
-
-.search-page__placeholder-note {
-  font: 400 12px "Inter", sans-serif;
-  color: var(--sn-text-secondary);
-  margin: 0;
-}
-
 .search-page__rail {
   display: flex;
   flex-direction: column;

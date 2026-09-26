@@ -39,6 +39,7 @@ function post(overrides: Partial<FeedPost> = {}): FeedPost {
     banterRoomId: null,
     likeCount: 3,
     commentCount: 1,
+    viewCount: 0,
     createdAt: new Date().toISOString(),
     isLiked: false,
     isSaved: false,
