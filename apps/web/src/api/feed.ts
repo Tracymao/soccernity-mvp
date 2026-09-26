@@ -40,6 +40,9 @@ export interface FeedPost {
   banterRoomId: string | null;
   likeCount: number;
   commentCount: number;
+  // Denormalized view-EVENT counter (Post.viewCount) -- real server value,
+  // 0 for a post nobody has opened. Incremented by POST /posts/:id/view.
+  viewCount: number;
   createdAt: string;
   // Per-calling-user viewer state (Decision Log #153). `true` iff the
   // caller has already liked / saved this post. Returned by GET
@@ -234,4 +237,21 @@ export async function addComment(accessToken: string, postId: string, contentTex
     );
   }
   return (await response.json()) as FeedComment;
+}
+
+// POST /posts/:id/view -- OptionalJwtAuthGuard on the server (a logged-out
+// caller may also register a view); we always send the caller's token so
+// the server can de-duplicate per logged-in viewer. Returns the fresh
+// server-side count.
+export interface ViewState {
+  postId: string;
+  viewCount: number;
+}
+
+export async function recordPostView(accessToken: string, postId: string): Promise<ViewState> {
+  const response = await authedFetch(`/posts/${encodeURIComponent(postId)}/view`, accessToken, { method: "POST" });
+  if (!response.ok) {
+    throw new FeedApiError(`Couldn't record that view (${response.status}).`, { status: response.status });
+  }
+  return (await response.json()) as ViewState;
 }

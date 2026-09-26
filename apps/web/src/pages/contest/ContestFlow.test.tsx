@@ -82,6 +82,7 @@ function feedPost(): FeedPost {
     banterRoomId: null,
     likeCount: 0,
     commentCount: 0,
+    viewCount: 0,
     createdAt: new Date().toISOString(),
     isLiked: false,
     isSaved: false,

@@ -55,6 +55,7 @@ function post(overrides: Partial<FeedPost> = {}): FeedPost {
     banterRoomId: "room-1",
     likeCount: 3,
     commentCount: 1,
+    viewCount: 0,
     createdAt: "2026-09-13T00:00:00.000Z",
     isLiked: false,
     isSaved: false,
@@ -135,6 +136,7 @@ describe("BanterRoomPage", () => {
       banterRoomId: "room-1",
       likeCount: 0,
       commentCount: 0,
+      viewCount: 0,
       createdAt: "2026-09-13T01:00:00.000Z",
     });
 
