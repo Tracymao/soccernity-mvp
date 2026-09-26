@@ -29,6 +29,13 @@ import {
   SPORTS_DEFAULT_PAGE_SIZE,
   SPORTS_MAX_PAGE_SIZE,
 } from './sports.constants';
+import {
+  IMPLEMENTED_SPORTS_DATA_PROVIDER,
+  providerSupports,
+  resolveSportsDataProvider,
+  SportsDataField,
+  SportsDataProvider,
+} from './sports-data-provider.constants';
 import { GetStandingsQueryDto } from './dto/get-standings-query.dto';
 import { ListFixturesQueryDto } from './dto/list-fixtures-query.dto';
 import { ListLiveScoresQueryDto } from './dto/list-live-scores-query.dto';
@@ -171,6 +178,9 @@ export interface PublicStandingRow {
   goalsFor: number;
   goalsAgainst: number;
   goalDifference: number;
+  // OMITTED (key absent, never null/[]) unless the active provider supports standingsForm AND the row
+  // carries form data. Oldest -> newest.
+  form?: ('W' | 'D' | 'L')[];
 }
 
 export interface PublicStandingsGroup {
@@ -267,6 +277,7 @@ export class SportsService {
   private readonly h2hTtl: number;
   private readonly highlightsTtl: number;
   private readonly maxRefreshPages: number;
+  private readonly provider: SportsDataProvider;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -287,6 +298,20 @@ export class SportsService {
     // the endpoint's own documented max `limit`), but spending unboundedly many requests refreshing
     // ONE date would defeat the entire point of the per-date refresh-lock design. See README.
     this.maxRefreshPages = config.get<number>('SPORTS_DATA_MAX_REFRESH_PAGES') ?? 1;
+
+    this.provider = resolveSportsDataProvider(config.get<string>('SPORTS_DATA_PROVIDER'));
+    if (this.provider !== IMPLEMENTED_SPORTS_DATA_PROVIDER) {
+      // Capability gating follows the selected provider, but the wired SportsDataClient is still
+      // Highlightly-only — say so loudly instead of letting the config look like a working pivot.
+      this.logger.warn(
+        `SPORTS_DATA_PROVIDER=${this.provider}, but the only implemented SportsDataClient is ${IMPLEMENTED_SPORTS_DATA_PROVIDER}. ` +
+          'Capability gating follows the selected provider; data is still fetched from the implemented one.',
+      );
+    }
+  }
+
+  private supports(field: SportsDataField): boolean {
+    return providerSupports(this.provider, field);
   }
 
   private ttlForPhase(phase: MatchPhase | null): number {
@@ -717,6 +742,29 @@ export class SportsService {
     return String(new Date().getUTCFullYear());
   }
 
+  // Capability-gated shaping: `form` is only ever added when the active provider is documented to
+  // supply it, and only when this row actually has data. Otherwise the key is ABSENT — never null, [] or
+  // any other placeholder that a client could mistake for "this team has no recent results".
+  private toPublicStandingRow(r: RawStandingRow): PublicStandingRow {
+    const row: PublicStandingRow = {
+      position: r.position,
+      team: toPublicTeamRef(String(r.team.id), r.team.name, r.team.logo ?? null),
+      points: r.points,
+      played: r.total.games,
+      won: r.total.wins,
+      drawn: r.total.draws,
+      lost: r.total.loses,
+      goalsFor: r.total.scoredGoals,
+      goalsAgainst: r.total.receivedGoals,
+      goalDifference: r.total.scoredGoals - r.total.receivedGoals,
+    };
+    if (this.supports('standingsForm') && Array.isArray(r.form)) {
+      const form = r.form.map((c) => String(c).toUpperCase()).filter((c): c is 'W' | 'D' | 'L' => c === 'W' || c === 'D' || c === 'L');
+      if (form.length > 0) row.form = form;
+    }
+    return row;
+  }
+
   async getStandings(query: GetStandingsQueryDto): Promise<PublicStandings> {
     const season = await this.resolveSeason(query.league, query.season);
     let row = await this.prisma.standing.findUnique({ where: { leagueId_season: { leagueId: query.league, season } } });
@@ -737,18 +785,7 @@ export class SportsService {
       season,
       groups: groups.map((g) => ({
         name: g.name ?? null,
-        rows: g.standings.map((r) => ({
-          position: r.position,
-          team: toPublicTeamRef(String(r.team.id), r.team.name, r.team.logo ?? null),
-          points: r.points,
-          played: r.total.games,
-          won: r.total.wins,
-          drawn: r.total.draws,
-          lost: r.total.loses,
-          goalsFor: r.total.scoredGoals,
-          goalsAgainst: r.total.receivedGoals,
-          goalDifference: r.total.scoredGoals - r.total.receivedGoals,
-        })),
+        rows: g.standings.map((r) => this.toPublicStandingRow(r)),
       })),
       updatedAt: row?.updatedAt?.toISOString() ?? null,
     };
