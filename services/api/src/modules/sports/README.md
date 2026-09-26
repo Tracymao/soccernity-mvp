@@ -47,10 +47,18 @@ history and wasn't the safer call here either.
 
 ## Two real, confirmed Highlightly data gaps — found during this build, not silently built around
 
+> **Correction (`sprint-4/sports-vendor-capability-registry`, 2026-09-26): gap #1 below is WRONG as
+> originally written.** Highlightly's documentation has a "Football.Match Box Score" endpoint returning
+> per-player statistics for every player in one match, in one call (refreshed every 5 minutes). The exact
+> request path is unconfirmed and it was never traced live, so this module still serves team-level stats
+> only — but "no batched box score exists" is not true. The original text is kept below, struck through
+> in spirit, for the historical record. Full evidence and sources: `highlightly-vs-sportmonks.md`,
+> Finding 1. Gap #2 (standings form) was re-checked and stands.
+
 Per this PR's own task brief's instruction to "state that back clearly" rather than quietly
 assuming or padding out missing vendor data:
 
-1. **No batched per-match player box scores.** `GET /statistics/{matchId}` (confirmed against
+1. **~~No batched per-match player box scores.~~ (superseded — see the correction above)** `GET /statistics/{matchId}` (confirmed against
    Highlightly's own documented example response) is **team-level only** —
    `[{team, statistics: [{value, displayName}]}]`, nothing per-player. Per-player numbers
    (minutes/goals/assists/shots/passes/tackles/fouls) exist only via `GET /players/{id}/statistics`,
@@ -81,6 +89,18 @@ Bookmakers. **There is no dedicated top-scorers/leading-scorers endpoint.** `Pla
 is per-player, not a rankable list. This confirms the fast-follow exclusion should stay excluded —
 building it would mean querying every player in a league individually, the same fan-out problem as
 the box-score gap above.
+
+## Vendor capability registry (added by `sprint-4/sports-vendor-capability-registry`)
+
+`sports-data-provider.constants.ts` holds `SPORTS_DATA_PROVIDER_CAPABILITIES` — per provider
+(`highlightly` | `sportmonks`), a `supported | unsupported | unconfirmed` status for every field in the
+vendor comparison — plus `providerSupports()`. The active provider comes from `SPORTS_DATA_PROVIDER`
+(default `highlightly`; an unknown value fails at boot). `SportsService` omits any response field the
+active provider doesn't support: today that is standings `form`, which is only emitted when the provider
+supports it **and** the row has data. Flipping the provider changes what the capability check reports
+only — `HighlightlyClient` is still the sole `SportsDataClient` implementation, and the service warns at
+boot if you select another. The evidence behind every status, the tier/price facts, and the list of
+fields hidden today are in `highlightly-vs-sportmonks.md`.
 
 ## Section 4.6 endpoint mapping
 
@@ -200,10 +220,11 @@ content a logged-out visitor should see).
 1. **The real Highlightly paid-tier request budget is unknown.** `HIGHLIGHTLY_DAILY_REQUEST_BUDGET`
    defaults to the confirmed free-tier 100/day; production needs a founder decision on which plan to
    buy, then this override set to match.
-2. **No batched player box-score data exists from this vendor** (data gap #1 above) — `GET
-   /sports/matches/:id/stats` is team-level only. A future pass wanting real box scores needs either
-   a different/supplementary data source, or accepting the per-player API-call cost against a much
-   higher request budget than the free tier.
+2. **~~No batched player box-score data exists from this vendor~~ — CORRECTED (see the note under
+   "Two real, confirmed Highlightly data gaps").** Highlightly documents a per-match Match Box Score
+   endpoint; `GET /sports/matches/:id/stats` is still team-level only because nothing has built or
+   traced the box-score call. A future pass wanting real box scores should confirm the endpoint path
+   and stat list with a live call first.
 3. **No standings "form" field exists from this vendor** (data gap #2 above) — the Figma Standing
    screen's FORM column has no real data source today.
 4. **No confirmed top-scorers endpoint exists from this vendor** — the fast-follow exclusion stays

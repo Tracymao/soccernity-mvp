@@ -338,6 +338,51 @@ describe('SportsService', () => {
       expect(result.groups[0].rows[0]).not.toHaveProperty('form');
       expect(result.groups[0].rows[0].goalDifference).toBe(1);
     });
+
+    describe('capability gating of standings `form` (ACTIVE provider)', () => {
+      const rowWithForm = (form: unknown) => ({
+        position: 1,
+        points: 63,
+        team: { id: 't1', name: 'Arsenal' },
+        total: { games: 17, wins: 11, draws: 4, loses: 5, scoredGoals: 28, receivedGoals: 27 },
+        ...(form === undefined ? {} : { form }),
+      });
+
+      async function standingsRow(providerConfig: Record<string, unknown>, form: unknown) {
+        const prisma = buildPrismaMock();
+        (prisma.standing.findUnique as jest.Mock).mockResolvedValue({
+          leagueId: '133',
+          season: '2026',
+          table: [{ name: 'League', standings: [rowWithForm(form)] }],
+          updatedAt: new Date(),
+        });
+        const service = new SportsService(prisma, buildClientMock(), buildLockMock(true), buildConfig(providerConfig));
+        return (await service.getStandings({ league: '133', season: '2026' } as never)).groups[0].rows[0];
+      }
+
+      it('omits `form` on highlightly even if a raw row somehow carries it (never trust data the vendor is not documented to supply)', async () => {
+        const row = await standingsRow({}, ['W', 'D', 'L']);
+        expect(row).not.toHaveProperty('form');
+      });
+
+      it("emits `form` when the active provider is flipped to sportmonks and the row has data", async () => {
+        const row = await standingsRow({ SPORTS_DATA_PROVIDER: 'sportmonks' }, ['w', 'D', 'L', 'x']);
+        expect(row.form).toEqual(['W', 'D', 'L']); // normalised to upper-case, junk dropped
+      });
+
+      it('still omits the key entirely (not null / []) on sportmonks when the row has no form data', async () => {
+        expect(await standingsRow({ SPORTS_DATA_PROVIDER: 'sportmonks' }, undefined)).not.toHaveProperty('form');
+        expect(await standingsRow({ SPORTS_DATA_PROVIDER: 'sportmonks' }, null)).not.toHaveProperty('form');
+        expect(await standingsRow({ SPORTS_DATA_PROVIDER: 'sportmonks' }, [])).not.toHaveProperty('form');
+        expect(await standingsRow({ SPORTS_DATA_PROVIDER: 'sportmonks' }, ['x'])).not.toHaveProperty('form');
+      });
+
+      it('fails fast on an invalid SPORTS_DATA_PROVIDER', () => {
+        expect(() => new SportsService(buildPrismaMock(), buildClientMock(), buildLockMock(true), buildConfig({ SPORTS_DATA_PROVIDER: 'nope' }))).toThrow(
+          /SPORTS_DATA_PROVIDER/,
+        );
+      });
+    });
   });
 
   describe('getHighlights', () => {

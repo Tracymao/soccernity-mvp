@@ -154,6 +154,11 @@ export interface RawStandingRow {
   total: RawStandingSplit;
   home?: RawStandingSplit | null;
   away?: RawStandingSplit | null;
+  // Recent results, oldest -> newest, as 'W' | 'D' | 'L'. HighlightlyClient NEVER sets this (its
+  // documented standings row has no form field). It exists so a future provider adapter (SportMonks'
+  // `include=form`) has somewhere to put it; SportsService only ever surfaces it when the active
+  // provider's capability entry says standingsForm is supported (sports-data-provider.constants.ts).
+  form?: string[] | null;
 }
 
 export interface RawStandingsGroup {
