@@ -349,9 +349,11 @@ and sufficient shape.
   table above), never by match quality. ILIKE substring matching has no
   natural relevance signal to rank by; a real ranking strategy is part of
   the same future full-text-search work above, not a separate concern.
-- **A frontend for trending topics** — `apps/web` has no UI consuming
-  `GET /trending` yet; this is backend-only, same as `GET /search`'s own
-  scoping.
+- **A frontend for trending topics** — now built for desktop only:
+  `apps/web`'s `/search` page has a "Trends for you" card consuming
+  `GET /trending` (`figma/trends-sidebar`, `pages/search/TrendsForYou.tsx`).
+  Still not built: tapping a trend to search it (`/search` has no `?q=`
+  deep link) and any per-hashtag action (see the moderation note below).
 - **No admin/moderation surface for hashtags** — an abusive or spammy
   hashtag cannot be hidden, blocked, or removed from trending short of a
   direct database edit. No report/moderation route references `Hashtag`

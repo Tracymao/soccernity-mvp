@@ -350,3 +350,109 @@
   opacity: 0.6;
   cursor: default;
 }
+
+/* --- "Trends for you" card (desktop right rail, 2876:4647) --------------
+ * Card 270px in Figma; the rail column is up to 300px so it fills the
+ * column. Title 12px Montserrat Medium, row name 12px SemiBold, post count
+ * 10px SemiBold secondary, "See more" 10px SemiBold -- all from the
+ * frame's own text nodes. Rows are separated by 1px hairlines
+ * (2876:4684-4689). */
+
+.trends-card {
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 12px;
+  padding: 0 0 14px;
+}
+
+.trends-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 8px 19px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+}
+
+.trends-card__title {
+  margin: 0;
+  font: 500 12px "Montserrat", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.trends-card__refresh {
+  display: flex;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 999px;
+}
+
+.trends-card__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 11px;
+}
+
+.trends-card__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 8px 10px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+}
+
+.trends-card__row:last-child {
+  border-bottom: none;
+}
+
+.trends-card__row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.trends-card__name {
+  font: 600 12px "Montserrat", sans-serif;
+  color: var(--sn-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.trends-card__count {
+  font: 600 10px "Montserrat", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.trends-card__more {
+  display: flex;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  padding: 2px;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.trends-card__see-more {
+  display: block;
+  margin: 10px auto 0;
+  border: none;
+  background: transparent;
+  padding: 4px 8px;
+  font: 600 10px "Montserrat", sans-serif;
+  color: var(--sn-text-primary);
+  cursor: pointer;
+}
+
+.trends-card__status {
+  margin: 0;
+  padding: 16px 19px 4px;
+  font: 500 12px "Montserrat", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.trends-card__status--error {
+  color: var(--sn-brand-navy);
+}
