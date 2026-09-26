@@ -34,11 +34,30 @@ implementation — **configured entirely through env vars**
 Cloudflare R2, Backblaze B2, or DigitalOcean Spaces — no vendor-specific
 SDK quirk is hardcoded anywhere in it.
 
-**Decision Log candidate: the actual storage provider is still
-unresolved**, mirroring Decision Log #26's own "unbundled, cost-aligned
-for a pre-launch MVP" reasoning for hosting generally — the founder
-should pick one (and provision real credentials) once launch-scale
-storage/bandwidth costs matter; nothing in this PR forces that choice.
+**Provider decision (Decision Log #307, resolved 2026-09-26): Cloudflare
+R2.** The standout factor is **zero egress fees** — for a media-heavy
+social app, reads (feed, profile and clip playback) vastly outnumber
+writes, so bandwidth, not storage, would dominate an AWS S3 bill; R2
+removes that line item entirely, consistent with Decision Log #26's
+"cost-aligned for a pre-launch MVP" reasoning. R2 is S3-compatible, so
+this needs **no code change** — `S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com`
+and `S3_REGION=auto` (see `.env.example`).
+
+**This decision does NOT make storage live.** Creating the Cloudflare
+account, the R2 bucket, and an S3-compatible API token is a human
+action outside any PR's reach. Until Temi does that and pastes real
+`S3_BUCKET` / `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_ENDPOINT` values
+into a real `.env`, storage stays **wired-but-inactive** and
+`POST /admin/media/upload` still returns 503 (below).
+
+**Known gap, flagged not fixed (docs-only PR):** `S3StorageService`
+builds `MediaAsset.url` as `<endpoint>/<bucket>/<key>`. On R2 that is the
+authenticated S3-API endpoint, **not publicly readable** — public access
+needs the bucket's `r2.dev` subdomain or a custom domain, whose URLs also
+omit the bucket segment. A follow-up (e.g. an `S3_PUBLIC_BASE_URL` env
+var used for `url` construction) is needed before uploaded media can be
+displayed to users.
+
 `S3_ENDPOINT` is the one env var that changes *behaviour*, not just a
 value: leaving it unset targets real AWS S3 (virtual-hosted-style URLs
 — `https://<bucket>.s3.<region>.amazonaws.com/<key>` — the AWS SDK v3's
@@ -182,7 +201,7 @@ path, the URL-construction math for both addressing styles, and the
 `PutObjectCommand`/`DeleteObjectCommand` call shapes are all covered by
 `s3-storage.service.spec.ts` against a mocked SDK; nothing here proves a
 byte actually lands in a real S3-compatible bucket. That proof needs a
-real provider account — the still-open Decision Log candidate above.
+real provider account — the not-yet-created R2 account (see the provider decision above).
 
 **No e2e spec added** — every `MediaService` method is a plain
 `create`/`findMany` Prisma call against a model with **zero relations**
