@@ -10,10 +10,11 @@
 // comment). Built desktop-only side cards: right-rail "Trends for you"
 // (search/TrendsForYou.tsx, public GET /trending), left-rail "Trending
 // News" (search/TrendingNewsPanel.tsx, GET /articles) and right-rail
-// "Fixtures" (search/FixturesPanel.tsx, GET /sports/fixtures); the mobile
-// frame has none of these sidebars, so they are not mounted (and never
-// fetch) on mobile. Suggested people and the video carousel are still
-// UNBUILT — rendered as honest, empty <PlaceholderSlot> regions (no
+// "Fixtures" (search/FixturesPanel.tsx, GET /sports/fixtures), and left-rail
+// "Suggested" people (search/SuggestedPeoplePanel.tsx, GET /users/suggested,
+// Follow via POST /users/:id/follow); the mobile frame has none of these
+// sidebars, so they are not mounted (and never fetch) on mobile. The video
+// carousel is still UNBUILT — rendered as honest, empty <PlaceholderSlot> regions (no
 // fabricated sample data), left for separate follow-up PRs. The "For you"
 // personalised feed content shown under the chips on both Figma frames is
 // likewise not
@@ -69,6 +70,7 @@ import { useIsMobile } from "../layout/useIsMobile";
 import TrendsForYou from "./search/TrendsForYou";
 import TrendingNewsPanel from "./search/TrendingNewsPanel";
 import FixturesPanel from "./search/FixturesPanel";
+import SuggestedPeoplePanel from "./search/SuggestedPeoplePanel";
 import "./search/SearchTrendingPage.css";
 
 type SearchState = "idle" | "loading" | "loaded" | "error";
@@ -232,7 +234,7 @@ export default function SearchTrendingPage() {
         {!isMobile && (
           <aside className="search-page__rail search-page__rail--left">
             <TrendingNewsPanel />
-            <PlaceholderSlot title="Suggested" />
+            <SuggestedPeoplePanel accessToken={token} currentUserId={decoded.sub} />
           </aside>
         )}
 
