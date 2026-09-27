@@ -1,4 +1,10 @@
-import { BadRequestException, ExecutionContext, INestApplication, ValidationPipe } from '@nestjs/common';
+import {
+  BadRequestException,
+  ExecutionContext,
+  INestApplication,
+  NotFoundException,
+  ValidationPipe,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
@@ -21,6 +27,7 @@ describe('AdminMediaController (HTTP layer)', () => {
   const mediaService = {
     listMedia: jest.fn(),
     uploadMedia: jest.fn(),
+    getMediaById: jest.fn(),
   };
 
   let currentAdmin: { sub: string; role: string; aud: string };
@@ -56,6 +63,13 @@ describe('AdminMediaController (HTTP layer)', () => {
 
       await request(app.getHttpServer()).get('/admin/media').expect(403);
       expect(mediaService.listMedia).not.toHaveBeenCalled();
+    });
+
+    it('rejects a moderator with 403 on GET /admin/media/:id', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
+
+      await request(app.getHttpServer()).get('/admin/media/media-1').expect(403);
+      expect(mediaService.getMediaById).not.toHaveBeenCalled();
     });
 
     it('rejects a moderator with 403 on POST /admin/media/upload', async () => {
@@ -101,6 +115,36 @@ describe('AdminMediaController (HTTP layer)', () => {
 
     it('rejects an invalid type filter', async () => {
       await request(app.getHttpServer()).get('/admin/media').query({ type: 'bogus' }).expect(400);
+    });
+  });
+
+  describe('GET /admin/media/:id', () => {
+    beforeEach(() => {
+      currentAdmin = { sub: 'admin-1', role: 'editor', aud: 'admin-console' };
+    });
+
+    it('forwards the id and returns the media asset', async () => {
+      mediaService.getMediaById.mockResolvedValue({ id: 'media-1', type: 'image' });
+
+      const res = await request(app.getHttpServer()).get('/admin/media/media-1').expect(200);
+
+      expect(mediaService.getMediaById).toHaveBeenCalledWith('media-1');
+      expect(res.body.id).toBe('media-1');
+    });
+
+    it('a superadmin may also fetch a single media asset', async () => {
+      currentAdmin = { sub: 'admin-2', role: 'superadmin', aud: 'admin-console' };
+      mediaService.getMediaById.mockResolvedValue({ id: 'media-1' });
+
+      await request(app.getHttpServer()).get('/admin/media/media-1').expect(200);
+
+      expect(mediaService.getMediaById).toHaveBeenCalledWith('media-1');
+    });
+
+    it('surfaces a 404 thrown by the service (media does not exist)', async () => {
+      mediaService.getMediaById.mockRejectedValue(new NotFoundException('Media not found'));
+
+      await request(app.getHttpServer()).get('/admin/media/missing').expect(404);
     });
   });
 

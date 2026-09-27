@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -148,5 +148,24 @@ export class MediaService {
     const nextCursor = hasMore && last ? encodeMediaCursor({ createdAt: last.createdAt, id: last.id }) : null;
 
     return { items, nextCursor };
+  }
+
+  // GET /admin/media/:id (AdminRolesGuard('editor', 'superadmin') — same
+  // class-level guard as list/upload). The single-resource fetch that
+  // used to not exist anywhere — MediaPreviewPage.tsx previously worked
+  // around this via a router-state handoff plus a bounded
+  // findMediaById() re-list-and-search fallback (see README.md's own
+  // "What this PR does NOT do" entry, now superseded). A non-existent id
+  // is a genuine 404, same as ModerationService.getReportById /
+  // GrassrootsService.getTeamById's own precedent for this shape of gap —
+  // no additional gate beyond existence, unlike a Report's
+  // concernsMinor/child-safety-vetting check: MediaAsset carries no
+  // analogous restricted-content concept.
+  async getMediaById(id: string): Promise<MediaListItem> {
+    const media = await this.prisma.mediaAsset.findUnique({ where: { id }, select: MEDIA_LIST_SELECT });
+    if (!media) {
+      throw new NotFoundException('Media not found');
+    }
+    return media;
   }
 }

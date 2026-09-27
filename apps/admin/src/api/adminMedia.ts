@@ -39,36 +39,17 @@ export function listMedia(query: { type?: MediaType; cursor?: string; limit?: nu
   return adminFetch<MediaListPage>(`/admin/media${qs ? `?${qs}` : ""}`);
 }
 
-// There is no GET /admin/media/:id anywhere in services/api —
-// MediaPreviewPage.tsx is reached from MediaLibraryPage's own row link,
-// which passes the row's already-fetched MediaAsset via router `state`
-// (see ReportDetailPage.tsx's own identical precedent, and
-// api/moderation.ts's matching `findReportById` comment). `findMediaById`
-// below is the fallback for a DIRECT visit or a page refresh (no router
-// state): it re-lists (unfiltered, so an image OR a video row is found
-// regardless of type) and searches client-side for the matching id,
-// bounded to a few pages so a very large media library can't turn a
-// refresh into an unbounded crawl. If the asset isn't found within that
-// bound, the page shows an honest "open it from the library instead"
-// state rather than fabricating one.
-//
-// A real GET /admin/media/:id would remove this workaround entirely and
-// is the more correct long-term fix; recorded as a Decision Log
-// candidate in media/README.md, per this codebase's established
-// "flag it, don't silently add one" instruction for exactly this shape
-// of gap.
-const FIND_BY_ID_MAX_PAGES = 5;
-
-export async function findMediaById(id: string): Promise<MediaAsset | null> {
-  let cursor: string | undefined;
-  for (let page = 0; page < FIND_BY_ID_MAX_PAGES; page += 1) {
-    const result = await listMedia({ cursor, limit: 50 });
-    const found = result.items.find((m) => m.id === id);
-    if (found) return found;
-    if (!result.nextCursor) return null;
-    cursor = result.nextCursor;
-  }
-  return null;
+// GET /admin/media/:id — the real single-resource fetch that used to not
+// exist (see MediaPreviewPage.tsx's own header comment for the workaround
+// this route now supersedes: a router-state handoff from MediaLibraryPage's
+// row link, plus a bounded re-list-and-search fallback for a direct
+// visit/refresh — the same shape ReportDetailPage.tsx/api/moderation.ts's
+// `getReportById`/`findReportById` pair already established). A
+// non-existent id is a genuine 404 (AdminApiError with status 404); no
+// additional gate beyond existence — MediaAsset has no analogous
+// child-safety-vetting concept.
+export function getMediaById(id: string): Promise<MediaAsset> {
+  return adminFetch<MediaAsset>(`/admin/media/${id}`);
 }
 
 // POST /admin/media/upload — single-file multipart upload, field name

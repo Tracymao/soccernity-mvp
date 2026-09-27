@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
 import { encodeMediaCursor } from './cursor.util';
@@ -18,6 +18,7 @@ function buildPrismaMock() {
     mediaAsset: {
       create: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn(),
     },
   } as unknown as PrismaService;
 
@@ -175,6 +176,31 @@ describe('MediaService', () => {
 
       expect(page.items).toHaveLength(1);
       expect(page.nextCursor).toBeNull();
+    });
+  });
+
+  describe('getMediaById', () => {
+    it('returns the media asset when it exists', async () => {
+      const storage = buildFakeStorage();
+      const prisma = buildPrismaMock();
+      (prisma.mediaAsset.findUnique as jest.Mock).mockResolvedValue(mediaAsset());
+      const service = new MediaService(storage, prisma);
+
+      const result = await service.getMediaById('media-1');
+
+      expect(prisma.mediaAsset.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'media-1' } }),
+      );
+      expect(result).toEqual(mediaAsset());
+    });
+
+    it('throws NotFoundException for a non-existent id', async () => {
+      const storage = buildFakeStorage();
+      const prisma = buildPrismaMock();
+      (prisma.mediaAsset.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new MediaService(storage, prisma);
+
+      await expect(service.getMediaById('does-not-exist')).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });
