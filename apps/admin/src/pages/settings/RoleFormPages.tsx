@@ -1,23 +1,47 @@
 // Add / Edit / Delete Role — Figma nodes 1658:2456, 1658:2592, 5403:7205.
 //
-// STUB: no role-management endpoint (Decision Log #191). Forms reproduced
-// and disabled. "Delete Role" is navy, not red — no destructive token
-// (CLAUDE.md non-negotiable #3).
-import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+// Real data (Edit only): PATCH /admin/staff/:id/role (Build Plan Section
+// 4.8, built by feat/admin-role-management) reassigns AdminUser.role;
+// PATCH /admin/users/:id/child-safety-vetting
+// (schema/report-severity-escalation-admin-vetting-application) records
+// — but does NOT itself perform — child-safety vetting for that admin.
+// Both are AdminRolesGuard('superadmin')-only; see
+// admin-staff-roles/README.md's "Response shape" section for why the
+// vetting fields ride along on GET/PATCH /admin/staff's own response
+// even though this module doesn't write them.
+//
+// AddRolePage/DeleteRolePage remain disclosed stubs — per Decision Log
+// #191 there is still no self-service admin/moderator account
+// creation/deletion endpoint (admin-staff-roles/README.md's own "Not
+// built" list explicitly leaves both out of scope). "Add a New Role" is
+// really "create an admin/moderator account". Delete Role is navy, not
+// red — no destructive token (CLAUDE.md non-negotiable #3).
+import { useEffect, useState, type ReactNode } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { StubBanner, StubButton, StubField } from "../../components/stub/AdminStub";
+import { AdminApiError } from "../../api/adminClient";
+import {
+  ADMIN_STAFF_ROLES,
+  findStaffById,
+  updateAdminRole,
+  type AdminStaffListItem,
+  type AdminStaffRole,
+} from "../../api/adminStaff";
+import { setChildSafetyVetting } from "../../api/adminStaffVetting";
+import { formatDateTime } from "./settingsShared";
+import "./settings.css";
 
-function Shell({ title, children }: { title: string; children: ReactNode }) {
+function StubShell({ title, children }: { title: string; children: ReactNode }) {
   return (
     <>
-      <div className="admin-stub__back">
+      <div className="rl-back">
         <Link to="/settings">← Roles</Link>
       </div>
       <AdminPageHeader title={title} hideSearch />
       <StubBanner>
-        No admin role-management endpoint exists, and there is no self-service admin/moderator
-        registration — accounts are provisioned by direct DB insert (Decision Log #191).
+        There is no self-service admin/moderator account creation or deletion endpoint — accounts
+        are provisioned by direct DB insert (Decision Log #191).
       </StubBanner>
       <div className="admin-stub__body">{children}</div>
     </>
@@ -26,7 +50,7 @@ function Shell({ title, children }: { title: string; children: ReactNode }) {
 
 export function AddRolePage() {
   return (
-    <Shell title="Add a new role">
+    <StubShell title="Add a new role">
       <p className="admin-stub__note">
         This screen really creates an admin/moderator account (name, email, password) — see
         Decision Log #191 for why that is not self-service.
@@ -39,25 +63,229 @@ export function AddRolePage() {
       <div className="admin-stub__actions">
         <StubButton>Submit</StubButton>
       </div>
-    </Shell>
+    </StubShell>
   );
 }
 
+type LoadState = "loading" | "loaded" | "not-found" | "error";
+
 export function EditRolePage() {
+  const { id = "" } = useParams();
+  const location = useLocation() as { state?: { admin?: AdminStaffListItem } };
+  const navigate = useNavigate();
+
+  const [admin, setAdmin] = useState<AdminStaffListItem | null>(location.state?.admin ?? null);
+  const [loadState, setLoadState] = useState<LoadState>(admin ? "loaded" : "loading");
+
+  const [role, setRole] = useState<AdminStaffRole>(admin?.role ?? "editor");
+  const [savingRole, setSavingRole] = useState(false);
+  const [roleError, setRoleError] = useState<string | null>(null);
+  const [roleSaved, setRoleSaved] = useState(false);
+
+  const [vettingBusy, setVettingBusy] = useState(false);
+  const [vettingError, setVettingError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (admin) return;
+    let cancelled = false;
+    findStaffById(id)
+      .then((found) => {
+        if (cancelled) return;
+        if (found) {
+          setAdmin(found);
+          setRole(found.role);
+          setLoadState("loaded");
+        } else {
+          setLoadState("not-found");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLoadState("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Only re-runs if `id` changes — `admin` is intentionally excluded so
+    // a successful save/toggle below doesn't trigger a refetch.
+  }, [id]);
+
+  const backLink = (
+    <div className="rl-back">
+      <Link to="/settings">← Roles</Link>
+    </div>
+  );
+
+  async function handleSaveRole() {
+    setRoleError(null);
+    setRoleSaved(false);
+    setSavingRole(true);
+    try {
+      const updated = await updateAdminRole(id, role);
+      setAdmin(updated);
+      setRole(updated.role);
+      setRoleSaved(true);
+    } catch (err) {
+      setRoleError(err instanceof AdminApiError ? err.message : "Couldn't update this role.");
+    } finally {
+      setSavingRole(false);
+    }
+  }
+
+  async function handleToggleVetting() {
+    if (!admin) return;
+    setVettingError(null);
+    setVettingBusy(true);
+    const next = !admin.childSafetyVetted;
+    try {
+      const updated = await setChildSafetyVetting(id, next);
+      // Merge only the vetting-specific fields this endpoint actually
+      // owns — id/email/fullName/role come from AdminStaffListItem's own
+      // wider (and more precisely typed) shape and are left untouched.
+      setAdmin((prev) =>
+        prev
+          ? {
+              ...prev,
+              childSafetyVetted: updated.childSafetyVetted,
+              vettedAt: updated.vettedAt,
+              vettedByAdminId: updated.vettedByAdminId,
+            }
+          : prev,
+      );
+    } catch (err) {
+      setVettingError(err instanceof AdminApiError ? err.message : "Couldn't update the vetting record.");
+    } finally {
+      setVettingBusy(false);
+    }
+  }
+
+  if (loadState === "loading") {
+    return (
+      <>
+        <AdminPageHeader title="Edit role" hideSearch />
+        <div className="rl-page">
+          {backLink}
+          <p className="rl-loading">Loading this admin account…</p>
+        </div>
+      </>
+    );
+  }
+
+  if (loadState === "not-found" || loadState === "error" || !admin) {
+    return (
+      <>
+        <AdminPageHeader title="Edit role" hideSearch />
+        <div className="rl-page">
+          {backLink}
+          <div className="rl-card">
+            <h2 className="rl-card__title">Admin account not found</h2>
+            <p className="rl-note">
+              {loadState === "error"
+                ? "Couldn't load this admin account. Please try again from the Roles list."
+                : "This admin account isn't in the first 250 staff records — open it directly from the Roles list instead of a bookmarked link."}
+            </p>
+            <div className="rl-action-row">
+              <button type="button" className="rl-btn rl-btn--primary" onClick={() => navigate("/settings")}>
+                Back to Roles
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
-    <Shell title="Edit role">
-      <StubField label="Name" value="Adaeze M." />
-      <StubField label="Role" kind="select" value="Moderator" />
-      <div className="admin-stub__actions">
-        <StubButton>Submit</StubButton>
+    <>
+      <AdminPageHeader title="Edit role" hideSearch />
+      <div className="rl-page">
+        {backLink}
+
+        <div className="rl-card">
+          <h2 className="rl-card__title">Account</h2>
+          <div className="rl-field-row">
+            <span className="rl-field-row__label">Name</span>
+            <span className="rl-field-row__value">{admin.fullName}</span>
+          </div>
+          <div className="rl-field-row">
+            <span className="rl-field-row__label">Email</span>
+            <span className="rl-field-row__value">{admin.email}</span>
+          </div>
+
+          <label className="rl-field">
+            <span>Role</span>
+            <select value={role} onChange={(e) => setRole(e.target.value as AdminStaffRole)} disabled={savingRole}>
+              {ADMIN_STAFF_ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {roleError ? (
+            <p className="rl-error" role="alert">
+              {roleError}
+            </p>
+          ) : null}
+          {roleSaved && !roleError ? <p className="rl-success">Role updated.</p> : null}
+
+          <div className="rl-action-row">
+            <button type="button" className="rl-btn rl-btn--primary" onClick={handleSaveRole} disabled={savingRole}>
+              {savingRole ? "Saving…" : "Submit"}
+            </button>
+          </div>
+        </div>
+
+        <div className="rl-card">
+          <h2 className="rl-card__title">Child safety vetting</h2>
+
+          <div className="rl-callout">
+            <span className="rl-callout__bar" aria-hidden />
+            <p>
+              This records that a real-world DBS/background check has been completed for this
+              staff member <strong>outside of Soccernity's systems</strong> — toggling it performs
+              no verification of its own. Only a superadmin may set or clear it.
+            </p>
+          </div>
+
+          <span className={`rl-pill ${admin.childSafetyVetted ? "rl-pill--strong" : "rl-pill--soft"}`}>
+            {admin.childSafetyVetted ? "Vetted" : "Not vetted"}
+          </span>
+
+          {admin.childSafetyVetted ? (
+            <p className="rl-note">
+              Recorded {formatDateTime(admin.vettedAt)}
+              {admin.vettedByAdminId ? ` by admin ${admin.vettedByAdminId}` : ""}.
+            </p>
+          ) : (
+            <p className="rl-note">No vetting record is on file for this staff member.</p>
+          )}
+
+          {vettingError ? (
+            <p className="rl-error" role="alert">
+              {vettingError}
+            </p>
+          ) : null}
+
+          <div className="rl-action-row">
+            <button
+              type="button"
+              className="rl-btn rl-btn--outline"
+              onClick={handleToggleVetting}
+              disabled={vettingBusy}
+            >
+              {vettingBusy ? "Updating…" : admin.childSafetyVetted ? "Clear vetting record" : "Mark as vetted"}
+            </button>
+          </div>
+        </div>
       </div>
-    </Shell>
+    </>
   );
 }
 
 export function DeleteRolePage() {
   return (
-    <Shell title="Delete this role?">
+    <StubShell title="Delete this role?">
       <p className="admin-stub__note">
         Members currently assigned this role would lose its permissions.
       </p>
@@ -67,6 +295,6 @@ export function DeleteRolePage() {
           Cancel
         </Link>
       </div>
-    </Shell>
+    </StubShell>
   );
 }

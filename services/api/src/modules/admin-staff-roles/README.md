@@ -150,47 +150,65 @@ flag if uncertain" convention.
 ## Response shape: an explicit allowlist, never a spread of the raw row
 
 `ADMIN_STAFF_SELECT` (`id`, `email`, `fullName`, `role`, `accountStatus`,
-`createdAt`) is a Prisma `select` clause, not `{ ...adminUser }` — the
+`createdAt`, plus `childSafetyVetted`/`vettedAt`/`vettedByAdminId` — see
+below) is a Prisma `select` clause, not `{ ...adminUser }` — the
 same "never leak `passwordHash`" discipline
 `admin-response.mapper.ts`'s `toAdminSummary`,
 `admin-users.service.ts`'s `USER_LIST_SELECT`, and
 `admin-staff-vetting.service.ts`'s `ADMIN_STAFF_VETTING_SELECT` already
 apply for their own resources. `accountStatus`/`createdAt` are included
 on the list/write response even though this module never writes either
-— a future real conversion of `SettingsRolesPage.tsx` (currently out of
-this PR's scope — see "Not built" below) will plausibly want to show
+— the real conversion of `SettingsRolesPage.tsx` (see below) shows
 whether a listed admin account is still active.
+
+**`childSafetyVetted`/`vettedAt`/`vettedByAdminId` were added to this
+select afterwards** (`apps/admin` frontend-conversion follow-up, not a
+new endpoint or a schema change — all three columns already existed on
+`AdminUser`, added by `schema/report-severity-escalation-admin-vetting-application`).
+Reasoning: `AdminStaffVettingModule`'s own `PATCH
+/admin/users/:id/child-safety-vetting` is PATCH-only — there is no GET
+anywhere that exposes another admin's current vetting status — so once
+`RoleFormPages.tsx`'s `EditRolePage` needed to render a real
+vetted/not-vetted toggle for a specific admin, it had nothing to read
+that state from. Rather than add a second GET endpoint duplicating
+`GET /admin/staff`'s own per-admin lookup shape, this module's existing
+select was widened to also carry the three columns — `GET /admin/staff`
+and `PATCH /admin/staff/:id/role` are otherwise completely unchanged
+(same guards, same DTOs, same write behaviour), and `PATCH
+/admin/users/:id/child-safety-vetting` itself was NOT touched. This
+module still never *writes* any of the three fields — `updateAdminRole`
+only ever sets `role`; an existing vetting record survives a role
+change untouched, and its own select was already this same constant.
 
 ---
 
-## Matching the existing frontend stub, without converting it
+## Matching the existing frontend stub — now converted
 
-`SettingsRolesPage.tsx`'s sample table shows `Name` + `Role` + `Actions`
-(Edit/Delete) per row; `RoleFormPages.tsx`'s `EditRolePage` shows `Name`
-(read-only text) + a `Role` select + Submit. This module's `GET
-/admin/staff` list gives a future real conversion of that table exactly
-the fields it needs (`fullName` for `Name`, `role` for `Role`); `PATCH
-/admin/staff/:id/role` gives the Edit form's Submit button a real
-endpoint to call. **`AddRolePage`/`DeleteRolePage` remain correctly
-out of scope and correctly still stubs** — per Decision Log #191, there
-is still no self-service admin/moderator account creation or deletion
-endpoint anywhere in this codebase; "Add a New Role" is really "create
-an admin/moderator account" (RoleFormPages.tsx's own header comment),
-which this PR's task brief explicitly did NOT ask for ("view and assign
-role", not "create or delete an account"). Building account
+`SettingsRolesPage.tsx`'s roles table and `RoleFormPages.tsx`'s
+`EditRolePage` (frontend follow-up, `feat/admin-roles-vetting-wiring`)
+are wired to `GET /admin/staff` (the list) and `PATCH
+/admin/staff/:id/role` (the Edit form's role reassignment), plus the
+new child-safety-vetting toggle described above, wired to
+`AdminStaffVettingModule`'s own `PATCH
+/admin/users/:id/child-safety-vetting`. There is no `GET
+/admin/staff/:id` — `EditRolePage` is reached from the roles list's own
+"Edit" link, which passes the row's already-fetched `AdminStaffListItem`
+via router `state` (the same `ReportDetailPage.tsx`/`MediaPreviewPage.tsx`
+precedent); a direct visit or refresh falls back to
+`apps/admin/src/api/adminStaff.ts`'s `findStaffById`, which re-lists
+(bounded to a few pages) and searches client-side, same shape as
+`findReportById`/`findMediaById`.
+
+**`AddRolePage`/`DeleteRolePage` remain correctly out of scope and
+correctly still stubs** — per Decision Log #191, there is still no
+self-service admin/moderator account creation or deletion endpoint
+anywhere in this codebase; "Add a New Role" is really "create an
+admin/moderator account" (RoleFormPages.tsx's own header comment), which
+this module's own task brief explicitly did NOT ask for ("view and
+assign role", not "create or delete an account"). Building account
 creation/deletion here would be real, unscoped new architecture (its
 own password-provisioning/email-verification concerns) well beyond this
 module's literal brief.
-
-**No `apps/admin` UI conversion is done in this PR.** Per this task's
-own brief ("Build endpoints... Add tests"), this is `services/api`
-only — the same backend-first, frontend-conversion-later split every
-other paired feature in this codebase uses (e.g.
-`sprint-5/admin-media-storage-backend` then a separate
-`sprint-5/admin-media-storage-frontend`). Converting
-`SettingsRolesPage.tsx`/`RoleFormPages.tsx`'s `EditRolePage` (Add/Delete
-stay stubs) to real data against these two endpoints is the natural
-`figma-to-code` follow-up this PR unblocks.
 
 ---
 
@@ -243,8 +261,12 @@ message / PR description for the exact before/after suite counts.
   by direct DB insert. This PR's own task brief scoped strictly to
   "view and assign role," not account lifecycle; `AddRolePage`/
   `DeleteRolePage` in `RoleFormPages.tsx` correctly remain stubs.
-- **No `apps/admin` UI conversion.** See "Matching the existing
-  frontend stub" above — a real, flagged follow-up.
+- **No `GET /admin/staff/:id` (single-admin lookup).** `EditRolePage`'s
+  own "no dedicated GET, use router state + a bounded fallback listing"
+  workaround is disclosed above, matching the same real gap
+  `api/moderation.ts`'s `findReportById` and `api/adminMedia.ts`'s
+  `findMediaById` already carry for their own resources. A real one
+  would remove that workaround entirely.
 - **No append-only role-change HISTORY on `AdminUser` itself** — only
   the current `role` value is stored, same "this model only tracks the
   MOST RECENT state of an admin-recorded decision" limitation

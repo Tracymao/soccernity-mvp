@@ -24,6 +24,20 @@ import { UpdateAdminRoleDto } from './dto/update-admin-role.dto';
 // SettingsRolesPage.tsx's own sample table shows Name + Role, and a
 // future real conversion of that screen will want to know whether a
 // listed admin is still an active account.
+//
+// `childSafetyVetted`/`vettedAt`/`vettedByAdminId` were added here as a
+// small, deliberate extension of this SAME select (no new route, no
+// schema change — the three columns already existed) when
+// SettingsRolesPage.tsx/RoleFormPages.tsx's EditRolePage were converted
+// to real data: the vetting record has no GET of its own anywhere
+// (AdminStaffVettingModule is PATCH-only, by design — see that module's
+// README), so without also surfacing it here the Edit view would have no
+// way to render a real "vetted / not vetted" toggle for another admin —
+// only a write-and-hope one. This does NOT touch
+// `PATCH /admin/users/:id/child-safety-vetting` (PR 3) at all; that
+// endpoint's own response already carries all three fields, and writing
+// through it here keeps the roster in sync for free (`updateAdminRole`'s
+// own Prisma `update` reads back the same, now-wider, select).
 const ADMIN_STAFF_SELECT = {
   id: true,
   email: true,
@@ -31,6 +45,9 @@ const ADMIN_STAFF_SELECT = {
   role: true,
   accountStatus: true,
   createdAt: true,
+  childSafetyVetted: true,
+  vettedAt: true,
+  vettedByAdminId: true,
 } as const;
 
 export type AdminStaffListItem = Prisma.AdminUserGetPayload<{ select: typeof ADMIN_STAFF_SELECT }>;
