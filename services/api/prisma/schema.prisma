@@ -1059,15 +1059,69 @@ model PostView {
 
 // Feeds the Admin moderation queue — Build Plan Section 8.4.
 model Report {
-  id         String   @id @default(uuid())
-  reporterId String
+  id                   String     @id @default(uuid())
+  // schema/report-severity-escalation-admin-vetting -- reporterId/reporter
+  // are now OPTIONAL. Section 3's original Report assumed every report
+  // comes from a logged-in User, but Section 8.4's own moderation
+  // workflow (and the safeguarding non-negotiables) require a report
+  // route for a non-authenticated party -- a parent, a school, a member
+  // of the public with no Soccernity account -- to flag content
+  // concerning a minor without first having to register. There is no
+  // application code in this PR wiring such a route; this is the schema
+  // groundwork only, flagged as a Decision Log candidate rather than
+  // added silently. When reporterId is null, reporterContactEmail /
+  // reporterContactName carry whatever contact info the non-authenticated
+  // reporter gave (both also null if none was given -- an anonymous tip).
+  // A reporter with a real User row should never have both reporterId set
+  // AND a contact field set; that invariant is not enforced at the schema
+  // level (no CHECK constraint here) and would need application-level
+  // validation once a route is built.
+  reporterId           String?
   // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
-  reporter   User     @relation("reporter", fields: [reporterId], references: [id])
-  targetType String // post | user | comment
-  targetId   String
-  reason     String
-  status     String   @default("open") // open | reviewed | actioned
-  createdAt  DateTime @default(now())
+  // onDelete: Restrict is now stated EXPLICITLY -- reporterId became
+  // optional in this PR, and Prisma's own default onDelete action for an
+  // optional relation is SetNull, not Restrict. Explicit here so making
+  // this field optional (to support a non-authenticated reporter) does
+  // not silently weaken the existing, deliberate RESTRICT safety net for
+  // reports filed by a real User.
+  reporter             User?      @relation("reporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  reporterContactEmail String?
+  reporterContactName  String?
+  targetType           String // post | user | comment
+  targetId             String
+  reason               String
+  status               String     @default("open") // open | reviewed | actioned
+  createdAt            DateTime   @default(now())
+  // Whether the reported content/behaviour concerns a minor -- distinct
+  // from severity (a low-severity report can still concern a minor, and
+  // vice versa). Defaults false; no application code sets this yet, so
+  // it is always false on every report filed through the existing
+  // POST /reports route until a future PR adds the UI/logic to set it
+  // (e.g. a checkbox, or an automatic inference from the reported user's
+  // own isMinor flag).
+  concernsMinor        Boolean    @default(false)
+  // low | medium | high | critical. A plain String, not a Prisma enum --
+  // matches this model's own existing status/actionTaken/appealStatus
+  // string-enum convention rather than introducing a different pattern
+  // for one field. Defaults "medium"; no application code reads or
+  // writes this yet.
+  severity             String     @default("medium")
+  // Escalation trail -- a report that needs to go beyond ordinary
+  // moderator review (e.g. to a designated child-safety lead, or
+  // ultimately to an external authority). escalatedByAdminId is
+  // deliberately independent of reviewedByAdminId/appealReviewedByAdminId
+  // below -- escalating is not the same act as reviewing or deciding an
+  // appeal, and nothing here requires it to be a DIFFERENT admin the way
+  // Decision Log #138 requires for appeal review. escalatedToAuthority
+  // records only that a decision was made to escalate outside Soccernity
+  // (e.g. to a regulator or law enforcement) -- it does not itself send
+  // anything anywhere; no application code exists yet to act on any of
+  // these four fields.
+  escalatedAt          DateTime?
+  escalatedByAdminId   String?
+  escalatedByAdmin     AdminUser? @relation("reportEscalatedBy", fields: [escalatedByAdminId], references: [id])
+  escalationNotes      String?
+  escalatedToAuthority Boolean    @default(false)
 
   // sprint-5/admin-moderation-queue-backend additions below -- a genuine
   // schema addition beyond Section 3's original six-field Report list,
@@ -1227,6 +1281,59 @@ model AdminUser {
   // collide on the same generated field name.
   reviewedReports       Report[]  @relation("reportReviewedBy")
   appealReviewedReports Report[]  @relation("reportAppealReviewedBy")
+  // schema/report-severity-escalation-admin-vetting -- reverse relation
+  // for Report.escalatedByAdmin (see Report's own comment on the
+  // escalation trail fields). No application code sets this yet.
+  escalatedReports      Report[]  @relation("reportEscalatedBy")
+
+  // childSafetyVetted / vettedAt / vettedByAdminId -- a genuine schema
+  // addition beyond this model's own existing field list, flagged per
+  // CLAUDE.md's "the data model is a fixed spec" rule rather than added
+  // silently. Records whether THIS admin/moderator has been through a
+  // separate, real-world child-safety vetting process (e.g. a DBS check
+  // or local equivalent) before being trusted with Report review on a
+  // minors' platform -- a real safeguarding gap this schema previously
+  // had no way to represent at all: any editor/moderator/superadmin row
+  // could review a report concerning a minor with no record of whether
+  // that person had ever actually been vetted for it. childSafetyVetted
+  // defaults false (unvetted) on every existing and future row; no
+  // migration backfill flips it true for anyone, since a real vetting
+  // decision cannot be inferred from existing data and must not be
+  // assumed. vettedByAdminId is a self-relation (a superadmin vets
+  // another admin/moderator) -- deliberately NOT the same field as
+  // reviewedByAdminId/escalatedByAdmin above, since vetting a colleague
+  // is a distinct act from reviewing or escalating a report. No
+  // application code reads or writes any of these three fields yet --
+  // no vetting endpoint, no gate on Report review keyed to this flag.
+  childSafetyVetted Boolean          @default(false)
+  vettedAt          DateTime?
+  vettedByAdminId   String?
+  vettedByAdmin     AdminUser?       @relation("adminVettedBy", fields: [vettedByAdminId], references: [id])
+  vettedAdmins      AdminUser[]      @relation("adminVettedBy")
+  // Reverse relation for AdminActionLog.admin (see that model's own
+  // comment). No application code writes AdminActionLog rows yet.
+  actionLogs        AdminActionLog[]
+}
+
+// schema/report-severity-escalation-admin-vetting -- a genuine new model,
+// flagged per CLAUDE.md's "the data model is a fixed spec" rule rather
+// than added silently. A general-purpose, append-only audit trail of
+// admin/moderator actions -- distinct from Report's own
+// reviewedByAdminId/actionTaken/appeal fields, which record ONLY the
+// moderation-decision lifecycle of one specific Report. AdminActionLog
+// is meant to eventually cover every admin-console action worth an audit
+// record (user suspensions, article edits, category changes, etc.), not
+// just Report review -- but no application code writes to this model in
+// this PR; it is schema groundwork only.
+model AdminActionLog {
+  id         String    @id @default(uuid())
+  adminId    String
+  admin      AdminUser @relation(fields: [adminId], references: [id])
+  action     String
+  targetType String
+  targetId   String
+  notes      String?
+  createdAt  DateTime  @default(now())
 }
 
 // ---------- Sports Hub (cached from the licensed sports-data vendor — Decision Log #6, resolved
