@@ -15,11 +15,26 @@
 // Appeal Review (appeals tab) screen, passing the row's own already-fetched
 // Report via router `state` -- see api/moderation.ts's own Decision Log
 // candidate #4 comment for why (no GET /reports/:id exists).
+//
+// schema/report-severity-escalation-admin-vetting-application: a "Flags"
+// column shows severity (every report has one) and, when true, a
+// "Concerns a minor" badge. A non-vetted admin never sees a
+// concernsMinor row here at all -- the backend's listReports silently
+// filters those out (moderation.service.ts) -- so no frontend gate is
+// needed on this screen; see ReportDetailPage.tsx/AppealReviewPage.tsx
+// for the "somehow linked directly" restricted state this can't cover.
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { listReports, type Report } from "../../api/moderation";
-import { targetLabel, useAsyncData } from "./moderationShared";
+import {
+  MinorFlagBadge,
+  reporterCellLabel,
+  reporterFullLabel,
+  SeverityPill,
+  targetLabel,
+  useAsyncData,
+} from "./moderationShared";
 import "./moderation.css";
 
 type Tab = "open" | "appeals";
@@ -32,11 +47,15 @@ function ReportRow({ report, tab }: { report: Report; tab: Tab }) {
         {report.targetId.slice(0, 8)}…
       </span>
       <span>{targetLabel(report.targetType)}</span>
+      <span className="mod-flags">
+        <SeverityPill severity={report.severity} />
+        {report.concernsMinor ? <MinorFlagBadge /> : null}
+      </span>
       <span className="mod-cell--secondary mod-cell--truncate" title={report.reason}>
         {report.reason}
       </span>
-      <span className="mod-cell--secondary" title={report.reporterId}>
-        {report.reporterId.slice(0, 8)}…
+      <span className="mod-cell--secondary" title={reporterFullLabel(report)}>
+        {reporterCellLabel(report)}
       </span>
       <span>
         <span className={`mod-pill ${report.status === "open" ? "mod-pill--strong" : "mod-pill--soft"}`}>
@@ -146,6 +165,7 @@ export default function ModerationQueuePage() {
             <div className="mod-table__row mod-table__row--head">
               <span>Reported</span>
               <span>Type</span>
+              <span>Flags</span>
               <span>Reason</span>
               <span>Reporter</span>
               <span>Status</span>

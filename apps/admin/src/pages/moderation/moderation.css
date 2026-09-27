@@ -89,7 +89,7 @@
 
 .mod-table__row {
   display: grid;
-  grid-template-columns: 100px 90px 1.6fr 100px 110px 90px;
+  grid-template-columns: 100px 90px 130px 1.3fr 110px 100px 90px;
   gap: 16px;
   align-items: center;
   padding: 14px 20px;
@@ -140,6 +140,25 @@
 .mod-pill--soft {
   background-color: var(--sn-green-tint-12);
   color: var(--sn-text-primary);
+}
+
+/* schema/report-severity-escalation-admin-vetting-application — the
+ * "concerns a minor" flag. A distinct outline treatment (not a solid
+ * fill) so it doesn't read as just another severity/status pill at a
+ * glance — still navy/surface only, no new colour (non-negotiable #3). */
+.mod-pill--minor {
+  background-color: var(--sn-background-surface);
+  border: 1px solid var(--sn-brand-navy);
+  color: var(--sn-brand-navy);
+  font-weight: 700;
+  text-transform: none;
+}
+
+.mod-flags {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 
 /* links + buttons */
@@ -244,4 +263,44 @@
   font-size: 14px;
   color: var(--sn-text-primary);
   word-break: break-word;
+}
+
+/* Escalate card + the child-safety-vetting restricted state
+ * (schema/report-severity-escalation-admin-vetting-application). */
+
+.mod-card--restricted {
+  border: 1px solid var(--sn-brand-navy);
+}
+
+.mod-escalate-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mod-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--sn-icon-inactive);
+  background-color: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.mod-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--sn-text-primary);
+  cursor: pointer;
+}
+
+.mod-checkbox input {
+  margin-top: 3px;
 }

@@ -10,6 +10,13 @@
 // tab), which passes the row's own already-fetched Report via router
 // `state`; a direct visit / refresh falls back to api/moderation.ts's
 // findReportById (see that file's own Decision Log candidate #4 comment).
+//
+// schema/report-severity-escalation-admin-vetting-application: same
+// severity/concernsMinor display + child-safety-vetting-restricted state
+// as ReportDetailPage.tsx — see that file's own header comment for why a
+// concernsMinor report can still reach this screen directly even though
+// the queue's own list filtering already keeps a non-vetted admin from
+// ever clicking "Review" on one.
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import AdminPageHeader from "../../layout/AdminPageHeader";
@@ -17,12 +24,19 @@ import { AdminApiError } from "../../api/adminClient";
 import {
   decideAppeal,
   findReportById,
+  isChildSafetyVettingRequiredError,
   REPORT_ACTION_LABELS,
   type AppealDecision,
   type Report,
   type ReportAction,
 } from "../../api/moderation";
-import { formatDateTime } from "./moderationShared";
+import {
+  EscalateReportCard,
+  formatDateTime,
+  MinorFlagBadge,
+  SeverityPill,
+  VettingRestrictedNotice,
+} from "./moderationShared";
 import "./moderation.css";
 
 type LoadState = "loading" | "loaded" | "not-found" | "error";
@@ -35,6 +49,7 @@ export default function AppealReviewPage() {
   const [report, setReport] = useState<Report | null>(location.state?.report ?? null);
   const [loadState, setLoadState] = useState<LoadState>(report ? "loaded" : "loading");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionRestricted, setActionRestricted] = useState(false);
   const [submitting, setSubmitting] = useState<AppealDecision | null>(null);
 
   useEffect(() => {
@@ -72,9 +87,13 @@ export default function AppealReviewPage() {
       await decideAppeal(id, decision);
       navigate("/moderation");
     } catch (err) {
-      setActionError(
-        err instanceof AdminApiError ? err.message : "Couldn’t record that decision. Please try again.",
-      );
+      if (isChildSafetyVettingRequiredError(err)) {
+        setActionRestricted(true);
+      } else {
+        setActionError(
+          err instanceof AdminApiError ? err.message : "Couldn’t record that decision. Please try again.",
+        );
+      }
       setSubmitting(null);
     }
   }
@@ -128,7 +147,20 @@ export default function AppealReviewPage() {
                 ? `This report's appeal was already decided (${report.appealStatus}).`
                 : "This report has no appeal filed against it."}
             </p>
+            <div className="mod-field">
+              <span className="mod-field__label">Severity</span>
+              <span className="mod-field__value">
+                <SeverityPill severity={report.severity} />
+              </span>
+            </div>
+            <div className="mod-field">
+              <span className="mod-field__label">Concerns a minor</span>
+              <span className="mod-field__value">
+                {report.concernsMinor ? <MinorFlagBadge /> : "No"}
+              </span>
+            </div>
           </div>
+          <EscalateReportCard report={report} onEscalated={setReport} />
         </div>
       </>
     );
@@ -169,6 +201,18 @@ export default function AppealReviewPage() {
             <span className="mod-field__label">Original report reason</span>
             <span className="mod-field__value">{report.reason}</span>
           </div>
+          <div className="mod-field">
+            <span className="mod-field__label">Severity</span>
+            <span className="mod-field__value">
+              <SeverityPill severity={report.severity} />
+            </span>
+          </div>
+          <div className="mod-field">
+            <span className="mod-field__label">Concerns a minor</span>
+            <span className="mod-field__value">
+              {report.concernsMinor ? <MinorFlagBadge /> : "No"}
+            </span>
+          </div>
         </div>
 
         <div className="mod-card">
@@ -188,36 +232,48 @@ export default function AppealReviewPage() {
           </div>
         </div>
 
-        <div className="mod-card">
-          <h2 className="mod-card__title">Decide the appeal</h2>
-          {actionError ? (
-            <p className="mod-error" role="alert">
-              {actionError}
+        {actionRestricted ? (
+          <VettingRestrictedNotice />
+        ) : (
+          <div className="mod-card">
+            <h2 className="mod-card__title">Decide the appeal</h2>
+            {report.concernsMinor ? (
+              <p className="mod-note">
+                This report concerns a minor — deciding its appeal requires a child-safety-vetted
+                admin (Settings › Roles).
+              </p>
+            ) : null}
+            {actionError ? (
+              <p className="mod-error" role="alert">
+                {actionError}
+              </p>
+            ) : null}
+            <div className="mod-action-row">
+              <button
+                type="button"
+                className="mod-btn mod-btn--outline"
+                onClick={() => handleDecide("upheld")}
+                disabled={submitting !== null}
+              >
+                {submitting === "upheld" ? "Saving…" : "Uphold Original Decision"}
+              </button>
+              <button
+                type="button"
+                className="mod-btn mod-btn--primary"
+                onClick={() => handleDecide("overturned")}
+                disabled={submitting !== null}
+              >
+                {submitting === "overturned" ? "Saving…" : "Overturn Decision"}
+              </button>
+            </div>
+            <p className="mod-note">
+              Overturning reopens the report in the Moderation Queue with the original action
+              cleared, ready to be actioned again.
             </p>
-          ) : null}
-          <div className="mod-action-row">
-            <button
-              type="button"
-              className="mod-btn mod-btn--outline"
-              onClick={() => handleDecide("upheld")}
-              disabled={submitting !== null}
-            >
-              {submitting === "upheld" ? "Saving…" : "Uphold Original Decision"}
-            </button>
-            <button
-              type="button"
-              className="mod-btn mod-btn--primary"
-              onClick={() => handleDecide("overturned")}
-              disabled={submitting !== null}
-            >
-              {submitting === "overturned" ? "Saving…" : "Overturn Decision"}
-            </button>
           </div>
-          <p className="mod-note">
-            Overturning reopens the report in the Moderation Queue with the original action
-            cleared, ready to be actioned again.
-          </p>
-        </div>
+        )}
+
+        <EscalateReportCard report={report} onEscalated={setReport} />
       </div>
     </>
   );
