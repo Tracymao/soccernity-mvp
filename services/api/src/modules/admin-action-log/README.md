@@ -78,6 +78,10 @@ judgment. Checked directly rather than assumed:
   (`admin_user.role_changed`) is reserved in `admin-action-log.constants.ts`
   specifically so whoever builds that endpoint has a name ready to use,
   rather than inventing an ad-hoc string at that point.
+  **RESOLVED — see `../admin-staff-roles/README.md` (`feat/admin-role-management`):**
+  `PATCH /admin/staff/:id/role` now exists, superadmin-only, and calls
+  `AdminActionLogService.record()` with exactly the reserved
+  `ADMIN_ROLE_CHANGED` action on every successful write.
 
 ---
 
@@ -124,6 +128,7 @@ Tests added/updated:
   currently surfaces this audit trail for a superadmin to review. A real,
   disclosed follow-up.
 - **`AdminUser` role-change** — see the dedicated section above.
+  **RESOLVED by `feat/admin-role-management`** — no longer an open gap.
 - **Article/category edits, media uploads, and every other admin-console
   action this model is eventually meant to cover** are not wired here —
   only the five call sites this PR's own brief named. Extending coverage

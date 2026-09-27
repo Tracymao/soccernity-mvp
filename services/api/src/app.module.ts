@@ -25,6 +25,7 @@ import { ModerationModule } from './modules/moderation/moderation.module';
 import { AdminContentModule } from './modules/admin-content/admin-content.module';
 import { AdminUsersModule } from './modules/admin-users/admin-users.module';
 import { AdminStaffVettingModule } from './modules/admin-staff-vetting/admin-staff-vetting.module';
+import { AdminStaffRolesModule } from './modules/admin-staff-roles/admin-staff-roles.module';
 import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module';
 import { MediaModule } from './modules/media/media.module';
 import { BlogModule } from './modules/blog/blog.module';
@@ -150,6 +151,21 @@ import { SearchModule } from './modules/search/search.module';
     // GET/PATCH /admin/moderation/reports* and the new
     // PATCH .../escalate route — see modules/moderation/README.md.
     AdminStaffVettingModule,
+    // feat/admin-role-management — Section 4.8 (Admin Service), the
+    // AdminUser role-management slice: GET /admin/staff, PATCH
+    // /admin/staff/:id/role — both AdminJwtAuthGuard +
+    // AdminRolesGuard('superadmin') ONLY, not moderator (mirrors
+    // AdminStaffVettingModule's own superadmin-only shape, not
+    // AdminUsersModule/ModerationModule's moderator+superadmin split —
+    // see modules/admin-staff-roles/README.md's "who may view"
+    // reasoning). Matches the existing apps/admin Settings/Roles screens
+    // (SettingsRolesPage.tsx/RoleFormPages.tsx), built as a disclosed
+    // stub per Decision Log #191/#250/#302 pending exactly this
+    // endpoint. Fills the `admin_user.role_changed` action
+    // admin-action-log.constants.ts had reserved but never wired to a
+    // real call site. Zero schema.prisma diff — AdminUser.role already
+    // existed.
+    AdminStaffRolesModule,
     // sprint-5/admin-users-dashboard-backend (same PR) — Section 4.8's
     // Dashboard line, GET /admin/dashboard/stats. A separate module from
     // AdminUsersModule on purpose (a cross-model aggregate-reporting
