@@ -8891,6 +8891,54 @@ Full reasoning for every choice above: Build Plan Section 5.
   - **Verification (before -> after)**: mocked suite 89 suites / ~1200 (last recorded) -> 92 suites / 1244 tests, 0 failures; e2e (real Postgres, Stripe faked at the gateway) new `test/coppa-card-verification.e2e-spec.ts` + the existing consent/sweep specs, 43 tests, 0 failures; `apps/web` vitest 47 suites / 367 tests -> 48 / 371, 0 failures; `tsc`, eslint, `nest build`, `vite build` clean. PR opened, not merged.
 - **`sprint-4/media-storage-r2-decision` (docs/config only, 2026-09-26) resolves Decision Log #307: the Media storage provider is Cloudflare R2** (zero egress fees — the standout cost factor for a media-heavy social app vs AWS S3). `.env.example`'s S3 section and `modules/media/README.md` record it, with the concrete `https://<account-id>.r2.cloudflarestorage.com` endpoint shape; no code change (R2 is S3-compatible). **This does NOT make storage live**: the Cloudflare account, R2 bucket and API token are a human action; until Temi pastes real `S3_BUCKET`/`S3_ACCESS_KEY`/`S3_SECRET_KEY`/`S3_ENDPOINT` into a real `.env`, `POST /admin/media/upload` still 503s. **Flagged, not fixed:** `MediaAsset.url` is built as `<endpoint>/<bucket>/<key>`, which on R2 is the authenticated S3 endpoint and not publicly readable — public playback needs an `r2.dev`/custom-domain base URL (follow-up, e.g. an `S3_PUBLIC_BASE_URL` var). Docx #307 flipped Open → Resolved with an additive note. PR opened, not merged.
 - **`fix/platform-express-multer-cve` (2026-09-27) resolves Decision Log #309 -- lockfile only, no `package.json` or code change.** The `multer` that `FileInterceptor` loads was the hoisted root `2.2.0` (three high advisories) because `@nestjs/platform-express@11.2.1` pinned it exactly; the entry's claim that only a 12.x major could fix this was wrong. `npm update @nestjs/platform-express` within the existing `^11.0.0` range moved it to `11.2.6` (latest 11.x, depends on `multer@2.4.0`); the installed tree now has a single `multer@2.4.0` (nested `2.3.0` gone, `multer` absent from `npm audit`). Verified against `node_modules`, not the declared range. `jest src/modules/media src/modules/admin`: 18 suites / 162 tests, 0 failures; `tsc` and `nest build` clean; full mocked/e2e suites not re-run. The Sprint 5 media bullet above and `docs/admin-backend-spec-deviations-295-310.md` Part B describe the hazard as it stood before this. PR opened, not merged -- Temi's call.
+- **`feat/admin-moderation-severity-vetting-escalation-ui` (figma-to-code,
+  2026-09-27) wires the Moderation Queue/Report Detail/Appeal Review
+  screens to the severity/concernsMinor/escalation-trail fields and the
+  child-safety-vetting gate `schema/report-severity-escalation-admin-
+  vetting-application` added — `apps/admin` only, no backend/Figma
+  change.** `api/moderation.ts`'s `Report` type gains `severity`,
+  `concernsMinor`, the four escalation-trail fields, and (since the
+  already-merged `feat/public-report-submission` route can produce a
+  report with no `User` behind it) a nullable `reporterId` +
+  `reporterContactEmail`/`reporterContactName` — the pre-existing
+  `report.reporterId.slice(0, 8)` row render would have thrown on a
+  public report; fixed via a shared `reporterCellLabel`/`reporterFullLabel`
+  pair in `moderationShared.tsx`, not left as a latent crash.
+  - **Queue rows** gain a "Flags" column (severity pill + a "Concerns a
+    minor" badge, shown only when true); **Report Detail** and **Appeal
+    Review** show both in their existing field cards.
+  - **The child-safety-vetting restriction is reflected, not re-gated
+    client-side** — `GET /admin/profile` has no field exposing the
+    CALLING admin's own `childSafetyVetted` value (only `GET
+    /admin/staff`, superadmin-only, for other admins), so there is no
+    way to predict this up front; a non-vetted admin already can't see a
+    `concernsMinor` report in the queue at all (server-side list
+    filtering, unchanged). A new shared `VettingRestrictedNotice`
+    replaces the Take-action / Decide-the-appeal section, in place of a
+    generic error, specifically when the server 403s with
+    `child_safety_vetting_required` — covering a report "somehow linked
+    directly" (a stale bookmark, a shared link, router `state` surviving
+    in history).
+  - **New `escalateReport` client + a shared `EscalateReportCard`**
+    (notes textarea + an "I have already contacted an external
+    authority" checkbox), rendered on both Report Detail and Appeal
+    Review (including its no-pending-appeal state) — independent of
+    `Report.status`/`concernsMinor`, matching the backend's own
+    "may be called on a report in any status, gated for ANY non-vetted
+    admin regardless" behaviour. Copy is explicit that clicking only
+    *records* an escalation the admin already made themselves — it never
+    notifies or contacts anyone. Re-submitting after a first escalation
+    is supported (prefilled, relabelled "Update escalation record"),
+    matching the endpoint's own deliberately-re-callable design.
+  - **Verified**: `apps/admin` vitest 16 suites / 100 tests → 16 suites /
+    141 tests, 0 failures (41 new — 27 in `moderation.test.tsx` covering
+    every new behaviour above); `npm run lint` and `npm run build` both
+    clean. `npx tsc --noEmit` shows one pre-existing, unrelated error
+    (`adminTheme.ts` missing the `overlayScrim`/`shadow*` keys from an
+    unmerged design PR's token additions) — confirmed present on a clean
+    `main` before this branch, not introduced here, and does not affect
+    `npm run build`.
+  - PR opened, not merged — Temi verifies and merges.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

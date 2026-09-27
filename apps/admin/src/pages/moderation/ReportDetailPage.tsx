@@ -8,6 +8,18 @@
 // falls back to api/moderation.ts's findReportById (see that file's own
 // Decision Log candidate #4 comment). Delete/suspend actions are navy, not
 // red -- no destructive-colour token exists (CLAUDE.md non-negotiable #3).
+//
+// schema/report-severity-escalation-admin-vetting-application: severity +
+// concernsMinor are shown on this screen too (not just the queue rows).
+// A non-vetted admin can never REACH a concernsMinor report through the
+// queue (listReports silently filters it out server-side), but this page
+// can still be reached with one directly -- a stale bookmark, a shared
+// link, router `state` surviving in browser history -- so "Take action"
+// below renders the real 403 (CHILD_SAFETY_VETTING_REQUIRED_CODE) as a
+// dedicated restricted state, not a generic inline error, if that ever
+// happens. The Escalate card (moderationShared.tsx) is independent of
+// concernsMinor and status -- any non-vetted admin gets the same 403
+// there regardless.
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import AdminPageHeader from "../../layout/AdminPageHeader";
@@ -15,12 +27,21 @@ import { AdminApiError } from "../../api/adminClient";
 import {
   actionReport,
   findReportById,
+  isChildSafetyVettingRequiredError,
   REPORT_ACTIONS,
   REPORT_ACTION_LABELS,
   type Report,
   type ReportAction,
 } from "../../api/moderation";
-import { formatDateTime, targetLabel } from "./moderationShared";
+import {
+  EscalateReportCard,
+  formatDateTime,
+  MinorFlagBadge,
+  reporterFullLabel,
+  SeverityPill,
+  targetLabel,
+  VettingRestrictedNotice,
+} from "./moderationShared";
 import "./moderation.css";
 
 type LoadState = "loading" | "loaded" | "not-found" | "error";
@@ -33,6 +54,7 @@ export default function ReportDetailPage() {
   const [report, setReport] = useState<Report | null>(location.state?.report ?? null);
   const [loadState, setLoadState] = useState<LoadState>(report ? "loaded" : "loading");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionRestricted, setActionRestricted] = useState(false);
   const [submitting, setSubmitting] = useState<ReportAction | null>(null);
 
   useEffect(() => {
@@ -72,9 +94,13 @@ export default function ReportDetailPage() {
       await actionReport(id, action);
       navigate("/moderation");
     } catch (err) {
-      setActionError(
-        err instanceof AdminApiError ? err.message : "Couldn’t record that action. Please try again.",
-      );
+      if (isChildSafetyVettingRequiredError(err)) {
+        setActionRestricted(true);
+      } else {
+        setActionError(
+          err instanceof AdminApiError ? err.message : "Couldn’t record that action. Please try again.",
+        );
+      }
       setSubmitting(null);
     }
   }
@@ -138,12 +164,24 @@ export default function ReportDetailPage() {
         <div className="mod-card">
           <h2 className="mod-card__title">Report details</h2>
           <div className="mod-field">
-            <span className="mod-field__label">Reporter id</span>
-            <span className="mod-field__value">{report.reporterId}</span>
+            <span className="mod-field__label">Reporter</span>
+            <span className="mod-field__value">{reporterFullLabel(report)}</span>
           </div>
           <div className="mod-field">
             <span className="mod-field__label">Reason</span>
             <span className="mod-field__value">{report.reason}</span>
+          </div>
+          <div className="mod-field">
+            <span className="mod-field__label">Severity</span>
+            <span className="mod-field__value">
+              <SeverityPill severity={report.severity} />
+            </span>
+          </div>
+          <div className="mod-field">
+            <span className="mod-field__label">Concerns a minor</span>
+            <span className="mod-field__value">
+              {report.concernsMinor ? <MinorFlagBadge /> : "No"}
+            </span>
           </div>
           <div className="mod-field">
             <span className="mod-field__label">Submitted</span>
@@ -173,9 +211,17 @@ export default function ReportDetailPage() {
               </div>
             ) : null}
           </div>
+        ) : actionRestricted ? (
+          <VettingRestrictedNotice />
         ) : (
           <div className="mod-card">
             <h2 className="mod-card__title">Take action</h2>
+            {report.concernsMinor ? (
+              <p className="mod-note">
+                This report concerns a minor — acting on it requires a child-safety-vetted admin
+                (Settings › Roles).
+              </p>
+            ) : null}
             {actionError ? (
               <p className="mod-error" role="alert">
                 {actionError}
@@ -201,6 +247,8 @@ export default function ReportDetailPage() {
             </p>
           </div>
         )}
+
+        <EscalateReportCard report={report} onEscalated={setReport} />
       </div>
     </>
   );
