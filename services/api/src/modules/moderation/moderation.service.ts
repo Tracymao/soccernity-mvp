@@ -48,8 +48,8 @@ export class ModerationService {
   // A well-formed but non-existent target must 404, never a raw FK-less
   // silent accept — Report.targetId is a bare string, not an FK (by
   // design: it has to point at three different tables depending on
-  // targetType, which Prisma relations can't express), so nothing at the
-  // database layer would otherwise catch a typo'd or already-deleted id.
+  // targetType, so Prisma relations can't express this), so nothing
+  // at the database layer would otherwise catch a typo'd or already-deleted id.
   private async assertReportTargetExists(targetType: string, targetId: string): Promise<void> {
     switch (targetType) {
       case 'post': {
@@ -134,34 +134,16 @@ export class ModerationService {
   async appealReport(reportId: string, callerId: string, dto: AppealReportDto): Promise<Report> {
     const report = await this.assertReportExists(reportId);
 
-    // Checked BEFORE the reported-user identity check on purpose: a
-    // report that has never been actioned (still 'open') or was
-    // dismissed ('reviewed') has nothing to appeal, regardless of who is
-    // asking — this is a state question, not an authorization one, so it
-    // comes first (mirrors this codebase's own 404-before-403 ordering
-    // discipline for "settle existence/state before authorization").
     if (report.status !== 'actioned') {
       throw new ForbiddenException('Only an actioned report may be appealed');
     }
 
-    // One appeal per actioning-cycle. A report that already has a
-    // pending/upheld/overturned appeal on its CURRENT action cannot be
-    // appealed again — actionReport() clears these back to null whenever
-    // a report is re-actioned after a prior overturned appeal (see that
-    // method's own comment), so this can never incorrectly block a
-    // legitimate fresh appeal on a genuinely NEW action.
     if (report.appealStatus) {
       throw new ConflictException('This report has already been appealed');
     }
 
     const reportedUserId = await this.resolveReportedUserId(report.targetType, report.targetId);
     if (!reportedUserId || reportedUserId !== callerId) {
-      // Deliberately the same generic ForbiddenException regardless of
-      // WHY the caller isn't eligible (they're the reporter, an
-      // unrelated third party, or the target no longer resolves at
-      // all) — never distinguishes those cases in the response, the
-      // same "don't leak which specific reason applied" posture this
-      // codebase already uses elsewhere (e.g. FeedService.deleteComment).
       throw new ForbiddenException('You may only appeal a report made against you');
     }
 
@@ -216,18 +198,6 @@ export class ModerationService {
   // content removal, a warning, a suspension, or dismissed. Maps onto
   // Report.status's own pre-existing enum (dismissed -> 'reviewed',
   // anything else -> 'actioned'), never a fourth status value.
-  //
-  // Only reachable on an 'open' report — a report that is already
-  // 'actioned' or 'reviewed' cannot be actioned a second time this way
-  // (a stale second PATCH call, or trying to re-action a dismissed
-  // report). The ONLY path back to 'open' after an initial action is an
-  // OVERTURNED appeal (decideAppeal below), which is exactly the
-  // scenario this re-actioning re-opens for: a fresh action + a fresh,
-  // once-per-cycle appeal window. That is also why this clears any
-  // stale appeal fields below — they belong to the PREVIOUS action
-  // cycle, and appealReport()'s own "already appealed" guard would
-  // otherwise incorrectly block a legitimate new appeal on this new
-  // action, since it reads report.appealStatus off the same row.
   // -------------------------------------------------------------------
   async actionReport(reportId: string, adminId: string, dto: ActionReportDto): Promise<Report> {
     const report = await this.assertReportExists(reportId);
@@ -255,21 +225,13 @@ export class ModerationService {
         },
       });
 
-      // Section 8.4: notify BOTH the reporting user and the reported
-      // user of the outcome. One shared Notification.type
-      // ('moderation_decision') covers both this event and the appeal
-      // decision below — a comment-only addition to Notification.type's
-      // schema comment, no migration needed (the column is a plain
-      // String, same as every other type value). No self-notification
-      // guard is needed for the ADMIN's own identity (a completely
-      // separate AdminUser auth domain, Decision Log #189-193, mirroring
-      // contest.service.ts's own contest_win trigger reasoning) — but a
-      // real Report CAN have the same real User as both reporter and
-      // reported (a self-report), so that coincidence is guarded here to
-      // avoid a duplicate notification to the same recipient.
-      await tx.notification.create({
-        data: { userId: report.reporterId, type: 'moderation_decision', payloadRefId: reportId },
-      });
+      // A reporter may be an unauthenticated contact and therefore have no
+      // User row. Do not attempt to create a notification with a null userId.
+      if (report.reporterId) {
+        await tx.notification.create({
+          data: { userId: report.reporterId, type: 'moderation_decision', payloadRefId: reportId },
+        });
+      }
       if (reportedUserId && reportedUserId !== report.reporterId) {
         await tx.notification.create({
           data: { userId: reportedUserId, type: 'moderation_decision', payloadRefId: reportId },
@@ -293,9 +255,6 @@ export class ModerationService {
       throw new ConflictException('This report has no pending appeal to review');
     }
 
-    // Decision Log #138. Checked after the state check above (an appeal
-    // that isn't pending is a state problem regardless of who's asking),
-    // and before anything is written.
     if (report.reviewedByAdminId === adminId) {
       throw new ForbiddenException('The admin who actioned this report may not also review its appeal');
     }
@@ -310,12 +269,6 @@ export class ModerationService {
       };
 
       if (dto.decision === 'overturned') {
-        // Reverse the report back to a non-actioned state — the exact
-        // instruction this endpoint was briefed against. appealStatus
-        // itself is deliberately LEFT as 'overturned' (not reset to
-        // null) as the historical record of this appeal round; only the
-        // ACTION-side fields revert, so the report re-enters the open
-        // queue as if never actioned.
         data.status = 'open';
         data.reviewedByAdmin = { disconnect: true };
         data.reviewedAt = null;
@@ -324,12 +277,6 @@ export class ModerationService {
 
       const updated = await tx.report.update({ where: { id: reportId }, data });
 
-      // Section 8.4: notify the reported user of the appeal outcome.
-      // Deliberately NOT the reporter too — unlike actionReport()'s own
-      // notification step above, an appeal is a dispute between the
-      // reported user and the platform's original decision; the
-      // reporter was already notified once, when the report was first
-      // actioned.
       if (reportedUserId) {
         await tx.notification.create({
           data: { userId: reportedUserId, type: 'moderation_decision', payloadRefId: reportId },
