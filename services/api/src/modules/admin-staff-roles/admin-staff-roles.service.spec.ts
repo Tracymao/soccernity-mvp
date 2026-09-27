@@ -32,6 +32,11 @@ function admin(overrides: Partial<Record<string, unknown>> = {}) {
     role: 'moderator',
     accountStatus: 'active',
     createdAt: new Date('2026-09-01T10:00:00.000Z'),
+    // Vetting fields — not written by this service, only read back (see
+    // ADMIN_STAFF_SELECT's own header comment on why they were added).
+    childSafetyVetted: false,
+    vettedAt: null,
+    vettedByAdminId: null,
     ...overrides,
   };
 }
@@ -124,9 +129,28 @@ describe('AdminStaffRolesService', () => {
             role: true,
             accountStatus: true,
             createdAt: true,
+            childSafetyVetted: true,
+            vettedAt: true,
+            vettedByAdminId: true,
           },
         }),
       );
+    });
+
+    it('passes through the vetting fields (read-only here — this module never writes them)', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.adminUser.findMany as jest.Mock).mockResolvedValue([
+        admin({ childSafetyVetted: true, vettedAt: new Date('2026-09-20T00:00:00.000Z'), vettedByAdminId: 'superadmin-1' }),
+      ]);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never);
+
+      const page = await service.listStaff({});
+
+      expect(page.items[0]).toMatchObject({
+        childSafetyVetted: true,
+        vettedByAdminId: 'superadmin-1',
+      });
     });
   });
 
@@ -163,12 +187,18 @@ describe('AdminStaffRolesService', () => {
           role: true,
           accountStatus: true,
           createdAt: true,
+          childSafetyVetted: true,
+          vettedAt: true,
+          vettedByAdminId: true,
         },
       });
       // Not a superadmin -> superadmin change, so the last-superadmin
       // guard's COUNT query is never even attempted.
       expect(prisma.adminUser.count).not.toHaveBeenCalled();
       expect(result.role).toBe('moderator');
+      // The write's own select is the same widened ADMIN_STAFF_SELECT —
+      // an existing vetting record survives a role change untouched.
+      expect(result.childSafetyVetted).toBe(false);
     });
 
     it('promotes a moderator to superadmin (no guard needed on a promotion)', async () => {

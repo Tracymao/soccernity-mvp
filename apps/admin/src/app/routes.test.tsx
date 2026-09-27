@@ -69,8 +69,10 @@ describe("adminRoutes (integration)", () => {
     renderAt("/settings");
 
     await waitFor(() => expect(screen.getByText("Ada Lovelace")).not.toBeNull());
-    // Settings/Roles is a disclosed stub — banner names the missing backend
-    expect(screen.getByText(/no admin role-management endpoint/i)).not.toBeNull();
+    // Settings/Roles is real data now (feat/admin-roles-vetting-wiring) —
+    // its own async GET /admin/staff isn't mocked here, so just confirm
+    // the section screen itself rendered (its header, synchronous).
+    expect(screen.getByRole("heading", { name: "Roles" })).not.toBeNull();
   });
 
   it("shows a not-found state for an unknown authenticated path", async () => {

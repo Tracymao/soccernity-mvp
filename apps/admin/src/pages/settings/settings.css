@@ -1,0 +1,260 @@
+/* Settings / Roles admin screens (Figma nodes 1658:2303 / 1658:2456 /
+ * 1658:2592 / 5403:7205), backed by feat/admin-role-management. Light
+ * mode only; every colour is a --sn-* token. Destructive/blocking
+ * actions are navy, not red — no destructive token exists
+ * (non-negotiable #3), same convention pages/users/users.css /
+ * pages/content/content.css use. */
+
+.rl-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1100px;
+}
+
+.rl-back {
+  font-size: 13px;
+}
+
+.rl-back a {
+  color: var(--sn-brand-navy);
+  font-weight: 600;
+}
+
+.rl-action-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.rl-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sn-text-secondary);
+}
+
+.rl-loading,
+.rl-error {
+  color: var(--sn-text-secondary);
+  font-size: 14px;
+}
+
+.rl-error {
+  padding: 10px 12px;
+  border: 1px solid var(--sn-brand-navy);
+  border-radius: 4px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-weight: 600;
+}
+
+.rl-success {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-brand-navy);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rl-row-error {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.rl-card {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 560px;
+}
+
+.rl-card__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+/* table */
+
+.rl-table {
+  background-color: var(--sn-background-surface);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.rl-table__row {
+  display: grid;
+  grid-template-columns: 1.4fr 130px 150px;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 20px;
+  font-size: 13px;
+}
+
+.rl-table__row--head {
+  background-color: var(--sn-green-tint-12);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+.rl-cell--primary {
+  color: var(--sn-text-primary);
+  font-weight: 600;
+}
+
+.rl-cell--secondary {
+  color: var(--sn-text-secondary);
+}
+
+.rl-cell--truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* pills */
+
+.rl-pill {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: lowercase;
+}
+
+.rl-pill--strong {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.rl-pill--soft {
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+}
+
+/* fields (read-only key/value rows) */
+
+.rl-field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rl-field-row__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+}
+
+.rl-field-row__value {
+  font-size: 14px;
+  color: var(--sn-text-primary);
+}
+
+/* editable form field */
+
+.rl-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rl-field span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.rl-field select {
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--sn-icon-inactive);
+  background-color: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+  font: inherit;
+}
+
+/* callouts */
+
+.rl-callout {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  background-color: var(--sn-green-tint-12);
+  border-radius: 8px;
+}
+
+.rl-callout__bar {
+  flex: 0 0 3px;
+  border-radius: 2px;
+  background-color: var(--sn-brand-navy);
+  align-self: stretch;
+}
+
+.rl-callout p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sn-text-primary);
+  line-height: 1.5;
+}
+
+/* actions */
+
+.rl-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sn-brand-navy);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.rl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.rl-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.rl-btn--outline {
+  background-color: var(--sn-background-surface);
+  border-color: var(--sn-brand-navy);
+  color: var(--sn-text-primary);
+}
+
+.rl-btn--primary {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.rl-btn--sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}

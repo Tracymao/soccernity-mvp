@@ -9,11 +9,15 @@
 // Categories (/admin/articles*, /admin/categories* — sprint-5/admin-articles-categories-backend);
 // Users + Dashboard (/admin/users*, /admin/dashboard/stats —
 // sprint-5/admin-users-dashboard-backend); Media
-// (/admin/media* — this PR, sprint-5/admin-media-storage-backend, the
-// first real file storage this codebase has ever had). The rest
-// (Competitions, Settings/roles) are still honest disclosed stubs (their
-// backend endpoints don't exist yet). A stub's PR swaps it for real data
-// when its endpoints land; the paths and the nav do not change.
+// (/admin/media* — sprint-5/admin-media-storage-backend, the first real
+// file storage this codebase has ever had); Settings/Roles (/admin/staff*,
+// /admin/users/:id/child-safety-vetting — feat/admin-roles-vetting-wiring —
+// EditRolePage's role select + its child-safety-vetting toggle are real;
+// "Add Role"/"Delete Role" stay disclosed stubs, no account
+// creation/deletion endpoint exists, Decision Log #191). Only
+// Competitions remains an honest disclosed stub (its backend endpoint
+// doesn't exist yet). A stub's PR swaps it for real data when its
+// endpoints land; the paths and the nav do not change.
 //
 // `adminRoutes` (the RouteObject[]) is exported separately from `router`
 // so a test can mount the real tree via createMemoryRouter — the same
@@ -112,10 +116,21 @@ export const adminRoutes: RouteObject[] = [
           { path: "media", element: <MediaLibraryPage /> },
           { path: "media/preview/:id", element: <MediaPreviewPage /> },
           { path: "media/upload", element: <MediaUploadPage /> },
-          // Stubs (sprint-2/admin-settings-roles-stub) — no role-management endpoint (Decision Log #191).
+          // Real screens (feat/admin-roles-vetting-wiring) — wired to
+          // GET/PATCH /admin/staff (Section 4.8, built by
+          // feat/admin-role-management) and PATCH
+          // /admin/users/:id/child-safety-vetting
+          // (schema/report-severity-escalation-admin-vetting-application).
+          // No GET /admin/staff/:id exists, so Edit is reached via a
+          // router `state` handoff from the Roles list's own "Edit"
+          // link, with a bounded fallback fetch for a direct visit —
+          // see api/adminStaff.ts's own findStaffById comment. "Add
+          // Role"/"Delete Role" stay disclosed stubs — no self-service
+          // admin/moderator account creation or deletion endpoint exists
+          // (Decision Log #191).
           { path: "settings", element: <SettingsRolesPage /> },
           { path: "settings/roles/new", element: <AddRolePage /> },
-          { path: "settings/roles/edit", element: <EditRolePage /> },
+          { path: "settings/roles/edit/:id", element: <EditRolePage /> },
           { path: "settings/roles/delete", element: <DeleteRolePage /> },
           // Real screen (sprint-2/admin-profile-and-password) — GET/PATCH
           // /admin/profile + POST /admin/auth/change-password are built
