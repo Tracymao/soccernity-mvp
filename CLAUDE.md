@@ -11440,6 +11440,68 @@ real, still-open follow-up, not done by this entry.
   - **Hidden today (no Highlightly source):** standings FORM, top scorers, xG, Pressure Index, shot maps, player/match ratings (ratings *unconfirmed*, not documented-absent). Player box scores are deliberately not on that list — see the correction above.
   - **Verification:** see the PR description for measured before/after counts.
   - PR opened, not merged — Temi's call after review.
+- **`feat/public-report-submission` (backend-api, 2026-09-27) builds
+  `POST /reports/public` — the application half of the schema groundwork
+  `schema/report-severity-escalation-admin-vetting` (PR #320) laid on
+  `Report` (`reporterId`/`reporter` made optional, `reporterContactEmail`
+  added, `concernsMinor` added, flagged there as "no application code
+  wiring such a route... yet"). `services/api` only, no Figma/`apps/web`,
+  zero schema/migration change.**
+  - **New `PublicReportsController`** (`reports/public-reports.controller.ts`),
+    a **separate controller** from `ReportsController` (which applies
+    `JwtAuthGuard` at the class level) — this route has no guard at all
+    besides `@AuthRateLimit()`, the same reused throttle
+    (`AuthRateLimitModule`/`AuthThrottlerGuard`) every other
+    unauthenticated, potentially-abusable route in this codebase carries.
+    **This is the only anti-abuse control here** — there is no CAPTCHA
+    infrastructure anywhere in this repo, and none was invented for it.
+  - **`CreatePublicReportDto`** requires `reporterContactEmail` (`@IsEmail()`),
+    `targetType`, `targetId` (UUID), `reason`, and `concernsMinor`
+    (boolean) — `reporterContactName` deliberately not collected here,
+    though the schema column stays available for a future route that
+    wants it.
+  - **`ModerationService.createPublicReport`** reuses the existing
+    `Report` table and moderation queue (no parallel model): creates a
+    row with `reporterId: null`, the given `reporterContactEmail`,
+    `targetType`/`targetId`/`reason`/`concernsMinor`, re-checking target
+    existence via the same `assertReportTargetExists` `POST /reports`
+    already uses (404 on a typo'd/deleted target). On success, fires a
+    plain acknowledgment email — **reuses `RegistrationEmailService`**
+    (this codebase's one existing "queue a transactional email"
+    abstraction; wired into `ModerationModule` directly, the same
+    outside-auth/registration pattern `age-reclassification.module.ts`
+    already established) via a new `'public-report-acknowledgement'`
+    template, fire-and-forget with a logged warning on failure — the same
+    "must never block on / fail because of email delivery" discipline
+    `RegistrationService`'s own sends use. Copy makes **no promise about
+    outcome or timeline** beyond "a moderator will review this," per the
+    task's own explicit instruction.
+  - A publicly-submitted report shows up in `GET /admin/moderation/reports`
+    and can be actioned exactly like any other; `actionReport()`'s own
+    nullable-reporter handling (already fixed on the schema PR's branch,
+    commit `330ce93`) was re-confirmed unchanged and correct — no
+    duplicate notification, no crash on a null `reporterId`.
+  - **New Decision Log candidate, not yet transcribed into the Build Plan
+    docx**: whether this route's exact shape (no guard, required contact
+    email, no `reporterContactName`) should be formally written into
+    Section 4 — same open question `sprint-5/admin-moderation-queue-backend`'s
+    own README already raised for `POST /reports`/`POST /reports/:id/appeal`.
+    Full reasoning in `modules/moderation/README.md`'s own new section.
+  - **Verification**: full mocked suite **102 suites / 1367 tests, 0
+    failures** (up from 101/1353 immediately before this branch — 1 new
+    suite, `public-reports.controller.http.spec.ts` (9 tests), plus 4 new
+    `createPublicReport` cases in the existing `moderation.service.spec.ts`
+    and 1 new template-coverage test in
+    `registration-email.service.spec.ts`, both in existing suites);
+    `nest build`, `npm run lint`
+    (whole `src` tree), and `npx tsc --noEmit` all clean. No e2e spec
+    added — `createPublicReport` is a plain `prisma.report.create()` call,
+    no raw SQL/transaction/novel relation, the same category
+    `test/README.md`'s own guiding principle already keeps at the mocked
+    layer (matching `sprint-2/feed-per-user-flags`'s and
+    `admin-content/README.md`'s own identical conclusion for analogous
+    changes).
+  - PR opened, not merged — Temi verifies and merges.
 
 ## The eight agents, and the order they run in
 

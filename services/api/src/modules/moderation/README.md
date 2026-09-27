@@ -33,6 +33,7 @@ this is not a "flagged, unverified" migration.
 | Method & path | Guards | Purpose |
 |---|---|---|
 | `POST /reports` | `JwtAuthGuard` | Report a post, comment, or user. **Genuine spec-gap addition** — see below. |
+| `POST /reports/public` | none (`@AuthRateLimit()` only) | A non-authenticated party reports content that depicts them or their child. **Genuine spec-gap addition, feat/public-report-submission** — see below. |
 | `POST /reports/:id/appeal` | `JwtAuthGuard` | The reported user appeals an actioned report. **Genuine spec-gap addition** — see below. |
 | `GET /admin/moderation/reports` | `AdminJwtAuthGuard` + `AdminRolesGuard('moderator', 'superadmin')` | The moderation queue, keyset-paginated, optional `?status=` filter. Section 4.8's literal line. |
 | `PATCH /admin/moderation/reports/:id` | `AdminJwtAuthGuard` + `AdminRolesGuard('moderator', 'superadmin')` | Action a report: content removal, warning, suspension, or dismissed. Section 4.8's literal line. |
@@ -40,6 +41,63 @@ this is not a "flagged, unverified" migration.
 
 All three admin routes are the first role-gated admin surface in this
 codebase — see "The role-gating guard" below.
+
+---
+
+## `POST /reports/public` (feat/public-report-submission)
+
+`schema/report-severity-escalation-admin-vetting` made `Report.reporterId`/
+`.reporter` optional and added `reporterContactEmail`/`reporterContactName`/
+`concernsMinor`, explicitly flagged as "schema groundwork only... no
+application code wiring such a route." This is that route.
+
+- **A separate controller (`PublicReportsController`), not a third method
+  on `ReportsController`** — `ReportsController` applies `JwtAuthGuard` at
+  the class level, and this route serves a caller who has no Soccernity
+  account for the purposes of this one report (a parent, a school, a
+  member of the public) — same "the credential is per-route, not a
+  session" reasoning `GuardianConsentController` already established for
+  its own unguarded, token-credentialed routes.
+- **`@AuthRateLimit()` (the shared, env-driven `'auth'` throttler) is the
+  only anti-abuse control** — there is no CAPTCHA infrastructure anywhere
+  in this repo, and none is invented here. Same reuse pattern
+  `admin.module.ts` already documents for importing `AuthRateLimitModule`
+  a second/third time.
+- **`CreatePublicReportDto` requires `reporterContactEmail`** (unlike the
+  schema column, which stays nullable for a hypothetical future
+  genuinely-anonymous route) — this endpoint's whole point is to let
+  Soccernity follow up and to send the acknowledgment email below, so a
+  submission with no way to reach the reporter back would defeat it.
+  `reporterContactName` is deliberately not collected by this route.
+- **On success, `ModerationService.createPublicReport` fires a plain
+  acknowledgment email** to `reporterContactEmail`, reusing
+  `RegistrationEmailService` (this codebase's one existing
+  "queue a transactional email" abstraction — see
+  `age-reclassification-sweep.service.ts` for the same "outside
+  auth/registration, still reuse this service directly rather than
+  build a second one" pattern) via a new `'public-report-acknowledgement'`
+  template. The copy makes **no promise about outcome or timeline**
+  beyond "a moderator will review this" — Report's own severity/
+  escalation trail (from `schema/report-severity-escalation-admin-vetting`)
+  means the real handling time is genuinely unknown at submission time.
+  Fire-and-forget with a logged warning on failure, the same
+  "must never block on / fail because of email delivery" discipline
+  `RegistrationService` already applies to its own sends — a failed send
+  must not fail report submission, and this caller has no session to
+  retry against anyway.
+- **Reuses the existing `Report` table and moderation queue** — no
+  parallel model. A publicly-submitted report shows up in
+  `GET /admin/moderation/reports` and can be actioned exactly like any
+  other, with `reporterId: null` and `reporterContactEmail` set instead.
+  `actionReport()`'s own notification step already treats a `null`
+  `reporterId` as "no `User` row to notify" (see that method's own
+  comment) — no change needed there.
+- **New Decision Log candidate, not yet transcribed into the Build Plan
+  docx**: whether `POST /reports/public` (and its exact shape — no guard,
+  required contact email, no `reporterContactName`) should be formally
+  written into Section 4, the same open question
+  `sprint-5/admin-moderation-queue-backend`'s own README section already
+  raised for `POST /reports`/`POST /reports/:id/appeal`.
 
 ---
 
