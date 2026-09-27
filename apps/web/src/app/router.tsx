@@ -87,6 +87,7 @@ import DisplayDensityPage from "../pages/settings/DisplayDensityPage";
 import LanguagePage from "../pages/settings/LanguagePage";
 import DataUsagePage from "../pages/settings/DataUsagePage";
 import InactiveAccountPage from "../pages/InactiveAccountPage";
+import ReportPage from "../pages/ReportPage";
 import NotFoundPage from "../pages/NotFoundPage";
 import { TermsPage, PrivacyPage } from "../pages/legal/LegalPage";
 
@@ -284,6 +285,16 @@ export const routes: RouteObject[] = [
       // message. See LeaderboardPage.tsx / ContestPage.tsx.
       { path: "leaderboard", element: <LeaderboardPage /> },
       { path: "contest", element: <ContestPage /> },
+
+      // Report a concern -- an unauthenticated public reporting page
+      // (POST /reports/public, ModerationModule's PublicReportsController).
+      // No Figma frame exists for this; built plain, see ReportPage.tsx's
+      // own header comment. No login gate -- reachable with no session at
+      // all, that's the whole point. No site footer -- a utility page,
+      // same category as ClubFanPage/GrassrootsTeamPage/ContestPage. Nav
+      // entry point: linked from Footer.tsx (there's no separate help/
+      // support hub anywhere in this app to link from instead).
+      { path: "report", element: <ReportPage /> },
 
       // Auth-flow routes that stay under AppShell (built full-bleed within
       // its content area -- see each page's CSS header comment). The core
