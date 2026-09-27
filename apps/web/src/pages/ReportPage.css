@@ -1,0 +1,188 @@
+/* ReportPage.tsx — no Figma frame exists for this (see that file's own
+ * header comment); built plainly, matching the visual vocabulary the
+ * other organiser-style forms in this app already use (GrassrootsPage.css'
+ * register-team form, accountActions.css) rather than reusing either
+ * file directly, since this page belongs to neither of those domains.
+ * Colours reference the app-wide --sn-* custom properties
+ * (src/theme/applyTheme.ts) -- never hardcode hex. Light theme only,
+ * the app's single active mode. */
+
+.report-page {
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.report-page__header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.report-page__title {
+  font: 700 32px/1.25 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.report-page__lede {
+  font: 400 15px/1.55 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.report-page__card {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 28px;
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 12px;
+}
+
+.report-page__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.report-page__label {
+  font: 600 13px/1.3 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.report-page__input,
+.report-page__textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--sn-green-tint-12);
+  font: 400 15px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  outline: none;
+}
+
+.report-page__select {
+  cursor: pointer;
+}
+
+.report-page__textarea {
+  min-height: 96px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.report-page__input::placeholder,
+.report-page__textarea::placeholder {
+  color: var(--sn-text-secondary);
+}
+
+.report-page__input:focus-visible,
+.report-page__textarea:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 1px;
+}
+
+.report-page__hint {
+  font: 400 12px/1.4 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.report-page__hint a {
+  color: var(--sn-brand-navy);
+}
+
+.report-page__checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: var(--sn-green-tint-12);
+  cursor: pointer;
+}
+
+.report-page__checkbox input[type="checkbox"] {
+  margin-top: 3px;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  accent-color: var(--sn-brand-navy);
+  cursor: pointer;
+}
+
+.report-page__checkbox-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.report-page__checkbox-title {
+  font: 600 14px/1.3 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.report-page__checkbox-hint {
+  font: 400 12px/1.4 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.report-page__error {
+  font: 400 14px/1.5 "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+  margin: 0;
+}
+
+.report-page__btn {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 16px 24px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font: 600 15px "Inter", sans-serif;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  display: block;
+}
+
+.report-page__btn--primary {
+  background: var(--sn-brand-navy);
+  border-color: var(--sn-brand-navy);
+  color: #fff; /* no --sn-text-on-navy token -- disclosed exception, same as accountActions.css */
+}
+
+.report-page__btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* --- success state -------------------------------------------------- */
+
+.report-page--success {
+  align-items: center;
+  text-align: center;
+  padding: 48px 24px;
+  gap: 16px;
+}
+
+.report-page__success-disc {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--sn-brand-green);
+  color: var(--sn-text-on-green);
+  font: 700 26px/56px "Inter", sans-serif;
+  display: block;
+}
+
+.report-page--success .report-page__btn {
+  width: auto;
+  padding: 14px 32px;
+}

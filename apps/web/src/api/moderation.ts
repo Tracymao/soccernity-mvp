@@ -70,6 +70,56 @@ async function errorMessageFrom(response: Response, fallback: string): Promise<s
   return fallback;
 }
 
+// The real Report row a public submission gets back — a slightly wider
+// shape than `Report` above (adds concernsMinor, since ReportAction.tsx
+// never needed it but the /report page's own confirmation state does not
+// currently read it either — kept for parity with the real API response,
+// not dead weight).
+export interface PublicReport extends Report {
+  concernsMinor: boolean;
+}
+
+// POST /reports/public (PublicReportsController) — the unauthenticated
+// counterpart to createReport below, for a caller with no Soccernity
+// account at all: a parent, a school, or anyone else flagging content
+// that depicts them or their child. See ../pages/ReportPage.tsx for where
+// this is wired in.
+//
+// Deliberately sends NO Authorization header — there is no session to
+// attach, and the route has no guard besides its own rate limit
+// (services/api/src/modules/moderation/public-reports.controller.ts).
+//
+// `reporterContactName` is deliberately NOT a field here, matching
+// CreatePublicReportDto exactly — that DTO's own comment explains why it
+// isn't collected on this route, and the global ValidationPipe's
+// forbidNonWhitelisted would 400 the whole request if this client sent
+// one anyway.
+export async function createPublicReport(payload: {
+  reporterContactEmail: string;
+  targetType: ReportTargetType;
+  targetId: string;
+  reason: string;
+  concernsMinor: boolean;
+}): Promise<PublicReport> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/reports/public`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new ModerationApiError("Couldn't reach the Soccernity server.");
+  }
+  if (!response.ok) {
+    throw new ModerationApiError(
+      await errorMessageFrom(response, `Couldn't submit that report (${response.status}).`),
+      { status: response.status },
+    );
+  }
+  return (await response.json()) as PublicReport;
+}
+
 // POST /reports.
 export async function createReport(
   accessToken: string,

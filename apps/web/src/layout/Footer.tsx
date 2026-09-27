@@ -21,6 +21,13 @@
 // fabricate a destination. They become real links when those targets
 // exist. The social icon SVGs carry their brand-green fill baked in, the
 // same convention nav-blog.svg etc. already use.
+//
+// "Report a concern" (added alongside ReportPage.tsx) IS a real,
+// navigating link -- unlike the legal-links row above, /report exists
+// today (POST /reports/public). This is the "help area" that task asked
+// for: there's no separate help/support hub anywhere in this app to link
+// from instead.
+import { Link } from "react-router";
 import logoMark from "../assets/icons/soccernity-logo-mark.svg";
 import socialFacebook from "../assets/icons/social-facebook.svg";
 import socialInstagram from "../assets/icons/social-instagram.svg";
@@ -72,6 +79,10 @@ export default function Footer() {
       </nav>
 
       <div className="sn-footer__rule" aria-hidden="true" />
+
+      <p className="sn-footer__report">
+        <Link to="/report">Report a concern</Link>
+      </p>
 
       <p className="sn-footer__legal">
         Copyright &copy; 2026 Soccernity. All rights reserved. The information contained in Soccernity may not be

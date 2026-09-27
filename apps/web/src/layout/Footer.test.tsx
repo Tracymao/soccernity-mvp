@@ -38,7 +38,18 @@ describe("Footer", () => {
   it("renders the legal links as non-navigating spans (no /terms, /privacy, /contact routes exist yet)", () => {
     renderFooter();
     const footer = screen.getByRole("contentinfo");
-    expect(within(footer).queryAllByRole("link")).toHaveLength(0);
+    // "Report a concern" IS a real, navigating link -- see the next test.
+    // The three legal links stay non-interactive spans.
+    const links = within(footer).queryAllByRole("link");
+    expect(links).toHaveLength(1);
+    expect(links[0].textContent).toBe("Report a concern");
+  });
+
+  it("links 'Report a concern' to the real /report page", () => {
+    renderFooter();
+    const footer = screen.getByRole("contentinfo");
+    const link = within(footer).getByRole("link", { name: "Report a concern" });
+    expect(link.getAttribute("href")).toBe("/report");
   });
 });
 

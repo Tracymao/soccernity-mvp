@@ -107,6 +107,22 @@
   background: rgba(255, 255, 255, 0.15);
 }
 
+/* --- report a concern -------------------------------------------- */
+
+.sn-footer__report {
+  margin: 0;
+}
+
+.sn-footer__report a {
+  font: 600 13px "Montserrat", "Inter", sans-serif;
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: underline;
+}
+
+.sn-footer__report a:hover {
+  color: #fff;
+}
+
 .sn-footer__legal {
   margin: 0;
   max-width: 1294px;
