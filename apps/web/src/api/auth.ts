@@ -145,20 +145,25 @@ export async function login(payload: LoginRequest): Promise<LoginResponse> {
 
   if (!response.ok) {
     // A deactivated account: the backend (AuthService.login) returns a
-    // 401 whose message mentions "deactivated", and it does so ONLY
-    // AFTER the password has verified -- so reaching this branch means
-    // the credentials were correct and the account is simply switched
-    // off. Surface that as a distinct `code` so LoginPage can route to
-    // the Inactive Account interstitial (Activate / Delete) instead of
-    // showing a "wrong password" error.
+    // 401 with a structured `code: "account_deactivated"` field on the
+    // response body, and does so ONLY AFTER the password has verified --
+    // so reaching this branch means the credentials were correct and the
+    // account is simply switched off. Surface that as a distinct `code`
+    // here too so LoginPage can route to the Inactive Account
+    // interstitial (Activate / Delete) instead of showing a "wrong
+    // password" error.
     //
-    // Message-string matching is the only signal the backend gives for
-    // this today (both cases are a bare 401). A dedicated response code
-    // or a 403 would be more robust -- flagged as a backend follow-up
-    // (Decision Log #225).
-    const body = (await response.json().catch(() => null)) as { message?: unknown } | null;
-    const backendMessage = typeof body?.message === "string" ? body.message : "";
-    if (response.status === 401 && /deactivat/i.test(backendMessage)) {
+    // Previously this checked /deactivat/i against the response's
+    // `message` string -- fragile against any future copy change on the
+    // backend side (Decision Log #225's own flagged follow-up). Now
+    // checks the stable, machine-readable `code` field
+    // (services/api/src/modules/auth/auth.service.ts's
+    // ACCOUNT_DEACTIVATED_CODE) instead, mirroring how
+    // guardianConsentRejection() below and every other structured-error
+    // guard in this codebase (GuardianConsentGuard, Under16RestrictionGuard)
+    // already surface a `code`.
+    const body = (await response.json().catch(() => null)) as { code?: unknown } | null;
+    if (response.status === 401 && body?.code === "account_deactivated") {
       throw new AuthApiError("This account has been deactivated.", {
         status: 401,
         code: "account_deactivated",
