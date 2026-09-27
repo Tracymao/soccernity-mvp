@@ -6,6 +6,7 @@ import { CurrentAdmin } from '../admin/guards/current-admin.decorator';
 import { AdminAccessTokenPayload } from '../admin/token/admin-token.types';
 import { ActionReportDto } from './dto/action-report.dto';
 import { AppealDecisionDto } from './dto/appeal-decision.dto';
+import { EscalateReportDto } from './dto/escalate-report.dto';
 import { ListReportsQueryDto } from './dto/list-reports-query.dto';
 import { ModerationService } from './moderation.service';
 
@@ -28,8 +29,8 @@ export class AdminModerationController {
   constructor(private readonly moderationService: ModerationService) {}
 
   @Get('reports')
-  async list(@Query() query: ListReportsQueryDto) {
-    return this.moderationService.listReports(query);
+  async list(@Query() query: ListReportsQueryDto, @CurrentAdmin() admin: AdminAccessTokenPayload) {
+    return this.moderationService.listReports(query, admin.sub);
   }
 
   @Patch('reports/:id')
@@ -48,5 +49,19 @@ export class AdminModerationController {
     @Body() dto: AppealDecisionDto,
   ) {
     return this.moderationService.decideAppeal(id, admin.sub, dto);
+  }
+
+  // Restricted to child-safety-vetted admins — see
+  // ModerationService.escalateReport's own header comment. Still behind
+  // this controller's class-level AdminRolesGuard('moderator',
+  // 'superadmin') too; the vetting check is an ADDITIONAL, orthogonal
+  // gate, not a replacement for the role check.
+  @Patch('reports/:id/escalate')
+  async escalate(
+    @Param('id') id: string,
+    @CurrentAdmin() admin: AdminAccessTokenPayload,
+    @Body() dto: EscalateReportDto,
+  ) {
+    return this.moderationService.escalateReport(id, admin.sub, dto);
   }
 }

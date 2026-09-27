@@ -78,7 +78,15 @@ describe('Moderation e2e: report -> action -> appeal -> second-reviewer review',
     return { userId: user.id, accessToken: accessToken.token };
   }
 
-  async function createAdmin(label: string, role: string): Promise<{ adminId: string; accessToken: string }> {
+  async function createAdmin(
+    label: string,
+    role: string,
+    // schema/report-severity-escalation-admin-vetting-application —
+    // optional so every PRE-EXISTING call site (none of which cares
+    // about vetting) is untouched; defaults to false, matching
+    // AdminUser.childSafetyVetted's own real DB-level default.
+    childSafetyVetted = false,
+  ): Promise<{ adminId: string; accessToken: string }> {
     const prisma = getTestPrismaClient();
     const admin = await prisma.adminUser.create({
       data: {
@@ -86,6 +94,7 @@ describe('Moderation e2e: report -> action -> appeal -> second-reviewer review',
         passwordHash: 'unused',
         fullName: `E2E Mod Admin ${label}`,
         role,
+        childSafetyVetted,
       },
     });
     const { accessToken } = await app.get(AdminTokenService).issueTokenPair(admin.id, admin.role);
@@ -396,5 +405,241 @@ describe('Moderation e2e: report -> action -> appeal -> second-reviewer review',
     const ids = res.body.items.map((r: { id: string }) => r.id);
     expect(ids).toContain(second.body.id);
     expect(ids).not.toContain(first.body.id);
+  });
+
+  // ---------- severity (schema/report-severity-escalation-admin-vetting-application) ----------
+
+  it('POST /reports defaults severity to medium when omitted, and persists an explicit value when given', async () => {
+    const reporter = await createUser('reporter-severity');
+    const reported = await createUser('reported-severity');
+    const postId = await seedPost(reported.userId);
+    const prisma = getTestPrismaClient();
+
+    const defaultRes = await request(server())
+      .post('/reports')
+      .set(auth(reporter.accessToken))
+      .send({ targetType: 'post', targetId: postId, reason: 'no severity given' })
+      .expect(201);
+    expect(defaultRes.body.severity).toBe('medium');
+    const defaultRow = await prisma.report.findUniqueOrThrow({ where: { id: defaultRes.body.id } });
+    expect(defaultRow.severity).toBe('medium');
+
+    const explicitRes = await request(server())
+      .post('/reports')
+      .set(auth(reporter.accessToken))
+      .send({ targetType: 'post', targetId: postId, reason: 'urgent', severity: 'critical' })
+      .expect(201);
+    expect(explicitRes.body.severity).toBe('critical');
+  });
+
+  it('POST /reports rejects an invalid severity value', async () => {
+    const reporter = await createUser('reporter-severity-bad');
+    const reported = await createUser('reported-severity-bad');
+    const postId = await seedPost(reported.userId);
+
+    await request(server())
+      .post('/reports')
+      .set(auth(reporter.accessToken))
+      .send({ targetType: 'post', targetId: postId, reason: 'x', severity: 'catastrophic' })
+      .expect(400);
+  });
+
+  // ---------- child-safety-vetting gate (schema/report-severity-escalation-admin-vetting-application) ----------
+  //
+  // Report.concernsMinor and AdminUser.childSafetyVetted are seeded
+  // directly via Prisma below rather than through POST /reports/public
+  // (the only route that accepts concernsMinor on submission) — that
+  // route shares the real, hardcoded 5-requests/60s 'auth' throttler
+  // bucket every other e2e file in this suite already avoids for the
+  // same reason (see test/README.md / feed-reactions.e2e-spec.ts's own
+  // createUser() precedent). POST /reports/public's own handling of
+  // concernsMinor/severity is already covered by the mocked unit suite
+  // (moderation.service.spec.ts) — this section proves the GATE itself,
+  // which reads Report.concernsMinor however it got there.
+  describe('child-safety-vetting gate', () => {
+    async function seedConcernsMinorReport(reporterId: string, targetType: string, targetId: string): Promise<string> {
+      const prisma = getTestPrismaClient();
+      const report = await prisma.report.create({
+        data: { reporterId, targetType, targetId, reason: 'concerning content involving a minor', concernsMinor: true },
+      });
+      return report.id;
+    }
+
+    it('GET /admin/moderation/reports: a NON-vetted admin never sees a concernsMinor report, regardless of role; a VETTED admin does', async () => {
+      const reporter = await createUser('reporter-vet-list');
+      const reported = await createUser('reported-vet-list');
+      const postId = await seedPost(reported.userId);
+      const reportId = await seedConcernsMinorReport(reporter.userId, 'post', postId);
+
+      const unvettedModerator = await createAdmin('unvetted-list-mod', 'moderator', false);
+      const unvettedSuperadmin = await createAdmin('unvetted-list-super', 'superadmin', false);
+      const vettedModerator = await createAdmin('vetted-list-mod', 'moderator', true);
+
+      const asUnvettedModerator = await request(server())
+        .get('/admin/moderation/reports')
+        .set(auth(unvettedModerator.accessToken))
+        .expect(200);
+      expect(asUnvettedModerator.body.items.map((r: { id: string }) => r.id)).not.toContain(reportId);
+
+      // "Regardless of role" — even an unvetted SUPERADMIN is blocked.
+      const asUnvettedSuperadmin = await request(server())
+        .get('/admin/moderation/reports')
+        .set(auth(unvettedSuperadmin.accessToken))
+        .expect(200);
+      expect(asUnvettedSuperadmin.body.items.map((r: { id: string }) => r.id)).not.toContain(reportId);
+
+      const asVettedModerator = await request(server())
+        .get('/admin/moderation/reports')
+        .set(auth(vettedModerator.accessToken))
+        .expect(200);
+      expect(asVettedModerator.body.items.map((r: { id: string }) => r.id)).toContain(reportId);
+    });
+
+    it('PATCH /admin/moderation/reports/:id (direct access): 403s a NON-vetted admin on a concernsMinor report; a VETTED admin may action it, and the report row is untouched by the failed attempt', async () => {
+      const reporter = await createUser('reporter-vet-action');
+      const reported = await createUser('reported-vet-action');
+      const postId = await seedPost(reported.userId);
+      const reportId = await seedConcernsMinorReport(reporter.userId, 'post', postId);
+      const prisma = getTestPrismaClient();
+
+      const unvettedModerator = await createAdmin('unvetted-action-mod', 'moderator', false);
+      await request(server())
+        .patch(`/admin/moderation/reports/${reportId}`)
+        .set(auth(unvettedModerator.accessToken))
+        .send({ action: 'content_removed' })
+        .expect(403);
+
+      const untouched = await prisma.report.findUniqueOrThrow({ where: { id: reportId } });
+      expect(untouched.status).toBe('open');
+      expect(untouched.reviewedByAdminId).toBeNull();
+
+      const vettedModerator = await createAdmin('vetted-action-mod', 'moderator', true);
+      const actionRes = await request(server())
+        .patch(`/admin/moderation/reports/${reportId}`)
+        .set(auth(vettedModerator.accessToken))
+        .send({ action: 'content_removed' })
+        .expect(200);
+      expect(actionRes.body.status).toBe('actioned');
+
+      const afterVettedAction = await prisma.report.findUniqueOrThrow({ where: { id: reportId } });
+      expect(afterVettedAction.reviewedByAdminId).toBe(vettedModerator.adminId);
+    });
+
+    it('PATCH /admin/moderation/reports/:id/appeal (direct access): 403s a NON-vetted admin reviewing an appeal on a concernsMinor report; a VETTED (different) admin may review it', async () => {
+      const reporter = await createUser('reporter-vet-appeal');
+      const reported = await createUser('reported-vet-appeal');
+      const postId = await seedPost(reported.userId);
+      const reportId = await seedConcernsMinorReport(reporter.userId, 'post', postId);
+      const vettedActioner = await createAdmin('vetted-appeal-actioner', 'moderator', true);
+
+      await request(server())
+        .patch(`/admin/moderation/reports/${reportId}`)
+        .set(auth(vettedActioner.accessToken))
+        .send({ action: 'content_removed' })
+        .expect(200);
+
+      await request(server())
+        .post(`/reports/${reportId}/appeal`)
+        .set(auth(reported.accessToken))
+        .send({ reason: 'this was not my content' })
+        .expect(201);
+
+      const unvettedReviewer = await createAdmin('unvetted-appeal-reviewer', 'superadmin', false);
+      await request(server())
+        .patch(`/admin/moderation/reports/${reportId}/appeal`)
+        .set(auth(unvettedReviewer.accessToken))
+        .send({ decision: 'upheld' })
+        .expect(403);
+
+      const vettedReviewer = await createAdmin('vetted-appeal-reviewer', 'superadmin', true);
+      const decisionRes = await request(server())
+        .patch(`/admin/moderation/reports/${reportId}/appeal`)
+        .set(auth(vettedReviewer.accessToken))
+        .send({ decision: 'upheld' })
+        .expect(200);
+      expect(decisionRes.body.appealStatus).toBe('upheld');
+    });
+  });
+
+  // ---------- PATCH /admin/moderation/reports/:id/escalate ----------
+
+  describe('escalate', () => {
+    it('403s a NON-vetted admin regardless of role, and 200s a vetted admin, persisting the full escalation trail', async () => {
+      const reporter = await createUser('reporter-escalate');
+      const reported = await createUser('reported-escalate');
+      const postId = await seedPost(reported.userId);
+      const createRes = await request(server())
+        .post('/reports')
+        .set(auth(reporter.accessToken))
+        .send({ targetType: 'post', targetId: postId, reason: 'needs escalating' })
+        .expect(201);
+      const reportId = createRes.body.id as string;
+      const prisma = getTestPrismaClient();
+
+      const unvettedSuperadmin = await createAdmin('unvetted-escalate-super', 'superadmin', false);
+      await request(server())
+        .patch(`/admin/moderation/reports/${reportId}/escalate`)
+        .set(auth(unvettedSuperadmin.accessToken))
+        .send({ escalationNotes: 'trying without vetting', escalatedToAuthority: false })
+        .expect(403);
+
+      const untouched = await prisma.report.findUniqueOrThrow({ where: { id: reportId } });
+      expect(untouched.escalatedAt).toBeNull();
+
+      const vettedModerator = await createAdmin('vetted-escalate-mod', 'moderator', true);
+      const escalateRes = await request(server())
+        .patch(`/admin/moderation/reports/${reportId}/escalate`)
+        .set(auth(vettedModerator.accessToken))
+        .send({ escalationNotes: 'flagging for the designated child-safety lead', escalatedToAuthority: false })
+        .expect(200);
+      expect(escalateRes.body.escalatedByAdminId).toBe(vettedModerator.adminId);
+      expect(escalateRes.body.escalatedToAuthority).toBe(false);
+
+      const afterFirstEscalation = await prisma.report.findUniqueOrThrow({ where: { id: reportId } });
+      expect(afterFirstEscalation.escalatedAt).not.toBeNull();
+      expect(afterFirstEscalation.escalatedByAdminId).toBe(vettedModerator.adminId);
+      expect(afterFirstEscalation.escalationNotes).toBe('flagging for the designated child-safety lead');
+      expect(afterFirstEscalation.escalatedToAuthority).toBe(false);
+
+      // Re-callable: the same vetted admin later records that they have
+      // ACTUALLY made an external report -- escalatedToAuthority flips
+      // to true, overwriting the prior escalation-trail snapshot.
+      const secondEscalateRes = await request(server())
+        .patch(`/admin/moderation/reports/${reportId}/escalate`)
+        .set(auth(vettedModerator.accessToken))
+        .send({ escalationNotes: 'reported to the relevant authority', escalatedToAuthority: true })
+        .expect(200);
+      expect(secondEscalateRes.body.escalatedToAuthority).toBe(true);
+
+      const afterSecondEscalation = await prisma.report.findUniqueOrThrow({ where: { id: reportId } });
+      expect(afterSecondEscalation.escalatedToAuthority).toBe(true);
+      expect(afterSecondEscalation.escalationNotes).toBe('reported to the relevant authority');
+    });
+
+    it('escalates a report regardless of its status, including one already actioned', async () => {
+      const reporter = await createUser('reporter-escalate-actioned');
+      const reported = await createUser('reported-escalate-actioned');
+      const postId = await seedPost(reported.userId);
+      const vettedModerator = await createAdmin('vetted-escalate-actioned', 'moderator', true);
+
+      const createRes = await request(server())
+        .post('/reports')
+        .set(auth(reporter.accessToken))
+        .send({ targetType: 'post', targetId: postId, reason: 'already actioned' })
+        .expect(201);
+      const reportId = createRes.body.id as string;
+
+      await request(server())
+        .patch(`/admin/moderation/reports/${reportId}`)
+        .set(auth(vettedModerator.accessToken))
+        .send({ action: 'dismissed' })
+        .expect(200);
+
+      await request(server())
+        .patch(`/admin/moderation/reports/${reportId}/escalate`)
+        .set(auth(vettedModerator.accessToken))
+        .send({ escalationNotes: 'escalating even though already dismissed', escalatedToAuthority: false })
+        .expect(200);
+    });
   });
 });

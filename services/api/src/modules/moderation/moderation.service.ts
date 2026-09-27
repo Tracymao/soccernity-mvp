@@ -14,8 +14,14 @@ import { AppealDecisionDto } from './dto/appeal-decision.dto';
 import { AppealReportDto } from './dto/appeal-report.dto';
 import { CreatePublicReportDto } from './dto/create-public-report.dto';
 import { CreateReportDto } from './dto/create-report.dto';
+import { EscalateReportDto } from './dto/escalate-report.dto';
 import { ListReportsQueryDto } from './dto/list-reports-query.dto';
-import { MODERATION_DEFAULT_PAGE_SIZE, MODERATION_MAX_PAGE_SIZE } from './moderation.constants';
+import {
+  CHILD_SAFETY_VETTING_REQUIRED_CODE,
+  DEFAULT_REPORT_SEVERITY,
+  MODERATION_DEFAULT_PAGE_SIZE,
+  MODERATION_MAX_PAGE_SIZE,
+} from './moderation.constants';
 
 export interface ReportListPage {
   items: Report[];
@@ -49,6 +55,11 @@ export class ModerationService {
         targetType: dto.targetType,
         targetId: dto.targetId,
         reason: dto.reason,
+        // Defaults to 'medium' when omitted — matched explicitly here
+        // rather than left to Report.severity's own DB-level default, so
+        // the API's documented behaviour doesn't depend on a Prisma
+        // undefined-vs-omitted nuance.
+        severity: dto.severity ?? DEFAULT_REPORT_SEVERITY,
       },
     });
   }
@@ -73,6 +84,10 @@ export class ModerationService {
         targetId: dto.targetId,
         reason: dto.reason,
         concernsMinor: dto.concernsMinor,
+        // Defaults to 'medium' when omitted — see createReport's own
+        // comment on why this is matched explicitly rather than left to
+        // Report.severity's DB-level default.
+        severity: dto.severity ?? DEFAULT_REPORT_SEVERITY,
       },
     });
 
@@ -169,6 +184,38 @@ export class ModerationService {
   }
 
   // -------------------------------------------------------------------
+  // Child-safety-vetting gate. AdminAccessTokenPayload structurally
+  // carries only { sub, role, aud } (admin-token.types.ts) — the same
+  // "no safety-sensitive state in the token, always re-read Postgres"
+  // discipline GuardianConsentGuard already applies for the User side
+  // (Section 5.7). childSafetyVetted is exactly that kind of state, so
+  // it is read fresh here on every call this gates, never trusted from a
+  // cached/stale value. Applies REGARDLESS of AdminRolesGuard's own
+  // moderator/superadmin role check — a superadmin who is not
+  // child-safety-vetted is blocked exactly the same as a moderator who
+  // isn't; vetting is an orthogonal axis to role.
+  // -------------------------------------------------------------------
+  private async isChildSafetyVetted(adminId: string): Promise<boolean> {
+    const admin = await this.prisma.adminUser.findUnique({
+      where: { id: adminId },
+      select: { childSafetyVetted: true },
+    });
+    return admin?.childSafetyVetted ?? false;
+  }
+
+  private async assertChildSafetyVetted(adminId: string): Promise<void> {
+    if (await this.isChildSafetyVetted(adminId)) {
+      return;
+    }
+    throw new ForbiddenException({
+      statusCode: 403,
+      error: 'Forbidden',
+      code: CHILD_SAFETY_VETTING_REQUIRED_CODE,
+      message: 'This action requires a child-safety-vetted admin.',
+    });
+  }
+
+  // -------------------------------------------------------------------
   // POST /reports/:id/appeal (user-facing, JwtAuthGuard only). Only the
   // REPORTED user (never the reporter) may appeal, and only once a
   // report has actually been actioned — a dismissed report (status
@@ -205,13 +252,23 @@ export class ModerationService {
   // GET /admin/moderation/reports (AdminJwtAuthGuard + AdminRolesGuard,
   // moderator/superadmin only). Keyset-paginated, newest-first, optional
   // exact-match `status` filter.
+  //
+  // `adminId` is the CALLER's id, freshly checked against
+  // AdminUser.childSafetyVetted (see assertChildSafetyVetted's own
+  // comment). A non-vetted admin — regardless of role — never sees a
+  // Report where concernsMinor is true at all; it is filtered out of the
+  // list rather than returned and then hidden, so no partial/redacted
+  // row shape is needed.
   // -------------------------------------------------------------------
-  async listReports(query: ListReportsQueryDto): Promise<ReportListPage> {
+  async listReports(query: ListReportsQueryDto, adminId: string): Promise<ReportListPage> {
     const limit = Math.min(query.limit ?? MODERATION_DEFAULT_PAGE_SIZE, MODERATION_MAX_PAGE_SIZE);
 
     const conditions: Prisma.ReportWhereInput[] = [];
     if (query.status) {
       conditions.push({ status: query.status });
+    }
+    if (!(await this.isChildSafetyVetted(adminId))) {
+      conditions.push({ concernsMinor: false });
     }
     if (query.cursor) {
       const cursor = decodeModerationCursor(query.cursor);
@@ -245,6 +302,14 @@ export class ModerationService {
   // -------------------------------------------------------------------
   async actionReport(reportId: string, adminId: string, dto: ActionReportDto): Promise<Report> {
     const report = await this.assertReportExists(reportId);
+
+    // 404 (existence) is already settled above; this is the "403 on
+    // direct access" half of the concernsMinor gate (listReports is the
+    // filtering half) — a non-vetted admin may not act on a report
+    // concerning a minor, regardless of role.
+    if (report.concernsMinor) {
+      await this.assertChildSafetyVetted(adminId);
+    }
 
     if (report.status !== 'open') {
       throw new ConflictException('This report has already been reviewed');
@@ -295,6 +360,15 @@ export class ModerationService {
   async decideAppeal(reportId: string, adminId: string, dto: AppealDecisionDto): Promise<Report> {
     const report = await this.assertReportExists(reportId);
 
+    // Same "403 on direct access" gate actionReport applies — reviewing
+    // an appeal on a report concerning a minor requires the SAME
+    // child-safety vetting, on top of (not instead of) Decision Log
+    // #138's separate same-admin-may-not-review-their-own-action rule
+    // checked below.
+    if (report.concernsMinor) {
+      await this.assertChildSafetyVetted(adminId);
+    }
+
     if (report.appealStatus !== 'pending') {
       throw new ConflictException('This report has no pending appeal to review');
     }
@@ -328,6 +402,37 @@ export class ModerationService {
       }
 
       return updated;
+    });
+  }
+
+  // -------------------------------------------------------------------
+  // PATCH /admin/moderation/reports/:id/escalate (AdminJwtAuthGuard +
+  // AdminRolesGuard('moderator', 'superadmin') from the controller, PLUS
+  // the child-safety-vetting gate below) — restricted to vetted admins
+  // regardless of the target report's own concernsMinor value (a report
+  // may need escalating precisely because it wasn't flagged as
+  // concerning a minor at submission time but turns out, on review, to
+  // be one). Sets the escalation trail Report's own schema comment
+  // describes: escalatedAt/escalatedByAdminId/escalationNotes/
+  // escalatedToAuthority. This endpoint records that a human has done
+  // something outside Soccernity (or is flagging it for someone who
+  // will) — it does not itself contact anyone. Deliberately independent
+  // of reviewedByAdminId/appealReviewedByAdminId/Report.status —
+  // escalating is not the same act as actioning or appeal-reviewing, and
+  // this may be called on a report in any status.
+  // -------------------------------------------------------------------
+  async escalateReport(reportId: string, adminId: string, dto: EscalateReportDto): Promise<Report> {
+    await this.assertReportExists(reportId);
+    await this.assertChildSafetyVetted(adminId);
+
+    return this.prisma.report.update({
+      where: { id: reportId },
+      data: {
+        escalatedAt: new Date(),
+        escalatedByAdminId: adminId,
+        escalationNotes: dto.escalationNotes,
+        escalatedToAuthority: dto.escalatedToAuthority,
+      },
     });
   }
 }

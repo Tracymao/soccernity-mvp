@@ -11502,6 +11502,99 @@ real, still-open follow-up, not done by this entry.
     `admin-content/README.md`'s own identical conclusion for analogous
     changes).
   - PR opened, not merged — Temi verifies and merges.
+- **`schema/report-severity-escalation-admin-vetting-application`
+  (backend-api, 2026-09-27) is the application half of PR #320's schema
+  groundwork (`Report.severity`/`escalatedAt`/`escalatedByAdminId`/
+  `escalationNotes`/`escalatedToAuthority`, `AdminUser.childSafetyVetted`/
+  `vettedAt`/`vettedByAdminId`) — that PR flagged all of it as "no
+  application code... yet." `services/api` only, zero schema/migration
+  change (every field already existed).**
+  - **`severity` accepted on submission by BOTH `POST /reports` and
+    `POST /reports/public`** (optional; defaults `'medium'`, matched
+    explicitly at the service layer per `REPORT_SEVERITIES`/
+    `DEFAULT_REPORT_SEVERITY` in `moderation.constants.ts`, rather than
+    left to Prisma's own DB-level default). Deliberately optional on
+    both routes — a reporter rarely has the context to assess severity
+    reliably; that's what the moderation queue is for.
+  - **The child-safety-vetting gate**
+    (`ModerationService.assertChildSafetyVetted`/`isChildSafetyVetted`) —
+    fresh-reads `AdminUser.childSafetyVetted` from Postgres on every
+    call, the same Section 5.7 "no safety-sensitive state trusted from
+    the token" discipline `GuardianConsentGuard` already applies for the
+    User side (`AdminAccessTokenPayload` carries only `{sub, role, aud}`,
+    same as `AdminRolesGuard`'s own token-trusted `role` check — but
+    vetting is deliberately fresh-read while role is not, a disclosed
+    divergence argued in `moderation/README.md`). Applied on
+    `GET`/`PATCH /admin/moderation/reports*` **regardless of role** — an
+    unvetted superadmin is blocked exactly like an unvetted moderator.
+    Two shapes: `GET .../reports` silently filters any `concernsMinor:
+    true` row out of the list (`conditions.push({ concernsMinor: false
+    })`) for a non-vetted admin; `PATCH .../reports/:id` and
+    `.../:id/appeal` 403 with a distinct code
+    (`CHILD_SAFETY_VETTING_REQUIRED_CODE`) on **direct access** to a
+    `concernsMinor` report, checked after the existing 404-before-403
+    convention but before any further business-state check (409s). A
+    `concernsMinor: false` report never triggers an `AdminUser` lookup at
+    all.
+  - **New `PATCH /admin/moderation/reports/:id/escalate`** — same guards
+    as the other admin-moderation routes, PLUS the vetting gate applied
+    **unconditionally**, regardless of the target report's own
+    `concernsMinor` value (a report may need escalating precisely
+    *because* it wasn't flagged as concerning a minor at submission but
+    turns out, on review, to be one). Sets `escalatedAt` = now(),
+    `escalatedByAdminId` = the acting admin, plus admin-supplied
+    `escalationNotes`/`escalatedToAuthority` — records that a human has
+    escalated something; contacts no one itself. Deliberately
+    **re-callable** (not one-shot, no status gate) — a vetted admin can
+    escalate internally first (`escalatedToAuthority: false`) and later
+    call it again once they've actually made an external report, each
+    call overwriting the trail to the most recent state (same
+    "no append-only multi-cycle audit trail" limitation already disclosed
+    for the review/appeal fields).
+  - **New top-level module `admin-staff-vetting`** —
+    `PATCH /admin/users/:id/child-safety-vetting`, **superadmin-only**
+    (not moderator, a deliberate divergence from every other role-gated
+    route in this codebase so far). Sets/unsets `childSafetyVetted` on
+    the TARGET admin (`:id`), writing `vettedAt`/`vettedByAdminId`
+    together with it: `true` → `vettedAt = now()`, `vettedByAdminId` =
+    the calling superadmin (never the target); `false` → both cleared to
+    `null` (a disclosed judgment call — this model tracks only the most
+    recent vetting decision, no history, same precedent
+    `Report.reviewedByAdminId` already sets). No self-vetting
+    restriction — a superadmin may vet themselves. Response is an
+    explicit `select`-based allowlist (id/email/fullName/role/
+    childSafetyVetted/vettedAt/vettedByAdminId), never a raw row spread —
+    `passwordHash` is never leaked. **Deliberately its own module**, not
+    folded into `AdminModule` (Decision Log #54 scopes that to Admin
+    Console account/auth/profile only) or `AdminUsersModule` (a
+    different resource, platform `User` management, that happens to
+    share the literal `/admin/users` URL prefix this task's own brief
+    specified — a disclosed naming overlap, not a route collision, flagged
+    in the controller's own header comment and `modules/admin-staff-
+    vetting/README.md`). This endpoint performs no verification itself —
+    it only records a decision (a real-world DBS/background-check
+    confirmation) made outside the system.
+  - **Verification, all re-measured directly**: full mocked suite
+    **102 suites / 1367 tests, 0 failures → 104 suites / 1403 tests, 0
+    failures** (2 new suites, both in the new `admin-staff-vetting`
+    module — 36 new tests total: 18 in `moderation.service.spec.ts`, 6 in
+    `admin-moderation.controller.http.spec.ts`, 4 in
+    `admin-staff-vetting.service.spec.ts`, 8 in
+    `admin-staff-vetting.controller.http.spec.ts`). Full e2e suite (real
+    Postgres/Redis via docker-compose, `npm run test:e2e`) **26 suites /
+    250 tests, 0 failures → 27 suites / 263 tests, 0 failures** (1 new
+    suite — `test/admin-staff-vetting.e2e-spec.ts`, 6 new tests, proving
+    the genuinely new `AdminUser.vettedByAdminId` self-relation FK
+    round-trips against real Postgres, and end-to-end-threading both
+    modules: an unvetted moderator blocked from a real seeded
+    `concernsMinor` report becomes able to see/action it — same access
+    token, no re-login — the moment a superadmin vets them — plus 7 new
+    tests added to the existing `test/moderation.e2e-spec.ts`; every
+    pre-existing e2e suite re-run and still green alongside both).
+    `npx tsc --noEmit`, `npm run lint`, and `nest build` are all clean.
+    Full reasoning in `modules/moderation/README.md`'s new sections and
+    the new `modules/admin-staff-vetting/README.md`.
+  - PR opened, not merged — Temi verifies and merges.
 
 ## The eight agents, and the order they run in
 

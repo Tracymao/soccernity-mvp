@@ -31,6 +31,25 @@ export type ReportAction = (typeof REPORT_ACTIONS)[number];
 export const APPEAL_DECISIONS = ['upheld', 'overturned'] as const;
 export type AppealDecision = (typeof APPEAL_DECISIONS)[number];
 
+// schema/report-severity-escalation-admin-vetting — Report.severity's own
+// schema comment ("low | medium | high | critical... defaults 'medium'").
+// Accepted on submission by BOTH POST /reports and POST /reports/public;
+// an omitted value defaults to 'medium' at the service layer (matching,
+// not just relying on, the column's own DB-level default — see
+// ModerationService.createReport/createPublicReport).
+export const REPORT_SEVERITIES = ['low', 'medium', 'high', 'critical'] as const;
+export type ReportSeverity = (typeof REPORT_SEVERITIES)[number];
+export const DEFAULT_REPORT_SEVERITY: ReportSeverity = 'medium';
+
+// The 403 code thrown when a report concerning a minor (Report.concernsMinor)
+// is listed/actioned/appeal-reviewed by an AdminUser whose childSafetyVetted
+// flag is not true, and when PATCH /admin/moderation/reports/:id/escalate is
+// called by a non-vetted admin regardless of the target report's own
+// concernsMinor value. A distinct, machine-readable `code` (not just a
+// generic 403 message) — same pattern GUARDIAN_CONSENT_PENDING_CODE
+// already established in guardian-consent.guard.ts.
+export const CHILD_SAFETY_VETTING_REQUIRED_CODE = 'child_safety_vetting_required';
+
 // Section 5.5: every list endpoint is paginated. Same default 20 / max 50
 // every other list endpoint in this codebase uses.
 export const MODERATION_DEFAULT_PAGE_SIZE = 20;
