@@ -34,6 +34,28 @@ import {
 const WEEKLY_ROUND_COUNT = 3;
 const ROUND_LENGTH_MS = 7 * 24 * 60 * 60 * 1000;
 
+// sprint-2/contest-withdrawn-consent-visibility (Decision Log #339
+// resolution). toWeeklyWinners()/toStandings() are shared by the public
+// (JwtAuthGuard-only) endpoints and the AdminJwtAuthGuard-only endpoints,
+// and each surface needs different visibility when a
+// ContestRoundWinner/ContestStanding row's userId belongs to a minor whose
+// Guardian.consentStatus has moved to 'declined' (withdrawn) since the
+// entry was submitted:
+//   - 'public': the row is OMITTED entirely -- no renumbering/backfill.
+//     The vacated position/prize slot stays vacant; the next-ranked
+//     entrant is never promoted into it. This is a deliberate business
+//     decision, not an accidental gap: a withdrawal reduces the prize
+//     count by one, it does not create a new winner.
+//   - 'admin': the row is KEPT (an admin still needs it to reconcile round
+//     scoring -- position, weekNumber, entryId are all real), but the
+//     minor's real identity/content is redacted to a placeholder, the same
+//     anonymize-in-place-rather-than-delete discipline
+//     account-anonymization-reconsideration (Decision Log #341) already
+//     established for feed.service.ts's authors.
+type ContestVisibilityMode = 'public' | 'admin';
+
+const WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER = 'Entry withdrawn — guardian consent revoked';
+
 // A cycle plus its rounds (each with weekly winners + the winning post
 // id) and its crowned standings — everything needed to derive the phase
 // and shape every Contest response.
@@ -169,6 +191,7 @@ export class ContestService {
     const phase = ContestService.derivePhase(graph.status, this.judgedCount(graph));
     const activeRound = this.findOpenRound(graph);
     const isAcceptingEntries = graph.status === 'active' && activeRound !== null;
+    const withdrawnUserIds = await this.getWithdrawnConsentUserIds(this.collectGraphUserIds(graph));
 
     let callerEntry: CurrentContestResponse['callerEntry'] = null;
     if (activeRound) {
@@ -187,8 +210,8 @@ export class ContestService {
       isAcceptingEntries,
       activeRound: activeRound ? this.toRoundSummary(activeRound) : null,
       rounds: graph.rounds.map((r) => this.toRoundSummary(r)),
-      weeklyWinners: this.toWeeklyWinners(graph),
-      monthlyStandings: phase === 'crowned' ? this.toStandings(graph) : [],
+      weeklyWinners: this.toWeeklyWinners(graph, 'public', withdrawnUserIds),
+      monthlyStandings: phase === 'crowned' ? this.toStandings(graph, 'public', withdrawnUserIds) : [],
       callerEntry,
     };
   }
@@ -206,12 +229,13 @@ export class ContestService {
     }
     const graph = cycle as CycleWithGraph;
     const phase = ContestService.derivePhase(graph.status, this.judgedCount(graph));
+    const withdrawnUserIds = await this.getWithdrawnConsentUserIds(this.collectGraphUserIds(graph));
     return {
       cycle: this.toCycleSummary(graph),
       phase,
       rounds: graph.rounds.map((r) => this.toRoundSummary(r)),
-      weeklyWinners: this.toWeeklyWinners(graph),
-      monthlyStandings: this.toStandings(graph),
+      weeklyWinners: this.toWeeklyWinners(graph, 'public', withdrawnUserIds),
+      monthlyStandings: this.toStandings(graph, 'public', withdrawnUserIds),
     };
   }
 
@@ -227,29 +251,35 @@ export class ContestService {
   // dateOfBirth/isMinor are immutable post-registration, so an entry
   // cannot retroactively become a *minor's* entry.
   //
-  // CORRECTED by sprint-1/guardian-consent-decline-withdraw-expiry: this
-  // comment previously also asserted that "Guardian.consentStatus only
-  // ever moves pending -> confirmed (no reversal path anywhere in the
-  // codebase)". That is no longer true. A guardian can now withdraw
-  // consent (POST /auth/guardian-consent/withdraw), moving a confirmed
-  // row to 'declined' — so an entry that WAS validly submitted by a
-  // consented minor can now, later, belong to a minor whose consent has
-  // been revoked, and this admin surface would still show their
-  // displayName and post text.
+  // sprint-1/guardian-consent-decline-withdraw-expiry corrected this
+  // comment to note that a guardian CAN now withdraw consent after having
+  // already confirmed it (POST /auth/guardian-consent/withdraw), moving a
+  // 'confirmed' Guardian row to 'declined' — so a ContestRoundWinner/
+  // ContestStanding row that WAS validly submitted by a consented minor
+  // can later belong to a minor whose consent has since been revoked.
+  // That correction flagged this as a Decision Log candidate (#339)
+  // without resolving it either way.
   //
-  // Still no minor filter, but now as a deliberate, bounded judgment call
-  // rather than "there is no real path to filter":
-  //   - the exposure is admin-only (AdminJwtAuthGuard + the admin console),
-  //     not public;
-  //   - it is time-bounded by construction — withdrawal immediately puts
-  //     the account into pending_deletion, and AccountDeletionSweepService
-  //     hard-deletes it (cascading the Post and ContestEntry away
-  //     entirely) after the 30-day grace period;
-  //   - and filtering has a real cost of its own: a finalist silently
-  //     vanishing from a mid-judging cycle would leave an admin unable to
-  //     reconcile a round they had already started scoring.
-  // FLAGGED as a Decision Log candidate rather than silently resolved
-  // either way — see guardian-consent/README.md.
+  // RESOLVED by sprint-2/contest-withdrawn-consent-visibility, per Temi's
+  // explicit direction — see the ContestVisibilityMode doc comment above
+  // toWeeklyWinners()/toStandings() for the full public-vs-admin shape.
+  // Short version: the PUBLIC endpoints (getCurrentContest/getCycleById)
+  // now omit a withdrawn winner/standing row entirely, with no
+  // renumbering; the ADMIN endpoints below keep the row (so an admin can
+  // still reconcile round scoring) but redact the minor's displayName and
+  // postId to WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER, mirroring how
+  // feed.service.ts's ACTIVE_AUTHOR_POST_FILTER family anonymizes an
+  // author's identity in place rather than deleting the row
+  // (Decision Log #341).
+  //
+  // NOT covered by this resolution, and flagged as a smaller, separate
+  // residual gap rather than silently expanded into: toAdminEntry() /
+  // AdminContestEntry (a round's raw, not-yet-judged `entries` array,
+  // exposed only via getCycleByIdForAdmin/getCurrentContestForAdmin's
+  // `rounds[].entries`) still shows a withdrawn entrant's real
+  // displayName and full post content (contentText/mediaUrls) unredacted
+  // — that surface was not named in Decision Log #339 and needs its own
+  // follow-up.
   // -------------------------------------------------------------------
 
   // GET /admin/contest/cycles
@@ -258,7 +288,12 @@ export class ContestService {
       orderBy: { createdAt: 'desc' },
       include: ADMIN_CYCLE_LIST_INCLUDE,
     });
-    return { items: cycles.map((cycle) => this.toAdminCycleListItem(cycle)) };
+    // One batched Guardian lookup across every cycle's userIds, not one
+    // query per cycle — see getWithdrawnConsentUserIds's own comment.
+    const withdrawnUserIds = await this.getWithdrawnConsentUserIds(
+      cycles.flatMap((cycle) => this.collectGraphUserIds(cycle)),
+    );
+    return { items: cycles.map((cycle) => this.toAdminCycleListItem(cycle, withdrawnUserIds)) };
   }
 
   // GET /admin/contest/cycles/:id
@@ -270,7 +305,8 @@ export class ContestService {
     if (!cycle) {
       throw new NotFoundException('Contest cycle not found');
     }
-    return this.toAdminCycleDetail(cycle);
+    const withdrawnUserIds = await this.getWithdrawnConsentUserIds(this.collectGraphUserIds(cycle));
+    return this.toAdminCycleDetail(cycle, withdrawnUserIds);
   }
 
   // GET /admin/contest/current — same resolution as getCurrentContest:
@@ -292,7 +328,8 @@ export class ContestService {
     if (!cycle) {
       return { cycle: null, phase: null, rounds: [], weeklyWinners: [], monthlyStandings: [] };
     }
-    return this.toAdminCycleDetail(cycle);
+    const withdrawnUserIds = await this.getWithdrawnConsentUserIds(this.collectGraphUserIds(cycle));
+    return this.toAdminCycleDetail(cycle, withdrawnUserIds);
   }
 
   // -------------------------------------------------------------------
@@ -602,6 +639,35 @@ export class ContestService {
     return graph.rounds.filter((r) => r.status === 'judged').length;
   }
 
+  // Every distinct userId that appears as a ContestRoundWinner or a
+  // ContestStanding in one cycle's graph — the full set toWeeklyWinners/
+  // toStandings need to check against getWithdrawnConsentUserIds's
+  // result. Deliberately NOT deduped here (getWithdrawnConsentUserIds's
+  // own `in: [...new Set(...)]` handles that once, across every cycle a
+  // caller batches together).
+  private collectGraphUserIds(graph: CycleWithGraph): string[] {
+    return [
+      ...graph.rounds.flatMap((r) => r.winners.map((w) => w.userId)),
+      ...graph.standings.map((s) => s.userId),
+    ];
+  }
+
+  // Decision Log #339. One batched Guardian lookup for every userId a
+  // caller passes in, rather than one query per winner/standing row — the
+  // same "batch, never N+1" discipline feed.service.ts's
+  // attachViewerState() and messaging.service.ts's toConversationViews()
+  // already established. A userId with no Guardian row at all (not a
+  // minor) is simply absent from the result set, same as any other
+  // "hide via absence, never a distinct signal" filter in this codebase.
+  private async getWithdrawnConsentUserIds(userIds: string[]): Promise<Set<string>> {
+    if (userIds.length === 0) return new Set();
+    const rows = await this.prisma.guardian.findMany({
+      where: { minorUserId: { in: [...new Set(userIds)] }, consentStatus: 'declined' },
+      select: { minorUserId: true },
+    });
+    return new Set(rows.map((r) => r.minorUserId));
+  }
+
   private findOpenRound(graph: CycleWithGraph): CycleWithGraph['rounds'][number] | null {
     const now = Date.now();
     return (
@@ -644,8 +710,18 @@ export class ContestService {
     };
   }
 
-  private toWeeklyWinners(graph: CycleWithGraph): ContestWinnerSummary[] {
-    return graph.rounds
+  // mode/withdrawnUserIds: Decision Log #339. 'public' omits a withdrawn
+  // row entirely (no renumbering — the vacated position simply stays
+  // absent). 'admin' keeps the row but redacts displayName/postId to
+  // WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER. withdrawnUserIds must be
+  // computed once per call site via getWithdrawnConsentUserIds() (never
+  // per-row) — see the doc comment on ContestVisibilityMode above.
+  private toWeeklyWinners(
+    graph: CycleWithGraph,
+    mode: ContestVisibilityMode,
+    withdrawnUserIds: Set<string>,
+  ): ContestWinnerSummary[] {
+    const winners = graph.rounds
       .flatMap((round) =>
         round.winners.map((w) => ({
           weekNumber: round.weekNumber,
@@ -657,17 +733,40 @@ export class ContestService {
         })),
       )
       .sort((a, b) => a.weekNumber - b.weekNumber || a.position - b.position);
+
+    if (mode === 'public') {
+      return winners.filter((w) => !withdrawnUserIds.has(w.userId));
+    }
+    return winners.map((w) =>
+      withdrawnUserIds.has(w.userId)
+        ? { ...w, displayName: WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER, postId: WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER }
+        : w,
+    );
   }
 
-  private toStandings(graph: CycleWithGraph): ContestStandingSummary[] {
-    return graph.standings
+  private toStandings(
+    graph: CycleWithGraph,
+    mode: ContestVisibilityMode,
+    withdrawnUserIds: Set<string>,
+  ): ContestStandingSummary[] {
+    const standings = graph.standings
       .map((s) => ({ position: s.position, userId: s.userId, displayName: s.user.displayName }))
       .sort((a, b) => a.position - b.position);
+
+    if (mode === 'public') {
+      return standings.filter((s) => !withdrawnUserIds.has(s.userId));
+    }
+    return standings.map((s) =>
+      withdrawnUserIds.has(s.userId) ? { ...s, displayName: WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER } : s,
+    );
   }
 
   // ---- admin read shaping (Decision Log #241) ----------------------
 
-  private toAdminCycleListItem(graph: AdminCycleListGraph): AdminContestCycleListItem {
+  private toAdminCycleListItem(
+    graph: AdminCycleListGraph,
+    withdrawnUserIds: Set<string>,
+  ): AdminContestCycleListItem {
     return {
       cycle: this.toCycleSummary(graph),
       phase: ContestService.derivePhase(graph.status, this.judgedCount(graph)),
@@ -675,18 +774,21 @@ export class ContestService {
         ...this.toRoundSummary(r),
         entryCount: r._count.entries,
       })),
-      weeklyWinners: this.toWeeklyWinners(graph),
-      monthlyStandings: this.toStandings(graph),
+      weeklyWinners: this.toWeeklyWinners(graph, 'admin', withdrawnUserIds),
+      monthlyStandings: this.toStandings(graph, 'admin', withdrawnUserIds),
     };
   }
 
-  private toAdminCycleDetail(graph: AdminCycleDetailGraph): AdminContestCycleDetailResponse {
+  private toAdminCycleDetail(
+    graph: AdminCycleDetailGraph,
+    withdrawnUserIds: Set<string>,
+  ): AdminContestCycleDetailResponse {
     return {
       cycle: this.toCycleSummary(graph),
       phase: ContestService.derivePhase(graph.status, this.judgedCount(graph)),
       rounds: graph.rounds.map((r) => this.toAdminRoundDetail(r)),
-      weeklyWinners: this.toWeeklyWinners(graph),
-      monthlyStandings: this.toStandings(graph),
+      weeklyWinners: this.toWeeklyWinners(graph, 'admin', withdrawnUserIds),
+      monthlyStandings: this.toStandings(graph, 'admin', withdrawnUserIds),
     };
   }
 

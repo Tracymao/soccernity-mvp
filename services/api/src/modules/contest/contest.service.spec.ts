@@ -21,6 +21,7 @@ function buildMock() {
     pointsLedgerEntry: { create: jest.fn() },
     post: { findUnique: jest.fn() },
     notification: { create: jest.fn() },
+    guardian: { findMany: jest.fn().mockResolvedValue([]) },
   } as unknown as PrismaService;
   (prisma as unknown as { $transaction: jest.Mock }).$transaction = jest.fn((fn: (tx: unknown) => unknown) => fn(prisma));
   return prisma;
@@ -161,6 +162,42 @@ describe('ContestService', () => {
       expect(res.monthlyStandings).toEqual([]);
     });
 
+    // Decision Log #339 resolution -- sprint-2/contest-withdrawn-consent-visibility.
+    it('omits a withdrawn-consent winner entirely from the public surface, with no renumbering', async () => {
+      const prisma = buildMock();
+      (prisma.guardian.findMany as jest.Mock).mockResolvedValue([{ minorUserId: 'u-2' }]);
+      (prisma.contestCycle.findFirst as jest.Mock).mockResolvedValue(
+        graphCycle({
+          status: 'active',
+          rounds: [
+            round(1, {
+              status: 'judged',
+              winners: [
+                { entryId: 'e-1', position: 1, userId: 'u-1', user: { displayName: 'Ada' }, entry: { postId: 'post-1' } },
+                { entryId: 'e-2', position: 2, userId: 'u-2', user: { displayName: 'Withdrawn Minor' }, entry: { postId: 'post-2' } },
+                { entryId: 'e-3', position: 3, userId: 'u-3', user: { displayName: 'Chinedu' }, entry: { postId: 'post-3' } },
+              ],
+            }),
+            round(2),
+            round(3),
+          ],
+        }),
+      );
+
+      const res = await new ContestService(prisma).getCurrentContest('u-1');
+
+      // Position 2 (u-2) is gone -- position 1 and position 3 remain
+      // exactly as-is, position 3 is NOT renumbered to position 2.
+      expect(res.weeklyWinners).toEqual([
+        { weekNumber: 1, position: 1, userId: 'u-1', displayName: 'Ada', entryId: 'e-1', postId: 'post-1' },
+        { weekNumber: 1, position: 3, userId: 'u-3', displayName: 'Chinedu', entryId: 'e-3', postId: 'post-3' },
+      ]);
+      expect((prisma.guardian.findMany as jest.Mock).mock.calls[0][0]).toEqual({
+        where: { minorUserId: { in: ['u-1', 'u-2', 'u-3'] }, consentStatus: 'declined' },
+        select: { minorUserId: true },
+      });
+    });
+
     it('falls back to the most recent completed cycle (phase crowned) when none is running', async () => {
       const prisma = buildMock();
       (prisma.contestCycle.findFirst as jest.Mock)
@@ -177,6 +214,30 @@ describe('ContestService', () => {
       expect(res.phase).toBe('crowned');
       expect(res.monthlyStandings).toEqual([{ position: 1, userId: 'u-9', displayName: 'Nina' }]);
       expect(res.isAcceptingEntries).toBe(false);
+    });
+
+    it('omits a withdrawn-consent standing entirely from the public surface, with no renumbering', async () => {
+      const prisma = buildMock();
+      (prisma.guardian.findMany as jest.Mock).mockResolvedValue([{ minorUserId: 'u-2' }]);
+      (prisma.contestCycle.findFirst as jest.Mock)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(
+          graphCycle({
+            status: 'completed',
+            crownedAt: new Date('2026-09-28T00:00:00.000Z'),
+            standings: [
+              { position: 1, userId: 'u-1', user: { displayName: 'Ada' } },
+              { position: 2, userId: 'u-2', user: { displayName: 'Withdrawn Minor' } },
+              { position: 3, userId: 'u-3', user: { displayName: 'Chinedu' } },
+            ],
+          }),
+        );
+
+      const res = await new ContestService(prisma).getCurrentContest('u-1');
+      expect(res.monthlyStandings).toEqual([
+        { position: 1, userId: 'u-1', displayName: 'Ada' },
+        { position: 3, userId: 'u-3', displayName: 'Chinedu' },
+      ]);
     });
 
     it('reports callerEntry when the caller already has an entry in the open round', async () => {
@@ -554,6 +615,37 @@ describe('ContestService', () => {
       expect(res.weeklyWinners[0]).toMatchObject({ weekNumber: 1, position: 1, displayName: 'Nina', postId: 'p-9' });
       expect(res.monthlyStandings).toEqual([{ position: 1, userId: 'u-9', displayName: 'Nina' }]);
     });
+
+    // Decision Log #339 resolution -- sprint-2/contest-withdrawn-consent-visibility.
+    it('omits a withdrawn-consent winner/standing entirely, with no renumbering', async () => {
+      const prisma = buildMock();
+      (prisma.guardian.findMany as jest.Mock).mockResolvedValue([{ minorUserId: 'u-2' }]);
+      (prisma.contestCycle.findUnique as jest.Mock).mockResolvedValue(
+        graphCycle({
+          status: 'completed',
+          crownedAt: new Date('2026-09-28T00:00:00.000Z'),
+          rounds: [
+            round(1, {
+              status: 'judged',
+              winners: [
+                { entryId: 'e-1', position: 1, userId: 'u-1', user: { displayName: 'Ada' }, entry: { postId: 'post-1' } },
+                { entryId: 'e-2', position: 2, userId: 'u-2', user: { displayName: 'Withdrawn Minor' }, entry: { postId: 'post-2' } },
+              ],
+            }),
+          ],
+          standings: [
+            { position: 1, userId: 'u-1', user: { displayName: 'Ada' } },
+            { position: 2, userId: 'u-2', user: { displayName: 'Withdrawn Minor' } },
+          ],
+        }),
+      );
+
+      const res = await new ContestService(prisma).getCycleById('cyc-1');
+      expect(res.weeklyWinners).toEqual([
+        { weekNumber: 1, position: 1, userId: 'u-1', displayName: 'Ada', entryId: 'e-1', postId: 'post-1' },
+      ]);
+      expect(res.monthlyStandings).toEqual([{ position: 1, userId: 'u-1', displayName: 'Ada' }]);
+    });
   });
 
   // ------------------------------------------------------------------
@@ -622,6 +714,58 @@ describe('ContestService', () => {
       (prisma.contestCycle.findMany as jest.Mock).mockResolvedValue([]);
       expect(await new ContestService(prisma).listCyclesForAdmin()).toEqual({ items: [] });
     });
+
+    // Decision Log #339 resolution -- sprint-2/contest-withdrawn-consent-visibility.
+    it('keeps a withdrawn-consent winner/standing row but redacts displayName + postId', async () => {
+      const prisma = buildMock();
+      (prisma.guardian.findMany as jest.Mock).mockResolvedValue([{ minorUserId: 'u-2' }]);
+      (prisma.contestCycle.findMany as jest.Mock).mockResolvedValue([
+        graphCycle({
+          id: 'cyc-new',
+          status: 'active',
+          rounds: [
+            listRound(1, {
+              status: 'judged',
+              _count: { entries: 2 },
+              winners: [
+                { entryId: 'e-1', position: 1, userId: 'u-1', user: { displayName: 'Ada' }, entry: { postId: 'post-1' } },
+                { entryId: 'e-2', position: 2, userId: 'u-2', user: { displayName: 'Withdrawn Minor' }, entry: { postId: 'post-2' } },
+              ],
+            }),
+          ],
+        }),
+        graphCycle({
+          id: 'cyc-old',
+          status: 'completed',
+          crownedAt: new Date(),
+          rounds: [],
+          standings: [{ position: 1, userId: 'u-2', user: { displayName: 'Withdrawn Minor' } }],
+        }),
+      ]);
+
+      const res = await new ContestService(prisma).listCyclesForAdmin();
+
+      // The row stays present (unlike the public surface's omission) --
+      // an admin still needs it to reconcile round scoring -- but the
+      // real identity/content is redacted.
+      expect(res.items[0].weeklyWinners).toEqual([
+        { weekNumber: 1, position: 1, userId: 'u-1', displayName: 'Ada', entryId: 'e-1', postId: 'post-1' },
+        {
+          weekNumber: 1,
+          position: 2,
+          userId: 'u-2',
+          displayName: 'Entry withdrawn — guardian consent revoked',
+          entryId: 'e-2',
+          postId: 'Entry withdrawn — guardian consent revoked',
+        },
+      ]);
+      expect(res.items[1].monthlyStandings).toEqual([
+        { position: 1, userId: 'u-2', displayName: 'Entry withdrawn — guardian consent revoked' },
+      ]);
+      // One batched Guardian lookup across BOTH cycles, not one per cycle.
+      expect(prisma.guardian.findMany as jest.Mock).toHaveBeenCalledTimes(1);
+      expect((prisma.guardian.findMany as jest.Mock).mock.calls[0][0].where.minorUserId.in.sort()).toEqual(['u-1', 'u-2']);
+    });
   });
 
   describe('getCycleByIdForAdmin', () => {
@@ -664,6 +808,42 @@ describe('ContestService', () => {
       ]);
       expect(res.rounds[1].entries).toEqual([]);
       expect(res.rounds[1].entryCount).toBe(0);
+    });
+
+    // Decision Log #339 resolution -- sprint-2/contest-withdrawn-consent-visibility.
+    it('redacts a withdrawn-consent winner in weeklyWinners, but does not touch the raw round entries', async () => {
+      const prisma = buildMock();
+      (prisma.guardian.findMany as jest.Mock).mockResolvedValue([{ minorUserId: 'u-b' }]);
+      const winning = entry({ id: 'e-win', userId: 'u-b', user: { displayName: 'Ben' }, winner: { position: 1 } });
+      (prisma.contestCycle.findUnique as jest.Mock).mockResolvedValue(
+        graphCycle({
+          status: 'active',
+          rounds: [
+            {
+              ...detailRound(1, [winning], { status: 'judged' }),
+              winners: [{ entryId: 'e-win', position: 1, userId: 'u-b', user: { displayName: 'Ben' }, entry: { postId: 'post-1' } }],
+            },
+          ],
+        }),
+      );
+
+      const res = await new ContestService(prisma).getCycleByIdForAdmin('cyc-1');
+
+      expect(res.weeklyWinners).toEqual([
+        {
+          weekNumber: 1,
+          position: 1,
+          userId: 'u-b',
+          displayName: 'Entry withdrawn — guardian consent revoked',
+          entryId: 'e-win',
+          postId: 'Entry withdrawn — guardian consent revoked',
+        },
+      ]);
+      // toAdminEntry()/AdminContestEntry's raw round.entries is a
+      // separate, NOT-YET-redacted surface -- flagged as its own residual
+      // gap in the resolution comment above the admin read surface, not
+      // silently fixed by this PR.
+      expect(res.rounds[0].entries[0].entrant).toEqual({ userId: 'u-b', displayName: 'Ben' });
     });
   });
 
