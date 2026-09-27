@@ -1,5 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AdminActionLogService } from '../admin-action-log/admin-action-log.service';
+import {
+  ADMIN_ACTION_LOG_ACTIONS,
+  ADMIN_ACTION_LOG_TARGET_TYPES,
+} from '../admin-action-log/admin-action-log.constants';
 import { SetChildSafetyVettingDto } from './dto/set-child-safety-vetting.dto';
 
 // GET-free, PATCH-only response shape for this route — an explicit
@@ -47,7 +52,15 @@ export interface AdminStaffVettingSummary {
 // overlap). This service only ever reads/writes AdminUser.
 @Injectable()
 export class AdminStaffVettingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // feat/admin-action-log — see AdminActionLogService's own header
+    // comment. Called after the write below, with the CALLING superadmin
+    // as adminId and the TARGET admin as targetId (the same
+    // caller-vs-target distinction setChildSafetyVetting's own vettedAt/
+    // vettedByAdminId already draw).
+    private readonly adminActionLogService: AdminActionLogService,
+  ) {}
 
   // -------------------------------------------------------------------
   // Sets or unsets childSafetyVetted on the TARGET admin (:id — the
@@ -77,7 +90,7 @@ export class AdminStaffVettingService {
   ): Promise<AdminStaffVettingSummary> {
     await this.assertAdminExists(targetAdminId);
 
-    return this.prisma.adminUser.update({
+    const updated = await this.prisma.adminUser.update({
       where: { id: targetAdminId },
       data: {
         childSafetyVetted: dto.childSafetyVetted,
@@ -86,6 +99,16 @@ export class AdminStaffVettingService {
       },
       select: ADMIN_STAFF_VETTING_SELECT,
     });
+
+    await this.adminActionLogService.record(
+      callerAdminId,
+      ADMIN_ACTION_LOG_ACTIONS.ADMIN_CHILD_SAFETY_VETTING_UPDATED,
+      ADMIN_ACTION_LOG_TARGET_TYPES.ADMIN_USER,
+      targetAdminId,
+      `childSafetyVetted=${dto.childSafetyVetted}`,
+    );
+
+    return updated;
   }
 
   private async assertAdminExists(id: string): Promise<void> {

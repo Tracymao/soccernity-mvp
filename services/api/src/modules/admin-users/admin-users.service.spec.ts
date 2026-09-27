@@ -1,6 +1,7 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccountDeletionSweepService } from '../account-deletion/account-deletion-sweep.service';
+import { AdminActionLogService } from '../admin-action-log/admin-action-log.service';
 import { TokenService } from '../auth/token/token.service';
 import { AdminUsersService } from './admin-users.service';
 import { encodeAdminUsersCursor } from './cursor.util';
@@ -12,6 +13,11 @@ import { encodeAdminUsersCursor } from './cursor.util';
 // Postgres is already proven in
 // test/account-deletion-sweep.e2e-spec.ts / test/account-deletion.e2e-spec.ts;
 // this file covers AdminUsersService's own branching/guard logic.
+//
+// feat/admin-action-log — AdminUsersService now also takes an
+// AdminActionLogService, called after updateUserStatus's own write
+// succeeds (both the plain accountStatus write and the immediate-delete
+// branch).
 
 function buildDeps() {
   const prisma = {
@@ -31,7 +37,11 @@ function buildDeps() {
     listStalledHolds: jest.fn().mockResolvedValue([]),
   } as unknown as AccountDeletionSweepService;
 
-  return { prisma, tokenService, accountDeletionSweepService };
+  const adminActionLogService = {
+    record: jest.fn().mockResolvedValue(undefined),
+  } as unknown as AdminActionLogService;
+
+  return { prisma, tokenService, accountDeletionSweepService, adminActionLogService };
 }
 
 function user(overrides: Partial<Record<string, unknown>> = {}) {
@@ -49,8 +59,8 @@ function user(overrides: Partial<Record<string, unknown>> = {}) {
 describe('AdminUsersService', () => {
   describe('listStalledHolds', () => {
     it('defaults the threshold to 90 days and only reads', async () => {
-      const { prisma, tokenService, accountDeletionSweepService } = buildDeps();
-      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService);
+      const { prisma, tokenService, accountDeletionSweepService, adminActionLogService } = buildDeps();
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService, adminActionLogService);
 
       const out = await service.listStalledHolds();
 
@@ -62,9 +72,9 @@ describe('AdminUsersService', () => {
 
   describe('listUsers', () => {
     it('applies an exact-match status filter alongside the cursor', async () => {
-      const { prisma, tokenService, accountDeletionSweepService } = buildDeps();
+      const { prisma, tokenService, accountDeletionSweepService, adminActionLogService } = buildDeps();
       (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService);
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService, adminActionLogService);
 
       await service.listUsers({ status: 'suspended', limit: 10 });
 
@@ -77,12 +87,12 @@ describe('AdminUsersService', () => {
     });
 
     it('returns a nextCursor only when there are more rows than the page size', async () => {
-      const { prisma, tokenService, accountDeletionSweepService } = buildDeps();
+      const { prisma, tokenService, accountDeletionSweepService, adminActionLogService } = buildDeps();
       const rows = Array.from({ length: 3 }, (_, i) =>
         user({ id: `user-${i}`, createdAt: new Date(2026, 8, i + 1) }),
       );
       (prisma.user.findMany as jest.Mock).mockResolvedValue(rows);
-      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService);
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService, adminActionLogService);
 
       const page = await service.listUsers({ limit: 2 });
 
@@ -91,8 +101,8 @@ describe('AdminUsersService', () => {
     });
 
     it('decodes a supplied cursor into an (createdAt, id) OR condition', async () => {
-      const { prisma, tokenService, accountDeletionSweepService } = buildDeps();
-      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService);
+      const { prisma, tokenService, accountDeletionSweepService, adminActionLogService } = buildDeps();
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService, adminActionLogService);
       const cursor = encodeAdminUsersCursor({ createdAt: new Date('2026-09-01T00:00:00.000Z'), id: 'user-9' });
 
       await service.listUsers({ cursor });
@@ -116,10 +126,10 @@ describe('AdminUsersService', () => {
 
   describe('updateUserStatus — active/suspended transitions', () => {
     it('sets accountStatus and revokes sessions on suspend', async () => {
-      const { prisma, tokenService, accountDeletionSweepService } = buildDeps();
+      const { prisma, tokenService, accountDeletionSweepService, adminActionLogService } = buildDeps();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(user());
       (prisma.user.update as jest.Mock).mockResolvedValue(user({ accountStatus: 'suspended' }));
-      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService);
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService, adminActionLogService);
 
       const result = await service.updateUserStatus('user-1', 'admin-1', { status: 'suspended' });
 
@@ -133,10 +143,10 @@ describe('AdminUsersService', () => {
     });
 
     it('does NOT revoke sessions when moving back to active', async () => {
-      const { prisma, tokenService, accountDeletionSweepService } = buildDeps();
+      const { prisma, tokenService, accountDeletionSweepService, adminActionLogService } = buildDeps();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(user({ accountStatus: 'suspended' }));
       (prisma.user.update as jest.Mock).mockResolvedValue(user({ accountStatus: 'active' }));
-      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService);
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService, adminActionLogService);
 
       await service.updateUserStatus('user-1', 'admin-1', { status: 'active' });
 
@@ -150,12 +160,12 @@ describe('AdminUsersService', () => {
     // so AccountDeletionSweepService's own query can never pick the row
     // up again.
     it('clears a stale pendingDeletionAt when reactivating a pending_deletion user', async () => {
-      const { prisma, tokenService, accountDeletionSweepService } = buildDeps();
+      const { prisma, tokenService, accountDeletionSweepService, adminActionLogService } = buildDeps();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(
         user({ accountStatus: 'pending_deletion' }),
       );
       (prisma.user.update as jest.Mock).mockResolvedValue(user({ accountStatus: 'active' }));
-      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService);
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService, adminActionLogService);
 
       await service.updateUserStatus('user-1', 'admin-1', { status: 'active' });
 
@@ -167,9 +177,9 @@ describe('AdminUsersService', () => {
     });
 
     it('throws NotFoundException for a non-existent user', async () => {
-      const { prisma, tokenService, accountDeletionSweepService } = buildDeps();
+      const { prisma, tokenService, accountDeletionSweepService, adminActionLogService } = buildDeps();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService);
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService, adminActionLogService);
 
       await expect(
         service.updateUserStatus('missing-user', 'admin-1', { status: 'suspended' }),
@@ -180,9 +190,9 @@ describe('AdminUsersService', () => {
 
   describe('updateUserStatus — deleted (immediate, admin-triggered)', () => {
     it('revokes sessions and calls anonymizeUser directly, skipping the 30-day grace period', async () => {
-      const { prisma, tokenService, accountDeletionSweepService } = buildDeps();
+      const { prisma, tokenService, accountDeletionSweepService, adminActionLogService } = buildDeps();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(user({ isMinor: true }));
-      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService);
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService, adminActionLogService);
 
       const result = await service.updateUserStatus('user-1', 'admin-1', { status: 'deleted' });
 
@@ -195,9 +205,9 @@ describe('AdminUsersService', () => {
     });
 
     it('rejects any status change on an already-deleted (anonymized) user with 409 -- it cannot be resurrected', async () => {
-      const { prisma, tokenService, accountDeletionSweepService } = buildDeps();
+      const { prisma, tokenService, accountDeletionSweepService, adminActionLogService } = buildDeps();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(user({ accountStatus: 'deleted' }));
-      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService);
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService, adminActionLogService);
 
       await expect(service.updateUserStatus('user-1', 'admin-1', { status: 'active' })).rejects.toThrow(ConflictException);
       await expect(service.updateUserStatus('user-1', 'admin-1', { status: 'deleted' })).rejects.toThrow(ConflictException);
@@ -206,14 +216,75 @@ describe('AdminUsersService', () => {
     });
 
     it('throws NotFoundException for a non-existent user and never calls anonymizeUser', async () => {
-      const { prisma, tokenService, accountDeletionSweepService } = buildDeps();
+      const { prisma, tokenService, accountDeletionSweepService, adminActionLogService } = buildDeps();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService);
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService, adminActionLogService);
 
       await expect(
         service.updateUserStatus('missing-user', 'admin-1', { status: 'deleted' }),
       ).rejects.toThrow(NotFoundException);
       expect(accountDeletionSweepService.anonymizeUser).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---------- AdminActionLog wiring (feat/admin-action-log) ----------
+
+  describe('updateUserStatus — AdminActionLog wiring', () => {
+    it('records an AdminActionLog row after a plain active/suspended write, with the new status as notes', async () => {
+      const { prisma, tokenService, accountDeletionSweepService, adminActionLogService } = buildDeps();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(user());
+      (prisma.user.update as jest.Mock).mockResolvedValue(user({ accountStatus: 'suspended' }));
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService, adminActionLogService);
+
+      await service.updateUserStatus('user-1', 'admin-1', { status: 'suspended' });
+
+      expect(adminActionLogService.record).toHaveBeenCalledTimes(1);
+      expect(adminActionLogService.record).toHaveBeenCalledWith(
+        'admin-1',
+        'user.status_updated',
+        'user',
+        'user-1',
+        'status=suspended',
+      );
+    });
+
+    it('records an AdminActionLog row on the immediate-delete branch too', async () => {
+      const { prisma, tokenService, accountDeletionSweepService, adminActionLogService } = buildDeps();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(user({ isMinor: false }));
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService, adminActionLogService);
+
+      await service.updateUserStatus('user-1', 'admin-1', { status: 'deleted' });
+
+      expect(adminActionLogService.record).toHaveBeenCalledTimes(1);
+      expect(adminActionLogService.record).toHaveBeenCalledWith(
+        'admin-1',
+        'user.status_updated',
+        'user',
+        'user-1',
+        'status=deleted',
+      );
+    });
+
+    it('never records an AdminActionLog row for a non-existent user (404)', async () => {
+      const { prisma, tokenService, accountDeletionSweepService, adminActionLogService } = buildDeps();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService, adminActionLogService);
+
+      await expect(
+        service.updateUserStatus('missing-user', 'admin-1', { status: 'suspended' }),
+      ).rejects.toThrow(NotFoundException);
+      expect(adminActionLogService.record).not.toHaveBeenCalled();
+    });
+
+    it('never records an AdminActionLog row when the user is already deleted (409)', async () => {
+      const { prisma, tokenService, accountDeletionSweepService, adminActionLogService } = buildDeps();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(user({ accountStatus: 'deleted' }));
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService, adminActionLogService);
+
+      await expect(service.updateUserStatus('user-1', 'admin-1', { status: 'active' })).rejects.toThrow(
+        ConflictException,
+      );
+      expect(adminActionLogService.record).not.toHaveBeenCalled();
     });
   });
 });

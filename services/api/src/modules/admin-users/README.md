@@ -243,22 +243,26 @@ file in isolation). `nest build` + `npm run lint` both clean.
   disclosed note — flagged as a Decision Log candidate for the founder to
   decide if an admin-initiated registration path is ever actually
   needed, not built speculatively.
-- **No audit trail** of who suspended/deleted a user beyond application
-  logs (`Logger.log`, includes the acting admin's id) — no schema field
-  records it. A future pass wanting a real audit trail should follow the
-  `ModerationService`/`Report.reviewedByAdminId` precedent rather than
-  inventing a new shape.
+- ~~**No audit trail** of who suspended/deleted a user beyond application
+  logs~~ — **resolved by `feat/admin-action-log`**: `updateUserStatus` now
+  also writes a genuinely append-only `AdminActionLog` row
+  (`user.status_updated`, `notes: status=<active|suspended|deleted>`) on
+  every successful write, both the plain accountStatus branch and the
+  immediate-delete branch. The `Logger.log` calls themselves are
+  unchanged/still present — this is additive, not a replacement. See
+  `modules/admin-action-log/README.md`.
 
 ---
 
 ## Files
 
 ```
-admin-users.module.ts       — wires AdminAuthFoundationModule + AuthFoundationModule + AccountDeletionModule
+admin-users.module.ts       — wires AdminAuthFoundationModule + AuthFoundationModule + AccountDeletionModule + AdminActionLogModule
 admin-users.service.ts      — AdminUsersService, all business logic
 admin-users.constants.ts    — ADMIN_USER_WRITE_STATUSES, ADMIN_USER_ACTIONS, ADMIN_USER_FILTER_STATUSES, page sizes
 cursor.util.ts              — this module's own (createdAt, id) keyset cursor
 admin-users.controller.ts   — GET/PATCH /admin/users*
 dto/list-users-query.dto.ts
 dto/update-user-status.dto.ts
+../admin-action-log/        — AdminActionLogService.record(...) (own module, own README)
 ```

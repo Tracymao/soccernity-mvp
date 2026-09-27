@@ -189,9 +189,15 @@ tests, 0 failures** (this module's 6 tests plus 7 more added to
   records a decision a superadmin has already made outside the system —
   it performs no verification itself, exactly as the task brief that
   dispatched this work specified.
-- **No audit trail beyond `vettedAt`/`vettedByAdminId`'s own
-  most-recent-state.** No append-only history of every vet/un-vet cycle
-  — see "The write shape" section above.
+- **`AdminUser.vettedAt`/`vettedByAdminId` still only ever hold the MOST
+  RECENT state** — no change here, see "The write shape" section above.
+  **Partially superseded by `feat/admin-action-log`, though**: every call
+  to `setChildSafetyVetting` now also writes a genuinely append-only
+  `AdminActionLog` row (`admin_user.child_safety_vetting_updated`,
+  `notes: childSafetyVetted=<bool>`) — so a full history of every
+  vet/un-vet call now exists in `AdminActionLog`, even though
+  `AdminUser`'s own three fields still don't carry it themselves. See
+  `modules/admin-action-log/README.md`.
 - **No `apps/admin` UI.** No Figma frame exists for this yet, and none
   was built or converted here — this PR is `services/api` only. A
   superadmin-facing "vet this admin" action on the existing Users/Roles
@@ -205,8 +211,9 @@ tests, 0 failures** (this module's 6 tests plus 7 more added to
 ## Files
 
 ```
-admin-staff-vetting.module.ts                     — wires AdminAuthFoundationModule
+admin-staff-vetting.module.ts                     — wires AdminAuthFoundationModule + AdminActionLogModule
 admin-staff-vetting.service.ts                    — AdminStaffVettingService, all business logic
 admin-staff-vetting.controller.ts                 — PATCH /admin/users/:id/child-safety-vetting
 dto/set-child-safety-vetting.dto.ts
+../admin-action-log/                              — AdminActionLogService.record(...) (own module, own README)
 ```
