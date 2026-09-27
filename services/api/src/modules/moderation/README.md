@@ -604,10 +604,23 @@ from `schema/report-severity-escalation-admin-vetting`. `npx tsc --noEmit`,
 
 ---
 
+## AdminActionLog wiring (feat/admin-action-log)
+
+`actionReport`, `decideAppeal`, and `escalateReport` each now call
+`AdminActionLogService.record(...)` once their own state change has
+committed successfully — a separate, general-purpose audit trail from
+this module's own `Report.reviewedByAdminId`/`actionTaken`/appeal fields.
+See `modules/admin-action-log/README.md` for the full reasoning (why it's
+a separate model, why `record()` runs after rather than inside each
+method's own `$transaction`, and the full call-site table across every
+module that writes to it).
+
+---
+
 ## Files
 
 ```
-moderation.module.ts                — wires both foundation modules + both controllers
+moderation.module.ts                — wires both foundation modules + both controllers + AdminActionLogModule
 moderation.service.ts                — ModerationService, all business logic
 moderation.constants.ts              — REPORT_TARGET_TYPES, REPORT_ACTIONS, APPEAL_DECISIONS, REPORT_SEVERITIES,
                                         DEFAULT_REPORT_SEVERITY, CHILD_SAFETY_VETTING_REQUIRED_CODE, page sizes
@@ -625,4 +638,5 @@ dto/list-reports-query.dto.ts
 ../admin/guards/admin-roles.decorator.ts — @AdminRoles(...), new shared admin infra
 ../admin/guards/admin-roles.guard.ts     — AdminRolesGuard, new shared admin infra
 ../admin-staff-vetting/                  — PATCH /admin/users/:id/child-safety-vetting (own module, own README)
+../admin-action-log/                     — AdminActionLogService.record(...) (own module, own README)
 ```

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AdminActionLogModule } from '../admin-action-log/admin-action-log.module';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
@@ -45,8 +46,19 @@ import { ReportsController } from './reports.controller';
 // out of the admin queue/actions for non-vetted admins, and adds
 // PATCH /admin/moderation/reports/:id/escalate, restricted to vetted
 // admins. See README.md for the full reasoning.
+//
+// feat/admin-action-log — AdminActionLogModule imported for
+// AdminActionLogService, called after actionReport/decideAppeal/
+// escalateReport each successfully commit their own state change. See
+// modules/admin-action-log/README.md for the full call-site table.
 @Module({
-  imports: [AuthFoundationModule, AdminAuthFoundationModule, AuthRateLimitModule, ConfigModule],
+  imports: [
+    AuthFoundationModule,
+    AdminAuthFoundationModule,
+    AuthRateLimitModule,
+    ConfigModule,
+    AdminActionLogModule,
+  ],
   controllers: [ReportsController, PublicReportsController, AdminModerationController],
   providers: [ModerationService, PrismaService, RegistrationEmailService],
 })

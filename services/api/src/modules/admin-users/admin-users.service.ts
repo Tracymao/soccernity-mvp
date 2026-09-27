@@ -2,6 +2,11 @@ import { ConflictException, Injectable, Logger, NotFoundException } from '@nestj
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccountDeletionSweepService, HELD_INVESTIGATION_ALERT_DAYS } from '../account-deletion/account-deletion-sweep.service';
+import { AdminActionLogService } from '../admin-action-log/admin-action-log.service';
+import {
+  ADMIN_ACTION_LOG_ACTIONS,
+  ADMIN_ACTION_LOG_TARGET_TYPES,
+} from '../admin-action-log/admin-action-log.constants';
 import { TokenService } from '../auth/token/token.service';
 import { ADMIN_USERS_DEFAULT_PAGE_SIZE, ADMIN_USERS_MAX_PAGE_SIZE } from './admin-users.constants';
 import { decodeAdminUsersCursor, encodeAdminUsersCursor } from './cursor.util';
@@ -55,6 +60,9 @@ export class AdminUsersService {
     // comment on the `deleted` branch for the full reasoning on why this
     // is the right reuse (not a parallel deletion implementation).
     private readonly accountDeletionSweepService: AccountDeletionSweepService,
+    // feat/admin-action-log — see AdminActionLogService's own header
+    // comment. Called after each successful accountStatus write below.
+    private readonly adminActionLogService: AdminActionLogService,
   ) {}
 
   // GET /admin/users/held-investigations -- accounts whose deletion has
@@ -150,6 +158,13 @@ export class AdminUsersService {
       await this.tokenService.revokeAllSessionsForUser(userId);
       await this.accountDeletionSweepService.anonymizeUser(userId, user.isMinor);
       this.logger.log(`Admin ${adminId} anonymized user ${userId} (immediate, grace period skipped).`);
+      await this.adminActionLogService.record(
+        adminId,
+        ADMIN_ACTION_LOG_ACTIONS.USER_STATUS_UPDATED,
+        ADMIN_ACTION_LOG_TARGET_TYPES.USER,
+        userId,
+        `status=${dto.status}`,
+      );
       return { deleted: true, id: userId };
     }
 
@@ -173,6 +188,13 @@ export class AdminUsersService {
     }
 
     this.logger.log(`Admin ${adminId} set user ${userId}'s accountStatus to '${dto.status}'.`);
+    await this.adminActionLogService.record(
+      adminId,
+      ADMIN_ACTION_LOG_ACTIONS.USER_STATUS_UPDATED,
+      ADMIN_ACTION_LOG_TARGET_TYPES.USER,
+      userId,
+      `status=${dto.status}`,
+    );
     return { deleted: false, user: updated };
   }
 }

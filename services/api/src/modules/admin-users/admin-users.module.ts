@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccountDeletionModule } from '../account-deletion/account-deletion.module';
+import { AdminActionLogModule } from '../admin-action-log/admin-action-log.module';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { AdminUsersController } from './admin-users.controller';
@@ -21,8 +22,12 @@ import { AdminUsersService } from './admin-users.service';
 // AccountDeletionSweepService (the immediate-delete reuse — see
 // admin-users.service.ts's own comment on why this is reuse, not a
 // parallel deletion implementation).
+//
+// feat/admin-action-log — AdminActionLogModule imported so
+// updateUserStatus can record an audit-log row after each successful
+// accountStatus write. See modules/admin-action-log/README.md.
 @Module({
-  imports: [AdminAuthFoundationModule, AuthFoundationModule, AccountDeletionModule],
+  imports: [AdminAuthFoundationModule, AuthFoundationModule, AccountDeletionModule, AdminActionLogModule],
   controllers: [AdminUsersController],
   providers: [AdminUsersService, PrismaService],
 })

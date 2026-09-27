@@ -59,8 +59,22 @@ function buildEmailServiceMock() {
   };
 }
 
-function buildService(prisma: PrismaService, emailService = buildEmailServiceMock()): ModerationService {
-  return new ModerationService(prisma, emailService as never);
+// feat/admin-action-log — ModerationService now also takes an
+// AdminActionLogService, called after actionReport/decideAppeal/
+// escalateReport each successfully commit their own state change. Same
+// mocking convention as the two fixtures above.
+function buildAdminActionLogServiceMock() {
+  return {
+    record: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
+function buildService(
+  prisma: PrismaService,
+  emailService = buildEmailServiceMock(),
+  adminActionLogService = buildAdminActionLogServiceMock(),
+): ModerationService {
+  return new ModerationService(prisma, emailService as never, adminActionLogService as never);
 }
 
 function report(overrides: Partial<Record<string, unknown>> = {}) {
@@ -541,6 +555,67 @@ describe('ModerationService', () => {
       expect(result.status).toBe('actioned');
       expect(prisma.report.update).toHaveBeenCalled();
     });
+
+    // ---------- AdminActionLog wiring (feat/admin-action-log) ----------
+
+    it('records an AdminActionLog row after a successful action, with the recorded action as notes', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'open' }));
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(
+        report({ status: 'actioned', actionTaken: 'content_removed' }),
+      );
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await service.actionReport('report-1', 'admin-1', { action: 'content_removed' });
+
+      expect(adminActionLogService.record).toHaveBeenCalledTimes(1);
+      expect(adminActionLogService.record).toHaveBeenCalledWith(
+        'admin-1',
+        'report.actioned',
+        'report',
+        'report-1',
+        'content_removed',
+      );
+    });
+
+    it('never records an AdminActionLog row when the report does not exist (404)', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await expect(service.actionReport('missing', 'admin-1', { action: 'dismissed' })).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(adminActionLogService.record).not.toHaveBeenCalled();
+    });
+
+    it('never records an AdminActionLog row when the report is not open (409)', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await expect(service.actionReport('report-1', 'admin-1', { action: 'warning_issued' })).rejects.toThrow(
+        ConflictException,
+      );
+      expect(adminActionLogService.record).not.toHaveBeenCalled();
+    });
+
+    it('never records an AdminActionLog row when a non-vetted admin is blocked (403)', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'open', concernsMinor: true }));
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: false });
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await expect(
+        service.actionReport('report-1', 'unvetted-admin', { action: 'content_removed' }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(adminActionLogService.record).not.toHaveBeenCalled();
+    });
   });
 
   // ---------- PATCH /admin/moderation/reports/:id/appeal ----------
@@ -699,6 +774,68 @@ describe('ModerationService', () => {
 
       expect(result.appealStatus).toBe('upheld');
     });
+
+    // ---------- AdminActionLog wiring (feat/admin-action-log) ----------
+
+    it('records an AdminActionLog row after a successful appeal decision, with the decision as notes', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'actioned', appealStatus: 'pending', reviewedByAdminId: 'admin-1' }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ appealStatus: 'upheld' }));
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await service.decideAppeal('report-1', 'admin-2', { decision: 'upheld' });
+
+      expect(adminActionLogService.record).toHaveBeenCalledTimes(1);
+      expect(adminActionLogService.record).toHaveBeenCalledWith(
+        'admin-2',
+        'report.appeal_decided',
+        'report',
+        'report-1',
+        'upheld',
+      );
+    });
+
+    it('never records an AdminActionLog row when the report does not exist (404)', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await expect(service.decideAppeal('missing', 'admin-2', { decision: 'upheld' })).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(adminActionLogService.record).not.toHaveBeenCalled();
+    });
+
+    it('never records an AdminActionLog row when there is no pending appeal (409)', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'actioned', appealStatus: null }));
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await expect(service.decideAppeal('report-1', 'admin-2', { decision: 'upheld' })).rejects.toThrow(
+        ConflictException,
+      );
+      expect(adminActionLogService.record).not.toHaveBeenCalled();
+    });
+
+    it('never records an AdminActionLog row when the same admin who actioned the report tries to review its appeal (403, Decision Log #138)', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'actioned', appealStatus: 'pending', reviewedByAdminId: 'admin-1' }),
+      );
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await expect(service.decideAppeal('report-1', 'admin-1', { decision: 'upheld' })).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(adminActionLogService.record).not.toHaveBeenCalled();
+    });
   });
 
   // ---------- PATCH /admin/moderation/reports/:id/escalate ----------
@@ -788,6 +925,61 @@ describe('ModerationService', () => {
           escalatedToAuthority: false,
         }),
       ).resolves.toBeDefined();
+    });
+
+    // ---------- AdminActionLog wiring (feat/admin-action-log) ----------
+
+    it('records an AdminActionLog row after a successful escalation, with escalatedToAuthority + escalationNotes as notes', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report());
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: true });
+      (prisma.report.update as jest.Mock).mockResolvedValue(
+        report({ escalatedAt: new Date(), escalatedByAdminId: 'vetted-admin', escalatedToAuthority: true }),
+      );
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await service.escalateReport('report-1', 'vetted-admin', {
+        escalationNotes: 'reported to the relevant authority this morning',
+        escalatedToAuthority: true,
+      });
+
+      expect(adminActionLogService.record).toHaveBeenCalledTimes(1);
+      expect(adminActionLogService.record).toHaveBeenCalledWith(
+        'vetted-admin',
+        'report.escalated',
+        'report',
+        'report-1',
+        'escalatedToAuthority=true: reported to the relevant authority this morning',
+      );
+    });
+
+    it('never records an AdminActionLog row when the report does not exist (404)', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await expect(
+        service.escalateReport('missing', 'admin-1', { escalationNotes: 'urgent', escalatedToAuthority: false }),
+      ).rejects.toThrow(NotFoundException);
+      expect(adminActionLogService.record).not.toHaveBeenCalled();
+    });
+
+    it('never records an AdminActionLog row when a non-vetted admin is blocked (403)', async () => {
+      const prisma = buildPrismaMock();
+      const adminActionLogService = buildAdminActionLogServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ concernsMinor: false }));
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: false });
+      const service = buildService(prisma, buildEmailServiceMock(), adminActionLogService);
+
+      await expect(
+        service.escalateReport('report-1', 'unvetted-admin', {
+          escalationNotes: 'needs a second look',
+          escalatedToAuthority: false,
+        }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(adminActionLogService.record).not.toHaveBeenCalled();
     });
   });
 

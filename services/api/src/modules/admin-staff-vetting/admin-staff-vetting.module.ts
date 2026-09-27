@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AdminActionLogModule } from '../admin-action-log/admin-action-log.module';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
 import { AdminStaffVettingController } from './admin-staff-vetting.controller';
 import { AdminStaffVettingService } from './admin-staff-vetting.service';
@@ -20,8 +21,12 @@ import { AdminStaffVettingService } from './admin-staff-vetting.service';
 // AdminAuthFoundationModule for AdminJwtAuthGuard/AdminRolesGuard — no
 // session-revocation or cross-module reuse the way AdminUsersModule
 // needs for its own, unrelated suspend/delete actions.
+//
+// feat/admin-action-log — AdminActionLogModule imported so
+// setChildSafetyVetting can record an audit-log row after each write. See
+// modules/admin-action-log/README.md.
 @Module({
-  imports: [AdminAuthFoundationModule],
+  imports: [AdminAuthFoundationModule, AdminActionLogModule],
   controllers: [AdminStaffVettingController],
   providers: [AdminStaffVettingService, PrismaService],
 })

@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { Prisma, Report } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AdminActionLogService } from '../admin-action-log/admin-action-log.service';
+import { ADMIN_ACTION_LOG_ACTIONS, ADMIN_ACTION_LOG_TARGET_TYPES } from '../admin-action-log/admin-action-log.constants';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
 import { decodeModerationCursor, encodeModerationCursor } from './cursor.util';
 import { ActionReportDto } from './dto/action-report.dto';
@@ -40,6 +42,11 @@ export class ModerationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: RegistrationEmailService,
+    // feat/admin-action-log — see AdminActionLogService's own header
+    // comment for why this is a separate audit trail from Report's own
+    // reviewed/action/appeal fields, and why record() is called after
+    // (not inside) each method's own $transaction/update.
+    private readonly adminActionLogService: AdminActionLogService,
   ) {}
 
   // -------------------------------------------------------------------
@@ -318,8 +325,8 @@ export class ModerationService {
     const newStatus = dto.action === 'dismissed' ? 'reviewed' : 'actioned';
     const reportedUserId = await this.resolveReportedUserId(report.targetType, report.targetId);
 
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.report.update({
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const updatedReport = await tx.report.update({
         where: { id: reportId },
         data: {
           status: newStatus,
@@ -347,8 +354,20 @@ export class ModerationService {
         });
       }
 
-      return updated;
+      return updatedReport;
     });
+
+    // See AdminActionLogService's own comment on why this runs after (not
+    // inside) the transaction above.
+    await this.adminActionLogService.record(
+      adminId,
+      ADMIN_ACTION_LOG_ACTIONS.REPORT_ACTIONED,
+      ADMIN_ACTION_LOG_TARGET_TYPES.REPORT,
+      reportId,
+      dto.action,
+    );
+
+    return updated;
   }
 
   // -------------------------------------------------------------------
@@ -379,7 +398,7 @@ export class ModerationService {
 
     const reportedUserId = await this.resolveReportedUserId(report.targetType, report.targetId);
 
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const data: Prisma.ReportUpdateInput = {
         appealStatus: dto.decision,
         appealReviewedByAdmin: { connect: { id: adminId } },
@@ -393,7 +412,7 @@ export class ModerationService {
         data.actionTaken = null;
       }
 
-      const updated = await tx.report.update({ where: { id: reportId }, data });
+      const updatedReport = await tx.report.update({ where: { id: reportId }, data });
 
       if (reportedUserId) {
         await tx.notification.create({
@@ -401,8 +420,20 @@ export class ModerationService {
         });
       }
 
-      return updated;
+      return updatedReport;
     });
+
+    // See AdminActionLogService's own comment on why this runs after (not
+    // inside) the transaction above.
+    await this.adminActionLogService.record(
+      adminId,
+      ADMIN_ACTION_LOG_ACTIONS.REPORT_APPEAL_DECIDED,
+      ADMIN_ACTION_LOG_TARGET_TYPES.REPORT,
+      reportId,
+      dto.decision,
+    );
+
+    return updated;
   }
 
   // -------------------------------------------------------------------
@@ -425,7 +456,7 @@ export class ModerationService {
     await this.assertReportExists(reportId);
     await this.assertChildSafetyVetted(adminId);
 
-    return this.prisma.report.update({
+    const updated = await this.prisma.report.update({
       where: { id: reportId },
       data: {
         escalatedAt: new Date(),
@@ -434,5 +465,15 @@ export class ModerationService {
         escalatedToAuthority: dto.escalatedToAuthority,
       },
     });
+
+    await this.adminActionLogService.record(
+      adminId,
+      ADMIN_ACTION_LOG_ACTIONS.REPORT_ESCALATED,
+      ADMIN_ACTION_LOG_TARGET_TYPES.REPORT,
+      reportId,
+      `escalatedToAuthority=${dto.escalatedToAuthority}: ${dto.escalationNotes}`,
+    );
+
+    return updated;
   }
 }
