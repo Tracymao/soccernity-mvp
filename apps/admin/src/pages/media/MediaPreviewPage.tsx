@@ -1,17 +1,19 @@
 // Media Preview — Figma node 396:442.
 //
-// Real data: GET /admin/media (Build Plan Section 4.8, built by
-// sprint-5/admin-media-storage-backend). There is no GET
-// /admin/media/:id anywhere in services/api — this screen is reached
-// from MediaLibraryPage's own row link, which passes the row's own
-// already-fetched MediaAsset via router `state`; a direct visit /
-// refresh falls back to api/adminMedia.ts's findMediaById (see that
-// file's own Decision Log candidate comment). The Figma screen has no
-// primary action — it's the library list with a preview pane.
+// Real data: GET /admin/media/:id (Build Plan Section 4.8, built by
+// sprint-5/admin-media-storage-backend; the GET single-resource route
+// added separately — see api/adminMedia.ts's getMediaById comment). This
+// screen is reached from MediaLibraryPage's own row link, which passes
+// the row's already-fetched MediaAsset via router `state` (skipping a
+// redundant fetch); a direct visit / refresh (no router state) now calls
+// the real `getMediaById` instead of the old bounded-list-scan
+// (`findMediaById`) workaround. The Figma screen has no primary action —
+// it's the library list with a preview pane.
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import AdminPageHeader from "../../layout/AdminPageHeader";
-import { findMediaById, type MediaAsset } from "../../api/adminMedia";
+import { AdminApiError } from "../../api/adminClient";
+import { getMediaById, type MediaAsset } from "../../api/adminMedia";
 import { displayNameFromUrl, formatBytes, formatDate } from "./mediaShared";
 import "./media.css";
 
@@ -28,18 +30,19 @@ export default function MediaPreviewPage() {
   useEffect(() => {
     if (media) return;
     let cancelled = false;
-    findMediaById(id)
+    getMediaById(id)
       .then((found) => {
         if (cancelled) return;
-        if (found) {
-          setMedia(found);
-          setLoadState("loaded");
-        } else {
-          setLoadState("not-found");
-        }
+        setMedia(found);
+        setLoadState("loaded");
       })
-      .catch(() => {
-        if (!cancelled) setLoadState("error");
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (err instanceof AdminApiError && err.status === 404) {
+          setLoadState("not-found");
+        } else {
+          setLoadState("error");
+        }
       });
     return () => {
       cancelled = true;
@@ -76,7 +79,7 @@ export default function MediaPreviewPage() {
             <p className="med-note">
               {loadState === "error"
                 ? "Couldn’t load this file. Please try again from the library."
-                : "This file isn’t in the first 250 uploads — open it directly from the Media library instead of a bookmarked link."}
+                : "No file exists with this id — open it directly from the Media library instead of a bookmarked link."}
             </p>
             <div className="med-action-row">
               <button type="button" className="med-btn med-btn--primary" onClick={() => navigate("/media")}>

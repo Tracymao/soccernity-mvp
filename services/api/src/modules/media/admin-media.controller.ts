@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Param, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
 import { AdminRoles } from '../admin/guards/admin-roles.decorator';
@@ -26,9 +26,23 @@ import { MediaService, UploadedMediaFile } from './media.service';
 export class AdminMediaController {
   constructor(private readonly mediaService: MediaService) {}
 
+  // Declared before GET /admin/media/:id so Nest matches a bare
+  // /admin/media request here, not against the :id route — same ordering
+  // discipline GrassrootsTeamsController's own GET /teams / GET /teams/:id
+  // pair already follows.
   @Get()
   async list(@Query() query: ListMediaQueryDto) {
     return this.mediaService.listMedia(query);
+  }
+
+  // The single-resource fetch MediaPreviewPage.tsx previously had no
+  // backend route for — see MediaService.getMediaById's own header
+  // comment. 404 on a non-existent id; no additional gate beyond
+  // existence (unlike ModerationService.getReportById's
+  // child-safety-vetting check — MediaAsset has no analogous concept).
+  @Get(':id')
+  async getOne(@Param('id') id: string) {
+    return this.mediaService.getMediaById(id);
   }
 
   // multer's own `limits.fileSize` aborts the upload once the 50MB cap

@@ -9,11 +9,11 @@ vi.mock("../../api/adminMedia", async (importOriginal) => {
     ...actual,
     listMedia: vi.fn(),
     uploadMedia: vi.fn(),
-    findMediaById: vi.fn(),
+    getMediaById: vi.fn(),
   };
 });
 
-import { listMedia, uploadMedia, findMediaById, type MediaAsset } from "../../api/adminMedia";
+import { listMedia, uploadMedia, getMediaById, type MediaAsset } from "../../api/adminMedia";
 import MediaLibraryPage from "./MediaLibraryPage";
 import MediaPreviewPage from "./MediaPreviewPage";
 import MediaUploadPage from "./MediaUploadPage";
@@ -22,7 +22,7 @@ afterEach(cleanup);
 beforeEach(() => {
   vi.mocked(listMedia).mockReset();
   vi.mocked(uploadMedia).mockReset();
-  vi.mocked(findMediaById).mockReset();
+  vi.mocked(getMediaById).mockReset();
 });
 
 function media(overrides: Partial<MediaAsset> = {}): MediaAsset {
@@ -205,7 +205,7 @@ describe("MediaPreviewPage", () => {
 
     expect(await screen.findByText("abc123-photo.jpg")).not.toBeNull();
     expect(screen.getByRole("img")).not.toBeNull();
-    expect(findMediaById).not.toHaveBeenCalled();
+    expect(getMediaById).not.toHaveBeenCalled();
   });
 
   it("renders a video preview for a video asset", async () => {
@@ -222,8 +222,8 @@ describe("MediaPreviewPage", () => {
     expect(document.querySelector("video")).not.toBeNull();
   });
 
-  it("falls back to findMediaById on a direct visit with no router state", async () => {
-    vi.mocked(findMediaById).mockResolvedValue(media());
+  it("calls the real getMediaById on a direct visit with no router state", async () => {
+    vi.mocked(getMediaById).mockResolvedValue(media());
 
     render(
       <MemoryRouter initialEntries={["/media/preview/media-1"]}>
@@ -233,12 +233,12 @@ describe("MediaPreviewPage", () => {
       </MemoryRouter>,
     );
 
-    await waitFor(() => expect(findMediaById).toHaveBeenCalledWith("media-1"));
+    await waitFor(() => expect(getMediaById).toHaveBeenCalledWith("media-1"));
     expect(await screen.findByText("abc123-photo.jpg")).not.toBeNull();
   });
 
-  it("shows an honest not-found state when the id can't be resolved", async () => {
-    vi.mocked(findMediaById).mockResolvedValue(null);
+  it("shows an honest not-found state on a real 404 from the backend", async () => {
+    vi.mocked(getMediaById).mockRejectedValue(new AdminApiError(404, "Media not found"));
 
     render(
       <MemoryRouter initialEntries={["/media/preview/does-not-exist"]}>
@@ -249,5 +249,19 @@ describe("MediaPreviewPage", () => {
     );
 
     expect(await screen.findByText("File not found")).not.toBeNull();
+  });
+
+  it("shows an error state on a non-404 failure", async () => {
+    vi.mocked(getMediaById).mockRejectedValue(new AdminApiError(500, "Server error"));
+
+    render(
+      <MemoryRouter initialEntries={["/media/preview/media-1"]}>
+        <Routes>
+          <Route path="/media/preview/:id" element={<MediaPreviewPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Couldn’t load this file. Please try again from the library.")).not.toBeNull();
   });
 });
