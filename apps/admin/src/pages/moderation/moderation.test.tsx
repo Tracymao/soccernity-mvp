@@ -9,6 +9,7 @@ vi.mock("../../api/moderation", async (importOriginal) => {
   return {
     ...actual,
     listReports: vi.fn(),
+    getReportById: vi.fn(),
     actionReport: vi.fn(),
     decideAppeal: vi.fn(),
     escalateReport: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock("../../api/moderation", async (importOriginal) => {
 
 import {
   listReports,
+  getReportById,
   actionReport,
   decideAppeal,
   escalateReport,
@@ -32,6 +34,7 @@ import AppealReviewPage from "./AppealReviewPage";
 afterEach(cleanup);
 beforeEach(() => {
   vi.mocked(listReports).mockReset();
+  vi.mocked(getReportById).mockReset();
   vi.mocked(actionReport).mockReset();
   vi.mocked(decideAppeal).mockReset();
   vi.mocked(escalateReport).mockReset();
@@ -257,7 +260,7 @@ describe("ReportDetailPage", () => {
       const btn = screen.getByRole("button", { name: label });
       expect(btn.hasAttribute("disabled")).toBe(false);
     }
-    expect(findReportById).not.toHaveBeenCalled();
+    expect(getReportById).not.toHaveBeenCalled();
   });
 
   it("actions the report and navigates back to the queue on success", async () => {
@@ -307,22 +310,32 @@ describe("ReportDetailPage", () => {
     expect(screen.queryByRole("button", { name: "Dismiss Report" })).toBeNull();
   });
 
-  it("falls back to findReportById when there is no router state (direct visit / refresh)", async () => {
+  it("falls back to getReportById when there is no router state (direct visit / refresh)", async () => {
     const report = openReport({ id: "direct-visit-report" });
-    vi.mocked(findReportById).mockResolvedValueOnce(report);
+    vi.mocked(getReportById).mockResolvedValueOnce(report);
 
     renderAt(<ReportDetailPage />, "/moderation/reports/:id", `/moderation/reports/${report.id}`);
 
-    await waitFor(() => expect(findReportById).toHaveBeenCalledWith(report.id, "open"));
+    await waitFor(() => expect(getReportById).toHaveBeenCalledWith(report.id));
     expect(await screen.findByText("Abusive language")).not.toBeNull();
   });
 
-  it("shows an honest not-found state when the fallback fetch can't find the report", async () => {
-    vi.mocked(findReportById).mockResolvedValueOnce(null);
+  it("shows an honest not-found state when the real fetch 404s", async () => {
+    vi.mocked(getReportById).mockRejectedValueOnce(new AdminApiError(404, "Report not found"));
 
     renderAt(<ReportDetailPage />, "/moderation/reports/:id", "/moderation/reports/missing-id");
 
     expect(await screen.findByText("Report not found")).not.toBeNull();
+    expect(await screen.findByText(/No report exists with this id/)).not.toBeNull();
+  });
+
+  it("shows the restricted state (not not-found) when a direct visit's fetch itself 403s as vetting-required", async () => {
+    vi.mocked(getReportById).mockRejectedValueOnce(vettingRequiredError());
+
+    renderAt(<ReportDetailPage />, "/moderation/reports/:id", "/moderation/reports/minor-report-id");
+
+    expect(await screen.findByText("Restricted — child-safety vetting required")).not.toBeNull();
+    expect(screen.queryByText("Report not found")).toBeNull();
   });
 
   it("shows severity and 'Concerns a minor' in the Report details card", async () => {

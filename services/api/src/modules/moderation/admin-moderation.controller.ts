@@ -33,6 +33,16 @@ export class AdminModerationController {
     return this.moderationService.listReports(query, admin.sub);
   }
 
+  // The single-resource fetch ReportDetailPage.tsx/AppealReviewPage.tsx
+  // previously had no backend route for — see
+  // ModerationService.getReportById's own header comment for the full
+  // 404-then-child-safety-vetting-gate reasoning (same guard shape as
+  // PATCH reports/:id below).
+  @Get('reports/:id')
+  async getOne(@Param('id') id: string, @CurrentAdmin() admin: AdminAccessTokenPayload) {
+    return this.moderationService.getReportById(id, admin.sub);
+  }
+
   @Patch('reports/:id')
   async action(
     @Param('id') id: string,

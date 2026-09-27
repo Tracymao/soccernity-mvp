@@ -301,6 +301,38 @@ export class ModerationService {
   }
 
   // -------------------------------------------------------------------
+  // GET /admin/moderation/reports/:id (AdminJwtAuthGuard +
+  // AdminRolesGuard, moderator/superadmin only). The single-resource fetch
+  // ReportDetailPage.tsx/AppealReviewPage.tsx previously had no backend
+  // route for (see api/moderation.ts's own former Decision Log candidate
+  // #4 comment, superseded by this route) — a direct visit or a page
+  // refresh no longer needs to bounded-scan the list endpoint for a
+  // matching id.
+  //
+  // Same guard shape as actionReport/decideAppeal: 404 (existence) is
+  // settled first via assertReportExists, THEN — only if the report
+  // concerns a minor — the child-safety-vetting gate is applied. A
+  // non-vetted admin who somehow reaches a concernsMinor report directly
+  // (a stale bookmark, a shared link, router `state` surviving in
+  // history) gets the same 403 (CHILD_SAFETY_VETTING_REQUIRED_CODE) on
+  // GET as they would on PATCH — this is a read of safety-sensitive
+  // content, not a mutation, but the access restriction is the same
+  // either way: listReports already keeps a non-vetted admin from ever
+  // seeing this report's id in the queue at all, so this is purely the
+  // "direct access" backstop, matching actionReport/decideAppeal's own
+  // reasoning.
+  // -------------------------------------------------------------------
+  async getReportById(reportId: string, adminId: string): Promise<Report> {
+    const report = await this.assertReportExists(reportId);
+
+    if (report.concernsMinor) {
+      await this.assertChildSafetyVetted(adminId);
+    }
+
+    return report;
+  }
+
+  // -------------------------------------------------------------------
   // PATCH /admin/moderation/reports/:id (AdminJwtAuthGuard +
   // AdminRolesGuard, moderator/superadmin only). Admin actions a report:
   // content removal, a warning, a suspension, or dismissed. Maps onto
