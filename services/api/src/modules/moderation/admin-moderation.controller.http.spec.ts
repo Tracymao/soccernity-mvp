@@ -20,6 +20,7 @@ describe('AdminModerationController (HTTP layer)', () => {
     listReports: jest.fn(),
     actionReport: jest.fn(),
     decideAppeal: jest.fn(),
+    escalateReport: jest.fn(),
   };
 
   let currentAdmin: { sub: string; role: string; aud: string };
@@ -77,6 +78,16 @@ describe('AdminModerationController (HTTP layer)', () => {
       expect(moderationService.decideAppeal).not.toHaveBeenCalled();
     });
 
+    it('rejects an editor with 403 on PATCH /admin/moderation/reports/:id/escalate', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'editor', aud: 'admin-console' };
+
+      await request(app.getHttpServer())
+        .patch('/admin/moderation/reports/report-1/escalate')
+        .send({ escalationNotes: 'urgent', escalatedToAuthority: false })
+        .expect(403);
+      expect(moderationService.escalateReport).not.toHaveBeenCalled();
+    });
+
     it('allows a moderator through', async () => {
       currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
       moderationService.listReports.mockResolvedValue({ items: [], nextCursor: null });
@@ -107,7 +118,7 @@ describe('AdminModerationController (HTTP layer)', () => {
         .query({ status: 'open', limit: 10 })
         .expect(200);
 
-      expect(moderationService.listReports).toHaveBeenCalledWith({ status: 'open', limit: 10 });
+      expect(moderationService.listReports).toHaveBeenCalledWith({ status: 'open', limit: 10 }, 'admin-1');
       expect(res.body.items).toHaveLength(1);
     });
 
@@ -167,6 +178,70 @@ describe('AdminModerationController (HTTP layer)', () => {
         .patch('/admin/moderation/reports/report-1/appeal')
         .send({ decision: 'maybe' })
         .expect(400);
+    });
+  });
+
+  describe('PATCH /admin/moderation/reports/:id/escalate', () => {
+    beforeEach(() => {
+      currentAdmin = { sub: 'admin-3', role: 'moderator', aud: 'admin-console' };
+    });
+
+    it('escalates a report, forwarding the report id and the escalating admin id', async () => {
+      moderationService.escalateReport.mockResolvedValue({
+        id: 'report-1',
+        escalatedAt: '2026-09-27T00:00:00.000Z',
+        escalatedByAdminId: 'admin-3',
+        escalationNotes: 'flagging for review',
+        escalatedToAuthority: false,
+      });
+
+      const res = await request(app.getHttpServer())
+        .patch('/admin/moderation/reports/report-1/escalate')
+        .send({ escalationNotes: 'flagging for review', escalatedToAuthority: false })
+        .expect(200);
+
+      expect(moderationService.escalateReport).toHaveBeenCalledWith('report-1', 'admin-3', {
+        escalationNotes: 'flagging for review',
+        escalatedToAuthority: false,
+      });
+      expect(res.body.escalatedByAdminId).toBe('admin-3');
+    });
+
+    it('rejects a missing escalationNotes', async () => {
+      await request(app.getHttpServer())
+        .patch('/admin/moderation/reports/report-1/escalate')
+        .send({ escalatedToAuthority: false })
+        .expect(400);
+      expect(moderationService.escalateReport).not.toHaveBeenCalled();
+    });
+
+    it('rejects a missing escalatedToAuthority', async () => {
+      await request(app.getHttpServer())
+        .patch('/admin/moderation/reports/report-1/escalate')
+        .send({ escalationNotes: 'urgent' })
+        .expect(400);
+    });
+
+    it('rejects a non-boolean escalatedToAuthority', async () => {
+      await request(app.getHttpServer())
+        .patch('/admin/moderation/reports/report-1/escalate')
+        .send({ escalationNotes: 'urgent', escalatedToAuthority: 'yes' })
+        .expect(400);
+    });
+
+    it('a superadmin may also escalate', async () => {
+      currentAdmin = { sub: 'admin-4', role: 'superadmin', aud: 'admin-console' };
+      moderationService.escalateReport.mockResolvedValue({ id: 'report-1', escalatedToAuthority: true });
+
+      await request(app.getHttpServer())
+        .patch('/admin/moderation/reports/report-1/escalate')
+        .send({ escalationNotes: 'already reported to the authority', escalatedToAuthority: true })
+        .expect(200);
+
+      expect(moderationService.escalateReport).toHaveBeenCalledWith('report-1', 'admin-4', {
+        escalationNotes: 'already reported to the authority',
+        escalatedToAuthority: true,
+      });
     });
   });
 });

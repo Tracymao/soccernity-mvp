@@ -34,6 +34,17 @@ import { ReportsController } from './reports.controller';
 // age-reclassification.module.ts for the identical shape — a module
 // outside auth/registration providing RegistrationEmailService directly
 // rather than a dedicated email module, since none exists).
+//
+// schema/report-severity-escalation-admin-vetting-application —
+// POST /reports and POST /reports/public both now accept an optional
+// `severity` on submission (defaults 'medium'). ModerationService now
+// also fresh-reads AdminUser.childSafetyVetted (via
+// AdminAuthFoundationModule's already-imported AdminJwtAuthGuard/
+// AdminRolesGuard domain — no new module import needed, PrismaService
+// already covers reading a second model) to gate concernsMinor reports
+// out of the admin queue/actions for non-vetted admins, and adds
+// PATCH /admin/moderation/reports/:id/escalate, restricted to vetted
+// admins. See README.md for the full reasoning.
 @Module({
   imports: [AuthFoundationModule, AdminAuthFoundationModule, AuthRateLimitModule, ConfigModule],
   controllers: [ReportsController, PublicReportsController, AdminModerationController],

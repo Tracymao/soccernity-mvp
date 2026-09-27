@@ -26,21 +26,37 @@ this is not a "flagged, unverified" migration.
 `User` / `Guardian` safeguarding fields are untouched — only `Report` and
 `AdminUser` change (confirmed by schema diff).
 
+**schema/report-severity-escalation-admin-vetting-application
+(backend-api, 2026-09-27)** is the application half of a later schema PR
+(`schema/report-severity-escalation-admin-vetting`) that had added
+`Report.severity`/`escalatedAt`/`escalatedByAdminId`/`escalationNotes`/
+`escalatedToAuthority` and `AdminUser.childSafetyVetted`/`vettedAt`/
+`vettedByAdminId` — again flagged "no application code... yet." This PR
+is that application code: `severity` on submission, the child-safety-
+vetting gate on the admin routes, and the new `.../escalate` route. **Zero
+new schema/migration** — every field was already there. See "`severity`
+on submission" and "The child-safety-vetting gate" sections below.
+
 ---
 
 ## Endpoints
 
 | Method & path | Guards | Purpose |
 |---|---|---|
-| `POST /reports` | `JwtAuthGuard` | Report a post, comment, or user. **Genuine spec-gap addition** — see below. |
-| `POST /reports/public` | none (`@AuthRateLimit()` only) | A non-authenticated party reports content that depicts them or their child. **Genuine spec-gap addition, feat/public-report-submission** — see below. |
+| `POST /reports` | `JwtAuthGuard` | Report a post, comment, or user. Accepts an optional `severity`. **Genuine spec-gap addition** — see below. |
+| `POST /reports/public` | none (`@AuthRateLimit()` only) | A non-authenticated party reports content that depicts them or their child. Accepts an optional `severity`. **Genuine spec-gap addition, feat/public-report-submission** — see below. |
 | `POST /reports/:id/appeal` | `JwtAuthGuard` | The reported user appeals an actioned report. **Genuine spec-gap addition** — see below. |
-| `GET /admin/moderation/reports` | `AdminJwtAuthGuard` + `AdminRolesGuard('moderator', 'superadmin')` | The moderation queue, keyset-paginated, optional `?status=` filter. Section 4.8's literal line. |
-| `PATCH /admin/moderation/reports/:id` | `AdminJwtAuthGuard` + `AdminRolesGuard('moderator', 'superadmin')` | Action a report: content removal, warning, suspension, or dismissed. Section 4.8's literal line. |
-| `PATCH /admin/moderation/reports/:id/appeal` | `AdminJwtAuthGuard` + `AdminRolesGuard('moderator', 'superadmin')` | The second-reviewer decision — upheld or overturned. **Genuine spec-gap addition** — see below. |
+| `GET /admin/moderation/reports` | `AdminJwtAuthGuard` + `AdminRolesGuard('moderator', 'superadmin')` + the child-safety-vetting gate | The moderation queue, keyset-paginated, optional `?status=` filter. Section 4.8's literal line. |
+| `PATCH /admin/moderation/reports/:id` | `AdminJwtAuthGuard` + `AdminRolesGuard('moderator', 'superadmin')` + the child-safety-vetting gate | Action a report: content removal, warning, suspension, or dismissed. Section 4.8's literal line. |
+| `PATCH /admin/moderation/reports/:id/appeal` | `AdminJwtAuthGuard` + `AdminRolesGuard('moderator', 'superadmin')` + the child-safety-vetting gate | The second-reviewer decision — upheld or overturned. **Genuine spec-gap addition** — see below. |
+| `PATCH /admin/moderation/reports/:id/escalate` | `AdminJwtAuthGuard` + `AdminRolesGuard('moderator', 'superadmin')` + the child-safety-vetting gate | Records that a vetted admin has escalated the report (internally and/or to an external authority). **Genuine spec-gap addition, schema/report-severity-escalation-admin-vetting-application** — see below. |
 
-All three admin routes are the first role-gated admin surface in this
-codebase — see "The role-gating guard" below.
+All four admin routes are the first role-gated admin surface in this
+codebase — see "The role-gating guard" below. Three of them are ALSO the
+first surface gated on `AdminUser.childSafetyVetted` — see "The
+child-safety-vetting gate" below. Setting that flag on another admin is a
+SEPARATE endpoint, `PATCH /admin/users/:id/child-safety-vetting`
+(superadmin-only) — see `modules/admin-staff-vetting/README.md`.
 
 ---
 
@@ -181,6 +197,109 @@ admin roles, so a role change taking effect only on the admin's next
 login (not retroactively mid-session) was judged an acceptable trade-off
 for this PR. Flagged as a judgment call, not silently assumed to be
 "obviously fine."
+
+---
+
+## `severity` on submission (schema/report-severity-escalation-admin-vetting-application)
+
+`Report.severity` (`low | medium | high | critical`, schema default
+`'medium'`) was laid down as schema groundwork with "no application code
+reads or writes this yet." Both `POST /reports` and `POST /reports/public`
+now accept an optional `severity` field; an omitted value is matched
+explicitly at the service layer to `DEFAULT_REPORT_SEVERITY` ('medium',
+`moderation.constants.ts`) rather than left to Prisma's own DB-level
+default, so the documented API behaviour doesn't depend on a Prisma
+undefined-vs-omitted nuance.
+
+Deliberately **optional on both routes, not required** — a reporter
+(authenticated or not) rarely has the context to assess severity
+reliably; that's precisely what the moderation queue a vetted/unvetted
+admin reviews exists to determine. This is a different judgment call from
+`concernsMinor` on the public route, which **is** required there: a
+non-authenticated reporter flagging content that depicts them or their
+child is exactly the caller who can state *that* reliably.
+
+---
+
+## The child-safety-vetting gate (`ModerationService.assertChildSafetyVetted`)
+
+`AdminUser.childSafetyVetted`/`vettedAt`/`vettedByAdminId` were laid down
+as schema groundwork with "no application code reads or writes any of
+these three fields yet — no vetting endpoint, no gate on Report review
+keyed to this flag." This PR is that gate (the vetting endpoint itself —
+`PATCH /admin/users/:id/child-safety-vetting` — lives in a separate
+module, `modules/admin-staff-vetting/`).
+
+**Fresh-read from Postgres on every call, never trusted from the JWT —
+the same Section 5.7 discipline `GuardianConsentGuard` already applies
+for the User side.** `AdminAccessTokenPayload` structurally carries only
+`{ sub, role, aud }` (`admin-token.types.ts`) — no safety-sensitive state.
+`childSafetyVetted` is exactly that kind of state, so
+`ModerationService.isChildSafetyVetted`/`assertChildSafetyVetted` always
+read `AdminUser.childSafetyVetted` fresh, per request, rather than
+caching or trusting anything from a prior request or the token itself.
+This is a **deliberate divergence from `AdminRolesGuard`'s own trust
+model** (which reads `role` off the already-verified token and does NOT
+re-read Postgres — see that guard's own header comment) — role
+assignment and child-safety vetting are treated differently on purpose:
+Section 5.7's fresh-read discipline is about safety-sensitive state, and
+a report concerning a minor being reviewable only by someone whose
+real-world vetting status is current is squarely that, in a way an
+admin's role label is not.
+
+**Applies REGARDLESS of role — a non-vetted superadmin is blocked exactly
+the same as a non-vetted moderator.** Vetting is an orthogonal axis to
+role, not a stronger role. Proven directly, not just asserted: both the
+mocked and e2e suites include a case where an **unvetted superadmin**
+still gets a `concernsMinor` report filtered out of the list / 403'd on
+direct access.
+
+**Two enforcement shapes, covering both ways an admin can reach a
+report:**
+1. **`GET /admin/moderation/reports` — filtering.** A non-vetted admin
+   never sees a `Report` row where `concernsMinor` is `true` at all; it
+   is excluded from the query (`conditions.push({ concernsMinor: false
+   })`) rather than returned and then redacted, so no partial/masked row
+   shape is ever needed. A `?status=` filter still ANDs alongside it
+   normally.
+2. **`PATCH /admin/moderation/reports/:id` and
+   `.../:id/appeal` — "403 on direct access."** Existence (404) is always
+   settled first (`assertReportExists`), matching this codebase's
+   established "404 before 403" convention (see
+   `FeedService.deleteComment`/`GrassrootsService`'s own precedent). Then,
+   if — and only if — `report.concernsMinor` is `true`, the caller's own
+   vetting status is checked; a non-vetted admin is rejected with a `403`
+   carrying a distinct, machine-readable `code`
+   (`CHILD_SAFETY_VETTING_REQUIRED_CODE`, same pattern
+   `GUARDIAN_CONSENT_PENDING_CODE` already established), **before** any
+   further business-state check (`actionReport`'s `status !== 'open'` 409,
+   `decideAppeal`'s Decision Log #138 same-admin check) — so an
+   unauthorized admin never learns the report's own state either. A
+   report where `concernsMinor` is `false` (the common case) never
+   triggers an `AdminUser` lookup at all — proven directly in the mocked
+   suite.
+
+**`PATCH /admin/moderation/reports/:id/escalate` is gated differently —
+it ALWAYS requires vetting, regardless of the target report's own
+`concernsMinor` value.** A report may need escalating *precisely because*
+it wasn't flagged as concerning a minor at submission time but turns out,
+on review, to be one — gating escalate on the (possibly wrong)
+`concernsMinor` flag would defeat the point. Sets
+`escalatedAt`/`escalatedByAdminId`/`escalationNotes`/`escalatedToAuthority`
+(`Report`'s own schema comment on the escalation trail) — this endpoint
+**records** that a human has escalated something outside (or within)
+Soccernity; it does not itself contact anyone. Deliberately independent
+of `Report.status`/`reviewedByAdminId`/`appealReviewedByAdminId` —
+escalating is not the same act as actioning or appeal-reviewing, and may
+be called on a report in any status (open, reviewed, or actioned).
+**Deliberately re-callable, not one-shot**: `escalatedToAuthority` is
+admin-supplied on every call (never defaulted), so a vetted admin can
+escalate internally first (`escalatedToAuthority: false`) and, once they
+have actually contacted an external authority, call the same endpoint
+again to flip it `true` — each call overwrites the trail to reflect the
+MOST RECENT escalation action, the same "no append-only audit trail
+across multiple cycles" disclosed limitation this module's README already
+states for the review/appeal trail (see that section below).
 
 ---
 
@@ -412,20 +531,98 @@ ran — not a flagged, unconfirmed migration. `npx tsc --noEmit`,
 
 ---
 
+## Testing (schema/report-severity-escalation-admin-vetting-application — severity, the child-safety-vetting gate, escalate)
+
+**Mocked suite** — `moderation.service.spec.ts` gained: severity
+default/explicit-override cases for both `createReport`/`createPublicReport`;
+a dedicated `listReports` sub-block proving the vetted/non-vetted/no-row
+filtering behavior (including "an admin with no `AdminUser` row at all —
+a since-removed account behind a still-valid token — is treated as
+non-vetted", the same defensive posture `GuardianConsentGuard` already
+takes for its own analogous case); `actionReport`/`decideAppeal`
+sub-blocks proving the 403-before-other-checks ordering, that a
+`concernsMinor: false` report never even queries `AdminUser`, and that a
+vetted admin succeeds; and a new `escalateReport` describe block (404,
+403 for non-vetted, both `escalatedToAuthority` values, and
+status-independence). `admin-moderation.controller.http.spec.ts` gained
+an editor-403 case and DTO-validation/role-gating coverage for the new
+`.../escalate` route, and its existing `listReports` call-shape
+assertion was updated for the new `adminId` parameter.
+
+**A new module, `admin-staff-vetting`, was added with its own full
+mocked + e2e coverage** — see `modules/admin-staff-vetting/README.md`
+for its own Testing section; not duplicated here.
+
+**`test/moderation.e2e-spec.ts` gained**: a severity default/explicit-value
+case against real Postgres; a `child-safety-vetting gate` describe block
+proving, against real seeded `AdminUser` rows (including a `concernsMinor:
+true` `Report` seeded directly via Prisma — see that block's own header
+comment for why `POST /reports/public` itself is deliberately NOT used
+here, the same shared-`'auth'`-throttler-avoidance precedent
+`feed-reactions.e2e-spec.ts`'s own `createUser()` helper already
+established) that an unvetted moderator AND an unvetted superadmin are
+both blocked (list-filtered and 403'd on direct access) while a vetted
+moderator/superadmin is not; and an `escalate` describe block proving the
+403/200 split, that the trail persists in real Postgres, that it is
+genuinely re-callable, and that it works regardless of report status.
+
+**A new e2e file, `test/admin-staff-vetting.e2e-spec.ts`, was added** —
+hits `test/README.md`'s third e2e trigger: `AdminUser.vettedByAdminId` is
+a genuinely NEW self-relation FK (`AdminUser` → `AdminUser`) that no
+application code had ever written to before this PR. Proves the real
+`AdminRolesGuard('superadmin')` genuinely rejects a **moderator**, not
+just an editor (the only negative case most other role-gated e2e tests in
+this codebase prove) — vetting decisions being superadmin-only, not
+moderator-eligible like every other role-gated route in this module, is
+the one place this PR's role-gating diverges from
+`AdminModerationController`'s own `('moderator', 'superadmin')` pattern.
+Its final test threads the two modules together end to end: a real
+`concernsMinor` report, blocked for an unvetted moderator both in the
+list and on direct action, becomes visible/actionable by that **same**
+moderator (same access token, no re-login) the moment a superadmin calls
+`PATCH /admin/users/:id/child-safety-vetting` — proving the gate reads
+fresh from Postgres on the very next request, not cached in the token.
+
+**Verification, all re-measured directly (computed from the exact diff
+of test cases added, cross-checked against two full, real runs of the
+complete suite before opening this PR — not estimated)**: mocked suite
+**102 suites / 1367 tests, 0 failures → 104 suites / 1403 tests, 0
+failures** (2 new suites — both in `admin-staff-vetting/` — 36 new tests:
+18 in `moderation.service.spec.ts`, 6 in
+`admin-moderation.controller.http.spec.ts`, 4 in
+`admin-staff-vetting.service.spec.ts`, 8 in
+`admin-staff-vetting.controller.http.spec.ts`). Full e2e suite (real
+Postgres/Redis via docker-compose, `npm run test:e2e`) **26 suites / 250
+tests, 0 failures → 27 suites / 263 tests, 0 failures** (1 new suite —
+`test/admin-staff-vetting.e2e-spec.ts`, 6 new tests — plus 7 new tests
+added to the existing `test/moderation.e2e-spec.ts`; every pre-existing
+e2e suite re-run and still green alongside both, not just the new/changed
+files in isolation). **Zero `schema.prisma` diff, zero new migration** —
+every field this PR reads/writes on `Report`/`AdminUser` already existed
+from `schema/report-severity-escalation-admin-vetting`. `npx tsc --noEmit`,
+`npm run lint`, and `nest build` are all clean.
+
+---
+
 ## Files
 
 ```
 moderation.module.ts                — wires both foundation modules + both controllers
 moderation.service.ts                — ModerationService, all business logic
-moderation.constants.ts              — REPORT_TARGET_TYPES, REPORT_ACTIONS, APPEAL_DECISIONS, page sizes
+moderation.constants.ts              — REPORT_TARGET_TYPES, REPORT_ACTIONS, APPEAL_DECISIONS, REPORT_SEVERITIES,
+                                        DEFAULT_REPORT_SEVERITY, CHILD_SAFETY_VETTING_REQUIRED_CODE, page sizes
 cursor.util.ts                       — this module's own (createdAt, id) keyset cursor
 reports.controller.ts                — user-facing: POST /reports, POST /reports/:id/appeal
-admin-moderation.controller.ts       — admin-facing: GET/PATCH /admin/moderation/reports*
+public-reports.controller.ts         — public: POST /reports/public
+admin-moderation.controller.ts       — admin-facing: GET/PATCH /admin/moderation/reports*, PATCH .../escalate
 dto/create-report.dto.ts
+dto/create-public-report.dto.ts
 dto/appeal-report.dto.ts
 dto/action-report.dto.ts
 dto/appeal-decision.dto.ts
+dto/escalate-report.dto.ts
 dto/list-reports-query.dto.ts
 ../admin/guards/admin-roles.decorator.ts — @AdminRoles(...), new shared admin infra
 ../admin/guards/admin-roles.guard.ts     — AdminRolesGuard, new shared admin infra
+../admin-staff-vetting/                  — PATCH /admin/users/:id/child-safety-vetting (own module, own README)
 ```

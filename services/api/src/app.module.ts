@@ -24,6 +24,7 @@ import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
 import { AdminContentModule } from './modules/admin-content/admin-content.module';
 import { AdminUsersModule } from './modules/admin-users/admin-users.module';
+import { AdminStaffVettingModule } from './modules/admin-staff-vetting/admin-staff-vetting.module';
 import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module';
 import { MediaModule } from './modules/media/media.module';
 import { BlogModule } from './modules/blog/blog.module';
@@ -133,6 +134,22 @@ import { SearchModule } from './modules/search/search.module';
     // closed in AuthService.reactivateAccount — see that file's own
     // comment). See modules/admin-users/README.md.
     AdminUsersModule,
+    // schema/report-severity-escalation-admin-vetting-application —
+    // PATCH /admin/users/:id/child-safety-vetting, superadmin-only. The
+    // application half of AdminUser.childSafetyVetted/vettedAt/
+    // vettedByAdminId (schema groundwork laid by
+    // schema/report-severity-escalation-admin-vetting, flagged there as
+    // unread/unwritten by any endpoint). Deliberately its own module —
+    // NOT AdminModule (Decision Log #54 scopes that to Admin Console
+    // account/auth/profile) and NOT AdminUsersModule (a different
+    // resource, platform User management, that happens to share this
+    // `admin/users` URL prefix — see
+    // modules/admin-staff-vetting/admin-staff-vetting.controller.ts's
+    // own header comment for the disclosed naming overlap). Pairs with
+    // ModerationModule's own childSafetyVetted gate on
+    // GET/PATCH /admin/moderation/reports* and the new
+    // PATCH .../escalate route — see modules/moderation/README.md.
+    AdminStaffVettingModule,
     // sprint-5/admin-users-dashboard-backend (same PR) — Section 4.8's
     // Dashboard line, GET /admin/dashboard/stats. A separate module from
     // AdminUsersModule on purpose (a cross-model aggregate-reporting

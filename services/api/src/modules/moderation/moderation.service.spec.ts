@@ -26,6 +26,17 @@ function buildPrismaMock() {
     user: {
       findUnique: jest.fn(),
     },
+    // schema/report-severity-escalation-admin-vetting-application —
+    // ModerationService now fresh-reads AdminUser.childSafetyVetted for
+    // the concernsMinor gate / escalate's own vetting requirement.
+    // Defaults to "vetted" so every PRE-EXISTING test in this file that
+    // doesn't care about vetting keeps behaving exactly as before
+    // (listReports adds no extra filter, actionReport/decideAppeal never
+    // trip the gate since report()'s own default concernsMinor is falsy)
+    // — only the dedicated new tests below override this mock.
+    adminUser: {
+      findUnique: jest.fn().mockResolvedValue({ childSafetyVetted: true }),
+    },
     notification: {
       create: jest.fn(),
     },
@@ -90,9 +101,46 @@ describe('ModerationService', () => {
       });
 
       expect(prisma.report.create).toHaveBeenCalledWith({
-        data: { reporterId: 'reporter-1', targetType: 'post', targetId: 'post-1', reason: 'spam' },
+        data: {
+          reporterId: 'reporter-1',
+          targetType: 'post',
+          targetId: 'post-1',
+          reason: 'spam',
+          severity: 'medium',
+        },
       });
       expect(result.id).toBe('report-1');
+    });
+
+    it('defaults severity to medium when omitted', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.report.create as jest.Mock).mockResolvedValue(report({ severity: 'medium' }));
+      const service = buildService(prisma);
+
+      await service.createReport('reporter-1', { targetType: 'post', targetId: 'post-1', reason: 'spam' });
+
+      expect(prisma.report.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ severity: 'medium' }) }),
+      );
+    });
+
+    it('forwards an explicit severity when given', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.report.create as jest.Mock).mockResolvedValue(report({ severity: 'critical' }));
+      const service = buildService(prisma);
+
+      await service.createReport('reporter-1', {
+        targetType: 'post',
+        targetId: 'post-1',
+        reason: 'spam',
+        severity: 'critical',
+      });
+
+      expect(prisma.report.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ severity: 'critical' }) }),
+      );
     });
 
     it('404s when the reported post does not exist', async () => {
@@ -135,7 +183,13 @@ describe('ModerationService', () => {
       await service.createReport('reporter-1', { targetType: 'user', targetId: 'user-9', reason: 'harassment' });
 
       expect(prisma.report.create).toHaveBeenCalledWith({
-        data: { reporterId: 'reporter-1', targetType: 'user', targetId: 'user-9', reason: 'harassment' },
+        data: {
+          reporterId: 'reporter-1',
+          targetType: 'user',
+          targetId: 'user-9',
+          reason: 'harassment',
+          severity: 'medium',
+        },
       });
     });
   });
@@ -252,12 +306,12 @@ describe('ModerationService', () => {
   // ---------- GET /admin/moderation/reports ----------
 
   describe('listReports', () => {
-    it('lists reports newest-first with the default page size and no status filter', async () => {
+    it('lists reports newest-first with the default page size and no status filter (vetted admin, no concernsMinor filter added)', async () => {
       const prisma = buildPrismaMock();
       (prisma.report.findMany as jest.Mock).mockResolvedValue([report()]);
       const service = buildService(prisma);
 
-      const result = await service.listReports({});
+      const result = await service.listReports({}, 'admin-1');
 
       expect(prisma.report.findMany).toHaveBeenCalledWith({
         where: {},
@@ -273,7 +327,7 @@ describe('ModerationService', () => {
       (prisma.report.findMany as jest.Mock).mockResolvedValue([]);
       const service = buildService(prisma);
 
-      await service.listReports({ status: 'open' });
+      await service.listReports({ status: 'open' }, 'admin-1');
 
       expect(prisma.report.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { AND: [{ status: 'open' }] } }),
@@ -288,11 +342,65 @@ describe('ModerationService', () => {
       (prisma.report.findMany as jest.Mock).mockResolvedValue(rows);
       const service = buildService(prisma);
 
-      const result = await service.listReports({ limit: 2 });
+      const result = await service.listReports({ limit: 2 }, 'admin-1');
 
       expect(result.items).toHaveLength(2);
       expect(result.nextCursor).toBe(
         encodeModerationCursor({ createdAt: rows[1].createdAt, id: rows[1].id }),
+      );
+    });
+
+    // ---------- child-safety-vetting gate (schema/report-severity-escalation-admin-vetting-application) ----------
+
+    it('freshly checks the CALLING admin (not a cached role) via AdminUser.childSafetyVetted', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findMany as jest.Mock).mockResolvedValue([]);
+      const service = buildService(prisma);
+
+      await service.listReports({}, 'admin-42');
+
+      expect(prisma.adminUser.findUnique).toHaveBeenCalledWith({
+        where: { id: 'admin-42' },
+        select: { childSafetyVetted: true },
+      });
+    });
+
+    it('a NON-vetted admin gets an implicit concernsMinor: false filter ANDed in, regardless of role (role is not even read here)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: false });
+      (prisma.report.findMany as jest.Mock).mockResolvedValue([]);
+      const service = buildService(prisma);
+
+      await service.listReports({}, 'unvetted-admin');
+
+      expect(prisma.report.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { AND: [{ concernsMinor: false }] } }),
+      );
+    });
+
+    it('an admin with no AdminUser row at all (a since-removed account behind a still-valid token) is treated as non-vetted', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.report.findMany as jest.Mock).mockResolvedValue([]);
+      const service = buildService(prisma);
+
+      await service.listReports({}, 'ghost-admin');
+
+      expect(prisma.report.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { AND: [{ concernsMinor: false }] } }),
+      );
+    });
+
+    it('a VETTED admin gets no concernsMinor filter added, ANDed alongside a real status filter', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: true });
+      (prisma.report.findMany as jest.Mock).mockResolvedValue([]);
+      const service = buildService(prisma);
+
+      await service.listReports({ status: 'open' }, 'vetted-admin');
+
+      expect(prisma.report.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { AND: [{ status: 'open' }] } }),
       );
     });
   });
@@ -384,6 +492,54 @@ describe('ModerationService', () => {
       await service.actionReport('report-1', 'admin-1', { action: 'warning_issued' });
 
       expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+    });
+
+    // ---------- child-safety-vetting gate ----------
+
+    it('403s a NON-vetted admin acting on a report where concernsMinor is true, regardless of role, and never mutates the report', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'open', concernsMinor: true }));
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: false });
+      const service = buildService(prisma);
+
+      await expect(
+        service.actionReport('report-1', 'unvetted-admin', { action: 'content_removed' }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.report.update).not.toHaveBeenCalled();
+      expect(prisma.adminUser.findUnique).toHaveBeenCalledWith({
+        where: { id: 'unvetted-admin' },
+        select: { childSafetyVetted: true },
+      });
+    });
+
+    it('never checks vetting at all when concernsMinor is false (the common case)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', concernsMinor: false, targetType: 'user', targetId: 'user-1' }),
+      );
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
+      const service = buildService(prisma);
+
+      await service.actionReport('report-1', 'any-admin', { action: 'dismissed' });
+
+      expect(prisma.adminUser.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('a VETTED admin may action a report where concernsMinor is true', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', concernsMinor: true, targetType: 'user', targetId: 'user-1' }),
+      );
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: true });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'actioned', concernsMinor: true }));
+      const service = buildService(prisma);
+
+      const result = await service.actionReport('report-1', 'vetted-admin', { action: 'content_removed' });
+
+      expect(result.status).toBe('actioned');
+      expect(prisma.report.update).toHaveBeenCalled();
     });
   });
 
@@ -500,6 +656,139 @@ describe('ModerationService', () => {
 
       expect(prisma.notification.create).not.toHaveBeenCalled();
     });
+
+    // ---------- child-safety-vetting gate ----------
+
+    it('403s a NON-vetted admin reviewing an appeal on a report where concernsMinor is true, before Decision Log #138 same-admin check even runs', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({
+          status: 'actioned',
+          appealStatus: 'pending',
+          reviewedByAdminId: 'admin-1',
+          concernsMinor: true,
+        }),
+      );
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: false });
+      const service = buildService(prisma);
+
+      // admin-1 is ALSO the original reviewer here (would otherwise also
+      // 403 under #138) -- the vetting gate is checked first and its
+      // own, distinct message/code is what's expected.
+      await expect(
+        service.decideAppeal('report-1', 'admin-1', { decision: 'upheld' }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.report.update).not.toHaveBeenCalled();
+    });
+
+    it('a VETTED admin may review an appeal on a report where concernsMinor is true', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({
+          status: 'actioned',
+          appealStatus: 'pending',
+          reviewedByAdminId: 'admin-1',
+          concernsMinor: true,
+        }),
+      );
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: true });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ appealStatus: 'upheld', concernsMinor: true }));
+      const service = buildService(prisma);
+
+      const result = await service.decideAppeal('report-1', 'admin-2', { decision: 'upheld' });
+
+      expect(result.appealStatus).toBe('upheld');
+    });
+  });
+
+  // ---------- PATCH /admin/moderation/reports/:id/escalate ----------
+
+  describe('escalateReport', () => {
+    it('404s when the report does not exist, and never checks vetting', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma);
+
+      await expect(
+        service.escalateReport('missing', 'admin-1', { escalationNotes: 'urgent', escalatedToAuthority: false }),
+      ).rejects.toThrow(NotFoundException);
+      expect(prisma.adminUser.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('403s a NON-vetted admin, regardless of the report\'s own concernsMinor value', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ concernsMinor: false }));
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: false });
+      const service = buildService(prisma);
+
+      await expect(
+        service.escalateReport('report-1', 'unvetted-admin', {
+          escalationNotes: 'needs a second look',
+          escalatedToAuthority: false,
+        }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.report.update).not.toHaveBeenCalled();
+    });
+
+    it('a vetted admin escalates internally (escalatedToAuthority: false) — sets the full trail', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report());
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: true });
+      (prisma.report.update as jest.Mock).mockResolvedValue(
+        report({ escalatedAt: new Date(), escalatedByAdminId: 'vetted-admin', escalatedToAuthority: false }),
+      );
+      const service = buildService(prisma);
+
+      const result = await service.escalateReport('report-1', 'vetted-admin', {
+        escalationNotes: 'flagging for the designated child-safety lead',
+        escalatedToAuthority: false,
+      });
+
+      expect(prisma.report.update).toHaveBeenCalledWith({
+        where: { id: 'report-1' },
+        data: {
+          escalatedAt: expect.any(Date),
+          escalatedByAdminId: 'vetted-admin',
+          escalationNotes: 'flagging for the designated child-safety lead',
+          escalatedToAuthority: false,
+        },
+      });
+      expect(result.escalatedToAuthority).toBe(false);
+    });
+
+    it('a vetted admin records that they have already made an external report (escalatedToAuthority: true)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report());
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: true });
+      (prisma.report.update as jest.Mock).mockResolvedValue(
+        report({ escalatedToAuthority: true }),
+      );
+      const service = buildService(prisma);
+
+      await service.escalateReport('report-1', 'vetted-admin', {
+        escalationNotes: 'reported to the relevant authority this morning',
+        escalatedToAuthority: true,
+      });
+
+      expect(prisma.report.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ escalatedToAuthority: true }) }),
+      );
+    });
+
+    it('escalates a report regardless of its current status (not gated on open/reviewed/actioned)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: true });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
+      const service = buildService(prisma);
+
+      await expect(
+        service.escalateReport('report-1', 'vetted-admin', {
+          escalationNotes: 'still escalating after the fact',
+          escalatedToAuthority: false,
+        }),
+      ).resolves.toBeDefined();
+    });
   });
 
   // ---------- POST /reports/public ----------
@@ -532,10 +821,39 @@ describe('ModerationService', () => {
           targetId: 'post-1',
           reason: dto.reason,
           concernsMinor: true,
+          severity: 'medium',
         },
       });
       expect(result.reporterId).toBeNull();
       expect(result.concernsMinor).toBe(true);
+    });
+
+    it('defaults severity to medium when omitted', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.report.create as jest.Mock).mockResolvedValue(report({ reporterId: null, severity: 'medium' }));
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await service.createPublicReport(dto);
+
+      expect(prisma.report.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ severity: 'medium' }) }),
+      );
+    });
+
+    it('forwards an explicit severity when given', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.report.create as jest.Mock).mockResolvedValue(report({ reporterId: null, severity: 'high' }));
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await service.createPublicReport({ ...dto, severity: 'high' });
+
+      expect(prisma.report.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ severity: 'high' }) }),
+      );
     });
 
     it('404s when the reported target does not exist, and never creates a Report or sends an email', async () => {

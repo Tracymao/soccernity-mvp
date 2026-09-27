@@ -1,5 +1,5 @@
-import { IsBoolean, IsEmail, IsIn, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
-import { REPORT_TARGET_TYPES, ReportTargetType } from '../moderation.constants';
+import { IsBoolean, IsEmail, IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { REPORT_SEVERITIES, REPORT_TARGET_TYPES, ReportSeverity, ReportTargetType } from '../moderation.constants';
 
 // POST /reports/public — a public, unauthenticated report route for a
 // non-Soccernity-account party (a parent, a school, a member of the
@@ -46,4 +46,16 @@ export class CreatePublicReportDto {
   // for every OTHER route that doesn't set it yet.
   @IsBoolean()
   concernsMinor!: boolean;
+
+  // Optional — defaults to 'medium' at the service layer when omitted,
+  // same as CreateReportDto's own severity field (see
+  // moderation.constants.ts's DEFAULT_REPORT_SEVERITY). Left optional
+  // here too rather than required: a non-authenticated reporter can
+  // reliably say WHETHER a minor is concerned (concernsMinor, required),
+  // but assessing an abstract severity tier is a different, harder ask —
+  // that's precisely what the moderation queue/vetted-admin review this
+  // report enters is for.
+  @IsOptional()
+  @IsIn(REPORT_SEVERITIES)
+  severity?: ReportSeverity;
 }
