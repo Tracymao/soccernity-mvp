@@ -8,6 +8,11 @@ import { ServerClient } from 'postmark';
 // only ever emailed the guardian, so a minor whose account was restricted
 // had no way to learn what had happened to it. "Notify the minor plainly
 // why" is a safeguarding requirement of that PR's brief, not a nicety.
+// feat/public-report-submission added 'public-report-acknowledgement' —
+// see RegistrationEmailService.sendPublicReportAcknowledgementEmail's
+// own comment for why this generic email-service abstraction (built for
+// the registration/guardian-consent flows) is the right place for a
+// moderation-adjacent email too, rather than a new service.
 export type RegistrationEmailTemplate =
   | 'verify-email'
   | 'guardian-consent'
@@ -16,7 +21,8 @@ export type RegistrationEmailTemplate =
   | 'guardian-consent-withdrawn'
   | 'guardian-consent-reminder'
   | 'guardian-consent-expired'
-  | 'guardian-minor-turned-18';
+  | 'guardian-minor-turned-18'
+  | 'public-report-acknowledgement';
 
 export interface OutboundRegistrationEmail {
   to: string;
@@ -177,6 +183,34 @@ export class RegistrationEmailService {
     });
   }
 
+  // ---------------------------------------------------------------
+  // feat/public-report-submission
+  // ---------------------------------------------------------------
+
+  // To the non-authenticated REPORTER (a parent, a school, a member of
+  // the public with no Soccernity account) who just filed a report via
+  // POST /reports/public. This service already existed as this
+  // codebase's one generic "queue a transactional email" abstraction
+  // (registration + the whole guardian-consent lifecycle), so this
+  // reuses it rather than standing up a second one for one moderation
+  // email — the same reasoning age-reclassification-sweep.service.ts
+  // already applied when it needed to send a guardian a plain
+  // notification email outside the registration flow proper.
+  //
+  // Deliberately makes no promise about outcome or timeline beyond "a
+  // moderator will review this" — the report itself may take any amount
+  // of time to review, may be dismissed, or may be escalated (see
+  // Report's own severity/escalation fields), and none of that is known
+  // at submission time.
+  async sendPublicReportAcknowledgementEmail(to: string): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: 'We received your report',
+      template: 'public-report-acknowledgement',
+      data: {},
+    });
+  }
+
   private async dispatch(email: OutboundRegistrationEmail): Promise<void> {
     if (!this.isConfigured) {
       this.logger.log(
@@ -312,6 +346,12 @@ function renderTextBody(template: RegistrationEmailTemplate, data: Record<string
 ` +
         `— The Soccernity team`
       );
+    case 'public-report-acknowledgement':
+      return (
+        `Thank you for letting us know.\n\n` +
+        `We've received your report and a moderator will review it. We won't be able to share the outcome or a timeline, but we take every report seriously.\n\n` +
+        `If you have more information to add, you can reply to this email.`
+      );
     default:
       throw new Error(`Unknown registration email template: ${template as string}`);
   }
@@ -370,6 +410,12 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
         `<p>If you have any questions about this change, or about the account generally, you can reach us at support@soccernity.com.</p>` +
         `<p>Thanks for being part of ${data.minorDisplayName}'s Soccernity journey so far.</p>` +
         `<p>— The Soccernity team</p>`
+      );
+    case 'public-report-acknowledgement':
+      return (
+        `<p>Thank you for letting us know.</p>` +
+        `<p>We've received your report and a moderator will review it. We won't be able to share the outcome or a timeline, but we take every report seriously.</p>` +
+        `<p>If you have more information to add, you can reply to this email.</p>`
       );
     default:
       throw new Error(`Unknown registration email template: ${template as string}`);

@@ -2,14 +2,17 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, Report } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
 import { decodeModerationCursor, encodeModerationCursor } from './cursor.util';
 import { ActionReportDto } from './dto/action-report.dto';
 import { AppealDecisionDto } from './dto/appeal-decision.dto';
 import { AppealReportDto } from './dto/appeal-report.dto';
+import { CreatePublicReportDto } from './dto/create-public-report.dto';
 import { CreateReportDto } from './dto/create-report.dto';
 import { ListReportsQueryDto } from './dto/list-reports-query.dto';
 import { MODERATION_DEFAULT_PAGE_SIZE, MODERATION_MAX_PAGE_SIZE } from './moderation.constants';
@@ -26,7 +29,12 @@ export interface ReportListPage {
 // surface — Section 4 never defines either route.
 @Injectable()
 export class ModerationService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(ModerationService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly emailService: RegistrationEmailService,
+  ) {}
 
   // -------------------------------------------------------------------
   // POST /reports (user-facing, JwtAuthGuard only — see README.md for why
@@ -43,6 +51,42 @@ export class ModerationService {
         reason: dto.reason,
       },
     });
+  }
+
+  // -------------------------------------------------------------------
+  // POST /reports/public (no guard at all — see PublicReportsController's
+  // own header comment). For a non-authenticated party (a parent, a
+  // school, a member of the public) to flag content that depicts them or
+  // their child without first having to register. reporterId is left
+  // null on the created row — see Report's own schema comment on why
+  // reporterId/reporter became optional, and README.md for this route's
+  // Decision Log candidate.
+  // -------------------------------------------------------------------
+  async createPublicReport(dto: CreatePublicReportDto): Promise<Report> {
+    await this.assertReportTargetExists(dto.targetType, dto.targetId);
+
+    const report = await this.prisma.report.create({
+      data: {
+        reporterId: null,
+        reporterContactEmail: dto.reporterContactEmail,
+        targetType: dto.targetType,
+        targetId: dto.targetId,
+        reason: dto.reason,
+        concernsMinor: dto.concernsMinor,
+      },
+    });
+
+    // Same "must never block on / fail because of email delivery"
+    // discipline as RegistrationService's own fire-and-forget sends — a
+    // failed acknowledgment must not fail the report submission itself,
+    // and the caller here has no session to retry against anyway.
+    void this.emailService.sendPublicReportAcknowledgementEmail(dto.reporterContactEmail).catch((err: Error) => {
+      this.logger.warn(
+        `Failed to queue public-report acknowledgement email for report ${report.id}: ${err.message}`,
+      );
+    });
+
+    return report;
   }
 
   // A well-formed but non-existent target must 404, never a raw FK-less

@@ -38,6 +38,20 @@ function buildPrismaMock() {
   return prisma;
 }
 
+// feat/public-report-submission — ModerationService now takes a
+// RegistrationEmailService too (for POST /reports/public's acknowledgment
+// send). Same mocking convention as
+// guardian-consent.service.spec.ts's own emailService fixture.
+function buildEmailServiceMock() {
+  return {
+    sendPublicReportAcknowledgementEmail: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
+function buildService(prisma: PrismaService, emailService = buildEmailServiceMock()): ModerationService {
+  return new ModerationService(prisma, emailService as never);
+}
+
 function report(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: 'report-1',
@@ -68,7 +82,7 @@ describe('ModerationService', () => {
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
       (prisma.report.create as jest.Mock).mockResolvedValue(report());
 
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
       const result = await service.createReport('reporter-1', {
         targetType: 'post',
         targetId: 'post-1',
@@ -84,7 +98,7 @@ describe('ModerationService', () => {
     it('404s when the reported post does not exist', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       await expect(
         service.createReport('reporter-1', { targetType: 'post', targetId: 'missing', reason: 'spam' }),
@@ -95,7 +109,7 @@ describe('ModerationService', () => {
     it('404s when the reported comment does not exist', async () => {
       const prisma = buildPrismaMock();
       (prisma.comment.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       await expect(
         service.createReport('reporter-1', { targetType: 'comment', targetId: 'missing', reason: 'abuse' }),
@@ -105,7 +119,7 @@ describe('ModerationService', () => {
     it('404s when the reported user does not exist', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       await expect(
         service.createReport('reporter-1', { targetType: 'user', targetId: 'missing', reason: 'harassment' }),
@@ -116,7 +130,7 @@ describe('ModerationService', () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-9' });
       (prisma.report.create as jest.Mock).mockResolvedValue(report({ targetType: 'user', targetId: 'user-9' }));
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       await service.createReport('reporter-1', { targetType: 'user', targetId: 'user-9', reason: 'harassment' });
 
@@ -132,7 +146,7 @@ describe('ModerationService', () => {
     it('404s when the report does not exist', async () => {
       const prisma = buildPrismaMock();
       (prisma.report.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       await expect(service.appealReport('missing', 'user-1', { reason: 'unfair' })).rejects.toThrow(
         NotFoundException,
@@ -142,7 +156,7 @@ describe('ModerationService', () => {
     it("403s when the report is still 'open' (never actioned)", async () => {
       const prisma = buildPrismaMock();
       (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'open' }));
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       await expect(service.appealReport('report-1', 'reporter-1', { reason: 'unfair' })).rejects.toThrow(
         ForbiddenException,
@@ -152,7 +166,7 @@ describe('ModerationService', () => {
     it("403s when the report was dismissed ('reviewed', not 'actioned')", async () => {
       const prisma = buildPrismaMock();
       (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'reviewed' }));
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       await expect(service.appealReport('report-1', 'post-author', { reason: 'unfair' })).rejects.toThrow(
         ForbiddenException,
@@ -165,7 +179,7 @@ describe('ModerationService', () => {
         report({ status: 'actioned', targetType: 'post', targetId: 'post-1' }),
       );
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       // reporter-1 is the reporter (see report() default), not post-author
       await expect(service.appealReport('report-1', 'reporter-1', { reason: 'unfair' })).rejects.toThrow(
@@ -178,7 +192,7 @@ describe('ModerationService', () => {
       const prisma = buildPrismaMock();
       (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
       (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       await expect(service.appealReport('report-1', 'anyone', { reason: 'unfair' })).rejects.toThrow(
         ForbiddenException,
@@ -191,7 +205,7 @@ describe('ModerationService', () => {
         report({ status: 'actioned', appealStatus: 'pending' }),
       );
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       await expect(service.appealReport('report-1', 'post-author', { reason: 'again' })).rejects.toThrow(
         ConflictException,
@@ -205,7 +219,7 @@ describe('ModerationService', () => {
       (prisma.report.update as jest.Mock).mockResolvedValue(
         report({ status: 'actioned', appealStatus: 'pending' }),
       );
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       const result = await service.appealReport('report-1', 'post-author', { reason: 'I was misidentified' });
 
@@ -227,7 +241,7 @@ describe('ModerationService', () => {
       );
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-9' });
       (prisma.report.update as jest.Mock).mockResolvedValue(report({ appealStatus: 'pending' }));
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       await service.appealReport('report-1', 'user-9', { reason: 'it was a joke' });
 
@@ -241,7 +255,7 @@ describe('ModerationService', () => {
     it('lists reports newest-first with the default page size and no status filter', async () => {
       const prisma = buildPrismaMock();
       (prisma.report.findMany as jest.Mock).mockResolvedValue([report()]);
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       const result = await service.listReports({});
 
@@ -257,7 +271,7 @@ describe('ModerationService', () => {
     it('ANDs an explicit status filter into the where clause', async () => {
       const prisma = buildPrismaMock();
       (prisma.report.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       await service.listReports({ status: 'open' });
 
@@ -272,7 +286,7 @@ describe('ModerationService', () => {
         report({ id: `report-${i}`, createdAt: new Date(2026, 8, 10 - i) }),
       );
       (prisma.report.findMany as jest.Mock).mockResolvedValue(rows);
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       const result = await service.listReports({ limit: 2 });
 
@@ -289,7 +303,7 @@ describe('ModerationService', () => {
     it('404s when the report does not exist', async () => {
       const prisma = buildPrismaMock();
       (prisma.report.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       await expect(service.actionReport('missing', 'admin-1', { action: 'dismissed' })).rejects.toThrow(
         NotFoundException,
@@ -299,7 +313,7 @@ describe('ModerationService', () => {
     it("409s when the report is not 'open' (already reviewed once)", async () => {
       const prisma = buildPrismaMock();
       (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       await expect(service.actionReport('report-1', 'admin-1', { action: 'warning_issued' })).rejects.toThrow(
         ConflictException,
@@ -311,7 +325,7 @@ describe('ModerationService', () => {
       (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'open' }));
       (prisma.post.findUnique as jest.Mock).mockResolvedValue(null); // target deleted
       (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'reviewed', actionTaken: 'dismissed' }));
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       const result = await service.actionReport('report-1', 'admin-1', { action: 'dismissed' });
 
@@ -345,7 +359,7 @@ describe('ModerationService', () => {
       (prisma.report.update as jest.Mock).mockResolvedValue(
         report({ status: 'actioned', actionTaken: 'content_removed' }),
       );
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       await service.actionReport('report-1', 'admin-1', { action: 'content_removed' });
 
@@ -365,7 +379,7 @@ describe('ModerationService', () => {
       );
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
       (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       await service.actionReport('report-1', 'admin-1', { action: 'warning_issued' });
 
@@ -379,7 +393,7 @@ describe('ModerationService', () => {
     it('404s when the report does not exist', async () => {
       const prisma = buildPrismaMock();
       (prisma.report.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       await expect(service.decideAppeal('missing', 'admin-2', { decision: 'upheld' })).rejects.toThrow(
         NotFoundException,
@@ -389,7 +403,7 @@ describe('ModerationService', () => {
     it("409s when there is no pending appeal on the report", async () => {
       const prisma = buildPrismaMock();
       (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'actioned', appealStatus: null }));
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       await expect(service.decideAppeal('report-1', 'admin-2', { decision: 'upheld' })).rejects.toThrow(
         ConflictException,
@@ -401,7 +415,7 @@ describe('ModerationService', () => {
       (prisma.report.findUnique as jest.Mock).mockResolvedValue(
         report({ status: 'actioned', appealStatus: 'pending', reviewedByAdminId: 'admin-1' }),
       );
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       await expect(service.decideAppeal('report-1', 'admin-1', { decision: 'upheld' })).rejects.toThrow(
         ForbiddenException,
@@ -422,7 +436,7 @@ describe('ModerationService', () => {
       );
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
       (prisma.report.update as jest.Mock).mockResolvedValue(report({ appealStatus: 'upheld' }));
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       await service.decideAppeal('report-1', 'admin-2', { decision: 'upheld' });
 
@@ -454,7 +468,7 @@ describe('ModerationService', () => {
       );
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
       (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'open', appealStatus: 'overturned' }));
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       const result = await service.decideAppeal('report-1', 'admin-2', { decision: 'overturned' });
 
@@ -480,11 +494,83 @@ describe('ModerationService', () => {
       );
       (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
       (prisma.report.update as jest.Mock).mockResolvedValue(report({ appealStatus: 'upheld' }));
-      const service = new ModerationService(prisma);
+      const service = buildService(prisma);
 
       await service.decideAppeal('report-1', 'admin-2', { decision: 'upheld' });
 
       expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---------- POST /reports/public ----------
+
+  describe('createPublicReport', () => {
+    const dto = {
+      reporterContactEmail: 'concerned-parent@example.com',
+      targetType: 'post' as const,
+      targetId: 'post-1',
+      reason: 'This photo shows my child without consent.',
+      concernsMinor: true,
+    };
+
+    it('creates a report with reporterId null, the given contact email, and concernsMinor set', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.report.create as jest.Mock).mockResolvedValue(
+        report({ reporterId: null, reporterContactEmail: dto.reporterContactEmail, concernsMinor: true }),
+      );
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      const result = await service.createPublicReport(dto);
+
+      expect(prisma.report.create).toHaveBeenCalledWith({
+        data: {
+          reporterId: null,
+          reporterContactEmail: dto.reporterContactEmail,
+          targetType: 'post',
+          targetId: 'post-1',
+          reason: dto.reason,
+          concernsMinor: true,
+        },
+      });
+      expect(result.reporterId).toBeNull();
+      expect(result.concernsMinor).toBe(true);
+    });
+
+    it('404s when the reported target does not exist, and never creates a Report or sends an email', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await expect(service.createPublicReport(dto)).rejects.toThrow(NotFoundException);
+      expect(prisma.report.create).not.toHaveBeenCalled();
+      expect(emailService.sendPublicReportAcknowledgementEmail).not.toHaveBeenCalled();
+    });
+
+    it('sends the acknowledgment email to the given contact address on success', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-9' });
+      (prisma.report.create as jest.Mock).mockResolvedValue(report({ reporterId: null, targetType: 'user' }));
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await service.createPublicReport({ ...dto, targetType: 'user', targetId: 'user-9' });
+
+      expect(emailService.sendPublicReportAcknowledgementEmail).toHaveBeenCalledWith(dto.reporterContactEmail);
+    });
+
+    it('does not let a failed acknowledgment email reject report submission', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.comment.findUnique as jest.Mock).mockResolvedValue({ id: 'comment-1' });
+      (prisma.report.create as jest.Mock).mockResolvedValue(report({ reporterId: null, targetType: 'comment' }));
+      const emailService = { sendPublicReportAcknowledgementEmail: jest.fn().mockRejectedValue(new Error('down')) };
+      const service = buildService(prisma, emailService);
+
+      await expect(
+        service.createPublicReport({ ...dto, targetType: 'comment', targetId: 'comment-1' }),
+      ).resolves.toBeDefined();
     });
   });
 });

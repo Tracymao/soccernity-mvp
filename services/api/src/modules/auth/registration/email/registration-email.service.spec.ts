@@ -105,6 +105,21 @@ describe('RegistrationEmailService', () => {
       expect(sent.HtmlBody).not.toMatch(/placeholder|verification code/i);
     });
 
+    it('sends a public-report acknowledgement with no outcome/timeline promise', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-report' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example' }),
+      );
+
+      await service.sendPublicReportAcknowledgementEmail('reporter@example.com');
+
+      const sent = mockSendEmail.mock.calls[0][0] as { To: string; Subject: string; TextBody: string };
+      expect(sent.To).toBe('reporter@example.com');
+      expect(sent.Subject).toBe('We received your report');
+      expect(sent.TextBody).toContain('a moderator will review it');
+      expect(sent.TextBody).not.toMatch(/\d+\s*(day|hour|week)/i);
+    });
+
     it('catches a Postmark send failure and logs it, without rejecting or leaking the token', async () => {
       const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
       mockSendEmail.mockRejectedValueOnce(new Error('Postmark: invalid API token'));
