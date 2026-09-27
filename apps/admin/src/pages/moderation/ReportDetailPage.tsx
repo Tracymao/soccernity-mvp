@@ -1,23 +1,27 @@
 // Report Detail & Action — Figma node 5796:8635.
 //
-// Real data: PATCH /admin/moderation/reports/:id (Build Plan Section 4.8,
-// Decision Log #135/#189, built by sprint-5/admin-moderation-queue-backend).
-// There is no GET /reports/:id anywhere in services/api -- this screen is
-// reached from ModerationQueuePage's "Review" link, which passes the row's
-// own already-fetched Report via router `state`; a direct visit / refresh
-// falls back to api/moderation.ts's findReportById (see that file's own
-// Decision Log candidate #4 comment). Delete/suspend actions are navy, not
-// red -- no destructive-colour token exists (CLAUDE.md non-negotiable #3).
+// Real data: GET / PATCH /admin/moderation/reports/:id (Build Plan Section
+// 4.8, Decision Log #135/#189, built by
+// sprint-5/admin-moderation-queue-backend; the GET single-resource route
+// added separately -- see api/moderation.ts's getReportById comment). This
+// screen is reached from ModerationQueuePage's "Review" link, which passes
+// the row's own already-fetched Report via router `state` (skipping a
+// redundant fetch); a direct visit / refresh (no router state) now calls
+// the real `getReportById` instead of the old bounded-list-scan workaround.
+// Delete/suspend actions are navy, not red -- no destructive-colour token
+// exists (CLAUDE.md non-negotiable #3).
 //
 // schema/report-severity-escalation-admin-vetting-application: severity +
-// concernsMinor are shown on this screen too (not just the queue rows).
-// A non-vetted admin can never REACH a concernsMinor report through the
+// concernsMinor are shown on this screen too (not just the queue rows). A
+// non-vetted admin can never REACH a concernsMinor report through the
 // queue (listReports silently filters it out server-side), but this page
 // can still be reached with one directly -- a stale bookmark, a shared
-// link, router `state` surviving in browser history -- so "Take action"
-// below renders the real 403 (CHILD_SAFETY_VETTING_REQUIRED_CODE) as a
-// dedicated restricted state, not a generic inline error, if that ever
-// happens. The Escalate card (moderationShared.tsx) is independent of
+// link, router `state` surviving in browser history -- so BOTH the
+// initial load (getReportById itself 403s on direct access, per
+// ModerationService.getReportById) and "Take action" below render the
+// real 403 (CHILD_SAFETY_VETTING_REQUIRED_CODE) as the same dedicated
+// restricted state, not a generic inline error or a misleading "not
+// found". The Escalate card (moderationShared.tsx) is independent of
 // concernsMinor and status -- any non-vetted admin gets the same 403
 // there regardless.
 import { useEffect, useState } from "react";
@@ -26,7 +30,7 @@ import AdminPageHeader from "../../layout/AdminPageHeader";
 import { AdminApiError } from "../../api/adminClient";
 import {
   actionReport,
-  findReportById,
+  getReportById,
   isChildSafetyVettingRequiredError,
   REPORT_ACTIONS,
   REPORT_ACTION_LABELS,
@@ -44,7 +48,7 @@ import {
 } from "./moderationShared";
 import "./moderation.css";
 
-type LoadState = "loading" | "loaded" | "not-found" | "error";
+type LoadState = "loading" | "loaded" | "not-found" | "restricted" | "error";
 
 export default function ReportDetailPage() {
   const { id = "" } = useParams();
@@ -60,18 +64,21 @@ export default function ReportDetailPage() {
   useEffect(() => {
     if (report) return;
     let cancelled = false;
-    findReportById(id, "open")
+    getReportById(id)
       .then((found) => {
         if (cancelled) return;
-        if (found) {
-          setReport(found);
-          setLoadState("loaded");
-        } else {
-          setLoadState("not-found");
-        }
+        setReport(found);
+        setLoadState("loaded");
       })
-      .catch(() => {
-        if (!cancelled) setLoadState("error");
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (isChildSafetyVettingRequiredError(err)) {
+          setLoadState("restricted");
+        } else if (err instanceof AdminApiError && err.status === 404) {
+          setLoadState("not-found");
+        } else {
+          setLoadState("error");
+        }
       });
     return () => {
       cancelled = true;
@@ -117,6 +124,18 @@ export default function ReportDetailPage() {
     );
   }
 
+  if (loadState === "restricted") {
+    return (
+      <>
+        <AdminPageHeader title="Report" hideSearch />
+        <div className="mod-page">
+          {backLink}
+          <VettingRestrictedNotice />
+        </div>
+      </>
+    );
+  }
+
   if (loadState === "not-found" || loadState === "error" || !report) {
     return (
       <>
@@ -128,7 +147,7 @@ export default function ReportDetailPage() {
             <p className="mod-note">
               {loadState === "error"
                 ? "Couldn’t load this report. Please try again from the queue."
-                : "This report isn’t in the first 250 open reports — open it directly from the Moderation Queue instead of a bookmarked link."}
+                : "No report exists with this id — open it directly from the Moderation Queue instead of a bookmarked link."}
             </p>
             <div className="mod-action-row">
               <Link className="mod-btn mod-btn--primary" to="/moderation">

@@ -419,6 +419,62 @@ describe('ModerationService', () => {
     });
   });
 
+  // ---------- GET /admin/moderation/reports/:id ----------
+
+  describe('getReportById', () => {
+    it('404s when the report does not exist', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma);
+
+      await expect(service.getReportById('missing', 'admin-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('returns the report as-is when it does not concern a minor, without checking vetting at all', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ concernsMinor: false }));
+      const service = buildService(prisma);
+
+      const result = await service.getReportById('report-1', 'admin-1');
+
+      expect(result.id).toBe('report-1');
+      expect(prisma.adminUser.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('returns the report to a VETTED admin when it concerns a minor', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ concernsMinor: true }));
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: true });
+      const service = buildService(prisma);
+
+      const result = await service.getReportById('report-1', 'vetted-admin');
+
+      expect(result.concernsMinor).toBe(true);
+      expect(prisma.adminUser.findUnique).toHaveBeenCalledWith({
+        where: { id: 'vetted-admin' },
+        select: { childSafetyVetted: true },
+      });
+    });
+
+    it('403s a NON-vetted admin fetching a report where concernsMinor is true — a direct-access backstop, not just a queue-list filter', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ concernsMinor: true }));
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: false });
+      const service = buildService(prisma);
+
+      await expect(service.getReportById('report-1', 'unvetted-admin')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('settles 404 (existence) BEFORE the 403 vetting check — a non-existent id never touches AdminUser at all', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma);
+
+      await expect(service.getReportById('missing', 'unvetted-admin')).rejects.toThrow(NotFoundException);
+      expect(prisma.adminUser.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
   // ---------- PATCH /admin/moderation/reports/:id ----------
 
   describe('actionReport', () => {

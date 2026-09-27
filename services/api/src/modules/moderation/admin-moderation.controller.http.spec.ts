@@ -1,4 +1,10 @@
-import { ExecutionContext, INestApplication, ValidationPipe } from '@nestjs/common';
+import {
+  ExecutionContext,
+  ForbiddenException,
+  INestApplication,
+  NotFoundException,
+  ValidationPipe,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
@@ -18,6 +24,7 @@ describe('AdminModerationController (HTTP layer)', () => {
   let app: INestApplication;
   const moderationService = {
     listReports: jest.fn(),
+    getReportById: jest.fn(),
     actionReport: jest.fn(),
     decideAppeal: jest.fn(),
     escalateReport: jest.fn(),
@@ -56,6 +63,13 @@ describe('AdminModerationController (HTTP layer)', () => {
 
       await request(app.getHttpServer()).get('/admin/moderation/reports').expect(403);
       expect(moderationService.listReports).not.toHaveBeenCalled();
+    });
+
+    it('rejects an editor with 403 on GET /admin/moderation/reports/:id', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'editor', aud: 'admin-console' };
+
+      await request(app.getHttpServer()).get('/admin/moderation/reports/report-1').expect(403);
+      expect(moderationService.getReportById).not.toHaveBeenCalled();
     });
 
     it('rejects an editor with 403 on PATCH /admin/moderation/reports/:id', async () => {
@@ -124,6 +138,55 @@ describe('AdminModerationController (HTTP layer)', () => {
 
     it('rejects an invalid status filter', async () => {
       await request(app.getHttpServer()).get('/admin/moderation/reports').query({ status: 'bogus' }).expect(400);
+    });
+  });
+
+  describe('GET /admin/moderation/reports/:id', () => {
+    beforeEach(() => {
+      currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
+    });
+
+    it('forwards the report id and the calling admin id, and returns the report', async () => {
+      moderationService.getReportById.mockResolvedValue({ id: 'report-1', concernsMinor: false });
+
+      const res = await request(app.getHttpServer())
+        .get('/admin/moderation/reports/report-1')
+        .expect(200);
+
+      expect(moderationService.getReportById).toHaveBeenCalledWith('report-1', 'admin-1');
+      expect(res.body.id).toBe('report-1');
+    });
+
+    it('a superadmin may also fetch a single report', async () => {
+      currentAdmin = { sub: 'admin-2', role: 'superadmin', aud: 'admin-console' };
+      moderationService.getReportById.mockResolvedValue({ id: 'report-1' });
+
+      await request(app.getHttpServer()).get('/admin/moderation/reports/report-1').expect(200);
+
+      expect(moderationService.getReportById).toHaveBeenCalledWith('report-1', 'admin-2');
+    });
+
+    it('surfaces a 404 thrown by the service (report does not exist)', async () => {
+      moderationService.getReportById.mockRejectedValue(new NotFoundException('Report not found'));
+
+      await request(app.getHttpServer()).get('/admin/moderation/reports/missing').expect(404);
+    });
+
+    it('surfaces the child-safety-vetting 403 thrown by the service for a concernsMinor report', async () => {
+      moderationService.getReportById.mockRejectedValue(
+        new ForbiddenException({
+          statusCode: 403,
+          error: 'Forbidden',
+          code: 'child_safety_vetting_required',
+          message: 'This action requires a child-safety-vetted admin.',
+        }),
+      );
+
+      const res = await request(app.getHttpServer())
+        .get('/admin/moderation/reports/report-1')
+        .expect(403);
+
+      expect(res.body.code).toBe('child_safety_vetting_required');
     });
   });
 
