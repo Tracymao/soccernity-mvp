@@ -13,7 +13,6 @@ vi.mock("../../api/moderation", async (importOriginal) => {
     actionReport: vi.fn(),
     decideAppeal: vi.fn(),
     escalateReport: vi.fn(),
-    findReportById: vi.fn(),
   };
 });
 
@@ -23,7 +22,6 @@ import {
   actionReport,
   decideAppeal,
   escalateReport,
-  findReportById,
   CHILD_SAFETY_VETTING_REQUIRED_CODE,
   type Report,
 } from "../../api/moderation";
@@ -38,7 +36,6 @@ beforeEach(() => {
   vi.mocked(actionReport).mockReset();
   vi.mocked(decideAppeal).mockReset();
   vi.mocked(escalateReport).mockReset();
-  vi.mocked(findReportById).mockReset();
 });
 
 // A 403 shaped exactly like moderation.service.ts's assertChildSafetyVetted
@@ -504,14 +501,32 @@ describe("AppealReviewPage", () => {
     expect(screen.queryByRole("button", { name: "Overturn Decision" })).toBeNull();
   });
 
-  it("falls back to findReportById(id, 'actioned') when there is no router state", async () => {
+  it("falls back to getReportById when there is no router state (direct visit / refresh)", async () => {
     const report = actionedReportWithAppeal({ id: "direct-visit-appeal" });
-    vi.mocked(findReportById).mockResolvedValueOnce(report);
+    vi.mocked(getReportById).mockResolvedValueOnce(report);
 
     renderAt(<AppealReviewPage />, "/moderation/appeals/:id", `/moderation/appeals/${report.id}`);
 
-    await waitFor(() => expect(findReportById).toHaveBeenCalledWith(report.id, "actioned"));
+    await waitFor(() => expect(getReportById).toHaveBeenCalledWith(report.id));
     expect(await screen.findByText("Remove Content")).not.toBeNull();
+  });
+
+  it("shows an honest not-found state when the real fetch 404s", async () => {
+    vi.mocked(getReportById).mockRejectedValueOnce(new AdminApiError(404, "Report not found"));
+
+    renderAt(<AppealReviewPage />, "/moderation/appeals/:id", "/moderation/appeals/missing-id");
+
+    expect(await screen.findByText("Appeal not found")).not.toBeNull();
+    expect(await screen.findByText(/No report exists with this id/)).not.toBeNull();
+  });
+
+  it("shows the restricted state (not not-found) when a direct visit's fetch itself 403s as vetting-required", async () => {
+    vi.mocked(getReportById).mockRejectedValueOnce(vettingRequiredError());
+
+    renderAt(<AppealReviewPage />, "/moderation/appeals/:id", "/moderation/appeals/minor-report-id");
+
+    expect(await screen.findByText("Restricted — child-safety vetting required")).not.toBeNull();
+    expect(screen.queryByText("Appeal not found")).toBeNull();
   });
 
   it("shows severity and 'Concerns a minor' in the original-decision card", async () => {
