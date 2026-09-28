@@ -132,6 +132,18 @@ Users/Dashboard/Media modules.
    shape (`excerpt: string`) needing zero change — only the value's
    provenance would change from "computed" to "authored, falling back
    to the computed truncation when blank."
+   **RESOLVED by `feat/article-excerpt-field`** — `Article.excerpt
+   String?` now exists (migration `20260928204535_add_article_excerpt`),
+   editable via `CreateArticleDto`/`UpdateArticleDto`
+   (`ARTICLE_EXCERPT_MAX_LENGTH = 300`) and
+   `CreateArticlePage.tsx`'s new "Excerpt (optional)" field. This
+   module's own response shape and `excerpt.util.ts`'s fallback are
+   exactly as predicted here — zero change to either:
+   `toPublicArticleListItem` uses `row.excerpt` when the admin set one
+   (a non-null value is always trimmed, non-empty text —
+   `AdminContentService` normalizes a whitespace-only value to `null`
+   on write, never storing `""`), falling back to the unchanged
+   `truncateExcerpt(row.body)` when it's `null`.
 2. **An `Article`-to-`MediaAsset` image relation, deferred.** The
    Sprint 5 Media library backend (`sprint-5/admin-media-storage-backend`)
    exists now, and both that PR and the original Articles/Categories PR

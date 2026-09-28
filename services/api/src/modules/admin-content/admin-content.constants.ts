@@ -14,3 +14,12 @@ export type CategoryStatus = (typeof CATEGORY_STATUSES)[number];
 // every other list endpoint in this codebase uses.
 export const ADMIN_CONTENT_DEFAULT_PAGE_SIZE = 20;
 export const ADMIN_CONTENT_MAX_PAGE_SIZE = 50;
+
+// Article.excerpt (Decision Log #333, resolved) — a curated, admin-
+// authored summary, distinct from blog/excerpt.util.ts's own
+// EXCERPT_MAX_LENGTH (200), which bounds the unstored, computed
+// fallback truncation of `body` on the public read side. This one
+// bounds what an admin may TYPE — intentionally a little roomier than
+// the auto-truncated fallback, since a hand-written summary is a
+// deliberate editorial choice, not a mechanical cut.
+export const ARTICLE_EXCERPT_MAX_LENGTH = 300;

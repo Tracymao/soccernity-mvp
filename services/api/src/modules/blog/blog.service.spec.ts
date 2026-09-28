@@ -183,6 +183,28 @@ describe('BlogService', () => {
 
       expect(page.items[0].excerpt).toBe('Short body.');
     });
+
+    it('uses the admin-curated excerpt when set, never the truncated body', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.article.findMany as jest.Mock).mockResolvedValue([
+        articleRow({ excerpt: 'A hand-written summary.' }),
+      ]);
+      const service = new BlogService(prisma);
+
+      const page = await service.listArticles({});
+
+      expect(page.items[0].excerpt).toBe('A hand-written summary.');
+    });
+
+    it('falls back to the truncated body when excerpt is explicitly null', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.article.findMany as jest.Mock).mockResolvedValue([articleRow({ excerpt: null, body: 'Short body.' })]);
+      const service = new BlogService(prisma);
+
+      const page = await service.listArticles({});
+
+      expect(page.items[0].excerpt).toBe('Short body.');
+    });
   });
 
   describe('getArticleById', () => {
@@ -228,6 +250,18 @@ describe('BlogService', () => {
       const result = await service.getArticleById('article-1');
       expect(result.body).toBe('Full body here.');
       expect(result.author).toBe('Jane Editor');
+    });
+
+    it('uses the admin-curated excerpt when set, on the detail path too', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.article.findFirst as jest.Mock).mockResolvedValue(
+        articleRow({ body: 'Full body here.', excerpt: 'A hand-written summary.' }),
+      );
+      const service = new BlogService(prisma);
+
+      const result = await service.getArticleById('article-1');
+      expect(result.excerpt).toBe('A hand-written summary.');
+      expect(result.body).toBe('Full body here.');
     });
   });
 
