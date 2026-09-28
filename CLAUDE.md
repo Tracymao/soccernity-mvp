@@ -8939,6 +8939,60 @@ Full reasoning for every choice above: Build Plan Section 5.
     `main` before this branch, not introduced here, and does not affect
     `npm run build`.
   - PR opened, not merged — Temi verifies and merges.
+- **`fix/feed-pagination-tiebreaker` (backend-api, 2026-09-28) fixes a
+  real keyset-pagination bug in `services/api/src/modules/feed/
+  feed.service.ts` — `services/api` only, no Figma/`apps/web` touched.**
+  All three of that file's keyset-pagination call sites (`GET
+  /posts/feed`/`GET /clubs/:id/feed`/`GET /banter-rooms/:id/posts` via
+  `paginatePostsWithViewerState`; `GET /posts/:id/comments`; `GET
+  /users/:id/saved-posts`) tiebroke same-millisecond `createdAt`/
+  `savedAt` ties on a random UUID (`Post.id`/`Comment.id`, or — for
+  saved posts — `SavedPost`'s old `postId` tiebreaker, itself a foreign
+  key to `Post.id`) with zero relation to insertion order — this
+  codebase's `createdAt` columns are `TIMESTAMP(3)` (millisecond
+  precision), so a real collision under any burst of activity isn't
+  hypothetical.
+  - **Fix: a genuine monotonic `sequence Int @default(autoincrement())
+    @unique` column added to `Post`, `Comment`, and `SavedPost`**
+    (migration `20260928120000_add_feed_pagination_sequence_columns`,
+    purely additive), used as the tiebreaker instead — ties now resolve
+    in true creation/save order. `sequence` is fetched internally (via
+    new `*_SELECT_WITH_SEQUENCE` variants) purely to build the cursor
+    and is stripped back off before a page is ever returned — it was
+    never, and still isn't, part of any public API payload.
+  - **`feed/cursor.util.ts`'s original, `id`-keyed
+    `FeedCursor`/`encodeFeedCursor`/`decodeFeedCursor` are deliberately
+    left completely unchanged** — `users.service.ts`'s
+    `getFollowers`/`getFollowing` import those directly (an exception to
+    this codebase's usual per-module-cursor-util-copy convention,
+    `Follow.id` as their own, unrelated tiebreaker) and were out of this
+    fix's scope, so a second, additive pair
+    (`FeedSequenceCursor`/`encodeFeedSequenceCursor`/
+    `decodeFeedSequenceCursor`) was added instead of repurposing the
+    first — confirmed non-breaking by running `src/modules/users` (82/82
+    tests) and `cursor.util.spec.ts`'s own unchanged id-based tests, both
+    still green.
+  - **The bug was genuinely reproduced before the fix, not just
+    reasoned about**: a new real-Postgres e2e spec
+    (`test/feed-pagination-ordering.e2e-spec.ts`, one case per call
+    site) seeds two rows sharing an identical timestamp with ids crafted
+    so the old tiebreaker would report them in the wrong order; all
+    three were confirmed to genuinely FAIL against the pre-fix code
+    (`git stash` on just `feed.service.ts`/`cursor.util.ts`, migration
+    and test left in place) and PASS again once the fix was restored.
+  - **Verification, all real**: `services/api` `npx tsc --noEmit` and
+    `npx eslint src` both clean; `nest build` clean; full mocked Jest
+    suite — 107 suites / 1474 tests, 1464 passed, 10 failed, all 10
+    confirmed (by reading each failing spec file directly) to be
+    real-HTTP-bootstrap timeout/`ECONNRESET` contention flakes in
+    modules (`banter`, `admin-staff-roles`, others) that mock their
+    service dependencies entirely and have zero code-path connection to
+    `feed.service.ts`/`cursor.util.ts` — `src/modules/feed` (136/136)
+    and `src/modules/users` (82/82) both individually 100% green. Full
+    e2e suite (real Postgres/Redis via docker-compose, `npm run
+    test:e2e`) — **28 suites / 266 tests, 0 failures**, including the
+    new ordering spec.
+  - PR opened, not merged — Temi verifies and merges.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

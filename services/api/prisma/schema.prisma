@@ -564,6 +564,20 @@ model Result {
 
 model Post {
   id           String        @id @default(uuid())
+  // Keyset-pagination tiebreaker for feed.service.ts's
+  // paginatePostsWithViewerState (GET /posts/feed, GET /clubs/:id/feed,
+  // GET /banter-rooms/:id/posts) -- `id` is a random UUID with zero
+  // relation to insertion order, so two posts sharing the same
+  // millisecond-precision `createdAt` were tiebroken in an order
+  // unrelated to which one was actually created first. `sequence` is a
+  // genuinely monotonically-increasing Postgres-assigned counter, so
+  // ties now resolve in true creation order and a page fetched twice in
+  // a row can never duplicate or omit a row because of an arbitrary
+  // UUID comparison. Deliberately NEVER selected into the public API
+  // payload (see POST_SELECT in feed.service.ts) -- purely an internal
+  // pagination-ordering detail, not a field clients should see or rely
+  // on.
+  sequence     Int           @unique @default(autoincrement())
   authorId     String
   // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
   // Deleting a Post this way then needs to keep cascading into its own
@@ -633,6 +647,13 @@ model Post {
 
 model Comment {
   id          String   @id @default(uuid())
+  // Same keyset-pagination-tiebreaker fix as Post.sequence above, for
+  // feed.service.ts's getComments (createdAt asc, ordered oldest-first)
+  // -- `id` is a random UUID unrelated to insertion order; `sequence` is
+  // a real monotonic counter, so comments left in the same millisecond
+  // sort in the order they were actually posted. Never selected into the
+  // public API payload.
+  sequence    Int      @unique @default(autoincrement())
   postId      String
   // sprint-2/account-deletion-cascade -- NOT itself one of Decision Log
   // #44's eleven User-referencing tables, but load-bearing for it:
@@ -876,17 +897,27 @@ model Notification {
 }
 
 model SavedPost {
-  id      String   @id @default(uuid())
-  userId  String
+  id       String   @id @default(uuid())
+  // Same keyset-pagination-tiebreaker fix as Post.sequence /
+  // Comment.sequence above, for feed.service.ts's getSavedPosts
+  // (savedAt desc). The previous tiebreaker was `postId` -- itself a
+  // random UUID (a foreign key to Post.id) with no relation to WHEN this
+  // particular row was saved -- so two posts saved in the same
+  // millisecond tiebroke in an order unrelated to save order.
+  // `sequence` is a real monotonic counter on THIS row, so ties resolve
+  // in true most-recently-saved-first order. Never selected into the
+  // public API payload.
+  sequence Int      @unique @default(autoincrement())
+  userId   String
   // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
-  user    User     @relation(fields: [userId], references: [id])
-  postId  String
+  user     User     @relation(fields: [userId], references: [id])
+  postId   String
   // sprint-2/account-deletion-cascade -- load-bearing for #44 the same
   // way Comment.post is (see that model's comment): a Post cascading
   // away from its author's User delete must keep cascading into
   // SavedPost rows saved by OTHER users too, or the whole delete aborts.
-  post    Post     @relation(fields: [postId], references: [id])
-  savedAt DateTime @default(now())
+  post     Post     @relation(fields: [postId], references: [id])
+  savedAt  DateTime @default(now())
 
   @@unique([userId, postId])
 }
