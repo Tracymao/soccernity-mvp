@@ -272,14 +272,17 @@ export class ContestService {
   // author's identity in place rather than deleting the row
   // (Decision Log #341).
   //
-  // NOT covered by this resolution, and flagged as a smaller, separate
-  // residual gap rather than silently expanded into: toAdminEntry() /
-  // AdminContestEntry (a round's raw, not-yet-judged `entries` array,
-  // exposed only via getCycleByIdForAdmin/getCurrentContestForAdmin's
-  // `rounds[].entries`) still shows a withdrawn entrant's real
-  // displayName and full post content (contentText/mediaUrls) unredacted
-  // — that surface was not named in Decision Log #339 and needs its own
-  // follow-up.
+  // toAdminEntry() / AdminContestEntry (a round's raw, not-yet-judged
+  // `entries` array, exposed only via getCycleByIdForAdmin/
+  // getCurrentContestForAdmin's `rounds[].entries`) is ALSO now covered,
+  // closing the residual gap this comment used to flag as a separate
+  // follow-up: a withdrawn entrant's real displayName and full post
+  // content (contentText/mediaUrls) are redacted to
+  // WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER there too, via the same
+  // getWithdrawnConsentUserIds() batched lookup — see
+  // collectAdminDetailUserIds()'s own comment for why `entries[].userId`
+  // needed folding into that lookup, and toAdminEntry()'s own comment for
+  // exactly what is and isn't redacted on an entry row.
   // -------------------------------------------------------------------
 
   // GET /admin/contest/cycles
@@ -305,7 +308,7 @@ export class ContestService {
     if (!cycle) {
       throw new NotFoundException('Contest cycle not found');
     }
-    const withdrawnUserIds = await this.getWithdrawnConsentUserIds(this.collectGraphUserIds(cycle));
+    const withdrawnUserIds = await this.getWithdrawnConsentUserIds(this.collectAdminDetailUserIds(cycle));
     return this.toAdminCycleDetail(cycle, withdrawnUserIds);
   }
 
@@ -328,7 +331,7 @@ export class ContestService {
     if (!cycle) {
       return { cycle: null, phase: null, rounds: [], weeklyWinners: [], monthlyStandings: [] };
     }
-    const withdrawnUserIds = await this.getWithdrawnConsentUserIds(this.collectGraphUserIds(cycle));
+    const withdrawnUserIds = await this.getWithdrawnConsentUserIds(this.collectAdminDetailUserIds(cycle));
     return this.toAdminCycleDetail(cycle, withdrawnUserIds);
   }
 
@@ -652,6 +655,23 @@ export class ContestService {
     ];
   }
 
+  // The admin detail graph (ADMIN_CYCLE_DETAIL_INCLUDE) carries each
+  // round's raw `entries` array on top of everything collectGraphUserIds()
+  // already covers -- a userId can appear here (as an entrant who
+  // submitted, win or lose) without ever appearing as a
+  // ContestRoundWinner/ContestStanding row, so collectGraphUserIds()
+  // alone would miss it. Used only by getCycleByIdForAdmin/
+  // getCurrentContestForAdmin (both ADMIN_CYCLE_DETAIL_INCLUDE); NOT by
+  // listCyclesForAdmin, whose ADMIN_CYCLE_LIST_INCLUDE has no `entries`
+  // field to read (only a per-round _count), so collectGraphUserIds()
+  // alone is still correct there.
+  private collectAdminDetailUserIds(graph: AdminCycleDetailGraph): string[] {
+    return [
+      ...this.collectGraphUserIds(graph),
+      ...graph.rounds.flatMap((r) => r.entries.map((e) => e.userId)),
+    ];
+  }
+
   // Decision Log #339. One batched Guardian lookup for every userId a
   // caller passes in, rather than one query per winner/standing row — the
   // same "batch, never N+1" discipline feed.service.ts's
@@ -786,29 +806,51 @@ export class ContestService {
     return {
       cycle: this.toCycleSummary(graph),
       phase: ContestService.derivePhase(graph.status, this.judgedCount(graph)),
-      rounds: graph.rounds.map((r) => this.toAdminRoundDetail(r)),
+      rounds: graph.rounds.map((r) => this.toAdminRoundDetail(r, withdrawnUserIds)),
       weeklyWinners: this.toWeeklyWinners(graph, 'admin', withdrawnUserIds),
       monthlyStandings: this.toStandings(graph, 'admin', withdrawnUserIds),
     };
   }
 
-  private toAdminRoundDetail(round: AdminCycleDetailGraph['rounds'][number]): AdminContestRoundDetail {
+  private toAdminRoundDetail(
+    round: AdminCycleDetailGraph['rounds'][number],
+    withdrawnUserIds: Set<string>,
+  ): AdminContestRoundDetail {
     return {
       ...this.toRoundSummary(round),
       entryCount: round.entries.length,
-      entries: round.entries.map((e) => this.toAdminEntry(e)),
+      entries: round.entries.map((e) => this.toAdminEntry(e, withdrawnUserIds)),
     };
   }
 
-  private toAdminEntry(entry: AdminCycleDetailGraph['rounds'][number]['entries'][number]): AdminContestEntry {
+  // Decision Log #339 (residual gap closed). entryId, submittedAt,
+  // post.id/createdAt/likeCount/commentCount, and position are all kept
+  // real regardless of withdrawal -- an admin still needs them to
+  // reconcile round judging (same "keep the row, redact only
+  // identity/content" reasoning as toWeeklyWinners()/toStandings()'s own
+  // 'admin' mode). Only entrant.displayName and post.contentText/
+  // mediaUrls are redacted, to the same WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER
+  // string toWeeklyWinners() already uses for a withdrawn winner's
+  // displayName/postId -- mediaUrls is a string[], so it becomes a
+  // single-element array carrying that same placeholder, not an empty
+  // array (an empty array would read as "no media", a different and
+  // false claim about the original post).
+  private toAdminEntry(
+    entry: AdminCycleDetailGraph['rounds'][number]['entries'][number],
+    withdrawnUserIds: Set<string>,
+  ): AdminContestEntry {
+    const withdrawn = withdrawnUserIds.has(entry.userId);
     return {
       entryId: entry.id,
       submittedAt: entry.submittedAt,
-      entrant: { userId: entry.userId, displayName: entry.user.displayName },
+      entrant: {
+        userId: entry.userId,
+        displayName: withdrawn ? WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER : entry.user.displayName,
+      },
       post: {
         id: entry.post.id,
-        contentText: entry.post.contentText,
-        mediaUrls: entry.post.mediaUrls,
+        contentText: withdrawn ? WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER : entry.post.contentText,
+        mediaUrls: withdrawn ? [WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER] : entry.post.mediaUrls,
         createdAt: entry.post.createdAt,
         likeCount: entry.post.likeCount,
         commentCount: entry.post.commentCount,
