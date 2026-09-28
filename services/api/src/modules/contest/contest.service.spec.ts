@@ -810,8 +810,10 @@ describe('ContestService', () => {
       expect(res.rounds[1].entryCount).toBe(0);
     });
 
-    // Decision Log #339 resolution -- sprint-2/contest-withdrawn-consent-visibility.
-    it('redacts a withdrawn-consent winner in weeklyWinners, but does not touch the raw round entries', async () => {
+    // Decision Log #339 resolution -- sprint-2/contest-withdrawn-consent-visibility,
+    // extended by sprint-2/contest-admin-entries-withdrawn-consent-redaction
+    // to also cover toAdminEntry()/AdminContestEntry's raw round.entries.
+    it('redacts a withdrawn-consent winner in BOTH weeklyWinners and the raw round entries', async () => {
       const prisma = buildMock();
       (prisma.guardian.findMany as jest.Mock).mockResolvedValue([{ minorUserId: 'u-b' }]);
       const winning = entry({ id: 'e-win', userId: 'u-b', user: { displayName: 'Ben' }, winner: { position: 1 } });
@@ -839,11 +841,67 @@ describe('ContestService', () => {
           postId: 'Entry withdrawn — guardian consent revoked',
         },
       ]);
-      // toAdminEntry()/AdminContestEntry's raw round.entries is a
-      // separate, NOT-YET-redacted surface -- flagged as its own residual
-      // gap in the resolution comment above the admin read surface, not
-      // silently fixed by this PR.
-      expect(res.rounds[0].entries[0].entrant).toEqual({ userId: 'u-b', displayName: 'Ben' });
+      // toAdminEntry()/AdminContestEntry's raw round.entries is now
+      // redacted too -- the residual gap the resolution comment above the
+      // admin read surface used to flag is closed.
+      expect(res.rounds[0].entries[0]).toEqual({
+        entryId: 'e-win',
+        submittedAt: winning.submittedAt,
+        entrant: { userId: 'u-b', displayName: 'Entry withdrawn — guardian consent revoked' },
+        post: {
+          id: 'post-1',
+          contentText: 'Entry withdrawn — guardian consent revoked',
+          mediaUrls: ['Entry withdrawn — guardian consent revoked'],
+          createdAt: winning.post.createdAt,
+          likeCount: 4,
+          commentCount: 1,
+        },
+        position: 1,
+      });
+    });
+
+    // Decision Log #339 resolution, entries-only case -- an entrant who
+    // never won a round (no ContestRoundWinner row at all) still needs to
+    // be caught by the withdrawn-consent lookup, since
+    // collectGraphUserIds() alone (winners + standings) would never see
+    // them. Proves collectAdminDetailUserIds() folds round.entries[].userId
+    // into the batched Guardian lookup, not just toAdminEntry()'s own
+    // per-row redaction logic.
+    it('redacts a withdrawn-consent entrant who never won a round, and leaves a non-withdrawn entrant untouched', async () => {
+      const prisma = buildMock();
+      (prisma.guardian.findMany as jest.Mock).mockResolvedValue([{ minorUserId: 'u-lost' }]);
+      const stillReal = entry({ id: 'e-real', userId: 'u-real', user: { displayName: 'Rita' }, winner: null });
+      const withdrawnLoser = entry({ id: 'e-lost', userId: 'u-lost', user: { displayName: 'Withdrawn Minor' }, winner: null });
+      (prisma.contestCycle.findUnique as jest.Mock).mockResolvedValue(
+        graphCycle({
+          status: 'active',
+          rounds: [detailRound(1, [stillReal, withdrawnLoser], { status: 'open' })],
+        }),
+      );
+
+      const res = await new ContestService(prisma).getCycleByIdForAdmin('cyc-1');
+
+      // No winners/standings at all -- collectGraphUserIds() alone would
+      // pass an empty array to getWithdrawnConsentUserIds().
+      expect(res.weeklyWinners).toEqual([]);
+      // The batched Guardian lookup is still called with u-lost -- proving
+      // it came from round.entries[].userId, not from winners/standings.
+      expect((prisma.guardian.findMany as jest.Mock).mock.calls[0][0].where.minorUserId.in).toEqual(['u-real', 'u-lost']);
+      expect(res.rounds[0].entries).toEqual([
+        expect.objectContaining({
+          entryId: 'e-real',
+          entrant: { userId: 'u-real', displayName: 'Rita' },
+          post: expect.objectContaining({ contentText: 'my keepie-uppie clip' }),
+        }),
+        expect.objectContaining({
+          entryId: 'e-lost',
+          entrant: { userId: 'u-lost', displayName: 'Entry withdrawn — guardian consent revoked' },
+          post: expect.objectContaining({
+            contentText: 'Entry withdrawn — guardian consent revoked',
+            mediaUrls: ['Entry withdrawn — guardian consent revoked'],
+          }),
+        }),
+      ]);
     });
   });
 
@@ -868,6 +926,30 @@ describe('ContestService', () => {
       const res = await new ContestService(prisma).getCurrentContestForAdmin();
       expect(res.phase).toBe('crowned');
       expect((prisma.contestCycle.findFirst as jest.Mock).mock.calls[1][0].where).toEqual({ status: 'completed' });
+    });
+
+    // Decision Log #339 resolution -- confirms the entries-redaction fix
+    // applies to getCurrentContestForAdmin too, not just getCycleByIdForAdmin
+    // (both build on collectAdminDetailUserIds()/toAdminCycleDetail()).
+    it('redacts a withdrawn-consent entrant in the raw round entries', async () => {
+      const prisma = buildMock();
+      (prisma.guardian.findMany as jest.Mock).mockResolvedValue([{ minorUserId: 'u-lost' }]);
+      const withdrawnLoser = entry({ id: 'e-lost', userId: 'u-lost', user: { displayName: 'Withdrawn Minor' }, winner: null });
+      (prisma.contestCycle.findFirst as jest.Mock).mockResolvedValueOnce(
+        graphCycle({ status: 'active', rounds: [detailRound(1, [withdrawnLoser], { status: 'open' })] }),
+      );
+
+      const res = await new ContestService(prisma).getCurrentContestForAdmin();
+
+      expect(res.rounds[0].entries[0]).toEqual(
+        expect.objectContaining({
+          entrant: { userId: 'u-lost', displayName: 'Entry withdrawn — guardian consent revoked' },
+          post: expect.objectContaining({
+            contentText: 'Entry withdrawn — guardian consent revoked',
+            mediaUrls: ['Entry withdrawn — guardian consent revoked'],
+          }),
+        }),
+      );
     });
 
     it('returns an all-null response when no cycle has ever existed', async () => {

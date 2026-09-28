@@ -8993,6 +8993,72 @@ Full reasoning for every choice above: Build Plan Section 5.
     test:e2e`) — **28 suites / 266 tests, 0 failures**, including the
     new ordering spec.
   - PR opened, not merged — Temi verifies and merges.
+- **`sprint-2/contest-admin-entries-withdrawn-consent-redaction`
+  (backend-api, 2026-09-28) closes the one residual gap
+  `sprint-2/contest-withdrawn-consent-visibility` (Decision Log #339)
+  flagged as a separate, not-yet-fixed follow-up: `toAdminEntry()` /
+  `AdminContestEntry` — a round's raw, not-yet-judged `entries` array,
+  exposed via `GET /admin/contest/cycles/:id` and `GET
+  /admin/contest/current`'s `rounds[].entries` — still showed a
+  withdrawn entrant's real `displayName` and full post content
+  (`contentText`/`mediaUrls`) unredacted, even though the sibling
+  `weeklyWinners`/`monthlyStandings` surfaces were already fixed.
+  `services/api` only.**
+  - **A new `collectAdminDetailUserIds()` helper** folds
+    `round.entries[].userId` into the same batched
+    `getWithdrawnConsentUserIds()` Guardian lookup
+    `toWeeklyWinners()`/`toStandings()` already use — the existing
+    `collectGraphUserIds()` only ever scanned winners/standings, so an
+    entrant who submitted an entry but never won a round (no
+    `ContestRoundWinner` row at all) was never covered by the withdrawn-
+    consent check to begin with. Used only by `getCycleByIdForAdmin`/
+    `getCurrentContestForAdmin` (both `ADMIN_CYCLE_DETAIL_INCLUDE`, the
+    only graph shape carrying `entries`) — `listCyclesForAdmin`
+    (`ADMIN_CYCLE_LIST_INCLUDE`, only a per-round `_count`) is unaffected
+    and untouched.
+  - **`toAdminEntry()` now redacts `entrant.displayName` and
+    `post.contentText`/`mediaUrls`** to the same
+    `"Entry withdrawn — guardian consent revoked"` placeholder
+    `toWeeklyWinners()`/`toStandings()` already use in admin mode
+    (`mediaUrls` becomes a single-element array carrying that string, not
+    an empty array — an empty array would falsely read as "no media" on
+    the original post). `entryId`, `submittedAt`,
+    `post.id`/`createdAt`/`likeCount`/`commentCount`, and `position` all
+    stay real — an admin still needs them to reconcile round judging, the
+    same "keep the row, redact only identity/content" reasoning the
+    original resolution already established.
+  - **The resolution comment above the admin read surface (`contest.service.ts`)
+    is updated in place** to describe this as resolved rather than left
+    describing an already-closed residual gap.
+  - **3 new mocked unit tests, mirroring the admin-redaction tests the
+    original resolution already added** (`contest.service.spec.ts`): a
+    withdrawn round winner redacted in both `weeklyWinners` AND the raw
+    `entries` array in the same response (the prior test's name/premise —
+    "does not touch the raw round entries" — was rewritten, since that
+    claim is no longer true); a withdrawn entrant who never won a round,
+    proving the batched lookup now sees entries beyond winners/standings,
+    alongside a non-withdrawn entrant in the same round left untouched;
+    and the same entries-redaction proved on `getCurrentContestForAdmin`
+    too, not just `getCycleByIdForAdmin`. No e2e spec added — same
+    reasoning as the original resolution: a plain
+    `findMany`-then-filter/map change, no raw SQL/transaction/new
+    relation, the class of change `test/README.md`'s own guiding
+    principle already keeps at the mocked layer.
+  - **Verification**: `services/api` `src/modules/contest` suite — **3
+    suites / 76 tests, 0 failures** (up from 73 — 3 new tests, no
+    existing test removed); `npx tsc --noEmit` and `npx eslint
+    src/modules/contest` both clean. Full mocked suite re-run separately:
+    96/107 suites green, the same documented full-suite CPU-contention
+    flake class this file's own `fix/feed-pagination-tiebreaker` bullet
+    immediately above already describes (unrelated modules —
+    `password-reset` and others — timing out under parallel load; zero
+    code-path connection to `contest.service.ts`, confirmed by grep that
+    nothing outside `contest.service.ts`/`contest.service.spec.ts`
+    references the two touched private methods).
+  - Decision Log #339's forward-pointer in
+    `docs/Soccernity_MVP_Build_Plan_v1.7.docx` appended (not rewritten)
+    to record this residual gap as also closed.
+  - PR opened, not merged — Temi verifies and merges.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
