@@ -1,6 +1,8 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PasswordService } from '../auth/password/password.service';
 import { AdminActionLogService } from '../admin-action-log/admin-action-log.service';
 import {
   ADMIN_ACTION_LOG_ACTIONS,
@@ -11,6 +13,7 @@ import {
   ADMIN_STAFF_ROLES_MAX_PAGE_SIZE,
 } from './admin-staff-roles.constants';
 import { decodeAdminStaffRolesCursor, encodeAdminStaffRolesCursor } from './cursor.util';
+import { CreateAdminStaffDto } from './dto/create-admin-staff.dto';
 import { ListStaffQueryDto } from './dto/list-staff-query.dto';
 import { UpdateAdminRoleDto } from './dto/update-admin-role.dto';
 
@@ -85,7 +88,68 @@ export class AdminStaffRolesService {
     // caller-vs-target distinction AdminStaffVettingService's own
     // vettedAt/vettedByAdminId already draw.
     private readonly adminActionLogService: AdminActionLogService,
+    // Same argon2id wrapper AdminAuthService uses for login and
+    // change-password (exported by AdminAuthFoundationModule).
+    private readonly passwordService: PasswordService,
   ) {}
+
+  // -------------------------------------------------------------------
+  // POST /admin/staff (Decision Log #191). Provisions a new AdminUser.
+  //
+  // PASSWORD CONVENTION: none existed for admin-created accounts —
+  // PasswordResetService is User-only (User table, User token store), and
+  // nothing else in the codebase creates an AdminUser. So this follows
+  // the simplest safe shape: a temporary password (admin-supplied, or
+  // generated and returned ONCE here) that the new admin is expected to
+  // replace via the existing POST /admin/auth/change-password. There is
+  // no "must change on first login" flag — AdminUser has no such column
+  // and adding one is a schema change beyond this task; flagged in the
+  // README. The generated password is never logged or written to the
+  // action log.
+  //
+  // Email is trimmed + lower-cased, matching AdminAuthService.login(),
+  // which lower-cases the lookup. A duplicate is a clean 409 (pre-check
+  // plus a P2002 backstop for the race).
+  // -------------------------------------------------------------------
+  async createStaff(
+    callerAdminId: string,
+    dto: CreateAdminStaffDto,
+  ): Promise<AdminStaffListItem & { temporaryPassword?: string }> {
+    const email = dto.email.trim().toLowerCase();
+
+    const existing = await this.prisma.adminUser.findUnique({ where: { email }, select: { id: true } });
+    if (existing) {
+      throw new ConflictException('An admin account with this email already exists.');
+    }
+
+    const generated = dto.temporaryPassword === undefined;
+    const password = dto.temporaryPassword ?? randomBytes(12).toString('base64url');
+    const passwordHash = await this.passwordService.hash(password);
+
+    let created: AdminStaffListItem;
+    try {
+      created = await this.prisma.adminUser.create({
+        data: { email, fullName: dto.fullName.trim(), role: dto.role, passwordHash },
+        select: ADMIN_STAFF_SELECT,
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException('An admin account with this email already exists.');
+      }
+      throw err;
+    }
+
+    this.logger.log(`Admin ${callerAdminId} created admin ${created.id} with role '${dto.role}'.`);
+    await this.adminActionLogService.record(
+      callerAdminId,
+      ADMIN_ACTION_LOG_ACTIONS.ADMIN_USER_CREATED,
+      ADMIN_ACTION_LOG_TARGET_TYPES.ADMIN_USER,
+      created.id,
+      `role=${dto.role}`,
+    );
+
+    return generated ? { ...created, temporaryPassword: password } : created;
+  }
 
   // -------------------------------------------------------------------
   // GET /admin/staff. Keyset-paginated, newest-first, one optional

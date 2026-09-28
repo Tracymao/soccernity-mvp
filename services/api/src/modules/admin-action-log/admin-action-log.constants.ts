@@ -20,6 +20,9 @@ export const ADMIN_ACTION_LOG_ACTIONS = {
   // name to slot straight into AdminActionLogService.record() rather than
   // inventing an ad-hoc string at that point.
   ADMIN_ROLE_CHANGED: 'admin_user.role_changed',
+  // POST /admin/staff (Decision Log #191) — a superadmin provisioned a
+  // new AdminUser. Detail records role only, never the password.
+  ADMIN_USER_CREATED: 'admin_user.created',
 } as const;
 
 export type AdminActionLogAction = (typeof ADMIN_ACTION_LOG_ACTIONS)[keyof typeof ADMIN_ACTION_LOG_ACTIONS];
