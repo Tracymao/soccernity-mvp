@@ -29,6 +29,8 @@ existed (a plain Postgres `String`, not a Prisma/Postgres enum).
 | `GET /admin/staff` | `AdminJwtAuthGuard` + `AdminRolesGuard('superadmin')` | List every `AdminUser` (id, email, fullName, role, accountStatus, createdAt). Keyset-paginated, optional exact-match `role` filter. |
 | `PATCH /admin/staff/:id/role` | `AdminJwtAuthGuard` + `AdminRolesGuard('superadmin')` | Reassign the TARGET `AdminUser`'s `role` to one of `editor`/`moderator`/`superadmin`. |
 
+| `POST /admin/staff` | `AdminJwtAuthGuard` + `AdminRolesGuard('superadmin')` | Provision a new `AdminUser` (Decision Log #191). Body: `email`, `fullName`, `role`, optional `temporaryPassword`. |
+
 ---
 
 ## Who may view â€” a deliberate divergence from the rest of Section 4.8
@@ -294,3 +296,30 @@ dto/list-staff-query.dto.ts
 dto/update-admin-role.dto.ts
 ../admin-action-log/                               â€” AdminActionLogService.record(...) (own module, own README)
 ```
+
+
+---
+
+## POST /admin/staff — creating admin accounts (Decision Log #191)
+
+Previously `AdminUser` rows could only be provisioned by direct DB insert.
+`POST /admin/staff` (superadmin-only, same guards as the rest of this
+controller) creates one from `email`, `fullName`, `role` and an optional
+`temporaryPassword`.
+
+- **Password convention.** No existing one to reuse:
+  `PasswordResetService` is `User`-only, and nothing else creates an
+  `AdminUser`. So: an admin-set password (min 8, same rule as
+  `ChangePasswordDto`), or — if omitted — a random 16-char one returned
+  **once** in the response as `temporaryPassword`. The new admin replaces
+  it via the existing `POST /admin/auth/change-password`. The password is
+  hashed with the shared `PasswordService` (argon2id), never logged, never
+  written to the action log, never returned when admin-supplied.
+- **Not built:** no must-change-on-first-login flag (no such `AdminUser`
+  column; would be a schema change), no invite email, no admin
+  set-password/reset flow. The first superadmin is still bootstrapped by
+  direct DB insert.
+- Email is trimmed + lower-cased (matching `AdminAuthService.login`);
+  duplicates are a 409 (pre-check plus a `P2002` race backstop). Response
+  is the same allowlist as the rest of this module (no `passwordHash`).
+- Audited as `admin_user.created` (detail `role=<role>`).

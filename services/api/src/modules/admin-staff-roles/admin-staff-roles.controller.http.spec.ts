@@ -16,6 +16,7 @@ describe('AdminStaffRolesController (HTTP layer)', () => {
   const adminStaffRolesService = {
     listStaff: jest.fn(),
     updateAdminRole: jest.fn(),
+    createStaff: jest.fn(),
   };
 
   let currentAdmin: { sub: string; role: string; aud: string };
@@ -187,6 +188,38 @@ describe('AdminStaffRolesController (HTTP layer)', () => {
         .patch('/admin/staff/target-admin-1/role')
         .send({ role: 'editor' })
         .expect(409);
+    });
+  });
+
+  describe('POST /admin/staff', () => {
+    const body = { email: 'new@example.com', fullName: 'New Person', role: 'moderator' };
+
+    it.each(['editor', 'moderator'])('rejects a %s with 403', async (role) => {
+      currentAdmin = { sub: 'admin-1', role, aud: 'admin-console' };
+      await request(app.getHttpServer()).post('/admin/staff').send(body).expect(403);
+      expect(adminStaffRolesService.createStaff).not.toHaveBeenCalled();
+    });
+
+    it('lets a superadmin create, forwarding the calling admin id and dto', async () => {
+      currentAdmin = { sub: 'superadmin-1', role: 'superadmin', aud: 'admin-console' };
+      adminStaffRolesService.createStaff.mockResolvedValue({ id: 'new-1', ...body, temporaryPassword: 'generated' });
+
+      const res = await request(app.getHttpServer()).post('/admin/staff').send(body).expect(201);
+
+      expect(adminStaffRolesService.createStaff).toHaveBeenCalledWith('superadmin-1', body);
+      expect(res.body.temporaryPassword).toBe('generated');
+    });
+
+    it.each([
+      ['invalid email', { ...body, email: 'nope' }],
+      ['missing fullName', { email: body.email, role: 'editor' }],
+      ['role outside the real set', { ...body, role: 'owner' }],
+      ['password shorter than 8', { ...body, temporaryPassword: 'short' }],
+      ['extra field (e.g. accountStatus)', { ...body, accountStatus: 'active' }],
+    ])('rejects %s with 400', async (_label, payload) => {
+      currentAdmin = { sub: 'superadmin-1', role: 'superadmin', aud: 'admin-console' };
+      await request(app.getHttpServer()).post('/admin/staff').send(payload).expect(400);
+      expect(adminStaffRolesService.createStaff).not.toHaveBeenCalled();
     });
   });
 });

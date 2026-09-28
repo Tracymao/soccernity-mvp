@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
 import { AdminRoles } from '../admin/guards/admin-roles.decorator';
 import { AdminRolesGuard } from '../admin/guards/admin-roles.guard';
 import { CurrentAdmin } from '../admin/guards/current-admin.decorator';
 import { AdminAccessTokenPayload } from '../admin/token/admin-token.types';
 import { AdminStaffRolesService } from './admin-staff-roles.service';
+import { CreateAdminStaffDto } from './dto/create-admin-staff.dto';
 import { ListStaffQueryDto } from './dto/list-staff-query.dto';
 import { UpdateAdminRoleDto } from './dto/update-admin-role.dto';
 
@@ -35,6 +36,12 @@ export class AdminStaffRolesController {
   @Get()
   async list(@Query() query: ListStaffQueryDto) {
     return this.adminStaffRolesService.listStaff(query);
+  }
+
+  // POST /admin/staff — provision a new AdminUser (Decision Log #191).
+  @Post()
+  async create(@CurrentAdmin() admin: AdminAccessTokenPayload, @Body() dto: CreateAdminStaffDto) {
+    return this.adminStaffRolesService.createStaff(admin.sub, dto);
   }
 
   @Patch(':id/role')
