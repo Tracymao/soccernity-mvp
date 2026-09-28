@@ -128,21 +128,26 @@ export class BlogService {
   // combinable filters on the referenced Category (see
   // ListPublicArticlesQueryDto's own header comment).
   //
-  // Deliberately does NOT filter out an article whose category has since
-  // been marked 'inactive' — see README.md's Decision Log candidate on
-  // this. GET /categories is what hides an inactive category from the
-  // public tab list; an already-published article under one stays
-  // reachable both through the unfiltered "All" listing here and through
-  // its own GET /articles/:id link.
+  // When either filter is supplied, the referenced Category must also be
+  // 'active' — the same gate GET /categories already applies to its own
+  // listing. A request scoped to an inactive category's articles behaves
+  // as if that category has no published articles at all (an empty page,
+  // never an error), matching how GET /categories already hides an
+  // inactive category from the public tab list. This is a genuine,
+  // disclosed change from this service's earlier behavior, which left an
+  // inactive category's already-published articles reachable through
+  // this filtered path (they remain reachable via the unfiltered "All"
+  // listing and via GET /articles/:id — this filter does not touch
+  // either of those).
   async listArticles(query: ListPublicArticlesQueryDto): Promise<PublicArticleListPage> {
     const limit = Math.min(query.limit ?? BLOG_DEFAULT_PAGE_SIZE, BLOG_MAX_PAGE_SIZE);
 
     const conditions: Prisma.ArticleWhereInput[] = [PUBLISHED_ARTICLE_FILTER];
     if (query.categoryId) {
-      conditions.push({ categoryId: query.categoryId });
+      conditions.push({ categoryId: query.categoryId, category: { status: 'active' } });
     }
     if (query.categorySlug) {
-      conditions.push({ category: { slug: query.categorySlug } });
+      conditions.push({ category: { slug: query.categorySlug, status: 'active' } });
     }
     if (query.cursor) {
       const cursor = decodeArticleCursor(query.cursor);

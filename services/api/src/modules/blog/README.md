@@ -148,17 +148,23 @@ Users/Dashboard/Media modules.
    adding it, not "clean and small" once you account for what makes it
    actually work. `BlogPage.tsx`/`ArticleDetailPage.tsx` keep their
    existing placeholder `<span>` media blocks, unchanged by this PR.
-3. **An inactive category doesn't hide its own already-published
-   articles from `GET /articles`.** Marking a `Category` `'inactive'`
-   only removes it from `GET /categories`'s own tab list — it does
-   **not** filter `GET /articles`'s "All" listing, and an explicit
-   `?categoryId=<uuid-of-an-inactive-category>` still returns that
-   category's published articles (nothing prevents a stale bookmarked
-   link from working). Section 4.8 doesn't specify this interaction
-   either way; this is the more conservative reading (retiring a
-   category from the browse UI doesn't retroactively un-publish
-   content), but it's a real product judgment call, not an obvious
-   default.
+3. **RESOLVED (`fix/blog-inactive-category-filter`).** An explicit
+   `?categoryId=`/`?categorySlug=` filter on `GET /articles` now also
+   requires the referenced `Category` to be `'active'` — the same gate
+   `GET /categories`'s own listing already applies. A request scoped to
+   an inactive category behaves as if that category has no published
+   articles at all (an empty page, never an error), matching
+   `GET /categories`'s own "an inactive category doesn't show up"
+   behavior. **Deliberately unchanged, and still worth knowing**: this
+   only affects the two explicit filters — `GET /articles`'s unfiltered
+   "All" listing still returns every published article regardless of
+   its category's status, and `GET /articles/:id` is unaffected too (an
+   already-published article under an inactive category is still
+   individually reachable by direct link). Retiring a category from the
+   browse UI still doesn't retroactively un-publish or hide the content
+   itself outside the two filtered query params — only "browse by this
+   specific category" now respects the category's own active/inactive
+   state.
 
 ## Verification
 
