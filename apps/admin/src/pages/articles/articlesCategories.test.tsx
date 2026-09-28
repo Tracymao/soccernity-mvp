@@ -16,6 +16,18 @@ vi.mock("../../api/adminContent", async (importOriginal) => {
   };
 });
 
+// Decision Log #334, resolved — CoverImagePicker.tsx (mounted by
+// CreateArticlePage) calls listMedia() from api/adminMedia, a separate
+// module from api/adminContent — mocked the same way media.test.tsx
+// mocks it.
+vi.mock("../../api/adminMedia", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../api/adminMedia")>();
+  return {
+    ...actual,
+    listMedia: vi.fn(),
+  };
+});
+
 import {
   listArticles,
   createArticle,
@@ -26,6 +38,7 @@ import {
   type ArticleListItem,
   type Category,
 } from "../../api/adminContent";
+import { listMedia, type MediaAsset } from "../../api/adminMedia";
 import ArticlesPage from "./ArticlesPage";
 import CreateArticlePage from "./CreateArticlePage";
 import CategoriesPage from "../categories/CategoriesPage";
@@ -39,7 +52,20 @@ beforeEach(() => {
   vi.mocked(listCategories).mockReset();
   vi.mocked(createCategory).mockReset();
   vi.mocked(updateCategory).mockReset();
+  vi.mocked(listMedia).mockReset();
 });
+
+function mediaAsset(overrides: Partial<MediaAsset> = {}): MediaAsset {
+  return {
+    id: "media-1",
+    uploaderId: "admin-1",
+    url: "https://cdn.example.com/media/admin-1/abc123-cover.jpg",
+    type: "image",
+    size: 512_000,
+    createdAt: "2026-09-20T10:00:00.000Z",
+    ...overrides,
+  };
+}
 
 function article(overrides: Partial<ArticleListItem> = {}): ArticleListItem {
   return {
@@ -51,6 +77,9 @@ function article(overrides: Partial<ArticleListItem> = {}): ArticleListItem {
     authorAdminId: "admin-1",
     publishedAt: null,
     createdAt: "2026-09-14T10:00:00.000Z",
+    // Decision Log #334, resolved.
+    coverImageId: null,
+    coverImage: null,
     ...overrides,
   };
 }
@@ -275,6 +304,149 @@ describe("CreateArticlePage", () => {
 
     expect(screen.getByRole("button", { name: "Upload Images" }).hasAttribute("disabled")).toBe(true);
     expect(screen.getByText(/image attachment ships once the Media library backend exists/i)).not.toBeNull();
+  });
+
+  // Decision Log #334, resolved — the cover image picker.
+  describe("cover image picker", () => {
+    it("renders collapsed by default — no GET /admin/media call until opened", async () => {
+      vi.mocked(listCategories).mockResolvedValue({ items: [category()], nextCursor: null });
+
+      render(
+        <MemoryRouter>
+          <CreateArticlePage />
+        </MemoryRouter>,
+      );
+
+      expect(await screen.findByRole("button", { name: "Choose cover image" })).not.toBeNull();
+      expect(listMedia).not.toHaveBeenCalled();
+    });
+
+    it("opens the picker and lists real images from the Media library only on open", async () => {
+      vi.mocked(listCategories).mockResolvedValue({ items: [category()], nextCursor: null });
+      vi.mocked(listMedia).mockResolvedValue({ items: [mediaAsset()], nextCursor: null });
+
+      render(
+        <MemoryRouter>
+          <CreateArticlePage />
+        </MemoryRouter>,
+      );
+
+      fireEvent.click(await screen.findByRole("button", { name: "Choose cover image" }));
+
+      await waitFor(() => expect(listMedia).toHaveBeenCalledWith({ type: "image", limit: 24 }));
+      expect(await screen.findByTitle("abc123-cover.jpg")).not.toBeNull();
+    });
+
+    it("shows a hint when the Media library has no images yet", async () => {
+      vi.mocked(listCategories).mockResolvedValue({ items: [category()], nextCursor: null });
+      vi.mocked(listMedia).mockResolvedValue({ items: [], nextCursor: null });
+
+      render(
+        <MemoryRouter>
+          <CreateArticlePage />
+        </MemoryRouter>,
+      );
+
+      fireEvent.click(await screen.findByRole("button", { name: "Choose cover image" }));
+
+      expect(
+        await screen.findByText(/no images in the media library yet — upload one from the media section first/i),
+      ).not.toBeNull();
+    });
+
+    it("selects an image, closing the picker and showing the selected thumbnail with Change/Remove", async () => {
+      vi.mocked(listCategories).mockResolvedValue({ items: [category()], nextCursor: null });
+      vi.mocked(listMedia).mockResolvedValue({ items: [mediaAsset()], nextCursor: null });
+
+      render(
+        <MemoryRouter>
+          <CreateArticlePage />
+        </MemoryRouter>,
+      );
+
+      fireEvent.click(await screen.findByRole("button", { name: "Choose cover image" }));
+      fireEvent.click(await screen.findByTitle("abc123-cover.jpg"));
+
+      expect(await screen.findByText("abc123-cover.jpg")).not.toBeNull();
+      expect(screen.getByRole("button", { name: "Change" })).not.toBeNull();
+      expect(screen.getByRole("button", { name: "Remove" })).not.toBeNull();
+      // The panel is closed after picking — no more grid item visible.
+      expect(screen.queryByRole("button", { name: "Choose cover image" })).toBeNull();
+    });
+
+    it("removes a selected cover image, returning to the Choose cover image button", async () => {
+      vi.mocked(listCategories).mockResolvedValue({ items: [category()], nextCursor: null });
+      vi.mocked(listMedia).mockResolvedValue({ items: [mediaAsset()], nextCursor: null });
+
+      render(
+        <MemoryRouter>
+          <CreateArticlePage />
+        </MemoryRouter>,
+      );
+
+      fireEvent.click(await screen.findByRole("button", { name: "Choose cover image" }));
+      fireEvent.click(await screen.findByTitle("abc123-cover.jpg"));
+      fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+
+      expect(await screen.findByRole("button", { name: "Choose cover image" })).not.toBeNull();
+    });
+
+    it("submits the selected cover image's id as coverImageId when saving", async () => {
+      vi.mocked(listCategories).mockResolvedValue({ items: [category()], nextCursor: null });
+      vi.mocked(listMedia).mockResolvedValue({ items: [mediaAsset({ id: "media-42" })], nextCursor: null });
+      vi.mocked(createArticle).mockResolvedValue({ ...article(), body: "A body", excerpt: null });
+
+      render(
+        <MemoryRouter>
+          <CreateArticlePage />
+        </MemoryRouter>,
+      );
+
+      await waitFor(() => expect(listCategories).toHaveBeenCalled());
+
+      fireEvent.change(screen.getByRole("textbox", { name: "Title" }), { target: { value: "A title" } });
+      fireEvent.change(screen.getByRole("textbox", { name: "Article body" }), { target: { value: "A body" } });
+      fireEvent.change(screen.getByRole("combobox"), { target: { value: "category-1" } });
+
+      fireEvent.click(await screen.findByRole("button", { name: "Choose cover image" }));
+      fireEvent.click(await screen.findByTitle("abc123-cover.jpg"));
+
+      fireEvent.click(screen.getByRole("button", { name: "Save as Draft" }));
+
+      await waitFor(() =>
+        expect(createArticle).toHaveBeenCalledWith({
+          title: "A title",
+          body: "A body",
+          categoryId: "category-1",
+          status: "draft",
+          coverImageId: "media-42",
+        }),
+      );
+    });
+
+    it("omits coverImageId entirely when no cover image was chosen", async () => {
+      vi.mocked(listCategories).mockResolvedValue({ items: [category()], nextCursor: null });
+      vi.mocked(createArticle).mockResolvedValue({ ...article(), body: "A body", excerpt: null });
+
+      render(
+        <MemoryRouter>
+          <CreateArticlePage />
+        </MemoryRouter>,
+      );
+
+      await waitFor(() => expect(listCategories).toHaveBeenCalled());
+
+      fireEvent.change(screen.getByRole("textbox", { name: "Title" }), { target: { value: "A title" } });
+      fireEvent.change(screen.getByRole("textbox", { name: "Article body" }), { target: { value: "A body" } });
+      fireEvent.change(screen.getByRole("combobox"), { target: { value: "category-1" } });
+
+      fireEvent.click(screen.getByRole("button", { name: "Save as Draft" }));
+
+      await waitFor(() => expect(createArticle).toHaveBeenCalled());
+      const call = vi.mocked(createArticle).mock.calls[0][0];
+      expect(call.coverImageId).toBeUndefined();
+      expect(listMedia).not.toHaveBeenCalled();
+    });
   });
 
   it("trims and sends a curated excerpt when the admin fills it in", async () => {

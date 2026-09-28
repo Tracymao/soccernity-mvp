@@ -35,6 +35,12 @@ function articleRow(overrides: Partial<Record<string, unknown>> = {}) {
     publishedAt: new Date('2026-09-01T10:00:00.000Z'),
     category: { id: 'category-1', name: 'Premier League', slug: 'premier-league' },
     authorAdmin: { fullName: 'Jane Editor' },
+    // Decision Log #334, resolved — `null` by default, matching a
+    // published article with no cover image set. `coverImageId` is
+    // deliberately not on this factory — PUBLIC_ARTICLE_SELECT never
+    // selects it (see that const's own comment; only the admin side
+    // exposes the bare id).
+    coverImage: null,
     ...overrides,
   };
 }
@@ -205,6 +211,29 @@ describe('BlogService', () => {
 
       expect(page.items[0].excerpt).toBe('Short body.');
     });
+
+    // Decision Log #334, resolved.
+    it('exposes coverImage as null when the article has none set', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.article.findMany as jest.Mock).mockResolvedValue([articleRow()]);
+      const service = new BlogService(prisma);
+
+      const page = await service.listArticles({});
+
+      expect(page.items[0].coverImage).toBeNull();
+    });
+
+    it('passes through the resolved coverImage (url/type) when one is set', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.article.findMany as jest.Mock).mockResolvedValue([
+        articleRow({ coverImage: { url: 'https://media.example.com/cover.jpg', type: 'image' } }),
+      ]);
+      const service = new BlogService(prisma);
+
+      const page = await service.listArticles({});
+
+      expect(page.items[0].coverImage).toEqual({ url: 'https://media.example.com/cover.jpg', type: 'image' });
+    });
   });
 
   describe('getArticleById', () => {
@@ -262,6 +291,7 @@ describe('BlogService', () => {
       const result = await service.getArticleById('article-1');
       expect(result.excerpt).toBe('A hand-written summary.');
       expect(result.body).toBe('Full body here.');
+      expect(result.coverImage).toBeNull();
     });
   });
 

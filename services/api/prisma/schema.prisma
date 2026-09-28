@@ -1231,6 +1231,12 @@ model MediaAsset {
   // endpoint doesn't need a backfill migration or a fragile
   // parse-the-key-back-out-of-the-URL workaround.
   key        String
+  // feat/article-cover-image addition, resolving Decision Log #334 — the
+  // reverse side of Article.coverImage (see that model's own comment).
+  // Plural/array because one MediaAsset could in principle be reused as
+  // the cover of more than one Article (no uniqueness constraint stops
+  // that, and nothing in this ticket's brief asked for one).
+  coverForArticles Article[]
 }
 
 // ---------- Admin & Operations Console (Log Book Section 6.6) ----------
@@ -1263,6 +1269,23 @@ model Article {
   // keyset-paginate by, the same gap Follow.createdAt / Like.likedAt /
   // BanterRoomMember.joinedAt each closed for their own models.
   createdAt     DateTime  @default(now())
+  // feat/article-cover-image addition, resolving Decision Log #334 — a
+  // genuine schema addition beyond Section 3's original Article field
+  // list, flagged per CLAUDE.md's "the data model is a fixed spec" rule
+  // rather than added silently. Nullable (not every article needs a
+  // cover image) and `onDelete: SetNull` — deliberately NOT Cascade or
+  // Restrict: losing the linked MediaAsset (a future DELETE
+  // /admin/media/:id route, or any other removal path) must not take
+  // the Article down with it or block the deletion outright, the same
+  // "don't let losing an unrelated row break otherwise-fine content"
+  // discipline Decision Log #341's account-anonymization redesign
+  // already applied (Comment/Like/SavedPost surviving a deleted User via
+  // RESTRICT-then-anonymize rather than a cross-content cascade). A
+  // deleted cover image simply leaves the Article's coverImageId null
+  // again — no code anywhere currently sets it back to null on its own,
+  // so this is presently the ONLY way that happens.
+  coverImageId  String?
+  coverImage    MediaAsset? @relation(fields: [coverImageId], references: [id], onDelete: SetNull)
 }
 
 model Category {

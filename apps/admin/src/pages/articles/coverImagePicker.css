@@ -1,0 +1,75 @@
+/* Cover image picker (Decision Log #334, resolved) — CreateArticlePage.tsx.
+ * No Figma frame exists for this control (see CoverImagePicker.tsx's own
+ * header comment); built plain, reusing pages/content/content.css's
+ * `--sn-*` token vocabulary and `.ac-btn`/`.ac-hint`/`.ac-loading`/
+ * `.ac-error` classes rather than inventing a parallel set. Light mode
+ * only. */
+
+.ac-cover-picker__selected {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ac-cover-picker__thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 6px;
+  background-color: var(--sn-green-tint-12);
+}
+
+.ac-cover-picker__name {
+  font-size: 13px;
+  color: var(--sn-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+
+.ac-cover-picker__panel {
+  margin-top: 10px;
+  padding: 14px;
+  border-radius: 8px;
+  background-color: var(--sn-green-tint-12);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ac-cover-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 10px;
+}
+
+.ac-cover-picker__item {
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  overflow: hidden;
+  background-color: var(--sn-background-surface);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+}
+
+.ac-cover-picker__item:hover,
+.ac-cover-picker__item:focus-visible {
+  border-color: var(--sn-brand-navy);
+}
+
+.ac-cover-picker__item img {
+  width: 100%;
+  height: 72px;
+  object-fit: cover;
+  display: block;
+}
+
+.ac-cover-picker__item-size {
+  padding: 4px 6px;
+  font-size: 11px;
+  color: var(--sn-text-secondary);
+}

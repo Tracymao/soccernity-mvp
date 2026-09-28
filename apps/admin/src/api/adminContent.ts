@@ -24,6 +24,18 @@ export interface ArticleCategoryRef {
   name: string;
 }
 
+// Decision Log #334, resolved — the resolved cover image, mirroring
+// services/api's own nested `coverImage: { id, url, type }` shape
+// (admin-content.service.ts's ARTICLE_LIST_SELECT). `null` both when no
+// cover image was ever set and when the MediaAsset it once pointed at
+// has since been deleted (Article.coverImageId's own `onDelete:
+// SetNull` — see schema.prisma's comment on Article.coverImage).
+export interface ArticleCoverImageRef {
+  id: string;
+  url: string;
+  type: string;
+}
+
 // The real Article row, list-shaped — services/api's own ARTICLE_LIST_SELECT
 // (admin-content.service.ts) deliberately omits `body` from the list
 // response (Section 5.5 low-bandwidth discipline); the create/update
@@ -37,6 +49,8 @@ export interface ArticleListItem {
   authorAdminId: string;
   publishedAt: string | null;
   createdAt: string;
+  coverImageId: string | null;
+  coverImage: ArticleCoverImageRef | null;
 }
 
 export interface Article extends ArticleListItem {
@@ -88,13 +102,17 @@ export function listArticles(
 // leaves the article a draft (Article.status's own schema default).
 // `excerpt` is optional (Decision Log #333, resolved) — omitting it (or
 // sending an empty/whitespace string) leaves the public read side to
-// fall back to its own computed truncation of `body`.
+// fall back to its own computed truncation of `body`. `coverImageId` is
+// optional (Decision Log #334, resolved) — a real `MediaAsset.id`
+// (services/api validates it exists before creating); omitting it
+// leaves the article with no cover image.
 export function createArticle(dto: {
   title: string;
   body: string;
   categoryId: string;
   status?: ArticleStatus;
   excerpt?: string;
+  coverImageId?: string;
 }): Promise<Article> {
   return adminFetch<Article>("/admin/articles", { method: "POST", body: dto });
 }
@@ -104,9 +122,24 @@ export function createArticle(dto: {
 // CreateArticlePage.tsx's createArticle() call also sends `status`
 // explicitly now, via this same DTO shape. Sending `excerpt: ""` clears a
 // previously-set curated excerpt back to the computed fallback.
+//
+// `coverImageId` (Decision Log #334, resolved) is genuinely THREE-way
+// optional, not two: omit the key entirely -> leave the current cover
+// image untouched; a real MediaAsset id -> set/replace it; an EXPLICIT
+// `null` -> clear it back to no cover image at all. `Partial<{...
+// coverImageId: string | null }>` gives the field type `string | null |
+// undefined` — exactly that tri-state — matching
+// services/api's own UpdateArticleDto.
 export function updateArticle(
   id: string,
-  dto: Partial<{ title: string; body: string; categoryId: string; status: ArticleStatus; excerpt: string }>,
+  dto: Partial<{
+    title: string;
+    body: string;
+    categoryId: string;
+    status: ArticleStatus;
+    excerpt: string;
+    coverImageId: string | null;
+  }>,
 ): Promise<Article> {
   return adminFetch<Article>(`/admin/articles/${id}`, { method: "PATCH", body: dto });
 }

@@ -15,6 +15,12 @@ import { ARTICLE_EXCERPT_MAX_LENGTH, ARTICLE_STATUSES, ArticleStatus } from '../
 // string, normalized to `null` in AdminContentService) leaves the
 // public read side to fall back to excerpt.util.ts's own
 // truncateExcerpt(body), unchanged.
+//
+// `coverImageId` is OPTIONAL (Decision Log #334, resolved) — a real
+// `MediaAsset.id` (AdminContentService.assertMediaAssetExists checks it
+// exists before the create runs). Omitting it leaves the article with
+// no cover image at all — the same "optional, no clearing concept
+// needed on create" shape `excerpt` already has.
 export class CreateArticleDto {
   @IsString()
   @MinLength(1)
@@ -36,4 +42,8 @@ export class CreateArticleDto {
   @IsString()
   @MaxLength(ARTICLE_EXCERPT_MAX_LENGTH)
   excerpt?: string;
+
+  @IsOptional()
+  @IsUUID()
+  coverImageId?: string;
 }

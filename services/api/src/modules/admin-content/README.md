@@ -208,36 +208,110 @@ create/rename).
 
 ---
 
-## No `e2e` spec added for this module — stated reasoning, not a silent omission
+## `e2e` coverage — none for the original six routes; a new spec for `coverImageId`'s `onDelete: SetNull`
 
 Per `test/README.md`'s own guiding principle: add a real e2e spec
 specifically when a code path involves raw SQL, transaction/isolation-
 level reasoning, or a genuinely novel Prisma relation/constraint. None of
-the three apply here — every method in `AdminContentService` is a plain
-`findUnique`/`findMany`/`create`/`update` call, no `$transaction`, no
-`$executeRaw`/`$queryRaw`, and no new relation or `@@unique` constraint
-(`Category.slug`'s `@unique` already existed; `Article.createdAt` /
-`Category.createdAt` / `Category.status` are plain scalar columns, not
-relations). The mocked unit suite
+the three applied to the original six routes — every method in
+`AdminContentService` was a plain `findUnique`/`findMany`/`create`/`update`
+call, no `$transaction`, no `$executeRaw`/`$queryRaw`, and no new
+relation or `@@unique` constraint (`Category.slug`'s `@unique` already
+existed; `Article.createdAt` / `Category.createdAt` / `Category.status`
+are plain scalar columns, not relations). The mocked unit suite
 (`admin-content.service.spec.ts`, `admin-articles.controller.http.spec.ts`,
-`admin-categories.controller.http.spec.ts`) is the right, faster layer
-for this module's logic — the same conclusion `feed/README.md`'s own
+`admin-categories.controller.http.spec.ts`) was the right, faster layer
+for that module's logic — the same conclusion `feed/README.md`'s own
 per-caller-viewer-state addition (`sprint-2/feed-per-user-flags`, plain
 `findMany`/`findUnique` calls, no transaction/raw-SQL/new-relation) drew
-for an analogous shape of change. The full e2e suite was re-run after applying
-this PR's migration as a pure regression check — **17 suites / 161
-tests, 0 failures, before and after** (no e2e file changed by this PR).
+for an analogous shape of change. The full e2e suite was re-run after
+applying `sprint-5/admin-articles-categories-backend`'s migration as a
+pure regression check — **17 suites / 161 tests, 0 failures, before and
+after** (no e2e file changed by that PR).
+
+**`feat/article-cover-image` (Decision Log #334, resolved) is different
+— trigger #3 genuinely applies.** `Article.coverImage` is the FIRST
+relation anywhere in this schema to use an EXPLICIT `onDelete: SetNull`
+(`Report.reporter`'s own comment, right next to this one, notes that
+Prisma's own *default* for an optional relation is already `SetNull` —
+but nothing had ever exercised that behaviour, default or explicit,
+against a real Postgres FK constraint before this PR). Whether deleting
+the referenced `MediaAsset` genuinely sets `Article.coverImageId` back
+to `null` at the database level — without blocking the delete, and
+without touching any other column on the `Article` row — is exactly the
+kind of thing only a real database can prove; a mocked `PrismaService`
+would happily "enforce" whatever behaviour the mock author assumed,
+correct or not. `test/admin-content-cover-image.e2e-spec.ts` (new)
+proves this directly (seed an `Article` with a real `coverImageId` →
+delete the `MediaAsset` row via Prisma, the only way to exercise the
+real FK today since no `DELETE /admin/media/:id` route exists yet →
+assert `coverImageId` is `null` and everything else on the `Article`
+row is untouched, both via a direct Prisma read and via the real
+`GET /admin/articles` HTTP response), plus the create/update
+`assertMediaAssetExists` 404 paths and the omit-vs-explicit-null
+three-way `PATCH` semantics — all against real Postgres, not mocked.
+
+---
+
+## `coverImageId` (Decision Log #334, resolved) — a picker, not an uploader
+
+`feat/article-cover-image` closes the "no image relation" gap flagged
+below (and in `modules/blog/README.md`'s own item 2, which resolves the
+public-read side of this at the same time). `Article.coverImageId
+String?` (`onDelete: SetNull` — see schema.prisma's own comment on
+`Article.coverImage` for why: losing the linked `MediaAsset` must not
+take the Article down or block the deletion, mirroring Decision Log
+#341's "don't cascade-break unrelated content" discipline) is now
+editable via `CreateArticleDto`/`UpdateArticleDto`, both validated by a
+new `assertMediaAssetExists` (mirrors `assertCategoryExists` exactly —
+a plain Prisma existence check, not a cross-module `MediaService`
+injection; see that method's own comment for why, matching
+`ContestService`'s established precedent for validating a FK into
+another module's table).
+
+`CreateArticlePage.tsx` gained a **picker**, not an uploader — it reuses
+the already-shipped `GET /admin/media` (`listMedia` from
+`api/adminMedia.ts`) to let an editor choose from already-uploaded
+images; it does not add a new upload flow inline (the existing disabled
+"Upload Images" composer control, described in the bullet below, is
+untouched and stays exactly as disclosed). No Figma frame exists for
+this picker (checked before building it) — built plain and flagged, the
+same "no design exists, build plainly and disclose it" precedent
+`AdminProfilePage.tsx`'s Change Password panel and PR #245's
+`ReportAction` component both already established.
+
+`ArticlesPage.tsx`'s `GET /admin/articles` response now carries a
+nested `coverImage: { id, url, type } | null` per row (added to
+`ARTICLE_LIST_SELECT`) — so an editor can see, at a glance, whether an
+article has a cover image attached without a second request.
+
+**A real, pre-existing bug found and fixed as a direct consequence of
+this change, not a separate cleanup pass**: `createArticle`/
+`updateArticle` previously called `this.prisma.article.create`/`update`
+with no `select`/`include` at all. Prisma omits every relation by
+default when no select/include is given — so despite `apps/admin`'s own
+`Article` TS type already claiming a nested `category: ArticleCategoryRef`
+on the create/update response, the real HTTP response never actually
+carried it. `ArticlesPage.tsx`'s Publish/Unpublish row action applies
+that response straight onto the row via `article.category.name` — a
+latent runtime crash (`Cannot read properties of undefined`) waiting for
+whoever eventually wrote a test asserting on the *real* backend response
+shape rather than a hand-built mock. Both methods now pass an explicit
+`ARTICLE_DETAIL_SELECT` (`ARTICLE_LIST_SELECT` plus `body`/`excerpt`),
+which was the minimal, necessary fix to make the new `coverImage` field
+on that same response actually work at all — fixing `category` in the
+same stroke, not a separate unrelated change bundled in.
 
 ---
 
 ## Don't (per the task brief, restated here for anyone extending this module)
 
 - **No image upload, no `MediaAsset` wiring.** `CreateArticlePage.tsx`'s
-  "Add up to 5 images, 50MB each" control stays visibly disabled with a
-  disclosed note — the Media backend (a separate, sequenced-later
-  ticket) has no module/endpoints yet, even though the `MediaAsset`
-  model itself already exists in `schema.prisma`. `Article` has no
-  image relation.
+  "Add up to 5 images, 50MB each" control (the composer's inline
+  attachment button) stays visibly disabled with a disclosed note —
+  unaffected by the new **cover image picker** above, which is a
+  separate, single-image field reusing the already-shipped Media
+  library's *list* endpoint, not a new upload flow.
 - **No public-facing `GET /articles`.** Section 4.8 is admin-only;
   `apps/web`'s Blog/Article Detail pages are a separate, already-shipped
   feature using their own illustrative-dummy-data path (no backend

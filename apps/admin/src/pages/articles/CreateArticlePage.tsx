@@ -2,17 +2,23 @@
 //
 // Real data: POST /admin/articles (Build Plan Section 4.8, built by
 // sprint-5/admin-articles-categories-backend). Title/body/category are
-// wired and submittable. Image attachment is DELIBERATELY still a
-// disabled stub — the Media backend (services/api's MediaAsset model has
-// no module/endpoints yet) doesn't exist, and Article has no image
-// relation at all, per this PR's own explicit scope. Ships once the
-// Media library backend exists.
+// wired and submittable. The composer's own INLINE "Upload Images"
+// attachment control is DELIBERATELY still a disabled stub — attaching
+// images inline to the article body has no endpoint at all, separate
+// from the cover image field below.
 //
 // Excerpt (Decision Log #333, resolved by feat/article-excerpt-field) —
 // a real, optional field, not on the original Figma frame. Left blank,
 // the public Blog feed falls back to a computed truncation of the body
 // (services/api's own excerpt.util.ts); the fallback is unaffected by
 // this addition.
+//
+// Cover image (Decision Log #334, resolved by feat/article-cover-image)
+// — a real, optional field, also not on the original Figma frame (see
+// CoverImagePicker.tsx's own header comment). A PICKER, not an uploader
+// — reuses the already-shipped Media library (GET /admin/media) rather
+// than adding a new upload flow inline; distinct from the still-disabled
+// inline attachment control above.
 //
 // No Figma frame designs a publish/draft choice on this screen (the
 // original "Submit Post" button just POSTs, and CreateArticleDto's own
@@ -27,7 +33,9 @@ import { useNavigate, Link } from "react-router-dom";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { AdminApiError } from "../../api/adminClient";
 import { createArticle, listCategories, type ArticleStatus, type Category } from "../../api/adminContent";
+import type { MediaAsset } from "../../api/adminMedia";
 import { useAsyncData } from "../content/adminContentShared";
+import CoverImagePicker from "./CoverImagePicker";
 import "../content/content.css";
 
 export default function CreateArticlePage() {
@@ -42,6 +50,7 @@ export default function CreateArticlePage() {
   const [body, setBody] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [excerpt, setExcerpt] = useState("");
+  const [coverImage, setCoverImage] = useState<MediaAsset | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Which target status is currently in flight — null when idle. Tracked
   // per-status (not a plain boolean) so only the button that was actually
@@ -64,6 +73,7 @@ export default function CreateArticlePage() {
         categoryId,
         status,
         excerpt: excerpt.trim() || undefined,
+        coverImageId: coverImage?.id,
       });
       navigate("/articles", { state: { createdArticleId: created.id } });
     } catch (err) {
@@ -116,6 +126,8 @@ export default function CreateArticlePage() {
             Shown on the public Blog feed. Leave blank to use an automatic summary of the article body instead.
           </span>
         </div>
+
+        <CoverImagePicker selected={coverImage} onChange={setCoverImage} disabled={saving !== null} />
 
         <label className="ac-field">
           <span>Category</span>
