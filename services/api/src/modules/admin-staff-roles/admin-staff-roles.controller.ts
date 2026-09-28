@@ -8,6 +8,7 @@ import { AdminStaffRolesService } from './admin-staff-roles.service';
 import { CreateAdminStaffDto } from './dto/create-admin-staff.dto';
 import { ListStaffQueryDto } from './dto/list-staff-query.dto';
 import { UpdateAdminRoleDto } from './dto/update-admin-role.dto';
+import { UpdateAdminStatusDto } from './dto/update-admin-status.dto';
 
 // GET /admin/staff, PATCH /admin/staff/:id/role — the AdminUser
 // role-management endpoints Settings/Roles' apps/admin screens were
@@ -38,7 +39,7 @@ export class AdminStaffRolesController {
     return this.adminStaffRolesService.listStaff(query);
   }
 
-  // POST /admin/staff � provision a new AdminUser (Decision Log #191).
+  // POST /admin/staff � provision a new AdminUser (Decision Log #191).
   @Post()
   async create(@CurrentAdmin() admin: AdminAccessTokenPayload, @Body() dto: CreateAdminStaffDto) {
     return this.adminStaffRolesService.createStaff(admin.sub, dto);
@@ -51,5 +52,18 @@ export class AdminStaffRolesController {
     @Body() dto: UpdateAdminRoleDto,
   ) {
     return this.adminStaffRolesService.updateAdminRole(id, admin.sub, dto);
+  }
+
+  // PATCH /admin/staff/:id/status — set the TARGET AdminUser's
+  // accountStatus (Decision Log #193). See
+  // AdminStaffRolesService.updateAdminStatus's own comment for the full
+  // guard/revocation reasoning.
+  @Patch(':id/status')
+  async updateStatus(
+    @Param('id') id: string,
+    @CurrentAdmin() admin: AdminAccessTokenPayload,
+    @Body() dto: UpdateAdminStatusDto,
+  ) {
+    return this.adminStaffRolesService.updateAdminStatus(id, admin.sub, dto);
   }
 }

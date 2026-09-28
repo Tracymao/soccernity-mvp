@@ -1308,13 +1308,15 @@ model AdminUser {
   phone                 String?
   // "active" | "deactivated" — mirrors User.accountStatus's existing
   // string-enum convention. No self-service deactivate/reactivate
-  // endpoint exists for AdminUser in this PR (nothing in the Admin
-  // Profile screen asks for one) — this field exists so a future
-  // superadmin-facing "suspend this admin/moderator" action (or a
-  // manual DB flip) can instantly block login without deleting the row
-  // or losing Article.authorAdmin/Report-reviewer attribution history.
-  // AdminAuthService.login() checks this the same way AuthService.login()
-  // checks User.accountStatus.
+  // endpoint exists for AdminUser (nothing in the Admin Profile screen
+  // asks for one) — this field is written only by a superadmin-facing
+  // action (or a manual DB flip). AdminAuthService.login() checks this
+  // the same way AuthService.login() checks User.accountStatus.
+  // feat/admin-staff-status (Decision Log #193, resolved): PATCH
+  // /admin/staff/:id/status (admin-staff-roles module, superadmin-only)
+  // is that action — it sets this field, revoking every existing session
+  // for the target admin on a deactivation, and is rejected with a 409
+  // if it would deactivate the last remaining active superadmin.
   accountStatus         String    @default("active")
   role                  String // editor | moderator | superadmin
   createdAt             DateTime  @default(now())

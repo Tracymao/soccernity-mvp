@@ -28,6 +28,7 @@ existed (a plain Postgres `String`, not a Prisma/Postgres enum).
 |---|---|---|
 | `GET /admin/staff` | `AdminJwtAuthGuard` + `AdminRolesGuard('superadmin')` | List every `AdminUser` (id, email, fullName, role, accountStatus, createdAt). Keyset-paginated, optional exact-match `role` filter. |
 | `PATCH /admin/staff/:id/role` | `AdminJwtAuthGuard` + `AdminRolesGuard('superadmin')` | Reassign the TARGET `AdminUser`'s `role` to one of `editor`/`moderator`/`superadmin`. |
+| `PATCH /admin/staff/:id/status` | `AdminJwtAuthGuard` + `AdminRolesGuard('superadmin')` | Set the TARGET `AdminUser`'s `accountStatus` to `active`/`deactivated` (Decision Log #193). |
 
 | `POST /admin/staff` | `AdminJwtAuthGuard` + `AdminRolesGuard('superadmin')` | Provision a new `AdminUser` (Decision Log #191). Body: `email`, `fullName`, `role`, optional `temporaryPassword`. |
 
@@ -94,8 +95,9 @@ modules despite all being Section 4.8 admin surfaces.
 endpoint writes **only** `AdminUser.role` — `fullName`/`email`/`phone`
 already have `PATCH /admin/profile` (self-service only);
 `childSafetyVetted`/`vettedAt`/`vettedByAdminId` already have `PATCH
-/admin/users/:id/child-safety-vetting`; `accountStatus` has no write
-path for `AdminUser` at all yet (see "Not built" below) and this
+/admin/users/:id/child-safety-vetting`; `accountStatus` now has its own
+dedicated `PATCH /admin/staff/:id/status` (see below, Decision Log #193)
+and this
 endpoint does not add one.
 
 **No self-role-change restriction is imposed** — mirrors
@@ -149,6 +151,58 @@ flag if uncertain" convention.
 
 ---
 
+## `PATCH /admin/staff/:id/status` — resolving Decision Log #193
+
+`AdminUser.accountStatus` (`active`/`deactivated`) existed from
+`sprint-2/admin-console-account-entity` onward and `AdminAuthService.login()`
+already checked it, but nothing ever wrote it — Decision Log #193's own
+text: "it exists so a future superadmin-facing 'suspend this
+admin/moderator' action can instantly block login... but nothing here
+builds that action." `feat/admin-staff-status` is that action.
+
+`UpdateAdminStatusDto` accepts a single required `status` field, one of
+`active`/`deactivated` — a narrower value set than `UpdateUserStatusDto`'s
+own `active`/`suspended`/`deleted` (`admin-users` module), since there is
+no admin-side `pending_deletion`/hard-delete concept here at all; this
+endpoint only ever suspends or restores login access, never removes the
+row (removing an `AdminUser` would orphan `Article.authorAdmin`/
+`Report.reviewedByAdminId` attribution history — out of scope, not asked
+for).
+
+**No restriction on moving ANY admin into `active` or `deactivated` from
+whatever their current status is** — mirrors
+`AdminUsersService.updateUserStatus`'s own "this is a moderation action"
+reasoning; there is no self-service `accountStatus` write for `AdminUser`
+at all (unlike `User`'s deactivate/reactivate pair) for this to collide
+with.
+
+**The one safety guard this endpoint adds, mirroring `PATCH
+/admin/staff/:id/role`'s own last-active-superadmin guard exactly**:
+deactivating the LAST remaining active superadmin is rejected with a
+`409`, for the identical reason a demotion is — a deactivated admin
+cannot authenticate, so deactivating the sole active superadmin would
+make this very endpoint permanently unreachable. Both guards now share
+one private helper (`assertNotLastActiveSuperadmin`) rather than two
+copies of the same `COUNT` query; the query's shape and every existing
+`updateAdminRole` test's assertion on it are unchanged.
+
+**A deactivation additionally revokes every existing session for the
+TARGET admin** (`AdminTokenService.revokeAllSessionsForAdmin`, already
+exported by `AdminAuthFoundationModule` — no new module wiring needed) —
+the same "blocking future logins is meaningless if current tokens keep
+working" reasoning `AuthService.deactivateAccount` and
+`AdminUsersService.updateUserStatus`'s own `suspended` branch already
+apply for their resources. Reactivating does not re-issue anything; the
+admin simply logs in again.
+
+Audited as `admin_user.status_updated` (`ADMIN_ACCOUNT_STATUS_UPDATED`,
+`admin-action-log.constants.ts` — mirrors `USER_STATUS_UPDATED`'s naming
+for the `User`-side equivalent), detail `status=<active|deactivated>`,
+CALLER as `adminId`, TARGET admin as `targetId` — same convention as
+every other call site in this module.
+
+---
+
 ## Response shape: an explicit allowlist, never a spread of the raw row
 
 `ADMIN_STAFF_SELECT` (`id`, `email`, `fullName`, `role`, `accountStatus`,
@@ -192,7 +246,12 @@ are wired to `GET /admin/staff` (the list) and `PATCH
 /admin/staff/:id/role` (the Edit form's role reassignment), plus the
 new child-safety-vetting toggle described above, wired to
 `AdminStaffVettingModule`'s own `PATCH
-/admin/users/:id/child-safety-vetting`. There is no `GET
+/admin/users/:id/child-safety-vetting`, plus (this PR,
+`feat/admin-staff-status`) an "Active" / "Deactivated" status control on
+the same `EditRolePage`, wired to `PATCH /admin/staff/:id/status`, and an
+account-status pill on each `SettingsRolesPage.tsx` roster row (using the
+`accountStatus` this module's own list select already carried). There is
+no `GET
 /admin/staff/:id` — `EditRolePage` is reached from the roles list's own
 "Edit" link, which passes the row's already-fetched `AdminStaffListItem`
 via router `state` (the same `ReportDetailPage.tsx`/`MediaPreviewPage.tsx`
@@ -218,36 +277,49 @@ module's literal brief.
 
 **Mocked suite only** (`admin-staff-roles.service.spec.ts`,
 `admin-staff-roles.controller.http.spec.ts`) — no e2e spec added.
-`updateAdminRole` is a plain `prisma.adminUser.update()` write to an
-existing `String` column, with a plain `count()` read as its one guard
-— no raw SQL, no transaction, and no new relation/constraint (`role` is
-not an FK and carries no unique/check constraint). None of
+`updateAdminRole`/`updateAdminStatus` are both plain
+`prisma.adminUser.update()` writes to an existing `String` column, with
+a shared plain `count()` read as their one guard, and
+`updateAdminStatus`'s one extra step (`AdminTokenService.
+revokeAllSessionsForAdmin`) is itself already covered by
+`admin-token.service.spec.ts`'s own tests — no raw SQL, no transaction,
+and no new relation/constraint (neither `role` nor `accountStatus` is an
+FK, and neither carries a unique/check constraint). None of
 `test/README.md`'s three e2e-add triggers apply, the same conclusion
 `admin-action-log/README.md` and `admin-content/README.md` already
 reached for their own analogous plain-write/plain-read modules. Real
-`AdminUser` row behaviour (a genuinely persisted `role` write against
-Postgres) is exercised indirectly by every other e2e spec that already
-seeds `AdminUser` rows with a specific role and asserts on
-`AdminRolesGuard` behaviour (e.g.
-`test/admin-staff-vetting.e2e-spec.ts`); none of those specs assert on
-this module's own two routes, since this module didn't exist when they
-were written.
+`AdminUser` row behaviour (a genuinely persisted `role`/`accountStatus`
+write against Postgres) is exercised indirectly by every other e2e spec
+that already seeds `AdminUser` rows with a specific role/status and
+asserts on `AdminRolesGuard`/`AdminAuthService.login()` behaviour (e.g.
+`test/admin-staff-vetting.e2e-spec.ts`; `admin-auth.service.spec.ts`'s
+own **mocked** — not e2e — "rejects login for a deactivated admin
+account with the same generic message" test, which already proves
+`AdminAuthService.login()` rejects whatever this endpoint writes); none
+of those specs assert on this module's own three routes, since this
+module didn't exist (or, for `/status`, this route didn't exist) when
+they were written.
 
-Covers: role-gating (editor AND moderator both 403 on BOTH routes —
+Covers: role-gating (editor AND moderator both 403 on ALL THREE routes —
 distinct from every other role-gated module in this codebase except
 `AdminStaffVettingModule`, which all admit moderator on GET, superadmin
-admitted on both); `GET /admin/staff`'s cursor/role-filter/pagination
+admitted on all three); `GET /admin/staff`'s cursor/role-filter/pagination
 logic (mirrors `admin-users.service.spec.ts`'s own shape); DTO
-validation (missing/invalid `role`, an unrecognised extra field under
-`whitelist: true, forbidNonWhitelisted: true`); the last-active-superadmin
-guard (rejects when zero OTHER active superadmins remain, allows when at
-least one does, never trips on a promotion or a same-role no-op write,
+validation (missing/invalid `role`/`status`, `status: 'suspended'`
+rejected — that's a `User`-only value, not a real `AdminUser` one, an
+unrecognised extra field under `whitelist: true, forbidNonWhitelisted:
+true`); the shared last-active-superadmin guard (rejects when zero OTHER
+active superadmins remain on EITHER a demotion or a deactivation, allows
+when at least one does, never trips on a promotion, a same-role no-op
+write, a status no-op re-confirmation, or an already-deactivated target,
 excludes the target itself from the count so a sole superadmin cannot
-self-demote); that the response never leaks `passwordHash`; and the
-`AdminActionLogService.record()` wiring (called only on a successful
-write, with the CALLING superadmin as `adminId` and the TARGET admin as
-`targetId`, action `admin_user.role_changed` — never called on the
-404 or 409 rejection paths).
+self-demote or self-deactivate); `updateAdminStatus` revoking every
+session ONLY on the `deactivated` branch (never on `active`); that the
+response never leaks `passwordHash`; and the `AdminActionLogService.record()`
+wiring for both routes (called only on a successful write, with the
+CALLING superadmin as `adminId` and the TARGET admin as `targetId`,
+actions `admin_user.role_changed`/`admin_user.status_updated` — never
+called on a 404 or 409 rejection path).
 
 **Verification, all re-measured directly.** See this PR's own commit
 message / PR description for the exact before/after suite counts.
@@ -269,13 +341,22 @@ message / PR description for the exact before/after suite counts.
   `api/moderation.ts`'s `findReportById` and `api/adminMedia.ts`'s
   `findMediaById` already carry for their own resources. A real one
   would remove that workaround entirely.
-- **No append-only role-change HISTORY on `AdminUser` itself** — only
-  the current `role` value is stored, same "this model only tracks the
-  MOST RECENT state of an admin-recorded decision" limitation
-  `admin-staff-vetting/README.md` already discloses for
+- **No append-only role-/status-change HISTORY on `AdminUser` itself** —
+  only the current `role`/`accountStatus` value is stored, same "this
+  model only tracks the MOST RECENT state of an admin-recorded decision"
+  limitation `admin-staff-vetting/README.md` already discloses for
   `vettedAt`/`vettedByAdminId`. A full history now exists in
-  `AdminActionLog` (`admin_user.role_changed` rows), even though
-  `AdminUser.role` itself doesn't carry it.
+  `AdminActionLog` (`admin_user.role_changed`/`admin_user.status_updated`
+  rows), even though `AdminUser.role`/`.accountStatus` themselves don't
+  carry it.
+- **No must-reauthenticate-to-deactivate / no confirmation step** on
+  `PATCH /admin/staff/:id/status` — unlike `User`'s own self-service
+  `deactivateAccount`/`deleteAccount` (which both require the caller to
+  re-enter their own password), this is an ADMIN acting on a DIFFERENT
+  admin's account, already behind a real superadmin session — the same
+  "already authenticated, no re-auth step" posture `PATCH
+  /admin/users/:id`/`PATCH /admin/staff/:id/role` both already have for
+  their own admin-on-someone-else actions.
 - **No rate limiting beyond the shared admin-console session/guard
   posture.** Every write here already requires a real superadmin
   session; no additional `@AuthRateLimit()`-style throttle was added,
@@ -289,18 +370,20 @@ message / PR description for the exact before/after suite counts.
 ```
 admin-staff-roles.module.ts                       — wires AdminAuthFoundationModule + AdminActionLogModule
 admin-staff-roles.service.ts                       — AdminStaffRolesService, all business logic
-admin-staff-roles.controller.ts                    — GET /admin/staff, PATCH /admin/staff/:id/role
-admin-staff-roles.constants.ts                     — ADMIN_USER_ROLES, page-size defaults
+admin-staff-roles.controller.ts                    — GET /admin/staff, PATCH /admin/staff/:id/role, PATCH /admin/staff/:id/status, POST /admin/staff
+admin-staff-roles.constants.ts                     — ADMIN_USER_ROLES, ADMIN_STAFF_ACCOUNT_STATUSES, page-size defaults
 cursor.util.ts                                     — (createdAt, id) keyset cursor, this module's own copy
 dto/list-staff-query.dto.ts
 dto/update-admin-role.dto.ts
+dto/update-admin-status.dto.ts
+dto/create-admin-staff.dto.ts
 ../admin-action-log/                               — AdminActionLogService.record(...) (own module, own README)
 ```
 
 
 ---
 
-## POST /admin/staff � creating admin accounts (Decision Log #191)
+## POST /admin/staff � creating admin accounts (Decision Log #191)
 
 Previously `AdminUser` rows could only be provisioned by direct DB insert.
 `POST /admin/staff` (superadmin-only, same guards as the rest of this
@@ -310,7 +393,7 @@ controller) creates one from `email`, `fullName`, `role` and an optional
 - **Password convention.** No existing one to reuse:
   `PasswordResetService` is `User`-only, and nothing else creates an
   `AdminUser`. So: an admin-set password (min 8, same rule as
-  `ChangePasswordDto`), or � if omitted � a random 16-char one returned
+  `ChangePasswordDto`), or � if omitted � a random 16-char one returned
   **once** in the response as `temporaryPassword`. The new admin replaces
   it via the existing `POST /admin/auth/change-password`. The password is
   hashed with the shared `PasswordService` (argon2id), never logged, never

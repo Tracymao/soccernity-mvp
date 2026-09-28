@@ -10,6 +10,7 @@ vi.mock("../../api/adminStaff", async (importOriginal) => {
     ...actual,
     listStaff: vi.fn(),
     updateAdminRole: vi.fn(),
+    updateAdminStatus: vi.fn(),
     findStaffById: vi.fn(),
   };
 });
@@ -25,6 +26,7 @@ vi.mock("../../api/adminStaffVetting", async (importOriginal) => {
 import {
   listStaff,
   updateAdminRole,
+  updateAdminStatus,
   findStaffById,
   type AdminStaffListItem,
 } from "../../api/adminStaff";
@@ -36,6 +38,7 @@ afterEach(cleanup);
 beforeEach(() => {
   vi.mocked(listStaff).mockReset();
   vi.mocked(updateAdminRole).mockReset();
+  vi.mocked(updateAdminStatus).mockReset();
   vi.mocked(findStaffById).mockReset();
   vi.mocked(setChildSafetyVetting).mockReset();
 });
@@ -90,6 +93,22 @@ describe("SettingsRolesPage", () => {
     await waitFor(() => expect(listStaff).toHaveBeenCalledWith({ limit: 50 }));
     expect(await screen.findByText("A Moderator")).not.toBeNull();
     expect(screen.getByText("moderator")).not.toBeNull();
+  });
+
+  it("renders each row's real accountStatus as a Status pill", async () => {
+    vi.mocked(listStaff).mockResolvedValue({
+      items: [admin({ id: "a1", fullName: "Active Admin", accountStatus: "active" }), admin({ id: "a2", fullName: "Deactivated Admin", accountStatus: "deactivated" })],
+      nextCursor: null,
+    });
+
+    render(
+      <MemoryRouter>
+        <SettingsRolesPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("active")).not.toBeNull();
+    expect(screen.getByText("deactivated")).not.toBeNull();
   });
 
   it("shows an empty state with no staff accounts", async () => {
@@ -258,6 +277,87 @@ describe("EditRolePage", () => {
     expect(
       await screen.findByText("Cannot change this role: it belongs to the last active superadmin account."),
     ).not.toBeNull();
+  });
+
+  it("discloses plainly that deactivating signs the account out of every existing session immediately", async () => {
+    const a = admin();
+    renderAt(<EditRolePage />, "/settings/roles/edit/:id", {
+      pathname: `/settings/roles/edit/${a.id}`,
+      state: { admin: a },
+    });
+
+    expect(
+      await screen.findByText(/signs it out of every existing session immediately/i),
+    ).not.toBeNull();
+  });
+
+  it('an active admin shows "Deactivate account"; clicking it sets accountStatus deactivated', async () => {
+    const a = admin({ accountStatus: "active" });
+    vi.mocked(updateAdminStatus).mockResolvedValueOnce(admin({ ...a, accountStatus: "deactivated" }));
+
+    renderAt(<EditRolePage />, "/settings/roles/edit/:id", {
+      pathname: `/settings/roles/edit/${a.id}`,
+      state: { admin: a },
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Deactivate account" }));
+
+    await waitFor(() => expect(updateAdminStatus).toHaveBeenCalledWith(a.id, "deactivated"));
+    expect(await screen.findByRole("button", { name: "Reactivate account" })).not.toBeNull();
+    expect(screen.getByText("deactivated")).not.toBeNull();
+  });
+
+  it('a deactivated admin shows "Reactivate account"; clicking it sets accountStatus active', async () => {
+    const a = admin({ accountStatus: "deactivated" });
+    vi.mocked(updateAdminStatus).mockResolvedValueOnce(admin({ ...a, accountStatus: "active" }));
+
+    renderAt(<EditRolePage />, "/settings/roles/edit/:id", {
+      pathname: `/settings/roles/edit/${a.id}`,
+      state: { admin: a },
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reactivate account" }));
+
+    await waitFor(() => expect(updateAdminStatus).toHaveBeenCalledWith(a.id, "active"));
+    expect(await screen.findByRole("button", { name: "Deactivate account" })).not.toBeNull();
+    expect(screen.getByText("active")).not.toBeNull();
+  });
+
+  it("surfaces the real 409 for a last-active-superadmin deactivation", async () => {
+    const a = admin({ role: "superadmin", accountStatus: "active" });
+    vi.mocked(updateAdminStatus).mockRejectedValueOnce(
+      new AdminApiError(409, "Cannot deactivate this account: it belongs to the last active superadmin account."),
+    );
+
+    renderAt(<EditRolePage />, "/settings/roles/edit/:id", {
+      pathname: `/settings/roles/edit/${a.id}`,
+      state: { admin: a },
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Deactivate account" }));
+
+    expect(
+      await screen.findByText("Cannot deactivate this account: it belongs to the last active superadmin account."),
+    ).not.toBeNull();
+    // Displayed status is unchanged on a rejected write.
+    expect(screen.getByText("active")).not.toBeNull();
+  });
+
+  it("surfaces a real backend error on the status toggle without changing the displayed state", async () => {
+    const a = admin({ accountStatus: "active" });
+    vi.mocked(updateAdminStatus).mockRejectedValueOnce(
+      new AdminApiError(403, "You do not have permission to access this resource"),
+    );
+
+    renderAt(<EditRolePage />, "/settings/roles/edit/:id", {
+      pathname: `/settings/roles/edit/${a.id}`,
+      state: { admin: a },
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Deactivate account" }));
+
+    expect(await screen.findByText("You do not have permission to access this resource")).not.toBeNull();
+    expect(screen.getByText("active")).not.toBeNull();
   });
 
   it("discloses plainly that the vetting toggle performs no verification of its own", async () => {

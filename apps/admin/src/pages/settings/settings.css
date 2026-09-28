@@ -92,7 +92,9 @@
 
 .rl-table__row {
   display: grid;
-  grid-template-columns: 1.4fr 130px 150px;
+  /* Name | Role | Status | Actions — the Status column was added by
+     feat/admin-staff-status alongside PATCH /admin/staff/:id/status. */
+  grid-template-columns: 1.2fr 110px 110px 150px;
   gap: 16px;
   align-items: center;
   padding: 14px 20px;

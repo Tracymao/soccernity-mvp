@@ -2,10 +2,15 @@
 //
 // Real data (Edit only): PATCH /admin/staff/:id/role (Build Plan Section
 // 4.8, built by feat/admin-role-management) reassigns AdminUser.role;
-// PATCH /admin/users/:id/child-safety-vetting
+// PATCH /admin/staff/:id/status (feat/admin-staff-status, Decision Log
+// #193) sets AdminUser.accountStatus (active/deactivated) — deactivating
+// revokes every existing session for that admin and (a 409) is refused
+// if the target is the last active superadmin, mirroring the role
+// endpoint's own last-active-superadmin guard; PATCH
+// /admin/users/:id/child-safety-vetting
 // (schema/report-severity-escalation-admin-vetting-application) records
 // — but does NOT itself perform — child-safety vetting for that admin.
-// Both are AdminRolesGuard('superadmin')-only; see
+// All three are AdminRolesGuard('superadmin')-only; see
 // admin-staff-roles/README.md's "Response shape" section for why the
 // vetting fields ride along on GET/PATCH /admin/staff's own response
 // even though this module doesn't write them.
@@ -25,6 +30,8 @@ import {
   ADMIN_STAFF_ROLES,
   findStaffById,
   updateAdminRole,
+  updateAdminStatus,
+  type AdminStaffAccountStatus,
   type AdminStaffListItem,
   type AdminStaffRole,
 } from "../../api/adminStaff";
@@ -84,6 +91,9 @@ export function EditRolePage() {
 
   const [vettingBusy, setVettingBusy] = useState(false);
   const [vettingError, setVettingError] = useState<string | null>(null);
+
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   useEffect(() => {
     if (admin) return;
@@ -155,6 +165,21 @@ export function EditRolePage() {
       setVettingError(err instanceof AdminApiError ? err.message : "Couldn't update the vetting record.");
     } finally {
       setVettingBusy(false);
+    }
+  }
+
+  async function handleToggleStatus() {
+    if (!admin) return;
+    setStatusError(null);
+    setStatusBusy(true);
+    const next: AdminStaffAccountStatus = admin.accountStatus === "active" ? "deactivated" : "active";
+    try {
+      const updated = await updateAdminStatus(id, next);
+      setAdmin(updated);
+    } catch (err) {
+      setStatusError(err instanceof AdminApiError ? err.message : "Couldn't update this account's status.");
+    } finally {
+      setStatusBusy(false);
     }
   }
 
@@ -232,6 +257,44 @@ export function EditRolePage() {
           <div className="rl-action-row">
             <button type="button" className="rl-btn rl-btn--primary" onClick={handleSaveRole} disabled={savingRole}>
               {savingRole ? "Saving…" : "Submit"}
+            </button>
+          </div>
+        </div>
+
+        <div className="rl-card">
+          <h2 className="rl-card__title">Account status</h2>
+
+          <div className="rl-callout">
+            <span className="rl-callout__bar" aria-hidden />
+            <p>
+              Deactivating this account signs it out of every existing session immediately and
+              blocks it from logging back in until it's reactivated. Only a superadmin may set or
+              clear this.
+            </p>
+          </div>
+
+          <span className={`rl-pill ${admin.accountStatus === "active" ? "rl-pill--strong" : "rl-pill--soft"}`}>
+            {admin.accountStatus}
+          </span>
+
+          {statusError ? (
+            <p className="rl-error" role="alert">
+              {statusError}
+            </p>
+          ) : null}
+
+          <div className="rl-action-row">
+            <button
+              type="button"
+              className="rl-btn rl-btn--outline"
+              onClick={handleToggleStatus}
+              disabled={statusBusy}
+            >
+              {statusBusy
+                ? "Updating…"
+                : admin.accountStatus === "active"
+                  ? "Deactivate account"
+                  : "Reactivate account"}
             </button>
           </div>
         </div>

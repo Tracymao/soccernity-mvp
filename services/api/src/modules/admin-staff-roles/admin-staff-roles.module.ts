@@ -21,9 +21,12 @@ import { AdminStaffRolesService } from './admin-staff-roles.service';
 // modules the same way this codebase already keeps
 // Moderation/AdminContent/AdminUsers as three separate Section 4.8
 // surfaces despite all three being admin-console modules). Only needs
-// AdminAuthFoundationModule for AdminJwtAuthGuard/AdminRolesGuard, and
-// AdminActionLogModule so updateAdminRole can record an audit-log row
-// after each write (modules/admin-action-log/README.md).
+// AdminAuthFoundationModule for AdminJwtAuthGuard/AdminRolesGuard (and,
+// as of feat/admin-staff-status, AdminTokenService -- already exported
+// by this same module, so updateAdminStatus's session-revocation-on-
+// deactivate call needed no new module wiring), and AdminActionLogModule
+// so updateAdminRole/updateAdminStatus can record an audit-log row after
+// each write (modules/admin-action-log/README.md).
 @Module({
   imports: [AdminAuthFoundationModule, AdminActionLogModule],
   controllers: [AdminStaffRolesController],

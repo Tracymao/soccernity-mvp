@@ -11,7 +11,13 @@
 // "Add Role" and "Delete Role" remain disclosed stubs — per Decision Log
 // #191 there is still no self-service admin/moderator account creation
 // or deletion endpoint anywhere in this codebase; only reassigning an
-// EXISTING admin's role (via "Edit") is real.
+// EXISTING admin's role, or setting their accountStatus (both via
+// "Edit"), is real.
+//
+// The Status column (feat/admin-staff-status, Decision Log #193) reads
+// accountStatus straight off the same AdminStaffListItem this page's
+// GET /admin/staff already fetches — no second request. Reassigning it
+// happens on EditRolePage, not inline here.
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import AdminPageHeader from "../../layout/AdminPageHeader";
@@ -29,6 +35,14 @@ function StaffRow({ admin }: { admin: AdminStaffListItem }) {
       <span>
         <span className={`rl-pill ${admin.role === "superadmin" ? "rl-pill--strong" : "rl-pill--soft"}`}>
           {admin.role}
+        </span>
+      </span>
+      <span>
+        {/* accountStatus (Decision Log #193/feat/admin-staff-status) —
+            same strong=active/soft=otherwise convention UsersPage.tsx's
+            own accountStatus pill already uses. */}
+        <span className={`rl-pill ${admin.accountStatus === "active" ? "rl-pill--strong" : "rl-pill--soft"}`}>
+          {admin.accountStatus}
         </span>
       </span>
       <span>
@@ -107,6 +121,7 @@ export default function SettingsRolesPage() {
             <div className="rl-table__row rl-table__row--head">
               <span>Name</span>
               <span>Role</span>
+              <span>Status</span>
               <span>Actions</span>
             </div>
             {items.map((a) => (
