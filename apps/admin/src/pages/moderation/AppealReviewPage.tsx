@@ -8,22 +8,28 @@
 // surfaces that message verbatim rather than re-deriving the rule
 // client-side. Reached from ModerationQueuePage's "Review" link (Appeals
 // tab), which passes the row's own already-fetched Report via router
-// `state`; a direct visit / refresh falls back to api/moderation.ts's
-// findReportById (see that file's own Decision Log candidate #4 comment).
+// `state`; a direct visit / refresh now calls the real
+// GET /admin/moderation/reports/:id (api/moderation.ts's getReportById)
+// instead of the old bounded-list-scan findReportById fallback — the same
+// wiring ReportDetailPage.tsx already got.
 //
 // schema/report-severity-escalation-admin-vetting-application: same
 // severity/concernsMinor display + child-safety-vetting-restricted state
 // as ReportDetailPage.tsx — see that file's own header comment for why a
 // concernsMinor report can still reach this screen directly even though
 // the queue's own list filtering already keeps a non-vetted admin from
-// ever clicking "Review" on one.
+// ever clicking "Review" on one. Because getReportById itself 403s
+// (CHILD_SAFETY_VETTING_REQUIRED_CODE) on direct access to a
+// concernsMinor report, the initial load here now renders the same
+// dedicated restricted state as ReportDetailPage.tsx, not a misleading
+// "not found".
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { AdminApiError } from "../../api/adminClient";
 import {
   decideAppeal,
-  findReportById,
+  getReportById,
   isChildSafetyVettingRequiredError,
   REPORT_ACTION_LABELS,
   type AppealDecision,
@@ -39,7 +45,7 @@ import {
 } from "./moderationShared";
 import "./moderation.css";
 
-type LoadState = "loading" | "loaded" | "not-found" | "error";
+type LoadState = "loading" | "loaded" | "not-found" | "restricted" | "error";
 
 export default function AppealReviewPage() {
   const { id = "" } = useParams();
@@ -55,22 +61,28 @@ export default function AppealReviewPage() {
   useEffect(() => {
     if (report) return;
     let cancelled = false;
-    findReportById(id, "actioned")
+    getReportById(id)
       .then((found) => {
         if (cancelled) return;
-        if (found) {
-          setReport(found);
-          setLoadState("loaded");
-        } else {
-          setLoadState("not-found");
-        }
+        setReport(found);
+        setLoadState("loaded");
       })
-      .catch(() => {
-        if (!cancelled) setLoadState("error");
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (isChildSafetyVettingRequiredError(err)) {
+          setLoadState("restricted");
+        } else if (err instanceof AdminApiError && err.status === 404) {
+          setLoadState("not-found");
+        } else {
+          setLoadState("error");
+        }
       });
     return () => {
       cancelled = true;
     };
+    // Only re-runs if `id` changes -- `report` is intentionally excluded so
+    // a successful decide/escalate action's optimistic update above doesn't
+    // refetch (matches ReportDetailPage.tsx's own effect).
   }, [id]);
 
   const backLink = (
@@ -110,6 +122,18 @@ export default function AppealReviewPage() {
     );
   }
 
+  if (loadState === "restricted") {
+    return (
+      <>
+        <AdminPageHeader title="Appeal" hideSearch />
+        <div className="mod-page">
+          {backLink}
+          <VettingRestrictedNotice />
+        </div>
+      </>
+    );
+  }
+
   if (loadState === "not-found" || loadState === "error" || !report) {
     return (
       <>
@@ -121,7 +145,7 @@ export default function AppealReviewPage() {
             <p className="mod-note">
               {loadState === "error"
                 ? "Couldn’t load this appeal. Please try again from the queue."
-                : "This report isn’t in the first 250 actioned reports — open it directly from the Moderation Queue’s Appeals tab instead of a bookmarked link."}
+                : "No report exists with this id — open it directly from the Moderation Queue’s Appeals tab instead of a bookmarked link."}
             </p>
             <div className="mod-action-row">
               <Link className="mod-btn mod-btn--primary" to="/moderation">

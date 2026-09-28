@@ -204,59 +204,20 @@ export function escalateReport(id: string, input: EscalateReportInput): Promise<
   });
 }
 
-// GET /admin/moderation/reports/:id — the real single-resource fetch that
-// used to not exist (see findReportById's own comment below, kept for
-// AppealReviewPage.tsx, for the workaround this route now supersedes for
-// ReportDetailPage.tsx). Same guards as PATCH .../reports/:id: a
-// non-existent id is a genuine 404, and a report where concernsMinor is
-// true 403s (CHILD_SAFETY_VETTING_REQUIRED_CODE) for a caller who isn't
-// child-safety-vetted — a "direct access" backstop on TOP of listReports'
-// own queue-level filtering, not a replacement for it.
+// GET /admin/moderation/reports/:id — the real single-resource fetch.
+// There used to be no `GET /reports/:id` or `GET /admin/moderation/reports/:id`
+// anywhere in services/api (confirmed by reading reports.controller.ts and
+// admin-moderation.controller.ts directly — moderation/README.md's own
+// endpoint table used to list only five routes), so a direct visit or
+// refresh of Report Detail / Appeal Review (reached from
+// ModerationQueuePage's "Review" link, which normally passes the row's
+// already-fetched Report via router `state`) had no way to fetch one
+// report by id. Both ReportDetailPage.tsx and AppealReviewPage.tsx now
+// call this directly for that fallback — same guards as PATCH
+// .../reports/:id: a non-existent id is a genuine 404, and a report where
+// concernsMinor is true 403s (CHILD_SAFETY_VETTING_REQUIRED_CODE) for a
+// caller who isn't child-safety-vetted — a "direct access" backstop on TOP
+// of listReports' own queue-level filtering, not a replacement for it.
 export function getReportById(id: string): Promise<Report> {
   return adminFetch<Report>(`/admin/moderation/reports/${id}`);
-}
-
-// --- Decision Log candidate #4 (moderation module) — PARTIALLY RESOLVED
-// for ReportDetailPage.tsx by GET /admin/moderation/reports/:id above.
-//
-// There used to be no `GET /reports/:id` or `GET /admin/moderation/reports/:id`
-// anywhere in services/api — confirmed by reading reports.controller.ts
-// and admin-moderation.controller.ts directly (moderation/README.md's
-// own endpoint table used to list only five routes). Report Detail and
-// Appeal Review both need a single report by id, reached by clicking
-// "Review" on a Moderation Queue row.
-//
-// The original workaround: the Queue passes the full `Report` it already
-// has via router `state` (react-router's `Link to={...} state={{ report
-// }}`) — the same pattern apps/web's MessagesPage.tsx/NewConversationPage.tsx
-// use to hand a `Conversation`'s otherParticipant to ConversationPage.tsx
-// without a dedicated single-resource GET. `findReportById` below was the
-// fallback for a DIRECT visit or a page refresh (no router state): it
-// re-lists the one status bucket the target page cares about (`status:
-// 'open'` for Report Detail, `status: 'actioned'` for Appeal Review) and
-// searches client-side for the matching id, bounded to a few pages so a
-// very large open-report backlog can't turn a refresh into an unbounded
-// crawl.
-//
-// ReportDetailPage.tsx now calls the real `getReportById` above instead
-// of this fallback. AppealReviewPage.tsx still uses `findReportById`
-// below — out of scope for the task that added the real endpoint, kept
-// as-is and flagged here as the remaining follow-up (the fix is
-// mechanical: swap it for `getReportById` there too, the same way this
-// file's own header comment update just did for the Detail page).
-const FIND_BY_ID_MAX_PAGES = 5;
-
-export async function findReportById(
-  id: string,
-  status: "open" | "reviewed" | "actioned",
-): Promise<Report | null> {
-  let cursor: string | undefined;
-  for (let page = 0; page < FIND_BY_ID_MAX_PAGES; page += 1) {
-    const result = await listReports({ status, cursor, limit: 50 });
-    const found = result.items.find((r) => r.id === id);
-    if (found) return found;
-    if (!result.nextCursor) return null;
-    cursor = result.nextCursor;
-  }
-  return null;
 }
