@@ -11837,6 +11837,34 @@ real, still-open follow-up, not done by this entry.
     Full reasoning in `modules/moderation/README.md`'s new sections and
     the new `modules/admin-staff-vetting/README.md`.
   - PR opened, not merged — Temi verifies and merges.
+- **`fix/blog-inactive-category-filter` (backend-api, 2026-09-28) closes
+  Decision Log #335 — `GET /articles`'s `?categoryId=`/`?categorySlug=`
+  filters now also require the referenced `Category` to be `'active'`.
+  `services/api` only, zero schema/migration change.** Before this fix,
+  an explicit category filter still returned an inactive category's
+  already-published articles — only `GET /categories`'s own listing
+  hid the inactive category itself. `BlogService.listArticles` now
+  ANDs `category: { status: 'active' }` onto both filter branches
+  (`categoryId` and `categorySlug`, still independently combinable per
+  the DTO's own header comment) — a request scoped to an inactive
+  category behaves as if it has no published articles at all (an empty
+  page, never an error), matching `GET /categories`'s own "inactive is
+  simply absent" behavior. **Deliberately unchanged**: `GET /articles`'s
+  unfiltered "All" listing and `GET /articles/:id` are untouched by this
+  fix — only the two explicit category filters now respect
+  `Category.status`; retiring a category still doesn't retroactively
+  un-publish or hide its content outside those two query params. Full
+  reasoning in `modules/blog/README.md`'s own Decision Log candidate
+  item 3, now marked Resolved. **Verification**: `src/modules/blog`
+  suite — 3 suites / 30 tests, 0 failures (up from 27 — one new test
+  proving the empty-page behavior, plus the three existing
+  categoryId/categorySlug/combined tests updated to assert the new
+  `category: { status: 'active' }` clause); `npx tsc --noEmit`,
+  `npx eslint src/modules/blog`, and `npx nest build` all clean. Full
+  mocked/e2e suites not re-run in this session. Forward-pointer appended
+  to Decision Log #335's Status cell in
+  `docs/Soccernity_MVP_Build_Plan_v1.7.docx`.
+  - PR opened, not merged — Temi verifies and merges.
 
 ## The eight agents, and the order they run in
 

@@ -76,17 +76,19 @@ describe('BlogService', () => {
       expect(call.select.authorAdmin).toEqual({ select: { fullName: true } });
     });
 
-    it('filters by categoryId when supplied, ANDed with the published filter', async () => {
+    it('filters by categoryId when supplied, ANDed with the published filter AND the category being active', async () => {
       const prisma = buildPrismaMock();
       const service = new BlogService(prisma);
 
       await service.listArticles({ categoryId: 'category-1' });
 
       const call = (prisma.article.findMany as jest.Mock).mock.calls[0][0];
-      expect(call.where.AND).toEqual(expect.arrayContaining([{ categoryId: 'category-1' }]));
+      expect(call.where.AND).toEqual(
+        expect.arrayContaining([{ categoryId: 'category-1', category: { status: 'active' } }]),
+      );
     });
 
-    it('filters by categorySlug when supplied', async () => {
+    it('filters by categorySlug when supplied, also requiring the category to be active', async () => {
       const prisma = buildPrismaMock();
       const service = new BlogService(prisma);
 
@@ -94,11 +96,11 @@ describe('BlogService', () => {
 
       const call = (prisma.article.findMany as jest.Mock).mock.calls[0][0];
       expect(call.where.AND).toEqual(
-        expect.arrayContaining([{ category: { slug: 'premier-league' } }]),
+        expect.arrayContaining([{ category: { slug: 'premier-league', status: 'active' } }]),
       );
     });
 
-    it('combines categoryId and categorySlug when both are supplied', async () => {
+    it('combines categoryId and categorySlug when both are supplied, each still requiring an active category', async () => {
       const prisma = buildPrismaMock();
       const service = new BlogService(prisma);
 
@@ -106,8 +108,31 @@ describe('BlogService', () => {
 
       const call = (prisma.article.findMany as jest.Mock).mock.calls[0][0];
       expect(call.where.AND).toEqual(
-        expect.arrayContaining([{ categoryId: 'category-1' }, { category: { slug: 'premier-league' } }]),
+        expect.arrayContaining([
+          { categoryId: 'category-1', category: { status: 'active' } },
+          { category: { slug: 'premier-league', status: 'active' } },
+        ]),
       );
+    });
+
+    it('returns an empty page for a categoryId scoped to an inactive category — never an error', async () => {
+      // The service passes `category: { status: 'active' }` through to
+      // Prisma's own WHERE clause; a real Postgres query against an
+      // inactive category's id would then match zero rows. This test
+      // proves the service-level behavior on that "zero rows" outcome —
+      // an inactive category's already-published articles behave as if
+      // that category has no published articles at all, matching
+      // listCategories' own "inactive is simply absent" behavior — not
+      // that the WHERE clause itself is correct (the two tests above
+      // already prove that).
+      const prisma = buildPrismaMock();
+      (prisma.article.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new BlogService(prisma);
+
+      const page = await service.listArticles({ categoryId: 'inactive-category-1' });
+
+      expect(page.items).toEqual([]);
+      expect(page.nextCursor).toBeNull();
     });
 
     it('applies the cursor as an additional AND condition on publishedAt/id', async () => {
