@@ -134,15 +134,39 @@ resolved unilaterally here.
   `cursor.util.ts` for the full reasoning (an offset degrades under
   concurrent inserts, which a feed has by definition). Query params:
   - `cursor` (optional, opaque — base64 of an internal
-    `{ createdAt, id }` envelope; a client should treat it as a black
-    box, not construct one).
+    `{ createdAt, sequence }` envelope; a client should treat it as a
+    black box, not construct one).
   - `limit` (optional, integer, 1–50; default 20 if omitted). Both
     numbers are deliberate, documented choices — Section 5.5 requires
     pagination but doesn't specify page sizes.
-  - Ordered most-recent-first: `createdAt desc, id desc` (the `id` is
-    a tiebreaker for rows sharing an identical `createdAt` timestamp,
-    not a meaningful secondary sort on its own).
-  - Response shape: `{ items: Post[], nextCursor: string | null }`.
+  - Ordered most-recent-first: `createdAt desc, sequence desc` (the
+    tiebreaker for rows sharing an identical `createdAt` timestamp).
+    **Fixed a real bug, not just tidied**: this used to tiebreak on
+    `id` — `Post.id` is a random `@default(uuid())` with zero relation
+    to insertion order, so two posts created in the same millisecond
+    (this codebase's `createdAt` columns are `TIMESTAMP(3)`, so a real
+    collision under any burst of activity — concurrent requests, a
+    batch/seed import — is not a hypothetical) tiebroke in an order
+    unrelated to which one was actually created first. `Post.sequence`
+    (see its own comment in `schema.prisma`) is a genuine
+    Postgres-assigned `SERIAL`, so ties now resolve in true creation
+    order. `getComments`/`getSavedPosts` below had the identical
+    problem via their own `id`/`postId` tiebreakers and got the same
+    fix (`Comment.sequence`/`SavedPost.sequence`) — see each entry's own
+    note. `cursor.util.ts` still exports the original, unchanged
+    `id`-keyed `FeedCursor`/`encodeFeedCursor`/`decodeFeedCursor` too —
+    `users.service.ts`'s `getFollowers`/`getFollowing` import those
+    directly (an exception to this codebase's usual
+    per-module-cursor-util-copy convention) and were deliberately left
+    alone, out of this fix's scope; the new sequence-keyed shape is a
+    second, additively-added pair
+    (`FeedSequenceCursor`/`encodeFeedSequenceCursor`/
+    `decodeFeedSequenceCursor`), not a breaking change to the first.
+  - Response shape: `{ items: Post[], nextCursor: string | null }` —
+    `sequence` itself is never part of this payload (see
+    `POST_SELECT_WITH_SEQUENCE`'s own comment in `feed.service.ts`);
+    it's fetched internally to build `nextCursor` and stripped back off
+    before a page is returned.
   - Does not select `comments`, `likes`, or `savedBy` relations on the
     list payload — Section 5.5's "keep list payloads lean" — only the
     already-denormalized `likeCount`/`commentCount` ints.

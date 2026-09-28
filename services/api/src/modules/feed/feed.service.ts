@@ -4,7 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ENGAGEMENT_POINTS } from '../points/points.constants';
 import { awardPoints } from '../points/points.util';
 import { recordPostHashtags } from '../search/hashtag.util';
-import { decodeFeedCursor, encodeFeedCursor } from './cursor.util';
+import { decodeFeedSequenceCursor, encodeFeedSequenceCursor } from './cursor.util';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreatePostDto } from './dto/create-post.dto';
 import { FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE, FeedQueryDto } from './dto/feed-query.dto';
@@ -51,6 +51,19 @@ const POST_SELECT = {
 } as const;
 
 export type FeedPost = Prisma.PostGetPayload<{ select: typeof POST_SELECT }>;
+
+// Internal-only variant of POST_SELECT that additionally pulls
+// Post.sequence — the monotonic keyset-pagination tiebreaker (see its
+// own comment in schema.prisma). Used ONLY inside
+// paginatePostsWithViewerState()'s own fetch, to build a correct
+// nextCursor/WHERE filter; `sequence` is stripped back off every row
+// before it's handed to attachViewerState() or returned to a caller, so
+// FeedPost / the public API payload are completely unchanged by this —
+// see paginatePostsWithViewerState() below.
+const POST_SELECT_WITH_SEQUENCE = {
+  ...POST_SELECT,
+  sequence: true,
+} as const;
 
 // sprint-2/account-deactivation-backend (Decision Log #221). Every
 // post-reading surface (GET /posts/feed, GET /clubs/:id/feed,
@@ -122,6 +135,16 @@ const COMMENT_SELECT = {
 
 export type FeedComment = Prisma.CommentGetPayload<{ select: typeof COMMENT_SELECT }>;
 
+// Internal-only variant of COMMENT_SELECT that additionally pulls
+// Comment.sequence for the same reason POST_SELECT_WITH_SEQUENCE exists
+// above — used only inside getComments()'s own fetch, stripped back off
+// before the rows are returned, so FeedComment / the public API payload
+// are unchanged.
+const COMMENT_SELECT_WITH_SEQUENCE = {
+  ...COMMENT_SELECT,
+  sequence: true,
+} as const;
+
 export interface CommentPage {
   items: FeedComment[];
   nextCursor: string | null;
@@ -165,9 +188,30 @@ const SAVED_POST_SELECT = {
 
 export type SavedPostEntry = Prisma.SavedPostGetPayload<{ select: typeof SAVED_POST_SELECT }>;
 
+// Internal-only variant of SAVED_POST_SELECT that additionally pulls
+// SavedPost.sequence — same reason as POST_SELECT_WITH_SEQUENCE /
+// COMMENT_SELECT_WITH_SEQUENCE above. Used only inside
+// getSavedPosts()'s own fetch, stripped back off before the rows are
+// returned.
+const SAVED_POST_SELECT_WITH_SEQUENCE = {
+  ...SAVED_POST_SELECT,
+  sequence: true,
+} as const;
+
 export interface SavedPostPage {
   items: SavedPostEntry[];
   nextCursor: string | null;
+}
+
+// Drops the internal-only `sequence` field a *_SELECT_WITH_SEQUENCE
+// query pulls in purely to build a correct keyset cursor (see
+// POST_SELECT_WITH_SEQUENCE's own comment) — never part of any public
+// response shape, so every pagination method strips it back off before
+// the row reaches attachViewerState()/a caller.
+function stripSequence<T extends { sequence: number }>(row: T): Omit<T, 'sequence'> {
+  const rest: Omit<T, 'sequence'> & { sequence?: number } = { ...row };
+  delete rest.sequence;
+  return rest;
 }
 
 @Injectable()
@@ -346,10 +390,12 @@ export class FeedService {
   // those too.
   //
   // Keyset pagination (Section 5.5) ordered most-recent-first: createdAt
-  // desc, id desc as the tiebreaker for rows sharing the same createdAt
-  // timestamp — see cursor.util.ts and feed-query.dto.ts. take: limit + 1
-  // is the standard "fetch one extra row" trick to know whether a next
-  // page exists without a separate COUNT() query.
+  // desc, sequence desc as the tiebreaker for rows sharing the same
+  // createdAt timestamp — see cursor.util.ts, feed-query.dto.ts, and the
+  // comment on Post.sequence in schema.prisma for why the tiebreaker is
+  // a monotonic counter rather than the row's own (random-UUID) `id`.
+  // take: limit + 1 is the standard "fetch one extra row" trick to know
+  // whether a next page exists without a separate COUNT() query.
   private async paginatePostsWithViewerState(
     where: Prisma.PostWhereInput,
     limit: number,
@@ -357,15 +403,22 @@ export class FeedService {
   ): Promise<FeedPage> {
     const rows = await this.prisma.post.findMany({
       where,
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ createdAt: 'desc' }, { sequence: 'desc' }],
       take: limit + 1,
-      select: POST_SELECT,
+      select: POST_SELECT_WITH_SEQUENCE,
     });
 
     const hasMore = rows.length > limit;
-    const trimmed = hasMore ? rows.slice(0, limit) : rows;
-    const last = trimmed[trimmed.length - 1];
-    const nextCursor = hasMore && last ? encodeFeedCursor({ createdAt: last.createdAt, id: last.id }) : null;
+    const trimmedWithSequence = hasMore ? rows.slice(0, limit) : rows;
+    const last = trimmedWithSequence[trimmedWithSequence.length - 1];
+    const nextCursor =
+      hasMore && last ? encodeFeedSequenceCursor({ createdAt: last.createdAt, sequence: last.sequence }) : null;
+
+    // Strip `sequence` back off before this ever reaches
+    // attachViewerState()/a caller — it exists only to build the cursor
+    // above, and was never part of the public FeedPost shape (see
+    // POST_SELECT_WITH_SEQUENCE's own comment).
+    const trimmed: FeedPost[] = trimmedWithSequence.map(stripSequence);
 
     const items = await this.attachViewerState(userId, trimmed);
     return { items, nextCursor };
@@ -421,9 +474,12 @@ export class FeedService {
   }
 
   private buildCursorFilter(rawCursor: string): Prisma.PostWhereInput {
-    const cursor = decodeFeedCursor(rawCursor);
+    const cursor = decodeFeedSequenceCursor(rawCursor);
     return {
-      OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }],
+      OR: [
+        { createdAt: { lt: cursor.createdAt } },
+        { createdAt: cursor.createdAt, sequence: { lt: cursor.sequence } },
+      ],
     };
   }
 
@@ -664,15 +720,18 @@ export class FeedService {
 
   // GET /posts/:id/comments. Same keyset-cursor pagination pattern as
   // getFeed() (Section 5.5), reusing cursor.util.ts's encode/decode
-  // as-is — the envelope shape ({ createdAt, id }) is generic, so no
-  // second cursor format is invented for comments. Ordering is
-  // deliberately oldest-first (createdAt asc, id asc as the tiebreaker),
-  // the opposite direction from the feed's most-recent-first: Section
-  // 4.3 doesn't specify a comment-thread order, and this is a documented
-  // judgment call (see feed/README.md), not an oversight — a comment
-  // thread reads naturally top-to-bottom in the order it was written,
-  // the same convention essentially every comment UI (this codebase's
-  // own Figma-derived screens included) follows.
+  // as-is — the envelope shape ({ createdAt, sequence }) is generic, so
+  // no second cursor format is invented for comments. Ordering is
+  // deliberately oldest-first (createdAt asc, sequence asc as the
+  // tiebreaker — see the comment on Comment.sequence in schema.prisma
+  // for why the tiebreaker is a monotonic counter rather than the row's
+  // own (random-UUID) `id`), the opposite direction from the feed's
+  // most-recent-first: Section 4.3 doesn't specify a comment-thread
+  // order, and this is a documented judgment call (see feed/README.md),
+  // not an oversight — a comment thread reads naturally top-to-bottom in
+  // the order it was written, the same convention essentially every
+  // comment UI (this codebase's own Figma-derived screens included)
+  // follows.
   async getComments(postId: string, query: FeedQueryDto): Promise<CommentPage> {
     await this.assertPostExists(postId);
 
@@ -684,26 +743,34 @@ export class FeedService {
 
     const rows = await this.prisma.comment.findMany({
       where,
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      orderBy: [{ createdAt: 'asc' }, { sequence: 'asc' }],
       take: limit + 1,
-      select: COMMENT_SELECT,
+      select: COMMENT_SELECT_WITH_SEQUENCE,
     });
 
     const hasMore = rows.length > limit;
-    const items = hasMore ? rows.slice(0, limit) : rows;
-    const last = items[items.length - 1];
-    const nextCursor = hasMore && last ? encodeFeedCursor({ createdAt: last.createdAt, id: last.id }) : null;
+    const rowsWithSequence = hasMore ? rows.slice(0, limit) : rows;
+    const last = rowsWithSequence[rowsWithSequence.length - 1];
+    const nextCursor =
+      hasMore && last ? encodeFeedSequenceCursor({ createdAt: last.createdAt, sequence: last.sequence }) : null;
+
+    // Strip `sequence` back off — see COMMENT_SELECT_WITH_SEQUENCE's own
+    // comment; it was never part of the public FeedComment shape.
+    const items: FeedComment[] = rowsWithSequence.map(stripSequence);
 
     return { items, nextCursor };
   }
 
   private buildCommentsCursorFilter(rawCursor: string): Prisma.CommentWhereInput {
-    const cursor = decodeFeedCursor(rawCursor);
+    const cursor = decodeFeedSequenceCursor(rawCursor);
     // Ascending-order counterpart of buildCursorFilter() above: "greater
     // than" instead of "less than," because comments page oldest-first
     // while the main feed pages newest-first.
     return {
-      OR: [{ createdAt: { gt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { gt: cursor.id } }],
+      OR: [
+        { createdAt: { gt: cursor.createdAt } },
+        { createdAt: cursor.createdAt, sequence: { gt: cursor.sequence } },
+      ],
     };
   }
 
@@ -861,18 +928,22 @@ export class FeedService {
   // controller — see feed/README.md and users/README.md's precedent)
   // isn't this method's concern; by the time userId reaches here it's
   // already the caller's own id. Same keyset-cursor pattern again, most-
-  // recently-saved-first (savedAt desc, postId desc tiebreaker) — the
+  // recently-saved-first (savedAt desc, sequence desc tiebreaker) — the
   // natural "what did I save recently" read, matching the feed's own
-  // most-recent-first convention. postId (not SavedPost's own `id`,
-  // which isn't selected here) is the tiebreaker because
-  // @@unique([userId, postId]) already guarantees it's unique within a
-  // single caller's rows — no need to select an extra field just for
-  // this. Note the cursor envelope's `createdAt` field is reused to
-  // carry SavedPost.savedAt here (see cursor.util.ts — the envelope
-  // shape is a generic { timestamp, id } pair despite its field being
-  // named for the feed's original use; renaming it would touch every
-  // existing call site and test for no behavioral gain, so this method
-  // instead documents the reuse here).
+  // most-recent-first convention. The tiebreaker used to be `postId`
+  // (SavedPost's own `id` wasn't selected here) — but postId is a
+  // foreign key to Post.id, a random UUID with no relation to WHEN this
+  // particular row was saved, so two posts saved in the same millisecond
+  // tiebroke in an order unrelated to save order. SavedPost.sequence
+  // (see its own comment in schema.prisma) is a genuinely monotonic
+  // counter on THIS row, so ties now resolve in true
+  // most-recently-saved-first order. Note the cursor envelope's
+  // `createdAt` field is reused to carry SavedPost.savedAt here (see
+  // cursor.util.ts — the envelope shape is a generic { timestamp,
+  // sequence } pair despite its field being named for the feed's
+  // original use; renaming it would touch every existing call site and
+  // test for no behavioral gain, so this method instead documents the
+  // reuse here).
   async getSavedPosts(userId: string, query: FeedQueryDto): Promise<SavedPostPage> {
     const limit = Math.min(query.limit ?? FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE);
 
@@ -882,24 +953,31 @@ export class FeedService {
 
     const rows = await this.prisma.savedPost.findMany({
       where,
-      orderBy: [{ savedAt: 'desc' }, { postId: 'desc' }],
+      orderBy: [{ savedAt: 'desc' }, { sequence: 'desc' }],
       take: limit + 1,
-      select: SAVED_POST_SELECT,
+      select: SAVED_POST_SELECT_WITH_SEQUENCE,
     });
 
     const hasMore = rows.length > limit;
-    const items = hasMore ? rows.slice(0, limit) : rows;
-    const last = items[items.length - 1];
+    const rowsWithSequence = hasMore ? rows.slice(0, limit) : rows;
+    const last = rowsWithSequence[rowsWithSequence.length - 1];
     const nextCursor =
-      hasMore && last ? encodeFeedCursor({ createdAt: last.savedAt, id: last.postId }) : null;
+      hasMore && last ? encodeFeedSequenceCursor({ createdAt: last.savedAt, sequence: last.sequence }) : null;
+
+    // Strip `sequence` back off — see SAVED_POST_SELECT_WITH_SEQUENCE's
+    // own comment; it was never part of the public SavedPostEntry shape.
+    const items: SavedPostEntry[] = rowsWithSequence.map(stripSequence);
 
     return { items, nextCursor };
   }
 
   private buildSavedPostsCursorFilter(rawCursor: string): Prisma.SavedPostWhereInput {
-    const cursor = decodeFeedCursor(rawCursor);
+    const cursor = decodeFeedSequenceCursor(rawCursor);
     return {
-      OR: [{ savedAt: { lt: cursor.createdAt } }, { savedAt: cursor.createdAt, postId: { lt: cursor.id } }],
+      OR: [
+        { savedAt: { lt: cursor.createdAt } },
+        { savedAt: cursor.createdAt, sequence: { lt: cursor.sequence } },
+      ],
     };
   }
 }

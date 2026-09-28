@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { encodeFeedCursor } from './cursor.util';
+import { encodeFeedSequenceCursor } from './cursor.util';
 import { FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE } from './dto/feed-query.dto';
 import { FeedService } from './feed.service';
 
@@ -103,6 +103,11 @@ const AUTHOR = { id: 'author-1', displayName: 'Author One' };
 function buildPostRow(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: 'post-1',
+    // Default sequence for a single-row fixture — irrelevant unless a
+    // test builds multiple rows to exercise ordering/cursor behavior, in
+    // which case each row overrides it explicitly (see the getFeed /
+    // getClubFeed pagination tests below).
+    sequence: 1,
     authorId: 'author-1',
     author: AUTHOR,
     contentText: 'Great match today',
@@ -355,7 +360,7 @@ describe('FeedService', () => {
       });
     });
 
-    it('orders most-recent-first, keyed on (createdAt, id)', async () => {
+    it('orders most-recent-first, keyed on (createdAt, sequence) — NOT id, a random UUID unrelated to insertion order', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
       const service = new FeedService(prisma);
@@ -363,7 +368,8 @@ describe('FeedService', () => {
       await service.getFeed('user-1', {});
 
       const callArgs = (prisma.post.findMany as jest.Mock).mock.calls[0][0];
-      expect(callArgs.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
+      expect(callArgs.orderBy).toEqual([{ createdAt: 'desc' }, { sequence: 'desc' }]);
+      expect(callArgs.select).toHaveProperty('sequence', true);
     });
 
     it('defaults to a page size of FEED_DEFAULT_PAGE_SIZE, requesting one extra row', async () => {
@@ -403,9 +409,9 @@ describe('FeedService', () => {
     it('returns a nextCursor and trims the extra lookahead row when more rows exist than the limit', async () => {
       const prisma = buildPrismaMock();
       const rows = [
-        buildPostRow({ id: 'post-3', createdAt: new Date('2026-08-03T00:00:00.000Z') }),
-        buildPostRow({ id: 'post-2', createdAt: new Date('2026-08-02T00:00:00.000Z') }),
-        buildPostRow({ id: 'post-1', createdAt: new Date('2026-08-01T00:00:00.000Z') }), // lookahead row
+        buildPostRow({ id: 'post-3', sequence: 3, createdAt: new Date('2026-08-03T00:00:00.000Z') }),
+        buildPostRow({ id: 'post-2', sequence: 2, createdAt: new Date('2026-08-02T00:00:00.000Z') }),
+        buildPostRow({ id: 'post-1', sequence: 1, createdAt: new Date('2026-08-01T00:00:00.000Z') }), // lookahead row
       ];
       (prisma.post.findMany as jest.Mock).mockResolvedValue(rows);
       const service = new FeedService(prisma);
@@ -415,15 +421,20 @@ describe('FeedService', () => {
       expect(page.items).toHaveLength(2);
       expect(page.items.map((p) => p.id)).toEqual(['post-3', 'post-2']);
       expect(page.nextCursor).toBe(
-        encodeFeedCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), id: 'post-2' }),
+        encodeFeedSequenceCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), sequence: 2 }),
       );
+      // `sequence` exists purely to build the cursor above — it must
+      // never leak into the actual response payload (see
+      // POST_SELECT_WITH_SEQUENCE's own comment in feed.service.ts).
+      expect(page.items[0]).not.toHaveProperty('sequence');
+      expect(page.items[1]).not.toHaveProperty('sequence');
     });
 
-    it('applies a cursor filter (createdAt < cursor OR createdAt = cursor AND id < cursor.id) when a cursor is given', async () => {
+    it('applies a cursor filter (createdAt < cursor OR createdAt = cursor AND sequence < cursor.sequence) when a cursor is given — NOT id, which was never monotonic', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
       const service = new FeedService(prisma);
-      const cursor = encodeFeedCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), id: 'post-2' });
+      const cursor = encodeFeedSequenceCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), sequence: 2 });
 
       await service.getFeed('user-1', { cursor });
 
@@ -432,7 +443,7 @@ describe('FeedService', () => {
       expect(callArgs.where.AND[1]).toEqual({
         OR: [
           { createdAt: { lt: new Date('2026-08-02T00:00:00.000Z') } },
-          { createdAt: new Date('2026-08-02T00:00:00.000Z'), id: { lt: 'post-2' } },
+          { createdAt: new Date('2026-08-02T00:00:00.000Z'), sequence: { lt: 2 } },
         ],
       });
     });
@@ -595,7 +606,7 @@ describe('FeedService', () => {
         clubPageId: 'club-1',
         author: { accountStatus: { in: ['active', 'deleted'] } },
       });
-      expect(callArgs.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
+      expect(callArgs.orderBy).toEqual([{ createdAt: 'desc' }, { sequence: 'desc' }]);
       expect(callArgs.take).toBe(FEED_DEFAULT_PAGE_SIZE + 1);
     });
 
@@ -612,13 +623,13 @@ describe('FeedService', () => {
     it('ANDs a cursor filter with the clubPageId scope and builds a nextCursor from the last kept row', async () => {
       const prisma = buildPrismaMock();
       const rows = [
-        buildPostRow({ id: 'post-3', clubPageId: 'club-1', createdAt: new Date('2026-08-03T00:00:00.000Z') }),
-        buildPostRow({ id: 'post-2', clubPageId: 'club-1', createdAt: new Date('2026-08-02T00:00:00.000Z') }),
-        buildPostRow({ id: 'post-1', clubPageId: 'club-1', createdAt: new Date('2026-08-01T00:00:00.000Z') }),
+        buildPostRow({ id: 'post-3', sequence: 3, clubPageId: 'club-1', createdAt: new Date('2026-08-03T00:00:00.000Z') }),
+        buildPostRow({ id: 'post-2', sequence: 2, clubPageId: 'club-1', createdAt: new Date('2026-08-02T00:00:00.000Z') }),
+        buildPostRow({ id: 'post-1', sequence: 1, clubPageId: 'club-1', createdAt: new Date('2026-08-01T00:00:00.000Z') }),
       ];
       (prisma.post.findMany as jest.Mock).mockResolvedValue(rows);
       const service = new FeedService(prisma);
-      const cursor = encodeFeedCursor({ createdAt: new Date('2026-08-09T00:00:00.000Z'), id: 'post-9' });
+      const cursor = encodeFeedSequenceCursor({ createdAt: new Date('2026-08-09T00:00:00.000Z'), sequence: 9 });
 
       const page = await service.getClubFeed('club-1', 'user-1', { cursor, limit: 2 });
 
@@ -630,12 +641,12 @@ describe('FeedService', () => {
       expect(callArgs.where.AND[1]).toEqual({
         OR: [
           { createdAt: { lt: new Date('2026-08-09T00:00:00.000Z') } },
-          { createdAt: new Date('2026-08-09T00:00:00.000Z'), id: { lt: 'post-9' } },
+          { createdAt: new Date('2026-08-09T00:00:00.000Z'), sequence: { lt: 9 } },
         ],
       });
       expect(page.items.map((p) => p.id)).toEqual(['post-3', 'post-2']);
       expect(page.nextCursor).toBe(
-        encodeFeedCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), id: 'post-2' }),
+        encodeFeedSequenceCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), sequence: 2 }),
       );
     });
 
@@ -1043,6 +1054,10 @@ describe('FeedService', () => {
     function buildCommentRow(overrides: Partial<Record<string, unknown>> = {}) {
       return {
         id: 'comment-1',
+        // See buildPostRow's own comment — irrelevant unless a test
+        // builds multiple rows to exercise getComments' ordering/cursor
+        // behavior, in which case each row overrides it explicitly.
+        sequence: 1,
         postId: 'post-1',
         authorId: 'author-1',
         author: AUTHOR2,
@@ -1108,7 +1123,7 @@ describe('FeedService', () => {
       expect(prisma.comment.findMany).not.toHaveBeenCalled();
     });
 
-    it('orders comments oldest-first (createdAt asc, id asc)', async () => {
+    it('orders comments oldest-first (createdAt asc, sequence asc) — NOT id, a random UUID unrelated to insertion order', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
       (prisma.comment.findMany as jest.Mock).mockResolvedValue([]);
@@ -1117,16 +1132,17 @@ describe('FeedService', () => {
       await service.getComments('post-1', {});
 
       const callArgs = (prisma.comment.findMany as jest.Mock).mock.calls[0][0];
-      expect(callArgs.orderBy).toEqual([{ createdAt: 'asc' }, { id: 'asc' }]);
+      expect(callArgs.orderBy).toEqual([{ createdAt: 'asc' }, { sequence: 'asc' }]);
       expect(callArgs.where).toEqual({ postId: 'post-1' });
+      expect(callArgs.select).toHaveProperty('sequence', true);
     });
 
-    it('applies an ascending cursor filter (createdAt > cursor OR createdAt = cursor AND id > cursor.id)', async () => {
+    it('applies an ascending cursor filter (createdAt > cursor OR createdAt = cursor AND sequence > cursor.sequence)', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
       (prisma.comment.findMany as jest.Mock).mockResolvedValue([]);
       const service = new FeedService(prisma);
-      const cursor = encodeFeedCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), id: 'comment-2' });
+      const cursor = encodeFeedSequenceCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), sequence: 2 });
 
       await service.getComments('post-1', { cursor });
 
@@ -1135,7 +1151,7 @@ describe('FeedService', () => {
         postId: 'post-1',
         OR: [
           { createdAt: { gt: new Date('2026-08-02T00:00:00.000Z') } },
-          { createdAt: new Date('2026-08-02T00:00:00.000Z'), id: { gt: 'comment-2' } },
+          { createdAt: new Date('2026-08-02T00:00:00.000Z'), sequence: { gt: 2 } },
         ],
       });
     });
@@ -1144,9 +1160,9 @@ describe('FeedService', () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
       const rows = [
-        buildCommentRow({ id: 'comment-1', createdAt: new Date('2026-08-01T00:00:00.000Z') }),
-        buildCommentRow({ id: 'comment-2', createdAt: new Date('2026-08-02T00:00:00.000Z') }),
-        buildCommentRow({ id: 'comment-3', createdAt: new Date('2026-08-03T00:00:00.000Z') }), // lookahead row
+        buildCommentRow({ id: 'comment-1', sequence: 1, createdAt: new Date('2026-08-01T00:00:00.000Z') }),
+        buildCommentRow({ id: 'comment-2', sequence: 2, createdAt: new Date('2026-08-02T00:00:00.000Z') }),
+        buildCommentRow({ id: 'comment-3', sequence: 3, createdAt: new Date('2026-08-03T00:00:00.000Z') }), // lookahead row
       ];
       (prisma.comment.findMany as jest.Mock).mockResolvedValue(rows);
       const service = new FeedService(prisma);
@@ -1155,8 +1171,10 @@ describe('FeedService', () => {
 
       expect(page.items.map((c) => c.id)).toEqual(['comment-1', 'comment-2']);
       expect(page.nextCursor).toBe(
-        encodeFeedCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), id: 'comment-2' }),
+        encodeFeedSequenceCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), sequence: 2 }),
       );
+      expect(page.items[0]).not.toHaveProperty('sequence');
+      expect(page.items[1]).not.toHaveProperty('sequence');
     });
 
     // Notification wiring, added by sprint-2/follow-and-notifications.
@@ -1477,6 +1495,11 @@ describe('FeedService', () => {
     function buildSavedRow(overrides: Partial<Record<string, unknown>> = {}) {
       return {
         postId: 'post-1',
+        // See buildPostRow's own comment — irrelevant unless a test
+        // builds multiple rows to exercise ordering/cursor behavior, in
+        // which case each row overrides it explicitly. This is
+        // SavedPost's OWN sequence, not the embedded post's.
+        sequence: 1,
         savedAt: new Date('2026-08-01T00:00:00.000Z'),
         post: buildPostRow(),
         ...overrides,
@@ -1492,15 +1515,19 @@ describe('FeedService', () => {
 
       const callArgs = (prisma.savedPost.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.where).toEqual({ userId: 'user-1' });
-      expect(callArgs.orderBy).toEqual([{ savedAt: 'desc' }, { postId: 'desc' }]);
+      // NOT `postId` — that's a foreign key to Post.id (a random UUID)
+      // with no relation to WHEN this row was saved. See
+      // SAVED_POST_SELECT_WITH_SEQUENCE's own comment.
+      expect(callArgs.orderBy).toEqual([{ savedAt: 'desc' }, { sequence: 'desc' }]);
+      expect(callArgs.select).toHaveProperty('sequence', true);
     });
 
     it('paginates with a nextCursor when more saved posts exist than the limit', async () => {
       const prisma = buildPrismaMock();
       const rows = [
-        buildSavedRow({ postId: 'post-3', savedAt: new Date('2026-08-03T00:00:00.000Z') }),
-        buildSavedRow({ postId: 'post-2', savedAt: new Date('2026-08-02T00:00:00.000Z') }),
-        buildSavedRow({ postId: 'post-1', savedAt: new Date('2026-08-01T00:00:00.000Z') }), // lookahead
+        buildSavedRow({ postId: 'post-3', sequence: 3, savedAt: new Date('2026-08-03T00:00:00.000Z') }),
+        buildSavedRow({ postId: 'post-2', sequence: 2, savedAt: new Date('2026-08-02T00:00:00.000Z') }),
+        buildSavedRow({ postId: 'post-1', sequence: 1, savedAt: new Date('2026-08-01T00:00:00.000Z') }), // lookahead
       ];
       (prisma.savedPost.findMany as jest.Mock).mockResolvedValue(rows);
       const service = new FeedService(prisma);
@@ -1509,15 +1536,17 @@ describe('FeedService', () => {
 
       expect(page.items.map((s) => s.postId)).toEqual(['post-3', 'post-2']);
       expect(page.nextCursor).toBe(
-        encodeFeedCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), id: 'post-2' }),
+        encodeFeedSequenceCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), sequence: 2 }),
       );
+      expect(page.items[0]).not.toHaveProperty('sequence');
+      expect(page.items[1]).not.toHaveProperty('sequence');
     });
 
-    it('applies a descending cursor filter keyed on savedAt/postId when a cursor is given', async () => {
+    it('applies a descending cursor filter keyed on savedAt/sequence when a cursor is given', async () => {
       const prisma = buildPrismaMock();
       (prisma.savedPost.findMany as jest.Mock).mockResolvedValue([]);
       const service = new FeedService(prisma);
-      const cursor = encodeFeedCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), id: 'post-2' });
+      const cursor = encodeFeedSequenceCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), sequence: 2 });
 
       await service.getSavedPosts('user-1', { cursor });
 
@@ -1526,7 +1555,7 @@ describe('FeedService', () => {
         userId: 'user-1',
         OR: [
           { savedAt: { lt: new Date('2026-08-02T00:00:00.000Z') } },
-          { savedAt: new Date('2026-08-02T00:00:00.000Z'), postId: { lt: 'post-2' } },
+          { savedAt: new Date('2026-08-02T00:00:00.000Z'), sequence: { lt: 2 } },
         ],
       });
     });
