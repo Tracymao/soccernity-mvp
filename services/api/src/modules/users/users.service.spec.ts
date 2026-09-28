@@ -1,7 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { encodeFeedCursor } from '../feed/cursor.util';
+import { encodeFeedSequenceCursor } from '../feed/cursor.util';
 import { UsersService } from './users.service';
 
 function buildPrismaMock() {
@@ -408,7 +408,7 @@ describe('UsersService', () => {
   describe('getFollowers / getFollowing', () => {
     function buildFollowRow(overrides: Partial<Record<string, unknown>> = {}) {
       return {
-        id: 'follow-1',
+        sequence: 1,
         createdAt: new Date('2026-08-01T00:00:00.000Z'),
         follower: { id: 'follower-1', displayName: 'Follower One' },
         followee: { id: 'followee-1', displayName: 'Followee One' },
@@ -435,7 +435,7 @@ describe('UsersService', () => {
 
       const callArgs = (prisma.follow.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.where).toEqual({ followeeId: 'user-1', follower: { is: { accountStatus: 'active' } } });
-      expect(callArgs.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
+      expect(callArgs.orderBy).toEqual([{ createdAt: 'desc' }, { sequence: 'desc' }]);
     });
 
     it('returns the embedded follower as the minimal {id, displayName} shape, no passwordHash/isMinor', async () => {
@@ -457,9 +457,9 @@ describe('UsersService', () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1', accountStatus: 'active' });
       const rows = [
-        buildFollowRow({ id: 'follow-3', createdAt: new Date('2026-08-03T00:00:00.000Z') }),
-        buildFollowRow({ id: 'follow-2', createdAt: new Date('2026-08-02T00:00:00.000Z') }),
-        buildFollowRow({ id: 'follow-1', createdAt: new Date('2026-08-01T00:00:00.000Z') }), // lookahead
+        buildFollowRow({ sequence: 3, createdAt: new Date('2026-08-03T00:00:00.000Z') }),
+        buildFollowRow({ sequence: 2, createdAt: new Date('2026-08-02T00:00:00.000Z') }),
+        buildFollowRow({ sequence: 1, createdAt: new Date('2026-08-01T00:00:00.000Z') }), // lookahead
       ];
       (prisma.follow.findMany as jest.Mock).mockResolvedValue(rows);
       const service = new UsersService(prisma);
@@ -468,7 +468,7 @@ describe('UsersService', () => {
 
       expect(page.items).toHaveLength(2);
       expect(page.nextCursor).toBe(
-        encodeFeedCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), id: 'follow-2' }),
+        encodeFeedSequenceCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), sequence: 2 }),
       );
     });
 
@@ -484,12 +484,12 @@ describe('UsersService', () => {
       expect(page.nextCursor).toBeNull();
     });
 
-    it('applies a cursor filter (createdAt < cursor OR createdAt = cursor AND id < cursor.id) to getFollowers', async () => {
+    it('applies a cursor filter (createdAt < cursor OR createdAt = cursor AND sequence < cursor.sequence) to getFollowers', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1', accountStatus: 'active' });
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
       const service = new UsersService(prisma);
-      const cursor = encodeFeedCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), id: 'follow-2' });
+      const cursor = encodeFeedSequenceCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), sequence: 2 });
 
       await service.getFollowers('user-1', { cursor });
 
@@ -499,7 +499,7 @@ describe('UsersService', () => {
         follower: { is: { accountStatus: 'active' } },
         OR: [
           { createdAt: { lt: new Date('2026-08-02T00:00:00.000Z') } },
-          { createdAt: new Date('2026-08-02T00:00:00.000Z'), id: { lt: 'follow-2' } },
+          { createdAt: new Date('2026-08-02T00:00:00.000Z'), sequence: { lt: 2 } },
         ],
       });
     });

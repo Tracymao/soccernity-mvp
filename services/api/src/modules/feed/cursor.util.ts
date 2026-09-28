@@ -14,17 +14,22 @@ import { BadRequestException } from '@nestjs/common';
 // without being a breaking API contract change, and avoids a client
 // hand-crafting a cursor that doesn't correspond to a real row.
 //
-// STILL USED by users.service.ts's getFollowers/getFollowing (Follow.id
-// as the tiebreaker, imported directly from here rather than copied —
-// an exception to this codebase's usual per-module-cursor-util
-// convention). feed.service.ts's own three pagination call sites
-// (getFeed/getClubFeed/getBanterRoomFeed, getComments, getSavedPosts) no
-// longer use THIS cursor shape — see FeedSequenceCursor below and each
-// call site's own comment in feed.service.ts for why: `id` there was a
-// random UUID (Post.id/Comment.id) or a foreign key to one (SavedPost's
+// No longer used by any pagination call site as of
+// fix/follow-pagination-tiebreaker — users.service.ts's getFollowers/
+// getFollowing were the LAST consumer (Follow.id as the tiebreaker,
+// imported directly from here rather than copied) and now use
+// FeedSequenceCursor below instead, for the same reason
+// feed.service.ts's own three pagination call sites (getFeed/
+// getClubFeed/getBanterRoomFeed, getComments, getSavedPosts) already
+// switched off this shape: `id` there was a random UUID
+// (Post.id/Comment.id/Follow.id) or a foreign key to one (SavedPost's
 // old `postId` tiebreaker) with no relation to insertion order, so rows
 // sharing the same millisecond-precision timestamp tiebroke in an order
-// unrelated to which one was actually created/saved first.
+// unrelated to which one was actually created/saved/followed first.
+// Kept in place, with its own passing unit tests (cursor.util.spec.ts),
+// as a generic id-keyed cursor utility — not deleted, since removing it
+// was out of scope for the bug this fixed and nothing rules out a future
+// non-sequence-backed caller reusing it.
 export interface FeedCursor {
   createdAt: Date;
   id: string;
@@ -65,15 +70,16 @@ export function decodeFeedCursor(raw: string): FeedCursor {
 // Sequence-tiebreaker counterpart of FeedCursor above, used by
 // feed.service.ts's own three pagination call sites
 // (paginatePostsWithViewerState for GET /posts/feed + GET /clubs/:id/feed
-// + GET /banter-rooms/:id/posts, getComments, getSavedPosts). `sequence`
-// is a genuinely monotonically-increasing Postgres-assigned counter (see
-// the comment on Post.sequence / Comment.sequence / SavedPost.sequence
-// in schema.prisma) — not the row's own `id`, which is a random UUID (or,
+// + GET /banter-rooms/:id/posts, getComments, getSavedPosts) AND, as of
+// fix/follow-pagination-tiebreaker, users.service.ts's getFollowers/
+// getFollowing. `sequence` is a genuinely monotonically-increasing
+// Postgres-assigned counter (see the comment on Post.sequence /
+// Comment.sequence / SavedPost.sequence / Follow.sequence in
+// schema.prisma) — not the row's own `id`, which is a random UUID (or,
 // for SavedPost's old tiebreaker, a foreign key to one) with no relation
 // to insertion order. A dedicated shape rather than repurposing
-// FeedCursor above: users.service.ts imports FeedCursor/encodeFeedCursor/
-// decodeFeedCursor directly (Follow.id as its own, unrelated tiebreaker,
-// out of this fix's scope) and must keep working unchanged.
+// FeedCursor above, since that one's envelope ({ createdAt, id: string })
+// has no room for a numeric sequence.
 //
 // Same opaque-base64-of-a-small-JSON-envelope contract as FeedCursor.
 export interface FeedSequenceCursor {

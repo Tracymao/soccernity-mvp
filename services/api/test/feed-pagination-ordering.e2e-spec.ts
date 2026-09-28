@@ -6,22 +6,24 @@ import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
 
 // Real-Postgres coverage for the keyset-pagination tiebreaker bug fixed
-// directly on Post.sequence / Comment.sequence / SavedPost.sequence (see
-// each column's own comment in schema.prisma, and
-// feed.service.ts/cursor.util.ts's matching comments): a mocked Prisma
-// client can't prove anything about SQL ORDER BY behavior — it just
-// returns whatever array a test hands it — so this is exactly category
-// (2)/(3) from test/README.md's own guiding principle (a real relation/
-// constraint-adjacent ordering question that only a genuine database
-// engine can answer).
+// directly on Post.sequence / Comment.sequence / SavedPost.sequence /
+// Follow.sequence (see each column's own comment in schema.prisma, and
+// feed.service.ts / users.service.ts / cursor.util.ts's matching
+// comments): a mocked Prisma client can't prove anything about SQL
+// ORDER BY behavior — it just returns whatever array a test hands it —
+// so this is exactly category (2)/(3) from test/README.md's own guiding
+// principle (a real relation/constraint-adjacent ordering question that
+// only a genuine database engine can answer).
 //
 // Before the fix, all three of feed.service.ts's keyset-pagination call
-// sites tiebroke same-millisecond ties on a random UUID (Post.id /
-// Comment.id, or — for saved posts — SavedPost's foreign key to
-// Post.id) that has zero relation to which row was actually created (or
-// saved) first. Each test below deliberately crafts two rows that share
-// an EXACT `createdAt`/`savedAt` timestamp, with ids chosen so the OLD
-// id-based tiebreaker would have reported them in the WRONG (i.e.
+// sites (and, as of fix/follow-pagination-tiebreaker,
+// users.service.ts's getFollowers/getFollowing too) tiebroke
+// same-millisecond ties on a random UUID (Post.id / Comment.id /
+// Follow.id, or — for saved posts — SavedPost's foreign key to Post.id)
+// that has zero relation to which row was actually created (or saved,
+// or followed) first. Each test below deliberately crafts two rows that
+// share an EXACT `createdAt`/`savedAt` timestamp, with ids chosen so the
+// OLD id-based tiebreaker would have reported them in the WRONG (i.e.
 // not-actually-most-recent-first / not-actually-oldest-first) order —
 // proving the fix, not just that pagination "works" for some order.
 describe('Feed pagination ordering e2e: same-millisecond ties tiebreak on sequence, not a random id', () => {
@@ -252,6 +254,131 @@ describe('Feed pagination ordering e2e: same-millisecond ties tiebreak on sequen
 
       expect(secondPage.body.items).toHaveLength(1);
       expect(secondPage.body.items[0].postId).toBe(postSavedFirst.id);
+      expect(secondPage.body.nextCursor).toBeNull();
+    });
+  });
+
+  // fix/follow-pagination-tiebreaker: the same class of bug, in
+  // users.service.ts's getFollowers/getFollowing — those two tiebroke
+  // same-`createdAt` Follow rows on Follow.id (a random UUID with no
+  // relation to insertion order), left out of scope by the three blocks
+  // above since users.service.ts imported the plain, non-sequence
+  // FeedCursor pair directly rather than feed.service.ts's
+  // FeedSequenceCursor pair. Follow.sequence (see its own comment in
+  // schema.prisma) closes the same gap, reusing FeedSequenceCursor/
+  // encodeFeedSequenceCursor/decodeFeedSequenceCursor as-is — no third
+  // cursor shape was needed.
+  describe('GET /users/:id/followers', () => {
+    it('orders same-createdAt follows by true follow order (sequence), not by a random id', async () => {
+      const target = await createUser('followers-target');
+      const followerA = await createUser('followers-a');
+      const followerB = await createUser('followers-b');
+      const prisma = getTestPrismaClient();
+
+      const tiedAt = new Date('2026-09-20T12:00:00.000Z');
+
+      // followA follows target FIRST (so Postgres assigns it the LOWER
+      // `sequence`), but the Follow row is deliberately given an id that
+      // sorts AFTER followB's under a plain string `desc` comparison —
+      // the exact trap the old `id desc` tiebreaker fell into.
+      const followA = await prisma.follow.create({
+        data: {
+          id: 'zzzzzzzz-follow-created-first',
+          followerId: followerA.userId,
+          followeeId: target.userId,
+          createdAt: tiedAt,
+        },
+      });
+      const followB = await prisma.follow.create({
+        data: {
+          id: '00000000-follow-created-second',
+          followerId: followerB.userId,
+          followeeId: target.userId,
+          createdAt: tiedAt,
+        },
+      });
+
+      // Sanity-check the trap is real: if this ever stopped holding, the
+      // rest of this test would pass trivially for the wrong reason.
+      expect(followA.id > followB.id).toBe(true);
+
+      const firstPage = await request(app.getHttpServer())
+        .get(`/users/${target.userId}/followers?limit=1`)
+        .set('Authorization', `Bearer ${target.accessToken}`)
+        .expect(200);
+
+      // The genuinely most-recently-followed follower (followerB) must
+      // come first — under the old id-desc tiebreak, followA's larger id
+      // would have incorrectly sorted first instead.
+      expect(firstPage.body.items).toHaveLength(1);
+      expect(firstPage.body.items[0].id).toBe(followerB.userId);
+      expect(firstPage.body.nextCursor).not.toBeNull();
+
+      const secondPage = await request(app.getHttpServer())
+        .get(
+          `/users/${target.userId}/followers?limit=1&cursor=${encodeURIComponent(firstPage.body.nextCursor)}`,
+        )
+        .set('Authorization', `Bearer ${target.accessToken}`)
+        .expect(200);
+
+      expect(secondPage.body.items).toHaveLength(1);
+      expect(secondPage.body.items[0].id).toBe(followerA.userId);
+      expect(secondPage.body.nextCursor).toBeNull();
+    });
+  });
+
+  describe('GET /users/:id/following', () => {
+    it('orders same-createdAt follows by true follow order (sequence), not by a random id', async () => {
+      const source = await createUser('following-source');
+      const followeeA = await createUser('following-a');
+      const followeeB = await createUser('following-b');
+      const prisma = getTestPrismaClient();
+
+      const tiedAt = new Date('2026-09-20T12:00:00.000Z');
+
+      // source follows followeeA FIRST (lower `sequence`), but that Follow
+      // row is deliberately given an id that sorts AFTER the one for
+      // followeeB under a plain string `desc` comparison.
+      const followA = await prisma.follow.create({
+        data: {
+          id: 'zzzzzzzz-following-created-first',
+          followerId: source.userId,
+          followeeId: followeeA.userId,
+          createdAt: tiedAt,
+        },
+      });
+      const followB = await prisma.follow.create({
+        data: {
+          id: '00000000-following-created-second',
+          followerId: source.userId,
+          followeeId: followeeB.userId,
+          createdAt: tiedAt,
+        },
+      });
+
+      expect(followA.id > followB.id).toBe(true);
+
+      const firstPage = await request(app.getHttpServer())
+        .get(`/users/${source.userId}/following?limit=1`)
+        .set('Authorization', `Bearer ${source.accessToken}`)
+        .expect(200);
+
+      // The genuinely most-recently-followed followee (followeeB) must
+      // come first — under the old id-desc tiebreak, followA's larger id
+      // would have incorrectly sorted first instead.
+      expect(firstPage.body.items).toHaveLength(1);
+      expect(firstPage.body.items[0].id).toBe(followeeB.userId);
+      expect(firstPage.body.nextCursor).not.toBeNull();
+
+      const secondPage = await request(app.getHttpServer())
+        .get(
+          `/users/${source.userId}/following?limit=1&cursor=${encodeURIComponent(firstPage.body.nextCursor)}`,
+        )
+        .set('Authorization', `Bearer ${source.accessToken}`)
+        .expect(200);
+
+      expect(secondPage.body.items).toHaveLength(1);
+      expect(secondPage.body.items[0].id).toBe(followeeA.userId);
       expect(secondPage.body.nextCursor).toBeNull();
     });
   });
