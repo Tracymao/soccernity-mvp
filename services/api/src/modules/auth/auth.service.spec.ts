@@ -5,7 +5,7 @@ import { InMemoryRedisFake } from './token/test-support/in-memory-redis.fake';
 import { RefreshTokenStore } from './token/refresh-token.store';
 import { TokenService } from './token/token.service';
 import { PasswordService } from './password/password.service';
-import { AuthService } from './auth.service';
+import { ACCOUNT_DEACTIVATED_CODE, AuthService } from './auth.service';
 
 // Minimal fake standing in for PrismaService — only the methods AuthService
 // actually calls. Keeps this a fast unit test while still exercising
@@ -375,6 +375,31 @@ describe('AuthService', () => {
       await expect(authService.login('a@example.com', 'the-real-password')).rejects.toThrow(
         /deactivated/i,
       );
+    });
+
+    // apps/web's login() previously detected this case by regex-matching
+    // the message body (/deactivat/i) — fragile against any future copy
+    // change. This is the structured, machine-readable signal it now
+    // checks instead, mirroring GuardianConsentGuard/Under16RestrictionGuard's
+    // own { statusCode, error, code, message } convention.
+    it('the 401 for a deactivated account carries the structured account_deactivated code', async () => {
+      const { authService, prisma, passwordService } = await buildHarness();
+      const passwordHash = await passwordService.hash('the-real-password');
+      prisma.seed('a@example.com', { id: 'user-1', role: 'fan', passwordHash });
+      await authService.deactivateAccount('user-1', 'the-real-password');
+
+      let caught: UnauthorizedException | undefined;
+      try {
+        await authService.login('a@example.com', 'the-real-password');
+      } catch (error) {
+        caught = error as UnauthorizedException;
+      }
+
+      expect(caught).toBeInstanceOf(UnauthorizedException);
+      expect(caught!.getResponse()).toMatchObject({
+        statusCode: 401,
+        code: ACCOUNT_DEACTIVATED_CODE,
+      });
     });
 
     it('rejects a wrong password and does not deactivate the account', async () => {

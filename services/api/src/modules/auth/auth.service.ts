@@ -6,6 +6,18 @@ import { PasswordService } from './password/password.service';
 import { InvalidRefreshTokenError, RefreshTokenReuseDetectedError } from './token/token.errors';
 import { TokenService } from './token/token.service';
 
+// A distinct, machine-readable `code` on the 401 login() throws for a
+// deactivated account — mirrors GuardianConsentGuard's own
+// GUARDIAN_CONSENT_PENDING_CODE / Under16RestrictionGuard's
+// UNDER_16_RESTRICTED_CODE convention (throw new XException({ statusCode,
+// error, code, message })), used here for the same reason: so a caller
+// (apps/web's login(), auth.ts) can branch on the *kind* of 401 without
+// pattern-matching the message body, which is fragile against any future
+// copy change. Previously the frontend detected this case with
+// /deactivat/i.test(message) — see auth.ts's own comment, now updated to
+// check this field instead (Decision Log #225's flagged follow-up).
+export const ACCOUNT_DEACTIVATED_CODE = 'account_deactivated';
+
 // Sprint 1 / PR B3 — POST /auth/login, refresh, logout. Section 4.1 lists
 // /auth/login but not a refresh or logout path explicitly; both are
 // required by Section 5.7's "rotated on every use, revocable server-side"
@@ -71,9 +83,12 @@ export class AuthService implements OnModuleInit {
     // active). Same reasoning as pending_deletion, extended to a second
     // state.
     if (user.accountStatus === 'deactivated') {
-      throw new UnauthorizedException(
-        'This account has been deactivated. Use POST /auth/reactivate-account to restore it.',
-      );
+      throw new UnauthorizedException({
+        statusCode: 401,
+        error: 'Unauthorized',
+        code: ACCOUNT_DEACTIVATED_CODE,
+        message: 'This account has been deactivated. Use POST /auth/reactivate-account to restore it.',
+      });
     }
     if (user.accountStatus !== 'active') {
       // Covers 'pending_deletion', 'suspended' (and any future non-'active'
