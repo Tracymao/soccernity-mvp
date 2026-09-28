@@ -167,6 +167,39 @@ describe('AdminArticlesController (HTTP layer)', () => {
         })
         .expect(400);
     });
+
+    it('accepts and forwards an optional excerpt', async () => {
+      adminContentService.createArticle.mockResolvedValue({ id: 'article-1', status: 'draft' });
+
+      await request(app.getHttpServer())
+        .post('/admin/articles')
+        .send({
+          title: 'A title',
+          body: 'A body',
+          categoryId: '123e4567-e89b-42d3-a456-426614174000',
+          excerpt: 'A curated summary.',
+        })
+        .expect(201);
+
+      expect(adminContentService.createArticle).toHaveBeenCalledWith('admin-1', {
+        title: 'A title',
+        body: 'A body',
+        categoryId: '123e4567-e89b-42d3-a456-426614174000',
+        excerpt: 'A curated summary.',
+      });
+    });
+
+    it('rejects an excerpt over the max length', async () => {
+      await request(app.getHttpServer())
+        .post('/admin/articles')
+        .send({
+          title: 'A title',
+          body: 'A body',
+          categoryId: '123e4567-e89b-42d3-a456-426614174000',
+          excerpt: 'x'.repeat(301),
+        })
+        .expect(400);
+    });
   });
 
   describe('PATCH /admin/articles/:id', () => {
@@ -191,6 +224,17 @@ describe('AdminArticlesController (HTTP layer)', () => {
         .patch('/admin/articles/article-1')
         .send({ status: 'archived' })
         .expect(400);
+    });
+
+    it('updates an article excerpt, including clearing it with an empty string', async () => {
+      adminContentService.updateArticle.mockResolvedValue({ id: 'article-1', excerpt: null });
+
+      await request(app.getHttpServer())
+        .patch('/admin/articles/article-1')
+        .send({ excerpt: '' })
+        .expect(200);
+
+      expect(adminContentService.updateArticle).toHaveBeenCalledWith('article-1', { excerpt: '' });
     });
   });
 });

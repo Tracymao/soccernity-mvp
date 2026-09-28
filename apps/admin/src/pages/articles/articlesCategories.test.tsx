@@ -91,6 +91,7 @@ describe("ArticlesPage", () => {
     vi.mocked(updateArticle).mockResolvedValue({
       ...article(),
       body: "A body",
+      excerpt: null,
       status: "published",
       publishedAt: "2026-09-15T00:00:00.000Z",
     });
@@ -110,7 +111,7 @@ describe("ArticlesPage", () => {
 
   it("unpublishes a published article via PATCH", async () => {
     vi.mocked(listArticles).mockResolvedValue({ items: [article({ status: "published" })], nextCursor: null });
-    vi.mocked(updateArticle).mockResolvedValue({ ...article({ status: "draft" }), body: "A body" });
+    vi.mocked(updateArticle).mockResolvedValue({ ...article({ status: "draft" }), body: "A body", excerpt: null });
 
     render(
       <MemoryRouter>
@@ -189,6 +190,7 @@ describe("CreateArticlePage", () => {
     vi.mocked(createArticle).mockResolvedValue({
       ...article(),
       body: "A body",
+      excerpt: null,
     });
 
     render(
@@ -221,6 +223,7 @@ describe("CreateArticlePage", () => {
       ...article(),
       status: "published",
       body: "A body",
+      excerpt: null,
     });
 
     render(
@@ -272,6 +275,75 @@ describe("CreateArticlePage", () => {
 
     expect(screen.getByRole("button", { name: "Upload Images" }).hasAttribute("disabled")).toBe(true);
     expect(screen.getByText(/image attachment ships once the Media library backend exists/i)).not.toBeNull();
+  });
+
+  it("trims and sends a curated excerpt when the admin fills it in", async () => {
+    vi.mocked(listCategories).mockResolvedValue({ items: [category()], nextCursor: null });
+    vi.mocked(createArticle).mockResolvedValue({ ...article(), body: "A body", excerpt: null });
+
+    render(
+      <MemoryRouter>
+        <CreateArticlePage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(listCategories).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Title" }), { target: { value: "A title" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Article body" }), { target: { value: "A body" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Excerpt (optional)" }), {
+      target: { value: "  A curated summary.  " },
+    });
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "category-1" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save as Draft" }));
+
+    await waitFor(() =>
+      expect(createArticle).toHaveBeenCalledWith({
+        title: "A title",
+        body: "A body",
+        categoryId: "category-1",
+        status: "draft",
+        excerpt: "A curated summary.",
+      }),
+    );
+  });
+
+  it("omits excerpt entirely when left blank — never sends an empty string", async () => {
+    vi.mocked(listCategories).mockResolvedValue({ items: [category()], nextCursor: null });
+    vi.mocked(createArticle).mockResolvedValue({ ...article(), body: "A body", excerpt: null });
+
+    render(
+      <MemoryRouter>
+        <CreateArticlePage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(listCategories).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Title" }), { target: { value: "A title" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Article body" }), { target: { value: "A body" } });
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "category-1" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save as Draft" }));
+
+    await waitFor(() => expect(createArticle).toHaveBeenCalled());
+    const call = vi.mocked(createArticle).mock.calls[0][0];
+    expect(call.excerpt).toBeUndefined();
+  });
+
+  it("shows a hint explaining the automatic fallback when no excerpt is set", async () => {
+    vi.mocked(listCategories).mockResolvedValue({ items: [], nextCursor: null });
+
+    render(
+      <MemoryRouter>
+        <CreateArticlePage />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByText(/leave blank to use an automatic summary of the article body instead/i),
+    ).not.toBeNull();
   });
 });
 

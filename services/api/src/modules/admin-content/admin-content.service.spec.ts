@@ -85,9 +85,44 @@ describe('AdminContentService', () => {
           authorAdminId: 'admin-1',
           status: 'draft',
           publishedAt: null,
+          excerpt: null,
         },
       });
       expect(result.id).toBe('article-1');
+    });
+
+    it('trims and stores a provided excerpt', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.category.findUnique as jest.Mock).mockResolvedValue({ id: 'category-1' });
+      (prisma.article.create as jest.Mock).mockResolvedValue(article({ excerpt: 'A curated summary.' }));
+
+      const service = new AdminContentService(prisma);
+      await service.createArticle('admin-1', {
+        title: 'A title',
+        body: 'A body',
+        categoryId: 'category-1',
+        excerpt: '  A curated summary.  ',
+      });
+
+      const call = (prisma.article.create as jest.Mock).mock.calls[0][0];
+      expect(call.data.excerpt).toBe('A curated summary.');
+    });
+
+    it('normalizes a whitespace-only excerpt to null, never storing ""', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.category.findUnique as jest.Mock).mockResolvedValue({ id: 'category-1' });
+      (prisma.article.create as jest.Mock).mockResolvedValue(article());
+
+      const service = new AdminContentService(prisma);
+      await service.createArticle('admin-1', {
+        title: 'A title',
+        body: 'A body',
+        categoryId: 'category-1',
+        excerpt: '   ',
+      });
+
+      const call = (prisma.article.create as jest.Mock).mock.calls[0][0];
+      expect(call.data.excerpt).toBeNull();
     });
 
     it('sets publishedAt when created directly as published', async () => {
@@ -226,6 +261,54 @@ describe('AdminContentService', () => {
         NotFoundException,
       );
       expect(prisma.article.update).not.toHaveBeenCalled();
+    });
+
+    it('leaves excerpt untouched when omitted from the patch', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.article.findUnique as jest.Mock).mockResolvedValue({
+        id: 'article-1',
+        status: 'draft',
+        publishedAt: null,
+      });
+      (prisma.article.update as jest.Mock).mockResolvedValue(article());
+
+      const service = new AdminContentService(prisma);
+      await service.updateArticle('article-1', { title: 'A new title' });
+
+      const call = (prisma.article.update as jest.Mock).mock.calls[0][0];
+      expect(call.data.excerpt).toBeUndefined();
+    });
+
+    it('trims and stores a provided excerpt', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.article.findUnique as jest.Mock).mockResolvedValue({
+        id: 'article-1',
+        status: 'draft',
+        publishedAt: null,
+      });
+      (prisma.article.update as jest.Mock).mockResolvedValue(article({ excerpt: 'Updated summary.' }));
+
+      const service = new AdminContentService(prisma);
+      await service.updateArticle('article-1', { excerpt: '  Updated summary.  ' });
+
+      const call = (prisma.article.update as jest.Mock).mock.calls[0][0];
+      expect(call.data.excerpt).toBe('Updated summary.');
+    });
+
+    it('clears a previously-set excerpt back to null when sent as an empty string', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.article.findUnique as jest.Mock).mockResolvedValue({
+        id: 'article-1',
+        status: 'draft',
+        publishedAt: null,
+      });
+      (prisma.article.update as jest.Mock).mockResolvedValue(article({ excerpt: null }));
+
+      const service = new AdminContentService(prisma);
+      await service.updateArticle('article-1', { excerpt: '   ' });
+
+      const call = (prisma.article.update as jest.Mock).mock.calls[0][0];
+      expect(call.data.excerpt).toBeNull();
     });
   });
 

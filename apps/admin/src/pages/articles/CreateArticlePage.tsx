@@ -8,6 +8,12 @@
 // relation at all, per this PR's own explicit scope. Ships once the
 // Media library backend exists.
 //
+// Excerpt (Decision Log #333, resolved by feat/article-excerpt-field) —
+// a real, optional field, not on the original Figma frame. Left blank,
+// the public Blog feed falls back to a computed truncation of the body
+// (services/api's own excerpt.util.ts); the fallback is unaffected by
+// this addition.
+//
 // No Figma frame designs a publish/draft choice on this screen (the
 // original "Submit Post" button just POSTs, and CreateArticleDto's own
 // `status` is optional, defaulting server-side to 'draft') — the single
@@ -35,6 +41,7 @@ export default function CreateArticlePage() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [excerpt, setExcerpt] = useState("");
   const [error, setError] = useState<string | null>(null);
   // Which target status is currently in flight — null when idle. Tracked
   // per-status (not a plain boolean) so only the button that was actually
@@ -51,7 +58,13 @@ export default function CreateArticlePage() {
     }
     setSaving(status);
     try {
-      const created = await createArticle({ title: title.trim(), body: body.trim(), categoryId, status });
+      const created = await createArticle({
+        title: title.trim(),
+        body: body.trim(),
+        categoryId,
+        status,
+        excerpt: excerpt.trim() || undefined,
+      });
       navigate("/articles", { state: { createdArticleId: created.id } });
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Couldn't create the article. Please try again.");
@@ -81,6 +94,28 @@ export default function CreateArticlePage() {
           <span>Article body</span>
           <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={10} disabled={saving !== null} />
         </label>
+
+        {/* Not `<label className="ac-field">...</label>` like the fields
+            above — the hint text sits OUTSIDE the <label> element on
+            purpose, so it isn't folded into the textarea's own
+            accessible name (an unconditional sibling, unlike the
+            Category field's own conditional ac-hint spans below, which
+            in their default not-rendered state don't hit this). */}
+        <div className="ac-field">
+          <label>
+            <span>Excerpt (optional)</span>
+            <textarea
+              value={excerpt}
+              onChange={(e) => setExcerpt(e.target.value)}
+              rows={2}
+              maxLength={300}
+              disabled={saving !== null}
+            />
+          </label>
+          <span className="ac-hint">
+            Shown on the public Blog feed. Leave blank to use an automatic summary of the article body instead.
+          </span>
+        </div>
 
         <label className="ac-field">
           <span>Category</span>

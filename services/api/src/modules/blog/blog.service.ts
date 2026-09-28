@@ -18,13 +18,17 @@ import { truncateExcerpt } from './excerpt.util';
 // `authorAdmin.fullName` is exposed, never `email` or any other
 // AdminUser field), no `status` (every row this service ever returns is
 // already known to be 'published', per PUBLISHED_ARTICLE_FILTER below).
-// `body` IS selected here — read only to derive the excerpt
-// (excerpt.util.ts) and, on the detail path, to return in full — the
-// list-response shape (toPublicArticleListItem) strips it back out.
+// `body` IS selected here — read only to derive the excerpt fallback
+// (excerpt.util.ts) when `excerpt` itself is unset and, on the detail
+// path, to return in full — the list-response shape
+// (toPublicArticleListItem) strips it back out. `excerpt` (Decision Log
+// #333, resolved) is the admin-curated summary; see
+// toPublicArticleListItem's own comment for the fallback rule.
 const PUBLIC_ARTICLE_SELECT = {
   id: true,
   title: true,
   body: true,
+  excerpt: true,
   publishedAt: true,
   category: { select: { id: true, name: true, slug: true } },
   authorAdmin: { select: { fullName: true } },
@@ -56,11 +60,17 @@ export interface PublicArticleListPage {
   nextCursor: string | null;
 }
 
+// `excerpt` (Decision Log #333, resolved): use the admin's own curated
+// value when set (AdminContentService.createArticle/updateArticle both
+// normalize a whitespace-only value to `null`, so a non-null value here
+// is always real, non-empty text — no `.trim()` needed on this side);
+// otherwise fall back to excerpt.util.ts's own unstored, word-boundary
+// truncation of `body`, unchanged from before this field existed.
 function toPublicArticleListItem(row: PublicArticleRow): PublicArticleListItem {
   return {
     id: row.id,
     title: row.title,
-    excerpt: truncateExcerpt(row.body),
+    excerpt: row.excerpt ?? truncateExcerpt(row.body),
     // Non-null by PUBLISHED_ARTICLE_FILTER's own WHERE clause (every row
     // reaching this function was queried with `publishedAt: { not: null }`).
     publishedAt: row.publishedAt as Date,

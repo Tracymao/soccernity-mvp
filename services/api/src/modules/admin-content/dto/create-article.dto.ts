@@ -1,5 +1,5 @@
 import { IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
-import { ARTICLE_STATUSES, ArticleStatus } from '../admin-content.constants';
+import { ARTICLE_EXCERPT_MAX_LENGTH, ARTICLE_STATUSES, ArticleStatus } from '../admin-content.constants';
 
 // POST /admin/articles (Build Plan Section 4.8's literal line).
 // `authorAdminId` is taken from the verified admin access token
@@ -9,6 +9,12 @@ import { ARTICLE_STATUSES, ArticleStatus } from '../admin-content.constants';
 // schema @default("draft") when omitted — see
 // AdminContentService.createArticle for the publishedAt-on-publish
 // behaviour when a caller does supply `status: 'published'` directly.
+//
+// `excerpt` is OPTIONAL (Decision Log #333, resolved) — a curated,
+// admin-authored summary. Omitting it (or sending an empty/whitespace
+// string, normalized to `null` in AdminContentService) leaves the
+// public read side to fall back to excerpt.util.ts's own
+// truncateExcerpt(body), unchanged.
 export class CreateArticleDto {
   @IsString()
   @MinLength(1)
@@ -25,4 +31,9 @@ export class CreateArticleDto {
   @IsOptional()
   @IsIn(ARTICLE_STATUSES)
   status?: ArticleStatus;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(ARTICLE_EXCERPT_MAX_LENGTH)
+  excerpt?: string;
 }

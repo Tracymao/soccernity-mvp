@@ -106,6 +106,14 @@ export class AdminContentService {
   // own schema @default("draft") when the caller omits it; a caller MAY
   // create an already-published article directly (status: 'published'),
   // in which case publishedAt is set to now() in the same write.
+  //
+  // `excerpt` (Decision Log #333, resolved) is trimmed and normalized to
+  // `null` when omitted or whitespace-only — never stored as `""` —
+  // mirroring GrassrootsService.createFixture's own
+  // `dto.opponentName?.trim() || undefined` treatment of an optional
+  // free-text field. A `null` excerpt is exactly the signal
+  // blog.service.ts's public read path already looks for to fall back
+  // to excerpt.util.ts's truncateExcerpt(body).
   async createArticle(adminId: string, dto: CreateArticleDto) {
     await this.assertCategoryExists(dto.categoryId);
 
@@ -118,6 +126,7 @@ export class AdminContentService {
         authorAdminId: adminId,
         status,
         publishedAt: status === 'published' ? new Date() : null,
+        excerpt: dto.excerpt?.trim() || null,
       },
     });
   }
@@ -197,6 +206,11 @@ export class AdminContentService {
         data.publishedAt = new Date();
       }
     }
+    // A caller explicitly sending `excerpt: ""` (or whitespace-only)
+    // clears a previously-set curated excerpt back to `null` — reverting
+    // to blog.service.ts's own auto-truncated fallback — rather than
+    // storing the empty string. Same normalization as createArticle.
+    if (dto.excerpt !== undefined) data.excerpt = dto.excerpt.trim() || null;
 
     return this.prisma.article.update({ where: { id }, data });
   }
