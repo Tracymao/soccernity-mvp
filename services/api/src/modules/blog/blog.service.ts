@@ -24,6 +24,13 @@ import { truncateExcerpt } from './excerpt.util';
 // (toPublicArticleListItem) strips it back out. `excerpt` (Decision Log
 // #333, resolved) is the admin-curated summary; see
 // toPublicArticleListItem's own comment for the fallback rule.
+//
+// `coverImageId`/`coverImage` (Decision Log #334, resolved) — same
+// nested shape (id/url/type) admin-content.service.ts's own
+// ARTICLE_LIST_SELECT exposes, minus `coverImageId` itself (a bare
+// MediaAsset id has no public use once `coverImage.url` is already
+// here — the admin side keeps the bare id too, since ArticlesPage.tsx's
+// picker needs it to pre-select the current image on an edit).
 const PUBLIC_ARTICLE_SELECT = {
   id: true,
   title: true,
@@ -32,6 +39,7 @@ const PUBLIC_ARTICLE_SELECT = {
   publishedAt: true,
   category: { select: { id: true, name: true, slug: true } },
   authorAdmin: { select: { fullName: true } },
+  coverImage: { select: { url: true, type: true } },
 } as const;
 
 type PublicArticleRow = Prisma.ArticleGetPayload<{ select: typeof PUBLIC_ARTICLE_SELECT }>;
@@ -42,6 +50,14 @@ export interface PublicArticleCategoryRef {
   slug: string;
 }
 
+// `null` when the article has no cover image set, or when the
+// MediaAsset it once pointed at has since been deleted
+// (Article.coverImageId's own `onDelete: SetNull`, schema.prisma).
+export interface PublicArticleCoverImage {
+  url: string;
+  type: string;
+}
+
 export interface PublicArticleListItem {
   id: string;
   title: string;
@@ -49,6 +65,7 @@ export interface PublicArticleListItem {
   publishedAt: Date;
   category: PublicArticleCategoryRef;
   author: string;
+  coverImage: PublicArticleCoverImage | null;
 }
 
 export interface PublicArticleDetail extends PublicArticleListItem {
@@ -76,6 +93,7 @@ function toPublicArticleListItem(row: PublicArticleRow): PublicArticleListItem {
     publishedAt: row.publishedAt as Date,
     category: row.category,
     author: row.authorAdmin.fullName,
+    coverImage: row.coverImage,
   };
 }
 

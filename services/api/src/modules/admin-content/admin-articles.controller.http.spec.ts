@@ -200,6 +200,57 @@ describe('AdminArticlesController (HTTP layer)', () => {
         })
         .expect(400);
     });
+
+    // Decision Log #334, resolved — coverImageId.
+    it('accepts and forwards an optional coverImageId', async () => {
+      adminContentService.createArticle.mockResolvedValue({ id: 'article-1', status: 'draft' });
+
+      await request(app.getHttpServer())
+        .post('/admin/articles')
+        .send({
+          title: 'A title',
+          body: 'A body',
+          categoryId: '123e4567-e89b-42d3-a456-426614174000',
+          coverImageId: '223e4567-e89b-42d3-a456-426614174000',
+        })
+        .expect(201);
+
+      expect(adminContentService.createArticle).toHaveBeenCalledWith('admin-1', {
+        title: 'A title',
+        body: 'A body',
+        categoryId: '123e4567-e89b-42d3-a456-426614174000',
+        coverImageId: '223e4567-e89b-42d3-a456-426614174000',
+      });
+    });
+
+    it('omits coverImageId entirely when not sent', async () => {
+      adminContentService.createArticle.mockResolvedValue({ id: 'article-1', status: 'draft' });
+
+      await request(app.getHttpServer())
+        .post('/admin/articles')
+        .send({
+          title: 'A title',
+          body: 'A body',
+          categoryId: '123e4567-e89b-42d3-a456-426614174000',
+        })
+        .expect(201);
+
+      const call = adminContentService.createArticle.mock.calls[0][1];
+      expect('coverImageId' in call).toBe(false);
+    });
+
+    it('rejects a non-UUID coverImageId', async () => {
+      await request(app.getHttpServer())
+        .post('/admin/articles')
+        .send({
+          title: 'A title',
+          body: 'A body',
+          categoryId: '123e4567-e89b-42d3-a456-426614174000',
+          coverImageId: 'not-a-uuid',
+        })
+        .expect(400);
+      expect(adminContentService.createArticle).not.toHaveBeenCalled();
+    });
   });
 
   describe('PATCH /admin/articles/:id', () => {
@@ -235,6 +286,57 @@ describe('AdminArticlesController (HTTP layer)', () => {
         .expect(200);
 
       expect(adminContentService.updateArticle).toHaveBeenCalledWith('article-1', { excerpt: '' });
+    });
+
+    // Decision Log #334, resolved — coverImageId's genuinely three-way
+    // optional PATCH semantics, proven against the REAL global
+    // ValidationPipe (whitelist + transform), not just asserted in a
+    // comment: an explicit `null` in the request body must survive
+    // class-transformer's plainToInstance and NOT be stripped by
+    // `whitelist: true` (which only removes undeclared properties, never
+    // coerces the value of a declared one).
+    it('sets a coverImageId', async () => {
+      adminContentService.updateArticle.mockResolvedValue({ id: 'article-1', coverImageId: 'media-1' });
+
+      await request(app.getHttpServer())
+        .patch('/admin/articles/article-1')
+        .send({ coverImageId: '223e4567-e89b-42d3-a456-426614174000' })
+        .expect(200);
+
+      expect(adminContentService.updateArticle).toHaveBeenCalledWith('article-1', {
+        coverImageId: '223e4567-e89b-42d3-a456-426614174000',
+      });
+    });
+
+    it('clears a coverImageId with an EXPLICIT null, surviving the real ValidationPipe', async () => {
+      adminContentService.updateArticle.mockResolvedValue({ id: 'article-1', coverImageId: null });
+
+      await request(app.getHttpServer())
+        .patch('/admin/articles/article-1')
+        .send({ coverImageId: null })
+        .expect(200);
+
+      expect(adminContentService.updateArticle).toHaveBeenCalledWith('article-1', { coverImageId: null });
+    });
+
+    it('leaves coverImageId untouched (not forwarded at all) when omitted from the patch', async () => {
+      adminContentService.updateArticle.mockResolvedValue({ id: 'article-1' });
+
+      await request(app.getHttpServer())
+        .patch('/admin/articles/article-1')
+        .send({ title: 'A new title' })
+        .expect(200);
+
+      const call = adminContentService.updateArticle.mock.calls[0][1];
+      expect('coverImageId' in call).toBe(false);
+    });
+
+    it('rejects a non-UUID coverImageId (a real value, not null)', async () => {
+      await request(app.getHttpServer())
+        .patch('/admin/articles/article-1')
+        .send({ coverImageId: 'not-a-uuid' })
+        .expect(400);
+      expect(adminContentService.updateArticle).not.toHaveBeenCalled();
     });
   });
 });

@@ -21,6 +21,14 @@ import { slugify } from './slug.util';
 // own list only ever needs title/date/category (the task brief's own
 // literal spec); a caller editing an article already has its full row
 // via the create/update responses below, both of which DO include body.
+//
+// `coverImageId`/`coverImage` (Decision Log #334, resolved) — a nested
+// ref (id/url/type), the same shape `category` already gets, so
+// ArticlesPage.tsx can show what's attached (or that nothing is) without
+// a second round-trip to GET /admin/media/:id. `coverImage` is `null`
+// when `coverImageId` is `null`, or when a MediaAsset it once pointed at
+// has since been deleted (Article.coverImageId's own onDelete: SetNull —
+// see schema.prisma's comment on Article.coverImage).
 const ARTICLE_LIST_SELECT = {
   id: true,
   title: true,
@@ -30,6 +38,8 @@ const ARTICLE_LIST_SELECT = {
   authorAdminId: true,
   publishedAt: true,
   createdAt: true,
+  coverImageId: true,
+  coverImage: { select: { id: true, url: true, type: true } },
 } as const;
 
 export type ArticleListItem = Prisma.ArticleGetPayload<{ select: typeof ARTICLE_LIST_SELECT }>;
@@ -38,6 +48,29 @@ export interface ArticleListPage {
   items: ArticleListItem[];
   nextCursor: string | null;
 }
+
+// POST/PATCH response shape — everything ARTICLE_LIST_SELECT has, plus
+// `body`/`excerpt` (the two fields the list view omits). Also fixes a
+// real, pre-existing gap found while adding this: createArticle/
+// updateArticle previously called `this.prisma.article.create`/`update`
+// with NO select/include at all, so — despite adminContent.ts's own
+// `Article` TS type on the apps/admin side already claiming a nested
+// `category: ArticleCategoryRef` — the real HTTP response never actually
+// carried `category` (Prisma omits every relation by default; only
+// scalar columns come back unselected). ArticlesPage.tsx's own
+// Publish/Unpublish row action applies that response straight onto the
+// row via `article.category.name`, so this was a latent runtime bug
+// (`Cannot read properties of undefined`), not just a type mismatch —
+// pre-existing, not introduced by this change, and fixed here as a
+// direct, minimal, necessary side effect of making a new nested
+// `coverImage` field on the very same response actually work at all.
+const ARTICLE_DETAIL_SELECT = {
+  ...ARTICLE_LIST_SELECT,
+  body: true,
+  excerpt: true,
+} as const;
+
+export type ArticleDetail = Prisma.ArticleGetPayload<{ select: typeof ARTICLE_DETAIL_SELECT }>;
 
 // GET /admin/categories response shape. `articleCount` is a computed
 // field (Prisma's own `_count`, a cheap aggregate — no Article rows
@@ -89,6 +122,24 @@ export class AdminContentService {
     }
   }
 
+  // Same shape as assertCategoryExists, for the OPTIONAL coverImageId FK
+  // (Decision Log #334, resolved). Queries `mediaAsset` directly via
+  // Prisma rather than injecting MediaService/MediaModule — this
+  // module's own established cross-module FK-validation precedent
+  // (ContestService.recordRoundResults does the identical thing for
+  // ContestEntry.postId, a FK into FeedModule's own Post table) is a
+  // direct Prisma read, not a cross-module service call, so this follows
+  // that rather than adding a new dependency edge for the first time.
+  private async assertMediaAssetExists(mediaAssetId: string): Promise<void> {
+    const media = await this.prisma.mediaAsset.findUnique({
+      where: { id: mediaAssetId },
+      select: { id: true },
+    });
+    if (!media) {
+      throw new NotFoundException('Cover image not found');
+    }
+  }
+
   private async assertArticleExists(id: string): Promise<{ id: string; status: string; publishedAt: Date | null }> {
     const article = await this.prisma.article.findUnique({
       where: { id },
@@ -114,8 +165,18 @@ export class AdminContentService {
   // free-text field. A `null` excerpt is exactly the signal
   // blog.service.ts's public read path already looks for to fall back
   // to excerpt.util.ts's truncateExcerpt(body).
+  //
+  // `coverImageId` (Decision Log #334, resolved) is OPTIONAL — an
+  // article can be created with no cover image at all, same as excerpt.
+  // When supplied, it's checked against a real MediaAsset row
+  // (assertMediaAssetExists) BEFORE the create runs, same ordering as
+  // the category check just above — a bad id is a clean 404, never a
+  // raw FK-constraint failure from Postgres.
   async createArticle(adminId: string, dto: CreateArticleDto) {
     await this.assertCategoryExists(dto.categoryId);
+    if (dto.coverImageId) {
+      await this.assertMediaAssetExists(dto.coverImageId);
+    }
 
     const status = dto.status ?? 'draft';
     return this.prisma.article.create({
@@ -127,7 +188,9 @@ export class AdminContentService {
         status,
         publishedAt: status === 'published' ? new Date() : null,
         excerpt: dto.excerpt?.trim() || null,
+        coverImageId: dto.coverImageId ?? null,
       },
+      select: ARTICLE_DETAIL_SELECT,
     });
   }
 
@@ -195,6 +258,13 @@ export class AdminContentService {
     if (dto.categoryId) {
       await this.assertCategoryExists(dto.categoryId);
     }
+    // A real, non-null coverImageId is checked against a real MediaAsset
+    // row (assertMediaAssetExists) BEFORE the update runs, same as
+    // category above. An explicit `coverImageId: null` is the clear
+    // signal (see below) — nothing to validate for that case.
+    if (dto.coverImageId) {
+      await this.assertMediaAssetExists(dto.coverImageId);
+    }
 
     const data: Prisma.ArticleUpdateInput = {};
     if (dto.title !== undefined) data.title = dto.title;
@@ -211,8 +281,23 @@ export class AdminContentService {
     // to blog.service.ts's own auto-truncated fallback — rather than
     // storing the empty string. Same normalization as createArticle.
     if (dto.excerpt !== undefined) data.excerpt = dto.excerpt.trim() || null;
+    // `coverImageId` (Decision Log #334, resolved) is a genuinely
+    // three-way-optional field on this DTO, distinguished by
+    // `!== undefined`: omitted entirely -> leave the current cover image
+    // untouched (this `if` never runs); a real MediaAsset id -> connect
+    // it (already validated to exist, above); an EXPLICIT `null` -> clear
+    // it back to no cover image at all, via Prisma's own `disconnect`
+    // relation op (sets the FK column to NULL) — mirroring `category`'s
+    // own relation-object style immediately above, rather than writing
+    // the raw scalar `coverImageId` column directly (Prisma's CHECKED
+    // `ArticleUpdateInput`, which `data` is typed as here, doesn't expose
+    // that scalar for a `@relation` field at all — only the nested
+    // connect/disconnect object).
+    if (dto.coverImageId !== undefined) {
+      data.coverImage = dto.coverImageId === null ? { disconnect: true } : { connect: { id: dto.coverImageId } };
+    }
 
-    return this.prisma.article.update({ where: { id }, data });
+    return this.prisma.article.update({ where: { id }, data, select: ARTICLE_DETAIL_SELECT });
   }
 
   // -------------------------------------------------------------------

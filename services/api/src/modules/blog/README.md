@@ -160,6 +160,24 @@ Users/Dashboard/Media modules.
    adding it, not "clean and small" once you account for what makes it
    actually work. `BlogPage.tsx`/`ArticleDetailPage.tsx` keep their
    existing placeholder `<span>` media blocks, unchanged by this PR.
+   **RESOLVED by `feat/article-cover-image`** — `Article.coverImageId
+   String?` (nullable, `onDelete: SetNull`) now exists (migration
+   `20260928212908_add_article_cover_image`; named `coverImageId`, not
+   the `imageAssetId` this note originally proposed — a naming call made
+   by that ticket, not this one), editable via
+   `CreateArticleDto`/`UpdateArticleDto` and a new image picker on
+   `CreateArticlePage.tsx` that reuses `GET /admin/media` (no separate
+   uploader built into the composer — a *picker*, not an *uploader*, per
+   that ticket's own explicit scope). This module's public read side
+   (`PUBLIC_ARTICLE_SELECT`/`toPublicArticleListItem`) now exposes a
+   `coverImage: { url, type } | null` field — `null` both when no cover
+   image was ever set and when the `MediaAsset` it pointed at has since
+   been deleted (the `onDelete: SetNull` firing). `apps/web`'s
+   `BlogPage.tsx`/`ArticleDetailPage.tsx` were **not** updated by that
+   ticket to actually render this new field — still a real, disclosed
+   follow-up, same as this module's own long-standing "no public-facing
+   `GET /articles`... this PR does not connect the two" note two items
+   below never claimed to solve on the `apps/web` side either.
 3. **RESOLVED (`fix/blog-inactive-category-filter`).** An explicit
    `?categoryId=`/`?categorySlug=` filter on `GET /articles` now also
    requires the referenced `Category` to be `'active'` — the same gate

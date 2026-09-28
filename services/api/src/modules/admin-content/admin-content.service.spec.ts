@@ -31,6 +31,11 @@ function buildPrismaMock() {
       findMany: jest.fn().mockResolvedValue([]),
       update: jest.fn(),
     },
+    // feat/article-cover-image (Decision Log #334, resolved) —
+    // assertMediaAssetExists's own Prisma dependency.
+    mediaAsset: {
+      findUnique: jest.fn(),
+    },
   } as unknown as PrismaService;
 
   return prisma;
@@ -46,6 +51,17 @@ function article(overrides: Partial<Record<string, unknown>> = {}) {
     status: 'draft',
     publishedAt: null,
     createdAt: new Date('2026-09-01T10:00:00.000Z'),
+    coverImageId: null,
+    coverImage: null,
+    ...overrides,
+  };
+}
+
+function mediaAsset(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 'media-1',
+    url: 'https://media.example.com/media-1.jpg',
+    type: 'image',
     ...overrides,
   };
 }
@@ -86,9 +102,13 @@ describe('AdminContentService', () => {
           status: 'draft',
           publishedAt: null,
           excerpt: null,
+          coverImageId: null,
         },
+        select: expect.objectContaining({ coverImageId: true, coverImage: expect.anything() }),
       });
       expect(result.id).toBe('article-1');
+      // No mediaAsset lookup at all when coverImageId is omitted.
+      expect(prisma.mediaAsset.findUnique).not.toHaveBeenCalled();
     });
 
     it('trims and stores a provided excerpt', async () => {
@@ -150,6 +170,48 @@ describe('AdminContentService', () => {
 
       await expect(
         service.createArticle('admin-1', { title: 'A title', body: 'A body', categoryId: 'missing' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.article.create).not.toHaveBeenCalled();
+    });
+
+    it('accepts a real coverImageId, checked against MediaAsset before creating', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.category.findUnique as jest.Mock).mockResolvedValue({ id: 'category-1' });
+      (prisma.mediaAsset.findUnique as jest.Mock).mockResolvedValue({ id: 'media-1' });
+      (prisma.article.create as jest.Mock).mockResolvedValue(
+        article({ coverImageId: 'media-1', coverImage: mediaAsset() }),
+      );
+
+      const service = new AdminContentService(prisma);
+      const result = await service.createArticle('admin-1', {
+        title: 'A title',
+        body: 'A body',
+        categoryId: 'category-1',
+        coverImageId: 'media-1',
+      });
+
+      expect(prisma.mediaAsset.findUnique).toHaveBeenCalledWith({
+        where: { id: 'media-1' },
+        select: { id: true },
+      });
+      const call = (prisma.article.create as jest.Mock).mock.calls[0][0];
+      expect(call.data.coverImageId).toBe('media-1');
+      expect(result.coverImage).toEqual(mediaAsset());
+    });
+
+    it('404s when coverImageId does not reference a real MediaAsset — creates nothing', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.category.findUnique as jest.Mock).mockResolvedValue({ id: 'category-1' });
+      (prisma.mediaAsset.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new AdminContentService(prisma);
+
+      await expect(
+        service.createArticle('admin-1', {
+          title: 'A title',
+          body: 'A body',
+          categoryId: 'category-1',
+          coverImageId: 'missing-media',
+        }),
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.article.create).not.toHaveBeenCalled();
     });
@@ -309,6 +371,79 @@ describe('AdminContentService', () => {
 
       const call = (prisma.article.update as jest.Mock).mock.calls[0][0];
       expect(call.data.excerpt).toBeNull();
+    });
+
+    it('leaves coverImageId untouched when omitted from the patch — no mediaAsset lookup at all', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.article.findUnique as jest.Mock).mockResolvedValue({
+        id: 'article-1',
+        status: 'draft',
+        publishedAt: null,
+      });
+      (prisma.article.update as jest.Mock).mockResolvedValue(article());
+
+      const service = new AdminContentService(prisma);
+      await service.updateArticle('article-1', { title: 'A new title' });
+
+      const call = (prisma.article.update as jest.Mock).mock.calls[0][0];
+      expect(call.data.coverImage).toBeUndefined();
+      expect(prisma.mediaAsset.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('connects a real coverImageId, checked against MediaAsset first', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.article.findUnique as jest.Mock).mockResolvedValue({
+        id: 'article-1',
+        status: 'draft',
+        publishedAt: null,
+      });
+      (prisma.mediaAsset.findUnique as jest.Mock).mockResolvedValue({ id: 'media-1' });
+      (prisma.article.update as jest.Mock).mockResolvedValue(
+        article({ coverImageId: 'media-1', coverImage: mediaAsset() }),
+      );
+
+      const service = new AdminContentService(prisma);
+      await service.updateArticle('article-1', { coverImageId: 'media-1' });
+
+      expect(prisma.mediaAsset.findUnique).toHaveBeenCalledWith({
+        where: { id: 'media-1' },
+        select: { id: true },
+      });
+      const call = (prisma.article.update as jest.Mock).mock.calls[0][0];
+      expect(call.data.coverImage).toEqual({ connect: { id: 'media-1' } });
+    });
+
+    it('disconnects an explicit coverImageId: null — clearing the cover image, never a mediaAsset lookup', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.article.findUnique as jest.Mock).mockResolvedValue({
+        id: 'article-1',
+        status: 'draft',
+        publishedAt: null,
+      });
+      (prisma.article.update as jest.Mock).mockResolvedValue(article({ coverImageId: null, coverImage: null }));
+
+      const service = new AdminContentService(prisma);
+      await service.updateArticle('article-1', { coverImageId: null });
+
+      const call = (prisma.article.update as jest.Mock).mock.calls[0][0];
+      expect(call.data.coverImage).toEqual({ disconnect: true });
+      expect(prisma.mediaAsset.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('404s when the patched coverImageId does not reference a real MediaAsset — updates nothing', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.article.findUnique as jest.Mock).mockResolvedValue({
+        id: 'article-1',
+        status: 'draft',
+        publishedAt: null,
+      });
+      (prisma.mediaAsset.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new AdminContentService(prisma);
+
+      await expect(
+        service.updateArticle('article-1', { coverImageId: 'missing-media' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.article.update).not.toHaveBeenCalled();
     });
   });
 
