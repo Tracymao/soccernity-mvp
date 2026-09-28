@@ -9059,6 +9059,7 @@ Full reasoning for every choice above: Build Plan Section 5.
     `docs/Soccernity_MVP_Build_Plan_v1.7.docx` appended (not rewritten)
     to record this residual gap as also closed.
   - PR opened, not merged — Temi verifies and merges.
+- **`feat/admin-staff-create` (backend-api, 2026-09-28) resolves Decision Log #191: `POST /admin/staff` (superadmin-only, `services/api` only, zero schema diff) creates an `AdminUser` from `email`/`fullName`/`role` plus an admin-set or generated temporary password.** No admin password-setup convention existed (`PasswordResetService` is `User`-only), so a generated 16-char password is returned once and the new admin changes it via the existing `POST /admin/auth/change-password`; no must-change-on-first-login flag exists (would need a schema change) and no invite email is sent. Duplicate email -> 409. Audited as `admin_user.created` (never the password). The first superadmin is still bootstrapped by direct DB insert. Verification: `admin-staff-roles` + `admin-action-log` jest suites 3 suites / 44 tests, 0 failures; `tsc`, eslint clean; full mocked/e2e suites not re-run. PR #340 opened, not merged.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
