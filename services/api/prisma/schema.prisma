@@ -943,6 +943,20 @@ model Like {
 
 model Follow {
   id         String   @id @default(uuid())
+  // Keyset-pagination tiebreaker for users.service.ts's getFollowers/
+  // getFollowing (fix/follow-pagination-tiebreaker) -- `id` is a random
+  // UUID with zero relation to insertion order, the exact same class of
+  // bug fix/feed-pagination-tiebreaker already fixed for Post.sequence /
+  // Comment.sequence / SavedPost.sequence (see each column's own comment
+  // for the full reasoning). Two Follow rows sharing the same
+  // millisecond-precision `createdAt` used to tiebreak on `id desc`, an
+  // order unrelated to which follow actually happened first. `sequence`
+  // is a genuinely monotonically-increasing Postgres-assigned counter, so
+  // ties now resolve in true creation order. Deliberately NEVER selected
+  // into the public API payload (getFollowers/getFollowing only ever
+  // return the embedded follower/followee user, never the Follow row
+  // itself) -- purely an internal pagination-ordering detail.
+  sequence   Int      @unique @default(autoincrement())
   followerId String
   // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
   follower   User     @relation("follower", fields: [followerId], references: [id])

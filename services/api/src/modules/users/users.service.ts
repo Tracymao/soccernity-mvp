@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { decodeFeedCursor, encodeFeedCursor } from '../feed/cursor.util';
+import { decodeFeedSequenceCursor, encodeFeedSequenceCursor } from '../feed/cursor.util';
 import { FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE, FeedQueryDto } from '../feed/dto/feed-query.dto';
 import { ENGAGEMENT_POINTS } from '../points/points.constants';
 import { awardPoints } from '../points/points.util';
@@ -335,10 +335,23 @@ export class UsersService {
   //
   // Same keyset-cursor pagination pattern as FeedService (cursor.util.ts
   // reused as-is, no second pagination scheme invented), ordered
-  // most-recently-followed-first (createdAt desc, id desc tiebreaker on
-  // Follow's own row id -- NOT the embedded user's id), matching the
-  // feed's own most-recent-first convention. :id not referencing a real
-  // User -> 404.
+  // most-recently-followed-first (createdAt desc, sequence desc
+  // tiebreaker on Follow's own row -- NOT the embedded user's id).
+  //
+  // fix/follow-pagination-tiebreaker: the tiebreaker used to be Follow.id
+  // (a random UUID with no relation to insertion order -- the same class
+  // of bug fix/feed-pagination-tiebreaker fixed for Post/Comment/
+  // SavedPost). Follow.sequence (see its own comment in schema.prisma) is
+  // a genuinely monotonic counter, so ties now resolve in true
+  // most-recently-followed-first order. This reuses FeedSequenceCursor/
+  // encodeFeedSequenceCursor/decodeFeedSequenceCursor from
+  // feed/cursor.util.ts (the same pair feed.service.ts's own three
+  // sequence-tiebroken call sites use) rather than the plain FeedCursor/
+  // encodeFeedCursor/decodeFeedCursor pair this method used to import --
+  // that pair's envelope shape ({ createdAt, id: string }) has no room
+  // for a numeric sequence, so a second cursor shape would have to be
+  // invented if FeedSequenceCursor weren't already generic enough; it is.
+  // :id not referencing a real User -> 404.
   async getFollowers(userId: string, query: FeedQueryDto): Promise<FollowPage> {
     await this.assertFollowGraphVisible(userId);
 
@@ -352,9 +365,9 @@ export class UsersService {
 
     const rows = await this.prisma.follow.findMany({
       where,
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ createdAt: 'desc' }, { sequence: 'desc' }],
       take: limit + 1,
-      select: { id: true, createdAt: true, follower: { select: FOLLOW_USER_SELECT } },
+      select: { sequence: true, createdAt: true, follower: { select: FOLLOW_USER_SELECT } },
     });
 
     return this.toFollowPage(rows, limit, (row) => row.follower);
@@ -376,9 +389,9 @@ export class UsersService {
 
     const rows = await this.prisma.follow.findMany({
       where,
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ createdAt: 'desc' }, { sequence: 'desc' }],
       take: limit + 1,
-      select: { id: true, createdAt: true, followee: { select: FOLLOW_USER_SELECT } },
+      select: { sequence: true, createdAt: true, followee: { select: FOLLOW_USER_SELECT } },
     });
 
     return this.toFollowPage(rows, limit, (row) => row.followee);
@@ -445,11 +458,11 @@ export class UsersService {
   // both fetch limit+1 Follow rows (each embedding either `follower` or
   // `followee`, the only difference between the two callers) and need
   // the identical "trim the lookahead row, build nextCursor from the
-  // last kept row's (createdAt, id)" logic FeedService.getFeed/
+  // last kept row's (createdAt, sequence)" logic FeedService.getFeed/
   // getComments/getSavedPosts each repeat inline for their own single
   // caller. With two callers sharing the exact same shape here, factoring
   // it once is worth the small indirection.
-  private toFollowPage<T extends { id: string; createdAt: Date }>(
+  private toFollowPage<T extends { sequence: number; createdAt: Date }>(
     rows: T[],
     limit: number,
     pickUser: (row: T) => FollowUser,
@@ -457,15 +470,19 @@ export class UsersService {
     const hasMore = rows.length > limit;
     const sliced = hasMore ? rows.slice(0, limit) : rows;
     const last = sliced[sliced.length - 1];
-    const nextCursor = hasMore && last ? encodeFeedCursor({ createdAt: last.createdAt, id: last.id }) : null;
+    const nextCursor =
+      hasMore && last ? encodeFeedSequenceCursor({ createdAt: last.createdAt, sequence: last.sequence }) : null;
 
     return { items: sliced.map(pickUser), nextCursor };
   }
 
   private buildFollowCursorFilter(rawCursor: string): Prisma.FollowWhereInput {
-    const cursor = decodeFeedCursor(rawCursor);
+    const cursor = decodeFeedSequenceCursor(rawCursor);
     return {
-      OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }],
+      OR: [
+        { createdAt: { lt: cursor.createdAt } },
+        { createdAt: cursor.createdAt, sequence: { lt: cursor.sequence } },
+      ],
     };
   }
 }

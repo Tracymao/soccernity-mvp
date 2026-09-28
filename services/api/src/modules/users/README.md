@@ -257,8 +257,18 @@ uncontroversial.
   every other list endpoint in this codebase uses
   (`FeedQueryDto`/`cursor.util.ts`, reused as-is — no second pagination
   scheme invented), ordered most-recently-followed-first (`createdAt
-  desc, id desc` on `Follow`'s own row — see point 4 for why
-  `createdAt` had to be added first). Each entry is the minimal
+  desc, sequence desc` on `Follow`'s own row — see point 4 for why
+  `createdAt` had to be added first). **`fix/follow-pagination-tiebreaker`
+  fixed the tiebreaker itself**: it used to be `id desc` (`Follow.id`, a
+  random UUID with no relation to insertion order — the same class of
+  bug `fix/feed-pagination-tiebreaker` already fixed for
+  `Post`/`Comment`/`SavedPost`); `Follow.sequence` (see its own comment
+  in `schema.prisma`) is now a genuinely monotonic counter, and
+  `getFollowers`/`getFollowing` use `FeedSequenceCursor`/
+  `encodeFeedSequenceCursor`/`decodeFeedSequenceCursor` from
+  `feed/cursor.util.ts` (the same pair `feed.service.ts`'s own
+  sequence-tiebroken call sites use) instead of the plain `FeedCursor`
+  pair. Each entry is the minimal
   `{id, displayName}` shape (`FOLLOW_USER_SELECT` in
   `users.service.ts`) — no `passwordHash`/`isMinor`/`email`/`phone`/
   `dateOfBirth`/`verificationStatus` ever leaves Postgres via either
