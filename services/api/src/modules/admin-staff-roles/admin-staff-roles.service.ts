@@ -8,6 +8,7 @@ import {
   ADMIN_ACTION_LOG_ACTIONS,
   ADMIN_ACTION_LOG_TARGET_TYPES,
 } from '../admin-action-log/admin-action-log.constants';
+import { AdminTokenService } from '../admin/token/admin-token.service';
 import {
   ADMIN_STAFF_ROLES_DEFAULT_PAGE_SIZE,
   ADMIN_STAFF_ROLES_MAX_PAGE_SIZE,
@@ -16,6 +17,7 @@ import { decodeAdminStaffRolesCursor, encodeAdminStaffRolesCursor } from './curs
 import { CreateAdminStaffDto } from './dto/create-admin-staff.dto';
 import { ListStaffQueryDto } from './dto/list-staff-query.dto';
 import { UpdateAdminRoleDto } from './dto/update-admin-role.dto';
+import { UpdateAdminStatusDto } from './dto/update-admin-status.dto';
 
 // GET /admin/staff and PATCH /admin/staff/:id/role response shape — an
 // explicit allowlist, never a spread of the raw Prisma AdminUser row:
@@ -91,18 +93,26 @@ export class AdminStaffRolesService {
     // Same argon2id wrapper AdminAuthService uses for login and
     // change-password (exported by AdminAuthFoundationModule).
     private readonly passwordService: PasswordService,
+    // feat/admin-staff-status — updateAdminStatus revokes every existing
+    // admin session on a deactivation, the same "blocking future logins
+    // is meaningless if current tokens keep working" reasoning
+    // AuthService.deactivateAccount / AdminUsersService.updateUserStatus's
+    // own `suspended` branch already apply for their resources. Already
+    // exported by AdminAuthFoundationModule (this module's own import),
+    // so no new module wiring is needed for this.
+    private readonly adminTokenService: AdminTokenService,
   ) {}
 
   // -------------------------------------------------------------------
   // POST /admin/staff (Decision Log #191). Provisions a new AdminUser.
   //
-  // PASSWORD CONVENTION: none existed for admin-created accounts �
+  // PASSWORD CONVENTION: none existed for admin-created accounts �
   // PasswordResetService is User-only (User table, User token store), and
   // nothing else in the codebase creates an AdminUser. So this follows
   // the simplest safe shape: a temporary password (admin-supplied, or
   // generated and returned ONCE here) that the new admin is expected to
   // replace via the existing POST /admin/auth/change-password. There is
-  // no "must change on first login" flag � AdminUser has no such column
+  // no "must change on first login" flag � AdminUser has no such column
   // and adding one is a schema change beyond this task; flagged in the
   // README. The generated password is never logged or written to the
   // action log.
@@ -218,14 +228,10 @@ export class AdminStaffRolesService {
     const target = await this.assertAdminExists(targetAdminId);
 
     if (target.role === 'superadmin' && dto.role !== 'superadmin') {
-      const remainingActiveSuperadmins = await this.prisma.adminUser.count({
-        where: { role: 'superadmin', accountStatus: 'active', id: { not: targetAdminId } },
-      });
-      if (remainingActiveSuperadmins === 0) {
-        throw new ConflictException(
-          'Cannot change this role: it belongs to the last active superadmin account.',
-        );
-      }
+      await this.assertNotLastActiveSuperadmin(
+        targetAdminId,
+        'Cannot change this role: it belongs to the last active superadmin account.',
+      );
     }
 
     const updated = await this.prisma.adminUser.update({
@@ -246,8 +252,102 @@ export class AdminStaffRolesService {
     return updated;
   }
 
-  private async assertAdminExists(id: string): Promise<{ id: string; role: string }> {
-    const admin = await this.prisma.adminUser.findUnique({ where: { id }, select: { id: true, role: true } });
+  // -------------------------------------------------------------------
+  // PATCH /admin/staff/:id/status (feat/admin-staff-status, Decision Log
+  // #193). Writes ONLY AdminUser.accountStatus — the same narrow-scope
+  // precedent updateAdminRole already sets for `role`. `AdminUser.
+  // accountStatus` existed from `sprint-2/admin-console-account-entity`
+  // onward with no endpoint that ever wrote it (Decision Log #193's own
+  // text: "it exists so a future superadmin-facing 'suspend this
+  // admin/moderator' action can instantly block login... but nothing here
+  // builds that action") — this is that action.
+  //
+  // No restriction on moving ANY admin into `active` or `deactivated`
+  // from whatever their current status is — mirrors
+  // AdminUsersService.updateUserStatus's own "this is a moderation
+  // action, not constrained by a self-service state machine" reasoning
+  // (there IS no self-service accountStatus write for AdminUser at all,
+  // unlike User's deactivate/reactivate pair, so there is no self-service
+  // state machine to even collide with here).
+  //
+  // THE ONE SAFETY GUARD THIS ENDPOINT ADDS, disclosed rather than
+  // silently built in, mirroring updateAdminRole's own last-active-
+  // superadmin guard exactly: deactivating the LAST remaining active
+  // superadmin is rejected with a 409, for the identical reason a
+  // demotion is — a deactivated admin cannot authenticate
+  // (AdminAuthService.login() already checks accountStatus), so
+  // deactivating the sole active superadmin would make PATCH
+  // /admin/staff/:id/status itself permanently unreachable, the same
+  // irrecoverable lockout updateAdminRole's guard already prevents on
+  // the role-change side.
+  //
+  // A deactivation additionally revokes every existing session for the
+  // TARGET admin — see adminTokenService's own constructor comment above
+  // for why. Reactivating does NOT re-issue anything; the admin simply
+  // logs in again.
+  // -------------------------------------------------------------------
+  async updateAdminStatus(
+    targetAdminId: string,
+    callerAdminId: string,
+    dto: UpdateAdminStatusDto,
+  ): Promise<AdminStaffListItem> {
+    const target = await this.assertAdminExists(targetAdminId);
+
+    if (target.role === 'superadmin' && target.accountStatus === 'active' && dto.status !== 'active') {
+      await this.assertNotLastActiveSuperadmin(
+        targetAdminId,
+        'Cannot deactivate this account: it belongs to the last active superadmin account.',
+      );
+    }
+
+    const updated = await this.prisma.adminUser.update({
+      where: { id: targetAdminId },
+      data: { accountStatus: dto.status },
+      select: ADMIN_STAFF_SELECT,
+    });
+
+    if (dto.status === 'deactivated') {
+      // Blocking future logins is meaningless if the target's current,
+      // still-valid tokens keep working — the exact reasoning
+      // AuthService.deactivateAccount / AdminUsersService.updateUserStatus's
+      // own `suspended` branch already document for their own resources.
+      await this.adminTokenService.revokeAllSessionsForAdmin(targetAdminId);
+    }
+
+    this.logger.log(`Admin ${callerAdminId} set admin ${targetAdminId}'s accountStatus to '${dto.status}'.`);
+    await this.adminActionLogService.record(
+      callerAdminId,
+      ADMIN_ACTION_LOG_ACTIONS.ADMIN_ACCOUNT_STATUS_UPDATED,
+      ADMIN_ACTION_LOG_TARGET_TYPES.ADMIN_USER,
+      targetAdminId,
+      `status=${dto.status}`,
+    );
+
+    return updated;
+  }
+
+  // Shared by updateAdminRole (demoting) and updateAdminStatus
+  // (deactivating) — both are, from this guard's point of view, the same
+  // question: "would this leave zero active superadmins able to reach
+  // this very endpoint again?" The COUNT query's shape is unchanged from
+  // updateAdminRole's original inline version — deactivated superadmin
+  // accounts do not count toward "remaining" (AdminAuthService.login()
+  // already refuses them), and the target itself is always excluded so a
+  // genuinely sole superadmin cannot act on themselves either.
+  private async assertNotLastActiveSuperadmin(targetAdminId: string, message: string): Promise<void> {
+    const remainingActiveSuperadmins = await this.prisma.adminUser.count({
+      where: { role: 'superadmin', accountStatus: 'active', id: { not: targetAdminId } },
+    });
+    if (remainingActiveSuperadmins === 0) {
+      throw new ConflictException(message);
+    }
+  }
+
+  private async assertAdminExists(id: string): Promise<{ id: string; role: string; accountStatus: string }> {
+    const admin = await this.prisma.adminUser.findUnique({
+      where: { id },
+      select: { id: true, role: true, accountStatus: true },
+    });
     if (!admin) {
       throw new NotFoundException('Admin account not found');
     }

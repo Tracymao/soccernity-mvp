@@ -16,6 +16,7 @@ describe('AdminStaffRolesController (HTTP layer)', () => {
   const adminStaffRolesService = {
     listStaff: jest.fn(),
     updateAdminRole: jest.fn(),
+    updateAdminStatus: jest.fn(),
     createStaff: jest.fn(),
   };
 
@@ -81,18 +82,44 @@ describe('AdminStaffRolesController (HTTP layer)', () => {
       expect(adminStaffRolesService.updateAdminRole).not.toHaveBeenCalled();
     });
 
-    it('allows a superadmin through on both routes', async () => {
+    it('rejects an editor with 403 on PATCH /admin/staff/:id/status', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'editor', aud: 'admin-console' };
+
+      await request(app.getHttpServer())
+        .patch('/admin/staff/target-admin-1/status')
+        .send({ status: 'deactivated' })
+        .expect(403);
+      expect(adminStaffRolesService.updateAdminStatus).not.toHaveBeenCalled();
+    });
+
+    it('rejects a moderator with 403 on PATCH /admin/staff/:id/status', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
+
+      await request(app.getHttpServer())
+        .patch('/admin/staff/target-admin-1/status')
+        .send({ status: 'active' })
+        .expect(403);
+      expect(adminStaffRolesService.updateAdminStatus).not.toHaveBeenCalled();
+    });
+
+    it('allows a superadmin through on all three routes', async () => {
       currentAdmin = { sub: 'admin-1', role: 'superadmin', aud: 'admin-console' };
       adminStaffRolesService.listStaff.mockResolvedValue({ items: [], nextCursor: null });
       adminStaffRolesService.updateAdminRole.mockResolvedValue({ id: 'target-admin-1', role: 'moderator' });
+      adminStaffRolesService.updateAdminStatus.mockResolvedValue({ id: 'target-admin-1', accountStatus: 'deactivated' });
 
       await request(app.getHttpServer()).get('/admin/staff').expect(200);
       await request(app.getHttpServer())
         .patch('/admin/staff/target-admin-1/role')
         .send({ role: 'moderator' })
         .expect(200);
+      await request(app.getHttpServer())
+        .patch('/admin/staff/target-admin-1/status')
+        .send({ status: 'deactivated' })
+        .expect(200);
       expect(adminStaffRolesService.listStaff).toHaveBeenCalledTimes(1);
       expect(adminStaffRolesService.updateAdminRole).toHaveBeenCalledTimes(1);
+      expect(adminStaffRolesService.updateAdminStatus).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -188,6 +215,93 @@ describe('AdminStaffRolesController (HTTP layer)', () => {
         .patch('/admin/staff/target-admin-1/role')
         .send({ role: 'editor' })
         .expect(409);
+    });
+  });
+
+  describe('PATCH /admin/staff/:id/status', () => {
+    beforeEach(() => {
+      currentAdmin = { sub: 'superadmin-1', role: 'superadmin', aud: 'admin-console' };
+    });
+
+    it('sets the TARGET admin status, forwarding the TARGET admin id and the calling superadmin id separately', async () => {
+      adminStaffRolesService.updateAdminStatus.mockResolvedValue({
+        id: 'target-admin-1',
+        email: 'ed@example.com',
+        fullName: 'An Editor',
+        role: 'editor',
+        accountStatus: 'deactivated',
+        createdAt: '2026-09-28T00:00:00.000Z',
+      });
+
+      const res = await request(app.getHttpServer())
+        .patch('/admin/staff/target-admin-1/status')
+        .send({ status: 'deactivated' })
+        .expect(200);
+
+      expect(adminStaffRolesService.updateAdminStatus).toHaveBeenCalledWith(
+        'target-admin-1',
+        'superadmin-1',
+        { status: 'deactivated' },
+      );
+      expect(res.body.accountStatus).toBe('deactivated');
+      // Never leaks passwordHash — response is an explicit allowlist.
+      expect(res.body.passwordHash).toBeUndefined();
+    });
+
+    it('accepts "active" to reactivate', async () => {
+      adminStaffRolesService.updateAdminStatus.mockResolvedValue({ id: 'target-admin-1', accountStatus: 'active' });
+
+      await request(app.getHttpServer())
+        .patch('/admin/staff/target-admin-1/status')
+        .send({ status: 'active' })
+        .expect(200);
+
+      expect(adminStaffRolesService.updateAdminStatus).toHaveBeenCalledWith('target-admin-1', 'superadmin-1', {
+        status: 'active',
+      });
+    });
+
+    it('rejects a missing status', async () => {
+      await request(app.getHttpServer()).patch('/admin/staff/target-admin-1/status').send({}).expect(400);
+      expect(adminStaffRolesService.updateAdminStatus).not.toHaveBeenCalled();
+    });
+
+    it('rejects a status outside the real active/deactivated set (e.g. a User-only value like "suspended")', async () => {
+      await request(app.getHttpServer())
+        .patch('/admin/staff/target-admin-1/status')
+        .send({ status: 'suspended' })
+        .expect(400);
+      expect(adminStaffRolesService.updateAdminStatus).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unrecognised extra field (whitelist: true, forbidNonWhitelisted: true)', async () => {
+      await request(app.getHttpServer())
+        .patch('/admin/staff/target-admin-1/status')
+        .send({ status: 'deactivated', role: 'moderator' })
+        .expect(400);
+      expect(adminStaffRolesService.updateAdminStatus).not.toHaveBeenCalled();
+    });
+
+    it('surfaces the service-level 409 for a last-active-superadmin deactivation', async () => {
+      const { ConflictException } = await import('@nestjs/common');
+      adminStaffRolesService.updateAdminStatus.mockRejectedValue(
+        new ConflictException('Cannot deactivate this account: it belongs to the last active superadmin account.'),
+      );
+
+      await request(app.getHttpServer())
+        .patch('/admin/staff/target-admin-1/status')
+        .send({ status: 'deactivated' })
+        .expect(409);
+    });
+
+    it('surfaces a 404 for a non-existent target', async () => {
+      const { NotFoundException } = await import('@nestjs/common');
+      adminStaffRolesService.updateAdminStatus.mockRejectedValue(new NotFoundException('Admin account not found'));
+
+      await request(app.getHttpServer())
+        .patch('/admin/staff/missing-admin/status')
+        .send({ status: 'deactivated' })
+        .expect(404);
     });
   });
 

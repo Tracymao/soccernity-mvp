@@ -9059,7 +9059,80 @@ Full reasoning for every choice above: Build Plan Section 5.
     `docs/Soccernity_MVP_Build_Plan_v1.7.docx` appended (not rewritten)
     to record this residual gap as also closed.
   - PR opened, not merged — Temi verifies and merges.
-- **`feat/admin-staff-create` (backend-api, 2026-09-28) resolves Decision Log #191: `POST /admin/staff` (superadmin-only, `services/api` only, zero schema diff) creates an `AdminUser` from `email`/`fullName`/`role` plus an admin-set or generated temporary password.** No admin password-setup convention existed (`PasswordResetService` is `User`-only), so a generated 16-char password is returned once and the new admin changes it via the existing `POST /admin/auth/change-password`; no must-change-on-first-login flag exists (would need a schema change) and no invite email is sent. Duplicate email -> 409. Audited as `admin_user.created` (never the password). The first superadmin is still bootstrapped by direct DB insert. Verification: `admin-staff-roles` + `admin-action-log` jest suites 3 suites / 44 tests, 0 failures; `tsc`, eslint clean; full mocked/e2e suites not re-run. PR #340 opened, not merged.
+- **`feat/admin-staff-create` (backend-api, 2026-09-28) resolves Decision Log #191: `POST /admin/staff` (superadmin-only, `services/api` only, zero schema diff) creates an `AdminUser` from `email`/`fullName`/`role` plus an admin-set or generated temporary password.** No admin password-setup convention existed (`PasswordResetService` is `User`-only), so a generated 16-char password is returned once and the new admin changes it via the existing `POST /admin/auth/change-password`; no must-change-on-first-login flag exists (would need a schema change) and no invite email is sent. Duplicate email -> 409. Audited as `admin_user.created` (never the password). The first superadmin is still bootstrapped by direct DB insert. Verification: `admin-staff-roles` + `admin-action-log` jest suites 3 suites / 44 tests, 0 failures; `tsc`, eslint clean; full mocked/e2e suites not re-run. **Merged as PR #340** — this bullet's own text previously said "PR #340 opened, not merged"; corrected here in place once the merge was confirmed directly against `git log` on `origin/main`, per this file's own "Keeping this file current" rule.
+- **`feat/admin-staff-status` (backend-api + figma-to-code, 2026-09-28)
+  resolves Decision Log #193 — `AdminUser.accountStatus` (`active`/
+  `deactivated`, existed since `sprint-2/admin-console-account-entity`
+  with no endpoint ever writing it) now has a real write path.** Branch
+  from fresh `origin/main` (`feat/admin-staff-create`, PR #340, was
+  already merged). `services/api` — zero `schema.prisma` column change,
+  comment-only. **`AdminAuthService.login()` was checked, not assumed —
+  it already rejected any non-`'active'` admin with the same generic
+  `Invalid credentials`** (the same treatment `AuthService.login()` gives
+  `User.accountStatus`, minus a distinct deactivated-specific message —
+  admin has no self-service reactivate path to point one at, matching
+  that service's own existing comment), and `admin-auth.service.spec.ts`
+  already had a passing test proving it (`'rejects login for a
+  deactivated admin account with the same generic message'`) — no code
+  change was needed or made there.
+  - **New `PATCH /admin/staff/:id/status`** (same
+    `AdminJwtAuthGuard`/`AdminRolesGuard('superadmin')` class-level guard
+    as the rest of `admin-staff-roles`), `UpdateAdminStatusDto` — a
+    single required `status`, `active`/`deactivated` only (a narrower
+    value set than `admin-users`' own `active`/`suspended`/`deleted`;
+    there is no admin-side `pending_deletion`/hard-delete concept here).
+    No restriction on moving ANY admin between the two states — mirrors
+    `AdminUsersService.updateUserStatus`'s own "moderation action, not a
+    self-service state machine" reasoning.
+  - **The one safety guard added, mirroring `PATCH /admin/staff/:id/role`'s
+    own last-active-superadmin guard exactly (now shared via one private
+    helper, `assertNotLastActiveSuperadmin`, used by both endpoints —
+    the `COUNT` query's shape and every existing `updateAdminRole` test's
+    assertion on it are unchanged)**: deactivating the LAST remaining
+    active superadmin is a `409` — a deactivated admin cannot
+    authenticate, so deactivating the sole active superadmin would make
+    this very endpoint permanently unreachable, the identical lockout the
+    role-demotion guard already prevents.
+  - **A deactivation revokes every existing session for the TARGET admin**
+    (`AdminTokenService.revokeAllSessionsForAdmin`, already exported by
+    `AdminAuthFoundationModule` — no new module wiring needed) — the same
+    "blocking future logins is meaningless if current tokens keep
+    working" reasoning `AuthService.deactivateAccount`/
+    `AdminUsersService.updateUserStatus`'s own `suspended` branch already
+    apply. Reactivating does not re-issue anything.
+  - Audited as `admin_user.status_updated`
+    (`ADMIN_ACCOUNT_STATUS_UPDATED`, mirroring `USER_STATUS_UPDATED`'s
+    naming), CALLER as `adminId`, TARGET admin as `targetId`.
+  - **`apps/admin` wired in the same PR, per the task brief**: a new
+    "Account status" card on `RoleFormPages.tsx`'s `EditRolePage`
+    (alongside the existing Role and Child safety vetting cards) — a
+    pill showing the real current status, a callout disclosing that
+    deactivating signs the account out of every existing session
+    immediately, and a Deactivate/Reactivate toggle button surfacing the
+    real 409/other backend errors without changing the displayed state
+    on a rejected write. `SettingsRolesPage.tsx`'s roster table gained a
+    Status column (reusing the row's already-fetched `accountStatus` —
+    no second request), same strong=active/soft=otherwise pill
+    convention `UsersPage.tsx`'s own `accountStatus` pill already uses.
+  - **Verification, all real, re-measured directly** (before figure
+    recomputed from a clean `main` checkout, not estimated): `services/api`
+    `admin-staff-roles` mocked suite **2 suites / 41 tests → 2 suites /
+    61 tests, 0 failures** (20 new — 11 `updateAdminStatus` service cases
+    + 9 controller-HTTP cases, including the shared
+    last-active-superadmin-guard coverage on the new route); `npx tsc
+    --noEmit`, `npx eslint`, and `npx nest build` all clean. Full mocked
+    suite spot-check:
+    a suite unrelated to this change (`admin-media.controller.http.spec.ts`)
+    failed only inside a full-parallel run and passed cleanly (12/12) in
+    isolation — the same documented full-suite CPU-contention flake class
+    `fix/feed-pagination-tiebreaker`'s own bullet already describes, not
+    a regression from this change; the full suite itself was not
+    re-run start-to-finish a second time given its ~30-minute wall clock.
+    `apps/admin`: `npx tsc --noEmit`/`eslint` clean; vitest **16 suites /
+    151 tests, 0 failures** (up from 145 — 6 new tests, all in
+    `settingsRoles.test.tsx`, which went 18 → 24); `npx vite build`
+    clean production bundle.
+  - PR opened, not merged — Temi verifies and merges.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

@@ -39,6 +39,8 @@ changes, ...), not just Report review.
 | `ModerationService` | `escalateReport` | `report.escalated` | `report` / the report id | `escalatedToAuthority=<bool>: <escalationNotes>` |
 | `AdminStaffVettingService` | `setChildSafetyVetting` | `admin_user.child_safety_vetting_updated` | `admin_user` / the **target** admin's id (not the caller) | `childSafetyVetted=<bool>` |
 | `AdminUsersService` | `updateUserStatus` | `user.status_updated` | `user` / the user id | `status=<active\|suspended\|deleted>` |
+| `AdminStaffRolesService` | `updateAdminRole` | `admin_user.role_changed` | `admin_user` / the **target** admin's id | `role=<editor\|moderator\|superadmin>` |
+| `AdminStaffRolesService` | `updateAdminStatus` | `admin_user.status_updated` | `admin_user` / the **target** admin's id | `status=<active\|deactivated>` |
 
 In every case `adminId` passed to `record()` is the **acting** admin (the
 `AdminAccessTokenPayload.sub` of whoever made the call) — for

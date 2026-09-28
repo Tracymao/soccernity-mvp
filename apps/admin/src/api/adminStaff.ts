@@ -64,6 +64,22 @@ export function updateAdminRole(id: string, role: AdminStaffRole): Promise<Admin
   return adminFetch<AdminStaffListItem>(`/admin/staff/${id}/role`, { method: "PATCH", body: { role } });
 }
 
+// AdminUser.accountStatus's real value set — a narrower two-value set
+// than platform User's own ("active" | "suspended" | "deleted",
+// api/adminUsers.ts) since there is no admin-side pending_deletion/hard-
+// delete concept, only "can this admin currently log in."
+export const ADMIN_STAFF_ACCOUNT_STATUSES = ["active", "deactivated"] as const;
+export type AdminStaffAccountStatus = (typeof ADMIN_STAFF_ACCOUNT_STATUSES)[number];
+
+// PATCH /admin/staff/:id/status (feat/admin-staff-status, Decision Log
+// #193) — sets ONLY AdminUser.accountStatus. Deactivating revokes every
+// existing session for the TARGET admin server-side; a 409 means the
+// target is the last active superadmin, same shape as updateAdminRole's
+// own 409 — surfaced verbatim via AdminApiError.message.
+export function updateAdminStatus(id: string, status: AdminStaffAccountStatus): Promise<AdminStaffListItem> {
+  return adminFetch<AdminStaffListItem>(`/admin/staff/${id}/status`, { method: "PATCH", body: { status } });
+}
+
 // There is no GET /admin/staff/:id anywhere in services/api —
 // EditRolePage is reached from SettingsRolesPage's own row "Edit" link,
 // which passes the row's already-fetched AdminStaffListItem via router
