@@ -6,9 +6,11 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
 import { FeedQueryDto } from '../feed/dto/feed-query.dto';
 import { BanterService } from './banter.service';
+import { AttachBanterRoomTopicsDto } from './dto/attach-banter-room-topics.dto';
 import { CreateBanterPostDto } from './dto/create-banter-post.dto';
 import { CreateBanterRoomDto } from './dto/create-banter-room.dto';
 import { ListBanterRoomsQueryDto } from './dto/list-banter-rooms-query.dto';
+import { ListBanterTopicsQueryDto } from './dto/list-banter-topics-query.dto';
 import { MyBantsQueryDto } from './dto/my-bants-query.dto';
 
 // Build Plan Section 4.4 (Club & Banter Service) — the /banter-rooms
@@ -16,16 +18,19 @@ import { MyBantsQueryDto } from './dto/my-bants-query.dto';
 //
 // Section 4.4 lists: GET /banter-rooms, GET /banter-rooms/:id, POST
 // /banter-rooms, POST /banter-rooms/:id/topics, GET
-// /banter-rooms/search?q=. This controller builds all of those EXCEPT
-// POST /banter-rooms/:id/topics (there is no Topic entity in Section 3
-// and scopeType:'topic' is a room *category*, not a room *having*
-// topics — flagged as a Decision Log candidate in banter/README.md, not
-// built). It also adds three endpoints Section 4.4's literal list omits
-// but Section 6's Sprint 3 description + Post.banterRoomId's existence
-// require: POST/DELETE /banter-rooms/:id/join, GET /banter-rooms/mine
-// ("My Bants"), and POST/GET /banter-rooms/:id/posts. All flagged in the
-// README the same way GrassrootsController flagged PATCH
-// /fixtures/:id/status (Decision Log #254).
+// /banter-rooms/search?q=. This controller now builds ALL of those,
+// including POST /banter-rooms/:id/topics (sprint-3/banter-room-topics
+// resolves Decision Log #276 — see schema.prisma's Topic/BanterRoomTopic
+// models and banter/README.md's Permission model section for the
+// cardinality and guard reasoning). It also adds four endpoints Section
+// 4.4's literal list omits but Section 6's Sprint 3 description +
+// Post.banterRoomId's existence require: POST/DELETE
+// /banter-rooms/:id/join, GET /banter-rooms/mine ("My Bants"), POST/GET
+// /banter-rooms/:id/posts, and GET /banter-rooms/topics (the topics
+// catalog — without it, ?topicId= filtering has nothing for a client to
+// discover ids from). All flagged in the README the same way
+// GrassrootsController flagged PATCH /fixtures/:id/status (Decision Log
+// #254).
 //
 // Guard reasoning per route is inline below and in banter/README.md.
 // sprint-1/under-16-restrictions: whole controller off for isUnder16 accounts
@@ -85,6 +90,18 @@ export class BanterController {
   @UseGuards(JwtAuthGuard)
   async mine(@Query() query: MyBantsQueryDto, @CurrentUser() user: AccessTokenPayload) {
     return this.banter.getMyRooms(user.sub, query);
+  }
+
+  // GET /banter-rooms/topics — the topics catalog
+  // (sprint-3/banter-room-topics, Decision Log #276). JwtAuthGuard only,
+  // same reasoning as list/search/mine — browsing a small tag catalog is
+  // no more safety-sensitive than browsing rooms. Declared before /:id
+  // (the same "search"/"mine" convention) so Nest never matches
+  // "topics" as a room id.
+  @Get('topics')
+  @UseGuards(JwtAuthGuard)
+  async topics(@Query() query: ListBanterTopicsQueryDto) {
+    return this.banter.listTopics(query);
   }
 
   // GET /banter-rooms/:id — JwtAuthGuard only, reading a single room is
@@ -155,5 +172,33 @@ export class BanterController {
     @Body() dto: CreateBanterPostDto,
   ) {
     return this.banter.postToRoom(user.sub, id, dto);
+  }
+
+  // POST /banter-rooms/:id/topics — Section 4.4's literal,
+  // previously-unbuilt route (sprint-3/banter-room-topics resolves
+  // Decision Log #276). JwtAuthGuard + GuardianConsentGuard (attaching a
+  // topic tag changes the room's own public-facing categorization
+  // metadata — a short confirmation of POST /banter-rooms's own
+  // "posting"-class reasoning above, not a fresh argument).
+  //
+  // PERMISSION MODEL, argued in full in BanterService.attachTopics's own
+  // comment and banter/README.md: only the room's CREATOR may attach
+  // topics — not any member, and not any authenticated user (403
+  // otherwise). 404 room -> 403 not-creator, in that order
+  // (BanterService.attachTopics settles existence before ownership).
+  //
+  // HttpCode(200): the same "idempotent ensure-attached action, not a
+  // resource-creation action" characterization join/leave already use —
+  // a call where every requested topic is already attached does nothing
+  // new, unlike POST /banter-rooms itself.
+  @Post(':id/topics')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
+  async attachTopics(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: AttachBanterRoomTopicsDto,
+  ) {
+    return this.banter.attachTopics(user.sub, id, dto);
   }
 }

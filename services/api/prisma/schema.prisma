@@ -679,13 +679,30 @@ model BanterRoom {
   // is deliberately NO scope-target field (which club / which league):
   // sprint-3/banter-rooms-backend treats scopeType as a filterable
   // category and `name` as free text. A genuine "which Arsenal room"
-  // needs a scopeRef/scopeName addition — flagged as a Decision Log
-  // candidate in banter/README.md, not built.
+  // needs a scopeRef/scopeName addition — still flagged as a Decision Log
+  // candidate in banter/README.md, not built (Decision Log #276's OTHER
+  // flagged item — the `POST /banter-rooms/:id/topics` half of #276 is
+  // resolved below by BanterRoomTopic/Topic; this scopeRef/scopeName gap
+  // is a separate, still-open item on the same Decision Log entry).
+  //
+  // scopeType:'topic' remains a room CATEGORY value ("this room is
+  // topic-scoped, not club/league/country-scoped") — it is deliberately
+  // NOT the same concept as the BanterRoomTopic/Topic tagging system
+  // below (sprint-3/banter-room-topics). A room can have scopeType:'club'
+  // and still carry Topic tags like "Transfers"/"Match Day" — the two
+  // axes are orthogonal, exactly as Decision Log #276 originally
+  // distinguished them ("scopeType:'topic' is a room category, not a
+  // room *having* topics").
   scopeType   String
   // The user who created the room. Kept as a bare String (not a User
   // @relation) exactly as Section 3 scaffolded it — making it a real FK
   // would pull room creation into the Decision Log #44 account-deletion
   // cascade scope for no MVP benefit. Flagged in banter/README.md.
+  //
+  // sprint-3/banter-room-topics also uses this field as the real
+  // authorization anchor for POST /banter-rooms/:id/topics ("only the
+  // room's creator may attach topics") — see banter/README.md's Permission
+  // model section for the full reasoning.
   createdBy   String
   // Denormalized cache of members.count(), the same discipline as
   // Post.likeCount / ClubPage.memberCount. sprint-3/banter-rooms-backend
@@ -703,6 +720,87 @@ model BanterRoom {
   // avoid the raw $executeRaw the implicit-m2m _ClubMembership forced on
   // ClubsService.joinClub.
   members     BanterRoomMember[]
+  // sprint-3/banter-room-topics — resolves Decision Log #276's
+  // "POST /banter-rooms/:id/topics" gap. See BanterRoomTopic/Topic below.
+  topics      BanterRoomTopic[]
+}
+
+// sprint-3/banter-room-topics — resolves the "no Topic entity" half of
+// Decision Log #276 (Section 4.4's originally-named, previously-unbuilt
+// `POST /banter-rooms/:id/topics`). A genuine addition beyond Section 3's
+// literal 20-entity list, flagged per CLAUDE.md's "the data model is a
+// fixed spec" rule — the same category of flagged addition
+// CommunityGroup/BanterRoomMember already made for their own features.
+//
+// Deliberately NOT the same concept as Hashtag/PostHashtag (search
+// module, sprint-4/trending-topics-backend) — checked directly before
+// building this, not assumed distinct. Hashtag rows are auto-EXTRACTED
+// from free Post.contentText via a #(\w+) regex scan and exist purely to
+// power GET /trending's windowed decay aggregation; a BanterRoom Topic is
+// a manually CURATED, creator-attached categorization tag with a
+// completely different lifecycle and no decay/trending concept at all.
+// Reusing Hashtag here would conflate two unrelated concerns (a room's
+// stable topical identity vs. a rolling popularity signal over post
+// text) — kept as two separate models.
+model Topic {
+  id String @id @default(uuid())
+  name String
+
+  // name.trim().toLowerCase(), @unique — the SAME anti-duplicate pattern
+  // CommunityGroup.nameNormalized already establishes (community-groups
+  // module, sprint-3/community-groups-backend). Enforced via
+  // BanterService.attachOneTopic's per-name upsert (never a plain
+  // create) — "attach a topic named 'Transfers'" and "attach a topic
+  // named 'transfers'" always resolve to the same Topic row. A genuine
+  // concurrent double-create of the same normalized name is retried
+  // (bounded, whole-transaction) rather than recovered mid-transaction —
+  // see BanterService.attachOneTopic's own comment for why a
+  // create-then-catch-and-recover design here was a real, reproduced
+  // bug, not just a theoretical risk.
+  nameNormalized String @unique
+
+  createdAt DateTime @default(now())
+  rooms     BanterRoomTopic[]
+}
+
+// The BanterRoom <-> Topic join. Sprint-3/banter-room-topics — mirrors
+// BanterRoomMember / CommunityGroupMember / Like / SavedPost / Follow's
+// exact shape: an EXPLICIT join model (never an implicit Prisma m2m — see
+// ClubPage.members' own real silent-relation-merge-bug precedent this
+// schema's own history already carries), a surrogate `id` + `@@unique`
+// composite for P2002-catch idempotency (attaching an already-attached
+// topic is a no-op, not an error — see BanterService.attachTopics).
+//
+// MANY-TO-MANY, not a single nullable `topicId` FK on BanterRoom — a real
+// cardinality judgment call, argued in full in banter/README.md's
+// Permission model section. Short version: Section 4.4's own route is
+// named `POST /banter-rooms/:id/topics` (plural, collection-style sub-
+// resource), the same shape this codebase already uses for a genuinely
+// multi-valued relationship (compare `GET /banter-rooms/:id/posts`, a
+// collection under a resource) — a single-FK design would more naturally
+// be expressed as `PATCH /banter-rooms/:id { topicId }`, which is not
+// what Section 4.4 names. A room built around a topic-scoped
+// conversation ("Transfer Deadline Day Chat") plausibly touches more than
+// one topical tag at once ("Transfers" + "Deadline Day"), and nothing in
+// scopeType's own four-value category axis (club | league | country |
+// topic) forces a 1:1 topic relationship — scopeType already IS the
+// single-value axis; Topic is the orthogonal, genuinely multi-valued one.
+model BanterRoomTopic {
+  id           String     @id @default(uuid())
+  banterRoomId String
+  banterRoom   BanterRoom @relation(fields: [banterRoomId], references: [id], onDelete: Cascade)
+  topicId      String
+  topic        Topic      @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  // When this topic was attached to this room — no Section-5.5 list
+  // endpoint currently orders by it (the topics catalog orders
+  // alphabetically by name, matching BanterRoom/ClubPage's own
+  // no-timestamp-column convention — see banter/cursor.util.ts), but kept
+  // for the same "a join row's own attach time is real, disclosable data"
+  // reasoning BanterRoomMember.joinedAt / CommunityGroupMember.joinedAt
+  // already carry.
+  createdAt    DateTime   @default(now())
+
+  @@unique([banterRoomId, topicId])
 }
 
 // sprint-3/banter-rooms-backend — per-user Banter Room membership,

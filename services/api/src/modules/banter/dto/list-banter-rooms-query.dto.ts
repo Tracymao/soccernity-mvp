@@ -25,6 +25,13 @@ import { BANTER_ROOM_SCOPE_TYPES, BanterRoomScopeType } from '../banter.constant
 //    3, so this is a plain `contains` (ILIKE), matching how
 //    GrassrootsPage's own server-side filter works — the precedent this
 //    task points at.
+//  - `topicId` — OPTIONAL exact-match filter on BanterRoomTopic
+//    (sprint-3/banter-room-topics, Decision Log #276). "Filter rooms by
+//    topic" — the read-side half this task's own brief names. A plain
+//    equality condition ANDed alongside the rest (same treatment as
+//    `scopeType`), not part of ordering/tiebreak. A bad/unknown topicId
+//    is not a 400 — it simply matches zero rooms, same as a `q` that
+//    matches nothing.
 export class ListBanterRoomsQueryDto {
   @IsOptional()
   @IsString()
@@ -44,4 +51,8 @@ export class ListBanterRoomsQueryDto {
   @IsOptional()
   @IsString()
   q?: string;
+
+  @IsOptional()
+  @IsString()
+  topicId?: string;
 }

@@ -21,3 +21,13 @@ export type BanterRoomScopeType = (typeof BANTER_ROOM_SCOPE_TYPES)[number];
 // for consistency rather than re-derived.
 export const BANTER_ROOMS_DEFAULT_PAGE_SIZE = 20;
 export const BANTER_ROOMS_MAX_PAGE_SIZE = 50;
+
+// GET /banter-rooms/topics — the topics catalog (sprint-3/banter-room-topics,
+// Decision Log #276). Same Section 5.5 bounds; a separate pair of
+// constants (not a reuse of the rooms ones above) since the two surfaces
+// paginate genuinely different tables and could plausibly diverge later —
+// matching the COMMUNITY_GROUP_MEMBERS_*_PAGE_SIZE / COMMUNITY_GROUPS_*_PAGE_SIZE
+// split community-groups.constants.ts already makes for its own two list
+// surfaces.
+export const BANTER_TOPICS_DEFAULT_PAGE_SIZE = 20;
+export const BANTER_TOPICS_MAX_PAGE_SIZE = 50;
