@@ -9132,7 +9132,12 @@ Full reasoning for every choice above: Build Plan Section 5.
     151 tests, 0 failures** (up from 145 — 6 new tests, all in
     `settingsRoles.test.tsx`, which went 18 → 24); `npx vite build`
     clean production bundle.
-  - PR opened, not merged — Temi verifies and merges.
+  - **Merged as PR #341** — this bullet's own text previously said "PR
+    opened, not merged"; corrected here in place once the merge was
+    confirmed directly against `git log` on `origin/main`, per this
+    file's own "Keeping this file current" rule (same correction the
+    `feat/admin-staff-create` bullet just above already made for
+    itself).
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
@@ -11864,7 +11869,70 @@ real, still-open follow-up, not done by this entry.
   mocked/e2e suites not re-run in this session. Forward-pointer appended
   to Decision Log #335's Status cell in
   `docs/Soccernity_MVP_Build_Plan_v1.7.docx`.
-  - PR opened, not merged — Temi verifies and merges.
+  - **Merged as PR #342** — this bullet's own text previously said "PR
+    opened, not merged"; corrected here in place once the merge was
+    confirmed directly against `git log` on `origin/main`, per this
+    file's own "Keeping this file current" rule.
+- **`feat/article-excerpt-field` (backend-api, 2026-09-28) resolves
+  Decision Log #333 — `Article.excerpt String?` (nullable, migration
+  `20260928204535_add_article_excerpt`) is now a real, admin-curated
+  summary field. `services/api` only.** `CreateArticleDto`/
+  `UpdateArticleDto` accept an optional `excerpt`
+  (`ARTICLE_EXCERPT_MAX_LENGTH = 300`, a fresh constant distinct from
+  `excerpt.util.ts`'s own `EXCERPT_MAX_LENGTH = 200`, which bounds the
+  computed fallback); `AdminContentService` trims and normalizes a
+  whitespace-only value to `null` on write, never storing `""` — the
+  same treatment `GrassrootsService.createFixture` already gives
+  `opponentName`. Sending `excerpt: ""` on `PATCH` clears a
+  previously-set excerpt back to `null`. `CreateArticlePage.tsx` gets a
+  new "Excerpt (optional)" field, with a hint explaining the
+  automatic-summary fallback, sitting outside the `<label>` element on
+  purpose so it isn't folded into the textarea's own accessible name. On
+  the public read path, `BlogService.toPublicArticleListItem` uses
+  `row.excerpt` when the admin set one, falling back to
+  `excerpt.util.ts`'s `truncateExcerpt(body)` when it's null/empty — the
+  fallback itself is unchanged, and the public response shape
+  (`excerpt: string`) is unchanged, so `apps/web` needed no changes.
+  Verification: `services/api` mocked suite 107 suites / 1520 tests, 0
+  failures; `tsc`/eslint/`nest build` clean. `apps/admin` vitest 16
+  suites / 154 tests, 0 failures; `tsc`/eslint/`vite build` clean.
+  Migration applied and verified against both the dev and test
+  databases. Appends a forward-pointer to Decision Log #333 in
+  `docs/Soccernity_MVP_Build_Plan_v1.7.docx`, and marks
+  `blog/README.md`'s own matching Decision Log candidate item 1
+  RESOLVED in place. **Merged as PR #343.**
+- **`feat/article-cover-image` (backend-api, 2026-09-29) resolves
+  Decision Log #334 — `Article.coverImageId String?` (nullable,
+  `onDelete: SetNull`, migration `20260928212908_add_article_cover_image`)
+  now exists, editable via `CreateArticleDto`/`UpdateArticleDto`
+  (validated against a real `MediaAsset` row, `assertMediaAssetExists`,
+  before the write runs) and a new picker on `CreateArticlePage.tsx`
+  (`CoverImagePicker.tsx`) that reuses the already-shipped `GET
+  /admin/media` — a picker, not an uploader; no separate upload flow was
+  added.** No Figma frame designs this control — built plain and
+  flagged, same precedent as `AdminProfilePage.tsx`'s Change Password
+  panel. **There is no "edit article" page anywhere in this codebase to
+  wire a counterpart into** — only an inline Publish/Unpublish toggle on
+  `ArticlesPage.tsx`'s list — so the task's assumption of one was
+  checked and found not to hold. The public Blog read shape (`GET
+  /articles`, `GET /articles/:id`) now exposes a resolved `coverImage: {
+  url, type } | null` too. **A real, pre-existing, unrelated bug was
+  found and fixed as a direct side effect**: `createArticle`/
+  `updateArticle` ran with no `select`/`include` at all, so despite
+  `apps/admin`'s own TS types already claiming a nested `category` on
+  the response, it was never actually there — a latent crash in
+  `ArticlesPage.tsx`'s own Publish/Unpublish action, fixed in the same
+  stroke as adding `coverImage`. New real e2e coverage
+  (`test/admin-content-cover-image.e2e-spec.ts`) — `Article.coverImage`
+  is the first relation in this schema to use an *explicit* `onDelete:
+  SetNull`, proven against real Postgres, not mocked. **Not done,
+  flagged**: `apps/web`'s `BlogPage.tsx`/`ArticleDetailPage.tsx` don't
+  render the new field yet. Verified: mocked suite 107 suites / 1520 →
+  1535 tests, 0 failures; full e2e suite 29 suites / 275 tests, 0
+  failures; `apps/admin` vitest 16 suites / 154 → 161 tests, 0 failures;
+  `tsc`/lint/build clean on both workspaces. Appends a forward-pointer to
+  Decision Log #334's own Status cell in
+  `docs/Soccernity_MVP_Build_Plan_v1.7.docx`. **Merged as PR #344.**
 
 ## The eight agents, and the order they run in
 
