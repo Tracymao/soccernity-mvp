@@ -18,6 +18,13 @@ import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from '
 // validation, guard wiring, the branching logic and the P2002/P2025
 // idempotency paths a mock can prove.
 //
+// sprint-3/banter-room-topics (Decision Log #276) adds two more real
+// Prisma relations/constraints this file now also proves against Postgres:
+// Topic.nameNormalized's own @@unique (a genuine concurrent double-create
+// of the SAME normalized name, from two different rooms, must resolve to
+// one Topic row) and BanterRoomTopic's @@unique([banterRoomId, topicId])
+// (idempotent re-attach, a genuine concurrent double-attach).
+//
 // Users are seeded directly via Prisma + a real TokenService-minted
 // access token (createUser), not POST /auth/register — the same pattern
 // clubs.e2e-spec.ts / grassroots.e2e-spec.ts use. None of the Banter
@@ -135,6 +142,7 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
         createdBy: creator.userId,
         memberCount: 1,
         joined: true,
+        topics: [], // sprint-3/banter-room-topics (Decision Log #276)
       });
 
       expect(await realMemberRowCount(create.body.id)).toBe(1);
@@ -432,6 +440,205 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
         await prisma.banterRoomMember.count({ where: { userId: creator.userId } }),
       ).toBe(1);
       await prisma.banterRoom.findUniqueOrThrow({ where: { id: room.id } });
+    });
+  });
+
+  // ---------- Topics (sprint-3/banter-room-topics, Decision Log #276) ----------
+
+  describe('GET /banter-rooms/topics + POST /banter-rooms/:id/topics', () => {
+    it('the creator can attach topics; a non-creator (even a member) gets 403; nothing changes on the 403', async () => {
+      const creator = await createUser('topic-creator');
+      const member = await createUser('topic-member');
+      const room = await createRoom(creator.accessToken, { name: 'Deadline Day Chat' });
+      await request(server())
+        .post(`/banter-rooms/${room.id}/join`)
+        .set('Authorization', `Bearer ${member.accessToken}`)
+        .expect(200);
+
+      const forbidden = await request(server())
+        .post(`/banter-rooms/${room.id}/topics`)
+        .set('Authorization', `Bearer ${member.accessToken}`)
+        .send({ names: ['Transfers'] })
+        .expect(403);
+      expect(forbidden.body).toBeDefined();
+
+      const prisma = getTestPrismaClient();
+      expect(await prisma.topic.count()).toBe(0);
+      expect(await prisma.banterRoomTopic.count()).toBe(0);
+
+      const attach = await request(server())
+        .post(`/banter-rooms/${room.id}/topics`)
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .send({ names: ['Transfers', 'Deadline Day'] })
+        .expect(200);
+
+      expect(attach.body.roomId).toBe(room.id);
+      expect(attach.body.topics.map((t: { name: string }) => t.name).sort()).toEqual([
+        'Deadline Day',
+        'Transfers',
+      ]);
+      expect(await prisma.topic.count()).toBe(2);
+      expect(await prisma.banterRoomTopic.count({ where: { banterRoomId: room.id } })).toBe(2);
+    });
+
+    it('attached topics are surfaced on GET /banter-rooms, GET /banter-rooms/:id, and GET /banter-rooms/mine', async () => {
+      const creator = await createUser('topic-surface');
+      const room = await createRoom(creator.accessToken, { name: 'Surfaced Room' });
+      await request(server())
+        .post(`/banter-rooms/${room.id}/topics`)
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .send({ names: ['Transfers'] })
+        .expect(200);
+
+      const list = await request(server())
+        .get('/banter-rooms')
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .expect(200);
+      expect(
+        list.body.items.find((r: { id: string }) => r.id === room.id).topics,
+      ).toEqual([{ id: expect.any(String), name: 'Transfers' }]);
+
+      const single = await request(server())
+        .get(`/banter-rooms/${room.id}`)
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .expect(200);
+      expect(single.body.topics).toEqual([{ id: expect.any(String), name: 'Transfers' }]);
+
+      const mine = await request(server())
+        .get('/banter-rooms/mine')
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .expect(200);
+      expect(
+        mine.body.items.find((r: { id: string }) => r.id === room.id).topics,
+      ).toEqual([{ id: expect.any(String), name: 'Transfers' }]);
+    });
+
+    it('attaching the same topic twice is idempotent — no duplicate row, unaffected by casing/whitespace', async () => {
+      const creator = await createUser('topic-idempotent');
+      const room = await createRoom(creator.accessToken, { name: 'Idempotent Room' });
+
+      const first = await request(server())
+        .post(`/banter-rooms/${room.id}/topics`)
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .send({ names: ['Transfers'] })
+        .expect(200);
+      const second = await request(server())
+        .post(`/banter-rooms/${room.id}/topics`)
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .send({ names: ['  transfers  '] }) // same normalized name, different case/whitespace
+        .expect(200);
+
+      expect(first.body.topics).toHaveLength(1);
+      expect(second.body.topics).toHaveLength(1);
+      expect(second.body.topics[0].id).toBe(first.body.topics[0].id);
+
+      const prisma = getTestPrismaClient();
+      expect(await prisma.topic.count()).toBe(1); // one Topic row, not two
+      expect(await prisma.banterRoomTopic.count({ where: { banterRoomId: room.id } })).toBe(1);
+    });
+
+    it('filters rooms by topicId (GET /banter-rooms?topicId=)', async () => {
+      const creator = await createUser('topic-filter');
+      const tagged = await createRoom(creator.accessToken, { name: 'Tagged Room' });
+      await createRoom(creator.accessToken, { name: 'Untagged Room' });
+      const attach = await request(server())
+        .post(`/banter-rooms/${tagged.id}/topics`)
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .send({ names: ['Transfers'] })
+        .expect(200);
+      const topicId = attach.body.topics[0].id as string;
+
+      const filtered = await request(server())
+        .get(`/banter-rooms?topicId=${topicId}`)
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .expect(200);
+      expect(filtered.body.items.map((r: { name: string }) => r.name)).toEqual(['Tagged Room']);
+    });
+
+    it('GET /banter-rooms/topics lists the catalog alphabetically and keyset-paginates', async () => {
+      const creator = await createUser('topic-catalog');
+      const room = await createRoom(creator.accessToken, { name: 'Catalog Room' });
+      await request(server())
+        .post(`/banter-rooms/${room.id}/topics`)
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .send({ names: ['Zonal Marking', 'Anfield Chat'] })
+        .expect(200);
+
+      const page1 = await request(server())
+        .get('/banter-rooms/topics?limit=1')
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .expect(200);
+      expect(page1.body.items.map((t: { name: string }) => t.name)).toEqual(['Anfield Chat']);
+      expect(page1.body.nextCursor).toEqual(expect.any(String));
+
+      const page2 = await request(server())
+        .get(`/banter-rooms/topics?limit=1&cursor=${encodeURIComponent(page1.body.nextCursor)}`)
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .expect(200);
+      expect(page2.body.items.map((t: { name: string }) => t.name)).toEqual(['Zonal Marking']);
+      expect(page2.body.nextCursor).toBeNull();
+    });
+
+    it('two concurrent attaches of the SAME new topic name (from different rooms) produce exactly one Topic row', async () => {
+      const creator = await createUser('topic-race-creator');
+      const roomA = await createRoom(creator.accessToken, { name: 'Race Room A' });
+      const roomB = await createRoom(creator.accessToken, { name: 'Race Room B' });
+
+      const fire = (roomId: string) =>
+        request(server())
+          .post(`/banter-rooms/${roomId}/topics`)
+          .set('Authorization', `Bearer ${creator.accessToken}`)
+          .send({ names: ['Deadline Day'] });
+
+      const [r1, r2] = await Promise.all([fire(roomA.id), fire(roomB.id)]);
+      expect(r1.status).toBe(200);
+      expect(r2.status).toBe(200);
+      expect(r1.body.topics[0].id).toBe(r2.body.topics[0].id);
+
+      const prisma = getTestPrismaClient();
+      expect(await prisma.topic.count({ where: { nameNormalized: 'deadline day' } })).toBe(1);
+    });
+
+    it('a restricted-pending minor cannot attach topics, even to their own room (403 guardian_consent_pending)', async () => {
+      const minor = await createRestrictedMinor('topic-guard');
+      // A minor cannot create a room either (blocked upstream), so seed
+      // one directly via Prisma with the minor as createdBy — proves the
+      // guard blocks attachment regardless of "would this minor even be
+      // able to own a room in practice."
+      const prisma = getTestPrismaClient();
+      const seededRoom = await prisma.banterRoom.create({
+        data: { name: 'Seeded Room', scopeType: 'topic', createdBy: minor.userId, memberCount: 1 },
+      });
+
+      const blocked = await request(server())
+        .post(`/banter-rooms/${seededRoom.id}/topics`)
+        .set('Authorization', `Bearer ${minor.accessToken}`)
+        .send({ names: ['Transfers'] })
+        .expect(403);
+      expect(blocked.body.code).toBe('guardian_consent_pending');
+      expect(await prisma.topic.count()).toBe(0);
+    });
+
+    it('rejects unauthenticated requests (401) and validates the body (400)', async () => {
+      const creator = await createUser('topic-validate');
+      const room = await createRoom(creator.accessToken, { name: 'Validate Room' });
+
+      await request(server())
+        .post(`/banter-rooms/${room.id}/topics`)
+        .send({ names: ['Transfers'] })
+        .expect(401);
+      await request(server()).get('/banter-rooms/topics').expect(401);
+
+      await request(server())
+        .post(`/banter-rooms/${room.id}/topics`)
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .send({ names: [] })
+        .expect(400);
+      await request(server())
+        .post(`/banter-rooms/does-not-exist/topics`)
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .send({ names: ['Transfers'] })
+        .expect(404);
     });
   });
 });

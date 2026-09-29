@@ -31,6 +31,7 @@ function buildPrismaMock() {
       create: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
       findUnique: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
     },
@@ -39,6 +40,15 @@ function buildPrismaMock() {
       findMany: jest.fn().mockResolvedValue([]),
       findUnique: jest.fn().mockResolvedValue(null),
       delete: jest.fn(),
+    },
+    // sprint-3/banter-room-topics (Decision Log #276).
+    topic: {
+      upsert: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    banterRoomTopic: {
+      upsert: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
     },
   } as unknown as PrismaService;
 
@@ -60,6 +70,12 @@ function buildFeedMock() {
   } as unknown as FeedService;
 }
 
+// `topics: []` by default — sprint-3/banter-room-topics (Decision Log
+// #276) added a `topics` field to ROOM_SELECT's raw shape (a junction
+// array `{ topic: {...} }[]`) that toRoomSummary() flattens to
+// `TopicSummary[]`. Every existing test below attaches no topics, so the
+// raw and flattened shapes are identical (`[].map(...) === []`) — no
+// other test literal needs to change because of this field.
 function room(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: 'room-1',
@@ -67,8 +83,13 @@ function room(overrides: Partial<Record<string, unknown>> = {}) {
     scopeType: 'club',
     createdBy: 'user-1',
     memberCount: 3,
+    topics: [],
     ...overrides,
   };
+}
+
+function topic(overrides: Partial<Record<string, unknown>> = {}) {
+  return { id: 'topic-1', name: 'Transfers', ...overrides };
 }
 
 describe('BanterService', () => {
@@ -134,6 +155,32 @@ describe('BanterService', () => {
           { OR: [{ name: { gt: 'Alpha' } }, { name: 'Alpha', id: { gt: 'room-1' } }] },
         ],
       });
+    });
+
+    // sprint-3/banter-room-topics (Decision Log #276) — "filter rooms by
+    // topic" (ListBanterRoomsQueryDto.topicId).
+    it('ANDs a topicId filter against the BanterRoomTopic join', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findMany as jest.Mock).mockResolvedValueOnce([]);
+
+      const service = new BanterService(prisma, buildFeedMock());
+      await service.listRooms({ topicId: 'topic-1' }, 'viewer-1');
+
+      const where = (prisma.banterRoom.findMany as jest.Mock).mock.calls[0][0].where;
+      expect(where).toEqual({ AND: [{ topics: { some: { topicId: 'topic-1' } } }] });
+    });
+
+    it('flattens the raw topics junction shape to a plain TopicSummary[]', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findMany as jest.Mock).mockResolvedValueOnce([
+        room({ id: 'room-1', topics: [{ topic: topic() }, { topic: topic({ id: 'topic-2', name: 'Deadline Day' }) }] }),
+      ]);
+      (prisma.banterRoomMember.findMany as jest.Mock).mockResolvedValueOnce([]);
+
+      const service = new BanterService(prisma, buildFeedMock());
+      const result = await service.listRooms({}, 'viewer-1');
+
+      expect(result.items[0].topics).toEqual([topic(), topic({ id: 'topic-2', name: 'Deadline Day' })]);
     });
 
     it('builds a nextCursor from the last kept row when a lookahead row exists', async () => {
@@ -383,6 +430,204 @@ describe('BanterService', () => {
 
       await service.getRoomFeed('room-1', 'user-1', { limit: 10 });
       expect(feed.getBanterRoomFeed).toHaveBeenCalledWith('room-1', 'user-1', { limit: 10 });
+    });
+  });
+
+  // ---------- Topics (sprint-3/banter-room-topics, Decision Log #276) ----------
+
+  describe('attachTopics', () => {
+    it('404s for an unknown room, writing nothing', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new BanterService(prisma, buildFeedMock());
+
+      await expect(
+        service.attachTopics('user-1', 'nope', { names: ['Transfers'] }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.banterRoom.findUniqueOrThrow).not.toHaveBeenCalled();
+      expect(prisma.topic.upsert).not.toHaveBeenCalled();
+    });
+
+    it('403s when the caller is not the room creator (existence settled first)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ id: 'room-1' });
+      (prisma.banterRoom.findUniqueOrThrow as jest.Mock).mockResolvedValue({
+        createdBy: 'someone-else',
+      });
+      const service = new BanterService(prisma, buildFeedMock());
+
+      await expect(
+        service.attachTopics('user-1', 'room-1', { names: ['Transfers'] }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.topic.upsert).not.toHaveBeenCalled();
+    });
+
+    it('upserts the Topic by its normalized name and upserts the join row, returning the room\'s full current topics', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ id: 'room-1' });
+      (prisma.banterRoom.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdBy: 'user-1' });
+      (prisma.topic.upsert as jest.Mock).mockResolvedValue(topic({ id: 'topic-9', name: 'Transfers' }));
+      (prisma.banterRoomTopic.upsert as jest.Mock).mockResolvedValue({});
+      (prisma.banterRoomTopic.findMany as jest.Mock).mockResolvedValue([
+        { topic: topic({ id: 'topic-9', name: 'Transfers' }) },
+      ]);
+
+      const service = new BanterService(prisma, buildFeedMock());
+      const result = await service.attachTopics('user-1', 'room-1', { names: ['Transfers'] });
+
+      // upsert, never create/findUnique — see banter.service.ts's own
+      // comment on why a create-then-catch-and-recover design on a
+      // shared transaction is unsafe (a real bug this file's e2e suite
+      // caught, fixed here).
+      expect(prisma.topic.upsert).toHaveBeenCalledWith({
+        where: { nameNormalized: 'transfers' },
+        create: { name: 'Transfers', nameNormalized: 'transfers' },
+        update: { name: 'Transfers' },
+        select: expect.objectContaining({ id: true, name: true }),
+      });
+      expect(prisma.banterRoomTopic.upsert).toHaveBeenCalledWith({
+        where: { banterRoomId_topicId: { banterRoomId: 'room-1', topicId: 'topic-9' } },
+        create: { banterRoomId: 'room-1', topicId: 'topic-9' },
+        update: {},
+      });
+      expect(result).toEqual({
+        roomId: 'room-1',
+        topics: [topic({ id: 'topic-9', name: 'Transfers' })],
+      });
+    });
+
+    it('normalizes case/whitespace before upserting — different input, same normalized key', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ id: 'room-1' });
+      (prisma.banterRoom.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdBy: 'user-1' });
+      (prisma.topic.upsert as jest.Mock).mockResolvedValue(topic({ id: 'topic-1', name: 'Transfers' }));
+      (prisma.banterRoomTopic.upsert as jest.Mock).mockResolvedValue({});
+      (prisma.banterRoomTopic.findMany as jest.Mock).mockResolvedValue([]);
+
+      const service = new BanterService(prisma, buildFeedMock());
+      await service.attachTopics('user-1', 'room-1', { names: ['  TRANSFERS  '] });
+
+      expect(prisma.topic.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { nameNormalized: 'transfers' } }),
+      );
+    });
+
+    // A real bug, found by test/banter.e2e-spec.ts against real Postgres
+    // (not by this mocked suite, which can't reproduce genuine Postgres
+    // transaction-abort semantics) and fixed by retrying the WHOLE
+    // per-name transaction, not by catching-and-recovering inside it.
+    it('retries the whole per-name transaction on a genuine concurrent-write race (P2002), and succeeds', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ id: 'room-1' });
+      (prisma.banterRoom.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdBy: 'user-1' });
+      (prisma.topic.upsert as jest.Mock)
+        .mockRejectedValueOnce(p2002())
+        .mockResolvedValueOnce(topic({ id: 'topic-1', name: 'Transfers' }));
+      (prisma.banterRoomTopic.upsert as jest.Mock).mockResolvedValue({});
+      (prisma.banterRoomTopic.findMany as jest.Mock).mockResolvedValue([]);
+
+      const service = new BanterService(prisma, buildFeedMock());
+      await service.attachTopics('user-1', 'room-1', { names: ['Transfers'] });
+
+      expect(prisma.topic.upsert).toHaveBeenCalledTimes(2);
+    });
+
+    it('gives up after 3 retries and rethrows a persistent P2002 (4 attempts total)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ id: 'room-1' });
+      (prisma.banterRoom.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdBy: 'user-1' });
+      (prisma.topic.upsert as jest.Mock).mockRejectedValue(p2002());
+
+      const service = new BanterService(prisma, buildFeedMock());
+      await expect(
+        service.attachTopics('user-1', 'room-1', { names: ['Transfers'] }),
+      ).rejects.toBeInstanceOf(Prisma.PrismaClientKnownRequestError);
+      expect(prisma.topic.upsert).toHaveBeenCalledTimes(4); // initial + 3 retries
+    });
+
+    it('rethrows a non-P2002 error immediately, without retrying', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ id: 'room-1' });
+      (prisma.banterRoom.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdBy: 'user-1' });
+      (prisma.topic.upsert as jest.Mock).mockRejectedValue(new Error('boom'));
+
+      const service = new BanterService(prisma, buildFeedMock());
+      await expect(
+        service.attachTopics('user-1', 'room-1', { names: ['Transfers'] }),
+      ).rejects.toThrow('boom');
+      expect(prisma.topic.upsert).toHaveBeenCalledTimes(1);
+    });
+
+    it('processes multiple names in one call, upserting each independently', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ id: 'room-1' });
+      (prisma.banterRoom.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdBy: 'user-1' });
+      (prisma.topic.upsert as jest.Mock)
+        .mockResolvedValueOnce(topic({ id: 'topic-1', name: 'Transfers' }))
+        .mockResolvedValueOnce(topic({ id: 'topic-2', name: 'Deadline Day' }));
+      (prisma.banterRoomTopic.upsert as jest.Mock).mockResolvedValue({});
+      (prisma.banterRoomTopic.findMany as jest.Mock).mockResolvedValue([]);
+
+      const service = new BanterService(prisma, buildFeedMock());
+      await service.attachTopics('user-1', 'room-1', { names: ['Transfers', 'Deadline Day'] });
+
+      expect(prisma.banterRoomTopic.upsert).toHaveBeenCalledTimes(2);
+      expect(prisma.banterRoomTopic.upsert).toHaveBeenNthCalledWith(1, {
+        where: { banterRoomId_topicId: { banterRoomId: 'room-1', topicId: 'topic-1' } },
+        create: { banterRoomId: 'room-1', topicId: 'topic-1' },
+        update: {},
+      });
+      expect(prisma.banterRoomTopic.upsert).toHaveBeenNthCalledWith(2, {
+        where: { banterRoomId_topicId: { banterRoomId: 'room-1', topicId: 'topic-2' } },
+        create: { banterRoomId: 'room-1', topicId: 'topic-2' },
+        update: {},
+      });
+    });
+  });
+
+  describe('listTopics', () => {
+    it('orders alphabetically by name asc, id asc', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.topic.findMany as jest.Mock).mockResolvedValueOnce([
+        topic({ id: 'topic-1', name: 'Alpha' }),
+        topic({ id: 'topic-2', name: 'Beta' }),
+      ]);
+
+      const service = new BanterService(prisma, buildFeedMock());
+      const result = await service.listTopics({});
+
+      const callArgs = (prisma.topic.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArgs.orderBy).toEqual([{ name: 'asc' }, { id: 'asc' }]);
+      expect(result.items).toEqual([
+        topic({ id: 'topic-1', name: 'Alpha' }),
+        topic({ id: 'topic-2', name: 'Beta' }),
+      ]);
+      expect(result.nextCursor).toBeNull();
+    });
+
+    it('applies a (name,id) cursor filter and builds a nextCursor from the last kept row', async () => {
+      const prisma = buildPrismaMock();
+      const cursor = encodeBanterRoomCursor({ name: 'Alpha', id: 'topic-1' });
+      (prisma.topic.findMany as jest.Mock).mockResolvedValueOnce([
+        topic({ id: 'topic-2', name: 'Beta' }),
+        topic({ id: 'topic-3', name: 'Gamma' }), // lookahead
+      ]);
+
+      const service = new BanterService(prisma, buildFeedMock());
+      const result = await service.listTopics({ cursor, limit: 1 });
+
+      const where = (prisma.topic.findMany as jest.Mock).mock.calls[0][0].where;
+      expect(where).toEqual({
+        AND: [{ OR: [{ name: { gt: 'Alpha' } }, { name: 'Alpha', id: { gt: 'topic-1' } }] }],
+      });
+      expect(result.items).toHaveLength(1);
+      expect(result.nextCursor).toBe(encodeBanterRoomCursor({ name: 'Beta', id: 'topic-2' }));
+    });
+
+    it('rejects a malformed cursor with a 400', async () => {
+      const prisma = buildPrismaMock();
+      const service = new BanterService(prisma, buildFeedMock());
+      await expect(service.listTopics({ cursor: 'not-base64-json' })).rejects.toThrow();
     });
   });
 });

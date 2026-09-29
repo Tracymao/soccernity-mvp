@@ -7,11 +7,13 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BanterController } from './banter.controller';
 import { BanterService } from './banter.service';
 
-// Exercises the real HTTP layer: routing (incl. that /search and /mine
-// aren't shadowed by /:id), DTO validation, and guard wiring — following
-// clubs.controller.http.spec.ts / grassroots.controller.http.spec.ts.
+// Exercises the real HTTP layer: routing (incl. that /search, /mine and
+// /topics aren't shadowed by /:id), DTO validation, and guard wiring —
+// following clubs.controller.http.spec.ts / grassroots.controller.http.spec.ts.
 // Both guards are overridden; the consent guard counts its invocations
-// so we can assert it's on exactly the four write routes.
+// so we can assert it's on exactly the five write routes (create, join,
+// leave, postToRoom, attachTopics — sprint-3/banter-room-topics added the
+// fifth).
 describe('BanterController (HTTP layer)', () => {
   let app: INestApplication;
   const CALLER = { sub: 'user-1', role: 'fan' };
@@ -27,6 +29,9 @@ describe('BanterController (HTTP layer)', () => {
     assertRoomExists: jest.fn(),
     getRoomFeed: jest.fn(),
     postToRoom: jest.fn(),
+    // sprint-3/banter-room-topics (Decision Log #276).
+    listTopics: jest.fn(),
+    attachTopics: jest.fn(),
   };
 
   beforeAll(async () => {
@@ -135,6 +140,24 @@ describe('BanterController (HTTP layer)', () => {
       expect(banter.getRoomById).not.toHaveBeenCalled();
     });
 
+    // sprint-3/banter-room-topics (Decision Log #276).
+    it('GET /banter-rooms/topics hits listTopics, NOT getRoomById, and does NOT run the consent guard', async () => {
+      banter.listTopics.mockResolvedValue({ items: [], nextCursor: null });
+      await request(app.getHttpServer()).get('/banter-rooms/topics?limit=5').expect(200);
+      expect(banter.listTopics).toHaveBeenCalledWith(expect.objectContaining({ limit: 5 }));
+      expect(banter.getRoomById).not.toHaveBeenCalled();
+      expect(consentGuardCalls).toBe(0);
+    });
+
+    it('GET /banter-rooms?topicId= passes topicId through', async () => {
+      banter.listRooms.mockResolvedValue({ items: [], nextCursor: null });
+      await request(app.getHttpServer()).get('/banter-rooms?topicId=topic-1').expect(200);
+      expect(banter.listRooms).toHaveBeenCalledWith(
+        expect.objectContaining({ topicId: 'topic-1' }),
+        'user-1',
+      );
+    });
+
     it('rejects an unknown scopeType query filter with 400', async () => {
       await request(app.getHttpServer()).get('/banter-rooms?scopeType=nope').expect(400);
     });
@@ -201,6 +224,42 @@ describe('BanterController (HTTP layer)', () => {
         .post('/banter-rooms/r-1/posts')
         .send({ contentText: 'x', banterRoomId: 'a-different-room' })
         .expect(400);
+    });
+  });
+
+  // sprint-3/banter-room-topics (Decision Log #276).
+  describe('POST /banter-rooms/:id/topics', () => {
+    it('attaches topics, returns 200 (idempotent-attach, not a resource creation), and runs the consent guard', async () => {
+      banter.attachTopics.mockResolvedValue({ roomId: 'r-1', topics: [{ id: 't-1', name: 'Transfers' }] });
+      await request(app.getHttpServer())
+        .post('/banter-rooms/r-1/topics')
+        .send({ names: ['Transfers'] })
+        .expect(200);
+      expect(banter.attachTopics).toHaveBeenCalledWith('user-1', 'r-1', { names: ['Transfers'] });
+      expect(consentGuardCalls).toBe(1);
+    });
+
+    it('rejects an empty names array (400)', async () => {
+      await request(app.getHttpServer()).post('/banter-rooms/r-1/topics').send({ names: [] }).expect(400);
+      expect(banter.attachTopics).not.toHaveBeenCalled();
+    });
+
+    it('rejects more than 5 names (400)', async () => {
+      await request(app.getHttpServer())
+        .post('/banter-rooms/r-1/topics')
+        .send({ names: ['a1', 'a2', 'a3', 'a4', 'a5', 'a6'] })
+        .expect(400);
+    });
+
+    it('rejects a name shorter than 2 characters (400)', async () => {
+      await request(app.getHttpServer())
+        .post('/banter-rooms/r-1/topics')
+        .send({ names: ['x'] })
+        .expect(400);
+    });
+
+    it('rejects a missing names field (400)', async () => {
+      await request(app.getHttpServer()).post('/banter-rooms/r-1/topics').send({}).expect(400);
     });
   });
 });
