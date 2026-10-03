@@ -120,6 +120,94 @@ describe('RegistrationEmailService', () => {
       expect(sent.TextBody).not.toMatch(/\d+\s*(day|hour|week)/i);
     });
 
+    // feat/moderation-outcome-appeal-emails
+    it('sends the reporter an outcome email with the mapped copy and no reported-party details', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-actioned' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example' }),
+      );
+
+      await service.sendReportActionedEmail('reporter@example.com', 'content_removed');
+
+      const sent = mockSendEmail.mock.calls[0][0] as { To: string; Subject: string; TextBody: string; HtmlBody: string };
+      expect(sent.To).toBe('reporter@example.com');
+      expect(sent.Subject).toBe('An update on your Soccernity report');
+      expect(sent.TextBody).toContain('Outcome: Content removed');
+      expect(sent.TextBody).toContain('has been removed');
+      expect(sent.TextBody).toContain("can't share further details");
+      expect(sent.HtmlBody).toContain('<strong>Outcome:</strong> Content removed');
+    });
+
+    it('maps every ReportAction to its own outcome label', async () => {
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example' }),
+      );
+      const expected: Record<string, string> = {
+        content_removed: 'Content removed',
+        warning_issued: 'Warning issued',
+        user_suspended: 'Account suspended',
+        dismissed: 'No action taken',
+      };
+
+      for (const [action, label] of Object.entries(expected)) {
+        mockSendEmail.mockResolvedValueOnce({ MessageID: `msg-${action}` });
+        await service.sendReportActionedEmail('reporter@example.com', action);
+        const calls = mockSendEmail.mock.calls;
+        const sent = calls[calls.length - 1][0] as { TextBody: string };
+        expect(sent.TextBody).toContain(`Outcome: ${label}`);
+      }
+    });
+
+    it('rejects an unknown report action before anything is queued', async () => {
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example' }),
+      );
+
+      await expect(service.sendReportActionedEmail('reporter@example.com', 'nuked_from_orbit')).rejects.toThrow(
+        'Unknown report action',
+      );
+      expect(mockSendEmail).not.toHaveBeenCalled();
+    });
+
+    it('tells the appellant an upheld appeal changed nothing', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-upheld' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example' }),
+      );
+
+      await service.sendAppealDecisionEmail('appellant@example.com', 'upheld');
+
+      const sent = mockSendEmail.mock.calls[0][0] as { Subject: string; TextBody: string };
+      expect(sent.Subject).toBe('Your appeal has been reviewed');
+      expect(sent.TextBody).toContain('has been upheld, so no change has been made');
+    });
+
+    it('tells the appellant an overturned appeal reopened the report, without claiming any enforced reversal', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-overturned' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example' }),
+      );
+
+      await service.sendAppealDecisionEmail('appellant@example.com', 'overturned');
+
+      const sent = mockSendEmail.mock.calls[0][0] as { TextBody: string; HtmlBody: string };
+      expect(sent.TextBody).toContain('overturned the original decision');
+      expect(sent.TextBody).toContain('returned to our review queue');
+      expect(sent.TextBody).not.toMatch(/reinstated|restored|lifted|reversed/i);
+      expect(sent.HtmlBody).toContain('returned to our review queue');
+    });
+
+    it('rejects an unknown appeal decision before anything is queued', async () => {
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example' }),
+      );
+
+      await expect(service.sendAppealDecisionEmail('appellant@example.com', 'maybe')).rejects.toThrow(
+        'Unknown appeal decision',
+      );
+      expect(mockSendEmail).not.toHaveBeenCalled();
+    });
+
     it('catches a Postmark send failure and logs it, without rejecting or leaking the token', async () => {
       const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
       mockSendEmail.mockRejectedValueOnce(new Error('Postmark: invalid API token'));

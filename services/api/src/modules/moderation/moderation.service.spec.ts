@@ -56,8 +56,16 @@ function buildPrismaMock() {
 function buildEmailServiceMock() {
   return {
     sendPublicReportAcknowledgementEmail: jest.fn().mockResolvedValue(undefined),
+    // feat/moderation-outcome-appeal-emails
+    sendReportActionedEmail: jest.fn().mockResolvedValue(undefined),
+    sendAppealDecisionEmail: jest.fn().mockResolvedValue(undefined),
   };
 }
+
+// Outcome/appeal emails are fire-and-forget (void, caught inside the
+// helper), so tests flush the microtask queue before asserting on the
+// email mock. setImmediate runs after all pending promise callbacks.
+const flushPromises = () => new Promise((resolve) => setImmediate(resolve));
 
 // feat/admin-action-log — ModerationService now also takes an
 // AdminActionLogService, called after actionReport/decideAppeal/
@@ -476,6 +484,179 @@ describe('ModerationService', () => {
   });
 
   // ---------- PATCH /admin/moderation/reports/:id ----------
+
+  describe('outcome and appeal-decision emails (feat/moderation-outcome-appeal-emails)', () => {
+    it('emails a logged-in reporter their outcome, using the address on their User row', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', reporterId: 'reporter-1', targetType: 'post', targetId: 'post-1' }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
+      (prisma.user.findUnique as jest.Mock).mockImplementation(({ where }: { where: { id: string } }) =>
+        Promise.resolve(
+          where.id === 'reporter-1'
+            ? { email: 'reporter@example.com', accountStatus: 'active' }
+            : { email: 'author@example.com', accountStatus: 'active' },
+        ),
+      );
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await service.actionReport('report-1', 'admin-1', { action: 'content_removed' });
+      await flushPromises();
+
+      expect(emailService.sendReportActionedEmail).toHaveBeenCalledTimes(1);
+      expect(emailService.sendReportActionedEmail).toHaveBeenCalledWith('reporter@example.com', 'content_removed');
+    });
+
+    it('emails a public (no-account) reporter at reporterContactEmail, without looking up a User for them', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({
+          status: 'open',
+          reporterId: null,
+          reporterContactEmail: 'parent@example.com',
+          targetType: 'post',
+          targetId: 'post-1',
+        }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'reviewed' }));
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ email: 'author@example.com', accountStatus: 'active' });
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await service.actionReport('report-1', 'admin-1', { action: 'dismissed' });
+      await flushPromises();
+
+      expect(emailService.sendReportActionedEmail).toHaveBeenCalledTimes(1);
+      expect(emailService.sendReportActionedEmail).toHaveBeenCalledWith('parent@example.com', 'dismissed');
+      // A post target resolves its author via post.findUnique, and a public
+      // reporter has no User row to look up — so user.findUnique is never hit.
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('never emails the anonymised address of a deleted reporter (Decision Log #341)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', reporterId: 'reporter-1', targetType: 'post', targetId: 'post-1' }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'reviewed' }));
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        email: 'deleted-reporter-1@deleted.soccernity.internal',
+        accountStatus: 'deleted',
+      });
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await service.actionReport('report-1', 'admin-1', { action: 'dismissed' });
+      await flushPromises();
+
+      expect(emailService.sendReportActionedEmail).not.toHaveBeenCalled();
+    });
+
+    it('sends no outcome email when a public report has no contact address', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', reporterId: null, reporterContactEmail: null, targetType: 'post', targetId: 'post-1' }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'reviewed' }));
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await service.actionReport('report-1', 'admin-1', { action: 'dismissed' });
+      await flushPromises();
+
+      expect(emailService.sendReportActionedEmail).not.toHaveBeenCalled();
+    });
+
+    it('a failed outcome email never fails the admin action itself', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', reporterId: null, reporterContactEmail: 'parent@example.com', targetType: 'post', targetId: 'post-1' }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'reviewed', actionTaken: 'dismissed' }));
+      const emailService = {
+        ...buildEmailServiceMock(),
+        sendReportActionedEmail: jest.fn().mockRejectedValue(new Error('Postmark down')),
+      };
+      const service = buildService(prisma, emailService);
+
+      await expect(service.actionReport('report-1', 'admin-1', { action: 'dismissed' })).resolves.toEqual(
+        expect.objectContaining({ status: 'reviewed' }),
+      );
+      await flushPromises();
+
+      expect(emailService.sendReportActionedEmail).toHaveBeenCalledTimes(1);
+    });
+
+    it('emails the appellant (the reported user) with the upheld decision', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({
+          status: 'actioned',
+          appealStatus: 'pending',
+          reviewedByAdminId: 'admin-1',
+          targetType: 'post',
+          targetId: 'post-1',
+        }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ appealStatus: 'upheld' }));
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ email: 'author@example.com', accountStatus: 'active' });
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await service.decideAppeal('report-1', 'admin-2', { decision: 'upheld' });
+      await flushPromises();
+
+      expect(emailService.sendAppealDecisionEmail).toHaveBeenCalledTimes(1);
+      expect(emailService.sendAppealDecisionEmail).toHaveBeenCalledWith('author@example.com', 'upheld');
+    });
+
+    it('emails the appellant with the overturned decision', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({
+          status: 'actioned',
+          appealStatus: 'pending',
+          reviewedByAdminId: 'admin-1',
+          targetType: 'post',
+          targetId: 'post-1',
+        }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'open', appealStatus: 'overturned' }));
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ email: 'author@example.com', accountStatus: 'active' });
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await service.decideAppeal('report-1', 'admin-2', { decision: 'overturned' });
+      await flushPromises();
+
+      expect(emailService.sendAppealDecisionEmail).toHaveBeenCalledWith('author@example.com', 'overturned');
+    });
+
+    it('sends no appeal email when the reported user cannot be resolved (target since deleted)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'actioned', appealStatus: 'pending', reviewedByAdminId: 'admin-1', targetType: 'post', targetId: 'post-1' }),
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ appealStatus: 'upheld' }));
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await service.decideAppeal('report-1', 'admin-2', { decision: 'upheld' });
+      await flushPromises();
+
+      expect(emailService.sendAppealDecisionEmail).not.toHaveBeenCalled();
+    });
+  });
 
   describe('actionReport', () => {
     it('404s when the report does not exist', async () => {
@@ -1131,7 +1312,10 @@ describe('ModerationService', () => {
       const prisma = buildPrismaMock();
       (prisma.comment.findUnique as jest.Mock).mockResolvedValue({ id: 'comment-1' });
       (prisma.report.create as jest.Mock).mockResolvedValue(report({ reporterId: null, targetType: 'comment' }));
-      const emailService = { sendPublicReportAcknowledgementEmail: jest.fn().mockRejectedValue(new Error('down')) };
+      const emailService = {
+        ...buildEmailServiceMock(),
+        sendPublicReportAcknowledgementEmail: jest.fn().mockRejectedValue(new Error('down')),
+      };
       const service = buildService(prisma, emailService);
 
       await expect(
