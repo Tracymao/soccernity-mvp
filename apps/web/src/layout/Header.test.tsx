@@ -124,7 +124,6 @@ describe("navigation config", () => {
   it("drawer order matches the live Figma Navigation Drawer (Decision Log #162/#266/#282/#287/#288)", () => {
     expect(drawerNavItems.map((i) => i.label)).toEqual([
       "Community",
-      "Messages",
       "Notifications",
       "Sports Hub",
       "Blog",
@@ -316,9 +315,10 @@ describe("Header -- logged in (mobile)", () => {
 
     expect(within(nav).getByRole("link", { name: "Clubs" }).getAttribute("href")).toBe("/clubs");
     expect(within(nav).getByRole("link", { name: "Blog" }).getAttribute("href")).toBe("/blog");
-    // Messages (Decision Log #277) and Notifications (Decision Log #291)
-    // both resolve now.
-    expect(within(nav).getByRole("link", { name: "Messages" }).getAttribute("href")).toBe("/messages");
+    // Messages is no longer a drawer row (founder edit in Figma); the
+    // avatar-adjacent messages icon in the header is its entry point.
+    expect(within(nav).queryByRole("link", { name: "Messages" })).toBeNull();
+    // Notifications (Decision Log #291) resolves.
     expect(within(nav).getByRole("link", { name: "Notifications" }).getAttribute("href")).toBe(
       "/notifications",
     );

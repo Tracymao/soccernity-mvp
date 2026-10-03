@@ -104,6 +104,11 @@ export interface DrawerNavItem {
 // avatar and the header logo already links home (working in code, same
 // precedent as #162), so the row was redundant.
 //
+// Messages removed as its own row (founder edit made directly in the Figma
+// Navigation Drawer, no Decision Log entry). The messages icon beside the
+// avatar in Header.tsx (/messages) is the mobile messages entry point and
+// is not gated by !isMobile, so the drawer row was a straight duplicate.
+//
 // DECISION LOG #287/#288 -- "Profile" removed as its own row. The
 // founder folded profile navigation into the "Signed in as" identity
 // block instead (NavDrawer.tsx now wraps it in a NavLink to /profile),
@@ -113,7 +118,6 @@ export interface DrawerNavItem {
 // from the pre-#287 order minus Profile.
 export const drawerNavItems: DrawerNavItem[] = [
   { label: "Community", to: "/community" },
-  { label: "Messages", to: "/messages" },
   // /notifications now resolves (sprint-3/notification-centre-to-code,
   // Decision Log #291 -- NotificationCentrePage.tsx, converting the
   // finalized design from Decision Log #279) -- same "flip available once
