@@ -20,6 +20,15 @@ export interface BlogCategoryRef {
   slug: string;
 }
 
+// Resolved cover image (Decision Log #334). `null` when the article has no
+// cover set, or its MediaAsset has since been deleted. Admin pickers are
+// image-only today, but `type` is kept so the renderer can refuse anything
+// it isn't prepared to show (see pages/blog/CoverMedia.tsx).
+export interface ArticleCoverImage {
+  url: string;
+  type: string;
+}
+
 export interface ArticleSummary {
   id: string;
   title: string;
@@ -27,6 +36,7 @@ export interface ArticleSummary {
   publishedAt: string;
   category: BlogCategoryRef;
   author: string;
+  coverImage: ArticleCoverImage | null;
 }
 
 export interface Article extends ArticleSummary {

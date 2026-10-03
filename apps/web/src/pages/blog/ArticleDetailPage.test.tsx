@@ -25,6 +25,7 @@ const ZAHA: Article = {
   category: { id: "cat-pl", name: "Premier League", slug: "premier-league" },
   author: "Jane Editor",
   body: "First paragraph of the article.\n\nSecond paragraph, with more detail.",
+  coverImage: null,
 };
 
 const KANE: ArticleSummary = {
@@ -34,6 +35,7 @@ const KANE: ArticleSummary = {
   publishedAt: "2026-08-08T10:02:00.000Z",
   category: { id: "cat-pl", name: "Premier League", slug: "premier-league" },
   author: "Jane Editor",
+  coverImage: null,
 };
 
 afterEach(cleanup);
@@ -124,5 +126,58 @@ describe("ArticleDetailPage", () => {
     await screen.findByRole("heading", { level: 1 });
 
     expect(screen.queryByRole("heading", { name: "More Trending News" })).toBeNull();
+  });
+
+  it("shows the article's cover image in the hero slot when one is set", async () => {
+    vi.mocked(getArticleById).mockResolvedValueOnce({
+      ...ZAHA,
+      coverImage: { url: "https://media.example.com/zaha-cover.jpg", type: "image" },
+    });
+    vi.mocked(listArticles).mockResolvedValueOnce({ items: [], nextCursor: null });
+
+    renderAt(`/blog/${ZAHA.id}`);
+    await screen.findByRole("heading", { level: 1 });
+
+    const img = document.querySelector(".article-detail__hero img.cover-media__img");
+    expect(img?.getAttribute("src")).toBe("https://media.example.com/zaha-cover.jpg");
+  });
+
+  it("keeps the hero placeholder box, with no image, when the cover is null", async () => {
+    vi.mocked(getArticleById).mockResolvedValueOnce(ZAHA);
+    vi.mocked(listArticles).mockResolvedValueOnce({ items: [], nextCursor: null });
+
+    renderAt(`/blog/${ZAHA.id}`);
+    await screen.findByRole("heading", { level: 1 });
+
+    expect(document.querySelectorAll(".article-detail__hero").length).toBe(1);
+    expect(document.querySelectorAll("img").length).toBe(0);
+  });
+
+  it("shows a related article's cover on its card", async () => {
+    vi.mocked(getArticleById).mockResolvedValueOnce(ZAHA);
+    vi.mocked(listArticles).mockResolvedValueOnce({
+      items: [{ ...KANE, coverImage: { url: "https://media.example.com/kane.jpg", type: "image" } }],
+      nextCursor: null,
+    });
+
+    renderAt(`/blog/${ZAHA.id}`);
+    await screen.findByRole("heading", { name: "More Trending News" });
+
+    const img = document.querySelector(".article-related-card__media img.cover-media__img");
+    expect(img?.getAttribute("src")).toBe("https://media.example.com/kane.jpg");
+  });
+
+  it("does not render a non-image cover, keeping the placeholder", async () => {
+    vi.mocked(getArticleById).mockResolvedValueOnce({
+      ...ZAHA,
+      coverImage: { url: "https://media.example.com/clip.mp4", type: "video" },
+    });
+    vi.mocked(listArticles).mockResolvedValueOnce({ items: [], nextCursor: null });
+
+    renderAt(`/blog/${ZAHA.id}`);
+    await screen.findByRole("heading", { level: 1 });
+
+    expect(document.querySelectorAll("img").length).toBe(0);
+    expect(document.querySelectorAll(".article-detail__hero").length).toBe(1);
   });
 });

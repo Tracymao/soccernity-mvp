@@ -28,6 +28,7 @@ const ZAHA: ArticleSummary = {
   publishedAt: "2026-08-08T09:28:00.000Z",
   category: { id: "cat-pl", name: "Premier League", slug: "premier-league" },
   author: "Jane Editor",
+  coverImage: null,
 };
 
 const GIRONA: ArticleSummary = {
@@ -37,6 +38,7 @@ const GIRONA: ArticleSummary = {
   publishedAt: "2026-08-05T11:50:00.000Z",
   category: { id: "cat-ll", name: "La Liga", slug: "la-liga" },
   author: "Jane Editor",
+  coverImage: null,
 };
 
 afterEach(cleanup);
@@ -46,7 +48,7 @@ beforeEach(() => {
 });
 
 function renderPage() {
-  render(
+  return render(
     <MemoryRouter initialEntries={["/blog"]}>
       <BlogPage />
     </MemoryRouter>,
@@ -136,12 +138,67 @@ describe("BlogPage", () => {
     expect(screen.getByRole("alert").textContent).toMatch(/couldn.t load articles/i);
   });
 
-  it("renders the image-placeholder disclosure note", async () => {
-    vi.mocked(listCategories).mockResolvedValueOnce({ items: [], nextCursor: null });
-    vi.mocked(listArticles).mockResolvedValueOnce({ items: [], nextCursor: null });
+  it("shows the cover image on the featured card when one is set", async () => {
+    vi.mocked(listCategories).mockResolvedValueOnce({ items: [PREMIER_LEAGUE], nextCursor: null });
+    vi.mocked(listArticles).mockResolvedValueOnce({
+      items: [{ ...ZAHA, coverImage: { url: "https://media.example.com/zaha.jpg", type: "image" } }],
+      nextCursor: null,
+    });
 
-    renderPage();
+    const { container } = renderPage();
 
-    expect(await screen.findByText(/article images aren.t available yet/i)).not.toBeNull();
+    await screen.findAllByRole("heading", { name: /zaha double/i });
+    const img = container.querySelector("img.cover-media__img");
+    expect(img?.getAttribute("src")).toBe("https://media.example.com/zaha.jpg");
+  });
+
+  it("shows the cover image on a grid card too", async () => {
+    // ZAHA is the section's featured card (first in its category); the
+    // second, covered article is the one that lands in the grid.
+    const SECOND_PL = {
+      ...ZAHA,
+      id: "second-pl-story",
+      title: "Second Premier League story",
+      coverImage: { url: "https://media.example.com/second.jpg", type: "image" },
+    };
+    vi.mocked(listCategories).mockResolvedValueOnce({ items: [PREMIER_LEAGUE], nextCursor: null });
+    vi.mocked(listArticles).mockResolvedValueOnce({ items: [ZAHA, SECOND_PL], nextCursor: null });
+
+    const { container } = renderPage();
+
+    await screen.findAllByRole("heading", { name: /second premier league story/i });
+    const srcs = Array.from(container.querySelectorAll("img.cover-media__img")).map((i) => i.getAttribute("src"));
+    expect(new Set(srcs)).toEqual(new Set(["https://media.example.com/second.jpg"]));
+    expect(container.querySelector(".blog-card__media img")).not.toBeNull();
+  });
+
+  it("renders no image and keeps the placeholder box when the cover is null", async () => {
+    vi.mocked(listCategories).mockResolvedValueOnce({ items: [PREMIER_LEAGUE], nextCursor: null });
+    vi.mocked(listArticles).mockResolvedValueOnce({ items: [ZAHA], nextCursor: null });
+
+    const { container } = renderPage();
+
+    await screen.findAllByRole("heading", { name: /zaha double/i });
+    expect(container.querySelectorAll("img").length).toBe(0);
+    expect(container.querySelectorAll(".blog-featured__media").length).toBeGreaterThan(0);
+  });
+
+  it("falls back to the placeholder box when the cover image fails to load", async () => {
+    vi.mocked(listCategories).mockResolvedValueOnce({ items: [PREMIER_LEAGUE], nextCursor: null });
+    vi.mocked(listArticles).mockResolvedValueOnce({
+      items: [{ ...ZAHA, coverImage: { url: "https://media.example.com/broken.jpg", type: "image" } }],
+      nextCursor: null,
+    });
+
+    const { container } = renderPage();
+
+    await screen.findAllByRole("heading", { name: /zaha double/i });
+    const img = container.querySelector("img.cover-media__img");
+    expect(img).not.toBeNull();
+    // The same cover appears in the "All" tab's Trending block and its
+    // category section, so fail every rendered instance, not just the first.
+    container.querySelectorAll("img.cover-media__img").forEach((el) => fireEvent.error(el));
+    expect(container.querySelectorAll("img").length).toBe(0);
+    expect(container.querySelectorAll(".blog-featured__media").length).toBeGreaterThan(0);
   });
 });

@@ -19,9 +19,13 @@
 // client-side to exclude the current article -- there is no
 // exclude-id/related-articles param on that endpoint.
 //
+// COVER IMAGE (Decision Log #334): the hero and related-card slots render
+// the article's cover when one is set (see CoverMedia.tsx). Built plain --
+// no Figma frame places a real cover; the hero keeps the design's own
+// slot, under the title and byline, rather than moving above the title.
+//
 // STILL PLACEHOLDER: the article's own body, its title and its category
-// are all real; the hero image stays a non-functional placeholder box (no
-// Article-to-MediaAsset relation -- see modules/blog/README.md), and the
+// are all real; the comment composer is rendered disabled, and the
 // comment composer is rendered disabled with an explanatory note (there is
 // no comments endpoint anywhere in Section 4, and no social-auth flow) --
 // the sample comments are captioned as such. This mirrors the "render it,
@@ -30,6 +34,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router";
 import { getArticleById, listArticles, BlogApiError, type Article, type ArticleSummary } from "../../api/blog";
+import CoverMedia from "./CoverMedia";
 import { SAMPLE_COMMENTS } from "./blogData";
 import "./ArticleDetailPage.css";
 
@@ -50,10 +55,22 @@ function bodyParagraphs(body: string): string[] {
     .filter(Boolean);
 }
 
-function RelatedCard({ id, title, excerpt, date }: { id: string; title: string; excerpt: string; date: string }) {
+function RelatedCard({
+  id,
+  title,
+  excerpt,
+  date,
+  coverImage,
+}: {
+  id: string;
+  title: string;
+  excerpt: string;
+  date: string;
+  coverImage: ArticleSummary["coverImage"];
+}) {
   return (
     <Link to={`/blog/${id}`} className="article-related-card">
-      <span className="article-related-card__media" aria-hidden="true" />
+      <CoverMedia coverImage={coverImage} className="article-related-card__media" />
       <h3 className="article-related-card__title">{title}</h3>
       <p className="article-related-card__excerpt">{excerpt}</p>
       <span className="article-related-card__date">
@@ -161,7 +178,9 @@ export default function ArticleDetailPage() {
         <span className="article-share__icon">&#128241;</span>
       </div>
 
-      <div className="article-detail__hero" aria-hidden="true" />
+      {/* Same hero slot as the Figma frames. With no cover this is the
+          original tinted placeholder box, unchanged. */}
+      <CoverMedia coverImage={article.coverImage} className="article-detail__hero" />
 
       <div className="article-detail__body">
         {bodyParagraphs(article.body).map((paragraph, i) => (
@@ -220,7 +239,14 @@ export default function ArticleDetailPage() {
           <h2 className="article-related__title">More Trending News</h2>
           <div className="article-related__grid">
             {related.map((a) => (
-              <RelatedCard key={a.id} id={a.id} title={a.title} excerpt={a.excerpt} date={formatDate(a.publishedAt)} />
+              <RelatedCard
+                key={a.id}
+                id={a.id}
+                title={a.title}
+                excerpt={a.excerpt}
+                date={formatDate(a.publishedAt)}
+                coverImage={a.coverImage}
+              />
             ))}
           </div>
         </section>

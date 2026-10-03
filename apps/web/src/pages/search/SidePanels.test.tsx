@@ -34,6 +34,7 @@ function article(n: number): ArticleSummary {
     publishedAt: "2026-09-20T10:00:00.000Z",
     category: { id: "c1", name: "Premier League", slug: "premier-league" },
     author: "Admin",
+    coverImage: null,
   };
 }
 

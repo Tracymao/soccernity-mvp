@@ -27,13 +27,13 @@
 // affordance for Blog, so this is a disclosed, deliberate limitation for
 // now, not a bug.
 //
-// Article images stay non-functional placeholder boxes -- there is no
-// Article-to-MediaAsset relation (deferred, see modules/blog/README.md's
-// Decision Log candidate #2), so nothing here has a real image URL to
-// render.
+// Cover images (Decision Log #334): each card shows its article's cover
+// when one is set, via the shared CoverMedia slot. A null cover keeps the
+// same tinted placeholder box as before, so layout doesn't change.
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { listArticles, listCategories, type ArticleSummary, type Category } from "../api/blog";
+import CoverMedia from "./blog/CoverMedia";
 import "./blog/BlogPage.css";
 
 type LoadState = "loading" | "loaded" | "error";
@@ -54,7 +54,7 @@ function ArticleTimestamp({ publishedAt }: { publishedAt: string }) {
 function FeaturedCard({ article }: { article: ArticleSummary }) {
   return (
     <Link to={`/blog/${article.id}`} className="blog-featured">
-      <span className="blog-featured__media" aria-hidden="true" />
+      <CoverMedia coverImage={article.coverImage} className="blog-featured__media" />
       <div className="blog-featured__body">
         <span className="blog-badge">{article.category.name}</span>
         <h3 className="blog-featured__title">{article.title}</h3>
@@ -68,7 +68,7 @@ function FeaturedCard({ article }: { article: ArticleSummary }) {
 function ArticleCard({ article }: { article: ArticleSummary }) {
   return (
     <Link to={`/blog/${article.id}`} className="blog-card">
-      <span className="blog-card__media" aria-hidden="true" />
+      <CoverMedia coverImage={article.coverImage} className="blog-card__media" />
       <div className="blog-card__body">
         <h3 className="blog-card__title">{article.title}</h3>
         <p className="blog-card__excerpt">{article.excerpt}</p>
@@ -282,10 +282,6 @@ export default function BlogPage() {
         ) : (
           sections.map((s) => <CategorySection key={s.heading} heading={s.heading} articles={s.articles} />)
         ))}
-
-      <p className="blog-disclosure">
-        Article images aren&rsquo;t available yet &mdash; the Blog has no image upload/storage wiring for articles.
-      </p>
     </div>
   );
 }
