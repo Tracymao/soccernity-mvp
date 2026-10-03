@@ -1,20 +1,14 @@
 // Dashboard — Figma node 110:5.
 //
-// Real data for three of the four stat cards: GET /admin/dashboard/stats
-// (Build Plan Section 4.8, built by sprint-5/admin-users-dashboard-backend,
-// AdminJwtAuthGuard only — reachable by every admin role). New Users
-// (this calendar month), Total Articles (Published), and Community Users
-// (Registered) are all real, computed server-side.
+// Real data: GET /admin/dashboard/stats (Build Plan Section 4.8, AdminJwtAuthGuard
+// only — reachable by every admin role). New Users (this calendar month),
+// Total Visits (all time), Total Articles (Published), Community Users
+// (Registered), and the visitor-statistics chart (the last 6 UTC months of
+// anonymous page views) are all real, computed server-side.
 //
-// Total Visits stays "—" — the backend's own response carries an
-// explicit `totalVisits: null`, never a faked 0, because no page-view/
-// visit-tracking model or middleware exists anywhere in this codebase
-// (a Decision Log candidate, see admin-dashboard/README.md). The
-// visitor-statistics chart and the "New users by league" breakdown are
-// ALSO still sample/not-wired — a league concept doesn't exist on User
-// at all, and Section 4.5's "Community Users" figure carries no per-
-// league dimension; both remain out of this PR's scope, flagged rather
-// than silently built as something they aren't.
+// Still sample / not wired: the "New users by league" breakdown — a league
+// concept doesn't exist on User at all (blocked on Decision Log #6) — and the
+// "Latest posts" table, neither of which is in the stats endpoint's contract.
 import { useEffect, useState } from "react";
 import AdminPageHeader from "../layout/AdminPageHeader";
 import { AdminApiError } from "../api/adminClient";
@@ -29,6 +23,15 @@ const LATEST_POSTS: string[][] = [
   ["08/08/2022", "Late Barça winner sinks Sevilla", "La Liga"],
   ["08/08/2022", "Rangers edge Enyimba in Aba", "NPFL"],
 ];
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// "YYYY-MM" → "Jan". Pure string parsing, no Date, so the label is the same
+// regardless of the viewer's timezone.
+function monthLabel(month: string): string {
+  const index = Number(month.slice(5, 7)) - 1;
+  return MONTH_NAMES[index] ?? month;
+}
 
 function useDashboardStats() {
   const [data, setData] = useState<AdminDashboardStats | null>(null);
@@ -60,12 +63,38 @@ function useDashboardStats() {
   return { data, loading, error, reload: () => setNonce((n) => n + 1) };
 }
 
+function VisitorChart({ series }: { series: AdminDashboardStats["visitsByMonth"] }) {
+  const max = series.reduce((m, p) => Math.max(m, p.count), 0);
+  const summary = series.map((p) => `${monthLabel(p.month)} ${p.count}`).join(", ");
+
+  return (
+    <div className="admin-dashboard__chart" role="img" aria-label={`Page views by month: ${summary}`}>
+      <div className="admin-dashboard__chart-bars" aria-hidden>
+        {series.map((p) => (
+          <div key={p.month} className="admin-dashboard__chart-col">
+            <span className="admin-dashboard__chart-count">{p.count}</span>
+            <span
+              className="admin-dashboard__chart-bar"
+              style={{ height: max > 0 ? `${Math.round((p.count / max) * 100)}%` : "0%" }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="admin-dashboard__chart-axis" aria-hidden>
+        {series.map((p) => (
+          <span key={p.month}>{monthLabel(p.month)}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { data, loading, error, reload } = useDashboardStats();
 
   const statCards = [
     { label: "New Users", sub: "This month", value: data?.newUsersThisMonth },
-    { label: "Total Visits", sub: "All time", value: data?.totalVisits ?? undefined },
+    { label: "Total Visits", sub: "All time", value: data?.totalVisits },
     { label: "Total Articles", sub: "Published", value: data?.totalArticlesPublished },
     { label: "Community Users", sub: "Registered", value: data?.communityUsersTotal },
   ];
@@ -110,23 +139,11 @@ export default function DashboardPage() {
         </StubSection>
 
         <StubSection title="Visitor statistics">
-          <div className="admin-dashboard__chart" role="img" aria-label="Visitor statistics chart — not available">
-            <p className="admin-stub__sample-caption">
-              Sample — no page-view tracking exists anywhere in this codebase yet.
-            </p>
-            <div className="admin-dashboard__chart-bars">
-              {[40, 65, 50, 80, 60].map((h, i) => (
-                <span key={i} style={{ height: `${h}%` }} />
-              ))}
-            </div>
-            <div className="admin-dashboard__chart-axis">
-              <span>Jan</span>
-              <span>Feb</span>
-              <span>Mar</span>
-              <span>Apr</span>
-              <span>May</span>
-            </div>
-          </div>
+          {data ? (
+            <VisitorChart series={data.visitsByMonth} />
+          ) : (
+            <p className="admin-stub__sample-caption">{loading ? "Loading…" : "No data yet."}</p>
+          )}
         </StubSection>
 
         <StubSection title="Latest posts">
