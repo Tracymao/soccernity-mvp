@@ -19,6 +19,7 @@ describe('Sports controllers (HTTP layer)', () => {
     getMatchById: jest.fn(),
     getMatchStatistics: jest.fn(),
     getMatchLineups: jest.fn(),
+    getMatchBoxScore: jest.fn(),
     getHeadToHead: jest.fn(),
     getMatchMomentum: jest.fn(),
     getMatchEvents: jest.fn(),
@@ -102,6 +103,14 @@ describe('Sports controllers (HTTP layer)', () => {
       sportsService.getMatchStatistics.mockResolvedValue({ home: null, away: null, updatedAt: null });
       await request(app.getHttpServer()).get('/sports/matches/match-1/stats').expect(200);
       expect(sportsService.getMatchStatistics).toHaveBeenCalledWith('match-1');
+    });
+  });
+
+  describe('GET /sports/matches/:id/box-score', () => {
+    it('reaches the service and is served without any guard', async () => {
+      sportsService.getMatchBoxScore.mockResolvedValue({ home: null, away: null, updatedAt: null, availability: {} });
+      await request(app.getHttpServer()).get('/sports/matches/match-1/box-score').expect(200);
+      expect(sportsService.getMatchBoxScore).toHaveBeenCalledWith('match-1');
     });
   });
 

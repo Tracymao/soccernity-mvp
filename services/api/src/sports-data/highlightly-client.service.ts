@@ -10,6 +10,7 @@ import {
   RawMatchEvent,
   RawMatchesPage,
   RawStandingsGroup,
+  RawBoxScoreTeam,
   RawTeamStatistics,
   SportsDataClient,
   SportsDataNotFoundError,
@@ -153,6 +154,12 @@ export class HighlightlyClient extends SportsDataClient {
   // per-match method.)
   async getMatchEvents(externalRef: string): Promise<RawMatchEvent[]> {
     return this.request<RawMatchEvent[]>(`/events/${encodeURIComponent(externalRef)}`);
+  }
+
+  // GET /box-score/{matchId} — the only per-player source Highlightly serves; confirmed live (Decision
+  // Log #324). Returned verbatim, never trimmed here: SportsService owns the projection.
+  async getMatchBoxScore(externalRef: string): Promise<RawBoxScoreTeam[]> {
+    return this.request<RawBoxScoreTeam[]>(`/box-score/${encodeURIComponent(externalRef)}`);
   }
 
   // GET /head-2-head?teamIdOne=&teamIdTwo= — a bare top-level array of RawMatch, confirmed against

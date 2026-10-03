@@ -96,6 +96,35 @@ export interface RawTeamStatistics {
 // GET /events/{matchId} — bare top-level array. `time` is Highlightly's own minute-string format,
 // e.g. "45+1" for first-half stoppage time — parsed by momentum.util.ts's `parseEventMinute`, never
 // assumed to be a bare integer.
+// GET /box-score/{matchId} — a top-level array of two team entries, each with its players. Confirmed
+// live 2026-10-03 (Decision Log #324): 45 player rows for one finished match. `matchRating` is a
+// string (e.g. "6.44") and empty for players without one; `statistics` is a flat keyed object of ~40
+// fields, NOT the `[{name, value}]` array the vendor's own docs describe. Only the keys this module
+// reads are typed; every other key is deliberately not surfaced.
+export interface RawBoxScorePlayerStatistics {
+  expectedGoals?: number | string | null;
+  expectedAssists?: number | string | null;
+  [key: string]: number | string | null | undefined;
+}
+
+export interface RawBoxScorePlayer {
+  id: string | number;
+  name: string;
+  fullName?: string | null;
+  shirtNumber?: number | string | null;
+  position?: string | null;
+  isCaptain?: boolean | null;
+  isSubstitute?: boolean | null;
+  minutesPlayed?: number | string | null;
+  matchRating?: string | null;
+  statistics?: RawBoxScorePlayerStatistics | null;
+}
+
+export interface RawBoxScoreTeam {
+  team: RawTeamRef;
+  players: RawBoxScorePlayer[];
+}
+
 export interface RawMatchEvent {
   team?: RawTeamRef | null;
   time: string;
@@ -216,6 +245,7 @@ export abstract class SportsDataClient {
   abstract getMatchStatistics(externalRef: string): Promise<RawTeamStatistics[]>;
   abstract getMatchLineups(externalRef: string): Promise<RawLineups>;
   abstract getMatchEvents(externalRef: string): Promise<RawMatchEvent[]>;
+  abstract getMatchBoxScore(externalRef: string): Promise<RawBoxScoreTeam[]>;
   abstract getHeadToHead(homeTeamId: string, awayTeamId: string): Promise<RawMatch[]>;
   abstract getStandings(leagueId: string, season: string): Promise<RawStandingsGroup[]>;
   abstract getHighlights(params: ListHighlightsParams): Promise<RawHighlightsPage>;

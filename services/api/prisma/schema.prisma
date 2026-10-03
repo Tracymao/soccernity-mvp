@@ -1607,6 +1607,11 @@ model MatchData {
   // Highlightly genuinely returned nothing" — e.g. a scheduled match with no lineup announced yet).
   statistics          Json?
   statisticsUpdatedAt DateTime?
+  // Per-player box score (GET /box-score/{matchId}), one vendor call per match. Consumed only by the
+  // Match Centre's Statistics tab, never by a list endpoint — see sports.service.ts's
+  // getMatchBoxScore for the call-frequency reasoning.
+  boxScore            Json?
+  boxScoreUpdatedAt   DateTime?
   lineups             Json?
   lineupsUpdatedAt    DateTime?
   // Also the source data for the momentum endpoint (Decision Log candidate, see

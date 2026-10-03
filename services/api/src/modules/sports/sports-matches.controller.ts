@@ -37,6 +37,13 @@ export class SportsMatchesController {
     return this.sportsService.getMatchStatistics(id);
   }
 
+  // Per-player box score (Highlightly GET /box-score/{matchId}). Called only from the Match Centre's
+  // Statistics tab, so it is never spent on a list view — see sports.service.ts's getMatchBoxScore.
+  @Get('matches/:id/box-score')
+  async getBoxScore(@Param('id') id: string) {
+    return this.sportsService.getMatchBoxScore(id);
+  }
+
   @Get('matches/:id/lineups')
   async getLineups(@Param('id') id: string) {
     return this.sportsService.getMatchLineups(id);

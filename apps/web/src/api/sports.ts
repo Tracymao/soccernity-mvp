@@ -67,9 +67,9 @@ export interface TeamStatistics {
 // second means the vendor can but nothing is cached for this match.
 export type FieldAvailability = "available" | "no_data" | "not_available_from_provider";
 
+// Only the metrics with no source at all on the team-level statistics feed. Ratings and xG come from the
+// per-player box score (MatchBoxScoreAvailability below).
 export interface MatchAvailability {
-  playerRatings: FieldAvailability;
-  expectedGoals: FieldAvailability;
   pressureIndex: FieldAvailability;
   shotMaps: FieldAvailability;
 }
@@ -80,6 +80,38 @@ export interface MatchStatistics {
   away: TeamStatistics | null;
   updatedAt: string | null;
   availability: MatchAvailability;
+}
+
+export interface BoxScorePlayer {
+  id: string | null;
+  name: string;
+  shirtNumber: number | null;
+  position: string | null;
+  isSubstitute: boolean;
+  minutesPlayed: number | null;
+  rating: number | null;
+  expectedGoals: number | null;
+  expectedAssists: number | null;
+}
+
+export interface TeamBoxScore {
+  team: TeamRef;
+  // Sum of the players' xG, or null when none carries one. The vendor does not publish a team total.
+  expectedGoals: number | null;
+  players: BoxScorePlayer[];
+}
+
+export interface MatchBoxScoreAvailability {
+  playerRatings: FieldAvailability;
+  expectedGoals: FieldAvailability;
+}
+
+// Per-player box score. Fetched only when the Statistics tab opens, never on a list view.
+export interface MatchBoxScore {
+  home: TeamBoxScore | null;
+  away: TeamBoxScore | null;
+  updatedAt: string | null;
+  availability: MatchBoxScoreAvailability;
 }
 
 export interface LineupPlayer {
@@ -267,6 +299,11 @@ export async function getMatchById(matchId: string): Promise<MatchSummary> {
 // GET /sports/matches/:id/stats
 export async function getMatchStatistics(matchId: string): Promise<MatchStatistics> {
   return get<MatchStatistics>(`/sports/matches/${matchId}/stats`);
+}
+
+// GET /sports/matches/:id/box-score -- per-player ratings and xG from the vendor's box score.
+export async function getMatchBoxScore(matchId: string): Promise<MatchBoxScore> {
+  return get<MatchBoxScore>(`/sports/matches/${matchId}/box-score`);
 }
 
 // GET /sports/matches/:id/lineups -- also carries a substitutions

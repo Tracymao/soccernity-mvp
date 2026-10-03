@@ -40,6 +40,7 @@ import { Link, useParams, useSearchParams } from "react-router";
 import {
   getMatchById,
   getMatchStatistics,
+  getMatchBoxScore,
   getMatchLineups,
   getMatchEvents,
   getMatchMomentum,
@@ -49,8 +50,10 @@ import {
   getHighlights,
   SportsApiError,
   type MatchAvailability,
+  type MatchBoxScore,
   type MatchSummary,
   type MatchStatistics,
+  type TeamBoxScore,
   type Lineups,
   type MatchEvents,
   type Momentum,
@@ -200,7 +203,17 @@ function MatchSummaryTab({ match, events }: { match: MatchSummary; events: Loada
 
 // ---------- Statistics (sub tab) ----------
 
-function StatisticsTab({ stats, onRetry }: { stats: Loadable<MatchStatistics>; onRetry: () => void }) {
+function StatisticsTab({
+  stats,
+  onRetry,
+  boxScore,
+  onRetryBoxScore,
+}: {
+  stats: Loadable<MatchStatistics>;
+  onRetry: () => void;
+  boxScore: Loadable<MatchBoxScore>;
+  onRetryBoxScore: () => void;
+}) {
   if (stats.status === "idle" || stats.status === "loading") {
     return <StatusMessage>Loading team statistics…</StatusMessage>;
   }
@@ -214,7 +227,7 @@ function StatisticsTab({ stats, onRetry }: { stats: Loadable<MatchStatistics>; o
   }
 
   const { home, away, availability } = stats.data;
-  const advanced = <AdvancedMetricGates availability={availability} />;
+  const advanced = <AdvancedMetricGates availability={availability} boxScore={boxScore} onRetryBoxScore={onRetryBoxScore} />;
   if (!home || !away) {
     return (
       <>
@@ -255,9 +268,7 @@ function StatisticsTab({ stats, onRetry }: { stats: Loadable<MatchStatistics>; o
           );
         })}
       </ul>
-      <StatusMessage>
-        Team totals only — per-player statistics aren&rsquo;t available from this data source.
-      </StatusMessage>
+      <StatusMessage>Team totals. Player ratings and expected goals are shown below.</StatusMessage>
     </Section>
     {advanced}
     </>
@@ -266,18 +277,100 @@ function StatisticsTab({ stats, onRetry }: { stats: Loadable<MatchStatistics>; o
 
 // ---------- Statistics: vendor-dependent gates ----------
 
-// Four vendor-only metrics, each gated on the backend's availability signal. Nothing is
-// ingested into the cache yet, so when the signal is 'available' the children slot is where
-// a real display goes — no data shape exists to render today, which is why no children are
-// passed. Changing SPORTS_DATA_PROVIDER on the backend flips these without any edit here.
-function AdvancedMetricGates({ availability }: { availability: MatchAvailability }) {
+// Ratings and xG come from the per-player box score, shown when the backend reports them available.
+// Pressure index and shot map have no source at all yet, so they stay on the placeholder. Changing
+// SPORTS_DATA_PROVIDER on the backend flips every gate here without any edit in this file.
+function AdvancedMetricGates({
+  availability,
+  boxScore,
+  onRetryBoxScore,
+}: {
+  availability: MatchAvailability;
+  boxScore: Loadable<MatchBoxScore>;
+  onRetryBoxScore: () => void;
+}) {
   return (
     <>
-      <FieldAvailabilityGate label="Player box score · RATING" availability={availability.playerRatings} />
-      <FieldAvailabilityGate label="Expected goals (xG)" availability={availability.expectedGoals} />
+      <BoxScoreSections boxScore={boxScore} onRetry={onRetryBoxScore} />
       <FieldAvailabilityGate label="Pressure index" availability={availability.pressureIndex} />
       <FieldAvailabilityGate label="Shot map" availability={availability.shotMaps} />
     </>
+  );
+}
+
+function BoxScoreSections({ boxScore, onRetry }: { boxScore: Loadable<MatchBoxScore>; onRetry: () => void }) {
+  if (boxScore.status === "idle" || boxScore.status === "loading") {
+    return <StatusMessage>Loading player ratings and expected goals…</StatusMessage>;
+  }
+  if (boxScore.status === "error") {
+    return (
+      <div>
+        <StatusMessage tone="error">Couldn&rsquo;t load player ratings and expected goals.</StatusMessage>
+        <RetryButton onRetry={onRetry} />
+      </div>
+    );
+  }
+
+  const { home, away, availability } = boxScore.data;
+  const bothSides = home != null && away != null;
+  return (
+    <>
+      {availability.playerRatings === "available" && bothSides ? (
+        <PlayerRatings home={home} away={away} />
+      ) : (
+        <FieldAvailabilityGate label="Player box score · RATING" availability={availability.playerRatings} />
+      )}
+      {availability.expectedGoals === "available" && bothSides ? (
+        <ExpectedGoals home={home} away={away} />
+      ) : (
+        <FieldAvailabilityGate label="Expected goals (xG)" availability={availability.expectedGoals} />
+      )}
+    </>
+  );
+}
+
+function PlayerRatings({ home, away }: { home: TeamBoxScore; away: TeamBoxScore }) {
+  const rated = (team: TeamBoxScore) =>
+    team.players.filter((p) => p.rating != null).sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+  return (
+    <Section>
+      {[home, away].map((team) => (
+        <div key={team.team.id} className="mc-lineup-list">
+          <h4>{team.team.name}</h4>
+          <ul>
+            {rated(team).map((p, i) => (
+              <li key={p.id ?? i}>
+                <span>{p.name}</span>
+                {p.position && <span className="mc-lineup-list__position">{p.position}</span>}
+                {p.minutesPlayed != null && <span className="mc-lineup-list__position">{p.minutesPlayed}&prime;</span>}
+                <span className="mc-lineup-list__number">{p.rating?.toFixed(1)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      <StatusMessage>Ratings are the vendor&rsquo;s match rating; how it is calculated is not published.</StatusMessage>
+    </Section>
+  );
+}
+
+function ExpectedGoals({ home, away }: { home: TeamBoxScore; away: TeamBoxScore }) {
+  const fmt = (value: number | null) => (value == null ? "—" : value.toFixed(2));
+  return (
+    <Section>
+      <div className="mc-stats-header">
+        <span className="mc-stats-header__team">{home.team.name}</span>
+        <span className="mc-stats-header__team mc-stats-header__team--right">{away.team.name}</span>
+      </div>
+      <ul className="mc-stat-rows">
+        <li className="mc-stat-row">
+          <span className="mc-stat-row__value mc-stat-row__value--home">{fmt(home.expectedGoals)}</span>
+          <span className="mc-stat-row__label">Expected goals (xG)</span>
+          <span className="mc-stat-row__value">{fmt(away.expectedGoals)}</span>
+        </li>
+      </ul>
+      <StatusMessage>Team xG is the sum of each player&rsquo;s xG in the match box score.</StatusMessage>
+    </Section>
   );
 }
 
@@ -757,6 +850,7 @@ export default function MatchCentrePage() {
 
   const [events, retryEvents] = useLazyTab(matchId, summaryActive || commentaryActive, getMatchEvents);
   const [stats, retryStats] = useLazyTab(matchId, statsActive, getMatchStatistics);
+  const [boxScore, retryBoxScore] = useLazyTab(matchId, statsActive, getMatchBoxScore);
   const [lineups, retryLineups] = useLazyTab(matchId, lineupsActive, getMatchLineups);
   const [momentum, retryMomentum] = useLazyTab(matchId, momentumActive, getMatchMomentum);
   const [h2h, retryH2h] = useLazyTab(matchId, h2hActive, getHeadToHead);
@@ -886,7 +980,9 @@ export default function MatchCentrePage() {
 
       <div className="mc-content">
         {summaryActive && <MatchSummaryTab match={match} events={events} />}
-        {statsActive && <StatisticsTab stats={stats} onRetry={retryStats} />}
+        {statsActive && (
+          <StatisticsTab stats={stats} onRetry={retryStats} boxScore={boxScore} onRetryBoxScore={retryBoxScore} />
+        )}
         {lineupsActive && <LineupsTab lineups={lineups} onRetry={retryLineups} />}
         {momentumActive && (
           <MomentumTab momentum={momentum} homeTeamName={match.homeTeam.name} awayTeamName={match.awayTeam.name} onRetry={retryMomentum} />

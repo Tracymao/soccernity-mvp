@@ -63,6 +63,8 @@ vendor's *public documentation* supports, so the capability registry
    only, so coverage across leagues is unproven; and whether these are Highlightly's own model or a third-party
    feed is unknown. Changing `SPORTS_DATA_PROVIDER_CAPABILITIES` is a decision for `backend-api` once a
    box-score ingest exists and the field coverage is checked across more matches; this PR leaves the registry alone.
+   **Update (`sprint-4/box-score-rating-xg`):** the registry now marks `expectedGoals` and `playerRatings` `supported`
+   for Highlightly, citing this live response. Coverage across more matches is still unchecked.
 
 ## Plans (as documented 2026-09-26)
 

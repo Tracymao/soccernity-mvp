@@ -9,7 +9,11 @@ export const SPORTS_MAX_PAGE_SIZE = 50;
 // each number below. Every one of these is the TTL for the Redis refresh-lock key that gates a real
 // Highlightly call for that resource (sports-refresh-lock.ts) — NOT a bare Redis cache-value TTL;
 // Postgres (MatchData/Standing) is the actual durable store these numbers gate writes into.
-export const DEFAULT_LIVE_CACHE_TTL_SECONDS = 60; // matches Highlightly's own documented ~once-a-minute live-data refresh cadence
+export const DEFAULT_LIVE_CACHE_TTL_SECONDS = 60;
+// Box score refreshes less often than live stats on purpose: Highlightly documents its own Match Box
+// Score as refreshed every 5 minutes, and it is only read from the Match Centre's Statistics tab, so
+// polling it every minute would spend the free-tier budget for no visible gain.
+export const DEFAULT_BOX_SCORE_LIVE_CACHE_TTL_SECONDS = 5 * 60; // matches Highlightly's own documented ~once-a-minute live-data refresh cadence
 export const DEFAULT_SCHEDULED_CACHE_TTL_SECONDS = 6 * 60 * 60; // 6h — a not-yet-started fixture's lineups/details rarely change this often
 export const DEFAULT_FINISHED_CACHE_TTL_SECONDS = 24 * 60 * 60; // 24h — final match data is effectively immutable, but not treated as literally infinite (rare post-match corrections, e.g. a VAR review overturning a card after the fact)
 export const DEFAULT_STANDINGS_CACHE_TTL_SECONDS = 30 * 60; // 30 min — matches Highlightly's own documented "standings refresh up to an hour after a match"
