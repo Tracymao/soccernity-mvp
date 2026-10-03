@@ -39,7 +39,7 @@
 // indicator already made) and the numeric badge on the account
 // dropdown / drawer's Notification(s) row (Figma's navy count-pill,
 // Decision Log #88).
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import logoMark from "../assets/icons/soccernity-logo-mark.svg";
 import searchIcon from "../assets/icons/search.svg";
@@ -67,11 +67,28 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const accountRef = useRef<HTMLDivElement>(null);
 
   // Close any open overlay when the route changes or the session ends.
   useEffect(() => {
     setMenuOpen(false);
   }, [location.key, hasSession]);
+
+  // Desktop account dropdown: close on a click outside the avatar + menu
+  // wrapper (Decision Log #106). Mounted only while open, so no listener
+  // outlives the menu.
+  useEffect(() => {
+    if (!menuOpen || isMobile) return;
+    function handlePointerDown(event: MouseEvent) {
+      if (accountRef.current && !accountRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [menuOpen, isMobile]);
 
   // Fetch the signed-in user's profile once per session, for NavDrawer's
   // identity block (Decision Log #168). Keyed on the token itself: it
@@ -178,7 +195,7 @@ export default function Header() {
 
       <div className="sn-header__auth">
         {hasSession ? (
-          <div className="sn-header__account">
+          <div className="sn-header__account" ref={accountRef}>
             {/* Messages: /messages now resolves (sprint-3/banter-
                 messaging-to-code, Decision Log #277) -- closes the
                 messages half of Decision Log #166. Notifications (the
