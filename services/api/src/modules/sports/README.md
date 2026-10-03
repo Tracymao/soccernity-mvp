@@ -48,12 +48,12 @@ history and wasn't the safer call here either.
 ## Two real, confirmed Highlightly data gaps — found during this build, not silently built around
 
 > **Correction (`sprint-4/sports-vendor-capability-registry`, 2026-09-26): gap #1 below is WRONG as
-> originally written.** Highlightly's documentation has a "Football.Match Box Score" endpoint returning
-> per-player statistics for every player in one match, in one call (refreshed every 5 minutes). The exact
-> request path is unconfirmed and it was never traced live, so this module still serves team-level stats
-> only — but "no batched box score exists" is not true. The original text is kept below, struck through
-> in spirit, for the historical record. Full evidence and sources: `highlightly-vs-sportmonks.md`,
-> Finding 1. Gap #2 (standings form) was re-checked and stands.
+> originally written.** Highlightly serves a per-player box score for one match in one call. **Confirmed
+> live on 2026-10-03 (Decision Log #324):** `GET /box-score/{matchId}`, one request per match, returning all
+> players. This module still serves team-level stats only (`GET /sports/matches/:id/stats`); the box-score
+> call is not built here, pending a costing decision against the free-tier budget (Decision Log #323). The
+> original text is kept below for the historical record. Full evidence: `highlightly-vs-sportmonks.md`,
+> Finding 1 and Finding 5. Gap #2 (standings form) was re-checked and stands.
 
 Per this PR's own task brief's instruction to "state that back clearly" rather than quietly
 assuming or padding out missing vendor data:
@@ -184,17 +184,18 @@ higher (or lower) paid-plan quota needs a founder decision on which Highlightly 
 that override set to match. This is a real, open Decision Log candidate (see below), not resolved by
 this PR.
 
-## Auth header uncertainty — disclosed, not silently assumed either way
+## Auth header — confirmed live (2026-10-03, Decision Log #328)
 
-Highlightly's docs state `x-rapidapi-key` as the required auth header for "your Highlightly or
-RapidAPI API Key" — the SAME header name whether the key came from a direct Highlightly account or a
-RapidAPI subscription; `x-rapidapi-host` is documented as required only when actually calling
-through RapidAPI's own gateway. `HighlightlyClient` sends `x-rapidapi-key` on every call, and
-`x-rapidapi-host` only when `SPORTS_DATA_RAPIDAPI_HOST` is explicitly set (i.e. `SPORTS_DATA_BASE_URL`
-is pointed at RapidAPI's gateway host rather than `soccer.highlightly.net` directly). This exact
-behavior for the DIRECT `highlightly.net` host specifically was not spelled out as an isolated,
-verbatim code example on the public docs page — flagged as a real, disclosed uncertainty, to be
-confirmed the moment a real account exists and a live call can be traced (see "Verification" below).
+`HighlightlyClient` sends `x-rapidapi-key` on every call, and `x-rapidapi-host` only when
+`SPORTS_DATA_RAPIDAPI_HOST` is set. Checked against the real account, through the real client:
+
+- `x-rapidapi-key` alone to `soccer.highlightly.net`: **200**, with real match data.
+- No key at all: **403** `Missing mandatory HTTP Headers`.
+- `x-rapidapi-host` sent to the direct host as well: **200**. Harmless, but the code still sends it only
+  when explicitly configured.
+
+So the header behavior the client implements is correct for the direct host. Still unverified: the
+RapidAPI gateway path (no RapidAPI-routed key was tested).
 
 ## Route ordering
 
@@ -220,11 +221,12 @@ content a logged-out visitor should see).
 1. **The real Highlightly paid-tier request budget is unknown.** `HIGHLIGHTLY_DAILY_REQUEST_BUDGET`
    defaults to the confirmed free-tier 100/day; production needs a founder decision on which plan to
    buy, then this override set to match.
-2. **~~No batched player box-score data exists from this vendor~~ — CORRECTED (see the note under
-   "Two real, confirmed Highlightly data gaps").** Highlightly documents a per-match Match Box Score
-   endpoint; `GET /sports/matches/:id/stats` is still team-level only because nothing has built or
-   traced the box-score call. A future pass wanting real box scores should confirm the endpoint path
-   and stat list with a live call first.
+2. **~~No batched player box-score data exists from this vendor~~ — CORRECTED and CONFIRMED live (2026-10-03,
+   Decision Log #324).** `GET /box-score/{matchId}` returns every player for one match, one call. Only that
+   path returns box-score data; the other candidates tested were `/players/{matchId}` (200, empty array),
+   `/players/{id}/box-scores` and `/football/match-box-score/{matchId}` (both 404). `GET
+   /sports/matches/:id/stats` is still team-level only because the box-score call is not built yet. Building
+   it is a separate decision, to be costed against the free-tier budget (#323) first.
 3. **No standings "form" field exists from this vendor** (data gap #2 above) — the Figma Standing
    screen's FORM column has no real data source today.
 4. **No confirmed top-scorers endpoint exists from this vendor** — the fast-follow exclusion stays
@@ -234,12 +236,15 @@ content a logged-out visitor should see).
    be updated to include them — this README doesn't do that edit itself, matching how prior similar
    findings in this project (e.g. Decision Log #23 on `GET /auth/me`) were left for whoever next
    edits Section 4 in the live Build Plan document.
-6. **The direct `highlightly.net` host's exact auth-header behavior is not independently confirmed**
-   beyond what the public docs page states for "Highlightly or RapidAPI" keys generally — see "Auth
-   header uncertainty" above.
+6. **Resolved (Decision Log #328, 2026-10-03):** the direct host's auth-header behavior is confirmed
+   live — see "Auth header — confirmed live" above.
 7. **`league` on `GET /sports/fixtures`/`GET /sports/live-scores`, and `season` on `GET
    /sports/standings`, are additional params beyond Section 4.6's literal query-string list** —
    flagged the same way Blog's `categoryId`/`categorySlug` filters were.
+8. **Highlightly's live box score contains populated xG fields (and a `matchRating` per player), which the
+   capability registry still marks unsupported/unconfirmed.** Observed 2026-10-03 on one finished match
+   (`highlightly-vs-sportmonks.md` Finding 5). Open: whether the registry should change, which needs field
+   coverage checked across more matches and a box-score ingest to exist first. The registry is unchanged here.
 
 ## Verification
 
