@@ -91,6 +91,21 @@ export async function listClubs(accessToken: string, cursor?: string): Promise<C
   return (await response.json()) as ClubPageResult;
 }
 
+// Every club the caller is a member of. GET /clubs has no membership filter
+// and pages alphabetically, so this walks the cursor to the end rather than
+// trusting the first page. Membership is the same ClubPage.members row the
+// club-scoped Banter Room affiliation check reads (banter.service.ts).
+export async function listJoinedClubs(accessToken: string): Promise<ClubSummary[]> {
+  const joined: ClubSummary[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await listClubs(accessToken, cursor);
+    joined.push(...page.items.filter((c) => c.joined));
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  return joined;
+}
+
 // GET /clubs/:id -- a single club, same ClubSummary shape as the list
 // entries (services/api clubs.service.ts's getClubById). A missing club is
 // a real 404 from the server; surfaced here as a ClubsApiError with
