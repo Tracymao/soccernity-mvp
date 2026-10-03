@@ -17,7 +17,9 @@ import {
   type Momentum,
   type HeadToHead,
   type Highlights,
+  type MatchAvailability,
 } from "../../api/sports";
+import FieldAvailabilityGate from "./FieldAvailabilityGate";
 
 vi.mock("../../api/sports", async () => {
   const actual = await vi.importActual<typeof import("../../api/sports")>("../../api/sports");
@@ -31,6 +33,7 @@ vi.mock("../../api/sports", async () => {
     getHeadToHead: vi.fn(),
     getStandings: vi.fn(),
     getHighlights: vi.fn(),
+    getTopScorers: vi.fn(),
   };
 });
 
@@ -43,6 +46,7 @@ import {
   getHeadToHead,
   getStandings,
   getHighlights,
+  getTopScorers,
 } from "../../api/sports";
 
 function team(id: string, name: string) {
@@ -65,7 +69,13 @@ const LIVERPOOL_V_CHELSEA: MatchSummary = {
 };
 
 const EMPTY_EVENTS: MatchEvents = { items: [], updatedAt: null };
-const EMPTY_STATS: MatchStatistics = { home: null, away: null, updatedAt: null };
+const ALL_NOT_AVAILABLE: MatchAvailability = {
+  playerRatings: "not_available_from_provider",
+  expectedGoals: "not_available_from_provider",
+  pressureIndex: "not_available_from_provider",
+  shotMaps: "not_available_from_provider",
+};
+const EMPTY_STATS: MatchStatistics = { home: null, away: null, updatedAt: null, availability: ALL_NOT_AVAILABLE };
 const EMPTY_MOMENTUM: Momentum = { bars: [], markers: [], updatedAt: null };
 const EMPTY_H2H: HeadToHead = {
   meetings: [],
@@ -77,6 +87,7 @@ const EMPTY_LINEUPS: Lineups = {
   home: { team: team("hp1", "Liverpool"), formation: null, rows: [], startingXI: [], substitutes: [], missingPlayers: [], coach: null },
   away: { team: team("ap1", "Chelsea"), formation: null, rows: [], startingXI: [], substitutes: [], missingPlayers: [], coach: null },
   substitutions: [],
+  expectedLineups: "not_available_from_provider",
   updatedAt: null,
 };
 
@@ -90,6 +101,9 @@ beforeEach(() => {
   vi.mocked(getHeadToHead).mockReset().mockResolvedValue(EMPTY_H2H);
   vi.mocked(getStandings).mockReset().mockResolvedValue({ leagueId: "39", season: "2026", groups: [], updatedAt: null });
   vi.mocked(getHighlights).mockReset().mockResolvedValue(EMPTY_HIGHLIGHTS);
+  vi.mocked(getTopScorers)
+    .mockReset()
+    .mockResolvedValue({ leagueId: "39", season: "2026", availability: "not_available_from_provider", items: [] });
 });
 
 function renderPage(id = "m1") {
@@ -171,6 +185,7 @@ describe("MatchCentrePage", () => {
       home: { team: team("hp1", "Liverpool"), statistics: [{ label: "Ball Possession", value: "58%" }] },
       away: { team: team("ap1", "Chelsea"), statistics: [{ label: "Ball Possession", value: "42%" }] },
       updatedAt: null,
+      availability: ALL_NOT_AVAILABLE,
     });
 
     renderPage();
@@ -210,6 +225,7 @@ describe("MatchCentrePage", () => {
       },
       away: EMPTY_LINEUPS.away,
       substitutions: [{ minute: 62, side: "home", playerOff: "Salah", playerOn: "Gakpo" }],
+      expectedLineups: "not_available_from_provider",
       updatedAt: null,
     });
 
@@ -333,8 +349,10 @@ describe("MatchCentrePage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Standings" }));
 
-    expect(await screen.findByRole("alert")).not.toBeNull();
+    expect(await screen.findByText(/Standings aren.t available for this match/)).not.toBeNull();
+    expect(await screen.findByText(/Top scorers aren.t available for this match/)).not.toBeNull();
     expect(getStandings).not.toHaveBeenCalled();
+    expect(getTopScorers).not.toHaveBeenCalled();
   });
 
   it("switching to Video lazily fetches highlights and renders clip cards", async () => {
@@ -374,6 +392,7 @@ describe("MatchCentrePage", () => {
         home: { team: team("hp1", "Liverpool"), statistics: [{ label: "Shots", value: 10 }] },
         away: { team: team("ap1", "Chelsea"), statistics: [{ label: "Shots", value: 8 }] },
         updatedAt: null,
+        availability: ALL_NOT_AVAILABLE,
       });
 
     renderPage();
@@ -385,5 +404,148 @@ describe("MatchCentrePage", () => {
 
     expect(await screen.findByText("Shots")).not.toBeNull();
     expect(getMatchStatistics).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("MatchCentrePage — vendor-dependent field placeholders", () => {
+  const TEAM_STATS = {
+    home: { team: team("hp1", "Liverpool"), statistics: [{ label: "Ball Possession", value: "58%" }] },
+    away: { team: team("ap1", "Chelsea"), statistics: [{ label: "Ball Possession", value: "42%" }] },
+    updatedAt: null,
+  };
+
+  it("renders each vendor-only Statistics metric as a disabled 'not available from provider' placeholder, with no value shown", async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
+    vi.mocked(getMatchStatistics).mockResolvedValueOnce({ ...TEAM_STATS, availability: ALL_NOT_AVAILABLE });
+
+    renderPage();
+    await screen.findByText("Liverpool");
+    fireEvent.click(screen.getByRole("button", { name: "Statistics" }));
+
+    expect(await screen.findByText("Player box score · RATING")).not.toBeNull();
+    expect(screen.getByText("Expected goals (xG)")).not.toBeNull();
+    expect(screen.getByText("Pressure index")).not.toBeNull();
+    expect(screen.getByText("Shot map")).not.toBeNull();
+    expect(screen.getAllByText("Not available from current data provider")).toHaveLength(4);
+    expect(screen.queryByText("No data for this match yet")).toBeNull();
+    expect(document.querySelectorAll('[aria-disabled="true"]')).toHaveLength(4);
+  });
+
+  it("tells 'no data for this match' apart from 'not available from provider' on the same tab", async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
+    vi.mocked(getMatchStatistics).mockResolvedValueOnce({
+      ...TEAM_STATS,
+      availability: {
+        playerRatings: "no_data",
+        expectedGoals: "not_available_from_provider",
+        pressureIndex: "no_data",
+        shotMaps: "not_available_from_provider",
+      },
+    });
+
+    renderPage();
+    await screen.findByText("Liverpool");
+    fireEvent.click(screen.getByRole("button", { name: "Statistics" }));
+
+    expect(await screen.findAllByText("No data for this match yet")).toHaveLength(2);
+    expect(screen.getAllByText("Not available from current data provider")).toHaveLength(2);
+  });
+
+  it("still shows the advanced-metric placeholders when team totals are missing entirely", async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
+    vi.mocked(getMatchStatistics).mockResolvedValueOnce({ home: null, away: null, updatedAt: null, availability: ALL_NOT_AVAILABLE });
+
+    renderPage();
+    await screen.findByText("Liverpool");
+    fireEvent.click(screen.getByRole("button", { name: "Statistics" }));
+
+    expect(await screen.findByText(/team statistics aren.t available for this match yet/i)).not.toBeNull();
+    expect(screen.getAllByText("Not available from current data provider")).toHaveLength(4);
+  });
+
+  it("shows an 'Expected lineups' placeholder on the Lineups tab, even when no XI is available yet", async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
+    vi.mocked(getMatchLineups).mockResolvedValueOnce({ ...EMPTY_LINEUPS, expectedLineups: "not_available_from_provider" });
+
+    renderPage();
+    await screen.findByText("Liverpool");
+    fireEvent.click(screen.getByRole("button", { name: "Lineups" }));
+
+    expect(await screen.findByText("Expected lineups")).not.toBeNull();
+    expect(screen.getByText("Not available from current data provider")).not.toBeNull();
+  });
+
+  it("a top-scorers failure does not hide the standings table beneath which it renders", async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
+    vi.mocked(getStandings).mockResolvedValueOnce({
+      leagueId: "39",
+      season: "2026",
+      groups: [
+        {
+          name: null,
+          rows: [{ position: 1, team: team("hp1", "Liverpool"), points: 20, played: 8, won: 6, drawn: 2, lost: 0, goalsFor: 18, goalsAgainst: 6, goalDifference: 12 }],
+        },
+      ],
+      updatedAt: null,
+    });
+    vi.mocked(getTopScorers).mockRejectedValueOnce(new Error("boom"));
+
+    renderPage();
+    await screen.findByText("Liverpool");
+    fireEvent.click(screen.getByRole("button", { name: "Standings" }));
+
+    expect(await screen.findByText("Couldn't load top scorers.")).not.toBeNull();
+    expect(screen.getByRole("table")).not.toBeNull();
+    expect(getTopScorers).toHaveBeenCalledWith("39", "2026");
+  });
+
+  it("renders top scorers as a disabled placeholder when the provider cannot supply them", async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
+
+    renderPage();
+    await screen.findByText("Liverpool");
+    fireEvent.click(screen.getByRole("button", { name: "Standings" }));
+
+    expect(await screen.findByText("Top scorers")).not.toBeNull();
+    expect(await screen.findByText("Not available from current data provider")).not.toBeNull();
+  });
+
+  it("renders top scorers as real rows only when the provider supports them", async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
+    vi.mocked(getTopScorers).mockResolvedValueOnce({
+      leagueId: "39",
+      season: "2026",
+      availability: "available",
+      items: [{ rank: 1, player: { id: "p9", name: "Haaland" }, team: team("mc", "Man City"), goals: 14, assists: 3 }],
+    });
+
+    renderPage();
+    await screen.findByText("Liverpool");
+    fireEvent.click(screen.getByRole("button", { name: "Standings" }));
+
+    expect(await screen.findByText("Haaland")).not.toBeNull();
+    expect(screen.queryByText("Not available from current data provider")).toBeNull();
+  });
+});
+
+describe("FieldAvailabilityGate", () => {
+  it("renders children, and no placeholder, only when the signal is 'available'", () => {
+    render(
+      <FieldAvailabilityGate label="Shot map" availability="available">
+        <p>real shot map</p>
+      </FieldAvailabilityGate>,
+    );
+    expect(screen.getByText("real shot map")).not.toBeNull();
+    expect(screen.queryByText("Shot map")).toBeNull();
+  });
+
+  it("never renders children for an unavailable state", () => {
+    render(
+      <FieldAvailabilityGate label="Shot map" availability="no_data">
+        <p>should not appear</p>
+      </FieldAvailabilityGate>,
+    );
+    expect(screen.queryByText("should not appear")).toBeNull();
+    expect(screen.getByText("No data for this match yet")).not.toBeNull();
   });
 });

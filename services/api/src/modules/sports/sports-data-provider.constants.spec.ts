@@ -1,5 +1,6 @@
 import {
   DEFAULT_ACTIVE_SPORTS_DATA_PROVIDER,
+  fieldAvailability,
   providerSupports,
   resolveSportsDataProvider,
   SPORTS_DATA_PROVIDER_CAPABILITIES,
@@ -49,6 +50,15 @@ describe('sports data provider capability registry', () => {
     expect(providerSupports('highlightly', 'playerRatings')).toBe(false);
     expect(SPORTS_DATA_PROVIDER_CAPABILITIES.sportmonks.shotMaps.status).toBe('unconfirmed');
     expect(providerSupports('sportmonks', 'shotMaps')).toBe(false);
+  });
+
+  it('fieldAvailability separates "vendor cannot supply it" from "supported, nothing cached yet"', () => {
+    expect(fieldAvailability('highlightly', 'topScorers', false)).toBe('not_available_from_provider');
+    expect(fieldAvailability('highlightly', 'topScorers', true)).toBe('not_available_from_provider');
+    expect(fieldAvailability('sportmonks', 'topScorers', false)).toBe('no_data');
+    expect(fieldAvailability('sportmonks', 'topScorers', true)).toBe('available');
+    // unconfirmed is treated as unavailable, same as unsupported
+    expect(fieldAvailability('sportmonks', 'shotMaps', true)).toBe('not_available_from_provider');
   });
 
   it('records the vendor-specific facts the doc relies on', () => {

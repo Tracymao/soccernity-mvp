@@ -16,4 +16,11 @@ export class SportsStandingsController {
   async getStandings(@Query() query: GetStandingsQueryDto) {
     return this.sportsService.getStandings(query);
   }
+
+  // Lives here rather than on SportsMatchesController because top scorers are a per-league resource,
+  // not a per-match one. Reuses GetStandingsQueryDto's league/season params verbatim.
+  @Get('top-scorers')
+  getTopScorers(@Query() query: GetStandingsQueryDto) {
+    return this.sportsService.getTopScorers(query);
+  }
 }
