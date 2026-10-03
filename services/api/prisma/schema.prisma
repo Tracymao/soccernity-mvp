@@ -694,6 +694,24 @@ model BanterRoom {
   // distinguished them ("scopeType:'topic' is a room category, not a
   // room *having* topics").
   scopeType   String
+  // sprint-3/banter-room-scope-ref (Decision Log #276 item b). The id of
+  // the real entity this room is about, validated server-side against the
+  // table matching scopeType — there is no native polymorphic FK in
+  // Prisma, so the pairing is enforced in BanterService, never trusted
+  // from the client. Only scopeType 'club' can resolve today: the schema
+  // has a ClubPage table but NO League or Country table (ClubPage.league /
+  // ClubPage.country are free-text), so 'league'/'country' rooms keep a
+  // null scopeRef until those entities exist. 'topic' is never entity-
+  // scoped. Deliberately NOT a foreign key (a polymorphic column would
+  // need a per-type relation), so a referenced ClubPage row is not
+  // cascaded on deletion — there is no ClubPage deletion path today.
+  scopeRef    String?
+  // Denormalized snapshot of the referenced entity's display name
+  // (ClubPage.name for scopeType 'club'). Kept in sync by
+  // BanterService.syncScopeNames on every room read: a stale snapshot is
+  // re-resolved from the real entity and written back, so a rename
+  // doesn't leave a permanently wrong label. Null whenever scopeRef is.
+  scopeName   String?
   // The user who created the room. Kept as a bare String (not a User
   // @relation) exactly as Section 3 scaffolded it — making it a real FK
   // would pull room creation into the Decision Log #44 account-deletion

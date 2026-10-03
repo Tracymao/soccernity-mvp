@@ -101,16 +101,36 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
     return { userId: user.id, accessToken: accessToken.token };
   }
 
+  // Defaults to a topic-scoped room: a club-scoped room now REQUIRES a real
+  // club the caller belongs to (Decision Log #276 item b), so the generic
+  // helper no longer defaults to 'club'. Club rooms go through
+  // seedClubFor + an explicit scopeRef.
   async function createRoom(
     token: string,
-    over: Partial<{ name: string; scopeType: string }> = {},
+    over: Partial<{ name: string; scopeType: string; scopeRef: string }> = {},
   ): Promise<{ id: string; memberCount: number }> {
     const res = await request(server())
       .post('/banter-rooms')
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: over.name ?? 'Gooners Only', scopeType: over.scopeType ?? 'club' })
+      .send({
+        name: over.name ?? 'Gooners Only',
+        scopeType: over.scopeType ?? 'topic',
+        ...(over.scopeRef ? { scopeRef: over.scopeRef } : {}),
+      })
       .expect(201);
     return { id: res.body.id as string, memberCount: res.body.memberCount as number };
+  }
+
+  // A real ClubPage with `memberUserId` already a member — the only way a
+  // user becomes affiliated with a club (ClubPage.members, the populated
+  // membership mechanism). Seeded directly so this spec doesn't depend on
+  // the club-join endpoint's own rate-limited setup.
+  async function seedClubFor(memberUserId: string, name: string): Promise<{ id: string; name: string }> {
+    const prisma = getTestPrismaClient();
+    const club = await prisma.clubPage.create({
+      data: { name, memberCount: 1, members: { connect: { id: memberUserId } } },
+    });
+    return { id: club.id, name: club.name };
   }
 
   async function realMemberRowCount(roomId: string): Promise<number> {
@@ -128,17 +148,20 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
   describe('POST /banter-rooms', () => {
     it('creates a room owned by the caller, auto-joins them (memberCount 1, one real BanterRoomMember row), and it shows in "My Bants"', async () => {
       const creator = await createUser('creator');
+      const club = await seedClubFor(creator.userId, 'Arsenal');
 
       const create = await request(server())
         .post('/banter-rooms')
         .set('Authorization', `Bearer ${creator.accessToken}`)
-        .send({ name: 'Gooners Only', scopeType: 'club' })
+        .send({ name: 'Gooners Only', scopeType: 'club', scopeRef: club.id })
         .expect(201);
 
       expect(create.body).toEqual({
         id: expect.any(String),
         name: 'Gooners Only',
         scopeType: 'club',
+        scopeRef: club.id,
+        scopeName: 'Arsenal',
         createdBy: creator.userId,
         memberCount: 1,
         joined: true,
@@ -249,8 +272,9 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
   describe('GET /banter-rooms + /search', () => {
     it('filters by scopeType and by name (case-insensitive), and keyset-paginates alphabetically', async () => {
       const owner = await createUser('list-owner');
-      await createRoom(owner.accessToken, { name: 'Anfield Chat', scopeType: 'club' });
-      await createRoom(owner.accessToken, { name: 'Bragging Rights', scopeType: 'club' });
+      const club = await seedClubFor(owner.userId, 'Liverpool');
+      await createRoom(owner.accessToken, { name: 'Anfield Chat', scopeType: 'club', scopeRef: club.id });
+      await createRoom(owner.accessToken, { name: 'Bragging Rights', scopeType: 'club', scopeRef: club.id });
       await createRoom(owner.accessToken, { name: 'Zonal Marking', scopeType: 'topic' });
       await createRoom(owner.accessToken, { name: 'Premier League Talk', scopeType: 'league' });
 
@@ -296,6 +320,108 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
 
       expect(asOwner.body.items.find((r: { id: string }) => r.id === room.id).joined).toBe(true);
       expect(asStranger.body.items.find((r: { id: string }) => r.id === room.id).joined).toBe(false);
+    });
+  });
+
+  // ---------- Scope target (Decision Log #276 item b) ----------
+
+  describe('scopeRef / scopeName on POST /banter-rooms', () => {
+    it('rejects a club room with no scopeRef (400) and writes nothing', async () => {
+      const creator = await createUser('scope-noref');
+      await request(server())
+        .post('/banter-rooms')
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .send({ name: 'Club Without Club', scopeType: 'club' })
+        .expect(400);
+      expect(await getTestPrismaClient().banterRoom.count()).toBe(0);
+    });
+
+    it('rejects a club scopeRef that is not a real club (404)', async () => {
+      const creator = await createUser('scope-ghost');
+      await request(server())
+        .post('/banter-rooms')
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .send({
+          name: 'Ghost Club Room',
+          scopeType: 'club',
+          scopeRef: '00000000-0000-4000-8000-000000000000',
+        })
+        .expect(404);
+      expect(await getTestPrismaClient().banterRoom.count()).toBe(0);
+    });
+
+    it('rejects a club the caller is not a member of (403), even though the club exists', async () => {
+      const member = await createUser('scope-member');
+      const outsider = await createUser('scope-outsider');
+      const club = await seedClubFor(member.userId, 'Chelsea');
+      await request(server())
+        .post('/banter-rooms')
+        .set('Authorization', `Bearer ${outsider.accessToken}`)
+        .send({ name: 'Blues Only', scopeType: 'club', scopeRef: club.id })
+        .expect(403);
+      expect(await getTestPrismaClient().banterRoom.count()).toBe(0);
+    });
+
+    it.each(['league', 'country', 'topic'])(
+      'rejects a scopeRef on a %s room (400) — mismatched scopeType/scopeRef',
+      async (scopeType) => {
+        const creator = await createUser(`scope-mismatch-${scopeType}`);
+        const club = await seedClubFor(creator.userId, 'Everton');
+        await request(server())
+          .post('/banter-rooms')
+          .set('Authorization', `Bearer ${creator.accessToken}`)
+          .send({ name: `Mismatched ${scopeType}`, scopeType, scopeRef: club.id })
+          .expect(400);
+        expect(await getTestPrismaClient().banterRoom.count()).toBe(0);
+      },
+    );
+
+    it('keeps scopeName in sync: a club rename is visible on the next read and the stored snapshot is corrected', async () => {
+      const creator = await createUser('scope-rename');
+      const club = await seedClubFor(creator.userId, 'Arsenal');
+      const room = await request(server())
+        .post('/banter-rooms')
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .send({ name: 'Gunners', scopeType: 'club', scopeRef: club.id })
+        .expect(201);
+      expect(room.body.scopeName).toBe('Arsenal');
+
+      // Renamed out-of-band — there is no club-rename endpoint.
+      await getTestPrismaClient().clubPage.update({
+        where: { id: club.id },
+        data: { name: 'Arsenal FC' },
+      });
+
+      const detail = await request(server())
+        .get(`/banter-rooms/${room.body.id}`)
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .expect(200);
+      expect(detail.body.scopeName).toBe('Arsenal FC');
+      expect(detail.body.scopeRef).toBe(club.id);
+
+      // The write-back is real, not just a response-time override.
+      const stored = await getTestPrismaClient().banterRoom.findUniqueOrThrow({
+        where: { id: room.body.id },
+      });
+      expect(stored.scopeName).toBe('Arsenal FC');
+
+      // And the list read agrees.
+      const list = await request(server())
+        .get('/banter-rooms?scopeType=club')
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .expect(200);
+      expect(list.body.items[0].scopeName).toBe('Arsenal FC');
+    });
+
+    it('leaves league/country/topic rooms with a null scopeRef and scopeName', async () => {
+      const creator = await createUser('scope-null');
+      const league = await request(server())
+        .post('/banter-rooms')
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .send({ name: 'Premier League Talk', scopeType: 'league' })
+        .expect(201);
+      expect(league.body.scopeRef).toBeNull();
+      expect(league.body.scopeName).toBeNull();
     });
   });
 

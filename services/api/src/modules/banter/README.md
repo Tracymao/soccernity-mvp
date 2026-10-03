@@ -63,6 +63,79 @@ diff is one new model plus two mechanical reverse-relation array fields
 (`BanterRoom.members`, `User.banterRoomMemberships`) and tightened `//`
 comments.
 
+## Scope target (`sprint-3/banter-room-scope-ref`, resolves Decision Log #276 item b)
+
+`BanterRoom` gains two nullable columns (migration
+`20261003083646_banter_room_scope_ref`, additive):
+
+- **`scopeRef`** — the id of the real entity the room is about. Not a
+  foreign key: a polymorphic column can't carry one per `scopeType`, so
+  the pairing is enforced in `BanterService.resolveScopeTarget`.
+- **`scopeName`** — a denormalized snapshot of that entity's display name.
+
+### What can be referenced — and why only clubs
+
+The brief asked for club / league / country. The schema has **one**
+entity table that fits: `ClubPage`. There is **no `League` or `Country`
+table** — `ClubPage.league` and `ClubPage.country` are free text. Inventing
+those tables here would be a schema decision for the founder, so:
+
+| `scopeType` | `scopeRef` | Behaviour |
+| --- | --- | --- |
+| `club` | **required** | Must be a real `ClubPage` (404 otherwise), and the caller must be a member of it (403 otherwise). |
+| `league` | rejected (400) | No League table exists yet. Stored `null`/`null`, as before. |
+| `country` | rejected (400) | No Country table exists yet. Stored `null`/`null`, as before. |
+| `topic` | rejected (400) | Never entity-scoped. |
+
+A `scopeRef` that contradicts its `scopeType` is a **400, not silently
+dropped**: a client that sends one has the wrong model of the room, and
+the response should say so.
+
+**Consequence worth knowing:** a club-scoped room now requires a club. Before
+this PR `scopeType: 'club'` was a free-text category with no club behind it.
+Any client that created club rooms without a `scopeRef` will now get a 400.
+
+### Affiliation
+
+"Affiliated" means a `ClubPage.members` row for the caller — the only
+club-membership mechanism that is actually populated (`POST /clubs/:id/join`).
+`User.clubAffiliationId` is **not** consulted: nothing writes it, so reading
+it would make the check always fail. The brief asked to mirror the check used
+for `BanterRoom.createdBy`, but there is none — `createdBy` is only the
+caller's own id, with no ownership or affiliation test. This is therefore a
+new check, not a copy of an existing one.
+
+### Keeping `scopeName` honest
+
+`scopeName` is written from the live `ClubPage.name` on create. On every
+room read (`listRooms`, `getMyRooms`, `getRoomById`), `syncScopeNames`
+re-resolves the names of the club-scoped rooms in one batched `ClubPage`
+read. Any row whose stored snapshot disagrees is written back with one
+`updateMany` per renamed club, and the fresh name is returned. This was
+chosen over a periodic job: a stale label is only ever *seen* on a read,
+and the write is idempotent and touches only rows that have actually drifted.
+
+Caveats, flagged rather than solved:
+
+- A room nobody reads keeps a stale snapshot until someone does. Nothing
+  reads `scopeName` outside these endpoints, so this is cosmetic, but it is
+  not a guarantee that every stored row is current.
+- There is no club-rename endpoint. Renames happen out-of-band, which is
+  exactly the case the sync exists for.
+- A `ClubPage` with no matching row keeps its stored snapshot. No ClubPage
+  deletion path exists today.
+
+### Serialization
+
+`scopeRef` and `scopeName` are in `ROOM_SELECT`, so they appear on every
+room response. No admin surface selects `BanterRoom`, so there was no other
+serialization to update.
+
+### Still open
+
+- A `League` or `Country` entity table, which would let those two scope
+  types reference something real. A founder/schema decision.
+
 ## Topics (`sprint-3/banter-room-topics`, resolves Decision Log #276)
 
 Decision Log #276 flagged two gaps in the original `sprint-3/banter-rooms-backend`
@@ -262,14 +335,9 @@ Section 4.4 lists: `GET /banter-rooms`, `GET /banter-rooms/:id`, `POST
 
 ### Not built
 
-- **A `scopeRef` / `scopeName` target field on `BanterRoom`** — so a
-  "club-scoped" room can name *which* club/league/country. Section 3
-  gives `BanterRoom` only `{ id, name, scopeType, createdBy, memberCount
-  }`. MVP treats `scopeType` as a bare filter category + free-text
-  `name`, matching the Figma scope-filter-bar-as-categories reading.
-  **Still open — Decision Log #276's other flagged item; the `Topic`
-  half of #276 is now resolved by `sprint-3/banter-room-topics`, this
-  half is not.**
+- ~~A `scopeRef` / `scopeName` target field on `BanterRoom`~~ — **resolved
+  by `sprint-3/banter-room-scope-ref`, see the section below.** Only the
+  club half can resolve today; league/country rooms still have no entity.
 - **A room-delete / room-edit endpoint** — Section 4.4 lists neither;
   not invented.
 - **Room-name moderation / a topic-name moderation queue** — an unbounded
