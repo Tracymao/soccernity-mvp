@@ -1,4 +1,8 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FeedService } from '../feed/feed.service';
@@ -41,6 +45,12 @@ function buildPrismaMock() {
       findUnique: jest.fn().mockResolvedValue(null),
       delete: jest.fn(),
     },
+    // sprint-3/banter-room-scope-ref — club scope resolution + affiliation.
+    clubPage: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     // sprint-3/banter-room-topics (Decision Log #276).
     topic: {
       upsert: jest.fn(),
@@ -81,6 +91,8 @@ function room(overrides: Partial<Record<string, unknown>> = {}) {
     id: 'room-1',
     name: 'Gooners Only',
     scopeType: 'club',
+    scopeRef: 'club-1',
+    scopeName: 'Arsenal',
     createdBy: 'user-1',
     memberCount: 3,
     topics: [],
@@ -102,10 +114,17 @@ describe('BanterService', () => {
       (prisma.banterRoomMember.create as jest.Mock).mockResolvedValue({});
 
       const service = new BanterService(prisma, buildFeedMock());
-      const result = await service.createRoom('user-1', { name: 'Gooners Only', scopeType: 'club' });
+      const result = await service.createRoom('user-1', { name: 'Gooners Only', scopeType: 'topic' });
 
       expect(prisma.banterRoom.create).toHaveBeenCalledWith({
-        data: { name: 'Gooners Only', scopeType: 'club', createdBy: 'user-1', memberCount: 1 },
+        data: {
+          name: 'Gooners Only',
+          scopeType: 'topic',
+          scopeRef: null,
+          scopeName: null,
+          createdBy: 'user-1',
+          memberCount: 1,
+        },
         select: expect.objectContaining({ id: true, name: true, scopeType: true, memberCount: true }),
       });
       expect(prisma.banterRoomMember.create).toHaveBeenCalledWith({
@@ -114,6 +133,160 @@ describe('BanterService', () => {
       expect(result).toEqual({ ...room({ id: 'room-9', memberCount: 1 }), joined: true });
       // Both writes went through the interactive transaction.
       expect((prisma as unknown as { $transaction: jest.Mock }).$transaction).toHaveBeenCalled();
+    });
+  });
+
+  // Decision Log #276 item (b) — sprint-3/banter-room-scope-ref.
+  describe('createRoom scope target (scopeRef / scopeName)', () => {
+    function clubMock(prisma: PrismaService, opts: { club: boolean; affiliated: boolean }) {
+      (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue(
+        opts.club ? { id: 'club-1', name: 'Arsenal' } : null,
+      );
+      (prisma.clubPage.findFirst as jest.Mock).mockResolvedValue(
+        opts.affiliated ? { id: 'club-1' } : null,
+      );
+    }
+
+    it('accepts a club room whose scopeRef is a club the caller is a member of, storing the live club name as scopeName', async () => {
+      const prisma = buildPrismaMock();
+      clubMock(prisma, { club: true, affiliated: true });
+      (prisma.banterRoom.create as jest.Mock).mockResolvedValue(
+        room({ id: 'room-9', scopeRef: 'club-1', scopeName: 'Arsenal' }),
+      );
+      (prisma.banterRoomMember.create as jest.Mock).mockResolvedValue({});
+
+      const service = new BanterService(prisma, buildFeedMock());
+      await service.createRoom('user-1', { name: 'Gooners', scopeType: 'club', scopeRef: 'club-1' });
+
+      // Affiliation is checked through ClubPage.members (the populated
+      // membership mechanism), scoped to the calling user.
+      expect(prisma.clubPage.findFirst).toHaveBeenCalledWith({
+        where: { id: 'club-1', members: { some: { id: 'user-1' } } },
+        select: { id: true },
+      });
+      expect(prisma.banterRoom.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ scopeRef: 'club-1', scopeName: 'Arsenal' }),
+        }),
+      );
+    });
+
+    it('rejects a club room with no scopeRef (400) before any write', async () => {
+      const prisma = buildPrismaMock();
+      const service = new BanterService(prisma, buildFeedMock());
+      await expect(
+        service.createRoom('user-1', { name: 'Gooners', scopeType: 'club' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.banterRoom.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a club scopeRef that is not a real ClubPage (404) before any write', async () => {
+      const prisma = buildPrismaMock();
+      clubMock(prisma, { club: false, affiliated: false });
+      const service = new BanterService(prisma, buildFeedMock());
+      await expect(
+        service.createRoom('user-1', { name: 'Gooners', scopeType: 'club', scopeRef: 'nope' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.banterRoom.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a club the caller is NOT affiliated with (403), never storing the room', async () => {
+      const prisma = buildPrismaMock();
+      clubMock(prisma, { club: true, affiliated: false });
+      const service = new BanterService(prisma, buildFeedMock());
+      await expect(
+        service.createRoom('user-1', { name: 'Gooners', scopeType: 'club', scopeRef: 'club-1' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.banterRoom.create).not.toHaveBeenCalled();
+      expect(prisma.banterRoomMember.create).not.toHaveBeenCalled();
+    });
+
+    it.each(['league', 'country', 'topic'] as const)('rejects a scopeRef on a %s room (400) — mismatched scopeType/scopeRef', async (scopeType) => {
+      const prisma = buildPrismaMock();
+      const service = new BanterService(prisma, buildFeedMock());
+      await expect(
+        service.createRoom('user-1', { name: 'Derby', scopeType, scopeRef: 'club-1' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.banterRoom.create).not.toHaveBeenCalled();
+      // The rejection happens before any entity lookup — there is no
+      // entity table to look in for these scope types.
+      expect(prisma.clubPage.findUnique).not.toHaveBeenCalled();
+    });
+
+    it.each(['league', 'country', 'topic'] as const)(
+      'stores scopeRef/scopeName as null for a %s room with no scopeRef',
+      async (scopeType) => {
+        const prisma = buildPrismaMock();
+        (prisma.banterRoom.create as jest.Mock).mockResolvedValue(room({ id: 'room-9' }));
+        (prisma.banterRoomMember.create as jest.Mock).mockResolvedValue({});
+        const service = new BanterService(prisma, buildFeedMock());
+        await service.createRoom('user-1', { name: 'Open Room', scopeType });
+        expect(prisma.banterRoom.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ scopeRef: null, scopeName: null }),
+          }),
+        );
+      },
+    );
+  });
+
+  // The scopeName-stays-in-sync requirement: a club rename must be visible
+  // on the next read, not frozen at the creation-time snapshot.
+  describe('scopeName sync on read', () => {
+    it('re-resolves a stale snapshot after the club is renamed, writes it back, and returns the fresh name', async () => {
+      const prisma = buildPrismaMock();
+      const service = new BanterService(prisma, buildFeedMock());
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue(
+        room({ id: 'room-1', scopeType: 'club', scopeRef: 'club-1', scopeName: 'Arsenal' }),
+      );
+      (prisma.banterRoomMember.findUnique as jest.Mock).mockResolvedValue(null);
+
+      // Before the rename: live name matches the snapshot — no write.
+      (prisma.clubPage.findMany as jest.Mock).mockResolvedValueOnce([{ id: 'club-1', name: 'Arsenal' }]);
+      const before = await service.getRoomById('room-1', 'viewer-1');
+      expect(before.scopeName).toBe('Arsenal');
+      expect(prisma.banterRoom.updateMany).not.toHaveBeenCalled();
+
+      // The club is renamed out-of-band (no club rename endpoint exists).
+      (prisma.clubPage.findMany as jest.Mock).mockResolvedValueOnce([
+        { id: 'club-1', name: 'Arsenal FC' },
+      ]);
+      const after = await service.getRoomById('room-1', 'viewer-1');
+      expect(after.scopeName).toBe('Arsenal FC');
+      expect(prisma.banterRoom.updateMany).toHaveBeenCalledWith({
+        where: {
+          scopeType: 'club',
+          scopeRef: 'club-1',
+          OR: [{ scopeName: null }, { scopeName: { not: 'Arsenal FC' } }],
+        },
+        data: { scopeName: 'Arsenal FC' },
+      });
+    });
+
+    it('re-syncs stale names on list reads too, one write per renamed club', async () => {
+      const prisma = buildPrismaMock();
+      const service = new BanterService(prisma, buildFeedMock());
+      (prisma.banterRoom.findMany as jest.Mock).mockResolvedValue([
+        room({ id: 'room-1', name: 'A', scopeType: 'club', scopeRef: 'club-1', scopeName: 'Old' }),
+        room({ id: 'room-2', name: 'B', scopeType: 'club', scopeRef: 'club-1', scopeName: 'Old' }),
+        room({ id: 'room-3', name: 'C', scopeType: 'topic', scopeRef: null, scopeName: null }),
+      ]);
+      (prisma.clubPage.findMany as jest.Mock).mockResolvedValue([{ id: 'club-1', name: 'New' }]);
+
+      const page = await service.listRooms({}, 'viewer-1');
+      expect(page.items.map((r) => r.scopeName)).toEqual(['New', 'New', null]);
+      // Two rooms share one club: a single updateMany, not one per room.
+      expect(prisma.banterRoom.updateMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('issues no ClubPage lookup at all for a page with no club-scoped rooms', async () => {
+      const prisma = buildPrismaMock();
+      const service = new BanterService(prisma, buildFeedMock());
+      (prisma.banterRoom.findMany as jest.Mock).mockResolvedValue([
+        room({ id: 'room-3', scopeType: 'topic', scopeRef: null, scopeName: null }),
+      ]);
+      await service.listRooms({}, 'viewer-1');
+      expect(prisma.clubPage.findMany).not.toHaveBeenCalled();
     });
   });
 

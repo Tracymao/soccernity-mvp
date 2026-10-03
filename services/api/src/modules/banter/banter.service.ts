@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FeedQueryDto } from '../feed/dto/feed-query.dto';
@@ -8,6 +13,7 @@ import {
   BANTER_ROOMS_MAX_PAGE_SIZE,
   BANTER_TOPICS_DEFAULT_PAGE_SIZE,
   BANTER_TOPICS_MAX_PAGE_SIZE,
+  BanterRoomScopeType,
 } from './banter.constants';
 import {
   decodeBanterRoomCursor,
@@ -61,6 +67,11 @@ const ROOM_SELECT = {
   id: true,
   name: true,
   scopeType: true,
+  // sprint-3/banter-room-scope-ref (Decision Log #276 item b). Exposed on
+  // every room read — public and the only room serialization in this
+  // codebase that carries scopeType (no admin surface selects BanterRoom).
+  scopeRef: true,
+  scopeName: true,
   createdBy: true,
   memberCount: true,
   topics: { select: { topic: { select: TOPIC_SELECT } } },
@@ -136,9 +147,20 @@ export class BanterService {
   // misleadingly 0 for an active room. The alternative (creator must
   // then explicitly join their own room) was considered and not chosen.
   async createRoom(userId: string, dto: CreateBanterRoomDto): Promise<BanterRoomView> {
+    // Validated BEFORE the transaction: a bad scope target must never
+    // leave a half-made room behind, and the affiliation lookups are
+    // plain reads that don't belong inside the write transaction.
+    const scope = await this.resolveScopeTarget(userId, dto.scopeType, dto.scopeRef);
     return this.prisma.$transaction(async (tx) => {
       const room = await tx.banterRoom.create({
-        data: { name: dto.name, scopeType: dto.scopeType, createdBy: userId, memberCount: 1 },
+        data: {
+          name: dto.name,
+          scopeType: dto.scopeType,
+          scopeRef: scope.scopeRef,
+          scopeName: scope.scopeName,
+          createdBy: userId,
+          memberCount: 1,
+        },
         select: ROOM_SELECT,
       });
       await tx.banterRoomMember.create({ data: { userId, banterRoomId: room.id } });
@@ -146,6 +168,122 @@ export class BanterService {
       // POST /banter-rooms/:id/topics is a separate, later call.
       return { ...toRoomSummary(room), joined: true };
     });
+  }
+
+  // Decision Log #276 item (b) — validates a room's scope target on
+  // creation and returns the (scopeRef, scopeName) pair to store. The
+  // scopeType/scopeRef pairing and the caller's affiliation are both
+  // decided HERE, never trusted from the client.
+  //
+  //   club     -> scopeRef REQUIRED. Must be a real ClubPage (404 if not),
+  //               and the caller must be a member of it (403 if not).
+  //               Affiliation is ClubPage.members — the only populated
+  //               club-membership mechanism (see clubs/README.md).
+  //               User.clubAffiliationId is deliberately NOT consulted:
+  //               nothing ever writes it.
+  //   league   -> scopeRef rejected. There is no League table; a
+  //   country     league/country room is free-text, same as before.
+  //   topic    -> scopeRef rejected. Never entity-scoped.
+  //
+  // Rejecting (rather than silently ignoring) a scopeRef that doesn't fit
+  // the scopeType is deliberate: a client that sends one has a wrong
+  // mental model of the room, and a 400 says so.
+  private async resolveScopeTarget(
+    userId: string,
+    scopeType: BanterRoomScopeType,
+    scopeRef: string | undefined,
+  ): Promise<{ scopeRef: string | null; scopeName: string | null }> {
+    if (scopeType === 'club') {
+      if (!scopeRef) {
+        throw new BadRequestException('A club-scoped Banter Room must name its club (scopeRef).');
+      }
+      const club = await this.prisma.clubPage.findUnique({
+        where: { id: scopeRef },
+        select: { id: true, name: true },
+      });
+      if (!club) {
+        throw new NotFoundException('Club not found');
+      }
+      const affiliated = await this.prisma.clubPage.findFirst({
+        where: { id: club.id, members: { some: { id: userId } } },
+        select: { id: true },
+      });
+      if (!affiliated) {
+        throw new ForbiddenException(
+          'You can only create a club-scoped Banter Room for a club you are a member of',
+        );
+      }
+      return { scopeRef: club.id, scopeName: club.name };
+    }
+
+    if (scopeRef) {
+      const reason =
+        scopeType === 'topic'
+          ? 'topic-scoped rooms are never tied to a specific entity'
+          : `${scopeType}-scoped rooms cannot reference a specific entity yet (there is no ${scopeType} table)`;
+      throw new BadRequestException(`scopeRef is not allowed here: ${reason}.`);
+    }
+    return { scopeRef: null, scopeName: null };
+  }
+
+  // Keeps the denormalized BanterRoom.scopeName honest on every read.
+  // Re-resolves each club-scoped room's live ClubPage.name in ONE batched
+  // read, and for any room whose stored snapshot is stale, writes the
+  // fresh name back (one updateMany per renamed club, not per room) and
+  // returns the fresh value. Chosen over a periodic job because reads are
+  // the only place a stale label is ever seen, and the write is idempotent
+  // and touches only rows that actually drifted. A ClubPage with no
+  // matching row keeps its stored snapshot (no ClubPage deletion path
+  // exists today; see the schema comment on BanterRoom.scopeRef).
+  private async syncScopeNames<
+    T extends { scopeType: string; scopeRef: string | null; scopeName: string | null },
+  >(rows: T[]): Promise<T[]> {
+    const clubIds = [
+      ...new Set(
+        rows.filter((r) => r.scopeType === 'club' && r.scopeRef).map((r) => r.scopeRef as string),
+      ),
+    ];
+    if (clubIds.length === 0) {
+      return rows;
+    }
+    const clubs = await this.prisma.clubPage.findMany({
+      where: { id: { in: clubIds } },
+      select: { id: true, name: true },
+    });
+    const liveName = new Map(clubs.map((c) => [c.id, c.name]));
+
+    // Only the clubs whose stored snapshot actually disagrees with the
+    // live name are written back.
+    const staleClubIds = new Set(
+      rows
+        .filter(
+          (r) =>
+            r.scopeType === 'club' &&
+            r.scopeRef !== null &&
+            liveName.has(r.scopeRef) &&
+            r.scopeName !== liveName.get(r.scopeRef),
+        )
+        .map((r) => r.scopeRef as string),
+    );
+    for (const clubId of staleClubIds) {
+      const name = liveName.get(clubId) as string;
+      await this.prisma.banterRoom.updateMany({
+        where: {
+          scopeType: 'club',
+          scopeRef: clubId,
+          // `scopeName: { not: name }` alone would skip NULL snapshots
+          // (SQL NULL <> x is NULL), so the null case is spelled out.
+          OR: [{ scopeName: null }, { scopeName: { not: name } }],
+        },
+        data: { scopeName: name },
+      });
+    }
+
+    return rows.map((r) =>
+      r.scopeType === 'club' && r.scopeRef && liveName.has(r.scopeRef)
+        ? { ...r, scopeName: liveName.get(r.scopeRef) as string }
+        : r,
+    );
   }
 
   // GET /banter-rooms  and  GET /banter-rooms/search?q=
@@ -191,11 +329,12 @@ export class BanterService {
     const nextCursor =
       hasMore && last ? encodeBanterRoomCursor({ name: last.name, id: last.id }) : null;
 
+    const synced = await this.syncScopeNames(trimmed);
     const joinedIds = await this.membershipSubset(
       userId,
-      trimmed.map((r) => r.id),
+      synced.map((r) => r.id),
     );
-    const items = trimmed.map((room) => ({ ...toRoomSummary(room), joined: joinedIds.has(room.id) }));
+    const items = synced.map((room) => ({ ...toRoomSummary(room), joined: joinedIds.has(room.id) }));
 
     return { items, nextCursor };
   }
@@ -241,7 +380,8 @@ export class BanterService {
     // Every room in this list is, by definition, one the caller has
     // joined — so `joined` is a hard `true`, not a lookup. Same shape as
     // listRooms so the frontend type is uniform.
-    const items = trimmed.map((m) => ({ ...toRoomSummary(m.banterRoom), joined: true }));
+    const synced = await this.syncScopeNames(trimmed.map((m) => m.banterRoom));
+    const items = synced.map((room) => ({ ...toRoomSummary(room), joined: true }));
 
     return { items, nextCursor };
   }
@@ -274,11 +414,12 @@ export class BanterService {
     if (!room) {
       throw new NotFoundException('Banter Room not found');
     }
+    const [synced] = await this.syncScopeNames([room]);
     const membership = await this.prisma.banterRoomMember.findUnique({
       where: { userId_banterRoomId: { userId, banterRoomId: roomId } },
       select: { id: true },
     });
-    return { ...toRoomSummary(room), joined: membership !== null };
+    return { ...toRoomSummary(synced), joined: membership !== null };
   }
 
   // Shared existence check — mirrors ClubsService.assertClubExists /
