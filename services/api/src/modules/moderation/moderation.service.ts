@@ -23,6 +23,7 @@ import {
   DEFAULT_REPORT_SEVERITY,
   MODERATION_DEFAULT_PAGE_SIZE,
   MODERATION_MAX_PAGE_SIZE,
+  ReportAction,
 } from './moderation.constants';
 
 export interface ReportListPage {
@@ -188,6 +189,73 @@ export class ModerationService {
       throw new NotFoundException('Report not found');
     }
     return report;
+  }
+
+  // -------------------------------------------------------------------
+  // feat/moderation-outcome-appeal-emails — outcome and appeal-decision
+  // emails. Both are fire-and-forget after the state change has committed
+  // (the same "email delivery must never block or fail the action" rule
+  // createPublicReport already follows), and both catch everything inside
+  // the helper, so a lookup or send failure can never surface as a 500 on
+  // the admin action that triggered it.
+  // -------------------------------------------------------------------
+
+  // The address to send a moderation email to, or null if there is none
+  // to send to. A deleted account (accountStatus 'deleted', Decision Log
+  // #341) has an anonymised placeholder address that must never receive
+  // mail, so it resolves to null the same way a missing user does.
+  private async deliverableEmailForUser(userId: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, accountStatus: true },
+    });
+    if (!user || user.accountStatus === 'deleted' || !user.email) {
+      return null;
+    }
+    return user.email;
+  }
+
+  // To the REPORTER, once their report has been actioned. A logged-in
+  // reporter's address comes from their User row; a public reporter's
+  // comes from Report.reporterContactEmail (reporterId is null for them).
+  private async notifyReporterOfOutcome(report: Report, action: ReportAction): Promise<void> {
+    try {
+      const to = report.reporterId
+        ? await this.deliverableEmailForUser(report.reporterId)
+        : report.reporterContactEmail;
+      if (!to) {
+        return;
+      }
+      await this.emailService.sendReportActionedEmail(to, action);
+    } catch (err) {
+      this.logger.warn(
+        `Failed to queue report-outcome email for report ${report.id}: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  // To the APPELLANT — the reported party whose appeal was just decided.
+  // The appellant is always the reported user (appealReport enforces it),
+  // so reportedUserId is the right address to resolve.
+  private async notifyAppellantOfDecision(
+    reportId: string,
+    reportedUserId: string | null,
+    decision: string,
+  ): Promise<void> {
+    try {
+      if (!reportedUserId) {
+        return;
+      }
+      const to = await this.deliverableEmailForUser(reportedUserId);
+      if (!to) {
+        return;
+      }
+      await this.emailService.sendAppealDecisionEmail(to, decision);
+    } catch (err) {
+      this.logger.warn(
+        `Failed to queue appeal-decision email for report ${reportId}: ${(err as Error).message}`,
+      );
+    }
   }
 
   // -------------------------------------------------------------------
@@ -399,6 +467,8 @@ export class ModerationService {
       dto.action,
     );
 
+    void this.notifyReporterOfOutcome(report, dto.action);
+
     return updated;
   }
 
@@ -464,6 +534,8 @@ export class ModerationService {
       reportId,
       dto.decision,
     );
+
+    void this.notifyAppellantOfDecision(reportId, reportedUserId, dto.decision);
 
     return updated;
   }

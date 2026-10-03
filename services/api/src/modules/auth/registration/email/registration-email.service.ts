@@ -22,7 +22,9 @@ export type RegistrationEmailTemplate =
   | 'guardian-consent-reminder'
   | 'guardian-consent-expired'
   | 'guardian-minor-turned-18'
-  | 'public-report-acknowledgement';
+  | 'public-report-acknowledgement'
+  | 'report-actioned'
+  | 'appeal-decision';
 
 export interface OutboundRegistrationEmail {
   to: string;
@@ -211,6 +213,51 @@ export class RegistrationEmailService {
     });
   }
 
+  // ---------------------------------------------------------------
+  // feat/moderation-outcome-appeal-emails
+  // ---------------------------------------------------------------
+
+  // To the REPORTER (a logged-in user or a public, non-authenticated
+  // contact) once an admin/moderator has actioned their report. Only the
+  // outcome and a short, generic reason are shared. Deliberately names
+  // nothing about the reported party: the reporter is told what was done,
+  // not who it was done to or what the evidence was, so this email can't
+  // be used to learn about another account's moderation history.
+  //
+  // `action` is ModerationService's own ReportAction value. Mapped here
+  // rather than in ModerationService so this email service owns all of
+  // its own copy, and an unknown value fails loudly before any send.
+  async sendReportActionedEmail(to: string, action: string): Promise<void> {
+    const copy = reportOutcomeCopy(action);
+    await this.dispatch({
+      to,
+      subject: 'An update on your Soccernity report',
+      template: 'report-actioned',
+      data: { outcomeLabel: copy.label, outcomeReason: copy.reason },
+    });
+  }
+
+  // To the APPELLANT (the reported party who appealed) once a second
+  // reviewer has decided the appeal. `decision` is ModerationService's own
+  // AppealDecision value ('upheld' | 'overturned').
+  //
+  // The copy for 'overturned' is worded to what the system actually does,
+  // not what a reader might assume: the report is reopened for a fresh
+  // decision. It does NOT claim any enforced reversal, because
+  // Report.actionTaken is a recorded decision, not an enforced one (see
+  // moderation/README.md's disclosed-limitation section).
+  async sendAppealDecisionEmail(to: string, decision: string): Promise<void> {
+    if (decision !== 'upheld' && decision !== 'overturned') {
+      throw new Error(`Unknown appeal decision for email: ${decision}`);
+    }
+    await this.dispatch({
+      to,
+      subject: 'Your appeal has been reviewed',
+      template: 'appeal-decision',
+      data: { decision },
+    });
+  }
+
   private async dispatch(email: OutboundRegistrationEmail): Promise<void> {
     if (!this.isConfigured) {
       this.logger.log(
@@ -352,6 +399,41 @@ function renderTextBody(template: RegistrationEmailTemplate, data: Record<string
         `We've received your report and a moderator will review it. We won't be able to share the outcome or a timeline, but we take every report seriously.\n\n` +
         `If you have more information to add, you can reply to this email.`
       );
+    case 'report-actioned':
+      return (
+        `Thank you for letting us know.
+
+` +
+        `We have reviewed your report.
+
+` +
+        `Outcome: ${data.outcomeLabel}
+
+` +
+        `${data.outcomeReason}
+
+` +
+        `For privacy reasons we can't share further details about any action taken on another account.`
+      );
+    case 'appeal-decision':
+      return data.decision === 'overturned'
+        ? `Hi,
+
+` +
+            `We have reviewed your appeal and overturned the original decision on this report.
+
+` +
+            `The report has been returned to our review queue so that it can be decided again.
+
+` +
+            `If you have more information to add, you can reply to this email.`
+        : `Hi,
+
+` +
+            `We have reviewed your appeal. The original decision on this report has been upheld, so no change has been made.
+
+` +
+            `If you have more information to add, you can reply to this email.`;
     default:
       throw new Error(`Unknown registration email template: ${template as string}`);
   }
@@ -417,7 +499,56 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
         `<p>We've received your report and a moderator will review it. We won't be able to share the outcome or a timeline, but we take every report seriously.</p>` +
         `<p>If you have more information to add, you can reply to this email.</p>`
       );
+    case 'report-actioned':
+      return (
+        `<p>Thank you for letting us know.</p>` +
+        `<p>We have reviewed your report.</p>` +
+        `<p><strong>Outcome:</strong> ${data.outcomeLabel}</p>` +
+        `<p>${data.outcomeReason}</p>` +
+        `<p>For privacy reasons we can't share further details about any action taken on another account.</p>`
+      );
+    case 'appeal-decision':
+      return data.decision === 'overturned'
+        ? `<p>Hi,</p>` +
+            `<p>We have reviewed your appeal and overturned the original decision on this report.</p>` +
+            `<p>The report has been returned to our review queue so that it can be decided again.</p>` +
+            `<p>If you have more information to add, you can reply to this email.</p>`
+        : `<p>Hi,</p>` +
+            `<p>We have reviewed your appeal. The original decision on this report has been upheld, so no change has been made.</p>` +
+            `<p>If you have more information to add, you can reply to this email.</p>`;
     default:
       throw new Error(`Unknown registration email template: ${template as string}`);
+  }
+}
+
+// feat/moderation-outcome-appeal-emails — plain, functional copy for the
+// reporter-facing outcome email, keyed by ModerationService's ReportAction
+// values. Unknown actions throw here, before anything is queued. Copy is
+// functional placeholder wording pending safeguarding review, like the
+// rest of this file's bodies.
+function reportOutcomeCopy(action: string): { label: string; reason: string } {
+  switch (action) {
+    case 'content_removed':
+      return {
+        label: 'Content removed',
+        reason: "The content you reported was found to break Soccernity's community guidelines and has been removed.",
+      };
+    case 'warning_issued':
+      return {
+        label: 'Warning issued',
+        reason: "The account involved was given a warning for breaking Soccernity's community guidelines.",
+      };
+    case 'user_suspended':
+      return {
+        label: 'Account suspended',
+        reason: "The account involved was suspended for breaking Soccernity's community guidelines.",
+      };
+    case 'dismissed':
+      return {
+        label: 'No action taken',
+        reason: "We reviewed your report and found it did not breach Soccernity's community guidelines, so no action was taken.",
+      };
+    default:
+      throw new Error(`Unknown report action for outcome email: ${action}`);
   }
 }

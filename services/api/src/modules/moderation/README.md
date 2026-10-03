@@ -617,6 +617,34 @@ module that writes to it).
 
 ---
 
+## Outcome and appeal-decision emails (feat/moderation-outcome-appeal-emails)
+
+Resolves Decision Log #143. Two plain, functional templates on the existing
+`RegistrationEmailService` (no new email abstraction):
+
+- **`report-actioned`** — to the reporter, when `actionReport` commits. A logged-in
+  reporter's address comes from their `User` row; a public reporter's comes from
+  `Report.reporterContactEmail`. Shares only the outcome label and a short, generic
+  reason. Never names the reported party or the evidence, so it can't be used to learn
+  about another account's moderation history.
+- **`appeal-decision`** — to the appellant (the reported user), when `decideAppeal`
+  commits. `overturned` is worded as "the report has been returned to our review
+  queue" and deliberately does NOT claim an enforced reversal, because `actionTaken`
+  is a recorded decision, not an enforced one (see the disclosed limitation above).
+
+Both are fire-and-forget after the state change commits (`void` + an internal
+try/catch), so a lookup or Postmark failure can never fail the admin action. A
+deleted account (`accountStatus: 'deleted'`, Decision Log #341) is never emailed,
+since its address is an anonymised placeholder. A missing contact address, or a
+reported user who no longer resolves, sends nothing and is not an error.
+
+**Not built, flagged:** the copy is functional placeholder wording, not
+counsel-reviewed. The reported user is not emailed a report outcome, only the
+appeal decision; Section 8.4's notify-both-parties rule is otherwise still covered
+by the existing in-app `moderation_decision` notifications only.
+
+---
+
 ## Files
 
 ```
