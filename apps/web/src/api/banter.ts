@@ -57,9 +57,13 @@ export interface BanterRoomPage {
   nextCursor: string | null;
 }
 
+// scopeRef is required for a "club" room (the club the caller is a member of)
+// and rejected for every other scopeType -- only send it when scopeType is
+// "club".
 export interface CreateBanterRoomRequest {
   name: string;
   scopeType: BanterRoomScopeType;
+  scopeRef?: string;
 }
 
 // POST/DELETE /banter-rooms/:id/join.

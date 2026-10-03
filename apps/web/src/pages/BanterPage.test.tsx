@@ -25,6 +25,11 @@ vi.mock("../api/banter", async () => {
   };
 });
 
+vi.mock("../api/clubs", async () => {
+  const actual = await vi.importActual<typeof import("../api/clubs")>("../api/clubs");
+  return { ...actual, listJoinedClubs: vi.fn() };
+});
+
 vi.mock("../api/users", async () => {
   const actual = await vi.importActual<typeof import("../api/users")>("../api/users");
   return { ...actual, getUser: vi.fn() };
@@ -33,6 +38,8 @@ vi.mock("../api/users", async () => {
 import { BanterApiError } from "../api/banter";
 import { listRooms, getMyRooms, createRoom, joinRoom, leaveRoom } from "../api/banter";
 import { getUser } from "../api/users";
+import { listJoinedClubs } from "../api/clubs";
+import type { ClubSummary } from "../api/clubs";
 
 function base64UrlEncode(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -70,6 +77,19 @@ function room(overrides: Partial<BanterRoom> = {}): BanterRoom {
   };
 }
 
+function club(overrides: Partial<ClubSummary> = {}): ClubSummary {
+  return {
+    id: "club-1",
+    name: "Chelsea FC",
+    league: "Premier League",
+    country: "England",
+    logoUrl: null,
+    memberCount: 100,
+    joined: true,
+    ...overrides,
+  };
+}
+
 function page(items: BanterRoom[], nextCursor: string | null = null): BanterRoomPage {
   return { items, nextCursor };
 }
@@ -84,6 +104,8 @@ beforeEach(() => {
   vi.mocked(createRoom).mockReset();
   vi.mocked(joinRoom).mockReset();
   vi.mocked(leaveRoom).mockReset();
+  vi.mocked(listJoinedClubs).mockReset();
+  vi.mocked(listJoinedClubs).mockResolvedValue([]);
 });
 
 function renderPage() {
@@ -220,5 +242,140 @@ describe("BanterPage", () => {
     renderPage();
     expect(await screen.findByText("This isn't available for your account yet.")).not.toBeNull();
     expect(screen.queryByText(/couldn.t load rooms/i)).toBeNull();
+  });
+  describe("club-scoped room creation", () => {
+    function openCreateForm() {
+      fireEvent.click(screen.getByRole("button", { name: "Create a room" }));
+    }
+
+    function scopeSelect(): HTMLSelectElement {
+      return screen.getByLabelText("Scope") as HTMLSelectElement;
+    }
+
+    function clubOption(): HTMLOptionElement {
+      return screen.getByRole("option", { name: "Club" }) as HTMLOptionElement;
+    }
+
+    beforeEach(() => {
+      window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+      vi.mocked(getUser).mockResolvedValue(profile());
+      vi.mocked(listRooms).mockResolvedValue(page([]));
+    });
+
+    it("creates a club room with scopeRef when the caller has a real club membership", async () => {
+      vi.mocked(listJoinedClubs).mockResolvedValueOnce([club({ id: "club-1", name: "Chelsea FC" })]);
+      vi.mocked(createRoom).mockResolvedValueOnce(room({ id: "new-room", scopeType: "club" }));
+
+      renderPage();
+      await screen.findByText(/no rooms match that search/i);
+      openCreateForm();
+
+      await waitFor(() => expect(clubOption().disabled).toBe(false));
+      fireEvent.change(scopeSelect(), { target: { value: "club" } });
+      fireEvent.change(screen.getByLabelText(/room name/i), { target: { value: "Stamford Bridge Talk" } });
+      expect((screen.getByLabelText("Club") as HTMLSelectElement).value).toBe("club-1");
+      fireEvent.click(screen.getByRole("button", { name: "Create room" }));
+
+      await waitFor(() =>
+        expect(createRoom).toHaveBeenCalledWith(expect.any(String), {
+          name: "Stamford Bridge Talk",
+          scopeType: "club",
+          scopeRef: "club-1",
+        }),
+      );
+    });
+
+    it("disables the Club option and explains why when the caller has no club memberships", async () => {
+      vi.mocked(listJoinedClubs).mockResolvedValueOnce([]);
+
+      renderPage();
+      await screen.findByText(/no rooms match that search/i);
+      openCreateForm();
+
+      expect(await screen.findByText(/join a club to create one/i)).not.toBeNull();
+      expect(clubOption().disabled).toBe(true);
+      expect(screen.queryByLabelText("Club")).toBeNull();
+    });
+
+    it("keeps the Club option disabled while memberships are still loading", async () => {
+      vi.mocked(listJoinedClubs).mockReturnValueOnce(new Promise<ClubSummary[]>(() => {}));
+
+      renderPage();
+      await screen.findByText(/no rooms match that search/i);
+      openCreateForm();
+
+      expect(await screen.findByText(/checking your club memberships/i)).not.toBeNull();
+      expect(clubOption().disabled).toBe(true);
+    });
+
+    it("disables the Club option and offers a retry when the membership lookup fails", async () => {
+      vi.mocked(listJoinedClubs).mockRejectedValueOnce(new Error("network down"));
+
+      renderPage();
+      await screen.findByText(/no rooms match that search/i);
+      openCreateForm();
+
+      expect(await screen.findByText(/couldn.t check your club memberships/i)).not.toBeNull();
+      expect(clubOption().disabled).toBe(true);
+
+      vi.mocked(listJoinedClubs).mockResolvedValueOnce([club()]);
+      fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+      await waitFor(() => expect(clubOption().disabled).toBe(false));
+    });
+
+    it("never sends scopeRef for a non-club scope", async () => {
+      vi.mocked(listJoinedClubs).mockResolvedValueOnce([club()]);
+      vi.mocked(createRoom).mockResolvedValueOnce(room({ id: "new-room", scopeType: "league" }));
+
+      renderPage();
+      await screen.findByText(/no rooms match that search/i);
+      openCreateForm();
+      await waitFor(() => expect(clubOption().disabled).toBe(false));
+
+      fireEvent.change(scopeSelect(), { target: { value: "league" } });
+      fireEvent.change(screen.getByLabelText(/room name/i), { target: { value: "NPFL Talk" } });
+      fireEvent.click(screen.getByRole("button", { name: "Create room" }));
+
+      await waitFor(() =>
+        expect(createRoom).toHaveBeenCalledWith(expect.any(String), { name: "NPFL Talk", scopeType: "league" }),
+      );
+    });
+
+    it("shows the server's own message legibly when a club room is rejected, and re-reads memberships", async () => {
+      vi.mocked(listJoinedClubs).mockResolvedValueOnce([club()]);
+      vi.mocked(createRoom).mockRejectedValueOnce(
+        new BanterApiError("You can only create a club-scoped Banter Room for a club you are a member of", {
+          status: 403,
+        }),
+      );
+
+      renderPage();
+      await screen.findByText(/no rooms match that search/i);
+      openCreateForm();
+      await waitFor(() => expect(clubOption().disabled).toBe(false));
+
+      fireEvent.change(scopeSelect(), { target: { value: "club" } });
+      fireEvent.change(screen.getByLabelText(/room name/i), { target: { value: "Ghost Club Room" } });
+      fireEvent.click(screen.getByRole("button", { name: "Create room" }));
+
+      const alert = await screen.findByRole("alert");
+      expect(alert.textContent).toContain("You can only create a club-scoped Banter Room");
+      await waitFor(() => expect(listJoinedClubs).toHaveBeenCalledTimes(2));
+    });
+
+    it("blocks submit with an explanation instead of sending a club room without a club", async () => {
+      vi.mocked(listJoinedClubs).mockResolvedValueOnce([club()]);
+
+      renderPage();
+      await screen.findByText(/no rooms match that search/i);
+      openCreateForm();
+      await waitFor(() => expect(clubOption().disabled).toBe(false));
+
+      fireEvent.change(scopeSelect(), { target: { value: "club" } });
+      fireEvent.change(screen.getByLabelText("Club"), { target: { value: "" } });
+      fireEvent.change(screen.getByLabelText(/room name/i), { target: { value: "No Club Room" } });
+      expect((screen.getByRole("button", { name: "Create room" }) as HTMLButtonElement).disabled).toBe(true);
+      expect(createRoom).not.toHaveBeenCalled();
+    });
   });
 });
