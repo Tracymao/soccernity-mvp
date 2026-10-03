@@ -28,16 +28,11 @@ const REQUEST_TIMEOUT_MS = 10_000;
 // dependency; see tsconfig.json's own comment for why "DOM" was added to `lib` purely for fetch's
 // TYPE declarations, not any browser behavior.
 //
-// AUTH HEADER: the docs page (https://highlightly.net/football-api/documentation/) states
-// `x-rapidapi-key` as the required auth header for "your Highlightly or RapidAPI API Key" —
-// i.e. the SAME header name is used whether the key came from a direct Highlightly account or a
-// RapidAPI subscription. `x-rapidapi-host` is documented as required ONLY when actually calling
-// through RapidAPI's own gateway host — so it's sent here ONLY when SPORTS_DATA_RAPIDAPI_HOST is
-// explicitly set (i.e. SPORTS_DATA_BASE_URL is pointed at RapidAPI's host, not
-// soccer.highlightly.net directly). This exact header behavior for the DIRECT highlightly.net host
-// specifically was not spelled out in an isolated code example on the docs page — flagged as a real,
-// disclosed uncertainty in modules/sports/README.md, to be confirmed the moment a real account
-// exists and a live call can be traced.
+// AUTH HEADER — confirmed against the live API (2026-10-03, Decision Log #328): `x-rapidapi-key` alone
+// is accepted on the direct soccer.highlightly.net host (200); a request with no key is rejected
+// (403 "Missing mandatory HTTP Headers"). Sending `x-rapidapi-host` to the direct host is also
+// accepted (200), so the optional header is harmless there, but it is still only sent when
+// SPORTS_DATA_RAPIDAPI_HOST is set, i.e. when SPORTS_DATA_BASE_URL points at RapidAPI's gateway.
 @Injectable()
 export class HighlightlyClient extends SportsDataClient {
   private readonly logger = new Logger(HighlightlyClient.name);
