@@ -693,3 +693,39 @@
     font-size: 24px;
   }
 }
+
+.mc-disabled {
+  border: 1px dashed var(--sn-icon-inactive);
+  border-radius: 12px;
+  background: var(--sn-background-surface);
+  padding: 16px;
+  opacity: 0.85;
+}
+
+.mc-disabled__message {
+  font: 400 14px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.mc-top-scorers {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mc-top-scorers li {
+  display: grid;
+  grid-template-columns: 32px 1fr 1fr 48px;
+  gap: 12px;
+  font: 400 14px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.mc-top-scorers__goals {
+  text-align: right;
+  font-weight: 600;
+}

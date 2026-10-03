@@ -265,3 +265,13 @@ content a logged-out visitor should see).
   single-resource lookup) is handled defensively (accepts either shape) rather than picked one way
   and hoped for the best. The moment a real account exists, the first live call should be traced
   and this README updated with what was actually confirmed vs. assumed.
+
+## Capability signals for vendor-only fields (sprint-4/sports-capability-signals-ui)
+
+Decision Log #313 (player RATING) and #336 items 1 and 3 (top scorers; xG, Pressure index, shot maps, expected lineups) are now wired to explicit availability signals rather than silently omitted.
+
+- Every such response field carries a `FieldAvailability`: `available`, `no_data`, or `not_available_from_provider`. It is derived by `fieldAvailability()` in `sports-data-provider.constants.ts`, which is built on `providerSupports()`, so there is still only one capability check.
+- `GET /sports/matches/:id/stats` returns `availability` for `playerRatings`, `expectedGoals`, `pressureIndex` and `shotMaps`. `GET /sports/matches/:id/lineups` returns `expectedLineups`. `GET /sports/top-scorers?league=&season=` (new) returns `availability` plus an always-empty `items`. The top-scorers route makes no vendor call and no database read.
+- Nothing is ingested for these fields yet, so each availability is computed with `hasData = false`. Under Highlightly all of them are `not_available_from_provider`. Under SportMonks, the fields it supports report `no_data`, and `shotMaps` and `expectedLineups` stay unavailable because their status is `unconfirmed`.
+- Switching `SPORTS_DATA_PROVIDER` changes only the registry result. `HighlightlyClient` remains the only `SportsDataClient`, so no SportMonks data is fetched.
+- The frontend renders any non-`available` state as a disabled placeholder (`apps/web/src/pages/sports-hub/FieldAvailabilityGate.tsx`), with wording that distinguishes "not available from current data provider" from "no data for this match yet".

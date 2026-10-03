@@ -151,6 +151,21 @@ describe('Sports Hub e2e (Build Plan Section 4.6)', () => {
       expect(res.body.away.team.id).toBe('away-1');
     });
 
+    it('GET /sports/matches/:id/stats and /top-scorers carry the provider availability signal over real HTTP (Highlightly: not available, no vendor call)', async () => {
+      const row = await seedMatch({ statistics: [], statisticsUpdatedAt: new Date() });
+
+      const stats = await request(server()).get(`/sports/matches/${row.externalRef}/stats`).expect(200);
+      expect(stats.body.availability).toEqual({
+        playerRatings: 'not_available_from_provider',
+        expectedGoals: 'not_available_from_provider',
+        pressureIndex: 'not_available_from_provider',
+        shotMaps: 'not_available_from_provider',
+      });
+
+      const scorers = await request(server()).get('/sports/top-scorers').query({ league: '133', season: '2026' }).expect(200);
+      expect(scorers.body).toEqual({ leagueId: '133', season: '2026', availability: 'not_available_from_provider', items: [] });
+    });
+
     it('GET /sports/matches/:id/events orders newest-first, reading real JSON data back from Postgres', async () => {
       const row = await seedMatch({
         status: 'finished',

@@ -30,6 +30,8 @@ import {
   SPORTS_MAX_PAGE_SIZE,
 } from './sports.constants';
 import {
+  FieldAvailability,
+  fieldAvailability,
   IMPLEMENTED_SPORTS_DATA_PROVIDER,
   providerSupports,
   resolveSportsDataProvider,
@@ -89,10 +91,24 @@ export interface PublicTeamStatistics {
 // scores were available; they are NOT, from this vendor, without an unsustainable API-call fan-out.
 // This is a real, disclosed finding — see modules/sports/README.md's Decision Log candidate. No
 // synthetic/fabricated player rows are ever returned.
+// Availability of the vendor-only advanced metrics. See sports-data-provider.constants.ts's
+// FieldAvailability for the three states; none of these four is ingested into the cache yet, so
+// `hasData` is false by construction and only the provider's own capability can make one 'no_data'
+// instead of 'not_available_from_provider'.
+export interface PublicMatchAvailability {
+  playerRatings: FieldAvailability;
+  expectedGoals: FieldAvailability;
+  pressureIndex: FieldAvailability;
+  shotMaps: FieldAvailability;
+}
+
 export interface PublicMatchStatistics {
   home: PublicTeamStatistics | null;
   away: PublicTeamStatistics | null;
   updatedAt: string | null;
+  // See sports-data-provider.constants.ts. Gated on the registry, never on whatever the cache happens
+  // to hold, so a flip to another provider is the only thing that changes these values.
+  availability: PublicMatchAvailability;
 }
 
 export interface PublicLineupPlayer {
@@ -129,7 +145,27 @@ export interface PublicLineups {
   // Highlightly call. Empty if events haven't been fetched for this match yet (e.g. the caller only
   // ever requested lineups, never events/commentary).
   substitutions: PublicSubstitution[];
+  expectedLineups: FieldAvailability;
   updatedAt: string | null;
+}
+
+export interface PublicTopScorer {
+  rank: number;
+  player: { id: string | null; name: string };
+  team: PublicTeamRef;
+  goals: number;
+  assists: number | null;
+}
+
+// `items` is always empty today: no top-scorers source exists in the cache or the SportsDataClient
+// (Highlightly has no such endpoint). The `availability` signal says WHY it is empty — the provider
+// cannot supply it, versus the provider supports it but nothing is ingested — so a client never has to
+// guess. Same shape again once a SportMonks adapter fills `items`.
+export interface PublicTopScorers {
+  leagueId: string;
+  season: string | null;
+  availability: FieldAvailability;
+  items: PublicTopScorer[];
 }
 
 export interface PublicEvent {
@@ -312,6 +348,13 @@ export class SportsService {
 
   private supports(field: SportsDataField): boolean {
     return providerSupports(this.provider, field);
+  }
+
+  // The three-state signal for one field — see sports-data-provider.constants.ts's fieldAvailability.
+  // Callers pass hasData from what is actually cached, so 'available' can never be claimed for data that
+  // isn't there.
+  private availabilityFor(field: SportsDataField, hasData: boolean): FieldAvailability {
+    return fieldAvailability(this.provider, field, hasData);
   }
 
   private ttlForPhase(phase: MatchPhase | null): number {
@@ -547,7 +590,17 @@ export class SportsService {
     const home = cached.find((t) => String(t.team.id) === row.homeTeamId) ?? cached[0];
     const away = cached.find((t) => String(t.team.id) === row.awayTeamId) ?? cached[1];
 
-    return { home: toTeamStats(home), away: toTeamStats(away), updatedAt: row.statisticsUpdatedAt?.toISOString() ?? null };
+    // Team-level statistics the cache can hold never include these four vendor-only metrics, so each is
+    // hasData=false, so the signal is the provider capability alone. Flipping SPORTS_DATA_PROVIDER in
+    // sports-data-provider.constants.ts is what changes these values — no edit here.
+    const availability: PublicMatchAvailability = {
+      playerRatings: this.availabilityFor('playerRatings', false),
+      expectedGoals: this.availabilityFor('expectedGoals', false),
+      pressureIndex: this.availabilityFor('pressureIndex', false),
+      shotMaps: this.availabilityFor('shotMaps', false),
+    };
+
+    return { home: toTeamStats(home), away: toTeamStats(away), updatedAt: row.statisticsUpdatedAt?.toISOString() ?? null, availability };
   }
 
   // GET /sports/matches/:id/lineups — also derives `substitutions` from the already-cached `events`
@@ -596,7 +649,27 @@ export class SportsService {
       }))
       .sort((a, b) => a.minute - b.minute);
 
-    return { home: toTeamLineup('home'), away: toTeamLineup('away'), substitutions, updatedAt: row.lineupsUpdatedAt?.toISOString() ?? null };
+    // No pre-match predicted XI is cached, so hasData=false. Capability comes from sports-data-provider.constants.ts.
+    return {
+      home: toTeamLineup('home'),
+      away: toTeamLineup('away'),
+      substitutions,
+      expectedLineups: this.availabilityFor('expectedLineups', false),
+      updatedAt: row.lineupsUpdatedAt?.toISOString() ?? null,
+    };
+  }
+
+  // GET /sports/top-scorers?league=&season= — no vendor call, no DB read. Availability comes from
+  // sports-data-provider.constants.ts (see PublicTopScorers).
+  // `season` is passed through as given rather than resolved from the standings cache: unlike standings,
+  // there is no cached row to default to, and inventing a season here would be a fabricated value.
+  getTopScorers(params: { league: string; season?: string }): PublicTopScorers {
+    return {
+      leagueId: params.league,
+      season: params.season ?? null,
+      availability: this.availabilityFor('topScorers', false),
+      items: [],
+    };
   }
 
   // GET /sports/matches/:id/events — Decision Log candidate (see README), the "Live Commentary"

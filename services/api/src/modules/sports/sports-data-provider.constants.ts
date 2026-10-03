@@ -40,6 +40,7 @@ export type SportsDataField =
   | 'standingsForm'
   | 'matchEvents'
   | 'lineups'
+  | 'expectedLineups' // pre-match predicted XI (Decision Log #336-3)
   | 'matchStatistics' // team-level per-match statistics
   | 'playerBoxScores' // per-player, per-match statistics
   | 'playerRatings' // a per-player match rating
@@ -84,6 +85,7 @@ export const SPORTS_DATA_PROVIDER_CAPABILITIES: Record<SportsDataProvider, Provi
     standingsForm: unsupported('documented standings row has no form field (README data gap #2)'),
     matchEvents: supported(),
     lineups: supported('available ~40 min before to ~120 min after kickoff'),
+    expectedLineups: unsupported('not documented; Highlightly lineups are the confirmed XI, not a predicted one'),
     matchStatistics: supported('team-level, GET /statistics/{matchId}'),
     playerBoxScores: supported('Match Box Score section exists in the docs; exact path NOT confirmed (three fetches rendered three paths) and never traced live'),
     playerRatings: unconfirmed('no rating documented; the box-score example only shows Goals/Assists and its full stat list could not be read'),
@@ -107,6 +109,7 @@ export const SPORTS_DATA_PROVIDER_CAPABILITIES: Record<SportsDataProvider, Provi
     standingsForm: supported('include=form on standings endpoints; per-team W/D/L history tied to fixtures'),
     matchEvents: supported(),
     lineups: supported(),
+    expectedLineups: unconfirmed('docs name "Premium Expected Lineups" as a separate paid product; no endpoint or field traced'),
     matchStatistics: supported(),
     playerBoxScores: supported('via the fixture lineups.details nested include; not observed populated in a real response'),
     playerRatings: supported('`rating` is a documented player statistic type (type_id 118)'),
@@ -138,4 +141,20 @@ export function resolveSportsDataProvider(raw: string | undefined | null): Sport
 // The single question the rest of the codebase should ask. Only 'supported' returns true.
 export function providerSupports(provider: SportsDataProvider, field: SportsDataField): boolean {
   return SPORTS_DATA_PROVIDER_CAPABILITIES[provider][field].status === 'supported';
+}
+
+// The three-state availability signal the API returns beside any field that can be missing:
+//   'available'                   — the active provider supports it and this match/player has data
+//   'no_data'                     — the active provider supports it, but nothing is cached for this match
+//   'not_available_from_provider' — the active provider does not support it (or it is unconfirmed)
+// Clients must render 'not_available_from_provider' differently from 'no_data', so a user is never told
+// "no data" about something the current vendor cannot supply at all.
+export type FieldAvailability = 'available' | 'no_data' | 'not_available_from_provider';
+
+// The single place the three-state signal is derived, built on providerSupports() — no second capability
+// check. Flipping SPORTS_DATA_PROVIDER changes the first branch, and every response field calling this
+// flips with it, with no per-endpoint edit.
+export function fieldAvailability(provider: SportsDataProvider, field: SportsDataField, hasData: boolean): FieldAvailability {
+  if (!providerSupports(provider, field)) return 'not_available_from_provider';
+  return hasData ? 'available' : 'no_data';
 }

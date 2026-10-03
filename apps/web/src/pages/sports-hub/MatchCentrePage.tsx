@@ -45,8 +45,10 @@ import {
   getMatchMomentum,
   getHeadToHead,
   getStandings,
+  getTopScorers,
   getHighlights,
   SportsApiError,
+  type MatchAvailability,
   type MatchSummary,
   type MatchStatistics,
   type Lineups,
@@ -54,9 +56,11 @@ import {
   type Momentum,
   type HeadToHead,
   type Standings,
+  type TopScorers,
   type Highlights,
   type MatchEvent,
 } from "../../api/sports";
+import FieldAvailabilityGate from "./FieldAvailabilityGate";
 import { formatKickoffFull, monogramFor, phaseClass, phaseLabel } from "./format";
 import "./SportsHubPage.css";
 import "./MatchCentrePage.css";
@@ -209,14 +213,21 @@ function StatisticsTab({ stats, onRetry }: { stats: Loadable<MatchStatistics>; o
     );
   }
 
-  const { home, away } = stats.data;
+  const { home, away, availability } = stats.data;
+  const advanced = <AdvancedMetricGates availability={availability} />;
   if (!home || !away) {
-    return <StatusMessage>Team statistics aren&rsquo;t available for this match yet.</StatusMessage>;
+    return (
+      <>
+        <StatusMessage>Team statistics aren&rsquo;t available for this match yet.</StatusMessage>
+        {advanced}
+      </>
+    );
   }
 
   const awayByLabel = new Map(away.statistics.map((s) => [s.label, s.value]));
 
   return (
+    <>
     <Section>
       <div className="mc-stats-header">
         <span className="mc-stats-header__team">{home.team.name}</span>
@@ -248,6 +259,25 @@ function StatisticsTab({ stats, onRetry }: { stats: Loadable<MatchStatistics>; o
         Team totals only — per-player statistics aren&rsquo;t available from this data source.
       </StatusMessage>
     </Section>
+    {advanced}
+    </>
+  );
+}
+
+// ---------- Statistics: vendor-dependent gates ----------
+
+// Four vendor-only metrics, each gated on the backend's availability signal. Nothing is
+// ingested into the cache yet, so when the signal is 'available' the children slot is where
+// a real display goes — no data shape exists to render today, which is why no children are
+// passed. Changing SPORTS_DATA_PROVIDER on the backend flips these without any edit here.
+function AdvancedMetricGates({ availability }: { availability: MatchAvailability }) {
+  return (
+    <>
+      <FieldAvailabilityGate label="Player box score · RATING" availability={availability.playerRatings} />
+      <FieldAvailabilityGate label="Expected goals (xG)" availability={availability.expectedGoals} />
+      <FieldAvailabilityGate label="Pressure index" availability={availability.pressureIndex} />
+      <FieldAvailabilityGate label="Shot map" availability={availability.shotMaps} />
+    </>
   );
 }
 
@@ -300,12 +330,19 @@ function LineupsTab({ lineups, onRetry }: { lineups: Loadable<Lineups>; onRetry:
     );
   }
 
-  const { home, away, substitutions } = lineups.data;
+  const { home, away, substitutions, expectedLineups } = lineups.data;
+  const expected = <FieldAvailabilityGate label="Expected lineups" availability={expectedLineups} />;
   if (home.startingXI.length === 0 && away.startingXI.length === 0) {
-    return <StatusMessage>Lineups aren&rsquo;t available for this match yet.</StatusMessage>;
+    return (
+      <>
+        <StatusMessage>Lineups aren&rsquo;t available for this match yet.</StatusMessage>
+        {expected}
+      </>
+    );
   }
 
   return (
+    <>
     <Section>
       <div className="mc-lineups">
         <TeamLineupCard lineup={home} />
@@ -329,6 +366,8 @@ function LineupsTab({ lineups, onRetry }: { lineups: Loadable<Lineups>; onRetry:
         </>
       )}
     </Section>
+    {expected}
+    </>
   );
 }
 
@@ -577,6 +616,46 @@ function StandingsTab({ standings, homeTeamId, awayTeamId, onRetry }: {
   );
 }
 
+// ---------- Top scorers (under the Standings tab) ----------
+
+// Rendered beneath the standings table, not inside StandingsTab, so a top-scorers
+// failure can't take the standings table down with it.
+function TopScorersSection({ topScorers, onRetry }: { topScorers: Loadable<TopScorers>; onRetry: () => void }) {
+  if (topScorers.status === "idle" || topScorers.status === "loading") {
+    return <StatusMessage>Loading top scorers…</StatusMessage>;
+  }
+  if (topScorers.status === "error") {
+    return (
+      <div>
+        <StatusMessage tone="error">{topScorers.message}</StatusMessage>
+        <RetryButton onRetry={onRetry} />
+      </div>
+    );
+  }
+
+  const { availability, items } = topScorers.data;
+  return (
+    <FieldAvailabilityGate label="Top scorers" availability={availability}>
+      <Section title="Top scorers">
+        {items.length === 0 ? (
+          <StatusMessage>No scorers recorded for this league yet.</StatusMessage>
+        ) : (
+          <ol className="mc-top-scorers">
+            {items.map((s) => (
+              <li key={`${s.rank}-${s.player.name}`}>
+                <span className="mc-top-scorers__rank">{s.rank}</span>
+                <span className="mc-top-scorers__player">{s.player.name}</span>
+                <span className="mc-top-scorers__team">{s.team.name}</span>
+                <span className="mc-top-scorers__goals">{s.goals}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </Section>
+    </FieldAvailabilityGate>
+  );
+}
+
 // ---------- Video (level 1 tab) ----------
 
 function VideoTab({ highlights, onRetry }: { highlights: Loadable<Highlights>; onRetry: () => void }) {
@@ -705,6 +784,26 @@ export default function MatchCentrePage() {
     if (standingsActive && standings.status === "idle") loadStandings();
   }, [standingsActive, standings.status, loadStandings]);
 
+  // Separate from standings so a top-scorers failure can't break the standings table.
+  const [topScorers, setTopScorers] = useState<Loadable<TopScorers>>({ status: "idle" });
+
+  const loadTopScorers = useCallback(() => {
+    if (matchState.status !== "loaded") return;
+    const { league } = matchState.data;
+    if (!league.id) {
+      setTopScorers({ status: "error", message: "Top scorers aren't available for this match — no league information." });
+      return;
+    }
+    setTopScorers({ status: "loading" });
+    getTopScorers(league.id, league.season ?? undefined)
+      .then((data) => setTopScorers({ status: "loaded", data }))
+      .catch((err) => setTopScorers({ status: "error", message: errorMessage(err, "Couldn't load top scorers.") }));
+  }, [matchState]);
+
+  useEffect(() => {
+    if (standingsActive && topScorers.status === "idle") loadTopScorers();
+  }, [standingsActive, topScorers.status, loadTopScorers]);
+
   if (matchState.status === "idle" || matchState.status === "loading") {
     return (
       <div className="mc-page">
@@ -795,7 +894,10 @@ export default function MatchCentrePage() {
         {commentaryActive && <CommentaryTab events={events} onRetry={retryEvents} />}
         {h2hActive && <HeadToHeadTab h2h={h2h} onRetry={retryH2h} />}
         {standingsActive && (
-          <StandingsTab standings={standings} homeTeamId={match.homeTeam.id} awayTeamId={match.awayTeam.id} onRetry={loadStandings} />
+          <>
+            <StandingsTab standings={standings} homeTeamId={match.homeTeam.id} awayTeamId={match.awayTeam.id} onRetry={loadStandings} />
+            <TopScorersSection topScorers={topScorers} onRetry={loadTopScorers} />
+          </>
         )}
         {videoActive && <VideoTab highlights={highlights} onRetry={retryHighlights} />}
       </div>

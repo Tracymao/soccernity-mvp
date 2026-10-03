@@ -264,6 +264,72 @@ describe('SportsService', () => {
     });
   });
 
+  describe('vendor-only field availability signals (sports-data-provider.constants.ts)', () => {
+    const statsRow = () => matchRow({ statistics: [], statisticsUpdatedAt: new Date() });
+
+    it('marks playerRatings, expectedGoals, pressureIndex and shotMaps not_available_from_provider on highlightly', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.matchData.findUnique as jest.Mock).mockResolvedValue(statsRow());
+      const service = new SportsService(prisma, buildClientMock(), buildLockMock(true), buildConfig());
+
+      const { availability } = await service.getMatchStatistics('match-1');
+
+      expect(availability).toEqual({
+        playerRatings: 'not_available_from_provider',
+        expectedGoals: 'not_available_from_provider',
+        pressureIndex: 'not_available_from_provider',
+        shotMaps: 'not_available_from_provider',
+      });
+    });
+
+    it('reports no_data (never available) on sportmonks for fields it supports, since nothing is ingested yet — and keeps shotMaps unavailable because the docs do not confirm it', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.matchData.findUnique as jest.Mock).mockResolvedValue(statsRow());
+      const service = new SportsService(prisma, buildClientMock(), buildLockMock(true), buildConfig({ SPORTS_DATA_PROVIDER: 'sportmonks' }));
+
+      const { availability } = await service.getMatchStatistics('match-1');
+
+      expect(availability).toEqual({
+        playerRatings: 'no_data',
+        expectedGoals: 'no_data',
+        pressureIndex: 'no_data',
+        shotMaps: 'not_available_from_provider',
+      });
+    });
+
+    it('marks expectedLineups not_available_from_provider on both providers — sportmonks is only unconfirmed in the registry, and unconfirmed is never emitted as supported', async () => {
+      const lineupRow = () => matchRow({ lineups: null, lineupsUpdatedAt: new Date() });
+
+      const onHighlightlyPrisma = buildPrismaMock();
+      (onHighlightlyPrisma.matchData.findUnique as jest.Mock).mockResolvedValue(lineupRow());
+      const onHighlightly = new SportsService(onHighlightlyPrisma, buildClientMock(), buildLockMock(true), buildConfig());
+      expect((await onHighlightly.getMatchLineups('match-1')).expectedLineups).toBe('not_available_from_provider');
+
+      const onSportmonksPrisma = buildPrismaMock();
+      (onSportmonksPrisma.matchData.findUnique as jest.Mock).mockResolvedValue(lineupRow());
+      const onSportmonks = new SportsService(onSportmonksPrisma, buildClientMock(), buildLockMock(true), buildConfig({ SPORTS_DATA_PROVIDER: 'sportmonks' }));
+      expect((await onSportmonks.getMatchLineups('match-1')).expectedLineups).toBe('not_available_from_provider');
+    });
+
+    it('top scorers: not_available_from_provider on highlightly, with an empty list and no vendor or database call', () => {
+      const prisma = buildPrismaMock();
+      const client = buildClientMock();
+      const service = new SportsService(prisma, client, buildLockMock(true), buildConfig());
+
+      const result = service.getTopScorers({ league: '133', season: '2026' });
+
+      expect(result).toEqual({ leagueId: '133', season: '2026', availability: 'not_available_from_provider', items: [] });
+      expect(client.getMatches).not.toHaveBeenCalled();
+      expect(prisma.standing.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('top scorers: no_data on sportmonks, and leaves season null rather than inventing one when none is requested', () => {
+      const service = new SportsService(buildPrismaMock(), buildClientMock(), buildLockMock(true), buildConfig({ SPORTS_DATA_PROVIDER: 'sportmonks' }));
+
+      expect(service.getTopScorers({ league: '133' })).toEqual({ leagueId: '133', season: null, availability: 'no_data', items: [] });
+    });
+  });
+
   describe('getMatchLineups', () => {
     it('derives substitutions from the already-cached events column, without fetching events itself', async () => {
       const prisma = buildPrismaMock();

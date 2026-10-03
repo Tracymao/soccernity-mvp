@@ -60,11 +60,26 @@ export interface TeamStatistics {
   statistics: StatisticItem[];
 }
 
+// Three-state signal the backend attaches to any vendor-dependent field
+// (services/api/src/modules/sports/sports-data-provider.constants.ts).
+// 'not_available_from_provider' and 'no_data' must render differently: the
+// first means the current data vendor cannot supply the field at all, the
+// second means the vendor can but nothing is cached for this match.
+export type FieldAvailability = "available" | "no_data" | "not_available_from_provider";
+
+export interface MatchAvailability {
+  playerRatings: FieldAvailability;
+  expectedGoals: FieldAvailability;
+  pressureIndex: FieldAvailability;
+  shotMaps: FieldAvailability;
+}
+
 // Team-level only -- see this file's own header comment, data gap #1.
 export interface MatchStatistics {
   home: TeamStatistics | null;
   away: TeamStatistics | null;
   updatedAt: string | null;
+  availability: MatchAvailability;
 }
 
 export interface LineupPlayer {
@@ -95,6 +110,7 @@ export interface Lineups {
   home: TeamLineup;
   away: TeamLineup;
   substitutions: Substitution[];
+  expectedLineups: FieldAvailability;
   updatedAt: string | null;
 }
 
@@ -285,6 +301,30 @@ export async function getStandings(league: string, season?: string): Promise<Sta
   const params = new URLSearchParams({ league });
   if (season) params.set("season", season);
   return get<Standings>(`/sports/standings?${params.toString()}`);
+}
+
+export interface TopScorer {
+  rank: number;
+  player: { id: string | null; name: string };
+  team: TeamRef;
+  goals: number;
+  assists: number | null;
+}
+
+export interface TopScorers {
+  leagueId: string;
+  season: string | null;
+  availability: FieldAvailability;
+  items: TopScorer[];
+}
+
+// GET /sports/top-scorers?league=&season= -- availability says whether the
+// current provider can supply top scorers at all, so the UI can label an
+// empty list correctly.
+export async function getTopScorers(league: string, season?: string): Promise<TopScorers> {
+  const params = new URLSearchParams({ league });
+  if (season) params.set("season", season);
+  return get<TopScorers>(`/sports/top-scorers?${params.toString()}`);
 }
 
 // GET /sports/highlights/:matchId -- not paginated (a single match's
