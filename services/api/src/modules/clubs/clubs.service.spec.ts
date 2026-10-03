@@ -31,6 +31,11 @@ function buildPrismaMock() {
     // 0 = duplicate/no-op), matching $executeRaw's real return type
     // (affected row count).
     $executeRaw: jest.fn(),
+    // getClubMembers (Decision Log #224) resolves isFollowing for the page
+    // with one batched follow.findMany over the page's member ids.
+    follow: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
   } as unknown as PrismaService;
 
   // Same interactive-transaction mock shape as feed.service.spec.ts:
@@ -232,7 +237,7 @@ describe('ClubsService', () => {
       (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue(null);
 
       const service = new ClubsService(prisma);
-      await expect(service.getClubMembers('missing', {})).rejects.toThrow(NotFoundException);
+      await expect(service.getClubMembers('missing', 'caller-1', {})).rejects.toThrow(NotFoundException);
       expect((prisma as unknown as { user: { findMany: jest.Mock } }).user.findMany).not.toHaveBeenCalled();
     });
 
@@ -244,7 +249,7 @@ describe('ClubsService', () => {
       ]);
 
       const service = new ClubsService(prisma);
-      const result = await service.getClubMembers('club-1', {});
+      const result = await service.getClubMembers('club-1', 'caller-1', {});
 
       const callArgs = (prisma as unknown as { user: { findMany: jest.Mock } }).user.findMany.mock.calls[0][0];
       // Decision Log #221: deactivated / pending_deletion members are
@@ -259,7 +264,10 @@ describe('ClubsService', () => {
       ]);
       expect(callArgs.orderBy).toEqual([{ displayName: 'asc' }, { id: 'asc' }]);
       expect(callArgs.select).toEqual({ id: true, displayName: true });
-      expect(result).toEqual({ items: [memberRow('u-1', 'Ada Lovelace')], nextCursor: null });
+      expect(result).toEqual({
+        items: [{ ...memberRow('u-1', 'Ada Lovelace'), isFollowing: false }],
+        nextCursor: null,
+      });
     });
 
     it('never selects email / isMinor / passwordHash on a roster entry', async () => {
@@ -267,7 +275,7 @@ describe('ClubsService', () => {
       (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue({ id: 'club-1' });
 
       const service = new ClubsService(prisma);
-      await service.getClubMembers('club-1', {});
+      await service.getClubMembers('club-1', 'caller-1', {});
 
       const select = (prisma as unknown as { user: { findMany: jest.Mock } }).user.findMany.mock.calls[0][0].select;
       expect(select).not.toHaveProperty('email');
@@ -284,9 +292,9 @@ describe('ClubsService', () => {
       ]);
 
       const service = new ClubsService(prisma);
-      const result = await service.getClubMembers('club-1', { limit: 1 });
+      const result = await service.getClubMembers('club-1', 'caller-1', { limit: 1 });
 
-      expect(result.items).toEqual([memberRow('u-1', 'Ada')]);
+      expect(result.items).toEqual([{ ...memberRow('u-1', 'Ada'), isFollowing: false }]);
       expect(result.nextCursor).toBe(encodeClubCursor({ name: 'Ada', id: 'u-1' }));
     });
 
@@ -296,7 +304,7 @@ describe('ClubsService', () => {
       const cursor = encodeClubCursor({ name: 'Ada', id: 'u-1' });
 
       const service = new ClubsService(prisma);
-      await service.getClubMembers('club-1', { cursor });
+      await service.getClubMembers('club-1', 'caller-1', { cursor });
 
       const where = (prisma as unknown as { user: { findMany: jest.Mock } }).user.findMany.mock.calls[0][0].where;
       expect(where.AND[2]).toEqual({
@@ -309,7 +317,58 @@ describe('ClubsService', () => {
       (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue({ id: 'club-1' });
 
       const service = new ClubsService(prisma);
-      await expect(service.getClubMembers('club-1', { cursor: 'not-valid' })).rejects.toThrow();
+      await expect(service.getClubMembers('club-1', 'caller-1', { cursor: 'not-valid' })).rejects.toThrow();
+    });
+
+    it('marks a member the caller follows isFollowing: true and others false, via one batched follow lookup', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue({ id: 'club-1' });
+      (prisma as unknown as { user: { findMany: jest.Mock } }).user.findMany.mockResolvedValue([
+        memberRow('u-1', 'Ada'),
+        memberRow('u-2', 'Bo'),
+      ]);
+      const follow = (prisma as unknown as { follow: { findMany: jest.Mock } }).follow;
+      follow.findMany.mockResolvedValue([{ followeeId: 'u-1' }]);
+
+      const service = new ClubsService(prisma);
+      const result = await service.getClubMembers('club-1', 'caller-1', {});
+
+      expect(result.items).toEqual([
+        { ...memberRow('u-1', 'Ada'), isFollowing: true },
+        { ...memberRow('u-2', 'Bo'), isFollowing: false },
+      ]);
+      expect(follow.findMany).toHaveBeenCalledTimes(1);
+      expect(follow.findMany).toHaveBeenCalledWith({
+        where: { followerId: 'caller-1', followeeId: { in: ['u-1', 'u-2'] } },
+        select: { followeeId: true },
+      });
+    });
+
+    it('never looks up a follow row for the caller own roster entry, reporting it isFollowing: false', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue({ id: 'club-1' });
+      (prisma as unknown as { user: { findMany: jest.Mock } }).user.findMany.mockResolvedValue([
+        memberRow('caller-1', 'Me'),
+      ]);
+      const follow = (prisma as unknown as { follow: { findMany: jest.Mock } }).follow;
+
+      const service = new ClubsService(prisma);
+      const result = await service.getClubMembers('club-1', 'caller-1', {});
+
+      expect(follow.findMany).not.toHaveBeenCalled();
+      expect(result.items).toEqual([{ ...memberRow('caller-1', 'Me'), isFollowing: false }]);
+    });
+
+    it('issues no follow query for an empty roster page and returns an empty page', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue({ id: 'club-1' });
+      const follow = (prisma as unknown as { follow: { findMany: jest.Mock } }).follow;
+
+      const service = new ClubsService(prisma);
+      const result = await service.getClubMembers('club-1', 'caller-1', {});
+
+      expect(follow.findMany).not.toHaveBeenCalled();
+      expect(result).toEqual({ items: [], nextCursor: null });
     });
   });
 

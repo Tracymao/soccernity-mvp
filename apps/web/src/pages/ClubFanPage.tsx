@@ -24,11 +24,6 @@
 // shows a soft in-section message, never breaks the page.
 //
 // KNOWN GAPS (flagged, see this PR's report + Decision Log #157):
-//   - GET /clubs/:id/members has no per-caller `isFollowing` field
-//     (unlike GET /posts/feed's author), so a roster Follow button always
-//     starts as "Follow" and only self-corrects for in-session actions.
-//     Idempotent server-side, so harmless — same situation PostCard was
-//     in before Decision Log #153.
 //   - The Figma "View all members →" link has no destination screen (a
 //     dedicated full-roster route isn't built). Rendered here as an
 //     in-place "Load more members" instead — the honest functional

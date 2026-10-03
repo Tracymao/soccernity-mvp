@@ -177,12 +177,12 @@ describe('ClubsController (HTTP layer)', () => {
   });
 
   describe('GET /clubs/:id/members', () => {
-    it('delegates to ClubsService.getClubMembers with the id + query (no @CurrentUser)', async () => {
+    it('delegates to ClubsService.getClubMembers with the id, the caller id (for isFollowing), and the query', async () => {
       clubsService.getClubMembers.mockResolvedValue({ items: [], nextCursor: null });
 
       await request(app.getHttpServer()).get('/clubs/club-1/members?limit=3').expect(200);
 
-      expect(clubsService.getClubMembers).toHaveBeenCalledWith('club-1', { limit: 3 });
+      expect(clubsService.getClubMembers).toHaveBeenCalledWith('club-1', 'user-1', { limit: 3 });
     });
 
     it('propagates a 404 from ClubsService for a non-existent club', async () => {

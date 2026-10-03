@@ -3,17 +3,10 @@
 // frames 5841:9365 / 5841:9431 (sprint-2/club-fan-page-design), adapted
 // from the Community post-card author block.
 //
-// GET /clubs/:id/members returns only { id, displayName } per entry
-// (services/api ClubMember) -- no @handle (no such `User` column,
-// Decision Log #58) and, unlike GET /posts/feed's author, NO per-caller
-// `isFollowing` flag. So the button always starts as "Follow" and
-// self-corrects for in-session actions: POST/DELETE /users/:id/follow are
-// idempotent (users.service.ts), so a redundant follow is harmless. This
-// is the same pre-Decision-Log-#153 situation PostCard.tsx was in before
-// the feed author gained an isFollowing field -- flagged as the same
-// class of gap (see this PR's report + Decision Log #157).
-//
-// The current user's own row renders without a Follow button
+// The Follow / Following state seeds from the server's per-caller
+// `isFollowing` flag on the roster entry (Decision Log #224), and then
+// follows POST/DELETE /users/:id/follow's own response for in-session
+// actions. The current user's own row renders without a Follow button
 // (self-follow is a 400 -- users.service.ts), matching PostCard's
 // isOwnPost handling.
 import { useState } from "react";
@@ -35,7 +28,7 @@ interface ClubMemberRowProps {
 }
 
 export default function ClubMemberRow({ member, accessToken, currentUserId }: ClubMemberRowProps) {
-  const [following, setFollowing] = useState(false);
+  const [following, setFollowing] = useState(member.isFollowing);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

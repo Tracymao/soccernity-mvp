@@ -3892,6 +3892,15 @@ Full reasoning for every choice above: Build Plan Section 5.
     `joined` against real Postgres/`_ClubMembership`, including that the
     flag is scoped to the calling user (user B joining doesn't flip it
     for user A).
+- **`sprint-2/club-members-is-following` (backend-api + figma-to-code, 2026-10-03)
+  resolves Decision Log #224.** `GET /clubs/:id/members` now returns a
+  caller-scoped `isFollowing` per roster entry, resolved with one batched
+  `Follow` lookup over the page (no N+1; the caller's own entry is never
+  looked up). `ClubMemberRow` seeds its Follow/Following state from it, so
+  the button is correct on first paint. Decision Log #224's own docx Status
+  cell still needs its forward-pointer appended (flagged in the PR; the
+  docx was not editable in this session).
+
 - **`sprint-2/clubpicker-joined-wiring` (figma-to-code, 2026-09-02) is
   the frontend follow-up to Decision Log #154 — `apps/web` only. Closes a
   type/correctness gap, NOT a live user-facing bug** (unlike PR #137's
