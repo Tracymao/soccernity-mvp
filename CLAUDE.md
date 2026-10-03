@@ -9138,6 +9138,7 @@ Full reasoning for every choice above: Build Plan Section 5.
     file's own "Keeping this file current" rule (same correction the
     `feat/admin-staff-create` bullet just above already made for
     itself).
+- **`feat/admin-dashboard-page-views` resolves Decision Log #306 (backend-only).** `GET /admin/dashboard/stats` now returns a real `totalVisits` (all-time count) and `visitsByMonth` (last 6 UTC months, `"YYYY-MM"`), replacing the old hardcoded `totalVisits: null`. Backed by a new `PageView` model (route template + timestamp only, migration `20260929013242_add_page_view`) and a global `PageViewInterceptor` (`services/api/src/modules/page-views/`). **Strictly anonymous aggregate counting: no userId, IP, session, or user-agent is stored.** Counts only successful GET requests to matched routes, excluding `/health`, token-refresh, the notifications unread-count badge, and pagination continuations (`?cursor=`). Known over/under-counting is disclosed in that module's README. `apps/admin`'s DashboardPage chart is NOT yet wired to `visitsByMonth` (flagged follow-up). Verification: mocked suite 107 suites / 1555 tests → 109 / 1578, 0 failures; e2e 29 suites / 283 tests, 0 failures (no e2e spec added). PR opened, not merged — Temi's call after review.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.

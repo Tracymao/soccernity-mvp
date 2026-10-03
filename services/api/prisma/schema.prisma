@@ -1838,3 +1838,49 @@ model AgeReclassificationLog {
   @@index([userId])
   @@index([occurredAt])
 }
+
+// feat/admin-dashboard-page-views -- Decision Log #306
+// (admin-dashboard/README.md's own candidate: "no page-view/visit-tracking
+// model or middleware exists anywhere in this codebase"). A genuine schema
+// addition beyond Section 3's fixed 20-entity list, flagged here per
+// CLAUDE.md's "the data model is a fixed spec" rule -- the same discipline
+// every prior schema-addition PR in this project has followed (Follow.
+// createdAt, BanterRoomMember.joinedAt, AgeReclassificationLog, etc.).
+// Backs GET /admin/dashboard/stats' `totalVisits` (now a real, all-time
+// count instead of an explicit null) and `visitsByMonth` -- see
+// modules/page-views/README.md for the full design, including exactly
+// which GET requests are counted as a "page view" and which aren't.
+//
+// STRICTLY ANONYMOUS AGGREGATE COUNTING -- a hard constraint, not a style
+// choice (CLAUDE.md non-negotiable #1: never weaken User/Guardian
+// safeguarding; this is a minors' platform, and adding any per-user
+// identity here would open a new personal-data-collection question the
+// DPIA -- docs/sprint-1-dpia-outline-draft.md -- has never reviewed). This
+// row deliberately carries:
+//   - NO userId / viewerId / any FK to User at all. Contrast PostView
+//     (above), which DOES record an optional viewerId -- that model exists
+//     for a genuinely different purpose (per-post view counts on content a
+//     specific viewer chose to open), not anonymous traffic counting.
+//   - NO IP address.
+//   - NO session id, cookie, or device fingerprint of any kind.
+//   - NO user-agent string.
+// If a future feature genuinely needs per-user or per-session analytics,
+// that is a new, separate DPIA-reviewed decision -- not an extension of
+// this model.
+model PageView {
+  id String @id @default(uuid())
+
+  // A coarse, low-cardinality ROUTE TEMPLATE, never a raw URL with query
+  // strings or entity ids baked in -- e.g. "/community", "/posts/:id" (the
+  // literal Nest route pattern, with dynamic segments left un-substituted,
+  // exactly as Nest's own @Controller()/@Get() decorators declare them).
+  // See PageViewInterceptor for how this is derived and
+  // modules/page-views/README.md for the full "what counts as a page
+  // view" reasoning.
+  route String
+
+  occurredAt DateTime @default(now())
+
+  @@index([route])
+  @@index([occurredAt])
+}
