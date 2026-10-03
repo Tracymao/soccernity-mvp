@@ -27,6 +27,7 @@ export function targetLabel(targetType: string): string {
   if (targetType === "post") return "Post";
   if (targetType === "comment") return "Comment";
   if (targetType === "user") return "User";
+  if (targetType === "banter_room") return "Bants room";
   return targetType;
 }
 

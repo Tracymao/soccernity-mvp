@@ -247,7 +247,7 @@ export default function ReportDetailPage() {
               </p>
             ) : null}
             <div className="mod-action-row">
-              {REPORT_ACTIONS.map((action) => (
+              {REPORT_ACTIONS.filter((action) => action !== "room_deactivated" || report.targetType === "banter_room").map((action) => (
                 <button
                   key={action}
                   type="button"

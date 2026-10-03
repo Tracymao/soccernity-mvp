@@ -46,6 +46,8 @@ import { getUser, type UserProfile } from "../api/users";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
 import { UNDER_16_MESSAGE, isUnder16Restricted } from "../lib/under16";
 import BanterJoinButton from "./banter/BanterJoinButton";
+import BanterStatusDot from "./banter/BanterStatusDot";
+import ReportAction from "./community/ReportAction";
 import { TRENDS, FIXTURES, SUGGESTED } from "./banter/banterData";
 import "./banter/BanterPage.css";
 
@@ -449,7 +451,10 @@ export default function BanterPage() {
                     {initialsFor(room.name)}
                   </span>
                   <span className="banter-room__text">
-                    <span className="banter-room__name">{room.name}</span>
+                    <span className="banter-room__name">
+                      <BanterStatusDot status={room.status} />
+                      {room.name}
+                    </span>
                     <span className="banter-room__meta">
                       {scopeLabel(room.scopeType)} &middot; {room.memberCount.toLocaleString("en-GB")} members
                     </span>
@@ -460,6 +465,12 @@ export default function BanterPage() {
                   roomId={room.id}
                   joined={room.joined}
                   onToggled={(next) => applyToggle(room.id, next)}
+                />
+                {/* Decision Log #357 — the only path that creates a
+                    banter_room report (POST /reports, JwtAuthGuard only). */}
+                <ReportAction
+                  accessToken={token}
+                  targets={[{ label: "Report room", targetType: "banter_room", targetId: room.id }]}
                 />
               </li>
             ))}

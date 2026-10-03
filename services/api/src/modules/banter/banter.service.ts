@@ -14,6 +14,7 @@ import {
   BANTER_TOPICS_DEFAULT_PAGE_SIZE,
   BANTER_TOPICS_MAX_PAGE_SIZE,
   BanterRoomScopeType,
+  BanterRoomStatus,
 } from './banter.constants';
 import {
   decodeBanterRoomCursor,
@@ -27,6 +28,7 @@ import { CreateBanterRoomDto } from './dto/create-banter-room.dto';
 import { ListBanterRoomsQueryDto } from './dto/list-banter-rooms-query.dto';
 import { ListBanterTopicsQueryDto } from './dto/list-banter-topics-query.dto';
 import { MyBantsQueryDto } from './dto/my-bants-query.dto';
+import { UpdateBanterRoomStatusDto } from './dto/update-banter-room-status.dto';
 
 // sprint-3/banter-room-topics (Decision Log #276) — the lean shape every
 // Topic reference returns, whether from GET /banter-rooms/topics or
@@ -73,6 +75,8 @@ const ROOM_SELECT = {
   scopeRef: true,
   scopeName: true,
   createdBy: true,
+  // Decision Log #357 — the room's active/inactive status dot.
+  status: true,
   memberCount: true,
   topics: { select: { topic: { select: TOPIC_SELECT } } },
 } as const;
@@ -620,16 +624,7 @@ export class BanterService {
     dto: AttachBanterRoomTopicsDto,
   ): Promise<AttachTopicsResult> {
     await this.assertRoomExists(roomId);
-
-    const room = await this.prisma.banterRoom.findUniqueOrThrow({
-      where: { id: roomId },
-      select: { createdBy: true },
-    });
-    if (room.createdBy !== userId) {
-      throw new ForbiddenException(
-        'Only the room creator may attach topics to this Banter Room',
-      );
-    }
+    await this.assertRoomCreator(userId, roomId, 'Only the room creator may attach topics to this Banter Room');
 
     // Sequential, not Promise.all — each name is its own independent
     // transaction (see attachOneTopic), and running them concurrently
@@ -641,6 +636,45 @@ export class BanterService {
     }
 
     return { roomId, topics: await this.currentTopics(roomId) };
+  }
+
+  private async assertRoomCreator(userId: string, roomId: string, message: string): Promise<void> {
+    const room = await this.prisma.banterRoom.findUniqueOrThrow({
+      where: { id: roomId },
+      select: { createdBy: true },
+    });
+    if (room.createdBy !== userId) {
+      throw new ForbiddenException(message);
+    }
+  }
+
+  // ---------- Status (Decision Log #357) ----------
+
+  // PATCH /banter-rooms/:id/status — the room creator's manual active /
+  // inactive toggle. Creator-only, the same check attachTopics uses (404
+  // before 403). JwtAuthGuard only: a room-settings write, not a Section
+  // 5.7 safety-sensitive action.
+  async updateRoomStatus(
+    userId: string,
+    roomId: string,
+    dto: UpdateBanterRoomStatusDto,
+  ): Promise<BanterRoomView> {
+    await this.assertRoomExists(roomId);
+    await this.assertRoomCreator(userId, roomId, "Only the room creator may change this Banter Room's status");
+    await this.setRoomStatus(this.prisma, roomId, dto.status);
+    return this.getRoomById(roomId, userId);
+  }
+
+  // The single write path for BanterRoom.status. Takes a Prisma client so
+  // ModerationService.actionReport can run it inside the same transaction
+  // that records a report's room_deactivated outcome — one status-write
+  // implementation, two callers. A missing room throws 404, which also
+  // rolls back any enclosing transaction.
+  async setRoomStatus(db: Prisma.TransactionClient, roomId: string, status: BanterRoomStatus): Promise<void> {
+    const result = await db.banterRoom.updateMany({ where: { id: roomId }, data: { status } });
+    if (result.count === 0) {
+      throw new NotFoundException('Banter Room not found');
+    }
   }
 
   // Find-or-create a Topic by its normalized (trim + lowercase) name and

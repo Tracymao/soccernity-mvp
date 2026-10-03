@@ -38,6 +38,7 @@ function room(overrides: Partial<BanterRoom> = {}): BanterRoom {
     name: "Chelsea vs Arsenal — Matchday Chat",
     scopeType: "club",
     createdBy: "someone-else",
+    status: "active",
     memberCount: 5230,
     joined: false,
     ...overrides,

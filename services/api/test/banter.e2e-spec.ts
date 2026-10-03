@@ -163,6 +163,7 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
         scopeRef: club.id,
         scopeName: 'Arsenal',
         createdBy: creator.userId,
+        status: 'active', // Decision Log #357
         memberCount: 1,
         joined: true,
         topics: [], // sprint-3/banter-room-topics (Decision Log #276)

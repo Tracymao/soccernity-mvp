@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../auth/guards/current-user.decorator';
 import { RestrictUnder16, Under16RestrictionGuard } from '../auth/guards/under-16-restriction.guard';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
@@ -12,6 +12,7 @@ import { CreateBanterRoomDto } from './dto/create-banter-room.dto';
 import { ListBanterRoomsQueryDto } from './dto/list-banter-rooms-query.dto';
 import { ListBanterTopicsQueryDto } from './dto/list-banter-topics-query.dto';
 import { MyBantsQueryDto } from './dto/my-bants-query.dto';
+import { UpdateBanterRoomStatusDto } from './dto/update-banter-room-status.dto';
 
 // Build Plan Section 4.4 (Club & Banter Service) — the /banter-rooms
 // half, Sprint 3. The /clubs half lives on ClubsController.
@@ -191,6 +192,20 @@ export class BanterController {
   // resource-creation action" characterization join/leave already use —
   // a call where every requested topic is already attached does nothing
   // new, unlike POST /banter-rooms itself.
+  // PATCH /banter-rooms/:id/status — the room creator's active/inactive
+  // toggle (Decision Log #357). JwtAuthGuard only; creator-only at the
+  // service layer (404 before 403). Moderators reach the same status via
+  // the Report/moderation queue's room_deactivated action, not this route.
+  @Patch(':id/status')
+  @UseGuards(JwtAuthGuard)
+  async updateStatus(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: UpdateBanterRoomStatusDto,
+  ) {
+    return this.banter.updateRoomStatus(user.sub, id, dto);
+  }
+
   @Post(':id/topics')
   @HttpCode(200)
   @UseGuards(JwtAuthGuard, GuardianConsentGuard)

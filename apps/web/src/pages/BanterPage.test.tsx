@@ -71,6 +71,7 @@ function room(overrides: Partial<BanterRoom> = {}): BanterRoom {
     name: "Chelsea vs Arsenal — Matchday Chat",
     scopeType: "club",
     createdBy: "someone-else",
+    status: "active",
     memberCount: 5230,
     joined: false,
     ...overrides,
@@ -122,6 +123,20 @@ describe("BanterPage", () => {
     expect(screen.getByText(/log in to join the conversation on bants/i)).not.toBeNull();
     expect(getUser).not.toHaveBeenCalled();
     expect(listRooms).not.toHaveBeenCalled();
+  });
+
+  it("shows each room's status dot (Decision Log #357) and a Report affordance on every room row", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    vi.mocked(getUser).mockResolvedValueOnce(profile());
+    vi.mocked(listRooms).mockResolvedValueOnce(
+      page([room({ id: "room-a", name: "Open Room", status: "active" }), room({ id: "room-b", name: "Shut Room", status: "inactive" })]),
+    );
+
+    renderPage();
+
+    expect(await screen.findByLabelText("Active room")).not.toBeNull();
+    expect(screen.getByLabelText("Inactive room")).not.toBeNull();
+    expect(screen.getAllByRole("button", { name: "Report" })).toHaveLength(2);
   });
 
   it("renders the caller's real display name in the profile card, and real rooms from GET /banter-rooms", async () => {

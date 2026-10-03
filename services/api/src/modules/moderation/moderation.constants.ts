@@ -5,8 +5,10 @@
 // Guardian.relationship, User.role, GrassrootsTeam.leagueType, etc.
 
 // Report.targetType — the schema comment lists `post | user | comment`.
-// The enforced allow-list for POST /reports.
-export const REPORT_TARGET_TYPES = ['post', 'user', 'comment'] as const;
+// The enforced allow-list for POST /reports. 'banter_room' added by
+// Decision Log #357: a Banter Room is reportable so a moderator can
+// deactivate it via the same queue, with no separate admin route.
+export const REPORT_TARGET_TYPES = ['post', 'user', 'comment', 'banter_room'] as const;
 export type ReportTargetType = (typeof REPORT_TARGET_TYPES)[number];
 
 // The outcome an admin/moderator may record via
@@ -20,8 +22,15 @@ export const REPORT_ACTIONS = [
   'warning_issued',
   'user_suspended',
   'dismissed',
+  'room_deactivated',
 ] as const;
 export type ReportAction = (typeof REPORT_ACTIONS)[number];
+
+// room_deactivated is valid ONLY for a banter_room target (Decision Log
+// #357) — it is the one action that writes BanterRoom.status. Recording it
+// against a post/user/comment would leave a misleading audit row, so
+// ModerationService rejects that combination with 400.
+export const ROOM_DEACTIVATED_ACTION = 'room_deactivated';
 
 // The second-reviewer's decision on an appeal
 // (PATCH /admin/moderation/reports/:id/appeal). Decision Log #138: the

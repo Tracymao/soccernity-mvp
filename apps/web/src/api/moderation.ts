@@ -17,7 +17,7 @@
 // AppealReportDto.reason have no fixed taxonomy on the backend.
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
 
-export const REPORT_TARGET_TYPES = ["post", "comment", "user"] as const;
+export const REPORT_TARGET_TYPES = ["post", "comment", "user", "banter_room"] as const;
 export type ReportTargetType = (typeof REPORT_TARGET_TYPES)[number];
 
 // The real Report row, over HTTP — services/api's own Report model.

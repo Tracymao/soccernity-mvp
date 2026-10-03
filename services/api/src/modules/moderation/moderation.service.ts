@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -9,6 +10,7 @@ import { Prisma, Report } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminActionLogService } from '../admin-action-log/admin-action-log.service';
 import { ADMIN_ACTION_LOG_ACTIONS, ADMIN_ACTION_LOG_TARGET_TYPES } from '../admin-action-log/admin-action-log.constants';
+import { BanterService } from '../banter/banter.service';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
 import { decodeModerationCursor, encodeModerationCursor } from './cursor.util';
 import { ActionReportDto } from './dto/action-report.dto';
@@ -23,6 +25,7 @@ import {
   DEFAULT_REPORT_SEVERITY,
   MODERATION_DEFAULT_PAGE_SIZE,
   MODERATION_MAX_PAGE_SIZE,
+  ROOM_DEACTIVATED_ACTION,
   ReportAction,
 } from './moderation.constants';
 
@@ -48,6 +51,9 @@ export class ModerationService {
     // reviewed/action/appeal fields, and why record() is called after
     // (not inside) each method's own $transaction/update.
     private readonly adminActionLogService: AdminActionLogService,
+    // Decision Log #357 — room_deactivated writes BanterRoom.status through
+    // BanterService.setRoomStatus, inside actionReport's own transaction.
+    private readonly banterService: BanterService,
   ) {}
 
   // -------------------------------------------------------------------
@@ -137,6 +143,11 @@ export class ModerationService {
         if (!user) throw new NotFoundException('User not found');
         return;
       }
+      case 'banter_room': {
+        const room = await this.prisma.banterRoom.findUnique({ where: { id: targetId }, select: { id: true } });
+        if (!room) throw new NotFoundException('Banter Room not found');
+        return;
+      }
     }
   }
 
@@ -177,6 +188,24 @@ export class ModerationService {
           select: { authorId: true },
         });
         return comment?.authorId ?? null;
+      }
+      case 'banter_room': {
+        // BanterRoom.createdBy is a bare String, not a User relation
+        // (Decision Log #44 / #341 — deliberately not an FK). So the room
+        // can outlive its creator: a hard-deleted account leaves a
+        // dangling id. Check the User row still exists before returning
+        // it, so a notification never targets a gone account (the
+        // notification FK would otherwise fail the whole transaction).
+        const room = await this.prisma.banterRoom.findUnique({
+          where: { id: targetId },
+          select: { createdBy: true },
+        });
+        if (!room) return null;
+        const creator = await this.prisma.user.findUnique({
+          where: { id: room.createdBy },
+          select: { id: true },
+        });
+        return creator?.id ?? null;
       }
       default:
         return null;
@@ -422,10 +451,21 @@ export class ModerationService {
       throw new ConflictException('This report has already been reviewed');
     }
 
+    if (dto.action === ROOM_DEACTIVATED_ACTION && report.targetType !== 'banter_room') {
+      throw new BadRequestException('room_deactivated may only be recorded against a Banter Room report');
+    }
+
     const newStatus = dto.action === 'dismissed' ? 'reviewed' : 'actioned';
     const reportedUserId = await this.resolveReportedUserId(report.targetType, report.targetId);
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      // Decision Log #357 — the one action with a side effect beyond the
+      // report row. Runs in this same transaction, so a failed status write
+      // also rolls back the recorded outcome.
+      if (dto.action === ROOM_DEACTIVATED_ACTION) {
+        await this.banterService.setRoomStatus(tx, report.targetId, 'inactive');
+      }
+
       const updatedReport = await tx.report.update({
         where: { id: reportId },
         data: {
