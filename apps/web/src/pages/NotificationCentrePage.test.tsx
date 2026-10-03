@@ -55,6 +55,24 @@ const CONTEST_WIN: Notification = {
   data: { cycle: { id: "cyc-1", title: "September Contest" } },
 };
 
+const KICKOFF_MATCH = {
+  externalRef: "ext-123",
+  competition: "Premier League",
+  homeTeamName: "Arsenal",
+  awayTeamName: "Chelsea",
+  kickoffTime: "2026-10-03T15:00:00.000Z",
+  status: "scheduled",
+};
+
+const MATCH_KICKOFF: Notification = {
+  id: "n-kickoff",
+  type: "match_kickoff",
+  read: false,
+  createdAt: "2026-10-03T14:00:00.000Z",
+  payloadRefId: "ext-123",
+  data: { match: KICKOFF_MATCH },
+};
+
 const ORPHANED: Notification = {
   id: "n-orphan",
   type: "like",
@@ -175,6 +193,41 @@ describe("NotificationCentrePage", () => {
     expect(await screen.findByText(/now has access to more of Soccernity/i)).not.toBeNull();
     expect(screen.queryByText(/no longer available/i)).toBeNull();
     expect(screen.queryByText(/16|sixteen/i)).toBeNull();
+  });
+
+  it("renders a match_kickoff notification with the real fixture and links to its match-centre page", async () => {
+    window.sessionStorage.setItem("sn_access_token", "test-token");
+    vi.mocked(listNotifications).mockResolvedValueOnce({
+      items: [MATCH_KICKOFF],
+      nextCursor: null,
+      unreadCount: 1,
+    });
+
+    renderPage();
+
+    const row = await screen.findByText(/kicks off soon/i);
+    expect(row.textContent).toContain("Arsenal vs Chelsea");
+    expect(row.closest("a")!.getAttribute("href")).toBe("/sports-hub/matches/ext-123");
+  });
+
+  it("falls back to the known side's name when a match_kickoff team is still TBD", async () => {
+    window.sessionStorage.setItem("sn_access_token", "test-token");
+    vi.mocked(listNotifications).mockResolvedValueOnce({
+      items: [
+        {
+          ...MATCH_KICKOFF,
+          data: { match: { ...KICKOFF_MATCH, awayTeamName: null } },
+        },
+      ],
+      nextCursor: null,
+      unreadCount: 1,
+    });
+
+    renderPage();
+
+    const row = await screen.findByText(/kicks off soon/i);
+    expect(row.textContent).toContain("Arsenal");
+    expect(row.textContent).not.toContain("vs");
   });
 
   it("renders a generic message for a notification whose referenced entity is gone (data: null)", async () => {

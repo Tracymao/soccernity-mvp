@@ -54,8 +54,20 @@ export interface NotificationContestCycle {
   title: string;
 }
 
+// match_kickoff: externalRef is the match-centre route param. Team names
+// are null while still TBD.
+export interface NotificationMatch {
+  externalRef: string;
+  competition: string;
+  homeTeamName: string | null;
+  awayTeamName: string | null;
+  kickoffTime: string;
+  status: string;
+}
+
 export type NotificationData =
   | { actor: NotificationActor }
+  | { match: NotificationMatch }
   | { post: NotificationPost }
   | { conversationId: string; otherParticipant: NotificationOtherParticipant | null }
   | { fixture: NotificationFixture }
