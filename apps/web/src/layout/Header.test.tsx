@@ -273,6 +273,28 @@ describe("Header -- logged in (desktop)", () => {
     expect(screen.getByTestId("pathname").textContent).toBe("/");
     expect(screen.getByRole("link", { name: "Login" })).not.toBeNull();
   });
+
+  it("a mousedown inside the open menu does not close it before the item's own click fires", () => {
+    renderHeader();
+    fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
+    const profile = screen.getByRole("menuitem", { name: "Profile" });
+
+    fireEvent.mouseDown(profile);
+    expect(screen.getByRole("menu", { name: "Account" })).not.toBeNull();
+
+    fireEvent.click(profile);
+    expect(screen.queryByRole("menu", { name: "Account" })).toBeNull();
+    expect(screen.getByTestId("pathname").textContent).toBe("/profile");
+  });
+
+  it("a mousedown elsewhere on the page closes the open account menu", () => {
+    renderHeader();
+    fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
+    expect(screen.getByRole("menu", { name: "Account" })).not.toBeNull();
+
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole("menu", { name: "Account" })).toBeNull();
+  });
 });
 
 describe("Header -- logged in (mobile)", () => {
