@@ -1,4 +1,5 @@
 import { PrismaService } from '../../prisma/prisma.service';
+import { PageViewService } from '../page-views/page-view.service';
 import { AdminDashboardService } from './admin-dashboard.service';
 
 function buildPrismaMock() {
@@ -8,6 +9,13 @@ function buildPrismaMock() {
   } as unknown as PrismaService;
 }
 
+function buildPageViewServiceMock() {
+  return {
+    getTotalViewCount: jest.fn().mockResolvedValue(0),
+    getMonthlyViewCounts: jest.fn().mockResolvedValue([]),
+  } as unknown as PageViewService;
+}
+
 describe('AdminDashboardService', () => {
   it('computes New Users (this calendar month) via a createdAt >= month-start filter', async () => {
     const prisma = buildPrismaMock();
@@ -15,7 +23,7 @@ describe('AdminDashboardService', () => {
       Promise.resolve(where ? 4 : 100),
     );
     (prisma.article.count as jest.Mock).mockResolvedValue(12);
-    const service = new AdminDashboardService(prisma);
+    const service = new AdminDashboardService(prisma, buildPageViewServiceMock());
 
     const stats = await service.getStats(new Date('2026-09-15T12:00:00.000Z'));
 
@@ -29,7 +37,7 @@ describe('AdminDashboardService', () => {
     const prisma = buildPrismaMock();
     (prisma.user.count as jest.Mock).mockResolvedValue(0);
     (prisma.article.count as jest.Mock).mockResolvedValue(7);
-    const service = new AdminDashboardService(prisma);
+    const service = new AdminDashboardService(prisma, buildPageViewServiceMock());
 
     const stats = await service.getStats();
 
@@ -43,7 +51,7 @@ describe('AdminDashboardService', () => {
       Promise.resolve(where ? 4 : 250),
     );
     (prisma.article.count as jest.Mock).mockResolvedValue(0);
-    const service = new AdminDashboardService(prisma);
+    const service = new AdminDashboardService(prisma, buildPageViewServiceMock());
 
     const stats = await service.getStats();
 
@@ -51,17 +59,44 @@ describe('AdminDashboardService', () => {
     expect(stats.communityUsersTotal).toBe(250);
   });
 
-  // The Decision Log candidate this module's own README documents: no
-  // page-view tracking exists anywhere in this codebase. Explicitly
-  // null, never a faked 0 and never a dropped key.
-  it('always returns totalVisits as an explicit null', async () => {
+  // Decision Log #306, resolved by feat/admin-dashboard-page-views:
+  // totalVisits/visitsByMonth are now real, sourced from PageViewService
+  // — no longer an explicit null. A genuine 0 is now an honest reading
+  // (no page views recorded yet), not the old ambiguous "we don't track
+  // this."
+  it('sources totalVisits/visitsByMonth from PageViewService, passing `now` through to the monthly breakdown', async () => {
     const prisma = buildPrismaMock();
     (prisma.user.count as jest.Mock).mockResolvedValue(0);
     (prisma.article.count as jest.Mock).mockResolvedValue(0);
-    const service = new AdminDashboardService(prisma);
+    const pageViewService = buildPageViewServiceMock();
+    (pageViewService.getTotalViewCount as jest.Mock).mockResolvedValue(42);
+    (pageViewService.getMonthlyViewCounts as jest.Mock).mockResolvedValue([
+      { month: '2026-08', count: 10 },
+      { month: '2026-09', count: 32 },
+    ]);
+    const service = new AdminDashboardService(prisma, pageViewService);
+    const now = new Date('2026-09-15T12:00:00.000Z');
+
+    const stats = await service.getStats(now);
+
+    expect(pageViewService.getTotalViewCount).toHaveBeenCalledWith();
+    expect(pageViewService.getMonthlyViewCounts).toHaveBeenCalledWith(undefined, now);
+    expect(stats.totalVisits).toBe(42);
+    expect(stats.visitsByMonth).toEqual([
+      { month: '2026-08', count: 10 },
+      { month: '2026-09', count: 32 },
+    ]);
+  });
+
+  it('reports totalVisits as a genuine 0 (not null) when no page views exist yet', async () => {
+    const prisma = buildPrismaMock();
+    (prisma.user.count as jest.Mock).mockResolvedValue(0);
+    (prisma.article.count as jest.Mock).mockResolvedValue(0);
+    const service = new AdminDashboardService(prisma, buildPageViewServiceMock());
 
     const stats = await service.getStats();
 
-    expect(stats).toHaveProperty('totalVisits', null);
+    expect(stats.totalVisits).toBe(0);
+    expect(stats.totalVisits).not.toBeNull();
   });
 });

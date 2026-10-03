@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
+import { PageViewModule } from '../page-views/page-view.module';
 import { AdminDashboardController } from './admin-dashboard.controller';
 import { AdminDashboardService } from './admin-dashboard.service';
 
@@ -12,8 +13,12 @@ import { AdminDashboardService } from './admin-dashboard.service';
 // moderator/superadmin-only like Users. Read-only, no user-facing
 // routes, so — like AdminContentModule — only AdminAuthFoundationModule
 // is imported.
+//
+// PageViewModule added by feat/admin-dashboard-page-views (Decision Log
+// #306) — AdminDashboardService now injects PageViewService for the real
+// `totalVisits`/`visitsByMonth` fields.
 @Module({
-  imports: [AdminAuthFoundationModule],
+  imports: [AdminAuthFoundationModule, PageViewModule],
   controllers: [AdminDashboardController],
   providers: [AdminDashboardService, PrismaService],
 })

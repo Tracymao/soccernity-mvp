@@ -38,7 +38,8 @@ describe('AdminDashboardController (HTTP layer)', () => {
       newUsersThisMonth: 4,
       totalArticlesPublished: 12,
       communityUsersTotal: 250,
-      totalVisits: null,
+      totalVisits: 891,
+      visitsByMonth: [{ month: '2026-09', count: 891 }],
     });
 
     const res = await request(app.getHttpServer()).get('/admin/dashboard/stats').expect(200);
@@ -48,7 +49,8 @@ describe('AdminDashboardController (HTTP layer)', () => {
       newUsersThisMonth: 4,
       totalArticlesPublished: 12,
       communityUsersTotal: 250,
-      totalVisits: null,
+      totalVisits: 891,
+      visitsByMonth: [{ month: '2026-09', count: 891 }],
     });
   });
 });

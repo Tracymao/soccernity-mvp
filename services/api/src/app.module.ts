@@ -31,6 +31,7 @@ import { MediaModule } from './modules/media/media.module';
 import { BlogModule } from './modules/blog/blog.module';
 import { SportsModule } from './modules/sports/sports.module';
 import { SearchModule } from './modules/search/search.module';
+import { PageViewModule } from './modules/page-views/page-view.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -66,6 +67,17 @@ import { SearchModule } from './modules/search/search.module';
     // AccountDeletionSweepService) needs this to actually run; it does
     // not belong to that module specifically.
     ScheduleModule.forRoot(),
+    // feat/admin-dashboard-page-views — Decision Log #306. Genuinely
+    // cross-cutting infra (registers PageViewInterceptor globally via
+    // APP_INTERCEPTOR), same category as SentryModule/ScheduleModule
+    // above rather than a feature tied to one sprint's own endpoint list
+    // — see modules/page-views/README.md for the full design, including
+    // exactly which GET requests count as a "page view." Strictly
+    // anonymous aggregate counting only: no userId, IP, session id, or
+    // user-agent is ever recorded (CLAUDE.md non-negotiable #1). Backs
+    // GET /admin/dashboard/stats' `totalVisits`/`visitsByMonth` — see
+    // AdminDashboardModule below.
+    PageViewModule,
     HealthModule, // Sprint 0 infra — MVP Build Plan Section 5
     PasswordResetModule, // Sprint 1 / PR B4 — /auth/forgot-password, /auth/reset-password
     AuthModule, // Sprint 1 / PR B3 — login, refresh, logout (Section 4.1 / 5.7)
@@ -172,12 +184,12 @@ import { SearchModule } from './modules/search/search.module';
     // concern, not user management), same "one module per Section 4.8
     // sub-resource" precedent as Moderation/AdminContent/AdminUsers.
     // Real aggregates for New Users (this calendar month), Total
-    // Articles Published, and Community Users (total User count). Total
-    // Visits and the visitor-statistics chart are DELIBERATELY OMITTED
-    // from the response, not faked as zero/null-rendered-as-real — no
-    // page-view/visit-tracking model or middleware exists anywhere in
-    // this codebase; see modules/admin-dashboard/README.md's Decision
-    // Log candidate.
+    // Articles Published, and Community Users (total User count).
+    // `totalVisits`/`visitsByMonth` are now ALSO real (was: Total Visits
+    // and the visitor-statistics chart deliberately omitted, no page-view
+    // model existed) — feat/admin-dashboard-page-views (Decision Log
+    // #306) resolves this via the new, strictly anonymous PageView model
+    // (see PageViewModule below and modules/admin-dashboard/README.md).
     AdminDashboardModule,
     // sprint-5/admin-media-storage-backend — Section 4.8 (Admin Service),
     // the Media library half: GET /admin/media, POST
