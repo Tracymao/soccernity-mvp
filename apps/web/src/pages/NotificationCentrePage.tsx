@@ -32,6 +32,10 @@
 //     round/position — the backend's own documented limitation), so this
 //     renders "you won a round in {cycle title}", not Figma's illustrative
 //     "you placed 1st this week".
+//   - match_kickoff: the real match ("{home} vs {away} kicks off soon"),
+//     linking to its match-centre page by externalRef. A TBD team name
+//     falls back to whichever side is known. Icon disc is still the
+//     generic "?" placeholder — a figma-screen-builder pass is pending.
 //   - `data: null` (a stale/orphaned payloadRefId — Decision Log #290) is
 //     rendered as a generic "This notification is no longer available."
 //
@@ -91,6 +95,7 @@ function linkFor(n: Notification): string | null {
     return `/grassroots/fixtures/${n.data.fixture.id}`;
   }
   if (n.type === "contest_win") return "/contest";
+  if (n.type === "match_kickoff" && "match" in n.data) return `/sports-hub/matches/${n.data.match.externalRef}`;
   return null;
 }
 
@@ -127,6 +132,12 @@ function bodyFor(n: Notification): { subject: string; rest: string } {
     case "contest_win": {
       const cycle = data && "cycle" in data ? data.cycle : null;
       return { subject: "Contest", rest: cycle ? ` — you won a round in ${cycle.title}` : " — you won a round" };
+    }
+    case "match_kickoff": {
+      const match = data && "match" in data ? data.match : null;
+      const teams = [match?.homeTeamName, match?.awayTeamName].filter((t): t is string => Boolean(t));
+      const subject = teams.length === 2 ? `${teams[0]} vs ${teams[1]}` : (teams[0] ?? "A match");
+      return { subject, rest: " kicks off soon" };
     }
     case "age_milestone":
       // Plain, non-alarming, no age threshold in the copy (PR #277's
