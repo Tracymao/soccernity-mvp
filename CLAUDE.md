@@ -9154,6 +9154,7 @@ Full reasoning for every choice above: Build Plan Section 5.
 - **Community, Sports Hub, and Admin Console remain the
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
+- `sprint-2/admin-login-rate-limit` resolves Decision Log #190: `POST /admin/auth/login` uses `@AuthRateLimit({ limit: 5, windowMs: 15 min })` instead of the shared User-facing `'auth'` config. The per-handler override keeps its counter independent of `/auth/login`. Covered by `test/admin-login-rate-limit.e2e-spec.ts` (lockout at attempt 6, independence both ways, and a metadata check for the 15-minute window). `services/api` only. Forward-pointer appended to #190 in the docx.
 - Before trusting any of the above, check Build Plan Section 9 (Decision
   Log) directly rather than this summary if something looks off — this
   section has gone stale before.

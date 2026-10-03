@@ -29,18 +29,12 @@ function extractBearerToken(authorizationHeader: string | undefined): string | u
 export class AdminAuthController {
   constructor(private readonly adminAuthService: AdminAuthService) {}
 
-  // @AuthRateLimit() is reused as-is from the User-facing auth module —
-  // it is generic, IP-based rate-limiting infrastructure with zero
-  // User-specific typing (see admin/README.md's Decision Log candidate
-  // note for the full reasoning on why this is safe to share while
-  // TokenService/JwtAuthGuard are not). It shares the same 'auth' named
-  // Throttler CONFIG (limit/window from AUTH_RATE_LIMIT_MAX/
-  // AUTH_RATE_LIMIT_WINDOW_MS) as /auth/login, but gets its own
-  // independent per-route counter — @nestjs/throttler's ThrottlerGuard
-  // keys each bucket by (controller class, handler, throttler name,
-  // tracker), so AdminAuthController.login's bucket can never be
-  // exhausted by traffic against AuthController.login or vice versa.
-  @AuthRateLimit()
+  // Decision Log #190: a stricter, fixed limit than the shared User-facing
+  // 'auth' config (admin accounts are a smaller, higher-value target set).
+  // The override is applied per-handler, so this route's counter is
+  // independent of AuthController.login's — admin traffic never exhausts
+  // the User login bucket and vice versa.
+  @AuthRateLimit({ limit: 5, windowMs: 15 * 60 * 1000 })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: AdminLoginDto): Promise<AdminAuthResponse> {
