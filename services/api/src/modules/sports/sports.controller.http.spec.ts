@@ -1,6 +1,8 @@
-import { INestApplication, NotFoundException, ValidationPipe } from '@nestjs/common';
+import { ExecutionContext, INestApplication, NotFoundException, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { MatchKickoffService } from './match-kickoff.service';
 import { SportsMatchesController } from './sports-matches.controller';
 import { SportsStandingsController } from './sports-standings.controller';
 import { SportsService } from './sports.service';
@@ -26,12 +28,28 @@ describe('Sports controllers (HTTP layer)', () => {
     getHighlights: jest.fn(),
     getStandings: jest.fn(),
   };
+  const matchKickoffService = {
+    subscribe: jest.fn(),
+    unsubscribe: jest.fn(),
+  };
+  const CALLER = { sub: 'user-1', role: 'user' };
 
   async function buildApp() {
     const moduleRef = await Test.createTestingModule({
       controllers: [SportsMatchesController, SportsStandingsController],
-      providers: [{ provide: SportsService, useValue: sportsService }],
-    }).compile();
+      providers: [
+        { provide: SportsService, useValue: sportsService },
+        { provide: MatchKickoffService, useValue: matchKickoffService },
+      ],
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({
+        canActivate: (context: ExecutionContext) => {
+          context.switchToHttp().getRequest().user = CALLER;
+          return true;
+        },
+      })
+      .compile();
 
     const nestApp = moduleRef.createNestApplication();
     nestApp.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
@@ -164,6 +182,29 @@ describe('Sports controllers (HTTP layer)', () => {
       sportsService.getStandings.mockResolvedValue({ leagueId: '133', season: '2026', groups: [], updatedAt: null });
       await request(app.getHttpServer()).get('/sports/standings').query({ league: '133', season: '2026' }).expect(200);
       expect(sportsService.getStandings).toHaveBeenCalledWith({ league: '133', season: '2026' });
+    });
+  });
+
+  describe('PUT/DELETE /sports/matches/:id/subscription', () => {
+    it('PUT subscribes the caller (from the token, never the body) and returns the resulting state', async () => {
+      matchKickoffService.subscribe.mockResolvedValue(undefined);
+      await request(app.getHttpServer())
+        .put('/sports/matches/ext-1/subscription')
+        .expect(200, { subscribed: true });
+      expect(matchKickoffService.subscribe).toHaveBeenCalledWith('user-1', 'ext-1');
+    });
+
+    it('DELETE unsubscribes the caller and returns the resulting state', async () => {
+      matchKickoffService.unsubscribe.mockResolvedValue(undefined);
+      await request(app.getHttpServer())
+        .delete('/sports/matches/ext-1/subscription')
+        .expect(200, { subscribed: false });
+      expect(matchKickoffService.unsubscribe).toHaveBeenCalledWith('user-1', 'ext-1');
+    });
+
+    it('surfaces a service 404 for an unknown match unchanged', async () => {
+      matchKickoffService.subscribe.mockRejectedValue(new NotFoundException('Match not found'));
+      await request(app.getHttpServer()).put('/sports/matches/nope/subscription').expect(404);
     });
   });
 });

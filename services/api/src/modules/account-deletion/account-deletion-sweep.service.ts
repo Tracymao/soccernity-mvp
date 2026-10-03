@@ -260,6 +260,7 @@ export class AccountDeletionSweepService {
       await tx.savedPost.deleteMany({ where: { userId } });
       await tx.follow.deleteMany({ where: { OR: [{ followerId: userId }, { followeeId: userId }] } });
       await tx.notification.deleteMany({ where: { userId } });
+      await tx.matchSubscription.deleteMany({ where: { userId } });
 
       // Membership rows (Banter Rooms, Community Groups, Club pages) are
       // ephemeral participation signal, the same category as Follow/Like,

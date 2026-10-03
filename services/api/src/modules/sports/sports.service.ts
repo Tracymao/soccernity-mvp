@@ -521,16 +521,30 @@ export class SportsService {
     const lockKey = `sports:refresh:matches:${date}${leagueId ? `:${leagueId}` : ''}`;
     const ttl = isToday ? this.liveTtl : this.scheduledTtl;
 
-    await this.refreshIfStale(lockKey, ttl, false, async () => {
-      let offset = 0;
-      for (let page = 0; page < this.maxRefreshPages; page += 1) {
-        const result = await this.client.getMatches({ date, leagueId, limit: 100, offset });
-        await Promise.all(result.items.map((raw) => this.upsertMatch(raw)));
-        const fetchedSoFar = offset + result.items.length;
-        if (!result.totalCount || fetchedSoFar >= result.totalCount || result.items.length === 0) break;
-        offset = fetchedSoFar;
-      }
-    });
+    await this.refreshIfStale(lockKey, ttl, false, () => this.fetchMatchesForDate(date, leagueId));
+  }
+
+  // sprint-4/match-kickoff-alerts. Deliberately a SEPARATE lock key from refreshMatchesForDate, on
+  // the scheduled TTL regardless of whether `date` is today. The kickoff watch runs every minute, so
+  // sharing listFixtures' live-scores key (60s TTL for today) would spend up to ~1,440 upstream calls
+  // a day against the 100/day free tier and starve the real live-scores refresh. Here the cost is
+  // at most one /matches call per watched date per scheduled TTL (6h by default), enough to catch a
+  // postponement announced before kickoff. See modules/sports/README.md's kickoff-alerts section.
+  async refreshDateForKickoffWatch(date: string): Promise<void> {
+    await this.refreshIfStale(`sports:refresh:kickoff-watch:${date}`, this.scheduledTtl, false, () =>
+      this.fetchMatchesForDate(date, undefined),
+    );
+  }
+
+  private async fetchMatchesForDate(date: string, leagueId: string | undefined): Promise<void> {
+    let offset = 0;
+    for (let page = 0; page < this.maxRefreshPages; page += 1) {
+      const result = await this.client.getMatches({ date, leagueId, limit: 100, offset });
+      await Promise.all(result.items.map((raw) => this.upsertMatch(raw)));
+      const fetchedSoFar = offset + result.items.length;
+      if (!result.totalCount || fetchedSoFar >= result.totalCount || result.items.length === 0) break;
+      offset = fetchedSoFar;
+    }
   }
 
   // GET /sports/fixtures?date=&league=&cursor=&limit=

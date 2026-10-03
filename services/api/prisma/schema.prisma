@@ -156,6 +156,7 @@ model User {
   followedBy       Follow[]           @relation("followee")
   following        Follow[]           @relation("follower")
   notifications    Notification[]
+  matchSubscriptions MatchSubscription[]
   reportsFiled     Report[]           @relation("reporter")
   messagesSent     Message[]
   createdTeams     GrassrootsTeam[]
@@ -1006,7 +1007,7 @@ model Notification {
   // (contest.service.ts, one per ContestRoundWinner row, not the monthly
   // ContestStanding crown). `reply` / `system` (this comment's previous
   // wording) were never actually implemented anywhere -- dropped.
-  type         String // follow | like | comment | message | fixture_scheduled | result_logged | contest_win | age_milestone (age-reclassification sweep, user turned 16; payloadRefId = milestone key)
+  type         String // follow | like | comment | message | fixture_scheduled | result_logged | contest_win | age_milestone (age-reclassification sweep, user turned 16; payloadRefId = milestone key) | match_kickoff (sports kickoff watch, payloadRefId = MatchData.externalRef)
   payloadRefId String?
   read         Boolean  @default(false)
   createdAt    DateTime @default(now())
@@ -1647,6 +1648,26 @@ model Standing {
   updatedAt DateTime @updatedAt
 
   @@unique([leagueId, season])
+}
+
+// sprint-4/match-kickoff-alerts (Decision Log #336 item 2). A user's opt-in to a kickoff alert for
+// one match. `externalRef` is deliberately a plain string with NO foreign key to MatchData: match
+// rows are upserted from the vendor and a subscription must survive a refresh that rewrites or
+// briefly lacks the row. The kickoff job joins on externalRef in application code.
+// `notifiedAt` is the at-most-once claim: set in the same transaction as the Notification row it
+// produces, so a second instance or a retry can never deliver twice.
+model MatchSubscription {
+  id          String    @id @default(uuid())
+  userId      String
+  // RESTRICT is the same safety net every other User relation carries (Decision Log #341): the
+  // User row is never hard-deleted, and anonymizeUser deletes these rows explicitly first.
+  user        User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  externalRef String
+  createdAt   DateTime  @default(now())
+  notifiedAt  DateTime?
+
+  @@unique([userId, externalRef])
+  @@index([notifiedAt, externalRef])
 }
 
 // ---------- Play & Compete (leaderboard only — MVP scope, Build Plan Section 2.1) ----------

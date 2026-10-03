@@ -1,6 +1,10 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Delete, Get, Param, Put, Query, UseGuards } from '@nestjs/common';
+import { CurrentUser } from '../auth/guards/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AccessTokenPayload } from '../auth/token/token.types';
 import { ListFixturesQueryDto } from './dto/list-fixtures-query.dto';
 import { ListLiveScoresQueryDto } from './dto/list-live-scores-query.dto';
+import { MatchKickoffService } from './match-kickoff.service';
 import { SportsService } from './sports.service';
 
 // Build Plan Section 4.6 — the Sports Hub / Highlightly integration. NO GUARD on this controller at
@@ -11,7 +15,10 @@ import { SportsService } from './sports.service';
 // live scores/fixtures are exactly the kind of content a logged-out visitor should be able to see).
 @Controller('sports')
 export class SportsMatchesController {
-  constructor(private readonly sportsService: SportsService) {}
+  constructor(
+    private readonly sportsService: SportsService,
+    private readonly matchKickoffService: MatchKickoffService,
+  ) {}
 
   @Get('live-scores')
   async liveScores(@Query() query: ListLiveScoresQueryDto) {
@@ -76,5 +83,23 @@ export class SportsMatchesController {
   @Get('highlights/:matchId')
   async getHighlights(@Param('matchId') matchId: string) {
     return this.sportsService.getHighlights(matchId);
+  }
+
+  // sprint-4/match-kickoff-alerts (Decision Log #336 item 2). The one route in this controller that
+  // requires a session: a subscription is per-user state, so it can't be served anonymously. JwtAuthGuard
+  // ONLY, no GuardianConsentGuard or Under16RestrictionGuard. Founder-confirmed: a subscription
+  // produces no visible content, so a restricted-pending minor may subscribe.
+  @Put('matches/:id/subscription')
+  @UseGuards(JwtAuthGuard)
+  async subscribe(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
+    await this.matchKickoffService.subscribe(user.sub, id);
+    return { subscribed: true };
+  }
+
+  @Delete('matches/:id/subscription')
+  @UseGuards(JwtAuthGuard)
+  async unsubscribe(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
+    await this.matchKickoffService.unsubscribe(user.sub, id);
+    return { subscribed: false };
   }
 }

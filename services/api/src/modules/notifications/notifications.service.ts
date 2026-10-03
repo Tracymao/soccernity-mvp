@@ -92,8 +92,22 @@ export interface NotificationContestCycle {
   title: string;
 }
 
+// match_kickoff — payloadRefId is MatchData.externalRef (sprint-4/match-kickoff-alerts, Decision Log
+// #336 item 2). Structured fields only, copy stays a frontend concern. Nullable: the match row can be
+// absent if it was never refreshed again after the subscription (a subscription itself is a plain
+// string reference with no FK, by design).
+export interface NotificationMatch {
+  externalRef: string;
+  competition: string;
+  homeTeamName: string | null;
+  awayTeamName: string | null;
+  kickoffTime: Date;
+  status: string;
+}
+
 export type NotificationData =
   | { actor: NotificationActor }
+  | { match: NotificationMatch }
   | { post: NotificationPost }
   | { conversationId: string; otherParticipant: NotificationOtherParticipant | null }
   | { fixture: NotificationFixture }
@@ -223,7 +237,7 @@ export class NotificationsService {
     };
   }
 
-  // Batched row -> NotificationView resolution. At most FIVE extra
+  // Batched row -> NotificationView resolution. At most SIX extra
   // queries for a whole page, never one per row (no N+1): one for the
   // referenced Posts (like/comment), one for the referenced
   // Conversations (message) plus the "other participant" lookups those
@@ -231,7 +245,7 @@ export class NotificationsService {
   // follow actors and the message other-participants (both need only
   // { id, displayName }), one for the referenced Fixtures
   // (fixture_scheduled/result_logged), and one for the referenced
-  // ContestCycles (contest_win). Each query only runs if the page
+  // ContestCycles (contest_win), and one for the MatchData rows (match_kickoff). Each query only runs if the page
   // actually contains that type — an empty page, or a page of a single
   // type, costs fewer than five.
   private async resolveNotifications(rows: NotificationRow[]): Promise<NotificationView[]> {
@@ -247,8 +261,9 @@ export class NotificationsService {
     const conversationRefIds = refIdsFor(['message']);
     const fixtureRefIds = refIdsFor(['fixture_scheduled', 'result_logged']);
     const cycleRefIds = refIdsFor(['contest_win']);
+    const matchRefIds = refIdsFor(['match_kickoff']);
 
-    const [posts, conversations, fixtures, cycles] = await Promise.all([
+    const [posts, conversations, fixtures, cycles, matches] = await Promise.all([
       postRefIds.length > 0
         ? this.prisma.post.findMany({
             where: { id: { in: postRefIds } },
@@ -291,6 +306,28 @@ export class NotificationsService {
             select: { id: true, title: true },
           })
         : Promise.resolve([] as { id: string; title: string }[]),
+      matchRefIds.length > 0
+        ? this.prisma.matchData.findMany({
+            where: { externalRef: { in: matchRefIds } },
+            select: {
+              externalRef: true,
+              competition: true,
+              homeTeamName: true,
+              awayTeamName: true,
+              kickoffTime: true,
+              status: true,
+            },
+          })
+        : Promise.resolve(
+            [] as {
+              externalRef: string;
+              competition: string;
+              homeTeamName: string | null;
+              awayTeamName: string | null;
+              kickoffTime: Date;
+              status: string;
+            }[],
+          ),
     ]);
 
     // "Other participant" ids, derived from the conversations above —
@@ -334,6 +371,7 @@ export class NotificationsService {
     const postById = new Map(posts.map((p) => [p.id, p]));
     const fixtureById = new Map(fixtures.map((f) => [f.id, f]));
     const cycleById = new Map(cycles.map((c) => [c.id, c]));
+    const matchByRef = new Map(matches.map((m) => [m.externalRef, m]));
 
     return rows.map((row) => ({
       id: row.id,
@@ -347,6 +385,7 @@ export class NotificationsService {
         otherParticipantIdByConversationId,
         fixtureById,
         cycleById,
+        matchByRef,
       }),
     }));
   }
@@ -370,6 +409,17 @@ export class NotificationsService {
         }
       >;
       cycleById: Map<string, { id: string; title: string }>;
+      matchByRef: Map<
+        string,
+        {
+          externalRef: string;
+          competition: string;
+          homeTeamName: string | null;
+          awayTeamName: string | null;
+          kickoffTime: Date;
+          status: string;
+        }
+      >;
     },
   ): NotificationData | null {
     if (!row.payloadRefId) {
@@ -409,6 +459,10 @@ export class NotificationsService {
       case 'contest_win': {
         const cycle = lookups.cycleById.get(row.payloadRefId);
         return cycle ? { cycle } : null;
+      }
+      case 'match_kickoff': {
+        const match = lookups.matchByRef.get(row.payloadRefId);
+        return match ? { match } : null;
       }
       case 'age_milestone':
         return { milestone: row.payloadRefId };
