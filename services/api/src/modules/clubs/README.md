@@ -663,12 +663,17 @@ deliberately never reads `Post.clubPageId` (`feed/README.md` point 2).
 
 ### `GET /clubs/:id/members` — the roster (Decision Log #217)
 
-Keyset-paginated list of the club's members, `{ id, displayName }` per
-entry — the same narrow `{ id, displayName }` select
+Keyset-paginated list of the club's members, `{ id, displayName,
+isFollowing }` per entry — the same narrow `{ id, displayName }` select
 `UsersService.FOLLOW_USER_SELECT` / `FeedService.POST_AUTHOR_SELECT`
 already use for "what any other user sees about someone else." No
 `@handle` / avatar (no such `User` column — parked backend requirements,
 Decision Log #58).
+
+`isFollowing` is the caller's own follow state for each member
+(Decision Log #224), resolved with one batched `Follow` lookup over the
+page's member ids; the caller's own entry is never looked up and is
+always `false`. Requires `@CurrentUser()` on the controller.
 
 - **Schema judgment call — roster = `ClubPage.members`, NOT a
   "represented club" field.** The Fan Page design captions the roster

@@ -649,7 +649,7 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
       const ids = res.body.items.map((m: { id: string }) => m.id);
       expect(ids).toEqual([alice.id, bob.id]); // alphabetical by displayName, minor excluded
       expect(ids).not.toContain(minor.userId);
-      expect(res.body.items[0]).toEqual({ id: alice.id, displayName: 'Alice Adult' });
+      expect(res.body.items[0]).toEqual({ id: alice.id, displayName: 'Alice Adult', isFollowing: false });
       // memberCount still counts the raw membership rows (all 3), only the
       // *visible* roster is filtered — documented in Decision Log #217.
       const clubRow = await prisma.clubPage.findUniqueOrThrow({ where: { id: club.id } });
@@ -726,6 +726,49 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
         .get('/clubs/does-not-exist/members')
         .set('Authorization', `Bearer ${caller.accessToken}`)
         .expect(404);
+    });
+
+    it('GET /clubs/:id/members reports isFollowing per the CALLER against real Follow rows (Decision Log #224)', async () => {
+      const prisma = getTestPrismaClient();
+      const club = await prisma.clubPage.create({ data: { name: 'IsFollowing FC', memberCount: 0 } });
+      const caller = await createUser('isfollowing-caller');
+
+      const amy = await prisma.user.create({
+        data: {
+          email: `if-amy-${Date.now()}@example.com`,
+          passwordHash: 'x',
+          displayName: 'Amy',
+          dateOfBirth: new Date('1990-01-01'),
+          isMinor: false,
+        },
+      });
+      const ben = await prisma.user.create({
+        data: {
+          email: `if-ben-${Date.now()}@example.com`,
+          passwordHash: 'x',
+          displayName: 'Ben',
+          dateOfBirth: new Date('1990-01-01'),
+          isMinor: false,
+        },
+      });
+      await addMember(club.id, amy.id);
+      await addMember(club.id, ben.id);
+
+      // Caller follows Amy only. Ben is followed by someone else, which
+      // must NOT leak into the caller's own isFollowing value.
+      await prisma.follow.create({ data: { followerId: caller.userId, followeeId: amy.id } });
+      const stranger = await createUser('isfollowing-stranger');
+      await prisma.follow.create({ data: { followerId: stranger.userId, followeeId: ben.id } });
+
+      const res = await request(app.getHttpServer())
+        .get(`/clubs/${club.id}/members`)
+        .set('Authorization', `Bearer ${caller.accessToken}`)
+        .expect(200);
+
+      expect(res.body.items).toEqual([
+        { id: amy.id, displayName: 'Amy', isFollowing: true },
+        { id: ben.id, displayName: 'Ben', isFollowing: false },
+      ]);
     });
   });
 });

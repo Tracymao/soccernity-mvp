@@ -90,13 +90,17 @@ export class ClubsController {
   // judgment call (roster = ClubPage.members, not the unbuilt
   // "represented club" field), the restricted-pending-minor exclusion,
   // and the alphabetical keyset pagination. JwtAuthGuard only, same
-  // reasoning as GET /clubs / GET /clubs/:id above — no @CurrentUser()
-  // needed (unlike GET /clubs, this endpoint has no per-caller field in
-  // its response).
+  // reasoning as GET /clubs / GET /clubs/:id above. @CurrentUser() is
+  // here because each entry carries the caller's own isFollowing flag
+  // (Decision Log #224).
   @Get(':id/members')
   @UseGuards(JwtAuthGuard)
-  async members(@Param('id') id: string, @Query() query: ListClubMembersQueryDto) {
-    return this.clubsService.getClubMembers(id, query);
+  async members(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Query() query: ListClubMembersQueryDto,
+  ) {
+    return this.clubsService.getClubMembers(id, user.sub, query);
   }
 
   // JwtAuthGuard only — argued fresh, not inherited from POST /posts's

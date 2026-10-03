@@ -43,17 +43,18 @@ export interface JoinClubResult {
 }
 
 // GET /clubs/:id/members roster entry. Mirrors services/api
-// clubs.service.ts's ClubMember exactly: { id, displayName } only. There
-// is NO @handle / avatar field (no such `User` column -- Decision Log
-// #58; the Figma roster's "@handle" text is decorative), and NO
-// per-caller `isFollowing` flag (unlike GET /posts/feed's author, which
-// carries one -- Decision Log #153). The roster server-side already
+// clubs.service.ts's ClubMember: { id, displayName, isFollowing } — the
+// caller's own follow state for that member (Decision Log #224), so the
+// Follow button renders correctly on first paint. There is NO @handle /
+// avatar field (no such `User` column -- Decision Log #58; the Figma
+// roster's "@handle" text is decorative). The roster server-side already
 // excludes restricted-pending minors and deactivated accounts
 // (Decision Log #217/#221), so the visible list can be shorter than the
 // club's memberCount.
 export interface ClubMember {
   id: string;
   displayName: string;
+  isFollowing: boolean;
 }
 
 export interface ClubMemberPage {

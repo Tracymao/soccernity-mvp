@@ -76,7 +76,14 @@ const CLUB_MEMBER_SELECT = {
   displayName: true,
 } as const;
 
-export type ClubMember = Prisma.UserGetPayload<{ select: typeof CLUB_MEMBER_SELECT }>;
+// Decision Log #224: the roster entry also carries the caller's own
+// follow state for that member, so the Follow button renders correctly on
+// first paint. Same batched per-caller discipline as FeedService's
+// attachViewerState (Decision Log #153) — an intersection on top of the
+// lean select, never a stored column.
+export type ClubMember = Prisma.UserGetPayload<{ select: typeof CLUB_MEMBER_SELECT }> & {
+  isFollowing: boolean;
+};
 
 export interface ClubMemberPage {
   items: ClubMember[];
@@ -263,7 +270,13 @@ export class ClubsService {
   // JwtAuthGuard only (ClubsController) — reading a roster is no more
   // safety-sensitive than GET /clubs or GET /clubs/:id, same reasoning
   // as those.
-  async getClubMembers(clubId: string, query: ListClubMembersQueryDto): Promise<ClubMemberPage> {
+  //
+  // `isFollowing` (Decision Log #224) is resolved for the whole page with
+  // ONE batched Follow lookup over the page's member ids, never one query
+  // per row. The caller is excluded from that lookup — a self-follow row
+  // can't exist, so their own roster entry is always false with nothing
+  // queried for it. An empty page issues no follow query at all.
+  async getClubMembers(clubId: string, userId: string, query: ListClubMembersQueryDto): Promise<ClubMemberPage> {
     await this.assertClubExists(clubId);
 
     const limit = Math.min(query.limit ?? CLUB_MEMBERS_DEFAULT_PAGE_SIZE, CLUB_MEMBERS_MAX_PAGE_SIZE);
@@ -287,7 +300,27 @@ export class ClubsService {
     const nextCursor =
       hasMore && last ? encodeClubCursor({ name: last.displayName, id: last.id }) : null;
 
-    return { items: trimmed, nextCursor };
+    const followedIds = await this.followedSubset(
+      userId,
+      trimmed.filter((m) => m.id !== userId).map((m) => m.id),
+    );
+    const items = trimmed.map((member) => ({ ...member, isFollowing: followedIds.has(member.id) }));
+
+    return { items, nextCursor };
+  }
+
+  // The subset of `followeeIds` the caller follows, in ONE batched query.
+  // Empty input → empty Set with no query issued (same short-circuit as
+  // membershipSubset above and FeedService.attachViewerState).
+  private async followedSubset(userId: string, followeeIds: string[]): Promise<Set<string>> {
+    if (followeeIds.length === 0) {
+      return new Set();
+    }
+    const rows = await this.prisma.follow.findMany({
+      where: { followerId: userId, followeeId: { in: followeeIds } },
+      select: { followeeId: true },
+    });
+    return new Set(rows.map((r) => r.followeeId));
   }
 
   private buildMemberCursorFilter(rawCursor: string): Prisma.UserWhereInput {

@@ -157,8 +157,14 @@ describe("ClubFanPage", () => {
     vi.mocked(getClubById).mockResolvedValueOnce(SURULERE);
     vi.mocked(getClubMembers)
       .mockReset()
-      .mockResolvedValueOnce({ items: [{ id: "m1", displayName: "Marcus Obi" }], nextCursor: "cursor-1" })
-      .mockResolvedValueOnce({ items: [{ id: "m2", displayName: "Tunde Adeyemi" }], nextCursor: null });
+      .mockResolvedValueOnce({
+        items: [{ id: "m1", displayName: "Marcus Obi", isFollowing: false }],
+        nextCursor: "cursor-1",
+      })
+      .mockResolvedValueOnce({
+        items: [{ id: "m2", displayName: "Tunde Adeyemi", isFollowing: false }],
+        nextCursor: null,
+      });
 
     renderPage();
 
@@ -174,7 +180,7 @@ describe("ClubFanPage", () => {
     window.sessionStorage.setItem("sn_access_token", "test-token");
     vi.mocked(getClubById).mockResolvedValueOnce(SURULERE);
     vi.mocked(getClubMembers).mockReset().mockResolvedValueOnce({
-      items: [{ id: "m1", displayName: "Marcus Obi" }],
+      items: [{ id: "m1", displayName: "Marcus Obi", isFollowing: false }],
       nextCursor: null,
     });
     vi.mocked(followUser).mockResolvedValueOnce({ following: true });
@@ -186,6 +192,21 @@ describe("ClubFanPage", () => {
 
     await waitFor(() => expect(followUser).toHaveBeenCalledWith("test-token", "m1"));
     expect(await screen.findByRole("button", { name: "Following" })).not.toBeNull();
+  });
+
+  it("renders a roster member the caller already follows as Following on first paint, with no click", async () => {
+    window.sessionStorage.setItem("sn_access_token", "test-token");
+    vi.mocked(getClubById).mockResolvedValueOnce(SURULERE);
+    vi.mocked(getClubMembers).mockReset().mockResolvedValueOnce({
+      items: [{ id: "m1", displayName: "Marcus Obi", isFollowing: true }],
+      nextCursor: null,
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole("button", { name: "Following" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Follow" })).toBeNull();
+    expect(followUser).not.toHaveBeenCalled();
   });
 
   it("toggles the club Join button to Leave (header action unchanged)", async () => {
