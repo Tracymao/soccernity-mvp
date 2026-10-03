@@ -15,6 +15,7 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
     savedPost: { deleteMany: jest.fn() },
     follow: { deleteMany: jest.fn() },
     notification: { deleteMany: jest.fn() },
+    matchSubscription: { deleteMany: jest.fn() },
     banterRoomMember: { deleteMany: jest.fn() },
     communityGroupMember: { deleteMany: jest.fn() },
     grassrootsTeam: { updateMany: jest.fn() },
@@ -142,6 +143,7 @@ describe('AccountDeletionSweepService', () => {
         where: { OR: [{ followerId: 'user-1' }, { followeeId: 'user-1' }] },
       });
       expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.matchSubscription.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.grassrootsTeam.updateMany).toHaveBeenCalledWith({
         where: { createdById: 'user-1' },
         data: { createdById: null },

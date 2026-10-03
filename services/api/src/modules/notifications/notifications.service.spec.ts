@@ -32,6 +32,9 @@ function buildPrismaMock() {
     contestCycle: {
       findMany: jest.fn().mockResolvedValue([]),
     },
+    matchData: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
   } as unknown as PrismaService;
 
   return prisma;
@@ -279,6 +282,41 @@ describe('NotificationsService', () => {
       const page = await service.listNotifications(CALLER, {});
 
       expect(page.items[0].data).toEqual({ cycle: { id: 'cyc-1', title: 'September Contest' } });
+    });
+
+    it('resolves match_kickoff to the match summary, batched into one MatchData query', async () => {
+      const prisma = buildPrismaMock();
+      const kickoffTime = new Date('2026-10-03T19:00:00Z');
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ type: 'match_kickoff', payloadRefId: 'ext-1' }),
+        row({ id: 'notif-2', type: 'match_kickoff', payloadRefId: 'ext-2' }),
+      ]);
+      (prisma.matchData.findMany as jest.Mock).mockResolvedValue([
+        {
+          externalRef: 'ext-1',
+          competition: 'Premier League',
+          homeTeamName: 'Chelsea',
+          awayTeamName: 'Liverpool',
+          kickoffTime,
+          status: 'scheduled',
+        },
+      ]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(prisma.matchData.findMany).toHaveBeenCalledTimes(1);
+      expect(page.items[0].data).toEqual({
+        match: {
+          externalRef: 'ext-1',
+          competition: 'Premier League',
+          homeTeamName: 'Chelsea',
+          awayTeamName: 'Liverpool',
+          kickoffTime,
+          status: 'scheduled',
+        },
+      });
+      expect(page.items[1].data).toBeNull();
     });
 
     it('resolves to null data when the referenced entity is gone (orphaned payloadRefId)', async () => {

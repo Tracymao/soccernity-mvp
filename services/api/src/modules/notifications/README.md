@@ -31,6 +31,7 @@ your post" from a `Notification` row alone — it needs to know what
 | `fixture_scheduled` | the `Fixture` | Yes, via the fixture's other team |
 | `result_logged` | the `Fixture` | Yes, via the fixture's other team |
 | `contest_win` | the `ContestCycle` (deliberately not `roundId`/`entryId` — `contest.service.ts`'s own comment says this is "the one single-resource read endpoint that exists today") | N/A — the recipient is already the actor |
+| `match_kickoff` | the `MatchData` row, keyed by `externalRef` (sprint-4/match-kickoff-alerts, Decision Log #336 item 2) | N/A — the recipient subscribed to the match themselves |
 
 ## Decision: option (a) — server-side resolution, denormalized
 
