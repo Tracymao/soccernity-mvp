@@ -9157,6 +9157,7 @@ Full reasoning for every choice above: Build Plan Section 5.
   strongest-designed pillars** (Log Book Section 23.1). Discover and
   Careers still have zero screens — unchanged, still Phase 2.
 - `sprint-2/admin-login-rate-limit` resolves Decision Log #190: `POST /admin/auth/login` uses `@AuthRateLimit({ limit: 5, windowMs: 15 min })` instead of the shared User-facing `'auth'` config. The per-handler override keeps its counter independent of `/auth/login`. Covered by `test/admin-login-rate-limit.e2e-spec.ts` (lockout at attempt 6, independence both ways, and a metadata check for the 15-minute window). `services/api` only. Forward-pointer appended to #190 in the docx.
+- `sprint-4/match-notification-investigation` (research only, 2026-10-03) answers Decision Log #336 item 2 (match-specific alerts). Recommendation, appended to #336's docx Status cell: REUSE the Notification table and Notification Centre read path for the in-app record; BUILD a new MatchSubscription model and a @Cron kickoff job that fires from the already-stored `MatchData.kickoffTime` with zero vendor calls. The real blocker is delivery, not the schema: Notifications are pull-only (no push, email or realtime path exists), so a literal "notified at kickoff" needs a founder channel decision. Nothing was built.
 - Before trusting any of the above, check Build Plan Section 9 (Decision
   Log) directly rather than this summary if something looks off — this
   section has gone stale before.
