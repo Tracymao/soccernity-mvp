@@ -241,10 +241,11 @@ content a logged-out visitor should see).
 7. **`league` on `GET /sports/fixtures`/`GET /sports/live-scores`, and `season` on `GET
    /sports/standings`, are additional params beyond Section 4.6's literal query-string list** —
    flagged the same way Blog's `categoryId`/`categorySlug` filters were.
-8. **Highlightly's live box score contains populated xG fields (and a `matchRating` per player), which the
-   capability registry still marks unsupported/unconfirmed.** Observed 2026-10-03 on one finished match
-   (`highlightly-vs-sportmonks.md` Finding 5). Open: whether the registry should change, which needs field
-   coverage checked across more matches and a box-score ingest to exist first. The registry is unchanged here.
+8. **Highlightly's live box score contains populated xG fields (and a `matchRating` per player).** Observed
+   2026-10-03 on one finished match (`highlightly-vs-sportmonks.md` Finding 5). Resolved in the registry by
+   `sprint-4/box-score-rating-xg`: `expectedGoals` and `playerRatings` are now `supported` for Highlightly,
+   and `GET /sports/matches/:id/box-score` serves them. Still open: field coverage across more leagues and
+   matches, since the sample is one match, and whether the xG is Highlightly's own model or a third-party feed.
 
 ## Verification
 
@@ -276,7 +277,20 @@ content a logged-out visitor should see).
 Decision Log #313 (player RATING) and #336 items 1 and 3 (top scorers; xG, Pressure index, shot maps, expected lineups) are now wired to explicit availability signals rather than silently omitted.
 
 - Every such response field carries a `FieldAvailability`: `available`, `no_data`, or `not_available_from_provider`. It is derived by `fieldAvailability()` in `sports-data-provider.constants.ts`, which is built on `providerSupports()`, so there is still only one capability check.
-- `GET /sports/matches/:id/stats` returns `availability` for `playerRatings`, `expectedGoals`, `pressureIndex` and `shotMaps`. `GET /sports/matches/:id/lineups` returns `expectedLineups`. `GET /sports/top-scorers?league=&season=` (new) returns `availability` plus an always-empty `items`. The top-scorers route makes no vendor call and no database read.
-- Nothing is ingested for these fields yet, so each availability is computed with `hasData = false`. Under Highlightly all of them are `not_available_from_provider`. Under SportMonks, the fields it supports report `no_data`, and `shotMaps` and `expectedLineups` stay unavailable because their status is `unconfirmed`.
+- `GET /sports/matches/:id/stats` returns `availability` for `pressureIndex` and `shotMaps` only. Player ratings and xG moved to the box score (below), since their values come from there. `GET /sports/matches/:id/lineups` returns `expectedLineups`. `GET /sports/top-scorers?league=&season=` (new) returns `availability` plus an always-empty `items`. The top-scorers route makes no vendor call and no database read.
+- Nothing is ingested for `pressureIndex` and `shotMaps` yet, so each availability is computed with `hasData = false`. Under Highlightly both are `not_available_from_provider`.
+
+## Per-player box score and the call budget (sprint-4/box-score-rating-xg)
+
+`GET /sports/matches/:id/box-score` serves per-player `rating` (from the vendor's `matchRating`) and `expectedGoals` / `expectedAssists` (from the vendor's flat `statistics` object), plus a team xG total. Each team's xG is the sum of its players' values, or `null` when no player carries one. That sum is our inference, not a published vendor figure.
+
+Call-frequency reasoning, against the free-tier budget of 100 requests/day (Decision Log #323):
+
+- **On demand only.** The Match Centre fetches the box score when the Statistics tab opens (lazy, the same `useLazyTab` as every other sub-tab). No list endpoint (`/sports/fixtures`, `/sports/live-scores`) ever reads it, so browsing a full day of fixtures costs zero box-score calls.
+- **Refresh cadence.** Live matches refresh at most every 5 minutes (`SPORTS_BOX_SCORE_LIVE_CACHE_TTL_SECONDS`, default 300), matching Highlightly's own documented 5-minute refresh for this endpoint. Finished matches use the 24-hour TTL. Scheduled matches use the 6-hour TTL.
+- **Worst case per match.** A live match lasts about 110 minutes, so one continuously-viewed match costs at most about 22 box-score calls. A finished match costs one call per 24 hours. A single Statistics view of a finished match costs one call.
+- **Not solved here.** `GET /sports/matches/:id/stats` (team-level) still refreshes every 60 seconds while a match is live, so it can cost about 110 calls per live match if someone keeps the tab open. That was already true before this change. Raising `SPORTS_LIVE_CACHE_TTL_SECONDS` is the lever, and it needs a founder decision on the budget before we touch it.
+
+The box score is served from the `MatchData.boxScore` JSON column (migration `20261003155426_add_match_box_score`), with its own `boxScoreUpdatedAt` freshness timestamp. A failed refresh serves the last stored box score, the same degrade-to-cache rule as every other sub-resource. Under SportMonks, the fields it supports report `no_data`, and `shotMaps` and `expectedLineups` stay unavailable because their status is `unconfirmed`.
 - Switching `SPORTS_DATA_PROVIDER` changes only the registry result. `HighlightlyClient` remains the only `SportsDataClient`, so no SportMonks data is fetched.
 - The frontend renders any non-`available` state as a disabled placeholder (`apps/web/src/pages/sports-hub/FieldAvailabilityGate.tsx`), with wording that distinguishes "not available from current data provider" from "no data for this match yet".

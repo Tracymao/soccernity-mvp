@@ -18,6 +18,7 @@ import {
   type HeadToHead,
   type Highlights,
   type MatchAvailability,
+  type MatchBoxScore,
 } from "../../api/sports";
 import FieldAvailabilityGate from "./FieldAvailabilityGate";
 
@@ -27,6 +28,7 @@ vi.mock("../../api/sports", async () => {
     ...actual,
     getMatchById: vi.fn(),
     getMatchStatistics: vi.fn(),
+    getMatchBoxScore: vi.fn(),
     getMatchLineups: vi.fn(),
     getMatchEvents: vi.fn(),
     getMatchMomentum: vi.fn(),
@@ -40,6 +42,7 @@ vi.mock("../../api/sports", async () => {
 import {
   getMatchById,
   getMatchStatistics,
+  getMatchBoxScore,
   getMatchLineups,
   getMatchEvents,
   getMatchMomentum,
@@ -69,13 +72,16 @@ const LIVERPOOL_V_CHELSEA: MatchSummary = {
 };
 
 const EMPTY_EVENTS: MatchEvents = { items: [], updatedAt: null };
-const ALL_NOT_AVAILABLE: MatchAvailability = {
-  playerRatings: "not_available_from_provider",
-  expectedGoals: "not_available_from_provider",
+const STATS_NOT_AVAILABLE: MatchAvailability = {
   pressureIndex: "not_available_from_provider",
   shotMaps: "not_available_from_provider",
 };
-const EMPTY_STATS: MatchStatistics = { home: null, away: null, updatedAt: null, availability: ALL_NOT_AVAILABLE };
+const BOX_SCORE_NOT_AVAILABLE: MatchBoxScore["availability"] = {
+  playerRatings: "not_available_from_provider",
+  expectedGoals: "not_available_from_provider",
+};
+const EMPTY_BOX_SCORE: MatchBoxScore = { home: null, away: null, updatedAt: null, availability: BOX_SCORE_NOT_AVAILABLE };
+const EMPTY_STATS: MatchStatistics = { home: null, away: null, updatedAt: null, availability: STATS_NOT_AVAILABLE };
 const EMPTY_MOMENTUM: Momentum = { bars: [], markers: [], updatedAt: null };
 const EMPTY_H2H: HeadToHead = {
   meetings: [],
@@ -95,6 +101,7 @@ afterEach(cleanup);
 beforeEach(() => {
   vi.mocked(getMatchById).mockReset();
   vi.mocked(getMatchStatistics).mockReset().mockResolvedValue(EMPTY_STATS);
+  vi.mocked(getMatchBoxScore).mockReset().mockResolvedValue(EMPTY_BOX_SCORE);
   vi.mocked(getMatchLineups).mockReset().mockResolvedValue(EMPTY_LINEUPS);
   vi.mocked(getMatchEvents).mockReset().mockResolvedValue(EMPTY_EVENTS);
   vi.mocked(getMatchMomentum).mockReset().mockResolvedValue(EMPTY_MOMENTUM);
@@ -185,7 +192,7 @@ describe("MatchCentrePage", () => {
       home: { team: team("hp1", "Liverpool"), statistics: [{ label: "Ball Possession", value: "58%" }] },
       away: { team: team("ap1", "Chelsea"), statistics: [{ label: "Ball Possession", value: "42%" }] },
       updatedAt: null,
-      availability: ALL_NOT_AVAILABLE,
+      availability: STATS_NOT_AVAILABLE,
     });
 
     renderPage();
@@ -197,7 +204,7 @@ describe("MatchCentrePage", () => {
     expect(await screen.findByText("58%")).not.toBeNull();
     expect(screen.getByText("42%")).not.toBeNull();
     expect(screen.getByText("Ball Possession")).not.toBeNull();
-    expect(screen.getByText(/per-player statistics aren.t available/i)).not.toBeNull();
+    expect(screen.getByText(/Player ratings and expected goals are shown below/i)).not.toBeNull();
     expect(getMatchStatistics).toHaveBeenCalledWith("m1");
   });
 
@@ -392,7 +399,7 @@ describe("MatchCentrePage", () => {
         home: { team: team("hp1", "Liverpool"), statistics: [{ label: "Shots", value: 10 }] },
         away: { team: team("ap1", "Chelsea"), statistics: [{ label: "Shots", value: 8 }] },
         updatedAt: null,
-        availability: ALL_NOT_AVAILABLE,
+        availability: STATS_NOT_AVAILABLE,
       });
 
     renderPage();
@@ -416,7 +423,7 @@ describe("MatchCentrePage — vendor-dependent field placeholders", () => {
 
   it("renders each vendor-only Statistics metric as a disabled 'not available from provider' placeholder, with no value shown", async () => {
     vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
-    vi.mocked(getMatchStatistics).mockResolvedValueOnce({ ...TEAM_STATS, availability: ALL_NOT_AVAILABLE });
+    vi.mocked(getMatchStatistics).mockResolvedValueOnce({ ...TEAM_STATS, availability: STATS_NOT_AVAILABLE });
 
     renderPage();
     await screen.findByText("Liverpool");
@@ -436,11 +443,15 @@ describe("MatchCentrePage — vendor-dependent field placeholders", () => {
     vi.mocked(getMatchStatistics).mockResolvedValueOnce({
       ...TEAM_STATS,
       availability: {
-        playerRatings: "no_data",
-        expectedGoals: "not_available_from_provider",
         pressureIndex: "no_data",
         shotMaps: "not_available_from_provider",
       },
+    });
+    vi.mocked(getMatchBoxScore).mockResolvedValueOnce({
+      home: null,
+      away: null,
+      updatedAt: null,
+      availability: { playerRatings: "no_data", expectedGoals: "not_available_from_provider" },
     });
 
     renderPage();
@@ -451,9 +462,56 @@ describe("MatchCentrePage — vendor-dependent field placeholders", () => {
     expect(screen.getAllByText("Not available from current data provider")).toHaveLength(2);
   });
 
+  it("renders real player ratings and team xG from the box score when the provider supplies them", async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
+    vi.mocked(getMatchStatistics).mockResolvedValueOnce({ ...TEAM_STATS, availability: STATS_NOT_AVAILABLE });
+    vi.mocked(getMatchBoxScore).mockResolvedValueOnce({
+      home: {
+        team: team("hp1", "Liverpool"),
+        expectedGoals: 1.14,
+        players: [
+          { id: "10", name: "Salah", shirtNumber: 11, position: "Forward", isSubstitute: false, minutesPlayed: 90, rating: 8.2, expectedGoals: 0.89, expectedAssists: null },
+          { id: "11", name: "Bench", shirtNumber: 30, position: "Goalkeeper", isSubstitute: true, minutesPlayed: 0, rating: null, expectedGoals: null, expectedAssists: null },
+        ],
+      },
+      away: {
+        team: team("ap1", "Chelsea"),
+        expectedGoals: 0.25,
+        players: [{ id: "20", name: "Palmer", shirtNumber: 10, position: "Midfield", isSubstitute: false, minutesPlayed: 90, rating: 6.4, expectedGoals: 0.25, expectedAssists: null }],
+      },
+      updatedAt: null,
+      availability: { playerRatings: "available", expectedGoals: "available" },
+    });
+
+    renderPage();
+    await screen.findByText("Liverpool");
+    fireEvent.click(screen.getByRole("button", { name: "Statistics" }));
+
+    expect(await screen.findByText("Salah")).not.toBeNull();
+    expect(screen.getByText("8.2")).not.toBeNull();
+    expect(screen.getByText("1.14")).not.toBeNull();
+    expect(screen.getByText("0.25")).not.toBeNull();
+    // Only the metrics with no source at all remain gated.
+    expect(screen.queryByText("Player box score · RATING")).toBeNull();
+    expect(screen.getAllByText("Not available from current data provider")).toHaveLength(2);
+    expect(document.querySelectorAll('[aria-disabled="true"]')).toHaveLength(2);
+  });
+
+  it("does not fetch the box score until the Statistics tab is opened", async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
+
+    renderPage();
+    await screen.findByText("Liverpool");
+
+    expect(getMatchBoxScore).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Statistics" }));
+    await screen.findByText("Player box score · RATING");
+    expect(getMatchBoxScore).toHaveBeenCalledWith("m1");
+  });
+
   it("still shows the advanced-metric placeholders when team totals are missing entirely", async () => {
     vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
-    vi.mocked(getMatchStatistics).mockResolvedValueOnce({ home: null, away: null, updatedAt: null, availability: ALL_NOT_AVAILABLE });
+    vi.mocked(getMatchStatistics).mockResolvedValueOnce({ home: null, away: null, updatedAt: null, availability: STATS_NOT_AVAILABLE });
 
     renderPage();
     await screen.findByText("Liverpool");

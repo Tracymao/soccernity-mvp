@@ -4,6 +4,8 @@ import { MatchData, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   ListHighlightsParams,
+  RawBoxScorePlayer,
+  RawBoxScoreTeam,
   RawHighlight,
   RawLineupPlayer,
   RawLineups,
@@ -19,6 +21,7 @@ import { SportsRefreshLock } from '../../sports-data/sports-refresh-lock';
 import { decodeMatchCursor, encodeMatchCursor } from './cursor.util';
 import { deriveMomentum, MomentumChart } from './momentum.util';
 import {
+  DEFAULT_BOX_SCORE_LIVE_CACHE_TTL_SECONDS,
   DEFAULT_FINISHED_CACHE_TTL_SECONDS,
   DEFAULT_H2H_CACHE_TTL_SECONDS,
   DEFAULT_HIGHLIGHTS_CACHE_TTL_SECONDS,
@@ -80,24 +83,14 @@ export interface PublicTeamStatistics {
   statistics: PublicStatisticItem[];
 }
 
-// NOTE, stated plainly per this PR's own task brief: Highlightly's own /statistics/{matchId}
-// endpoint (confirmed against its documented example response) is TEAM-LEVEL ONLY — there is no
-// batched per-match player box-score endpoint. Per-player numbers exist only via
-// /players/{id}/statistics, called ONE PLAYER AT A TIME — reconstructing an 11-player box score for
-// one match would mean 20+ extra Highlightly calls (every starter + substitute on both sides), which
-// is not viable under the confirmed 100-requests/day free-tier budget (or any budget without a
-// materially higher paid-plan quota, which is itself unresolved — see README). The Figma redesign
-// this PR is wired against (`sprint-4/sports-hub-highlightly-data-redesign`) assumed player box
-// scores were available; they are NOT, from this vendor, without an unsustainable API-call fan-out.
-// This is a real, disclosed finding — see modules/sports/README.md's Decision Log candidate. No
-// synthetic/fabricated player rows are ever returned.
-// Availability of the vendor-only advanced metrics. See sports-data-provider.constants.ts's
-// FieldAvailability for the three states; none of these four is ingested into the cache yet, so
-// `hasData` is false by construction and only the provider's own capability can make one 'no_data'
-// instead of 'not_available_from_provider'.
+// This endpoint is TEAM-LEVEL ONLY. Per-player numbers come from GET /sports/matches/:id/box-score
+// (Highlightly's /box-score/{matchId}, one call per match), not from here.
+// Availability of the vendor-only advanced metrics that have NO source in the cache. See
+// sports-data-provider.constants.ts's FieldAvailability for the three states; `hasData` is false by
+// construction, so only the provider's own capability can make one 'no_data' instead of
+// 'not_available_from_provider'. Player ratings and expected goals come from the per-player box score,
+// so their signal lives on PublicMatchBoxScore.availability instead.
 export interface PublicMatchAvailability {
-  playerRatings: FieldAvailability;
-  expectedGoals: FieldAvailability;
   pressureIndex: FieldAvailability;
   shotMaps: FieldAvailability;
 }
@@ -248,7 +241,78 @@ export interface PublicHighlights {
   updatedAt: string | null;
 }
 
+// GET /sports/matches/:id/box-score — per-player numbers from Highlightly's Match Box Score endpoint.
+// Deliberately narrow: only the fields the Match Centre renders. The vendor's flat `statistics` object
+// carries ~40 keys; none of the others is surfaced until a screen asks for it.
+export interface PublicBoxScorePlayer {
+  id: string | null;
+  name: string;
+  shirtNumber: number | null;
+  position: string | null;
+  isSubstitute: boolean;
+  minutesPlayed: number | null;
+  // Parsed from the vendor's string (e.g. "6.44"). Its meaning is unverified; see the provider registry.
+  rating: number | null;
+  expectedGoals: number | null;
+  expectedAssists: number | null;
+}
+
+export interface PublicTeamBoxScore {
+  team: PublicTeamRef;
+  // Sum of the players' expectedGoals values, or null when no player carries one. An inference: the
+  // vendor is not known to publish a team-level xG total, and null-as-no-contribution is assumed.
+  expectedGoals: number | null;
+  players: PublicBoxScorePlayer[];
+}
+
+export interface PublicMatchBoxScoreAvailability {
+  playerRatings: FieldAvailability;
+  expectedGoals: FieldAvailability;
+}
+
+export interface PublicMatchBoxScore {
+  home: PublicTeamBoxScore | null;
+  away: PublicTeamBoxScore | null;
+  updatedAt: string | null;
+  availability: PublicMatchBoxScoreAvailability;
+}
+
 // ---------- internal helpers ----------
+
+// Vendor numeric fields arrive as numbers, numeric strings, or empty strings. Anything that isn't a
+// finite number becomes null, never 0: a missing xG is not the same fact as a zero xG.
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function toPublicBoxScorePlayer(p: RawBoxScorePlayer): PublicBoxScorePlayer {
+  return {
+    id: p.id != null ? String(p.id) : null,
+    name: p.name,
+    shirtNumber: toFiniteNumber(p.shirtNumber),
+    position: p.position ?? null,
+    isSubstitute: p.isSubstitute === true,
+    minutesPlayed: toFiniteNumber(p.minutesPlayed),
+    rating: toFiniteNumber(p.matchRating),
+    expectedGoals: toFiniteNumber(p.statistics?.expectedGoals),
+    expectedAssists: toFiniteNumber(p.statistics?.expectedAssists),
+  };
+}
+
+function toPublicTeamBoxScore(raw: RawBoxScoreTeam): PublicTeamBoxScore {
+  const players = raw.players.map(toPublicBoxScorePlayer);
+  const xgValues = players.map((p) => p.expectedGoals).filter((v): v is number => v != null);
+  return {
+    team: toPublicTeamRef(String(raw.team.id), raw.team.name, raw.team.logo ?? null),
+    expectedGoals: xgValues.length > 0 ? xgValues.reduce((sum, v) => sum + v, 0) : null,
+    players,
+  };
+}
 
 function toPublicTeamRef(id: string | null, name: string | null, logo: string | null): PublicTeamRef {
   return { id: id ?? '', name: name ?? 'Unknown', logo };
@@ -312,6 +376,7 @@ export class SportsService {
   private readonly standingsTtl: number;
   private readonly h2hTtl: number;
   private readonly highlightsTtl: number;
+  private readonly boxScoreLiveTtl: number;
   private readonly maxRefreshPages: number;
   private readonly provider: SportsDataProvider;
 
@@ -327,6 +392,7 @@ export class SportsService {
     this.standingsTtl = config.get<number>('SPORTS_STANDINGS_CACHE_TTL_SECONDS') ?? DEFAULT_STANDINGS_CACHE_TTL_SECONDS;
     this.h2hTtl = config.get<number>('SPORTS_H2H_CACHE_TTL_SECONDS') ?? DEFAULT_H2H_CACHE_TTL_SECONDS;
     this.highlightsTtl = config.get<number>('SPORTS_HIGHLIGHTS_CACHE_TTL_SECONDS') ?? DEFAULT_HIGHLIGHTS_CACHE_TTL_SECONDS;
+    this.boxScoreLiveTtl = config.get<number>('SPORTS_BOX_SCORE_LIVE_CACHE_TTL_SECONDS') ?? DEFAULT_BOX_SCORE_LIVE_CACHE_TTL_SECONDS;
     // Bounds how many /matches pages (each page = one real Highlightly request) a single date
     // refresh will fetch, even if Highlightly reports more pages exist (`pagination.totalCount`
     // exceeding one page's own `limit`). A deliberate, disclosed cap against the daily budget — a
@@ -590,17 +656,48 @@ export class SportsService {
     const home = cached.find((t) => String(t.team.id) === row.homeTeamId) ?? cached[0];
     const away = cached.find((t) => String(t.team.id) === row.awayTeamId) ?? cached[1];
 
-    // Team-level statistics the cache can hold never include these four vendor-only metrics, so each is
-    // hasData=false, so the signal is the provider capability alone. Flipping SPORTS_DATA_PROVIDER in
+    // Team-level statistics never include these two vendor-only metrics, so each is hasData=false and the
+    // signal is the provider capability alone. Flipping SPORTS_DATA_PROVIDER in
     // sports-data-provider.constants.ts is what changes these values — no edit here.
     const availability: PublicMatchAvailability = {
-      playerRatings: this.availabilityFor('playerRatings', false),
-      expectedGoals: this.availabilityFor('expectedGoals', false),
       pressureIndex: this.availabilityFor('pressureIndex', false),
       shotMaps: this.availabilityFor('shotMaps', false),
     };
 
     return { home: toTeamStats(home), away: toTeamStats(away), updatedAt: row.statisticsUpdatedAt?.toISOString() ?? null, availability };
+  }
+
+  // GET /sports/matches/:id/box-score. Called only from the Match Centre's Statistics tab, never from a
+  // list endpoint, so one vendor call is spent per match a user actually opens. Same cache-through shape
+  // as the other sub-resources: a failed refresh serves the last stored box score.
+  async getMatchBoxScore(externalRef: string): Promise<PublicMatchBoxScore> {
+    let row = await this.getMatchRowOrThrow(externalRef);
+    const phase = row.status as MatchPhase;
+    const ttl = phase === 'live' ? this.boxScoreLiveTtl : this.ttlForPhase(phase);
+    const isFresh = row.boxScoreUpdatedAt != null && Date.now() - row.boxScoreUpdatedAt.getTime() < ttl * 1000;
+
+    await this.refreshIfStale(`sports:refresh:match:${externalRef}:boxscore`, ttl, isFresh, async () => {
+      const raw = await this.client.getMatchBoxScore(externalRef);
+      row = await this.prisma.matchData.update({
+        where: { externalRef },
+        data: { boxScore: raw as unknown as Prisma.InputJsonValue, boxScoreUpdatedAt: new Date() },
+      });
+    });
+
+    const cached = (row.boxScore as unknown as RawBoxScoreTeam[] | null) ?? [];
+    const homeRaw = cached.find((t) => String(t.team.id) === row.homeTeamId) ?? cached[0];
+    const awayRaw = cached.find((t) => String(t.team.id) === row.awayTeamId) ?? cached[1];
+    const home = homeRaw ? toPublicTeamBoxScore(homeRaw) : null;
+    const away = awayRaw && awayRaw !== homeRaw ? toPublicTeamBoxScore(awayRaw) : null;
+
+    // hasData is taken from what is actually cached, so 'available' is never claimed for an empty row.
+    const players = [...(home?.players ?? []), ...(away?.players ?? [])];
+    const availability: PublicMatchBoxScoreAvailability = {
+      playerRatings: this.availabilityFor('playerRatings', players.some((p) => p.rating != null)),
+      expectedGoals: this.availabilityFor('expectedGoals', players.some((p) => p.expectedGoals != null)),
+    };
+
+    return { home, away, updatedAt: row.boxScoreUpdatedAt?.toISOString() ?? null, availability };
   }
 
   // GET /sports/matches/:id/lineups — also derives `substitutions` from the already-cached `events`

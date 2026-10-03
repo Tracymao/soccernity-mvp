@@ -32,8 +32,9 @@ describe('sports data provider capability registry', () => {
   });
 
   it('flipping the provider changes what the capability check returns', () => {
-    // The six fields Highlightly cannot supply today (Decision Log #336 + README data gap #2).
-    const hiddenOnHighlightly: SportsDataField[] = ['topScorers', 'expectedGoals', 'pressureIndex', 'shotMaps', 'playerRatings', 'standingsForm'];
+    // The fields Highlightly cannot supply today (Decision Log #336 + README data gap #2). expectedGoals
+    // and playerRatings are NOT here: the live box score carries both (Decision Log #324).
+    const hiddenOnHighlightly: SportsDataField[] = ['topScorers', 'pressureIndex', 'shotMaps', 'standingsForm'];
     for (const field of hiddenOnHighlightly) expect(providerSupports('highlightly', field)).toBe(false);
 
     // SportMonks documents all of them except shot maps (docs do not confirm shot-location data).
@@ -46,8 +47,8 @@ describe('sports data provider capability registry', () => {
   });
 
   it("treats 'unconfirmed' exactly like 'unsupported' — only 'supported' passes", () => {
-    expect(SPORTS_DATA_PROVIDER_CAPABILITIES.highlightly.playerRatings.status).toBe('unconfirmed');
-    expect(providerSupports('highlightly', 'playerRatings')).toBe(false);
+    expect(SPORTS_DATA_PROVIDER_CAPABILITIES.highlightly.topScorers.status).toBe('unsupported');
+    expect(SPORTS_DATA_PROVIDER_CAPABILITIES.highlightly.expectedLineups.status).toBe('unsupported');
     expect(SPORTS_DATA_PROVIDER_CAPABILITIES.sportmonks.shotMaps.status).toBe('unconfirmed');
     expect(providerSupports('sportmonks', 'shotMaps')).toBe(false);
   });
@@ -59,6 +60,13 @@ describe('sports data provider capability registry', () => {
     expect(fieldAvailability('sportmonks', 'topScorers', true)).toBe('available');
     // unconfirmed is treated as unavailable, same as unsupported
     expect(fieldAvailability('sportmonks', 'shotMaps', true)).toBe('not_available_from_provider');
+  });
+
+  it('marks player ratings and xG supported on highlightly, backed by the live box score (Decision Log #324)', () => {
+    expect(providerSupports('highlightly', 'playerRatings')).toBe(true);
+    expect(providerSupports('highlightly', 'expectedGoals')).toBe(true);
+    expect(providerSupports('highlightly', 'playerBoxScores')).toBe(true);
+    expect(providerSupports('highlightly', 'pressureIndex')).toBe(false);
   });
 
   it('records the vendor-specific facts the doc relies on', () => {

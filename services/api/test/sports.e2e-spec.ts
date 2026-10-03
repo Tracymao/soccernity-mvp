@@ -156,8 +156,6 @@ describe('Sports Hub e2e (Build Plan Section 4.6)', () => {
 
       const stats = await request(server()).get(`/sports/matches/${row.externalRef}/stats`).expect(200);
       expect(stats.body.availability).toEqual({
-        playerRatings: 'not_available_from_provider',
-        expectedGoals: 'not_available_from_provider',
         pressureIndex: 'not_available_from_provider',
         shotMaps: 'not_available_from_provider',
       });

@@ -267,7 +267,7 @@ describe('SportsService', () => {
   describe('vendor-only field availability signals (sports-data-provider.constants.ts)', () => {
     const statsRow = () => matchRow({ statistics: [], statisticsUpdatedAt: new Date() });
 
-    it('marks playerRatings, expectedGoals, pressureIndex and shotMaps not_available_from_provider on highlightly', async () => {
+    it('marks pressureIndex and shotMaps not_available_from_provider on highlightly (ratings and xG live on the box score)', async () => {
       const prisma = buildPrismaMock();
       (prisma.matchData.findUnique as jest.Mock).mockResolvedValue(statsRow());
       const service = new SportsService(prisma, buildClientMock(), buildLockMock(true), buildConfig());
@@ -275,8 +275,6 @@ describe('SportsService', () => {
       const { availability } = await service.getMatchStatistics('match-1');
 
       expect(availability).toEqual({
-        playerRatings: 'not_available_from_provider',
-        expectedGoals: 'not_available_from_provider',
         pressureIndex: 'not_available_from_provider',
         shotMaps: 'not_available_from_provider',
       });
@@ -290,8 +288,6 @@ describe('SportsService', () => {
       const { availability } = await service.getMatchStatistics('match-1');
 
       expect(availability).toEqual({
-        playerRatings: 'no_data',
-        expectedGoals: 'no_data',
         pressureIndex: 'no_data',
         shotMaps: 'not_available_from_provider',
       });

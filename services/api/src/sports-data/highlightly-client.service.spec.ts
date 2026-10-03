@@ -143,6 +143,17 @@ describe('HighlightlyClient', () => {
     expect(stats).toEqual([{ team: { id: 1, name: 'A' }, statistics: [] }]);
   });
 
+  it('getMatchBoxScore calls GET /box-score/{matchId} and returns the top-level team array unmodified', async () => {
+    const fetchSpy = jest.fn().mockResolvedValue(mockJsonResponse(200, [{ team: { id: 1, name: 'A' }, players: [] }]));
+    global.fetch = fetchSpy as unknown as typeof fetch;
+    const client = new HighlightlyClient(buildConfig(), buildBudget());
+
+    const box = await client.getMatchBoxScore('42');
+
+    expect(box).toEqual([{ team: { id: 1, name: 'A' }, players: [] }]);
+    expect(String((fetchSpy.mock.calls[0] as unknown[])[0])).toContain('/box-score/42');
+  });
+
   it('getHighlights sends matchId/limit/offset as query params and unwraps {data, pagination}', async () => {
     const fetchSpy = jest.fn().mockResolvedValue(mockJsonResponse(200, { data: [], pagination: { totalCount: 0 } }));
     global.fetch = fetchSpy as unknown as typeof fetch;
