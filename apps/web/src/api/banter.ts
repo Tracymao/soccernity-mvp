@@ -43,11 +43,15 @@ export type BanterRoomScopeType = "club" | "league" | "country" | "topic";
 // an opaque id (no organiser PII) so a client can tell whether the caller
 // created the room. `joined` is per-caller, computed server-side
 // (Decision Log #154 pattern) -- never derived client-side.
+// BanterRoom.status (Decision Log #357) — drives the room's status dot.
+export type BanterRoomStatus = "active" | "inactive";
+
 export interface BanterRoom {
   id: string;
   name: string;
   scopeType: BanterRoomScopeType;
   createdBy: string;
+  status: BanterRoomStatus;
   memberCount: number;
   joined: boolean;
 }

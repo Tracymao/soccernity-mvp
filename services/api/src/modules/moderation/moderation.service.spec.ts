@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { encodeModerationCursor } from './cursor.util';
 import { ModerationService } from './moderation.service';
@@ -24,6 +24,9 @@ function buildPrismaMock() {
       findUnique: jest.fn(),
     },
     user: {
+      findUnique: jest.fn(),
+    },
+    banterRoom: {
       findUnique: jest.fn(),
     },
     // schema/report-severity-escalation-admin-vetting-application —
@@ -77,12 +80,26 @@ function buildAdminActionLogServiceMock() {
   };
 }
 
+// Decision Log #357 — ModerationService now also takes BanterService, used
+// only for the room_deactivated action's status write.
+function buildBanterServiceMock() {
+  return {
+    setRoomStatus: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
 function buildService(
   prisma: PrismaService,
   emailService = buildEmailServiceMock(),
   adminActionLogService = buildAdminActionLogServiceMock(),
+  banterService = buildBanterServiceMock(),
 ): ModerationService {
-  return new ModerationService(prisma, emailService as never, adminActionLogService as never);
+  return new ModerationService(
+    prisma,
+    emailService as never,
+    adminActionLogService as never,
+    banterService as never,
+  );
 }
 
 function report(overrides: Partial<Record<string, unknown>> = {}) {
@@ -856,6 +873,94 @@ describe('ModerationService', () => {
   });
 
   // ---------- PATCH /admin/moderation/reports/:id/appeal ----------
+
+  describe('actionReport — banter_room target (Decision Log #357)', () => {
+    it('room_deactivated sets the room inactive through BanterService, inside the same transaction', async () => {
+      const prisma = buildPrismaMock();
+      const banterService = buildBanterServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', targetType: 'banter_room', targetId: 'room-1' }),
+      );
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ createdBy: 'creator-1' });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'creator-1' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(
+        report({ status: 'actioned', actionTaken: 'room_deactivated' }),
+      );
+      const service = buildService(prisma, buildEmailServiceMock(), buildAdminActionLogServiceMock(), banterService);
+
+      await service.actionReport('report-1', 'admin-1', { action: 'room_deactivated' });
+
+      expect(banterService.setRoomStatus).toHaveBeenCalledTimes(1);
+      expect(banterService.setRoomStatus).toHaveBeenCalledWith(prisma, 'room-1', 'inactive');
+    });
+
+    it('a banter_room report with any other action does NOT touch the room status', async () => {
+      const prisma = buildPrismaMock();
+      const banterService = buildBanterServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', targetType: 'banter_room', targetId: 'room-1' }),
+      );
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ createdBy: 'creator-1' });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'creator-1' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(
+        report({ status: 'actioned', actionTaken: 'warning_issued' }),
+      );
+      const service = buildService(prisma, buildEmailServiceMock(), buildAdminActionLogServiceMock(), banterService);
+
+      await service.actionReport('report-1', 'admin-1', { action: 'warning_issued' });
+
+      expect(banterService.setRoomStatus).not.toHaveBeenCalled();
+    });
+
+    it('room_deactivated against a non-room target is a 400 and records nothing', async () => {
+      const prisma = buildPrismaMock();
+      const banterService = buildBanterServiceMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'open', targetType: 'post' }));
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+      const service = buildService(prisma, buildEmailServiceMock(), buildAdminActionLogServiceMock(), banterService);
+
+      await expect(service.actionReport('report-1', 'admin-1', { action: 'room_deactivated' })).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.report.update).not.toHaveBeenCalled();
+      expect(banterService.setRoomStatus).not.toHaveBeenCalled();
+    });
+
+    it('notifies the room creator when their account still exists', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', targetType: 'banter_room', targetId: 'room-1' }),
+      );
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ createdBy: 'creator-1' });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'creator-1' });
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
+      const service = buildService(prisma);
+
+      await service.actionReport('report-1', 'admin-1', { action: 'warning_issued' });
+
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: { userId: 'creator-1', type: 'moderation_decision', payloadRefId: 'report-1' },
+      });
+    });
+
+    it('a dangling createdBy (creator hard-deleted, Decision Log #44) is skipped rather than failing the transaction', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', targetType: 'banter_room', targetId: 'room-1' }),
+      );
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ createdBy: 'gone-user' });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'actioned' }));
+      const service = buildService(prisma);
+
+      await service.actionReport('report-1', 'admin-1', { action: 'warning_issued' });
+
+      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: { userId: 'reporter-1', type: 'moderation_decision', payloadRefId: 'report-1' },
+      });
+    });
+  });
 
   describe('decideAppeal', () => {
     it('404s when the report does not exist', async () => {

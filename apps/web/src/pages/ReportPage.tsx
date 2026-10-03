@@ -41,6 +41,7 @@ const TARGET_TYPE_LABELS: Record<ReportTargetType, string> = {
   post: "A post",
   comment: "A comment",
   user: "A user account",
+  banter_room: "A Bants room",
 };
 
 const REASON_MAX_LENGTH = 500;

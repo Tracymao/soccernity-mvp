@@ -26,5 +26,8 @@ import { BanterService } from './banter.service';
   imports: [AuthFoundationModule, FeedModule],
   controllers: [BanterController],
   providers: [BanterService, PrismaService],
+  // Exported so ModerationModule can call setRoomStatus inside the
+  // room_deactivated report action (Decision Log #357).
+  exports: [BanterService],
 })
 export class BanterModule {}

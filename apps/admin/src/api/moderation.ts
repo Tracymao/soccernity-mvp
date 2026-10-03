@@ -29,14 +29,17 @@ import { AdminApiError, adminFetch } from "./adminClient";
 // import from services/api, so this is this codebase's usual per-side
 // copy (the same convention api/contest.ts's own header comment
 // describes for its own types).
-export const REPORT_TARGET_TYPES = ["post", "user", "comment"] as const;
+export const REPORT_TARGET_TYPES = ["post", "user", "comment", "banter_room"] as const;
 export type ReportTargetType = (typeof REPORT_TARGET_TYPES)[number];
 
+// room_deactivated is valid only against a banter_room report (Decision
+// Log #357); ReportDetailPage offers it only in that case.
 export const REPORT_ACTIONS = [
   "content_removed",
   "warning_issued",
   "user_suspended",
   "dismissed",
+  "room_deactivated",
 ] as const;
 export type ReportAction = (typeof REPORT_ACTIONS)[number];
 
@@ -87,6 +90,7 @@ export const REPORT_ACTION_LABELS: Record<ReportAction, string> = {
   warning_issued: "Warn User",
   user_suspended: "Suspend User",
   dismissed: "Dismiss Report",
+  room_deactivated: "Deactivate Room",
 };
 
 // The real Report row — services/api prisma/schema.prisma's `Report`
@@ -102,7 +106,7 @@ export interface Report {
   reporterId: string | null;
   reporterContactEmail: string | null;
   reporterContactName: string | null;
-  targetType: string; // "post" | "user" | "comment"
+  targetType: string; // "post" | "user" | "comment" | "banter_room"
   targetId: string;
   reason: string;
   status: string; // "open" | "reviewed" | "actioned"

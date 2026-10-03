@@ -758,6 +758,59 @@ describe('BanterService', () => {
     });
   });
 
+  describe('updateRoomStatus (Decision Log #357)', () => {
+    it('404s for an unknown room, writing nothing', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new BanterService(prisma, buildFeedMock());
+
+      await expect(service.updateRoomStatus('user-1', 'nope', { status: 'inactive' })).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(prisma.banterRoom.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('403s when the caller is not the room creator, writing nothing', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ id: 'room-1' });
+      (prisma.banterRoom.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdBy: 'someone-else' });
+      const service = new BanterService(prisma, buildFeedMock());
+
+      await expect(service.updateRoomStatus('user-1', 'room-1', { status: 'inactive' })).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(prisma.banterRoom.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('the creator sets the status and gets the room back', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findUnique as jest.Mock)
+        .mockResolvedValueOnce({ id: 'room-1' })
+        .mockResolvedValueOnce({
+          id: 'room-1',
+          name: 'Room',
+          scopeType: 'topic',
+          scopeRef: null,
+          scopeName: null,
+          createdBy: 'user-1',
+          status: 'inactive',
+          memberCount: 1,
+          topics: [],
+        });
+      (prisma.banterRoom.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdBy: 'user-1' });
+      (prisma.banterRoom.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+      const service = new BanterService(prisma, buildFeedMock());
+
+      const result = await service.updateRoomStatus('user-1', 'room-1', { status: 'inactive' });
+
+      expect(prisma.banterRoom.updateMany).toHaveBeenCalledWith({
+        where: { id: 'room-1' },
+        data: { status: 'inactive' },
+      });
+      expect(result.status).toBe('inactive');
+    });
+  });
+
   describe('listTopics', () => {
     it('orders alphabetically by name asc, id asc', async () => {
       const prisma = buildPrismaMock();

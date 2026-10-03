@@ -388,8 +388,27 @@
 }
 
 .banter-room__name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font: 600 15px "Inter", sans-serif;
   color: var(--sn-text-primary);
+}
+
+/* Decision Log #357 — Figma Status Dot, 8px circle. */
+.banter-status-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.banter-status-dot--active {
+  background: var(--sn-brand-green);
+}
+
+.banter-status-dot--inactive {
+  background: var(--sn-icon-inactive);
 }
 
 .banter-room__meta {

@@ -31,3 +31,8 @@ export const BANTER_ROOMS_MAX_PAGE_SIZE = 50;
 // surfaces.
 export const BANTER_TOPICS_DEFAULT_PAGE_SIZE = 20;
 export const BANTER_TOPICS_MAX_PAGE_SIZE = 50;
+
+// BanterRoom.status (Decision Log #357) — the Figma Bants room status dot.
+// Plain String column, service-enforced allow-list, same as scopeType.
+export const BANTER_ROOM_STATUSES = ['active', 'inactive'] as const;
+export type BanterRoomStatus = (typeof BANTER_ROOM_STATUSES)[number];

@@ -6,6 +6,7 @@ import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
 import { AuthRateLimitModule } from '../auth/rate-limit/rate-limit.module';
+import { BanterModule } from '../banter/banter.module';
 import { AdminModerationController } from './admin-moderation.controller';
 import { ModerationService } from './moderation.service';
 import { PublicReportsController } from './public-reports.controller';
@@ -58,6 +59,8 @@ import { ReportsController } from './reports.controller';
     AuthRateLimitModule,
     ConfigModule,
     AdminActionLogModule,
+    // Decision Log #357 — BanterService.setRoomStatus for room_deactivated.
+    BanterModule,
   ],
   controllers: [ReportsController, PublicReportsController, AdminModerationController],
   providers: [ModerationService, PrismaService, RegistrationEmailService],

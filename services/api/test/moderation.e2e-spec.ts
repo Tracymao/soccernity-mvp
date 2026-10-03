@@ -407,6 +407,50 @@ describe('Moderation e2e: report -> action -> appeal -> second-reviewer review',
     expect(ids).not.toContain(first.body.id);
   });
 
+  // ---------- banter_room target + room_deactivated (Decision Log #357) ----------
+
+  it('a banter_room report can be actioned room_deactivated, which flips the real BanterRoom.status inside the same transaction; room_deactivated on a post is rejected 400', async () => {
+    const reporter = await createUser('room-reporter');
+    const creator = await createUser('room-creator');
+    const moderator = await createAdmin('room-mod', 'moderator');
+    const prisma = getTestPrismaClient();
+    const room = await prisma.banterRoom.create({
+      data: { name: `Room ${rand()}`, scopeType: 'topic', createdBy: creator.userId, memberCount: 1 },
+    });
+    const postId = await seedPost(creator.userId);
+
+    const reportRes = await request(server())
+      .post('/reports')
+      .set(auth(reporter.accessToken))
+      .send({ targetType: 'banter_room', targetId: room.id, reason: 'abusive room' })
+      .expect(201);
+
+    await request(server())
+      .patch(`/admin/moderation/reports/${reportRes.body.id}`)
+      .set(auth(moderator.accessToken))
+      .send({ action: 'room_deactivated' })
+      .expect(200);
+
+    const after = await prisma.banterRoom.findUnique({ where: { id: room.id } });
+    expect(after?.status).toBe('inactive');
+    const actioned = await prisma.report.findUnique({ where: { id: reportRes.body.id } });
+    expect(actioned?.actionTaken).toBe('room_deactivated');
+    expect(actioned?.status).toBe('actioned');
+
+    const postReport = await request(server())
+      .post('/reports')
+      .set(auth(reporter.accessToken))
+      .send({ targetType: 'post', targetId: postId, reason: 'spam' })
+      .expect(201);
+    await request(server())
+      .patch(`/admin/moderation/reports/${postReport.body.id}`)
+      .set(auth(moderator.accessToken))
+      .send({ action: 'room_deactivated' })
+      .expect(400);
+    const untouched = await prisma.report.findUnique({ where: { id: postReport.body.id } });
+    expect(untouched?.status).toBe('open');
+  });
+
   // ---------- severity (schema/report-severity-escalation-admin-vetting-application) ----------
 
   it('POST /reports defaults severity to medium when omitted, and persists an explicit value when given', async () => {

@@ -723,6 +723,13 @@ model BanterRoom {
   // room's creator may attach topics") — see banter/README.md's Permission
   // model section for the full reasoning.
   createdBy   String
+  // Decision Log #357 — "active" | "inactive", the Figma Bants room status
+  // dot. A plain String with a service-enforced allow-list (BanterService),
+  // the same convention as scopeType. Settable by the room creator
+  // (PATCH /banter-rooms/:id/status) and by a moderator's room_deactivated
+  // action via the Report/moderation queue. Only "inactive" is ever
+  // written by moderation; there is no moderator "reactivate" action.
+  status      String             @default("active")
   // Denormalized cache of members.count(), the same discipline as
   // Post.likeCount / ClubPage.memberCount. sprint-3/banter-rooms-backend
   // keeps this in sync transactionally alongside every BanterRoomMember
