@@ -25,6 +25,34 @@ vi.mock("../api/leaderboard", async () => {
   };
 });
 
+vi.mock("../api/users", async () => {
+  const actual = await vi.importActual<typeof import("../api/users")>("../api/users");
+  return {
+    ...actual,
+    getUser: vi.fn(),
+  };
+});
+
+import { getUser } from "../api/users";
+import type { UserProfile } from "../api/users";
+
+function profileWithRepresented(club: { id: string; name: string } | null): UserProfile {
+  return {
+    id: "user-1",
+    email: "fan@example.com",
+    phone: null,
+    displayName: "Fan",
+    dateOfBirth: "1998-07-04",
+    isMinor: false,
+    role: "fan",
+    verificationStatus: "unverified",
+    createdAt: new Date().toISOString(),
+    clubAffiliationId: null,
+    isTeamOrganiser: false,
+    representedClub: club,
+  };
+}
+
 vi.mock("../api/contest", async () => {
   const actual = await vi.importActual<typeof import("../api/contest")>("../api/contest");
   return {
@@ -126,6 +154,8 @@ beforeEach(() => {
   vi.mocked(getCurrentContest).mockResolvedValue(contestResponse());
   vi.mocked(getLeaderboard).mockReset();
   vi.mocked(getLeaderboard).mockResolvedValue(LB_PAGE);
+  vi.mocked(getUser).mockReset();
+  vi.mocked(getUser).mockResolvedValue(profileWithRepresented(null));
 });
 
 function renderPage(path = "/leaderboard") {
@@ -302,13 +332,40 @@ describe("LeaderboardPage", () => {
 
     const clubSelect = screen.getByLabelText("Club") as HTMLSelectElement;
     // Only the two `joined: true` clubs are real options -- NOT_JOINED is excluded.
+    // The "No represented club" placeholder appears too, since this caller has none.
     const optionLabels = within(clubSelect)
       .getAllByRole("option")
       .map((o) => o.textContent);
-    expect(optionLabels).toEqual(["Ikoyi Rovers FC", "Port Harcourt Blues"]);
+    expect(optionLabels).toEqual(["No represented club", "Ikoyi Rovers FC", "Port Harcourt Blues"]);
 
     fireEvent.click(screen.getByRole("radio", { name: "By club" }));
     expect(clubSelect.disabled).toBe(false);
+  });
+
+  it("pre-selects the caller's real represented club from GET /users/:id, not the first joined club", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI, PORT_HARCOURT], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValueOnce(profileWithRepresented({ id: PORT_HARCOURT.id, name: PORT_HARCOURT.name }));
+
+    renderPage("/leaderboard?tab=contest");
+    await screen.findByText("Chukwu James");
+
+    const clubSelect = screen.getByLabelText("Club") as HTMLSelectElement;
+    expect(clubSelect.value).toBe(PORT_HARCOURT.id);
+    expect(within(clubSelect).queryByRole("option", { name: "No represented club" })).toBeNull();
+  });
+
+  it("shows a 'No represented club' placeholder when the caller has none, rather than silently selecting a joined club", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI, PORT_HARCOURT], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValueOnce(profileWithRepresented(null));
+
+    renderPage("/leaderboard?tab=contest");
+    await screen.findByText("Chukwu James");
+
+    const clubSelect = screen.getByLabelText("Club") as HTMLSelectElement;
+    expect(clubSelect.value).toBe("");
+    expect(within(clubSelect).getByRole("option", { name: "No represented club" })).not.toBeNull();
   });
 
   it("shows a 'no clubs joined' message when By club is selected with zero real memberships (Contest tab)", async () => {

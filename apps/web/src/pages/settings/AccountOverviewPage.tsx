@@ -3,12 +3,12 @@
 // Overview" (Decision Log #230 audit). Rows: Account information · Club
 // representation · Change password · Deactivate account · Delete account.
 //
-// Only the last two have a screen in code (the real deactivate / delete
-// flows). The other three are visibly disabled with a "not built yet"
-// note rather than linking nowhere: their leaves (Account Info gate+edit
-// 2922:6396/2924:7112, Change Password 2924:6870, Club Representation
-// 5570:7813) are follow-up PRs, and Account Information's Username/Country
-// also lack backing columns (Decision Log #58).
+// Built here: Deactivate, Delete, and Club representation (the selector,
+// Decision Log #74, 5570:7813 — a standalone flow screen opened from this
+// row). Account information and Change password stay visibly disabled
+// with a "not built yet" note: their leaves (2922:6396/2924:7112, 2924:6870)
+// are follow-up PRs, and Account Information's Username/Country also lack
+// backing columns (Decision Log #58).
 import { Link } from "react-router";
 import { getStoredAccessToken } from "../../lib/session";
 
@@ -20,7 +20,11 @@ interface Row {
 
 const ROWS: Row[] = [
   { label: "Account information", desc: "Your name, phone, and email" },
-  { label: "Club representation", desc: "Set your represented club" },
+  {
+    label: "Club representation",
+    desc: "Set your represented club",
+    to: "/settings/account/club-representation",
+  },
   { label: "Change password", desc: "Update your password and sign out other sessions" },
   {
     label: "Deactivate account",

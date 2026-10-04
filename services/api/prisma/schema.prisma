@@ -128,6 +128,17 @@ model User {
   // at all.
   clubMemberships ClubPage[] @relation("ClubMembership")
 
+  // Decision Log #74 / #128 -- the ONE club this user "represents" for the
+  // Leaderboard's By-club scope and points attribution. Deliberately a
+  // separate, explicitly named relation: NOT clubAffiliationId (dead,
+  // written by nothing) and NOT clubMemberships (the fan-page m2m join).
+  // Must always be one of the user's own clubMemberships -- enforced in
+  // UsersService.setRepresentedClub, not by the database. Cleared by
+  // ClubsService.leaveClub when the user leaves that club. Set only via
+  // PATCH /users/:id/represented-club.
+  representedClubId String?
+  representedClub   ClubPage? @relation("RepresentedClub", fields: [representedClubId], references: [id], onDelete: SetNull)
+
   // sprint-3/banter-rooms-backend — the reverse side of
   // BanterRoomMember.user (see that model). Mechanical array field
   // required by Prisma; no business data of its own.
@@ -460,6 +471,10 @@ model ClubPage {
   // this module. Section 4.4 has no "list users declaring this as their
   // club" endpoint, and none is added speculatively here.
   affiliatedPlayers User[] @relation("ClubAffiliation")
+
+  // Reverse side of User.representedClub (Decision Log #74). Mechanical
+  // array field required by Prisma; no endpoint reads it.
+  representedBy User[] @relation("RepresentedClub")
 
   posts Post[]
 }

@@ -28,6 +28,14 @@ export interface UserProfile {
   // pages/grassroots/organiser.ts) -- browsing stays visible to every
   // logged-in user regardless of this flag.
   isTeamOrganiser: boolean;
+  // Decision Log #74 -- the one club this user represents, or null. Written
+  // only via setRepresentedClub below. `name` is included so the selector and
+  // Leaderboard can show it without a second request.
+  representedClub: { id: string; name: string } | null;
+}
+
+export interface RepresentedClubResult {
+  representedClub: { id: string; name: string } | null;
 }
 
 // PATCH /users/:id's real, confirmed field allowlist (update-user.dto.ts)
@@ -175,4 +183,26 @@ export async function unfollowUser(accessToken: string, userId: string): Promise
     throw new UsersApiError(`Couldn't unfollow that user (${response.status}).`, { status: response.status });
   }
   return (await response.json()) as { following: boolean };
+}
+
+// PATCH /users/:id/represented-club (Decision Log #74) — the one club this
+// user represents for Leaderboard points/By-club scope. `clubId: null`
+// unrepresents. The server rejects any club the caller hasn't joined
+// (400), so the client only ever offers joined clubs.
+export async function setRepresentedClub(
+  accessToken: string,
+  userId: string,
+  clubId: string | null,
+): Promise<RepresentedClubResult> {
+  const response = await authedFetch(`/users/${userId}/represented-club`, accessToken, {
+    method: "PATCH",
+    body: JSON.stringify({ clubId }),
+  });
+  if (!response.ok) {
+    let message = `Couldn't update your represented club (${response.status}).`;
+    const body = await response.json().catch(() => null);
+    if (body && typeof body.message === "string") message = body.message;
+    throw new UsersApiError(message, { status: response.status });
+  }
+  return (await response.json()) as RepresentedClubResult;
 }

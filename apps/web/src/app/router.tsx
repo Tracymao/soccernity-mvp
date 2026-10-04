@@ -74,6 +74,7 @@ import SettingsLayout from "../pages/settings/SettingsLayout";
 import SettingsLandingPage from "../pages/settings/SettingsLandingPage";
 import SettingsMenuPage from "../pages/settings/SettingsMenuPage";
 import AccountOverviewPage from "../pages/settings/AccountOverviewPage";
+import ClubRepresentationPage from "../pages/settings/ClubRepresentationPage";
 import SecurityOverviewPage from "../pages/settings/SecurityOverviewPage";
 import TwoFactorAuthPage from "../pages/settings/TwoFactorAuthPage";
 import NotificationPreferencesPage from "../pages/settings/NotificationPreferencesPage";
@@ -361,6 +362,10 @@ export const routes: RouteObject[] = [
           { path: "display/data-usage", element: <DataUsagePage /> },
         ],
       },
+      // Decision Log #74 — the represented-club selector. A standalone flow
+      // screen in Figma (own top bar, no Settings rail), so it sits directly
+      // under AppShell rather than inside SettingsLayout.
+      { path: "settings/account/club-representation", element: <ClubRepresentationPage /> },
       // Old flat paths (linked from earlier builds) redirect, not 404.
       { path: "settings/deactivate", element: <Navigate to="/settings/account/deactivate" replace /> },
       { path: "settings/delete-account", element: <Navigate to="/settings/account/delete" replace /> },

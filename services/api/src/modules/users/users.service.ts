@@ -43,6 +43,9 @@ const OWN_PROFILE_SELECT = {
   // sprint-1/under-16-restrictions: only ever forwarded (as
   // guardianContact) when isUnder16 -- see toOwnProfile below.
   guardian: { select: { email: true } },
+  // Decision Log #74 -- the one club this user represents (Leaderboard
+  // By-club scope). Read-only here; written only by setRepresentedClub.
+  representedClub: { select: { id: true, name: true } },
 } as const;
 
 export type OwnProfile = {
@@ -65,9 +68,14 @@ export type OwnProfile = {
   // individual own-profile read/update -- no list/roster/feed shape
   // selects Guardian at all.
   guardianContact: { label: 'Guardian contact'; email: string } | null;
+  representedClub: { id: string; name: string } | null;
 };
 
 type OwnProfileRow = Omit<OwnProfile, 'guardianContact'> & { guardian: { email: string } | null };
+
+export interface RepresentedClubResult {
+  representedClub: { id: string; name: string } | null;
+}
 
 function toOwnProfile({ guardian, ...rest }: OwnProfileRow): OwnProfile {
   return {
@@ -231,6 +239,31 @@ export class UsersService {
     }
 
     throw new NotFoundException('User not found');
+  }
+
+  // PATCH /users/:id/represented-club (Decision Log #74). A non-null clubId
+  // must be one of the caller's own club memberships (ClubPage.members) —
+  // checked here, not in the DTO, because it needs a database read. Any
+  // other club id (not joined, or non-existent) is a 400, not a 404: the
+  // caller named a club as an input they can't use. null is valid and
+  // unrepresents the club. Same shape as BanterService.updateRoomStatus:
+  // validate, write, return the resulting view.
+  async setRepresentedClub(userId: string, clubId: string | null): Promise<RepresentedClubResult> {
+    if (clubId !== null) {
+      const membership = await this.prisma.clubPage.findFirst({
+        where: { id: clubId, members: { some: { id: userId } } },
+        select: { id: true },
+      });
+      if (!membership) {
+        throw new BadRequestException('You can only represent a club you have joined');
+      }
+    }
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { representedClubId: clubId },
+      select: { representedClub: { select: { id: true, name: true } } },
+    });
+    return { representedClub: updated.representedClub };
   }
 
   // POST /users/:id/follow. followerId is the caller (from the verified

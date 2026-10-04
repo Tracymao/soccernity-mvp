@@ -30,22 +30,18 @@
 //     ContestBoard below. `?tab=contest` deep-links this tab (used by the
 //     Contest page's connector).
 //
-// The ONE piece of real data on this page is the CLUB filter's options:
-// Decision Log #128 ties the "By club" scope to the caller's real
-// `User.clubMemberships`, and GET /clubs (already live, Decision Log
-// #154) is the real source for "which clubs is this user a member of."
-// There is, however, no live endpoint for the single explicitly-selected
-// "represented club" Decision Log #74/#128 describes (no schema column,
-// no endpoint -- see CLAUDE.md's "Backend requirements parked" list).
-// Per this task's own instruction, that selector is wired against a
-// typed stub instead of blocking the page: the dropdown lists the
-// caller's REAL joined clubs, but which one is "represented" lives only
-// in this component's local state, not persisted anywhere. Flagged as a
-// new Decision Log entry (see this PR's description) rather than left
-// undocumented.
+// The CLUB filter's options are the caller's real joined clubs (Decision
+// Log #128 ties "By club" to clubMemberships; GET /clubs, Decision Log
+// #154, is the source). Its initial selection is the caller's real
+// represented club from GET /users/:id (Decision Log #74, PATCH
+// /users/:id/represented-club). Changing the dropdown here is a local view
+// filter only: it does NOT write the represented club. The Settings
+// selector owns that write. Wiring this control into the club-axis
+// leaderboard is Decision Log #128's own follow-up, not built here.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { listClubs, ClubsApiError, type ClubSummary } from "../api/clubs";
+import { getUser } from "../api/users";
 import { getCurrentContest, type CurrentContestResponse } from "../api/contest";
 import { getLeaderboard, type LeaderboardEntryView } from "../api/leaderboard";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
@@ -240,14 +236,21 @@ export default function LeaderboardPage() {
     setLoadState("loading");
     try {
       const page = await listClubs(token);
-      const joined = page.items.filter((c) => c.joined);
-      setMyClubs(joined);
-      setRepresentedClubId((prev) => prev ?? joined[0]?.id ?? null);
+      setMyClubs(page.items.filter((c) => c.joined));
     } catch (err) {
       // A failed clubs fetch shouldn't block the whole board -- Global
       // scope and the tables still render; only the "By club" option
       // becomes unavailable.
       setClubsError(err instanceof ClubsApiError);
+    }
+    if (myUserId) {
+      try {
+        const profile = await getUser(token, myUserId);
+        setRepresentedClubId(profile.representedClub?.id ?? null);
+      } catch {
+        // Leaves the CLUB filter with no represented club selected; the
+        // board itself is unaffected.
+      }
     }
     try {
       setContest(await getCurrentContest(token));
@@ -263,7 +266,7 @@ export default function LeaderboardPage() {
       setOverallError(true);
     }
     setLoadState("loaded");
-  }, [token]);
+  }, [token, myUserId]);
 
   async function loadMoreOverall() {
     if (!token || !overallCursor || loadingMore) return;
@@ -380,6 +383,7 @@ export default function LeaderboardPage() {
             onChange={(e) => setRepresentedClubId(e.target.value || null)}
           >
             {myClubs.length === 0 && <option value="">No clubs joined yet</option>}
+            {myClubs.length > 0 && representedClubId === null && <option value="">No represented club</option>}
             {myClubs.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}

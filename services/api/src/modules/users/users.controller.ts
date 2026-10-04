@@ -3,6 +3,7 @@ import { CurrentUser } from '../auth/guards/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
 import { FeedQueryDto } from '../feed/dto/feed-query.dto';
+import { SetRepresentedClubDto } from './dto/set-represented-club.dto';
 import { SuggestedUsersQueryDto } from './dto/suggested-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { SUGGESTED_USERS_DEFAULT_LIMIT, SUGGESTED_USERS_MAX_LIMIT } from './suggested-users.constants';
@@ -82,6 +83,20 @@ export class UsersController {
   ) {
     this.assertSelf(id, user);
     return this.usersService.updateOwnProfile(user.sub, dto);
+  }
+
+  // PATCH /users/:id/represented-club (Decision Log #74) — a dedicated
+  // route, not UpdateUserDto's generic allowlist, because the value needs
+  // a cross-entity check (must be one of the caller's own club
+  // memberships). Self-only, same assertSelf check as PATCH /users/:id.
+  @Patch(':id/represented-club')
+  async setRepresentedClub(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: SetRepresentedClubDto,
+  ) {
+    this.assertSelf(id, user);
+    return this.usersService.setRepresentedClub(user.sub, dto.clubId);
   }
 
   // NOTE: user.sub (from the verified JWT) is what's actually passed to

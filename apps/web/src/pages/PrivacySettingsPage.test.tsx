@@ -43,6 +43,7 @@ const ADULT: UserProfile = {
   createdAt: "2026-01-15T00:00:00.000Z",
   clubAffiliationId: null,
   isTeamOrganiser: false,
+  representedClub: null,
 };
 
 const MINOR: UserProfile = { ...ADULT, id: "user-2", email: "minor@example.com", isMinor: true };
