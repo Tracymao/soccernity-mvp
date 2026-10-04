@@ -57,10 +57,10 @@ stateless util, not a provider).
   obvious spam vector; only the "once per distinct target" rule blunts it
   today. The Sprint 6 Leaderboard aggregation is the natural place to cap
   engagement contribution at read time.
-- **`PointsLedgerEntry.clubId`** is always `null` today — the
-  represented-club field/endpoint doesn't exist (Decision Log #74/#128).
-  When it lands, the award sites should snapshot it so a historical
-  per-club Leaderboard can filter on it.
+- **`PointsLedgerEntry.clubId`** is a snapshot of the user's represented
+  club at award time, written by `awardPoints()` (Decision Log #128). Rows
+  earned before that change are NULL and unattributed. See
+  `leaderboard/README.md`'s "Club boards" section.
 - **`competition_result`** is a reserved `PointsSource` value with no
   writer — Decision Log #73's Competition umbrella (Prediction /
   Commentary) is still Build Plan Section 2.2-deferred.

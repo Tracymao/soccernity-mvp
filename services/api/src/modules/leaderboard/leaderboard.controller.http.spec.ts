@@ -55,7 +55,7 @@ describe('LeaderboardController (HTTP layer)', () => {
 
       await request(app.getHttpServer()).get('/leaderboard').expect(200);
 
-      expect(leaderboardService.getLeaderboard).toHaveBeenCalledWith({});
+      expect(leaderboardService.getLeaderboard).toHaveBeenCalledWith(CALLER.sub, {});
     });
 
     it('passes period/cursor/limit query params through to the service', async () => {
@@ -67,7 +67,7 @@ describe('LeaderboardController (HTTP layer)', () => {
         .query({ period: '2026-W33', cursor: 'abc', limit: '10' })
         .expect(200);
 
-      expect(leaderboardService.getLeaderboard).toHaveBeenCalledWith({
+      expect(leaderboardService.getLeaderboard).toHaveBeenCalledWith(CALLER.sub, {
         period: '2026-W33',
         cursor: 'abc',
         limit: 10,
@@ -107,6 +107,26 @@ describe('LeaderboardController (HTTP layer)', () => {
 
       const res = await request(app.getHttpServer()).get('/leaderboard').expect(200);
       expect(res.body).toEqual(body);
+    });
+  });
+
+  describe('GET /leaderboard?clubId=', () => {
+    it('passes a valid clubId through to the service, alongside the caller id', async () => {
+      app = await buildApp(true);
+      leaderboardService.getLeaderboard.mockResolvedValue({ items: [], nextCursor: null });
+      const clubId = '11111111-1111-4111-8111-111111111111';
+
+      await request(app.getHttpServer()).get(`/leaderboard?clubId=${clubId}`).expect(200);
+
+      expect(leaderboardService.getLeaderboard).toHaveBeenCalledWith(CALLER.sub, { clubId });
+    });
+
+    it('rejects a clubId that is not a UUID with 400, before reaching the service', async () => {
+      app = await buildApp(true);
+
+      await request(app.getHttpServer()).get('/leaderboard?clubId=not-a-uuid').expect(400);
+
+      expect(leaderboardService.getLeaderboard).not.toHaveBeenCalled();
     });
   });
 });

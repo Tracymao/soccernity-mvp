@@ -1714,8 +1714,13 @@ model LeaderboardEntry {
   points Int    @default(0)
   rank   Int?
   period String // e.g. "2026-W33"
+  // Decision Log #128 -- which board this row belongs to: '' = the Overall
+  // (global) board, otherwise a ClubPage id for that club's board. An empty
+  // string rather than NULL so the unique key below stays enforceable
+  // (Postgres treats NULLs as distinct in a UNIQUE index).
+  clubId String @default("")
 
-  @@unique([userId, period])
+  @@unique([userId, period, clubId])
 }
 
 // ---------- Play & Compete: Contest (weekly skill-challenge cycle) ----------
@@ -1877,10 +1882,12 @@ model PointsLedgerEntry {
   // ConsentAuditRecord.minorUserId.
   refId      String
   points     Int
-  // Snapshot of the user's represented club at award time — NULL for now
-  // (Decision Log #74/#128: the represented-club field/endpoint doesn't
-  // exist yet). When it lands, the award sites should populate this so a
-  // historical per-club Leaderboard can filter on it. Flagged follow-up.
+  // Snapshot of the user's represented club at award time (Decision Log
+  // #128). Populated by awardPoints() from User.representedClubId, so a
+  // later change of represented club never moves already-earned points.
+  // NULL = unattributed: either the user represented no club when the
+  // point was earned, or the point predates this column (no backfill —
+  // see leaderboard/README.md).
   clubId     String?
   occurredAt DateTime @default(now())
 

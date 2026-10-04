@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { encodeLeaderboardCursor } from './cursor.util';
 import { getCurrentIsoWeekPeriod } from './iso-week.util';
@@ -7,6 +7,7 @@ import { LeaderboardService } from './leaderboard.service';
 function buildMock() {
   const prisma = {
     leaderboardEntry: { findMany: jest.fn() },
+    user: { findUnique: jest.fn() },
   } as unknown as PrismaService;
   return prisma;
 }
@@ -27,7 +28,7 @@ describe('LeaderboardService', () => {
       const prisma = buildMock();
       (prisma.leaderboardEntry.findMany as jest.Mock).mockResolvedValue([]);
 
-      await new LeaderboardService(prisma).getLeaderboard({});
+      await new LeaderboardService(prisma).getLeaderboard('caller-1', {});
 
       const call = (prisma.leaderboardEntry.findMany as jest.Mock).mock.calls[0][0];
       expect(call.where.period).toBe(getCurrentIsoWeekPeriod());
@@ -37,7 +38,7 @@ describe('LeaderboardService', () => {
       const prisma = buildMock();
       (prisma.leaderboardEntry.findMany as jest.Mock).mockResolvedValue([]);
 
-      await new LeaderboardService(prisma).getLeaderboard({ period: '2026-W33' });
+      await new LeaderboardService(prisma).getLeaderboard('caller-1', { period: '2026-W33' });
 
       const call = (prisma.leaderboardEntry.findMany as jest.Mock).mock.calls[0][0];
       expect(call.where.period).toBe('2026-W33');
@@ -46,7 +47,7 @@ describe('LeaderboardService', () => {
     it('rejects a malformed period with 400 before ever querying Postgres', async () => {
       const prisma = buildMock();
 
-      await expect(new LeaderboardService(prisma).getLeaderboard({ period: 'not-a-period' })).rejects.toThrow(
+      await expect(new LeaderboardService(prisma).getLeaderboard('caller-1', { period: 'not-a-period' })).rejects.toThrow(
         BadRequestException,
       );
       expect(prisma.leaderboardEntry.findMany).not.toHaveBeenCalled();
@@ -54,7 +55,7 @@ describe('LeaderboardService', () => {
 
     it('rejects an out-of-range week with 400', async () => {
       const prisma = buildMock();
-      await expect(new LeaderboardService(prisma).getLeaderboard({ period: '2025-W53' })).rejects.toThrow(
+      await expect(new LeaderboardService(prisma).getLeaderboard('caller-1', { period: '2025-W53' })).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -63,7 +64,7 @@ describe('LeaderboardService', () => {
       const prisma = buildMock();
       (prisma.leaderboardEntry.findMany as jest.Mock).mockResolvedValue([]);
 
-      await new LeaderboardService(prisma).getLeaderboard({ period: '2026-W33' });
+      await new LeaderboardService(prisma).getLeaderboard('caller-1', { period: '2026-W33' });
 
       const call = (prisma.leaderboardEntry.findMany as jest.Mock).mock.calls[0][0];
       expect(call.where.user).toEqual({ accountStatus: 'active' });
@@ -73,7 +74,7 @@ describe('LeaderboardService', () => {
       const prisma = buildMock();
       (prisma.leaderboardEntry.findMany as jest.Mock).mockResolvedValue([]);
 
-      await new LeaderboardService(prisma).getLeaderboard({ period: '2026-W33' });
+      await new LeaderboardService(prisma).getLeaderboard('caller-1', { period: '2026-W33' });
 
       const call = (prisma.leaderboardEntry.findMany as jest.Mock).mock.calls[0][0];
       expect(call.orderBy).toEqual([{ rank: 'asc' }, { userId: 'asc' }]);
@@ -86,7 +87,7 @@ describe('LeaderboardService', () => {
         row({ userId: 'u-2', rank: 2, points: 180, displayName: 'Bob' }),
       ]);
 
-      const result = await new LeaderboardService(prisma).getLeaderboard({ period: '2026-W33', limit: 20 });
+      const result = await new LeaderboardService(prisma).getLeaderboard('caller-1', { period: '2026-W33', limit: 20 });
 
       expect(result).toEqual({
         items: [
@@ -106,7 +107,7 @@ describe('LeaderboardService', () => {
       ];
       (prisma.leaderboardEntry.findMany as jest.Mock).mockResolvedValue(rows);
 
-      const result = await new LeaderboardService(prisma).getLeaderboard({ period: '2026-W33', limit: 2 });
+      const result = await new LeaderboardService(prisma).getLeaderboard('caller-1', { period: '2026-W33', limit: 2 });
 
       const call = (prisma.leaderboardEntry.findMany as jest.Mock).mock.calls[0][0];
       expect(call.take).toBe(3);
@@ -122,7 +123,7 @@ describe('LeaderboardService', () => {
       // The DTO itself would reject > 50 at the HTTP layer (class-validator
       // @Max), but the service is defensive too, matching the DTO's own
       // ceiling exactly rather than trusting the caller.
-      await new LeaderboardService(prisma).getLeaderboard({ period: '2026-W33', limit: 999 });
+      await new LeaderboardService(prisma).getLeaderboard('caller-1', { period: '2026-W33', limit: 999 });
 
       const call = (prisma.leaderboardEntry.findMany as jest.Mock).mock.calls[0][0];
       expect(call.take).toBe(51);
@@ -132,7 +133,7 @@ describe('LeaderboardService', () => {
       const prisma = buildMock();
       (prisma.leaderboardEntry.findMany as jest.Mock).mockResolvedValue([]);
 
-      await new LeaderboardService(prisma).getLeaderboard({ period: '2026-W33' });
+      await new LeaderboardService(prisma).getLeaderboard('caller-1', { period: '2026-W33' });
 
       const call = (prisma.leaderboardEntry.findMany as jest.Mock).mock.calls[0][0];
       expect(call.take).toBe(21);
@@ -143,7 +144,7 @@ describe('LeaderboardService', () => {
       (prisma.leaderboardEntry.findMany as jest.Mock).mockResolvedValue([]);
       const cursor = encodeLeaderboardCursor({ rank: 5, userId: 'u-5' });
 
-      await new LeaderboardService(prisma).getLeaderboard({ period: '2026-W33', cursor });
+      await new LeaderboardService(prisma).getLeaderboard('caller-1', { period: '2026-W33', cursor });
 
       const call = (prisma.leaderboardEntry.findMany as jest.Mock).mock.calls[0][0];
       expect(call.where.OR).toEqual([
@@ -155,7 +156,7 @@ describe('LeaderboardService', () => {
     it('rejects an invalid cursor with 400', async () => {
       const prisma = buildMock();
       await expect(
-        new LeaderboardService(prisma).getLeaderboard({ period: '2026-W33', cursor: 'not-base64-json' }),
+        new LeaderboardService(prisma).getLeaderboard('caller-1', { period: '2026-W33', cursor: 'not-base64-json' }),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -163,9 +164,60 @@ describe('LeaderboardService', () => {
       const prisma = buildMock();
       (prisma.leaderboardEntry.findMany as jest.Mock).mockResolvedValue([]);
 
-      const result = await new LeaderboardService(prisma).getLeaderboard({ period: '2026-W01' });
+      const result = await new LeaderboardService(prisma).getLeaderboard('caller-1', { period: '2026-W01' });
 
       expect(result).toEqual({ items: [], nextCursor: null });
     });
+  });
+});
+
+describe('LeaderboardService club boards (Decision Log #128)', () => {
+  it('reads the Overall board (clubId "") when no clubId is supplied', async () => {
+    const prisma = buildMock();
+    (prisma.leaderboardEntry.findMany as jest.Mock).mockResolvedValue([]);
+
+    await new LeaderboardService(prisma).getLeaderboard('caller-1', { period: '2026-W33' });
+
+    const call = (prisma.leaderboardEntry.findMany as jest.Mock).mock.calls[0][0];
+    expect(call.where.clubId).toBe('');
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('reads the club board for the represented club of the caller', async () => {
+    const prisma = buildMock();
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ representedClubId: 'club-a' });
+    (prisma.leaderboardEntry.findMany as jest.Mock).mockResolvedValue([]);
+
+    await new LeaderboardService(prisma).getLeaderboard('caller-1', {
+      period: '2026-W33',
+      clubId: 'club-a',
+    });
+
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({
+      where: { id: 'caller-1' },
+      select: { representedClubId: true },
+    });
+    const call = (prisma.leaderboardEntry.findMany as jest.Mock).mock.calls[0][0];
+    expect(call.where.clubId).toBe('club-a');
+  });
+
+  it('refuses a club the caller does not represent, without reading the board', async () => {
+    const prisma = buildMock();
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ representedClubId: 'club-a' });
+
+    await expect(
+      new LeaderboardService(prisma).getLeaderboard('caller-1', { period: '2026-W33', clubId: 'club-b' }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.leaderboardEntry.findMany).not.toHaveBeenCalled();
+  });
+
+  it('refuses any clubId when the caller represents no club', async () => {
+    const prisma = buildMock();
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ representedClubId: null });
+
+    await expect(
+      new LeaderboardService(prisma).getLeaderboard('caller-1', { period: '2026-W33', clubId: 'club-a' }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.leaderboardEntry.findMany).not.toHaveBeenCalled();
   });
 });

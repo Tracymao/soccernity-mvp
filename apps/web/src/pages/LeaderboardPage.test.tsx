@@ -184,7 +184,7 @@ describe("LeaderboardPage", () => {
     expect(screen.getByText("4,860")).not.toBeNull();
     expect(screen.getByText("You")).not.toBeNull(); // the caller's own row (sub === userId)
     expect(listClubs).toHaveBeenCalledWith(expect.any(String));
-    expect(getLeaderboard).toHaveBeenCalledWith(expect.any(String));
+    expect(getLeaderboard).toHaveBeenCalled();
     // No club / 7-day-change columns -- the endpoint has neither.
     expect(screen.queryByRole("columnheader", { name: "Club" })).toBeNull();
     expect(screen.queryByRole("columnheader", { name: "7-day change" })).toBeNull();
@@ -232,18 +232,39 @@ describe("LeaderboardPage", () => {
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull(); // no more pages
   });
 
-  it("disables By club and All-time on the Overall board with a note (no fake client-side filtering)", async () => {
+  it("disables By club on the Overall board, with a reason, when the caller represents no club", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValueOnce(profileWithRepresented(null));
 
     renderPage();
     await screen.findByText("Emeka John");
 
-    expect((screen.getByRole("radio", { name: "By club" }) as HTMLButtonElement).disabled).toBe(true);
+    const byClub = screen.getByRole("radio", { name: "By club" }) as HTMLButtonElement;
+    expect(byClub.disabled).toBe(true);
+    expect(byClub.title).toMatch(/choose a club to represent/i);
     expect((screen.getByRole("radio", { name: "All-time" }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByRole("radio", { name: "Weekly" }).getAttribute("aria-checked")).toBe("true");
     expect(screen.getByText(/ranks this week only/i)).not.toBeNull();
+    expect(screen.getByText(/you don.t represent a club yet/i)).not.toBeNull();
     expect((screen.getByLabelText("Club") as HTMLSelectElement).disabled).toBe(true);
+  });
+
+  it("enables By club on the Overall board for the represented club and requests that club's board", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValueOnce(profileWithRepresented({ id: IKOYI.id, name: IKOYI.name }));
+
+    renderPage();
+    await screen.findByText("Emeka John");
+
+    expect((screen.getByRole("radio", { name: "By club" }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("radio", { name: "By club" }));
+
+    await waitFor(() =>
+      expect(getLeaderboard).toHaveBeenLastCalledWith(expect.any(String), { clubId: IKOYI.id }),
+    );
+    expect(screen.queryByText(/you don.t represent a club yet/i)).toBeNull();
   });
 
   it("switches to the Contest tab and shows the real weekly winners from GET /contest/current", async () => {

@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { LEADERBOARD_MAX_PAGE_SIZE } from '../leaderboard.constants';
 
 // GET /leaderboard?period=&cursor=&limit= — Build Plan Section 4.9 /
@@ -20,6 +20,12 @@ export class LeaderboardQueryDto {
   @IsOptional()
   @IsString()
   period?: string;
+
+  // Decision Log #128 -- the club board for the caller's own represented
+  // club. Authorised in LeaderboardController, not here.
+  @IsOptional()
+  @IsUUID()
+  clubId?: string;
 
   @IsOptional()
   @IsString()

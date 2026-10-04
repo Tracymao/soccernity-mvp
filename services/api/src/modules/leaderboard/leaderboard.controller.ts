@@ -1,4 +1,6 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { CurrentUser } from '../auth/guards/current-user.decorator';
+import { AccessTokenPayload } from '../auth/token/token.types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { LeaderboardQueryDto } from './dto/leaderboard-query.dto';
 import { LeaderboardService } from './leaderboard.service';
@@ -17,7 +19,7 @@ export class LeaderboardController {
   // see leaderboard.service.ts's own comment.
   @Get()
   @UseGuards(JwtAuthGuard)
-  async list(@Query() query: LeaderboardQueryDto) {
-    return this.leaderboardService.getLeaderboard(query);
+  async list(@CurrentUser() user: AccessTokenPayload, @Query() query: LeaderboardQueryDto) {
+    return this.leaderboardService.getLeaderboard(user.sub, query);
   }
 }

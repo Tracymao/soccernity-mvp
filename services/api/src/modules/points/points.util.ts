@@ -26,9 +26,10 @@ export interface AwardPointsInput {
   // ContestCycle id, depending on source. See PointsLedgerEntry.refId.
   refId: string;
   points: number;
-  // Snapshot of the user's represented club at award time. Always
-  // undefined today (Decision Log #74/#128 — the field doesn't exist);
-  // wired through so award sites need no signature change when it lands.
+  // Snapshot of the user's represented club at award time (Decision Log
+  // #128). Left undefined by every award site: awardPoints reads
+  // User.representedClubId inside the same transaction. Passed explicitly
+  // only by a caller that already knows the club to attribute to.
   clubId?: string | null;
   // Defaults to now(). Passed explicitly where the "real" event time
   // differs from the write time (e.g. a post's own createdAt).
@@ -44,6 +45,11 @@ export async function awardPoints(
   tx: Prisma.TransactionClient,
   input: AwardPointsInput,
 ): Promise<boolean> {
+  const clubId =
+    input.clubId !== undefined
+      ? input.clubId
+      : ((await tx.user.findUnique({ where: { id: input.userId }, select: { representedClubId: true } }))
+          ?.representedClubId ?? null);
   try {
     await tx.pointsLedgerEntry.create({
       data: {
@@ -51,7 +57,7 @@ export async function awardPoints(
         source: input.source,
         refId: input.refId,
         points: input.points,
-        clubId: input.clubId ?? null,
+        clubId,
         occurredAt: input.occurredAt ?? new Date(),
       },
     });
