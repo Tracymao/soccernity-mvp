@@ -14,7 +14,6 @@ vi.mock("../api/banter", async () => {
   return {
     ...actual,
     listRooms: vi.fn(),
-    listTopics: vi.fn(),
     getMyRooms: vi.fn(),
     createRoom: vi.fn(),
     joinRoom: vi.fn(),
@@ -32,7 +31,7 @@ vi.mock("../api/users", async () => {
   return { ...actual, getUser: vi.fn() };
 });
 
-import { listRooms, listTopics, getMyRooms } from "../api/banter";
+import { listRooms, getMyRooms } from "../api/banter";
 import { getUser } from "../api/users";
 import { listJoinedClubs } from "../api/clubs";
 
@@ -88,10 +87,6 @@ beforeEach(() => {
   vi.mocked(getUser).mockReset().mockResolvedValue(profile());
   vi.mocked(listRooms).mockReset().mockResolvedValue(page([room()]));
   vi.mocked(getMyRooms).mockReset();
-  vi.mocked(listTopics).mockReset().mockResolvedValue({
-    items: [{ id: "t-1", name: "Transfers" }],
-    nextCursor: null,
-  });
   vi.mocked(listJoinedClubs).mockReset().mockResolvedValue([]);
   window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
 });
@@ -115,15 +110,14 @@ describe("BanterPage filters — desktop modal", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Club" }));
     fireEvent.change(within(dialog).getByLabelText("From"), { target: { value: "2026-10-01" } });
     fireEvent.change(within(dialog).getByLabelText("To"), { target: { value: "2026-10-04" } });
-    await waitFor(() => expect(within(dialog).getByRole("combobox", { name: "Tag" })).not.toBeNull());
-    fireEvent.change(within(dialog).getByRole("combobox", { name: "Tag" }), { target: { value: "t-1" } });
+    fireEvent.change(within(dialog).getByRole("searchbox", { name: "Tag" }), { target: { value: "Arsenal" } });
     fireEvent.change(within(dialog).getByLabelText("Search rooms"), { target: { value: " derby " } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Search" }));
 
     await waitFor(() =>
       expect(listRooms).toHaveBeenLastCalledWith(expect.any(String), {
         scopeType: "club",
-        topicId: "t-1",
+        tagQuery: "Arsenal",
         dateFrom: "2026-10-01",
         dateTo: "2026-10-04",
         q: "derby",

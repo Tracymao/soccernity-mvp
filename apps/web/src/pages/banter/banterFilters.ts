@@ -1,11 +1,12 @@
 // The Bants room-list filters (Decision Log #358). One shape shared by the
 // desktop filter modal, the mobile filter panel and the active-filter chip
 // row, so every surface agrees on what is applied.
-import type { BanterRoomFilters, BanterRoomScopeType, BanterTopic } from "../../api/banter";
+import type { BanterRoomFilters, BanterRoomScopeType } from "../../api/banter";
 
 export interface BanterFilters {
   scopeType: BanterRoomScopeType | null;
-  topic: BanterTopic | null;
+  // Free-text "Tag" search (topic name, creator name, scoped club name).
+  tagQuery: string;
   // ISO dates (YYYY-MM-DD) from the native date inputs, or "" when unset.
   dateFrom: string;
   dateTo: string;
@@ -14,7 +15,7 @@ export interface BanterFilters {
 
 export const NO_BANTER_FILTERS: BanterFilters = {
   scopeType: null,
-  topic: null,
+  tagQuery: "",
   dateFrom: "",
   dateTo: "",
   q: "",
@@ -43,7 +44,7 @@ export function dateRangeError(f: Pick<BanterFilters, "dateFrom" | "dateTo">): s
 export function toRoomFilters(f: BanterFilters): BanterRoomFilters {
   return {
     ...(f.scopeType ? { scopeType: f.scopeType } : {}),
-    ...(f.topic ? { topicId: f.topic.id } : {}),
+    ...(f.tagQuery ? { tagQuery: f.tagQuery } : {}),
     ...(f.dateFrom ? { dateFrom: f.dateFrom } : {}),
     ...(f.dateTo ? { dateTo: f.dateTo } : {}),
     ...(f.q ? { q: f.q } : {}),
@@ -51,7 +52,7 @@ export function toRoomFilters(f: BanterFilters): BanterRoomFilters {
 }
 
 export function hasAnyFilter(f: BanterFilters): boolean {
-  return Boolean(f.scopeType || f.topic || f.dateFrom || f.dateTo || f.q);
+  return Boolean(f.scopeType || f.tagQuery || f.dateFrom || f.dateTo || f.q);
 }
 
 function formatIsoDate(iso: string): string {
@@ -71,14 +72,14 @@ export function dateRangeLabel(f: Pick<BanterFilters, "dateFrom" | "dateTo">): s
 }
 
 export interface FilterChip {
-  key: "scope" | "topic" | "date" | "q";
+  key: "scope" | "tag" | "date" | "q";
   label: string;
 }
 
 export function activeFilterChips(f: BanterFilters): FilterChip[] {
   const chips: FilterChip[] = [];
   if (f.scopeType) chips.push({ key: "scope", label: scopeOptionLabel(f.scopeType) });
-  if (f.topic) chips.push({ key: "topic", label: `#${f.topic.name}` });
+  if (f.tagQuery) chips.push({ key: "tag", label: `“${f.tagQuery}”` });
   const date = dateRangeLabel(f);
   if (date) chips.push({ key: "date", label: date });
   if (f.q) chips.push({ key: "q", label: `“${f.q}”` });

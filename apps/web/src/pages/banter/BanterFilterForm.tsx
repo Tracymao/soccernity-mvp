@@ -3,7 +3,7 @@
 // on submit. Rendered inside a dialog on desktop and as a full-screen panel
 // on mobile, so the form itself stays identical across breakpoints.
 import { useState, type FormEvent } from "react";
-import type { BanterRoomScopeType, BanterTopic } from "../../api/banter";
+import type { BanterRoomScopeType } from "../../api/banter";
 import {
   NO_BANTER_FILTERS,
   SCOPE_OPTIONS,
@@ -12,32 +12,20 @@ import {
 } from "./banterFilters";
 import "./BanterFilterForm.css";
 
-export type TopicsState = "idle" | "loading" | "loaded" | "error";
-
 interface BanterFilterFormProps {
   initial: BanterFilters;
-  topics: BanterTopic[];
-  topicsState: TopicsState;
-  onRetryTopics: () => void;
   onApply: (next: BanterFilters) => void;
   onCancel: () => void;
 }
 
-export default function BanterFilterForm({
-  initial,
-  topics,
-  topicsState,
-  onRetryTopics,
-  onApply,
-  onCancel,
-}: BanterFilterFormProps) {
+export default function BanterFilterForm({ initial, onApply, onCancel }: BanterFilterFormProps) {
   const [draft, setDraft] = useState<BanterFilters>(initial);
   const rangeError = dateRangeError(draft);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (rangeError) return;
-    onApply({ ...draft, q: draft.q.trim() });
+    onApply({ ...draft, tagQuery: draft.tagQuery.trim(), q: draft.q.trim() });
   }
 
   return (
@@ -100,34 +88,13 @@ export default function BanterFilterForm({
 
       <fieldset className="banter-filter__group">
         <legend className="banter-filter__legend">Tag</legend>
-        {topicsState === "loading" || topicsState === "idle" ? (
-          <p className="banter-filter__note" role="status">
-            Loading tags…
-          </p>
-        ) : topicsState === "error" ? (
-          <p className="banter-filter__note" role="alert">
-            Couldn&rsquo;t load tags.{" "}
-            <button type="button" className="banter-filter__link" onClick={onRetryTopics}>
-              Try again
-            </button>
-          </p>
-        ) : (
-          <select
-            aria-label="Tag"
-            value={draft.topic?.id ?? ""}
-            onChange={(e) => {
-              const picked = topics.find((t) => t.id === e.target.value) ?? null;
-              setDraft((d) => ({ ...d, topic: picked }));
-            }}
-          >
-            <option value="">Any tag</option>
-            {topics.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        )}
+        <input
+          type="search"
+          aria-label="Tag"
+          placeholder="Input author name, club, etc."
+          value={draft.tagQuery}
+          onChange={(e) => setDraft((d) => ({ ...d, tagQuery: e.target.value }))}
+        />
       </fieldset>
 
       <fieldset className="banter-filter__group">

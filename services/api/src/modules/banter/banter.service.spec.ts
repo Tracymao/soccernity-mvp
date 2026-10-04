@@ -60,6 +60,7 @@ function buildPrismaMock() {
       upsert: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
     },
+    $queryRaw: jest.fn().mockResolvedValue([]),
   } as unknown as PrismaService;
 
   // Same interactive-transaction mock shape as clubs.service.spec.ts /
@@ -341,6 +342,33 @@ describe('BanterService', () => {
 
       const where = (prisma.banterRoom.findMany as jest.Mock).mock.calls[0][0].where;
       expect(where).toEqual({ AND: [{ topics: { some: { topicId: 'topic-1' } } }] });
+    });
+
+    // Single free-text "Tag" search — resolves matching room ids via one raw
+    // query, then ANDs `id IN (...)` alongside the other filters.
+    it('ANDs a tagQuery as an id-in filter from the raw match, trimmed', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([{ id: 'room-7' }]);
+
+      const service = new BanterService(prisma, buildFeedMock());
+      await service.listRooms({ tagQuery: '  arsenal  ', scopeType: 'club' }, 'viewer-1');
+
+      const bound = (prisma.$queryRaw as jest.Mock).mock.calls[0];
+      expect(bound[0].values).toEqual(['arsenal', 'arsenal', 'arsenal']);
+      const where = (prisma.banterRoom.findMany as jest.Mock).mock.calls[0][0].where;
+      expect(where).toEqual({
+        AND: [{ scopeType: 'club' }, { id: { in: ['room-7'] } }],
+      });
+    });
+
+    it('treats a whitespace-only tagQuery as absent and skips the raw match', async () => {
+      const prisma = buildPrismaMock();
+      const service = new BanterService(prisma, buildFeedMock());
+      await service.listRooms({ tagQuery: '   ' }, 'viewer-1');
+
+      expect(prisma.$queryRaw).not.toHaveBeenCalled();
+      const where = (prisma.banterRoom.findMany as jest.Mock).mock.calls[0][0].where;
+      expect(where).toEqual({});
     });
 
     // Decision Log #358 — dateFrom/dateTo filter on BanterRoom.createdAt.

@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsISO8601, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsISO8601, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { BANTER_ROOM_SCOPE_TYPES, BanterRoomScopeType } from '../banter.constants';
 
 // GET /banter-rooms and GET /banter-rooms/search?q= (Build Plan Section
@@ -55,6 +55,16 @@ export class ListBanterRoomsQueryDto {
   @IsOptional()
   @IsString()
   topicId?: string;
+
+  // Single free-text "Tag" search (Figma 2459:14464, "Input author name,
+  // club, etc."). Case-insensitive substring match across the room's topic
+  // names, its creator's displayName, and its scoped club name. Independent
+  // of `q` (room-name search) and ANDed with everything else. See
+  // BanterService.listRooms for why this is a raw-SQL match.
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  tagQuery?: string;
 
   // Decision Log #358 — inclusive creation-date range on BanterRoom.createdAt.
   // A date-only value ("2026-10-04") is read as the whole UTC day; a full

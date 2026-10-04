@@ -35,13 +35,11 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router";
 import {
   listRooms,
-  listTopics,
   getMyRooms,
   createRoom,
   BanterApiError,
   type BanterRoom,
   type BanterRoomScopeType,
-  type BanterTopic,
 } from "../api/banter";
 import { listJoinedClubs, type ClubSummary } from "../api/clubs";
 import { getUser, type UserProfile } from "../api/users";
@@ -50,7 +48,7 @@ import { UNDER_16_MESSAGE, isUnder16Restricted } from "../lib/under16";
 import { useIsMobile } from "../layout/useIsMobile";
 import BanterJoinButton from "./banter/BanterJoinButton";
 import BanterStatusDot from "./banter/BanterStatusDot";
-import BanterFilterForm, { type TopicsState } from "./banter/BanterFilterForm";
+import BanterFilterForm from "./banter/BanterFilterForm";
 import {
   NO_BANTER_FILTERS,
   SCOPE_OPTIONS,
@@ -93,8 +91,6 @@ export default function BanterPage() {
   const [filters, setFilters] = useState<BanterFilters>(NO_BANTER_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [mobileView, setMobileView] = useState<MobileView>("results");
-  const [topics, setTopics] = useState<BanterTopic[]>([]);
-  const [topicsState, setTopicsState] = useState<TopicsState>("idle");
 
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [restricted, setRestricted] = useState(false);
@@ -199,22 +195,7 @@ export default function BanterPage() {
     setFilters((prev) => (prev.q ? { ...prev, q: "" } : prev));
   }
 
-  // Loads the Topic catalogue once for the Tag control. A failure is kept
-  // visible in the form (with a retry), never silently swallowed.
-  const loadTopics = useCallback(async () => {
-    if (!token) return;
-    setTopicsState("loading");
-    try {
-      const page = await listTopics(token);
-      setTopics(page.items);
-      setTopicsState("loaded");
-    } catch {
-      setTopicsState("error");
-    }
-  }, [token]);
-
   function openFilters() {
-    if (topicsState === "idle" || topicsState === "error") void loadTopics();
     if (isMobile) setMobileView("filter");
     else setFiltersOpen(true);
   }
@@ -226,11 +207,11 @@ export default function BanterPage() {
     setMobileView("results");
   }
 
-  function removeChip(key: "scope" | "topic" | "date" | "q") {
+  function removeChip(key: "scope" | "tag" | "date" | "q") {
     if (key === "q") setQueryInput("");
     setFilters((prev) => {
       if (key === "scope") return { ...prev, scopeType: null };
-      if (key === "topic") return { ...prev, topic: null };
+      if (key === "tag") return { ...prev, tagQuery: "" };
       if (key === "date") return { ...prev, dateFrom: "", dateTo: "" };
       return { ...prev, q: "" };
     });
@@ -310,9 +291,6 @@ export default function BanterPage() {
         <h1 className="banter-filter-dialog__title">Filter</h1>
         <BanterFilterForm
           initial={filters}
-          topics={topics}
-          topicsState={topicsState}
-          onRetryTopics={() => void loadTopics()}
           onApply={applyFilters}
           onCancel={() => setMobileView("results")}
         />
@@ -633,9 +611,6 @@ export default function BanterPage() {
             </h2>
             <BanterFilterForm
               initial={filters}
-              topics={topics}
-              topicsState={topicsState}
-              onRetryTopics={() => void loadTopics()}
               onApply={applyFilters}
               onCancel={() => setFiltersOpen(false)}
             />
