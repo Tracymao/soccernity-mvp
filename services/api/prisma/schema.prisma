@@ -596,11 +596,14 @@ model Post {
   sequence     Int           @unique @default(autoincrement())
   authorId     String
   // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
-  // Deleting a Post this way then needs to keep cascading into its own
-  // children (Comment.post/SavedPost.post/Like.post below) for a User
-  // delete to actually complete when someone else has commented/saved/
-  // liked this post -- those three relations carry onDelete: Cascade
-  // too, for exactly this reason, not independently of this decision.
+  // CORRECTION (feat/post-delete-and-comment-settings): this comment
+  // previously claimed Comment.post/SavedPost.post/Like.post already
+  // carried onDelete: Cascade. That was FALSE -- none had an onDelete
+  // clause (Postgres RESTRICT), and #341's migration never touched them.
+  // As of this change it is TRUE: Comment, SavedPost, Like, PostHashtag
+  // and PostView all cascade from Post (ContestEntry already did), so
+  // DELETE /posts/:id removes every trace of the post including other
+  // users' engagement on it (founder decision, Decision Log #360).
   author       User          @relation(fields: [authorId], references: [id])
   contentText  String
   mediaUrls    String[]
@@ -636,6 +639,11 @@ model Post {
   // (commentCount: { gt: 0 }) pattern unlikePost() already established
   // for likeCount — see feed.service.ts.
   commentCount Int           @default(0)
+  // Who may add NEW comments: everyone | followers (the commenter must follow
+  // the post's author) | off. The author can always comment. Bare String with
+  // a service-enforced allow-list (BanterRoom.scopeType/status convention).
+  // Never retroactively removes existing comments.
+  commentPermission String    @default("everyone")
   // sprint-4/post-view-tracking (Build Plan Section 4.3, POST
   // /posts/:id/view) -- same denormalized-cache convention as
   // likeCount/commentCount above: incremented transactionally alongside
@@ -680,11 +688,15 @@ model Comment {
   // for the full mechanical explanation and the founder's own explicit
   // "cascading Post also cascades away Comment/Like/SavedPost rows
   // written by OTHER, unrelated users" framing of this exact consequence.
-  post        Post     @relation(fields: [postId], references: [id])
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   authorId    String
   // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
   author      User     @relation(fields: [authorId], references: [id])
   contentText String
+  // Hidden by the POST's author (a hide, not a delete -- the row stays, is
+  // still cascade-deleted with the post, and the commenter keeps their copy).
+  // Hidden comments do not count toward Post.commentCount.
+  hidden      Boolean  @default(false)
   createdAt   DateTime @default(now())
 }
 
@@ -1061,7 +1073,7 @@ model SavedPost {
   // way Comment.post is (see that model's comment): a Post cascading
   // away from its author's User delete must keep cascading into
   // SavedPost rows saved by OTHER users too, or the whole delete aborts.
-  post     Post     @relation(fields: [postId], references: [id])
+  post     Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   savedAt  DateTime @default(now())
 
   @@unique([userId, postId])
@@ -1080,7 +1092,7 @@ model Like {
   // way Comment.post is (see that model's comment): a Post cascading
   // away from its author's User delete must keep cascading into Like
   // rows from OTHER users too, or the whole delete aborts.
-  post    Post     @relation(fields: [postId], references: [id])
+  post    Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   likedAt DateTime @default(now())
 
   @@unique([userId, postId])
@@ -1141,9 +1153,9 @@ model Hashtag {
   // Denormalized ALL-TIME cache -- the SAME convention Post.likeCount /
   // Post.commentCount / ClubPage.memberCount / BanterRoom.memberCount /
   // CommunityGroup.memberCount already establish: incremented
-  // transactionally alongside every PostHashtag row this tag gets (never
-  // decremented -- there is no Post-deletion code path anywhere in this
-  // codebase that would need to undo it), and always recomputable via
+  // transactionally alongside every PostHashtag row this tag gets, and
+  // decremented (floor-guarded) by FeedService.deletePost when a post
+  // carrying the tag is hard-deleted (DELETE /posts/:id), and always recomputable via
   // PostHashtag.count({ where: { hashtagId } }) if it ever drifts.
   // NOT what GET /trending reads from -- an all-time running total can
   // never "decay," so the trending query aggregates PostHashtag.createdAt
@@ -1165,12 +1177,11 @@ model Hashtag {
 model PostHashtag {
   id        String   @id @default(uuid())
   postId    String
-  // No onDelete: Cascade here, matching Like.post / Comment.post /
-  // SavedPost.post's own current shape exactly -- Post rows are never
-  // hard-deleted by any code path in this codebase today (there is no
-  // DELETE /posts/:id endpoint anywhere), so this FK's implicit RESTRICT
-  // default is inert in practice, not a real constraint on anything.
-  post      Post     @relation(fields: [postId], references: [id])
+  // onDelete: Cascade -- DELETE /posts/:id (feat/post-delete-and-comment-settings)
+  // hard-deletes the Post, and its hashtag links go with it. Before that
+  // endpoint existed this FK's RESTRICT default was inert; it would now
+  // have blocked every delete.
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   hashtagId String
   hashtag   Hashtag  @relation(fields: [hashtagId], references: [id])
   // Denormalized COPY of the owning Post's own createdAt at extraction
@@ -1228,12 +1239,9 @@ model PostHashtag {
 model PostView {
   id     String @id @default(uuid())
   postId String
-  // No onDelete: Cascade here, matching Like.post / Comment.post /
-  // SavedPost.post / PostHashtag.post's own current shape exactly -- see
-  // PostHashtag's own comment for why this FK's implicit RESTRICT
-  // default is inert in practice (no DELETE /posts/:id endpoint exists
-  // anywhere in this codebase today).
-  post   Post   @relation(fields: [postId], references: [id])
+  // onDelete: Cascade -- see PostHashtag.post: DELETE /posts/:id
+  // (feat/post-delete-and-comment-settings) removes view rows with the post.
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   // Nullable -- an anonymous view has no viewer to record. Matches
   // GrassrootsTeam.createdById's own nullable-User-relation shape

@@ -23,12 +23,15 @@ import {
   getComments,
   likePost,
   savePost,
+  setCommentHidden,
   unlikePost,
   unsavePost,
+  type CommentPermission,
   type FeedComment,
   type FeedPost,
 } from "../../api/feed";
 import { followUser, unfollowUser, UsersApiError } from "../../api/users";
+import OwnPostMenu from "./OwnPostMenu";
 import ReportAction from "./ReportAction";
 
 function initialsFor(name: string): string {
@@ -52,9 +55,13 @@ interface PostCardProps {
   post: FeedPost;
   accessToken: string;
   currentUserId: string;
+  /** Called after the author hard-deletes the post. The card also removes itself. */
+  onDeleted?: (postId: string) => void;
 }
 
-export default function PostCard({ post, accessToken, currentUserId }: PostCardProps) {
+export default function PostCard({ post, accessToken, currentUserId, onDeleted }: PostCardProps) {
+  const [deleted, setDeleted] = useState(false);
+  const [commentPermission, setCommentPermission] = useState<CommentPermission>(post.commentPermission ?? "everyone");
   const [liked, setLiked] = useState(post.isLiked);
   const [likeCount, setLikeCount] = useState(post.likeCount);
   const [saved, setSaved] = useState(post.isSaved);
@@ -75,6 +82,20 @@ export default function PostCard({ post, accessToken, currentUserId }: PostCardP
   const [commentSubmitting, setCommentSubmitting] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
   const [commentRestricted, setCommentRestricted] = useState(false);
+
+  // The post author hides/unhides individual comments. A hidden comment
+  // stays in their list (dimmed) and stops counting toward the total.
+  async function toggleHidden(c: FeedComment) {
+    setCommentError(null);
+    try {
+      const next = !c.hidden;
+      await setCommentHidden(accessToken, post.id, c.id, next);
+      setComments((prev) => prev.map((x) => (x.id === c.id ? { ...x, hidden: next } : x)));
+      setCommentCount((n) => Math.max(0, n + (next ? -1 : 1)));
+    } catch (err) {
+      setCommentError(err instanceof FeedApiError ? err.message : "Couldn't update that comment.");
+    }
+  }
 
   async function toggleLike() {
     if (likePending) return;
@@ -164,7 +185,7 @@ export default function PostCard({ post, accessToken, currentUserId }: PostCardP
       setCommentCount((n) => n + 1);
       setCommentText("");
     } catch (err) {
-      if (err instanceof FeedApiError && err.status === 403) {
+      if (err instanceof FeedApiError && err.status === 403 && /guardian consent/i.test(err.message)) {
         setCommentRestricted(true);
       } else {
         setCommentError(err instanceof FeedApiError ? err.message : "Couldn't add that comment.");
@@ -173,6 +194,8 @@ export default function PostCard({ post, accessToken, currentUserId }: PostCardP
       setCommentSubmitting(false);
     }
   }
+
+  if (deleted) return null;
 
   return (
     <article className="post">
@@ -193,6 +216,20 @@ export default function PostCard({ post, accessToken, currentUserId }: PostCardP
           >
             {following ? "Following" : "Follow"}
           </button>
+        )}
+        {isOwnPost && (
+          <div className="post__report">
+            <OwnPostMenu
+              accessToken={accessToken}
+              postId={post.id}
+              commentPermission={commentPermission}
+              onCommentPermissionChange={setCommentPermission}
+              onDeleted={() => {
+                setDeleted(true);
+                onDeleted?.(post.id);
+              }}
+            />
+          </div>
         )}
         {!isOwnPost && (
           <div className="post__report">
@@ -261,12 +298,22 @@ export default function PostCard({ post, accessToken, currentUserId }: PostCardP
       {commentsOpen && (
         <div className="comments">
           {comments.map((c) => (
-            <div key={c.id} className="comment">
+            <div key={c.id} className={c.hidden ? "comment comment--hidden" : "comment"} style={c.hidden ? { opacity: 0.6 } : undefined}>
               <span className="comment__author">
                 {c.author.displayName}
                 <span className="comment__time">{relativeTime(c.createdAt)}</span>
               </span>
               <p className="comment__body">{c.contentText}</p>
+              {c.hidden && (
+                <p className="composer__note">
+                  {isOwnPost ? "Hidden — only you and the commenter can see this." : "Hidden by the post author — only you can see this."}
+                </p>
+              )}
+              {isOwnPost && (
+                <button type="button" className="report-action__trigger" onClick={() => toggleHidden(c)}>
+                  {c.hidden ? "Unhide" : "Hide"}
+                </button>
+              )}
               {c.authorId !== currentUserId && (
                 <ReportAction
                   accessToken={accessToken}
@@ -304,6 +351,9 @@ export default function PostCard({ post, accessToken, currentUserId }: PostCardP
               {commentSubmitting ? "…" : "Reply"}
             </button>
           </form>
+          {commentPermission === "off" && (
+            <p className="composer__note">Comments are turned off for this post.</p>
+          )}
           {commentRestricted && (
             <p className="post__error" role="alert">
               Your account is restricted pending guardian consent, so you can&rsquo;t comment yet.{" "}

@@ -21,6 +21,8 @@
 // CommentPage exactly.
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
 
+export type CommentPermission = "everyone" | "followers" | "off";
+
 export interface FeedPostAuthor {
   id: string;
   displayName: string;
@@ -43,6 +45,9 @@ export interface FeedPost {
   // Denormalized view-EVENT counter (Post.viewCount) -- real server value,
   // 0 for a post nobody has opened. Incremented by POST /posts/:id/view.
   viewCount: number;
+  // Who may add NEW comments. Optional only so older fixtures/payloads
+  // without it read as "everyone".
+  commentPermission?: CommentPermission;
   createdAt: string;
   // Per-calling-user viewer state (Decision Log #153). `true` iff the
   // caller has already liked / saved this post. Returned by GET
@@ -64,6 +69,9 @@ export interface FeedComment {
   authorId: string;
   author: FeedPostAuthor;
   contentText: string;
+  // True when the post's author hid it. The server only sends a hidden
+  // comment to the post's author and the comment's own author.
+  hidden?: boolean;
   createdAt: string;
 }
 
@@ -237,6 +245,53 @@ export async function addComment(accessToken: string, postId: string, contentTex
     );
   }
   return (await response.json()) as FeedComment;
+}
+
+// DELETE /posts/:id -- hard delete, author only (204). Removes the post and
+// every comment/like/save on it, other users' included.
+export async function deletePost(accessToken: string, postId: string): Promise<void> {
+  const response = await authedFetch(`/posts/${postId}`, accessToken, { method: "DELETE" });
+  if (!response.ok) {
+    throw new FeedApiError(await errorMessageFrom(response, `Couldn't delete that post (${response.status}).`), {
+      status: response.status,
+    });
+  }
+}
+
+// PATCH /posts/:id/comment-settings -- post author only.
+export async function updateCommentSettings(
+  accessToken: string,
+  postId: string,
+  commentPermission: CommentPermission,
+): Promise<{ id: string; commentPermission: CommentPermission }> {
+  const response = await authedFetch(`/posts/${postId}/comment-settings`, accessToken, {
+    method: "PATCH",
+    body: JSON.stringify({ commentPermission }),
+  });
+  if (!response.ok) {
+    throw new FeedApiError(await errorMessageFrom(response, `Couldn't update comment settings (${response.status}).`), {
+      status: response.status,
+    });
+  }
+  return (await response.json()) as { id: string; commentPermission: CommentPermission };
+}
+
+// PATCH /posts/:id/comments/:commentId/hide | /unhide -- post author only.
+export async function setCommentHidden(
+  accessToken: string,
+  postId: string,
+  commentId: string,
+  hidden: boolean,
+): Promise<{ id: string; hidden: boolean }> {
+  const response = await authedFetch(`/posts/${postId}/comments/${commentId}/${hidden ? "hide" : "unhide"}`, accessToken, {
+    method: "PATCH",
+  });
+  if (!response.ok) {
+    throw new FeedApiError(await errorMessageFrom(response, `Couldn't update that comment (${response.status}).`), {
+      status: response.status,
+    });
+  }
+  return (await response.json()) as { id: string; hidden: boolean };
 }
 
 // POST /posts/:id/view -- OptionalJwtAuthGuard on the server (a logged-out
