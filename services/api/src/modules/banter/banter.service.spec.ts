@@ -343,6 +343,48 @@ describe('BanterService', () => {
       expect(where).toEqual({ AND: [{ topics: { some: { topicId: 'topic-1' } } }] });
     });
 
+    // Decision Log #358 — dateFrom/dateTo filter on BanterRoom.createdAt.
+    it('ANDs a date-only dateFrom/dateTo range as whole UTC days', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findMany as jest.Mock).mockResolvedValueOnce([]);
+
+      const service = new BanterService(prisma, buildFeedMock());
+      await service.listRooms({ dateFrom: '2026-10-01', dateTo: '2026-10-04' }, 'viewer-1');
+
+      const where = (prisma.banterRoom.findMany as jest.Mock).mock.calls[0][0].where;
+      expect(where).toEqual({
+        AND: [
+          {
+            createdAt: {
+              gte: new Date('2026-10-01T00:00:00.000Z'),
+              lte: new Date('2026-10-04T23:59:59.999Z'),
+            },
+          },
+        ],
+      });
+    });
+
+    it('takes a full timestamp bound as given and allows a one-sided range', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findMany as jest.Mock).mockResolvedValueOnce([]);
+
+      const service = new BanterService(prisma, buildFeedMock());
+      await service.listRooms({ dateFrom: '2026-10-02T09:30:00.000Z' }, 'viewer-1');
+
+      const where = (prisma.banterRoom.findMany as jest.Mock).mock.calls[0][0].where;
+      expect(where).toEqual({ AND: [{ createdAt: { gte: new Date('2026-10-02T09:30:00.000Z') } }] });
+    });
+
+    it('rejects dateFrom later than dateTo with a 400, before querying', async () => {
+      const prisma = buildPrismaMock();
+      const service = new BanterService(prisma, buildFeedMock());
+
+      await expect(
+        service.listRooms({ dateFrom: '2026-10-05', dateTo: '2026-10-01' }, 'viewer-1'),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.banterRoom.findMany).not.toHaveBeenCalled();
+    });
+
     it('flattens the raw topics junction shape to a plain TopicSummary[]', async () => {
       const prisma = buildPrismaMock();
       (prisma.banterRoom.findMany as jest.Mock).mockResolvedValueOnce([

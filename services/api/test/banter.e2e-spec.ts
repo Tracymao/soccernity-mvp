@@ -300,6 +300,41 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
       expect(byName.body.items.map((r: { name: string }) => r.name)).toEqual(['Zonal Marking']);
     });
 
+    // Decision Log #358 — dateFrom/dateTo filter on the real BanterRoom.createdAt
+    // column. One room is backdated directly so the range can exclude it.
+    it('filters by createdAt date range (whole UTC days, inclusive), and rejects dateFrom > dateTo with 400', async () => {
+      const owner = await createUser('date-owner');
+      await createRoom(owner.accessToken, { name: 'Recent Room', scopeType: 'topic' });
+      const old = await createRoom(owner.accessToken, { name: 'Old Room', scopeType: 'topic' });
+      await getTestPrismaClient().banterRoom.update({
+        where: { id: old.id },
+        data: { createdAt: new Date('2020-01-15T12:00:00.000Z') },
+      });
+
+      const day = (d: Date) => d.toISOString().slice(0, 10);
+      const today = new Date();
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      const names = async (query: string) => {
+        const res = await request(server())
+          .get(`/banter-rooms?${query}`)
+          .set('Authorization', `Bearer ${owner.accessToken}`)
+          .expect(200);
+        return (res.body.items as { name: string; id: string }[]).map((r) => r.name).sort();
+      };
+
+      expect(await names(`dateFrom=${day(today)}&dateTo=${day(today)}`)).toEqual(['Recent Room']);
+      expect(await names(`dateFrom=2020-01-15&dateTo=2020-01-15`)).toEqual(['Old Room']);
+      expect(await names(`dateFrom=${day(tomorrow)}`)).toEqual([]);
+      expect(await names(`dateTo=${day(yesterday)}`)).toEqual(['Old Room']);
+
+      await request(server())
+        .get(`/banter-rooms?dateFrom=${day(tomorrow)}&dateTo=${day(yesterday)}`)
+        .set('Authorization', `Bearer ${owner.accessToken}`)
+        .expect(400);
+    });
+
     it('GET /banter-rooms reports per-caller joined correctly, scoped to the calling user', async () => {
       const owner = await createUser('joined-owner');
       const other = await createUser('joined-other');

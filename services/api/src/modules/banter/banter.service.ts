@@ -98,6 +98,20 @@ function toRoomSummary(row: RawBanterRoomRow): BanterRoomSummary {
   return { ...row, topics: row.topics.map((t) => t.topic) };
 }
 
+// Decision Log #358 — dateFrom/dateTo as an inclusive createdAt range. A
+// date-only bound covers its whole UTC day; a full timestamp is taken as
+// given. Returns undefined when neither bound is supplied.
+function resolveCreatedAtBounds(dateFrom?: string, dateTo?: string): Prisma.DateTimeFilter | undefined {
+  if (!dateFrom && !dateTo) return undefined;
+  const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+  const gte = dateFrom ? new Date(DATE_ONLY.test(dateFrom) ? `${dateFrom}T00:00:00.000Z` : dateFrom) : undefined;
+  const lte = dateTo ? new Date(DATE_ONLY.test(dateTo) ? `${dateTo}T23:59:59.999Z` : dateTo) : undefined;
+  if (gte && lte && gte.getTime() > lte.getTime()) {
+    throw new BadRequestException('dateFrom must not be after dateTo.');
+  }
+  return { ...(gte ? { gte } : {}), ...(lte ? { lte } : {}) };
+}
+
 // What the room endpoints actually return: the lean room row plus ONE
 // per-request-user-computed boolean — `joined` is `true` iff a
 // BanterRoomMember row exists for (this room, the CALLING user). Same
@@ -312,6 +326,8 @@ export class BanterService {
     // table, same treatment as scopeType above; an unknown topicId simply
     // matches zero rooms rather than 400ing.
     if (query.topicId) filters.push({ topics: { some: { topicId: query.topicId } } });
+    const createdAt = resolveCreatedAtBounds(query.dateFrom, query.dateTo);
+    if (createdAt) filters.push({ createdAt });
     if (query.cursor) {
       const cursor = decodeBanterRoomCursor(query.cursor);
       filters.push({

@@ -501,3 +501,56 @@
     flex-direction: column;
   }
 }
+
+/* Filters entry point + active-filter chips (Decision Log #358). */
+.banter-search__filters {
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sn-text-primary);
+  font: 600 13px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.banter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.banter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 6px 0 12px;
+  border-radius: 16px;
+  background: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font: 600 13px "Inter", sans-serif;
+}
+
+.banter-chip button {
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sn-text-primary);
+  font: 500 16px/1 "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.banter-chips__clear {
+  border: none;
+  background: none;
+  padding: 0 4px;
+  color: var(--sn-brand-navy);
+  font: 600 13px "Inter", sans-serif;
+  text-decoration: underline;
+  cursor: pointer;
+}

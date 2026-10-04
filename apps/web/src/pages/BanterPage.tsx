@@ -35,18 +35,29 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router";
 import {
   listRooms,
+  listTopics,
   getMyRooms,
   createRoom,
   BanterApiError,
   type BanterRoom,
   type BanterRoomScopeType,
+  type BanterTopic,
 } from "../api/banter";
 import { listJoinedClubs, type ClubSummary } from "../api/clubs";
 import { getUser, type UserProfile } from "../api/users";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
 import { UNDER_16_MESSAGE, isUnder16Restricted } from "../lib/under16";
+import { useIsMobile } from "../layout/useIsMobile";
 import BanterJoinButton from "./banter/BanterJoinButton";
 import BanterStatusDot from "./banter/BanterStatusDot";
+import BanterFilterForm, { type TopicsState } from "./banter/BanterFilterForm";
+import {
+  NO_BANTER_FILTERS,
+  SCOPE_OPTIONS,
+  activeFilterChips,
+  toRoomFilters,
+  type BanterFilters,
+} from "./banter/banterFilters";
 import ReportAction from "./community/ReportAction";
 import { TRENDS, FIXTURES, SUGGESTED } from "./banter/banterData";
 import "./banter/BanterPage.css";
@@ -54,13 +65,9 @@ import "./banter/BanterPage.css";
 type LoadState = "loading" | "loaded" | "error" | "no-session";
 type Category = "all" | "mine";
 type ClubsState = "idle" | "loading" | "loaded" | "error";
-
-const SCOPE_OPTIONS: { value: BanterRoomScopeType; label: string }[] = [
-  { value: "club", label: "Club" },
-  { value: "league", label: "League" },
-  { value: "country", label: "Country" },
-  { value: "topic", label: "Topic" },
-];
+// Mobile only: the results list, or the full-screen filter panel
+// (Figma 5803:8876) it opens. Applying the panel returns to results.
+type MobileView = "results" | "filter";
 
 function initialsFor(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -77,11 +84,17 @@ export default function BanterPage() {
   const token = getStoredAccessToken();
   const decoded = token ? decodeAccessToken(token) : null;
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [category, setCategory] = useState<Category>("all");
+  // queryInput is the live search box; filters.q is what was last applied.
   const [queryInput, setQueryInput] = useState("");
-  const [activeQuery, setActiveQuery] = useState("");
+  const [filters, setFilters] = useState<BanterFilters>(NO_BANTER_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [mobileView, setMobileView] = useState<MobileView>("results");
+  const [topics, setTopics] = useState<BanterTopic[]>([]);
+  const [topicsState, setTopicsState] = useState<TopicsState>("idle");
 
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [restricted, setRestricted] = useState(false);
@@ -128,19 +141,18 @@ export default function BanterPage() {
   }, [token, decoded?.sub]);
 
   const load = useCallback(
-    async (cat: Category, q: string) => {
+    async (cat: Category, f: BanterFilters) => {
       if (!token) {
         setLoadState("no-session");
         return;
       }
       setLoadState("loading");
       try {
-        const trimmed = q.trim();
-        const page =
-          cat === "mine" ? await getMyRooms(token) : await listRooms(token, trimmed ? { q: trimmed } : undefined);
+        // "My Bants" has no server-side filters (GET /banter-rooms/mine takes
+        // none), so the Categories/Date/Tag filters apply to "All" only.
+        const page = cat === "mine" ? await getMyRooms(token) : await listRooms(token, toRoomFilters(f));
         setRooms(page.items);
         setCursor(page.nextCursor);
-        setActiveQuery(trimmed);
         setLoadState("loaded");
       } catch (err) {
         setRestricted(isUnder16Restricted(err));
@@ -150,30 +162,78 @@ export default function BanterPage() {
     [token],
   );
 
-  // Switching category always starts a fresh, unfiltered fetch for that
-  // category -- selectCategory() (below) clears queryInput at the same
-  // time, so this and the debounce effect never race.
+  // Any change to the category or the applied filters re-runs the list.
   useEffect(() => {
-    load(category, "");
-  }, [category, token, load]);
+    load(category, filters);
+  }, [category, filters, token, load]);
 
-  // Debounced re-query as the search box is typed, "All" only (a real
-  // server round trip -- GrassrootsPage's own city-filter precedent).
+  // Debounced quick search, "All" only -- a real server round trip
+  // (GrassrootsPage's own city-filter precedent).
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!token || category !== "all") return;
-    if (queryInput.trim() === activeQuery) return;
+    const trimmed = queryInput.trim();
+    if (trimmed === filters.q) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => load("all", queryInput), 300);
+    debounceRef.current = setTimeout(() => {
+      setFilters((prev) => (prev.q === trimmed ? prev : { ...prev, q: trimmed }));
+    }, 300);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [queryInput, activeQuery, category, token, load]);
+  }, [queryInput, filters.q, category, token]);
+
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFiltersOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [filtersOpen]);
 
   function selectCategory(next: Category) {
     if (next === category) return;
     setCategory(next);
     setQueryInput("");
+    setFilters((prev) => (prev.q ? { ...prev, q: "" } : prev));
+  }
+
+  // Loads the Topic catalogue once for the Tag control. A failure is kept
+  // visible in the form (with a retry), never silently swallowed.
+  const loadTopics = useCallback(async () => {
+    if (!token) return;
+    setTopicsState("loading");
+    try {
+      const page = await listTopics(token);
+      setTopics(page.items);
+      setTopicsState("loaded");
+    } catch {
+      setTopicsState("error");
+    }
+  }, [token]);
+
+  function openFilters() {
+    if (topicsState === "idle" || topicsState === "error") void loadTopics();
+    if (isMobile) setMobileView("filter");
+    else setFiltersOpen(true);
+  }
+
+  function applyFilters(next: BanterFilters) {
+    setFilters(next);
+    setQueryInput(next.q);
+    setFiltersOpen(false);
+    setMobileView("results");
+  }
+
+  function removeChip(key: "scope" | "topic" | "date" | "q") {
+    if (key === "q") setQueryInput("");
+    setFilters((prev) => {
+      if (key === "scope") return { ...prev, scopeType: null };
+      if (key === "topic") return { ...prev, topic: null };
+      if (key === "date") return { ...prev, dateFrom: "", dateTo: "" };
+      return { ...prev, q: "" };
+    });
   }
 
   async function loadMore() {
@@ -182,9 +242,7 @@ export default function BanterPage() {
     setLoadMoreError(null);
     try {
       const page =
-        category === "mine"
-          ? await getMyRooms(token, cursor)
-          : await listRooms(token, { cursor, ...(activeQuery ? { q: activeQuery } : {}) });
+        category === "mine" ? await getMyRooms(token, cursor) : await listRooms(token, { ...toRoomFilters(filters), cursor });
       setRooms((prev) => [...prev, ...page.items]);
       setCursor(page.nextCursor);
     } catch (err) {
@@ -241,6 +299,26 @@ export default function BanterPage() {
   // has no server-side q param, so it's filtered client-side here.
   const visibleRooms = category === "mine" && term ? rooms.filter((r) => r.name.toLowerCase().includes(term)) : rooms;
   const displayName = profile?.displayName ?? "You";
+  const chips = activeFilterChips(filters);
+
+  if (isMobile && mobileView === "filter") {
+    return (
+      <div className="banter-filter-panel">
+        <button type="button" className="banter-filter-panel__back" onClick={() => setMobileView("results")}>
+          ← Back to rooms
+        </button>
+        <h1 className="banter-filter-dialog__title">Filter</h1>
+        <BanterFilterForm
+          initial={filters}
+          topics={topics}
+          topicsState={topicsState}
+          onRetryTopics={() => void loadTopics()}
+          onApply={applyFilters}
+          onCancel={() => setMobileView("results")}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="banter">
@@ -396,12 +474,34 @@ export default function BanterPage() {
             value={queryInput}
             onChange={(e) => setQueryInput(e.target.value)}
           />
+          <button type="button" className="banter-search__filters" onClick={openFilters}>
+            Filters{chips.length > 0 ? ` (${chips.length})` : ""}
+          </button>
         </div>
 
         {term && (
           <p className="banter-search-result">
             Result showing for &ldquo;{queryInput}&rdquo; ({visibleRooms.length})
           </p>
+        )}
+
+        {chips.length > 0 && (
+          <div className="banter-chips" aria-label="Active filters">
+            {chips.map((c) => (
+              <span key={c.key} className="banter-chip">
+                {c.label}
+                <button type="button" aria-label={`Remove filter ${c.label}`} onClick={() => removeChip(c.key)}>
+                  ×
+                </button>
+              </span>
+            ))}
+            <button type="button" className="banter-chips__clear" onClick={() => applyFilters(NO_BANTER_FILTERS)}>
+              Clear all
+            </button>
+          </div>
+        )}
+        {chips.length > 0 && category === "mine" && (
+          <p className="banter-status banter-status--inline">Filters apply to All rooms.</p>
         )}
 
         <div className="banter-categories" role="tablist" aria-label="Bants categories">
@@ -519,6 +619,29 @@ export default function BanterPage() {
           ))}
         </div>
       </div>
+
+      {filtersOpen && !isMobile && (
+        <div
+          className="banter-filter-overlay"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setFiltersOpen(false);
+          }}
+        >
+          <div role="dialog" aria-modal="true" aria-labelledby="banter-filter-title" className="banter-filter-dialog">
+            <h2 id="banter-filter-title" className="banter-filter-dialog__title">
+              Filter
+            </h2>
+            <BanterFilterForm
+              initial={filters}
+              topics={topics}
+              topicsState={topicsState}
+              onRetryTopics={() => void loadTopics()}
+              onApply={applyFilters}
+              onCancel={() => setFiltersOpen(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

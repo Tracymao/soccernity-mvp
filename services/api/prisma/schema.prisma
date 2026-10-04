@@ -730,6 +730,12 @@ model BanterRoom {
   // action via the Report/moderation queue. Only "inactive" is ever
   // written by moderation; there is no moderator "reactivate" action.
   status      String             @default("active")
+  // Creation timestamp, added for the Bants filter modal's Date range
+  // (Decision Log #358) — filter-only, deliberately NOT a sort key: the
+  // room catalogue stays alphabetical by name (cursor.util.ts). Rooms that
+  // existed before this column was added read as the migration's run time,
+  // not their real creation date — there was no timestamp to backfill from.
+  createdAt   DateTime           @default(now())
   // Denormalized cache of members.count(), the same discipline as
   // Post.likeCount / ClubPage.memberCount. sprint-3/banter-rooms-backend
   // keeps this in sync transactionally alongside every BanterRoomMember

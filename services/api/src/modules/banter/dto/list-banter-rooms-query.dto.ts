@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsISO8601, IsOptional, IsString, Max, Min } from 'class-validator';
 import { BANTER_ROOM_SCOPE_TYPES, BanterRoomScopeType } from '../banter.constants';
 
 // GET /banter-rooms and GET /banter-rooms/search?q= (Build Plan Section
@@ -55,4 +55,15 @@ export class ListBanterRoomsQueryDto {
   @IsOptional()
   @IsString()
   topicId?: string;
+
+  // Decision Log #358 — inclusive creation-date range on BanterRoom.createdAt.
+  // A date-only value ("2026-10-04") is read as the whole UTC day; a full
+  // timestamp is used as-is. dateFrom > dateTo is a 400 (BanterService).
+  @IsOptional()
+  @IsISO8601()
+  dateFrom?: string;
+
+  @IsOptional()
+  @IsISO8601()
+  dateTo?: string;
 }

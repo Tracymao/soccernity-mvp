@@ -72,6 +72,7 @@ function room(overrides: Partial<BanterRoom> = {}): BanterRoom {
     scopeType: "club",
     createdBy: "someone-else",
     status: "active",
+    createdAt: "2026-10-01T12:00:00.000Z",
     memberCount: 5230,
     joined: false,
     ...overrides,
@@ -149,7 +150,7 @@ describe("BanterPage", () => {
     expect(await screen.findByText("Temi Titiloye")).not.toBeNull();
     expect(await screen.findByText("Chelsea vs Arsenal — Matchday Chat")).not.toBeNull();
     expect(getUser).toHaveBeenCalledWith(expect.any(String), "user-1");
-    expect(listRooms).toHaveBeenCalledWith(expect.any(String), undefined);
+    expect(listRooms).toHaveBeenCalledWith(expect.any(String), {});
   });
 
   it("falls back to a generic label if the profile fetch fails, but the real room list still renders", async () => {
