@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { CurrentUser } from '../auth/guards/current-user.decorator';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -7,6 +19,7 @@ import { AccessTokenPayload } from '../auth/token/token.types';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreatePostDto } from './dto/create-post.dto';
 import { FeedQueryDto } from './dto/feed-query.dto';
+import { UpdateCommentSettingsDto } from './dto/update-comment-settings.dto';
 import { FeedService } from './feed.service';
 
 // Build Plan Section 4.3 (Feed Service). Slice one (merged, PR #53) was
@@ -131,8 +144,55 @@ export class FeedController {
   // same category as GET /posts/feed and GET /posts/:id.
   @Get(':id/comments')
   @UseGuards(JwtAuthGuard)
-  async getComments(@Param('id') id: string, @Query() query: FeedQueryDto) {
-    return this.feedService.getComments(id, query);
+  async getComments(
+    @Param('id') id: string,
+    @Query() query: FeedQueryDto,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.feedService.getComments(id, query, user.sub);
+  }
+
+  // DELETE /posts/:id -- hard delete, author-only, JwtAuthGuard only
+  // (removing your own content produces nothing new, same reasoning as
+  // DELETE .../comments/:commentId). 204.
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtAuthGuard)
+  async deletePost(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload): Promise<void> {
+    return this.feedService.deletePost(id, user.sub);
+  }
+
+  // PATCH /posts/:id/comment-settings -- post author only.
+  @Patch(':id/comment-settings')
+  @UseGuards(JwtAuthGuard)
+  async updateCommentSettings(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: UpdateCommentSettingsDto,
+  ) {
+    return this.feedService.updateCommentSettings(id, user.sub, dto);
+  }
+
+  // Two routes (hide / unhide), not a toggle body: each is idempotent and
+  // the intent is explicit in the URL. Post author only.
+  @Patch(':id/comments/:commentId/hide')
+  @UseGuards(JwtAuthGuard)
+  async hideComment(
+    @Param('id') id: string,
+    @Param('commentId') commentId: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.feedService.setCommentHidden(id, commentId, user.sub, true);
+  }
+
+  @Patch(':id/comments/:commentId/unhide')
+  @UseGuards(JwtAuthGuard)
+  async unhideComment(
+    @Param('id') id: string,
+    @Param('commentId') commentId: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.feedService.setCommentHidden(id, commentId, user.sub, false);
   }
 
   // DELETE /posts/:id/comments/:commentId — JwtAuthGuard only,

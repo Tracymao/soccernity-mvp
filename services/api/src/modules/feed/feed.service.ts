@@ -7,6 +7,7 @@ import { recordPostHashtags } from '../search/hashtag.util';
 import { decodeFeedSequenceCursor, encodeFeedSequenceCursor } from './cursor.util';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreatePostDto } from './dto/create-post.dto';
+import { UpdateCommentSettingsDto } from './dto/update-comment-settings.dto';
 import { FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE, FeedQueryDto } from './dto/feed-query.dto';
 
 // Fields returned for a post's embedded author. Mirrors UsersService's
@@ -47,6 +48,9 @@ const POST_SELECT = {
   // payload so a client can show the real count (e.g. the /search "Videos"
   // carousel) without first having to call POST /posts/:id/view.
   viewCount: true,
+  // Who may add new comments (everyone | followers | off) -- exposed so the
+  // post author's "Manage comment settings" control can show current state.
+  commentPermission: true,
   createdAt: true,
 } as const;
 
@@ -130,6 +134,9 @@ const COMMENT_SELECT = {
   authorId: true,
   author: { select: POST_AUTHOR_SELECT },
   contentText: true,
+  // True when the POST's author hid this comment. Only the post's author
+  // and the comment's own author ever receive a hidden row (getComments).
+  hidden: true,
   createdAt: true,
 } as const;
 
@@ -550,10 +557,12 @@ export class FeedService {
   // getComments still call this the same way as before and simply don't
   // use the returned value — a purely additive signature change, not a
   // restructuring of this shared check.
-  private async assertPostExists(postId: string): Promise<{ id: string; authorId: string }> {
+  private async assertPostExists(
+    postId: string,
+  ): Promise<{ id: string; authorId: string; commentPermission: string }> {
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
-      select: { id: true, authorId: true },
+      select: { id: true, authorId: true, commentPermission: true },
     });
     if (!post) {
       throw new NotFoundException('Post not found');
@@ -702,6 +711,7 @@ export class FeedService {
   // analogous to the like P2002 path.
   async addComment(postId: string, authorId: string, dto: CreateCommentDto): Promise<FeedComment> {
     const post = await this.assertPostExists(postId);
+    await this.assertMayComment(post, authorId);
 
     return this.prisma.$transaction(async (tx) => {
       const comment = await tx.comment.create({
@@ -732,14 +742,27 @@ export class FeedService {
   // the order it was written, the same convention essentially every
   // comment UI (this codebase's own Figma-derived screens included)
   // follows.
-  async getComments(postId: string, query: FeedQueryDto): Promise<CommentPage> {
-    await this.assertPostExists(postId);
+  //
+  // Hidden comments (Comment.hidden, set by the post's author): excluded
+  // for every viewer EXCEPT (a) the post's author, who sees all of them
+  // flagged `hidden: true` so they can unhide, and (b) the comment's own
+  // author, who still sees their own hidden comment, also flagged, so it
+  // doesn't vanish from their view without explanation.
+  async getComments(postId: string, query: FeedQueryDto, viewerId?: string): Promise<CommentPage> {
+    const post = await this.assertPostExists(postId);
 
     const limit = Math.min(query.limit ?? FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE);
 
+    const visibility: Prisma.CommentWhereInput =
+      viewerId && viewerId === post.authorId
+        ? {}
+        : viewerId
+          ? { OR: [{ hidden: false }, { authorId: viewerId }] }
+          : { hidden: false };
+
     const where: Prisma.CommentWhereInput = query.cursor
-      ? { postId, ...this.buildCommentsCursorFilter(query.cursor) }
-      : { postId };
+      ? { AND: [{ postId }, visibility, this.buildCommentsCursorFilter(query.cursor)] }
+      : { AND: [{ postId }, visibility] };
 
     const rows = await this.prisma.comment.findMany({
       where,
@@ -818,7 +841,7 @@ export class FeedService {
   async deleteComment(postId: string, commentId: string, requestingUserId: string): Promise<void> {
     const comment = await this.prisma.comment.findUnique({
       where: { id: commentId },
-      select: { id: true, postId: true, authorId: true, post: { select: { authorId: true } } },
+      select: { id: true, postId: true, authorId: true, hidden: true, post: { select: { authorId: true } } },
     });
 
     if (!comment || comment.postId !== postId) {
@@ -831,10 +854,125 @@ export class FeedService {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.comment.delete({ where: { id: commentId } });
-      await tx.post.updateMany({
-        where: { id: postId, commentCount: { gt: 0 } },
-        data: { commentCount: { decrement: 1 } },
+      // A hidden comment was already subtracted from commentCount when it
+      // was hidden, so deleting it must not subtract it a second time.
+      if (!comment.hidden) {
+        await tx.post.updateMany({
+          where: { id: postId, commentCount: { gt: 0 } },
+          data: { commentCount: { decrement: 1 } },
+        });
+      }
+    });
+  }
+
+  // Enforces Post.commentPermission on NEW comments only (existing comments
+  // are never touched by a settings change). The post's own author may
+  // always comment. 'followers' = the commenter follows the post's author
+  // (Follow.followerId = commenter, Follow.followeeId = author). A refusal
+  // is a 403, the codebase's "authenticated but not allowed on this
+  // resource" convention.
+  private async assertMayComment(
+    post: { id: string; authorId: string; commentPermission: string },
+    commenterId: string,
+  ): Promise<void> {
+    if (post.authorId === commenterId) return;
+    if (post.commentPermission === 'off') {
+      throw new ForbiddenException('Comments are turned off for this post');
+    }
+    if (post.commentPermission !== 'followers') return; // 'everyone'
+    const follow = await this.prisma.follow.findUnique({
+      where: { followerId_followeeId: { followerId: commenterId, followeeId: post.authorId } },
+      select: { id: true },
+    });
+    if (!follow) {
+      throw new ForbiddenException('Follow this author to comment on this post');
+    }
+  }
+
+  // PATCH /posts/:id/comment-settings. Author-only. 404 before 403.
+  async updateCommentSettings(
+    postId: string,
+    callerId: string,
+    dto: UpdateCommentSettingsDto,
+  ): Promise<{ id: string; commentPermission: string }> {
+    const post = await this.assertPostExists(postId);
+    if (post.authorId !== callerId) {
+      throw new ForbiddenException('You may only change comment settings on your own post');
+    }
+    return this.prisma.post.update({
+      where: { id: postId },
+      data: { commentPermission: dto.commentPermission },
+      select: { id: true, commentPermission: true },
+    });
+  }
+
+  // PATCH /posts/:id/comments/:commentId/hide and /unhide. Only the POST's
+  // author may do either (not the comment's author). A hide is not a
+  // delete: the row stays. Hidden comments do not count toward
+  // Post.commentCount, so hide decrements and unhide increments, in the
+  // same transaction as the flag flip. Both are idempotent: the flag flip
+  // (updateMany guarded on the current value) is the guard, so only the
+  // call that actually changes the row adjusts the counter.
+  async setCommentHidden(
+    postId: string,
+    commentId: string,
+    callerId: string,
+    hidden: boolean,
+  ): Promise<{ id: string; hidden: boolean }> {
+    const post = await this.assertPostExists(postId);
+    const comment = await this.prisma.comment.findUnique({
+      where: { id: commentId },
+      select: { id: true, postId: true },
+    });
+    if (!comment || comment.postId !== postId) {
+      throw new NotFoundException('Comment not found');
+    }
+    if (post.authorId !== callerId) {
+      throw new ForbiddenException('You may only hide or unhide comments on your own post');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      const flipped = await tx.comment.updateMany({
+        where: { id: commentId, hidden: !hidden },
+        data: { hidden },
       });
+      if (flipped.count === 0) return;
+      if (hidden) {
+        await tx.post.updateMany({
+          where: { id: postId, commentCount: { gt: 0 } },
+          data: { commentCount: { decrement: 1 } },
+        });
+      } else {
+        await tx.post.update({ where: { id: postId }, data: { commentCount: { increment: 1 } } });
+      }
+    });
+    return { id: commentId, hidden };
+  }
+
+  // DELETE /posts/:id -- a real hard delete (founder decision, Decision Log
+  // #361). Author-only; 404 before 403. Every FK pointing at Post.id is
+  // onDelete: Cascade (Comment, SavedPost, Like, PostHashtag, PostView,
+  // ContestEntry), so one Post delete also removes other users' comments,
+  // likes and saves on it. The one denormalized counter on ANOTHER row that
+  // depends on this post is Hashtag.postCount, decremented here (floor-
+  // guarded) in the same transaction, before the cascade removes the
+  // PostHashtag links it is read from. There is no per-user post-count
+  // column anywhere. PointsLedgerEntry.refId and Notification.payloadRefId
+  // are bare strings, deliberately left: the ledger is historical (Decision
+  // Log #128) and notifications degrade to data: null once the post is gone.
+  async deletePost(postId: string, callerId: string): Promise<void> {
+    const post = await this.assertPostExists(postId);
+    if (post.authorId !== callerId) {
+      throw new ForbiddenException('You may only delete your own posts');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      const links = await tx.postHashtag.findMany({ where: { postId }, select: { hashtagId: true } });
+      for (const { hashtagId } of links) {
+        await tx.hashtag.updateMany({
+          where: { id: hashtagId, postCount: { gt: 0 } },
+          data: { postCount: { decrement: 1 } },
+        });
+      }
+      await tx.post.delete({ where: { id: postId } });
     });
   }
 

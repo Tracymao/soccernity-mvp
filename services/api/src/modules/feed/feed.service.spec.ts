@@ -16,6 +16,7 @@ function buildPrismaMock() {
       findFirst: jest.fn().mockResolvedValue(null),
       update: jest.fn(),
       updateMany: jest.fn(),
+      delete: jest.fn(),
     },
     like: {
       create: jest.fn(),
@@ -32,6 +33,7 @@ function buildPrismaMock() {
       findMany: jest.fn(),
       findUnique: jest.fn(),
       delete: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     savedPost: {
       create: jest.fn(),
@@ -82,9 +84,12 @@ function buildPrismaMock() {
     // both must exist unconditionally, same as pointsLedgerEntry above.
     hashtag: {
       upsert: jest.fn().mockResolvedValue({ id: 'hashtag-1' }),
+      // DELETE /posts/:id decrements Hashtag.postCount per linked tag.
+      updateMany: jest.fn(),
     },
     postHashtag: {
       create: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
     },
   } as unknown as PrismaService;
 
@@ -1138,7 +1143,7 @@ describe('FeedService', () => {
 
       const callArgs = (prisma.comment.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.orderBy).toEqual([{ createdAt: 'asc' }, { sequence: 'asc' }]);
-      expect(callArgs.where).toEqual({ postId: 'post-1' });
+      expect(callArgs.where).toEqual({ AND: [{ postId: 'post-1' }, { hidden: false }] });
       expect(callArgs.select).toHaveProperty('sequence', true);
     });
 
@@ -1153,10 +1158,15 @@ describe('FeedService', () => {
 
       const callArgs = (prisma.comment.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.where).toEqual({
-        postId: 'post-1',
-        OR: [
-          { createdAt: { gt: new Date('2026-08-02T00:00:00.000Z') } },
-          { createdAt: new Date('2026-08-02T00:00:00.000Z'), sequence: { gt: 2 } },
+        AND: [
+          { postId: 'post-1' },
+          { hidden: false },
+          {
+            OR: [
+              { createdAt: { gt: new Date('2026-08-02T00:00:00.000Z') } },
+              { createdAt: new Date('2026-08-02T00:00:00.000Z'), sequence: { gt: 2 } },
+            ],
+          },
         ],
       });
     });
@@ -1322,6 +1332,159 @@ describe('FeedService', () => {
       await expect(service.deleteComment('post-1', 'comment-1', 'commenter-1')).rejects.toBeInstanceOf(
         NotFoundException,
       );
+    });
+  });
+
+  describe('deletePost', () => {
+    it('404s for a missing post, 403s for a non-author, and deletes nothing in either case', async () => {
+      const prisma = buildPrismaMock();
+      const service = new FeedService(prisma);
+      (prisma.post.findUnique as jest.Mock).mockResolvedValueOnce(null);
+      await expect(service.deletePost('p', 'u')).rejects.toBeInstanceOf(NotFoundException);
+      (prisma.post.findUnique as jest.Mock).mockResolvedValueOnce({ id: 'p', authorId: 'owner' });
+      await expect(service.deletePost('p', 'someone-else')).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.post.delete).not.toHaveBeenCalled();
+    });
+
+    it('deletes the Post row (children cascade in Postgres) and decrements each linked hashtag floor-guarded', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'p', authorId: 'owner' });
+      (prisma.postHashtag.findMany as jest.Mock).mockResolvedValue([{ hashtagId: 'h1' }, { hashtagId: 'h2' }]);
+      const service = new FeedService(prisma);
+
+      await service.deletePost('p', 'owner');
+
+      expect(prisma.hashtag.updateMany).toHaveBeenCalledWith({
+        where: { id: 'h1', postCount: { gt: 0 } },
+        data: { postCount: { decrement: 1 } },
+      });
+      expect(prisma.hashtag.updateMany).toHaveBeenCalledTimes(2);
+      expect(prisma.post.delete).toHaveBeenCalledWith({ where: { id: 'p' } });
+    });
+  });
+
+  describe('comment settings', () => {
+    it('addComment: off blocks a non-author, still lets the author comment', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({
+        id: 'p', authorId: 'owner', commentPermission: 'off',
+      });
+      (prisma.comment.create as jest.Mock).mockResolvedValue({ id: 'c' });
+      const service = new FeedService(prisma);
+
+      await expect(service.addComment('p', 'other', { contentText: 'hi' })).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(prisma.comment.create).not.toHaveBeenCalled();
+      await service.addComment('p', 'owner', { contentText: 'hi' });
+      expect(prisma.comment.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('addComment: followers rejects a non-follower, accepts a follower (commenter = followerId, author = followeeId)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({
+        id: 'p', authorId: 'owner', commentPermission: 'followers',
+      });
+      (prisma.comment.create as jest.Mock).mockResolvedValue({ id: 'c' });
+      const service = new FeedService(prisma);
+
+      await expect(service.addComment('p', 'other', { contentText: 'hi' })).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      (prisma.follow.findUnique as jest.Mock).mockResolvedValue({ id: 'f' });
+      await service.addComment('p', 'other', { contentText: 'hi' });
+      expect(prisma.follow.findUnique).toHaveBeenLastCalledWith({
+        where: { followerId_followeeId: { followerId: 'other', followeeId: 'owner' } },
+        select: { id: true },
+      });
+      expect(prisma.comment.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('addComment: everyone accepts anyone with no follow lookup', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({
+        id: 'p', authorId: 'owner', commentPermission: 'everyone',
+      });
+      (prisma.comment.create as jest.Mock).mockResolvedValue({ id: 'c' });
+      await new FeedService(prisma).addComment('p', 'other', { contentText: 'hi' });
+      expect(prisma.follow.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('updateCommentSettings: 404 / 403 / success, and never touches existing comments', async () => {
+      const prisma = buildPrismaMock();
+      const service = new FeedService(prisma);
+      (prisma.post.findUnique as jest.Mock).mockResolvedValueOnce(null);
+      await expect(service.updateCommentSettings('p', 'u', { commentPermission: 'off' })).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'p', authorId: 'owner' });
+      await expect(
+        service.updateCommentSettings('p', 'other', { commentPermission: 'off' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      (prisma.post.update as jest.Mock).mockResolvedValue({ id: 'p', commentPermission: 'off' });
+      await service.updateCommentSettings('p', 'owner', { commentPermission: 'off' });
+      expect(prisma.post.update).toHaveBeenCalledWith({
+        where: { id: 'p' },
+        data: { commentPermission: 'off' },
+        select: { id: true, commentPermission: true },
+      });
+      expect(prisma.comment.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('setCommentHidden: only the post author; hide decrements, unhide increments, repeat is a no-op', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'p', authorId: 'owner' });
+      (prisma.comment.findUnique as jest.Mock).mockResolvedValue({ id: 'c', postId: 'p' });
+      const service = new FeedService(prisma);
+
+      await expect(service.setCommentHidden('p', 'c', 'other', true)).rejects.toBeInstanceOf(ForbiddenException);
+      (prisma.comment.findUnique as jest.Mock).mockResolvedValueOnce({ id: 'c', postId: 'other-post' });
+      await expect(service.setCommentHidden('p', 'c', 'owner', true)).rejects.toBeInstanceOf(NotFoundException);
+
+      (prisma.comment.updateMany as jest.Mock).mockResolvedValueOnce({ count: 1 });
+      await service.setCommentHidden('p', 'c', 'owner', true);
+      expect(prisma.post.updateMany).toHaveBeenCalledWith({
+        where: { id: 'p', commentCount: { gt: 0 } },
+        data: { commentCount: { decrement: 1 } },
+      });
+
+      (prisma.post.updateMany as jest.Mock).mockClear();
+      (prisma.comment.updateMany as jest.Mock).mockResolvedValueOnce({ count: 0 });
+      await service.setCommentHidden('p', 'c', 'owner', true);
+      expect(prisma.post.updateMany).not.toHaveBeenCalled();
+
+      (prisma.comment.updateMany as jest.Mock).mockResolvedValueOnce({ count: 1 });
+      await service.setCommentHidden('p', 'c', 'owner', false);
+      expect(prisma.post.update).toHaveBeenCalledWith({
+        where: { id: 'p' },
+        data: { commentCount: { increment: 1 } },
+      });
+    });
+
+    it('getComments visibility: post author sees all, comment author sees own hidden, others see none hidden', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'p', authorId: 'owner' });
+      (prisma.comment.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new FeedService(prisma);
+      const whereFor = async (viewer: string) => {
+        (prisma.comment.findMany as jest.Mock).mockClear();
+        await service.getComments('p', {}, viewer);
+        return (prisma.comment.findMany as jest.Mock).mock.calls[0][0].where;
+      };
+      expect(await whereFor('owner')).toEqual({ AND: [{ postId: 'p' }, {}] });
+      expect(await whereFor('viewer')).toEqual({
+        AND: [{ postId: 'p' }, { OR: [{ hidden: false }, { authorId: 'viewer' }] }],
+      });
+    });
+
+    it('deleteComment does not decrement commentCount again for an already-hidden comment', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.comment.findUnique as jest.Mock).mockResolvedValue({
+        id: 'c', postId: 'p', authorId: 'me', hidden: true, post: { authorId: 'owner' },
+      });
+      await new FeedService(prisma).deleteComment('p', 'c', 'me');
+      expect(prisma.comment.delete).toHaveBeenCalled();
+      expect(prisma.post.updateMany).not.toHaveBeenCalled();
     });
   });
 

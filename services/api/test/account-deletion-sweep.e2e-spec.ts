@@ -577,19 +577,16 @@ describe('AccountDeletionSweepService e2e: 30-day anonymize-in-place + investiga
       return rows[0]?.delete_rule ?? 'CONSTRAINT NOT FOUND';
     }
 
-    it('all fifteen constraints Decision Log #44 had flipped to CASCADE are RESTRICT again in the live database', async () => {
+    it('the twelve User-referencing constraints Decision Log #44 had flipped to CASCADE are RESTRICT again in the live database', async () => {
       const restricted = [
         'GrassrootsTeam_createdById_fkey',
         'Result_enteredById_fkey',
         'Post_authorId_fkey',
-        'Comment_postId_fkey',
         'Comment_authorId_fkey',
         'Message_senderId_fkey',
         'Notification_userId_fkey',
         'SavedPost_userId_fkey',
-        'SavedPost_postId_fkey',
         'Like_userId_fkey',
-        'Like_postId_fkey',
         'Follow_followerId_fkey',
         'Follow_followeeId_fkey',
         'Report_reporterId_fkey',
@@ -598,6 +595,23 @@ describe('AccountDeletionSweepService e2e: 30-day anonymize-in-place + investiga
       for (const name of restricted) {
         expect(await getDeleteRule(name)).toBe('RESTRICT');
       }
+    });
+
+    // feat/post-delete-and-comment-settings (Decision Log #360): the FKs that
+    // point at Post (not User) now cascade so DELETE /posts/:id removes a
+    // post's children. Post.authorId stays RESTRICT, so a User delete still fails.
+    it('the Post-referencing constraints cascade (DELETE /posts/:id), while Post_authorId stays RESTRICT', async () => {
+      for (const name of [
+        'Comment_postId_fkey',
+        'SavedPost_postId_fkey',
+        'Like_postId_fkey',
+        'PostHashtag_postId_fkey',
+        'PostView_postId_fkey',
+        'ContestEntry_postId_fkey',
+      ]) {
+        expect(await getDeleteRule(name)).toBe('CASCADE');
+      }
+      expect(await getDeleteRule('Post_authorId_fkey')).toBe('RESTRICT');
     });
 
     it('Guardian.minorUserId is still ON DELETE RESTRICT (unchanged)', async () => {

@@ -45,6 +45,9 @@ describe('FeedController (HTTP layer)', () => {
     addComment: jest.fn(),
     getComments: jest.fn(),
     deleteComment: jest.fn(),
+    deletePost: jest.fn(),
+    updateCommentSettings: jest.fn(),
+    setCommentHidden: jest.fn(),
     savePost: jest.fn(),
     unsavePost: jest.fn(),
     recordView: jest.fn(),
@@ -407,7 +410,7 @@ describe('FeedController (HTTP layer)', () => {
 
       await request(app.getHttpServer()).get('/posts/post-1/comments?cursor=abc&limit=5').expect(200);
 
-      expect(feedService.getComments).toHaveBeenCalledWith('post-1', { cursor: 'abc', limit: 5 });
+      expect(feedService.getComments).toHaveBeenCalledWith('post-1', { cursor: 'abc', limit: 5 }, ADULT.sub);
     });
 
     it('GET propagates a 404 from FeedService when postId does not reference a real post', async () => {
@@ -571,6 +574,54 @@ describe('FeedController (HTTP layer)', () => {
       await request(app.getHttpServer()).post('/posts/post-1/view').expect(200);
 
       expect(feedService.recordView).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('DELETE /posts/:id and comment settings', () => {
+    it('DELETE /posts/:id returns 204 on success, 403 for a non-author, 404 for a missing post', async () => {
+      currentUser = ADULT;
+      feedService.deletePost.mockResolvedValueOnce(undefined);
+      await request(app.getHttpServer()).delete('/posts/post-1').expect(204);
+      expect(feedService.deletePost).toHaveBeenCalledWith('post-1', ADULT.sub);
+
+      feedService.deletePost.mockRejectedValueOnce(new ForbiddenException('nope'));
+      await request(app.getHttpServer()).delete('/posts/post-1').expect(403);
+      feedService.deletePost.mockRejectedValueOnce(new NotFoundException('Post not found'));
+      await request(app.getHttpServer()).delete('/posts/missing').expect(404);
+    });
+
+    it('PATCH /posts/:id/comment-settings validates the value and maps 403/404', async () => {
+      currentUser = ADULT;
+      await request(app.getHttpServer())
+        .patch('/posts/post-1/comment-settings')
+        .send({ commentPermission: 'nobody' })
+        .expect(400);
+      feedService.updateCommentSettings.mockResolvedValueOnce({ id: 'post-1', commentPermission: 'off' });
+      await request(app.getHttpServer())
+        .patch('/posts/post-1/comment-settings')
+        .send({ commentPermission: 'off' })
+        .expect(200);
+      expect(feedService.updateCommentSettings).toHaveBeenCalledWith('post-1', ADULT.sub, {
+        commentPermission: 'off',
+      });
+      feedService.updateCommentSettings.mockRejectedValueOnce(new ForbiddenException('nope'));
+      await request(app.getHttpServer())
+        .patch('/posts/post-1/comment-settings')
+        .send({ commentPermission: 'off' })
+        .expect(403);
+    });
+
+    it('PATCH hide / unhide pass the right flag and map 403/404', async () => {
+      currentUser = ADULT;
+      feedService.setCommentHidden.mockResolvedValue({ id: 'c1', hidden: true });
+      await request(app.getHttpServer()).patch('/posts/post-1/comments/c1/hide').expect(200);
+      expect(feedService.setCommentHidden).toHaveBeenLastCalledWith('post-1', 'c1', ADULT.sub, true);
+      await request(app.getHttpServer()).patch('/posts/post-1/comments/c1/unhide').expect(200);
+      expect(feedService.setCommentHidden).toHaveBeenLastCalledWith('post-1', 'c1', ADULT.sub, false);
+      feedService.setCommentHidden.mockRejectedValueOnce(new ForbiddenException('nope'));
+      await request(app.getHttpServer()).patch('/posts/post-1/comments/c1/hide').expect(403);
+      feedService.setCommentHidden.mockRejectedValueOnce(new NotFoundException('Comment not found'));
+      await request(app.getHttpServer()).patch('/posts/post-1/comments/c1/hide').expect(404);
     });
   });
 });
