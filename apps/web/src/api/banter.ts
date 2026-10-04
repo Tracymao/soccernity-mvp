@@ -52,8 +52,22 @@ export interface BanterRoom {
   scopeType: BanterRoomScopeType;
   createdBy: string;
   status: BanterRoomStatus;
+  // Decision Log #358 -- ISO timestamp, used only by the list filters.
+  createdAt: string;
   memberCount: number;
   joined: boolean;
+}
+
+// GET /banter-rooms/topics -- the Topic catalogue behind the "Tag" filter.
+// `id` is what GET /banter-rooms?topicId= takes.
+export interface BanterTopic {
+  id: string;
+  name: string;
+}
+
+export interface BanterTopicPage {
+  items: BanterTopic[];
+  nextCursor: string | null;
 }
 
 export interface BanterRoomPage {
@@ -130,12 +144,22 @@ export async function createRoom(accessToken: string, payload: CreateBanterRoomR
 // `q` case-insensitive substring match on `name` (real server-side search
 // -- Section 4.4's own GET /banter-rooms/search?q= shares this same
 // filter mechanism, see searchRooms below). Keyset-paginated.
-export async function listRooms(
-  accessToken: string,
-  opts?: { scopeType?: BanterRoomScopeType; q?: string; cursor?: string },
-): Promise<BanterRoomPage> {
+export interface BanterRoomFilters {
+  scopeType?: BanterRoomScopeType;
+  topicId?: string;
+  // ISO date (YYYY-MM-DD), inclusive, whole UTC day on the server.
+  dateFrom?: string;
+  dateTo?: string;
+  q?: string;
+  cursor?: string;
+}
+
+export async function listRooms(accessToken: string, opts?: BanterRoomFilters): Promise<BanterRoomPage> {
   const url = new URL(`${API_BASE_URL}/banter-rooms`);
   if (opts?.scopeType) url.searchParams.set("scopeType", opts.scopeType);
+  if (opts?.topicId) url.searchParams.set("topicId", opts.topicId);
+  if (opts?.dateFrom) url.searchParams.set("dateFrom", opts.dateFrom);
+  if (opts?.dateTo) url.searchParams.set("dateTo", opts.dateTo);
   if (opts?.q) url.searchParams.set("q", opts.q);
   if (opts?.cursor) url.searchParams.set("cursor", opts.cursor);
 
@@ -144,6 +168,17 @@ export async function listRooms(
     throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't load rooms (${response.status}).`, false);
   }
   return (await response.json()) as BanterRoomPage;
+}
+
+// GET /banter-rooms/topics -- the Topic catalogue behind the "Tag" filter.
+export async function listTopics(accessToken: string, cursor?: string): Promise<BanterTopicPage> {
+  const url = new URL(`${API_BASE_URL}/banter-rooms/topics`);
+  if (cursor) url.searchParams.set("cursor", cursor);
+  const response = await authedFetch(url.pathname + url.search, accessToken);
+  if (!response.ok) {
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't load topics (${response.status}).`, false);
+  }
+  return (await response.json()) as BanterTopicPage;
 }
 
 // GET /banter-rooms/search?q= -- Section 4.4's literal search route.

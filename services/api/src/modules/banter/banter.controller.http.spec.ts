@@ -162,6 +162,18 @@ describe('BanterController (HTTP layer)', () => {
       await request(app.getHttpServer()).get('/banter-rooms?scopeType=nope').expect(400);
     });
 
+    it('GET /banter-rooms passes dateFrom/dateTo through, and rejects a non-ISO8601 date with 400', async () => {
+      banter.listRooms.mockResolvedValue({ items: [], nextCursor: null });
+      await request(app.getHttpServer())
+        .get('/banter-rooms?dateFrom=2026-10-01&dateTo=2026-10-04')
+        .expect(200);
+      expect(banter.listRooms).toHaveBeenCalledWith(
+        expect.objectContaining({ dateFrom: '2026-10-01', dateTo: '2026-10-04' }),
+        'user-1',
+      );
+      await request(app.getHttpServer()).get('/banter-rooms?dateFrom=last-tuesday').expect(400);
+    });
+
     it('GET /banter-rooms/:id delegates to getRoomById', async () => {
       banter.getRoomById.mockResolvedValue({ id: 'r-1', joined: false });
       await request(app.getHttpServer()).get('/banter-rooms/r-1').expect(200);

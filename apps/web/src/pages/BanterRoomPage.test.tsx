@@ -39,6 +39,7 @@ function room(overrides: Partial<BanterRoom> = {}): BanterRoom {
     scopeType: "club",
     createdBy: "someone-else",
     status: "active",
+    createdAt: "2026-10-01T12:00:00.000Z",
     memberCount: 5230,
     joined: false,
     ...overrides,
