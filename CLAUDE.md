@@ -9163,6 +9163,7 @@ Full reasoning for every choice above: Build Plan Section 5.
 - `fix/account-dropdown-outside-click` closes the real app-side gap left by Decision Log #106: the desktop account dropdown in `apps/web` now closes on a click outside the avatar and menu (the Figma prototype fix never reached the actual component).
 - `sprint-3/banter-room-status` resolves Decision Log #357 in full: `BanterRoom.status` (active/inactive, migration `20261003231054_add_banter_room_status`) is set by the room creator via `PATCH /banter-rooms/:id/status`, and moderators reach it through the Report queue as a fourth reportable type (`banter_room`) with a `room_deactivated` action. Known gap: no moderator reactivate action; only the creator can set a room back to active.
 - `fix/account-dropdown-elevation-token` (2026-10-04) is the app-side fix for Decision Log #181: `AccountDropdown.css` now uses one container `box-shadow` on `var(--sn-shadow-elevated)` (per-row shadow removed), and the same hardcoded-black pattern on the report menu in `CommunityPage.css` is fixed too. Forward-pointer appended to #181 in the docx.
+- `docs/figma-gotcha-variable-alpha` (docs only) folds Decision Log #117's bind-time variable-alpha gotcha into the Figma-authoring gotchas list, with a forward-pointer on #117.
 - Before trusting any of the above, check Build Plan Section 9 (Decision
   Log) directly rather than this summary if something looks off — this
   section has gone stale before.
@@ -9201,8 +9202,7 @@ own "Keeping this file current" section exists to prevent.** Decision Log
 #199 and #201 were the two most recently flagged as explicitly still open
 pending this fold-in; both are closed by their entry here. The other
 scattered gotchas named inline in individual session bullets throughout
-"Where things stand" (the variable-bound-paint-takes-its-alpha-from-the-
-variable rule, the manually-set-`.y`-on-an-`AUTO`-positioned-auto-layout-
+"Where things stand" (the manually-set-`.y`-on-an-`AUTO`-positioned-auto-layout-
 child rule, etc.) were **not** swept into this list by this pass — only
 #199, #201, and the `frame.resize()`-on-GROUPs gotcha this same cleanup
 session's own task text pointed at (which, on inspection, also did not
@@ -9230,7 +9230,23 @@ real, still-open follow-up, not done by this entry.
   paint — same visual result, no new colour introduced, immune to the bug.
   Found on the Admin Shell sidebar wash (Decision Log #199,
   `sprint-2/admin-shell-componentization`). No exhaustive file-wide audit
-  for other occurrences of this exact pattern has been done.
+  for other occurrences of this exact pattern has been done. See also the
+  bind-time alpha gotcha below (Decision Log #117) — a different bug with a
+  different fix.
+- **A paint bound to a variable takes its alpha from the variable's own
+  value, not from any fractional `opacity` set on the paint.** `{opacity:
+  0.3}` followed by `setBoundVariableForPaint(..., brand/navy)` yields a
+  fully opaque paint, because `brand/navy` is `#282E65` at alpha 1 — the
+  translucency is silently discarded at bind time, with no error. Consequences:
+  (a) translucency must come from a token that carries its own alpha
+  (`brand/green-tint` 12%, `color/icon/inactive` 15%, `color/text/secondary`
+  70%), or opacity must be re-applied to a copy of the paint *after* binding;
+  (b) a prior "0 unbound paints" audit can pass while a paint still renders at
+  the wrong alpha — the binding metadata is correct, the rendered alpha isn't.
+  Found in `sprint-2/mobile-settings-community-message-rebuild` (Decision Log
+  #117), where it silently produced two solid-navy scrims. See also the
+  `createInstance()`-time opacity reset above (Decision Log #199) — a different
+  bug with a different fix.
 - **`figma.union()` / `figma.subtract()` (and presumably
   `figma.intersect()`/`figma.exclude()`) discard the input shapes' own
   fills**, resetting the resulting `BOOLEAN_OPERATION` node to Figma's own
