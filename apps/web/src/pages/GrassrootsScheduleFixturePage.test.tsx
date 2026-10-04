@@ -37,6 +37,7 @@ function organiserProfile(overrides: Partial<UserProfile> = {}): UserProfile {
     createdAt: "2026-01-01T00:00:00.000Z",
     clubAffiliationId: null,
     isTeamOrganiser: true,
+    representedClub: null,
     ...overrides,
   };
 }

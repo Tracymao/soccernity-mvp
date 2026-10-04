@@ -61,6 +61,7 @@ function profile(overrides: Partial<UserProfile> = {}): UserProfile {
     createdAt: new Date().toISOString(),
     clubAffiliationId: null,
     isTeamOrganiser: false,
+    representedClub: null,
     ...overrides,
   };
 }

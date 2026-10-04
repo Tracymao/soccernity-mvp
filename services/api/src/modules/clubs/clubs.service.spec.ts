@@ -22,6 +22,9 @@ function buildPrismaMock() {
     // restricted-pending minors.
     user: {
       findMany: jest.fn().mockResolvedValue([]),
+      // leaveClub clears User.representedClubId when the leaver represents
+      // the club they just left (Decision Log #74).
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     // $executeRaw backs joinClub()'s raw "INSERT ... ON CONFLICT DO
     // NOTHING" against the implicit _ClubMembership join table — see
@@ -449,6 +452,34 @@ describe('ClubsService', () => {
       const service = new ClubsService(prisma);
       await expect(service.leaveClub('user-1', 'missing')).rejects.toThrow(NotFoundException);
       expect(prisma.$executeRaw).not.toHaveBeenCalled();
+    });
+
+    it('on a genuine leave, clears the leaver\'s representedClubId only when it points at this club', async () => {
+      const prisma = buildPrismaMock();
+      (prisma as unknown as { clubPage: { updateMany: jest.Mock } }).clubPage.updateMany = jest.fn().mockResolvedValue({ count: 1 });
+      (prisma.clubPage.findUnique as jest.Mock)
+        .mockResolvedValueOnce({ id: 'club-1' })
+        .mockResolvedValueOnce({ memberCount: 0 });
+      (prisma.$executeRaw as jest.Mock).mockResolvedValue(1);
+
+      const service = new ClubsService(prisma);
+      await service.leaveClub('user-1', 'club-1');
+
+      expect((prisma as unknown as { user: { updateMany: jest.Mock } }).user.updateMany).toHaveBeenCalledWith({
+        where: { id: 'user-1', representedClubId: 'club-1' },
+        data: { representedClubId: null },
+      });
+    });
+
+    it('a no-op leave (not a member) does not touch the leaver\'s representedClubId', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.clubPage.findUnique as jest.Mock).mockResolvedValueOnce({ id: 'club-1' }).mockResolvedValueOnce({ memberCount: 3 });
+      (prisma.$executeRaw as jest.Mock).mockResolvedValue(0);
+
+      const service = new ClubsService(prisma);
+      await service.leaveClub('user-1', 'club-1');
+
+      expect((prisma as unknown as { user: { updateMany: jest.Mock } }).user.updateMany).not.toHaveBeenCalled();
     });
 
     it('on a genuine leave (raw delete affects 1 row), decrements memberCount exactly once', async () => {

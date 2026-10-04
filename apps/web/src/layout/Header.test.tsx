@@ -50,6 +50,7 @@ const BASE_PROFILE: UserProfile = {
   createdAt: "2026-01-15T00:00:00.000Z",
   clubAffiliationId: null,
   isTeamOrganiser: false,
+  representedClub: null,
 };
 
 function LocationProbe() {

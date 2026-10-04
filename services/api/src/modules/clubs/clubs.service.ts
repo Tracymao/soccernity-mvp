@@ -429,6 +429,14 @@ export class ClubsService {
           where: { id: clubId, memberCount: { gt: 0 } },
           data: { memberCount: { decrement: 1 } },
         });
+        // Leaving the club you represent clears the representation in the
+        // same transaction — a user must never represent a club they no
+        // longer belong to (Decision Log #74). Leaving any other club
+        // leaves it untouched.
+        await tx.user.updateMany({
+          where: { id: userId, representedClubId: clubId },
+          data: { representedClubId: null },
+        });
       }
       // affected === 0 means this user was not a member (never joined, or
       // already left) — idempotent success, memberCount left untouched.
