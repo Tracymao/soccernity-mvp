@@ -51,3 +51,6 @@ export const ENGAGEMENT_POINTS_CAP_PER_PERIOD = 100;
 // import" convention (see clubs/dto/list-clubs-query.dto.ts's comment).
 export const LEADERBOARD_DEFAULT_PAGE_SIZE = 20;
 export const LEADERBOARD_MAX_PAGE_SIZE = 50;
+
+// LeaderboardEntry.clubId value for the Overall (global) board (Decision Log #128).
+export const GLOBAL_BOARD_CLUB_ID = '';

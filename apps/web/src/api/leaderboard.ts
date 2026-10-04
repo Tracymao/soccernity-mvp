@@ -3,8 +3,10 @@
 //
 // JwtAuthGuard-only (login required, Decision Log #129). Reads the
 // materialized LeaderboardEntry table; `period` is an ISO-8601 week
-// ("YYYY-Www") and defaults server-side to the current week. There is NO
-// club filter, NO all-time period, and NO per-row club / weekly-change field.
+// ("YYYY-Www") and defaults server-side to the current week. `clubId` (Decision
+// Log #128) selects the club board for the caller's OWN represented club; any
+// other club is a 403 server-side. There is NO all-time period and NO per-row
+// club / weekly-change field.
 //
 // Shapes mirror services/api/src/modules/leaderboard/leaderboard.types.ts.
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
@@ -33,10 +35,11 @@ export class LeaderboardApiError extends Error {
 
 export async function getLeaderboard(
   accessToken: string,
-  options: { period?: string; cursor?: string; limit?: number } = {},
+  options: { period?: string; clubId?: string; cursor?: string; limit?: number } = {},
 ): Promise<LeaderboardPage> {
   const url = new URL(`${API_BASE_URL}/leaderboard`);
   if (options.period) url.searchParams.set("period", options.period);
+  if (options.clubId) url.searchParams.set("clubId", options.clubId);
   if (options.cursor) url.searchParams.set("cursor", options.cursor);
   if (options.limit) url.searchParams.set("limit", String(options.limit));
 

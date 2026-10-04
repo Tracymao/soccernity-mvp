@@ -14,23 +14,25 @@ describe('LeaderboardRollupService', () => {
   describe('rollupPeriod', () => {
     it('upserts one LeaderboardEntry row per aggregated user, keyed on (userId, period)', async () => {
       const prisma = buildMock();
-      (prisma.$queryRaw as jest.Mock).mockResolvedValue([
-        { userId: 'u-1', totalPoints: 250, rank: 1 },
-        { userId: 'u-2', totalPoints: 180, rank: 2 },
-      ]);
+      (prisma.$queryRaw as jest.Mock)
+        .mockResolvedValueOnce([
+          { userId: 'u-1', totalPoints: 250, rank: 1 },
+          { userId: 'u-2', totalPoints: 180, rank: 2 },
+        ])
+        .mockResolvedValueOnce([]);
 
       const result = await new LeaderboardRollupService(prisma).rollupPeriod('2026-W33');
 
       expect(prisma.leaderboardEntry.upsert).toHaveBeenCalledTimes(2);
       expect(prisma.leaderboardEntry.upsert).toHaveBeenNthCalledWith(1, {
-        where: { userId_period: { userId: 'u-1', period: '2026-W33' } },
+        where: { userId_period_clubId: { userId: 'u-1', period: '2026-W33', clubId: '' } },
         update: { points: 250, rank: 1 },
-        create: { userId: 'u-1', period: '2026-W33', points: 250, rank: 1 },
+        create: { userId: 'u-1', period: '2026-W33', clubId: '', points: 250, rank: 1 },
       });
       expect(prisma.leaderboardEntry.upsert).toHaveBeenNthCalledWith(2, {
-        where: { userId_period: { userId: 'u-2', period: '2026-W33' } },
+        where: { userId_period_clubId: { userId: 'u-2', period: '2026-W33', clubId: '' } },
         update: { points: 180, rank: 2 },
-        create: { userId: 'u-2', period: '2026-W33', points: 180, rank: 2 },
+        create: { userId: 'u-2', period: '2026-W33', clubId: '', points: 180, rank: 2 },
       });
       expect(result).toEqual({ period: '2026-W33', upserted: 2 });
     });
@@ -112,7 +114,47 @@ describe('LeaderboardRollupService', () => {
       const service = new LeaderboardRollupService(prisma);
 
       await expect(service.runRollup()).resolves.toBeUndefined();
-      expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
+      // Two periods (current + previous), each with a global and a club query.
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(4);
+    });
+  });
+
+  describe('club boards (Decision Log #128)', () => {
+    it('upserts each club board row under that club id, separately from the global board', async () => {
+      const prisma = buildMock();
+      (prisma.$queryRaw as jest.Mock)
+        .mockResolvedValueOnce([{ userId: 'u-1', totalPoints: 90, rank: 1 }])
+        .mockResolvedValueOnce([
+          { clubId: 'club-a', userId: 'u-1', totalPoints: 60, rank: 1 },
+          { clubId: 'club-a', userId: 'u-2', totalPoints: 30, rank: 2 },
+        ]);
+
+      const result = await new LeaderboardRollupService(prisma).rollupPeriod('2026-W33');
+
+      expect(result).toEqual({ period: '2026-W33', upserted: 3 });
+      expect(prisma.leaderboardEntry.upsert).toHaveBeenCalledWith({
+        where: { userId_period_clubId: { userId: 'u-1', period: '2026-W33', clubId: '' } },
+        update: { points: 90, rank: 1 },
+        create: { userId: 'u-1', period: '2026-W33', clubId: '', points: 90, rank: 1 },
+      });
+      expect(prisma.leaderboardEntry.upsert).toHaveBeenCalledWith({
+        where: { userId_period_clubId: { userId: 'u-1', period: '2026-W33', clubId: 'club-a' } },
+        update: { points: 60, rank: 1 },
+        create: { userId: 'u-1', period: '2026-W33', clubId: 'club-a', points: 60, rank: 1 },
+      });
+    });
+
+    it('builds the club query over attributed points only, ranked per club', async () => {
+      const prisma = buildMock();
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
+
+      await new LeaderboardRollupService(prisma).rollupPeriod('2026-W33');
+
+      const clubQuery = (prisma.$queryRaw as jest.Mock).mock.calls[1][0] as readonly string[];
+      const sql = clubQuery.join('?');
+      expect(sql).toContain('ple."clubId" IS NOT NULL');
+      expect(sql).toContain('PARTITION BY "clubId"');
+      expect(sql).toContain('GROUP BY ple."clubId", ple."userId"');
     });
   });
 });

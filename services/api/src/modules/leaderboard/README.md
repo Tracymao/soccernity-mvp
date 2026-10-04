@@ -20,10 +20,13 @@ module" as more than it is:
 - It does **not** touch `FeedService`, `UsersService`, or
   `ContestService` (the point-award writers, via `points/points.util.ts`'s
   `awardPoints`) — this module is read/rollup only.
-- It does **not** support club-scoped filtering. `PointsLedgerEntry.clubId`
-  stays `null` for every row (Decision Log #74/#128 — the represented-club
-  field/endpoint doesn't exist yet), and there is no `?clubId=` query
-  param on `GET /leaderboard`.
+- **Club boards (Decision Log #128) — built.** `GET /leaderboard?clubId=`
+  returns the board for the caller's OWN represented club and nothing
+  else. Any other `clubId`, or any `clubId` when the caller represents no
+  club, is a 403 (checked server-side against a fresh read of
+  `User.representedClubId`). The club is a **snapshot at earning time**
+  (see below), not a live join, and points earned before this change are
+  unattributed.
 - It does **not** build the Competition board (Prediction/Commentary
   types, Decision Log #72/#73) — Build Plan Section 2.2 defers it.
 - It does **not** touch `apps/web` or Figma. `LeaderboardPage.tsx`'s
@@ -325,3 +328,39 @@ deactivated user's row at all, and a *stale* already-written row being
 hidden at read time after the user later deactivates), period isolation,
 ties sharing a rank, rollup idempotency across repeated runs, and full
 keyset pagination across 5 users with no gaps or duplicates.
+
+## Club boards (Decision Log #128)
+
+**Snapshot, not live.** `awardPoints()` (`points/points.util.ts`) reads
+`User.representedClubId` inside the award transaction and writes it to
+`PointsLedgerEntry.clubId`. A later change of represented club never moves
+points already earned: they stay on the club that was represented when they
+were earned. This follows `PointsLedgerEntry.clubId`'s own schema comment
+(snapshot at award time) and the append-only ledger. **Default taken
+absent a specified rule, open to founder override.** The opposite (a live
+join at query time, so points follow the user) is a one-line change in
+`GET /leaderboard`'s `where` clause and the rollup if the founder prefers
+it.
+
+**No backfill.** Pre-change rows keep `clubId = NULL` (unattributed).
+Backfilling from each user's *current* `representedClubId` would tag old
+points with whatever club they represent today, which is wrong under the
+snapshot rule. `User.representedClubId` itself only exists from the
+`20261004013141` migration, so no pre-change club is recoverable anyway. Club
+boards therefore start counting from the deploy of this change.
+
+**Materialization.** `LeaderboardEntry` gained `clubId String @default("")`:
+`''` is the Overall board (existing rows, unchanged), a `ClubPage` id is that
+club's board. The unique key is `(userId, period, clubId)`. The rollup runs
+a second aggregation per period over attributed points only
+(`clubId IS NOT NULL`), ranked with `RANK() OVER (PARTITION BY clubId …)`.
+The engagement cap is applied per `(club, user)`. That equals per-user in
+practice, because a user represents one club at a time. The only difference
+is a mid-week club switch, where the user's engagement for that week splits
+across two boards, each capped separately.
+
+**Judgment call to confirm:** the weekly win and monthly crown are attributed
+at award time. For contests, that is judging time, not entry time, so a user
+who switches club between entering a round and it being judged credits the
+win to the new club.
+

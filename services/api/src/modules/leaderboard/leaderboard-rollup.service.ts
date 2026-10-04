@@ -3,7 +3,11 @@ import { Cron } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { getCurrentIsoWeekPeriod, getIsoWeekBoundaries, getPreviousIsoWeekPeriod } from './iso-week.util';
-import { ENGAGEMENT_POINTS_CAP_PER_PERIOD, ENGAGEMENT_POINTS_SOURCES } from './leaderboard.constants';
+import {
+  ENGAGEMENT_POINTS_CAP_PER_PERIOD,
+  ENGAGEMENT_POINTS_SOURCES,
+  GLOBAL_BOARD_CLUB_ID,
+} from './leaderboard.constants';
 
 // The shape $queryRaw's aggregation below actually returns, after the
 // explicit ::INTEGER casts — see rollupPeriod's own comment on why those
@@ -15,6 +19,12 @@ interface AggregatedLeaderboardRow {
   totalPoints: number;
   rank: number;
 }
+
+// Decision Log #128 -- the same shape, plus the club board the row belongs to.
+interface AggregatedClubLeaderboardRow extends AggregatedLeaderboardRow {
+  clubId: string;
+}
+
 
 export interface RollupPeriodResult {
   period: string;
@@ -80,6 +90,32 @@ export class LeaderboardRollupService {
   async rollupPeriod(period: string): Promise<RollupPeriodResult> {
     const { start, end } = getIsoWeekBoundaries(period);
 
+    const globalRows = await this.aggregateGlobalBoard(start, end);
+    const clubRows = await this.aggregateClubBoards(start, end);
+
+    for (const row of globalRows) {
+      await this.upsertEntry(row, period, GLOBAL_BOARD_CLUB_ID);
+    }
+    for (const row of clubRows) {
+      await this.upsertEntry(row, period, row.clubId);
+    }
+
+    return { period, upserted: globalRows.length + clubRows.length };
+  }
+
+  private async upsertEntry(
+    row: AggregatedLeaderboardRow,
+    period: string,
+    clubId: string,
+  ): Promise<void> {
+    await this.prisma.leaderboardEntry.upsert({
+      where: { userId_period_clubId: { userId: row.userId, period, clubId } },
+      update: { points: row.totalPoints, rank: row.rank },
+      create: { userId: row.userId, period, clubId, points: row.totalPoints, rank: row.rank },
+    });
+  }
+
+  private async aggregateGlobalBoard(start: Date, end: Date): Promise<AggregatedLeaderboardRow[]> {
     // A CTE, not one flat query with the window function inline: Postgres
     // does not allow a SELECT list expression to reference another
     // expression's own alias at the same query level (the window
@@ -123,7 +159,7 @@ export class LeaderboardRollupService {
     // capped branch, once for the "everything else" branch) —
     // `Prisma.join` is called fresh each time rather than reused, since
     // each occurrence needs its own independent set of query parameters.
-    const aggregated = await this.prisma.$queryRaw<AggregatedLeaderboardRow[]>`
+    return this.prisma.$queryRaw<AggregatedLeaderboardRow[]>`
       WITH aggregated AS (
         SELECT
           ple."userId" AS "userId",
@@ -148,25 +184,44 @@ export class LeaderboardRollupService {
       FROM aggregated
       WHERE "totalPoints" > 0
     `;
+  }
 
-    // Plain Prisma upserts, not a second raw statement — Prisma's query
-    // builder can express "insert or update on a unique key" natively
-    // (upsert), so raw SQL is reserved for the one thing it genuinely
-    // can't do here (the window-function aggregation above). Each
-    // upsert is independently idempotent (re-running with identical
-    // input reproduces identical output), so this is deliberately NOT
-    // wrapped in one big $transaction across every row — a partial
-    // failure mid-loop just means fewer rows are current until the next
-    // 15-minute tick catches up, not a correctness problem for any
-    // individual row.
-    for (const row of aggregated) {
-      await this.prisma.leaderboardEntry.upsert({
-        where: { userId_period: { userId: row.userId, period } },
-        update: { points: row.totalPoints, rank: row.rank },
-        create: { userId: row.userId, period, points: row.totalPoints, rank: row.rank },
-      });
-    }
-
-    return { period, upserted: aggregated.length };
+  // Decision Log #128 -- one row per (club, user) for the club boards. Same
+  // cap, same active-account filter, same ledger window as the global board,
+  // with two differences: only points attributed to a club
+  // (ple."clubId" IS NOT NULL) count, and RANK() is partitioned by club so
+  // each club board is ranked on its own. The engagement cap is still applied
+  // per (club, user), which equals per user in practice: a user represents one
+  // club at a time, so their engagement points land in one club for a given
+  // week (see leaderboard/README.md on mid-week club switches).
+  private async aggregateClubBoards(start: Date, end: Date): Promise<AggregatedClubLeaderboardRow[]> {
+    return this.prisma.$queryRaw<AggregatedClubLeaderboardRow[]>`
+      WITH aggregated AS (
+        SELECT
+          ple."clubId" AS "clubId",
+          ple."userId" AS "userId",
+          CAST(
+            LEAST(
+              COALESCE(SUM(CASE WHEN ple.source IN (${Prisma.join(ENGAGEMENT_POINTS_SOURCES)}) THEN ple.points ELSE 0 END), 0),
+              ${ENGAGEMENT_POINTS_CAP_PER_PERIOD}
+            )
+            + COALESCE(SUM(CASE WHEN ple.source NOT IN (${Prisma.join(ENGAGEMENT_POINTS_SOURCES)}) THEN ple.points ELSE 0 END), 0)
+          AS INTEGER) AS "totalPoints"
+        FROM "PointsLedgerEntry" ple
+        INNER JOIN "User" u ON u.id = ple."userId"
+        WHERE ple."occurredAt" >= ${start}
+          AND ple."occurredAt" < ${end}
+          AND ple."clubId" IS NOT NULL
+          AND u."accountStatus" = 'active'
+        GROUP BY ple."clubId", ple."userId"
+      )
+      SELECT
+        "clubId",
+        "userId",
+        "totalPoints",
+        CAST(RANK() OVER (PARTITION BY "clubId" ORDER BY "totalPoints" DESC) AS INTEGER) AS "rank"
+      FROM aggregated
+      WHERE "totalPoints" > 0
+    `;
   }
 }

@@ -4,6 +4,8 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { LeaderboardRollupService } from '../src/modules/leaderboard/leaderboard-rollup.service';
+import { PointsSource } from '../src/modules/points/points.constants';
+import { awardPoints } from '../src/modules/points/points.util';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
 
 // sprint-6/leaderboard-read-rollup — Build Plan Section 4.9. Hits
@@ -211,7 +213,7 @@ describe('Leaderboard e2e (Section 4.9)', () => {
       // immediately regardless.
       expect(res.body.items.map((i: { userId: string }) => i.userId)).toEqual([peer.userId]);
       const staleRowStillExists = await prisma.leaderboardEntry.findUnique({
-        where: { userId_period: { userId: user.userId, period: PERIOD } },
+        where: { userId_period_clubId: { userId: user.userId, period: PERIOD, clubId: '' } },
       });
       expect(staleRowStillExists).not.toBeNull();
     });
@@ -350,6 +352,123 @@ describe('Leaderboard e2e (Section 4.9)', () => {
         .query({ period: '2025-W53' })
         .set('Authorization', `Bearer ${user.accessToken}`)
         .expect(400);
+    });
+  });
+
+  // Decision Log #128 -- per-club boards, against real Postgres. Points are
+  // awarded through the REAL awardPoints() helper inside a transaction, so the
+  // represented-club snapshot is exercised exactly as production writes it.
+  describe('club boards (Decision Log #128), end to end', () => {
+    async function createClub(name: string): Promise<string> {
+      const club = await getTestPrismaClient().clubPage.create({ data: { name } });
+      return club.id;
+    }
+
+    async function setRepresented(userId: string, clubId: string | null) {
+      await getTestPrismaClient().user.update({
+        where: { id: userId },
+        data: { representedClubId: clubId },
+      });
+    }
+
+    async function awardWhileRepresenting(userId: string, source: PointsSource, points: number, refId: string) {
+      const prisma = getTestPrismaClient();
+      await prisma.$transaction((tx) =>
+        awardPoints(tx, { userId, source, points, refId, occurredAt: IN_PERIOD_AT }),
+      );
+    }
+
+    function getBoard(accessToken: string, query: Record<string, string>) {
+      return request(server())
+        .get('/leaderboard')
+        .query({ period: PERIOD, ...query })
+        .set('Authorization', `Bearer ${accessToken}`);
+    }
+
+    it('a club board ranks only points attributed to that club; the Overall board still counts everyone', async () => {
+      const clubA = await createClub('Club A');
+      const alice = await createUser('alice');
+      const bob = await createUser('bob');
+      const carol = await createUser('carol');
+      await setRepresented(alice.userId, clubA);
+      await setRepresented(bob.userId, clubA);
+
+      await awardWhileRepresenting(alice.userId, 'engagement_post', 3, 'post-a');
+      await awardWhileRepresenting(bob.userId, 'contest_weekly_win', 6, 'round-b');
+      // Carol represents no club, so her points are unattributed.
+      await awardLedgerEntry(carol.userId, 'contest_weekly_win', 9, 'round-c');
+
+      await rollup.rollupPeriod(PERIOD);
+
+      const club = await getBoard(alice.accessToken, { clubId: clubA }).expect(200);
+      expect(club.body.items).toEqual([
+        { userId: bob.userId, displayName: 'E2E Leaderboard bob', points: 6, rank: 1 },
+        { userId: alice.userId, displayName: 'E2E Leaderboard alice', points: 3, rank: 2 },
+      ]);
+
+      const overall = await getBoard(alice.accessToken, {}).expect(200);
+      expect(overall.body.items.map((i: { userId: string }) => i.userId)).toEqual([
+        carol.userId,
+        bob.userId,
+        alice.userId,
+      ]);
+    });
+
+    it('snapshots the represented club at earning time: changing club later does not move earned points', async () => {
+      const clubA = await createClub('Club A');
+      const clubB = await createClub('Club B');
+      const alice = await createUser('alice');
+      const bob = await createUser('bob');
+      await setRepresented(alice.userId, clubA);
+      await setRepresented(bob.userId, clubA);
+
+      await awardWhileRepresenting(alice.userId, 'engagement_post', 3, 'post-before');
+
+      // Alice switches to Club B, then earns more.
+      await setRepresented(alice.userId, clubB);
+      await awardWhileRepresenting(alice.userId, 'engagement_post', 6, 'post-after');
+
+      await rollup.rollupPeriod(PERIOD);
+
+      const rowsA = await getTestPrismaClient().leaderboardEntry.findMany({
+        where: { period: PERIOD, clubId: clubA },
+      });
+      const rowsB = await getTestPrismaClient().leaderboardEntry.findMany({
+        where: { period: PERIOD, clubId: clubB },
+      });
+      expect(rowsA.map((r) => [r.userId, r.points])).toEqual([[alice.userId, 3]]);
+      expect(rowsB.map((r) => [r.userId, r.points])).toEqual([[alice.userId, 6]]);
+
+      // Bob still represents Club A, so he can read it and sees Alice's pre-switch points there.
+      const boardA = await getBoard(bob.accessToken, { clubId: clubA }).expect(200);
+      expect(boardA.body.items).toEqual([
+        { userId: alice.userId, displayName: 'E2E Leaderboard alice', points: 3, rank: 1 },
+      ]);
+    });
+
+    it('applies the engagement cap per club board', async () => {
+      const clubA = await createClub('Club A');
+      const alice = await createUser('alice');
+      await setRepresented(alice.userId, clubA);
+
+      await awardWhileRepresenting(alice.userId, 'engagement_post', 80, 'post-1');
+      await awardWhileRepresenting(alice.userId, 'engagement_follow', 80, 'followee-1');
+
+      await rollup.rollupPeriod(PERIOD);
+
+      const board = await getBoard(alice.accessToken, { clubId: clubA }).expect(200);
+      expect(board.body.items[0].points).toBe(100);
+    });
+
+    it('refuses a club the caller does not represent, and any club when they represent none', async () => {
+      const clubA = await createClub('Club A');
+      const clubB = await createClub('Club B');
+      const alice = await createUser('alice');
+      const bob = await createUser('bob');
+      await setRepresented(alice.userId, clubA);
+
+      await getBoard(alice.accessToken, { clubId: clubB }).expect(403);
+      await getBoard(bob.accessToken, { clubId: clubA }).expect(403);
     });
   });
 });

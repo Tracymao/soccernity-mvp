@@ -1,8 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { decodeLeaderboardCursor, encodeLeaderboardCursor } from './cursor.util';
 import { getCurrentIsoWeekPeriod, parseIsoWeekPeriod } from './iso-week.util';
-import { LEADERBOARD_DEFAULT_PAGE_SIZE, LEADERBOARD_MAX_PAGE_SIZE } from './leaderboard.constants';
+import {
+  GLOBAL_BOARD_CLUB_ID,
+  LEADERBOARD_DEFAULT_PAGE_SIZE,
+  LEADERBOARD_MAX_PAGE_SIZE,
+} from './leaderboard.constants';
 import { LeaderboardEntryView, LeaderboardPage } from './leaderboard.types';
 import { LeaderboardQueryDto } from './dto/leaderboard-query.dto';
 
@@ -24,12 +28,28 @@ export class LeaderboardService {
   // any particular caller (no @CurrentUser() needed), matching
   // GET /clubs / GET /banter-rooms's own "reading the directory isn't
   // caller-specific" shape, NOT GET /posts/feed's caller-scoped shape.
-  async getLeaderboard(query: LeaderboardQueryDto): Promise<LeaderboardPage> {
+  async getLeaderboard(callerId: string, query: LeaderboardQueryDto): Promise<LeaderboardPage> {
     const period = query.period ?? getCurrentIsoWeekPeriod();
     // Throws BadRequestException for a malformed/out-of-range period —
     // see iso-week.util.ts. Return value discarded; this call is purely
     // for validation before it's used as a literal WHERE-clause value.
     parseIsoWeekPeriod(period);
+
+    // Decision Log #128 -- the club board is only ever the caller's OWN
+    // represented club. Checked here, server-side, against a fresh read,
+    // so the API can't be used as a club-directory browser the UI doesn't
+    // offer. A club the caller doesn't represent, or any clubId when they
+    // represent none, is a 403.
+    const boardClubId = query.clubId ?? GLOBAL_BOARD_CLUB_ID;
+    if (query.clubId !== undefined) {
+      const caller = await this.prisma.user.findUnique({
+        where: { id: callerId },
+        select: { representedClubId: true },
+      });
+      if (caller?.representedClubId !== query.clubId) {
+        throw new ForbiddenException('You can only view the leaderboard for the club you represent.');
+      }
+    }
 
     const limit = Math.min(query.limit ?? LEADERBOARD_DEFAULT_PAGE_SIZE, LEADERBOARD_MAX_PAGE_SIZE);
     const cursor = query.cursor ? decodeLeaderboardCursor(query.cursor) : null;
@@ -37,6 +57,7 @@ export class LeaderboardService {
     const rows = await this.prisma.leaderboardEntry.findMany({
       where: {
         period,
+        clubId: boardClubId,
         // Defensive, second-stage active-account exclusion (Decision Log
         // #221) — mirrors feed.service.ts's ACTIVE_AUTHOR_POST_FILTER /
         // users.service.ts's ACTIVE_FOLLOW_ENTRY_FILTER exactly. The

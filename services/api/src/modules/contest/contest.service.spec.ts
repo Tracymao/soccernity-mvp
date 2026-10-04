@@ -19,6 +19,7 @@ function buildMock() {
     contestRoundWinner: { create: jest.fn() },
     contestStanding: { create: jest.fn() },
     pointsLedgerEntry: { create: jest.fn() },
+    user: { findUnique: jest.fn().mockResolvedValue({ representedClubId: null }) },
     post: { findUnique: jest.fn() },
     notification: { create: jest.fn() },
     guardian: { findMany: jest.fn().mockResolvedValue([]) },

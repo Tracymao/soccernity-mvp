@@ -257,23 +257,41 @@ export default function LeaderboardPage() {
     } catch {
       setContestError(true);
     }
-    try {
-      const page = await getLeaderboard(token);
-      setOverallRows(page.items);
-      setOverallCursor(page.nextCursor);
-      setOverallError(false);
-    } catch {
-      setOverallError(true);
-    }
     setLoadState("loaded");
   }, [token, myUserId]);
+
+  // Decision Log #128 -- "By club" on the Overall board is the viewer's OWN
+  // represented club. Scope "club" with no represented club is shown as an
+  // explicit note (clubScopeUnavailable), never as a silent global fallback.
+  const clubScopeActive = scope === "club";
+  const clubScopeUnavailable = clubScopeActive && representedClubId === null;
+  const boardClubId = clubScopeActive ? representedClubId : null;
+
+  useEffect(() => {
+    if (!token || clubScopeUnavailable) return;
+    let cancelled = false;
+    getLeaderboard(token, { clubId: boardClubId ?? undefined })
+      .then((page) => {
+        if (cancelled) return;
+        setOverallRows(page.items);
+        setOverallCursor(page.nextCursor);
+        setOverallError(false);
+        setLoadMoreError(false);
+      })
+      .catch(() => {
+        if (!cancelled) setOverallError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, boardClubId, clubScopeUnavailable]);
 
   async function loadMoreOverall() {
     if (!token || !overallCursor || loadingMore) return;
     setLoadingMore(true);
     setLoadMoreError(false);
     try {
-      const page = await getLeaderboard(token, { cursor: overallCursor });
+      const page = await getLeaderboard(token, { cursor: overallCursor, clubId: boardClubId ?? undefined });
       setOverallRows((prev) => [...prev, ...page.items]);
       setOverallCursor(page.nextCursor);
     } catch {
@@ -303,11 +321,11 @@ export default function LeaderboardPage() {
     );
   }
 
-  // GET /leaderboard has no club or all-time support, so on the Overall tab
-  // those two options are disabled and the effective view is always
-  // Global + Weekly. Other tabs keep their existing behaviour.
+  // GET /leaderboard has no all-time support, so on the Overall tab the
+  // time period is always Weekly. Club scope IS supported there (Decision
+  // Log #128), for the viewer's own represented club only.
   const overall = tab === "overall";
-  const scopeValue: Scope = overall ? "global" : scope;
+  const scopeValue: Scope = scope;
   const periodValue: TimePeriod = overall ? "weekly" : timePeriod;
 
   const competitionRows = COMPETITION_ROWS[competitionType];
@@ -363,8 +381,12 @@ export default function LeaderboardPage() {
               type="button"
               role="radio"
               aria-checked={scopeValue === "club"}
-              disabled={overall}
-              title={overall ? "Club scope isn't supported on the Overall board yet" : undefined}
+              disabled={overall && representedClubId === null}
+              title={
+                overall && representedClubId === null
+                  ? "Choose a club to represent in Settings to see the club board"
+                  : undefined
+              }
               className={scopeValue === "club" ? "lb-segment lb-segment--active" : "lb-segment"}
               onClick={() => setScope("club")}
             >
@@ -436,8 +458,15 @@ export default function LeaderboardPage() {
 
       {overall && (
         <p className="lb-note">
-          The Overall board ranks this week only. Club scope and the all-time view aren&rsquo;t supported yet, so
-          those options are switched off here.
+          The Overall board ranks this week only. The all-time view isn&rsquo;t supported yet, so it&rsquo;s
+          switched off here.
+        </p>
+      )}
+
+      {overall && representedClubId === null && (
+        <p className="lb-status lb-status--inline" role="status">
+          You don&rsquo;t represent a club yet, so the club board isn&rsquo;t available.{" "}
+          <Link to="/settings/account/club-representation">Choose a club to represent</Link>
         </p>
       )}
 
@@ -453,6 +482,7 @@ export default function LeaderboardPage() {
       {tab === "contest" && <ContestBoard contest={contest} contestError={contestError} />}
 
       {tab === "overall" &&
+        !clubScopeUnavailable &&
         (overallError ? (
           <p className="lb-status lb-status--inline" role="alert">
             Couldn&rsquo;t load the leaderboard right now. Please try again later.
@@ -556,7 +586,7 @@ export default function LeaderboardPage() {
         </p>
       )}
 
-      {tab === "overall" && !overallError && overallCursor && (
+      {tab === "overall" && !clubScopeUnavailable && !overallError && overallCursor && (
         <button type="button" className="lb-load-more" onClick={loadMoreOverall} disabled={loadingMore}>
           {loadingMore ? "Loading…" : "Load more"}
         </button>

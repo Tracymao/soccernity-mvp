@@ -70,6 +70,11 @@ function buildPrismaMock() {
     pointsLedgerEntry: {
       create: jest.fn(),
     },
+    // Decision Log #128: awardPoints snapshots the caller's represented club
+    // from the user row inside the same transaction.
+    user: {
+      findUnique: jest.fn().mockResolvedValue({ representedClubId: null }),
+    },
     // sprint-4/trending-topics-backend: createPost also extracts and
     // records hashtags inside the same transaction (via
     // recordPostHashtags, search/hashtag.util.ts). Every createPost test
