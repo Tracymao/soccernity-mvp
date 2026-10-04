@@ -58,18 +58,6 @@ export interface BanterRoom {
   joined: boolean;
 }
 
-// GET /banter-rooms/topics -- the Topic catalogue behind the "Tag" filter.
-// `id` is what GET /banter-rooms?topicId= takes.
-export interface BanterTopic {
-  id: string;
-  name: string;
-}
-
-export interface BanterTopicPage {
-  items: BanterTopic[];
-  nextCursor: string | null;
-}
-
 export interface BanterRoomPage {
   items: BanterRoom[];
   nextCursor: string | null;
@@ -146,7 +134,8 @@ export async function createRoom(accessToken: string, payload: CreateBanterRoomR
 // filter mechanism, see searchRooms below). Keyset-paginated.
 export interface BanterRoomFilters {
   scopeType?: BanterRoomScopeType;
-  topicId?: string;
+  // Free-text "Tag" search: topic name, creator displayName, or scoped club name.
+  tagQuery?: string;
   // ISO date (YYYY-MM-DD), inclusive, whole UTC day on the server.
   dateFrom?: string;
   dateTo?: string;
@@ -157,7 +146,7 @@ export interface BanterRoomFilters {
 export async function listRooms(accessToken: string, opts?: BanterRoomFilters): Promise<BanterRoomPage> {
   const url = new URL(`${API_BASE_URL}/banter-rooms`);
   if (opts?.scopeType) url.searchParams.set("scopeType", opts.scopeType);
-  if (opts?.topicId) url.searchParams.set("topicId", opts.topicId);
+  if (opts?.tagQuery) url.searchParams.set("tagQuery", opts.tagQuery);
   if (opts?.dateFrom) url.searchParams.set("dateFrom", opts.dateFrom);
   if (opts?.dateTo) url.searchParams.set("dateTo", opts.dateTo);
   if (opts?.q) url.searchParams.set("q", opts.q);
@@ -168,17 +157,6 @@ export async function listRooms(accessToken: string, opts?: BanterRoomFilters): 
     throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't load rooms (${response.status}).`, false);
   }
   return (await response.json()) as BanterRoomPage;
-}
-
-// GET /banter-rooms/topics -- the Topic catalogue behind the "Tag" filter.
-export async function listTopics(accessToken: string, cursor?: string): Promise<BanterTopicPage> {
-  const url = new URL(`${API_BASE_URL}/banter-rooms/topics`);
-  if (cursor) url.searchParams.set("cursor", cursor);
-  const response = await authedFetch(url.pathname + url.search, accessToken);
-  if (!response.ok) {
-    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't load topics (${response.status}).`, false);
-  }
-  return (await response.json()) as BanterTopicPage;
 }
 
 // GET /banter-rooms/search?q= -- Section 4.4's literal search route.

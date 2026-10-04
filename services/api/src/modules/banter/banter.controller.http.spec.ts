@@ -162,6 +162,16 @@ describe('BanterController (HTTP layer)', () => {
       await request(app.getHttpServer()).get('/banter-rooms?scopeType=nope').expect(400);
     });
 
+    it('GET /banter-rooms passes tagQuery through, and rejects one over 120 chars with 400', async () => {
+      banter.listRooms.mockResolvedValue({ items: [], nextCursor: null });
+      await request(app.getHttpServer()).get('/banter-rooms?tagQuery=Arsenal').expect(200);
+      expect(banter.listRooms).toHaveBeenCalledWith(
+        expect.objectContaining({ tagQuery: 'Arsenal' }),
+        expect.any(String),
+      );
+      await request(app.getHttpServer()).get(`/banter-rooms?tagQuery=${'x'.repeat(121)}`).expect(400);
+    });
+
     it('GET /banter-rooms passes dateFrom/dateTo through, and rejects a non-ISO8601 date with 400', async () => {
       banter.listRooms.mockResolvedValue({ items: [], nextCursor: null });
       await request(app.getHttpServer())

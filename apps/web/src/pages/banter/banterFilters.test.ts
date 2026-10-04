@@ -17,12 +17,12 @@ describe("toRoomFilters", () => {
     expect(toRoomFilters(NO_BANTER_FILTERS)).toEqual({});
   });
 
-  it("maps each set filter to its API parameter, with the tag's id", () => {
+  it("maps each set filter to its API parameter, with the tag text as tagQuery", () => {
     expect(
       toRoomFilters(
         filters({
           scopeType: "league",
-          topic: { id: "t-1", name: "Transfers" },
+          tagQuery: "Arsenal",
           dateFrom: "2026-10-01",
           dateTo: "2026-10-04",
           q: "derby",
@@ -30,7 +30,7 @@ describe("toRoomFilters", () => {
       ),
     ).toEqual({
       scopeType: "league",
-      topicId: "t-1",
+      tagQuery: "Arsenal",
       dateFrom: "2026-10-01",
       dateTo: "2026-10-04",
       q: "derby",
@@ -64,11 +64,11 @@ describe("activeFilterChips", () => {
     expect(activeFilterChips(NO_BANTER_FILTERS)).toEqual([]);
     expect(
       activeFilterChips(
-        filters({ scopeType: "club", topic: { id: "t-1", name: "Transfers" }, dateFrom: "2026-10-01", q: "derby" }),
+        filters({ scopeType: "club", tagQuery: "Arsenal", dateFrom: "2026-10-01", q: "derby" }),
       ),
     ).toEqual([
       { key: "scope", label: "Club" },
-      { key: "topic", label: "#Transfers" },
+      { key: "tag", label: "“Arsenal”" },
       { key: "date", label: "From 1 Oct 2026" },
       { key: "q", label: "“derby”" },
     ]);

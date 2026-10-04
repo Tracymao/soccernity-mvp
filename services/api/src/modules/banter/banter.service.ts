@@ -326,6 +326,8 @@ export class BanterService {
     // table, same treatment as scopeType above; an unknown topicId simply
     // matches zero rooms rather than 400ing.
     if (query.topicId) filters.push({ topics: { some: { topicId: query.topicId } } });
+    const tagTerm = query.tagQuery?.trim();
+    if (tagTerm) filters.push({ id: { in: await this.matchRoomIdsByTag(tagTerm) } });
     const createdAt = resolveCreatedAtBounds(query.dateFrom, query.dateTo);
     if (createdAt) filters.push({ createdAt });
     if (query.cursor) {
@@ -357,6 +359,31 @@ export class BanterService {
     const items = synced.map((room) => ({ ...toRoomSummary(room), joined: joinedIds.has(room.id) }));
 
     return { items, nextCursor };
+  }
+
+  // BanterRoom.createdBy is a bare String (no relation to User) and
+  // BanterRoom.scopeRef is a polymorphic id with no FK, so Prisma cannot
+  // express "creator's name / scoped club's name" as a relational filter.
+  // This resolves the match in one parameterized query over the real join
+  // paths instead. Live ClubPage.name is used rather than the denormalized
+  // BanterRoom.scopeName snapshot, so a renamed club is findable at once.
+  // League/country scopes have no backing table and can't be matched.
+  private async matchRoomIdsByTag(term: string): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
+      SELECT r."id"
+      FROM "BanterRoom" r
+      LEFT JOIN "User" u ON u."id" = r."createdBy"
+      LEFT JOIN "ClubPage" c ON r."scopeType" = 'club' AND c."id" = r."scopeRef"
+      WHERE position(lower(${term}) in lower(u."displayName")) > 0
+         OR position(lower(${term}) in lower(c."name")) > 0
+         OR EXISTS (
+           SELECT 1 FROM "BanterRoomTopic" bt
+           JOIN "Topic" t ON t."id" = bt."topicId"
+           WHERE bt."banterRoomId" = r."id"
+             AND position(lower(${term}) in lower(t."name")) > 0
+         )
+    `);
+    return rows.map((row) => row.id);
   }
 
   // GET /banter-rooms/mine — "My Bants" (Build Plan Section 6, Sprint 3).

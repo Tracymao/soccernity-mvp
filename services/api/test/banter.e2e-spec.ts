@@ -803,4 +803,68 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
         .expect(404);
     });
   });
+
+  describe('GET /banter-rooms?tagQuery= (free-text Tag search)', () => {
+    it('matches case-insensitively across topic name, creator displayName, and scoped club name, and ANDs with scopeType', async () => {
+      const creator = await createUser('tag-creator');
+      const prisma = getTestPrismaClient();
+      await prisma.user.update({
+        where: { id: creator.userId },
+        data: { displayName: 'Kwame Asante' },
+      });
+      const club = await seedClubFor(creator.userId, 'Arsenal Ladies');
+
+      // Matches via the creator's name.
+      const byName = await createRoom(creator.accessToken, { name: 'Zeta Room', scopeType: 'topic' });
+      // Matches via a topic name.
+      const byTopic = await createRoom(creator.accessToken, { name: 'Yak Room', scopeType: 'topic' });
+      await request(server())
+        .post(`/banter-rooms/${byTopic.id}/topics`)
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .send({ names: ['Deadline Day'] })
+        .expect(200);
+      // Matches via the scoped club name (club-scoped, so scopeType 'club').
+      const byClub = await createRoom(creator.accessToken, {
+        name: 'Omega Room',
+        scopeType: 'club',
+        scopeRef: club.id,
+      });
+      // Matches nothing.
+      await createRoom(creator.accessToken, { name: 'Quiet Room', scopeType: 'topic' });
+
+      const nameHit = await request(server())
+        .get('/banter-rooms?tagQuery=KWAME')
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .expect(200);
+      // The creator's displayName matches every room they created, so all
+      // four rooms match on the name, not just the one tagged for it.
+      const nameHitIds = nameHit.body.items.map((r: { id: string }) => r.id);
+      expect(nameHitIds).toHaveLength(4);
+      expect(nameHitIds).toEqual(expect.arrayContaining([byName.id, byTopic.id, byClub.id]));
+
+      const topicHit = await request(server())
+        .get('/banter-rooms?tagQuery=deadline')
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .expect(200);
+      expect(topicHit.body.items.map((r: { id: string }) => r.id)).toEqual([byTopic.id]);
+
+      const clubHit = await request(server())
+        .get('/banter-rooms?tagQuery=arsenal%20lad')
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .expect(200);
+      expect(clubHit.body.items.map((r: { id: string }) => r.id)).toEqual([byClub.id]);
+
+      const andHit = await request(server())
+        .get('/banter-rooms?tagQuery=arsenal&scopeType=topic')
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .expect(200);
+      expect(andHit.body.items).toEqual([]);
+
+      const noTerm = await request(server())
+        .get('/banter-rooms?tagQuery=%20%20')
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .expect(200);
+      expect(noTerm.body.items).toHaveLength(4);
+    });
+  });
 });
