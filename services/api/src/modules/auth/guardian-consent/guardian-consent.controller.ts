@@ -13,6 +13,7 @@ import { RequestConsentWithdrawalDto } from './dto/request-consent-withdrawal.dt
 import { ResendGuardianConsentDto } from './dto/resend-guardian-consent.dto';
 import { WithdrawGuardianConsentDto } from './dto/withdraw-guardian-consent.dto';
 import { GuardianConsentService, GuardianConsentStatusResponse } from './guardian-consent.service';
+import { GuardianEmailChangeLimiter } from './guardian-email-change.limiter';
 
 // Build Plan Section 4.1 (Auth Service): POST /auth/guardian-consent.
 // No JwtAuthGuard here (unlike /users/* — see users/README.md) — the
@@ -42,6 +43,7 @@ export class GuardianConsentController {
   constructor(
     private readonly guardianConsentService: GuardianConsentService,
     private readonly cardVerification: GuardianCardVerificationService,
+    private readonly emailChangeLimiter: GuardianEmailChangeLimiter,
   ) {}
 
   @Post('guardian-consent')
@@ -100,7 +102,10 @@ export class GuardianConsentController {
   // NOT GuardianConsentGuard, for the same reason GET .../status is: a
   // restricted-pending minor is exactly who this is for. Rate-limited
   // because it makes the platform send email to an address the caller
-  // chooses (the same spam-vector class resend() carries).
+  // chooses (the same spam-vector class resend() carries). That per-IP
+  // throttle is backed by a per-MINOR cap (GuardianEmailChangeLimiter) on how
+  // many changes may succeed per 24h, since an IP is a poor proxy for "one
+  // account".
   @AuthRateLimit()
   @UseGuards(JwtAuthGuard)
   @Post('guardian-consent/change-guardian-email')
@@ -109,7 +114,13 @@ export class GuardianConsentController {
     @CurrentUser() user: AccessTokenPayload,
     @Body() dto: ChangeGuardianEmailDto,
   ): Promise<{ message: string }> {
-    await this.guardianConsentService.changeGuardianEmail(user.sub, dto.email);
+    await this.emailChangeLimiter.run(user.sub, () =>
+      this.guardianConsentService.changeGuardianEmail(user.sub, {
+        name: dto.name,
+        email: dto.email,
+        relationship: dto.relationship,
+      }),
+    );
     return { message: 'Guardian email updated. A new consent request has been sent to the new address.' };
   }
 

@@ -16,6 +16,7 @@ import { seedDob } from './dob-seed';
 describe('Guardian email change e2e (real Postgres)', () => {
   let app: INestApplication;
   let sendSpy: jest.SpyInstance;
+  let replacedSpy: jest.SpyInstance;
   const priorRateLimit = process.env.AUTH_RATE_LIMIT_MAX;
 
   beforeAll(async () => {
@@ -33,9 +34,13 @@ describe('Guardian email change e2e (real Postgres)', () => {
   beforeEach(async () => {
     await resetDatabase();
     sendSpy = jest.spyOn(RegistrationEmailService.prototype, 'sendGuardianConsentEmail').mockResolvedValue(undefined);
+    replacedSpy = jest
+      .spyOn(RegistrationEmailService.prototype, 'sendGuardianEmailReplacedEmail')
+      .mockResolvedValue(undefined);
   });
   afterEach(() => {
     sendSpy.mockRestore();
+    replacedSpy.mockRestore();
   });
   afterAll(async () => {
     if (priorRateLimit === undefined) delete process.env.AUTH_RATE_LIMIT_MAX;
@@ -73,11 +78,11 @@ describe('Guardian email change e2e (real Postgres)', () => {
     return { user, guardian, token: accessToken.token, suffix };
   }
 
-  const change = (token: string, email: string) =>
+  const change = (token: string, email: string, over: { name?: string; relationship?: string } = {}) =>
     request(app.getHttpServer())
       .post('/auth/guardian-consent/change-guardian-email')
       .set('Authorization', `Bearer ${token}`)
-      .send({ email });
+      .send({ name: 'New Guardian', relationship: 'Legal Guardian', email, ...over });
 
   it('restarts the flow: new email + new token on the same pending row, auto-resend budget reset, request sent to the new address', async () => {
     const prisma = getTestPrismaClient();
@@ -89,6 +94,8 @@ describe('Guardian email change e2e (real Postgres)', () => {
     const after = await prisma.guardian.findUnique({ where: { minorUserId: user.id } });
     expect(after?.id).toBe(guardian.id);
     expect(after?.email).toBe(newEmail);
+    expect(after?.name).toBe('New Guardian');
+    expect(after?.relationship).toBe('Legal Guardian');
     expect(after?.consentStatus).toBe('pending');
     expect(after?.consentTimestamp).toBeNull();
     expect(after?.consentToken).not.toBe(guardian.consentToken);
@@ -97,6 +104,9 @@ describe('Guardian email change e2e (real Postgres)', () => {
 
     expect(sendSpy).toHaveBeenCalledTimes(1);
     expect(sendSpy).toHaveBeenCalledWith(newEmail, after!.consentToken, 'E2E Minor');
+    // ...and the PREVIOUS address is told its request was withdrawn.
+    expect(replacedSpy).toHaveBeenCalledTimes(1);
+    expect(replacedSpy).toHaveBeenCalledWith(guardian.email, 'E2E Minor');
   });
 
   it('the OLD emailed link stops working, and the NEW one confirms consent', async () => {
@@ -131,6 +141,7 @@ describe('Guardian email change e2e (real Postgres)', () => {
     expect(after).toEqual(before);
     expect(after?.consentStatus).toBe('confirmed');
     expect(sendSpy).not.toHaveBeenCalled();
+    expect(replacedSpy).not.toHaveBeenCalled();
   });
 
   it('is refused for a declined request, for the minor\'s own email, for the email already on file, and without a token', async () => {
@@ -141,7 +152,7 @@ describe('Guardian email change e2e (real Postgres)', () => {
     await change(token, guardian.email).expect(400);
     await request(app.getHttpServer())
       .post('/auth/guardian-consent/change-guardian-email')
-      .send({ email: 'x@example.com' })
+      .send({ name: 'X', relationship: 'Parent', email: 'x@example.com' })
       .expect(401);
     expect((await prisma.guardian.findUnique({ where: { minorUserId: user.id } }))?.consentToken).toBe(
       guardian.consentToken,
@@ -150,6 +161,41 @@ describe('Guardian email change e2e (real Postgres)', () => {
     await prisma.guardian.update({ where: { id: guardian.id }, data: { consentStatus: 'declined' } });
     await change(token, 'someone-else@example.com').expect(409);
     expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid or missing relationship/name with 400 and changes nothing', async () => {
+    const prisma = getTestPrismaClient();
+    const { user, guardian, token, suffix } = await seedMinor();
+
+    await change(token, `new-${suffix}@example.com`, { relationship: 'Neighbour' }).expect(400);
+    await change(token, `new-${suffix}@example.com`, { name: '' }).expect(400);
+    const after = await prisma.guardian.findUnique({ where: { minorUserId: user.id } });
+    expect(after?.email).toBe(guardian.email);
+    expect(after?.name).toBe('Old Guardian');
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it('per-minor cap: the 6th successful change in the window is 429 and sends nothing; refusals do not burn budget', async () => {
+    const prisma = getTestPrismaClient();
+    const { user, token, suffix } = await seedMinor();
+
+    // A refusal (same email as the minor's own) must not count against the cap.
+    await change(token, user.email).expect(400);
+
+    for (let i = 1; i <= 5; i++) {
+      await change(token, `cap-${i}-${suffix}@example.com`).expect(200);
+    }
+    expect(sendSpy).toHaveBeenCalledTimes(5);
+
+    await change(token, `cap-6-${suffix}@example.com`).expect(429);
+    expect(sendSpy).toHaveBeenCalledTimes(5);
+    expect(replacedSpy).toHaveBeenCalledTimes(5);
+    const after = await prisma.guardian.findUnique({ where: { minorUserId: user.id } });
+    expect(after?.email).toBe(`cap-5-${suffix}@example.com`);
+
+    // Another minor is unaffected.
+    const other = await seedMinor();
+    await change(other.token, `other-${suffix}@example.com`).expect(200);
   });
 
   it('two concurrent changes never leave a send for an address that is not the one stored (optimistic lock)', async () => {

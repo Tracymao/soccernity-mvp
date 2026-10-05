@@ -1395,7 +1395,9 @@ What it refuses (and why):
 - No Guardian row, not a minor, or reclassified as an adult (Decision Log #349)
   -> 404, same as `GET /status`.
 - Same email as on file -> 400. **The minor's own email -> 400** (a minor must not
-  be able to approve their own request; registration has no such check, flagged).
+  be able to approve their own request). The same rule now also applies at
+  **registration** (`RegistrationService.register`, before anything is written),
+  where the guardian email is first captured.
 - A card charge for the current guardian that is verified but not yet refunded
   -> 409 "try again in a little while". Clearing it would orphan the charge
   (`CardRefundRetrySweepService` finds it by `cardVerifiedAt` +
@@ -1404,14 +1406,37 @@ What it refuses (and why):
   clause carries the row's current token and card state (optimistic lock); a
   lost race is a 409 and sends nothing.
 
-Not built / flagged: the **previous guardian address is not notified** that it
-was replaced (would be a new email template, and a useful tripwire against a
-minor swapping a parent for a stranger); the guardian's **name and
-relationship are not re-captured** (the new address may be a different person
--- the screen has only an email field); no frontend wiring yet (the Figma
-screens exist: 5498:7164 / 5501:8536); `CONSENT_SCREEN_VERSION` deliberately
-not bumped (guardian-visible wording unchanged); the rate limit is the shared
-per-IP `'auth'` bucket, not a per-minor cap.
+Follow-up pass, same PR (everything the first cut flagged as unbuilt):
+
+- **Previous guardian address is notified.** After the new request is sent, the
+  OLD address gets a `guardian-email-replaced` email (new template,
+  `RegistrationEmailService.sendGuardianEmailReplacedEmail`): the request it
+  received was withdrawn, no further action needed, contact support if
+  unexpected. It carries no token and does **not** name the new address. Own
+  try/catch, so a failure can never fail a committed change. Plain functional
+  copy, **not counsel-reviewed**.
+- **Name and relationship are re-captured.** `ChangeGuardianEmailDto` now
+  requires `name` and `relationship` (same rules as registration's
+  `GuardianDetailsDto`) and writes both onto the row with the new email, so the
+  previous guardian's details never stay attached to a different person.
+- **Per-minor cap.** `GuardianEmailChangeLimiter` (Redis,
+  `guardian-email-change:<minorId>`): at most **5 successful changes per 24h**
+  (fixed window from the first counted change), on top of the per-IP
+  `@AuthRateLimit()`. INCR up front (concurrent requests can't both slip under),
+  DECR when the change is refused, so validation/state refusals never burn
+  budget; an over-limit attempt neither inflates the counter nor extends the
+  lockout. Enforced in the controller so `GuardianConsentService`'s constructor
+  is unchanged. A 429 carries a plain message.
+- **Frontend.** `apps/web` `/guardian-consent/change-email`
+  (`ChangeGuardianEmailPage`, Figma 5498:7164), linked from the pending state of
+  `/guardian-consent` (previously a disabled "Coming soon" button). Name and
+  relationship fields are **not in the Figma frame** (it has an email field
+  only) and were added plainly; the frame needs updating to match. Mobile frame
+  5501:8536 not separately inspected -- layout stacks at <=560px.
+
+Still open: `CONSENT_SCREEN_VERSION` deliberately not bumped (guardian-visible
+consent wording unchanged); the per-minor cap's numbers (5 / 24h) are a judgment
+call, not from a spec.
 
 Tests: `guardian-email-change.service.spec.ts` (11, unit, stateful fake honouring
 the optimistic-lock where clause), 4 new cases in

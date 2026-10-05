@@ -22,6 +22,7 @@ export type RegistrationEmailTemplate =
   | 'guardian-consent-reminder'
   | 'guardian-consent-expired'
   | 'guardian-minor-turned-18'
+  | 'guardian-email-replaced'
   | 'public-report-acknowledgement'
   | 'report-actioned'
   | 'appeal-decision';
@@ -182,6 +183,23 @@ export class RegistrationEmailService {
       subject: `An update on ${minorDisplayName}'s Soccernity account`,
       template: 'guardian-minor-turned-18',
       data: { minorDisplayName, guardianFirstName: guardianName.trim().split(/\s+/)[0] ?? '' },
+    });
+  }
+
+  // safeguarding/guardian-email-change-endpoint (Decision Log #365): To the
+  // PREVIOUS guardian address after a minor replaced it while consent was
+  // pending. Tells the person who was originally asked that the request they
+  // received no longer stands, so a minor cannot quietly swap a parent for
+  // someone else with the parent none the wiser. Deliberately does NOT name
+  // the new address (it may belong to a different person and the old holder
+  // has no claim on it) and asks nothing of them beyond contacting support if
+  // this is unexpected. Plain functional copy, NOT counsel-reviewed.
+  async sendGuardianEmailReplacedEmail(to: string, minorDisplayName: string): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: `The Soccernity approval request for ${minorDisplayName} was withdrawn`,
+      template: 'guardian-email-replaced',
+      data: { minorDisplayName },
     });
   }
 
@@ -393,6 +411,12 @@ function renderTextBody(template: RegistrationEmailTemplate, data: Record<string
 ` +
         `— The Soccernity team`
       );
+    case 'guardian-email-replaced':
+      return (
+        `You were asked to approve a Soccernity account for ${data.minorDisplayName}.\n\n` +
+        `The guardian email on that account has since been changed, so the approval link we sent you no longer works and nothing further is needed from you.\n\n` +
+        `If you are ${data.minorDisplayName}'s guardian and did not expect this, please contact support@soccernity.com.`
+      );
     case 'public-report-acknowledgement':
       return (
         `Thank you for letting us know.\n\n` +
@@ -492,6 +516,12 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
         `<p>If you have any questions about this change, or about the account generally, you can reach us at support@soccernity.com.</p>` +
         `<p>Thanks for being part of ${data.minorDisplayName}'s Soccernity journey so far.</p>` +
         `<p>— The Soccernity team</p>`
+      );
+    case 'guardian-email-replaced':
+      return (
+        `<p>You were asked to approve a Soccernity account for ${data.minorDisplayName}.</p>` +
+        `<p>The guardian email on that account has since been changed, so the approval link we sent you no longer works and nothing further is needed from you.</p>` +
+        `<p>If you are ${data.minorDisplayName}'s guardian and did not expect this, please contact support@soccernity.com.</p>`
       );
     case 'public-report-acknowledgement':
       return (

@@ -1,0 +1,204 @@
+/* ChangeGuardianEmailPage -- Figma 5498:7164 "Guardian Consent — 11 Change
+ * Guardian Email (Minor)". Light theme, app-wide --sn-* custom properties
+ * (src/theme/applyTheme.ts); never hardcode hex. Content column 760px,
+ * 28px gaps, 12px-radius card, green-tint notice, 64px 6px-radius buttons --
+ * all taken from the frame. Fonts: the frame uses Inter. */
+
+.cge {
+  display: flex;
+  justify-content: center;
+  padding: 32px 0 64px;
+}
+
+.cge__column {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  width: 100%;
+  max-width: 760px;
+}
+
+.cge__header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cge__heading {
+  font: 600 34px/44px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.cge__lead {
+  font: 400 16px/26px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.cge__form {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.cge__card {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 28px;
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 12px;
+}
+
+.cge__card-title {
+  font: 600 18px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.cge__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cge__label {
+  font: 600 14px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.cge__label--muted {
+  color: var(--sn-text-secondary);
+}
+
+.cge__value {
+  font: 400 16px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.cge__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 16px 20px;
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+  font: 400 16px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.cge__input::placeholder {
+  color: var(--sn-text-secondary);
+}
+
+.cge__input:focus-visible,
+.cge__btn:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 2px;
+}
+
+.cge__hint {
+  font: 400 12px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.cge__notice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px 24px;
+  background: var(--sn-green-tint-12);
+  border-radius: 12px;
+}
+
+.cge__notice-title {
+  font: 600 16px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.cge__notice-body {
+  font: 400 14px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.cge__error {
+  font: 400 14px/1.5 "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+  margin: 0;
+}
+
+.cge__actions {
+  display: flex;
+  gap: 16px;
+}
+
+.cge__btn {
+  flex: 1 1 0;
+  max-width: 316px;
+  height: 64px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font: 600 16px "Inter", sans-serif;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.cge__btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.cge__btn--primary {
+  background: var(--sn-brand-green);
+  border: 0;
+  color: var(--sn-text-on-green);
+}
+
+.cge__btn--outline {
+  background: transparent;
+  border: 1.5px solid var(--sn-brand-navy);
+  color: var(--sn-text-primary);
+}
+
+.cge__status {
+  font: 400 15px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  padding: 48px 0;
+  text-align: center;
+  margin: 0;
+}
+
+.cge__status--error {
+  color: var(--sn-brand-navy);
+}
+
+@media (max-width: 560px) {
+  .cge {
+    padding: 16px 0 40px;
+  }
+
+  .cge__heading {
+    font-size: 26px;
+    line-height: 34px;
+  }
+
+  .cge__card {
+    padding: 20px;
+  }
+
+  .cge__actions {
+    flex-direction: column;
+  }
+
+  .cge__btn {
+    max-width: none;
+  }
+}

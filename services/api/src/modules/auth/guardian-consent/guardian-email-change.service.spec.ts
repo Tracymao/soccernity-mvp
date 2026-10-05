@@ -44,6 +44,8 @@ function guardianRow(over: Partial<FakeGuardian> = {}): FakeGuardian {
   };
 }
 
+const det = (email: string) => ({ name: 'New Guardian', email, relationship: 'Legal Guardian' });
+
 function build(
   opts: { guardian?: FakeGuardian | null; minor?: { isMinor: boolean; email?: string } | null } = {},
 ) {
@@ -58,7 +60,8 @@ function build(
   const prisma = {
     user: { findUnique: jest.fn(async () => minor) },
     guardian: {
-      findUnique: jest.fn(async () => guardian),
+      // A COPY, like real Prisma: the caller's snapshot must not mutate when updateMany writes the row.
+      findUnique: jest.fn(async () => (guardian ? { ...guardian } : guardian)),
       updateMany: jest.fn(
         async ({ where, data }: { where: Record<string, unknown>; data: Partial<FakeGuardian> }) => {
           if (!guardian) return { count: 0 };
@@ -76,7 +79,10 @@ function build(
       ),
     },
   };
-  const emailService = { sendGuardianConsentEmail: jest.fn().mockResolvedValue(undefined) };
+  const emailService = {
+    sendGuardianConsentEmail: jest.fn().mockResolvedValue(undefined),
+    sendGuardianEmailReplacedEmail: jest.fn().mockResolvedValue(undefined),
+  };
   const config = { get: () => undefined } as never;
   const authService = { startPendingDeletion: jest.fn() };
   const service = new GuardianConsentService(prisma as never, config, emailService as never, authService as never);
@@ -92,7 +98,7 @@ describe('GuardianConsentService.changeGuardianEmail', () => {
     });
     const { service } = build({ guardian: g });
 
-    await service.changeGuardianEmail('minor-1', 'new-guardian@example.com');
+    await service.changeGuardianEmail('minor-1', det('new-guardian@example.com'));
 
     expect(g.email).toBe('new-guardian@example.com');
     expect(g.consentToken).not.toBe('old-token');
@@ -105,7 +111,7 @@ describe('GuardianConsentService.changeGuardianEmail', () => {
   it('sends the consent request to the NEW address with the NEW token, and nowhere else', async () => {
     const { service, emailService, guardian } = build();
 
-    await service.changeGuardianEmail('minor-1', 'New-Guardian@Example.com');
+    await service.changeGuardianEmail('minor-1', det('New-Guardian@Example.com'));
 
     expect(emailService.sendGuardianConsentEmail).toHaveBeenCalledTimes(1);
     expect(emailService.sendGuardianConsentEmail).toHaveBeenCalledWith(
@@ -125,7 +131,7 @@ describe('GuardianConsentService.changeGuardianEmail', () => {
     });
     const { service, prisma } = build({ guardian: g });
 
-    await service.changeGuardianEmail('minor-1', 'new-guardian@example.com');
+    await service.changeGuardianEmail('minor-1', det('new-guardian@example.com'));
 
     expect(g.stripePaymentIntentId).toBeNull();
     expect(g.cardVerifiedAt).toBeNull();
@@ -140,7 +146,7 @@ describe('GuardianConsentService.changeGuardianEmail', () => {
     const g = guardianRow({ consentStatus: 'confirmed', consentTimestamp: confirmedAt });
     const { service, prisma, emailService } = build({ guardian: g });
 
-    await expect(service.changeGuardianEmail('minor-1', 'new-guardian@example.com')).rejects.toBeInstanceOf(
+    await expect(service.changeGuardianEmail('minor-1', det('new-guardian@example.com'))).rejects.toBeInstanceOf(
       ConflictException,
     );
 
@@ -156,7 +162,7 @@ describe('GuardianConsentService.changeGuardianEmail', () => {
     const g = guardianRow({ consentStatus: 'declined' });
     const { service, prisma } = build({ guardian: g });
 
-    await expect(service.changeGuardianEmail('minor-1', 'new-guardian@example.com')).rejects.toBeInstanceOf(
+    await expect(service.changeGuardianEmail('minor-1', det('new-guardian@example.com'))).rejects.toBeInstanceOf(
       ConflictException,
     );
     expect(prisma.guardian.updateMany).not.toHaveBeenCalled();
@@ -164,18 +170,18 @@ describe('GuardianConsentService.changeGuardianEmail', () => {
 
   it('404s when the caller has no Guardian row, is not a minor, or no longer a minor (Decision Log #349)', async () => {
     await expect(
-      build({ guardian: null }).service.changeGuardianEmail('minor-1', 'new@example.com'),
+      build({ guardian: null }).service.changeGuardianEmail('minor-1', det('new@example.com')),
     ).rejects.toBeInstanceOf(NotFoundException);
 
     await expect(
-      build({ minor: { isMinor: false } }).service.changeGuardianEmail('minor-1', 'new@example.com'),
+      build({ minor: { isMinor: false } }).service.changeGuardianEmail('minor-1', det('new@example.com')),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('rejects the email already on file (case-insensitively) without restarting anything', async () => {
     const { service, prisma, emailService } = build();
 
-    await expect(service.changeGuardianEmail('minor-1', ' OLD-Guardian@example.com ')).rejects.toBeInstanceOf(
+    await expect(service.changeGuardianEmail('minor-1', det(' OLD-Guardian@example.com '))).rejects.toBeInstanceOf(
       BadRequestException,
     );
     expect(prisma.guardian.updateMany).not.toHaveBeenCalled();
@@ -185,7 +191,7 @@ describe('GuardianConsentService.changeGuardianEmail', () => {
   it("rejects the minor's own email, so a minor cannot approve their own consent request", async () => {
     const { service, prisma } = build();
 
-    await expect(service.changeGuardianEmail('minor-1', 'MINOR@example.com')).rejects.toBeInstanceOf(
+    await expect(service.changeGuardianEmail('minor-1', det('MINOR@example.com'))).rejects.toBeInstanceOf(
       BadRequestException,
     );
     expect(prisma.guardian.updateMany).not.toHaveBeenCalled();
@@ -200,7 +206,7 @@ describe('GuardianConsentService.changeGuardianEmail', () => {
     });
     const { service, prisma } = build({ guardian: g });
 
-    await expect(service.changeGuardianEmail('minor-1', 'new-guardian@example.com')).rejects.toBeInstanceOf(
+    await expect(service.changeGuardianEmail('minor-1', det('new-guardian@example.com'))).rejects.toBeInstanceOf(
       ConflictException,
     );
     expect(prisma.guardian.updateMany).not.toHaveBeenCalled();
@@ -218,7 +224,7 @@ describe('GuardianConsentService.changeGuardianEmail', () => {
       return snapshot;
     });
 
-    await expect(service.changeGuardianEmail('minor-1', 'new-guardian@example.com')).rejects.toBeInstanceOf(
+    await expect(service.changeGuardianEmail('minor-1', det('new-guardian@example.com'))).rejects.toBeInstanceOf(
       ConflictException,
     );
     expect(emailService.sendGuardianConsentEmail).not.toHaveBeenCalled();
@@ -229,7 +235,53 @@ describe('GuardianConsentService.changeGuardianEmail', () => {
     const { service, emailService, guardian } = build();
     emailService.sendGuardianConsentEmail.mockRejectedValueOnce(new Error('postmark down'));
 
-    await expect(service.changeGuardianEmail('minor-1', 'new-guardian@example.com')).resolves.toBeUndefined();
+    await expect(service.changeGuardianEmail('minor-1', det('new-guardian@example.com'))).resolves.toBeUndefined();
     expect(guardian!.email).toBe('new-guardian@example.com');
+  });
+
+  it('re-captures the guardian name and relationship with the new address (the new person may differ)', async () => {
+    const g = guardianRow({ name: 'Old Guardian', relationship: 'Parent' });
+    const { service } = build({ guardian: g });
+
+    await service.changeGuardianEmail('minor-1', {
+      name: '  Auntie Ada ',
+      email: 'ada@example.com',
+      relationship: 'Other',
+    });
+
+    expect(g.name).toBe('Auntie Ada');
+    expect(g.relationship).toBe('Other');
+  });
+
+  it('tells the PREVIOUS address its request was withdrawn, without naming the new address', async () => {
+    const { service, emailService } = build();
+
+    await service.changeGuardianEmail('minor-1', det('new-guardian@example.com'));
+
+    expect(emailService.sendGuardianEmailReplacedEmail).toHaveBeenCalledTimes(1);
+    expect(emailService.sendGuardianEmailReplacedEmail).toHaveBeenCalledWith(
+      'old-guardian@example.com',
+      'Minor Name',
+    );
+    expect(JSON.stringify(emailService.sendGuardianEmailReplacedEmail.mock.calls)).not.toContain('new-guardian');
+  });
+
+  it('does not notify the previous address when the change was refused', async () => {
+    const g = guardianRow({ consentStatus: 'confirmed' });
+    const { service, emailService } = build({ guardian: g });
+
+    await expect(service.changeGuardianEmail('minor-1', det('new-guardian@example.com'))).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(emailService.sendGuardianEmailReplacedEmail).not.toHaveBeenCalled();
+  });
+
+  it('a failure notifying the previous address never fails (or undoes) the change, and the new send still happened', async () => {
+    const { service, emailService, guardian } = build();
+    emailService.sendGuardianEmailReplacedEmail.mockRejectedValueOnce(new Error('postmark down'));
+
+    await expect(service.changeGuardianEmail('minor-1', det('new-guardian@example.com'))).resolves.toBeUndefined();
+    expect(guardian!.email).toBe('new-guardian@example.com');
+    expect(emailService.sendGuardianConsentEmail).toHaveBeenCalledTimes(1);
   });
 });

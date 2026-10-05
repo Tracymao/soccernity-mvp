@@ -294,8 +294,11 @@ export class GuardianConsentService {
   // replace an approving parent with an address of their choosing and keep
   // the approval -- so that goes through the withdrawal flow instead. A
   // declined one is already on the deletion path.
-  async changeGuardianEmail(minorUserId: string, newEmail: string): Promise<void> {
-    const normalizedEmail = newEmail.trim().toLowerCase();
+  async changeGuardianEmail(
+    minorUserId: string,
+    details: { name: string; email: string; relationship: string },
+  ): Promise<void> {
+    const normalizedEmail = details.email.trim().toLowerCase();
 
     const guardian = await this.prisma.guardian.findUnique({ where: { minorUserId } });
     const minor = guardian
@@ -362,6 +365,11 @@ export class GuardianConsentService {
       },
       data: {
         email: normalizedEmail,
+        // Re-captured with the address (see ChangeGuardianEmailDto): the
+        // new address may be a different person, and the previous
+        // guardian's name/relationship must not stay attached to it.
+        name: details.name.trim(),
+        relationship: details.relationship,
         consentToken: newToken,
         consentTokenExpiresAt: computeConsentTokenExpiresAt(this.config),
         consentAutoResentAt: null,
@@ -389,6 +397,22 @@ export class GuardianConsentService {
       this.logger.warn(
         `Failed to queue guardian consent email after guardian email change for user ${minor.id}: ${(err as Error).message}`,
       );
+    }
+
+    // Tell the PREVIOUS address its request no longer stands, so a minor
+    // cannot quietly swap an approving parent for someone else with the
+    // parent none the wiser. Own try/catch: independent of the send above and
+    // never able to fail a change that has already committed. Skipped if the
+    // previous address is the same as the new one (impossible past the
+    // already-on-file check, kept as a guard against a future refactor).
+    if (guardian.email.trim().toLowerCase() !== normalizedEmail) {
+      try {
+        await this.emailService.sendGuardianEmailReplacedEmail(guardian.email, minor.displayName);
+      } catch (err) {
+        this.logger.warn(
+          `Failed to notify previous guardian address after guardian email change for user ${minor.id}: ${(err as Error).message}`,
+        );
+      }
     }
   }
 
