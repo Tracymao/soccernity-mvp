@@ -12,13 +12,13 @@ function buildMock() {
   return prisma;
 }
 
-function row(over: Partial<{ userId: string; points: number; rank: number | null; displayName: string }> = {}) {
+function row(over: Partial<{ userId: string; points: number; rank: number | null; displayName: string; username: string | null }> = {}) {
   return {
     userId: over.userId ?? 'u-1',
     points: over.points ?? 100,
     rank: over.rank === undefined ? 1 : over.rank,
     period: '2026-W33',
-    user: { displayName: over.displayName ?? 'Player One' },
+    user: { username: over.username ?? null, displayName: over.displayName ?? 'Player One' },
   };
 }
 
@@ -80,6 +80,19 @@ describe('LeaderboardService', () => {
       expect(call.orderBy).toEqual([{ rank: 'asc' }, { userId: 'asc' }]);
     });
 
+    it('shows the username as publicName when set and falls back to displayName otherwise, never both', async () => {
+      const prisma = buildMock();
+      (prisma.leaderboardEntry.findMany as jest.Mock).mockResolvedValue([
+        row({ userId: 'u-1', rank: 1, displayName: 'Alice Real', username: 'ali_9' }),
+        row({ userId: 'u-2', rank: 2, displayName: 'Bob Real' }),
+      ]);
+
+      const result = await new LeaderboardService(prisma).getLeaderboard('caller-1', { period: '2026-W33', limit: 20 });
+
+      expect(result.items.map((i) => i.publicName)).toEqual(['ali_9', 'Bob Real']);
+      expect(JSON.stringify(result)).not.toContain('Alice Real');
+    });
+
     it('maps rows to the response shape, no nextCursor when a page is not full', async () => {
       const prisma = buildMock();
       (prisma.leaderboardEntry.findMany as jest.Mock).mockResolvedValue([
@@ -91,8 +104,8 @@ describe('LeaderboardService', () => {
 
       expect(result).toEqual({
         items: [
-          { userId: 'u-1', displayName: 'Alice', points: 250, rank: 1 },
-          { userId: 'u-2', displayName: 'Bob', points: 180, rank: 2 },
+          { userId: 'u-1', publicName: 'Alice', points: 250, rank: 1 },
+          { userId: 'u-2', publicName: 'Bob', points: 180, rank: 2 },
         ],
         nextCursor: null,
       });

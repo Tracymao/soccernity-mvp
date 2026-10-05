@@ -48,6 +48,8 @@ const BASE_PROFILE: UserProfile = {
   email: "adeniyi@example.com",
   phone: null,
   displayName: "Adeniyi Christiana",
+  username: null,
+  publicName: "Adeniyi Christiana",
   dateOfBirth: "1997-11-08",
   isMinor: false,
   role: "fan",
@@ -109,11 +111,11 @@ describe("ProfilePage", () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
     vi.mocked(getUser).mockResolvedValueOnce(BASE_PROFILE);
     vi.mocked(getFollowers).mockResolvedValueOnce({
-      items: [{ id: "f1", displayName: "Emeka John" }],
+      items: [{ id: "f1", publicName: "Emeka John" }],
       nextCursor: "cursor-1",
     });
     vi.mocked(getFollowers).mockResolvedValueOnce({
-      items: [{ id: "f2", displayName: "Abdul Yusuf" }],
+      items: [{ id: "f2", publicName: "Abdul Yusuf" }],
       nextCursor: null,
     });
 
@@ -132,7 +134,7 @@ describe("ProfilePage", () => {
   it("opens Edit Profile, renders Bio/Location/Preferred Club/Date of Birth as disabled, and saves via PATCH /users/:id", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
     vi.mocked(getUser).mockResolvedValueOnce(BASE_PROFILE);
-    vi.mocked(updateUser).mockResolvedValueOnce({ ...BASE_PROFILE, displayName: "Adeniyi Okafor" });
+    vi.mocked(updateUser).mockResolvedValueOnce({ ...BASE_PROFILE, publicName: "Adeniyi Okafor" });
 
     renderProfilePage();
     await screen.findByText("Adeniyi Christiana");

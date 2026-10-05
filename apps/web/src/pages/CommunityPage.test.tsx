@@ -98,7 +98,7 @@ function post(overrides: Partial<FeedPost> = {}): FeedPost {
   return {
     id: "post-1",
     authorId: "user-2",
-    author: { id: "user-2", displayName: "Emeka John", isFollowing: false },
+    author: { id: "user-2", publicName: "Emeka John", isFollowing: false },
     contentText: "First goal of the season, what a feeling",
     mediaUrls: [],
     clubPageId: null,
@@ -144,7 +144,7 @@ describe("CommunityPage", () => {
   it("loads and renders the feed via GET /posts/feed", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
     vi.mocked(getFeed).mockResolvedValueOnce({ items: [post()], nextCursor: null });
-    vi.mocked(getUser).mockResolvedValueOnce({ displayName: "Ada Player" } as never);
+    vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
 
     renderPage();
 
@@ -155,12 +155,12 @@ describe("CommunityPage", () => {
   it("publishes a post via POST /posts and prepends it to the feed", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
     vi.mocked(getFeed).mockResolvedValueOnce({ items: [], nextCursor: null });
-    vi.mocked(getUser).mockResolvedValueOnce({ displayName: "Ada Player" } as never);
+    vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
     vi.mocked(createPost).mockResolvedValueOnce(
       post({
         id: "new-post",
         authorId: "user-1",
-        author: { id: "user-1", displayName: "Ada Player", isFollowing: false },
+        author: { id: "user-1", publicName: "Ada Player", isFollowing: false },
         contentText: "Just posted this",
       }),
     );
@@ -178,7 +178,7 @@ describe("CommunityPage", () => {
   it("likes a post via POST /posts/:id/like and reflects the server's fresh count", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
     vi.mocked(getFeed).mockResolvedValueOnce({ items: [post({ likeCount: 3 })], nextCursor: null });
-    vi.mocked(getUser).mockResolvedValueOnce({ displayName: "Ada Player" } as never);
+    vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
     vi.mocked(likePost).mockResolvedValueOnce({ postId: "post-1", liked: true, likeCount: 4 });
 
     renderPage();
@@ -192,10 +192,10 @@ describe("CommunityPage", () => {
   it("does not render a Follow button on the caller's own post", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
     vi.mocked(getFeed).mockResolvedValueOnce({
-      items: [post({ authorId: "user-1", author: { id: "user-1", displayName: "Ada Player", isFollowing: false } })],
+      items: [post({ authorId: "user-1", author: { id: "user-1", publicName: "Ada Player", isFollowing: false } })],
       nextCursor: null,
     });
-    vi.mocked(getUser).mockResolvedValueOnce({ displayName: "Ada Player" } as never);
+    vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
 
     renderPage();
     await screen.findByText(/first goal of the season/i);
@@ -205,7 +205,7 @@ describe("CommunityPage", () => {
   it("shows no Contest tab in the composer when no contest is accepting entries", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
     vi.mocked(getFeed).mockResolvedValueOnce({ items: [], nextCursor: null });
-    vi.mocked(getUser).mockResolvedValueOnce({ displayName: "Ada Player" } as never);
+    vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
     vi.mocked(getCurrentContest).mockResolvedValue(noContest());
 
     renderPage();
@@ -217,7 +217,7 @@ describe("CommunityPage", () => {
   it("submits a contest entry: POST /posts then POST /contest/entries with the new post's id", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
     vi.mocked(getFeed).mockResolvedValueOnce({ items: [], nextCursor: null });
-    vi.mocked(getUser).mockResolvedValueOnce({ displayName: "Ada Player" } as never);
+    vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
     vi.mocked(getCurrentContest).mockResolvedValue(openContest());
     vi.mocked(createPost).mockResolvedValueOnce(
       post({ id: "entry-post", authorId: "user-1", contentText: "my skill clip caption" }) as never,
@@ -253,7 +253,7 @@ describe("CommunityPage", () => {
   it("shows an 'already entered' state in contest mode when callerEntry is set", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
     vi.mocked(getFeed).mockResolvedValueOnce({ items: [], nextCursor: null });
-    vi.mocked(getUser).mockResolvedValueOnce({ displayName: "Ada Player" } as never);
+    vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
     vi.mocked(getCurrentContest).mockResolvedValue(
       openContest({ callerEntry: { roundId: "round-2", weekNumber: 2, postId: "p9" } }),
     );
@@ -274,12 +274,12 @@ describe("CommunityPage", () => {
           likeCount: 7,
           isLiked: true,
           isSaved: true,
-          author: { id: "user-2", displayName: "Emeka John", isFollowing: true },
+          author: { id: "user-2", publicName: "Emeka John", isFollowing: true },
         }),
       ],
       nextCursor: null,
     });
-    vi.mocked(getUser).mockResolvedValueOnce({ displayName: "Ada Player" } as never);
+    vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
 
     renderPage();
 

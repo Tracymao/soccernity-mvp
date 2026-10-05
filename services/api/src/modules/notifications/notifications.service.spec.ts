@@ -61,7 +61,7 @@ describe('NotificationsService', () => {
       const rows = [row({ id: 'n-1' })];
       (prisma.notification.findMany as jest.Mock).mockResolvedValue(rows);
       (prisma.notification.count as jest.Mock).mockResolvedValue(3);
-      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'actor-1', displayName: 'Jane' }]);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'actor-1', username: null, displayName: 'Jane' }]);
       const service = new NotificationsService(prisma);
 
       const page = await service.listNotifications(CALLER, {});
@@ -121,12 +121,12 @@ describe('NotificationsService', () => {
       (prisma.notification.findMany as jest.Mock).mockResolvedValue([
         row({ type: 'follow', payloadRefId: 'actor-1' }),
       ]);
-      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'actor-1', displayName: 'Jane' }]);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'actor-1', username: null, displayName: 'Jane' }]);
       const service = new NotificationsService(prisma);
 
       const page = await service.listNotifications(CALLER, {});
 
-      expect(page.items[0].data).toEqual({ actor: { id: 'actor-1', displayName: 'Jane' } });
+      expect(page.items[0].data).toEqual({ actor: { id: 'actor-1', publicName: 'Jane' } });
       expect(prisma.user.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: { in: ['actor-1'] } } }),
       );
@@ -166,14 +166,14 @@ describe('NotificationsService', () => {
       (prisma.conversation.findMany as jest.Mock).mockResolvedValue([
         { id: 'convo-1', participantIds: [CALLER, 'other-1'] },
       ]);
-      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'other-1', displayName: 'Sam' }]);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'other-1', username: null, displayName: 'Sam' }]);
       const service = new NotificationsService(prisma);
 
       const page = await service.listNotifications(CALLER, {});
 
       expect(page.items[0].data).toEqual({
         conversationId: 'convo-1',
-        otherParticipant: { id: 'other-1', displayName: 'Sam' },
+        otherParticipant: { id: 'other-1', publicName: 'Sam' },
       });
     });
 
@@ -192,7 +192,7 @@ describe('NotificationsService', () => {
 
       expect(page.items[0].data).toEqual({
         conversationId: 'convo-1',
-        otherParticipant: { id: 'gone-1', displayName: null },
+        otherParticipant: { id: 'gone-1', publicName: null },
       });
     });
 
@@ -206,8 +206,8 @@ describe('NotificationsService', () => {
         { id: 'convo-1', participantIds: [CALLER, 'other-1'] },
       ]);
       (prisma.user.findMany as jest.Mock).mockResolvedValue([
-        { id: 'actor-1', displayName: 'Jane' },
-        { id: 'other-1', displayName: 'Sam' },
+        { id: 'actor-1', username: null, displayName: 'Jane' },
+        { id: 'other-1', username: null, displayName: 'Sam' },
       ]);
       const service = new NotificationsService(prisma);
 
@@ -391,7 +391,7 @@ describe('NotificationsService', () => {
     it('marks an unread notification read and returns the resolved item', async () => {
       const prisma = buildPrismaMock();
       (prisma.notification.findUnique as jest.Mock).mockResolvedValue(row({ read: false }));
-      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'actor-1', displayName: 'Jane' }]);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'actor-1', username: null, displayName: 'Jane' }]);
       const service = new NotificationsService(prisma);
 
       const result = await service.markRead(CALLER, 'notif-1');
@@ -401,7 +401,7 @@ describe('NotificationsService', () => {
         data: { read: true },
       });
       expect(result.read).toBe(true);
-      expect(result.data).toEqual({ actor: { id: 'actor-1', displayName: 'Jane' } });
+      expect(result.data).toEqual({ actor: { id: 'actor-1', publicName: 'Jane' } });
     });
 
     it('is idempotent — an already-read notification is a no-op 200, not a duplicate update', async () => {

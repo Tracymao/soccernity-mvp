@@ -25,7 +25,8 @@ export type CommentPermission = "everyone" | "followers" | "off";
 
 export interface FeedPostAuthor {
   id: string;
-  displayName: string;
+  // username if set, else displayName (services/api users/public-name.util.ts)
+  publicName: string;
   // Per-calling-user viewer state (Decision Log #153, services/api PR #136).
   // `true` iff the caller follows this author. Always `false` for the
   // caller's own posts (you can't follow yourself).

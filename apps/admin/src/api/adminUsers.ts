@@ -27,13 +27,13 @@ export const ADMIN_USER_FILTER_STATUSES = ["active", "deactivated", "pending_del
 export type AdminUserFilterStatus = (typeof ADMIN_USER_FILTER_STATUSES)[number];
 
 // The real User row, list-shaped — services/api's own USER_LIST_SELECT
-// (admin-users.service.ts). `displayName`, not a `username` — User has
-// no username column (Decision Log #58); UsersPage.tsx's own column
-// header stays "Username" (matching the original Figma stub) but is
-// bound to displayName, flagged inline in that component.
+// (admin-users.service.ts). Admins see the real displayName AND the
+// optional username (profile/username-column-and-display-convention) --
+// the admin console is not an "other user" surface, so no publicName.
 export interface AdminUserListItem {
   id: string;
   displayName: string;
+  username: string | null;
   email: string;
   accountStatus: string; // one of ADMIN_USER_FILTER_STATUSES
   createdAt: string;

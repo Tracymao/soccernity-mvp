@@ -104,7 +104,7 @@ function bodyFor(n: Notification): { subject: string; rest: string } {
   switch (n.type) {
     case "follow":
       return {
-        subject: data && "actor" in data ? data.actor.displayName : "Someone",
+        subject: data && "actor" in data ? data.actor.publicName : "Someone",
         rest: " started following you",
       };
     case "like":
@@ -112,7 +112,7 @@ function bodyFor(n: Notification): { subject: string; rest: string } {
     case "comment":
       return { subject: "Someone", rest: " commented on your post" };
     case "message": {
-      const name = data && "otherParticipant" in data ? (data.otherParticipant?.displayName ?? null) : null;
+      const name = data && "otherParticipant" in data ? (data.otherParticipant?.publicName ?? null) : null;
       return { subject: name ?? "Someone", rest: " sent you a message" };
     }
     case "fixture_scheduled": {
@@ -157,7 +157,7 @@ function RowAvatar({ notification }: { notification: Notification }) {
     : `notif-row__avatar ${read ? "notif-row__avatar--read" : "notif-row__avatar--unread"}`;
 
   if (type === "follow") {
-    const name = data && "actor" in data ? data.actor.displayName : null;
+    const name = data && "actor" in data ? data.actor.publicName : null;
     return <span className={className}>{name ? initialsFor(name) : "?"}</span>;
   }
   if (type === "like" || type === "comment") {

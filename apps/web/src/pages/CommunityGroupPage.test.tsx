@@ -48,7 +48,7 @@ const BALLERS: CommunityGroup = {
   joined: false,
 };
 
-const MEMBER: CommunityGroupMember = { id: "member-1", displayName: "Kemi Alabi" };
+const MEMBER: CommunityGroupMember = { id: "member-1", publicName: "Kemi Alabi" };
 
 const EMPTY_MEMBER_PAGE = { items: [], nextCursor: null };
 
@@ -180,7 +180,7 @@ describe("CommunityGroupPage", () => {
     vi.mocked(getCommunityGroupMembers)
       .mockReset()
       .mockResolvedValueOnce({ items: [MEMBER], nextCursor: "cursor-1" })
-      .mockResolvedValueOnce({ items: [{ id: "member-2", displayName: "Seyi Bankole" }], nextCursor: null });
+      .mockResolvedValueOnce({ items: [{ id: "member-2", publicName: "Seyi Bankole" }], nextCursor: null });
 
     renderPage();
     await screen.findByText("Kemi Alabi");

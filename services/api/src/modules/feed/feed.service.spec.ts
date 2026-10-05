@@ -108,7 +108,12 @@ function buildPrismaMock() {
   return prisma;
 }
 
-const AUTHOR = { id: 'author-1', displayName: 'Author One' };
+const AUTHOR = { id: 'author-1', username: null as string | null, displayName: 'Author One' };
+
+// What the API returns for a row: the embedded author is { id, publicName } only.
+function asView<T extends { author: { id: string; username: string | null; displayName: string } }>(row: T) {
+  return { ...row, author: { id: row.author.id, publicName: row.author.username ?? row.author.displayName } };
+}
 
 function buildPostRow(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -151,7 +156,7 @@ describe('FeedService', () => {
         },
         select: expect.objectContaining({ contentText: true, author: expect.anything() }),
       });
-      expect(result).toEqual(row);
+      expect(result).toEqual(asView(row));
     });
 
     it('awards the creator a baseline-engagement point (source engagement_post), keyed on the new post id, at the post createdAt (Decision Log #219)', async () => {
@@ -713,10 +718,10 @@ describe('FeedService', () => {
       const service = new FeedService(prisma);
 
       await expect(service.getPostById('post-1', 'viewer-1')).resolves.toEqual({
-        ...row,
+        ...asView(row),
         isLiked: false,
         isSaved: false,
-        author: { ...row.author, isFollowing: false },
+        author: { ...asView(row).author, isFollowing: false },
       });
     });
 
@@ -1059,7 +1064,7 @@ describe('FeedService', () => {
   });
 
   describe('addComment / getComments', () => {
-    const AUTHOR2 = { id: 'author-1', displayName: 'Author One' };
+    const AUTHOR2 = { id: 'author-1', username: null as string | null, displayName: 'Author One' };
 
     function buildCommentRow(overrides: Partial<Record<string, unknown>> = {}) {
       return {
@@ -1107,7 +1112,7 @@ describe('FeedService', () => {
         where: { id: 'post-1' },
         data: { commentCount: { increment: 1 } },
       });
-      expect(result).toEqual(row);
+      expect(result).toEqual(asView(row));
     });
 
     it("never selects the comment author's passwordHash or isMinor", async () => {
@@ -1364,12 +1369,24 @@ describe('FeedService', () => {
   });
 
   describe('comment settings', () => {
+    // A realistic comment row (embedded author included) -- the service maps it
+    // to the public shape, so a bare { id } is not a valid mock.
+    const commentRow = () => ({
+      id: 'c',
+      postId: 'p',
+      authorId: 'owner',
+      author: AUTHOR,
+      contentText: 'hi',
+      hidden: false,
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+
     it('addComment: off blocks a non-author, still lets the author comment', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({
         id: 'p', authorId: 'owner', commentPermission: 'off',
       });
-      (prisma.comment.create as jest.Mock).mockResolvedValue({ id: 'c' });
+      (prisma.comment.create as jest.Mock).mockResolvedValue(commentRow());
       const service = new FeedService(prisma);
 
       await expect(service.addComment('p', 'other', { contentText: 'hi' })).rejects.toBeInstanceOf(
@@ -1385,7 +1402,7 @@ describe('FeedService', () => {
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({
         id: 'p', authorId: 'owner', commentPermission: 'followers',
       });
-      (prisma.comment.create as jest.Mock).mockResolvedValue({ id: 'c' });
+      (prisma.comment.create as jest.Mock).mockResolvedValue(commentRow());
       const service = new FeedService(prisma);
 
       await expect(service.addComment('p', 'other', { contentText: 'hi' })).rejects.toBeInstanceOf(
@@ -1405,7 +1422,7 @@ describe('FeedService', () => {
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({
         id: 'p', authorId: 'owner', commentPermission: 'everyone',
       });
-      (prisma.comment.create as jest.Mock).mockResolvedValue({ id: 'c' });
+      (prisma.comment.create as jest.Mock).mockResolvedValue(commentRow());
       await new FeedService(prisma).addComment('p', 'other', { contentText: 'hi' });
       expect(prisma.follow.findUnique).not.toHaveBeenCalled();
     });
@@ -1738,6 +1755,41 @@ describe('FeedService', () => {
       const callArgs = (prisma.savedPost.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.select.post.select.author.select).not.toHaveProperty('passwordHash');
       expect(callArgs.select.post.select.author.select).not.toHaveProperty('isMinor');
+    });
+  });
+
+  describe('author public name (profile/username-column-and-display-convention)', () => {
+    const withUsername = { id: 'author-1', username: 'goalie_9', displayName: 'Ada Obi' };
+
+    it('getPostById shows the username as the author publicName and never forwards the real displayName', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findFirst as jest.Mock).mockResolvedValue(buildPostRow({ author: withUsername }));
+      const result = await new FeedService(prisma).getPostById('post-1', 'viewer-1');
+      expect(result.author.publicName).toBe('goalie_9');
+      expect(result.author).not.toHaveProperty('displayName');
+      expect(JSON.stringify(result)).not.toContain('Ada Obi');
+    });
+
+    it('getPostById falls back to the displayName when the author has no username', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findFirst as jest.Mock).mockResolvedValue(buildPostRow());
+      const result = await new FeedService(prisma).getPostById('post-1', 'viewer-1');
+      expect(result.author.publicName).toBe('Author One');
+    });
+
+    it('createPost and addComment resolve the author name the same way', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.create as jest.Mock).mockResolvedValue(buildPostRow({ author: withUsername }));
+      const post = await new FeedService(prisma).createPost('author-1', { contentText: 'hi' });
+      expect(post.author).toEqual({ id: 'author-1', publicName: 'goalie_9' });
+    });
+
+    it('the Prisma author select requests username + displayName (both needed to resolve), never isMinor', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findFirst as jest.Mock).mockResolvedValue(buildPostRow());
+      await new FeedService(prisma).getPostById('post-1', 'viewer-1');
+      const sel = (prisma.post.findFirst as jest.Mock).mock.calls[0][0].select.author.select;
+      expect(sel).toEqual({ id: true, username: true, displayName: true });
     });
   });
 });

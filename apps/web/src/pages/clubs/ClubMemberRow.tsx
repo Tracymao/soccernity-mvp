@@ -54,9 +54,9 @@ export default function ClubMemberRow({ member, accessToken, currentUserId }: Cl
     <li className="clubs-roster__row">
       <div className="clubs-roster__identity">
         <span className="clubs-roster__avatar" aria-hidden="true">
-          {initialsFor(member.displayName)}
+          {initialsFor(member.publicName)}
         </span>
-        <span className="clubs-roster__name">{member.displayName}</span>
+        <span className="clubs-roster__name">{member.publicName}</span>
       </div>
       {!isSelf && (
         <button

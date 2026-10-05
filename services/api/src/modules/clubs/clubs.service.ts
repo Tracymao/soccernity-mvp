@@ -8,6 +8,7 @@ import {
   ListClubMembersQueryDto,
 } from './dto/list-club-members-query.dto';
 import { CLUBS_DEFAULT_PAGE_SIZE, CLUBS_MAX_PAGE_SIZE, ListClubsQueryDto } from './dto/list-clubs-query.dto';
+import { PUBLIC_NAME_SELECT, toPublicUser } from '../users/public-name.util';
 
 // Response shape for every GET /clubs and GET /clubs/:id entry (Build
 // Plan Section 4.4). Deliberately does NOT select `members` or
@@ -71,9 +72,12 @@ export interface JoinState {
 // this select. `@handle` / avatar aren't here because `User` has no such
 // column (parked backend requirements, Decision Log #58) — the Figma
 // roster's handle text is decorative, same as everywhere else.
+// Sends { id, publicName } (username if set, else displayName), never the raw
+// displayName -- see users/public-name.util.ts. Ordering/cursor below stay on
+// displayName (flagged follow-up: sort by the public name).
 const CLUB_MEMBER_SELECT = {
   id: true,
-  displayName: true,
+  ...PUBLIC_NAME_SELECT,
 } as const;
 
 // Decision Log #224: the roster entry also carries the caller's own
@@ -81,7 +85,9 @@ const CLUB_MEMBER_SELECT = {
 // first paint. Same batched per-caller discipline as FeedService's
 // attachViewerState (Decision Log #153) — an intersection on top of the
 // lean select, never a stored column.
-export type ClubMember = Prisma.UserGetPayload<{ select: typeof CLUB_MEMBER_SELECT }> & {
+export type ClubMember = {
+  id: string;
+  publicName: string;
   isFollowing: boolean;
 };
 
@@ -304,7 +310,10 @@ export class ClubsService {
       userId,
       trimmed.filter((m) => m.id !== userId).map((m) => m.id),
     );
-    const items = trimmed.map((member) => ({ ...member, isFollowing: followedIds.has(member.id) }));
+    const items = trimmed.map((member) => ({
+      ...toPublicUser(member),
+      isFollowing: followedIds.has(member.id),
+    }));
 
     return { items, nextCursor };
   }

@@ -36,6 +36,8 @@ const ADULT: UserProfile = {
   email: "adult@example.com",
   phone: null,
   displayName: "Adeniyi Christiana",
+  username: null,
+  publicName: "Adeniyi Christiana",
   dateOfBirth: "1997-11-08",
   isMinor: false,
   role: "fan",

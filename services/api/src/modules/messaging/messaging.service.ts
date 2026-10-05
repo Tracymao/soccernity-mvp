@@ -14,6 +14,7 @@ import {
 } from './cursor.util';
 import { SendMessageDto } from './dto/send-message.dto';
 import { MessagingQueryDto } from './dto/messaging-query.dto';
+import { PUBLIC_NAME_SELECT, resolvePublicName } from '../users/public-name.util';
 
 // The lean row every conversation-returning path selects — never the
 // nested messages (a conversation with thousands of messages returned
@@ -45,7 +46,8 @@ const MESSAGE_SELECT = {
 
 export type MessageView = Prisma.MessageGetPayload<{ select: typeof MESSAGE_SELECT }>;
 
-// The other person in a 2-party conversation. `displayName` is nullable
+// The other person in a 2-party conversation. `publicName` (username if set,
+// else displayName) is nullable
 // only for the ghost case: a participant hard-deleted by the account-
 // deletion sweep (Message.senderId cascades, but Conversation.participantIds
 // still holds the id). The surviving participant then sees a conversation
@@ -53,7 +55,7 @@ export type MessageView = Prisma.MessageGetPayload<{ select: typeof MESSAGE_SELE
 // flagged in messaging/README.md.
 export interface OtherParticipant {
   id: string;
-  displayName: string | null;
+  publicName: string | null;
 }
 
 export interface MessagePreview {
@@ -530,9 +532,9 @@ export class MessagingService {
       otherIds.length > 0
         ? this.prisma.user.findMany({
             where: { id: { in: otherIds } },
-            select: { id: true, displayName: true },
+            select: { id: true, ...PUBLIC_NAME_SELECT },
           })
-        : Promise.resolve([] as { id: string; displayName: string }[]),
+        : Promise.resolve([] as { id: string; username: string | null; displayName: string }[]),
       this.prisma.message.groupBy({
         by: ['conversationId'],
         where: { conversationId: { in: conversationIds }, senderId: { not: callerId }, readAt: null },
@@ -550,7 +552,7 @@ export class MessagingService {
       }),
     ]);
 
-    const nameById = new Map(others.map((u) => [u.id, u.displayName]));
+    const nameById = new Map(others.map((u) => [u.id, resolvePublicName(u)]));
     const unreadByConversation = new Map(
       unreadGroups.map((g) => [g.conversationId, g._count._all]),
     );
@@ -562,7 +564,7 @@ export class MessagingService {
       return {
         id: c.id,
         otherParticipant: otherId
-          ? { id: otherId, displayName: nameById.get(otherId) ?? null }
+          ? { id: otherId, publicName: nameById.get(otherId) ?? null }
           : null,
         lastMessageAt: c.lastMessageAt,
         createdAt: c.createdAt,

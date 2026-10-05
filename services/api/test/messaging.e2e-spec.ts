@@ -119,7 +119,7 @@ describe('Messaging e2e (Section 4.7, DM slice)', () => {
 
       expect(first.body).toMatchObject({
         id: expect.any(String),
-        otherParticipant: { id: bob.userId, displayName: bob.displayName },
+        otherParticipant: { id: bob.userId, publicName: bob.displayName },
         lastMessage: null,
         unreadCount: 0,
       });
@@ -388,7 +388,7 @@ describe('Messaging e2e (Section 4.7, DM slice)', () => {
       expect(bobInbox.body.items).toHaveLength(1);
       expect(bobInbox.body.items[0]).toMatchObject({
         id: withBob.id,
-        otherParticipant: { id: alice.userId, displayName: alice.displayName },
+        otherParticipant: { id: alice.userId, publicName: alice.displayName },
         unreadCount: 2,
         lastMessage: { contentText: 'you there?', senderId: alice.userId },
       });

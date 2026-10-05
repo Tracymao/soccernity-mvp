@@ -43,7 +43,7 @@ function initialsFor(name: string | null): string {
 // honestly rather than crashing or showing "null" -- see messaging/
 // README.md's own note on this.
 function nameFor(conversation: Conversation): string {
-  return conversation.otherParticipant?.displayName ?? "Deleted user";
+  return conversation.otherParticipant?.publicName ?? "Deleted user";
 }
 
 function previewFor(conversation: Conversation): string {
@@ -153,7 +153,7 @@ export default function MessagesPage() {
                 state={{ otherParticipant: c.otherParticipant }}
               >
                 <span className="messages-row__avatar" aria-hidden="true">
-                  {initialsFor(c.otherParticipant?.displayName ?? null)}
+                  {initialsFor(c.otherParticipant?.publicName ?? null)}
                 </span>
                 <span className="messages-row__text">
                   <span className="messages-row__name">{nameFor(c)}</span>

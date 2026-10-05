@@ -21,7 +21,7 @@ function post(id: string, mediaUrls: string[], viewCount: number, name = "Ada"):
   return {
     id,
     authorId: `a-${id}`,
-    author: { id: `a-${id}`, displayName: name, isFollowing: false },
+    author: { id: `a-${id}`, publicName: name, isFollowing: false },
     contentText: `caption ${id}`,
     mediaUrls,
     clubPageId: null,

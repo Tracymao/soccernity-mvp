@@ -7,6 +7,7 @@ import {
 } from './notifications.constants';
 import { decodeNotificationCursor, encodeNotificationCursor } from './cursor.util';
 import { NotificationsQueryDto } from './dto/notifications-query.dto';
+import { PUBLIC_NAME_SELECT, toPublicUser } from '../users/public-name.util';
 
 // The seven real MVP notification types — see schema.prisma's own comment
 // on Notification.type for the authoritative list and where each is
@@ -38,7 +39,8 @@ type NotificationRow = Prisma.NotificationGetPayload<{ select: typeof NOTIFICATI
 // so this is the one type where the actor is directly resolvable.
 export interface NotificationActor {
   id: string;
-  displayName: string;
+  // username if set, else displayName (users/public-name.util.ts)
+  publicName: string;
 }
 
 // like / comment — payloadRefId is the POST, not an actor. A real,
@@ -63,7 +65,7 @@ export interface NotificationPost {
 // OtherParticipant.
 export interface NotificationOtherParticipant {
   id: string;
-  displayName: string | null;
+  publicName: string | null;
 }
 
 // fixture_scheduled / result_logged — payloadRefId is the fixtureId.
@@ -363,10 +365,10 @@ export class NotificationsService {
       userIds.length > 0
         ? await this.prisma.user.findMany({
             where: { id: { in: userIds } },
-            select: { id: true, displayName: true },
+            select: { id: true, ...PUBLIC_NAME_SELECT },
           })
         : [];
-    const userById = new Map(users.map((u) => [u.id, u]));
+    const userById = new Map(users.map((u) => [u.id, toPublicUser(u)]));
 
     const postById = new Map(posts.map((p) => [p.id, p]));
     const fixtureById = new Map(fixtures.map((f) => [f.id, f]));
@@ -394,7 +396,7 @@ export class NotificationsService {
     row: NotificationRow,
     lookups: {
       postById: Map<string, { id: string; contentText: string; authorId: string }>;
-      userById: Map<string, { id: string; displayName: string }>;
+      userById: Map<string, { id: string; publicName: string }>;
       otherParticipantIdByConversationId: Map<string, string | null>;
       fixtureById: Map<
         string,
@@ -438,7 +440,7 @@ export class NotificationsService {
       }
       case 'message': {
         const otherId = lookups.otherParticipantIdByConversationId.get(row.payloadRefId) ?? null;
-        const other = otherId ? (lookups.userById.get(otherId) ?? { id: otherId, displayName: null }) : null;
+        const other = otherId ? (lookups.userById.get(otherId) ?? { id: otherId, publicName: null }) : null;
         return { conversationId: row.payloadRefId, otherParticipant: other };
       }
       case 'fixture_scheduled':

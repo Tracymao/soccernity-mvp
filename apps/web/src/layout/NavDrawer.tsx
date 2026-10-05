@@ -84,9 +84,9 @@ export default function NavDrawer({ onClose, onLogout, profile, unreadCount = 0 
           {profile ? (
             <>
               <span className="sn-drawer__avatar" aria-hidden="true">
-                {initialsFor(profile.displayName)}
+                {initialsFor(profile.publicName)}
               </span>
-              <span className="sn-drawer__name">{profile.displayName}</span>
+              <span className="sn-drawer__name">{profile.publicName}</span>
             </>
           ) : (
             <>

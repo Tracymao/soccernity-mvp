@@ -42,7 +42,7 @@ function response(overrides: Partial<CurrentContestResponse> = {}): CurrentConte
       judgedAt: null,
     },
     rounds: [],
-    weeklyWinners: [{ weekNumber: 1, position: 1, userId: "u1", displayName: "Emeka John", entryId: "e1", postId: "p1" }],
+    weeklyWinners: [{ weekNumber: 1, position: 1, userId: "u1", publicName: "Emeka John", entryId: "e1", postId: "p1" }],
     monthlyStandings: [],
     callerEntry: null,
     ...overrides,
@@ -106,8 +106,8 @@ describe("ContestPage", () => {
         isAcceptingEntries: false,
         activeRound: null,
         monthlyStandings: [
-          { position: 1, userId: "u1", displayName: "Emeka John" },
-          { position: 2, userId: "u2", displayName: "Chukwu James" },
+          { position: 1, userId: "u1", publicName: "Emeka John" },
+          { position: 2, userId: "u2", publicName: "Chukwu James" },
         ],
       }),
     );

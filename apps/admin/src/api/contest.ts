@@ -34,7 +34,7 @@ export interface ContestWinnerSummary {
   weekNumber: number;
   position: number;
   userId: string;
-  displayName: string;
+  publicName: string;
   entryId: string;
   postId: string;
 }
@@ -42,13 +42,13 @@ export interface ContestWinnerSummary {
 export interface ContestStandingSummary {
   position: number;
   userId: string;
-  displayName: string;
+  publicName: string;
 }
 
 export interface AdminContestEntry {
   entryId: string;
   submittedAt: string;
-  entrant: { userId: string; displayName: string };
+  entrant: { userId: string; publicName: string };
   post: {
     id: string;
     contentText: string;

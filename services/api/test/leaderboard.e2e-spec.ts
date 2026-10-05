@@ -119,8 +119,8 @@ describe('Leaderboard e2e (Section 4.9)', () => {
         .expect(200);
 
       expect(res.body.items).toEqual([
-        { userId: alice.userId, displayName: 'E2E Leaderboard alice', points: 6, rank: 1 },
-        { userId: bob.userId, displayName: 'E2E Leaderboard bob', points: 3, rank: 2 },
+        { userId: alice.userId, publicName: 'E2E Leaderboard alice', points: 6, rank: 1 },
+        { userId: bob.userId, publicName: 'E2E Leaderboard bob', points: 3, rank: 2 },
       ]);
       expect(res.body.nextCursor).toBeNull();
     });
@@ -169,7 +169,7 @@ describe('Leaderboard e2e (Section 4.9)', () => {
         .expect(200);
 
       // 40 (under the 100 cap, so untouched) + 250 (uncapped) = 290.
-      expect(res.body.items[0]).toEqual({ userId: user.userId, displayName: 'E2E Leaderboard mixed', points: 290, rank: 1 });
+      expect(res.body.items[0]).toEqual({ userId: user.userId, publicName: 'E2E Leaderboard mixed', points: 290, rank: 1 });
     });
 
     it('excludes a DEACTIVATED user from a fresh rollup entirely — no LeaderboardEntry row is written at all', async () => {
@@ -403,8 +403,8 @@ describe('Leaderboard e2e (Section 4.9)', () => {
 
       const club = await getBoard(alice.accessToken, { clubId: clubA }).expect(200);
       expect(club.body.items).toEqual([
-        { userId: bob.userId, displayName: 'E2E Leaderboard bob', points: 6, rank: 1 },
-        { userId: alice.userId, displayName: 'E2E Leaderboard alice', points: 3, rank: 2 },
+        { userId: bob.userId, publicName: 'E2E Leaderboard bob', points: 6, rank: 1 },
+        { userId: alice.userId, publicName: 'E2E Leaderboard alice', points: 3, rank: 2 },
       ]);
 
       const overall = await getBoard(alice.accessToken, {}).expect(200);
@@ -443,7 +443,7 @@ describe('Leaderboard e2e (Section 4.9)', () => {
       // Bob still represents Club A, so he can read it and sees Alice's pre-switch points there.
       const boardA = await getBoard(bob.accessToken, { clubId: clubA }).expect(200);
       expect(boardA.body.items).toEqual([
-        { userId: alice.userId, displayName: 'E2E Leaderboard alice', points: 3, rank: 1 },
+        { userId: alice.userId, publicName: 'E2E Leaderboard alice', points: 3, rank: 1 },
       ]);
     });
 

@@ -371,7 +371,7 @@ describe('CommunityGroupsService', () => {
       const service = new CommunityGroupsService(prisma);
       const result = await service.getGroupMembers('group-1', { limit: 1 });
 
-      expect(result.items).toEqual([{ id: 'u-1', displayName: 'Alice' }]);
+      expect(result.items).toEqual([{ id: 'u-1', publicName: 'Alice' }]);
       expect(result.nextCursor).toBe(
         encodeCommunityGroupMemberCursor({ name: 'Alice', id: 'u-1' }),
       );

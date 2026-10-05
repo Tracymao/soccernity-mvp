@@ -14,6 +14,10 @@ export interface UserProfile {
   email: string;
   phone: string | null;
   displayName: string;
+  // Optional handle (profile/username-column-and-display-convention).
+  username: string | null;
+  // What OTHER users see for this account: username, else displayName.
+  publicName: string;
   dateOfBirth: string;
   isMinor: boolean;
   role: "fan" | "player" | "admin" | string;
@@ -39,7 +43,7 @@ export interface RepresentedClubResult {
 }
 
 // PATCH /users/:id's real, confirmed field allowlist (update-user.dto.ts)
-// -- displayName and phone ONLY. Do not widen this without a matching
+// -- displayName, phone and username ONLY. Do not widen this without a matching
 // services/api change; the backend's own ValidationPipe
 // (whitelist: true, forbidNonWhitelisted: true) will 400 on anything else
 // anyway, but this type keeps that constraint visible at the call site
@@ -47,11 +51,13 @@ export interface RepresentedClubResult {
 export interface UpdateUserRequest {
   displayName?: string;
   phone?: string;
+  // 3-30 chars, letters/digits/underscore, stored lowercase; null clears it.
+  username?: string | null;
 }
 
 export interface FollowUserSummary {
   id: string;
-  displayName: string;
+  publicName: string;
 }
 
 export interface FollowPage {

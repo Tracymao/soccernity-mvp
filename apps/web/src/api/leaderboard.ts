@@ -13,7 +13,7 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?
 
 export interface LeaderboardEntryView {
   userId: string;
-  displayName: string;
+  publicName: string;
   points: number;
   rank: number;
 }

@@ -55,10 +55,10 @@ export default function SettingsLandingPage() {
       {profile ? (
         <div className="settings-identity">
           <span className="settings-identity__disc" aria-hidden="true">
-            {initialsFor(profile.displayName)}
+            {initialsFor(profile.publicName)}
           </span>
           <div>
-            <p className="settings-identity__name">{profile.displayName}</p>
+            <p className="settings-identity__name">{profile.publicName}</p>
             <p className="settings-identity__email">{profile.email}</p>
           </div>
         </div>

@@ -25,7 +25,7 @@ const FOLLOW: Notification = {
   read: false,
   createdAt: "2026-09-13T10:00:00.000Z",
   payloadRefId: "actor-1",
-  data: { actor: { id: "actor-1", displayName: "Jane Doe" } },
+  data: { actor: { id: "actor-1", publicName: "Jane Doe" } },
 };
 
 const LIKE_NO_ACTOR: Notification = {
@@ -43,7 +43,7 @@ const MESSAGE: Notification = {
   read: true,
   createdAt: "2026-09-12T09:00:00.000Z",
   payloadRefId: "convo-1",
-  data: { conversationId: "convo-1", otherParticipant: { id: "other-1", displayName: "Sam" } },
+  data: { conversationId: "convo-1", otherParticipant: { id: "other-1", publicName: "Sam" } },
 };
 
 const CONTEST_WIN: Notification = {

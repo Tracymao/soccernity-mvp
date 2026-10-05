@@ -51,7 +51,7 @@ beforeEach(() => {
   vi.mocked(markConversationRead).mockReset().mockResolvedValue({ conversationId: "convo-1", markedRead: 0 });
 });
 
-function renderPage(state?: { otherParticipant: { id: string; displayName: string | null } }) {
+function renderPage(state?: { otherParticipant: { id: string; publicName: string | null } }) {
   render(
     <MemoryRouter initialEntries={[{ pathname: "/messages/convo-1", state }]}>
       <Routes>
@@ -79,7 +79,7 @@ describe("ConversationPage", () => {
       nextCursor: null,
     });
 
-    renderPage({ otherParticipant: { id: "user-2", displayName: "Ada Obi" } });
+    renderPage({ otherParticipant: { id: "user-2", publicName: "Ada Obi" } });
 
     expect(await screen.findByRole("heading", { name: "Ada Obi" })).not.toBeNull();
     const bubbles = await screen.findAllByText(/first|second/i);
@@ -109,7 +109,7 @@ describe("ConversationPage", () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     vi.mocked(getMessages).mockResolvedValueOnce({ items: [message()], nextCursor: null });
 
-    renderPage({ otherParticipant: { id: "user-2", displayName: "Ada Obi" } });
+    renderPage({ otherParticipant: { id: "user-2", publicName: "Ada Obi" } });
     await screen.findByText("Hey!");
 
     await waitFor(() => expect(markConversationRead).toHaveBeenCalledWith(expect.any(String), "convo-1"));
@@ -123,7 +123,7 @@ describe("ConversationPage", () => {
       message({ id: "m-3", senderId: "user-1", contentText: "On my way" }),
     );
 
-    renderPage({ otherParticipant: { id: "user-2", displayName: "Ada Obi" } });
+    renderPage({ otherParticipant: { id: "user-2", publicName: "Ada Obi" } });
     await screen.findByRole("heading", { name: "Ada Obi" });
 
     fireEvent.change(screen.getByLabelText("Write a message"), { target: { value: "On my way" } });
@@ -142,7 +142,7 @@ describe("ConversationPage", () => {
       new MessagingApiError("Your account is awaiting guardian consent", { status: 403 }),
     );
 
-    renderPage({ otherParticipant: { id: "user-2", displayName: "Ada Obi" } });
+    renderPage({ otherParticipant: { id: "user-2", publicName: "Ada Obi" } });
     await screen.findByRole("heading", { name: "Ada Obi" });
 
     fireEvent.change(screen.getByLabelText("Write a message"), { target: { value: "Hi" } });
@@ -164,7 +164,7 @@ describe("ConversationPage", () => {
         nextCursor: null,
       });
 
-    renderPage({ otherParticipant: { id: "user-2", displayName: "Ada Obi" } });
+    renderPage({ otherParticipant: { id: "user-2", publicName: "Ada Obi" } });
     await screen.findByText("Recent");
 
     fireEvent.click(screen.getByRole("button", { name: "Load earlier messages" }));

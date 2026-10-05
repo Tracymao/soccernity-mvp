@@ -32,7 +32,7 @@ function post(overrides: Partial<FeedPost> = {}): FeedPost {
   return {
     id: "post-1",
     authorId: "user-2",
-    author: { id: "user-2", displayName: "Emeka John", isFollowing: false },
+    author: { id: "user-2", publicName: "Emeka John", isFollowing: false },
     contentText: "First goal of the season",
     mediaUrls: [],
     clubPageId: null,
@@ -110,8 +110,8 @@ describe("PostCard — report affordances", () => {
 
   it("offers Report on another user's comment, but not on the caller's own comment", async () => {
     const comments: FeedComment[] = [
-      { id: "c1", postId: "post-1", authorId: "user-2", author: { id: "user-2", displayName: "Emeka", isFollowing: false }, contentText: "Nice one", createdAt: new Date().toISOString() },
-      { id: "c2", postId: "post-1", authorId: "user-1", author: { id: "user-1", displayName: "Me", isFollowing: false }, contentText: "Thanks", createdAt: new Date().toISOString() },
+      { id: "c1", postId: "post-1", authorId: "user-2", author: { id: "user-2", publicName: "Emeka", isFollowing: false }, contentText: "Nice one", createdAt: new Date().toISOString() },
+      { id: "c2", postId: "post-1", authorId: "user-1", author: { id: "user-1", publicName: "Me", isFollowing: false }, contentText: "Thanks", createdAt: new Date().toISOString() },
     ];
     vi.mocked(getComments).mockResolvedValueOnce({ items: comments, nextCursor: null });
 

@@ -23,7 +23,7 @@ function buildPrismaMock() {
 }
 
 function userRow(overrides: Partial<Record<string, unknown>> = {}) {
-  return { id: 'user-1', displayName: 'Chelsea Fan', ...overrides };
+  return { id: 'user-1', username: null as string | null, displayName: 'Chelsea Fan', ...overrides };
 }
 
 function clubRow(overrides: Partial<Record<string, unknown>> = {}) {
@@ -42,7 +42,7 @@ function postRow(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: 'post-1',
     contentText: 'Chelsea won again',
-    author: { id: 'user-1', displayName: 'Chelsea Fan' },
+    author: { id: 'user-1', username: null, displayName: 'Chelsea Fan' },
     createdAt: new Date('2026-09-01T10:00:00.000Z'),
     likeCount: 3,
     commentCount: 1,
@@ -157,7 +157,7 @@ describe('SearchService', () => {
       );
     });
 
-    it('applies a case-insensitive contains filter on displayName', async () => {
+    it('applies a case-insensitive contains filter on the PUBLIC name (username, or displayName only when there is no username)', async () => {
       const prisma = buildPrismaMock();
       const service = new SearchService(prisma);
 
@@ -165,7 +165,14 @@ describe('SearchService', () => {
 
       const call = (prisma.user.findMany as jest.Mock).mock.calls[0][0];
       expect(call.where.AND).toEqual(
-        expect.arrayContaining([{ displayName: { contains: 'chelsea', mode: 'insensitive' } }]),
+        expect.arrayContaining([
+          {
+            OR: [
+              { username: { contains: 'chelsea', mode: 'insensitive' } },
+              { AND: [{ username: null }, { displayName: { contains: 'chelsea', mode: 'insensitive' } }] },
+            ],
+          },
+        ]),
       );
       expect(call.orderBy).toEqual([{ displayName: 'asc' }, { id: 'asc' }]);
     });
@@ -177,7 +184,7 @@ describe('SearchService', () => {
       await service.searchUsers('chelsea', undefined, 20);
 
       const call = (prisma.user.findMany as jest.Mock).mock.calls[0][0];
-      expect(call.select).toEqual({ id: true, displayName: true });
+      expect(call.select).toEqual({ id: true, username: true, displayName: true });
     });
 
     it('applies the cursor as an additional AND condition on displayName/id, ascending', async () => {
@@ -208,14 +215,25 @@ describe('SearchService', () => {
       expect(page.nextCursor).not.toBeNull();
     });
 
-    it('shapes each result to exactly {id, displayName}', async () => {
+    it('shapes each result to exactly {id, publicName}', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.findMany as jest.Mock).mockResolvedValue([userRow()]);
       const service = new SearchService(prisma);
 
       const page = await service.searchUsers('chelsea', undefined, 20);
 
-      expect(page.items[0]).toEqual({ id: 'user-1', displayName: 'Chelsea Fan' });
+      expect(page.items[0]).toEqual({ id: 'user-1', publicName: 'Chelsea Fan' });
+    });
+
+    it('shows the username as publicName when set, and never returns the real displayName', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([userRow({ username: 'blue_9' })]);
+      const service = new SearchService(prisma);
+
+      const page = await service.searchUsers('blue', undefined, 20);
+
+      expect(page.items[0]).toEqual({ id: 'user-1', publicName: 'blue_9' });
+      expect(JSON.stringify(page)).not.toContain('Chelsea Fan');
     });
   });
 
@@ -292,7 +310,7 @@ describe('SearchService', () => {
       await service.searchPosts('chelsea', undefined, 20);
 
       const call = (prisma.post.findMany as jest.Mock).mock.calls[0][0];
-      expect(call.select.author).toEqual({ select: { id: true, displayName: true } });
+      expect(call.select.author).toEqual({ select: { id: true, username: true, displayName: true } });
     });
 
     it('applies the cursor as an additional AND condition on createdAt/id, descending', async () => {
@@ -337,7 +355,7 @@ describe('SearchService', () => {
       expect(page.items[0]).toEqual({
         id: 'post-1',
         contentText: 'Chelsea won again',
-        author: { id: 'user-1', displayName: 'Chelsea Fan' },
+        author: { id: 'user-1', publicName: 'Chelsea Fan' },
         createdAt: new Date('2026-09-01T10:00:00.000Z'),
         likeCount: 3,
         commentCount: 1,

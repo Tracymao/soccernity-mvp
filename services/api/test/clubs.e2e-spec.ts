@@ -650,7 +650,7 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
       const ids = res.body.items.map((m: { id: string }) => m.id);
       expect(ids).toEqual([alice.id, bob.id]); // alphabetical by displayName, minor excluded
       expect(ids).not.toContain(minor.userId);
-      expect(res.body.items[0]).toEqual({ id: alice.id, displayName: 'Alice Adult', isFollowing: false });
+      expect(res.body.items[0]).toEqual({ id: alice.id, publicName: 'Alice Adult', isFollowing: false });
       // memberCount still counts the raw membership rows (all 3), only the
       // *visible* roster is filtered — documented in Decision Log #217.
       const clubRow = await prisma.clubPage.findUniqueOrThrow({ where: { id: club.id } });
@@ -713,14 +713,14 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
         .get(`/clubs/${club.id}/members?limit=2`)
         .set('Authorization', `Bearer ${caller.accessToken}`)
         .expect(200);
-      expect(page1.body.items.map((m: { displayName: string }) => m.displayName)).toEqual(['Amy', 'Ben']);
+      expect(page1.body.items.map((m: { publicName: string }) => m.publicName)).toEqual(['Amy', 'Ben']);
       expect(page1.body.nextCursor).toEqual(expect.any(String));
 
       const page2 = await request(app.getHttpServer())
         .get(`/clubs/${club.id}/members?limit=2&cursor=${encodeURIComponent(page1.body.nextCursor)}`)
         .set('Authorization', `Bearer ${caller.accessToken}`)
         .expect(200);
-      expect(page2.body.items.map((m: { displayName: string }) => m.displayName)).toEqual(['Cara']);
+      expect(page2.body.items.map((m: { publicName: string }) => m.publicName)).toEqual(['Cara']);
       expect(page2.body.nextCursor).toBeNull();
 
       await request(app.getHttpServer())
@@ -767,8 +767,8 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
         .expect(200);
 
       expect(res.body.items).toEqual([
-        { id: amy.id, displayName: 'Amy', isFollowing: true },
-        { id: ben.id, displayName: 'Ben', isFollowing: false },
+        { id: amy.id, publicName: 'Amy', isFollowing: true },
+        { id: ben.id, publicName: 'Ben', isFollowing: false },
       ]);
     });
   });

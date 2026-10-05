@@ -290,9 +290,9 @@ export default function SearchTrendingPage() {
                     {results.users.items.map((u) => (
                       <li key={u.id} className="search-page__user-row">
                         <span className="search-page__avatar" aria-hidden="true">
-                          {initialsFor(u.displayName)}
+                          {initialsFor(u.publicName)}
                         </span>
-                        <span className="search-page__user-name">{u.displayName}</span>
+                        <span className="search-page__user-name">{u.publicName}</span>
                       </li>
                     ))}
                   </ul>
@@ -346,9 +346,9 @@ export default function SearchTrendingPage() {
                       <li key={p.id} className="search-page__post-row">
                         <div className="search-page__post-header">
                           <span className="search-page__avatar" aria-hidden="true">
-                            {initialsFor(p.author.displayName)}
+                            {initialsFor(p.author.publicName)}
                           </span>
-                          <span className="search-page__post-author">{p.author.displayName}</span>
+                          <span className="search-page__post-author">{p.author.publicName}</span>
                           <span className="search-page__post-time">{relativeTime(p.createdAt)}</span>
                         </div>
                         <p className="search-page__post-text">{p.contentText}</p>

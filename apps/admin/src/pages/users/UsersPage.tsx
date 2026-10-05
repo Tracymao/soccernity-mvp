@@ -8,10 +8,9 @@
 // screen is only reachable by a moderator/superadmin token (mirrors
 // ModerationQueuePage.tsx's own role split, not ArticlesPage.tsx's).
 //
-// "Username" column — the Figma stub's own header — is bound to
-// displayName, not a username: User has no username column anywhere in
-// this codebase (Decision Log #58). Flagged here rather than silently
-// mismatched or renamed away from the Figma-derived label.
+// "Username" column — the Figma stub's own header — shows the real
+// displayName, plus the optional @username when the user has set one
+// (User.username, profile/username-column-and-display-convention).
 import { useState } from "react";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { AdminApiError } from "../../api/adminClient";
@@ -71,6 +70,7 @@ function UserRow({
     <div className="us-table__row" key={user.id}>
       <span className="us-cell--primary us-cell--truncate" title={user.email}>
         {user.displayName}
+        {user.username ? ` (@${user.username})` : ""}
       </span>
       <span className="us-cell--secondary">{formatDate(user.createdAt)}</span>
       <span>

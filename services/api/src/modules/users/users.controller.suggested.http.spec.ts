@@ -101,7 +101,7 @@ describe('UsersController (HTTP layer) — GET /users/suggested', () => {
   });
 
   it('returns the service response body as-is on success', async () => {
-    const body = { items: [{ id: 'user-2', displayName: 'Suggested Person' }] };
+    const body = { items: [{ id: 'user-2', publicName: 'Suggested Person' }] };
     usersService.getSuggestedUsers.mockResolvedValue(body);
 
     const res = await request(app.getHttpServer()).get('/users/suggested').expect(200);

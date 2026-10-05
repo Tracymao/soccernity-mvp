@@ -9,7 +9,8 @@
 // upserts a zero-point row (see leaderboard.service.ts's rollupPeriod).
 export interface LeaderboardEntryView {
   userId: string;
-  displayName: string;
+  // username if set, else displayName (users/public-name.util.ts)
+  publicName: string;
   points: number;
   rank: number;
 }

@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ENGAGEMENT_POINTS } from '../points/points.constants';
 import { awardPoints } from '../points/points.util';
 import { recordPostHashtags } from '../search/hashtag.util';
+import { PUBLIC_NAME_SELECT, toPublicUser } from '../users/public-name.util';
 import { decodeFeedSequenceCursor, encodeFeedSequenceCursor } from './cursor.util';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreatePostDto } from './dto/create-post.dto';
@@ -23,10 +24,16 @@ import { FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE, FeedQueryDto } from './dto/
 // the question properly. In particular: isMinor is never selected here,
 // on purpose — there's no reason for that safeguarding-sensitive field
 // to ever appear in another user's feed payload.
+// profile/username-column-and-display-convention: the select pulls username +
+// displayName, but the response only ever carries { id, publicName } (see
+// toFeedPost / toFeedComment) -- the raw displayName is never sent to other
+// users.
 const POST_AUTHOR_SELECT = {
   id: true,
-  displayName: true,
+  ...PUBLIC_NAME_SELECT,
 } as const;
+
+type PublicAuthor = { id: string; publicName: string };
 
 const POST_SELECT = {
   id: true,
@@ -54,7 +61,12 @@ const POST_SELECT = {
   createdAt: true,
 } as const;
 
-export type FeedPost = Prisma.PostGetPayload<{ select: typeof POST_SELECT }>;
+type RawFeedPost = Prisma.PostGetPayload<{ select: typeof POST_SELECT }>;
+export type FeedPost = Omit<RawFeedPost, 'author'> & { author: PublicAuthor };
+
+function toFeedPost(row: RawFeedPost): FeedPost {
+  return { ...row, author: toPublicUser(row.author) };
+}
 
 // Internal-only variant of POST_SELECT that additionally pulls
 // Post.sequence — the monotonic keyset-pagination tiebreaker (see its
@@ -140,7 +152,12 @@ const COMMENT_SELECT = {
   createdAt: true,
 } as const;
 
-export type FeedComment = Prisma.CommentGetPayload<{ select: typeof COMMENT_SELECT }>;
+type RawFeedComment = Prisma.CommentGetPayload<{ select: typeof COMMENT_SELECT }>;
+export type FeedComment = Omit<RawFeedComment, 'author'> & { author: PublicAuthor };
+
+function toFeedComment(row: RawFeedComment): FeedComment {
+  return { ...row, author: toPublicUser(row.author) };
+}
 
 // Internal-only variant of COMMENT_SELECT that additionally pulls
 // Comment.sequence for the same reason POST_SELECT_WITH_SEQUENCE exists
@@ -193,7 +210,12 @@ const SAVED_POST_SELECT = {
   post: { select: POST_SELECT },
 } as const;
 
-export type SavedPostEntry = Prisma.SavedPostGetPayload<{ select: typeof SAVED_POST_SELECT }>;
+type RawSavedPostEntry = Prisma.SavedPostGetPayload<{ select: typeof SAVED_POST_SELECT }>;
+export type SavedPostEntry = Omit<RawSavedPostEntry, 'post'> & { post: FeedPost };
+
+function toSavedPostEntry(row: RawSavedPostEntry): SavedPostEntry {
+  return { ...row, post: toFeedPost(row.post) };
+}
 
 // Internal-only variant of SAVED_POST_SELECT that additionally pulls
 // SavedPost.sequence — same reason as POST_SELECT_WITH_SEQUENCE /
@@ -270,7 +292,7 @@ export class FeedService {
         // search/hashtag.util.ts and search/README.md's "Trending
         // topics" section.
         await recordPostHashtags(tx, post.id, dto.contentText, post.createdAt);
-        return post;
+        return toFeedPost(post);
       });
     } catch (err) {
       // A clubPageId/banterRoomId that's well-formed at the DTO layer
@@ -425,7 +447,7 @@ export class FeedService {
     // attachViewerState()/a caller — it exists only to build the cursor
     // above, and was never part of the public FeedPost shape (see
     // POST_SELECT_WITH_SEQUENCE's own comment).
-    const trimmed: FeedPost[] = trimmedWithSequence.map(stripSequence);
+    const trimmed: FeedPost[] = trimmedWithSequence.map((row) => toFeedPost(stripSequence(row)));
 
     const items = await this.attachViewerState(userId, trimmed);
     return { items, nextCursor };
@@ -510,13 +532,14 @@ export class FeedService {
     // pending_deletion is treated as not-found here, exactly as it's
     // absent from GET /posts/feed — the "hide via 404" convention this
     // codebase already uses for restricted content.
-    const post = await this.prisma.post.findFirst({
+    const rawPost = await this.prisma.post.findFirst({
       where: { id: postId, ...ACTIVE_AUTHOR_POST_FILTER },
       select: POST_SELECT,
     });
-    if (!post) {
+    if (!rawPost) {
       throw new NotFoundException('Post not found');
     }
+    const post = toFeedPost(rawPost);
 
     const isOwnPost = post.authorId === userId;
     const [likeRow, savedRow, followRow] = await Promise.all([
@@ -724,7 +747,7 @@ export class FeedService {
           data: { userId: post.authorId, type: 'comment', payloadRefId: postId },
         });
       }
-      return comment;
+      return toFeedComment(comment);
     });
   }
 
@@ -779,7 +802,7 @@ export class FeedService {
 
     // Strip `sequence` back off — see COMMENT_SELECT_WITH_SEQUENCE's own
     // comment; it was never part of the public FeedComment shape.
-    const items: FeedComment[] = rowsWithSequence.map(stripSequence);
+    const items: FeedComment[] = rowsWithSequence.map((row) => toFeedComment(stripSequence(row)));
 
     return { items, nextCursor };
   }
@@ -1104,7 +1127,7 @@ export class FeedService {
 
     // Strip `sequence` back off — see SAVED_POST_SELECT_WITH_SEQUENCE's
     // own comment; it was never part of the public SavedPostEntry shape.
-    const items: SavedPostEntry[] = rowsWithSequence.map(stripSequence);
+    const items: SavedPostEntry[] = rowsWithSequence.map((row) => toSavedPostEntry(stripSequence(row)));
 
     return { items, nextCursor };
   }

@@ -32,6 +32,7 @@ interface FakeUserRecord {
   email: string;
   phone: string | null;
   displayName: string;
+  username: string | null;
   dateOfBirth: string; // ciphertext
   isMinor: boolean;
   verificationStatus: string;
@@ -43,6 +44,7 @@ interface FakeUserRecord {
 const DEFAULT_SEED_FIELDS = {
   phone: null,
   displayName: 'Test Player',
+  username: null,
   dateOfBirth: buildTestDobEncryption().encrypt(new Date('1995-01-01')),
   isMinor: false,
   verificationStatus: 'unverified',
@@ -148,6 +150,8 @@ describe('AuthService', () => {
         email: 'player@example.com',
         phone: null,
         displayName: 'Player One',
+        username: null,
+        publicName: 'Player One',
         dateOfBirth: new Date('1995-01-01'),
         isMinor: true,
         role: 'fan',

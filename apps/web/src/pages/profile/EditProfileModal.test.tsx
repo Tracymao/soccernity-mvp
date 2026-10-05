@@ -29,13 +29,21 @@ vi.mock("../../api/auth", async () => {
   return { ...actual, changePassword: vi.fn(), deactivateAccount: vi.fn(), deleteAccount: vi.fn() };
 });
 
+vi.mock("../../api/users", async () => {
+  const actual = await vi.importActual<typeof import("../../api/users")>("../../api/users");
+  return { ...actual, updateUser: vi.fn() };
+});
+
 import { deactivateAccount, deleteAccount } from "../../api/auth";
+import { updateUser, UsersApiError } from "../../api/users";
 
 const USER: UserProfile = {
   id: "user-1",
   email: "adeniyi@example.com",
   phone: null,
   displayName: "Adeniyi Christiana",
+  username: null,
+  publicName: "Adeniyi Christiana",
   dateOfBirth: "1997-11-08",
   isMinor: false,
   role: "fan",
@@ -51,6 +59,7 @@ beforeEach(() => {
   navigateMock.mockReset();
   vi.mocked(deactivateAccount).mockReset();
   vi.mocked(deleteAccount).mockReset();
+  vi.mocked(updateUser).mockReset();
   window.sessionStorage.clear();
   window.localStorage.clear();
 });
@@ -142,5 +151,72 @@ describe("EditProfileModal -- Bug 2 fix: stale session after deactivation/deleti
     expect(await screen.findByRole("alert")).not.toBeNull();
     expect(window.sessionStorage.getItem("sn_access_token")).toBe("stale-token");
     expect(navigateMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("EditProfileModal -- Username (profile/username-column-and-display-convention)", () => {
+  const save = () => fireEvent.click(screen.getByRole("button", { name: "Update Profile" }));
+  const usernameInput = () => screen.getByLabelText("Username") as HTMLInputElement;
+
+  function renderWith(user: UserProfile) {
+    render(
+      <MemoryRouter>
+        <EditProfileModal accessToken="token-abc" user={user} onClose={vi.fn()} onSaved={vi.fn()} />
+      </MemoryRouter>,
+    );
+  }
+
+  it("shows the current username, and sends the new one when it is set", async () => {
+    vi.mocked(updateUser).mockResolvedValueOnce({ ...USER, username: "goalie_9", publicName: "goalie_9" });
+    renderWith(USER);
+    expect(usernameInput().value).toBe("");
+
+    fireEvent.change(usernameInput(), { target: { value: "  goalie_9 " } });
+    save();
+
+    await waitFor(() => expect(updateUser).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(updateUser).mock.calls[0][2]).toMatchObject({ username: "goalie_9" });
+  });
+
+  it("does not send a username at all when it was not changed (fallback-to-displayName users are untouched)", async () => {
+    vi.mocked(updateUser).mockResolvedValueOnce(USER);
+    renderWith(USER);
+    save();
+
+    await waitFor(() => expect(updateUser).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(updateUser).mock.calls[0][2]).not.toHaveProperty("username");
+  });
+
+  it("clearing an existing username sends null, returning the account to its full name", async () => {
+    const withHandle = { ...USER, username: "goalie_9", publicName: "goalie_9" };
+    vi.mocked(updateUser).mockResolvedValueOnce(USER);
+    renderWith(withHandle);
+    expect(usernameInput().value).toBe("goalie_9");
+
+    fireEvent.change(usernameInput(), { target: { value: "" } });
+    save();
+
+    await waitFor(() => expect(updateUser).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(updateUser).mock.calls[0][2]).toMatchObject({ username: null });
+  });
+
+  it("rejects an invalid username client-side without calling the API", async () => {
+    renderWith(USER);
+    fireEvent.change(usernameInput(), { target: { value: "no spaces!" } });
+    save();
+
+    expect(await screen.findByText(/username must be 3-30 characters/i)).not.toBeNull();
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it("surfaces the server's 409 when the username is already taken", async () => {
+    vi.mocked(updateUser).mockRejectedValueOnce(
+      new UsersApiError("That username is already taken", { status: 409 }),
+    );
+    renderWith(USER);
+    fireEvent.change(usernameInput(), { target: { value: "taken_name" } });
+    save();
+
+    expect(await screen.findByText("That username is already taken")).not.toBeNull();
   });
 });

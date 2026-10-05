@@ -9,6 +9,7 @@ import {
 } from './leaderboard.constants';
 import { LeaderboardEntryView, LeaderboardPage } from './leaderboard.types';
 import { LeaderboardQueryDto } from './dto/leaderboard-query.dto';
+import { PUBLIC_NAME_SELECT, resolvePublicName } from '../users/public-name.util';
 
 // GET /leaderboard's READ side only — Build Plan Section 4.9. Reads
 // EXCLUSIVELY from the materialized LeaderboardEntry table (joined to
@@ -78,7 +79,7 @@ export class LeaderboardService {
             }
           : {}),
       },
-      include: { user: { select: { displayName: true } } },
+      include: { user: { select: PUBLIC_NAME_SELECT } },
       // rank ASC — ties (RANK() gives equal ranks on a points tie,
       // Decision Log #61(c)) are broken by userId ASC for a
       // deterministic keyset order. Postgres's own default null
@@ -97,7 +98,7 @@ export class LeaderboardService {
 
     const items: LeaderboardEntryView[] = page.map((row) => ({
       userId: row.userId,
-      displayName: row.user.displayName,
+      publicName: resolvePublicName(row.user),
       points: row.points,
       rank: row.rank ?? 0,
     }));

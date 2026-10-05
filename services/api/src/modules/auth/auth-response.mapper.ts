@@ -1,5 +1,6 @@
 import { User } from '@prisma/client';
 import { TokenPair } from './token/token.types';
+import { resolvePublicName } from '../users/public-name.util';
 
 // The HTTP-facing shape returned by /auth/refresh (and embedded inside
 // AuthResponse below for /auth/login and /auth/register).
@@ -51,6 +52,8 @@ export interface AuthUserSummary {
   email: string;
   phone: string | null;
   displayName: string;
+  username: string | null;
+  publicName: string;
   dateOfBirth: Date | null;
   isMinor: boolean;
   role: string;
@@ -67,6 +70,8 @@ export function toAuthUserSummary(user: User, dateOfBirth: Date | null): AuthUse
     email: user.email,
     phone: user.phone,
     displayName: user.displayName,
+    username: user.username,
+    publicName: resolvePublicName(user),
     dateOfBirth,
     isMinor: user.isMinor,
     role: user.role,

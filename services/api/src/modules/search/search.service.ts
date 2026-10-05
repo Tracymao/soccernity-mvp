@@ -11,6 +11,7 @@ import {
 } from './cursor.util';
 import { SearchQueryDto } from './dto/search-query.dto';
 import { SEARCH_DEFAULT_PAGE_SIZE, SEARCH_MAX_PAGE_SIZE } from './search.constants';
+import { PUBLIC_NAME_SELECT, publicNameContains, toPublicUser } from '../users/public-name.util';
 
 // v1 simplification, disclosed rather than silently shipped: matching
 // is Postgres ILIKE-equivalent substring matching (Prisma's `contains` +
@@ -36,18 +37,18 @@ import { SEARCH_DEFAULT_PAGE_SIZE, SEARCH_MAX_PAGE_SIZE } from './search.constan
 // blog/cursor.util.ts's header comment documents). In particular:
 // isMinor is never selected, on purpose — that safeguarding-sensitive
 // field must never appear in a payload any other user can read, and
-// there is no `username`/handle column anywhere on User (Decision Log
-// #58, still parked) to search on or return either.
+// results carry { id, publicName } only (username if set, else displayName --
+// users/public-name.util.ts), never the raw displayName.
 const SEARCH_USER_SELECT = {
   id: true,
-  displayName: true,
+  ...PUBLIC_NAME_SELECT,
 } as const;
 
 type SearchUserRow = Prisma.UserGetPayload<{ select: typeof SEARCH_USER_SELECT }>;
 
 export interface SearchUserResult {
   id: string;
-  displayName: string;
+  publicName: string;
 }
 
 // sprint-4/search-module (Decision Log #139). Every user-returning
@@ -90,7 +91,7 @@ const VISIBLE_SEARCH_USER_FILTER: Prisma.UserWhereInput = {
 };
 
 function toSearchUserResult(row: SearchUserRow): SearchUserResult {
-  return { id: row.id, displayName: row.displayName };
+  return toPublicUser(row);
 }
 
 // Same field set GET /clubs itself returns (clubs.service.ts's own
@@ -111,7 +112,7 @@ export type SearchClubResult = Prisma.ClubPageGetPayload<{ select: typeof SEARCH
 
 // Narrow author field set, mirroring SEARCH_USER_SELECT above (id +
 // displayName only — never isMinor).
-const SEARCH_POST_AUTHOR_SELECT = { id: true, displayName: true } as const;
+const SEARCH_POST_AUTHOR_SELECT = { id: true, ...PUBLIC_NAME_SELECT } as const;
 
 const SEARCH_POST_SELECT = {
   id: true,
@@ -233,7 +234,8 @@ export class SearchService {
     }
   }
 
-  // Alphabetical by displayName (displayName asc, id asc) — see
+  // Alphabetical by displayName (displayName asc, id asc; flagged follow-up:
+  // order by the public name instead) — see
   // cursor.util.ts's header comment for why this differs from posts'
   // own newest-first order.
   async searchUsers(
@@ -243,7 +245,9 @@ export class SearchService {
   ): Promise<SearchResultPage<SearchUserResult>> {
     const filters: Prisma.UserWhereInput[] = [
       VISIBLE_SEARCH_USER_FILTER,
-      { displayName: { contains: q, mode: 'insensitive' } },
+      // Matches the PUBLIC name only (username, or displayName when there is no
+      // username) so a real name cannot be used to find a pseudonymous account.
+      publicNameContains(q) as Prisma.UserWhereInput,
     ];
     if (cursor) {
       const c = decodeSearchUserCursor(cursor);

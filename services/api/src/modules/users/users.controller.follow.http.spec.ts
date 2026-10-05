@@ -118,11 +118,11 @@ describe('UsersController (HTTP layer) — follow/follower routes', () => {
 
   describe('GET /users/:id/followers, GET /users/:id/following', () => {
     it('GET /followers succeeds for :id that is NOT the caller — not self-scoped', async () => {
-      usersService.getFollowers.mockResolvedValue({ items: [{ id: 'follower-1', displayName: 'A Follower' }], nextCursor: null });
+      usersService.getFollowers.mockResolvedValue({ items: [{ id: 'follower-1', publicName: 'A Follower' }], nextCursor: null });
 
       const response = await request(app.getHttpServer()).get('/users/someone-else/followers').expect(200);
 
-      expect(response.body).toEqual({ items: [{ id: 'follower-1', displayName: 'A Follower' }], nextCursor: null });
+      expect(response.body).toEqual({ items: [{ id: 'follower-1', publicName: 'A Follower' }], nextCursor: null });
       expect(usersService.getFollowers).toHaveBeenCalledWith('someone-else', {});
     });
 
@@ -146,11 +146,11 @@ describe('UsersController (HTTP layer) — follow/follower routes', () => {
     });
 
     it('GET /following succeeds for :id that is NOT the caller — not self-scoped', async () => {
-      usersService.getFollowing.mockResolvedValue({ items: [{ id: 'followee-1', displayName: 'A Followee' }], nextCursor: null });
+      usersService.getFollowing.mockResolvedValue({ items: [{ id: 'followee-1', publicName: 'A Followee' }], nextCursor: null });
 
       const response = await request(app.getHttpServer()).get('/users/someone-else/following').expect(200);
 
-      expect(response.body).toEqual({ items: [{ id: 'followee-1', displayName: 'A Followee' }], nextCursor: null });
+      expect(response.body).toEqual({ items: [{ id: 'followee-1', publicName: 'A Followee' }], nextCursor: null });
       expect(usersService.getFollowing).toHaveBeenCalledWith('someone-else', {});
     });
 

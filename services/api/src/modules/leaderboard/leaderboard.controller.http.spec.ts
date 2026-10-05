@@ -100,7 +100,7 @@ describe('LeaderboardController (HTTP layer)', () => {
     it('returns the service response body as-is on success', async () => {
       app = await buildApp(true);
       const body = {
-        items: [{ userId: 'u-1', displayName: 'Alice', points: 250, rank: 1 }],
+        items: [{ userId: 'u-1', publicName: 'Alice', points: 250, rank: 1 }],
         nextCursor: null,
       };
       leaderboardService.getLeaderboard.mockResolvedValue(body);

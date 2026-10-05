@@ -201,10 +201,10 @@ export default function PostCard({ post, accessToken, currentUserId, onDeleted }
     <article className="post">
       <div className="post__head">
         <div className="post__avatar" aria-hidden="true">
-          {initialsFor(post.author.displayName)}
+          {initialsFor(post.author.publicName)}
         </div>
         <div className="post__identity">
-          <span className="post__author">{post.author.displayName}</span>
+          <span className="post__author">{post.author.publicName}</span>
           <span className="post__time">{relativeTime(post.createdAt)}</span>
         </div>
         {!isOwnPost && (
@@ -300,7 +300,7 @@ export default function PostCard({ post, accessToken, currentUserId, onDeleted }
           {comments.map((c) => (
             <div key={c.id} className={c.hidden ? "comment comment--hidden" : "comment"} style={c.hidden ? { opacity: 0.6 } : undefined}>
               <span className="comment__author">
-                {c.author.displayName}
+                {c.author.publicName}
                 <span className="comment__time">{relativeTime(c.createdAt)}</span>
               </span>
               <p className="comment__body">{c.contentText}</p>

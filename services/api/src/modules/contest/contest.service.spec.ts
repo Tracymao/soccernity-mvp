@@ -158,7 +158,7 @@ describe('ContestService', () => {
       const res = await new ContestService(prisma).getCurrentContest('u-1');
       expect(res.phase).toBe('week_1');
       expect(res.weeklyWinners).toEqual([
-        { weekNumber: 1, position: 1, userId: 'u-9', displayName: 'Nina', entryId: 'e-1', postId: 'post-9' },
+        { weekNumber: 1, position: 1, userId: 'u-9', publicName: 'Nina', entryId: 'e-1', postId: 'post-9' },
       ]);
       expect(res.monthlyStandings).toEqual([]);
     });
@@ -190,8 +190,8 @@ describe('ContestService', () => {
       // Position 2 (u-2) is gone -- position 1 and position 3 remain
       // exactly as-is, position 3 is NOT renumbered to position 2.
       expect(res.weeklyWinners).toEqual([
-        { weekNumber: 1, position: 1, userId: 'u-1', displayName: 'Ada', entryId: 'e-1', postId: 'post-1' },
-        { weekNumber: 1, position: 3, userId: 'u-3', displayName: 'Chinedu', entryId: 'e-3', postId: 'post-3' },
+        { weekNumber: 1, position: 1, userId: 'u-1', publicName: 'Ada', entryId: 'e-1', postId: 'post-1' },
+        { weekNumber: 1, position: 3, userId: 'u-3', publicName: 'Chinedu', entryId: 'e-3', postId: 'post-3' },
       ]);
       expect((prisma.guardian.findMany as jest.Mock).mock.calls[0][0]).toEqual({
         where: { minorUserId: { in: ['u-1', 'u-2', 'u-3'] }, consentStatus: 'declined' },
@@ -213,7 +213,7 @@ describe('ContestService', () => {
 
       const res = await new ContestService(prisma).getCurrentContest('u-1');
       expect(res.phase).toBe('crowned');
-      expect(res.monthlyStandings).toEqual([{ position: 1, userId: 'u-9', displayName: 'Nina' }]);
+      expect(res.monthlyStandings).toEqual([{ position: 1, userId: 'u-9', publicName: 'Nina' }]);
       expect(res.isAcceptingEntries).toBe(false);
     });
 
@@ -236,8 +236,8 @@ describe('ContestService', () => {
 
       const res = await new ContestService(prisma).getCurrentContest('u-1');
       expect(res.monthlyStandings).toEqual([
-        { position: 1, userId: 'u-1', displayName: 'Ada' },
-        { position: 3, userId: 'u-3', displayName: 'Chinedu' },
+        { position: 1, userId: 'u-1', publicName: 'Ada' },
+        { position: 3, userId: 'u-3', publicName: 'Chinedu' },
       ]);
     });
 
@@ -613,8 +613,8 @@ describe('ContestService', () => {
       const res = await new ContestService(prisma).getCycleById('cyc-1');
       expect(res.phase).toBe('crowned');
       expect(res.rounds).toHaveLength(3);
-      expect(res.weeklyWinners[0]).toMatchObject({ weekNumber: 1, position: 1, displayName: 'Nina', postId: 'p-9' });
-      expect(res.monthlyStandings).toEqual([{ position: 1, userId: 'u-9', displayName: 'Nina' }]);
+      expect(res.weeklyWinners[0]).toMatchObject({ weekNumber: 1, position: 1, publicName: 'Nina', postId: 'p-9' });
+      expect(res.monthlyStandings).toEqual([{ position: 1, userId: 'u-9', publicName: 'Nina' }]);
     });
 
     // Decision Log #339 resolution -- sprint-2/contest-withdrawn-consent-visibility.
@@ -643,9 +643,9 @@ describe('ContestService', () => {
 
       const res = await new ContestService(prisma).getCycleById('cyc-1');
       expect(res.weeklyWinners).toEqual([
-        { weekNumber: 1, position: 1, userId: 'u-1', displayName: 'Ada', entryId: 'e-1', postId: 'post-1' },
+        { weekNumber: 1, position: 1, userId: 'u-1', publicName: 'Ada', entryId: 'e-1', postId: 'post-1' },
       ]);
-      expect(res.monthlyStandings).toEqual([{ position: 1, userId: 'u-1', displayName: 'Ada' }]);
+      expect(res.monthlyStandings).toEqual([{ position: 1, userId: 'u-1', publicName: 'Ada' }]);
     });
   });
 
@@ -705,9 +705,9 @@ describe('ContestService', () => {
       expect(res.items[0].cycle.id).toBe('cyc-new');
       expect(res.items[0].phase).toBe('week_1');
       expect(res.items[0].rounds.map((r) => r.entryCount)).toEqual([3, 1, 0]);
-      expect(res.items[0].weeklyWinners[0]).toMatchObject({ weekNumber: 1, displayName: 'Nina' });
+      expect(res.items[0].weeklyWinners[0]).toMatchObject({ weekNumber: 1, publicName: 'Nina' });
       expect(res.items[1].cycle.id).toBe('cyc-old');
-      expect(res.items[1].monthlyStandings).toEqual([{ position: 1, userId: 'u-9', displayName: 'Nina' }]);
+      expect(res.items[1].monthlyStandings).toEqual([{ position: 1, userId: 'u-9', publicName: 'Nina' }]);
     });
 
     it('returns an empty items array when no cycle exists', async () => {
@@ -717,7 +717,7 @@ describe('ContestService', () => {
     });
 
     // Decision Log #339 resolution -- sprint-2/contest-withdrawn-consent-visibility.
-    it('keeps a withdrawn-consent winner/standing row but redacts displayName + postId', async () => {
+    it('keeps a withdrawn-consent winner/standing row but redacts publicName + postId', async () => {
       const prisma = buildMock();
       (prisma.guardian.findMany as jest.Mock).mockResolvedValue([{ minorUserId: 'u-2' }]);
       (prisma.contestCycle.findMany as jest.Mock).mockResolvedValue([
@@ -750,18 +750,18 @@ describe('ContestService', () => {
       // an admin still needs it to reconcile round scoring -- but the
       // real identity/content is redacted.
       expect(res.items[0].weeklyWinners).toEqual([
-        { weekNumber: 1, position: 1, userId: 'u-1', displayName: 'Ada', entryId: 'e-1', postId: 'post-1' },
+        { weekNumber: 1, position: 1, userId: 'u-1', publicName: 'Ada', entryId: 'e-1', postId: 'post-1' },
         {
           weekNumber: 1,
           position: 2,
           userId: 'u-2',
-          displayName: 'Entry withdrawn — guardian consent revoked',
+          publicName: 'Entry withdrawn — guardian consent revoked',
           entryId: 'e-2',
           postId: 'Entry withdrawn — guardian consent revoked',
         },
       ]);
       expect(res.items[1].monthlyStandings).toEqual([
-        { position: 1, userId: 'u-2', displayName: 'Entry withdrawn — guardian consent revoked' },
+        { position: 1, userId: 'u-2', publicName: 'Entry withdrawn — guardian consent revoked' },
       ]);
       // One batched Guardian lookup across BOTH cycles, not one per cycle.
       expect(prisma.guardian.findMany as jest.Mock).toHaveBeenCalledTimes(1);
@@ -794,7 +794,7 @@ describe('ContestService', () => {
         {
           entryId: 'e-win',
           submittedAt: winning.submittedAt,
-          entrant: { userId: 'u-a', displayName: 'Ada' },
+          entrant: { userId: 'u-a', publicName: 'Ada' },
           post: {
             id: 'post-1',
             contentText: 'my keepie-uppie clip',
@@ -837,7 +837,7 @@ describe('ContestService', () => {
           weekNumber: 1,
           position: 1,
           userId: 'u-b',
-          displayName: 'Entry withdrawn — guardian consent revoked',
+          publicName: 'Entry withdrawn — guardian consent revoked',
           entryId: 'e-win',
           postId: 'Entry withdrawn — guardian consent revoked',
         },
@@ -848,7 +848,7 @@ describe('ContestService', () => {
       expect(res.rounds[0].entries[0]).toEqual({
         entryId: 'e-win',
         submittedAt: winning.submittedAt,
-        entrant: { userId: 'u-b', displayName: 'Entry withdrawn — guardian consent revoked' },
+        entrant: { userId: 'u-b', publicName: 'Entry withdrawn — guardian consent revoked' },
         post: {
           id: 'post-1',
           contentText: 'Entry withdrawn — guardian consent revoked',
@@ -891,12 +891,12 @@ describe('ContestService', () => {
       expect(res.rounds[0].entries).toEqual([
         expect.objectContaining({
           entryId: 'e-real',
-          entrant: { userId: 'u-real', displayName: 'Rita' },
+          entrant: { userId: 'u-real', publicName: 'Rita' },
           post: expect.objectContaining({ contentText: 'my keepie-uppie clip' }),
         }),
         expect.objectContaining({
           entryId: 'e-lost',
-          entrant: { userId: 'u-lost', displayName: 'Entry withdrawn — guardian consent revoked' },
+          entrant: { userId: 'u-lost', publicName: 'Entry withdrawn — guardian consent revoked' },
           post: expect.objectContaining({
             contentText: 'Entry withdrawn — guardian consent revoked',
             mediaUrls: ['Entry withdrawn — guardian consent revoked'],
@@ -915,7 +915,7 @@ describe('ContestService', () => {
 
       const res = await new ContestService(prisma).getCurrentContestForAdmin();
       expect(res.phase).toBe('final_live');
-      expect(res.rounds[0].entries[0].entrant.displayName).toBe('Alice');
+      expect(res.rounds[0].entries[0].entrant.publicName).toBe('Alice');
     });
 
     it('falls back to the most-recently completed cycle when none is running', async () => {
@@ -944,7 +944,7 @@ describe('ContestService', () => {
 
       expect(res.rounds[0].entries[0]).toEqual(
         expect.objectContaining({
-          entrant: { userId: 'u-lost', displayName: 'Entry withdrawn — guardian consent revoked' },
+          entrant: { userId: 'u-lost', publicName: 'Entry withdrawn — guardian consent revoked' },
           post: expect.objectContaining({
             contentText: 'Entry withdrawn — guardian consent revoked',
             mediaUrls: ['Entry withdrawn — guardian consent revoked'],

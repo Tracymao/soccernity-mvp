@@ -195,9 +195,9 @@ export default function NewConversationPage() {
           {people.map((person) => (
             <li key={person.id} className="messages-recipient">
               <span className="messages-recipient__avatar" aria-hidden="true">
-                {initialsFor(person.displayName)}
+                {initialsFor(person.publicName)}
               </span>
-              <span className="messages-recipient__name">{person.displayName}</span>
+              <span className="messages-recipient__name">{person.publicName}</span>
               <button
                 type="button"
                 className="messages-recipient__button"

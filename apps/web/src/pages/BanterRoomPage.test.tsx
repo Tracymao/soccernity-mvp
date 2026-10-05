@@ -50,7 +50,7 @@ function post(overrides: Partial<FeedPost> = {}): FeedPost {
   return {
     id: "post-1",
     authorId: "author-1",
-    author: { id: "author-1", displayName: "Marcus Obi", isFollowing: false },
+    author: { id: "author-1", publicName: "Marcus Obi", isFollowing: false },
     contentText: "Big win tonight!",
     mediaUrls: [],
     clubPageId: null,
@@ -131,7 +131,7 @@ describe("BanterRoomPage", () => {
     vi.mocked(postToRoom).mockResolvedValueOnce({
       id: "new-post",
       authorId: "user-1",
-      author: { id: "user-1", displayName: "You" },
+      author: { id: "user-1", publicName: "You" },
       contentText: "Great atmosphere",
       mediaUrls: [],
       clubPageId: null,

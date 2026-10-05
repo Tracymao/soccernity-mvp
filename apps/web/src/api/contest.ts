@@ -49,7 +49,7 @@ export interface ContestWinnerSummary {
   weekNumber: number;
   position: number;
   userId: string;
-  displayName: string;
+  publicName: string;
   entryId: string;
   postId: string;
 }
@@ -57,7 +57,7 @@ export interface ContestWinnerSummary {
 export interface ContestStandingSummary {
   position: number;
   userId: string;
-  displayName: string;
+  publicName: string;
 }
 
 // GET /contest/current

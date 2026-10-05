@@ -42,6 +42,8 @@ function profileWithRepresented(club: { id: string; name: string } | null): User
     email: "fan@example.com",
     phone: null,
     displayName: "Fan",
+    username: null,
+    publicName: "Fan",
     dateOfBirth: "1998-07-04",
     isMinor: false,
     role: "fan",
@@ -90,8 +92,8 @@ function contestResponse(overrides: Partial<CurrentContestResponse> = {}): Curre
     },
     rounds: [],
     weeklyWinners: [
-      { weekNumber: 1, position: 1, userId: "u1", displayName: "Emeka John", entryId: "e1", postId: "p1" },
-      { weekNumber: 1, position: 2, userId: "u2", displayName: "Chukwu James", entryId: "e2", postId: "p2" },
+      { weekNumber: 1, position: 1, userId: "u1", publicName: "Emeka John", entryId: "e1", postId: "p1" },
+      { weekNumber: 1, position: 2, userId: "u2", publicName: "Chukwu James", entryId: "e2", postId: "p2" },
     ],
     monthlyStandings: [],
     callerEntry: null,
@@ -101,9 +103,9 @@ function contestResponse(overrides: Partial<CurrentContestResponse> = {}): Curre
 
 const LB_PAGE: LeaderboardPageData = {
   items: [
-    { userId: "u1", displayName: "Emeka John", points: 4860, rank: 1 },
-    { userId: "u2", displayName: "Chukwu James", points: 4512, rank: 2 },
-    { userId: "user-1", displayName: "Adeniyi Christiana", points: 3102, rank: 3 },
+    { userId: "u1", publicName: "Emeka John", points: 4860, rank: 1 },
+    { userId: "u2", publicName: "Chukwu James", points: 4512, rank: 2 },
+    { userId: "user-1", publicName: "Adeniyi Christiana", points: 3102, rank: 3 },
   ],
   nextCursor: null,
 };
@@ -218,7 +220,7 @@ describe("LeaderboardPage", () => {
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
     vi.mocked(getLeaderboard)
       .mockResolvedValueOnce({ items: LB_PAGE.items, nextCursor: "cur-2" })
-      .mockResolvedValueOnce({ items: [{ userId: "u9", displayName: "Musa Ibrahim", points: 900, rank: 4 }], nextCursor: null });
+      .mockResolvedValueOnce({ items: [{ userId: "u9", publicName: "Musa Ibrahim", points: 900, rank: 4 }], nextCursor: null });
 
     renderPage();
     await screen.findByText("Emeka John");
@@ -301,8 +303,8 @@ describe("LeaderboardPage", () => {
         phase: "crowned",
         isAcceptingEntries: false,
         monthlyStandings: [
-          { position: 1, userId: "u1", displayName: "Emeka John" },
-          { position: 2, userId: "u2", displayName: "Chukwu James" },
+          { position: 1, userId: "u1", publicName: "Emeka John" },
+          { position: 2, userId: "u2", publicName: "Chukwu James" },
         ],
       }),
     );
