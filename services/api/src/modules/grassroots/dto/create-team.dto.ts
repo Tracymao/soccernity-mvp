@@ -1,4 +1,4 @@
-import { IsIn, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { GRASSROOTS_LEAGUE_TYPES, GrassrootsLeagueType } from '../grassroots.constants';
 
 // POST /teams (Build Plan Section 4.5). GrassrootsTeam Section 3 fields
@@ -24,4 +24,11 @@ export class CreateTeamDto {
 
   @IsIn(GRASSROOTS_LEAGUE_TYPES)
   leagueType!: GrassrootsLeagueType;
+
+  // Pre-publication sensitive-content screen: set true to publish a
+  // submission the screen flagged, after the submitter has seen the
+  // warning. Absent/false on a flagged submission -> 422, nothing saved.
+  @IsOptional()
+  @IsBoolean()
+  confirmSensitive?: boolean;
 }

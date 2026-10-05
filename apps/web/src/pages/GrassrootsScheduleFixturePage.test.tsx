@@ -199,4 +199,63 @@ describe("GrassrootsScheduleFixturePage", () => {
     expect(await screen.findByRole("alert")).not.toBeNull();
     expect(screen.getByRole("link", { name: /consent status/i }).getAttribute("href")).toBe("/guardian-consent");
   });
+
+  // ---- Pre-publication sensitive-content screen ----
+
+  async function fillOtherOpponentForm() {
+    window.sessionStorage.setItem("sn_access_token", tokenFor("me"));
+    renderPage();
+    await screen.findByRole("heading", { name: "Schedule a fixture" });
+    fireEvent.click(screen.getByRole("radio", { name: "Other team" }));
+    fireEvent.change(screen.getByLabelText("Opponent name"), { target: { value: "Riverside FC" } });
+    fireEvent.change(screen.getByLabelText("Match date"), { target: { value: "2026-10-01" } });
+    fireEvent.change(screen.getByLabelText("Kick-off time"), { target: { value: "15:00" } });
+    fireEvent.change(screen.getByLabelText("Venue (optional)"), { target: { value: "St Mary Church Hall" } });
+  }
+
+  function flaggedVenue() {
+    return new GrassrootsApiError("This looks like it may mention something sensitive about someone.", {
+      status: 422,
+      code: "sensitive_content_review_required",
+      flaggedFields: [{ field: "venue", categories: ["religion"] }],
+    });
+  }
+
+  it("a 422 from the screen shows confirm-or-edit (naming the flagged field), not an error", async () => {
+    vi.mocked(createFixture).mockRejectedValueOnce(flaggedVenue());
+    await fillOtherOpponentForm();
+    fireEvent.click(screen.getByRole("button", { name: "Schedule fixture" }));
+
+    expect(await screen.findByText(/may mention something sensitive about someone/i)).not.toBeNull();
+    expect(screen.getByText(/Flagged: Venue/)).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Schedule fixture" })).toBeNull();
+    expect(vi.mocked(createFixture).mock.calls[0][1]).not.toHaveProperty("confirmSensitive");
+  });
+
+  it("'Share anyway' resends the same fixture with confirmSensitive: true", async () => {
+    vi.mocked(createFixture).mockRejectedValueOnce(flaggedVenue()).mockResolvedValueOnce(scheduledFixture());
+    await fillOtherOpponentForm();
+    fireEvent.click(screen.getByRole("button", { name: "Schedule fixture" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Share anyway" }));
+
+    await waitFor(() => expect(createFixture).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(createFixture).mock.calls[1][1]).toMatchObject({
+      venue: "St Mary Church Hall",
+      confirmSensitive: true,
+    });
+    expect(await screen.findByRole("heading", { name: "Fixture scheduled" })).not.toBeNull();
+  });
+
+  it("editing the venue withdraws the warning so a confirmation can't cover new text", async () => {
+    vi.mocked(createFixture).mockRejectedValueOnce(flaggedVenue());
+    await fillOtherOpponentForm();
+    fireEvent.click(screen.getByRole("button", { name: "Schedule fixture" }));
+    await screen.findByRole("button", { name: "Share anyway" });
+
+    fireEvent.change(screen.getByLabelText("Venue (optional)"), { target: { value: "Hackney Marshes" } });
+
+    expect(screen.queryByRole("button", { name: "Share anyway" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Schedule fixture" })).not.toBeNull();
+    expect(createFixture).toHaveBeenCalledTimes(1);
+  });
 });

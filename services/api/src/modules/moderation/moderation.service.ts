@@ -148,6 +148,16 @@ export class ModerationService {
         if (!room) throw new NotFoundException('Banter Room not found');
         return;
       }
+      case 'grassroots_team': {
+        const team = await this.prisma.grassrootsTeam.findUnique({ where: { id: targetId }, select: { id: true } });
+        if (!team) throw new NotFoundException('Team not found');
+        return;
+      }
+      case 'fixture': {
+        const fixture = await this.prisma.fixture.findUnique({ where: { id: targetId }, select: { id: true } });
+        if (!fixture) throw new NotFoundException('Fixture not found');
+        return;
+      }
     }
   }
 
@@ -163,6 +173,8 @@ export class ModerationService {
   //                            still exists.
   //   - targetType 'comment'-> the comment's own authorId, if the
   //                            comment still exists.
+  //   - targetType 'grassroots_team' / 'fixture' -> the team's / teamA's
+  //                            organiser, if the team still has one.
   // Returns null if the target has since been deleted (e.g. the reported
   // post/comment was removed, or — Decision Log #44's cascade — the
   // reported user's own account was hard-deleted) or targetType is
@@ -206,6 +218,25 @@ export class ModerationService {
           select: { id: true },
         });
         return creator?.id ?? null;
+      }
+      case 'grassroots_team': {
+        // GrassrootsTeam.createdById is nullable (a dormant team after its
+        // organiser's anonymisation, Decision Log #341) -> null = nobody to
+        // notify / no one who can appeal.
+        const team = await this.prisma.grassrootsTeam.findUnique({
+          where: { id: targetId },
+          select: { createdById: true },
+        });
+        return team?.createdById ?? null;
+      }
+      case 'fixture': {
+        // The fixture's author is the organiser of teamA (only teamA's
+        // organiser may create a fixture, Decision Log #255).
+        const fixture = await this.prisma.fixture.findUnique({
+          where: { id: targetId },
+          select: { teamA: { select: { createdById: true } } },
+        });
+        return fixture?.teamA.createdById ?? null;
       }
       default:
         return null;

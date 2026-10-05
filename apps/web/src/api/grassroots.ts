@@ -122,6 +122,9 @@ export interface CreateTeamRequest {
   name: string;
   city: string;
   leagueType: GrassrootsLeagueType;
+  // Pre-publication sensitive-content screen: send true only after the
+  // person has seen the warning for THIS text and chosen to publish.
+  confirmSensitive?: boolean;
 }
 
 // POST /fixtures. `teamAId` is the team scheduling the fixture (the caller
@@ -135,6 +138,8 @@ export interface CreateFixtureRequest {
   opponentName?: string;
   scheduledAt: string;
   venue?: string;
+  // See CreateTeamRequest.confirmSensitive.
+  confirmSensitive?: boolean;
 }
 
 export interface LogResultRequest {
@@ -142,13 +147,31 @@ export interface LogResultRequest {
   scoreB: number;
 }
 
+// A field the pre-publication sensitive-content screen flagged. `field` is
+// the request field name; the server never returns the submitted text.
+export interface SensitiveFieldFlag {
+  field: string;
+  categories: string[];
+}
+
+export const SENSITIVE_CONTENT_REVIEW_REQUIRED_CODE = "sensitive_content_review_required";
+
 export class GrassrootsApiError extends Error {
   readonly status?: number;
+  // Machine-readable server code, currently only the 422
+  // "sensitive_content_review_required" from POST /teams and POST /fixtures.
+  readonly code?: string;
+  readonly flaggedFields?: SensitiveFieldFlag[];
 
-  constructor(message: string, options?: { status?: number }) {
+  constructor(
+    message: string,
+    options?: { status?: number; code?: string; flaggedFields?: SensitiveFieldFlag[] },
+  ) {
     super(message);
     this.name = "GrassrootsApiError";
     this.status = options?.status;
+    this.code = options?.code;
+    this.flaggedFields = options?.flaggedFields;
   }
 }
 
@@ -183,6 +206,25 @@ async function errorMessageFrom(response: Response, fallback: string): Promise<s
   return fallback;
 }
 
+// Like errorMessageFrom, but also carries the 422 sensitive-content-screen
+// body (code + flaggedFields) so the caller can show the confirm-or-edit
+// step instead of a plain error. Used only by the two endpoints that run
+// the screen (POST /teams, POST /fixtures).
+async function screenAwareError(response: Response, fallback: string): Promise<GrassrootsApiError> {
+  const body = await response.json().catch(() => null);
+  let message = fallback;
+  if (body && typeof body.message === "string") message = body.message;
+  else if (body && Array.isArray(body.message) && typeof body.message[0] === "string") message = body.message[0];
+  if (response.status === 422 && body && body.code === SENSITIVE_CONTENT_REVIEW_REQUIRED_CODE) {
+    return new GrassrootsApiError(message, {
+      status: response.status,
+      code: body.code,
+      flaggedFields: Array.isArray(body.flaggedFields) ? (body.flaggedFields as SensitiveFieldFlag[]) : [],
+    });
+  }
+  return new GrassrootsApiError(message, { status: response.status });
+}
+
 // ---------- Teams ----------
 
 // POST /teams response: the team plus `reclaimed` -- true when the caller
@@ -192,16 +234,16 @@ export type CreateTeamResult = GrassrootsTeam & { reclaimed: boolean; message?: 
 
 // POST /teams -- JwtAuthGuard + GuardianConsentGuard. A 403 means the
 // caller is a restricted-pending minor. A duplicate of a live team is a 409.
+// A 422 with code "sensitive_content_review_required" means the pre-
+// publication screen flagged the name/city: nothing was saved; resend with
+// `confirmSensitive: true` once the person has confirmed.
 export async function createTeam(accessToken: string, payload: CreateTeamRequest): Promise<CreateTeamResult> {
   const response = await authedFetch("/teams", accessToken, {
     method: "POST",
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
-    throw new GrassrootsApiError(
-      await errorMessageFrom(response, `Couldn't register that team (${response.status}).`),
-      { status: response.status },
-    );
+    throw await screenAwareError(response, `Couldn't register that team (${response.status}).`);
   }
   return (await response.json()) as CreateTeamResult;
 }
@@ -265,10 +307,7 @@ export async function createFixture(accessToken: string, payload: CreateFixtureR
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
-    throw new GrassrootsApiError(
-      await errorMessageFrom(response, `Couldn't schedule that fixture (${response.status}).`),
-      { status: response.status },
-    );
+    throw await screenAwareError(response, `Couldn't schedule that fixture (${response.status}).`);
   }
   return (await response.json()) as Fixture;
 }

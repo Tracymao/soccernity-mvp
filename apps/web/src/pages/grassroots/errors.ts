@@ -14,7 +14,11 @@
 // api/grassroots.ts's GrassrootsApiError already carries the server's
 // `message` (via errorMessageFrom) and `.status`, so a message match is
 // enough to tell the two apart without also threading `code` through.
-import { GrassrootsApiError } from "../../api/grassroots";
+import {
+  GrassrootsApiError,
+  SENSITIVE_CONTENT_REVIEW_REQUIRED_CODE,
+  type SensitiveFieldFlag,
+} from "../../api/grassroots";
 
 export function isAwaitingConsent(err: unknown): boolean {
   return (
@@ -22,4 +26,18 @@ export function isAwaitingConsent(err: unknown): boolean {
     err.status === 403 &&
     /guardian consent/i.test(err.message)
   );
+}
+
+// The pre-publication sensitive-content screen refused a submission (422,
+// nothing saved) and wants the person to confirm or edit. Returns the
+// flagged fields, or null for any other error.
+export function sensitiveContentFlags(err: unknown): SensitiveFieldFlag[] | null {
+  if (
+    err instanceof GrassrootsApiError &&
+    err.status === 422 &&
+    err.code === SENSITIVE_CONTENT_REVIEW_REQUIRED_CODE
+  ) {
+    return err.flaggedFields ?? [];
+  }
+  return null;
 }

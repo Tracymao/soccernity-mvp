@@ -8,7 +8,12 @@
 // The enforced allow-list for POST /reports. 'banter_room' added by
 // Decision Log #357: a Banter Room is reportable so a moderator can
 // deactivate it via the same queue, with no separate admin route.
-export const REPORT_TARGET_TYPES = ['post', 'user', 'comment', 'banter_room'] as const;
+// 'grassroots_team' and 'fixture' added by the pre-publication
+// sensitive-content screen (Russmedia obligation): a flagged-and-confirmed
+// Grassroots submission is logged to this queue against the record it
+// published (see GrassrootsService.logSensitiveContentReport), and the same
+// two types are also user-reportable through POST /reports.
+export const REPORT_TARGET_TYPES = ['post', 'user', 'comment', 'banter_room', 'grassroots_team', 'fixture'] as const;
 export type ReportTargetType = (typeof REPORT_TARGET_TYPES)[number];
 
 // The outcome an admin/moderator may record via

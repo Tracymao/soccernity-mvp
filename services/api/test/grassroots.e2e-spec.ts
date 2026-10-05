@@ -736,4 +736,127 @@ describe('Grassroots Records Service e2e (Section 4.5)', () => {
       await request(server()).delete('/teams/does-not-exist').set('Authorization', `Bearer ${admin}`).expect(404);
     });
   });
+
+  // ---------- Pre-publication sensitive-content screen (Russmedia obligation) ----------
+
+  describe('pre-publication sensitive-content screen', () => {
+    async function moderatorToken(): Promise<string> {
+      const prisma = getTestPrismaClient();
+      const admin = await prisma.adminUser.create({
+        data: {
+          email: `e2e-gr-screen-admin-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
+          passwordHash: 'unused',
+          fullName: 'E2E Screen Mod',
+          role: 'moderator',
+        },
+      });
+      const { accessToken } = await app.get(AdminTokenService).issueTokenPair(admin.id, admin.role);
+      return accessToken.token;
+    }
+
+    it('a flagged team name is refused with a 422, nothing is saved, and the submitter is not made an organiser', async () => {
+      const prisma = getTestPrismaClient();
+      const org = await createUser('screen-team-refused');
+
+      const res = await request(server())
+        .post('/teams')
+        .set('Authorization', `Bearer ${org.accessToken}`)
+        .send({ name: 'Cancer Survivors FC', city: 'London', leagueType: 'informal' })
+        .expect(422);
+
+      expect(res.body.code).toBe('sensitive_content_review_required');
+      expect(res.body.flaggedFields).toEqual([{ field: 'name', categories: ['health'] }]);
+      expect(JSON.stringify(res.body)).not.toMatch(/survivor/i);
+      expect(await prisma.grassrootsTeam.count()).toBe(0);
+      expect(await prisma.report.count()).toBe(0);
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: org.userId } })).isTeamOrganiser).toBe(false);
+    });
+
+    it('confirming publishes the team AND the confirmed submission shows up in the admin Moderation Queue (no parallel queue)', async () => {
+      const prisma = getTestPrismaClient();
+      const org = await createUser('screen-team-confirmed');
+      const mod = await moderatorToken();
+
+      const created = await request(server())
+        .post('/teams')
+        .set('Authorization', `Bearer ${org.accessToken}`)
+        .send({ name: 'Cancer Survivors FC', city: 'London', leagueType: 'informal', confirmSensitive: true })
+        .expect(201);
+
+      const rows = await prisma.report.findMany();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        reporterId: null,
+        reporterContactEmail: null,
+        targetType: 'grassroots_team',
+        targetId: created.body.id,
+        status: 'open',
+        concernsMinor: false,
+      });
+      expect(rows[0].reason).toMatch(/^\[Automated: pre-publication sensitive-content screen\]/);
+      expect(rows[0].reason).toContain('name (health)');
+      expect(rows[0].reason).not.toMatch(/survivor/i);
+
+      const queue = await request(server())
+        .get('/admin/moderation/reports')
+        .set('Authorization', `Bearer ${mod}`)
+        .expect(200);
+      expect(queue.body.items.map((r: { id: string }) => r.id)).toContain(rows[0].id);
+    });
+
+    it('a clean team creates no Report', async () => {
+      const prisma = getTestPrismaClient();
+      const org = await createUser('screen-team-clean');
+      await createTeam(org.accessToken, { name: 'Hackney Wick FC' });
+      expect(await prisma.report.count()).toBe(0);
+    });
+
+    it('fixtures: flagged venue -> 422 and no row; confirmed -> fixture saved + Report against the fixture, which the admin can action', async () => {
+      const prisma = getTestPrismaClient();
+      const org = await createUser('screen-fixture');
+      const mod = await moderatorToken();
+      const teamId = await createTeam(org.accessToken);
+      const body = { teamAId: teamId, scheduledAt: '2026-11-01T14:00:00.000Z', venue: 'St Mary Church Hall' };
+
+      const refused = await request(server())
+        .post('/fixtures')
+        .set('Authorization', `Bearer ${org.accessToken}`)
+        .send(body)
+        .expect(422);
+      expect(refused.body.flaggedFields).toEqual([{ field: 'venue', categories: ['religion'] }]);
+      expect(await prisma.fixture.count()).toBe(0);
+      expect(await prisma.report.count()).toBe(0);
+
+      const ok = await request(server())
+        .post('/fixtures')
+        .set('Authorization', `Bearer ${org.accessToken}`)
+        .send({ ...body, confirmSensitive: true })
+        .expect(201);
+      expect(ok.body.venue).toBe('St Mary Church Hall');
+
+      const report = await prisma.report.findFirstOrThrow();
+      expect(report).toMatchObject({ targetType: 'fixture', targetId: ok.body.id, reporterId: null });
+
+      // The reported user resolves to teamA's organiser, so the normal
+      // action flow (which notifies the reported user) works on this row.
+      await request(server())
+        .patch(`/admin/moderation/reports/${report.id}`)
+        .set('Authorization', `Bearer ${mod}`)
+        .send({ action: 'dismissed' })
+        .expect(200);
+      expect((await prisma.report.findUniqueOrThrow({ where: { id: report.id } })).status).toBe('reviewed');
+    });
+
+    it('a non-organiser gets the 403, not the screen (no 422 for someone who may not create the fixture)', async () => {
+      const owner = await createUser('screen-owner');
+      const stranger = await createUser('screen-stranger');
+      const teamId = await createTeam(owner.accessToken);
+
+      await request(server())
+        .post('/fixtures')
+        .set('Authorization', `Bearer ${stranger.accessToken}`)
+        .send({ teamAId: teamId, scheduledAt: '2026-11-01T14:00:00.000Z', venue: 'St Mary Church Hall' })
+        .expect(403);
+    });
+  });
 });

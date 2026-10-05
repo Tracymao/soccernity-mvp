@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsDateString, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
 // POST /fixtures (Build Plan Section 4.5). Fixture Section 3 fields a
 // caller supplies: teamAId, teamBId (nullable), scheduledAt, venue
@@ -48,4 +48,11 @@ export class CreateFixtureDto {
   @MinLength(2)
   @MaxLength(200)
   venue?: string;
+
+  // Pre-publication sensitive-content screen (opponentName, venue): set
+  // true to publish a flagged submission after the submitter has seen the
+  // warning. Absent/false on a flagged submission -> 422, nothing saved.
+  @IsOptional()
+  @IsBoolean()
+  confirmSensitive?: boolean;
 }

@@ -29,7 +29,7 @@ import { AdminApiError, adminFetch } from "./adminClient";
 // import from services/api, so this is this codebase's usual per-side
 // copy (the same convention api/contest.ts's own header comment
 // describes for its own types).
-export const REPORT_TARGET_TYPES = ["post", "user", "comment", "banter_room"] as const;
+export const REPORT_TARGET_TYPES = ["post", "user", "comment", "banter_room", "grassroots_team", "fixture"] as const;
 export type ReportTargetType = (typeof REPORT_TARGET_TYPES)[number];
 
 // room_deactivated is valid only against a banter_room report (Decision
@@ -106,7 +106,7 @@ export interface Report {
   reporterId: string | null;
   reporterContactEmail: string | null;
   reporterContactName: string | null;
-  targetType: string; // "post" | "user" | "comment" | "banter_room"
+  targetType: string; // "post" | "user" | "comment" | "banter_room" | "grassroots_team" | "fixture"
   targetId: string;
   reason: string;
   status: string; // "open" | "reviewed" | "actioned"

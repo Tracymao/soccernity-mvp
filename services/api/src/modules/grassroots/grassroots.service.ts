@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -19,6 +20,13 @@ import { ListFixturesQueryDto } from './dto/list-fixtures-query.dto';
 import { ListTeamsQueryDto } from './dto/list-teams-query.dto';
 import { LogResultDto } from './dto/log-result.dto';
 import { UpdateFixtureStatusDto } from './dto/update-fixture-status.dto';
+import {
+  SENSITIVE_CONTENT_REVIEW_MESSAGE,
+  SENSITIVE_CONTENT_REVIEW_REQUIRED_CODE,
+  SensitiveFieldFlag,
+  buildSensitiveContentReportReason,
+  screenSensitiveContent,
+} from '../sensitive-content/sensitive-content.util';
 import {
   FixtureStatus,
   GRASSROOTS_DEFAULT_PAGE_SIZE,
@@ -47,6 +55,28 @@ export type GrassrootsTeamView = Prisma.GrassrootsTeamGetPayload<{ select: typeo
 // dormant team (`reclaimed`) rather than a fresh row, with an explanatory
 // `message` on the takeover path.
 export type CreateTeamResult = GrassrootsTeamView & { reclaimed: boolean; message?: string };
+
+// Pre-publication sensitive-content screen gate. Throws a 422 carrying a
+// machine-readable code and the flagged FIELD NAMES + categories (never the
+// submitted text) unless the submitter already confirmed. Returns the flags
+// when a flagged submission was confirmed, so the caller can log it for
+// moderation after the record is created; [] when nothing was flagged.
+function gateSensitiveContent(
+  fields: Record<string, string | null | undefined>,
+  confirmSensitive: boolean | undefined,
+): SensitiveFieldFlag[] {
+  const flags = screenSensitiveContent(fields);
+  if (flags.length > 0 && confirmSensitive !== true) {
+    throw new UnprocessableEntityException({
+      statusCode: 422,
+      error: 'Unprocessable Entity',
+      code: SENSITIVE_CONTENT_REVIEW_REQUIRED_CODE,
+      message: SENSITIVE_CONTENT_REVIEW_MESSAGE,
+      flaggedFields: flags,
+    });
+  }
+  return flags;
+}
 
 // Identity key for the (name, city) match: trimmed + lowercased, used only
 // to derive the advisory-lock key, never stored.
@@ -183,6 +213,13 @@ export class GrassrootsService {
       let team: GrassrootsTeamView;
       let reclaimed = false;
       const dormant = matches[0];
+      // Screen only a genuinely new record: a takeover republishes the
+      // existing, already-public name/city unchanged, so the submitter is
+      // not disclosing anything new. Thrown inside the transaction, before
+      // any write, so a refused submission leaves nothing behind.
+      const sensitiveFlags = dormant
+        ? []
+        : gateSensitiveContent({ name, city }, dto.confirmSensitive);
       if (dormant) {
         const claimed = await tx.grassrootsTeam.updateMany({
           where: { id: dormant.id, createdById: null },
@@ -207,6 +244,10 @@ export class GrassrootsService {
         });
       }
 
+      if (sensitiveFlags.length > 0) {
+        await this.logSensitiveContentReport(tx, 'grassroots_team', team.id, sensitiveFlags);
+      }
+
       await tx.user.update({
         where: { id: userId },
         data: { isTeamOrganiser: true },
@@ -220,6 +261,33 @@ export class GrassrootsService {
               'This team was already registered on Soccernity but had no organiser. You are now its organiser, and its existing fixtures and results are unchanged.',
           }
         : { ...team, reclaimed: false };
+    });
+  }
+
+  // Logs a flagged-AND-confirmed submission into the existing Moderation
+  // Queue (the Report table) -- no parallel queue. Runs inside the same
+  // transaction as the record it describes, so a report never exists for a
+  // record that failed to save and vice versa. reporterId and
+  // reporterContactEmail are both null: the only report shape that is
+  // neither a logged-in user's nor a public reporter's (the public route
+  // requires the email), i.e. system-generated. The reason carries an
+  // [Automated ...] prefix and lists flagged field names + categories,
+  // never the text itself. Severity stays at its default; concernsMinor
+  // stays false (inferring it from leagueType school/academy is a flagged
+  // follow-up, not decided here).
+  private async logSensitiveContentReport(
+    tx: Prisma.TransactionClient,
+    targetType: 'grassroots_team' | 'fixture',
+    targetId: string,
+    flags: SensitiveFieldFlag[],
+  ): Promise<void> {
+    await tx.report.create({
+      data: {
+        reporterId: null,
+        targetType,
+        targetId,
+        reason: buildSensitiveContentReportReason(flags),
+      },
     });
   }
 
@@ -361,6 +429,14 @@ export class GrassrootsService {
       throw new ForbiddenException('You may only create fixtures for a team you registered');
     }
 
+    // Pre-publication sensitive-content screen over the free-text fields.
+    // After the 403 so a non-organiser learns nothing about the screen;
+    // before any write, so a refused submission saves nothing.
+    const sensitiveFlags = gateSensitiveContent(
+      { opponentName, venue: dto.venue },
+      dto.confirmSensitive,
+    );
+
     // teamB's createdById, needed only to pick the fixture_scheduled
     // Notification recipient below — stays null when the away side is a
     // free-text opponentName (no registered team, so no one to notify).
@@ -386,6 +462,10 @@ export class GrassrootsService {
         },
         select: FIXTURE_SELECT,
       });
+
+      if (sensitiveFlags.length > 0) {
+        await this.logSensitiveContentReport(tx, 'fixture', fixture.id, sensitiveFlags);
+      }
 
       // fixture_scheduled Notification (Decision Log #87's audit) --
       // recipient is teamB's organiser, only when teamB is a real

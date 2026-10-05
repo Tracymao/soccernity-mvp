@@ -15,7 +15,14 @@
 // pending minor gets a 403, surfaced with a link to /guardian-consent
 // (isAwaitingConsent). No-session → a "log in" prompt, the API never
 // called.
-import { useState, type FormEvent } from "react";
+//
+// Pre-publication sensitive-content screen: a 422
+// "sensitive_content_review_required" (nothing saved) swaps the submit
+// button for a confirm-or-edit step (SensitiveContentWarning). Editing
+// either field clears it, so a confirmation always applies to the exact
+// text the person was warned about -- the server would otherwise skip the
+// screen for newly typed text sent with confirmSensitive.
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import {
   createTeam,
@@ -23,9 +30,11 @@ import {
   GrassrootsApiError,
   type GrassrootsLeagueType,
   type CreateTeamResult,
+  type SensitiveFieldFlag,
 } from "../api/grassroots";
 import { getStoredAccessToken } from "../lib/session";
-import { isAwaitingConsent } from "./grassroots/errors";
+import { isAwaitingConsent, sensitiveContentFlags } from "./grassroots/errors";
+import SensitiveContentWarning from "./grassroots/SensitiveContentWarning";
 import "./grassroots/GrassrootsPage.css";
 
 const TYPE_OPTIONS: { value: GrassrootsLeagueType; label: string }[] = [
@@ -44,7 +53,14 @@ export default function GrassrootsRegisterTeamPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [awaitingConsent, setAwaitingConsent] = useState(false);
+  const [sensitiveFlags, setSensitiveFlags] = useState<SensitiveFieldFlag[] | null>(null);
   const [registered, setRegistered] = useState<CreateTeamResult | null>(null);
+
+  // A confirmation only covers the text that was flagged: any edit to a
+  // screened field withdraws it and the next submit is screened afresh.
+  useEffect(() => {
+    setSensitiveFlags(null);
+  }, [name, city]);
 
   if (!token) {
     return (
@@ -56,17 +72,25 @@ export default function GrassrootsRegisterTeamPage() {
 
   const canSubmit = name.trim().length >= 2 && city.trim().length >= 2 && !submitting;
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
+  async function submit(e: FormEvent | null, confirmSensitive = false) {
+    e?.preventDefault();
     if (!token || !canSubmit) return;
     setSubmitting(true);
     setError(null);
     setAwaitingConsent(false);
     try {
-      const team = await createTeam(token, { name: name.trim(), city: city.trim(), leagueType });
+      const team = await createTeam(token, {
+        name: name.trim(),
+        city: city.trim(),
+        leagueType,
+        ...(confirmSensitive ? { confirmSensitive: true } : {}),
+      });
       setRegistered(team);
     } catch (err) {
-      if (isAwaitingConsent(err)) {
+      const flags = sensitiveContentFlags(err);
+      if (flags) {
+        setSensitiveFlags(flags);
+      } else if (isAwaitingConsent(err)) {
         setAwaitingConsent(true);
       } else {
         setError(err instanceof GrassrootsApiError ? err.message : "Couldn't register that team.");
@@ -204,9 +228,18 @@ export default function GrassrootsRegisterTeamPage() {
         </p>
       )}
 
-      <button type="submit" className="grassroots-btn grassroots-btn--primary" disabled={!canSubmit}>
-        {submitting ? "Registering…" : "Register team"}
-      </button>
+      {sensitiveFlags ? (
+        <SensitiveContentWarning
+          flags={sensitiveFlags}
+          busy={submitting}
+          onEdit={() => setSensitiveFlags(null)}
+          onConfirm={() => void submit(null, true)}
+        />
+      ) : (
+        <button type="submit" className="grassroots-btn grassroots-btn--primary" disabled={!canSubmit}>
+          {submitting ? "Registering…" : "Register team"}
+        </button>
+      )}
 
       <Link to="/grassroots" className="grassroots-linkback">
         Back
