@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../token/token.types';
 import { AuthRateLimit } from '../rate-limit/auth-rate-limit.decorator';
 import { CardVerificationDto } from './dto/card-verification.dto';
+import { ChangeGuardianEmailDto } from './dto/change-guardian-email.dto';
 import { GuardianCardVerificationService } from './guardian-card-verification.service';
 import { DeclineGuardianConsentDto } from './dto/decline-guardian-consent.dto';
 import { GuardianConsentDto } from './dto/guardian-consent.dto';
@@ -91,6 +92,25 @@ export class GuardianConsentController {
   async resend(@Body() dto: ResendGuardianConsentDto): Promise<{ message: string }> {
     await this.guardianConsentService.resendConsent(dto.email);
     return { message: 'If that account has a guardian consent request pending, a new email has been sent.' };
+  }
+
+  // safeguarding/guardian-email-change-endpoint (Decision Log #60/#365) —
+  // the MINOR corrects the guardian's email while consent is pending, which
+  // restarts the consent flow against the new address. JwtAuthGuard ONLY,
+  // NOT GuardianConsentGuard, for the same reason GET .../status is: a
+  // restricted-pending minor is exactly who this is for. Rate-limited
+  // because it makes the platform send email to an address the caller
+  // chooses (the same spam-vector class resend() carries).
+  @AuthRateLimit()
+  @UseGuards(JwtAuthGuard)
+  @Post('guardian-consent/change-guardian-email')
+  @HttpCode(HttpStatus.OK)
+  async changeGuardianEmail(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: ChangeGuardianEmailDto,
+  ): Promise<{ message: string }> {
+    await this.guardianConsentService.changeGuardianEmail(user.sub, dto.email);
+    return { message: 'Guardian email updated. A new consent request has been sent to the new address.' };
   }
 
   // sprint-1/guardian-consent-decline-withdraw-expiry — the guardian says

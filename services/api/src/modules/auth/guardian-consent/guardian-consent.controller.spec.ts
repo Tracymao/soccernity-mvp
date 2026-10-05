@@ -1,4 +1,11 @@
-import { BadRequestException, ExecutionContext, INestApplication, NotFoundException, ValidationPipe } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ExecutionContext,
+  INestApplication,
+  NotFoundException,
+  ValidationPipe,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
@@ -24,6 +31,8 @@ describe('GuardianConsentController (HTTP layer)', () => {
     declineConsent: jest.fn(),
     requestWithdrawal: jest.fn(),
     withdrawConsent: jest.fn(),
+    // safeguarding/guardian-email-change-endpoint
+    changeGuardianEmail: jest.fn(),
   };
   const cardVerification = { getRequirements: jest.fn(), createIntent: jest.fn(), complete: jest.fn() };
 
@@ -251,6 +260,54 @@ describe('GuardianConsentController (HTTP layer)', () => {
       );
 
       await request(app.getHttpServer()).get('/auth/guardian-consent/status').expect(404);
+    });
+  });
+
+  // safeguarding/guardian-email-change-endpoint (Decision Log #365).
+  describe('POST /auth/guardian-consent/change-guardian-email', () => {
+    it('returns 200, keyed off the caller-from-JWT id, forwarding only the new email', async () => {
+      guardianConsentService.changeGuardianEmail.mockResolvedValueOnce(undefined);
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/guardian-consent/change-guardian-email')
+        .send({ email: 'new-guardian@example.com' })
+        .expect(200);
+
+      expect(response.body.message).toMatch(/new consent request has been sent/i);
+      expect(guardianConsentService.changeGuardianEmail).toHaveBeenCalledWith(
+        AUTHENTICATED_MINOR.sub,
+        'new-guardian@example.com',
+      );
+    });
+
+    it('400s on an invalid email and never calls the service', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/change-guardian-email')
+        .send({ email: 'not-an-email' })
+        .expect(400);
+      expect(guardianConsentService.changeGuardianEmail).not.toHaveBeenCalled();
+    });
+
+    it('rejects a caller-supplied minor id / extra fields (whitelist + forbidNonWhitelisted)', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/change-guardian-email')
+        .send({ email: 'new-guardian@example.com', minorUserId: 'someone-else' })
+        .expect(400);
+      expect(guardianConsentService.changeGuardianEmail).not.toHaveBeenCalled();
+    });
+
+    it('maps a ConflictException (already confirmed) to 409 and a NotFoundException to 404', async () => {
+      guardianConsentService.changeGuardianEmail.mockRejectedValueOnce(new ConflictException('confirmed'));
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/change-guardian-email')
+        .send({ email: 'new-guardian@example.com' })
+        .expect(409);
+
+      guardianConsentService.changeGuardianEmail.mockRejectedValueOnce(new NotFoundException('none'));
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/change-guardian-email')
+        .send({ email: 'new-guardian@example.com' })
+        .expect(404);
     });
   });
 
