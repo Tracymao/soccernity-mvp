@@ -483,7 +483,9 @@ classified as belonging to a minor (under 18) and whether it is under 16. These 
 classifications are recalculated daily from your date of birth (Section 4.5), and each change is
 recorded in an audit log that keeps your account ID, the classification that changed, and your age
 at that moment — **not** your date of birth. **[PROPOSAL — live data-minimisation consideration, not a
-completed change]** We currently store your full date of birth. Soccernity is evaluating storing
+completed change]** We currently store your full date of birth. It is **encrypted at rest, not hashed**: a hash is
+one-way, and we need the actual date to recalculate your under-18 / under-16 status every day
+(Section 4.5). Soccernity is evaluating storing
 only an age band, rather than the full date of birth, where a feature does not need the exact
 date. No schema change has been made; that is a separate backend decision (Part C).
 
@@ -915,7 +917,7 @@ mistaken for settled by the time this reaches counsel or gets converted into Fig
 | 19 | **Resolved (signed off)** — see row 4 | PP §2 | — |
 | 20 | Cross-border transfer assessment (standalone restatement of row 9) | PP §5 | Counsel |
 | 21 | Encryption-at-rest and breach-notification technical standard (restates row 11) | PP §11 | Founder + `backend-api` + counsel |
-| 22 | Age band vs full date of birth (data minimisation) | PP §1.1 | Founder + `backend-api` |
+| 22 | Age band vs full date of birth (data minimisation). **Hashing question resolved (comment 26):** DOB is encrypted at rest, not hashed, because the daily age sweep needs the real date. **Code check:** `User.dateOfBirth` is a plain `DateTime?` column with no application-level encryption in `services/api`, so "encrypted at rest" currently depends on the database host's storage encryption (not verified here) — confirm before publishing | PP §1.1 | Founder + `backend-api` |
 | 23 | Investigation hold has no maximum duration (Decision Log #345 gives visibility only) | PP §9 | Founder + counsel |
 | 24 | **Age-reclassification (Decision Log #349)**: accepted ~24h misclassification window; reliance on unverified date of birth; younger-direction corrections re-apply restrictions with no notice | ToS §3.6; PP §4.5 | Counsel |
 | 25 | **Resolved (Decision Log #351, live in `messaging.service.ts`)** — under-16 recipient refusal is the same 404 as other blocked paths | PP §8 | — |
