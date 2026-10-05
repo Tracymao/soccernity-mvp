@@ -1,3 +1,4 @@
+import { buildTestDobEncryption } from '../../crypto/test-dob-encryption';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -47,7 +48,7 @@ const FULL_DB_ROW = {
   phone: '+441234567890',
   passwordHash: 'argon2id$super-secret-hash-should-never-leave-this-object',
   displayName: 'Old Name',
-  dateOfBirth: new Date('2000-01-01'),
+  dateOfBirth: buildTestDobEncryption().encrypt(new Date('2000-01-01')),
   isMinor: false,
   role: 'fan',
   verificationStatus: 'unverified',
@@ -80,7 +81,7 @@ describe('UsersService', () => {
       const selected = withoutPasswordHash(FULL_DB_ROW);
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(selected);
 
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
       const result = await service.getOwnProfile('user-1');
 
       expect(prisma.user.findUnique).toHaveBeenCalledWith(
@@ -96,7 +97,7 @@ describe('UsersService', () => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(
         withoutPasswordHash({ ...FULL_DB_ROW, isMinor: true, isUnder16: true, guardian: { email: 'parent@example.com' } }),
       );
-      const result = await new UsersService(prisma).getOwnProfile('user-1');
+      const result = await new UsersService(prisma, buildTestDobEncryption()).getOwnProfile('user-1');
 
       expect(result.isUnder16).toBe(true);
       expect(result.guardianContact).toEqual({ label: 'Guardian contact', email: 'parent@example.com' });
@@ -108,7 +109,7 @@ describe('UsersService', () => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(
         withoutPasswordHash({ ...FULL_DB_ROW, isMinor: true, isUnder16: false, guardian: { email: 'parent@example.com' } }),
       );
-      const result = await new UsersService(prisma).getOwnProfile('user-1');
+      const result = await new UsersService(prisma, buildTestDobEncryption()).getOwnProfile('user-1');
 
       expect(result.guardianContact).toBeNull();
       expect(JSON.stringify(result)).not.toContain('parent@example.com');
@@ -121,7 +122,7 @@ describe('UsersService', () => {
         passwordHash: undefined,
       });
 
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
       await service.getOwnProfile('user-1');
 
       const callArgs = (prisma.user.findUnique as jest.Mock).mock.calls[0][0];
@@ -133,7 +134,7 @@ describe('UsersService', () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
 
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await expect(service.getOwnProfile('ghost-user')).rejects.toThrow(NotFoundException);
     });
@@ -143,7 +144,7 @@ describe('UsersService', () => {
       const selected = withoutPasswordHash({ ...FULL_DB_ROW, isTeamOrganiser: true });
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(selected);
 
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
       const result = await service.getOwnProfile('user-1');
 
       const callArgs = (prisma.user.findUnique as jest.Mock).mock.calls[0][0];
@@ -161,7 +162,7 @@ describe('UsersService', () => {
         displayName: 'New Name',
       });
 
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
       await service.updateOwnProfile('user-1', { displayName: 'New Name' });
 
       expect(prisma.user.update).toHaveBeenCalledWith({
@@ -176,7 +177,7 @@ describe('UsersService', () => {
       const selected = withoutPasswordHash(FULL_DB_ROW);
       (prisma.user.update as jest.Mock).mockResolvedValue(selected);
 
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
       // Simulates a dto object that somehow has extra safeguarding-related
       // keys on it (e.g. if a future refactor loosened DTO validation) —
       // toUpdateData() must not read them.
@@ -205,7 +206,7 @@ describe('UsersService', () => {
       const selected = withoutPasswordHash(FULL_DB_ROW);
       (prisma.user.update as jest.Mock).mockResolvedValue(selected);
 
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
       await service.updateOwnProfile('user-1', {});
 
       const callArgs = (prisma.user.update as jest.Mock).mock.calls[0][0];
@@ -216,7 +217,7 @@ describe('UsersService', () => {
   describe('followUser / unfollowUser', () => {
     it('rejects a self-follow with BadRequestException, without querying Prisma at all', async () => {
       const prisma = buildPrismaMock();
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await expect(service.followUser('user-1', 'user-1')).rejects.toBeInstanceOf(BadRequestException);
       expect(prisma.user.findUnique).not.toHaveBeenCalled();
@@ -226,7 +227,7 @@ describe('UsersService', () => {
     it('throws NotFoundException when followeeId does not reference a real user', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await expect(service.followUser('user-1', 'ghost')).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.follow.create).not.toHaveBeenCalled();
@@ -236,7 +237,7 @@ describe('UsersService', () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'followee-1' });
       (prisma.follow.create as jest.Mock).mockResolvedValue({ id: 'follow-1' });
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       const result = await service.followUser('follower-1', 'followee-1');
 
@@ -269,7 +270,7 @@ describe('UsersService', () => {
         clientVersion: '5.0.0',
       });
       (prisma.follow.create as jest.Mock).mockRejectedValue(dup);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await service.followUser('follower-1', 'followee-1');
 
@@ -282,7 +283,7 @@ describe('UsersService', () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'followee-1' });
       (prisma.follow.create as jest.Mock).mockResolvedValue({ id: 'follow-1' });
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await service.followUser('follower-1', 'followee-1');
 
@@ -302,7 +303,7 @@ describe('UsersService', () => {
         clientVersion: '5.0.0',
       });
       (prisma.follow.create as jest.Mock).mockRejectedValue(dupError);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       const result = await service.followUser('follower-1', 'followee-1');
 
@@ -326,7 +327,7 @@ describe('UsersService', () => {
         following = true;
         return Promise.resolve({ id: 'follow-1' });
       });
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await service.followUser('follower-1', 'followee-1');
       await service.followUser('follower-1', 'followee-1'); // duplicate — P2002, idempotent
@@ -342,14 +343,14 @@ describe('UsersService', () => {
         clientVersion: '5.0.0',
       });
       (prisma.follow.create as jest.Mock).mockRejectedValue(otherError);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await expect(service.followUser('follower-1', 'followee-1')).rejects.toBe(otherError);
     });
 
     it('rejects a self-unfollow with BadRequestException', async () => {
       const prisma = buildPrismaMock();
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await expect(service.unfollowUser('user-1', 'user-1')).rejects.toBeInstanceOf(BadRequestException);
       expect(prisma.follow.delete).not.toHaveBeenCalled();
@@ -358,7 +359,7 @@ describe('UsersService', () => {
     it('throws NotFoundException from unfollowUser when followeeId does not reference a real user', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await expect(service.unfollowUser('user-1', 'ghost')).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.follow.delete).not.toHaveBeenCalled();
@@ -368,7 +369,7 @@ describe('UsersService', () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'followee-1' });
       (prisma.follow.delete as jest.Mock).mockResolvedValue({ id: 'follow-1' });
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       const result = await service.unfollowUser('follower-1', 'followee-1');
 
@@ -386,7 +387,7 @@ describe('UsersService', () => {
         clientVersion: '5.0.0',
       });
       (prisma.follow.delete as jest.Mock).mockRejectedValue(notFoundError);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await expect(service.unfollowUser('follower-1', 'followee-1')).resolves.toEqual({ following: false });
     });
@@ -399,7 +400,7 @@ describe('UsersService', () => {
         clientVersion: '5.0.0',
       });
       (prisma.follow.delete as jest.Mock).mockRejectedValue(otherError);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await expect(service.unfollowUser('follower-1', 'followee-1')).rejects.toBe(otherError);
     });
@@ -419,7 +420,7 @@ describe('UsersService', () => {
     it('throws NotFoundException from getFollowers when :id does not reference a real user', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await expect(service.getFollowers('ghost', {})).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.follow.findMany).not.toHaveBeenCalled();
@@ -429,7 +430,7 @@ describe('UsersService', () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1', accountStatus: 'active' });
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await service.getFollowers('user-1', {});
 
@@ -442,7 +443,7 @@ describe('UsersService', () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1', accountStatus: 'active' });
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([buildFollowRow()]);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       const page = await service.getFollowers('user-1', {});
 
@@ -462,7 +463,7 @@ describe('UsersService', () => {
         buildFollowRow({ sequence: 1, createdAt: new Date('2026-08-01T00:00:00.000Z') }), // lookahead
       ];
       (prisma.follow.findMany as jest.Mock).mockResolvedValue(rows);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       const page = await service.getFollowers('user-1', { limit: 2 });
 
@@ -476,7 +477,7 @@ describe('UsersService', () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1', accountStatus: 'active' });
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([buildFollowRow()]);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       const page = await service.getFollowers('user-1', { limit: 10 });
 
@@ -488,7 +489,7 @@ describe('UsersService', () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1', accountStatus: 'active' });
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
       const cursor = encodeFeedSequenceCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), sequence: 2 });
 
       await service.getFollowers('user-1', { cursor });
@@ -507,7 +508,7 @@ describe('UsersService', () => {
     it('throws NotFoundException from getFollowing when :id does not reference a real user', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await expect(service.getFollowing('ghost', {})).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.follow.findMany).not.toHaveBeenCalled();
@@ -517,7 +518,7 @@ describe('UsersService', () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1', accountStatus: 'active' });
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([buildFollowRow()]);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       const page = await service.getFollowing('user-1', {});
 
@@ -538,7 +539,7 @@ describe('UsersService', () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true, accountStatus: 'active' });
       (prisma.guardian.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await expect(service.getFollowers('minor-1', {})).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.follow.findMany).not.toHaveBeenCalled();
@@ -548,7 +549,7 @@ describe('UsersService', () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true, accountStatus: 'active' });
       (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'pending' });
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await expect(service.getFollowers('minor-1', {})).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.follow.findMany).not.toHaveBeenCalled();
@@ -559,7 +560,7 @@ describe('UsersService', () => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true, accountStatus: 'active' });
       (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'confirmed' });
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await expect(service.getFollowers('minor-1', {})).resolves.toEqual({ items: [], nextCursor: null });
       expect(prisma.follow.findMany).toHaveBeenCalled();
@@ -569,7 +570,7 @@ describe('UsersService', () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'adult-1', isMinor: false, accountStatus: 'active' });
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await expect(service.getFollowers('adult-1', {})).resolves.toEqual({ items: [], nextCursor: null });
       expect(prisma.guardian.findUnique).not.toHaveBeenCalled();
@@ -579,7 +580,7 @@ describe('UsersService', () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true, accountStatus: 'active' });
       (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'pending' });
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await expect(service.getFollowing('minor-1', {})).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.follow.findMany).not.toHaveBeenCalled();
@@ -590,7 +591,7 @@ describe('UsersService', () => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true, accountStatus: 'active' });
       (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'confirmed' });
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await expect(service.getFollowing('minor-1', {})).resolves.toEqual({ items: [], nextCursor: null });
       expect(prisma.follow.findMany).toHaveBeenCalled();
@@ -601,7 +602,7 @@ describe('UsersService', () => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true, accountStatus: 'active' });
       (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'confirmed' });
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await service.getFollowers('minor-1', {});
 
@@ -620,7 +621,7 @@ describe('UsersService', () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true, accountStatus: 'active' });
       (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'pending' });
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       expect(service.getFollowers.length).toBe(2); // (userId, query) -- no caller/actor param
       await expect(service.getFollowers('minor-1', {})).rejects.toBeInstanceOf(NotFoundException);
@@ -640,7 +641,7 @@ describe('UsersService', () => {
         isMinor: false,
         accountStatus: 'deactivated',
       });
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await expect(service.getFollowers('gone-1', {})).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.guardian.findUnique).not.toHaveBeenCalled();
@@ -654,7 +655,7 @@ describe('UsersService', () => {
         isMinor: false,
         accountStatus: 'pending_deletion',
       });
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await expect(service.getFollowing('gone-2', {})).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.follow.findMany).not.toHaveBeenCalled();
@@ -668,7 +669,7 @@ describe('UsersService', () => {
         accountStatus: 'active',
       });
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await service.getFollowers('user-1', {});
 
@@ -685,7 +686,7 @@ describe('UsersService', () => {
     it('excludes the caller themselves, restricted-pending minors excluded/deactivated accounts, and already-followed users, ordered most-recently-joined-first', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       await service.getSuggestedUsers('caller-1', 10);
 
@@ -703,7 +704,7 @@ describe('UsersService', () => {
     it('returns the minimal {id, displayName} shape, no passwordHash/isMinor/email', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.findMany as jest.Mock).mockResolvedValue([suggestedRow()]);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       const result = await service.getSuggestedUsers('caller-1', 10);
 
@@ -720,7 +721,7 @@ describe('UsersService', () => {
       const prisma = buildPrismaMock();
       const rows = [suggestedRow({ id: 'user-2' }), suggestedRow({ id: 'user-3' })];
       (prisma.user.findMany as jest.Mock).mockResolvedValue(rows);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       const result = await service.getSuggestedUsers('caller-1', 2);
 
@@ -738,7 +739,7 @@ describe('UsersService', () => {
     it('returns an empty list when the query finds nothing, without throwing', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new UsersService(prisma);
+      const service = new UsersService(prisma, buildTestDobEncryption());
 
       const result = await service.getSuggestedUsers('caller-1', 10);
 

@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // This is the exact gap that motivated this whole PR: ClubsService.joinClub
 // (see src/modules/clubs/clubs.service.ts) issues a raw, parameterized
@@ -114,7 +115,7 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
         email: uniqueLeaveEmail(label),
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E Clubs Leave User ${label}`,
-        dateOfBirth: new Date('1998-07-04'), // adult, no guardian-consent branch
+        dateOfBirth: seedDob('1998-07-04'), // adult, no guardian-consent branch
         isMinor: false,
       },
     });
@@ -517,7 +518,7 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
           email: `e2e-clubs-minor-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
           passwordHash: 'unused-in-this-e2e-spec-file',
           displayName: `Zzz Minor ${label}`, // sorts last, so it's never the trimmed lookahead row
-          dateOfBirth: new Date('2015-01-01'),
+          dateOfBirth: seedDob('2015-01-01'),
           isMinor: true,
           guardian: {
             create: {
@@ -624,7 +625,7 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
           email: `roster-alice-${Date.now()}@example.com`,
           passwordHash: 'x',
           displayName: 'Alice Adult',
-          dateOfBirth: new Date('1990-01-01'),
+          dateOfBirth: seedDob('1990-01-01'),
           isMinor: false,
         },
       });
@@ -633,7 +634,7 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
           email: `roster-bob-${Date.now()}@example.com`,
           passwordHash: 'x',
           displayName: 'Bob Adult',
-          dateOfBirth: new Date('1990-01-01'),
+          dateOfBirth: seedDob('1990-01-01'),
           isMinor: false,
         },
       });
@@ -666,7 +667,7 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
           email: `consented-minor-${Date.now()}@example.com`,
           passwordHash: 'x',
           displayName: 'Consented Minor',
-          dateOfBirth: new Date('2015-01-01'),
+          dateOfBirth: seedDob('2015-01-01'),
           isMinor: true,
           guardian: {
             create: {
@@ -701,7 +702,7 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
             email: `mp-${name}-${Date.now()}@example.com`,
             passwordHash: 'x',
             displayName: name,
-            dateOfBirth: new Date('1990-01-01'),
+            dateOfBirth: seedDob('1990-01-01'),
             isMinor: false,
           },
         });
@@ -738,7 +739,7 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
           email: `if-amy-${Date.now()}@example.com`,
           passwordHash: 'x',
           displayName: 'Amy',
-          dateOfBirth: new Date('1990-01-01'),
+          dateOfBirth: seedDob('1990-01-01'),
           isMinor: false,
         },
       });
@@ -747,7 +748,7 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
           email: `if-ben-${Date.now()}@example.com`,
           passwordHash: 'x',
           displayName: 'Ben',
-          dateOfBirth: new Date('1990-01-01'),
+          dateOfBirth: seedDob('1990-01-01'),
           isMinor: false,
         },
       });

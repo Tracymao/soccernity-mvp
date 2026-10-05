@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // sprint-3/community-groups-backend — Build Plan Sprint 3, Decision Log
 // #281. Hits test/README.md's e2e triggers:
@@ -59,7 +60,7 @@ describe('Community Groups e2e (Build Plan Sprint 3, Decision Log #281)', () => 
         email: `e2e-cg-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E CG ${label}`,
-        dateOfBirth: new Date('1994-05-05'), // adult — GuardianConsentGuard passes
+        dateOfBirth: seedDob('1994-05-05'), // adult — GuardianConsentGuard passes
         isMinor: false,
       },
     });
@@ -79,7 +80,7 @@ describe('Community Groups e2e (Build Plan Sprint 3, Decision Log #281)', () => 
         email: `e2e-cg-minor-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
         passwordHash: 'unused',
         displayName: `E2E CG Minor ${label}`,
-        dateOfBirth: new Date('2014-01-01'),
+        dateOfBirth: seedDob('2014-01-01'),
         isMinor: true,
         guardian: {
           create: {
@@ -456,7 +457,7 @@ describe('Community Groups e2e (Build Plan Sprint 3, Decision Log #281)', () => 
           email: `e2e-cg-roster-minor-${Date.now()}@example.com`,
           passwordHash: 'unused',
           displayName: 'A Restricted Minor',
-          dateOfBirth: new Date('2014-01-01'),
+          dateOfBirth: seedDob('2014-01-01'),
           isMinor: true,
           guardian: {
             create: {

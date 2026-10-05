@@ -54,7 +54,7 @@ services:
     # build` (which builds every workspace via `--workspaces --if-present`,
     # appropriate for CI verifying the whole monorepo but wasteful for a
     # deploy that only ships the API).
-    preDeployCommand: npx prisma migrate deploy --schema=services/api/prisma/schema.prisma
+    preDeployCommand: npx prisma migrate deploy --schema=services/api/prisma/schema.prisma && node services/api/dist/scripts/backfill-dob-encryption.js
     # LOWER CONFIDENCE: `preDeployCommand` is Render's field (introduced
     # after this file's underlying spec knowledge was last refreshed, to
     # the best of available confidence) for running a one-off command
@@ -85,6 +85,8 @@ services:
       - key: REDIS_URL
         sync: false
       - key: JWT_SECRET
+        sync: false
+      - key: DOB_ENCRYPTION_KEY
         sync: false
       - key: JWT_ACCESS_TTL_SECONDS
         sync: false
@@ -135,7 +137,7 @@ services:
     # idle behavior would otherwise introduce.
     region: oregon
     buildCommand: npm install && npm run prisma:generate && npm run build --workspace=services/api
-    preDeployCommand: npx prisma migrate deploy --schema=services/api/prisma/schema.prisma
+    preDeployCommand: npx prisma migrate deploy --schema=services/api/prisma/schema.prisma && node services/api/dist/scripts/backfill-dob-encryption.js
     startCommand: npm run start:prod --workspace=services/api
     healthCheckPath: /health
     envVars:
@@ -146,6 +148,8 @@ services:
       - key: REDIS_URL
         sync: false
       - key: JWT_SECRET
+        sync: false
+      - key: DOB_ENCRYPTION_KEY
         sync: false
       - key: JWT_ACCESS_TTL_SECONDS
         sync: false

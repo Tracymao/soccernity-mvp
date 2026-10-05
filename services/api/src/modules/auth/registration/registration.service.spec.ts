@@ -1,3 +1,4 @@
+import { buildTestDobEncryption } from '../../../crypto/test-dob-encryption';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { RegistrationService } from './registration.service';
 
@@ -75,6 +76,7 @@ describe('RegistrationService', () => {
       config as any,
       clubsService as any,
       guardianConsentService as any,
+      buildTestDobEncryption(),
     );
 
     return {

@@ -10,6 +10,7 @@ import {
 } from '../src/modules/account-deletion/account-deletion-sweep.service';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // Real-Postgres coverage for AccountDeletionSweepService — Decision Log
 // #42 (30-day grace + consent-record retention) as RECONSIDERED by
@@ -62,7 +63,7 @@ describe('AccountDeletionSweepService e2e: 30-day anonymize-in-place + investiga
         phone: '+2348100000000',
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E Deletion Sweep User ${label}`,
-        dateOfBirth: overrides.isMinor ? new Date('2015-01-01') : new Date('1998-07-04'),
+        dateOfBirth: overrides.isMinor ? seedDob('2015-01-01') : seedDob('1998-07-04'),
         isMinor: overrides.isMinor ?? false,
         accountStatus: 'pending_deletion',
         pendingDeletionAt: overrides.pendingDeletionAt,
@@ -77,7 +78,7 @@ describe('AccountDeletionSweepService e2e: 30-day anonymize-in-place + investiga
         email: uniqueEmail(label),
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E Other User ${label}`,
-        dateOfBirth: new Date('1998-07-04'),
+        dateOfBirth: seedDob('1998-07-04'),
       },
     });
     const { accessToken } = await app.get(TokenService).issueTokenPair(user.id, user.role);
@@ -138,7 +139,7 @@ describe('AccountDeletionSweepService e2e: 30-day anonymize-in-place + investiga
           email: uniqueEmail('active'),
           passwordHash: 'unused',
           displayName: 'Still Active',
-          dateOfBirth: new Date('1998-07-04'),
+          dateOfBirth: seedDob('1998-07-04'),
           accountStatus: 'active',
         },
       });
@@ -147,7 +148,7 @@ describe('AccountDeletionSweepService e2e: 30-day anonymize-in-place + investiga
           email: uniqueEmail('deactivated'),
           passwordHash: 'unused',
           displayName: 'Deactivated Only',
-          dateOfBirth: new Date('1998-07-04'),
+          dateOfBirth: seedDob('1998-07-04'),
           accountStatus: 'deactivated',
         },
       });

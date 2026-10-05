@@ -1,6 +1,7 @@
 import { Injectable, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { DobEncryptionService } from '../../crypto/dob-encryption.service';
 import { AuthResponse, toAuthUserSummary, toTokenPairResponse, TokenPairResponse } from './auth-response.mapper';
 import { PasswordService } from './password/password.service';
 import { InvalidRefreshTokenError, RefreshTokenReuseDetectedError } from './token/token.errors';
@@ -37,6 +38,7 @@ export class AuthService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly passwordService: PasswordService,
     private readonly tokenService: TokenService,
+    private readonly dobEncryption: DobEncryptionService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -104,7 +106,7 @@ export class AuthService implements OnModuleInit {
     // AuthResponse/toAuthUserSummary comments for why isMinor/
     // verificationStatus are safe to include here even though they must
     // never appear inside the access token itself.
-    return { ...toTokenPairResponse(tokenPair), user: toAuthUserSummary(user) };
+    return { ...toTokenPairResponse(tokenPair), user: toAuthUserSummary(user, this.dobEncryption.decryptNullable(user.dateOfBirth)) };
   }
 
   // POST /auth/change-password. userId comes from the verified JWT
@@ -323,7 +325,7 @@ export class AuthService implements OnModuleInit {
         : user;
 
     const tokenPair = await this.tokenService.issueTokenPair(activeUser.id, activeUser.role);
-    return { ...toTokenPairResponse(tokenPair), user: toAuthUserSummary(activeUser) };
+    return { ...toTokenPairResponse(tokenPair), user: toAuthUserSummary(activeUser, this.dobEncryption.decryptNullable(activeUser.dateOfBirth)) };
   }
 
   // Shared re-auth step for deactivateAccount/deleteAccount: both require

@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // Real-Postgres coverage for UsersService.followUser/unfollowUser/
 // getFollowers/getFollowing's transactional and notification-direction
@@ -63,7 +64,7 @@ describe('Follow e2e: follow/unfollow, notification direction, and followers/fol
         email: uniqueEmail(label),
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E Follow User ${label}`,
-        dateOfBirth: new Date('1998-07-04'), // adult, no guardian-consent branch
+        dateOfBirth: seedDob('1998-07-04'), // adult, no guardian-consent branch
         isMinor: false,
       },
     });

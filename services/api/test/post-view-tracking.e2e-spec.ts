@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // Real-Postgres coverage for POST /posts/:id/view
 // (sprint-4/post-view-tracking) — guiding-principle trigger #3 from this
@@ -54,7 +55,7 @@ describe('Post view tracking e2e: POST /posts/:id/view against real Postgres', (
         email: uniqueEmail(label),
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E View User ${label}`,
-        dateOfBirth: new Date('1998-07-04'), // adult, no guardian-consent branch
+        dateOfBirth: seedDob('1998-07-04'), // adult, no guardian-consent branch
         isMinor: false,
       },
     });

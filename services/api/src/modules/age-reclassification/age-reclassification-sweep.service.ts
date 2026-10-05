@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { DobEncryptionService } from '../../crypto/dob-encryption.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
 import { calculateAge, computeIsMinor, computeIsUnder16 } from '../auth/registration/age.util';
@@ -17,8 +18,6 @@ export interface AgeReclassificationResult {
 // which milestone, so the type can grow without a new column).
 export const AGE_MILESTONE_NOTIFICATION_TYPE = 'age_milestone';
 export const UNDER_16_LIFTED_MILESTONE = 'under_16_lifted';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 // sprint-1/age-reclassification-sweep (Decision Log #349; closes the gap
 // Decision Log #346/#347 both disclosed). User.isMinor and User.isUnder16
@@ -57,6 +56,7 @@ export class AgeReclassificationSweepService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: RegistrationEmailService,
+    private readonly dobEncryption: DobEncryptionService,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_2AM)
@@ -73,28 +73,51 @@ export class AgeReclassificationSweepService {
 
   // `now` is injectable for deterministic tests, same as the other sweeps.
   async sweepReclassifications(now: Date = new Date()): Promise<AgeReclassificationResult> {
-    // Candidate narrowing only (a stored flag that could disagree with the
-    // date of birth), widened by a day each way so timezone edges are never
-    // missed; the exact decision is always made by the shared age.util
-    // functions below, the same ones registration uses.
-    const bound = (years: number, offsetMs: number) => {
-      const d = new Date(now);
-      d.setFullYear(d.getFullYear() - years);
-      return new Date(d.getTime() + offsetMs);
-    };
-
-    const candidates = await this.prisma.user.findMany({
-      where: {
-        dateOfBirth: { not: null },
-        OR: [
-          { isMinor: true, dateOfBirth: { lte: bound(18, DAY_MS) } },
-          { isMinor: false, dateOfBirth: { gt: bound(18, -DAY_MS) } },
-          { isUnder16: true, dateOfBirth: { lte: bound(16, DAY_MS) } },
-          { isUnder16: false, dateOfBirth: { gt: bound(16, -DAY_MS) } },
-        ],
-      },
-      select: { id: true, displayName: true, dateOfBirth: true, isMinor: true, isUnder16: true },
-    });
+    // dateOfBirth is stored encrypted (security/dob-field-encryption), so
+    // the old SQL range narrowing on it is impossible. Instead page through
+    // every account that has a DOB (keyset, 500 per page -- never one giant
+    // read), decrypt in memory, and keep only rows whose stored flags
+    // disagree with the DOB. The exact decision is still made by the shared
+    // age.util functions, the same ones registration uses. Cost is one
+    // decrypt per account per daily run -- fine at MVP scale; revisit (e.g.
+    // a stored non-sensitive birthday-month index) only if the table grows
+    // to where this matters. `scanned` is now accounts EXAMINED, not the
+    // old SQL-narrowed candidate count.
+    const candidates: Array<{
+      id: string;
+      displayName: string;
+      dateOfBirth: Date;
+      isMinor: boolean;
+      isUnder16: boolean;
+    }> = [];
+    let scanned = 0;
+    let cursor: string | undefined;
+    for (;;) {
+      const page = await this.prisma.user.findMany({
+        where: { dateOfBirth: { not: null } },
+        select: { id: true, displayName: true, dateOfBirth: true, isMinor: true, isUnder16: true },
+        orderBy: { id: 'asc' },
+        take: 500,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      });
+      if (page.length === 0) break;
+      for (const row of page) {
+        scanned++;
+        if (!row.dateOfBirth) continue;
+        try {
+          const dob = this.dobEncryption.decrypt(row.dateOfBirth);
+          if (computeIsMinor(dob, now) !== row.isMinor || computeIsUnder16(dob, now) !== row.isUnder16) {
+            candidates.push({ ...row, dateOfBirth: dob });
+          }
+        } catch (err) {
+          // One undecryptable row must not strand the rest.
+          this.logger.error(
+            `Age reclassification sweep: could not decrypt dateOfBirth for user ${row.id}: ${(err as Error).message}`,
+          );
+        }
+      }
+      cursor = page[page.length - 1].id;
+    }
 
     const reclassifiedUserIds: string[] = [];
     const reclassifiedYoungerUserIds: string[] = [];
@@ -171,7 +194,7 @@ export class AgeReclassificationSweepService {
       }
     }
 
-    return { scanned: candidates.length, reclassifiedUserIds, reclassifiedYoungerUserIds };
+    return { scanned, reclassifiedUserIds, reclassifiedYoungerUserIds };
   }
 
   // Best-effort (never throws): informs the guardian on file that the

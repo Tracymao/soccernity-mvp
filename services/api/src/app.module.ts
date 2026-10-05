@@ -32,6 +32,7 @@ import { BlogModule } from './modules/blog/blog.module';
 import { SportsModule } from './modules/sports/sports.module';
 import { SearchModule } from './modules/search/search.module';
 import { PageViewModule } from './modules/page-views/page-view.module';
+import { CryptoModule } from './crypto/crypto.module';
 
 // Feature modules land in src/modules/* as each is built — see the
 // Sprint-by-Sprint Backlog (MVP Build Plan Section 6) for build order.
@@ -44,6 +45,7 @@ import { PageViewModule } from './modules/page-views/page-view.module';
     // src/instrument.ts), so the interceptors this module wires up become
     // no-ops rather than doing anything.
     SentryModule.forRoot(),
+    CryptoModule,
     // envFilePath is explicit and built from __dirname (this compiled
     // file's real on-disk location — services/api/dist/ under both
     // `nest start` and `nest build`, per nest-cli.json's default

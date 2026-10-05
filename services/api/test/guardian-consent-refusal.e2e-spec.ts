@@ -6,6 +6,7 @@ import { AccountDeletionSweepService } from '../src/modules/account-deletion/acc
 import { GuardianConsentExpirySweepService } from '../src/modules/auth/guardian-consent/guardian-consent-expiry-sweep.service';
 import { PasswordService } from '../src/modules/auth/password/password.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // Real-Postgres coverage for sprint-1/guardian-consent-decline-withdraw-expiry.
 //
@@ -81,7 +82,7 @@ async function seedMinorWithGuardian(
       displayName: `E2E Minor ${label}`,
       // A real minor — isMinor is what makes the guardian-consent flow
       // apply at all.
-      dateOfBirth: new Date('2014-05-02'),
+      dateOfBirth: seedDob('2014-05-02'),
       isMinor: true,
     },
   });

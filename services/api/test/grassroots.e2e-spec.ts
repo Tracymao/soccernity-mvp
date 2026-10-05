@@ -6,6 +6,7 @@ import { AccountDeletionSweepService } from '../src/modules/account-deletion/acc
 import { AdminTokenService } from '../src/modules/admin/token/admin-token.service';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // sprint-5/grassroots-records-service — Build Plan Section 4.5. This hits
 // test/README.md's e2e triggers: transaction/isolation-level reasoning
@@ -50,7 +51,7 @@ describe('Grassroots Records Service e2e (Section 4.5)', () => {
         email: `e2e-grassroots-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E Grassroots ${label}`,
-        dateOfBirth: new Date('1994-05-05'), // adult — GuardianConsentGuard passes
+        dateOfBirth: seedDob('1994-05-05'), // adult — GuardianConsentGuard passes
         isMinor: false,
       },
     });

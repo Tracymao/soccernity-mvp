@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { AdminTokenService } from '../src/modules/admin/token/admin-token.service';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // sprint-5/admin-moderation-queue-backend — Build Plan Section 4.8
 // (Admin Service) + Section 8.4 (Moderation & appeals workflow). Hits
@@ -70,7 +71,7 @@ describe('Moderation e2e: report -> action -> appeal -> second-reviewer review',
         email: `e2e-mod-${label}-${Date.now()}-${rand()}@example.com`,
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E Mod ${label}`,
-        dateOfBirth: new Date('1994-05-05'),
+        dateOfBirth: seedDob('1994-05-05'),
         isMinor: false,
       },
     });

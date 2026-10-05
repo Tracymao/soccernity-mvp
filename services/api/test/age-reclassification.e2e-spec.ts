@@ -6,6 +6,7 @@ import { AgeReclassificationSweepService } from '../src/modules/age-reclassifica
 import { GuardianConsentExpirySweepService } from '../src/modules/auth/guardian-consent/guardian-consent-expiry-sweep.service';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // sprint-1/age-reclassification-sweep (Decision Log #349), against real
 // Postgres. Proves the daily sweep flips isMinor / isUnder16 when a date of
@@ -57,7 +58,7 @@ describe('Age reclassification sweep e2e', () => {
         email: `e2e-age-${n}-${Date.now()}@example.com`,
         passwordHash: 'unused',
         displayName: `Age ${n}`,
-        dateOfBirth: opts.dob,
+        dateOfBirth: seedDob(opts.dob),
         isMinor: opts.isMinor,
         isUnder16: opts.isUnder16,
         ...(opts.consent && {

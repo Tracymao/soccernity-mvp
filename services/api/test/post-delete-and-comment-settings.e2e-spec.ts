@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // Real-Postgres coverage for DELETE /posts/:id (hard-delete cascade, Decision
 // Log #361) and the post author's comment controls (commentPermission, hide).
@@ -38,7 +39,7 @@ describe('Post deletion + comment settings e2e (real Postgres)', () => {
         email: `e2e-pd-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E PD ${label}`,
-        dateOfBirth: new Date('1998-07-04'),
+        dateOfBirth: seedDob('1998-07-04'),
         isMinor: false,
       },
     });

@@ -6,6 +6,7 @@ import { AccountDeletionSweepService } from '../src/modules/account-deletion/acc
 import { PasswordService } from '../src/modules/auth/password/password.service';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // Real-Postgres coverage for sprint-2/account-deactivation-backend
 // (Decision Log #221). Two things the mocked unit suites can't prove on
@@ -64,7 +65,7 @@ describe('Account deactivation e2e: full deactivate -> reactivate -> deactivate 
         email,
         passwordHash: await passwordService.hash(password),
         displayName: `E2E Deactivation User ${label}`,
-        dateOfBirth: new Date('1998-07-04'),
+        dateOfBirth: seedDob('1998-07-04'),
         isMinor: false,
       },
     });
@@ -199,7 +200,7 @@ describe('Account deactivation e2e: an inactive account\'s content disappears fr
         email: uniqueEmail(label),
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E Deactivation Visibility ${label}`,
-        dateOfBirth: new Date('1998-07-04'),
+        dateOfBirth: seedDob('1998-07-04'),
         isMinor: false,
       },
     });

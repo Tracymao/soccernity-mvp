@@ -6,6 +6,7 @@ import { PasswordService } from '../src/modules/auth/password/password.service';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { AdminTokenService } from '../src/modules/admin/token/admin-token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // ---------------------------------------------------------------------
 // Decision Log #54 (Build Plan Section 9) — sprint-2/admin-console-account-entity.
@@ -310,7 +311,7 @@ describe('Admin Console e2e: cross-authentication is impossible in both directio
         email: uniqueEmail('e2e-cross-user'),
         passwordHash: await passwordService.hash('irrelevant-for-this-block'),
         displayName: 'Cross Auth Test User',
-        dateOfBirth: new Date('1995-01-01'),
+        dateOfBirth: seedDob('1995-01-01'),
         isMinor: false,
       },
     });

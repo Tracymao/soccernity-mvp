@@ -53,6 +53,7 @@ describe('RegistrationController (HTTP layer)', () => {
   describe('POST /auth/register', () => {
     it('returns 201 with the shaped response on success', async () => {
       registrationService.register.mockResolvedValueOnce({
+        dateOfBirth: new Date('1990-01-01'),
         user: {
           id: 'user-1',
           email: 'adult@example.com',

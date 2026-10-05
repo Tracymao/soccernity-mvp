@@ -63,9 +63,9 @@ export class RegistrationController {
 // auth/README.md's "response shape reconciliation" note for why these two
 // endpoints intentionally return the identical token/user shape now.
 function toRegisterResponse(result: RegisterResult) {
-  const { user, guardian, tokens } = result;
+  const { user, dateOfBirth, guardian, tokens } = result;
   return {
-    user: toAuthUserSummary(user),
+    user: toAuthUserSummary(user, dateOfBirth),
     guardian: guardian
       ? {
           id: guardian.id,

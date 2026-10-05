@@ -58,13 +58,16 @@ export interface AuthUserSummary {
   createdAt: Date;
 }
 
-export function toAuthUserSummary(user: User): AuthUserSummary {
+// `dateOfBirth` is passed in already decrypted (User.dateOfBirth is stored
+// as ciphertext; see src/crypto/dob-encryption.service.ts) -- the mapper
+// never sees or forwards the stored ciphertext.
+export function toAuthUserSummary(user: User, dateOfBirth: Date | null): AuthUserSummary {
   return {
     id: user.id,
     email: user.email,
     phone: user.phone,
     displayName: user.displayName,
-    dateOfBirth: user.dateOfBirth,
+    dateOfBirth,
     isMinor: user.isMinor,
     role: user.role,
     verificationStatus: user.verificationStatus,

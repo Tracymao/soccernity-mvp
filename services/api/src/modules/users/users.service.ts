@@ -1,3 +1,4 @@
+import { DobEncryptionService } from '../../crypto/dob-encryption.service';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -71,15 +72,19 @@ export type OwnProfile = {
   representedClub: { id: string; name: string } | null;
 };
 
-type OwnProfileRow = Omit<OwnProfile, 'guardianContact'> & { guardian: { email: string } | null };
+type OwnProfileRow = Omit<OwnProfile, 'guardianContact' | 'dateOfBirth'> & {
+  dateOfBirth: string | null; // ciphertext
+  guardian: { email: string } | null;
+};
 
 export interface RepresentedClubResult {
   representedClub: { id: string; name: string } | null;
 }
 
-function toOwnProfile({ guardian, ...rest }: OwnProfileRow): OwnProfile {
+function toOwnProfile({ guardian, dateOfBirth, ...rest }: OwnProfileRow, dob: DobEncryptionService): OwnProfile {
   return {
     ...rest,
+    dateOfBirth: dob.decryptNullable(dateOfBirth),
     guardianContact:
       rest.isUnder16 && guardian ? { label: 'Guardian contact', email: guardian.email } : null,
   };
@@ -139,7 +144,10 @@ export interface SuggestedUsersResult {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dobEncryption: DobEncryptionService,
+  ) {}
 
   async getOwnProfile(userId: string): Promise<OwnProfile> {
     const user = await this.prisma.user.findUnique({
@@ -152,7 +160,7 @@ export class UsersService {
       // can't know the account is gone.
       throw new NotFoundException('User not found');
     }
-    return toOwnProfile(user);
+    return toOwnProfile(user, this.dobEncryption);
   }
 
   async updateOwnProfile(userId: string, dto: UpdateUserDto): Promise<OwnProfile> {
@@ -162,7 +170,7 @@ export class UsersService {
       data,
       select: OWN_PROFILE_SELECT,
     });
-    return toOwnProfile(updated);
+    return toOwnProfile(updated, this.dobEncryption);
   }
 
   // Shared existence check for the four follow endpoints below, mirroring

@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { PasswordService } from '../src/modules/auth/password/password.service';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // Real-Postgres coverage for sprint-1/f5-f6-missing-endpoints's
 // change-password / deactivate-account / delete-account /
@@ -78,7 +79,7 @@ describe('Account lifecycle e2e: deactivate -> login fails -> reactivate -> logi
         email,
         passwordHash: await passwordService.hash(password),
         displayName: `E2E Account Lifecycle User ${label}`,
-        dateOfBirth: new Date('1998-07-04'), // adult, no guardian-consent branch
+        dateOfBirth: seedDob('1998-07-04'), // adult, no guardian-consent branch
         isMinor: false,
       },
     });
@@ -208,7 +209,7 @@ describe('Account lifecycle e2e: delete-account (pending_deletion) is not undone
         email,
         passwordHash: await passwordService.hash(password),
         displayName: `E2E Account Lifecycle User ${label}`,
-        dateOfBirth: new Date('1998-07-04'),
+        dateOfBirth: seedDob('1998-07-04'),
         isMinor: false,
       },
     });
