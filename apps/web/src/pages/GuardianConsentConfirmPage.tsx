@@ -92,6 +92,17 @@ const WHAT_STAYS_OFF = [
   },
 ];
 
+// safeguarding/guardian-contact-public-visibility (legal-copy Part C row
+// 32): disclosed here because it widens what a guardian consents to.
+const GUARDIAN_CONTACT_NOTICE = {
+  title: "Your email on their profile",
+  body:
+    "While the account holder is under 18, your email address appears on their profile, labelled " +
+    "“Guardian contact”, and any logged-in Soccernity user can see it. Under-18 accounts cannot " +
+    "receive ordinary direct messages, so this is how others can reach you about them. It is removed " +
+    "automatically when they turn 18.",
+};
+
 export default function GuardianConsentConfirmPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
@@ -197,6 +208,11 @@ export default function GuardianConsentConfirmPage() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div className="consent-card">
+              <p className="consent-card__title">{GUARDIAN_CONTACT_NOTICE.title}</p>
+              <p className="consent-page__subheading">{GUARDIAN_CONTACT_NOTICE.body}</p>
             </div>
 
             {token && <CardVerificationPanel token={token} onGateChange={setCardGate} />}

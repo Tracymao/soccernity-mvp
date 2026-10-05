@@ -6,6 +6,7 @@ import { decodeFeedSequenceCursor, encodeFeedSequenceCursor } from '../feed/curs
 import { FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE, FeedQueryDto } from '../feed/dto/feed-query.dto';
 import { ENGAGEMENT_POINTS } from '../points/points.constants';
 import { awardPoints } from '../points/points.util';
+import { calculateAge } from '../auth/registration/age.util';
 import { UpdateUserDto } from './dto/update-user.dto';
 
 // Fields returned for the authenticated user's OWN profile. Notably:
@@ -41,13 +42,40 @@ const OWN_PROFILE_SELECT = {
   // here (not a new endpoint) so apps/web can read it off the same
   // GET /users/:id call it already makes for its own profile.
   isTeamOrganiser: true,
-  // sprint-1/under-16-restrictions: only ever forwarded (as
-  // guardianContact) when isUnder16 -- see toOwnProfile below.
+  // safeguarding/guardian-contact-public-visibility: only ever forwarded
+  // (as guardianContact) for a current minor -- see guardianContactFor.
   guardian: { select: { email: true } },
   // Decision Log #74 -- the one club this user represents (Leaderboard
   // By-club scope). Read-only here; written only by setRepresentedClub.
   representedClub: { select: { id: true, name: true } },
 } as const;
+
+export type GuardianContact = { label: 'Guardian contact'; email: string };
+
+export type PublicProfile = {
+  id: string;
+  displayName: string;
+  guardianContact: GuardianContact | null;
+};
+
+// safeguarding/guardian-contact-public-visibility (legal-copy Part C row
+// 32): a minor's guardian's email is shown on their profile to ANY viewer,
+// because a minor cannot send/receive ordinary DMs and this is the only
+// route for anyone to reach them. Applies to every current minor (<18),
+// not only under-16s. It stops showing at 18: `isMinor` is the stored flag
+// (flipped by the daily age-reclassification sweep), and the DOB is also
+// checked here so the contact disappears on the birthday itself rather
+// than up to ~24h later. Guardian rows are kept after 18 (consent history)
+// so the row's existence alone must never drive visibility.
+function guardianContactFor(
+  isMinor: boolean,
+  guardian: { email: string } | null,
+  dateOfBirth: Date | null,
+): GuardianContact | null {
+  if (!isMinor || !guardian) return null;
+  if (dateOfBirth && calculateAge(dateOfBirth) >= 18) return null;
+  return { label: 'Guardian contact', email: guardian.email };
+}
 
 export type OwnProfile = {
   id: string;
@@ -62,13 +90,11 @@ export type OwnProfile = {
   clubAffiliationId: string | null;
   isTeamOrganiser: boolean;
   isUnder16: boolean;
-  // sprint-1/under-16-restrictions (counsel): present ONLY for an
-  // isUnder16 account, `null` otherwise. `email` is the GUARDIAN's
-  // address, never the minor's own (which stays private per existing
-  // policy); `label` makes that unambiguous to any caller. Only on the
-  // individual own-profile read/update -- no list/roster/feed shape
-  // selects Guardian at all.
-  guardianContact: { label: 'Guardian contact'; email: string } | null;
+  // Present ONLY for a current minor (isMinor, under 18 by DOB), `null`
+  // otherwise -- see guardianContactFor. `email` is the GUARDIAN's
+  // address, never the minor's own; `label` makes that unambiguous. The
+  // same shape is shown to any viewer via getPublicProfile.
+  guardianContact: GuardianContact | null;
   representedClub: { id: string; name: string } | null;
 };
 
@@ -82,11 +108,11 @@ export interface RepresentedClubResult {
 }
 
 function toOwnProfile({ guardian, dateOfBirth, ...rest }: OwnProfileRow, dob: DobEncryptionService): OwnProfile {
+  const plainDob = dob.decryptNullable(dateOfBirth);
   return {
     ...rest,
-    dateOfBirth: dob.decryptNullable(dateOfBirth),
-    guardianContact:
-      rest.isUnder16 && guardian ? { label: 'Guardian contact', email: guardian.email } : null,
+    dateOfBirth: plainDob,
+    guardianContact: guardianContactFor(rest.isMinor, guardian, plainDob),
   };
 }
 
@@ -161,6 +187,41 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
     return toOwnProfile(user, this.dobEncryption);
+  }
+
+  // GET /users/:id/public-profile -- the profile card any authenticated
+  // viewer may read. Deliberately tiny: id, displayName and (for a current
+  // minor) the labelled guardian contact; nothing else about the user.
+  // Visibility mirrors assertFollowGraphVisible: a non-active account and
+  // a restricted-pending minor (consent not confirmed) are a 404, never a
+  // 200/403 that confirms they exist. Fresh Postgres read every call.
+  async getPublicProfile(userId: string): Promise<PublicProfile> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        displayName: true,
+        dateOfBirth: true,
+        isMinor: true,
+        accountStatus: true,
+        guardian: { select: { email: true, consentStatus: true } },
+      },
+    });
+    if (!user || user.accountStatus !== 'active') {
+      throw new NotFoundException('User not found');
+    }
+    if (user.isMinor && user.guardian?.consentStatus !== 'confirmed') {
+      throw new NotFoundException('User not found');
+    }
+    return {
+      id: user.id,
+      displayName: user.displayName,
+      guardianContact: guardianContactFor(
+        user.isMinor,
+        user.guardian,
+        this.dobEncryption.decryptNullable(user.dateOfBirth),
+      ),
+    };
   }
 
   async updateOwnProfile(userId: string, dto: UpdateUserDto): Promise<OwnProfile> {

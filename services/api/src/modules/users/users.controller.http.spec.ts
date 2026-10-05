@@ -26,6 +26,7 @@ describe('UsersController (HTTP layer) — guardian-consent guard exclusion', ()
   let app: INestApplication;
   const usersService = {
     getOwnProfile: jest.fn(),
+    getPublicProfile: jest.fn(),
     updateOwnProfile: jest.fn(),
   };
 
@@ -71,6 +72,20 @@ describe('UsersController (HTTP layer) — guardian-consent guard exclusion', ()
 
     expect(response.body.id).toBe('minor-1');
     expect(usersService.getOwnProfile).toHaveBeenCalledWith('minor-1');
+  });
+
+  it('GET /users/:id/public-profile is readable for another user (not self-only) and not swallowed by :id', async () => {
+    usersService.getPublicProfile.mockResolvedValueOnce({
+      id: 'someone-else',
+      displayName: 'Other',
+      guardianContact: { label: 'Guardian contact', email: 'parent@example.com' },
+    });
+
+    const response = await request(app.getHttpServer()).get('/users/someone-else/public-profile').expect(200);
+
+    expect(response.body.guardianContact.email).toBe('parent@example.com');
+    expect(usersService.getPublicProfile).toHaveBeenCalledWith('someone-else');
+    expect(usersService.getOwnProfile).not.toHaveBeenCalled();
   });
 
   it('PATCH /users/:id succeeds for a minor with outstanding guardian consent (not blocked)', async () => {
