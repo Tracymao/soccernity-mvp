@@ -29,6 +29,14 @@ function buildPrismaMock() {
     banterRoom: {
       findUnique: jest.fn(),
     },
+    // Pre-publication sensitive-content screen: grassroots_team / fixture
+    // are now valid report targets.
+    grassrootsTeam: {
+      findUnique: jest.fn(),
+    },
+    fixture: {
+      findUnique: jest.fn(),
+    },
     // schema/report-severity-escalation-admin-vetting-application —
     // ModerationService now fresh-reads AdminUser.childSafetyVetted for
     // the concernsMinor gate / escalate's own vetting requirement.
@@ -125,6 +133,36 @@ function report(overrides: Partial<Record<string, unknown>> = {}) {
 
 describe('ModerationService', () => {
   // ---------- POST /reports ----------
+
+  describe('createReport — grassroots_team / fixture targets (sensitive-content screen)', () => {
+    it('accepts an existing grassroots_team target', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.grassrootsTeam.findUnique as jest.Mock).mockResolvedValue({ id: 'team-1' });
+      (prisma.report.create as jest.Mock).mockResolvedValue(report({ targetType: 'grassroots_team' }));
+      const service = buildService(prisma);
+
+      await service.createReport('reporter-1', { targetType: 'grassroots_team', targetId: 'team-1', reason: 'x' });
+
+      expect(prisma.report.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ targetType: 'grassroots_team', targetId: 'team-1' }) }),
+      );
+    });
+
+    it('404s a non-existent grassroots_team / fixture target', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.grassrootsTeam.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.fixture.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = buildService(prisma);
+
+      await expect(
+        service.createReport('reporter-1', { targetType: 'grassroots_team', targetId: 'nope', reason: 'x' }),
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        service.createReport('reporter-1', { targetType: 'fixture', targetId: 'nope', reason: 'x' }),
+      ).rejects.toThrow(NotFoundException);
+      expect(prisma.report.create).not.toHaveBeenCalled();
+    });
+  });
 
   describe('createReport', () => {
     it('creates a report against an existing post target, reporterId = the caller', async () => {

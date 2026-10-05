@@ -429,3 +429,46 @@ leaves their team **dormant** (`createdById: null`), read-only via the existing
   same name/city → reassigned not duplicated → new organiser creates
   fixtures/status/results, old organiser gets 403 — plus live-duplicate 409,
   both race cases, and every DELETE branch.
+
+## Status update — pre-publication sensitive-content screen (`trust-safety/pre-publication-sensitive-content-screen`)
+
+Opened following the #4/#203 legal-copy sign-off review. A 2026 CJEU ruling
+(Russmedia) treats a platform publishing structured, distributed user
+content as a joint controller with a duty to screen for special-category
+disclosures **before** publication. Grassroots record-keeping is the only
+live feature with that shape (a public, structured record, not chat), so
+the screen is scoped here. Discover/scout-matching does not exist yet and
+is **not** covered — see the Decision Log entry's forward requirement.
+
+- **Screened fields** — every free-text field Grassroots accepts:
+  `POST /teams` -> `name`, `city`; `POST /fixtures` -> `opponentName`,
+  `venue`. (There are no fixture-notes, result-description or player
+  fields; `Result` is a score pair only.) A dormant-team takeover is not
+  screened — it republishes the already-public name/city unchanged.
+- **Detector** — `sensitive-content/sensitive-content.util.ts`, a pure,
+  deliberately low-precision keyword list over UK/EU GDPR Art. 9(1)
+  categories (health, religion, ethnicity, sexual orientation, politics,
+  trade union, biometric/genetic). False positives cost one click; false
+  negatives are the risk. No pre-existing text-flagging utility existed to
+  reuse (the Report queue is user-submitted, not content-scanned).
+- **Friction** — a flagged submission with no `confirmSensitive: true` is
+  a `422` `{ code: 'sensitive_content_review_required', message, flaggedFields:
+  [{ field, categories }] }` and **nothing is saved** (checked before any
+  write; after the 403, so a non-organiser learns nothing about the
+  screen). The text itself is never echoed. The web pages show a
+  confirm-or-edit step; editing a screened field withdraws it.
+- **Logging for moderation** — a flagged-and-confirmed submission writes a
+  `Report` in the **existing** Moderation Queue, in the same transaction as
+  the record: `reporterId: null`, `reporterContactEmail: null` (the only
+  report shape that is neither a user's nor a public reporter's, i.e.
+  system-generated), `reason` prefixed `[Automated: pre-publication
+  sensitive-content screen]` listing flagged field names + categories
+  (never the text). `Report.targetType` gained `grassroots_team` and
+  `fixture` (existence check + reported-user resolution added; they are
+  also user-reportable via `POST /reports`).
+- **Not built / flagged:** no schema change, so `Report` has no `source`
+  column (the reason prefix is how a moderator tells these apart);
+  `concernsMinor` stays `false` on these reports (inferring it from
+  `leagueType` school/academy is a candidate, not decided); `actionTaken`
+  `content_removed` on these reports is recorded, not enforced, like every
+  other target type; the word list is English-only and not tuned.

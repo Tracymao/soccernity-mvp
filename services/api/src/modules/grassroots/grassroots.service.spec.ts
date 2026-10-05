@@ -1,4 +1,10 @@
-import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { encodeFixtureCursor, encodeTeamCursor } from './cursor.util';
@@ -25,6 +31,11 @@ function buildPrismaMock() {
       create: jest.fn(),
     },
     notification: {
+      create: jest.fn(),
+    },
+    // Pre-publication sensitive-content screen: a flagged-and-confirmed
+    // submission is logged to the Moderation Queue (Report) in-transaction.
+    report: {
       create: jest.fn(),
     },
     // backend/team-organiser-flag — createTeam now flips
@@ -806,6 +817,145 @@ describe('GrassrootsService', () => {
       await expect(service.updateFixtureStatus('owner-a', 'f-1', { status: 'live' })).rejects.toThrow(
         /"full_time" to "live"/,
       );
+    });
+  });
+
+  // ---------- Pre-publication sensitive-content screen ----------
+
+  describe('sensitive-content screen', () => {
+    const CLEAN_TEAM = { name: 'Hackney Wick FC', city: 'London', leagueType: 'informal' } as const;
+    const FLAGGED_TEAM = { name: 'Diabetes Awareness FC', city: 'London', leagueType: 'informal' } as const;
+
+    async function expect422(promise: Promise<unknown>) {
+      const err = await promise.then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect(err).toBeInstanceOf(UnprocessableEntityException);
+      return (err as UnprocessableEntityException).getResponse() as Record<string, unknown>;
+    }
+
+    it('createTeam: a flagged name is refused with a 422 + code + field names (never the text), and nothing is written', async () => {
+      const prisma = buildPrismaMock();
+      const service = new GrassrootsService(prisma);
+
+      const body = await expect422(service.createTeam('user-1', FLAGGED_TEAM));
+
+      expect(body.code).toBe('sensitive_content_review_required');
+      expect(body.flaggedFields).toEqual([{ field: 'name', categories: ['health'] }]);
+      expect(JSON.stringify(body)).not.toMatch(/diabet/i);
+      expect(prisma.grassrootsTeam.create).not.toHaveBeenCalled();
+      expect(prisma.report.create).not.toHaveBeenCalled();
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('createTeam: a flagged name with confirmSensitive creates the team AND logs a system Report against it', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.grassrootsTeam.create as jest.Mock).mockResolvedValue({ id: 't-1', ...FLAGGED_TEAM });
+      const service = new GrassrootsService(prisma);
+
+      await service.createTeam('user-1', { ...FLAGGED_TEAM, confirmSensitive: true });
+
+      expect(prisma.grassrootsTeam.create).toHaveBeenCalledTimes(1);
+      // confirmSensitive is a control flag, never persisted on the team.
+      expect((prisma.grassrootsTeam.create as jest.Mock).mock.calls[0][0].data).not.toHaveProperty('confirmSensitive');
+      const data = (prisma.report.create as jest.Mock).mock.calls[0][0].data;
+      expect(data).toMatchObject({ reporterId: null, targetType: 'grassroots_team', targetId: 't-1' });
+      expect(data).not.toHaveProperty('reporterContactEmail');
+      expect(data.reason).toMatch(/^\[Automated: pre-publication sensitive-content screen\]/);
+      expect(data.reason).toContain('name (health)');
+      expect(data.reason).not.toMatch(/diabet/i);
+    });
+
+    it('createTeam: a clean submission is not reported', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.grassrootsTeam.create as jest.Mock).mockResolvedValue({ id: 't-1' });
+      const service = new GrassrootsService(prisma);
+
+      await service.createTeam('user-1', CLEAN_TEAM);
+
+      expect(prisma.report.create).not.toHaveBeenCalled();
+    });
+
+    it('createTeam: taking over a dormant team is not screened (the name/city are already public and unchanged)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.grassrootsTeam.findMany as jest.Mock).mockResolvedValue([
+        { id: 't-9', ...FLAGGED_TEAM, createdById: null, verified: false },
+      ]);
+      (prisma.grassrootsTeam.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+      const service = new GrassrootsService(prisma);
+
+      const result = await service.createTeam('user-1', FLAGGED_TEAM);
+
+      expect(result.reclaimed).toBe(true);
+      expect(prisma.report.create).not.toHaveBeenCalled();
+    });
+
+    describe('createFixture', () => {
+      const BASE = { teamAId: 'a', scheduledAt: '2026-10-01T14:00:00.000Z' };
+
+      function arm(prisma: PrismaService) {
+        (prisma.grassrootsTeam.findUnique as jest.Mock).mockResolvedValue({ id: 'a' });
+        (prisma.grassrootsTeam.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdById: 'user-1' });
+        (prisma.fixture.create as jest.Mock).mockResolvedValue({ id: 'f-1', status: 'scheduled' });
+      }
+
+      it('a flagged venue is refused with a 422 and nothing is written', async () => {
+        const prisma = buildPrismaMock();
+        arm(prisma);
+        const service = new GrassrootsService(prisma);
+
+        const body = await expect422(service.createFixture('user-1', { ...BASE, venue: 'St Mary Church Hall' }));
+
+        expect(body.code).toBe('sensitive_content_review_required');
+        expect(body.flaggedFields).toEqual([{ field: 'venue', categories: ['religion'] }]);
+        expect(prisma.fixture.create).not.toHaveBeenCalled();
+        expect(prisma.report.create).not.toHaveBeenCalled();
+      });
+
+      it('a flagged opponentName is refused too', async () => {
+        const prisma = buildPrismaMock();
+        arm(prisma);
+        const service = new GrassrootsService(prisma);
+
+        const body = await expect422(service.createFixture('user-1', { ...BASE, opponentName: 'Muslim Youth FC' }));
+
+        expect(body.flaggedFields).toEqual([{ field: 'opponentName', categories: ['religion'] }]);
+      });
+
+      it('confirmSensitive creates the fixture and logs a system Report against the fixture, in the same transaction', async () => {
+        const prisma = buildPrismaMock();
+        arm(prisma);
+        const service = new GrassrootsService(prisma);
+
+        await service.createFixture('user-1', { ...BASE, venue: 'St Mary Church Hall', confirmSensitive: true });
+
+        expect((prisma.fixture.create as jest.Mock).mock.calls[0][0].data).not.toHaveProperty('confirmSensitive');
+        const data = (prisma.report.create as jest.Mock).mock.calls[0][0].data;
+        expect(data).toMatchObject({ reporterId: null, targetType: 'fixture', targetId: 'f-1' });
+        expect(data.reason).toContain('venue (religion)');
+      });
+
+      it('403s a non-organiser BEFORE revealing the screen (no 422 for someone who may not create the fixture)', async () => {
+        const prisma = buildPrismaMock();
+        arm(prisma);
+        (prisma.grassrootsTeam.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdById: 'someone-else' });
+        const service = new GrassrootsService(prisma);
+
+        await expect(
+          service.createFixture('user-1', { ...BASE, venue: 'St Mary Church Hall' }),
+        ).rejects.toThrow(ForbiddenException);
+      });
+
+      it('a clean venue is not reported', async () => {
+        const prisma = buildPrismaMock();
+        arm(prisma);
+        const service = new GrassrootsService(prisma);
+
+        await service.createFixture('user-1', { ...BASE, venue: 'Hackney Marshes' });
+
+        expect(prisma.report.create).not.toHaveBeenCalled();
+      });
     });
   });
 });

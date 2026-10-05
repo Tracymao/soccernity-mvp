@@ -132,4 +132,65 @@ describe("GrassrootsRegisterTeamPage", () => {
     expect(await screen.findByRole("alert")).not.toBeNull();
     expect(screen.getByRole("alert").textContent).toMatch(/couldn.t register that team/i);
   });
+
+  // ---- Pre-publication sensitive-content screen ----
+
+  function flaggedError(field: string, categories: string[]) {
+    return new GrassrootsApiError("This looks like it may mention something sensitive about someone.", {
+      status: 422,
+      code: "sensitive_content_review_required",
+      flaggedFields: [{ field, categories }],
+    });
+  }
+
+  it("a 422 from the screen shows the confirm-or-edit step instead of an error, and nothing is confirmed yet", async () => {
+    window.sessionStorage.setItem("sn_access_token", "test-token");
+    vi.mocked(createTeam).mockRejectedValueOnce(flaggedError("name", ["health"]));
+
+    renderPage();
+    fillForm();
+    fireEvent.click(screen.getByRole("button", { name: "Register team" }));
+
+    expect(await screen.findByText(/may mention something sensitive about someone/i)).not.toBeNull();
+    expect(screen.getByText(/Flagged: Team name/)).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Register team" })).toBeNull();
+    expect(createTeam).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(createTeam).mock.calls[0][1]).not.toHaveProperty("confirmSensitive");
+  });
+
+  it("'Share anyway' resends with confirmSensitive: true and shows the confirmation", async () => {
+    window.sessionStorage.setItem("sn_access_token", "test-token");
+    vi.mocked(createTeam)
+      .mockRejectedValueOnce(flaggedError("name", ["health"]))
+      .mockResolvedValueOnce({ ...CREATED, reclaimed: false });
+
+    renderPage();
+    fillForm();
+    fireEvent.click(screen.getByRole("button", { name: "Register team" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Share anyway" }));
+
+    await waitFor(() => expect(createTeam).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(createTeam).mock.calls[1][1]).toMatchObject({ confirmSensitive: true });
+    expect(await screen.findByRole("heading", { name: "Team registered" })).not.toBeNull();
+  });
+
+  it("'Edit what I wrote' returns to the form without confirming, and editing a field withdraws the warning", async () => {
+    window.sessionStorage.setItem("sn_access_token", "test-token");
+    vi.mocked(createTeam).mockRejectedValue(flaggedError("name", ["health"]));
+
+    renderPage();
+    fillForm();
+    fireEvent.click(screen.getByRole("button", { name: "Register team" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit what I wrote" }));
+    expect(screen.getByRole("button", { name: "Register team" })).not.toBeNull();
+
+    // Warned again -> then typing in a screened field withdraws the warning,
+    // so the confirm button can never apply to text the person didn't see flagged.
+    fireEvent.click(screen.getByRole("button", { name: "Register team" }));
+    await screen.findByRole("button", { name: "Share anyway" });
+    fireEvent.change(screen.getByLabelText("Team name"), { target: { value: "Peckham Town" } });
+    expect(screen.queryByRole("button", { name: "Share anyway" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Register team" })).not.toBeNull();
+    expect(createTeam).toHaveBeenCalledTimes(2);
+  });
 });

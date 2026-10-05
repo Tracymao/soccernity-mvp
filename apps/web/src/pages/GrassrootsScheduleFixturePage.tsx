@@ -43,9 +43,11 @@ import {
   GrassrootsApiError,
   type Fixture,
   type GrassrootsTeam,
+  type SensitiveFieldFlag,
 } from "../api/grassroots";
 import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
-import { isAwaitingConsent } from "./grassroots/errors";
+import { isAwaitingConsent, sensitiveContentFlags } from "./grassroots/errors";
+import SensitiveContentWarning from "./grassroots/SensitiveContentWarning";
 import { fetchIsTeamOrganiser } from "./grassroots/organiser";
 import "./grassroots/GrassrootsPage.css";
 
@@ -78,6 +80,10 @@ export default function GrassrootsScheduleFixturePage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [awaitingConsent, setAwaitingConsent] = useState(false);
+  // Pre-publication sensitive-content screen (opponentName / venue): a 422
+  // (nothing saved) shows a confirm-or-edit step; editing either screened
+  // field withdraws it (see GrassrootsRegisterTeamPage).
+  const [sensitiveFlags, setSensitiveFlags] = useState<SensitiveFieldFlag[] | null>(null);
   const [scheduled, setScheduled] = useState<Fixture | null>(null);
 
   const load = useCallback(async () => {
@@ -132,6 +138,10 @@ export default function GrassrootsScheduleFixturePage() {
     };
   }, [oppCity, oppMode, token, teamId]);
 
+  useEffect(() => {
+    setSensitiveFlags(null);
+  }, [opponentName, venue, oppMode]);
+
   const canSubmit =
     loadState === "loaded" &&
     date !== "" &&
@@ -139,8 +149,8 @@ export default function GrassrootsScheduleFixturePage() {
     !submitting &&
     (oppMode !== "other" || opponentName.trim().length > 0);
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
+  async function submit(e: FormEvent | null, confirmSensitive = false) {
+    e?.preventDefault();
     if (!token || !teamId || !canSubmit) return;
     setSubmitting(true);
     setError(null);
@@ -160,10 +170,14 @@ export default function GrassrootsScheduleFixturePage() {
         ...(oppMode === "other" ? { opponentName: opponentName.trim() } : {}),
         scheduledAt: scheduledAt.toISOString(),
         ...(venue.trim() ? { venue: venue.trim() } : {}),
+        ...(confirmSensitive ? { confirmSensitive: true } : {}),
       });
       setScheduled(fixture);
     } catch (err) {
-      if (isAwaitingConsent(err)) {
+      const flags = sensitiveContentFlags(err);
+      if (flags) {
+        setSensitiveFlags(flags);
+      } else if (isAwaitingConsent(err)) {
         setAwaitingConsent(true);
       } else {
         setError(err instanceof GrassrootsApiError ? err.message : "Couldn't schedule that fixture.");
@@ -451,9 +465,18 @@ export default function GrassrootsScheduleFixturePage() {
         </p>
       )}
 
-      <button type="submit" className="grassroots-btn grassroots-btn--primary" disabled={!canSubmit}>
-        {submitting ? "Scheduling…" : "Schedule fixture"}
-      </button>
+      {sensitiveFlags ? (
+        <SensitiveContentWarning
+          flags={sensitiveFlags}
+          busy={submitting}
+          onEdit={() => setSensitiveFlags(null)}
+          onConfirm={() => void submit(null, true)}
+        />
+      ) : (
+        <button type="submit" className="grassroots-btn grassroots-btn--primary" disabled={!canSubmit}>
+          {submitting ? "Scheduling…" : "Schedule fixture"}
+        </button>
+      )}
 
       <Link to={`/grassroots/${team.id}`} className="grassroots-linkback">
         Cancel
