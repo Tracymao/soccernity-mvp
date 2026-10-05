@@ -1,3 +1,4 @@
+import { DobEncryptionService } from '../../../crypto/dob-encryption.service';
 import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
@@ -20,6 +21,8 @@ import { RegistrationEmailService } from './email/registration-email.service';
 
 export interface RegisterResult {
   user: User;
+  // Plaintext, for response shaping only -- the stored column is ciphertext.
+  dateOfBirth: Date;
   guardian: Guardian | null;
   tokens: TokenPair;
 }
@@ -80,6 +83,7 @@ export class RegistrationService {
     private readonly config: ConfigService,
     private readonly clubsService: ClubsService,
     private readonly guardianConsentService: GuardianConsentService,
+    private readonly dobEncryption: DobEncryptionService,
   ) {}
 
   async register(dto: RegisterDto): Promise<RegisterResult> {
@@ -144,7 +148,7 @@ export class RegistrationService {
         phone: dto.phone,
         passwordHash,
         displayName: dto.displayName,
-        dateOfBirth,
+        dateOfBirth: this.dobEncryption.encrypt(dateOfBirth),
         isMinor,
         isUnder16,
       },
@@ -215,7 +219,7 @@ export class RegistrationService {
     // { sub, role }.
     const tokens = await this.tokenService.issueTokenPair(user.id, user.role);
 
-    return { user, guardian, tokens };
+    return { user, dateOfBirth, guardian, tokens };
   }
 
   async verifyEmail(token: string): Promise<VerifyEmailResult> {

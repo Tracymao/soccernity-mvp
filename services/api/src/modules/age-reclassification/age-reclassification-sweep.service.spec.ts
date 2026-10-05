@@ -1,3 +1,4 @@
+import { buildTestDobEncryption } from '../../crypto/test-dob-encryption';
 import { AgeReclassificationSweepService } from './age-reclassification-sweep.service';
 
 const NOW = new Date('2026-09-20T12:00:00Z');
@@ -11,10 +12,11 @@ interface Row {
 }
 
 function build(rows: Row[], updateCount = 1) {
+  const enc = buildTestDobEncryption();
   const createMany = jest.fn().mockResolvedValue({ count: 1 });
   const updateMany = jest.fn().mockResolvedValue({ count: updateCount });
   const prisma = {
-    user: { findMany: jest.fn().mockResolvedValue(rows.map((r) => ({ displayName: 'Kid', ...r }))) },
+    user: { findMany: jest.fn().mockResolvedValueOnce(rows.map((r) => ({ displayName: 'Kid', ...r, dateOfBirth: r.dateOfBirth && enc.encrypt(r.dateOfBirth) }))).mockResolvedValue([]) },
     guardian: { findUnique: jest.fn().mockResolvedValue({ email: 'g@example.com', name: 'Grace Hopper' }) },
     notification: { create: jest.fn().mockResolvedValue({}) },
     $transaction: jest.fn(async (fn: (tx: unknown) => unknown) =>
@@ -22,7 +24,7 @@ function build(rows: Row[], updateCount = 1) {
     ),
   };
   const email = { sendGuardianMinorTurned18Email: jest.fn().mockResolvedValue(undefined) };
-  const service = new AgeReclassificationSweepService(prisma as never, email as never);
+  const service = new AgeReclassificationSweepService(prisma as never, email as never, enc);
   return { service, prisma, updateMany, createMany, email };
 }
 

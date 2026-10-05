@@ -6,6 +6,7 @@ import { PasswordService } from '../src/modules/auth/password/password.service';
 import { AdminTokenService } from '../src/modules/admin/token/admin-token.service';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // sprint-5/admin-users-dashboard-backend — Build Plan Section 4.8 (Admin
 // Service), the platform-user management half. Hits test/README.md's
@@ -73,7 +74,7 @@ describe('Admin Users e2e: role gating, suspend/reactivate/delete against real P
         email: `e2e-admin-users-${label}-${Date.now()}-${rand()}@example.com`,
         passwordHash,
         displayName: `E2E Admin-Users ${label}`,
-        dateOfBirth: new Date('1994-05-05'),
+        dateOfBirth: seedDob('1994-05-05'),
         isMinor: overrides.isMinor ?? false,
         accountStatus: overrides.accountStatus ?? 'active',
         pendingDeletionAt: overrides.pendingDeletionAt ?? null,

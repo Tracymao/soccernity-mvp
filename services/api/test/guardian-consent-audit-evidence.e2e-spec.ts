@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { AccountDeletionSweepService } from '../src/modules/account-deletion/account-deletion-sweep.service';
 import { CONSENT_SCREEN_VERSION } from '../src/modules/auth/guardian-consent/consent-screen-version.constants';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // Decision Log #348 (UK GDPR Art. 7(1)): the consent-screen version and a
 // coarse device type must be captured by the REAL confirm route, stored on
@@ -37,7 +38,7 @@ describe('Guardian consent audit evidence e2e: screen version + device type (rea
         email: `e2e-audit-${label}-${suffix}@example.com`,
         passwordHash: 'unused',
         displayName: `Audit ${label}`,
-        dateOfBirth: new Date('2015-01-01'),
+        dateOfBirth: seedDob('2015-01-01'),
         isMinor: true,
       },
     });

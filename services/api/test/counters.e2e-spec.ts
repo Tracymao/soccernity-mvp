@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // Direct, real-Postgres proof of the "denormalized cache must never
 // drift" obligation documented on Post.likeCount and Post.commentCount in
@@ -61,7 +62,7 @@ describe('Counters e2e: Post.likeCount/commentCount never drift from real Like/C
         email: uniqueEmail(label),
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E Counters User ${label}`,
-        dateOfBirth: new Date('1998-07-04'), // adult, no guardian-consent branch
+        dateOfBirth: seedDob('1998-07-04'), // adult, no guardian-consent branch
         isMinor: false,
       },
     });

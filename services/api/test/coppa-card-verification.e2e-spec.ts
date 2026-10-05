@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { AccountDeletionSweepService } from '../src/modules/account-deletion/account-deletion-sweep.service';
 import { CardVerificationGateway } from '../src/payments/card-verification.gateway';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // sprint-1/coppa-card-verification. A technical control, not a legal
 // conclusion. Real Postgres for the parts a mock cannot show: the real
@@ -64,7 +65,7 @@ describe('COPPA card verification e2e (real Postgres, Stripe faked)', () => {
         email: `e2e-coppa-${label}-${suffix}@example.com`,
         passwordHash: 'unused',
         displayName: `Coppa ${label}`,
-        dateOfBirth: new Date('2018-01-01'),
+        dateOfBirth: seedDob('2018-01-01'),
         isMinor: true,
       },
     });

@@ -1,3 +1,4 @@
+import { buildTestDobEncryption } from '../../crypto/test-dob-encryption';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { UnauthorizedException } from '@nestjs/common';
@@ -31,7 +32,7 @@ interface FakeUserRecord {
   email: string;
   phone: string | null;
   displayName: string;
-  dateOfBirth: Date;
+  dateOfBirth: string; // ciphertext
   isMinor: boolean;
   verificationStatus: string;
   createdAt: Date;
@@ -42,7 +43,7 @@ interface FakeUserRecord {
 const DEFAULT_SEED_FIELDS = {
   phone: null,
   displayName: 'Test Player',
-  dateOfBirth: new Date('1995-01-01'),
+  dateOfBirth: buildTestDobEncryption().encrypt(new Date('1995-01-01')),
   isMinor: false,
   verificationStatus: 'unverified',
   createdAt: new Date('2026-08-16T00:00:00.000Z'),
@@ -98,7 +99,7 @@ async function buildHarness() {
   const tokenService = new TokenService(jwtService, refreshTokenStore, configService);
   const prisma = new FakePrismaUsers();
 
-  const authService = new AuthService(prisma as never, passwordService, tokenService);
+  const authService = new AuthService(prisma as never, passwordService, tokenService, buildTestDobEncryption());
   await authService.onModuleInit();
 
   return { authService, prisma, passwordService, tokenService };

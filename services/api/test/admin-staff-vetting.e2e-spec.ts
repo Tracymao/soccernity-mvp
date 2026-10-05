@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { AdminTokenService } from '../src/modules/admin/token/admin-token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // schema/report-severity-escalation-admin-vetting-application —
 // PATCH /admin/users/:id/child-safety-vetting. Hits test/README.md's
@@ -174,7 +175,7 @@ describe('Admin Staff Vetting e2e: PATCH /admin/users/:id/child-safety-vetting a
         email: `e2e-vet-reporter-${Date.now()}-${rand()}@example.com`,
         passwordHash: 'unused',
         displayName: 'E2E Vet Reporter',
-        dateOfBirth: new Date('1994-05-05'),
+        dateOfBirth: seedDob('1994-05-05'),
         isMinor: false,
       },
     });
@@ -183,7 +184,7 @@ describe('Admin Staff Vetting e2e: PATCH /admin/users/:id/child-safety-vetting a
         email: `e2e-vet-reported-${Date.now()}-${rand()}@example.com`,
         passwordHash: 'unused',
         displayName: 'E2E Vet Reported',
-        dateOfBirth: new Date('1994-05-05'),
+        dateOfBirth: seedDob('1994-05-05'),
         isMinor: false,
       },
     });

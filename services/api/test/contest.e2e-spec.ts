@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { AdminTokenService } from '../src/modules/admin/token/admin-token.service';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // sprint-2/contest-data-model-backend (Decision Log #218/#219) — the full
 // weekly-progression state machine driven against real Postgres, plus the
@@ -43,7 +44,7 @@ describe('Contest e2e: the weekly-progression state machine + points ledger', ()
         email: `e2e-contest-${label}-${Date.now()}-${rand()}@example.com`,
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName,
-        dateOfBirth: new Date('1998-07-04'),
+        dateOfBirth: seedDob('1998-07-04'),
         isMinor: false,
       },
     });

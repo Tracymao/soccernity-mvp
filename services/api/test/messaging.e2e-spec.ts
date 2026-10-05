@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // sprint-3/messaging-direct-messaging — Build Plan Section 4.7 (Messaging
 // slice). Hits test/README.md's e2e triggers:
@@ -61,7 +62,7 @@ describe('Messaging e2e (Section 4.7, DM slice)', () => {
         email: `e2e-msg-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName,
-        dateOfBirth: new Date('1993-03-03'), // adult — GuardianConsentGuard passes
+        dateOfBirth: seedDob('1993-03-03'), // adult — GuardianConsentGuard passes
         isMinor: false,
       },
     });
@@ -80,7 +81,7 @@ describe('Messaging e2e (Section 4.7, DM slice)', () => {
         email: `e2e-msg-minor-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
         passwordHash: 'unused',
         displayName: `E2E Msg Minor ${label}`,
-        dateOfBirth: new Date('2014-01-01'),
+        dateOfBirth: seedDob('2014-01-01'),
         isMinor: true,
         guardian: {
           create: {

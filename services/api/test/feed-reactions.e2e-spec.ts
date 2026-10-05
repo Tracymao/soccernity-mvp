@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // Real-Postgres coverage for the transactional counter/notification logic
 // documented directly on FeedService.likePost/unlikePost/addComment/
@@ -109,7 +110,7 @@ describe('Feed reactions e2e: like/unlike, comment, save/unsave against real Pos
         // auth.e2e-spec.ts.
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E Feed User ${label}`,
-        dateOfBirth: new Date('1998-07-04'), // adult, no guardian-consent branch
+        dateOfBirth: seedDob('1998-07-04'), // adult, no guardian-consent branch
         isMinor: false,
       },
     });

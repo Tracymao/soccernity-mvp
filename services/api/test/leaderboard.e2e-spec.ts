@@ -7,6 +7,7 @@ import { LeaderboardRollupService } from '../src/modules/leaderboard/leaderboard
 import { PointsSource } from '../src/modules/points/points.constants';
 import { awardPoints } from '../src/modules/points/points.util';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // sprint-6/leaderboard-read-rollup — Build Plan Section 4.9. Hits
 // test/README.md's e2e triggers #1 (raw SQL — a GROUP BY + RANK() OVER
@@ -72,7 +73,7 @@ describe('Leaderboard e2e (Section 4.9)', () => {
         email: `e2e-lb-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E Leaderboard ${label}`,
-        dateOfBirth: new Date('1994-05-05'),
+        dateOfBirth: seedDob('1994-05-05'),
         isMinor: false,
         accountStatus: over.accountStatus ?? 'active',
       },

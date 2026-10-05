@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // PATCH /users/:id/represented-club (Decision Log #74) against real
 // Postgres: the new User.representedClubId FK (ON DELETE SET NULL), the
@@ -38,7 +39,7 @@ describe('Represented club e2e (Decision Log #74)', () => {
         email: `e2e-represent-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E Represent ${label}`,
-        dateOfBirth: new Date('1998-07-04'),
+        dateOfBirth: seedDob('1998-07-04'),
         isMinor: false,
       },
     });

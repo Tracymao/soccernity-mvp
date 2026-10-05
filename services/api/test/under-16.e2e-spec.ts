@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // sprint-1/under-16-restrictions -- counsel's under-16 tier, against real
 // Postgres: the real Under16RestrictionGuard reads User.isUnder16 fresh,
@@ -44,7 +45,7 @@ describe('Under-16 restrictions e2e', () => {
         email: `e2e-u16-${kind}-${n}-${Date.now()}@example.com`,
         passwordHash: 'unused',
         displayName: `U16 ${kind} ${n}`,
-        dateOfBirth: new Date(dob),
+        dateOfBirth: seedDob(dob),
         isMinor: minor,
         isUnder16: kind === 'under16',
         ...(minor && {

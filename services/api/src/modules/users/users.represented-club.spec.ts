@@ -1,3 +1,4 @@
+import { buildTestDobEncryption } from '../../crypto/test-dob-encryption';
 import { BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from './users.service';
@@ -17,7 +18,7 @@ describe('UsersService.setRepresentedClub (Decision Log #74)', () => {
     (prisma.clubPage.findFirst as jest.Mock).mockResolvedValue({ id: CLUB_ID });
     (prisma.user.update as jest.Mock).mockResolvedValue({ representedClub: { id: CLUB_ID, name: 'Ikoyi Rovers FC' } });
 
-    const result = await new UsersService(prisma).setRepresentedClub('user-1', CLUB_ID);
+    const result = await new UsersService(prisma, buildTestDobEncryption()).setRepresentedClub('user-1', CLUB_ID);
 
     expect(prisma.clubPage.findFirst).toHaveBeenCalledWith({
       where: { id: CLUB_ID, members: { some: { id: 'user-1' } } },
@@ -35,7 +36,7 @@ describe('UsersService.setRepresentedClub (Decision Log #74)', () => {
     const prisma = buildPrismaMock();
     (prisma.clubPage.findFirst as jest.Mock).mockResolvedValue(null);
 
-    await expect(new UsersService(prisma).setRepresentedClub('user-1', CLUB_ID)).rejects.toThrow(BadRequestException);
+    await expect(new UsersService(prisma, buildTestDobEncryption()).setRepresentedClub('user-1', CLUB_ID)).rejects.toThrow(BadRequestException);
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
@@ -43,14 +44,14 @@ describe('UsersService.setRepresentedClub (Decision Log #74)', () => {
     const prisma = buildPrismaMock();
     (prisma.clubPage.findFirst as jest.Mock).mockResolvedValue(null);
 
-    await expect(new UsersService(prisma).setRepresentedClub('user-1', CLUB_ID)).rejects.toThrow(BadRequestException);
+    await expect(new UsersService(prisma, buildTestDobEncryption()).setRepresentedClub('user-1', CLUB_ID)).rejects.toThrow(BadRequestException);
   });
 
   it('null unrepresents the club without any membership lookup', async () => {
     const prisma = buildPrismaMock();
     (prisma.user.update as jest.Mock).mockResolvedValue({ representedClub: null });
 
-    const result = await new UsersService(prisma).setRepresentedClub('user-1', null);
+    const result = await new UsersService(prisma, buildTestDobEncryption()).setRepresentedClub('user-1', null);
 
     expect(prisma.clubPage.findFirst).not.toHaveBeenCalled();
     expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: { representedClubId: null } }));

@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { TRENDING_WINDOW_HOURS } from '../src/modules/search/trending.constants';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
+import { seedDob } from './dob-seed';
 
 // sprint-4/trending-topics-backend — Build Plan Section 4.7 (GET
 // /trending). No hashtag/topic model existed anywhere in this schema
@@ -63,7 +64,7 @@ describe('Trending topics e2e (Section 4.7)', () => {
         email: `e2e-trending-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E Trending ${label}`,
-        dateOfBirth: new Date('1994-05-05'),
+        dateOfBirth: seedDob('1994-05-05'),
         isMinor: false,
         accountStatus: 'active',
       },
