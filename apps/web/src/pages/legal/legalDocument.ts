@@ -1,7 +1,7 @@
 // Source of the /terms and /privacy pages: the draft legal copy document
 // itself, imported raw at build time so the live app always renders whatever
 // version of docs/legal-copy-draft-tos-privacy-policy.md exists at merge time
-// (v0.2 or v0.3 alike). No copy is duplicated into the app.
+// (currently v0.7). No copy is duplicated into the app.
 import rawSource from "../../../../../docs/legal-copy-draft-tos-privacy-policy.md?raw";
 
 // The source file marks itself "NOT APPROVED" until counsel signs off. The
@@ -27,5 +27,5 @@ function between(startMarker: string, endMarker: string): string {
 export const TERMS_MARKDOWN = between("# Soccernity Terms of Service", "## PART B");
 export const PRIVACY_MARKDOWN = between("# Soccernity Privacy Policy", "## PART C");
 
-// Version line from the source header, e.g. "0.3 (draft -- still NOT APPROVED)".
+// Version line from the source header, e.g. "0.7 (draft — still NOT APPROVED)".
 export const SOURCE_VERSION = /\*\*Version:\*\*\s*(.+)/.exec(source)?.[1]?.trim() ?? "";
