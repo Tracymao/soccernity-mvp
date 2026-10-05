@@ -69,6 +69,14 @@ export class UsersController {
     return this.usersService.getSuggestedUsers(user.sub, limit);
   }
 
+  // GET /users/:id/public-profile -- viewer-scoped card (any authenticated
+  // user): displayName + guardianContact for a current minor. GET /users/:id
+  // stays self-only. See UsersService.getPublicProfile.
+  @Get(':id/public-profile')
+  async getPublicProfile(@Param('id') id: string) {
+    return this.usersService.getPublicProfile(id);
+  }
+
   @Get(':id')
   async getById(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
     this.assertSelf(id, user);

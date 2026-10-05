@@ -92,27 +92,57 @@ describe('UsersService', () => {
       expect(result.verificationStatus).toBe('unverified');
     });
 
-    it('exposes the guardian email as a labelled guardianContact ONLY for an under-16 account', async () => {
+    const yearsAgo = (n: number) => {
+      const d = new Date();
+      d.setFullYear(d.getFullYear() - n);
+      return d;
+    };
+    const dobEnc = buildTestDobEncryption();
+
+    it.each([
+      ['an under-16', 12, true],
+      ['a 16-17 minor', 17, false],
+    ])('exposes the labelled guardianContact to the owner for %s', async (_l, age, under16) => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(
-        withoutPasswordHash({ ...FULL_DB_ROW, isMinor: true, isUnder16: true, guardian: { email: 'parent@example.com' } }),
+        withoutPasswordHash({
+          ...FULL_DB_ROW,
+          dateOfBirth: dobEnc.encrypt(yearsAgo(age)),
+          isMinor: true,
+          isUnder16: under16,
+          guardian: { email: 'parent@example.com' },
+        }),
       );
-      const result = await new UsersService(prisma, buildTestDobEncryption()).getOwnProfile('user-1');
+      const result = await new UsersService(prisma, dobEnc).getOwnProfile('user-1');
 
-      expect(result.isUnder16).toBe(true);
       expect(result.guardianContact).toEqual({ label: 'Guardian contact', email: 'parent@example.com' });
       expect(result).not.toHaveProperty('guardian');
     });
 
-    it('does NOT expose guardianContact for a 16-17 minor even though a Guardian row exists', async () => {
+    it('does NOT expose guardianContact for an adult even if a Guardian row survives', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(
-        withoutPasswordHash({ ...FULL_DB_ROW, isMinor: true, isUnder16: false, guardian: { email: 'parent@example.com' } }),
+        withoutPasswordHash({ ...FULL_DB_ROW, isMinor: false, guardian: { email: 'parent@example.com' } }),
       );
-      const result = await new UsersService(prisma, buildTestDobEncryption()).getOwnProfile('user-1');
+      const result = await new UsersService(prisma, dobEnc).getOwnProfile('user-1');
 
       expect(result.guardianContact).toBeNull();
       expect(JSON.stringify(result)).not.toContain('parent@example.com');
+    });
+
+    it('hides guardianContact on the 18th birthday even before the age sweep has flipped isMinor', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(
+        withoutPasswordHash({
+          ...FULL_DB_ROW,
+          dateOfBirth: dobEnc.encrypt(yearsAgo(18)),
+          isMinor: true,
+          guardian: { email: 'parent@example.com' },
+        }),
+      );
+      const result = await new UsersService(prisma, dobEnc).getOwnProfile('user-1');
+
+      expect(result.guardianContact).toBeNull();
     });
 
     it('the Prisma select clause itself never requests passwordHash', async () => {
@@ -150,6 +180,62 @@ describe('UsersService', () => {
       const callArgs = (prisma.user.findUnique as jest.Mock).mock.calls[0][0];
       expect(callArgs.select.isTeamOrganiser).toBe(true);
       expect(result.isTeamOrganiser).toBe(true);
+    });
+  });
+
+  describe('getPublicProfile', () => {
+    const dobEnc = buildTestDobEncryption();
+    const yearsAgo = (n: number) => {
+      const d = new Date();
+      d.setFullYear(d.getFullYear() - n);
+      return d;
+    };
+    const row = (over: Record<string, unknown> = {}) => ({
+      id: 'minor-1',
+      displayName: 'Young Player',
+      dateOfBirth: dobEnc.encrypt(yearsAgo(14)),
+      isMinor: true,
+      accountStatus: 'active',
+      guardian: { email: 'parent@example.com', consentStatus: 'confirmed' },
+      ...over,
+    });
+    const run = async (r: unknown) => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(r);
+      return new UsersService(prisma, dobEnc).getPublicProfile('minor-1');
+    };
+
+    it('shows a minor guardianContact to any viewer, and nothing else about them', async () => {
+      const result = await run(row());
+      expect(result).toEqual({
+        id: 'minor-1',
+        displayName: 'Young Player',
+        guardianContact: { label: 'Guardian contact', email: 'parent@example.com' },
+      });
+    });
+
+    it('also shows it for a 16-17 minor', async () => {
+      const result = await run(row({ dateOfBirth: dobEnc.encrypt(yearsAgo(17)) }));
+      expect(result.guardianContact?.email).toBe('parent@example.com');
+    });
+
+    it('returns null guardianContact for an adult, even with a surviving Guardian row', async () => {
+      const result = await run(row({ isMinor: false, dateOfBirth: dobEnc.encrypt(yearsAgo(30)) }));
+      expect(result.guardianContact).toBeNull();
+      expect(JSON.stringify(result)).not.toContain('parent@example.com');
+    });
+
+    it('stops showing it once the minor turns 18, even if isMinor has not been flipped yet', async () => {
+      const result = await run(row({ dateOfBirth: dobEnc.encrypt(yearsAgo(18)) }));
+      expect(result.guardianContact).toBeNull();
+    });
+
+    it('404s for a restricted-pending minor, a non-active account, and a missing user', async () => {
+      await expect(run(row({ guardian: { email: 'p@example.com', consentStatus: 'pending' } }))).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(run(row({ accountStatus: 'deactivated' }))).rejects.toThrow(NotFoundException);
+      await expect(run(null)).rejects.toThrow(NotFoundException);
     });
   });
 

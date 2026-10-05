@@ -167,7 +167,7 @@ describe('Under-16 restrictions e2e', () => {
     ).toBe(200);
   });
 
-  it('guardian contact: only on an under-16 own profile, labelled, never in a roster', async () => {
+  it('guardian contact: on any current minor own profile (under-16 and 16-17), labelled, never on an adult, never in a roster', async () => {
     const adult = await seed('adult');
     const kid = await seed('under16');
     const teen = await seed('age16to17');
@@ -180,8 +180,14 @@ describe('Under-16 restrictions e2e', () => {
     expect(own.body.email).not.toBe(own.body.guardianContact.email);
 
     const teenOwn = await request(server()).get(`/users/${teen.id}`).set(auth(teen.token));
-    expect(teenOwn.body.guardianContact).toBeNull();
-    expect(JSON.stringify(teenOwn.body)).not.toContain('guardian-');
+    // Decision Log #363: guardian contact covers every current minor, not only under-16s.
+    expect(teenOwn.body.isUnder16).toBe(false);
+    expect(teenOwn.body.guardianContact).toMatchObject({ label: 'Guardian contact' });
+    expect(teenOwn.body.guardianContact.email).toMatch(/^guardian-\d+@example\.com$/);
+
+    const adultOwn = await request(server()).get(`/users/${adult.id}`).set(auth(adult.token));
+    expect(adultOwn.body.guardianContact).toBeNull();
+    expect(JSON.stringify(adultOwn.body)).not.toContain('guardian-');
 
     // Self-only endpoint: another user cannot read it; roster shapes never carry it.
     expect((await request(server()).get(`/users/${kid.id}`).set(auth(adult.token))).status).toBe(403);
