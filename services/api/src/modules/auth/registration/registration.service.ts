@@ -122,6 +122,18 @@ export class RegistrationService {
       );
     }
 
+    // safeguarding/guardian-email-change-endpoint (Decision Log #365): a
+    // minor must not be able to list THEIR OWN address as their guardian and
+    // then approve their own consent request from their own inbox. The same
+    // rule is enforced on POST /auth/guardian-consent/change-guardian-email;
+    // before this it existed only there, leaving registration -- the first
+    // place a guardian email is captured -- as the easier bypass. Checked
+    // before anything is written. Same lowercase comparison as the
+    // duplicate-account check above (Decision Log #16).
+    if (isMinor && dto.guardian && dto.guardian.email.trim().toLowerCase() === email) {
+      throw new BadRequestException("The guardian email can't be your own email address.");
+    }
+
     // Sprint 2 / sprint-2/auto-join-on-signup: auto-join on signup (Build
     // Plan Section 6's Sprint 2 line, left unbuilt when club pages
     // themselves shipped in PR #58 — RegisterDto had no club-selection

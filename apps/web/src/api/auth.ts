@@ -326,6 +326,54 @@ export async function getGuardianConsentStatus(accessToken: string): Promise<Gua
   return (await response.json()) as GuardianConsentStatus;
 }
 
+// POST /auth/guardian-consent/change-guardian-email (Decision Log #365) --
+// the MINOR (authenticated) replaces the guardian on file while consent is
+// still pending; the backend restarts the consent flow against the new
+// address. name + relationship are required alongside the email because the
+// new address may be a different person. The server's 400/409/429 messages
+// ("can't be your own email", "already confirmed", "too many changes") are
+// deliberate and user-readable, so they are passed through verbatim.
+export interface ChangeGuardianEmailRequest {
+  name: string;
+  email: string;
+  relationship: GuardianRelationship;
+}
+
+export async function changeGuardianEmail(
+  accessToken: string,
+  payload: ChangeGuardianEmailRequest,
+): Promise<{ message: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/guardian-consent/change-guardian-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify(payload),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    let serverMessage: string | null = null;
+    try {
+      const body = (await response.json()) as { message?: unknown };
+      if (typeof body.message === "string") serverMessage = body.message;
+      else if (Array.isArray(body.message) && typeof body.message[0] === "string") serverMessage = body.message[0];
+    } catch {
+      // Unparseable body -- fall through to the generic message.
+    }
+    const readable = [400, 409, 429].includes(response.status) && serverMessage;
+    throw new AuthApiError(readable ? (serverMessage as string) : "Couldn't update the guardian email. Please try again.", {
+      status: response.status,
+    });
+  }
+
+  return (await response.json()) as { message: string };
+}
+
 export async function resendGuardianConsentRequest(email: string): Promise<{ message: string }> {
   let response: Response;
   try {

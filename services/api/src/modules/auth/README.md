@@ -1358,3 +1358,88 @@ only `consentToken`). Every other guardian keeps the email-link-only flow.
 `consentTimestamp` and snapshotted into `ConsentAuditRecord`. Config:
 `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `COPPA_VERIFICATION_AMOUNT_CENTS`
 (placeholders => 503, fail closed). Full detail in CLAUDE.md's matching bullet.
+
+## Status update -- safeguarding/guardian-email-change-endpoint (Decision Log #60 / #365)
+
+`POST /auth/guardian-consent/change-guardian-email` `{ email }` lets a minor
+correct the guardian's email **while consent is still pending**. Submitting a
+new address restarts the guardian-consent flow from scratch, as Decision Log
+#60 decided on the design side. `JwtAuthGuard` only (NOT `GuardianConsentGuard`
+-- a restricted-pending minor is exactly who this is for), `@AuthRateLimit()`
+(the platform emails an address the caller chooses, the same spam-vector class
+`/resend` carries). The minor is the JWT `sub`; there is no id in the body and
+`forbidNonWhitelisted` rejects one.
+
+What "restart" does, all on the SAME `Guardian` row (`GuardianConsentService.changeGuardianEmail`):
+
+- `email` replaced (trimmed, lowercased); a fresh `consentToken` overwrites the
+  `@unique` column, so the **old emailed link stops resolving**; a fresh
+  `consentTokenExpiresAt` window starts.
+- `consentAutoResentAt` cleared, so the new guardian gets the full
+  expiry-sweep treatment (one automatic chase, then implicit decline) rather
+  than inheriting the old guardian's spent budget.
+- Card verification progress wiped (`stripePaymentIntentId`, `cardVerifiedAt`,
+  `cardRefundedAt` -> null); a different person must complete their own charge.
+  `cardVerificationRequired` stays frozen (age/country have not changed).
+- The consent request is sent through the existing
+  `RegistrationEmailService.sendGuardianConsentEmail`, to the new address with
+  the new token. Best-effort: a send failure is logged, not thrown, because the
+  state change has committed and `/resend` exists.
+
+What it refuses (and why):
+
+- **Confirmed consent -> 409, nothing written.** A live approval is relied on;
+  letting a minor swap the approving parent for an address of their choosing and
+  keep the approval would defeat it. Withdrawal is the existing path for that.
+- **Declined -> 409** (already on the deletion path).
+- No Guardian row, not a minor, or reclassified as an adult (Decision Log #349)
+  -> 404, same as `GET /status`.
+- Same email as on file -> 400. **The minor's own email -> 400** (a minor must not
+  be able to approve their own request). The same rule now also applies at
+  **registration** (`RegistrationService.register`, before anything is written),
+  where the guardian email is first captured.
+- A card charge for the current guardian that is verified but not yet refunded
+  -> 409 "try again in a little while". Clearing it would orphan the charge
+  (`CardRefundRetrySweepService` finds it by `cardVerifiedAt` +
+  `stripePaymentIntentId`), so the hourly sweep settles it first.
+- Concurrent changes/confirm/resend: the write is an `updateMany` whose where
+  clause carries the row's current token and card state (optimistic lock); a
+  lost race is a 409 and sends nothing.
+
+Follow-up pass, same PR (everything the first cut flagged as unbuilt):
+
+- **Previous guardian address is notified.** After the new request is sent, the
+  OLD address gets a `guardian-email-replaced` email (new template,
+  `RegistrationEmailService.sendGuardianEmailReplacedEmail`): the request it
+  received was withdrawn, no further action needed, contact support if
+  unexpected. It carries no token and does **not** name the new address. Own
+  try/catch, so a failure can never fail a committed change. Plain functional
+  copy, **not counsel-reviewed**.
+- **Name and relationship are re-captured.** `ChangeGuardianEmailDto` now
+  requires `name` and `relationship` (same rules as registration's
+  `GuardianDetailsDto`) and writes both onto the row with the new email, so the
+  previous guardian's details never stay attached to a different person.
+- **Per-minor cap.** `GuardianEmailChangeLimiter` (Redis,
+  `guardian-email-change:<minorId>`): at most **5 successful changes per 24h**
+  (fixed window from the first counted change), on top of the per-IP
+  `@AuthRateLimit()`. INCR up front (concurrent requests can't both slip under),
+  DECR when the change is refused, so validation/state refusals never burn
+  budget; an over-limit attempt neither inflates the counter nor extends the
+  lockout. Enforced in the controller so `GuardianConsentService`'s constructor
+  is unchanged. A 429 carries a plain message.
+- **Frontend.** `apps/web` `/guardian-consent/change-email`
+  (`ChangeGuardianEmailPage`, Figma 5498:7164), linked from the pending state of
+  `/guardian-consent` (previously a disabled "Coming soon" button). Name and
+  relationship fields are **not in the Figma frame** (it has an email field
+  only) and were added plainly; the frame needs updating to match. Mobile frame
+  5501:8536 not separately inspected -- layout stacks at <=560px.
+
+Still open: `CONSENT_SCREEN_VERSION` deliberately not bumped (guardian-visible
+consent wording unchanged); the per-minor cap's numbers (5 / 24h) are a judgment
+call, not from a spec.
+
+Tests: `guardian-email-change.service.spec.ts` (11, unit, stateful fake honouring
+the optimistic-lock where clause), 4 new cases in
+`guardian-consent.controller.spec.ts`, and `test/guardian-email-change.e2e-spec.ts`
+(5, real Postgres: restart on the same row, old link dead / new link confirms,
+confirmed consent byte-identical, refusals, concurrent changes).

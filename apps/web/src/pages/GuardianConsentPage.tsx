@@ -325,11 +325,18 @@ export default function GuardianConsentPage() {
           >
             {resendState === "sending" ? "Sending…" : "Resend approval request"}
           </button>
-          {/* No PATCH-guardian-email endpoint exists anywhere in Section 4.1
-              -- flagged, not silently wired to nothing. */}
-          <button type="button" className="consent-button consent-button--secondary" disabled title="Coming soon">
+          {/* safeguarding/guardian-email-change-endpoint (Decision Log #365):
+              the endpoint now exists; this opens the standalone Change
+              Guardian Email screen (Figma 5498:7164). Only offered while
+              consent is pending, which is the only state this branch
+              renders. */}
+          <Link
+            to="/guardian-consent/change-email"
+            className="consent-button consent-button--secondary"
+            style={{ textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center" }}
+          >
             Change guardian email
-          </button>
+          </Link>
         </div>
 
         {resendState === "sent" && (

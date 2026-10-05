@@ -105,6 +105,25 @@ describe('RegistrationEmailService', () => {
       expect(sent.HtmlBody).not.toMatch(/placeholder|verification code/i);
     });
 
+    // safeguarding/guardian-email-change-endpoint (Decision Log #365)
+    it('sends the previous guardian address a withdrawn notice that carries no token and asks for nothing', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-replaced' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example' }),
+      );
+
+      await service.sendGuardianEmailReplacedEmail('old-guardian@example.com', 'Ada Lovelace');
+
+      const sent = mockSendEmail.mock.calls[0][0] as { To: string; Subject: string; TextBody: string; HtmlBody: string };
+      expect(sent.To).toBe('old-guardian@example.com');
+      expect(sent.Subject).toBe('The Soccernity approval request for Ada Lovelace was withdrawn');
+      expect(sent.TextBody).toContain('no longer works');
+      expect(sent.TextBody).toContain('support@soccernity.com');
+      expect(sent.HtmlBody).toContain('Ada Lovelace');
+      // Never a credential, never the new address.
+      expect(sent.TextBody).not.toMatch(/token|code is|consent code/i);
+    });
+
     it('sends a public-report acknowledgement with no outcome/timeline promise', async () => {
       mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-report' });
       const service = new RegistrationEmailService(

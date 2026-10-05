@@ -63,6 +63,7 @@ import SignupPage from "../pages/SignupPage";
 import ForgotPasswordPage from "../pages/ForgotPasswordPage";
 import ResetPasswordPage from "../pages/ResetPasswordPage";
 import GuardianConsentPage from "../pages/GuardianConsentPage";
+import ChangeGuardianEmailPage from "../pages/guardian-consent/ChangeGuardianEmailPage";
 import GuardianConsentConfirmPage from "../pages/GuardianConsentConfirmPage";
 import VerifyEmailPage from "../pages/VerifyEmailPage";
 import ProfilePage from "../pages/ProfilePage";
@@ -310,6 +311,9 @@ export const routes: RouteObject[] = [
       // full routing-split argument.
       { path: "guardian-consent", element: <GuardianConsentPage /> }, // F5
       { path: "guardian-consent/confirm", element: <GuardianConsentConfirmPage /> }, // F5
+      // Decision Log #365 -- the minor's own "Change guardian email" screen
+      // (Figma 5498:7164); authenticated, pending-consent only.
+      { path: "guardian-consent/change-email", element: <ChangeGuardianEmailPage /> },
       { path: "profile", element: <ProfilePage /> }, // F6
 
       // Notification Centre (Build Plan Section 4.7, NotificationsModule —

@@ -10,6 +10,8 @@ import { GuardianCardVerificationService } from './guardian-card-verification.se
 import { GuardianConsentExpirySweepService } from './guardian-consent-expiry-sweep.service';
 import { GuardianConsentController } from './guardian-consent.controller';
 import { GuardianConsentService } from './guardian-consent.service';
+import { GuardianEmailChangeLimiter } from './guardian-email-change.limiter';
+import { RedisModule } from '../../../redis/redis.module';
 
 // Sprint 1 / PR B5 (Build Plan Section 4.1): POST /auth/guardian-consent.
 // Self-contained, like AuthRegistrationModule/AuthModule/
@@ -74,10 +76,11 @@ import { GuardianConsentService } from './guardian-consent.service';
 //    being triggerable on demand. It stays directly callable in-process,
 //    with an explicit `now`, for tests.
 @Module({
-  imports: [ConfigModule, AuthFoundationModule, AuthModule, PaymentsModule],
+  imports: [ConfigModule, AuthFoundationModule, AuthModule, PaymentsModule, RedisModule],
   controllers: [GuardianConsentController],
   providers: [
     GuardianConsentService,
+    GuardianEmailChangeLimiter,
     GuardianConsentExpirySweepService,
     GuardianCardVerificationService,
     CardRefundRetrySweepService,

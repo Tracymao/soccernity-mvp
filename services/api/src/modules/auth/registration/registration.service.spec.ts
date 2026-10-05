@@ -123,6 +123,24 @@ describe('RegistrationService', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
+    it("rejects a minor listing their OWN email as the guardian email (case/whitespace-insensitive), writing nothing", async () => {
+      const { service, prisma, emailService } = buildService();
+
+      await expect(
+        service.register({
+          email: 'Minor@Example.com',
+          password: 'password123',
+          displayName: 'Minor User',
+          ...asOfMinor,
+          guardian: { name: 'Me', email: '  minor@example.COM ', relationship: 'Parent' },
+        } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(prisma.guardian.create).not.toHaveBeenCalled();
+      expect(emailService.sendGuardianConsentEmail).not.toHaveBeenCalled();
+    });
+
     describe('consent path selection (sprint-1/coppa-card-verification)', () => {
       const guardianDetails = { name: 'Parent', email: 'p@example.com', relationship: 'Parent' };
       const dobYearsAgo = (years: number) => {

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -265,6 +265,155 @@ export class GuardianConsentService {
       updated.consentToken,
       params.minorDisplayName,
     );
+  }
+
+  // -------------------------------------------------------------------
+  // safeguarding/guardian-email-change-endpoint (Decision Log #60,
+  // legal-copy Part C row 34): a minor corrects the guardian's email while
+  // consent is still PENDING. Submitting a new address RESTARTS the
+  // guardian-consent flow from scratch, exactly as a first-time
+  // submission at registration would:
+  //   - the old consent link stops resolving (consentToken is @unique and
+  //     is overwritten, same mechanism resend uses);
+  //   - a fresh expiry window starts and consentAutoResentAt is cleared, so
+  //     the new guardian gets the full expiry-sweep treatment (one
+  //     automatic chase, then implicit decline) rather than inheriting the
+  //     old guardian's half-spent budget;
+  //   - any card-verification progress made by the OLD guardian is wiped
+  //     (a different person must do their own charge);
+  //   - the existing sendGuardianConsentEmail path delivers the new link
+  //     to the new address.
+  //
+  // Caller identity comes from the verified JWT (`sub`), never a param, and
+  // the route is JwtAuthGuard-only (NOT GuardianConsentGuard) for the same
+  // reason GET /status is: a restricted-pending minor is exactly who this
+  // is for.
+  //
+  // ONLY a PENDING request can be changed. A confirmed consent is live and
+  // already relied upon -- swapping the guardian under it would let a minor
+  // replace an approving parent with an address of their choosing and keep
+  // the approval -- so that goes through the withdrawal flow instead. A
+  // declined one is already on the deletion path.
+  async changeGuardianEmail(
+    minorUserId: string,
+    details: { name: string; email: string; relationship: string },
+  ): Promise<void> {
+    const normalizedEmail = details.email.trim().toLowerCase();
+
+    const guardian = await this.prisma.guardian.findUnique({ where: { minorUserId } });
+    const minor = guardian
+      ? await this.prisma.user.findUnique({
+          where: { id: minorUserId },
+          select: { id: true, email: true, displayName: true, isMinor: true },
+        })
+      : null;
+
+    // Same 404 getConsentStatus() gives -- "no guardian flow applies to
+    // this account" covers a non-minor, and a Guardian row left behind for
+    // a user reclassified as an adult (Decision Log #349), which must not
+    // be editable here either.
+    if (!guardian || !minor || !minor.isMinor) {
+      throw new NotFoundException('No guardian consent record exists for this account');
+    }
+
+    if (guardian.consentStatus === 'confirmed') {
+      throw new ConflictException(
+        'Consent has already been confirmed for this account, so the guardian email can no longer be changed. ' +
+          'Ask your guardian to withdraw consent if they need to.',
+      );
+    }
+    if (guardian.consentStatus !== 'pending') {
+      throw new ConflictException('Consent for this account was declined or withdrawn.');
+    }
+
+    if (normalizedEmail === guardian.email.trim().toLowerCase()) {
+      throw new BadRequestException('That is already the guardian email on file.');
+    }
+    // A minor must not be able to approve their own consent request. The
+    // registration form has no such check, but this route is reachable
+    // after the fact and cheaply closes the obvious route to it.
+    if (normalizedEmail === minor.email.trim().toLowerCase()) {
+      throw new BadRequestException("The guardian email can't be your own email address.");
+    }
+
+    // A completed-but-not-yet-refunded charge cannot be cleared without
+    // orphaning it: CardRefundRetrySweepService finds stranded charges by
+    // cardVerifiedAt + stripePaymentIntentId, and the refund must still
+    // go out to the original payer. Refuse for now; the hourly sweep
+    // settles it and the minor can retry.
+    if (guardian.cardVerifiedAt && !guardian.cardRefundedAt) {
+      throw new ConflictException(
+        'A card verification for the current guardian is still being settled. Please try again in a little while.',
+      );
+    }
+
+    const newToken = randomUUID();
+
+    // updateMany with the row's CURRENT token and card state in the where
+    // clause (optimistic lock): if a concurrent change, confirm, decline or
+    // card completion landed since the read above, nothing matches and we
+    // refuse rather than overwrite it. `minorUser.isMinor` mirrors
+    // refuseConsentAndScheduleDeletion()'s own adult-reclassification guard.
+    const changed = await this.prisma.guardian.updateMany({
+      where: {
+        id: guardian.id,
+        consentStatus: 'pending',
+        consentToken: guardian.consentToken,
+        cardVerifiedAt: guardian.cardVerifiedAt,
+        cardRefundedAt: guardian.cardRefundedAt,
+        minorUser: { isMinor: true },
+      },
+      data: {
+        email: normalizedEmail,
+        // Re-captured with the address (see ChangeGuardianEmailDto): the
+        // new address may be a different person, and the previous
+        // guardian's name/relationship must not stay attached to it.
+        name: details.name.trim(),
+        relationship: details.relationship,
+        consentToken: newToken,
+        consentTokenExpiresAt: computeConsentTokenExpiresAt(this.config),
+        consentAutoResentAt: null,
+        // cardVerificationRequired stays: it was frozen at registration
+        // from the child's age/country, which has not changed.
+        stripePaymentIntentId: null,
+        cardVerifiedAt: null,
+        cardRefundedAt: null,
+      },
+    });
+
+    if (changed.count === 0) {
+      throw new ConflictException(
+        'The consent request changed while this was being processed. Please refresh and try again.',
+      );
+    }
+
+    // Best-effort, like registration's own first send: the state change is
+    // committed and the minor can use POST /guardian-consent/resend if the
+    // email genuinely fails to arrive. RegistrationEmailService already
+    // swallows provider errors; this catches anything it doesn't.
+    try {
+      await this.emailService.sendGuardianConsentEmail(normalizedEmail, newToken, minor.displayName);
+    } catch (err) {
+      this.logger.warn(
+        `Failed to queue guardian consent email after guardian email change for user ${minor.id}: ${(err as Error).message}`,
+      );
+    }
+
+    // Tell the PREVIOUS address its request no longer stands, so a minor
+    // cannot quietly swap an approving parent for someone else with the
+    // parent none the wiser. Own try/catch: independent of the send above and
+    // never able to fail a change that has already committed. Skipped if the
+    // previous address is the same as the new one (impossible past the
+    // already-on-file check, kept as a guard against a future refactor).
+    if (guardian.email.trim().toLowerCase() !== normalizedEmail) {
+      try {
+        await this.emailService.sendGuardianEmailReplacedEmail(guardian.email, minor.displayName);
+      } catch (err) {
+        this.logger.warn(
+          `Failed to notify previous guardian address after guardian email change for user ${minor.id}: ${(err as Error).message}`,
+        );
+      }
+    }
   }
 
   // -------------------------------------------------------------------

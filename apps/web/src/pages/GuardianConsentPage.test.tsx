@@ -84,6 +84,21 @@ describe("GuardianConsentPage", () => {
     await waitFor(() => expect(resendGuardianConsentRequest).toHaveBeenCalledWith("guardian@example.com"));
   });
 
+  it("offers Change guardian email as a link to the real screen in the pending state (not a disabled button)", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({
+      consentStatus: "pending",
+      guardianEmail: "guardian@example.com",
+      canResend: true,
+      consentTimestamp: null,
+    });
+
+    renderPage();
+
+    const link = (await screen.findByRole("link", { name: /change guardian email/i })) as HTMLAnchorElement;
+    expect(link.getAttribute("href")).toBe("/guardian-consent/change-email");
+  });
+
   it("disables resend when canResend is false", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({

@@ -1,4 +1,13 @@
-import { BadRequestException, ExecutionContext, INestApplication, NotFoundException, ValidationPipe } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ExecutionContext,
+  HttpException,
+  HttpStatus,
+  INestApplication,
+  NotFoundException,
+  ValidationPipe,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
@@ -7,8 +16,10 @@ import { AuthThrottlerGuard } from '../rate-limit/auth-throttler.guard';
 import { GuardianConsentController } from './guardian-consent.controller';
 import { GuardianCardVerificationService } from './guardian-card-verification.service';
 import { GuardianConsentService } from './guardian-consent.service';
+import { GuardianEmailChangeLimiter } from './guardian-email-change.limiter';
 
 const AUTHENTICATED_MINOR = { sub: 'minor-1', role: 'fan' };
+const VALID_CHANGE = { name: 'New Guardian', email: 'new-guardian@example.com', relationship: 'Legal Guardian' };
 
 // Exercises real HTTP request/response handling (routing, DTO
 // validation, status codes) with GuardianConsentService mocked out,
@@ -24,8 +35,12 @@ describe('GuardianConsentController (HTTP layer)', () => {
     declineConsent: jest.fn(),
     requestWithdrawal: jest.fn(),
     withdrawConsent: jest.fn(),
+    // safeguarding/guardian-email-change-endpoint
+    changeGuardianEmail: jest.fn(),
   };
   const cardVerification = { getRequirements: jest.fn(), createIntent: jest.fn(), complete: jest.fn() };
+  // Pass-through by default; individual tests make it throw 429.
+  const emailChangeLimiter = { run: jest.fn(async (_id: string, change: () => Promise<unknown>) => change()) };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -33,6 +48,7 @@ describe('GuardianConsentController (HTTP layer)', () => {
       providers: [
         { provide: GuardianConsentService, useValue: guardianConsentService },
         { provide: GuardianCardVerificationService, useValue: cardVerification },
+        { provide: GuardianEmailChangeLimiter, useValue: emailChangeLimiter },
       ],
     })
       // /auth/guardian-consent/resend carries @AuthRateLimit() (DPIA
@@ -254,6 +270,70 @@ describe('GuardianConsentController (HTTP layer)', () => {
     });
   });
 
+  // safeguarding/guardian-email-change-endpoint (Decision Log #365).
+  describe('POST /auth/guardian-consent/change-guardian-email', () => {
+    it('returns 200, keyed off the caller-from-JWT id, forwarding name, email and relationship', async () => {
+      guardianConsentService.changeGuardianEmail.mockResolvedValueOnce(undefined);
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/guardian-consent/change-guardian-email')
+        .send(VALID_CHANGE)
+        .expect(200);
+
+      expect(response.body.message).toMatch(/new consent request has been sent/i);
+      expect(guardianConsentService.changeGuardianEmail).toHaveBeenCalledWith(AUTHENTICATED_MINOR.sub, VALID_CHANGE);
+      expect(emailChangeLimiter.run).toHaveBeenCalledWith(AUTHENTICATED_MINOR.sub, expect.any(Function));
+    });
+
+    it('400s on an invalid email and never calls the service', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/change-guardian-email')
+        .send({ ...VALID_CHANGE, email: 'not-an-email' })
+        .expect(400);
+      expect(guardianConsentService.changeGuardianEmail).not.toHaveBeenCalled();
+    });
+
+    it('400s when name or relationship is missing, or relationship is not an allowed value', async () => {
+      const post = (body: object) =>
+        request(app.getHttpServer()).post('/auth/guardian-consent/change-guardian-email').send(body);
+      await post({ email: 'new-guardian@example.com' }).expect(400);
+      await post({ ...VALID_CHANGE, name: '' }).expect(400);
+      await post({ ...VALID_CHANGE, relationship: 'Neighbour' }).expect(400);
+      expect(guardianConsentService.changeGuardianEmail).not.toHaveBeenCalled();
+    });
+
+    it('surfaces the per-minor limiter 429 and does not run the change', async () => {
+      emailChangeLimiter.run.mockRejectedValueOnce(new HttpException('Too many', HttpStatus.TOO_MANY_REQUESTS));
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/change-guardian-email')
+        .send(VALID_CHANGE)
+        .expect(429);
+      expect(guardianConsentService.changeGuardianEmail).not.toHaveBeenCalled();
+    });
+
+    it('rejects a caller-supplied minor id / extra fields (whitelist + forbidNonWhitelisted)', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/change-guardian-email')
+        .send({ ...VALID_CHANGE, minorUserId: 'someone-else' })
+        .expect(400);
+      expect(guardianConsentService.changeGuardianEmail).not.toHaveBeenCalled();
+    });
+
+    it('maps a ConflictException (already confirmed) to 409 and a NotFoundException to 404', async () => {
+      guardianConsentService.changeGuardianEmail.mockRejectedValueOnce(new ConflictException('confirmed'));
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/change-guardian-email')
+        .send(VALID_CHANGE)
+        .expect(409);
+
+      guardianConsentService.changeGuardianEmail.mockRejectedValueOnce(new NotFoundException('none'));
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/change-guardian-email')
+        .send(VALID_CHANGE)
+        .expect(404);
+    });
+  });
+
   // -----------------------------------------------------------------
   // sprint-1/guardian-consent-decline-withdraw-expiry
   // -----------------------------------------------------------------
@@ -431,6 +511,7 @@ describe('POST /auth/guardian-consent/resend (real rate limiting)', () => {
       providers: [
         { provide: GuardianConsentService, useValue: guardianConsentService },
         { provide: GuardianCardVerificationService, useValue: { getRequirements: jest.fn(), createIntent: jest.fn(), complete: jest.fn() } },
+        { provide: GuardianEmailChangeLimiter, useValue: { run: jest.fn() } },
         AuthThrottlerGuard,
       ],
     })
