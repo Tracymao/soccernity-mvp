@@ -16,13 +16,13 @@ import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 // GET /admin/users response shape — lean, list-appropriate columns only
 // (Section 5.5's low-bandwidth discipline, the same reasoning
 // ARTICLE_LIST_SELECT/CLUB_SELECT/GROUP_SELECT already follow).
-// `displayName`, not a `username` — User has no username column
-// (Decision Log #58); UsersPage.tsx's own "Username" column header is
-// bound to displayName instead (flagged in that PR's own comment, not
-// silently mismatched).
+// Admins see BOTH the real displayName and the optional username (added by
+// profile/username-column-and-display-convention) -- the admin console is not
+// an "other user" surface, so no publicName resolution here.
 const USER_LIST_SELECT = {
   id: true,
   displayName: true,
+  username: true,
   email: true,
   accountStatus: true,
   createdAt: true,

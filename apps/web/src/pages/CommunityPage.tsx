@@ -201,7 +201,7 @@ export default function CommunityPage() {
         {token && (
           <PostComposer
             accessToken={token}
-            authorName={profile?.displayName ?? "You"}
+            authorName={profile?.publicName ?? "You"}
             contest={contest}
             initialMode={composeContest ? "contest" : "post"}
             onCreated={(post) =>

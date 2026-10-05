@@ -206,7 +206,7 @@ export default function ConversationPage() {
   // No router state (a direct visit / hard refresh) -> generic header;
   // see this file's own header comment on why nothing better is
   // recoverable from this route alone.
-  const headerName = passedOther ? passedOther.displayName ?? "Deleted user" : "Conversation";
+  const headerName = passedOther ? passedOther.publicName ?? "Deleted user" : "Conversation";
 
   const isConsentBlocked = sendError !== null && /guardian consent/i.test(sendError);
 
@@ -218,7 +218,7 @@ export default function ConversationPage() {
 
       <header className="conversation-page__header">
         <span className="conversation-page__avatar" aria-hidden="true">
-          {initialsFor(passedOther?.displayName ?? null)}
+          {initialsFor(passedOther?.publicName ?? null)}
         </span>
         <h1 className="conversation-page__name">{headerName}</h1>
       </header>

@@ -46,7 +46,7 @@ function EntryBody({ entry }: { entry: AdminContestEntry }) {
   return (
     <div className="ct-entry__body">
       <div className="ct-entrant">
-        <span className="ct-entrant__name">{entry.entrant.displayName}</span>
+        <span className="ct-entrant__name">{entry.entrant.publicName}</span>
         <span className="ct-entrant__time">Submitted {formatDateTime(entry.submittedAt)}</span>
       </div>
       <p className="ct-entry__text">{entry.post.contentText}</p>
@@ -233,7 +233,7 @@ export default function ContestJudgeWeekPage() {
                     </span>
                   ) : (
                     <PositionChips
-                      ariaLabel={`Position for ${entry.entrant.displayName}`}
+                      ariaLabel={`Position for ${entry.entrant.publicName}`}
                       value={positions[entry.entryId] ?? null}
                       onChange={(v) =>
                         setPositions((prev) => ({ ...prev, [entry.entryId]: v }))

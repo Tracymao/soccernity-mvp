@@ -233,7 +233,9 @@ describe('ClubsService', () => {
   });
 
   describe('getClubMembers', () => {
-    const memberRow = (id: string, displayName: string) => ({ id, displayName });
+    const memberRow = (id: string, displayName: string) => ({ id, username: null, displayName });
+    // What the API returns for a row: publicName only, no raw displayName.
+    const memberView = (id: string, name: string) => ({ id, publicName: name });
 
     it('throws NotFoundException for a non-existent club, before querying users', async () => {
       const prisma = buildPrismaMock();
@@ -266,9 +268,9 @@ describe('ClubsService', () => {
         },
       ]);
       expect(callArgs.orderBy).toEqual([{ displayName: 'asc' }, { id: 'asc' }]);
-      expect(callArgs.select).toEqual({ id: true, displayName: true });
+      expect(callArgs.select).toEqual({ id: true, username: true, displayName: true });
       expect(result).toEqual({
-        items: [{ ...memberRow('u-1', 'Ada Lovelace'), isFollowing: false }],
+        items: [{ ...memberView('u-1', 'Ada Lovelace'), isFollowing: false }],
         nextCursor: null,
       });
     });
@@ -297,7 +299,7 @@ describe('ClubsService', () => {
       const service = new ClubsService(prisma);
       const result = await service.getClubMembers('club-1', 'caller-1', { limit: 1 });
 
-      expect(result.items).toEqual([{ ...memberRow('u-1', 'Ada'), isFollowing: false }]);
+      expect(result.items).toEqual([{ ...memberView('u-1', 'Ada'), isFollowing: false }]);
       expect(result.nextCursor).toBe(encodeClubCursor({ name: 'Ada', id: 'u-1' }));
     });
 
@@ -337,8 +339,8 @@ describe('ClubsService', () => {
       const result = await service.getClubMembers('club-1', 'caller-1', {});
 
       expect(result.items).toEqual([
-        { ...memberRow('u-1', 'Ada'), isFollowing: true },
-        { ...memberRow('u-2', 'Bo'), isFollowing: false },
+        { ...memberView('u-1', 'Ada'), isFollowing: true },
+        { ...memberView('u-2', 'Bo'), isFollowing: false },
       ]);
       expect(follow.findMany).toHaveBeenCalledTimes(1);
       expect(follow.findMany).toHaveBeenCalledWith({
@@ -359,7 +361,7 @@ describe('ClubsService', () => {
       const result = await service.getClubMembers('club-1', 'caller-1', {});
 
       expect(follow.findMany).not.toHaveBeenCalled();
-      expect(result.items).toEqual([{ ...memberRow('caller-1', 'Me'), isFollowing: false }]);
+      expect(result.items).toEqual([{ ...memberView('caller-1', 'Me'), isFollowing: false }]);
     });
 
     it('issues no follow query for an empty roster page and returns an empty page', async () => {

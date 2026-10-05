@@ -22,7 +22,7 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?
 
 export interface NotificationActor {
   id: string;
-  displayName: string;
+  publicName: string;
 }
 
 // like / comment -- payloadRefId is the Post, not an actor. There is
@@ -37,7 +37,7 @@ export interface NotificationPost {
 
 export interface NotificationOtherParticipant {
   id: string;
-  displayName: string | null;
+  publicName: string | null;
 }
 
 export interface NotificationFixture {

@@ -15,6 +15,8 @@ vi.mock("../../api/users", async () => {
       id: "u1",
       email: "ada@example.com",
       displayName: "Ada Lovelace",
+      username: null,
+      publicName: "Ada Lovelace",
       isMinor: false,
     }),
   };

@@ -29,7 +29,7 @@ function post(overrides: Partial<FeedPost> = {}): FeedPost {
   return {
     id: "post-1",
     authorId: "user-1",
-    author: { id: "user-1", displayName: "Me", isFollowing: false },
+    author: { id: "user-1", publicName: "Me", isFollowing: false },
     contentText: "My post",
     mediaUrls: [],
     clubPageId: null,
@@ -49,7 +49,7 @@ function comment(overrides: Partial<FeedComment> = {}): FeedComment {
     id: "c1",
     postId: "post-1",
     authorId: "user-2",
-    author: { id: "user-2", displayName: "Other", isFollowing: false },
+    author: { id: "user-2", publicName: "Other", isFollowing: false },
     contentText: "a comment",
     createdAt: new Date().toISOString(),
     ...overrides,

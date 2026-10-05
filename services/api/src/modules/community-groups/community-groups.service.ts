@@ -16,6 +16,7 @@ import {
 import { CreateCommunityGroupDto } from './dto/create-community-group.dto';
 import { ListCommunityGroupMembersQueryDto } from './dto/list-community-group-members-query.dto';
 import { ListCommunityGroupsQueryDto } from './dto/list-community-groups-query.dto';
+import { PUBLIC_NAME_SELECT, toPublicUser } from '../users/public-name.util';
 
 // Response shape for every GET /community-groups and GET
 // /community-groups/:id entry (Build Plan Sprint 3, Decision Log #281).
@@ -77,12 +78,14 @@ export interface JoinGroupState {
 // (both of those are private, unexported consts in other modules). No
 // email, phone, dateOfBirth, isMinor, verificationStatus, or
 // passwordHash ever leaves Postgres via this select.
+// Sends { id, publicName } (username if set, else displayName), never the raw
+// displayName. Ordering/cursor stay on displayName (flagged follow-up).
 const GROUP_MEMBER_SELECT = {
   id: true,
-  displayName: true,
+  ...PUBLIC_NAME_SELECT,
 } as const;
 
-export type CommunityGroupMemberView = Prisma.UserGetPayload<{ select: typeof GROUP_MEMBER_SELECT }>;
+export type CommunityGroupMemberView = { id: string; publicName: string };
 
 export interface CommunityGroupMemberPage {
   items: CommunityGroupMemberView[];
@@ -418,7 +421,7 @@ export class CommunityGroupsService {
         ? encodeCommunityGroupMemberCursor({ name: last.displayName, id: last.id })
         : null;
 
-    return { items: trimmed, nextCursor };
+    return { items: trimmed.map(toPublicUser), nextCursor };
   }
 
   private buildMemberCursorFilter(rawCursor: string): Prisma.UserWhereInput {

@@ -356,7 +356,7 @@ describe('AccountDeletionSweepService e2e: 30-day anonymize-in-place + investiga
         .set('Authorization', `Bearer ${userB.accessToken}`)
         .expect(200);
       expect(res.body.contentText).toBe("User A's post");
-      expect(res.body.author.displayName).toBe(DELETED_USER_DISPLAY_NAME);
+      expect(res.body.author.publicName).toBe(DELETED_USER_DISPLAY_NAME);
     });
 
     it('a deactivated / pending_deletion author\'s post is still HIDDEN from the feed — only anonymized (deleted) authors\' posts stay visible', async () => {

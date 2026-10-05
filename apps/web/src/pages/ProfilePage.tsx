@@ -139,13 +139,13 @@ export default function ProfilePage() {
             EditProfileModal.tsx's header comment for the same gap on the
             edit side. Rendered as initials, not a broken/missing image. */}
         <div className="profile-header__avatar" aria-hidden="true">
-          {initialsFor(profile.displayName)}
+          {initialsFor(profile.publicName)}
         </div>
 
         <div className="profile-header__body">
           <div className="profile-header__top">
             <div>
-              <h1 className="profile-header__name">{profile.displayName}</h1>
+              <h1 className="profile-header__name">{profile.publicName}</h1>
               {/* No @username/handle field exists on the User model --
                   email shown instead as the closest real identity data,
                   flagged as a departure from the Figma frame's @handle. */}
@@ -201,7 +201,7 @@ export default function ProfilePage() {
           )}
           <ul className="profile-follow-list">
             {followItems.map((item) => (
-              <li key={item.id}>{item.displayName}</li>
+              <li key={item.id}>{item.publicName}</li>
             ))}
           </ul>
           {followLoading && <p className="profile-section__body">Loading…</p>}

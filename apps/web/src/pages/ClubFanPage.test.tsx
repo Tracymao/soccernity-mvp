@@ -45,7 +45,7 @@ function post(overrides: Partial<FeedPost> = {}): FeedPost {
   return {
     id: "post-1",
     authorId: "author-1",
-    author: { id: "author-1", displayName: "Marcus Obi", isFollowing: false },
+    author: { id: "author-1", publicName: "Marcus Obi", isFollowing: false },
     contentText: "Massive win at the weekend — 3–1 and up to 2nd in the league.",
     mediaUrls: [],
     clubPageId: "club-s",
@@ -115,11 +115,11 @@ describe("ClubFanPage", () => {
     vi.mocked(getClubById).mockResolvedValueOnce(SURULERE);
     vi.mocked(getClubFeed).mockReset().mockResolvedValueOnce({
       items: [
-        post({ id: "p1", author: { id: "a1", displayName: "Marcus Obi", isFollowing: false } }),
+        post({ id: "p1", author: { id: "a1", publicName: "Marcus Obi", isFollowing: false } }),
         post({
           id: "p2",
           contentText: "Anyone driving to the away match on Sunday with a spare seat?",
-          author: { id: "a2", displayName: "Tunde Adeyemi", isFollowing: false },
+          author: { id: "a2", publicName: "Tunde Adeyemi", isFollowing: false },
         }),
       ],
       nextCursor: null,
@@ -158,11 +158,11 @@ describe("ClubFanPage", () => {
     vi.mocked(getClubMembers)
       .mockReset()
       .mockResolvedValueOnce({
-        items: [{ id: "m1", displayName: "Marcus Obi", isFollowing: false }],
+        items: [{ id: "m1", publicName: "Marcus Obi", isFollowing: false }],
         nextCursor: "cursor-1",
       })
       .mockResolvedValueOnce({
-        items: [{ id: "m2", displayName: "Tunde Adeyemi", isFollowing: false }],
+        items: [{ id: "m2", publicName: "Tunde Adeyemi", isFollowing: false }],
         nextCursor: null,
       });
 
@@ -180,7 +180,7 @@ describe("ClubFanPage", () => {
     window.sessionStorage.setItem("sn_access_token", "test-token");
     vi.mocked(getClubById).mockResolvedValueOnce(SURULERE);
     vi.mocked(getClubMembers).mockReset().mockResolvedValueOnce({
-      items: [{ id: "m1", displayName: "Marcus Obi", isFollowing: false }],
+      items: [{ id: "m1", publicName: "Marcus Obi", isFollowing: false }],
       nextCursor: null,
     });
     vi.mocked(followUser).mockResolvedValueOnce({ following: true });
@@ -198,7 +198,7 @@ describe("ClubFanPage", () => {
     window.sessionStorage.setItem("sn_access_token", "test-token");
     vi.mocked(getClubById).mockResolvedValueOnce(SURULERE);
     vi.mocked(getClubMembers).mockReset().mockResolvedValueOnce({
-      items: [{ id: "m1", displayName: "Marcus Obi", isFollowing: true }],
+      items: [{ id: "m1", publicName: "Marcus Obi", isFollowing: true }],
       nextCursor: null,
     });
 

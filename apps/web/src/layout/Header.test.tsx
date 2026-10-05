@@ -43,6 +43,8 @@ const BASE_PROFILE: UserProfile = {
   email: "adeniyi@example.com",
   phone: null,
   displayName: "Adeniyi Christiana",
+  username: null,
+  publicName: "Adeniyi Christiana",
   dateOfBirth: "1997-11-08",
   isMinor: false,
   role: "fan",
@@ -424,7 +426,7 @@ describe("Header -- drawer identity block (Decision Log #168)", () => {
   });
 
   it("never renders a handle / username row (no real data for one -- Decision Log #58)", async () => {
-    vi.mocked(getUser).mockResolvedValueOnce({ ...BASE_PROFILE, displayName: "Adeniyi Christiana" });
+    vi.mocked(getUser).mockResolvedValueOnce({ ...BASE_PROFILE, displayName: "Adeniyi Christiana", publicName: "Adeniyi Christiana" });
     const drawer = openDrawer();
 
     await within(drawer).findByText("Adeniyi Christiana");

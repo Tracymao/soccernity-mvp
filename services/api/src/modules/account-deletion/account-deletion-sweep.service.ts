@@ -296,6 +296,9 @@ export class AccountDeletionSweepService {
           email: deletedUserEmail(userId),
           phone: null,
           displayName: DELETED_USER_DISPLAY_NAME,
+          // profile/username-column-and-display-convention: release the handle
+          // (it is personal data, and would otherwise stay reserved forever).
+          username: null,
           passwordHash: UNUSABLE_PASSWORD_HASH,
           dateOfBirth: null,
           clubAffiliationId: null,

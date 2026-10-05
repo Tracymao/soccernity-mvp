@@ -69,16 +69,16 @@ function SuggestedRow({ user, accessToken }: SuggestedRowProps) {
   return (
     <li className="suggested-card__row">
       <span className="suggested-card__avatar" aria-hidden="true">
-        {initialsFor(user.displayName)}
+        {initialsFor(user.publicName)}
       </span>
-      <span className="suggested-card__name">{user.displayName}</span>
+      <span className="suggested-card__name">{user.publicName}</span>
       <button
         type="button"
         className={following ? "suggested-card__follow suggested-card__follow--following" : "suggested-card__follow"}
         onClick={toggle}
         disabled={pending}
         aria-pressed={following}
-        aria-label={`${following ? "Unfollow" : "Follow"} ${user.displayName}`}
+        aria-label={`${following ? "Unfollow" : "Follow"} ${user.publicName}`}
       >
         {pending ? "…" : following ? "Following" : "Follow"}
       </button>

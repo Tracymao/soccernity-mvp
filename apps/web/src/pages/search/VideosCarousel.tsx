@@ -50,7 +50,7 @@ function toVideoItem(post: FeedPost): VideoItem | null {
     postId: post.id,
     url,
     viewCount: post.viewCount,
-    authorName: post.author.displayName,
+    authorName: post.author.publicName,
     caption: post.contentText,
   };
 }

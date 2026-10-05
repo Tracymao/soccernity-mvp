@@ -59,9 +59,9 @@ export default function GroupMemberRow({ member, accessToken, currentUserId }: G
     <li className="groups-roster__row">
       <div className="groups-roster__identity">
         <span className="groups-roster__avatar" aria-hidden="true">
-          {initialsFor(member.displayName)}
+          {initialsFor(member.publicName)}
         </span>
-        <span className="groups-roster__name">{member.displayName}</span>
+        <span className="groups-roster__name">{member.publicName}</span>
       </div>
       {!isSelf && (
         <button

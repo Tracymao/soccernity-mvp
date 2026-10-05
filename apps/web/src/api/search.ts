@@ -25,7 +25,7 @@ export type SearchScope = "users" | "clubs" | "posts";
 // own SEARCH_USER_SELECT comment).
 export interface SearchUserResult {
   id: string;
-  displayName: string;
+  publicName: string;
 }
 
 // Same field set GET /clubs itself returns, minus the per-caller `joined`

@@ -110,7 +110,7 @@ describe('SearchController (HTTP layer)', () => {
 
   it('returns the service response body as-is on success', async () => {
     const body = {
-      users: { items: [{ id: 'user-1', displayName: 'Chelsea Fan' }], nextCursor: null },
+      users: { items: [{ id: 'user-1', publicName: 'Chelsea Fan' }], nextCursor: null },
       clubs: { items: [], nextCursor: null },
       posts: { items: [], nextCursor: null },
     };

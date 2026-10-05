@@ -99,12 +99,12 @@ function current(phase: ContestPhase, judged: number): AdminCurrentContest {
     weeklyWinners:
       judged >= 1
         ? [
-            { weekNumber: 1, position: 1, userId: "u-ada", displayName: "Ada B.", entryId: "e1", postId: "p1" },
-            { weekNumber: 1, position: 2, userId: "u-ben", displayName: "Ben C.", entryId: "e2", postId: "p2" },
+            { weekNumber: 1, position: 1, userId: "u-ada", publicName: "Ada B.", entryId: "e1", postId: "p1" },
+            { weekNumber: 1, position: 2, userId: "u-ben", publicName: "Ben C.", entryId: "e2", postId: "p2" },
           ]
         : [],
     monthlyStandings:
-      phase === "crowned" ? [{ position: 1, userId: "u-ada", displayName: "Ada B." }] : [],
+      phase === "crowned" ? [{ position: 1, userId: "u-ada", publicName: "Ada B." }] : [],
   };
 }
 
@@ -215,7 +215,7 @@ function cycleWithOpenWeek(entries: number): AdminCurrentContest {
   w3.entries = Array.from({ length: entries }, (_, i) => ({
     entryId: `w3e${i}`,
     submittedAt: "2026-09-17T09:12:00.000Z",
-    entrant: { userId: `u${i}`, displayName: `Player ${i}` },
+    entrant: { userId: `u${i}`, publicName: `Player ${i}` },
     post: {
       id: `pw3${i}`,
       contentText: `entry ${i}`,
@@ -282,7 +282,7 @@ describe("ContestJudgeWeekPage", () => {
       {
         entryId: "j1",
         submittedAt: "2026-09-03T09:12:00.000Z",
-        entrant: { userId: "u-ada", displayName: "Ada B." },
+        entrant: { userId: "u-ada", publicName: "Ada B." },
         post: {
           id: "p",
           contentText: "x",
@@ -313,10 +313,10 @@ describe("ContestCrownWinnersPage", () => {
   it("deduplicates the finalist pool by userId and submits standings", async () => {
     const c = current("final_live", 3);
     c.weeklyWinners = [
-      { weekNumber: 1, position: 1, userId: "u-ada", displayName: "Ada B.", entryId: "e1", postId: "p1" },
-      { weekNumber: 2, position: 2, userId: "u-ada", displayName: "Ada B.", entryId: "e2", postId: "p2" },
-      { weekNumber: 3, position: 1, userId: "u-ada", displayName: "Ada B.", entryId: "e3", postId: "p3" },
-      { weekNumber: 1, position: 2, userId: "u-ben", displayName: "Ben C.", entryId: "e4", postId: "p4" },
+      { weekNumber: 1, position: 1, userId: "u-ada", publicName: "Ada B.", entryId: "e1", postId: "p1" },
+      { weekNumber: 2, position: 2, userId: "u-ada", publicName: "Ada B.", entryId: "e2", postId: "p2" },
+      { weekNumber: 3, position: 1, userId: "u-ada", publicName: "Ada B.", entryId: "e3", postId: "p3" },
+      { weekNumber: 1, position: 2, userId: "u-ben", publicName: "Ben C.", entryId: "e4", postId: "p4" },
     ];
     vi.mocked(getContestCycle).mockResolvedValue(c as never);
     vi.mocked(crownContestCycle).mockResolvedValue({} as never);

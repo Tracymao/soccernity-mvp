@@ -14,7 +14,7 @@ vi.mock("../../api/users", async () => {
 import { followUser, getSuggestedUsers, unfollowUser } from "../../api/users";
 
 function users(n: number) {
-  return Array.from({ length: n }, (_, i) => ({ id: `u${i + 1}`, displayName: `Person ${i + 1}` }));
+  return Array.from({ length: n }, (_, i) => ({ id: `u${i + 1}`, publicName: `Person ${i + 1}` }));
 }
 
 afterEach(cleanup);
@@ -26,7 +26,7 @@ beforeEach(() => {
 
 describe("SuggestedPeoplePanel", () => {
   it("requests the top 3 with the caller's token and renders each person with initials and a Follow button", async () => {
-    vi.mocked(getSuggestedUsers).mockResolvedValue({ items: [{ id: "u1", displayName: "Emeka John" }] });
+    vi.mocked(getSuggestedUsers).mockResolvedValue({ items: [{ id: "u1", publicName: "Emeka John" }] });
     render(<SuggestedPeoplePanel accessToken="tok" currentUserId="me" />);
 
     expect(await screen.findByText("Emeka John")).not.toBeNull();

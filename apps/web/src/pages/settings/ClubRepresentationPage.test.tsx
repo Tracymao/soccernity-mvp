@@ -62,6 +62,8 @@ function profile(represented: { id: string; name: string } | null): UserProfile 
     email: "fan@example.com",
     phone: null,
     displayName: "Fan",
+    username: null,
+    publicName: "Fan",
     dateOfBirth: "1998-07-04",
     isMinor: false,
     role: "fan",

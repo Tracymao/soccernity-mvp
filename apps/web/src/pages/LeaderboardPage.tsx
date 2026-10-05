@@ -138,10 +138,10 @@ function ContestBoard({
                 <td>
                   <div className="lb-player">
                     <span className="lb-avatar" aria-hidden="true">
-                      {initialsFor(s.displayName)}
+                      {initialsFor(s.publicName)}
                     </span>
                     <span className="lb-player__text">
-                      <span className="lb-player__name">{s.displayName}</span>
+                      <span className="lb-player__name">{s.publicName}</span>
                       <span className="lb-player__handle">{ordinal(s.position)} · Monthly winner</span>
                     </span>
                   </div>
@@ -168,9 +168,9 @@ function ContestBoard({
                 <td>
                   <div className="lb-player">
                     <span className="lb-avatar" aria-hidden="true">
-                      {initialsFor(w.displayName)}
+                      {initialsFor(w.publicName)}
                     </span>
-                    <span className="lb-player__name">{w.displayName}</span>
+                    <span className="lb-player__name">{w.publicName}</span>
                   </div>
                 </td>
               </tr>
@@ -520,10 +520,10 @@ export default function LeaderboardPage() {
                     <td>
                       <div className="lb-player">
                         <span className="lb-avatar" aria-hidden="true">
-                          {initialsFor(row.displayName)}
+                          {initialsFor(row.publicName)}
                         </span>
                         <span className="lb-player__name">
-                          {row.displayName}
+                          {row.publicName}
                           {isYou && <span className="lb-you-tag">You</span>}
                         </span>
                       </div>

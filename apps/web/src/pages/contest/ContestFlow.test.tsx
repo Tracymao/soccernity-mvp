@@ -75,7 +75,7 @@ function feedPost(): FeedPost {
   return {
     id: "my-entry-post",
     authorId: "user-1",
-    author: { id: "user-1", displayName: "Ada Player", isFollowing: false },
+    author: { id: "user-1", publicName: "Ada Player", isFollowing: false },
     contentText: "Nutmeg challenge — week 2",
     mediaUrls: [],
     clubPageId: null,
@@ -95,7 +95,7 @@ beforeEach(() => {
   window.localStorage.clear();
   window.sessionStorage.setItem("sn_access_token", TOKEN);
   vi.mocked(getFeed).mockReset().mockResolvedValue({ items: [], nextCursor: null });
-  vi.mocked(getUser).mockReset().mockResolvedValue({ displayName: "Ada Player" } as never);
+  vi.mocked(getUser).mockReset().mockResolvedValue({ publicName: "Ada Player" } as never);
   vi.mocked(listClubs).mockReset().mockResolvedValue({ items: [], nextCursor: null });
   vi.mocked(createPost).mockReset();
   vi.mocked(getCurrentContest).mockReset();
@@ -156,7 +156,7 @@ describe("contest posting flow", () => {
             weekNumber: 2,
             position: 1,
             userId: "user-1",
-            displayName: "Ada Player",
+            publicName: "Ada Player",
             entryId: "ce-1",
             postId: createdPostId,
           },

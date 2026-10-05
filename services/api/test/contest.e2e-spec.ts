@@ -267,7 +267,7 @@ describe('Contest e2e: the weekly-progression state machine + points ledger', ()
     expect(current.body.phase).toBe('crowned');
     expect(current.body.isAcceptingEntries).toBe(false);
     expect(current.body.monthlyStandings).toHaveLength(3);
-    expect(current.body.monthlyStandings[0]).toMatchObject({ position: 1, displayName: 'Contest alice' });
+    expect(current.body.monthlyStandings[0]).toMatchObject({ position: 1, publicName: 'Contest alice' });
 
     // a second cycle can now be created (the first is 'completed')
     await request(app.getHttpServer())
@@ -430,7 +430,7 @@ describe('Contest e2e: the weekly-progression state machine + points ledger', ()
       expect(week1.entries).toHaveLength(2);
       const entryA = week1.entries.find((e: { entrant: { userId: string } }) => e.entrant.userId === a.userId);
       const entryB = week1.entries.find((e: { entrant: { userId: string } }) => e.entrant.userId === b.userId);
-      expect(entryA.entrant.displayName).toBe('Contest adm-a');
+      expect(entryA.entrant.publicName).toBe('Contest adm-a');
       expect(entryA.post.id).toBe(postA);
       expect(entryA.post).toHaveProperty('contentText');
       expect(entryA.post).toHaveProperty('mediaUrls');

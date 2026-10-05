@@ -49,6 +49,8 @@ export interface AuthUserSummary {
   email: string;
   phone: string | null;
   displayName: string;
+  username: string | null;
+  publicName: string;
   dateOfBirth: string;
   isMinor: boolean;
   role: "fan" | "player" | "admin";

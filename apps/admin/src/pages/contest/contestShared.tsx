@@ -127,7 +127,7 @@ export function PositionChips({
 
 export interface Finalist {
   userId: string;
-  displayName: string;
+  publicName: string;
   placings: string; // "Week 1 · 1st · Week 2 · 2nd"
 }
 
@@ -143,7 +143,7 @@ export function dedupeFinalists(weeklyWinners: ContestWinnerSummary[]): Finalist
     } else {
       byUser.set(w.userId, {
         userId: w.userId,
-        displayName: w.displayName,
+        publicName: w.publicName,
         placings: placing,
       });
     }

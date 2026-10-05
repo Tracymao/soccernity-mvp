@@ -32,6 +32,8 @@ const TOKENS: LoginResponse = {
     email: "sam@example.com",
     phone: null,
     displayName: "Sam",
+    username: null,
+    publicName: "Sam",
     dateOfBirth: "1990-01-01",
     isMinor: false,
     role: "fan",

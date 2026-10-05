@@ -25,7 +25,7 @@ function fakeAccessToken(sub = "user-1"): string {
 function conversation(overrides: Partial<Conversation> = {}): Conversation {
   return {
     id: "convo-1",
-    otherParticipant: { id: "user-2", displayName: "Ada Obi" },
+    otherParticipant: { id: "user-2", publicName: "Ada Obi" },
     lastMessageAt: "2026-09-13T10:00:00.000Z",
     createdAt: "2026-09-01T00:00:00.000Z",
     lastMessage: { contentText: "See you at training", senderId: "user-2", sentAt: "2026-09-13T10:00:00.000Z" },
@@ -93,7 +93,7 @@ describe("MessagesPage", () => {
   it("renders 'Deleted user' for a conversation whose other participant was hard-deleted (Decision Log #44)", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     vi.mocked(listConversations).mockResolvedValueOnce({
-      items: [conversation({ otherParticipant: { id: "user-2", displayName: null }, lastMessage: null })],
+      items: [conversation({ otherParticipant: { id: "user-2", publicName: null }, lastMessage: null })],
       nextCursor: null,
     });
 
@@ -118,7 +118,7 @@ describe("MessagesPage", () => {
     vi.mocked(listConversations)
       .mockResolvedValueOnce({ items: [conversation()], nextCursor: "cursor-1" })
       .mockResolvedValueOnce({
-        items: [conversation({ id: "convo-2", otherParticipant: { id: "user-3", displayName: "Bola" } })],
+        items: [conversation({ id: "convo-2", otherParticipant: { id: "user-3", publicName: "Bola" } })],
         nextCursor: null,
       });
 

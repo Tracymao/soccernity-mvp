@@ -5,7 +5,10 @@
 // REAL, CONFIRMED BACKEND GAP (flagged plainly here and in this PR's
 // description, not silently worked around): PATCH /users/:id
 // (services/api/src/modules/users/dto/update-user.dto.ts) accepts ONLY
-// `displayName` and `phone`. The Figma frame's Bio, Location, Preferred
+// `displayName`, `phone` and (profile/username-column-and-display-convention)
+// `username` -- the Username field below has no dedicated Figma frame beyond
+// the unbuilt Create Profile screen (Decision Log #58), so it is built plainly.
+// The Figma frame's Bio, Location, Preferred
 // Club, and Date of Birth fields have NO real persistence path today --
 //   - dateOfBirth is deliberately excluded server-side (changing it could
 //     flip the safeguarding-sensitive `isMinor` field, and this codebase
@@ -67,6 +70,9 @@ function splitDisplayName(displayName: string): { firstName: string; lastName: s
   return { firstName: trimmed.slice(0, spaceIndex), lastName: trimmed.slice(spaceIndex + 1) };
 }
 
+// Mirrors services/api's UpdateUserDto.username rule.
+const USERNAME_PATTERN = /^[A-Za-z0-9_]{3,30}$/;
+
 type ManagePanel = null | "password" | "deactivate" | "delete";
 
 export default function EditProfileModal({ accessToken, user, onClose, onSaved }: EditProfileModalProps) {
@@ -75,6 +81,7 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
   const [firstName, setFirstName] = useState(initialName.firstName);
   const [lastName, setLastName] = useState(initialName.lastName);
   const [phone, setPhone] = useState(user.phone ?? "");
+  const [username, setUsername] = useState(user.username ?? "");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -118,11 +125,21 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
       return;
     }
 
+    // Username is only sent when it changed. Empty clears it (null), which
+    // returns the account to showing its full name to other users.
+    const trimmedUsername = username.trim();
+    const usernameChanged = trimmedUsername !== (user.username ?? "");
+    if (usernameChanged && trimmedUsername && !USERNAME_PATTERN.test(trimmedUsername)) {
+      setSaveError("Username must be 3-30 characters: letters, numbers and underscores only.");
+      return;
+    }
+
     setSaving(true);
     try {
       const updated = await updateUser(accessToken, user.id, {
         displayName,
         ...(phone.trim() ? { phone: phone.trim() } : {}),
+        ...(usernameChanged ? { username: trimmedUsername ? trimmedUsername : null } : {}),
       });
       setSaveSuccess(true);
       onSaved(updated);
@@ -261,6 +278,24 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
                   aria-label="Last name"
                 />
               </div>
+            </div>
+
+            <div className="edit-profile-field">
+              <label className="edit-profile-field__label" htmlFor="edit-profile-username">
+                Username
+              </label>
+              <input
+                id="edit-profile-username"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                placeholder="e.g. goalie_9"
+                autoCapitalize="none"
+                autoCorrect="off"
+              />
+              <p className="edit-profile-field__hint">
+                Optional. If you set one, other people see your username instead of your full name. 3-30 letters,
+                numbers or underscores; not case-sensitive.
+              </p>
             </div>
 
             <div className="edit-profile-field">

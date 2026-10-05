@@ -53,7 +53,7 @@ export interface JoinClubResult {
 // club's memberCount.
 export interface ClubMember {
   id: string;
-  displayName: string;
+  publicName: string;
   isFollowing: boolean;
 }
 

@@ -116,6 +116,7 @@ describe('AccountDeletionSweepService', () => {
           email: deletedUserEmail('user-1'),
           phone: null,
           displayName: DELETED_USER_DISPLAY_NAME,
+          username: null,
           passwordHash: UNUSABLE_PASSWORD_HASH,
           dateOfBirth: null,
           clubAffiliationId: null,

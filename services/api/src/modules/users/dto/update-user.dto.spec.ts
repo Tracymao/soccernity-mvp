@@ -42,4 +42,26 @@ describe('UpdateUserDto', () => {
     expect(errors.length).toBeGreaterThan(0);
     expect(errors[0].property).toBe('phone');
   });
+
+  describe('username', () => {
+    const validate_ = async (body: object) => validate(plainToInstance(UpdateUserDto, body), { whitelist: true, forbidNonWhitelisted: true });
+
+    it.each(['abc', 'goalie_9', 'Goalie_9', 'a'.repeat(30), '___', '123'])('accepts %s', async (username) => {
+      expect(await validate_({ username })).toHaveLength(0);
+    });
+
+    it.each(['ab', 'a'.repeat(31), 'has space', 'dash-ed', 'émile', 'name!', '@goalie'])('rejects %s', async (username) => {
+      const errors = await validate_({ username });
+      expect(errors.map((e) => e.property)).toContain('username');
+    });
+
+    it('accepts null (clears the username)', async () => {
+      expect(await validate_({ username: null })).toHaveLength(0);
+    });
+
+    it('rejects a non-string username', async () => {
+      const errors = await validate_({ username: 12345 });
+      expect(errors.map((e) => e.property)).toContain('username');
+    });
+  });
 });

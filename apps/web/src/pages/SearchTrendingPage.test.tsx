@@ -186,7 +186,7 @@ describe("SearchTrendingPage", () => {
   it("debounces (300ms) then calls the real GET /search and renders grouped results", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     vi.mocked(searchAll).mockResolvedValueOnce({
-      users: { items: [{ id: "u1", displayName: "Ada Obi" }], nextCursor: null },
+      users: { items: [{ id: "u1", publicName: "Ada Obi" }], nextCursor: null },
       clubs: {
         items: [{ id: "c1", name: "Ikoyi Rovers FC", league: "Lagos Sunday League", country: "Nigeria", logoUrl: null, memberCount: 42 }],
         nextCursor: null,
@@ -196,7 +196,7 @@ describe("SearchTrendingPage", () => {
           {
             id: "p1",
             contentText: "Great match today!",
-            author: { id: "u2", displayName: "Bola Ade" },
+            author: { id: "u2", publicName: "Bola Ade" },
             createdAt: new Date().toISOString(),
             likeCount: 5,
             commentCount: 2,
@@ -222,7 +222,7 @@ describe("SearchTrendingPage", () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     vi.mocked(searchAll).mockResolvedValueOnce({
       ...emptyResults(),
-      users: { items: [{ id: "u1", displayName: "Ada Obi" }], nextCursor: null },
+      users: { items: [{ id: "u1", publicName: "Ada Obi" }], nextCursor: null },
     });
 
     renderPage();
@@ -247,9 +247,9 @@ describe("SearchTrendingPage", () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     vi.mocked(searchAll).mockResolvedValueOnce({
       ...emptyResults(),
-      users: { items: [{ id: "u1", displayName: "Ada Obi" }], nextCursor: "cursor-1" },
+      users: { items: [{ id: "u1", publicName: "Ada Obi" }], nextCursor: "cursor-1" },
     });
-    vi.mocked(searchUsers).mockResolvedValueOnce({ items: [{ id: "u2", displayName: "Bola Ade" }], nextCursor: null });
+    vi.mocked(searchUsers).mockResolvedValueOnce({ items: [{ id: "u2", publicName: "Bola Ade" }], nextCursor: null });
 
     renderPage();
     fireEvent.change(screen.getByLabelText(/search players, clubs, posts/i), { target: { value: "ad" } });

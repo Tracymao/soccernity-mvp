@@ -1,5 +1,5 @@
 import { buildTestDobEncryption } from '../../crypto/test-dob-encryption';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { encodeFeedSequenceCursor } from '../feed/cursor.util';
@@ -48,6 +48,7 @@ const FULL_DB_ROW = {
   phone: '+441234567890',
   passwordHash: 'argon2id$super-secret-hash-should-never-leave-this-object',
   displayName: 'Old Name',
+  username: null as string | null,
   dateOfBirth: buildTestDobEncryption().encrypt(new Date('2000-01-01')),
   isMinor: false,
   role: 'fan',
@@ -209,7 +210,7 @@ describe('UsersService', () => {
       const result = await run(row());
       expect(result).toEqual({
         id: 'minor-1',
-        displayName: 'Young Player',
+        publicName: 'Young Player',
         guardianContact: { label: 'Guardian contact', email: 'parent@example.com' },
       });
     });
@@ -533,7 +534,7 @@ describe('UsersService', () => {
 
       const page = await service.getFollowers('user-1', {});
 
-      expect(page.items).toEqual([{ id: 'follower-1', displayName: 'Follower One' }]);
+      expect(page.items).toEqual([{ id: 'follower-1', publicName: 'Follower One' }]);
 
       const callArgs = (prisma.follow.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.select.follower.select).not.toHaveProperty('passwordHash');
@@ -610,7 +611,7 @@ describe('UsersService', () => {
 
       const callArgs = (prisma.follow.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.where).toEqual({ followerId: 'user-1', followee: { is: { accountStatus: 'active' } } });
-      expect(page.items).toEqual([{ id: 'followee-1', displayName: 'Followee One' }]);
+      expect(page.items).toEqual([{ id: 'followee-1', publicName: 'Followee One' }]);
     });
   });
 
@@ -794,13 +795,13 @@ describe('UsersService', () => {
 
       const result = await service.getSuggestedUsers('caller-1', 10);
 
-      expect(result.items).toEqual([{ id: 'user-2', displayName: 'Suggested Person' }]);
+      expect(result.items).toEqual([{ id: 'user-2', publicName: 'Suggested Person' }]);
 
       const callArgs = (prisma.user.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.select).not.toHaveProperty('passwordHash');
       expect(callArgs.select).not.toHaveProperty('isMinor');
       expect(callArgs.select).not.toHaveProperty('email');
-      expect(callArgs.select).toEqual({ id: true, displayName: true });
+      expect(callArgs.select).toEqual({ id: true, username: true, displayName: true });
     });
 
     it('passes limit straight through as a plain top-N cut — no nextCursor/pagination shape', async () => {
@@ -813,8 +814,8 @@ describe('UsersService', () => {
 
       expect(result).toEqual({
         items: [
-          { id: 'user-2', displayName: 'Suggested Person' },
-          { id: 'user-3', displayName: 'Suggested Person' },
+          { id: 'user-2', publicName: 'Suggested Person' },
+          { id: 'user-3', publicName: 'Suggested Person' },
         ],
       });
       expect(result).not.toHaveProperty('nextCursor');
@@ -830,6 +831,106 @@ describe('UsersService', () => {
       const result = await service.getSuggestedUsers('caller-1', 10);
 
       expect(result).toEqual({ items: [] });
+    });
+  });
+
+  describe('username / public name (profile/username-column-and-display-convention)', () => {
+    it("getOwnProfile exposes both the owner's username and the resolved publicName (username wins)", async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(
+        withoutPasswordHash({ ...FULL_DB_ROW, username: 'goalie_9' }),
+      );
+      const result = await new UsersService(prisma, buildTestDobEncryption()).getOwnProfile('user-1');
+      expect(result.username).toBe('goalie_9');
+      expect(result.publicName).toBe('goalie_9');
+      expect(result.displayName).toBe('Old Name');
+    });
+
+    it('getOwnProfile falls back to displayName as publicName when no username is set', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(withoutPasswordHash(FULL_DB_ROW));
+      const result = await new UsersService(prisma, buildTestDobEncryption()).getOwnProfile('user-1');
+      expect(result.username).toBeNull();
+      expect(result.publicName).toBe('Old Name');
+    });
+
+    it('getPublicProfile returns the username as publicName and never leaks the real displayName', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        id: 'u9',
+        username: 'goalie_9',
+        displayName: 'Ada Obi',
+        dateOfBirth: null,
+        isMinor: false,
+        accountStatus: 'active',
+        guardian: null,
+      });
+      const result = await new UsersService(prisma, buildTestDobEncryption()).getPublicProfile('u9');
+      expect(result.publicName).toBe('goalie_9');
+      expect(JSON.stringify(result)).not.toContain('Ada Obi');
+      expect(result).not.toHaveProperty('displayName');
+    });
+
+    it('follower entries show the username when set, the displayName otherwise, and never both', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1', accountStatus: 'active' });
+      const base = { sequence: 1, createdAt: new Date('2026-01-01') };
+      (prisma.follow.findMany as jest.Mock).mockResolvedValue([
+        { ...base, sequence: 2, follower: { id: 'a', username: 'goalie_9', displayName: 'Ada Obi' } },
+        { ...base, sequence: 1, follower: { id: 'b', username: null, displayName: 'Ben Cole' } },
+      ]);
+      const page = await new UsersService(prisma, buildTestDobEncryption()).getFollowers('user-1', {});
+      expect(page.items).toEqual([
+        { id: 'a', publicName: 'goalie_9' },
+        { id: 'b', publicName: 'Ben Cole' },
+      ]);
+    });
+
+    it('updateOwnProfile stores the username lowercased so uniqueness is case-insensitive', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.update as jest.Mock).mockResolvedValue(
+        withoutPasswordHash({ ...FULL_DB_ROW, username: 'goalie_9' }),
+      );
+      await new UsersService(prisma, buildTestDobEncryption()).updateOwnProfile('user-1', { username: 'Goalie_9' });
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { username: 'goalie_9' } }),
+      );
+    });
+
+    it('updateOwnProfile clears the username with null (returning to displayName)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.update as jest.Mock).mockResolvedValue(withoutPasswordHash(FULL_DB_ROW));
+      const result = await new UsersService(prisma, buildTestDobEncryption()).updateOwnProfile('user-1', {
+        username: null,
+      });
+      expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: { username: null } }));
+      expect(result.publicName).toBe('Old Name');
+    });
+
+    it('updateOwnProfile leaves the username untouched when the field is omitted', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.update as jest.Mock).mockResolvedValue(withoutPasswordHash(FULL_DB_ROW));
+      await new UsersService(prisma, buildTestDobEncryption()).updateOwnProfile('user-1', { displayName: 'X' });
+      const data = (prisma.user.update as jest.Mock).mock.calls[0][0].data;
+      expect(data).not.toHaveProperty('username');
+    });
+
+    it('updateOwnProfile turns a unique-constraint race on username into a 409, not a 500', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.update as jest.Mock).mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', { code: 'P2002', clientVersion: 'x' }),
+      );
+      await expect(
+        new UsersService(prisma, buildTestDobEncryption()).updateOwnProfile('user-1', { username: 'taken_name' }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('updateOwnProfile rethrows an unrelated Prisma error', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.update as jest.Mock).mockRejectedValue(new Error('db down'));
+      await expect(
+        new UsersService(prisma, buildTestDobEncryption()).updateOwnProfile('user-1', { username: 'abc' }),
+      ).rejects.toThrow('db down');
     });
   });
 });

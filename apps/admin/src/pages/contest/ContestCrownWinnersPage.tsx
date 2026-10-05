@@ -105,11 +105,11 @@ export default function ContestCrownWinnersPage() {
               {finalists.map((f) => (
                 <div className="ct-finalist" key={f.userId}>
                   <div className="ct-finalist__copy">
-                    <div className="ct-finalist__name">{f.displayName}</div>
+                    <div className="ct-finalist__name">{f.publicName}</div>
                     <div className="ct-finalist__placings">{f.placings}</div>
                   </div>
                   <PositionChips
-                    ariaLabel={`Standing for ${f.displayName}`}
+                    ariaLabel={`Standing for ${f.publicName}`}
                     value={standings[f.userId] ?? null}
                     onChange={(v) => setStandings((prev) => ({ ...prev, [f.userId]: v }))}
                   />

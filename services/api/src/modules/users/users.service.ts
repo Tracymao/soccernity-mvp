@@ -1,5 +1,5 @@
 import { DobEncryptionService } from '../../crypto/dob-encryption.service';
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { decodeFeedSequenceCursor, encodeFeedSequenceCursor } from '../feed/cursor.util';
@@ -8,6 +8,7 @@ import { ENGAGEMENT_POINTS } from '../points/points.constants';
 import { awardPoints } from '../points/points.util';
 import { calculateAge } from '../auth/registration/age.util';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { PUBLIC_NAME_SELECT, resolvePublicName, toPublicUser } from './public-name.util';
 
 // Fields returned for the authenticated user's OWN profile. Notably:
 //
@@ -27,6 +28,8 @@ const OWN_PROFILE_SELECT = {
   email: true,
   phone: true,
   displayName: true,
+  // The owner's own username + the resolved name others see for them.
+  username: true,
   dateOfBirth: true,
   isMinor: true,
   isUnder16: true,
@@ -54,7 +57,8 @@ export type GuardianContact = { label: 'Guardian contact'; email: string };
 
 export type PublicProfile = {
   id: string;
-  displayName: string;
+  // username if set, else displayName -- the real displayName is not sent.
+  publicName: string;
   guardianContact: GuardianContact | null;
 };
 
@@ -82,6 +86,9 @@ export type OwnProfile = {
   email: string;
   phone: string | null;
   displayName: string;
+  username: string | null;
+  // What OTHER users see for this account (username, else displayName).
+  publicName: string;
   dateOfBirth: Date | null;
   isMinor: boolean;
   role: string;
@@ -98,7 +105,7 @@ export type OwnProfile = {
   representedClub: { id: string; name: string } | null;
 };
 
-type OwnProfileRow = Omit<OwnProfile, 'guardianContact' | 'dateOfBirth'> & {
+type OwnProfileRow = Omit<OwnProfile, 'guardianContact' | 'dateOfBirth' | 'publicName'> & {
   dateOfBirth: string | null; // ciphertext
   guardian: { email: string } | null;
 };
@@ -111,6 +118,7 @@ function toOwnProfile({ guardian, dateOfBirth, ...rest }: OwnProfileRow, dob: Do
   const plainDob = dob.decryptNullable(dateOfBirth);
   return {
     ...rest,
+    publicName: resolvePublicName(rest),
     dateOfBirth: plainDob,
     guardianContact: guardianContactFor(rest.isMinor, guardian, plainDob),
   };
@@ -122,10 +130,16 @@ function toOwnProfile({ guardian, dateOfBirth, ...rest }: OwnProfileRow, dob: Do
 // this function structurally cannot forward isMinor, role,
 // verificationStatus, or any other field to Prisma, because it never
 // reads them off `dto` in the first place.
-function toUpdateData(dto: UpdateUserDto): { displayName?: string; phone?: string } {
-  const data: { displayName?: string; phone?: string } = {};
+function toUpdateData(dto: UpdateUserDto): {
+  displayName?: string;
+  phone?: string;
+  username?: string | null;
+} {
+  const data: { displayName?: string; phone?: string; username?: string | null } = {};
   if (dto.displayName !== undefined) data.displayName = dto.displayName;
   if (dto.phone !== undefined) data.phone = dto.phone;
+  // Stored lowercase so the single @unique is case-insensitive; null clears.
+  if (dto.username !== undefined) data.username = dto.username === null ? null : dto.username.toLowerCase();
   return data;
 }
 
@@ -141,10 +155,11 @@ function toUpdateData(dto: UpdateUserDto): { displayName?: string; phone?: strin
 // via this select.
 const FOLLOW_USER_SELECT = {
   id: true,
-  displayName: true,
+  ...PUBLIC_NAME_SELECT,
 } as const;
 
-export type FollowUser = Prisma.UserGetPayload<{ select: typeof FOLLOW_USER_SELECT }>;
+// What a client receives: { id, publicName } (see public-name.util.ts).
+export type FollowUser = { id: string; publicName: string };
 
 export interface FollowPage {
   items: FollowUser[];
@@ -200,7 +215,7 @@ export class UsersService {
       where: { id: userId },
       select: {
         id: true,
-        displayName: true,
+        ...PUBLIC_NAME_SELECT,
         dateOfBirth: true,
         isMinor: true,
         accountStatus: true,
@@ -214,8 +229,7 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
     return {
-      id: user.id,
-      displayName: user.displayName,
+      ...toPublicUser(user),
       guardianContact: guardianContactFor(
         user.isMinor,
         user.guardian,
@@ -226,12 +240,21 @@ export class UsersService {
 
   async updateOwnProfile(userId: string, dto: UpdateUserDto): Promise<OwnProfile> {
     const data = toUpdateData(dto);
-    const updated = await this.prisma.user.update({
-      where: { id: userId },
-      data,
-      select: OWN_PROFILE_SELECT,
-    });
-    return toOwnProfile(updated, this.dobEncryption);
+    try {
+      const updated = await this.prisma.user.update({
+        where: { id: userId },
+        data,
+        select: OWN_PROFILE_SELECT,
+      });
+      return toOwnProfile(updated, this.dobEncryption);
+    } catch (err) {
+      // The only unique column this update can write is username. Racing
+      // claims on the same name lose here with a clean 409, never a 500.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException('That username is already taken');
+      }
+      throw err;
+    }
   }
 
   // Shared existence check for the four follow endpoints below, mirroring
@@ -553,7 +576,7 @@ export class UsersService {
       take: limit,
     });
 
-    return { items: rows };
+    return { items: rows.map(toPublicUser) };
   }
 
   // Shared pagination-shaping helper for getFollowers/getFollowing --
@@ -567,7 +590,7 @@ export class UsersService {
   private toFollowPage<T extends { sequence: number; createdAt: Date }>(
     rows: T[],
     limit: number,
-    pickUser: (row: T) => FollowUser,
+    pickUser: (row: T) => { id: string; username: string | null; displayName: string },
   ): FollowPage {
     const hasMore = rows.length > limit;
     const sliced = hasMore ? rows.slice(0, limit) : rows;
@@ -575,7 +598,7 @@ export class UsersService {
     const nextCursor =
       hasMore && last ? encodeFeedSequenceCursor({ createdAt: last.createdAt, sequence: last.sequence }) : null;
 
-    return { items: sliced.map(pickUser), nextCursor };
+    return { items: sliced.map((row) => toPublicUser(pickUser(row))), nextCursor };
   }
 
   private buildFollowCursorFilter(rawCursor: string): Prisma.FollowWhereInput {

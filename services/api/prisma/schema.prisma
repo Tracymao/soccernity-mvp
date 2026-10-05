@@ -34,6 +34,18 @@ model User {
   phone              String?
   passwordHash       String
   displayName        String
+  // profile/username-column-and-display-convention (legal-copy Part C row
+  // 33; Decision Log #58/#364) -- a genuine addition beyond Section 3's
+  // literal User field list, flagged per CLAUDE.md's "fixed spec" rule.
+  // Optional, distinct from displayName (the "full name" used in emails
+  // and the owner's own profile). Stored ALREADY LOWERCASED
+  // ([a-z0-9_]{3,30}, enforced by UpdateUserDto and normalised in
+  // UsersService), so this single @unique is case-insensitive by
+  // construction; Postgres treats NULLs as distinct, so any number of users
+  // may have none ("unique where set"). Other users see
+  // resolvePublicName(): username if set, else displayName -- the real
+  // displayName is NOT sent to other users when a username exists.
+  username           String?   @unique
   // AES-256-GCM ciphertext ("v1:<iv>:<tag>:<ct>"), NEVER plaintext --
   // security/dob-field-encryption. Encrypted/decrypted only via
   // DobEncryptionService (src/crypto). Not queryable by range: age logic

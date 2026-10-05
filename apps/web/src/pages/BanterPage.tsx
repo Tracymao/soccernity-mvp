@@ -279,7 +279,7 @@ export default function BanterPage() {
   // "All" rooms are already server-filtered by activeQuery; "My Bants"
   // has no server-side q param, so it's filtered client-side here.
   const visibleRooms = category === "mine" && term ? rooms.filter((r) => r.name.toLowerCase().includes(term)) : rooms;
-  const displayName = profile?.displayName ?? "You";
+  const displayName = profile?.publicName ?? "You";
   const chips = activeFilterChips(filters);
 
   if (isMobile && mobileView === "filter") {

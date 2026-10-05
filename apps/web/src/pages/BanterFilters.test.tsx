@@ -48,6 +48,8 @@ function profile(): UserProfile {
     email: "temi@example.com",
     phone: null,
     displayName: "Temi Titiloye",
+    username: null,
+    publicName: "Temi Titiloye",
     dateOfBirth: "2000-01-01",
     isMinor: false,
     role: "fan",

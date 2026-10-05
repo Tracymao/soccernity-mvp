@@ -174,9 +174,9 @@ export default function ContestPage() {
             {weeklyWinners.map((w) => (
               <li key={w.entryId} className="contest-winner">
                 <span className="contest-winner__avatar" aria-hidden="true">
-                  {initialsFor(w.displayName)}
+                  {initialsFor(w.publicName)}
                 </span>
-                <span className="contest-winner__name">{w.displayName}</span>
+                <span className="contest-winner__name">{w.publicName}</span>
                 <span className="contest-winner__round">
                   Week {w.weekNumber} &middot; {w.position === 1 ? "1st" : w.position === 2 ? "2nd" : "3rd"}
                 </span>
@@ -193,9 +193,9 @@ export default function ContestPage() {
             {monthlyStandings.map((s) => (
               <li key={s.userId} className="contest-winner">
                 <span className="contest-winner__avatar" aria-hidden="true">
-                  {initialsFor(s.displayName)}
+                  {initialsFor(s.publicName)}
                 </span>
-                <span className="contest-winner__name">{s.displayName}</span>
+                <span className="contest-winner__name">{s.publicName}</span>
                 <span className="contest-winner__round">
                   {s.position === 1 ? "1st" : s.position === 2 ? "2nd" : "3rd"} &middot; Monthly winner
                 </span>

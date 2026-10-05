@@ -30,6 +30,7 @@ import {
   ContestWinnerSummary,
   CurrentContestResponse,
 } from './contest.types';
+import { PUBLIC_NAME_SELECT, resolvePublicName } from '../users/public-name.util';
 
 const WEEKLY_ROUND_COUNT = 3;
 const ROUND_LENGTH_MS = 7 * 24 * 60 * 60 * 1000;
@@ -65,14 +66,14 @@ const CYCLE_GRAPH_INCLUDE = {
     include: {
       winners: {
         include: {
-          user: { select: { displayName: true } },
+          user: { select: PUBLIC_NAME_SELECT },
           entry: { select: { postId: true } },
         },
       },
     },
   },
   standings: {
-    include: { user: { select: { displayName: true } } },
+    include: { user: { select: PUBLIC_NAME_SELECT } },
   },
 } satisfies Prisma.ContestCycleInclude;
 
@@ -109,7 +110,7 @@ const ADMIN_CYCLE_DETAIL_INCLUDE = {
       entries: {
         orderBy: { submittedAt: 'asc' },
         include: {
-          user: { select: { displayName: true } },
+          user: { select: PUBLIC_NAME_SELECT },
           post: {
             select: {
               id: true,
@@ -747,7 +748,7 @@ export class ContestService {
           weekNumber: round.weekNumber,
           position: w.position,
           userId: w.userId,
-          displayName: w.user.displayName,
+          publicName: resolvePublicName(w.user),
           entryId: w.entryId,
           postId: w.entry.postId,
         })),
@@ -759,7 +760,7 @@ export class ContestService {
     }
     return winners.map((w) =>
       withdrawnUserIds.has(w.userId)
-        ? { ...w, displayName: WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER, postId: WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER }
+        ? { ...w, publicName: WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER, postId: WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER }
         : w,
     );
   }
@@ -770,14 +771,14 @@ export class ContestService {
     withdrawnUserIds: Set<string>,
   ): ContestStandingSummary[] {
     const standings = graph.standings
-      .map((s) => ({ position: s.position, userId: s.userId, displayName: s.user.displayName }))
+      .map((s) => ({ position: s.position, userId: s.userId, publicName: resolvePublicName(s.user) }))
       .sort((a, b) => a.position - b.position);
 
     if (mode === 'public') {
       return standings.filter((s) => !withdrawnUserIds.has(s.userId));
     }
     return standings.map((s) =>
-      withdrawnUserIds.has(s.userId) ? { ...s, displayName: WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER } : s,
+      withdrawnUserIds.has(s.userId) ? { ...s, publicName: WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER } : s,
     );
   }
 
@@ -845,7 +846,7 @@ export class ContestService {
       submittedAt: entry.submittedAt,
       entrant: {
         userId: entry.userId,
-        displayName: withdrawn ? WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER : entry.user.displayName,
+        publicName: withdrawn ? WITHDRAWN_CONSENT_ADMIN_PLACEHOLDER : resolvePublicName(entry.user),
       },
       post: {
         id: entry.post.id,

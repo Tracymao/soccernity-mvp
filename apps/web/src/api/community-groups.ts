@@ -74,7 +74,7 @@ export interface JoinGroupResult {
 // #153) -- same known-gap shape as api/clubs.ts's ClubMember.
 export interface CommunityGroupMember {
   id: string;
-  displayName: string;
+  publicName: string;
 }
 
 export interface CommunityGroupMemberPage {

@@ -9,6 +9,9 @@ export interface User {
   id: string;
   email: string;
   displayName: string;
+  // Optional, unique handle (stored lowercase). Other users see
+  // username ?? displayName -- see services/api users/public-name.util.ts.
+  username?: string | null;
   isMinor: boolean;
   role: "fan" | "player" | "admin";
   verificationStatus: string;

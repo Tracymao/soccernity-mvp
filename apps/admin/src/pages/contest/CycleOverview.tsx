@@ -201,7 +201,7 @@ export default function CycleOverview({
                 <span className="ct-pill ct-pill--soft">
                   Week {w.weekNumber} · {ordinal(w.position)}
                 </span>
-                <span>{w.displayName}</span>
+                <span>{w.publicName}</span>
               </div>
             ))
           )}
@@ -224,7 +224,7 @@ export default function CycleOverview({
             monthlyStandings.map((s) => (
               <div className="ct-panel__row" key={`${s.position}-${s.userId}`}>
                 <span className="ct-pill ct-pill--soft">{ordinal(s.position)}</span>
-                <span>{s.displayName}</span>
+                <span>{s.publicName}</span>
               </div>
             ))
           )}

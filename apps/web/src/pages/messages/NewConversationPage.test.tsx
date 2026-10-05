@@ -30,7 +30,7 @@ function fakeAccessToken(sub = "user-1"): string {
 }
 
 function person(overrides: Partial<SearchUserResult> = {}): SearchUserResult {
-  return { id: "user-2", displayName: "Ada Obi", ...overrides };
+  return { id: "user-2", publicName: "Ada Obi", ...overrides };
 }
 
 afterEach(cleanup);
@@ -101,7 +101,7 @@ describe("NewConversationPage", () => {
   it("fetches the next page with the returned cursor when Load more is clicked", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     vi.mocked(searchUsers).mockResolvedValueOnce({ items: [person()], nextCursor: "cursor-1" });
-    vi.mocked(searchUsers).mockResolvedValueOnce({ items: [person({ id: "user-3", displayName: "Bola Ade" })], nextCursor: null });
+    vi.mocked(searchUsers).mockResolvedValueOnce({ items: [person({ id: "user-3", publicName: "Bola Ade" })], nextCursor: null });
 
     renderPage();
     fireEvent.change(screen.getByLabelText(/search people/i), { target: { value: "ada" } });
@@ -120,7 +120,7 @@ describe("NewConversationPage", () => {
       created: true,
       conversation: {
         id: "convo-1",
-        otherParticipant: { id: "user-2", displayName: "Ada Obi" },
+        otherParticipant: { id: "user-2", publicName: "Ada Obi" },
         lastMessageAt: "2026-09-13T00:00:00.000Z",
         createdAt: "2026-09-13T00:00:00.000Z",
         lastMessage: null,

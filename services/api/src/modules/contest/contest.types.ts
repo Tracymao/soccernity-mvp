@@ -35,7 +35,8 @@ export interface ContestWinnerSummary {
   weekNumber: number;
   position: number;
   userId: string;
-  displayName: string;
+  // username if set, else displayName (users/public-name.util.ts)
+  publicName: string;
   entryId: string;
   postId: string;
 }
@@ -43,7 +44,8 @@ export interface ContestWinnerSummary {
 export interface ContestStandingSummary {
   position: number;
   userId: string;
-  displayName: string;
+  // username if set, else displayName (users/public-name.util.ts)
+  publicName: string;
 }
 
 // GET /contest/current — everything the Create Post "For Contest" mode-tab
@@ -128,7 +130,7 @@ export interface AdminContestEntry {
   submittedAt: Date;
   entrant: {
     userId: string;
-    displayName: string;
+    publicName: string;
   };
   post: {
     id: string;

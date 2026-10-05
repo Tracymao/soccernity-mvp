@@ -31,6 +31,8 @@ function organiserProfile(overrides: Partial<UserProfile> = {}): UserProfile {
     email: "org-1@example.com",
     phone: null,
     displayName: "Organiser",
+    username: null,
+    publicName: "Organiser",
     dateOfBirth: "2000-01-01",
     isMinor: false,
     role: "fan",

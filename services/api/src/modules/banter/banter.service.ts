@@ -367,6 +367,8 @@ export class BanterService {
   // This resolves the match in one parameterized query over the real join
   // paths instead. Live ClubPage.name is used rather than the denormalized
   // BanterRoom.scopeName snapshot, so a renamed club is findable at once.
+  // The creator is matched on their PUBLIC name (username, else displayName)
+  // so a real name can't be used to find a pseudonymous creator.
   // League/country scopes have no backing table and can't be matched.
   private async matchRoomIdsByTag(term: string): Promise<string[]> {
     const rows = await this.prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
@@ -374,7 +376,7 @@ export class BanterService {
       FROM "BanterRoom" r
       LEFT JOIN "User" u ON u."id" = r."createdBy"
       LEFT JOIN "ClubPage" c ON r."scopeType" = 'club' AND c."id" = r."scopeRef"
-      WHERE position(lower(${term}) in lower(u."displayName")) > 0
+      WHERE position(lower(${term}) in lower(COALESCE(u."username", u."displayName"))) > 0
          OR position(lower(${term}) in lower(c."name")) > 0
          OR EXISTS (
            SELECT 1 FROM "BanterRoomTopic" bt

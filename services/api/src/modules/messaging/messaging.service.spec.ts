@@ -275,7 +275,7 @@ describe('MessagingService', () => {
         conversationRow({ id: 'c-2', lastMessageAt: new Date('2026-09-09T11:00:00Z') }),
       ];
       p().conversation.findMany.mockResolvedValue(rows); // limit 1 -> 2 rows means hasMore
-      p().user.findMany.mockResolvedValue([{ id: RECIPIENT, displayName: 'Jordan' }]);
+      p().user.findMany.mockResolvedValue([{ id: RECIPIENT, username: null, displayName: 'Jordan' }]);
       p().message.groupBy.mockResolvedValue([{ conversationId: 'c-1', _count: { _all: 4 } }]);
       p().message.findMany.mockResolvedValue([
         { conversationId: 'c-1', contentText: 'yo', senderId: RECIPIENT, sentAt: new Date('2026-09-09T12:00:00Z') },
@@ -293,19 +293,19 @@ describe('MessagingService', () => {
       expect(page.items).toHaveLength(1);
       expect(page.items[0]).toMatchObject({
         id: 'c-1',
-        otherParticipant: { id: RECIPIENT, displayName: 'Jordan' },
+        otherParticipant: { id: RECIPIENT, publicName: 'Jordan' },
         unreadCount: 4,
         lastMessage: { contentText: 'yo', senderId: RECIPIENT },
       });
       expect(page.nextCursor).toEqual(expect.any(String));
     });
 
-    it('a conversation with no messages and an unknown other party degrades gracefully (unreadCount 0, displayName null, lastMessage null)', async () => {
+    it('a conversation with no messages and an unknown other party degrades gracefully (unreadCount 0, publicName null, lastMessage null)', async () => {
       p().conversation.findMany.mockResolvedValue([conversationRow({ id: 'c-9' })]);
       p().user.findMany.mockResolvedValue([]); // other party hard-deleted
       const page = await service.listConversations(CALLER, {});
       expect(page.items[0]).toMatchObject({
-        otherParticipant: { id: RECIPIENT, displayName: null },
+        otherParticipant: { id: RECIPIENT, publicName: null },
         unreadCount: 0,
         lastMessage: null,
       });
