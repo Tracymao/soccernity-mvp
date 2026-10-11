@@ -1,9 +1,17 @@
 # Soccernity — Draft Legal Copy: Terms of Service & Privacy Policy
 
-## DRAFT (v0.7) — POST-SIGN-OFF REWRITE — NOT APPROVED AS LIVE COPY, NOT LEGAL ADVICE
+## DRAFT (v0.8) — NOT APPROVED AS LIVE COPY, NOT LEGAL ADVICE
 
 **Status: draft output of the `safeguarding-drafter` workflow (`CLAUDE.md` non-negotiable #2). It is
 not approved, not in force, and not ready to publish.**
+
+**v0.8 is a founder-directed update (2026-10-12) made after the MVP coverage audit
+(`docs/mvp-coverage-audit.md`). Nobody — counsel included — has reviewed the v0.8 additions.** Every
+v0.8 addition that describes something not yet built is marked `[PROPOSAL, not yet built]`, and
+every point that needs counsel is marked `[OPEN]` or listed as counsel-review-pending in Part C.
+The one counsel position recorded in v0.8 is the founder's statement that counsel agrees to showing
+the guardian contact on every minor's profile; that is the founder's statement, not a document
+counsel has signed.
 
 What changed at v0.7: counsel and the founder have now worked through all 82 review comments on
 the previous draft, counsel has approved **with amendments**, and the checklist in the sign-off
@@ -25,10 +33,37 @@ Do not fill either from this file. The sign-off block at the end of this documen
 - **Grounded in:** Build Plan Sections 3, 8 and 9; Log Book Section 10; the DPIA draft
   (`docs/sprint-1-dpia-outline-draft.md`); and the merged code on `main` as of 2026-10-05 (checked
   against `services/api`, not recalled from earlier drafts).
-- **Version:** 0.7 (draft — still NOT APPROVED). Earlier versions: v0.1 drafted 2026-09-05; v0.2 applied counsel's
+- **Version:** 0.8 (draft — still NOT APPROVED). Earlier versions: v0.1 drafted 2026-09-05; v0.2 applied counsel's
   09/09/2026 review; v0.3–v0.6 (2026-09-20 to 2026-09-22) added the under-16 tier, adult-to-minor
   messaging block, consent audit evidence, age reclassification and card verification. Their
   per-version changelogs are superseded by this one and live in git history.
+
+### v0.8 changelog (2026-10-12)
+
+Aligned to Decision Log #367–#380 and to the corrections the coverage audit found. No resolved
+v0.7 decision was reversed; where v0.8 adds something the product does not yet do it is marked.
+
+1. **Guardian contact is shown on every minor's profile (under 18), not only under-16s** — ToS §3.5(c),
+   PP §1.2, §7, §8. Genuine under-16 rules (no DMs, no Bants, no creating Community Groups) are
+   unchanged. **Founder states counsel agrees**; counsel review of the final wording is pending.
+2. **Flow order made consistent** (Decision Log #367): Age Gate (date of birth and country), guardian
+   details, then the account is created at Register in a restricted state; profile completion and every
+   profile/social write are locked until approval (ToS §3.1, §3.2; PP §3, §4.1). Removes the
+   contradiction the audit found (audit section 5, item 13).
+3. **Username is required** and shown to others instead of a real name; an account that has not
+   completed its profile shows a neutral placeholder (Decision Log #369; ToS §4.4, §9.1; PP §1.1, §7).
+4. **Country and IP** (Decision Log #368): self-declared country at the Age Gate, country derived from
+   the IP at registration (IP read transiently, not stored), what is stored, uses, VPN limitation
+   (PP §1.8; ToS §3.7). Statements elsewhere that read as "no IP is processed" are made consistent.
+5. **Profile media** — avatar, cover photo and bio visible to other users including minors; image
+   checks at upload (Decision Log #371). `[PROPOSAL, not yet built]`.
+6. **Retention** — purge rule and hold rule (Decision Log #375, #376), including the narrow-purpose
+   wording for a reporter's data (PP §9, ToS §8.3–8.4). Counsel review pending.
+7. **New processing disclosed**, each `[PROPOSAL, not yet built]`: Contact Us form; Google and Facebook
+   sign-in; authenticator-app two-factor authentication; email to the minor on approval; mandatory
+   email verification; the guardian consent page's request summary (Decision Log #372).
+8. **Stale Part C rows fixed** (22, 33; 16/32 reworded; 23 and 27 extended) and the "do not publish
+   until each is built" note rewritten; new rows 37–44 added.
 
 ### v0.7 changelog
 
@@ -44,9 +79,9 @@ Do not fill either from this file. The sign-off block at the end of this documen
 5. **Adult-to-minor DM block** — worded as applying to **16–17s with guardian consent confirmed**
    (ToS §3.5, PP §8), with a short who-can-message-whom summary added so it cannot be read against
    the general messaging rules.
-6. **Guardian contact** — shown on the under-16's own profile card, **visible to any viewer**,
-   labelled "Guardian contact", because an under-16 cannot send or receive messages (ToS §3.5(a), PP
-   §1.2, §7, §8).
+6. **Guardian contact** — shown on the minor's own profile card, **visible to any viewer**,
+   labelled "Guardian contact" (ToS §3.5, PP §1.2, §7, §8). *v0.7 limited this to the youngest
+   tier; v0.8 widens it to every minor under 18 — see the v0.8 changelog, item 1.*
 7. **Display names** — username first, display name as fallback, for every user including minors
    and for Discover (ToS §9.1; PP §1.1, §1.5, §7).
 8. **Governing law** — England & Wales, exclusive jurisdiction, savings clause for non-excludable
@@ -78,9 +113,11 @@ Do not fill either from this file. The sign-off block at the end of this documen
 
 **C. Left alone on purpose:** the entity placeholder, the Effective Date, the sign-off block, the
 counsel-approved §10.3 warranty wording, and every `[PROPOSAL]`/`[OPEN]` marker that no resolved
-decision covered. Where the product does **not yet match** the resolved decision (guardian contact
-visibility, usernames, the user-initiated guardian-email change), the policy text states the decision
-and **Part C rows 32–34 flag the gap** — do not publish until each is built or the text is adjusted.
+decision covered. *(v0.8 note: the three gaps this paragraph originally listed — guardian-contact
+visibility, usernames, the user-initiated guardian-email change — have since been built (Decision Log
+#363, #364, #365); Part C rows 32–34 record the as-built state. The remaining place where policy text
+is ahead of the product is every item marked `[PROPOSAL, not yet built]` in v0.8; do not publish until
+each is built or its text is removed.)*
 **Out of scope here:** a pre-publication sensitive-content screen (Russmedia, CJEU) was identified
 during review; it is a separate product/engineering gap, tracked as its own Decision Log entry in a
 companion PR, and is not part of closing #203.
@@ -168,8 +205,8 @@ considered safety decision, not an over-reading of the law (Decision Log #8), be
 is a platform where unaffiliated adults and organisations may eventually seek to contact
 grassroots players. Full detail on how this works is in Section 3.
 
-2.3. Age declaration works in three steps when you sign up: (1) you enter your date of birth;
-(2) you affirm that the date of birth you entered is accurate; and (3) you are shown a warning
+2.3. Age declaration works in three steps when you sign up: (1) you enter your date of birth and the
+country you are in (the Age Gate); (2) you affirm that the date of birth you entered is accurate; and (3) you are shown a warning
 that providing a false date of birth — including to bypass the age floor in 2.1 or the
 guardian-consent requirement in 2.2 — is a breach of these Terms and may result in immediate
 account suspension. Soccernity relies on this declaration; it does not verify your age against
@@ -182,16 +219,25 @@ processing described in the Privacy Policy on the minor's behalf, on the terms d
 
 ### 3. Minors' accounts and the guardian-consent process
 
-3.1. When someone under 18 registers, Soccernity captures the name, email address, and
-relationship of a parent or guardian before the account is created, and sends that guardian a
-single-use consent link by email. **That link expires after 72 hours** and can be re-sent from the
-account's own status page if it lapses.
+3.1. When someone under 18 signs up, the order is: (1) the Age Gate, where they enter their date of
+birth and country; (2) the guardian's name, email address, and relationship are captured; (3) on
+submitting the registration step (Register) the account is created **in a restricted state**, and
+Soccernity sends that guardian a single-use consent link by email. **That link expires after 72
+hours** and can be re-sent from the account's own status page if it lapses. The date of birth is
+entered once, at the Age Gate; later steps show it and do not let it be edited. **[PROPOSAL, not yet
+built]** Every user, adult or minor, must also verify their email address before completing their
+profile.
 
 3.2. Until a guardian confirms consent, the minor's account exists but is **restricted**. A
 restricted-pending account cannot: have a publicly visible profile; send direct messages, or be
 found as a recipient by anyone trying to message it; participate in Banter Rooms beyond read-only viewing; or, as
 currently implemented, create posts or comments (Build Plan Section 8.3 step 5; Decision Log
-#21 for the current scope of what "restricted" covers). A restricted-pending minor also does not
+#21 for the current scope of what "restricted" covers). **[PROPOSAL, not yet built — Decision Log
+#370]** The restriction is intended to be uniform: a restricted-pending account also cannot complete
+its profile, edit its profile, follow anyone, like or save anything, or join a club or group. It can
+still report content and appeal, change the guardian's email address, change its password, deactivate
+or delete the account, and log out. **Registration cannot be completed until the guardian approves**
+(including the card verification in 3.7 where it applies). A restricted-pending minor also does not
 appear in another user's followers/following lists (Decision Log #41), and does not appear in
 Leaderboard rankings (Decision Log #45) — see the Privacy Policy for what changes once consent
 is confirmed.
@@ -222,16 +268,13 @@ enters the same 30-day account-deletion process described in Section 8 — nothi
 differently depending on which path was taken. This also means a minor's account can no longer sit
 restricted-pending indefinitely with no resolution.
 
-3.5. **Extra limits for accounts under 16, and a rule about adults contacting minors.**
+3.5. **Extra limits for accounts under 16, a rule about adults contacting minors, and guardian contact.**
 
 (a) *Under 16.* In addition to guardian consent, an account belonging to someone under 16 has
 further limits, **even after a guardian has confirmed consent**: (i) direct messaging is not
 available — the account can neither send nor receive direct messages; (ii) Bants (Banter Rooms) are
 not available, including reading them; and (iii) Community Groups are read-only in the sense that
-the account can view groups and can join or leave them, but cannot create one. Because an
-under-16 account can neither send nor receive direct messages, the account's profile card shows
-the guardian's email address, labelled **"Guardian contact"**, to **any viewer of that profile**:
-it is the only route by which anyone who needs to reach the child can do so. These limits apply
+the account can view groups and can join or leave them, but cannot create one. These limits apply
 in addition to, not instead of, the guardian-consent requirement in 3.1–3.4 (an under-16 whose
 guardian has consented is still under-16). We may show a message that a feature is unavailable
 without saying why.
@@ -246,6 +289,15 @@ not reveal a minor's account. This rule applies to starting a conversation only:
 conversation a minor started, and a minor may message an adult. See Privacy Policy
 Section 8 for the limits of this protection, stated honestly.
 
+(c) *Guardian contact on every minor's profile.* The profile of **any minor (under 18)** whose
+guardian has confirmed consent shows the guardian's email address, labelled **"Guardian contact"**,
+to **any viewer of that profile**, so that anyone who needs to reach the child has a route that goes
+through the guardian. It stops showing automatically when the account turns 18. No other guardian
+detail is shown. For an under-16 account, which can neither send nor receive direct messages, it is
+the only route by which anyone can reach the child. The guardian is told this on the consent screen
+before they confirm. *Founder states counsel agrees to this for all minors; counsel review of this
+wording is pending.*
+
 3.6. **Your age status is recalculated automatically.** Soccernity re-checks, once a day, whether
 each account is under 18 and under 16, using the date of birth on the account (which we do not
 verify against identity documents — see 2.3). When an account passes 16, the under-16 limits in
@@ -258,8 +310,8 @@ younger, the stricter classification is re-applied at the next daily check and n
 sent; we log these cases for manual review.
 
 3.7. **Extra verification for younger children in the United States.** Where an account is
-registered with a date of birth showing the child is **under 13**, and the country selected at
-sign-up is the **United States or was not given**, the guardian is asked to complete one further
+registered with a date of birth showing the child is **under 13**, and the country we determine for
+the account is the **United States or cannot be determined**, the guardian is asked to complete one further
 step **in addition to** the emailed consent link in 3.1: a small card payment. This step is our
 parental-verification control for this group under United States children's-privacy rules (COPPA).
 It exists because an email link alone shows only that someone with access to that inbox clicked
@@ -270,9 +322,13 @@ email link — consent is not recorded until **both** are done. The payment is a
 automatically as soon as the check succeeds**; if a refund does not go through first time, we retry
 it. Soccernity does not receive or store the guardian's card details (they go directly to the
 payment provider); we keep only a reference to the transaction. Guardians of children who are 13 or
-over, or whose selected country is not the United States, are not asked for this step. The country
-is what the person **tells us**; we do not check it. We will add further verification steps
-only if a regulator requires them.
+over, or whose country is determined not to be the United States, are not asked for this step.
+**[PROPOSAL, not yet built — Decision Log #368]** The country is the one we derive from the
+registration request (see the Privacy Policy, Section 1.8); the country the person selects at the Age
+Gate is kept alongside it, but the derived country is the one that decides whether this step applies,
+and if it cannot be determined we apply this stronger step. Someone using a VPN or similar tool can
+still appear to be in another country; we do not claim to prevent that. We will add further
+verification steps only if a regulator requires them. **[OPEN: counsel to confirm.]**
 
 ### 4. Your account
 
@@ -282,10 +338,20 @@ under your account. Tell us promptly if you believe your account has been compro
 4.2. You may only maintain one personal account. Club fan pages, Banter Rooms, and community
 groups are shared spaces within the platform, not separate accounts.
 
-4.3. Soccernity currently supports registering with an email address and password. **[PROPOSAL —
-not yet functional]** Sign-in via Google, Apple, or Facebook is visible in the product's design
-but is not yet connected to a working login flow (Decision Log #55); this document will need
-updating with each provider's own data-sharing terms once that integration goes live.
+4.3. Soccernity currently supports registering with an email address and password. **[PROPOSAL, not
+yet built — Decision Log #378]** Sign-in with Google or Facebook is intended: it receives your name and
+email address from the provider and **never** your date of birth, and you still go through the Age Gate
+(date of birth and country) and, if you are under 18, the guardian-consent flow like any other user.
+Apple sign-in is not planned. **[PROPOSAL, not yet built]** Two-factor authentication will use an
+authenticator app, not text messages. The Privacy Policy, Section 5, describes what each provider
+shares.
+
+4.4. **Completing your profile.** **[PROPOSAL, not yet built — Decision Log #369]** After you register
+(and, for a minor, after a guardian approves) you must complete your profile, including choosing a
+**username**, before you can use the rest of Soccernity. Until you do, other users see you under a
+neutral placeholder name rather than your real name, you cannot post, and you are returned to the
+profile step each time you log in. Once set, your username is what other users see; your real name is
+not shown to them.
 
 ### 5. Acceptable use
 
@@ -317,7 +383,11 @@ or a Banter Room to other users, or in a notification to a user you interacted w
 
 6.2. You are solely responsible for your own User Content. Soccernity is not obliged to monitor
 User Content before it is posted, but does operate the reporting and moderation process described
-in Section 7, and may remove content or suspend accounts that breach Section 5.
+in Section 7, and may remove content or suspend accounts that breach Section 5. **[PROPOSAL, not yet
+built — Decision Log #371]** Photos you upload as your avatar or cover photo are checked
+automatically when you upload them, by a third-party image-analysis provider (see the Privacy Policy,
+Section 5); an image that is flagged is not shown until a Soccernity moderator has reviewed it.
+Location and device information embedded in an image is removed. **[OPEN: counsel.]**
 
 6.3. If you delete one of your posts, it is **permanently deleted**, together with every comment,
 like and save other users have made on it (Decision Log #360). If you delete a comment, it is
@@ -363,7 +433,8 @@ product once made. **[PROPOSAL — see the Privacy Policy, Section 9, for the fu
 detail]**
 
 8.3. **What happens after the 30-day grace period.** Your account record is **anonymized in
-place; it is never hard-deleted.** Your email address, phone number, date of birth, and club
+place**, and in most cases it is not then deleted outright (the exceptions are in the last bullet
+below). Your email address, phone number, date of birth, and club
 affiliation are cleared, your display name is replaced with "[deleted user]," your password is
 made unusable, and the account is marked permanently deleted. Specifically:
 
@@ -376,12 +447,27 @@ made unusable, and the account is marked permanently deleted. Specifically:
   stays visible read-only, and can later be reassigned to a new user who registers the same team
   name and city.
 - **Guardian-consent records** are handled separately; see the Privacy Policy, Section 9.
+- **Anonymised accounts with nothing left in them are removed.** **[PROPOSAL, not yet built — Decision
+  Log #375]** 30 days after anonymisation, the anonymised record is permanently deleted if it
+  belonged to a minor whose guardian never approved the account, or if the account has no content.
+  An anonymised account that still has content stays anonymised and is not purged.
+  **[OPEN: counsel review pending.]**
 
 8.4. **Investigation hold — a genuine exception to the 30-day timer.** If you are the reporter,
 the reported party, or the author of reported content in a moderation report that has not yet
-been resolved, anonymization is **held entirely**. Your account stays fully identifiable to
-moderators until the investigation concludes. Preserving evidence takes priority over the
-ordinary 30-day timer. During the hold you still cannot log in.
+been resolved, anonymization is **held**. Your account stays identifiable to moderators until the
+investigation concludes. Preserving evidence takes priority over the ordinary 30-day timer. During
+the hold you still cannot log in. **[PROPOSAL, not yet built — Decision Log #376; counsel review
+pending]** The hold lasts while the report is open, then until any appeal period has ended or the
+appeal has been decided, then for **6 months** after the matter is closed, whatever the outcome.
+While it lasts we keep the report, the reported content and messages, and the identifiers needed to
+tie them to a person, and clear data that is not evidence (such as your password). If you were
+reported, your account is then deleted in the ordinary way. If you were the reporter and your report
+was upheld, or neither party was found at fault, your account follows the ordinary deletion path and
+only the report record is kept for the 6 months. If a moderator finds that a report was made in bad
+faith, the reporter's account is held in full for the 6 months. Separately, a moderator may place a
+**legal hold** on both accounts (for example where lawyers or law enforcement are involved), which
+lasts until it is lifted.
 
 8.5. **Minors.** A guardian's request to delete a minor's account supersedes the minor's own
 wishes. A minor cannot independently consent to keep, or to delete, their own account against
@@ -394,11 +480,14 @@ age or guardian-consent requirements in Sections 2–3.
 ### 9. Club pages, the Leaderboard, and public visibility
 
 9.1. Some information about you is visible to other users by default once your account is fully
-active (not restricted-pending): your username (or, if you have not set one, your display name),
-profile content you choose to share, your
+active (not restricted-pending): your username (shown instead of your real name; until you have
+completed your profile, a neutral placeholder is shown instead), profile content you choose to
+share, **[PROPOSAL, not yet built — Decision Log #371]** your avatar, cover photo, bio and country
+(shown in place of a location — we do not collect a precise location), your
 posts and comments, your club-page membership, and — where the Leaderboard feature is live —
-your ranking and points. **This applies to minors as well as adults**: Soccernity's product
-decision is to show your username — or, where you have not set one, your display name — on the
+your ranking and points. **This applies to minors as well as adults**: avatars and cover photos are
+visible to all users, including minors. Soccernity's product
+decision is to show your username on the
 Leaderboard and in Discover for all eligible users, including minors, with no pseudonym option,
 because the platform's purpose is to give grassroots players visibility to scouts and
 clubs (Decision Log #45); a restricted-pending minor is simply absent from this data until
@@ -440,7 +529,8 @@ live.
 ### 13. Contact us
 
 Questions about these Terms, or about your account, can be sent to
-**support@soccernity.com** (Decision Log #37).
+**support@soccernity.com** (Decision Log #37). **[PROPOSAL, not yet built]** A Contact Us form in the
+app is intended as a further route; see the Privacy Policy, Section 1.9.
 
 ---
 
@@ -477,8 +567,9 @@ will add further steps only if a regulator requires them.
 #### 1.1 Account and identity data (all users)
 
 Email address, phone number (optional), password (stored as a secure hash, never in plain text),
-username (optional — if you do not set one, your display name is shown in its place), display name,
-date of birth, and — derived from date of birth — whether your account is
+username (**[PROPOSAL, not yet built — Decision Log #369]** required before your profile is complete,
+and shown to other users instead of your real name; until it is set, others see a neutral
+placeholder), display name, date of birth, and — derived from date of birth — whether your account is
 classified as belonging to a minor (under 18) and whether it is under 16. These two
 classifications are recalculated daily from your date of birth (Section 4.5), and each change is
 recorded in an audit log that keeps your account ID, the classification that changed, and your age
@@ -492,14 +583,20 @@ If you are under 18, we also collect your parent or guardian's name, email addre
 relationship to you, in order to run the guardian-consent process described in Section 4.
 Guardians are themselves data subjects with respect to this information — it is processed only
 in connection with the consent flow, and is subject to the retention rules in Section 9. If the
-minor's account is under 16, the guardian's email address is also shown on that minor's profile
-card, labelled "Guardian contact", to any viewer of the profile (see Sections 7 and 8).
+minor's account is **under 18**, the guardian's email address is also shown on that minor's profile
+card, labelled "Guardian contact", to any viewer of the profile, until the account turns 18 (see
+Sections 7 and 8). *Founder states counsel agrees; counsel review of the wording is pending.*
 
 #### 1.3 Content you create
 
 Posts, comments, photos, videos, and other media you upload; your membership in club pages,
 Banter Rooms, and community groups; who you follow and who follows you; posts you save; and
-messages you send through the platform's direct-messaging feature.
+messages you send through the platform's direct-messaging feature. **[PROPOSAL, not yet built —
+Decision Log #371]** Also your avatar, cover photo and bio, which are visible to other users,
+**including minors** (and which minors can also see on each other's profiles), and your country,
+which is shown in place of a location. Images are checked automatically when uploaded (Section 5),
+then reviewed by a person if flagged, and the location and device information embedded in an image
+is removed.
 
 #### 1.4 Grassroots record-keeping data
 
@@ -511,8 +608,7 @@ you log, including venue and scheduled time; and match results.
 Notifications generated by your activity (follows, likes, comments), and, where relevant, an
 in-app notice when your account passes an age milestone (currently, turning 16), and — where the Leaderboard
 feature is live — your points and rank. **[PROPOSAL, see Section 10]** This may include a public
-ranking that shows your username (or, if you have not set one, your display name), including if
-you are a minor.
+ranking that shows your username, including if you are a minor.
 
 #### 1.6 Moderation data
 
@@ -527,15 +623,45 @@ project's own DPIA draft):** Soccernity does not currently use advertising ident
 fingerprinting, third-party behavioural-advertising tracking, or a third-party analytics SDK.
 We do not track your precise location. We do count visits to the service in aggregate (for example,
 how many requests a given page of the service received in a month); that count stores no user
-identifier, IP address, session identifier or browser string, and cannot be linked to you. If this changes in future, this Policy will be updated
+identifier, IP address, session identifier or browser string, and cannot be linked to you. (The one
+place we read an IP address at all is the momentary country lookup when you register, described in
+Section 1.8; it is not stored.) If this changes in future, this Policy will be updated
 before it does, not after.
+
+#### 1.8 Country and IP address
+
+**[PROPOSAL, not yet built — Decision Log #368; OPEN: counsel to confirm]** We ask for your **country**
+at sign-up (the Age Gate). We also work out which country a registration is coming from, by looking
+up the IP address of the request in a database that is held on our own servers — no third party
+receives the IP address. **The IP address is read in memory for that lookup and is never stored or
+logged.** What we keep is: the country you declared, the country we derived, which method produced
+the derived value, and when. We use the derived country (a) for safeguarding checks — in particular,
+deciding whether the US under-13 card-verification step in Section 4.6 applies, and applying the
+stronger step if the country cannot be determined — and (b) for grouping users by country in
+aggregate. The derived country is treated as the reliable one; the one you declared is kept for
+comparison. **Limitation:** someone using a VPN, Tor or a similar tool can appear to be in a
+different country, and we do not claim to detect that.
+
+#### 1.9 Contact form, sign-in providers and two-factor authentication
+
+**[PROPOSAL, not yet built]** *Contact Us form:* if you use it we collect your name, email address, the
+category you choose and your message, to answer you. **[OPEN: retention period — Temi/counsel to set;
+none has been decided.]** *Google and Facebook sign-in:* we receive your name and email address from
+the provider you choose. We do **not** receive or use a date of birth from them; you still give your
+date of birth and country at the Age Gate. *Two-factor authentication:* uses an authenticator app;
+we will hold the secret needed to check the codes it generates, protected at rest **[OPEN: details to
+be confirmed]**. *Email verification:* every user must verify their email address, which is
+processed by our email provider (Section 5).
 
 ### 2. How we use your data
 
 We use your data to: create and operate your account; show your content to other users as part
 of the service (your feed, club page, Banter Room, or profile); operate the guardian-consent
 process for minors' accounts; send you service emails (verification, password reset, guardian
-consent, account status); review reports and take moderation action; calculate Leaderboard
+consent, account status, and — **[PROPOSAL, not yet built]** — a notice to a minor when their
+guardian approves); review reports and take moderation action; check uploaded images for safety
+**[PROPOSAL, not yet built]**; apply safeguarding checks and aggregate country grouping using the
+country derived at registration (Section 1.8); calculate Leaderboard
 rankings where that feature is live; and maintain the security of the platform.
 
 **Lawful basis.** Our core lawful bases are **contractual necessity** (providing the account and
@@ -556,11 +682,16 @@ information to profile users, target them, or make decisions about them.
 
 ### 3. Restricted-pending accounts: what changes before and after guardian consent
 
-A minor's account exists as soon as it is created, but is **restricted** until a guardian
-confirms consent (see the Terms of Service, Section 3, and Build Plan Section 8.3). While
+A minor's account is created at the Register step — after the Age Gate and the guardian's details —
+and is **restricted** until a guardian confirms consent (see the Terms of Service, Section 3, and Build Plan Section 8.3). While
 restricted:
 
 - The account's profile is not visible to other users.
+- **[PROPOSAL, not yet built — Decision Log #370]** The account cannot complete or edit its profile
+  and cannot make any social write (follow, like, save, join a club or group). It can still report
+  and appeal, change the guardian's email, change its password, deactivate or delete the account,
+  and log out. Registration cannot be completed until the guardian approves, including card
+  verification where it applies.
 - The account cannot send direct messages and cannot be found as a recipient by anyone trying to
   message it.
 - The account cannot post to Banter Rooms beyond read-only viewing, and — as currently
@@ -581,15 +712,26 @@ Service, Section 3.5.
 
 ### 4. The guardian-consent process, in data-protection terms
 
-4.1. When a minor registers, we ask for their guardian's name, email, and relationship to the
-minor, and send a single-use link to that email address. That link expires after 72 hours and can be regenerated from the minor's own account-status page.
+4.1. When a minor signs up, after the Age Gate we ask for their guardian's name, email, and
+relationship to the minor, and — once the account is created at Register — send a single-use link to
+that email address. That link expires after 72 hours and can be regenerated from the minor's own
+account-status page.
 
 4.2. When the guardian follows the link, they see a plain-language explanation of what the
-minor's account can do and what data is collected, and an explicit "I consent" action. This
+minor's account can do and what data is collected, and an explicit "I consent" action.
+**[PROPOSAL, not yet built — Decision Log #372]** They also see a summary of the request — the
+minor's name, date of birth, how the guardian was named, and the date requested — and notices that
+the guardian's email appears on the minor's profile as the line of contact and that the minor's photo
+and username are visible to others. This is returned to the holder of the single-use link only;
+the link is rate-limited, gives the same response whether it is invalid, expired or used, and the
+date of birth is decrypted only to build that one response. A "report incorrect details" action
+flags the account for support, and declining remains available. When the guardian approves, an email
+is sent to the minor **[PROPOSAL, not yet built — Decision Log #373]**. This
 action is recorded, including the method and the time it happened. **The consent record also
 captures the version of the consent screen the guardian was shown and a coarse device type
 ("mobile", "desktop" or "unknown")** (Decision Log #348). This record does **not** include the
-guardian's browser string or IP address; the device type is derived at the moment of
+guardian's browser string or IP address (the registration country lookup in Section 1.8 concerns the
+person registering, not the guardian, and is not stored either); the device type is derived at the moment of
 confirmation and only the three-value category is kept. This is deliberately minimal: a fuller
 audit trail is itself more personal data about the guardian. We record this so we can demonstrate
 how consent was obtained if it is ever challenged (UK GDPR Article 7(1)). **[OPEN — limits, stated
@@ -634,8 +776,9 @@ registered with a date of birth under 13 and a self-selected country of the Unit
 country given), the guardian must also complete a card-payment check before consent is recorded, on
 top of the emailed link in 4.1–4.2. It exists because a clicked email link shows only inbox access;
 a card transaction is a method United States children's-privacy rules recognise for confirming the
-person is an adult. **What is collected and kept:** the country the person selected (used only to
-decide whether this step applies, and not verified); a reference to the payment-provider
+person is an adult. **What is collected and kept:** the country information described in Section 1.8
+(the declared and the derived country, used to decide whether this step applies; the derived country
+decides, and a country that cannot be determined gets this stronger step); a reference to the payment-provider
 transaction; whether the check passed and when; whether the refund completed; and, in the consent
 record, which method was used (email link, or email link plus card charge) and when. **What is not
 collected:** card numbers or other card details — they are entered into the payment provider's own
@@ -643,8 +786,8 @@ form and never reach or are logged by Soccernity. **The refund:** the charge is 
 US cents) and is refunded automatically once the check succeeds; an hourly job retries any refund
 that did not complete. After the account is anonymised (Section 9), the consent-record snapshot keeps
 the verification method and time, but **not** the transaction reference or the country. The payment
-provider (Section 5) is a further processor of the guardian's payment data. The country is what the
-guardian selects; we do not verify it. This card step is our COPPA verification control for this
+provider (Section 5) is a further processor of the guardian's payment data. The derived country can
+be wrong where someone uses a VPN (Section 1.8). This card step is our COPPA verification control for this
 group; we will add further steps only if a regulator requires them.
 
 ### 5. Who we share your data with
@@ -659,6 +802,15 @@ acting on Soccernity's instructions as a data processor unless stated otherwise:
   #307).
 - **Stripe** — payment provider, used only for the guardian card-verification step in Section 4.6
   for the younger-child US group. Card details go directly to Stripe and never reach Soccernity.
+- **Amazon Web Services (Amazon Rekognition)** — **[PROPOSAL, not yet built — Decision Log #371]**
+  automated safety check on uploaded images (avatars and cover photos), in an EU/UK region where
+  available. Flagged images go to a Soccernity moderator and are not shown until reviewed.
+  **[OPEN: counsel — cross-border transfer, and any duties that apply to hosting images of
+  minors, including hash-matching for child sexual abuse material, whose availability on our
+  storage provider is unconfirmed.]**
+- **MaxMind GeoLite2** — **[PROPOSAL, not yet built — Decision Log #368]** a country database held on
+  our own servers and used for the registration country lookup in Section 1.8. No IP address is sent
+  to MaxMind or anyone else.
 - **Sentry** — an error-monitoring tool, wired into the platform but not yet actively collecting
   data as of this draft (no live account exists). **[PROPOSAL, carried from the DPIA draft]**
   Before Sentry is switched on, we should configure it to avoid capturing request bodies or user
@@ -681,9 +833,11 @@ each of the providers above stores data, or whether that involves a transfer of 
 across borders that would require additional safeguards under UK GDPR or Nigeria's NDPA 2023.
 This is flagged as an open item for counsel, not assessed as low-risk by default.
 
-**Not yet live:** Google, Apple, and Facebook sign-in is visible in the product's design but not
-yet functionally connected (Decision Log #55). If and when it is enabled, this Policy will be
-updated to describe what each provider shares with Soccernity when you use it to sign in.
+**Not yet live:** **[PROPOSAL, not yet built — Decision Log #378]** Google and Facebook sign-in is
+intended. Each provider would share your name and email address with Soccernity (and, if you use
+Facebook without an email address, we would ask you for one); neither would give us a date of birth,
+and each provider receives the fact that you signed in to Soccernity under its own terms. Apple
+sign-in is not planned. **[OPEN: counsel to review each provider's role.]**
 
 ### 6. Cookies and similar technologies
 
@@ -705,8 +859,9 @@ feature. This is described here so it is not a surprise:
 - **Club pages** show your membership to other members and, depending on the club page's own
   settings, more broadly.
 - **The Leaderboard, scouting, and Discover visibility** — where these features are live — show
-  each eligible user's username or, where none is set, their display name (the same convention
-  everywhere), **including minors**, deliberately, with **no pseudonym option**. This is a product decision, not an oversight: the
+  each eligible user's username (the same convention everywhere; an account that has not completed
+  its profile shows a neutral placeholder), **including minors**, deliberately, with **no pseudonym
+  option**. This is a product decision, not an oversight: the
   platform's purpose is to give grassroots players visibility to scouts and clubs before formal
   scouting begins, and a pseudonymised or hidden minor would defeat that purpose for the users
   it is meant to help most (Decision Log #45). A restricted-pending minor is excluded from this
@@ -720,15 +875,21 @@ feature. This is described here so it is not a surprise:
   this data is standard on the platforms Soccernity is modelled after. **[PROPOSAL, flagged by
   the founder's own prior decision]** If Soccernity ever introduces a private-account setting,
   this default would need to be revisited.
+- **Avatars, cover photos, bio and country** **[PROPOSAL, not yet built — Decision Log #371]** are
+visible to other users, **including minors**, once the account is active. Country is shown in
+place of a location; we do not collect a precise location. Uploaded images are checked
+automatically and reviewed by a person if flagged (Section 5).
 - **Saved posts** are private — visible only to you, never to other users (a deliberate difference
-  from followers/following).
+from followers/following).
 - **Never shown publicly, regardless of account status:** your full date of birth, your guardian's
   contact details, your email address, your phone number, or the content of a report made about
-  or by you. (One deliberate, limited exception to the guardian-contact point: for an account
-under 16, the guardian's email address is shown on that minor's profile card, labelled "Guardian
-contact", to **any viewer of that profile**. We do this because an under-16 cannot send or receive
-messages, so this is the only route by which anyone can reach them. It does not appear in lists,
-rosters or feeds, and no other guardian detail — name, relationship — is shown.)
+  or by you. (One deliberate, limited exception to the guardian-contact point: for any minor's account
+(under 18), the guardian's email address is shown on that minor's profile card, labelled "Guardian
+contact", to **any viewer of that profile**, until the account turns 18. We do this so that anyone
+who needs to reach the child has a route that goes through the guardian; for an under-16, who cannot
+send or receive messages, it is the only route. It does not appear in lists, rosters or feeds, and no
+other guardian detail — name, relationship — is shown. *Founder states counsel agrees; counsel
+review of the wording is pending.*)
 
 ### 8. Direct messages and Banter Rooms
 
@@ -745,8 +906,9 @@ summary, not exceptions to it.
 **Under-16 accounts.** An account under 16 cannot send or receive direct messages, cannot use
 Bants at all (reading included), and can view, join and leave Community Groups but not create
 them. These limits apply even after a guardian has confirmed consent (Decision Log #346). The
-account's profile card shows a "Guardian contact" line with the guardian's email, visible to any
-viewer of that profile, because this is the only route by which anyone can reach the child. When
+account is also one of the minor accounts whose profile card shows a "Guardian contact" line with
+the guardian's email (Section 7; this applies to every minor under 18, not only under-16s) — for an
+under-16 it is the only route by which anyone can reach the child. When
 someone tries to message an under-16, they receive the same "user not found" response as for a
 non-existent account, so the response does not reveal that the account exists (Decision Log #351).
 
@@ -777,12 +939,15 @@ made a concrete decision (Decision Log #42, #341, #344).**
 |---|---|---|
 | Active account data (profile, content, guardian-consent record while the account is active) | For as long as your account remains active | Account deletion request (see below), guardian refusal of consent, or a defined review at the age of majority **[PROPOSAL, not yet built]** |
 | **Account deletion — the 30-day grace period** | Your account and content are retained for **30 days** after you request deletion, in a `pending_deletion` state during which you cannot log in | Automatic, scheduled, once the 30-day window elapses |
-| **Account deletion — after the 30-day window** | Your account record is **anonymized in place, never hard-deleted**: email, phone, date of birth, and club affiliation cleared; display name replaced with "[deleted user]"; password made unusable; account marked permanently deleted. The anonymized record has no purge timer (Decision Log #344) because it holds no personal data | Automatic, scheduled, unless an investigation hold applies |
+| **Account deletion — after the 30-day window** | Your account record is **anonymized in place**: email, phone, date of birth, and club affiliation cleared; display name replaced with "[deleted user]"; password made unusable; account marked permanently deleted. **[PROPOSAL, not yet built — Decision Log #375; counsel review pending]** 30 days after anonymisation the record is permanently deleted for (a) a minor's account whose guardian never approved it and (b) any account with no content; an anonymised account that still has content stays anonymised and is not purged until counsel has reviewed it (this replaces the earlier "no purge timer" position, Decision Log #344) | Automatic, scheduled, unless a hold applies |
 | **Content you posted** (posts, comments, messages, match results) | On **account** deletion: **not deleted.** Stays visible, attributed to "[deleted user]" | — |
 | **A post you delete yourself** | **Permanently deleted**, with every comment, like and save others made on it (Decision Log #360) | Immediate, on your request |
 | **Signals that are yours alone** (follows, likes, saves, notifications, group/room/club memberships) | Removed at anonymization | Automatic, at anonymization |
 | **Grassroots teams you organised** | The team survives: dormant, visible read-only, and reassignable to a new user who registers the same team name and city | Reclaim by a new registration of the same name and city |
-| **Investigation hold** | If you are the reporter, the reported party, or the author of reported content in an unresolved moderation report, anonymization is **held entirely** and your account stays fully identifiable to moderators | Conclusion of the investigation. No maximum duration is currently set **[OPEN]** |
+| **Investigation hold** **[PROPOSAL, not yet built — Decision Log #376; counsel review pending]** | If you are the reporter, the reported party, or the author of reported content in a moderation report, erasure is paused while the report is open, then until any appeal period has ended or the appeal is decided, then for **6 months** after the matter is closed, whatever the outcome. During the hold we keep the report, the reported content and messages, and identifiers (user ID, name, email, date of birth) and clear data that is not evidence (such as the password hash). A reported person, and the author of reported content, is then deleted in the ordinary way. A reporter whose report was upheld, or where neither party was found at fault, follows the ordinary deletion path and only the report record is kept for the 6 months; a reporter found to have acted in bad faith is held in full for the 6 months. A moderator may also place a **legal hold** on both accounts, which lasts until it is lifted | Closure of the report or appeal, plus 6 months, or lifting of a legal hold. While a report is open no maximum duration is set **[OPEN]** |
+| **A reporter's data held in full** **[PROPOSAL, not yet built — counsel review pending]** | Held in full only so that records exist if the reported person takes legal action against the reporter. It is not used for any other purpose | As above |
+| **Contact Us form submissions** **[PROPOSAL, not yet built]** | Name, email address, category and message, kept to answer the enquiry. **[OPEN: retention period — Temi/counsel to set; none decided.]** | To be set |
+| **Country information** **[PROPOSAL, not yet built — Decision Log #368]** | Declared country code, derived country code, method and time are kept with the account. The IP address used for the lookup is never stored. **[OPEN: retention period.]** | To be set |
 | **Guardian-consent records — separate exception** | Not deleted with the rest of your account. Separately snapshotted (the consent status, when consent was confirmed, how it was captured, and — where captured — the consent-screen version and coarse device type; not the full guardian record — the guardian's name, email and relationship to the minor are **not** retained past anonymisation — and never the raw browser string) and kept a further **6 months** after the 30-day grace period ends (**~7 months total**), so Soccernity can demonstrate valid guardian consent if challenged | Automatic, on its own separate timer |
 | **Age-reclassification log** (Decision Log #349) | One row per change to your under-18 / under-16 classification: account ID, which classification, before/after, your age at that moment (no date of birth). While the account is a minor account it follows the same retention as the rest of a minor's account data; once the account is promoted to adult, the ordinary adult retention rules apply | Promotion to adult |
 | **Guardian record once you turn 18** | Kept, not deleted, as consent history; no longer used to restrict the account. When you later delete your account, guardian data is handled on the normal guardian-data deletion timeframe — snapshotted into the consent record above, then deleted | Account deletion |
@@ -791,16 +956,23 @@ made a concrete decision (Decision Log #42, #341, #344).**
 | Media you upload (photos/videos) | Tied to the lifecycle of the post or article it belongs to; stays with content that remains visible | Deleted when the parent content is deleted |
 
 **On account deletion specifically, stated plainly:** after the 30-day window your account is
-anonymized in place. The content you posted stays, under "[deleted user]," because other users'
+anonymized in place (and, **[PROPOSAL, not yet built]**, permanently deleted a further 30 days later
+if it belonged to a minor whose guardian never approved it or has no content). The content you posted stays, under "[deleted user]," because other users'
 replies, likes, and saves on it are not yours to take down. Only the signals that are yours alone
 are removed. This is a deliberate design (Decision Log #341), chosen because removing a person's
 identity does not require removing other people's contributions.
 
 **Investigation hold — a genuine exception, not a technicality.** If you are the reporter, the
 reported party, or the author of reported content in a report that has not been resolved, we do
-not anonymize your account when the 30-day window ends. Your account stays fully identifiable to
+not anonymize your account when the 30-day window ends. Your account stays identifiable to
 moderators until the investigation concludes, because preserving evidence takes priority over the
-ordinary 30-day timer. You still cannot log in during this time.
+ordinary 30-day timer. You still cannot log in during this time. **[PROPOSAL, not yet built —
+Decision Log #376; counsel review pending]** After the investigation and any appeal, the hold
+continues for 6 months. **A reporter's data is held in full only where a moderator finds the report
+was made in bad faith, or where a legal hold is placed, and only so that records exist if the
+reported person takes legal action against the reporter; it is not held for any other purpose.**
+Where a report is upheld, or neither party is found at fault, the reporter's account follows the
+ordinary deletion path and only the report record is kept for the 6 months.
 
 **Guardians and minors.** A guardian's request to delete a minor's account supersedes the
 minor's own wishes. A minor cannot independently consent to keep, or delete, their own account.
@@ -882,7 +1054,8 @@ guardians, not only publish a changed date at the top of this page.
 ### 15. Contact us
 
 Questions about this Policy, or requests to exercise your data rights, can be sent to
-**support@soccernity.com**.
+**support@soccernity.com**. **[PROPOSAL, not yet built]** A Contact Us form in the app (Section 1.9)
+is intended as a further route.
 
 ---
 
@@ -908,14 +1081,14 @@ mistaken for settled by the time this reaches counsel or gets converted into Fig
 | 13 | **Resolved (signed off)** — England & Wales, exclusive jurisdiction, savings clause; applied in v0.7 | ToS §12 | — |
 | 14 | NDPA 2023 cross-check on the 6-month consent-record retention window (UK-GDPR-derived reasoning, not yet confirmed for Nigeria) | PP §9 | Nigerian counsel |
 | 15 | Cookie/local-storage audit for the actual web application | PP §6 | `backend-api`/frontend + counsel |
-| 16 | **Built (PR #272, Decision Log #346)** — under-16 tier. The under-16 recipient refusal is now the indistinguishable 404 (Decision Log #351, live). **Guardian-contact visibility differs from the code — see row 32** | ToS §3.5(a); PP §8 | Counsel |
+| 16 | **Built (PR #272, Decision Log #346)** — under-16 tier. The under-16 recipient refusal is now the indistinguishable 404 (Decision Log #351, live). Guardian contact now shows for **every minor (under 18)**, not only under-16s (v0.8) — see row 32; the genuine under-16 rules are unchanged | ToS §3.5(a), (c); PP §8 | Counsel |
 | 17 | **Built (PR #274, Decision Log #348)** — consent-screen version (a manually bumped label, tripwire-checked) + coarse device type. Counsel to confirm sufficiency | PP §4.2 | Counsel |
 | 18 | **Built (PRs #273/#276/#280, Decision Log #347/#350)** — adult cannot start a DM with a minor; enumeration-safe; timing jitter accepted (#350) | ToS §3.5(b); PP §8 | Counsel to confirm the accepted limitation |
 | 19 | **Resolved (signed off)** — see row 4 | PP §2 | — |
 | 20 | Cross-border transfer assessment (standalone restatement of row 9) | PP §5 | Counsel |
 | 21 | Encryption-at-rest and breach-notification technical standard (restates row 11) | PP §11 | Founder + `backend-api` + counsel |
-| 22 | **Resolved:** the full date of birth is used (not an age band) and is encrypted at rest, not hashed (comment 26). **Backend build pending:** `User.dateOfBirth` is currently a plain `DateTime?` column with no encryption in `services/api`; the DOB-encryption backend work is being built separately. The policy states the decision; do not publish until that work has merged | PP §1.1 | `backend-api` |
-| 23 | Investigation hold has no maximum duration (Decision Log #345 gives visibility only) | PP §9 | Founder + counsel |
+| 22 | **Resolved and built (Decision Log #362, merged):** the full date of birth is used (not an age band) and is encrypted at rest, not hashed (comment 26). The earlier "backend build pending" note is stale and removed. New v0.8 use of the decrypted DOB — the guardian consent page's request summary (Decision Log #372, not yet built) — needs counsel's view on proportionality | PP §1.1, §4.2 | Counsel |
+| 23 | Investigation hold has no maximum duration **while a report is open** (Decision Log #345 gives visibility only). v0.8 adds a post-closure period (Decision Log #376, see rows 39 and 40) | PP §9 | Founder + counsel |
 | 24 | **Age-reclassification (Decision Log #349)**: accepted ~24h misclassification window; reliance on unverified date of birth; younger-direction corrections re-apply restrictions with no notice | ToS §3.6; PP §4.5 | Counsel |
 | 25 | **Resolved (Decision Log #351, live in `messaging.service.ts`)** — under-16 recipient refusal is the same 404 as other blocked paths | PP §8 | — |
 | 26 | Guardian authority at 18: v0.2's "a guardian's request to delete a minor's account supersedes the minor's own wishes" (ToS §8.5, PP §9, counsel-approved) is silent on accounts that have since turned 18; also no retention period for the age-reclassification log, and whether the guardian's details should be minimised after 18 | ToS §8.5; PP §9 | Counsel |
@@ -924,11 +1097,19 @@ mistaken for settled by the time this reaches counsel or gets converted into Fig
 | 29 | **Resolved (signed off)** — card verification (PRs #297/#298) is the stated COPPA control; no further step unless a regulator requires one | ToS §3.7, §12; PP §4.6 | — |
 | 30 | **Superseded** — operational items moved to row 36 | — | — |
 | 31 | **Resolved (signed off)** — the blanket "we comply with all applicable laws" sentence stays removed; replacement scope wording applied in v0.7 | ToS §12; PP scope note | — |
-| 32 | **Built (Decision Log #363) -- guardian-contact visibility now matches the policy text; counsel to confirm the guardian-facing disclosure and whether already-confirmed (v1) guardians need notifying.** Original note: **Guardian contact: policy text was ahead of the code.** The resolved decision shows the guardian's email on the under-16's profile card to any viewer. Today `GET /users/:id` is self-only and returns `guardianContact` only to the account itself; no public profile card exists. Needs a backend change, and the guardian-visible consent wording should disclose it (bumping `CONSENT_SCREEN_VERSION` and its tripwire hash). Do not publish this wording until built | ToS §3.5(a); PP §1.2, §7, §8 | Founder + `backend-api` + counsel |
-| 33 | **Usernames are not built.** The display-name convention (username first, display name fallback) is stated, but `User` has no `username` column (Decision Log #58); everyone currently shows their display name | ToS §9.1; PP §1.1, §1.5, §7 | Founder + `backend-api` |
+| 32 | **Guardian contact for every minor (under 18). Backend built (Decision Log #363); the web UI does not render it yet** (`GET /users/:id/public-profile` has no consumer — audit section 5 item 14). **Founder states counsel agrees** to showing it for all minors; counsel review of the final wording is pending, as is whether already-confirmed (v1) guardians need notifying. v0.8 corrects the ToS/PP wording, which said under-16, to match the code and the guardian screen ("under 18"). The consent screen version was bumped to v2 for this disclosure | ToS §3.5(c); PP §1.2, §7, §8 | Founder + counsel |
+| 33 | **Usernames are built but optional (Decision Log #364); v0.8 makes them required before a profile is complete (Decision Log #369, not yet built).** The username-first public-name convention is in code (`publicName`). Not built: the incomplete-profile placeholder and gate, required-at-Create-Profile, and username moderation (reserved words, impersonation, profanity, cooldown, released-handle holding, admin revoke). Create Profile has no code | ToS §4.4, §9.1; PP §1.1, §1.5, §7 | Founder + `backend-api` |
 | 34 | **Built (Decision Log #365) -- the user-initiated guardian-email change now exists and matches ToS §3.3 / PP §4.3; counsel to confirm the wording against the shipped behaviour (below).** Original note: **User-initiated guardian-email change is not built.** No endpoint lets the minor change the guardian's email while consent is pending (the restart behaviour of Decision Log #60 has no code). As built: `POST /auth/guardian-consent/change-guardian-email`, available only while consent is *pending*; it restarts the request against the new address and the old link stops working. It is refused once consent is confirmed or declined. Also built in the same change: the new request requires the guardian's **name and relationship** (re-captured, since the new address may be a different person); the **previous guardian address is emailed** that the request was withdrawn (plain functional copy, not counsel-reviewed); a minor cannot list their **own** email as the guardian email (at registration or on change); and a **per-minor cap of 5 successful changes per 24h** applies. Counsel to review the withdrawn-notice wording | ToS §3.3; PP §4.3 | Founder + counsel |
 | 35 | A public (logged-out) report page now exists in the app (`/report`, `POST /reports/public`). Counsel removed non-user-reporting framing from the ToS, so §7.4 still does not describe it — counsel/product to confirm that is intended | ToS §7.4; PP §13 | Product + counsel |
 | 36 | Card step is built but **not live** (no payment-provider keys); the 50-cent figure is configurable but hardcoded in this copy; PCI-DSS self-assessment is an operational follow-up (carried from former row 30) | ToS §3.7; PP §4.6 | Founder |
+| 37 | **New in v0.8 — image-check processor and CSAM obligations.** Amazon Rekognition as a new processor for avatar/cover-photo checks (EU/UK region where available); cross-border assessment; whether hash-matching against known child sexual abuse material is available on the storage provider (Cloudflare R2 coverage unconfirmed) and what statutory duties attach to hosting images of minors. Not built. Counsel status: **pending** | PP §5, §1.3; ToS §6.2 | Counsel |
+| 38 | **New in v0.8 — IP address processed transiently at registration** (country lookup against a local GeoLite2 database; never stored; no third party). Wording, lawful basis and whether "transient, in memory" is enough for the disclosure. VPN/Tor limitation stated. Not built. Counsel status: **pending** | PP §1.7, §1.8; ToS §3.7 | Counsel |
+| 39 | **New in v0.8 — a reporter's data held in full** (only where bad faith is found, or under a legal hold) so records exist if the reported person takes legal action. Narrow-purpose wording is exactly as the founder specified; whether it is lawful and proportionate is for counsel. Not built. Counsel status: **pending** | ToS §8.4; PP §9 | Counsel |
+| 40 | **New in v0.8 — purge rule and anonymised-row retention.** Purge of anonymised rows of never-approved minors and no-content accounts after 30 days; content-bearing anonymised accounts stay until counsel reviews them (supersedes the "no purge timer" decision, Decision Log #344). Also: the 6-month post-closure hold and the appeal window length are not counsel-sourced; tension with the 6–7 year moderation-case retention. Not built. Counsel status: **pending** | ToS §8.3; PP §9 | Counsel |
+| 41 | **New in v0.8 — social sign-in.** Google and Facebook sign-in (name and email from the provider; no DOB; Facebook accounts without an email need a fallback); each provider's role and transfer position. Apple removed from scope. Not built. Counsel status: **pending** | ToS §4.3; PP §1.9, §5 | Counsel |
+| 42 | **New in v0.8 — Contact Us form retention.** Name, email, category, message are collected; **no retention period has been set** and none is invented here. Not built. Counsel status: **pending** | PP §1.9, §9 | Temi + counsel |
+| 43 | **New in v0.8 — avatar, cover photo, bio and country visible to other users including minors.** Includes minors seeing other minors' profiles. Not built. Counsel status: **pending** | ToS §9.1; PP §1.3, §7 | Founder + counsel |
+| 44 | **New in v0.8 — other new processing:** authenticator-app two-factor authentication (what is stored), email to the minor on guardian approval, mandatory email verification for every user, and the guardian consent page's request summary (returns the minor's name and DOB to an unauthenticated token holder). Not built. Counsel status: **pending** | PP §1.9, §4.2 | Counsel |
 
 ---
 
