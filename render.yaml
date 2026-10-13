@@ -1,4 +1,4 @@
-# Render Blueprint — Infrastructure as Code for services/api's web service.
+# Render Blueprint - Infrastructure as Code for services/api's web service.
 # Decision Log #26 (Build Plan Section 9 / CLAUDE.md): Render (API) + Neon
 # (Postgres) + Upstash (Redis), unbundled. Imported in Render's dashboard
 # ("New > Blueprint") to create the services below.
