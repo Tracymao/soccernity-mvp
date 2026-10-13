@@ -1,93 +1,73 @@
-# Render Blueprint — Infrastructure as Code for services/api's web service.
+# Render Blueprint � Infrastructure as Code for services/api's web service.
 # Decision Log #26 (Build Plan Section 9 / CLAUDE.md): Render (API) + Neon
-# (Postgres) + Upstash (Redis), unbundled. This file is imported directly
-# in Render's dashboard ("New > Blueprint") to create the service(s) below.
+# (Postgres) + Upstash (Redis), unbundled. Imported in Render's dashboard
+# ("New > Blueprint") to create the services below.
 #
-# CONFIDENCE NOTE (read before trusting this file blindly): this was written
-# from existing knowledge of Render's Blueprint spec, without live access to
-# re-verify it against Render's current docs. The overall shape (`services`,
-# `type: web`, `env: node`, `buildCommand`, `startCommand`,
-# `healthCheckPath`, `envVars` with `sync: false`) is used with reasonable
-# confidence. Two fields are lower-confidence and flagged explicitly rather
-# than presented as verified fact — see the comments on `preDeployCommand`
-# and `branch` below. There is no `rootDir` field used here at all (see the
-# comment above `buildCommand`) — that's a deliberate choice, not an
-# oversight. Live validation of this entire file still requires a human
-# with a real Render account importing it — see docs/deployment.md.
+# HOSTING REGION: everything is hosted in the EU. Both services use
+# `region: frankfurt`. Render does not allow a service's region to be changed
+# after creation (docs.render.com/blueprint-spec: "You can't modify this value
+# after creation"), so this must be right BEFORE the first import. Neon
+# (Postgres) and Upstash (Redis) must ALSO be created in an EU region, in or
+# near the same area as the Render service, to keep latency low and data in the
+# EU. This file cannot enforce that; it is a manual step (docs/deployment.md).
 #
-# This repo models two environments per CLAUDE.md's branch strategy
-# (`staging`, `main`) and .github/workflows/deploy.yml's own
-# RENDER_STAGING_URL / RENDER_PRODUCTION_URL split, so this Blueprint
-# defines two services, one per branch, rather than one. Render Blueprints
-# support a per-service `branch` field for exactly this — confirmed with
-# reasonable, not full, confidence (see the note on `branch` below).
+# VERIFIED AGAINST RENDER'S DOCS (https://render.com/docs/blueprint-spec,
+# read 2026-10-13): `region` accepts a fixed list that includes `frankfurt`; `branch` is a valid per-service key; `runtime` replaces the
+# deprecated `env` field; `preDeployCommand` runs after build and before
+# start. NOT verified live (no Render account): that this file imports cleanly.
+#
+# PRE-DEPLOY ON THE FREE PLAN: https://render.com/docs/deploys says "The
+# pre-deploy command is available for paid web services, private services,
+# and background workers." Staging below is `plan: free`, so its
+# preDeployCommand (migrations + DOB backfill) will probably NOT run. See
+# docs/deployment.md and the PR description for the proposed fix; the plan and
+# commands are deliberately unchanged here pending a decision.
+#
+# NODE_ENV is deliberately NOT set below. Render sets NODE_ENV=production for
+# Node services at runtime only (https://render.com/docs/environment-variables).
+# Setting it as an envVar would also apply it at build time, where `npm
+# install` would then skip devDependencies (@nestjs/cli, prisma, typescript)
+# and the build would fail.
+#
+# `sync: false` = Render prompts for the value at first import and never
+# stores it in this file. `value:` entries equal the code's own default, so
+# they change nothing; they exist so the setting is visible and editable.
+# PORT is not listed: services/api reads process.env.PORT ?? 3000.
 
 services:
   - type: web
     name: soccernity-api-staging
     runtime: node
     branch: staging
-    # LOWER CONFIDENCE: `branch` is used here with reasonable but not full
-    # confidence as the correct Blueprint key for pinning a service to a
-    # non-default branch. If this key name is wrong, the practical fallback
-    # is to configure the branch manually in Render's dashboard after
-    # importing this Blueprint once for the default branch.
     plan: free
-    # Free tier for staging — no safety-critical, guardian-consent-email
-    # traffic depends on staging's cold-start behavior the way it does on
-    # production's, so the cost tradeoff favors free here. See the
-    # production service below for why production is on Starter instead.
-    region: oregon
-    # No rootDir set: rather than scoping Render's build/start cwd into
-    # services/api (which would need its own standalone package-lock.json
-    # to install cleanly, since npm workspace hoisting/lockfile lives at
-    # the repo root), every command below runs from the repo root and
-    # explicitly targets services/api via `--workspace=services/api` or an
-    # explicit `--schema` path — the same npm-workspaces-aware pattern
-    # .github/workflows/ci.yml already uses successfully.
+    # Free for staging: no guardian-consent traffic depends on its cold start.
+    region: frankfurt
+    # No rootDir: every command runs from the repo root and targets
+    # services/api via --workspace or an explicit --schema path, the same
+    # pattern .github/workflows/ci.yml uses.
     buildCommand: npm install && npm run prisma:generate && npm run build --workspace=services/api
-    # Mirrors ci.yml's own three build-time steps ("Install dependencies",
-    # "Generate Prisma client", "Build"), scoped to services/api only for
-    # the last step (`--workspace=services/api`) since this Blueprint only
-    # ever needs to build the API, not apps/web/apps/admin/apps/mobile —
-    # a deliberate, stated narrowing of ci.yml's own unscoped `npm run
-    # build` (which builds every workspace via `--workspaces --if-present`,
-    # appropriate for CI verifying the whole monorepo but wasteful for a
-    # deploy that only ships the API).
+    # Needs DIRECT_URL and DOB_ENCRYPTION_KEY set (the backfill script throws
+    # without a valid key, which fails the deploy before cut-over).
     preDeployCommand: npx prisma migrate deploy --schema=services/api/prisma/schema.prisma && node services/api/dist/scripts/backfill-dob-encryption.js
-    # LOWER CONFIDENCE: `preDeployCommand` is Render's field (introduced
-    # after this file's underlying spec knowledge was last refreshed, to
-    # the best of available confidence) for running a one-off command
-    # after build but before the new deploy is cut over — the correct place
-    # for a non-interactive migration step. Explicitly NOT `prisma migrate
-    # dev` (interactive, can prompt for a migration name, wrong for
-    # non-interactive production/staging deploys) — mirrors ci.yml's own
-    # `npx prisma migrate deploy` exactly. This step needs DIRECT_URL
-    # resolvable (see Decision Log #26) — Render injects every envVar below
-    # as a real process-level environment variable regardless of working
-    # directory, so the `--schema` flag's relative path is the only cwd
-    # concern, not env-var resolution. If `preDeployCommand` turns out not
-    # to be a real/current Render Blueprint field, the fallback is to run
-    # this same command as the first part of `buildCommand` instead —
-    # functionally close enough for an MVP with no active users yet, just
-    # without Render's zero-downtime-cutover guarantee.
     startCommand: npm run start:prod --workspace=services/api
-    # services/api/package.json's real "start:prod" script: `node dist/main.js`.
     healthCheckPath: /health
-    # services/api/src/health/health.controller.ts — GET /health, a real
-    # `SELECT 1` against Postgres, not a hardcoded 200 (Sprint 0 requirement,
-    # Build Plan Section 5).
     envVars:
+      # --- Database / cache (Neon + Upstash, EU regions; see header) ---
       - key: DATABASE_URL
         sync: false
       - key: DIRECT_URL
         sync: false
       - key: REDIS_URL
         sync: false
+      # --- Secrets. No code default; generate a DIFFERENT value per variable and per environment. ---
       - key: JWT_SECRET
         sync: false
+      - key: ADMIN_JWT_SECRET
+        sync: false
+      # DOB_ENCRYPTION_KEY: must base64-decode to exactly 32 bytes (openssl rand -base64 32); losing it makes stored dates of birth unreadable; the pre-deploy script needs it
       - key: DOB_ENCRYPTION_KEY
         sync: false
+      # --- Auth tuning (code defaults apply when unset/blank) ---
       - key: JWT_ACCESS_TTL_SECONDS
         sync: false
       - key: JWT_REFRESH_TTL_DAYS
@@ -98,59 +78,120 @@ services:
         sync: false
       - key: RESET_TOKEN_TTL_MINUTES
         sync: false
-      - key: SPORTS_DATA_API_KEY
+      # ADMIN_JWT_ACCESS_TTL_SECONDS: code default (admin-token.constants.ts)
+      - key: ADMIN_JWT_ACCESS_TTL_SECONDS
+        value: "900"
+      # ADMIN_JWT_REFRESH_TTL_DAYS: code default (admin-token.constants.ts)
+      - key: ADMIN_JWT_REFRESH_TTL_DAYS
+        value: "7"
+      - key: GUARDIAN_CONSENT_TOKEN_TTL_HOURS
         sync: false
+      # GUARDIAN_CONSENT_WITHDRAWAL_TOKEN_TTL_HOURS: code default (consent-token.constants.ts)
+      - key: GUARDIAN_CONSENT_WITHDRAWAL_TOKEN_TTL_HOURS
+        value: "72"
+      # --- Email (Postmark) and links ---
       - key: EMAIL_PROVIDER_API_KEY
         sync: false
       - key: POSTMARK_FROM_EMAIL
         sync: false
       - key: WEB_APP_BASE_URL
         sync: false
-      - key: GUARDIAN_CONSENT_TOKEN_TTL_HOURS
+      # --- Sports data (Highlightly) ---
+      - key: SPORTS_DATA_API_KEY
         sync: false
+      # SPORTS_DATA_RAPIDAPI_HOST: leave blank for a direct Highlightly account; only set for a RapidAPI subscription
+      - key: SPORTS_DATA_RAPIDAPI_HOST
+        sync: false
+      # SPORTS_DATA_BASE_URL: code default (highlightly-client.service.ts)
+      - key: SPORTS_DATA_BASE_URL
+        value: "https://soccer.highlightly.net"
+      # SPORTS_DATA_PROVIDER: code default
+      - key: SPORTS_DATA_PROVIDER
+        value: "highlightly"
+      # HIGHLIGHTLY_DAILY_REQUEST_BUDGET: code default = free-tier limit
+      - key: HIGHLIGHTLY_DAILY_REQUEST_BUDGET
+        value: "100"
+      # SPORTS_LIVE_CACHE_TTL_SECONDS: code default (sports.constants.ts)
+      - key: SPORTS_LIVE_CACHE_TTL_SECONDS
+        value: "60"
+      # SPORTS_SCHEDULED_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_SCHEDULED_CACHE_TTL_SECONDS
+        value: "21600"
+      # SPORTS_FINISHED_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_FINISHED_CACHE_TTL_SECONDS
+        value: "86400"
+      # SPORTS_STANDINGS_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_STANDINGS_CACHE_TTL_SECONDS
+        value: "1800"
+      # SPORTS_H2H_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_H2H_CACHE_TTL_SECONDS
+        value: "21600"
+      # SPORTS_HIGHLIGHTS_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_HIGHLIGHTS_CACHE_TTL_SECONDS
+        value: "600"
+      # SPORTS_BOX_SCORE_LIVE_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_BOX_SCORE_LIVE_CACHE_TTL_SECONDS
+        value: "300"
+      # SPORTS_DATA_MAX_REFRESH_PAGES: code default
+      - key: SPORTS_DATA_MAX_REFRESH_PAGES
+        value: "1"
+      # --- Media storage (Cloudflare R2, S3-compatible; Decision Log #307) ---
       - key: S3_BUCKET
         sync: false
       - key: S3_ACCESS_KEY
         sync: false
       - key: S3_SECRET_KEY
         sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      # S3_REGION: code default; R2 uses the literal 'auto'
+      - key: S3_REGION
+        value: "auto"
+      # --- Guardian card verification (Stripe; use TEST keys until a real account exists) ---
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      # COPPA_VERIFICATION_AMOUNT_CENTS: code default and floor (Stripe minimum)
+      - key: COPPA_VERIFICATION_AMOUNT_CENTS
+        value: "50"
+      # --- Error monitoring ---
       - key: SENTRY_DSN
         sync: false
-    # `sync: false` on every entry per this PR's brief: Render will prompt
-    # for a real value in its dashboard when this Blueprint is imported,
-    # and never provision, guess, or store a real/placeholder secret in
-    # this committed file — same posture as .env.example's own placeholders.
-    # NOTE: PORT is deliberately NOT listed here. Render web services
-    # auto-assign and inject their own PORT env var; services/api/src/main.ts
-    # already reads `process.env.PORT ?? 3000`, so no configuration is
-    # needed for Render's own PORT injection to work correctly.
 
   - type: web
     name: soccernity-api
     runtime: node
     branch: main
     plan: starter
-    # Render's $7/month Starter tier (not Free) for production — Decision
-    # Log #26's stated reasoning: avoiding cold-start delay on
-    # safety-critical flows such as the guardian-consent email link
-    # (Build Plan Section 8.3), which Render's free tier's spin-down-on-
-    # idle behavior would otherwise introduce.
-    region: oregon
+    # Starter (not Free) for production: avoids cold-start delay on the guardian-consent email link (Decision Log #26, Build Plan 8.3).
+    region: frankfurt
+    # No rootDir: every command runs from the repo root and targets
+    # services/api via --workspace or an explicit --schema path, the same
+    # pattern .github/workflows/ci.yml uses.
     buildCommand: npm install && npm run prisma:generate && npm run build --workspace=services/api
+    # Needs DIRECT_URL and DOB_ENCRYPTION_KEY set (the backfill script throws
+    # without a valid key, which fails the deploy before cut-over).
     preDeployCommand: npx prisma migrate deploy --schema=services/api/prisma/schema.prisma && node services/api/dist/scripts/backfill-dob-encryption.js
     startCommand: npm run start:prod --workspace=services/api
     healthCheckPath: /health
     envVars:
+      # --- Database / cache (Neon + Upstash, EU regions; see header) ---
       - key: DATABASE_URL
         sync: false
       - key: DIRECT_URL
         sync: false
       - key: REDIS_URL
         sync: false
+      # --- Secrets. No code default; generate a DIFFERENT value per variable and per environment. ---
       - key: JWT_SECRET
         sync: false
+      - key: ADMIN_JWT_SECRET
+        sync: false
+      # DOB_ENCRYPTION_KEY: must base64-decode to exactly 32 bytes (openssl rand -base64 32); losing it makes stored dates of birth unreadable; the pre-deploy script needs it
       - key: DOB_ENCRYPTION_KEY
         sync: false
+      # --- Auth tuning (code defaults apply when unset/blank) ---
       - key: JWT_ACCESS_TTL_SECONDS
         sync: false
       - key: JWT_REFRESH_TTL_DAYS
@@ -161,21 +202,83 @@ services:
         sync: false
       - key: RESET_TOKEN_TTL_MINUTES
         sync: false
-      - key: SPORTS_DATA_API_KEY
+      # ADMIN_JWT_ACCESS_TTL_SECONDS: code default (admin-token.constants.ts)
+      - key: ADMIN_JWT_ACCESS_TTL_SECONDS
+        value: "900"
+      # ADMIN_JWT_REFRESH_TTL_DAYS: code default (admin-token.constants.ts)
+      - key: ADMIN_JWT_REFRESH_TTL_DAYS
+        value: "7"
+      - key: GUARDIAN_CONSENT_TOKEN_TTL_HOURS
         sync: false
+      # GUARDIAN_CONSENT_WITHDRAWAL_TOKEN_TTL_HOURS: code default (consent-token.constants.ts)
+      - key: GUARDIAN_CONSENT_WITHDRAWAL_TOKEN_TTL_HOURS
+        value: "72"
+      # --- Email (Postmark) and links ---
       - key: EMAIL_PROVIDER_API_KEY
         sync: false
       - key: POSTMARK_FROM_EMAIL
         sync: false
       - key: WEB_APP_BASE_URL
         sync: false
-      - key: GUARDIAN_CONSENT_TOKEN_TTL_HOURS
+      # --- Sports data (Highlightly) ---
+      - key: SPORTS_DATA_API_KEY
         sync: false
+      # SPORTS_DATA_RAPIDAPI_HOST: leave blank for a direct Highlightly account; only set for a RapidAPI subscription
+      - key: SPORTS_DATA_RAPIDAPI_HOST
+        sync: false
+      # SPORTS_DATA_BASE_URL: code default (highlightly-client.service.ts)
+      - key: SPORTS_DATA_BASE_URL
+        value: "https://soccer.highlightly.net"
+      # SPORTS_DATA_PROVIDER: code default
+      - key: SPORTS_DATA_PROVIDER
+        value: "highlightly"
+      # HIGHLIGHTLY_DAILY_REQUEST_BUDGET: code default = free-tier limit
+      - key: HIGHLIGHTLY_DAILY_REQUEST_BUDGET
+        value: "100"
+      # SPORTS_LIVE_CACHE_TTL_SECONDS: code default (sports.constants.ts)
+      - key: SPORTS_LIVE_CACHE_TTL_SECONDS
+        value: "60"
+      # SPORTS_SCHEDULED_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_SCHEDULED_CACHE_TTL_SECONDS
+        value: "21600"
+      # SPORTS_FINISHED_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_FINISHED_CACHE_TTL_SECONDS
+        value: "86400"
+      # SPORTS_STANDINGS_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_STANDINGS_CACHE_TTL_SECONDS
+        value: "1800"
+      # SPORTS_H2H_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_H2H_CACHE_TTL_SECONDS
+        value: "21600"
+      # SPORTS_HIGHLIGHTS_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_HIGHLIGHTS_CACHE_TTL_SECONDS
+        value: "600"
+      # SPORTS_BOX_SCORE_LIVE_CACHE_TTL_SECONDS: code default
+      - key: SPORTS_BOX_SCORE_LIVE_CACHE_TTL_SECONDS
+        value: "300"
+      # SPORTS_DATA_MAX_REFRESH_PAGES: code default
+      - key: SPORTS_DATA_MAX_REFRESH_PAGES
+        value: "1"
+      # --- Media storage (Cloudflare R2, S3-compatible; Decision Log #307) ---
       - key: S3_BUCKET
         sync: false
       - key: S3_ACCESS_KEY
         sync: false
       - key: S3_SECRET_KEY
         sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      # S3_REGION: code default; R2 uses the literal 'auto'
+      - key: S3_REGION
+        value: "auto"
+      # --- Guardian card verification (Stripe; use TEST keys until a real account exists) ---
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      # COPPA_VERIFICATION_AMOUNT_CENTS: code default and floor (Stripe minimum)
+      - key: COPPA_VERIFICATION_AMOUNT_CENTS
+        value: "50"
+      # --- Error monitoring ---
       - key: SENTRY_DSN
         sync: false
