@@ -55,7 +55,7 @@ Each contest is created from the admin panel. The admin Contest tab is redesigne
 - Required per contest:
   - (a) **Minimum tally**: x points a finalist needs to be considered for the final top 3. Admin-set at creation, no hardcoded default; a contest cannot be created without it.
   - (b) **Placement points** for 1st / 2nd / 3rd, weekly and monthly (defaults in section 9d).
-  - (c) **Per-week view-qualifying watch limit**, in seconds, for video entries (section 9c). The founder said the limit is "always communicated in the contest description". Because the system must enforce it, it is recorded as a required structured numeric field in addition to the description text. **ASSUMED interpretation** (open item b).
+  - (c) **Per-week view-qualifying watch limit**, in seconds, for video entries (section 9c). The founder said the limit is "always communicated in the contest description". Because the system must enforce it, it is recorded as a required structured numeric field in addition to the description text. **ASSUMED interpretation** (open item b). **CONFIRMED 2026-10-15 (Decision Log #393): required structured numeric field on the admin form.**
 - Per-week admin control: a "followers-excluded counting" switch (section 10).
 
 ## 5. Calendar (fixed, Europe/London time)
@@ -79,7 +79,7 @@ All boundaries are evaluated in Europe/London time, including across the BST/GMT
 - Minors can enter. Past winners can re-enter and win again in future months (no sit-out).
 - Restricted-pending accounts cannot enter (uniform write block, Decision Log #370).
 - OBSERVATION (recorded, no change made): Phase 1 ranks by engagement at the end of day 4, so an entry posted on day 1 has more time to earn engagement than one posted on day 4. The founder's design stands unless she asks for an entry cutoff.
-- ASSUMED (open item h): weekly entries are accepted during Phase 1 (days 1-4) only, because Phase 1 ranking closes at the end of day 4. The founder did not state an entry deadline for weeks 1-3.
+- ASSUMED (open item h): weekly entries are accepted during Phase 1 (days 1-4) only, because Phase 1 ranking closes at the end of day 4. The founder did not state an entry deadline for weeks 1-3. **CONFIRMED 2026-10-15 (#393): entries are accepted in Phase 1 (days 1-4) only.**
 
 ## 7. Phase 1 (days 1-4 of each of weeks 1-3)
 
@@ -87,7 +87,7 @@ All boundaries are evaluated in Europe/London time, including across the BST/GMT
 - The top 10 qualify for Phase 2.
 - If there are fewer than 10 entries, everyone qualifies.
 - If there are fewer than 3 entries, the week is FORFEITED: the leaderboard shows "Forfeited" for that week's 3 slots and no placement points are awarded.
-- Tie at the 10th place cutoff: not specified (open item h).
+- Tie at the 10th place cutoff: **CONFIRMED 2026-10-15 (#393): exactly ONE user qualifies as 10th. Tie-breaker = whoever reached the tied qualifying-engagement total earliest, by timestamp of the engagement that brought their tally to that total, from the log of qualifying engagement (removed engagement excluded). If still identical, the earlier entry submission wins.**
 
 ## 8. Phase 2 (days 5-7)
 
@@ -96,8 +96,8 @@ All boundaries are evaluated in Europe/London time, including across the BST/GMT
 - A vote can be changed or retracted. Retracting returns the user to the Voting page; voting again returns them to the Already Voted page.
 - Minors can vote even if they are not entrants.
 - ACCOUNTS WITH RESTRICTIONS CANNOT VOTE (founder confirmed; consistent with the restricted-pending write block, Decision Log #370).
-- Tie-break: earliest vote reached. The entrant whose tally first reached the tied number ranks higher, computed from the current non-retracted vote log by timestamp. **INTERPRETATION** (open item a), for founder confirmation.
-- ASSUMED (open item h): votes lock at 23:59:59 on day 7; weekly winners are confirmed at that point.
+- Tie-break: earliest vote reached. The entrant whose tally first reached the tied number ranks higher, computed from the current non-retracted vote log by timestamp. **INTERPRETATION** (open item a), for founder confirmation. **CONFIRMED 2026-10-15 (#393)** (previously an interpretation).
+- ASSUMED (open item h): votes lock at 23:59:59 on day 7; weekly winners are confirmed at that point. **CONFIRMED 2026-10-15 (#393): votes lock at 23:59:59 on day 7 and winners are confirmed then.**
 
 ## 9. Leaderboard points and engagement counting
 
@@ -122,7 +122,7 @@ Everyday engagement, outside any contest.
 - Founder's rationale: "it is more profitable to give than to receive", to encourage engagement.
 - The 0.25 rule applies ONLY to baseline leaderboard points and never affects contest or competition tallies.
 - SELF-ENGAGEMENT IS EXEMPT from baseline points (a user's own views / likes / comments on their own content earn nothing).
-- Points are REVOKED when the engagement is removed (unlike, comment deleted or removed, post removed, account later restricted). Revocation also reduces that day's cap counter (ASSUMED detail, open item d).
+- Points are REVOKED when the engagement is removed (unlike, comment deleted or removed, post removed, account later restricted). Revocation also reduces that day's cap counter (ASSUMED detail, open item d). **CONFIRMED 2026-10-15 (#393): revoking a point also reduces that day's cap counter; a removed-then-restored engagement earns its point once.**
 - Storage and display: points are stored internally in quarter-point units (1 point = 4 units) and DISPLAYED rounded to the nearest whole number (half rounds up). RANKING uses the exact stored value, so rounding never creates false ties.
 - DAILY CAPS (founder confirmed 2026-10-14; admin-configurable settings, not hardcoded; Europe/London calendar day): **40 points per day earned for GIVING and 20 points per day earned for RECEIVING** (about 1,800 per month maximum from baseline). Revisit after two weeks of live data.
 - A verified email is required; restricted accounts never earn. Same rules for minors.
@@ -156,7 +156,7 @@ Leaderboard points as a PRIZE for winning. The founder confirmed winners earn le
 |---|---:|---:|---:|
 | Weekly contest | 500 | 300 | 150 |
 | Monthly final | 2,000 | 1,200 | 600 |
-| Prediction, Commentary and other competitions | 500 | 300 | 150 (ASSUMED default, open item c) |
+| Prediction, Commentary and other competitions | 500 | 300 | 150 (**CONFIRMED 2026-10-15, #393**: other competitions default to the weekly figures; admins can override per contest/competition at creation) |
 
 - Weekly placement points are awarded when that week's winners are confirmed. Monthly final points are awarded on crowning.
 - Forfeited weeks and "No winner this month" award nothing.
@@ -272,14 +272,24 @@ Founder wording recorded: "it is more profitable to give than to receive" (basel
 
 ### ASSUMED / OPEN items (none silently resolved)
 
-- (a) **ASSUMED**: the tie-break "earliest vote reached" is computed from the current non-retracted vote log by timestamp (section 8). Founder to confirm.
-- (b) **ASSUMED**: the weekly view-qualifying limit is a required structured numeric field in addition to the description text (section 4).
-- (c) **ASSUMED**: default placement points for Prediction, Commentary and other competitions are 500 / 300 / 150 (section 9d). Founder to confirm.
-- (d) **ASSUMED**: revocation of baseline points also reduces that day's daily-cap counter (section 9b).
+- (a) **CONFIRMED 2026-10-15 (#393)** (was ASSUMED): the tie-break "earliest vote reached" is computed from the current non-retracted vote log by timestamp (section 8). 
+- (b) **CONFIRMED 2026-10-15 (#393)** (was ASSUMED): the weekly view-qualifying limit is a required structured numeric field in addition to the description text (section 4).
+- (c) **CONFIRMED 2026-10-15 (#393)** (was ASSUMED): default placement points for Prediction, Commentary and other competitions are 500 / 300 / 150 (section 9d). 
+- (d) **CONFIRMED 2026-10-15 (#393)** (was ASSUMED): revocation of baseline points also reduces that day's daily-cap counter (section 9b).
 - (e) **OBSERVATION**: Phase 1 early-poster advantage (section 6). No change made.
-- (f) **Read-only grep result** (2026-10-14, `origin/main`): leaderboard points ARE awarded for follows and posts today. `services/api/src/modules/points/points.constants.ts` `ENGAGEMENT_POINTS = { POST_CREATED: 3, LIKE_GIVEN: 1, FOLLOW_MADE: 1 }`; awarded at `feed.service.ts:279` (`createPost`, source `engagement_post`), `feed.service.ts:644` (`likePost`, `engagement_like`), `users.service.ts:395` (`followUser`, `engagement_follow`); counted by `leaderboard.constants.ts:24-26` and capped in `leaderboard-rollup.service.ts:128`; described in `points/README.md:16`, `leaderboard/README.md:228-234`, `contest/README.md:181-203`, and Decision Log #130 ("likes, follows, and posts"), #219 (post 3 / like 1 / follow 1). No web/admin copy promising points for follows or posts was found. Removal task: B-094. Existing ledger rows of source `engagement_follow` / `engagement_post` are not addressed by this document (open item h).
+- (f) **Read-only grep result** (2026-10-14, `origin/main`): leaderboard points ARE awarded for follows and posts today. `services/api/src/modules/points/points.constants.ts` `ENGAGEMENT_POINTS = { POST_CREATED: 3, LIKE_GIVEN: 1, FOLLOW_MADE: 1 }`; awarded at `feed.service.ts:279` (`createPost`, source `engagement_post`), `feed.service.ts:644` (`likePost`, `engagement_like`), `users.service.ts:395` (`followUser`, `engagement_follow`); counted by `leaderboard.constants.ts:24-26` and capped in `leaderboard-rollup.service.ts:128`; described in `points/README.md:16`, `leaderboard/README.md:228-234`, `contest/README.md:181-203`, and Decision Log #130 ("likes, follows, and posts"), #219 (post 3 / like 1 / follow 1). No web/admin copy promising points for follows or posts was found. Removal task: B-094. **RESOLVED 2026-10-15 (#393 (e)): the platform is not live and no points or ledger rows exist, so B-094 needs no historical-row handling; existing rows are simply reset.**
 - (g) **Conflicts with #128-#130 beyond the stated amendments**: #130 says Contest/Competition points come "via each competition's own scoring mechanism" and that weights were "parked as a backend-api task"; #219 later built post 3 / like 1 / follow 1 and weekly 50/30/20, monthly 250/150/100; this file replaces all of those weights (9b, 9d). #130 and #219 say engagement points are awarded once per target and never revoked; 9b revokes. #61(c) and #218(2) allow position ties in weekly and monthly top 3 ("two rows carrying the same ordinal"); the tie-breaks in sections 8 and 10 remove ties, so tied-row rendering is no longer needed. #148/#188 define the Create Post "For Contest" tab as visible whenever a round is open; section 10 restricts it to finalists in week 4. #128 says points attribute to the represented club at award time; unchanged.
 - (h) **Other ambiguities**: 1. weekly entry deadline (assumed Phase 1 only, section 6); 2. tie at the 10th-place Phase 1 cutoff; 3. when votes lock and when weekly winners are confirmed (assumed end of day 7); 4. what happens to existing `engagement_follow` / `engagement_post` ledger and `LeaderboardEntry` rows (keep, revoke, or leave as historical); 5. weekly view-qualifying limit for photos is fixed at 5 seconds, not admin-set; 6. whether a withdrawn-then-restored engagement re-earns points; 7. whether `User.isMinor` accounts' baseline points are subject to any additional safeguarding review (founder said "same rules for minors"; not reviewed by counsel; the legal draft has no contest or points section); 8. counsel has not reviewed processing of minors' view/dwell heartbeats (new personal-data processing).
+  **Status 2026-10-15 (#393):** items 1, 2, 3, 4, 5 and 6 are CONFIRMED (entries Phase 1 only; one user qualifies as 10th with the earliest-reached tie-break; votes lock 23:59:59 day 7; historical rows reset because nothing is live; photo threshold fixed 5 seconds; removed-then-restored earns once). STILL OPEN: item 7 (counsel review of minors' baseline points) and item 8 (counsel review of view/dwell heartbeat processing).
+
+### 14b. Founder confirmations 2026-10-15 (Decision Log #393)
+
+1. Phase 1 tie at 10th place: exactly ONE user qualifies as 10th (section 7).
+2. Previously ASSUMED, now confirmed: vote tie-break earliest vote reached from the non-retracted vote log; weekly view limit is a required numeric admin field; revocation reduces that day's cap counter; entries Phase 1 only; votes lock 23:59:59 day 7; photo view threshold fixed at 5 seconds; removed-then-restored engagement earns once; placement-point defaults (weekly 500/300/150, monthly 2,000/1,200/600, other competitions default to the weekly figures, admin may override at creation).
+3. No historical ledger handling for B-094: nothing is live, rows are reset.
+4. Outside this file: Guardian Details Option A (B-075), Change Guardian Email frames updated (B-004), corrections to #392 items 4, 8, 10.
+
+STILL OPEN: counsel review of minors' baseline points and of view/dwell heartbeat processing; (e) early-poster advantage observation; (g) conflicts with #128-#130 are resolved by this file as already stated.
 
 ## 15. Where each decision lives
 
@@ -303,6 +313,7 @@ Founder wording recorded: "it is more profitable to give than to receive" (basel
 | DOB correction tool | #390 | - | B-103, B-104 |
 | EU hosting | #391 | - | B-018, B-088 |
 | Community Group feed | #392 | - | B-101 |
+| Phase 1 10th-place tie; confirmed assumptions; no historical-row handling | #393 | 7, 8, 9, 14b | B-091, B-093, B-094 |
 
 ## 16. Change history
 
@@ -326,3 +337,7 @@ Changes versus chat 9 (Aug 2026) and chat 11 (Sept 2026):
 - Week-4 finalist exposure rule added (provenance: founder-delegated design, drafted by Claude, approved by the founder).
 - Restricted accounts cannot vote.
 - Competition umbrella and Create Competition moved into launch scope.
+
+### 2026-10-15
+
+- Decision Log #393: Phase 1 10th-place tie rule added; ASSUMED items (a)-(d) and (h)1-6 confirmed; historical-ledger question closed (nothing is live). Items (h)7 and (h)8 remain open (counsel).
