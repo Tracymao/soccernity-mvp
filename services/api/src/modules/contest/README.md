@@ -1,3 +1,11 @@
+> **SUPERSEDED (2026-10-14) -- admin judging is not the design.** The admin-judged mechanic described in this
+> README (admin `POST .../rounds/:week/results`, sequential judging, admin open-final / crown, and the
+> `final_live` week-4 phase label from the old design) was never the founder's design and is to be replaced.
+> Contests are decided by engagement (Phase 1), community votes (Phase 2) and engagement after a synchronised
+> reveal (week-4 final); there are no numbered levels. See `docs/contest-spec.md` and Decision Log #381
+> (#218 and #241 are superseded by it; #382-#388 hold the rules). This README describes the code as it
+> stands today, not the target.
+
 # contest module
 
 Build target: **sprint-2/contest-data-model-backend** — genuinely new
@@ -66,7 +74,7 @@ wall time, so the phase is deterministic and fully testable.
 | `week_1` | active, 1 judged | #70 step 2 (3 rows) |
 | `weeks_1_2` | active, 2 judged | #70 step 3 (6 rows) |
 | `weeks_1_3` | active, 3 judged | #70 step 4 (9 rows, count DYNAMIC) |
-| `final_live` | status `final` | #61 state 2 ("LEVEL 1 FINAL · LIVE") |
+| `final_live` | status `final` | #61 state 2 (week-4 final live; the old numbered-level label is retired) |
 | `crowned` | status `completed` | #61 state 3 (monthly top 3) |
 
 **Sequential judging** is enforced: week N cannot be judged while an

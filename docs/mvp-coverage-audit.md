@@ -794,3 +794,23 @@ Each item gives the claim (verbatim from CLAUDE.md unless stated) and what was f
 - **`docs/sprint-1-dpia-outline-draft.md` and all `.docx` files** — deliberately not read or touched.
 - **Figma non-frame top-level nodes (122)** — counted only (symbols, banners, loose text); not mapped.
 - **`services/api` endpoint behaviour beyond controller signatures/guards** — response shapes were read only where cited.
+
+
+## 7. Corrections, 2026-10-14 (contest, voting, points)
+
+Added by `docs/contest-spec-decisions-2026-10-14`. The table rows above are NOT rewritten (they record what was true of the code on 2026-10-08/10); the notes below say where a contest, voting or points statement is now wrong or incomplete. Source of truth: `docs/contest-spec.md`; Decision Log #381-#392.
+
+| Where | What the audit says | Correction |
+|---|---|---|
+| Frame row `2072:5584` (Contest entries and ranking page), line ~86 | Missing; "no list-round-entries endpoint" | Still Missing, but the page now has a spec: Phase 1 entries are ranked by engagement under the platform rule; the list endpoint is part of B-091 (contest-spec sections 7, 9a, 13). |
+| Frame rows `2155:1062`, `5801:8635` (Contest details), line ~90 | Partial; "Entries/ranking/voting subpages absent" | Details page "task for this week" is populated from the admin Contest tab (contest-spec section 4); the page must also show minimum-tally and placement-points copy. |
+| Frame rows `2094:994`, `5802:8726`, `5802:8978`, `5815:8916` (Voting, Already Voted), lines ~286-291 | Missing; "no vote endpoint", "Depends on missing voting feature" | Voting is specified (Phase 2: one vote per user per round, self-vote allowed, change/retract, restricted accounts cannot vote, tie-break earliest vote reached; contest-spec section 8, Decision Log #387). Build: B-091, B-098. |
+| Frame rows `5802:9183`, `5815:8948` (Between Weeks) | NotInspected | The between-weeks state is defined by the fixed Europe/London calendar (contest-spec section 5); verification is B-106. |
+| Frame rows `5524:7512`, `5541:7527` ("Live - Level 1 Final") and the Leaderboard Contest-tab rows (`5524:7188`, `5556:7426`, `5556:7529`, `5556:7632`, `5561:7483`, `5561:7608`, `5561:7733`), lines ~359-366 | "Phase states derived server-side"; status Built | The phases are no longer driven by admin judging (Decision Log #381). "Level 1" wording is retired: there are weeks 1-3 and the final (week 4). New states are required: Forfeited, uploading, No winner this month (contest-spec section 11; B-096, B-099). The frame names are Figma identifiers and are left as they are here. |
+| Frame rows `5564:7561`, `5564:7832`, `5565:7623`, `5565:7864`, `5566:8033`, `5569:7813` (Competition tab, Create Competition) | Stub; "no data model yet" | The Competition umbrella is now IN SCOPE for launch (Decision Log #392 item 1); backend B-100. |
+| Top gap 7 and Contest rows (line ~750): "Contest voting/entries/ranking have 6 frames and no code or endpoint" | Describes the gap | Still true of code. The gap is now specified; the admin-judged backend is not the design and is to be replaced (contest-spec section 3). |
+| Q9 / Section 5 and any statement that follows or posts earn leaderboard points (via CLAUDE.md citations of Decision Log #130/#219) | Not audited | Follows and posts earn no points anywhere (Decision Log #382/#383). The code still awards them (post 3, like 1, follow 1); removal is B-094. |
+| Section 5 item 5, `GuardianConsentPage` treats `declined` as pending (line ~755) | Reported as a bug | Remains a bug; it must be fixed together with the decline-cap work (Decision Log #389, B-102). |
+| Q2 "CURRENT expiry / decline / withdraw behaviour" | Decline closes the account immediately | Superseded in part by Decision Log #389: max 3 explicit declines on a still-valid request; the minor may resend or change guardian email; expiry and withdrawal unchanged. |
+| Q9 / frame `5108:6627` etc., "no self-service correction of date of birth" | Open question | Resolved by Decision Log #390: support correction tool (audited), re-runs age checks, re-triggers guardian flow when an adult account becomes a minor. |
+| Q11 / Section 1, hosting | "hosting ... no host definition found" | `render.yaml` is Frankfurt (PR #392); Decision Log #391 records EU hosting for everything. Static hosting for `apps/web` / `apps/admin` is still undefined (B-088). |

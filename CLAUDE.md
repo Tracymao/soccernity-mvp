@@ -4,6 +4,7 @@ Read this before doing anything. It's the short version of two much longer docum
 
 - `docs/Soccernity_Inventors_Log_Book_v2.13.docx` — the strategic and product record. Vision, market, full feature catalogue, competitive positioning, safeguarding principles, Figma design audit.
 - `docs/Soccernity_MVP_Build_Plan_v1.7.docx` — the tactical execution plan. MVP scope, data model, API contract, sprint backlog, infrastructure decisions, definition of done. **This is the one to work from day to day.**
+- `docs/contest-spec.md` — the Contest (weekly video-skill challenge), engagement-counting and leaderboard-points specification, decided 2026-10-14. **Single source of truth for contest and points behaviour; it supersedes every earlier contest/points description below where they conflict** (Decision Log #381–#388). `docs/build-register.md` is the launch-scope build register (Decision Log #378).
 
 ## What Soccernity is
 
@@ -2653,7 +2654,7 @@ Full reasoning for every choice above: Build Plan Section 5.
   - **Leaderboard Contest-type tab — all 3 monthly-phase states built**
     (Decision Log #61): `5524:7188` **Pending (Weeks 1–3)** — empty-state
     card + week-progress chips + "View this week's contest ›" CTA;
-    `5524:7512` **Live — Level 1 Final (Week 4)** — "LEVEL 1 FINAL · LIVE"
+    `5524:7512` **Live — week-4 final (Week 4; the Figma frame name still carries the retired numbered-level wording)** — LIVE
     banner + all weekly winners listed + "live order" note; `5524:7836`
     **Crowned — Monthly Winners** — text pill "1st · Monthly winner" (no
     trophy/medal iconography, Leaderboard rule). Cloned from `5171:6633`;
@@ -2698,7 +2699,7 @@ Full reasoning for every choice above: Build Plan Section 5.
     Consent mobile for screens 1/1a/2 (auth-mobile `header 7 — mobile`
     pattern); mobile homepage (5298px canonical, just settled DL #46);
     mobile leaderboard; a coordinated Contest user-facing section pass
-    (retrofit + mobile + a "Week N of 4 / Level 1 Final" phase
+    (retrofit + mobile + a "Week N of 4 / week-4 final" phase
     indicator); retrofitting `2072:5584` to light tokens.
   - Merged as PR #107.
 - **`sprint-2/mobile-leaderboard-homepage-contest-audit` builds the
@@ -2717,7 +2718,7 @@ Full reasoning for every choice above: Build Plan Section 5.
     Club" left, points + delta right); filter bar stacks; header →
     `header 4 — mobile`. **Decision Log #65.**
   - **All 3 Contest-tab mobile states built** (`5541:7304` Pending /
-    `5541:7527` Live Level-1 / `5541:7750` Crowned) — same content
+    `5541:7527` Live week-4 final / `5541:7750` Crowned) — same content
     decisions as the desktop states (DL #61), "View this contest ›"
     connectors preserved.
   - **Leaderboard empty state built** (desktop `5542:7344` + mobile
@@ -2769,7 +2770,7 @@ Full reasoning for every choice above: Build Plan Section 5.
     inside the disc (rank number restyled, not removed); the points value
     and points ordering are untouched — additive. Placed on `5171:6633`,
     `5540:7264`, Contest Crowned `5524:7836` / `5541:7750`, and the new
-    Competition boards — desktop + mobile. **NOT** on the Contest Level-1
+    Competition boards — desktop + mobile. **NOT** on the Contest week-4
     Final, the weekly-fill states, the empty states, or State Study A
     (all live/unsettled). Base frame's "DECIDED — No badge" note
     (`5177:6676`/`5177:6677`) rewritten in place.
@@ -5550,7 +5551,7 @@ Full reasoning for every choice above: Build Plan Section 5.
     changeable in the UI, never persisted) rather than blocking the page,
     per this task's own explicit instruction; (2) the real Contest
     mechanic's four phases (Vacant → three weekly-fill states → Live
-    Level-1 Final → Crowned, Decision Log #70) are **not** all
+    week-4 final → Crowned, Decision Log #70) are **not** all
     reproduced — a materially larger scope than this first conversion
     pass — the Contest tab ships as one illustrative representative
     state instead, flagged in-code and in the Decision Log rather than
@@ -6632,7 +6633,7 @@ Full reasoning for every choice above: Build Plan Section 5.
     `Contest —`, outside that PR's name filter — and flagged them for
     founder confirmation. **Founder confirmed the reversal extends to
     them**: they are a Leaderboard Contest-tab display state (weekly
-    top-3, winners advance to the Week 4 Level 1 final), not the
+    top-3, winners advance to the week-4 final), not the
     standalone Contest details/task page family.
   - Both footer clones removed (`6143:1648` desktop / `6143:1724`
     mobile, 106 descendant nodes, the same `Footer (cloned from Pass 1
@@ -9197,6 +9198,14 @@ Full reasoning for every choice above: Build Plan Section 5.
 - **`docs/build-register` (docs only, 2026-10-12) creates `docs/build-register.md`, the build register Decision Log #378 called for. No application code, schema, Figma, Decision Log docx, legal copy or DPIA changed.** It maps every audit gap frame to a B-ID, a wave and a subagent sequence. Recounted from the audit table: Built 196, Partial 71, Stub 34, Missing 35, NotInspected 6 = 342 screen frames, plus Reference 65 and Archived 36 = 443. All 146 gap frames sit in exactly one of 90 B-IDs (41 carry frames, 49 are work items or Figma re-syncs) across waves W0-W11; Section 1 reconciles to the audit. Also lists the accounts/keys the register needs (repo state only), the Part C counsel-pending rows that gate rows, and an Unresolved section: the audit's date mismatch (2026-10-08 vs 2026-10-10), the Top-gaps "no frame" vs Q4 conflict for other-user profile, an overstated Q7 DM contradiction (sending vs receiving), the #378 vs Competition-deferral scope conflict, the undefined contest voting mechanic, and the six NotInspected frames #378 does not name. The brief's check "rows + Built + Reference + Archived = 342" cannot hold literally (342 already excludes Reference/Archived). PR opened, not merged - Temi verifies and merges.
 - **`infra/render-eu-region-env-vars` (infra, 2026-10-13) moves `render.yaml` to EU hosting and closes its env-var gaps — `render.yaml`, `docs/deployment.md`, `.env.example` only; no application code, schema, docx, Figma.** Both services are now `region: frankfurt` (Render docs: region cannot be changed after creation; Neon/Upstash must also be created in EU regions, a manual step). A Decision Log entry recording the EU hosting decision is still needed (not written here). 40 env vars per service, identical sets: added `ADMIN_JWT_SECRET`, `STRIPE_*`, `S3_ENDPOINT`, `SPORTS_DATA_RAPIDAPI_HOST` as `sync: false`, and code-default `value:` entries for the `SPORTS_*`/`ADMIN_JWT_*_TTL_*`/`S3_REGION`/`COPPA_VERIFICATION_AMOUNT_CENTS`/`GUARDIAN_CONSENT_WITHDRAWAL_TOKEN_TTL_HOURS`/`HIGHLIGHTLY_DAILY_REQUEST_BUDGET` tuning vars. **`NODE_ENV` is deliberately NOT set in the Blueprint**: Render sets it to `production` at runtime only, and a build-time value would make `npm install` skip devDependencies and break `nest build`; consequence, staging Sentry events are labelled production. **Findings, not fixed:** `JWT_SECRET`/`ADMIN_JWT_SECRET` placeholders are not rejected at boot (the app would sign with the literal string); an unset `ADMIN_JWT_SECRET` boots fine and admin login returns 500 after the password check; Render documents `preDeployCommand` as paid-only, so staging (`plan: free`) migrations may not run. `docs/deployment.md` rewritten to match. Not live-validated (no Render account).
 - **`fix/render-yaml-invalid-utf8-byte` (infra, 2026-10-13) fixes a disclosure gap in `infra/render-eu-region-env-vars` (PR #392): line 1 of `render.yaml` contained a raw Windows-1252 byte (0x97, an em dash), so the file was not valid UTF-8 and a strict YAML reader would reject it.** One byte replaced with ASCII `-`; CRLF line endings and everything else untouched. Strict check passes (`yaml.safe_load` on a UTF-8 decode); `file` now reports ASCII text. Byte scan: `render.yaml` has no other non-ASCII bytes; `docs/deployment.md` (27 lines) and `.env.example` (33 lines) contain only valid UTF-8 em dashes, left unchanged. PR #392's YAML check evidently used a lenient decode that tolerates invalid bytes. PR opened, not merged - Temi verifies and merges.
+- **`docs/contest-spec-decisions-2026-10-14` (docs only, 2026-10-14) records the founder's contest, points, decline-cap, DOB-correction, hosting and scope decisions as Decision Log #381–#392 and a new single source of truth, `docs/contest-spec.md`. No application code, schema, Figma, legal copy or DPIA changed. Everything below is DECIDED, NOT BUILT.** **This SUPERSEDES contest and points descriptions earlier in this file** (the `sprint-2/contest-data-model-backend`, `sprint-2/admin-contest-*`, `sprint-2/contest-posting-flow-to-code` and `sprint-6/leaderboard-read-rollup` bullets, plus the #61/#70/#71/#130/#218/#219/#241–#243 references): read those bullets as history of the code as built, not as the design.
+  - **CORRECTION: contests are NOT admin-judged.** The admin-judged backend (#218/#241: admin judging endpoints, sequential judging) and the admin screens built on it (#242/#243) were never the founder's design and are to be replaced (B-091, B-097). **There is no "Level 1 / Level 2"** — weeks 1–3 and the final (week 4); the wording is retired and was removed from the prose of this file (the Sports Hub "Level 1 / Level 2" tab hierarchy is unrelated and unchanged).
+  - **Calendar (Europe/London):** weeks 1–3 = days 1–7 / 8–14 / 15–21; week 4 = day 22 to month end. Phase 1 (days 1–4 of each of weeks 1–3): entries ranked by views + likes + comments; top 10 qualify (fewer than 10: all; fewer than 3: week FORFEITED). Phase 2 (days 5–7): votes alone decide the top 3; one vote per user per round, self-vote allowed, change/retract allowed, restricted accounts cannot vote; tie-break earliest vote reached (interpretation, founder to confirm). Week 4: finalists only, upload window days 22–24 (deadline 23:59:59 day 24), videos hidden until the reveal at 00:00 day 25, then ranked by likes + comments (no views); minimum tally x or "No winner this month"; admin followers-excluded switch per week; follow status frozen at engagement time. Finalist exposure rule (founder-delegated design, drafted by Claude, approved 2026-10-14): balanced-impression rotation, tolerance 10%, 3 views per viewer per day, never ranked by engagement. Decision Log #381, #386–#388.
+  - **Points:** only views, likes and comments earn points; **follows and posts earn no points anywhere** (#382). Baseline: the giver earns 1, the creator receives 0.25, self-engagement exempt, stored in quarter-points, displayed rounded, daily caps 40 given / 20 received, revoked on removal (#383, amends #130). Placement points set by the admin per contest: weekly 500/300/150, monthly 2,000/1,200/600 (#385, supersedes #219's weights). View qualification rules (#384).
+  - **Read-only grep result — the code still awards follow and post points** (points.constants.ts `ENGAGEMENT_POINTS`: post 3, like 1, follow 1; `feed.service.ts` createPost/likePost, `users.service.ts` followUser). Removal is build register B-094; what happens to historical ledger rows is an open item.
+  - **Also decided (2026-10-14):** guardian decline cap — max 3 explicit declines on a still-valid request, the minor may resend or change guardian email, third decline → pending deletion; expiry/second lapse/withdrawal unchanged; supersedes #374 for explicit declines (#389, B-102). DOB: read-only for users; audited support correction tool; correction re-runs age checks and re-triggers the guardian flow for an adult account that becomes a minor (#390, B-103). EU hosting for everything: Render Frankfurt, Neon/Upstash EU (#391; this is the Decision Log entry the `infra/render-eu-region-env-vars` bullet said was still needed). Competition umbrella and Create Competition are now IN SCOPE; the Community Group feed is needed (supersedes #281; note the Community Groups frontend entry cited here as "#294" has no row in the Decision Log docx table); build everything, nothing deferred (#392).
+  - **Open / unmapped:** two of the founder's ten answers to build register Section 6 ("I agree", items 8 and 10) cannot be mapped to a register item from the repo and are recorded as unresolved in #392; answer 4 ("ship the correct one") is mapped by assumption to the password-change email frames. `docs/contest-spec.md` lists every ASSUMED/OPEN item. Not yet in the legal copy draft or the DPIA: minors' view/dwell processing, decline cap, DOB correction. Inventor's Log Book sections that now conflict are listed in the PR description (not edited).
+  - PR opened, not merged — Temi verifies and merges.
 - Before trusting any of the above, check Build Plan Section 9 (Decision
   Log) directly rather than this summary if something looks off — this
   section has gone stale before.
