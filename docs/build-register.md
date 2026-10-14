@@ -1,6 +1,6 @@
 # Build register - MVP launch scope (Decision Log #378)
 
-Source: `docs/mvp-coverage-audit.md` (PR #389, base `06dcaa0`), Decision Log #367-#380 (`docs/Soccernity_MVP_Build_Plan_v1.7.docx`, Section 9, PR #390), `docs/legal-copy-draft-tos-privacy-policy.md` v0.8 Part C, and the repo files cited per row. Written 2026-10-12 from `origin/main` `a054e71`.
+Source: `docs/mvp-coverage-audit.md` (PR #389, base `06dcaa0`), Decision Log #367-#380 (`docs/Soccernity_MVP_Build_Plan_v1.7.docx`, Section 9, PR #390), `docs/legal-copy-draft-tos-privacy-policy.md` v0.8 Part C, and the repo files cited per row. Written 2026-10-12 from `origin/main` `a054e71`. Updated 2026-10-14 (docs/contest-spec-decisions-2026-10-14): B-091 to B-106 added, Section 6 resolutions recorded, Section 7 extended to #392, Section 8 added; no existing row was edited.
 
 This is a planning document only. It changes no code, schema, Figma, Decision Log or legal text. Every row traces to an audit frame number, a Decision Log number or a code path the audit (or this pass) checked. Where a fact could not be determined it is in Section 6, not guessed.
 
@@ -24,25 +24,25 @@ Per Decision Log #378, **every Missing, Stub and Partial frame is launch-blockin
 
 **Reconciliation.** Gap frames counted in register rows: 146 (= 71 Partial + 34 Stub + 35 Missing + 6 NotInspected). 146 gap + 196 Built = 342 screen frames, which is the audit's "342". Adding Reference (65) and Archived (36) gives 443, the audit's 443 total. Every gap frame appears in exactly one row; no frame is unaccounted for. (The brief's check "rows + Built + Reference + Archived = 342" does not hold literally because 342 already excludes Reference and Archived; see Section 6.)
 
-Register size: **90 B-IDs** (41 carry gap frames, 49 are work items or Figma re-syncs with no gap frame of their own). Built frames that decisions #367-#380 make stale are referenced by Figma re-sync rows but stay counted in the Built bucket.
+Register size: **106 B-IDs** (41 carry gap frames, 65 are work items or Figma re-syncs with no gap frame of their own). B-091 to B-106 were added on 2026-10-14 (Section 8); they carry 0 gap frames, so the 146-frame reconciliation above is unchanged. Built frames that decisions #367-#380 make stale are referenced by Figma re-sync rows but stay counted in the Built bucket.
 
 ### Waves at a glance
 
 | Wave | B-IDs | Gap frames counted |
 |---|---:|---:|
-| W0 Figma pass | 15 | 4 |
+| W0 Figma pass | 19 | 4 |
 | W1 Backend foundations | 7 | 11 |
 | W2 Country / geo | 3 | 0 |
-| W3 Gates | 5 | 1 |
+| W3 Gates | 7 | 1 |
 | W4 Username | 4 | 0 |
 | W5 Profile and media | 8 | 10 |
 | W6 Hold / purge + admin actions | 3 | 0 |
 | W7 Contact Us | 2 | 4 |
-| W8 Remaining screens by feature area | 25 | 90 |
-| W9 Frontend counterparts | 11 | 22 |
+| W8 Remaining screens by feature area | 32 | 90 |
+| W9 Frontend counterparts | 14 | 22 |
 | W10 Social sign-in + 2FA | 4 | 4 |
 | W11 Hosting + launch gate | 3 | 0 |
-| **Total** | **90** | **146** |
+| **Total** | **106** | **146** |
 
 ## 2. Register
 
@@ -140,6 +140,22 @@ Agent legend: DS = figma-design-system, SB = figma-screen-builder, BE = backend-
 | B-088 | Hosting for apps/web and apps/admin (static sites, SPA rewrite, domains, CORS) - - | 0 | No frame counted here | render.yaml defines only the two API services; no host definition for either frontend exists in the repo, docs or workflows. | no spec | #380 | - | Static-site host + domain (nothing in the repo) | BE -> QA | W11 | N |
 | B-089 | Launch gate: legal copy - - | 0 | No frame counted here | Remove NOT APPROVED banner and [PROPOSAL]/[OPEN] markers, fill legal entity name/registration and Effective Date, counsel re-read of v0.8+, final Figma sync (f_legal). | Decision exists (#380 lists prerequisites) | #380 | B-010, B-046 | none | FO -> SG -> FC -> QA | W11 | Y (Part C rows 2, 37-44) |
 | B-090 | Launch gate: live services - - | 0 | No frame counted here | Postmark sending domain verified, support@soccernity.com working, Stripe keys (+ PCI SAQ A step), R2 credentials, Sentry region/plan, Highlightly plan (#323), real values in Render for the Section 4 keys. | Decision exists (#380 lists prerequisites) | #380 | B-018, B-088 | see Section 4 | FO -> BE -> QA | W11 | N |
+| B-091 | Contest backend rebuild: community votes (one per user per round, retractable, event log), engagement counters under the platform rule, final-entry flag, hidden-until-reveal visibility and reveal scheduler (Europe/London), minimum tally, forfeit and no-winner states, follow-status snapshot, phase scheduler, replace the admin judging endpoints - refs (not counted here): none | 0 | No frame counted here | Today contests are admin-judged (POST /admin/contest/cycles/:id/rounds/:week/results, sequential judging, crown/open-final); none of the votes, final-entry flag, reveal or minimum tally exists. Existing ContestRoundWinner/ContestStanding/PointsLedgerEntry models need review. | Spec: docs/contest-spec.md (sections 3-8, 10, 13) | #381, #382, #385, #386, #387, #218 (superseded), #241 (superseded) | B-020, B-026 | none | BE -> QA | W8 | N (see Section 8) |
+| B-092 | Final-week exposure engine: impression tracking, balanced-impression rotation, per-viewer shuffle, frequency cap, admin impression-distribution view (backend) - refs (not counted here): none | 0 | No frame counted here | Nothing exists: no impression model, no showcase-module endpoint, no tolerance/frequency settings, no admin distribution endpoint. | Spec: docs/contest-spec.md section 10b (founder-delegated design, approved 2026-10-14) | #388 | B-091 | none | BE -> FC -> QA | W8 | N |
+| B-093 | Leaderboard points engine: quarter-point ledger, giver/receiver rule, daily caps (40/20, configurable), revocation, self-engagement exemption, content-screening condition, verified-email condition, server-validated view-qualification heartbeats, placement-points awards, rounded display - refs (not counted here): none | 0 | No frame counted here | Current ledger is integer points, one award per target, never revoked, no caps, no heartbeats; LeaderboardEntry.points is Int. | Spec: docs/contest-spec.md (sections 9a-9e, 13) | #382, #383, #384, #385, #130 (amended), #219 (superseded) | B-020, B-026, B-091 | none | BE -> QA | W8 | Y (new processing of minors' view/dwell data; no Part C row yet - see Section 8) |
+| B-094 | Remove follow and post leaderboard point awards (the 2026-10-14 grep found them): ENGAGEMENT_POINTS.POST_CREATED/FOLLOW_MADE and the awardPoints calls in feed.service.ts (createPost), users.service.ts (followUser), the engagement_follow/engagement_post sources in leaderboard.constants.ts; decide what happens to existing ledger rows - refs (not counted here): none | 0 | No frame counted here | Follows (1) and posts (3) currently earn points; the founder decided they earn none. Treatment of historical ledger/LeaderboardEntry rows is not decided (contest-spec open item h4). | Decision exists; historical rows OPEN | #383, #382, #219 (superseded) | B-093 | none | BE -> QA | W8 | N |
+| B-095 | Figma: admin Contest tab redesign (contest description, weekly task with free-text mechanism, minimum tally, placement points, view-qualifying limit, followers-excluded switch) and admin impression-distribution view - refs (not counted here): the Contest console frames of Decision Log #242 (node ids in docs/sprint-2-admin-contest-screens-report.md) | 0 | Built frames referenced (not counted as gaps) | The Judge Week / Open the Final / Crown Winners screens model admin judging and are superseded; no frame has the new fields or the impression view. | Figma stale or contradicts decision (Figma behind decision #381/#388) | #381, #388, #242 (superseded) | - | none | DS -> SB | W0 | N |
+| B-096 | Figma: new contest states - weekly Forfeited slot, No winner this month, week-4 uploading state, finalist-only Create Post > Contest tab (upload window, closed for non-finalists and after the deadline), Final-week showcase module (feed and Contest page, with copy), retract-vote interaction, contest-vs-leaderboard handoffs; rename the 'Level 1 Final' frames 5524:7512 / 5541:7527 - refs (not counted here): 5524:7512, 5541:7527, 5818:8997, 5982:10905, 5982:10932 | 0 | Built frames referenced (not counted as gaps) | None of these states exists in Figma (all Missing). | no Figma (new states) | #386, #387, #388 | B-095 | none | SB | W0 | N |
+| B-097 | Admin Contest tab (apps/admin): create contest with description, task, minimum tally, placement points, view limit, followers-excluded switch; impression-distribution view; remove Judge Week / Open the Final / Crown Winners pages - refs (not counted here): none | 0 | No frame counted here | Current Contest console (#243) is wired to admin-judging endpoints that are being replaced. | Spec exists; frames per B-095 | #381, #388, #243 (superseded) | B-091, B-092, B-095 | none | FC -> QA | W9 | N |
+| B-098 | Voting pages including the Already Voted flow and retract: user-facing counterpart of the six Missing frames carried by B-049 (2072:5584, 5802:8655, 2094:994, 5802:8726, 5802:8978, 5815:8916) - refs (not counted here): the same six | 0 | Missing frames referenced (counted in B-049) | No vote endpoint, no entries list, no ranking page (see B-049); the mechanic is now specified. | Spec: docs/contest-spec.md sections 7-8 | #387, #381 | B-091, B-096 | none | FC -> QA | W9 | N |
+| B-099 | Leaderboard Contest tab states and Contest details/between-weeks states against the new calendar (Forfeited, uploading, live ranking from reveal, No winner this month) - refs (not counted here): 5524:7188, 5556:7426, 5556:7529, 5556:7632, 5524:7512, 5524:7836, 5802:9183, 5815:8948 | 0 | Built frames referenced (not counted as gaps) | ContestBoard renders the old derived phases; the new states need the new GET shape. | Figma per B-096; spec exists | #387, #386, #61 (amended), #70 (superseded) | B-091, B-093, B-096 | none | FC -> QA | W9 | N |
+| B-100 | Competition umbrella + Create Competition backend (Prediction accuracy-scored, Commentary community-voted, custom types; admin create/configure; scoring; votes; placement points) - refs (not counted here): carried by B-052 | 0 | Stub frames referenced (counted in B-052) | No Competition data model or admin endpoint; now in scope (previously deferred by Build Plan 2.2). Needs its own spec: scoring detail beyond placement points is not in docs/contest-spec.md. | Decision exists (in scope); detailed spec MISSING | #392 (item 1), #72, #73, #385 | B-091, B-093 | none | BE -> FC -> QA | W8 | N |
+| B-101 | Community Group feed: group-post model, create/read endpoints, composer and feed on the group page (frames 6453:18580, 6454:18580, 6457:18580, 6458:18580 carried by B-068) - refs (not counted here): the same four | 0 | Partial frames referenced (counted in B-068) | No group-post model or endpoint; CommunityGroupMember has no relation to Post. Moderation and restricted-pending rules for group posts not specified. | Decision exists (feed is needed); no data-model spec | #392 (item 3), #281 (superseded in part), #370, #21 | B-026 | none | BE -> FC -> QA | W8 | N |
+| B-102 | Guardian decline cap: per-account decline counter, resend / change-email after a decline (max 3, third decline -> pending deletion), expiry and withdrawal unchanged, requests-per-day cap and 'don't contact me again' option, fix GuardianConsentPage treating 'declined' as pending, wire decline frames 5491:8241 / 5501:8453 - refs (not counted here): 5491:8241, 5501:8453 | 0 | Missing frames referenced (counted in B-003) | Today a decline is terminal and revokes sessions (#337-#340); no counter, no resend-after-decline path. | Spec: Decision Log #389; Figma frames exist but need rewrite (B-003) | #389, #374 (superseded in part), #337-#340 (existing) | B-003, B-030 | none | BE -> FC -> QA | W3 | Y (not yet in legal copy draft; Part C row 44) |
+| B-103 | Support DOB correction tool: audited admin action, re-run under-13/16/18 checks and card-verification policy, re-trigger the guardian flow for an adult-turned-minor account - refs (not counted here): none | 0 | No frame counted here | No admin DOB-correction action exists; the age-reclassification sweep does not create Guardian rows. | Decision exists (#390); audit fields and in-flight request effect not specified | #390, #367, #349 (existing) | B-023, B-030, B-104 | none | BE -> FC -> QA | W3 | Y (not yet in legal copy draft; Part C row 22 relates) |
+| B-104 | Figma: admin DOB-correction action screen (new) - refs (not counted here): none | 0 | No frame counted here | No frame exists for the support tool. | no Figma | #390 | - | none | SB | W0 | N |
+| B-105 | Figma: password-change email frame resolution - 1380:2297 (describes an email-link change flow that does not exist) vs 1380:2318 (matches shipped behaviour) - refs (not counted here): 1380:2297, 1380:2318 | 0 | Missing frames referenced (counted in B-069) | Founder answer 4 ('ship the correct one') is mapped by assumption to this item; which frame is correct is for the founder to confirm. | Figma contradicts shipped behaviour (1380:2297) | #392 (item 4, assumed mapping) | - | none | DS | W0 | N |
+| B-106 | Verify the six NotInspected frames before launch (5802:9183, 5815:8948, 5542:7344, 5542:7695, 5803:8917, 2896:4837) - refs (not counted here): the six NotInspected frames carried by B-050, B-053, B-054, B-055 | 0 | NotInspected frames referenced (counted in B-050, B-053, B-054, B-055) | Founder answer 5 ('yes, verify them'). Frames not individually diffed against code. | Decision exists | #392 (item 5), #378 | - | none | QA | W8 | N |
 
 ## 3. Waves
 
@@ -149,7 +165,7 @@ Every B-ID is in exactly one wave (the wave in which its work is finished). Wher
 
 Reason: Design must stop contradicting the decisions before anything is built against it: Age Gate + country, Register read-only DOB, Create Profile, other-user profile, guardian-flow copy, the declined-minor frame, email links, 2FA, new admin actions. Net-new screens for later waves (kickoff-alert control, banter status/topics) are designed at the start of their own wave.
 
-B-IDs (15): B-001 (f_agegate), B-002 (f_gcflow), B-003 (f_decline), B-004 (f_cge), B-005 (f_register), B-006 (f_createprofile), B-007 (f_profile), B-008 (f_login), B-009 (f_email), B-010 (f_legal), B-011 (f_sports), B-012 (f_adminnew), B-013 (f_withdraw), B-014 (f_acct), B-015 (f_2fa)
+B-IDs (19): B-001 (f_agegate), B-002 (f_gcflow), B-003 (f_decline), B-004 (f_cge), B-005 (f_register), B-006 (f_createprofile), B-007 (f_profile), B-008 (f_login), B-009 (f_email), B-010 (f_legal), B-011 (f_sports), B-012 (f_adminnew), B-013 (f_withdraw), B-014 (f_acct), B-015 (f_2fa), B-095 (f_admin_contest), B-096 (f_contest_states), B-104 (f_dob_admin), B-105 (f_pwd_email)
 
 ### W1 Backend foundations
 
@@ -167,7 +183,7 @@ B-IDs (3): B-023 (country_schema), B-024 (geoip), B-025 (country_policy)
 
 Reason: Gates sit on top of W1-W2: uniform write block, profile-complete gate, minor approval email, wrong-DOB flag, routing into the activation flow.
 
-B-IDs (5): B-026 (write_block), B-027 (profile_gate), B-028 (approval_email), B-029 (wrongdob), B-030 (activation_flow)
+B-IDs (7): B-026 (write_block), B-027 (profile_gate), B-028 (approval_email), B-029 (wrongdob), B-030 (activation_flow), B-102 (decline_cap), B-103 (dob_correction)
 
 ### W4 Username
 
@@ -197,13 +213,13 @@ B-IDs (2): B-046 (contact_us), B-047 (footer_links)
 
 Reason: Every remaining Partial/Stub/Missing/NotInspected frame, split by feature area, plus orphan-endpoint UIs and prior-claim corrections.
 
-B-IDs (25): B-048 (sports_hide), B-049 (contest_core), B-050 (contest_states), B-051 (contest_rules), B-052 (competition), B-053 (leaderboard), B-054 (bants_post), B-055 (search_variant), B-056 (dashboard), B-057 (add_role), B-058 (delete_role), B-059 (settings_account), B-060 (settings_privacy), B-061 (settings_privacy_leaves), B-062 (settings_notifs), B-063 (settings_display), B-064 (saved), B-065 (post_page), B-066 (msg_sidebar), B-067 (msg_actions), B-068 (cg_feed), B-069 (emails_unwired), B-070 (orphan_kickoff), B-071 (orphan_banter), B-072 (hygiene)
+B-IDs (32): B-048 (sports_hide), B-049 (contest_core), B-050 (contest_states), B-051 (contest_rules), B-052 (competition), B-053 (leaderboard), B-054 (bants_post), B-055 (search_variant), B-056 (dashboard), B-057 (add_role), B-058 (delete_role), B-059 (settings_account), B-060 (settings_privacy), B-061 (settings_privacy_leaves), B-062 (settings_notifs), B-063 (settings_display), B-064 (saved), B-065 (post_page), B-066 (msg_sidebar), B-067 (msg_actions), B-068 (cg_feed), B-069 (emails_unwired), B-070 (orphan_kickoff), B-071 (orphan_banter), B-072 (hygiene), B-091 (contest_be), B-092 (exposure), B-093 (points_engine), B-094 (remove_follow_post_points), B-100 (competition_be), B-101 (cg_feed_be), B-106 (verify_notinspected)
 
 ### W9 Frontend counterparts
 
 Reason: Frontends that depend on W0-W8 changes: Age Gate country, Register, guardian screens, Create Profile, profile pages, Edit Profile, withdrawal page.
 
-B-IDs (11): B-073 (agegate_fe), B-074 (register_fe), B-075 (guardian_details_fe), B-076 (gc_pending_fe), B-077 (gc_activation_fe), B-078 (gc_consent_fe), B-079 (gc_confirm_fe), B-080 (withdraw_fe), B-081 (create_profile_fe), B-082 (profile_view_fe), B-083 (edit_profile_fe)
+B-IDs (14): B-073 (agegate_fe), B-074 (register_fe), B-075 (guardian_details_fe), B-076 (gc_pending_fe), B-077 (gc_activation_fe), B-078 (gc_consent_fe), B-079 (gc_confirm_fe), B-080 (withdraw_fe), B-081 (create_profile_fe), B-082 (profile_view_fe), B-083 (edit_profile_fe), B-097 (admin_contest_fe), B-098 (voting_fe), B-099 (lb_contest_fe)
 
 ### W10 Social sign-in + 2FA
 
@@ -281,22 +297,22 @@ Items I could not determine or that the inputs contradict. None is guessed.
 
 ### 6b. Decision-log gaps that block or shape rows
 
-- **#378 vs Competition deferral.** #378 makes every Stub launch-blocking, including the Competition tab and Admin Create Competition (6 frames, `competition` row). Build Plan 2.2 and Decision Log #72/#73 defer the Competition umbrella and no data model, scoring or admin endpoint exists. Which wins is not stated.
-- **Contest voting.** 6 Missing frames (`contest_core`) depict community voting; no Decision Log entry I found defines a voting mechanic (the contest is admin-judged). I did not locate a spec; the docx search for "vote" returned only #72, #130, #134, #238, #272.
-- **Community Group feed.** 4 Partial frames show a group feed; Decision Log #281/#294 (existing) say none is built or intended. #378 says Partial is in scope.
-- **#369 open points.** Placeholder name for incomplete profiles, and treatment of legacy accounts with no username, are explicitly open.
-- **#367 open points.** No self-service correction for a mistyped DOB once read-only; where Preferred Club free text is stored (no column; `clubAffiliationId` is an FK to a club page); what "Create Profile is blocked for restricted-pending" looks like on screen.
+- **#378 vs Competition deferral.** #378 makes every Stub launch-blocking, including the Competition tab and Admin Create Competition (6 frames, `competition` row). Build Plan 2.2 and Decision Log #72/#73 defer the Competition umbrella and no data model, scoring or admin endpoint exists. Which wins is not stated. **Resolved 2026-10-14 (#392 item 1): build it; Competition umbrella and Create Competition are in scope (B-100).**
+- **Contest voting.** 6 Missing frames (`contest_core`) depict community voting; no Decision Log entry I found defines a voting mechanic (the contest is admin-judged). I did not locate a spec; the docx search for "vote" returned only #72, #130, #134, #238, #272. **Resolved 2026-10-14 (#381, #387, #392 item 2): voting is built, contests are not admin-judged; spec in docs/contest-spec.md (B-091, B-098).**
+- **Community Group feed.** 4 Partial frames show a group feed; Decision Log #281/#294 (existing) say none is built or intended. #378 says Partial is in scope. **Resolved 2026-10-14 (#392 item 3): build the group feed; supersedes #281/#294 (B-101).**
+- **#369 open points.** Placeholder name for incomplete profiles, and treatment of legacy accounts with no username, are explicitly open. **Partly resolved 2026-10-14 (#392 item 9): legacy accounts without a username must complete the profile before accessing the platform; the placeholder name stays open.**
+- **#367 open points.** No self-service correction for a mistyped DOB once read-only; where Preferred Club free text is stored (no column; `clubAffiliationId` is an FK to a club page); what "Create Profile is blocked for restricted-pending" looks like on screen. **DOB-correction point resolved 2026-10-14 (#390; B-103, B-104); Preferred Club storage and the on-screen block remain open.**
 - **#368 open points.** Which table holds declared/derived/method/timestamp (User or Guardian or both); who owns GeoLite2 licence terms and refresh; whether the derived country is also used for non-US demographic grouping beyond what is described.
 - **#372, #375, #376.** Counsel proportionality of returning a child's DOB to a token holder; what an open wrong-DOB flag does to the consent flow; the exact "no content" test for purge; the 6-month and appeal-window figures are not counsel-sourced and conflict with the legal copy's 6-7 year moderation retention (PP s9).
 - **#371.** CSAM hash-matching coverage on R2 and statutory duties for hosting images of minors; Rekognition EU/UK region availability; whether Rekognition also applies to post attachments (`post_attach`, `bants_create`).
-- **#374.** "Archive or rewrite" frame `5491:8241`/`5501:8453` - no choice recorded.
+- **#374.** "Archive or rewrite" frame `5491:8241`/`5501:8453` - no choice recorded. **Resolved 2026-10-14 (#389): rewrite and wire the frames to the decline-cap logic (B-102, B-003).**
 - **#379 vs code.** #379 says items 1, 5, 11, 13, 14 are "addressed by the flow, copy and legal-draft changes in this same batch", but that batch was docs only; the code still contains "Add your position and photo" (`GuardianConsentPage.tsx:299`) and the "player profile" claim, so item 11 is not fixed in code (rows `gc_pending_fe`, `gc_consent_fe`).
-- **#378 and NotInspected.** #378 names Missing, Stub and Partial; the 6 NotInspected frames are not mentioned. They are placed in W8 as verification.
-- **Password-change emails.** `1380:2297` ("password change requested") describes an email-link flow that does not exist and overlaps `1380:2318`; which of the two, or neither, should ship is not decided.
+- **#378 and NotInspected.** #378 names Missing, Stub and Partial; the 6 NotInspected frames are not mentioned. They are placed in W8 as verification. **Resolved 2026-10-14 (#392 item 5): verify them (B-106).**
+- **Password-change emails.** `1380:2297` ("password change requested") describes an email-link flow that does not exist and overlaps `1380:2318`; which of the two, or neither, should ship is not decided. **2026-10-14 (#392 item 4, ASSUMED mapping of 'ship the correct one'): resolve in the Figma pass (B-105); the founder is to confirm which frame is correct.**
 
 ### 6c. Frames whose spec contradicts a decision where the intended side is unclear
 
-- `5491:8241` / `5501:8453` decline frames - decision #374 contradicts them; archive vs rewrite open.
+- `5491:8241` / `5501:8453` decline frames - decision #374 contradicts them; archive vs rewrite open. **Resolved 2026-10-14 (#389): rewrite and wire; max 3 declines.**
 - Guardian Details `5108:6627` / `5539:7354` - Figma (single name, no country) agrees with #63 and #368, code disagrees; I treated the Figma as intended (row `guardian_details_fe`).
 - Register `407:1051` / `1625:2333` and Create Profile - frames contradict #367 (DOB picker, Location); treated as stale, but the audit notes the frames have Username/Full-name rows that differ by breakpoint and I could not tell which breakpoint is intended.
 - Change Guardian Email `5498:7164` / `5501:8536` - code (built under #365) has name + relationship, the frames do not; I treated the code as intended (row `f_cge`) because #365 is a recorded resolution, but the frames were never updated.
@@ -319,7 +335,7 @@ Items I could not determine or that the inputs contradict. None is guessed.
 - Test suites were not run for this document (docs only).
 - Effort and sequencing inside a wave were not estimated; waves give order and reasons only.
 
-## 7. Decision Log #367-#380 coverage
+## 7. Decision Log #367-#392 coverage
 
 | Decision Log | Referenced by | Build work? |
 |---|---|---|
@@ -337,4 +353,60 @@ Items I could not determine or that the inputs contradict. None is guessed.
 | #378 | B-005, B-008, B-011, B-015, B-041, B-042, B-046, B-048, B-049, B-050, B-051, B-052, B-053, B-054, B-055, B-056, B-057, B-058, B-059, B-060, B-061, B-062, B-063, B-064, B-065, B-066, B-067, B-068, B-069, B-084, B-085, B-086, B-087 | Yes |
 | #379 | B-002, B-003, B-013, B-016, B-017, B-018, B-030, B-047, B-053, B-057, B-072, B-075, B-076, B-080, B-082 | Corrections only; the code-side fixes sit in the rows that cite it. |
 | #380 | B-010, B-018, B-019, B-040, B-088, B-089, B-090 | Tracked prerequisites, not a decision; W11 rows. |
+| #381 | B-091, B-095, B-096, B-097, B-098, B-099 | Yes (contest rebuild; supersedes #218/#241) |
+| #382 | B-091, B-093, B-094 | Yes |
+| #383 | B-093, B-094 | Yes |
+| #384 | B-093 | Yes |
+| #385 | B-091, B-093, B-100 | Yes |
+| #386 | B-091, B-096, B-099 | Yes |
+| #387 | B-091, B-098, B-099 | Yes |
+| #388 | B-092, B-095, B-096, B-097 | Yes |
+| #389 | B-102, B-003 | Yes |
+| #390 | B-103, B-104 | Yes |
+| #391 | B-018, B-088, B-090 | Hosting accounts and region (manual); render.yaml already moved (PR #392). |
+| #392 | B-052, B-068, B-069, B-100, B-101, B-105, B-106 | Yes (scope; Section 6 answers). Items 8 and 10 unmapped. |
 
+## 8. Updates 2026-10-14 (contest spec, decline cap, DOB correction, hosting, Section 6 answers)
+
+Source: `docs/contest-spec.md`, Decision Log #381-#392. Existing rows above are left as written; where a row is affected, this section says how.
+
+### 8a. Section 6 items: mapping of the founder's ten answers
+
+Section 6 has no numbered list. The founder's answers are mapped by subject; assumed mappings are flagged. Full text in Decision Log #392.
+
+| Founder answer | Section 6 bullet | Status | Decision Log | B-IDs |
+|---|---|---|---|---|
+| 1. Don't defer anything, build everything now | 6b #378 vs Competition deferral | Resolved | #392 | B-100, B-052 |
+| 2. Voting should be built; contest is not admin judged | 6b Contest voting | Resolved | #381-#388 | B-091, B-098 |
+| 3. Build the group feed | 6b Community Group feed | Resolved | #392 | B-101, B-068 |
+| 4. Ship the correct one | 6b Password-change emails (ASSUMED mapping) | Founder to confirm which frame | #392 | B-105, B-069 |
+| 5. Yes, verify them | 6b #378 and NotInspected | Resolved | #392 | B-106 |
+| 6. Decline flow | 6b #374, 6c decline frames | Resolved | #389 | B-102, B-003 |
+| 7. Support must be able to correct DOB | 6b #367 open points | Resolved | #390 | B-103, B-104 |
+| 8. I agree | UNMAPPED (candidates: 6c Guardian Details, 6c Change Guardian Email, 6c Register / Create Profile "treated as" statements) | Open | #392 | - |
+| 9. Legacy accounts without username must complete profile | 6b #369 open points | Partly resolved | #392 | B-027, B-031 |
+| 10. I agree | UNMAPPED, as 8 | Open | #392 | - |
+
+### 8b. Existing rows affected
+
+| Row | Effect |
+|---|---|
+| B-003 | Resolution is now "rewrite and wire to the decline-cap logic" (#389), not "archive or rewrite". Code wiring is B-102. |
+| B-049 | "No spec for the voting mechanic" is no longer true: spec is `docs/contest-spec.md`. User-facing build is B-098; backend B-091. |
+| B-050, B-053, B-054, B-055 | NotInspected frames are verified by B-106. B-050/B-053 states also change per B-096/B-099. |
+| B-052 | "Backend deferred by Build Plan 2.2 vs #378" is resolved in favour of building (#392); backend B-100. |
+| B-068 | "Contradicts #281/#294" is resolved: the feed is needed (#392). Backend and composer B-101. |
+| B-069 | 1380:2297 vs 1380:2318 resolution is B-105 (assumed mapping, founder to confirm). |
+| B-018, B-088, B-090 | Hosting is EU: Render Frankfurt, Neon and Upstash EU regions (#391). Account creation is manual. |
+| B-027, B-031 | Legacy accounts without a username are in scope of the incomplete-profile gate (#392 item 9). |
+
+### 8c. New counsel-pending items (not yet in the legal copy draft Part C)
+
+- Minors' view/dwell heartbeat processing and the giver/receiver points model (B-093).
+- Guardian decline cap, "don't contact me again" and requests-per-day cap (B-102).
+- Support DOB correction and guardian re-trigger (B-103).
+- Contest voting and finalist exposure data for minors (B-091, B-092).
+
+### 8d. Reconciliation
+
+Gap frames counted in rows: still 146 (B-091 to B-106 carry 0 frames). B-IDs: 90 + 16 = 106. Wave totals: W0 19, W1 7, W2 3, W3 7, W4 4, W5 8, W6 3, W7 2, W8 32, W9 14, W10 4, W11 3 = 106.

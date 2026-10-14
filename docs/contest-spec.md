@@ -1,0 +1,328 @@
+# Contest and leaderboard points specification
+
+Version: 2026-10-14. Docs only: no code, schema or Figma is changed by this file. Everything below is DECIDED, NOT BUILT, unless a section says otherwise.
+
+## 1. Status and sources
+
+Source: founder decisions, chat 9 (Aug 2026), chat 11 (Sept 2026) and session of 2026-10-14.
+
+This file is the single source of truth for the Contest mechanic, the leaderboard points model and the engagement counting rules. It supersedes every earlier contest and leaderboard-points description where they conflict, including Decision Log #61, #70, #71, #130, #218, #219, #241, #242 and #243, `services/api/src/modules/contest/README.md`, `services/api/src/modules/points/README.md`, `services/api/src/modules/leaderboard/README.md`, and the per-PR status bullets in `CLAUDE.md`. Those documents are not rewritten; each carries a "Superseded by" / "Amended by" pointer (Decision Log #381-#392) or a banner.
+
+Decision Log numbers used here (all in `docs/Soccernity_MVP_Build_Plan_v1.7.docx`, Section 9):
+
+| Topic | Decision Log |
+|---|---|
+| Contest rebuild spec and correction of #218/#241 | #381 |
+| Platform-wide engagement counting rule | #382 |
+| Baseline leaderboard points | #383 |
+| View-qualification rules | #384 |
+| Placement points | #385 |
+| Week-4 final mechanism | #386 |
+| Weekly mechanics | #387 |
+| Week-4 finalist exposure rule | #388 |
+| Guardian decline cap | #389 |
+| DOB correction tool and guardian re-trigger | #390 |
+| EU hosting | #391 |
+| Founder answers to build register Section 6, scope | #392 |
+
+## 2. Boundary: Contest vs Competition
+
+Contest and Competition are two separate features that share the leaderboard.
+
+- **Contest** is the weekly video-skill challenge with its own fixed mechanic, described in this file.
+- **Competition** is the admin-configured umbrella: Prediction (accuracy-scored), Commentary (community-voted) and custom types, created through Create Competition (Decision Log #72/#73).
+
+Competition rules in this file apply only where a section says so (sections 9a, 9d). Competition and Create Competition are now IN SCOPE for launch (Decision Log #392 item 1); they were previously deferred by Build Plan 2.2.
+
+## 3. Correction: contests are not admin-judged, and there is no "Level 1 / Level 2"
+
+1. The admin-judged contest backend (Decision Log #218 and #241: `POST /admin/contest/cycles/:id/rounds/:week/results`, enforced sequential judging, admin "crown" endpoint) was never the founder's design. **Contests are NOT admin-judged.** That behaviour is to be replaced, not preserved. Winners are determined by the engagement and voting rules below.
+2. There is NO "Level 1 / Level 2". The month has weeks 1-3 and the final (week 4). The words "Level 1", "Level-1" and "LEVEL 1 FINAL" are retired. The Figma frame names that still carry them (`5524:7512`, `5541:7527`) are to be renamed in the Figma pass (build register B-096).
+3. The admin console screens built on the judged model (Decision Log #242/#243: Judge Week, Open the Final, Crown Winners; `apps/admin` `ContestJudgeWeekPage`, `ContestCrownWinnersPage`, `ContestOpenFinalPage`) are superseded by the admin Contest tab redesign in section 4.
+
+**Remaining "Level 1" / "Level-1" occurrences in the repo** (checked 2026-10-14):
+
+- Contest-related, in files this PR does not edit (historical per-PR reports, left as written; superseded by this section): `docs/sprint-2-contest-posting-flow-to-code-report.md:94`, `docs/sprint-2-desktop-icon-nav-and-header-fix-report.md:32`, `docs/sprint-2-leaderboard-competition-split-admin-homepage-report.md:53,83,260`, `docs/sprint-2-leaderboard-footer-removal-and-contest-rules-modal-report.md:33,36`, `docs/sprint-2-mobile-leaderboard-homepage-contest-audit-report.md:53,136,137,152`, `docs/sprint-2-retrofit-screen-build-guardian-email-home-contest-report.md:23,152,185,199,209`.
+- Contest-related, in files this PR edits: the literal Figma frame names `5524:7512` and `5541:7527` are quoted in `docs/mvp-coverage-audit.md:253,271` (a frame-name column; not altered, annotated), `services/api/src/modules/contest/README.md:69` (superseded by banner), and `CLAUDE.md` historical bullets (reworded in this PR; the literal Figma names are quoted once with a "retired" note).
+- NOT contest-related, correct as they are: "Level 1 / Level 2" in `docs/sprint-4-sports-hub-*.md` and in `CLAUDE.md`'s Sports Hub bullets refer to the Match Centre tab hierarchy (Level 1: Match / H2H / Standings / Video; Level 2: Summary / Statistics / ...). Unrelated to the contest; unchanged.
+
+## 4. Admin creation (Admin > Contest tab, to be redesigned)
+
+Each contest is created from the admin panel. The admin Contest tab is redesigned (build register B-095, B-097) to hold:
+
+- A contest DESCRIPTION (not only current-cycle history). The contest details page "task for this week" is populated from this tab.
+- The mechanism for the week, stated by the admin inside the task as FREE TEXT. There is no option list.
+- Required per contest:
+  - (a) **Minimum tally**: x points a finalist needs to be considered for the final top 3. Admin-set at creation, no hardcoded default; a contest cannot be created without it.
+  - (b) **Placement points** for 1st / 2nd / 3rd, weekly and monthly (defaults in section 9d).
+  - (c) **Per-week view-qualifying watch limit**, in seconds, for video entries (section 9c). The founder said the limit is "always communicated in the contest description". Because the system must enforce it, it is recorded as a required structured numeric field in addition to the description text. **ASSUMED interpretation** (open item b).
+- Per-week admin control: a "followers-excluded counting" switch (section 10).
+
+## 5. Calendar (fixed, Europe/London time)
+
+| Period | Days of the calendar month | Notes |
+|---|---|---|
+| Week 1 | 1-7 | Phase 1 = days 1-4, Phase 2 = days 5-7 |
+| Week 2 | 8-14 | Phase 1 = days 8-11, Phase 2 = days 12-14 |
+| Week 3 | 15-21 | Phase 1 = days 15-18, Phase 2 = days 19-21 |
+| Week 4 (final) | 22 to month end | Days 22-24: finalist upload window, deadline 23:59:59 on day 24. 00:00 on day 25: REVEAL. Day 25 to month end: engagement window |
+
+Consequence, accepted by the founder as a result of the fixed calendar: the engagement window is 4 days in a 28-day February (days 25-28) and up to 7 days in a 31-day month (days 25-31).
+
+All boundaries are evaluated in Europe/London time, including across the BST/GMT change.
+
+## 6. Entry
+
+- Entry is via Create Post > Contest tab. One entry per user per week (the 1/0 counter in the design).
+- An entry is auto-pinned to the top of the entrant's feed with a "Contest" label.
+- One fixed challenge per week for everyone.
+- Minors can enter. Past winners can re-enter and win again in future months (no sit-out).
+- Restricted-pending accounts cannot enter (uniform write block, Decision Log #370).
+- OBSERVATION (recorded, no change made): Phase 1 ranks by engagement at the end of day 4, so an entry posted on day 1 has more time to earn engagement than one posted on day 4. The founder's design stands unless she asks for an entry cutoff.
+- ASSUMED (open item h): weekly entries are accepted during Phase 1 (days 1-4) only, because Phase 1 ranking closes at the end of day 4. The founder did not state an entry deadline for weeks 1-3.
+
+## 7. Phase 1 (days 1-4 of each of weeks 1-3)
+
+- Entries are ranked by engagement = views + likes + comments, counted under the platform engagement rule (section 9a) and the contest view-qualification rule (section 9c).
+- The top 10 qualify for Phase 2.
+- If there are fewer than 10 entries, everyone qualifies.
+- If there are fewer than 3 entries, the week is FORFEITED: the leaderboard shows "Forfeited" for that week's 3 slots and no placement points are awarded.
+- Tie at the 10th place cutoff: not specified (open item h).
+
+## 8. Phase 2 (days 5-7)
+
+- VOTES ALONE decide the top 3. Phase 1 engagement only decides who reaches the top 10.
+- One vote per user per round. Entrants have one vote too and MAY vote for themselves.
+- A vote can be changed or retracted. Retracting returns the user to the Voting page; voting again returns them to the Already Voted page.
+- Minors can vote even if they are not entrants.
+- ACCOUNTS WITH RESTRICTIONS CANNOT VOTE (founder confirmed; consistent with the restricted-pending write block, Decision Log #370).
+- Tie-break: earliest vote reached. The entrant whose tally first reached the tied number ranks higher, computed from the current non-retracted vote log by timestamp. **INTERPRETATION** (open item a), for founder confirmation.
+- ASSUMED (open item h): votes lock at 23:59:59 on day 7; weekly winners are confirmed at that point.
+
+## 9. Leaderboard points and engagement counting
+
+### 9a. Platform-wide engagement counting rule (Decision Log #382)
+
+Applies to EVERY engagement-based contest, challenge or competition and to every user (including contestants and minors).
+
+- Only VIEWS, LIKES and COMMENTS earn points. FOLLOWS AND POSTS EARN NO POINTS IN ANY CIRCUMSTANCE.
+- Per account per item: 1 for a qualifying view (only where views are counted), 1 for a like, 1 for a comment, regardless of how many views, likes or comments that account makes (ten comments = 1).
+- There is NO flat cap of 2. The signals available depend on the contest: Phase 1 = views + likes + comments (up to 3 per account per entry); the final = likes + comments (up to 2).
+- In contest and competition tallies SELF-ENGAGEMENT COUNTS.
+- Accounts with restrictions never count. Accounts without a verified email never count.
+- A comment counts only if it passes the existing content screening.
+- Non-engagement-based competition types (Prediction accuracy-scored, Commentary community-voted) are unaffected.
+
+### 9b. Baseline leaderboard points (Decision Log #383; AMENDS #130)
+
+Everyday engagement, outside any contest.
+
+- The account that GIVES the engagement earns FULL points: 1 per qualifying view / like / comment per unique post.
+- The creator who RECEIVES it earns one QUARTER point (0.25) per qualifying view / like / comment per unique account per post.
+- Founder's rationale: "it is more profitable to give than to receive", to encourage engagement.
+- The 0.25 rule applies ONLY to baseline leaderboard points and never affects contest or competition tallies.
+- SELF-ENGAGEMENT IS EXEMPT from baseline points (a user's own views / likes / comments on their own content earn nothing).
+- Points are REVOKED when the engagement is removed (unlike, comment deleted or removed, post removed, account later restricted). Revocation also reduces that day's cap counter (ASSUMED detail, open item d).
+- Storage and display: points are stored internally in quarter-point units (1 point = 4 units) and DISPLAYED rounded to the nearest whole number (half rounds up). RANKING uses the exact stored value, so rounding never creates false ties.
+- DAILY CAPS (founder confirmed 2026-10-14; admin-configurable settings, not hardcoded; Europe/London calendar day): **40 points per day earned for GIVING and 20 points per day earned for RECEIVING** (about 1,800 per month maximum from baseline). Revisit after two weeks of live data.
+- A verified email is required; restricted accounts never earn. Same rules for minors.
+- A comment earns points only if it passes the existing content screening.
+
+### 9c. View-qualification rules (Decision Log #384)
+
+A "view" counted for display is distinct from a "view POINT". Points are awarded only when the thresholds are met; one view point per account per post.
+
+**Baseline**
+
+| Content | Qualifies after |
+|---|---|
+| Photo | at least 3 seconds on screen |
+| Video | the full length if shorter than 60 seconds, otherwise 60 seconds watched |
+| Text-only post | at least 3 seconds visible |
+
+"Watched" means active playback while the post is visible and the tab or app is in the foreground. Muted autoplay in the feed counts. Skipping ahead earns no credit. A loop counts once. The creator's 0.25 for a view uses the same qualification as the viewer's.
+
+**Contest and competition tallies** (views counted for the contestant)
+
+- Video: the viewer must watch min(video length, the contest's weekly view-qualifying limit L in seconds). A video shorter than L must be watched completely; a video longer than L qualifies after L seconds.
+- Photo: at least 5 seconds on the image.
+- Views are not counted in the week-4 final.
+
+### 9d. Placement points (Decision Log #385; AMENDS #130 and #219)
+
+Leaderboard points as a PRIZE for winning. The founder confirmed winners earn leaderboard points and approved these defaults. The admin sets points for 1st / 2nd / 3rd when creating each contest or competition.
+
+| Occasion | 1st | 2nd | 3rd |
+|---|---:|---:|---:|
+| Weekly contest | 500 | 300 | 150 |
+| Monthly final | 2,000 | 1,200 | 600 |
+| Prediction, Commentary and other competitions | 500 | 300 | 150 (ASSUMED default, open item c) |
+
+- Weekly placement points are awarded when that week's winners are confirmed. Monthly final points are awarded on crowning.
+- Forfeited weeks and "No winner this month" award nothing.
+- Points accrue to the user's represented club and to the time period in which they are awarded (Decision Log #128/#130).
+- This SUPERSEDES the "conversion formula parked for backend" part of #130 for contests, and the 50/30/20 and 250/150/100 weights of #219.
+
+### 9e. Terminology
+
+The "minimum tally" (section 10) is an entry bar for the final top 3. "Placement points" are the leaderboard prize. They are different things.
+
+## 10. Week 4 final (Decision Log #386)
+
+- Only the finalists (the weekly winners, about 9: a dynamic count; fewer if weeks were forfeited; none means no final, and the leaderboard states so) get access to the Create Post > Contest tab portal, and only during the upload window (days 22-24, deadline 23:59:59 on day 24).
+- Each finalist uploads a NEW video. The server flags it as a final entry (no hashtag parsing).
+- FINALIST VIDEOS ARE HIDDEN from everyone except their owner until the reveal at 00:00 on day 25 (founder confirmed). Only engagement made after the reveal counts. The leaderboard shows live ranking from the reveal.
+- The leaderboard ranks only flagged final entries.
+- Ranking = likes + comments under the platform rule. Views are NOT counted in the final. Self-engagement counts in contest tallies.
+- A finalist who does not upload by the deadline scores 0, falls below the minimum tally and cannot place. The portal closes at the deadline.
+- MINIMUM TALLY: a finalist needs at least x points to be considered for the top 3. If nobody reaches x, there is NO WINNER for that month and the leaderboard shows a "No winner this month" state.
+- Tie-break: total points, then comments, then earliest upload.
+- FOLLOWER-BIAS HYBRID: by default all community engagement counts. An admin switch applies "followers-excluded counting" (only engagement from accounts that do not follow the finalist) for that week only. Follow status is FROZEN at the moment an account engages, so later follows never change the count. Self-engagement counts in BOTH modes (founder confirmed: nobody follows themselves).
+
+### 10b. Week-4 finalist exposure rule (Decision Log #388)
+
+**Provenance: FOUNDER-DELEGATED DESIGN.** The founder asked for "a reasonable and moderate, non-biased" flow. Drafted by Claude 2026-10-14. The founder APPROVED the proposal and parameters on 2026-10-14.
+
+Goal: every finalist gets comparable community exposure, independent of follower count, prior engagement or upload time.
+
+- **Audience**: all logged-in accounts that are not restricted (minors included, under the normal minor-safe feed rules).
+- **Placement**: a "Final week" showcase module pinned in the Community feed and listed on the Contest page, live from the reveal, identical for every eligible viewer.
+- **Ordering**: NEVER by engagement, live leaderboard rank, follower count or recency. A per-viewer shuffle seeded per viewer per day (stable within a session).
+- **Balanced-impression rotation**: impressions are tracked per finalist video (an impression = the card rendered in the viewport) and the video with the FEWEST impressions is served next, keeping counts within a tolerance of each other.
+- **Frequency cap**: any one viewer sees a given finalist video at most N times per day.
+- **Confirmed parameters** (admin-configurable settings): tolerance = within 10% of the mean impressions across live finalist videos; N = 3 per viewer per day.
+- Followers get no extra push in the module.
+- **Transparency**: Contest page copy tells viewers every finalist is shown to everyone equally. An admin view shows the impression distribution per finalist and flags any video outside the tolerance.
+- Unchanged by the followers-excluded switch.
+- Fewer than 9 finalists: same rule over those that exist.
+
+## 11. Weekly leaderboard fill (Decision Log #387; supersedes the single static empty state of PR #108)
+
+- The Contest tab is vacant ONLY during week 1 Phase 1.
+- 3 winners after week 1, 6 after week 2, 9 after week 3 (dynamic count).
+- Forfeited weeks read "Forfeited".
+- Week 4: finalists listed during the upload window (days 22-24, "uploading" state), live ranking from the reveal; then crowned top 3 with medals (or "No winner this month").
+
+## 12. Screens and states map
+
+Existing frames:
+
+| Screen | Desktop | Mobile |
+|---|---|---|
+| Contest Details | 2155:1062 | 5801:8635 |
+| Entries | 2072:5584 | 5802:8655 |
+| Voting | 2094:994 | 5802:8726 |
+| Already Voted | 5802:8978 | 5815:8916 |
+| Between Weeks | 5802:9183 | 5815:8948 |
+| Contest Design Notes | 5534:7264 | - |
+| Leaderboard Contest tab frames | per Decision Log #61/#70/#71 | per #61/#70/#71 |
+
+NEW frames or states required. **None are designed yet; each is Missing.**
+
+| New frame or state | Build register |
+|---|---|
+| Weekly "Forfeited" slot state | B-096 |
+| "No winner this month" state | B-096 |
+| Week-4 "uploading" state before the reveal | B-096 |
+| Finalist-only Create Post > Contest tab for the upload window, plus the closed state for non-finalists and after the deadline | B-096 |
+| "Final week" showcase module (feed and Contest page) with its explanatory copy | B-096 |
+| Retract-vote interaction | B-096 |
+| Contest-vs-leaderboard handoffs | B-096 |
+| Admin Contest tab redesign (description, weekly task with free-text mechanism, minimum tally, placement points, view-qualifying limit, followers-excluded switch) | B-095 |
+| Admin impression-distribution view | B-095 |
+| Rename of "Level 1 Final" frames | B-096 |
+
+## 13. Backend implications (planning only, no code)
+
+- Community votes: one per user per round, retractable, with an event log and timestamps; restricted accounts cannot vote.
+- Engagement counters under the platform rule (views / likes / comments, unique per account).
+- Server-validated playback and dwell heartbeats for view qualification (client-reported watch time alone is spoofable).
+- Baseline points ledger in quarter-point units with giver / receiver entries, daily caps, revocation, self-engagement exemption and the content-screening condition.
+- `LeaderboardEntry.points` is currently `Int`: store quarter-units, display rounded.
+- Placement-points awards.
+- Final-entry flag, hidden-until-reveal visibility, and a reveal scheduler (Europe/London).
+- Minimum tally, forfeit and no-winner states.
+- Admin endpoints replacing the judging endpoints.
+- Follow-status snapshot at engagement time.
+- Impression tracking and balanced-rotation serving with admin-configurable tolerance and frequency cap.
+- Phase scheduling in Europe/London.
+- No follow or post point awards (see section 14 grep result and B-094).
+
+Build register rows: B-091 (contest backend), B-092 (exposure engine), B-093 (points engine), B-094 (remove follow/post awards), B-095 to B-099 (frames and code), B-100 (Competition backend).
+
+## 14. Decisions confirmed 2026-10-14
+
+1. Restricted accounts cannot vote.
+2. Self-engagement counts in contest tallies in both follower modes, but is exempt from baseline points.
+3. Follows and posts earn no points anywhere.
+4. The exposure rule and its parameters are approved (tolerance 10%, N = 3 per viewer per day).
+5. The upload window ends 23:59:59 on day 24, with a synchronised reveal at 00:00 on day 25 and finalist videos hidden until then.
+6. Baseline rule: giver 1 / receiver 0.25, displayed rounded to the nearest whole number.
+7. Daily caps: 40 given / 20 received.
+8. Points are revoked on removal.
+9. Comments must pass content screening to count.
+10. View-qualification rules, including muted autoplay and text-only posts.
+11. The contest view limit is set weekly in the contest description (min(video length, limit)).
+12. Placement points are approved with the defaults in 9d.
+13. Contests are not admin-judged; no "Level 1 / Level 2" (corrections, section 3).
+14. Competition umbrella and Create Competition are in scope for launch.
+15. Guardian decline cap, DOB correction tool and EU hosting (Decision Log #389-#391).
+
+Founder wording recorded: "it is more profitable to give than to receive" (baseline rule); "a reasonable and moderate, non-biased" flow (exposure rule); the limit is "always communicated in the contest description" (view limit). No other verbatim founder wording was available to this document; none has been invented.
+
+### ASSUMED / OPEN items (none silently resolved)
+
+- (a) **ASSUMED**: the tie-break "earliest vote reached" is computed from the current non-retracted vote log by timestamp (section 8). Founder to confirm.
+- (b) **ASSUMED**: the weekly view-qualifying limit is a required structured numeric field in addition to the description text (section 4).
+- (c) **ASSUMED**: default placement points for Prediction, Commentary and other competitions are 500 / 300 / 150 (section 9d). Founder to confirm.
+- (d) **ASSUMED**: revocation of baseline points also reduces that day's daily-cap counter (section 9b).
+- (e) **OBSERVATION**: Phase 1 early-poster advantage (section 6). No change made.
+- (f) **Read-only grep result** (2026-10-14, `origin/main`): leaderboard points ARE awarded for follows and posts today. `services/api/src/modules/points/points.constants.ts` `ENGAGEMENT_POINTS = { POST_CREATED: 3, LIKE_GIVEN: 1, FOLLOW_MADE: 1 }`; awarded at `feed.service.ts:279` (`createPost`, source `engagement_post`), `feed.service.ts:644` (`likePost`, `engagement_like`), `users.service.ts:395` (`followUser`, `engagement_follow`); counted by `leaderboard.constants.ts:24-26` and capped in `leaderboard-rollup.service.ts:128`; described in `points/README.md:16`, `leaderboard/README.md:228-234`, `contest/README.md:181-203`, and Decision Log #130 ("likes, follows, and posts"), #219 (post 3 / like 1 / follow 1). No web/admin copy promising points for follows or posts was found. Removal task: B-094. Existing ledger rows of source `engagement_follow` / `engagement_post` are not addressed by this document (open item h).
+- (g) **Conflicts with #128-#130 beyond the stated amendments**: #130 says Contest/Competition points come "via each competition's own scoring mechanism" and that weights were "parked as a backend-api task"; #219 later built post 3 / like 1 / follow 1 and weekly 50/30/20, monthly 250/150/100; this file replaces all of those weights (9b, 9d). #130 and #219 say engagement points are awarded once per target and never revoked; 9b revokes. #61(c) and #218(2) allow position ties in weekly and monthly top 3 ("two rows carrying the same ordinal"); the tie-breaks in sections 8 and 10 remove ties, so tied-row rendering is no longer needed. #148/#188 define the Create Post "For Contest" tab as visible whenever a round is open; section 10 restricts it to finalists in week 4. #128 says points attribute to the represented club at award time; unchanged.
+- (h) **Other ambiguities**: 1. weekly entry deadline (assumed Phase 1 only, section 6); 2. tie at the 10th-place Phase 1 cutoff; 3. when votes lock and when weekly winners are confirmed (assumed end of day 7); 4. what happens to existing `engagement_follow` / `engagement_post` ledger and `LeaderboardEntry` rows (keep, revoke, or leave as historical); 5. weekly view-qualifying limit for photos is fixed at 5 seconds, not admin-set; 6. whether a withdrawn-then-restored engagement re-earns points; 7. whether `User.isMinor` accounts' baseline points are subject to any additional safeguarding review (founder said "same rules for minors"; not reviewed by counsel; the legal draft has no contest or points section); 8. counsel has not reviewed processing of minors' view/dwell heartbeats (new personal-data processing).
+
+## 15. Where each decision lives
+
+| Decision | Decision Log | This file | Build register |
+|---|---|---|---|
+| Contest not admin-judged; no Level 1/2 | #381 | 3 | B-091, B-095, B-096, B-097 |
+| Admin creation, minimum tally, view limit | #381 | 4 | B-091, B-095, B-097 |
+| Fixed calendar (Europe/London) | #387 | 5 | B-091 |
+| Weekly entry | #387 | 6 | B-091 |
+| Phase 1 ranking, forfeit | #387 | 7 | B-091 |
+| Phase 2 voting, retract, tie-break | #387 | 8 | B-091, B-098 |
+| Platform engagement rule | #382 | 9a | B-093 |
+| Baseline leaderboard points | #383 | 9b | B-093, B-094 |
+| View qualification | #384 | 9c | B-093 |
+| Placement points | #385 | 9d | B-091, B-093, B-100 |
+| Week-4 final | #386 | 10 | B-091, B-096 |
+| Finalist exposure rule | #388 | 10b | B-092, B-095, B-096 |
+| Weekly leaderboard fill | #387 | 11 | B-099 |
+| Competition umbrella in scope | #392 | 2 | B-100 |
+| Guardian decline cap | #389 | - | B-102, B-003 |
+| DOB correction tool | #390 | - | B-103, B-104 |
+| EU hosting | #391 | - | B-018, B-088 |
+| Community Group feed | #392 | - | B-101 |
+
+## 16. Change history
+
+### 2026-10-14
+
+Changes versus chat 9 (Aug 2026) and chat 11 (Sept 2026):
+
+- The final is judged by engagement (likes + comments), not by voting.
+- Views stay in Phase 1 only (qualified by 9c); views are not counted in the final.
+- "Level 1 / Level 2" removed.
+- The admin-judged backend (#218, #241) and its admin screens (#242, #243) are corrected as not the design.
+- Platform-wide engagement rule added (views / likes / comments, unique per account, self-engagement counts in contests, restricted and unverified accounts never count, comments must pass screening).
+- Follows and posts earn no points anywhere (reverses #130 "likes, follows, and posts" and #219 weights).
+- Baseline leaderboard rule: giver 1 / receiver 0.25, self-engagement exempt, quarter-point storage, rounded display, daily caps 40 / 20, revocation.
+- Placement points added (weekly 500 / 300 / 150, monthly 2,000 / 1,200 / 600).
+- View-qualification rules added (baseline and contest).
+- Minimum tally and "No winner this month" added.
+- Forfeits for weeks with fewer than 3 entries added.
+- Fixed Europe/London calendar added.
+- Week-4 schedule: upload window days 22-24, finalist videos hidden, synchronised reveal at 00:00 on day 25.
+- Week-4 finalist exposure rule added (provenance: founder-delegated design, drafted by Claude, approved by the founder).
+- Restricted accounts cannot vote.
+- Competition umbrella and Create Competition moved into launch scope.
