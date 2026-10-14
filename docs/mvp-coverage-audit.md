@@ -814,3 +814,13 @@ Added by `docs/contest-spec-decisions-2026-10-14`. The table rows above are NOT 
 | Q2 "CURRENT expiry / decline / withdraw behaviour" | Decline closes the account immediately | Superseded in part by Decision Log #389: max 3 explicit declines on a still-valid request; the minor may resend or change guardian email; expiry and withdrawal unchanged. |
 | Q9 / frame `5108:6627` etc., "no self-service correction of date of birth" | Open question | Resolved by Decision Log #390: support correction tool (audited), re-runs age checks, re-triggers guardian flow when an adult account becomes a minor. |
 | Q11 / Section 1, hosting | "hosting ... no host definition found" | `render.yaml` is Frankfurt (PR #392); Decision Log #391 records EU hosting for everything. Static hosting for `apps/web` / `apps/admin` is still undefined (B-088). |
+
+### Founder resolutions 2026-10-15 (Decision Log #393; extension only)
+
+The table rows above are not rewritten. Three statements in the build register that treated an unclear side "as intended" are resolved by the founder on 2026-10-15:
+
+| Where | Resolution |
+|---|---|
+| Guardian Details `5108:6627` / `5539:7354` (Section 1 item 7, Q14 item 9; register 6c "treated the Figma as intended") | Resolved by founder 2026-10-15: Option A. Single "Guardian's full name" field, no country select on this step; country is collected once at the Age Gate (#368). The code changes to match (B-075, after B-023/B-025/B-073). |
+| Change Guardian Email `5498:7164` / `5501:8536` (Q13; register 6c "treated the code as intended") | Resolved by founder 2026-10-15: the code is intended; the frames are updated to add guardian name and relationship (B-004). |
+| Register / Create Profile frames and Create Profile mobile `1629:2449` at 430px (Q14 item 14; register 6c "treated as stale") | Resolved by founder 2026-10-15: 390px is canonical; the frame is normalised to 390 and stale frames are brought in line (B-005, B-006). Preferred Club is free text in a new text field (#392 item 8 correction). |
