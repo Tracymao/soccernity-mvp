@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ServerClient } from 'postmark';
+import { buildWebAppLink } from './web-app-link.util';
 
 // sprint-1/guardian-consent-decline-withdraw-expiry added the five
 // guardian-consent lifecycle templates below the original two. Four of
@@ -67,12 +68,16 @@ export class RegistrationEmailService {
     }
   }
 
+  // B-016: carries a LINK to apps/web's /verify-email page (which reads
+  // ?token=), not a bare code -- no screen accepts a typed code.
   async sendVerificationEmail(to: string, token: string): Promise<void> {
+    const link = this.linkFor('verify-email', '/verify-email', token);
+    if (!link) return;
     await this.dispatch({
       to,
       subject: 'Verify your Soccernity email',
       template: 'verify-email',
-      data: { token },
+      data: { link },
     });
   }
 
@@ -86,11 +91,15 @@ export class RegistrationEmailService {
     consentToken: string,
     minorDisplayName: string,
   ): Promise<void> {
+    // B-016: the link opens apps/web's unauthenticated /guardian-consent/confirm
+    // page (reads ?token=). No account, no app install, as step 3 requires.
+    const link = this.linkFor('guardian-consent', '/guardian-consent/confirm', consentToken);
+    if (!link) return;
     await this.dispatch({
       to,
       subject: `Consent requested for ${minorDisplayName}'s Soccernity account`,
       template: 'guardian-consent',
-      data: { consentToken, minorDisplayName },
+      data: { link, minorDisplayName },
     });
   }
 
@@ -110,11 +119,17 @@ export class RegistrationEmailService {
     withdrawalToken: string,
     minorDisplayName: string,
   ): Promise<void> {
+    // B-016. The withdrawal page does not exist in apps/web yet (B-080); this
+    // path is an ASSUMPTION that ticket must adopt or change. The code itself
+    // stays in the body too: the designed confirm screen (Figma 6654:57) has a
+    // "withdrawal code" input, so a guardian can paste it if the link fails.
+    const link = this.linkFor('guardian-consent-withdrawal-request', '/guardian-consent/withdraw', withdrawalToken);
+    if (!link) return;
     await this.dispatch({
       to,
       subject: `Confirm withdrawing consent for ${minorDisplayName}'s Soccernity account`,
       template: 'guardian-consent-withdrawal-request',
-      data: { withdrawalToken, minorDisplayName },
+      data: { link, withdrawalToken, minorDisplayName },
     });
   }
 
@@ -276,6 +291,23 @@ export class RegistrationEmailService {
     });
   }
 
+  // B-016. Builds the apps/web link for a token email, or refuses. When
+  // WEB_APP_BASE_URL is unset/placeholder the email's only call to action would
+  // be a dead link, so NOTHING is sent and an error is logged (without the
+  // token or the address). Callers are fire-and-forget, so the request that
+  // triggered the email still succeeds; the minor can use "resend" once the
+  // value is fixed. Fails safe: no email is better than a misleading one.
+  private linkFor(template: RegistrationEmailTemplate, path: string, token: string): string | null {
+    const link = buildWebAppLink(this.config.get<string>('WEB_APP_BASE_URL'), path, { token });
+    if (!link) {
+      this.logger.error(
+        `[email] WEB_APP_BASE_URL is missing, a placeholder, or not https -- NOT sending "${template}" ` +
+          `because it would contain no usable link. Set WEB_APP_BASE_URL (docs/deployment.md).`,
+      );
+    }
+    return link;
+  }
+
   private async dispatch(email: OutboundRegistrationEmail): Promise<void> {
     if (!this.isConfigured) {
       this.logger.log(
@@ -320,11 +352,11 @@ export class RegistrationEmailService {
 function renderTextBody(template: RegistrationEmailTemplate, data: Record<string, string>): string {
   switch (template) {
     case 'verify-email':
-      return `Your Soccernity email verification code is: ${data.token}\n\nIf you did not request this, you can safely ignore this email.`;
+      return `Verify your Soccernity email address by opening this link:\n\n${data.link}\n\nIf you did not request this, you can safely ignore this email.`;
     case 'guardian-consent':
       return (
         `${data.minorDisplayName} has registered for a Soccernity account and listed you as their guardian.\n\n` +
-        `Your consent code is: ${data.consentToken}\n\n` +
+        `To review and respond to the request, open this link (no account needed):\n\n${data.link}\n\n` +
         `If you did not expect this email, you can safely ignore it.`
       );
     case 'guardian-consent-withdrawal-request':
@@ -332,7 +364,12 @@ function renderTextBody(template: RegistrationEmailTemplate, data: Record<string
         `You asked to withdraw your consent for ${data.minorDisplayName}'s Soccernity account.
 
 ` +
-        `Your withdrawal code is: ${data.withdrawalToken}
+        `To confirm, open this link:
+
+${data.link}
+
+` +
+        `Or enter this withdrawal code on the page: ${data.withdrawalToken}
 
 ` +
         `Confirming will close the account and schedule it for deletion.
@@ -466,17 +503,20 @@ function renderTextBody(template: RegistrationEmailTemplate, data: Record<string
 function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string, string>): string {
   switch (template) {
     case 'verify-email':
-      return `<p>Your Soccernity email verification code is: <strong>${data.token}</strong></p><p>If you did not request this, you can safely ignore this email.</p>`;
+      return `<p>Verify your Soccernity email address:</p><p><a href="${data.link}">Verify my email</a></p><p>If the button does not work, copy this link into your browser: ${data.link}</p><p>If you did not request this, you can safely ignore this email.</p>`;
     case 'guardian-consent':
       return (
         `<p><strong>${data.minorDisplayName}</strong> has registered for a Soccernity account and listed you as their guardian.</p>` +
-        `<p>Your consent code is: <strong>${data.consentToken}</strong></p>` +
+        `<p>To review and respond to the request (no account needed):</p><p><a href="${data.link}">Review the request</a></p>` +
+        `<p>If the button does not work, copy this link into your browser: ${data.link}</p>` +
         `<p>If you did not expect this email, you can safely ignore it.</p>`
       );
     case 'guardian-consent-withdrawal-request':
       return (
         `<p>You asked to withdraw your consent for <strong>${data.minorDisplayName}</strong>'s Soccernity account.</p>` +
-        `<p>Your withdrawal code is: <strong>${data.withdrawalToken}</strong></p>` +
+        `<p><a href="${data.link}">Confirm withdrawing consent</a></p>` +
+        `<p>If the button does not work, copy this link into your browser: ${data.link}</p>` +
+        `<p>Or enter this withdrawal code on the page: <strong>${data.withdrawalToken}</strong></p>` +
         `<p>Confirming will close the account and schedule it for deletion.</p>` +
         `<p>If you did not request this, you can safely ignore this email — nothing changes unless the code above is used.</p>`
       );

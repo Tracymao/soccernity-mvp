@@ -123,6 +123,32 @@ model User {
   // (Decision Log #255) regardless of what this flag says.
   isTeamOrganiser Boolean @default(false)
 
+  // backend/w2-country-storage (build register B-023; Decision Log #368) --
+  // genuine additions beyond Section 3's literal User field list. Country is
+  // mandatory at the Age Gate (declared by the user) and DERIVED at Register
+  // from the request IP against a LOCAL GeoLite2 database. The IP is read
+  // transiently in memory and is NEVER stored here or anywhere else; only the
+  // four values below persist.
+  //   declaredCountry          ISO-3166 alpha-2, as typed/selected by the user
+  //                            (Age Gate). Unverified. NULL for legacy rows and
+  //                            while the web Age Gate does not yet send it.
+  //   derivedCountry           ISO-3166 alpha-2 resolved from the IP; NULL when
+  //                            the lookup did not resolve.
+  //   countryDerivationMethod  'geolite2_local' (resolved) | 'unresolved'
+  //                            (lookup ran and did not resolve -- database
+  //                            missing, no usable IP, or no match). NULL only
+  //                            for rows created before this existed.
+  //   countryDerivedAt         when the lookup ran.
+  // The DERIVED code is authoritative for safeguarding checks (US under-13
+  // card verification) and demographic grouping; an unresolved lookup applies
+  // the STRONGER control (card verification for every under-13). The declared
+  // code is kept for audit/mismatch review and is never used to loosen a
+  // safeguarding decision. A CHECK constraint keeps the four values coherent.
+  declaredCountry         String?
+  derivedCountry          String?
+  countryDerivationMethod String?
+  countryDerivedAt        DateTime?
+
   // Safeguarding — required per Build Plan Section 8.3. Do not remove.
   guardian Guardian?
 
@@ -286,9 +312,15 @@ model Guardian {
   // toward the stronger control), the emailed-link confirmation is not
   // enough on its own; the guardian must also complete a small,
   // immediately-refunded card charge.
-  //   declaredCountry            ISO-3166 alpha-2, SELF-DECLARED at
-  //                              registration. Never IP-derived. NULL for
-  //                              adults, for legacy rows, and when omitted.
+  //   declaredCountry            DEPRECATED (build register B-023, Decision
+  //                              Log #368): no longer written. Country now
+  //                              lives on User (declaredCountry / derivedCountry
+  //                              / countryDerivationMethod / countryDerivedAt)
+  //                              and the DERIVED code decides card verification.
+  //                              Existing values were copied to User.declaredCountry
+  //                              by the migration; the column itself is left in
+  //                              place (expand/contract) and is dropped in a
+  //                              later migration once nothing reads it.
   //   cardVerificationRequired   Decided ONCE at registration and frozen, so
   //                              a child who turns 13 while pending is not
   //                              silently moved to a different path. Default

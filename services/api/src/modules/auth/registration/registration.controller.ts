@@ -4,9 +4,11 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Req,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { toAuthUserSummary, toTokenPairResponse } from '../auth-response.mapper';
 import { AuthRateLimit } from '../rate-limit/auth-rate-limit.decorator';
 import { RegisterDto } from './dto/register.dto';
@@ -32,8 +34,10 @@ export class RegistrationController {
   @Post('register')
   @AuthRateLimit()
   @HttpCode(HttpStatus.CREATED)
-  async register(@Body() dto: RegisterDto) {
-    const result = await this.registrationService.register(dto);
+  async register(@Body() dto: RegisterDto, @Req() req: Request) {
+    // req.ip is read here and passed on for one transient GeoLite2 lookup. It
+    // is deliberately not stored or logged anywhere (B-024, Decision Log #368).
+    const result = await this.registrationService.register(dto, req.ip);
     return toRegisterResponse(result);
   }
 

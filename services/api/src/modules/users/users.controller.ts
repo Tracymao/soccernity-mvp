@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../auth/guards/current-user.decorator';
+import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
 import { FeedQueryDto } from '../feed/dto/feed-query.dto';
@@ -83,6 +84,11 @@ export class UsersController {
     return this.usersService.getOwnProfile(user.sub);
   }
 
+  // B-020 (Decision Log #367): email verification is required before the
+  // profile can be completed. This is the write Create Profile will call, so it
+  // is the one route gated here; reads and every other write are unchanged.
+  // JwtAuthGuard (class level) has already attached request.user by now.
+  @UseGuards(EmailVerifiedGuard)
   @Patch(':id')
   async updateById(
     @Param('id') id: string,

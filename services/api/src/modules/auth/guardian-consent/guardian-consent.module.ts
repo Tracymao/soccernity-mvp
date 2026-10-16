@@ -9,6 +9,8 @@ import { CardRefundRetrySweepService } from './card-refund-retry-sweep.service';
 import { GuardianCardVerificationService } from './guardian-card-verification.service';
 import { GuardianConsentExpirySweepService } from './guardian-consent-expiry-sweep.service';
 import { GuardianConsentController } from './guardian-consent.controller';
+import { GuardianConsentSummaryController } from './guardian-consent-summary.controller';
+import { GuardianConsentSummaryService } from './guardian-consent-summary.service';
 import { GuardianConsentService } from './guardian-consent.service';
 import { GuardianEmailChangeLimiter } from './guardian-email-change.limiter';
 import { RedisModule } from '../../../redis/redis.module';
@@ -77,9 +79,10 @@ import { RedisModule } from '../../../redis/redis.module';
 //    with an explicit `now`, for tests.
 @Module({
   imports: [ConfigModule, AuthFoundationModule, AuthModule, PaymentsModule, RedisModule],
-  controllers: [GuardianConsentController],
+  controllers: [GuardianConsentController, GuardianConsentSummaryController],
   providers: [
     GuardianConsentService,
+    GuardianConsentSummaryService,
     GuardianEmailChangeLimiter,
     GuardianConsentExpirySweepService,
     GuardianCardVerificationService,

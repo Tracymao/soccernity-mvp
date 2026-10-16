@@ -6,12 +6,18 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SentryGlobalFilter } from '@sentry/nestjs/setup';
 import { AppModule } from './app.module';
+import { applyTrustProxy } from './trust-proxy';
+import { assertProductionEnv } from './validate-runtime-env';
 
 // Bootstraps the modular monolith described in CLAUDE.md.
 // Do not split this into separate deployable services until load
 // actually demands it — see MVP Build Plan Section 5.
 async function bootstrap() {
+  // B-018: fail the boot (not the first admin login) on missing/placeholder secrets.
+  assertProductionEnv();
   const app = await NestFactory.create(AppModule);
+  // B-024: see trust-proxy.ts. Unset TRUST_PROXY_HOPS = trust no proxy (fail-safe).
+  applyTrustProxy(app, process.env.TRUST_PROXY_HOPS);
   app.enableCors();
   // Added in Sprint 1 / PR B6 (users/profile) for PATCH /users/:id's
   // allowlist enforcement, but applies globally to every DTO-validated

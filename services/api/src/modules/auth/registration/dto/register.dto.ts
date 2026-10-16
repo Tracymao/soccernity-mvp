@@ -48,12 +48,14 @@ export class RegisterDto {
   @IsUUID()
   clubId?: string;
 
-  // sprint-1/coppa-card-verification -- SELF-DECLARED country of residence,
-  // ISO-3166 alpha-2 ("US", "NG", ...). Never IP-derived (no-IP-collection
-  // principle). Only consulted for a declared-under-13 registrant, to choose
-  // the consent path; optional so existing callers keep working, and an
-  // omitted value for an under-13 is treated as in scope (see
-  // card-verification-policy.util.ts). Case-insensitive on input.
+  // The SELF-DECLARED country of residence, ISO-3166 alpha-2 ("US", "NG",
+  // ...; "ZZ" = another country). Declared at the Age Gate (Decision Log #367/
+  // #368). Stored on User.declaredCountry for audit only: B-025 made the
+  // IP-DERIVED country authoritative, so this value can never loosen a
+  // safeguarding decision -- typing a non-US code no longer avoids card
+  // verification. Case-insensitive on input. Still optional on the API because
+  // the web Age Gate does not send it yet (B-073); it becomes required, for
+  // every registrant, in the same change that ships that step.
   @IsOptional()
   @Matches(/^[A-Za-z]{2}$/, { message: 'countryCode must be a 2-letter ISO country code' })
   countryCode?: string;

@@ -40,10 +40,52 @@ import * as path from 'path';
 // fallback (currently just JWT_SECRET).
 let loaded = false;
 
+// B-022 -- e2e key isolation. AppModule's own ConfigModule.forRoot() loads the
+// repo-root `.env` for every variable not already in process.env, so on a
+// developer machine that holds REAL third-party credentials (a live
+// Highlightly key was the case that surfaced this) the e2e run silently used
+// them: live matches leaked into sports.e2e-spec.ts's assertions, and a real
+// Postmark/Stripe/R2 key would have let a test send real email, charge a card
+// or write to a real bucket.
+//
+// dotenv never overrides a variable that is already set, so pinning each
+// external-service credential to its inert .env.example placeholder HERE --
+// before any spec imports AppModule -- wins over whatever the root `.env`
+// holds. Each placeholder is the exact value the code already treats as
+// "wired but inactive". A spec that needs a different value (a fake Stripe
+// gateway, a stubbed GeoIpService) overrides the provider, not the env.
+//
+// Deliberately forced rather than "set if absent": the point is that a real
+// value present in the developer's environment must NOT be honoured.
+export const E2E_INERT_EXTERNAL_ENV: Readonly<Record<string, string>> = {
+  SPORTS_DATA_API_KEY: 'replace-me-once-vendor-is-selected',
+  SPORTS_DATA_RAPIDAPI_HOST: '',
+  EMAIL_PROVIDER_API_KEY: 'replace-me',
+  POSTMARK_FROM_EMAIL: 'replace-me@example.com',
+  STRIPE_SECRET_KEY: 'replace-me',
+  STRIPE_PUBLISHABLE_KEY: 'replace-me',
+  S3_BUCKET: 'replace-me',
+  S3_ACCESS_KEY: 'replace-me',
+  S3_SECRET_KEY: 'replace-me',
+  S3_ENDPOINT: '',
+  SENTRY_DSN: 'replace-me-with-real-dsn-once-account-exists',
+  // B-024: no real GeoLite2 database in e2e unless a spec supplies one.
+  GEOLITE2_DB_PATH: '/nonexistent/e2e-geolite2-disabled.mmdb',
+  // The link base the email-link assertions expect.
+  WEB_APP_BASE_URL: 'http://localhost:5173',
+};
+
+export function isolateExternalServiceEnv(): void {
+  for (const [key, value] of Object.entries(E2E_INERT_EXTERNAL_ENV)) {
+    process.env[key] = value;
+  }
+}
+
 export function loadTestEnv(): void {
   if (loaded) return;
   loaded = true;
 
   const envTestPath = path.resolve(__dirname, '..', '..', '..', '.env.test');
   dotenv.config({ path: envTestPath });
+  isolateExternalServiceEnv();
 }

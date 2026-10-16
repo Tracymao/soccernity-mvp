@@ -1,7 +1,7 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AccountDeletionSweepService, HELD_INVESTIGATION_ALERT_DAYS } from '../account-deletion/account-deletion-sweep.service';
+import { AccountDeletionSweepService, resolveHeldInvestigationAlertDays } from '../account-deletion/account-deletion-sweep.service';
 import { AdminActionLogService } from '../admin-action-log/admin-action-log.service';
 import {
   ADMIN_ACTION_LOG_ACTIONS,
@@ -70,7 +70,7 @@ export class AdminUsersService {
   // (default 90, tunable). Visibility only; no auto-action.
   async listStalledHolds(olderThanDays?: number) {
     const items = await this.accountDeletionSweepService.listStalledHolds(olderThanDays);
-    return { thresholdDays: olderThanDays ?? HELD_INVESTIGATION_ALERT_DAYS, items };
+    return { thresholdDays: olderThanDays ?? resolveHeldInvestigationAlertDays(), items };
   }
 
   private async assertUserExists(id: string): Promise<{ id: string; isMinor: boolean; accountStatus: string }> {

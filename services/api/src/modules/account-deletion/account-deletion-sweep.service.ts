@@ -61,6 +61,18 @@ const CONSENT_AUDIT_RETENTION_MONTHS = 6;
 // call (Decision Log #343-adjacent; see admin-users/README.md).
 export const HELD_INVESTIGATION_ALERT_DAYS = 90;
 
+// B-018: the default above is now overridable with the HELD_INVESTIGATION_ALERT_DAYS
+// environment variable (it was a bare constant, so the "tunable" threshold could
+// only be changed by a code edit). Read at call time, not import time. A value
+// that is not a positive whole number falls back to the constant rather than
+// silently producing a nonsense cutoff.
+export function resolveHeldInvestigationAlertDays(raw: string | undefined = process.env.HELD_INVESTIGATION_ALERT_DAYS): number {
+  const v = raw?.trim();
+  if (!v || !/^\d+$/.test(v)) return HELD_INVESTIGATION_ALERT_DAYS;
+  const n = Number(v);
+  return n >= 1 ? n : HELD_INVESTIGATION_ALERT_DAYS;
+}
+
 export interface StalledHold {
   userId: string;
   displayName: string;
@@ -181,7 +193,7 @@ export class AccountDeletionSweepService {
   // investigation. Bounded by nature (only accounts with an open report
   // past their grace period), so unpaginated.
   async listStalledHolds(
-    thresholdDays: number = HELD_INVESTIGATION_ALERT_DAYS,
+    thresholdDays: number = resolveHeldInvestigationAlertDays(),
     now: Date = new Date(),
   ): Promise<StalledHold[]> {
     const dayMs = 24 * 60 * 60 * 1000;
@@ -301,6 +313,12 @@ export class AccountDeletionSweepService {
           username: null,
           passwordHash: UNUSABLE_PASSWORD_HASH,
           dateOfBirth: null,
+          // B-023: country is personal data too; the coherence CHECK on User
+          // allows the all-NULL state, so clearing all four together is valid.
+          declaredCountry: null,
+          derivedCountry: null,
+          countryDerivationMethod: null,
+          countryDerivedAt: null,
           clubAffiliationId: null,
           accountStatus: 'deleted',
           pendingDeletionAt: null,

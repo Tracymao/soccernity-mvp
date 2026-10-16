@@ -45,6 +45,8 @@ describe('Username e2e: unique-where-set column + public name convention against
         username,
         dateOfBirth: seedDob('1998-07-04'),
         isMinor: false,
+        // B-020: PATCH /users/:id requires a verified email.
+        verificationStatus: 'verified',
       },
     });
     const { accessToken } = await app.get(TokenService).issueTokenPair(user.id, user.role);
