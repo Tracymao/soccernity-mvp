@@ -1,6 +1,6 @@
 # Contest and leaderboard points specification
 
-Version: 2026-10-14, updated 2026-10-15 (Decision Log #393) and 2026-10-16 (Decision Log #394-#401, and #402 for the week-4 scope of the exposure settings). Docs only: no code, schema or Figma is changed by this file. Everything below is DECIDED, NOT BUILT, unless a section says otherwise.
+Version: 2026-10-14, updated 2026-10-15 (Decision Log #393) and 2026-10-16 (Decision Log #394-#401, and #402 for the week-4 scope of the exposure settings). Docs only: no code, schema or Figma is changed by this file. Everything below is DECIDED, NOT BUILT, unless a section says otherwise. Follow-up 2026-10-16 (Decision Log #403): non-finalist tab visible, forfeit pop-up, final task text, Final-week carousel, Voting page design.
 
 ## 1. Status and sources
 
@@ -29,6 +29,7 @@ Decision Log numbers used here (all in `docs/Soccernity_MVP_Build_Plan_v1.7.docx
 | Calendar change (20:00 lock, 08:00 open), Between Weeks, hidden tab, final-week pinning, forfeit pop-up | #400 |
 | Vote control is one toggle | #401 |
 | Tolerance and per-viewer cap are week 4 only (founder-adopted default, veto-able) | #402 |
+| Follow-up 2026-10-16: non-finalist tab stays visible, forfeit pop-up scope, final task text states, Final-week carousel, Voting page adopts Already Voted design | #403 |
 | Sign-up, decline, block, 2FA, admin moderation (not contest; see Section 14c) | #394-#398 |
 
 ## 2. Boundary: Contest vs Competition
@@ -109,15 +110,15 @@ All boundaries are evaluated in Europe/London time, including across the BST/GMT
 - Entries are ranked by engagement = views + likes + comments, counted under the platform engagement rule (section 9a) and the contest view-qualification rule (section 9c).
 - The top 10 qualify for Phase 2.
 - If there are fewer than 10 entries, everyone qualifies.
-- If there are fewer than 3 entries, the week is FORFEITED: the leaderboard shows "Forfeited" for that week's 3 slots and no placement points are awarded. The reason is SHOWN to users, and the forfeit is announced as a POP-UP (Decision Log #400, E11).
+- If there are fewer than 3 entries, the week is FORFEITED: the leaderboard shows "Forfeited" for that week's 3 slots and no placement points are awarded. The reason is SHOWN to users, and the forfeit is announced as a POP-UP (Decision Log #400, E11). **[2026-10-16, #403 item 9 (amends #400 E11): the pop-up is shown ONLY on the Contest page, on every load of that page, one pop-up per forfeited week from when the week is deemed forfeited; the reason is shown; nothing is remembered between loads. The leaderboard Contest tab shows the forfeited writing in place of the three names for that week and shows no pop-up.]**
 - Tie at the 10th place cutoff: **CONFIRMED 2026-10-15 (#393): exactly ONE user qualifies as 10th. Tie-breaker = whoever reached the tied qualifying-engagement total earliest, by timestamp of the engagement that brought their tally to that total, from the log of qualifying engagement (removed engagement excluded). If still identical, the earlier entry submission wins.**
 
 ## 8. Phase 2 (days 5-7)
 
 - VOTES ALONE decide the top 3. Phase 1 engagement only decides who reaches the top 10.
 - One vote per user per round. Entrants have one vote too and MAY vote for themselves.
-- A vote can be changed or retracted. Retracting returns the user to the Voting page; voting again returns them to the Already Voted page.
-- **The vote control is ONE button with two states (vote / un-vote): click to vote, click again to un-vote (Decision Log #401, E9).** There is NO separate "Change vote" control; changing a vote = un-voting, then voting for another entrant. A retracted vote reduces the entrant's tally. A restricted account cannot perform ANY function, including voting, so NO restricted Voting state is drawn. OPEN (not stated): whether the Already Voted page and the page navigation above remain now that the control is a toggle.
+- A vote can be changed or retracted. Retracting returns the user to the Voting page; voting again returns them to the Already Voted page. **[2026-10-16, #403 item 7: the Voting <-> Already Voted navigation described here goes away - the Voting page adopts the Already Voted design (entries column + board column, fan cards) with the vote toggle, and the separate Already Voted screens are archived afterwards.]**
+- **The vote control is ONE button with two states (vote / un-vote): click to vote, click again to un-vote (Decision Log #401, E9).** There is NO separate "Change vote" control; changing a vote = un-voting, then voting for another entrant. A retracted vote reduces the entrant's tally. A restricted account cannot perform ANY function, including voting, so NO restricted Voting state is drawn. OPEN (not stated): whether the Already Voted page and the page navigation above remain now that the control is a toggle. **[2026-10-16, #403 item 7: the OPEN point is closed - the Already Voted page does not remain as a separate screen; its design moves to the Voting page.]**
 - Minors can vote even if they are not entrants.
 - ACCOUNTS WITH RESTRICTIONS CANNOT VOTE (founder confirmed; consistent with the restricted-pending write block, Decision Log #370).
 - Tie-break: earliest vote reached. The entrant whose tally first reached the tied number ranks higher, computed from the current non-retracted vote log by timestamp. **INTERPRETATION** (open item a), for founder confirmation. **CONFIRMED 2026-10-15 (#393)** (previously an interpretation).
@@ -203,13 +204,13 @@ The "minimum tally" (section 10) is an entry bar for the final top 3. "Placement
 - Tie-break: total points, then comments, then earliest upload.
 - FOLLOWER-BIAS HYBRID: by default all community engagement counts. An admin switch applies "followers-excluded counting" (only engagement from accounts that do not follow the finalist) for that week only; the switch exists for week 4 ONLY and is not available in weeks 1-3 (#399, E2). Follow status is FROZEN at the moment an account engages, so later follows never change the count. Self-engagement counts in BOTH modes (founder confirmed: nobody follows themselves).
 
-- **Hidden tab (Decision Log #400, E8):** during days 22-24 the Contest tab is HIDDEN for a non-finalist; other users cannot see that a finalist has uploaded before the reveal. The minimum tally x is ADMIN-ONLY and is never shown to users, including on "No winner this month".
-- **Final-week entries are not on the Contest page (Decision Log #400, E10).** Week 4 has no active Contest page. Finalist entries are pinned on the finalist's own profile feed with the contest label (the Phase 1 pattern). Before the reveal ALL engagement on them is locked: buttons disabled, counts hidden, nothing recorded. Impression counts are never shown to users.
-- The final has task text, shown at the BOTTOM of the leaderboard page (#399, E3).
+- **Hidden tab (Decision Log #400, E8):** during days 22-24 the Contest tab is HIDDEN for a non-finalist; other users cannot see that a finalist has uploaded before the reveal. The minimum tally x is ADMIN-ONLY and is never shown to users, including on "No winner this month". **[2026-10-16, #403 item 1 (AMENDS #400 E8): the Contest tab is NOT hidden for a non-finalist. It stays visible, and a non-finalist who opens it during days 22-24 sees the existing 'Closed (not a finalist)' frames (6660:31044 / 6660:35699), which are restored. The minimum tally stays admin-only. OPEN: whether the closed copy may reveal anything about uploads before the reveal.]**
+- **Final-week entries are not on the Contest page (Decision Log #400, E10).** Week 4 has no active Contest page. Finalist entries are pinned on the finalist's own profile feed with the contest label (the Phase 1 pattern). Before the reveal ALL engagement on them is locked: buttons disabled, counts hidden, nothing recorded. Impression counts are never shown to users. **[2026-10-16, #403 item 11: the Community-feed 'Final week' module STAYS - see section 10b.]**
+- The final has task text, shown at the BOTTOM of the leaderboard page (#399, E3). **[2026-10-16, #403 item 10: the task text shows on the live-ranking and uploading states only, not on 'No winner this month' or the crowned state.]**
 
 ### 10b. Week-4 finalist exposure rule (Decision Log #388)
 
-**AMENDED 2026-10-16 (Decision Log #400, E10).** The founder decided that the final week's entries do NOT appear on the Contest page. This displaces the Contest-page listing in "Placement" and the Contest-page copy in "Transparency" below, and W0 Figma pass E's "Final-week showcase" frames on the Contest page are to be archived. Impression counts are never shown to users (the admin impression view stays). NOT ADDRESSED by the founder, so left as written and OPEN: whether the Community-feed "Final week" module and the balanced-impression rotation remain, and how other users reach a finalist's entry after the reveal.
+**AMENDED 2026-10-16 (Decision Log #400, E10).** The founder decided that the final week's entries do NOT appear on the Contest page. This displaces the Contest-page listing in "Placement" and the Contest-page copy in "Transparency" below, and W0 Figma pass E's "Final-week showcase" frames on the Contest page are to be archived. Impression counts are never shown to users (the admin impression view stays). NOT ADDRESSED by the founder, so left as written and OPEN: whether the Community-feed "Final week" module and the balanced-impression rotation remain, and how other users reach a finalist's entry after the reveal. **[2026-10-16, #403 item 11: the OPEN point 'whether the Community-feed Final week module remains' is answered - it STAYS. The dead 'View on the Contest page' link is removed. Its videos become a carousel that keeps the current frame size and serves as a preview slot reusable for other showcases later; it shows only during a final contest week and not at all when there is none. The balanced-impression rotation is not restated by the founder and stays as written below. OPEN: whether carousel views count as impressions (B-092); how other users reach a finalist's entry after the reveal.]**
 
 **Provenance: FOUNDER-DELEGATED DESIGN.** The founder asked for "a reasonable and moderate, non-biased" flow. Drafted by Claude 2026-10-14. The founder APPROVED the proposal and parameters on 2026-10-14.
 
@@ -230,9 +231,9 @@ Goal: every finalist gets comparable community exposure, independent of follower
 
 - The Contest tab is vacant ONLY during week 1 Phase 1. (OPEN, #400: what shows from 00:00 to 08:00 on day 1, before week 1 opens.)
 - 3 winners after week 1, 6 after week 2, 9 after week 3 (dynamic count).
-- Forfeited weeks read "Forfeited"; the reason is shown and the forfeit is announced as a pop-up (#400, E11).
+- Forfeited weeks read "Forfeited"; the reason is shown and the forfeit is announced as a pop-up (#400, E11). **[2026-10-16, #403 item 9: the pop-up appears on the Contest page only (every load, one per forfeited week, reason shown, not remembered); this tab shows the forfeited writing in place of the three names, with no pop-up.]**
 - Between a week's lock (20:00) and the next opening (08:00) the Between Weeks state (section 5) shows the week's result and when the next week opens.
-- Week 4: finalists listed during the upload window (days 22-24, "uploading" state), live ranking from the reveal; then crowned top 3 with medals (or "No winner this month").
+- Week 4: finalists listed during the upload window (days 22-24, "uploading" state), live ranking from the reveal; then crowned top 3 with medals (or "No winner this month"). **[2026-10-16, #403 item 10: the final task text is shown on the uploading and live-ranking states only.]**
 
 ## 12. Screens and states map
 
@@ -273,6 +274,17 @@ Re-sync work added 2026-10-16 (Decision Log #399-#401; all carried by build regi
 | Archive the "Final-week showcase" frames on the Contest page; add the pinned final entry on the finalist's profile feed with locked engagement | #400 (E10) |
 | Forfeit pop-up with the reason | #400 (E11) |
 | Vote button with two states (replaces the separate "Retract vote" button) | #401 (E9) |
+
+Re-sync work added 2026-10-16 (Decision Log #403; carried by build register B-113, with B-107 reversed where noted):
+
+| Change | Decision |
+|---|---|
+| Non-finalist Contest tab: the 'Closed (not a finalist)' frames 6660:31044 / 6660:35699 are RESTORED (un-archived); this REVERSES the 'hidden tab replacing the closed-state frames' item above | #403 (item 1) |
+| Voting page (2094:994 / 5802:8726) adopts the Already Voted design with the vote toggle; the Already Voted screens (5802:8978 / 5815:8916, and 6671:27155) are archived afterwards | #403 (item 7) |
+| Forfeit pop-up on the Contest page only; leaderboard Contest tab shows the forfeited writing in place of the three names | #403 (item 9) |
+| Final task text on the live-ranking and uploading states only (remove from other states) | #403 (item 10) |
+| Community-feed 'Final week' module (6661:26929 / 6661:29200): remove the dead 'View on the Contest page' link; videos as a carousel at the current frame size; final contest week only | #403 (item 11) |
+| Delete the ten hidden legacy absolute layers inside the ten rebuilt Create Post frames (only those) | #403 (item 6) |
 
 ## 13. Backend implications (planning only, no code)
 
@@ -362,7 +374,20 @@ DECIDED, NOT BUILT. Source: founder decisions 2026-10-15/16. Contest items are a
 | C3 | 2FA recovery (10 hashed backup codes; recovery by backup code, or email confirmation plus password; #402) | #397, #402 | Not contest |
 | D1-D4 | Admin moderation, username revoke (handle held 30 days, never re-picked by that user; #402), single-user read | #398, #402 | Not contest |
 
-STILL OPEN (not decided here): counsel wording for every [COPY PENDING LEGAL REVIEW] item; the number of days or window lengths stated as "configuration"; the CSAM path; the placeholder name for incomplete profiles (#369); what the Contest tab shows from 00:00 to 08:00 on day 1; whether the Community-feed "Final week" module and the balanced-impression rotation remain (E10); whether the Already Voted page remains (E9). [2026-10-16, #402: "whether tolerance and per-viewer cap are per contest or week 4 only" is resolved - week 4 only, founder-adopted default, veto-able.]
+STILL OPEN (not decided here): counsel wording for every [COPY PENDING LEGAL REVIEW] item; the number of days or window lengths stated as "configuration"; the CSAM path; the placeholder name for incomplete profiles (#369); what the Contest tab shows from 00:00 to 08:00 on day 1; whether the Community-feed "Final week" module and the balanced-impression rotation remain (E10); whether the Already Voted page remains (E9). [2026-10-16, #402: "whether tolerance and per-viewer cap are per contest or week 4 only" is resolved - week 4 only, founder-adopted default, veto-able.] [2026-10-16, #403: answered - 'whether the Community-feed Final week module remains' (it does, as a carousel; open: whether carousel views count as impressions) and 'whether the Already Voted page remains' (it does not; the Voting page adopts its design). The placeholder name for incomplete profiles is 'Soccernity member'. Still open: what the Contest tab shows from 00:00 to 08:00 on day 1; how other users reach a finalist's entry after the reveal; counsel wording; window lengths stated as configuration other than the withdrawal throttle (5 attempts per 15 minutes).]
+
+### 14d. Founder decisions 2026-10-16, follow-up (Decision Log #403)
+
+DECIDED, NOT BUILT. Contest items are applied in sections 7, 8, 10, 10b, 11 and 12 above. Non-contest items are recorded in the Decision Log and `docs/build-register.md` Section 12 and listed here only so this file points at them.
+
+| Item | Summary | Decision Log | Where it is applied |
+|---|---|---|---|
+| 1 | Non-finalist Contest tab stays visible in days 22-24 and shows the restored 'Closed (not a finalist)' frames; amends #400 E8 | #403 | Section 10 |
+| 7 | Voting page adopts the Already Voted design with the vote toggle; Already Voted screens archived afterwards | #403 | Sections 8, 12 |
+| 9 | Forfeit pop-up on the Contest page only, every load, one per forfeited week, reason shown, not remembered; leaderboard shows the forfeited writing; amends #400 E11 | #403 | Sections 7, 11 |
+| 10 | Final task text on the live-ranking and uploading states only; changes #399 E3 | #403 | Sections 10, 11 |
+| 11 | Community-feed 'Final week' module stays as a carousel, final week only; amends #400 E10 | #403 | Section 10b |
+| 2-6, 8, 12-19 | Decline-page cap sentence, Approved screens, admin components and shell search bar, Create Post deletion exception, lift hold, mobile Block, accepted Create Post changes, Montserrat Field, defaults, Bants open forum, two country fields, deferred production wiring, new register rows | #403 | Not contest |
 
 ## 15. Where each decision lives
 
@@ -392,6 +417,7 @@ STILL OPEN (not decided here): counsel wording for every [COPY PENDING LEGAL REV
 | Calendar: 20:00 lock, 08:00 open, Between Weeks kept | #400 | 5, 8, 11 | B-091, B-096, B-099 |
 | Hidden non-finalist tab; minimum tally admin-only; final entries pinned on profile; forfeit pop-up | #400 | 7, 10, 10b, 11 | B-092, B-096, B-107 |
 | Vote toggle button | #401 | 8 | B-091, B-098, B-107 |
+| Non-finalist tab visible; forfeit pop-up on the Contest page only; final task text on two states; Final-week carousel; Voting page adopts Already Voted design | #403 | 7, 8, 10, 10b, 11, 12 | B-091, B-092, B-096, B-098, B-099, B-113 |
 
 ## 16. Change history
 
@@ -428,3 +454,9 @@ Changes versus chat 9 (Aug 2026) and chat 11 (Sept 2026):
 - Decision Log #394-#398 (sign-up and profile, decline and withdrawal, Block, 2FA recovery, admin moderation) are not contest decisions; see Section 14c.
 - Not changed: placement points, baseline points, view qualification and the week-4 upload deadline (23:59:59 on day 24).
 - Decision Log #402 (founder-adopted defaults, veto-able): tolerance and the per-viewer daily cap apply to week 4 only (Sections 4, 4a, 10b; E4/E5 scope in 14c); they lock when week 4 starts. The remaining items of #402 (decline sessions, third decline, revoked username, Block, 2FA) are not contest decisions; see Section 14c and `docs/build-register.md` Section 11.
+
+### 2026-10-16 (follow-up)
+
+- Decision Log #403 (founder decisions 2026-10-16): the Contest tab is NOT hidden for a non-finalist - it stays visible and shows the restored 'Closed (not a finalist)' frames in days 22-24 (amends #400 E8, section 10); the forfeit pop-up is shown on the Contest page only, on every load, one per forfeited week, reason shown, not remembered, and the leaderboard tab shows the forfeited writing in place of the three names (amends #400 E11, sections 7 and 11); the final task text shows on the live-ranking and uploading states only (changes #399 E3, sections 10 and 11); the Community-feed 'Final week' module stays as a carousel, final week only, dead link removed (amends #400 E10, section 10b); the Voting page adopts the Already Voted design and the Already Voted screens are archived afterwards (closes the #401 open point, sections 8 and 12).
+- Not changed: calendar, placement points, baseline points, view qualification, the week-4 upload deadline (23:59:59 on day 24), the vote lock (20:00:00).
+- Decision Log #403 also records non-contest decisions (decline-page cap sentence, Approved screens, admin components, lift hold, Bants, country, defaults); see section 14d and `docs/build-register.md` Section 12.
