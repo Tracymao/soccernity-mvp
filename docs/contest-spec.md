@@ -1,10 +1,10 @@
 # Contest and leaderboard points specification
 
-Version: 2026-10-14. Docs only: no code, schema or Figma is changed by this file. Everything below is DECIDED, NOT BUILT, unless a section says otherwise.
+Version: 2026-10-14, updated 2026-10-15 (Decision Log #393) and 2026-10-16 (Decision Log #394-#401). Docs only: no code, schema or Figma is changed by this file. Everything below is DECIDED, NOT BUILT, unless a section says otherwise.
 
 ## 1. Status and sources
 
-Source: founder decisions, chat 9 (Aug 2026), chat 11 (Sept 2026) and session of 2026-10-14.
+Source: founder decisions, chat 9 (Aug 2026), chat 11 (Sept 2026), the session of 2026-10-14, the confirmations of 2026-10-15 and the decisions of 2026-10-15/16.
 
 This file is the single source of truth for the Contest mechanic, the leaderboard points model and the engagement counting rules. It supersedes every earlier contest and leaderboard-points description where they conflict, including Decision Log #61, #70, #71, #130, #218, #219, #241, #242 and #243, `services/api/src/modules/contest/README.md`, `services/api/src/modules/points/README.md`, `services/api/src/modules/leaderboard/README.md`, and the per-PR status bullets in `CLAUDE.md`. Those documents are not rewritten; each carries a "Superseded by" / "Amended by" pointer (Decision Log #381-#392) or a banner.
 
@@ -24,6 +24,11 @@ Decision Log numbers used here (all in `docs/Soccernity_MVP_Build_Plan_v1.7.docx
 | DOB correction tool and guardian re-trigger | #390 |
 | EU hosting | #391 |
 | Founder answers to build register Section 6, scope | #392 |
+| Founder confirmations 2026-10-15 | #393 |
+| Contest admin form: Title, week-4-only switch, final task text, locking, ranges | #399 |
+| Calendar change (20:00 lock, 08:00 open), Between Weeks, hidden tab, final-week pinning, forfeit pop-up | #400 |
+| Vote control is one toggle | #401 |
+| Sign-up, decline, block, 2FA, admin moderation (not contest; see Section 14c) | #394-#398 |
 
 ## 2. Boundary: Contest vs Competition
 
@@ -50,22 +55,39 @@ Competition rules in this file apply only where a section says so (sections 9a, 
 
 Each contest is created from the admin panel. The admin Contest tab is redesigned (build register B-095, B-097) to hold:
 
+- A required contest TITLE (e.g. "November Challenge"), maximum 80 characters. The contest name is NOT auto-generated (Decision Log #399, E1).
 - A contest DESCRIPTION (not only current-cycle history). The contest details page "task for this week" is populated from this tab.
 - The mechanism for the week, stated by the admin inside the task as FREE TEXT. There is no option list.
 - Required per contest:
   - (a) **Minimum tally**: x points a finalist needs to be considered for the final top 3. Admin-set at creation, no hardcoded default; a contest cannot be created without it.
   - (b) **Placement points** for 1st / 2nd / 3rd, weekly and monthly (defaults in section 9d).
-  - (c) **Per-week view-qualifying watch limit**, in seconds, for video entries (section 9c). The founder said the limit is "always communicated in the contest description". Because the system must enforce it, it is recorded as a required structured numeric field in addition to the description text. **ASSUMED interpretation** (open item b). **CONFIRMED 2026-10-15 (Decision Log #393): required structured numeric field on the admin form.**
-- Per-week admin control: a "followers-excluded counting" switch (section 10).
+  - (c) **Per-week view-qualifying watch limit**, in seconds, for video entries (section 9c). Allowed range 3-120 seconds (#399, E5). The founder said the limit is "always communicated in the contest description". Because the system must enforce it, it is recorded as a required structured numeric field in addition to the description text. **ASSUMED interpretation** (open item b). **CONFIRMED 2026-10-15 (Decision Log #393): required structured numeric field on the admin form.**
+- The "followers-excluded counting" switch applies to WEEK 4 ONLY (section 10). It is NOT available for weeks 1-3 (Decision Log #399, E2). This resolves the earlier contradiction between this section ("per-week") and section 10 ("for that week only") in favour of section 10.
+- The final (week 4) HAS task text. It is displayed at the BOTTOM of the leaderboard page; there is no other dedicated page for the final (#399, E3).
+- Week-4 exposure settings (section 10b): tolerance, allowed range 1-50 percent; per-viewer daily cap, allowed range 1-50 (#399, E5).
+
+### 4a. Editable after launch (Decision Log #399, E4)
+
+- BEFORE launch everything is editable except dates.
+- Once week 1 starts, LOCKED: placement points, the minimum tally, and the watch limit, followers switch, tolerance and per-viewer cap of any week that has started.
+- Still editable after launch: the description, and the task text of weeks that have not started.
+- Dates are never editable.
+- OPEN (not stated): whether tolerance and per-viewer cap are per contest or belong to week 4 only (#388 attaches them to the week-4 exposure rule).
 
 ## 5. Calendar (fixed, Europe/London time)
 
 | Period | Days of the calendar month | Notes |
 |---|---|---|
-| Week 1 | 1-7 | Phase 1 = days 1-4, Phase 2 = days 5-7 |
-| Week 2 | 8-14 | Phase 1 = days 8-11, Phase 2 = days 12-14 |
-| Week 3 | 15-21 | Phase 1 = days 15-18, Phase 2 = days 19-21 |
-| Week 4 (final) | 22 to month end | Days 22-24: finalist upload window, deadline 23:59:59 on day 24. 00:00 on day 25: REVEAL. Day 25 to month end: engagement window |
+| Week 1 | 1-7 | Opens 08:00:00 on day 1. Phase 1 = from opening to the end of day 4, Phase 2 = days 5-7. Votes lock 20:00:00 on day 7 |
+| Week 2 | 8-14 | Opens 08:00:00 on day 8. Phase 1 = from opening to the end of day 11, Phase 2 = days 12-14. Votes lock 20:00:00 on day 14 |
+| Week 3 | 15-21 | Opens 08:00:00 on day 15. Phase 1 = from opening to the end of day 18, Phase 2 = days 19-21. Votes lock 20:00:00 on day 21 |
+| Week 4 (final) | 22 to month end | Opens 08:00:00 on day 22. Days 22-24: finalist upload window, deadline 23:59:59 on day 24 (unchanged). 00:00 on day 25: REVEAL. Day 25 to month end: engagement window |
+
+**Calendar change 2026-10-16 (Decision Log #400, E6; SUPERSEDES the 23:59:59 vote lock of Decision Log #393 for the lock time only).** Votes lock at 20:00:00 on days 7, 14 and 21. The next week opens at 08:00:00 on days 8, 15 and 22. Week 1 also opens at 08:00:00 on day 1. Phase 1 still ends at the end of day 4, so entry windows are 8 hours shorter (founder's wording: "weeks 2-4 get 8 fewer hours of entries"; the 08:00 opening also shortens week 1 against a midnight start). At 20:00 the tally freezes and the weekly result is calculated. The week-4 upload deadline stays 23:59:59 on day 24.
+
+**Between Weeks (Decision Log #400, E7): KEPT.** From the lock at 20:00 to the next opening at 08:00 is 12 hours (20:00 to 08:00 on days 7-8, 14-15 and 21-22). The state shows the week's result and when the next week opens. W0 Figma pass E's Between Weeks frames are kept (5802:9183, 5815:8948).
+
+OPEN (not decided): what the Contest tab shows between the end of one month and 08:00:00 on day 1 of the next (00:00 to 08:00 on day 1).
 
 Consequence, accepted by the founder as a result of the fixed calendar: the engagement window is 4 days in a 28-day February (days 25-28) and up to 7 days in a 31-day month (days 25-31).
 
@@ -79,14 +101,14 @@ All boundaries are evaluated in Europe/London time, including across the BST/GMT
 - Minors can enter. Past winners can re-enter and win again in future months (no sit-out).
 - Restricted-pending accounts cannot enter (uniform write block, Decision Log #370).
 - OBSERVATION (recorded, no change made): Phase 1 ranks by engagement at the end of day 4, so an entry posted on day 1 has more time to earn engagement than one posted on day 4. The founder's design stands unless she asks for an entry cutoff.
-- ASSUMED (open item h): weekly entries are accepted during Phase 1 (days 1-4) only, because Phase 1 ranking closes at the end of day 4. The founder did not state an entry deadline for weeks 1-3. **CONFIRMED 2026-10-15 (#393): entries are accepted in Phase 1 (days 1-4) only.**
+- ASSUMED (open item h): weekly entries are accepted during Phase 1 (days 1-4) only, because Phase 1 ranking closes at the end of day 4. The founder did not state an entry deadline for weeks 1-3. **CONFIRMED 2026-10-15 (#393): entries are accepted in Phase 1 (days 1-4) only.** Since 2026-10-16 (#400) Phase 1 starts at the week's opening (08:00:00 on its first day), not at 00:00.
 
 ## 7. Phase 1 (days 1-4 of each of weeks 1-3)
 
 - Entries are ranked by engagement = views + likes + comments, counted under the platform engagement rule (section 9a) and the contest view-qualification rule (section 9c).
 - The top 10 qualify for Phase 2.
 - If there are fewer than 10 entries, everyone qualifies.
-- If there are fewer than 3 entries, the week is FORFEITED: the leaderboard shows "Forfeited" for that week's 3 slots and no placement points are awarded.
+- If there are fewer than 3 entries, the week is FORFEITED: the leaderboard shows "Forfeited" for that week's 3 slots and no placement points are awarded. The reason is SHOWN to users, and the forfeit is announced as a POP-UP (Decision Log #400, E11).
 - Tie at the 10th place cutoff: **CONFIRMED 2026-10-15 (#393): exactly ONE user qualifies as 10th. Tie-breaker = whoever reached the tied qualifying-engagement total earliest, by timestamp of the engagement that brought their tally to that total, from the log of qualifying engagement (removed engagement excluded). If still identical, the earlier entry submission wins.**
 
 ## 8. Phase 2 (days 5-7)
@@ -94,10 +116,11 @@ All boundaries are evaluated in Europe/London time, including across the BST/GMT
 - VOTES ALONE decide the top 3. Phase 1 engagement only decides who reaches the top 10.
 - One vote per user per round. Entrants have one vote too and MAY vote for themselves.
 - A vote can be changed or retracted. Retracting returns the user to the Voting page; voting again returns them to the Already Voted page.
+- **The vote control is ONE button with two states (vote / un-vote): click to vote, click again to un-vote (Decision Log #401, E9).** There is NO separate "Change vote" control; changing a vote = un-voting, then voting for another entrant. A retracted vote reduces the entrant's tally. A restricted account cannot perform ANY function, including voting, so NO restricted Voting state is drawn. OPEN (not stated): whether the Already Voted page and the page navigation above remain now that the control is a toggle.
 - Minors can vote even if they are not entrants.
 - ACCOUNTS WITH RESTRICTIONS CANNOT VOTE (founder confirmed; consistent with the restricted-pending write block, Decision Log #370).
 - Tie-break: earliest vote reached. The entrant whose tally first reached the tied number ranks higher, computed from the current non-retracted vote log by timestamp. **INTERPRETATION** (open item a), for founder confirmation. **CONFIRMED 2026-10-15 (#393)** (previously an interpretation).
-- ASSUMED (open item h): votes lock at 23:59:59 on day 7; weekly winners are confirmed at that point. **CONFIRMED 2026-10-15 (#393): votes lock at 23:59:59 on day 7 and winners are confirmed then.**
+- ASSUMED (open item h): votes lock at 23:59:59 on day 7; weekly winners are confirmed at that point. **CONFIRMED 2026-10-15 (#393): votes lock at 23:59:59 on day 7 and winners are confirmed then.** **SUPERSEDED 2026-10-16 by Decision Log #400 (E6), for the lock time only: votes lock at 20:00:00 on days 7, 14 and 21; the tally freezes and the weekly result is calculated at that moment; the next week opens at 08:00:00 on days 8, 15 and 22.**
 
 ## 9. Leaderboard points and engagement counting
 
@@ -169,7 +192,7 @@ The "minimum tally" (section 10) is an entry bar for the final top 3. "Placement
 
 ## 10. Week 4 final (Decision Log #386)
 
-- Only the finalists (the weekly winners, about 9: a dynamic count; fewer if weeks were forfeited; none means no final, and the leaderboard states so) get access to the Create Post > Contest tab portal, and only during the upload window (days 22-24, deadline 23:59:59 on day 24).
+- Only the finalists (the weekly winners, about 9: a dynamic count; fewer if weeks were forfeited; none means no final, and the leaderboard states so) get access to the Create Post > Contest tab portal, and only during the upload window (opens 08:00:00 on day 22; days 22-24; deadline 23:59:59 on day 24, unchanged by #400).
 - Each finalist uploads a NEW video. The server flags it as a final entry (no hashtag parsing).
 - FINALIST VIDEOS ARE HIDDEN from everyone except their owner until the reveal at 00:00 on day 25 (founder confirmed). Only engagement made after the reveal counts. The leaderboard shows live ranking from the reveal.
 - The leaderboard ranks only flagged final entries.
@@ -177,30 +200,37 @@ The "minimum tally" (section 10) is an entry bar for the final top 3. "Placement
 - A finalist who does not upload by the deadline scores 0, falls below the minimum tally and cannot place. The portal closes at the deadline.
 - MINIMUM TALLY: a finalist needs at least x points to be considered for the top 3. If nobody reaches x, there is NO WINNER for that month and the leaderboard shows a "No winner this month" state.
 - Tie-break: total points, then comments, then earliest upload.
-- FOLLOWER-BIAS HYBRID: by default all community engagement counts. An admin switch applies "followers-excluded counting" (only engagement from accounts that do not follow the finalist) for that week only. Follow status is FROZEN at the moment an account engages, so later follows never change the count. Self-engagement counts in BOTH modes (founder confirmed: nobody follows themselves).
+- FOLLOWER-BIAS HYBRID: by default all community engagement counts. An admin switch applies "followers-excluded counting" (only engagement from accounts that do not follow the finalist) for that week only; the switch exists for week 4 ONLY and is not available in weeks 1-3 (#399, E2). Follow status is FROZEN at the moment an account engages, so later follows never change the count. Self-engagement counts in BOTH modes (founder confirmed: nobody follows themselves).
+
+- **Hidden tab (Decision Log #400, E8):** during days 22-24 the Contest tab is HIDDEN for a non-finalist; other users cannot see that a finalist has uploaded before the reveal. The minimum tally x is ADMIN-ONLY and is never shown to users, including on "No winner this month".
+- **Final-week entries are not on the Contest page (Decision Log #400, E10).** Week 4 has no active Contest page. Finalist entries are pinned on the finalist's own profile feed with the contest label (the Phase 1 pattern). Before the reveal ALL engagement on them is locked: buttons disabled, counts hidden, nothing recorded. Impression counts are never shown to users.
+- The final has task text, shown at the BOTTOM of the leaderboard page (#399, E3).
 
 ### 10b. Week-4 finalist exposure rule (Decision Log #388)
+
+**AMENDED 2026-10-16 (Decision Log #400, E10).** The founder decided that the final week's entries do NOT appear on the Contest page. This displaces the Contest-page listing in "Placement" and the Contest-page copy in "Transparency" below, and W0 Figma pass E's "Final-week showcase" frames on the Contest page are to be archived. Impression counts are never shown to users (the admin impression view stays). NOT ADDRESSED by the founder, so left as written and OPEN: whether the Community-feed "Final week" module and the balanced-impression rotation remain, and how other users reach a finalist's entry after the reveal.
 
 **Provenance: FOUNDER-DELEGATED DESIGN.** The founder asked for "a reasonable and moderate, non-biased" flow. Drafted by Claude 2026-10-14. The founder APPROVED the proposal and parameters on 2026-10-14.
 
 Goal: every finalist gets comparable community exposure, independent of follower count, prior engagement or upload time.
 
 - **Audience**: all logged-in accounts that are not restricted (minors included, under the normal minor-safe feed rules).
-- **Placement**: a "Final week" showcase module pinned in the Community feed and listed on the Contest page, live from the reveal, identical for every eligible viewer.
+- **Placement**: a "Final week" showcase module pinned in the Community feed and listed on the Contest page [Contest-page listing displaced by #400, E10], live from the reveal, identical for every eligible viewer.
 - **Ordering**: NEVER by engagement, live leaderboard rank, follower count or recency. A per-viewer shuffle seeded per viewer per day (stable within a session).
 - **Balanced-impression rotation**: impressions are tracked per finalist video (an impression = the card rendered in the viewport) and the video with the FEWEST impressions is served next, keeping counts within a tolerance of each other.
 - **Frequency cap**: any one viewer sees a given finalist video at most N times per day.
 - **Confirmed parameters** (admin-configurable settings): tolerance = within 10% of the mean impressions across live finalist videos; N = 3 per viewer per day.
 - Followers get no extra push in the module.
-- **Transparency**: Contest page copy tells viewers every finalist is shown to everyone equally. An admin view shows the impression distribution per finalist and flags any video outside the tolerance.
+- **Transparency**: Contest page copy tells viewers every finalist is shown to everyone equally [Contest-page copy displaced by #400, E10]. An admin view shows the impression distribution per finalist and flags any video outside the tolerance.
 - Unchanged by the followers-excluded switch.
 - Fewer than 9 finalists: same rule over those that exist.
 
 ## 11. Weekly leaderboard fill (Decision Log #387; supersedes the single static empty state of PR #108)
 
-- The Contest tab is vacant ONLY during week 1 Phase 1.
+- The Contest tab is vacant ONLY during week 1 Phase 1. (OPEN, #400: what shows from 00:00 to 08:00 on day 1, before week 1 opens.)
 - 3 winners after week 1, 6 after week 2, 9 after week 3 (dynamic count).
-- Forfeited weeks read "Forfeited".
+- Forfeited weeks read "Forfeited"; the reason is shown and the forfeit is announced as a pop-up (#400, E11).
+- Between a week's lock (20:00) and the next opening (08:00) the Between Weeks state (section 5) shows the week's result and when the next week opens.
 - Week 4: finalists listed during the upload window (days 22-24, "uploading" state), live ranking from the reveal; then crowned top 3 with medals (or "No winner this month").
 
 ## 12. Screens and states map
@@ -232,6 +262,17 @@ NEW frames or states required. **None are designed yet; each is Missing.**
 | Admin impression-distribution view | B-095 |
 | Rename of "Level 1 Final" frames | B-096 |
 
+Re-sync work added 2026-10-16 (Decision Log #399-#401; all carried by build register B-107):
+
+| Change | Decision |
+|---|---|
+| Create Contest: required Title field (max 80), followers-excluded switch for week 4 only, final-week task text | #399 (E1-E3) |
+| Between Weeks content: result of the week and when the next week opens (kept, not dropped) | #400 (E6, E7) |
+| Non-finalist Contest tab during days 22-24: HIDDEN (replaces the "closed for non-finalists" frames); minimum tally not shown on "No winner this month" | #400 (E8) |
+| Archive the "Final-week showcase" frames on the Contest page; add the pinned final entry on the finalist's profile feed with locked engagement | #400 (E10) |
+| Forfeit pop-up with the reason | #400 (E11) |
+| Vote button with two states (replaces the separate "Retract vote" button) | #401 (E9) |
+
 ## 13. Backend implications (planning only, no code)
 
 - Community votes: one per user per round, retractable, with an event log and timestamps; restricted accounts cannot vote.
@@ -245,7 +286,10 @@ NEW frames or states required. **None are designed yet; each is Missing.**
 - Admin endpoints replacing the judging endpoints.
 - Follow-status snapshot at engagement time.
 - Impression tracking and balanced-rotation serving with admin-configurable tolerance and frequency cap.
-- Phase scheduling in Europe/London.
+- Phase scheduling in Europe/London, including the 20:00 vote lock on days 7, 14 and 21, the 08:00 opening on days 1, 8, 15 and 22, and calculation of the weekly result at the lock (Decision Log #400; build register B-091).
+- Contest edit-locking after launch and server-side validation of the ranges in sections 4 and 4a (#399; B-091).
+- Engagement on a finalist entry is refused and not recorded before the reveal (#400, E10).
+- A retracted vote removes that vote from the entrant's tally (#401, E9).
 - No follow or post point awards (see section 14 grep result and B-094).
 
 Build register rows: B-091 (contest backend), B-092 (exposure engine), B-093 (points engine), B-094 (remove follow/post awards), B-095 to B-099 (frames and code), B-100 (Competition backend).
@@ -280,16 +324,43 @@ Founder wording recorded: "it is more profitable to give than to receive" (basel
 - (f) **Read-only grep result** (2026-10-14, `origin/main`): leaderboard points ARE awarded for follows and posts today. `services/api/src/modules/points/points.constants.ts` `ENGAGEMENT_POINTS = { POST_CREATED: 3, LIKE_GIVEN: 1, FOLLOW_MADE: 1 }`; awarded at `feed.service.ts:279` (`createPost`, source `engagement_post`), `feed.service.ts:644` (`likePost`, `engagement_like`), `users.service.ts:395` (`followUser`, `engagement_follow`); counted by `leaderboard.constants.ts:24-26` and capped in `leaderboard-rollup.service.ts:128`; described in `points/README.md:16`, `leaderboard/README.md:228-234`, `contest/README.md:181-203`, and Decision Log #130 ("likes, follows, and posts"), #219 (post 3 / like 1 / follow 1). No web/admin copy promising points for follows or posts was found. Removal task: B-094. **RESOLVED 2026-10-15 (#393 (e)): the platform is not live and no points or ledger rows exist, so B-094 needs no historical-row handling; existing rows are simply reset.**
 - (g) **Conflicts with #128-#130 beyond the stated amendments**: #130 says Contest/Competition points come "via each competition's own scoring mechanism" and that weights were "parked as a backend-api task"; #219 later built post 3 / like 1 / follow 1 and weekly 50/30/20, monthly 250/150/100; this file replaces all of those weights (9b, 9d). #130 and #219 say engagement points are awarded once per target and never revoked; 9b revokes. #61(c) and #218(2) allow position ties in weekly and monthly top 3 ("two rows carrying the same ordinal"); the tie-breaks in sections 8 and 10 remove ties, so tied-row rendering is no longer needed. #148/#188 define the Create Post "For Contest" tab as visible whenever a round is open; section 10 restricts it to finalists in week 4. #128 says points attribute to the represented club at award time; unchanged.
 - (h) **Other ambiguities**: 1. weekly entry deadline (assumed Phase 1 only, section 6); 2. tie at the 10th-place Phase 1 cutoff; 3. when votes lock and when weekly winners are confirmed (assumed end of day 7); 4. what happens to existing `engagement_follow` / `engagement_post` ledger and `LeaderboardEntry` rows (keep, revoke, or leave as historical); 5. weekly view-qualifying limit for photos is fixed at 5 seconds, not admin-set; 6. whether a withdrawn-then-restored engagement re-earns points; 7. whether `User.isMinor` accounts' baseline points are subject to any additional safeguarding review (founder said "same rules for minors"; not reviewed by counsel; the legal draft has no contest or points section); 8. counsel has not reviewed processing of minors' view/dwell heartbeats (new personal-data processing).
-  **Status 2026-10-15 (#393):** items 1, 2, 3, 4, 5 and 6 are CONFIRMED (entries Phase 1 only; one user qualifies as 10th with the earliest-reached tie-break; votes lock 23:59:59 day 7; historical rows reset because nothing is live; photo threshold fixed 5 seconds; removed-then-restored earns once). STILL OPEN: item 7 (counsel review of minors' baseline points) and item 8 (counsel review of view/dwell heartbeat processing).
+  **Status 2026-10-15 (#393):** items 1, 2, 3, 4, 5 and 6 are CONFIRMED (entries Phase 1 only; one user qualifies as 10th with the earliest-reached tie-break; votes lock 23:59:59 day 7 [lock time superseded 2026-10-16, #400: 20:00:00 on days 7, 14 and 21]; historical rows reset because nothing is live; photo threshold fixed 5 seconds; removed-then-restored earns once). STILL OPEN: item 7 (counsel review of minors' baseline points) and item 8 (counsel review of view/dwell heartbeat processing).
 
 ### 14b. Founder confirmations 2026-10-15 (Decision Log #393)
 
+(Vote lock time: superseded 2026-10-16 by Decision Log #400; see section 14c.)
+
 1. Phase 1 tie at 10th place: exactly ONE user qualifies as 10th (section 7).
-2. Previously ASSUMED, now confirmed: vote tie-break earliest vote reached from the non-retracted vote log; weekly view limit is a required numeric admin field; revocation reduces that day's cap counter; entries Phase 1 only; votes lock 23:59:59 day 7; photo view threshold fixed at 5 seconds; removed-then-restored engagement earns once; placement-point defaults (weekly 500/300/150, monthly 2,000/1,200/600, other competitions default to the weekly figures, admin may override at creation).
+2. Previously ASSUMED, now confirmed: vote tie-break earliest vote reached from the non-retracted vote log; weekly view limit is a required numeric admin field; revocation reduces that day's cap counter; entries Phase 1 only; votes lock 23:59:59 day 7 [lock time superseded 2026-10-16, #400]; photo view threshold fixed at 5 seconds; removed-then-restored engagement earns once; placement-point defaults (weekly 500/300/150, monthly 2,000/1,200/600, other competitions default to the weekly figures, admin may override at creation).
 3. No historical ledger handling for B-094: nothing is live, rows are reset.
 4. Outside this file: Guardian Details Option A (B-075), Change Guardian Email frames updated (B-004), corrections to #392 items 4, 8, 10.
 
 STILL OPEN: counsel review of minors' baseline points and of view/dwell heartbeat processing; (e) early-poster advantage observation; (g) conflicts with #128-#130 are resolved by this file as already stated.
+
+### 14c. Founder decisions 2026-10-15/16 (Decision Log #394-#401)
+
+DECIDED, NOT BUILT. Source: founder decisions 2026-10-15/16. Contest items are applied in sections 4, 4a, 5, 7, 8, 10, 11, 12 and 13 above. Non-contest items are recorded in the Decision Log and `docs/build-register.md` Section 10 and are listed here only so this file points at them.
+
+| Item | Summary | Decision Log | Where it is applied |
+|---|---|---|---|
+| E1 | Create Contest has its own required Title, max 80 characters | #399 | Section 4 |
+| E2 | Followers-excluded switch is week 4 only; removed from weeks 1-3 | #399 | Sections 4, 10 |
+| E3 | The final has task text, shown at the bottom of the leaderboard page | #399 | Sections 4, 10 |
+| E4 | Edit locking once week 1 starts; dates never editable | #399 | Section 4a |
+| E5 | Ranges: watch limit 3-120 s; tolerance 1-50 %; per-viewer daily cap 1-50 | #399 | Sections 4, 4a |
+| E6 | Votes lock 20:00:00 on days 7, 14, 21; next week opens 08:00:00 on days 8, 15, 22 and on day 1 | #400 | Sections 5, 8 |
+| E7 | Between Weeks is kept (12 hours) | #400 | Sections 5, 11 |
+| E8 | Non-finalist Contest tab hidden days 22-24; minimum tally admin-only | #400 | Section 10 |
+| E9 | One vote toggle button; no separate Change vote | #401 | Section 8 |
+| E10 | Final-week entries not on the Contest page; pinned on the finalist's profile; engagement locked before reveal | #400 | Sections 10, 10b |
+| E11 | Forfeit reason shown; announced as a pop-up | #400 | Sections 7, 11 |
+| A1-A6 | Sign-up and profile | #394 | Not contest |
+| B1-B4 | Decline, withdrawal, DOB correction in flight | #395 | Not contest |
+| C1-C2 | Block | #396 | Not contest |
+| C3 | 2FA recovery | #397 | Not contest |
+| D1-D4 | Admin moderation, username revoke, single-user read | #398 | Not contest |
+
+STILL OPEN (not decided here): counsel wording for every [COPY PENDING LEGAL REVIEW] item; the number of days or window lengths stated as "configuration"; the CSAM path; the placeholder name for incomplete profiles (#369); what the Contest tab shows from 00:00 to 08:00 on day 1; whether the Community-feed "Final week" module and the balanced-impression rotation remain (E10); whether tolerance and per-viewer cap are per contest or week 4 only; whether the Already Voted page remains (E9).
 
 ## 15. Where each decision lives
 
@@ -314,6 +385,10 @@ STILL OPEN: counsel review of minors' baseline points and of view/dwell heartbea
 | EU hosting | #391 | - | B-018, B-088 |
 | Community Group feed | #392 | - | B-101 |
 | Phase 1 10th-place tie; confirmed assumptions; no historical-row handling | #393 | 7, 8, 9, 14b | B-091, B-093, B-094 |
+| Contest admin form: Title, week-4-only switch, final task text, locking, ranges | #399 | 4, 4a, 10 | B-091, B-095, B-097, B-099 |
+| Calendar: 20:00 lock, 08:00 open, Between Weeks kept | #400 | 5, 8, 11 | B-091, B-096, B-099 |
+| Hidden non-finalist tab; minimum tally admin-only; final entries pinned on profile; forfeit pop-up | #400 | 7, 10, 10b, 11 | B-092, B-096, B-107 |
+| Vote toggle button | #401 | 8 | B-091, B-098, B-107 |
 
 ## 16. Change history
 
@@ -341,3 +416,11 @@ Changes versus chat 9 (Aug 2026) and chat 11 (Sept 2026):
 ### 2026-10-15
 
 - Decision Log #393: Phase 1 10th-place tie rule added; ASSUMED items (a)-(d) and (h)1-6 confirmed; historical-ledger question closed (nothing is live). Items (h)7 and (h)8 remain open (counsel).
+
+### 2026-10-16
+
+- Decision Log #399: Create Contest has its own required Title (max 80 characters); the followers-excluded switch is week 4 only and is removed from weeks 1-3 (resolves the Section 4 vs Section 10 contradiction); the final has task text shown at the bottom of the leaderboard page; edit locking after week 1 starts and dates never editable; validation ranges (watch limit 3-120 s, tolerance 1-50 %, per-viewer daily cap 1-50).
+- Decision Log #400: votes lock at 20:00:00 on days 7, 14 and 21 and the next week opens at 08:00:00 on days 8, 15 and 22 (week 1 also opens at 08:00:00 on day 1), superseding the 23:59:59 lock time of #393; Between Weeks kept (12 hours); non-finalist Contest tab hidden during days 22-24 and the minimum tally admin-only; final-week entries not on the Contest page, pinned on the finalist's profile with engagement locked before the reveal (amends #388); forfeit reason shown as a pop-up.
+- Decision Log #401: the vote control is one toggle button; no separate Change vote.
+- Decision Log #394-#398 (sign-up and profile, decline and withdrawal, Block, 2FA recovery, admin moderation) are not contest decisions; see Section 14c.
+- Not changed: placement points, baseline points, view qualification and the week-4 upload deadline (23:59:59 on day 24).
