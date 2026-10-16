@@ -1,6 +1,6 @@
 # Contest and leaderboard points specification
 
-Version: 2026-10-14, updated 2026-10-15 (Decision Log #393) and 2026-10-16 (Decision Log #394-#401). Docs only: no code, schema or Figma is changed by this file. Everything below is DECIDED, NOT BUILT, unless a section says otherwise.
+Version: 2026-10-14, updated 2026-10-15 (Decision Log #393) and 2026-10-16 (Decision Log #394-#401, and #402 for the week-4 scope of the exposure settings). Docs only: no code, schema or Figma is changed by this file. Everything below is DECIDED, NOT BUILT, unless a section says otherwise.
 
 ## 1. Status and sources
 
@@ -28,6 +28,7 @@ Decision Log numbers used here (all in `docs/Soccernity_MVP_Build_Plan_v1.7.docx
 | Contest admin form: Title, week-4-only switch, final task text, locking, ranges | #399 |
 | Calendar change (20:00 lock, 08:00 open), Between Weeks, hidden tab, final-week pinning, forfeit pop-up | #400 |
 | Vote control is one toggle | #401 |
+| Tolerance and per-viewer cap are week 4 only (founder-adopted default, veto-able) | #402 |
 | Sign-up, decline, block, 2FA, admin moderation (not contest; see Section 14c) | #394-#398 |
 
 ## 2. Boundary: Contest vs Competition
@@ -64,15 +65,15 @@ Each contest is created from the admin panel. The admin Contest tab is redesigne
   - (c) **Per-week view-qualifying watch limit**, in seconds, for video entries (section 9c). Allowed range 3-120 seconds (#399, E5). The founder said the limit is "always communicated in the contest description". Because the system must enforce it, it is recorded as a required structured numeric field in addition to the description text. **ASSUMED interpretation** (open item b). **CONFIRMED 2026-10-15 (Decision Log #393): required structured numeric field on the admin form.**
 - The "followers-excluded counting" switch applies to WEEK 4 ONLY (section 10). It is NOT available for weeks 1-3 (Decision Log #399, E2). This resolves the earlier contradiction between this section ("per-week") and section 10 ("for that week only") in favour of section 10.
 - The final (week 4) HAS task text. It is displayed at the BOTTOM of the leaderboard page; there is no other dedicated page for the final (#399, E3).
-- Week-4 exposure settings (section 10b): tolerance, allowed range 1-50 percent; per-viewer daily cap, allowed range 1-50 (#399, E5).
+- Week-4 exposure settings (section 10b): tolerance, allowed range 1-50 percent; per-viewer daily cap, allowed range 1-50 (#399, E5). These two settings belong to WEEK 4 ONLY (the exposure rule of #388 runs only on the final): they are not per contest and not per week, and weeks 1-3 do not have them. Founder-adopted default, veto-able (Decision Log #402, item 6). The ranges stay as the validation bounds of the week-4 settings.
 
 ### 4a. Editable after launch (Decision Log #399, E4)
 
 - BEFORE launch everything is editable except dates.
-- Once week 1 starts, LOCKED: placement points, the minimum tally, and the watch limit, followers switch, tolerance and per-viewer cap of any week that has started.
+- Once week 1 starts, LOCKED: placement points, the minimum tally, and the watch limit, followers switch, tolerance and per-viewer cap of any week that has started. [Tolerance and the per-viewer cap are week-4 settings (#402), so they lock when week 4 starts (day 22), not when week 1 starts; until then they stay editable. The watch limit is unaffected.]
 - Still editable after launch: the description, and the task text of weeks that have not started.
 - Dates are never editable.
-- OPEN (not stated): whether tolerance and per-viewer cap are per contest or belong to week 4 only (#388 attaches them to the week-4 exposure rule).
+- RESOLVED 2026-10-16 (Decision Log #402, founder-adopted default, veto-able): tolerance and per-viewer cap belong to week 4 ONLY. Earlier text, kept: "OPEN (not stated): whether tolerance and per-viewer cap are per contest or belong to week 4 only (#388 attaches them to the week-4 exposure rule)."
 
 ## 5. Calendar (fixed, Europe/London time)
 
@@ -219,7 +220,7 @@ Goal: every finalist gets comparable community exposure, independent of follower
 - **Ordering**: NEVER by engagement, live leaderboard rank, follower count or recency. A per-viewer shuffle seeded per viewer per day (stable within a session).
 - **Balanced-impression rotation**: impressions are tracked per finalist video (an impression = the card rendered in the viewport) and the video with the FEWEST impressions is served next, keeping counts within a tolerance of each other.
 - **Frequency cap**: any one viewer sees a given finalist video at most N times per day.
-- **Confirmed parameters** (admin-configurable settings): tolerance = within 10% of the mean impressions across live finalist videos; N = 3 per viewer per day.
+- **Confirmed parameters** (admin-configurable settings, WEEK 4 ONLY, #402): tolerance = within 10% of the mean impressions across live finalist videos; N = 3 per viewer per day.
 - Followers get no extra push in the module.
 - **Transparency**: Contest page copy tells viewers every finalist is shown to everyone equally [Contest-page copy displaced by #400, E10]. An admin view shows the impression distribution per finalist and flags any video outside the tolerance.
 - Unchanged by the followers-excluded switch.
@@ -348,6 +349,7 @@ DECIDED, NOT BUILT. Source: founder decisions 2026-10-15/16. Contest items are a
 | E3 | The final has task text, shown at the bottom of the leaderboard page | #399 | Sections 4, 10 |
 | E4 | Edit locking once week 1 starts; dates never editable | #399 | Section 4a |
 | E5 | Ranges: watch limit 3-120 s; tolerance 1-50 %; per-viewer daily cap 1-50 | #399 | Sections 4, 4a |
+| E4/E5 scope | Tolerance and per-viewer daily cap apply to week 4 only; lock when week 4 starts (founder-adopted default, veto-able) | #402 | Sections 4, 4a, 10b |
 | E6 | Votes lock 20:00:00 on days 7, 14, 21; next week opens 08:00:00 on days 8, 15, 22 and on day 1 | #400 | Sections 5, 8 |
 | E7 | Between Weeks is kept (12 hours) | #400 | Sections 5, 11 |
 | E8 | Non-finalist Contest tab hidden days 22-24; minimum tally admin-only | #400 | Section 10 |
@@ -355,12 +357,12 @@ DECIDED, NOT BUILT. Source: founder decisions 2026-10-15/16. Contest items are a
 | E10 | Final-week entries not on the Contest page; pinned on the finalist's profile; engagement locked before reveal | #400 | Sections 10, 10b |
 | E11 | Forfeit reason shown; announced as a pop-up | #400 | Sections 7, 11 |
 | A1-A6 | Sign-up and profile | #394 | Not contest |
-| B1-B4 | Decline, withdrawal, DOB correction in flight | #395 | Not contest |
-| C1-C2 | Block | #396 | Not contest |
-| C3 | 2FA recovery | #397 | Not contest |
-| D1-D4 | Admin moderation, username revoke, single-user read | #398 | Not contest |
+| B1-B4 | Decline, withdrawal, DOB correction in flight (B1 amended by #402: decline page inside the account, sessions valid between declines; third decline = pending deletion with the 30-day grace) | #395, #402 | Not contest |
+| C1-C2 | Block (defaults adopted by #402) | #396, #402 | Not contest |
+| C3 | 2FA recovery (10 hashed backup codes; recovery by backup code, or email confirmation plus password; #402) | #397, #402 | Not contest |
+| D1-D4 | Admin moderation, username revoke (handle held 30 days, never re-picked by that user; #402), single-user read | #398, #402 | Not contest |
 
-STILL OPEN (not decided here): counsel wording for every [COPY PENDING LEGAL REVIEW] item; the number of days or window lengths stated as "configuration"; the CSAM path; the placeholder name for incomplete profiles (#369); what the Contest tab shows from 00:00 to 08:00 on day 1; whether the Community-feed "Final week" module and the balanced-impression rotation remain (E10); whether tolerance and per-viewer cap are per contest or week 4 only; whether the Already Voted page remains (E9).
+STILL OPEN (not decided here): counsel wording for every [COPY PENDING LEGAL REVIEW] item; the number of days or window lengths stated as "configuration"; the CSAM path; the placeholder name for incomplete profiles (#369); what the Contest tab shows from 00:00 to 08:00 on day 1; whether the Community-feed "Final week" module and the balanced-impression rotation remain (E10); whether the Already Voted page remains (E9). [2026-10-16, #402: "whether tolerance and per-viewer cap are per contest or week 4 only" is resolved - week 4 only, founder-adopted default, veto-able.]
 
 ## 15. Where each decision lives
 
@@ -386,6 +388,7 @@ STILL OPEN (not decided here): counsel wording for every [COPY PENDING LEGAL REV
 | Community Group feed | #392 | - | B-101 |
 | Phase 1 10th-place tie; confirmed assumptions; no historical-row handling | #393 | 7, 8, 9, 14b | B-091, B-093, B-094 |
 | Contest admin form: Title, week-4-only switch, final task text, locking, ranges | #399 | 4, 4a, 10 | B-091, B-095, B-097, B-099 |
+| Tolerance and per-viewer cap are week 4 only; lock when week 4 starts | #402 | 4, 4a, 10b | B-091, B-092, B-095, B-097 |
 | Calendar: 20:00 lock, 08:00 open, Between Weeks kept | #400 | 5, 8, 11 | B-091, B-096, B-099 |
 | Hidden non-finalist tab; minimum tally admin-only; final entries pinned on profile; forfeit pop-up | #400 | 7, 10, 10b, 11 | B-092, B-096, B-107 |
 | Vote toggle button | #401 | 8 | B-091, B-098, B-107 |
@@ -424,3 +427,4 @@ Changes versus chat 9 (Aug 2026) and chat 11 (Sept 2026):
 - Decision Log #401: the vote control is one toggle button; no separate Change vote.
 - Decision Log #394-#398 (sign-up and profile, decline and withdrawal, Block, 2FA recovery, admin moderation) are not contest decisions; see Section 14c.
 - Not changed: placement points, baseline points, view qualification and the week-4 upload deadline (23:59:59 on day 24).
+- Decision Log #402 (founder-adopted defaults, veto-able): tolerance and the per-viewer daily cap apply to week 4 only (Sections 4, 4a, 10b; E4/E5 scope in 14c); they lock when week 4 starts. The remaining items of #402 (decline sessions, third decline, revoked username, Block, 2FA) are not contest decisions; see Section 14c and `docs/build-register.md` Section 11.
