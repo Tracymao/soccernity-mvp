@@ -25,7 +25,10 @@ const yearsAgo = (years: number) => {
   return d.toISOString().slice(0, 10);
 };
 
-const guardian = (suffix: string) => ({ name: 'Grace Parent', email: `grace-${suffix}@example.com`, relationship: 'Parent' });
+// Takes the MINOR's own email and derives a distinct, valid guardian address from
+// it (registration rejects a guardian email equal to the minor's own, and an
+// address with two "@" fails DTO validation).
+const guardian = (minorEmail: string) => ({ name: 'Grace Parent', email: `grace-${minorEmail}`, relationship: 'Parent' });
 
 let counter = 0;
 function registerBody(over: Record<string, unknown> = {}) {
