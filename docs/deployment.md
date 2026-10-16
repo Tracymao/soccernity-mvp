@@ -86,10 +86,13 @@ No two may be the same.
   birth still stored in plain form; that script refuses to run without a valid
   key, so a missing or malformed key makes the deploy fail *before* the new
   version goes live (intentional, and safe — nothing is changed).
-- None of these three has a code default. For `JWT_SECRET` and
-  `ADMIN_JWT_SECRET` the app does **not** reject a placeholder such as
-  `replace-me` — it would sign tokens with that literal string — so never
-  leave a placeholder in those two.
+- None of these three has a code default. In production (`NODE_ENV=production`,
+  which Render sets) the app now **refuses to start** if `JWT_SECRET` or
+  `ADMIN_JWT_SECRET` is unset, still a placeholder such as `replace-me`, or if
+  the two are the same value. The deploy then fails and the previous version
+  keeps serving, instead of a half-working API (before this check, an unset
+  `ADMIN_JWT_SECRET` booted fine and every admin login returned a 500 after the
+  password had been checked). The error names the variable, never its value.
 
 ## 4. Render (the API host)
 
@@ -119,9 +122,18 @@ No two may be the same.
      then use the `.env.example` placeholders; verification, guardian-consent
      and password-reset emails are then logged, not sent, so sign-up cannot
      complete for anyone who needs an email.
-   - `WEB_APP_BASE_URL` — the real deployed URL of `apps/web` for that
-     environment. Used to build links in emails. If left unset, the code falls
-     back to a placeholder address, so set it before emails go live.
+   - `WEB_APP_BASE_URL` — the real deployed **https** URL of `apps/web` for
+     that environment, no trailing path. Used to build the links in the
+     verify-email, guardian-consent and withdrawal emails. If it is unset, a
+     placeholder, or plain `http` (outside localhost), those emails are **not
+     sent at all** and an error naming `WEB_APP_BASE_URL` is logged: an email
+     whose only call to action is a dead link is worse than none. (The
+     password-reset email still falls back to a placeholder address; it is a
+     known follow-up.)
+   - `TRUST_PROXY_HOPS`, `MAXMIND_ACCOUNT_ID`, `MAXMIND_LICENSE_KEY`,
+     `GEOLITE2_DB_PATH` — country derivation; see "Country derivation
+     (GeoLite2)" below. All optional, all fail safe (stronger safeguarding
+     control) when unset. Leave `GEOLITE2_DB_PATH` blank.
    - `SPORTS_DATA_API_KEY` — your Highlightly API key. A placeholder until a
      real account exists; Sports Hub then serves only cached data.
    - `SPORTS_DATA_RAPIDAPI_HOST` — leave blank unless the Highlightly account
@@ -171,6 +183,50 @@ needs to complete promptly; a slow first response there is worse than
 $7/month. Staging has no such requirement, so it stays on Render's Free
 tier in `render.yaml` to control cost.
 
+### Country derivation (GeoLite2) — Decision Log #368
+
+At registration the API derives the person's country from their request IP
+using a **local** MaxMind GeoLite2-Country database. The IP is read in memory,
+used once and dropped: it is never stored or logged, and no third party sees it.
+The derived country decides whether an under-13's guardian must complete card
+verification. Three things have to be in place for it to work, and **each fails
+safe**: if any is missing, the country is recorded as "unresolved" and the
+*stronger* control applies (card verification for every under-13). Nothing
+breaks; the platform is simply stricter.
+
+1. **A MaxMind account and the GeoLite2 licence** (founder action). Create a
+   free account at https://www.maxmind.com, accept the GeoLite2 End User
+   Licence Agreement, and generate a licence key. Someone must own those licence
+   terms and the refresh process (still open in Decision Log #368). Set
+   `MAXMIND_ACCOUNT_ID` and `MAXMIND_LICENSE_KEY` on each Render service.
+2. **The database file.** `render.yaml`'s build command ends with
+   `node services/api/dist/scripts/fetch-geolite2.js`, which downloads the
+   database to `services/api/geoip/GeoLite2-Country.mmdb` using those two
+   values. It never fails the build: with no credentials, or if the download
+   fails, it logs `[geolite2] skipped/FAILED …` and carries on. The file is
+   gitignored (MaxMind's terms don't allow redistributing it). To refresh it,
+   redeploy, or run the script again; the API reloads the file when it changes
+   on disk. MaxMind updates GeoLite2 on weekdays; a scheduled monthly redeploy
+   is the simplest refresh until an owner decides otherwise. **The download URL
+   and login scheme are taken from MaxMind's documented direct-download link but
+   have not been run against a real account — check the first build log.**
+3. **`TRUST_PROXY_HOPS`.** Behind Render's proxy every request's network peer is
+   the proxy, so the API must be told how many proxy hops to trust to see the
+   real client address. The right number is a property of Render's network and
+   **must be checked, not guessed**: too low and every user looks like Render's
+   proxy (lookups come out "unresolved"); too high and a visitor can forge their
+   own address with an `X-Forwarded-For` header. Leave it **unset** until
+   checked. To check: set it to `1`, register a throw-away account from a
+   network you know the country of, and look at that row's `derivedCountry`
+   (`select "derivedCountry","countryDerivationMethod" from "User" …`). If it is
+   your country, keep it; if it is `null`/`unresolved`, try `2`. Setting it also
+   fixes per-client rate limiting, which until now saw every user behind Render
+   as one address.
+
+How to tell what happened on any account: `User.countryDerivationMethod` is
+`geolite2_local` (resolved) or `unresolved`; the boot log says
+`GeoLite2 country database not loaded` when the file is missing.
+
 ## 5. After the first successful deploy
 
 1. Confirm each service's own URL from Render's dashboard (e.g.
@@ -195,7 +251,7 @@ tier in `render.yaml` to control cost.
 ## What this repo still can't do for you
 
 - Create the Neon/Upstash/Render accounts themselves, or agree to any of
-  their terms of service.
+  their terms of service. The same goes for MaxMind (GeoLite2 licence).
 - Generate or store real secret values on your behalf — the three generated
   secrets, every real connection string, and the Postmark / Sentry / R2 /
   Stripe / Highlightly credentials all require a human decision or a

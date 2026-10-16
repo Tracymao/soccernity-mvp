@@ -5,8 +5,9 @@ import { randomUUID } from 'crypto';
 import { Guardian, User } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ClubsService } from '../../clubs/clubs.service';
+import { GeoIpService } from '../../../geoip/geoip.service';
 import {
-  normalizeDeclaredCountry,
+  normalizeCountryCode,
   requiresCardVerification,
 } from '../guardian-consent/card-verification-policy.util';
 import { computeConsentTokenExpiresAt } from '../guardian-consent/consent-token.constants';
@@ -84,9 +85,15 @@ export class RegistrationService {
     private readonly clubsService: ClubsService,
     private readonly guardianConsentService: GuardianConsentService,
     private readonly dobEncryption: DobEncryptionService,
+    private readonly geoIp: GeoIpService,
   ) {}
 
-  async register(dto: RegisterDto): Promise<RegisterResult> {
+  // `clientIp` is the request's IP as Express resolved it (see
+  // trust-proxy.ts). It is used for exactly one in-memory GeoLite2 lookup
+  // below and is NEVER written to the database, a log or an email: B-024,
+  // Decision Log #368. Optional so non-HTTP callers and tests need not supply
+  // one -- an absent IP simply resolves to "unresolved" (the stronger control).
+  async register(dto: RegisterDto, clientIp?: string): Promise<RegisterResult> {
     // Decision Log #16 (Build Plan Section 9): normalize email to
     // lowercase on write so matching is case-insensitive — a guardian or
     // player who registered with mixed-case casing shouldn't be unable
@@ -154,6 +161,14 @@ export class RegistrationService {
 
     const passwordHash = await this.passwordService.hash(dto.password);
 
+    // B-023 / B-025 (Decision Log #368). The DERIVED country is authoritative;
+    // the declared one is stored for audit only. lookupCountry never throws and
+    // returns { resolved: false } for every failure, which requiresCardVerification
+    // below treats as "apply the stronger control".
+    const declaredCountry = normalizeCountryCode(dto.countryCode);
+    const lookup = await this.geoIp.lookupCountry(clientIp);
+    const derivedCountry = lookup.resolved ? lookup.countryCode : null;
+
     const user = await this.prisma.user.create({
       data: {
         email,
@@ -163,6 +178,10 @@ export class RegistrationService {
         dateOfBirth: this.dobEncryption.encrypt(dateOfBirth),
         isMinor,
         isUnder16,
+        declaredCountry,
+        derivedCountry,
+        countryDerivationMethod: lookup.method,
+        countryDerivedAt: new Date(),
       },
     });
 
@@ -179,9 +198,11 @@ export class RegistrationService {
           name: dto.guardian.name,
           email: dto.guardian.email,
           relationship: dto.guardian.relationship,
-          // sprint-1/coppa-card-verification: decided once, frozen here.
-          declaredCountry: normalizeDeclaredCountry(dto.countryCode),
-          cardVerificationRequired: requiresCardVerification(dateOfBirth, dto.countryCode),
+          // sprint-1/coppa-card-verification: decided once, frozen here. B-025:
+          // keyed off the DERIVED country (null = unresolved = stronger
+          // control). Guardian.declaredCountry is deprecated and no longer
+          // written -- see schema.prisma.
+          cardVerificationRequired: requiresCardVerification(dateOfBirth, derivedCountry),
           consentToken: randomUUID(),
           // DPIA finding R5: the token is a permanent credential without
           // an expiry -- see guardian-consent/consent-token.constants.ts.

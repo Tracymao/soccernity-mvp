@@ -1,6 +1,7 @@
 import { ExecutionContext, INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
+import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
@@ -33,6 +34,10 @@ describe('UsersController (HTTP layer) — GET /users/suggested', () => {
       controllers: [UsersController],
       providers: [{ provide: UsersService, useValue: usersService }],
     })
+      // B-020: PATCH /users/:id is behind EmailVerifiedGuard; its own behaviour is
+      // covered by email-verified.guard.spec.ts and test/email-verification.e2e-spec.ts.
+      .overrideGuard(EmailVerifiedGuard)
+      .useValue({ canActivate: () => true })
       .overrideGuard(JwtAuthGuard)
       .useValue({
         canActivate: (context: ExecutionContext) => {

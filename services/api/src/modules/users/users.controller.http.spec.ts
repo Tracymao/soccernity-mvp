@@ -1,6 +1,7 @@
 import { ExecutionContext, INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
+import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
@@ -37,6 +38,10 @@ describe('UsersController (HTTP layer) — guardian-consent guard exclusion', ()
       controllers: [UsersController],
       providers: [{ provide: UsersService, useValue: usersService }],
     })
+      // B-020: PATCH /users/:id is behind EmailVerifiedGuard; its own behaviour is
+      // covered by email-verified.guard.spec.ts and test/email-verification.e2e-spec.ts.
+      .overrideGuard(EmailVerifiedGuard)
+      .useValue({ canActivate: () => true })
       .overrideGuard(JwtAuthGuard)
       .useValue({
         canActivate: (context: ExecutionContext) => {
@@ -103,5 +108,22 @@ describe('UsersController (HTTP layer) — guardian-consent guard exclusion', ()
 
     expect(response.body.displayName).toBe('Updated Name');
     expect(usersService.updateOwnProfile).toHaveBeenCalledWith('minor-1', { displayName: 'Updated Name' });
+  });
+});
+
+// B-020 (Decision Log #367): the email-verification precondition is attached to
+// the profile-completion write ONLY. A user who has not verified their email
+// must still be able to read their own profile (to see why they are blocked).
+describe('UsersController — email-verification guard placement (B-020)', () => {
+  const guardsOn = (method: keyof UsersController): unknown[] =>
+    Reflect.getMetadata('__guards__', UsersController.prototype[method]) ?? [];
+
+  it('protects PATCH /users/:id', () => {
+    expect(guardsOn('updateById')).toContain(EmailVerifiedGuard);
+  });
+
+  it('does not protect GET /users/:id or the public profile read', () => {
+    expect(guardsOn('getById')).not.toContain(EmailVerifiedGuard);
+    expect(guardsOn('getPublicProfile')).not.toContain(EmailVerifiedGuard);
   });
 });

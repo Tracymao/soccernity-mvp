@@ -67,6 +67,14 @@ describe('RegistrationService', () => {
       getConsentStatusForUser: jest.fn().mockResolvedValue(null),
     };
 
+    // B-024: the lookup is mocked at the GeoIpService boundary. Default is an
+    // unresolved lookup (the real behaviour with no database / no IP).
+    const geoIp = {
+      lookupCountry: jest
+        .fn()
+        .mockResolvedValue({ resolved: false, method: 'unresolved', reason: 'database_unavailable' }),
+    };
+
     const service = new RegistrationService(
       prisma as any,
       passwordService as any,
@@ -77,6 +85,7 @@ describe('RegistrationService', () => {
       clubsService as any,
       guardianConsentService as any,
       buildTestDobEncryption(),
+      geoIp as any,
     );
 
     return {
@@ -89,6 +98,7 @@ describe('RegistrationService', () => {
       config,
       clubsService,
       guardianConsentService,
+      geoIp,
     };
   }
 
@@ -141,7 +151,7 @@ describe('RegistrationService', () => {
       expect(emailService.sendGuardianConsentEmail).not.toHaveBeenCalled();
     });
 
-    describe('consent path selection (sprint-1/coppa-card-verification)', () => {
+    describe('consent path selection (sprint-1/coppa-card-verification, re-keyed by B-025)', () => {
       const guardianDetails = { name: 'Parent', email: 'p@example.com', relationship: 'Parent' };
       const dobYearsAgo = (years: number) => {
         const d = new Date();
@@ -149,36 +159,99 @@ describe('RegistrationService', () => {
         d.setDate(d.getDate() - 30);
         return d.toISOString();
       };
-      const register = async (age: number, countryCode?: string) => {
-        const { service, prisma } = buildService();
-        await service.register({
-          email: 'm@example.com',
-          password: 'password123',
-          displayName: 'M',
-          dateOfBirth: dobYearsAgo(age),
-          guardian: guardianDetails,
-          ...(countryCode ? { countryCode } : {}),
-        } as any);
-        return prisma.guardian.create.mock.calls[0][0].data;
+      const resolved = (countryCode: string) => ({ resolved: true, countryCode, method: 'geolite2_local' });
+      const unresolved = { resolved: false, method: 'unresolved', reason: 'not_found' };
+
+      // `derived` is what the (mocked) GeoLite2 lookup returns; `declared` is
+      // the countryCode the registrant typed. Only `derived` may matter.
+      const register = async (age: number, derived: unknown, declared?: string, clientIp = '203.0.113.9') => {
+        const { service, prisma, geoIp } = buildService();
+        geoIp.lookupCountry.mockResolvedValue(derived);
+        await service.register(
+          {
+            email: 'm@example.com',
+            password: 'password123',
+            displayName: 'M',
+            dateOfBirth: dobYearsAgo(age),
+            guardian: guardianDetails,
+            ...(declared ? { countryCode: declared } : {}),
+          } as any,
+          clientIp,
+        );
+        return {
+          guardianData: prisma.guardian.create.mock.calls[0][0].data,
+          userData: prisma.user.create.mock.calls[0][0].data,
+          geoIp,
+          prisma,
+        };
       };
 
       it.each([
-        ['under 13, US', 10, 'US', true],
-        ['under 13, lowercase us', 10, 'us', true],
-        ['under 13, country omitted (fail toward stronger control)', 10, undefined, true],
-        ['under 13, outside the US', 10, 'NG', false],
-        ['13-17, US', 15, 'US', false],
-        ['13-17, omitted', 15, undefined, false],
-        ['13 (30 days past birthday), US', 13, 'US', false],
-        ['12, US', 12, 'US', true],
-      ])('%s -> cardVerificationRequired=%s', async (_label, age, country, expected) => {
-        const data = await register(age as number, country as string | undefined);
-        expect(data.cardVerificationRequired).toBe(expected);
+        ['under 13, derived US', 10, resolved('US'), undefined, true],
+        ['under 13, derived US, declared NG (declaring elsewhere does not avoid it)', 10, resolved('US'), 'NG', true],
+        ['under 13, derived NG, declared US (derived is authoritative)', 10, resolved('NG'), 'US', false],
+        ['under 13, derived non-US, nothing declared', 10, resolved('GB'), undefined, false],
+        ['under 13, lookup unresolved, nothing declared (stronger control)', 10, unresolved, undefined, true],
+        ['under 13, lookup unresolved, declared NG (stronger control still)', 10, unresolved, 'NG', true],
+        ['13-17, derived US', 15, resolved('US'), undefined, false],
+        ['13-17, lookup unresolved', 15, unresolved, undefined, false],
+        ['13 (30 days past birthday), derived US', 13, resolved('US'), undefined, false],
+        ['12, derived US', 12, resolved('US'), undefined, true],
+      ])('%s -> cardVerificationRequired=%s', async (_label, age, derived, declared, expected) => {
+        const { guardianData } = await register(age as number, derived, declared as string | undefined);
+        expect(guardianData.cardVerificationRequired).toBe(expected);
       });
 
-      it('stores the declared country uppercased, and null when omitted', async () => {
-        expect((await register(10, 'us')).declaredCountry).toBe('US');
-        expect((await register(10)).declaredCountry).toBeNull();
+      it('stores declared and derived country, method and timestamp on the User', async () => {
+        const { userData } = await register(10, resolved('US'), 'us');
+        expect(userData.declaredCountry).toBe('US');
+        expect(userData.derivedCountry).toBe('US');
+        expect(userData.countryDerivationMethod).toBe('geolite2_local');
+        expect(userData.countryDerivedAt).toBeInstanceOf(Date);
+      });
+
+      it('records an unresolved lookup as method "unresolved" with no derived code, and null declared when omitted', async () => {
+        const { userData } = await register(10, unresolved);
+        expect(userData.declaredCountry).toBeNull();
+        expect(userData.derivedCountry).toBeNull();
+        expect(userData.countryDerivationMethod).toBe('unresolved');
+        expect(userData.countryDerivedAt).toBeInstanceOf(Date);
+      });
+
+      it('no longer writes Guardian.declaredCountry', async () => {
+        const { guardianData } = await register(10, resolved('US'), 'US');
+        expect(guardianData).not.toHaveProperty('declaredCountry');
+      });
+
+      it('derives for adults too (the lookup is not limited to minors)', async () => {
+        const { service, prisma, geoIp } = buildService();
+        geoIp.lookupCountry.mockResolvedValue(resolved('GB'));
+        await service.register(
+          { email: 'a@example.com', password: 'password123', displayName: 'A', dateOfBirth: '1990-01-01' } as any,
+          '198.51.100.7',
+        );
+        expect(prisma.user.create.mock.calls[0][0].data.derivedCountry).toBe('GB');
+      });
+
+      it('passes the IP to the lookup and never writes it anywhere', async () => {
+        const ip = '203.0.113.77';
+        const { geoIp, prisma } = await register(10, resolved('US'), undefined, ip);
+        expect(geoIp.lookupCountry).toHaveBeenCalledWith(ip);
+        const everythingWritten = JSON.stringify([
+          prisma.user.create.mock.calls,
+          prisma.guardian.create.mock.calls,
+          prisma.user.update.mock.calls,
+        ]);
+        expect(everythingWritten).not.toContain(ip);
+      });
+
+      it('still registers when no IP is available (lookup is given undefined)', async () => {
+        const { service, prisma, geoIp } = buildService();
+        await service.register(
+          { email: 'n@example.com', password: 'password123', displayName: 'N', dateOfBirth: dobYearsAgo(10), guardian: guardianDetails } as any,
+        );
+        expect(geoIp.lookupCountry).toHaveBeenCalledWith(undefined);
+        expect(prisma.guardian.create.mock.calls[0][0].data.cardVerificationRequired).toBe(true);
       });
     });
 

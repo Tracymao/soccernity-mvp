@@ -120,6 +120,11 @@ describe('AccountDeletionSweepService', () => {
           passwordHash: UNUSABLE_PASSWORD_HASH,
           dateOfBirth: null,
           clubAffiliationId: null,
+          // B-023: the four country fields are personal data and are cleared too.
+          declaredCountry: null,
+          derivedCountry: null,
+          countryDerivationMethod: null,
+          countryDerivedAt: null,
           accountStatus: 'deleted',
           pendingDeletionAt: null,
         },

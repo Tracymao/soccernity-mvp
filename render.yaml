@@ -33,6 +33,13 @@
 # stores it in this file. `value:` entries equal the code's own default, so
 # they change nothing; they exist so the setting is visible and editable.
 # PORT is not listed: services/api reads process.env.PORT ?? 3000.
+#
+# GEOLITE2 (B-024): the buildCommand ends with fetch-geolite2.js, which
+# downloads MaxMind's GeoLite2-Country database next to the build so the API can
+# derive a registrant's country from their IP locally. It needs MAXMIND_ACCOUNT_ID
+# and MAXMIND_LICENSE_KEY; WITHOUT them (or if the download fails) it logs and
+# exits 0, the build still succeeds, and every country lookup is "unresolved",
+# which applies the STRONGER safeguarding control. See docs/deployment.md.
 
 services:
   - type: web
@@ -45,7 +52,7 @@ services:
     # No rootDir: every command runs from the repo root and targets
     # services/api via --workspace or an explicit --schema path, the same
     # pattern .github/workflows/ci.yml uses.
-    buildCommand: npm install && npm run prisma:generate && npm run build --workspace=services/api
+    buildCommand: npm install && npm run prisma:generate && npm run build --workspace=services/api && node services/api/dist/scripts/fetch-geolite2.js
     # Needs DIRECT_URL and DOB_ENCRYPTION_KEY set (the backfill script throws
     # without a valid key, which fails the deploy before cut-over).
     preDeployCommand: npx prisma migrate deploy --schema=services/api/prisma/schema.prisma && node services/api/dist/scripts/backfill-dob-encryption.js
@@ -155,6 +162,26 @@ services:
       # COPPA_VERIFICATION_AMOUNT_CENTS: code default and floor (Stripe minimum)
       - key: COPPA_VERIFICATION_AMOUNT_CENTS
         value: "50"
+      # --- Country derivation (B-024, Decision Log #368) ---
+      # TRUST_PROXY_HOPS: how many reverse proxies sit in front of the API, so
+      # req.ip is the real client address (X-Forwarded-For). Needed for the
+      # GeoLite2 country lookup AND for per-client rate limiting. Left UNSET it
+      # trusts no proxy (fail-safe: lookups come out "unresolved"). Set it to the
+      # verified hop count (start by testing 1) -- too high lets a client forge
+      # its IP. See docs/deployment.md before setting.
+      - key: TRUST_PROXY_HOPS
+        sync: false
+      # GEOLITE2_DB_PATH: leave blank to use the default (services/api/geoip/GeoLite2-Country.mmdb, where fetch-geolite2.js puts it)
+      - key: GEOLITE2_DB_PATH
+        sync: false
+      # MaxMind account for the build-time GeoLite2 download (fetch-geolite2.js).
+      - key: MAXMIND_ACCOUNT_ID
+        sync: false
+      - key: MAXMIND_LICENSE_KEY
+        sync: false
+      # HELD_INVESTIGATION_ALERT_DAYS: code default (account-deletion-sweep.service.ts)
+      - key: HELD_INVESTIGATION_ALERT_DAYS
+        value: "90"
       # --- Error monitoring ---
       - key: SENTRY_DSN
         sync: false
@@ -169,7 +196,7 @@ services:
     # No rootDir: every command runs from the repo root and targets
     # services/api via --workspace or an explicit --schema path, the same
     # pattern .github/workflows/ci.yml uses.
-    buildCommand: npm install && npm run prisma:generate && npm run build --workspace=services/api
+    buildCommand: npm install && npm run prisma:generate && npm run build --workspace=services/api && node services/api/dist/scripts/fetch-geolite2.js
     # Needs DIRECT_URL and DOB_ENCRYPTION_KEY set (the backfill script throws
     # without a valid key, which fails the deploy before cut-over).
     preDeployCommand: npx prisma migrate deploy --schema=services/api/prisma/schema.prisma && node services/api/dist/scripts/backfill-dob-encryption.js
@@ -279,6 +306,26 @@ services:
       # COPPA_VERIFICATION_AMOUNT_CENTS: code default and floor (Stripe minimum)
       - key: COPPA_VERIFICATION_AMOUNT_CENTS
         value: "50"
+      # --- Country derivation (B-024, Decision Log #368) ---
+      # TRUST_PROXY_HOPS: how many reverse proxies sit in front of the API, so
+      # req.ip is the real client address (X-Forwarded-For). Needed for the
+      # GeoLite2 country lookup AND for per-client rate limiting. Left UNSET it
+      # trusts no proxy (fail-safe: lookups come out "unresolved"). Set it to the
+      # verified hop count (start by testing 1) -- too high lets a client forge
+      # its IP. See docs/deployment.md before setting.
+      - key: TRUST_PROXY_HOPS
+        sync: false
+      # GEOLITE2_DB_PATH: leave blank to use the default (services/api/geoip/GeoLite2-Country.mmdb, where fetch-geolite2.js puts it)
+      - key: GEOLITE2_DB_PATH
+        sync: false
+      # MaxMind account for the build-time GeoLite2 download (fetch-geolite2.js).
+      - key: MAXMIND_ACCOUNT_ID
+        sync: false
+      - key: MAXMIND_LICENSE_KEY
+        sync: false
+      # HELD_INVESTIGATION_ALERT_DAYS: code default (account-deletion-sweep.service.ts)
+      - key: HELD_INVESTIGATION_ALERT_DAYS
+        value: "90"
       # --- Error monitoring ---
       - key: SENTRY_DSN
         sync: false
