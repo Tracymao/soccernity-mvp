@@ -60,6 +60,8 @@ The flow wording follows #367 (approval, then Create Profile, then Club Picker).
 
 ### Item 7 - Edit Profile country, and the final task text check (#403 items 10, 17)
 
+> Updated 2026-10-17 by pass I (section 8 below): the Edit Profile country decision is restated and the Create Profile and profile frames follow it. The frame content described here is unchanged.
+
 - `1466:15934` (desktop) and `5702:8317` (mobile): "Location" is now "Country", an editable select (chevron, sample value "Nigeria"), with the helper "Shown on your profile only if you fill it in. It does not change the country used for safeguarding. [COPY PENDING LEGAL REVIEW]". On desktop the fields below were moved down 28 px inside the modal (it had room: lowest field ends at 1151 of 1195). The mobile frame grew 663 to 699 on its own auto-layout.
 - **Final task text** exists only on the live-ranking frames `5524:7512` / `5541:7527` and the uploading frames `6659:26310` / `6659:27163` (plus the admin form fields, out of scope). It is not on Crowned (`5524:7836` / `5541:7750`) or No winner (`6659:26636` / `6659:27348`). Nothing needed removing.
 
@@ -106,3 +108,61 @@ Tagged: Guardian Approved subtitle and first row text (both frames; the title is
 - No frames outside the user-facing scope were touched (admin frames, Terms/Privacy B-010, decline page).
 - Item 6 of #403 (deleting the ten hidden legacy Create Post layers) is not part of this brief and was not done.
 - The Contest-page showcase frames archived by F1 were not touched.
+
+## 8. Pass I (2026-10-17) - profile country made optional everywhere (restates #403 item 17)
+
+Agent: figma-design-system. Same file and page (`weZWWqggy9j13eX8bhFgs6`, `0:1`). Figma and docs only: no application code, schema, legal copy, DPIA or `.docx` was changed, and no node was deleted. User-facing frames only. Register rows with a status line: B-006, B-007, B-081, B-082, B-113.
+
+The brief replaces the earlier Edit Profile decision (Country is an optional, editable profile field, separate from the safeguarding country) and applies it to Create Profile and the profile frames.
+
+### 8.1 What changed
+
+| Frame | Before | After |
+|---|---|---|
+| Create Profile desktop `1498:2303` | "Country" label, value "United Kingdom" (prefilled), no chevron | Label "Country (Optional)" ("(Optional)" in the secondary tone, as Preferred Club does on desktop); empty select showing the placeholder "Select country"; chevron added (`6712:28806`, 14x7, stroke bound to `color/text/secondary`); group renamed "Form Group - Country (optional, editable)" |
+| Create Profile mobile `1629:2449` | Same prefilled "United Kingdom" | Label "Country (Optional)" in one colour (as "Preferred Club (Optional)" on mobile); placeholder "Select country"; chevron added (`6712:28807`, a visible clone of the archived chevron, absolute-positioned at x 324, y 23); group renamed; frame height unchanged (1450) |
+| Flagged-state frames `6672:29251`, `6672:29235` | Bio and Preferred Club "Please rephrase" rows only | **Unchanged.** They contain no Country field (checked by text search and screenshot), so there was nothing to make blank. A note says so |
+| Edit Profile `1466:15934`, `5702:8317` | Editable Country select, sample "Nigeria", helper about the safeguarding country (G1) | **Unchanged.** Already editable, with the helper. The G1 note `6698:26193` was extended with three bullets: the replaced decision, a SCOPE OPEN on the label, and the final-task re-check |
+| Profile frames `1455:4362`, `1455:6626`, `5702:8250`, `5778:8490`, `6669:27188` | Sample "Nigeria" country line | **Unchanged.** One note per frame (below) says the country line appears only when filled and no blank line is drawn |
+
+- "United Kingdom" no longer appears on any of the four Create Profile frames (text search, 0 hits). The Country field has no read-only hint (the DOB hint stays on DOB). The Age Gate country no longer pre-fills it.
+- Stale text corrected in place: the pass B notes `6637:21602` (desktop) and `6637:21603` (mobile) said "Country, prefilled from the Age Gate value" and had a SCOPE OPEN asking whether the user may edit it. They now say blank, optional, editable and mark the question RESOLVED by pass I. The text was edited by range, so the rest of each note is untouched.
+- New notes, built as clones of the G1 note frame (so every fill is already bound): above the two desktop profile frames, `6712:28811` (other user) and `6712:28821` (own), beside the existing B-007 notes; below the three mobile frames, `6712:28832` (own), `6712:28843` (own, Media) and `6712:28854` (other user); below the pass B Create Profile notes, `6712:28864`. Each profile note says: the country line shows only when filled; no placeholder or empty row; the profile country is independent of the safeguarding country (declared at the Age Gate, confirmed from the IP, never shown, never editable). Own-profile notes add that a blank country is simply not shown and is added in Edit Profile. Mobile notes record that the Identity block is vertical auto-layout, so the lines below close up. The desktop notes record that those frames are absolute layout, so the absent state is described, not drawn (SCOPE OPEN).
+
+### 8.2 Final task text
+
+Re-checked by text search of the whole page (case-insensitive "final task"), not carried over from G1. It appears only on the live-ranking frames `5524:7512` / `5541:7527` and the uploading frames `6659:26310` / `6659:27163` (plus the admin Create / Edit Contest form fields, out of scope). Crowned `5524:7836` / `5541:7750` and No winner `6659:26636` / `6659:27348` have 0 matches. Nothing needed removing.
+
+### 8.3 Whole-canvas before / after
+
+I did **not** run a whole-canvas `get_metadata` at depth 4 or more: the page holds about 139,000 nodes, and G1 and F2 recorded the same limit. Counts were taken with `findAll` per top-level node instead.
+
+| | Before | After |
+|---|---|---|
+| Top-level nodes on `0:1` | 804 | 838 |
+| Total nodes | 138,219 | 139,240 |
+
+**Another session (pass H: Blocked users, 2FA recovery and pinned final entry frames) was writing to the same file during this pass**, so the raw delta (+34 top-level, +1,021 nodes) is mostly not mine. My own additions are +6 top-level notes (29 descendants, 35 nodes), +2 chevron vectors inside the two Country inputs, and +3 text nodes in the G1 note: **+40 nodes**. No node of mine was removed and no existing node was deleted; text edits replaced characters only. The six new notes were placed clear of every non-banner top-level node (the two desktop profile notes were first placed by a free-space search about 1,100 px below their frames, then moved beside the existing B-007 notes above them).
+
+### 8.4 Tokens and paint
+
+All new or edited paint is bound to Soccernity Theme (Light): the label and placeholder text use `color/text/primary` (`VariableID:5096:8`) and `color/text/secondary` (`5096:9`), the chevrons' strokes are bound to `color/text/secondary`, and the notes are clones of an already-bound note frame. Audit of the 13 touched or new nodes: 97 solid paints, 0 unbound. Light mode only, 390px mobile, no black, no new colour, no `brand/green-tint-28`.
+
+### 8.5 "[COPY PENDING LEGAL REVIEW]" and SCOPE OPEN
+
+- No new guardian-, minor- or data-processing wording was added to any UI frame. The label "Country (Optional)" is the founder's wording. The placeholder "Select country" is taken from `GuardianDetailsStep.tsx` (the Age Gate country select). The Edit Profile helper keeps its existing tag.
+- SCOPE OPEN on canvas: country list is the full list (default, veto-able); what a blank profile country affects elsewhere; the desktop profile frames are absolute layout (absent state described, not drawn); the Edit Profile label has no "(Optional)".
+
+### 8.6 Decision Log candidates
+
+1. **Edit Profile label.** Create Profile says "Country (Optional)" but Edit Profile says "Country" (like its Preferred Club and Bio, which carry no "(Optional)" there). Make it consistent either way.
+2. **Account Information (Edit) `2924:7112` / `5649:8176`.** These still show a "Country" field, and the pass A notes `6628:23286` / `6628:23287` say the IP-derived value is authoritative and the user's right to change it is undecided. #403 item 17 makes that two fields: this screen should show either the editable profile country or nothing. Not touched (not in the brief).
+3. **Pass H frames carry a sample "Nigeria" line**: `6706:26750`, `6707:26595`, `6707:26727`, `6707:26938`, `6709:26922`, `6709:27056`. They are another session's work and were not annotated. After that pass is merged, the country-only-when-filled rule applies to them too.
+4. **Placeholder wording** "Select country" is code wording (Age Gate). Confirm it for the profile select, or use "Select your country".
+5. **Own profile with a blank country.** The note says it is not shown; whether an own-profile hint ("Add your country") should appear is not specified.
+6. **Out-of-bounds copy.** `1455:6626` contains a nested node `Desktop - 9` (`1620:8975`) positioned at about x 2514, outside the frame bounds, whose text includes its own "Nigeria" and "Manchester United" lines. Not touched; it should be cleaned up in a separate housekeeping pass.
+
+### 8.7 Not done
+
+- No admin frame, legal frame, decline page or contest frame was touched.
+- `docs/Soccernity_MVP_Build_Plan_v1.7.docx` was not edited, as instructed. No Decision Log row was written.
