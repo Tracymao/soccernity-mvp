@@ -166,11 +166,16 @@ export class RegistrationEmailService {
     });
   }
 
-  // To the MINOR — their guardian actively declined the request.
+  // To the MINOR — the FINAL explicit decline. Since B-102 (Decision Log #389,
+  // #395 B2) this is sent only for the THIRD decline of a consent request;
+  // declines 1 and 2 send nothing (the minor sees the decline page inside the
+  // account). The wording says the account is closed after the limit was
+  // reached, without exposing a running count. [COPY PENDING LEGAL REVIEW]:
+  // functional wording only, not counsel-reviewed.
   async sendConsentDeclinedEmail(to: string, minorDisplayName: string, graceDays: number): Promise<void> {
     await this.dispatch({
       to,
-      subject: 'Your Soccernity account was not approved',
+      subject: 'Your Soccernity account has been closed',
       template: 'guardian-consent-declined',
       data: { minorDisplayName, graceDays: String(graceDays) },
     });
@@ -430,7 +435,7 @@ ${data.link}
         `Hi ${data.minorDisplayName},
 
 ` +
-        `Your guardian did not approve your Soccernity account, so it cannot be activated.
+        `Your guardian declined the approval request for your Soccernity account again, and the limit on declined requests has now been reached, so your account cannot be activated.
 
 ` +
         `Your account has been closed and is scheduled to be permanently deleted in ${data.graceDays} days.
@@ -580,7 +585,7 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
     case 'guardian-consent-declined':
       return (
         `<p>Hi ${data.minorDisplayName},</p>` +
-        `<p>Your guardian did not approve your Soccernity account, so it cannot be activated.</p>` +
+        `<p>Your guardian declined the approval request for your Soccernity account again, and the limit on declined requests has now been reached, so your account cannot be activated.</p>` +
         `<p>Your account has been closed and is scheduled to be permanently deleted in <strong>${data.graceDays} days</strong>.</p>` +
         `<p>If you think this was a mistake, speak to your guardian before then.</p>`
       );

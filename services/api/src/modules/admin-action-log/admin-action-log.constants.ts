@@ -17,6 +17,15 @@ export const ADMIN_ACTION_LOG_ACTIONS = {
   // Log #372) -- support cleared a guardian's "report incorrect details"
   // flag, releasing the hold on approval. targetType 'user' (the minor).
   GUARDIAN_INCORRECT_DETAILS_RESOLVED: 'guardian.incorrect_details_resolved',
+  // GET /admin/users/:id (B-109, Decision Log #398 D4) -- an admin's response
+  // contained the user's DECRYPTED date of birth. One row per such response,
+  // repeat reads included. targetType 'user'. No notes: the row records THAT
+  // it was read, never what was read.
+  USER_DOB_VIEWED: 'user.dob_viewed',
+  // POST /admin/users/:id/dob-correction (B-103, Decision Log #390) -- support
+  // corrected a user's date of birth. Notes carry the reason, old and new age
+  // tier and what happened to the guardian request; never a DOB value.
+  USER_DOB_CORRECTED: 'user.dob_corrected',
   // Reserved, NOT yet wired to a real call site — no AdminUser
   // role-change endpoint exists anywhere in this codebase yet
   // (grep-confirmed; no branch/PR for one either, at the time this

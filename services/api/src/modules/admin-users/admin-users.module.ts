@@ -1,9 +1,13 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccountDeletionModule } from '../account-deletion/account-deletion.module';
 import { AdminActionLogModule } from '../admin-action-log/admin-action-log.module';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
+import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
+import { AdminUserDetailService } from './admin-user-detail.service';
+import { AdminUserDobCorrectionService } from './admin-user-dob-correction.service';
 import { AdminUsersController } from './admin-users.controller';
 import { AdminUsersService } from './admin-users.service';
 
@@ -27,8 +31,17 @@ import { AdminUsersService } from './admin-users.service';
 // updateUserStatus can record an audit-log row after each successful
 // accountStatus write. See modules/admin-action-log/README.md.
 @Module({
-  imports: [AdminAuthFoundationModule, AuthFoundationModule, AccountDeletionModule, AdminActionLogModule],
+  // B-103/B-109: ConfigModule (consent-token TTL) and RegistrationEmailService
+  // (the guardian consent email a DOB-correction restart sends). DobEncryptionService
+  // comes from the global CryptoModule.
+  imports: [AdminAuthFoundationModule, AuthFoundationModule, AccountDeletionModule, AdminActionLogModule, ConfigModule],
   controllers: [AdminUsersController],
-  providers: [AdminUsersService, PrismaService],
+  providers: [
+    AdminUsersService,
+    AdminUserDetailService,
+    AdminUserDobCorrectionService,
+    PrismaService,
+    RegistrationEmailService,
+  ],
 })
 export class AdminUsersModule {}
