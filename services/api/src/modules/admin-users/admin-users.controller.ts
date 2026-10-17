@@ -6,10 +6,12 @@ import { CurrentAdmin } from '../admin/guards/current-admin.decorator';
 import { AdminAccessTokenPayload } from '../admin/token/admin-token.types';
 import { AdminUserDetailService } from './admin-user-detail.service';
 import { AdminUserDobCorrectionService } from './admin-user-dob-correction.service';
+import { AdminUserUsernameRevokeService } from './admin-user-username-revoke.service';
 import { AdminUsersService } from './admin-users.service';
 import { CorrectDobDto } from './dto/correct-dob.dto';
 import { HeldInvestigationsQueryDto } from './dto/held-investigations-query.dto';
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
+import { RevokeUsernameDto } from './dto/revoke-username.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 
 // Build Plan Section 4.8 (Admin Service) — platform-user management.
@@ -30,6 +32,7 @@ export class AdminUsersController {
     private readonly adminUsersService: AdminUsersService,
     private readonly adminUserDetailService: AdminUserDetailService,
     private readonly adminUserDobCorrectionService: AdminUserDobCorrectionService,
+    private readonly adminUserUsernameRevokeService: AdminUserUsernameRevokeService,
   ) {}
 
   @Get()
@@ -71,6 +74,19 @@ export class AdminUsersController {
     @Body() dto: CorrectDobDto,
   ) {
     return this.adminUserDobCorrectionService.correctDateOfBirth(id, admin.sub, dto);
+  }
+
+  // B-033 (Decision Log #398 D3, #402 item 3): audited username revoke.
+  // Moderator / superadmin, the same class-level gate as the rest of this
+  // controller. A REASON is required and goes to the audit record.
+  @Post(':id/username-revoke')
+  @HttpCode(200)
+  async revokeUsername(
+    @Param('id') id: string,
+    @CurrentAdmin() admin: AdminAccessTokenPayload,
+    @Body() dto: RevokeUsernameDto,
+  ) {
+    return this.adminUserUsernameRevokeService.revokeUsername(id, admin.sub, dto);
   }
 
   // B-029: support has dealt with the report; releases the hold on approval.

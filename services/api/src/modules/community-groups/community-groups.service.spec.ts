@@ -2,7 +2,8 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CommunityGroupsService } from './community-groups.service';
-import { encodeCommunityGroupCursor, encodeCommunityGroupMemberCursor } from './cursor.util';
+import { encodeCommunityGroupCursor } from './cursor.util';
+import { encodeUserNameCursor, USER_NAME_ORDER_BY } from '../users/user-name-keyset.util';
 
 // Mocked-Prisma unit tests, following banter.service.spec.ts /
 // clubs.service.spec.ts. The real CommunityGroupMember table, its
@@ -337,7 +338,7 @@ describe('CommunityGroupsService', () => {
       await expect(service.getGroupMembers('nope', {})).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('filters by membership + the restricted-pending/inactive-account visibility rule, orders alphabetically by displayName', async () => {
+    it('filters by membership + the restricted-pending/inactive-account visibility rule, orders alphabetically by username, no-username last (B-034)', async () => {
       const prisma = buildPrismaMock();
       (prisma.communityGroup.findUnique as jest.Mock).mockResolvedValue({ id: 'group-1' });
       (prisma.user.findMany as jest.Mock).mockResolvedValueOnce([
@@ -357,24 +358,38 @@ describe('CommunityGroupsService', () => {
           },
         ],
       });
-      expect(args.orderBy).toEqual([{ displayName: 'asc' }, { id: 'asc' }]);
+      expect(args.orderBy).toEqual(USER_NAME_ORDER_BY);
+      expect(JSON.stringify(args.orderBy)).not.toContain('displayName');
     });
 
     it('builds a nextCursor from the last kept row when a lookahead row exists', async () => {
       const prisma = buildPrismaMock();
       (prisma.communityGroup.findUnique as jest.Mock).mockResolvedValue({ id: 'group-1' });
       (prisma.user.findMany as jest.Mock).mockResolvedValueOnce([
-        { id: 'u-1', displayName: 'Alice' },
-        { id: 'u-2', displayName: 'Bob' }, // lookahead
+        { id: 'u-1', username: 'alice_9', displayName: 'Alice Real' },
+        { id: 'u-2', username: null, displayName: 'Bob' }, // lookahead
       ]);
 
       const service = new CommunityGroupsService(prisma);
       const result = await service.getGroupMembers('group-1', { limit: 1 });
 
-      expect(result.items).toEqual([{ id: 'u-1', publicName: 'Soccernity member' }]);
-      expect(result.nextCursor).toBe(
-        encodeCommunityGroupMemberCursor({ name: 'Alice', id: 'u-1' }),
-      );
+      expect(result.items).toEqual([{ id: 'u-1', publicName: 'alice_9' }]);
+      expect(result.nextCursor).toBe(encodeUserNameCursor({ username: 'alice_9', id: 'u-1' }));
+      expect(Buffer.from(result.nextCursor as string, 'base64url').toString('utf8')).not.toContain('Alice');
+    });
+
+    it('applies a username cursor after the named users and admits the no-username group; rejects a legacy cursor', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.communityGroup.findUnique as jest.Mock).mockResolvedValue({ id: 'group-1' });
+      (prisma.user.findMany as jest.Mock).mockResolvedValueOnce([]);
+      const service = new CommunityGroupsService(prisma);
+      await service.getGroupMembers('group-1', { cursor: encodeUserNameCursor({ username: 'alice_9', id: 'u-1' }) });
+      const where = (prisma.user.findMany as jest.Mock).mock.calls[0][0].where;
+      expect(where.AND[2]).toEqual({
+        OR: [{ username: { gt: 'alice_9' } }, { username: 'alice_9', id: { gt: 'u-1' } }, { username: null }],
+      });
+      const legacy = Buffer.from(JSON.stringify({ name: 'Alice', id: 'u-1' })).toString('base64url');
+      await expect(service.getGroupMembers('group-1', { cursor: legacy })).rejects.toThrow('Invalid pagination cursor');
     });
   });
 });

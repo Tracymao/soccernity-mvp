@@ -76,6 +76,7 @@ describe('RegistrationController (HTTP layer)', () => {
       const response = await request(app.getHttpServer())
         .post('/auth/register')
         .send({
+          countryCode: 'GB',
           email: 'adult@example.com',
           password: 'password123',
           displayName: 'Adult User',
@@ -113,7 +114,7 @@ describe('RegistrationController (HTTP layer)', () => {
 
       const response = await request(app.getHttpServer())
         .post('/auth/register')
-        .send({ email: 'adult@example.com', password: 'password123', displayName: 'Adult User', dateOfBirth: '1990-01-01' })
+        .send({ countryCode: 'GB', email: 'adult@example.com', password: 'password123', displayName: 'Adult User', dateOfBirth: '1990-01-01' })
         .expect(201);
 
       expect(response.body.user).toMatchObject({
@@ -142,6 +143,7 @@ describe('RegistrationController (HTTP layer)', () => {
       const response = await request(app.getHttpServer())
         .post('/auth/register')
         .send({
+          countryCode: 'GB',
           email: 'minor@example.com', password: 'password123', displayName: 'Minor User', dateOfBirth: '2012-01-01',
           guardian: { name: 'Parent', email: 'parent@example.com', relationship: 'Parent' },
         })
@@ -153,16 +155,48 @@ describe('RegistrationController (HTTP layer)', () => {
     it('rejects a body missing required fields with 400', async () => {
       await request(app.getHttpServer())
         .post('/auth/register')
-        .send({ email: 'not-enough@example.com' })
+        .send({ countryCode: 'GB', email: 'not-enough@example.com' })
         .expect(400);
 
       expect(registrationService.register).not.toHaveBeenCalled();
+    });
+
+    // B-073 / FC1: countryCode is REQUIRED now that the web Age Gate always sends it.
+    it('rejects a registration with no countryCode (400) before the service is reached', async () => {
+      registrationService.register.mockClear();
+      const res = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({ email: 'a@example.com', password: 'password123', displayName: 'A', dateOfBirth: '1990-01-01' })
+        .expect(400);
+      expect(JSON.stringify(res.body.message)).toContain('countryCode');
+      expect(registrationService.register).not.toHaveBeenCalled();
+    });
+
+    it.each(['', 'U', 'USA', '12', 'U$'])('rejects a malformed countryCode %j with 400', async (countryCode) => {
+      await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({ countryCode, email: 'a@example.com', password: 'password123', displayName: 'A', dateOfBirth: '1990-01-01' })
+        .expect(400);
+    });
+
+    it.each(['gb', 'US', 'ZZ'])('accepts the 2-letter countryCode %s (any case)', async (countryCode) => {
+      registrationService.register.mockResolvedValueOnce({
+        dateOfBirth: new Date('1990-01-01'),
+        user: { id: 'u', email: 'a@example.com', phone: null, displayName: 'A', dateOfBirth: new Date('1990-01-01'), isMinor: false, role: 'fan', verificationStatus: 'unverified', createdAt: new Date() },
+        guardian: null,
+        tokens: { accessToken: { token: 't', expiresIn: 900 }, refreshToken: { token: 'r', expiresAt: new Date() } },
+      });
+      await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({ countryCode, email: 'a@example.com', password: 'password123', displayName: 'A', dateOfBirth: '1990-01-01' })
+        .expect(201);
     });
 
     it('rejects an invalid guardian relationship with 400', async () => {
       await request(app.getHttpServer())
         .post('/auth/register')
         .send({
+          countryCode: 'GB',
           email: 'minor@example.com',
           password: 'password123',
           displayName: 'Minor',
@@ -178,6 +212,7 @@ describe('RegistrationController (HTTP layer)', () => {
       await request(app.getHttpServer())
         .post('/auth/register')
         .send({
+          countryCode: 'GB',
           email: 'adult@example.com',
           password: 'password123',
           displayName: 'Adult User',
@@ -195,6 +230,7 @@ describe('RegistrationController (HTTP layer)', () => {
       await request(app.getHttpServer())
         .post('/auth/register')
         .send({
+          countryCode: 'GB',
           email: 'taken@example.com',
           password: 'password123',
           displayName: 'Someone',

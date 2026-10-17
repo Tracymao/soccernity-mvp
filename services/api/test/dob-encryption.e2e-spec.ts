@@ -39,7 +39,7 @@ describe('DOB encryption e2e', () => {
     const email = `dob-enc-${Date.now()}@example.com`;
     const res = await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ email, password: 'a-real-password-123', displayName: 'Enc Test', dateOfBirth: '1990-06-15' })
+      .send({ countryCode: 'GB', email, password: 'a-real-password-123', displayName: 'Enc Test', dateOfBirth: '1990-06-15' })
       .expect(201);
 
     const stored = await rawDob(email);

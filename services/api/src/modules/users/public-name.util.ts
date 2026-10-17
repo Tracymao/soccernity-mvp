@@ -42,9 +42,10 @@ export function resolvePublicName(user: NameSource): string {
   return INCOMPLETE_PROFILE_PUBLIC_NAME;
 }
 
-// Prisma `select` fragment. displayName stays in it because the roster /
-// people-search cursors and ordering still use it (build register B-034 is the
-// open follow-up that removes that real-name leak); resolvePublicName ignores it.
+// Prisma `select` fragment. displayName stays in it ONLY so resolvePublicName
+// can recognise the '[deleted user]' anonymisation sentinel (#341); it is never
+// serialised, and since B-034 it no longer feeds any list ordering or cursor
+// (users/user-name-keyset.util.ts orders by username).
 export const PUBLIC_NAME_SELECT = { username: true, displayName: true } as const;
 
 // `{ id, publicName }` -- the standard other-facing user reference.

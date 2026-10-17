@@ -9,14 +9,18 @@ import {
 } from './community-groups.constants';
 import {
   decodeCommunityGroupCursor,
-  decodeCommunityGroupMemberCursor,
   encodeCommunityGroupCursor,
-  encodeCommunityGroupMemberCursor,
 } from './cursor.util';
 import { CreateCommunityGroupDto } from './dto/create-community-group.dto';
 import { ListCommunityGroupMembersQueryDto } from './dto/list-community-group-members-query.dto';
 import { ListCommunityGroupsQueryDto } from './dto/list-community-groups-query.dto';
 import { PUBLIC_NAME_SELECT, toPublicUser } from '../users/public-name.util';
+import {
+  decodeUserNameCursor,
+  USER_NAME_ORDER_BY,
+  userNameAfterCursor,
+  userNameCursorOf,
+} from '../users/user-name-keyset.util';
 
 // Response shape for every GET /community-groups and GET
 // /community-groups/:id entry (Build Plan Sprint 3, Decision Log #281).
@@ -404,11 +408,11 @@ export class CommunityGroupsService {
       { communityGroupMemberships: { some: { communityGroupId: groupId } } },
       VISIBLE_GROUP_MEMBER_FILTER,
     ];
-    if (query.cursor) filters.push(this.buildMemberCursorFilter(query.cursor));
+    if (query.cursor) filters.push(userNameAfterCursor(decodeUserNameCursor(query.cursor)));
 
     const rows = await this.prisma.user.findMany({
       where: { AND: filters },
-      orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+      orderBy: USER_NAME_ORDER_BY,
       take: limit + 1,
       select: GROUP_MEMBER_SELECT,
     });
@@ -416,21 +420,8 @@ export class CommunityGroupsService {
     const hasMore = rows.length > limit;
     const trimmed = hasMore ? rows.slice(0, limit) : rows;
     const last = trimmed[trimmed.length - 1];
-    const nextCursor =
-      hasMore && last
-        ? encodeCommunityGroupMemberCursor({ name: last.displayName, id: last.id })
-        : null;
+    const nextCursor = hasMore && last ? userNameCursorOf(last) : null;
 
     return { items: trimmed.map(toPublicUser), nextCursor };
-  }
-
-  private buildMemberCursorFilter(rawCursor: string): Prisma.UserWhereInput {
-    const cursor = decodeCommunityGroupMemberCursor(rawCursor);
-    return {
-      OR: [
-        { displayName: { gt: cursor.name } },
-        { displayName: cursor.name, id: { gt: cursor.id } },
-      ],
-    };
   }
 }

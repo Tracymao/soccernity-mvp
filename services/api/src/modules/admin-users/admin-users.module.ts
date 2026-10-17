@@ -8,6 +8,7 @@ import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
 import { AdminUserDetailService } from './admin-user-detail.service';
 import { AdminUserDobCorrectionService } from './admin-user-dob-correction.service';
+import { AdminUserUsernameRevokeService } from './admin-user-username-revoke.service';
 import { AdminUsersController } from './admin-users.controller';
 import { AdminUsersService } from './admin-users.service';
 
@@ -40,6 +41,7 @@ import { AdminUsersService } from './admin-users.service';
     AdminUsersService,
     AdminUserDetailService,
     AdminUserDobCorrectionService,
+    AdminUserUsernameRevokeService,
     PrismaService,
     RegistrationEmailService,
   ],

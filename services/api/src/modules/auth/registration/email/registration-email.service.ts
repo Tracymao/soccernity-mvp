@@ -27,7 +27,8 @@ export type RegistrationEmailTemplate =
   | 'guardian-email-replaced'
   | 'public-report-acknowledgement'
   | 'report-actioned'
-  | 'appeal-decision';
+  | 'appeal-decision'
+  | 'username-revoked';
 
 export interface OutboundRegistrationEmail {
   to: string;
@@ -329,6 +330,23 @@ export class RegistrationEmailService {
     });
   }
 
+  // B-033 (Decision Log #398 D3): to the user whose username an admin has just
+  // revoked. [COPY PENDING LEGAL REVIEW] -- plain functional wording, not
+  // counsel-reviewed. It deliberately carries NO free-text from the admin's
+  // reason (that is an internal note and can name other people or reports); it
+  // states only the categories the username rules cover, what changes for the
+  // account until a new name is chosen, and that the old name cannot be used
+  // again. No link and no token: the next login routes the user to pick a new
+  // username (nextStep = create_profile), so there is nothing to protect in a URL.
+  async sendUsernameRevokedEmail(to: string, displayName: string): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: 'Your Soccernity username was removed',
+      template: 'username-revoked',
+      data: { displayName },
+    });
+  }
+
   // B-016. Builds the apps/web link for a token email, or refuses. When
   // WEB_APP_BASE_URL is unset/placeholder the email's only call to action would
   // be a dead link, so NOTHING is sent and an error is logged (without the
@@ -389,6 +407,26 @@ export class RegistrationEmailService {
 // deliverable.
 function renderTextBody(template: RegistrationEmailTemplate, data: Record<string, string>): string {
   switch (template) {
+    case 'username-revoked':
+      return (
+        `Hi ${data.displayName},
+
+` +
+        `A Soccernity moderator has removed your username because it did not follow our username rules. ` +
+        `Usernames must not be offensive, must not pretend to be another person or organisation, and must not include personal details such as a real name, phone number or email address.
+
+` +
+        `What this means for your account:
+` +
+        `- Until you choose a new username, other people see you as "Soccernity member" and you can't post, comment or send messages.
+` +
+        `- The next time you log in you will be asked to choose a new username.
+` +
+        `- You can't use the removed username again, and nobody else can take it for 30 days.
+
+` +
+        `If you think this was a mistake, contact support@soccernity.com.`
+      );
     case 'verify-email':
       return `Verify your Soccernity email address by opening this link:\n\n${data.link}\n\nIf you did not request this, you can safely ignore this email.`;
     case 'guardian-consent':
@@ -555,6 +593,18 @@ ${data.link}
 
 function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string, string>): string {
   switch (template) {
+    case 'username-revoked':
+      return (
+        `<p>Hi ${escapeHtml(data.displayName)},</p>` +
+        `<p>A Soccernity moderator has removed your username because it did not follow our username rules. Usernames must not be offensive, must not pretend to be another person or organisation, and must not include personal details such as a real name, phone number or email address.</p>` +
+        `<p>What this means for your account:</p>` +
+        `<ul>` +
+        `<li>Until you choose a new username, other people see you as "Soccernity member" and you can't post, comment or send messages.</li>` +
+        `<li>The next time you log in you will be asked to choose a new username.</li>` +
+        `<li>You can't use the removed username again, and nobody else can take it for 30 days.</li>` +
+        `</ul>` +
+        `<p>If you think this was a mistake, contact support@soccernity.com.</p>`
+      );
     case 'verify-email':
       return `<p>Verify your Soccernity email address:</p><p><a href="${data.link}">Verify my email</a></p><p>If the button does not work, copy this link into your browser: ${data.link}</p><p>If you did not request this, you can safely ignore this email.</p>`;
     case 'guardian-consent':
@@ -683,4 +733,17 @@ function reportOutcomeCopy(action: string): { label: string; reason: string } {
     default:
       throw new Error(`Unknown report action for outcome email: ${action}`);
   }
+}
+
+// Minimal HTML escape for user-supplied text placed in an HTML body. Added with
+// the username-revoked template (B-033): displayName is free text. The older
+// templates in this file interpolate it unescaped; that is a pre-existing
+// weakness of theirs, not something this change widens.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }

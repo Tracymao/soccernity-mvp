@@ -11,15 +11,11 @@ import { BadRequestException } from '@nestjs/common';
 // already uses for ArticleCursor/CategoryCursor. Each entity type is
 // ordered differently, deliberately:
 //
-//  - Users, alphabetically by displayName (displayName asc, id asc) —
-//    same "browsable catalog, no good recency field to order by"
-//    reasoning as ClubPage (see clubs/cursor.util.ts) and BanterRoom
-//    (see banter/cursor.util.ts). User.createdAt exists on the schema
-//    but is not exposed by any other list endpoint in this codebase
-//    (feed.service.ts's own POST_AUTHOR_SELECT deliberately narrows to
-//    id + displayName only) — reusing it here for ordering only, with
-//    no plan to ever expose it, would be a needless asymmetry against
-//    every other place a User shows up in a list response.
+//  - Users, alphabetically by PUBLIC name (username asc, accounts with no
+//    username last, id) -- see users/user-name-keyset.util.ts (B-034). Same
+//    "browsable catalog, no good recency field to order by" reasoning as
+//    ClubPage (see clubs/cursor.util.ts) and BanterRoom (see
+//    banter/cursor.util.ts). The real displayName never feeds the order.
 //  - Clubs, alphabetically by name (name asc, id asc) — matches
 //    GET /clubs's own ordering exactly (clubs/cursor.util.ts), so the
 //    same club sorts identically whether a client found it via
@@ -38,27 +34,8 @@ import { BadRequestException } from '@nestjs/common';
 // decode function only accepts its own field name) — a client that
 // mixes them up gets a clean 400, not a silently wrong query.
 
-export interface SearchUserCursor {
-  displayName: string;
-  id: string;
-}
-
-export function encodeSearchUserCursor(cursor: SearchUserCursor): string {
-  const payload = JSON.stringify({ displayName: cursor.displayName, id: cursor.id });
-  return Buffer.from(payload, 'utf8').toString('base64url');
-}
-
-export function decodeSearchUserCursor(raw: string): SearchUserCursor {
-  const parsed = parseCursorPayload(raw);
-  if (
-    typeof (parsed as { displayName?: unknown }).displayName !== 'string' ||
-    typeof (parsed as { id?: unknown }).id !== 'string'
-  ) {
-    throw new BadRequestException('Invalid pagination cursor');
-  }
-  const { displayName, id } = parsed as { displayName: string; id: string };
-  return { displayName, id };
-}
+// The user-search cursor lives in users/user-name-keyset.util.ts (B-034): it is
+// keyed on the PUBLIC name (username), never the real displayName.
 
 export interface SearchClubCursor {
   name: string;

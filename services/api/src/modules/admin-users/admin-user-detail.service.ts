@@ -90,6 +90,11 @@ export interface AdminUserDetail {
     cardVerifiedAt: Date | null;
     consentVerificationMethod: string | null;
   } | null;
+  // B-033: handles an admin has revoked FROM THIS USER, newest first. Each is
+  // permanently barred for this user; `heldUntil` is when everyone else may
+  // take it. The reason lives in the audit log, not here. The User Detail
+  // screen uses this to show whether a revoke already happened.
+  usernameRevocations: Array<{ username: string; revokedAt: Date; heldUntil: Date }>;
 }
 
 @Injectable()
@@ -105,6 +110,11 @@ export class AdminUserDetailService {
     if (!row) {
       throw new NotFoundException('User not found');
     }
+    const usernameRevocations = await this.prisma.revokedUsername.findMany({
+      where: { userId },
+      orderBy: { revokedAt: 'desc' },
+      select: { username: true, revokedAt: true, holdUntil: true },
+    });
 
     // Decrypt FIRST (held in memory only), then write the audit row, then
     // return. If the audit write fails the request fails and no DOB leaves the
@@ -143,6 +153,11 @@ export class AdminUserDetailService {
         derivedAt: row.countryDerivedAt,
       },
       guardian: row.guardian,
+      usernameRevocations: usernameRevocations.map((r) => ({
+        username: r.username,
+        revokedAt: r.revokedAt,
+        heldUntil: r.holdUntil,
+      })),
     };
   }
 }

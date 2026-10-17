@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsersController } from './users.controller';
+import { UsernamePolicyService } from './username-policy.service';
 import { UsersService } from './users.service';
 
 // Sprint 1 / PR B6 — Section 4.2 (User Service), self-profile scope only.
@@ -15,6 +16,6 @@ import { UsersService } from './users.service';
 @Module({
   imports: [AuthFoundationModule],
   controllers: [UsersController],
-  providers: [UsersService, PrismaService],
+  providers: [UsersService, UsernamePolicyService, PrismaService],
 })
 export class UsersModule {}

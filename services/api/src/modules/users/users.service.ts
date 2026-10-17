@@ -10,6 +10,8 @@ import { calculateAge } from '../auth/registration/age.util';
 import { deriveOnboardingState, GuardianConsentState, OnboardingNextStep } from '../auth/onboarding-state.util';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PUBLIC_NAME_SELECT, resolvePublicName, toPublicUser } from './public-name.util';
+import { UsernamePolicyService } from './username-policy.service';
+import { USERNAME_REQUIRED_CODE } from './username-rules.constants';
 
 // Fields returned for the authenticated user's OWN profile. Notably:
 //
@@ -150,13 +152,13 @@ function toOwnProfile({ guardian, dateOfBirth, ...rest }: OwnProfileRow, dob: Do
 function toUpdateData(dto: UpdateUserDto): {
   displayName?: string;
   phone?: string;
-  username?: string | null;
 } {
-  const data: { displayName?: string; phone?: string; username?: string | null } = {};
+  const data: { displayName?: string; phone?: string } = {};
   if (dto.displayName !== undefined) data.displayName = dto.displayName;
   if (dto.phone !== undefined) data.phone = dto.phone;
-  // Stored lowercase so the single @unique is case-insensitive; null clears.
-  if (dto.username !== undefined) data.username = dto.username === null ? null : dto.username.toLowerCase();
+  // `username` is deliberately NOT forwarded from here: it needs the rules,
+  // revoked-handle and cooldown checks and an optimistic lock, so
+  // UsersService.updateOwnProfile handles it explicitly (B-031/B-032).
   return data;
 }
 
@@ -205,6 +207,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly dobEncryption: DobEncryptionService,
+    private readonly usernamePolicy: UsernamePolicyService,
   ) {}
 
   async getOwnProfile(userId: string): Promise<OwnProfile> {
@@ -255,9 +258,64 @@ export class UsersService {
     };
   }
 
+  // PATCH /users/:id. displayName and phone are plain writes. A USERNAME change
+  // goes through the username rules (B-031/B-032, Decision Log #369):
+  //   - it can never be cleared by the user (`null` -> 400 username_required): no
+  //     account exists without one once it has chosen, and the only way back to
+  //     "no username" is an admin revoke (B-033);
+  //   - sending the handle the account already has is a no-op, so it never
+  //     starts the change cooldown;
+  //   - otherwise UsernamePolicyService must allow it (format-level rules, club
+  //     names, the revoked-handle bar and 30-day hold, the change cooldown).
+  // The write is an optimistic lock on the username + its change timestamp read
+  // for the checks, so two concurrent changes cannot both pass the cooldown.
   async updateOwnProfile(userId: string, dto: UpdateUserDto): Promise<OwnProfile> {
-    const data = toUpdateData(dto);
+    if (dto.username === null) {
+      throw new BadRequestException({
+        message: "A username can't be removed. You can change it to another one.",
+        code: USERNAME_REQUIRED_CODE,
+      });
+    }
+
+    const data: Prisma.UserUpdateManyMutationInput = toUpdateData(dto);
+    let lock: { username: string | null; usernameChangedAt: Date | null } | null = null;
+
+    if (dto.username !== undefined) {
+      const current = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { username: true, usernameChangedAt: true, displayName: true, email: true, dateOfBirth: true },
+      });
+      if (!current) {
+        throw new NotFoundException('User not found');
+      }
+      const candidate = dto.username.toLowerCase();
+      if (candidate !== current.username) {
+        await this.usernamePolicy.assertAssignable({
+          userId,
+          candidate,
+          current: current.username,
+          usernameChangedAt: current.usernameChangedAt,
+          owner: {
+            displayName: current.displayName,
+            email: current.email,
+            dateOfBirth: this.dobEncryption.decryptNullable(current.dateOfBirth),
+          },
+        });
+        data.username = candidate;
+        // Only a change FROM a value starts the cooldown (see schema comment).
+        if (current.username !== null) data.usernameChangedAt = new Date();
+        lock = { username: current.username, usernameChangedAt: current.usernameChangedAt };
+      }
+    }
+
     try {
+      if (lock) {
+        const result = await this.prisma.user.updateMany({ where: { id: userId, ...lock }, data });
+        if (result.count === 0) {
+          throw new ConflictException('Your profile changed while this was being saved. Please try again.');
+        }
+        return await this.getOwnProfile(userId);
+      }
       const updated = await this.prisma.user.update({
         where: { id: userId },
         data,

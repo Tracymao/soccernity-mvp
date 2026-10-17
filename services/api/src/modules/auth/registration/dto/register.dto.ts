@@ -50,13 +50,12 @@ export class RegisterDto {
 
   // The SELF-DECLARED country of residence, ISO-3166 alpha-2 ("US", "NG",
   // ...; "ZZ" = another country). Declared at the Age Gate (Decision Log #367/
-  // #368). Stored on User.declaredCountry for audit only: B-025 made the
-  // IP-DERIVED country authoritative, so this value can never loosen a
-  // safeguarding decision -- typing a non-US code no longer avoids card
-  // verification. Case-insensitive on input. Still optional on the API because
-  // the web Age Gate does not send it yet (B-073); it becomes required, for
-  // every registrant, in the same change that ships that step.
-  @IsOptional()
+  // #368) and REQUIRED for every registrant since apps/web's Age Gate always
+  // sends it (B-073, FC1). Stored on User.declaredCountry for audit only: B-025
+  // made the IP-DERIVED country authoritative, so this value can never loosen a
+  // safeguarding decision -- typing a non-US code does not avoid card
+  // verification. Case-insensitive on input. A request without it is a 400
+  // (RegisterDto validation, before any user or guardian row exists).
   @Matches(/^[A-Za-z]{2}$/, { message: 'countryCode must be a 2-letter ISO country code' })
-  countryCode?: string;
+  countryCode!: string;
 }

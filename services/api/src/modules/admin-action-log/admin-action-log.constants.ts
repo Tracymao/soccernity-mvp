@@ -26,6 +26,11 @@ export const ADMIN_ACTION_LOG_ACTIONS = {
   // corrected a user's date of birth. Notes carry the reason, old and new age
   // tier and what happened to the guardian request; never a DOB value.
   USER_DOB_CORRECTED: 'user.dob_corrected',
+  // POST /admin/users/:id/username-revoke (B-033, Decision Log #398 D3) -- an
+  // admin removed a user's username. Written in the SAME transaction as the
+  // change. targetType 'user'. Notes carry the revoked handle, the 30-day hold
+  // end and the REASON.
+  USER_USERNAME_REVOKED: 'user.username_revoked',
   // Reserved, NOT yet wired to a real call site — no AdminUser
   // role-change endpoint exists anywhere in this codebase yet
   // (grep-confirmed; no branch/PR for one either, at the time this
