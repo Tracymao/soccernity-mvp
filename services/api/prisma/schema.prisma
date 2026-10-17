@@ -222,6 +222,7 @@ model User {
   // tx.user.delete() keeps working with no per-table handling added.
   contestEntries   ContestEntry[]
   contestRoundWins ContestRoundWinner[]
+  contestVotes     ContestVote[]
   contestStandings ContestStanding[]
   pointsLedger     PointsLedgerEntry[]
 
@@ -1127,10 +1128,18 @@ model Notification {
   // (contest.service.ts, one per ContestRoundWinner row, not the monthly
   // ContestStanding crown). `reply` / `system` (this comment's previous
   // wording) were never actually implemented anywhere -- dropped.
-  type         String // follow | like | comment | message | fixture_scheduled | result_logged | contest_win | age_milestone (age-reclassification sweep, user turned 16; payloadRefId = milestone key) | match_kickoff (sports kickoff watch, payloadRefId = MatchData.externalRef)
+  type         String // follow | like | comment | message | fixture_scheduled | result_logged | contest_win | age_milestone (age-reclassification sweep, user turned 16; payloadRefId = milestone key) | match_kickoff (sports kickoff watch, payloadRefId = MatchData.externalRef) | contest_week_opens | contest_votes_closing | contest_week_result (payloadRefId = "<cycleId>:<week>") | contest_finalist | contest_reveal | contest_final_result | contest_upload_reminder (payloadRefId = "<cycleId>") -- backend/w3c-contest-notifications, Decision Log #404 item 16
   payloadRefId String?
   read         Boolean  @default(false)
   createdAt    DateTime @default(now())
+  // backend/w3c-contest-notifications (B-122). NULL for every notification written by a
+  // user-triggered action (the pre-existing types); set only by the scheduled Contest
+  // fan-out (ContestNotificationSweepService) as "<type>|<cycleId>|<week or ->|<userId>".
+  // The UNIQUE index is what makes a re-run (or two overlapping instances) unable to
+  // write the same event to the same account twice: createMany({ skipDuplicates }) turns a
+  // collision into a no-op. Postgres treats NULLs as distinct, so unkeyed rows never clash.
+  // Never selected into any API payload.
+  dedupeKey    String?  @unique
 }
 
 model SavedPost {
@@ -1879,6 +1888,7 @@ model ContestRound {
 
   entries ContestEntry[]
   winners ContestRoundWinner[]
+  votes   ContestVote[]
 
   @@unique([cycleId, weekNumber])
 }
@@ -1904,6 +1914,7 @@ model ContestEntry {
   submittedAt DateTime     @default(now())
 
   winner ContestRoundWinner?
+  votes  ContestVote[]
 
   @@unique([roundId, userId])
 }
@@ -1924,6 +1935,29 @@ model ContestRoundWinner {
   user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   position  Int // 1 | 2 | 3 (ties allowed)
   createdAt DateTime     @default(now())
+}
+
+// backend/w3c-contest-notifications (B-122, Decision Log #404 item 16). MINIMAL on purpose: the
+// one fact the votes-closing reminder needs -- "has this account voted in this round?" -- and
+// nothing else. docs/contest-spec.md section 8: one vote per user per round (self-vote allowed),
+// so @@unique([roundId, voterId]). NOTHING WRITES THIS TABLE YET: the voting endpoints, the
+// retract/event-log semantics (a retract is a plain delete of the row here), the tie-break
+// timestamps and the restricted-account vote block are all B-091. B-091 owns this model and may
+// extend or replace it; the reminder only reads it through a relation filter
+// (User.contestVotes none { roundId }).
+model ContestVote {
+  id        String       @id @default(uuid())
+  roundId   String
+  round     ContestRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  voterId   String
+  // Decision Log #341: RESTRICT is the deliberate safety net, a User row is never hard-deleted.
+  voter     User         @relation(fields: [voterId], references: [id])
+  entryId   String
+  entry     ContestEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+
+  @@unique([roundId, voterId])
+  @@index([entryId])
 }
 
 // The monthly crowned top-3 (Decision Log #61 state 3 / #69 medals) —

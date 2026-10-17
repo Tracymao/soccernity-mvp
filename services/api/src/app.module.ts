@@ -13,6 +13,7 @@ import { FeedModule } from './modules/feed/feed.module';
 import { ClubsModule } from './modules/clubs/clubs.module';
 import { AccountDeletionModule } from './modules/account-deletion/account-deletion.module';
 import { AgeReclassificationModule } from './modules/age-reclassification/age-reclassification.module';
+import { ContestNotificationsModule } from './modules/contest-notifications/contest-notifications.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { ContestModule } from './modules/contest/contest.module';
 import { GrassrootsModule } from './modules/grassroots/grassroots.module';
@@ -106,6 +107,10 @@ import { CryptoModule } from './crypto/crypto.module';
     // @Cron() job only. See modules/account-deletion/README.md.
     AccountDeletionModule,
     AgeReclassificationModule,
+    // backend/w3c-contest-notifications (B-122, Decision Log #404 item 16). No route: registers the
+    // @Cron(EVERY_5_MINUTES) fan-out of the Contest in-app notification events. See
+    // modules/contest-notifications/README.md.
+    ContestNotificationsModule,
     // sprint-2/admin-console-account-entity — Decision Log #54. Admin
     // Console account/auth/profile slice ONLY: POST /admin/auth/login,
     // /admin/auth/refresh, /admin/auth/logout, /admin/auth/change-password,
