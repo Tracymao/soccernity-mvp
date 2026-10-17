@@ -36,6 +36,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router";
 import { AuthApiError, deleteInactiveAccount, reactivateAccount } from "../api/auth";
 import { storeSession } from "../lib/session";
+import { routeForNextStep } from "../lib/onboarding";
 import "./account/accountActions.css";
 
 const REDIRECT_DELAY_MS = 2500; // see settings/DeactivateAccountPage.tsx
@@ -78,7 +79,8 @@ export default function InactiveAccountPage() {
       // Same minimal session handling LoginPage.tsx uses on its own
       // unchecked-"stay signed in" path (sessionStorage, not persistent).
       storeSession(result, false);
-      navigate("/");
+      // B-125: route on the server's onboarding state, like a login.
+      navigate(routeForNextStep(result.user.nextStep));
     } catch (err) {
       setError(
         err instanceof AuthApiError ? err.message : "Couldn't reactivate your account. Please try again.",

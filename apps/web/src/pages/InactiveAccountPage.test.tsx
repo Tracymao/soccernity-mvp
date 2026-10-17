@@ -38,6 +38,9 @@ const TOKENS: LoginResponse = {
     isMinor: false,
     role: "fan",
     verificationStatus: "verified",
+    profileComplete: true,
+    guardianConsentStatus: "not_applicable",
+    nextStep: "none",
     createdAt: "2026-01-01T00:00:00.000Z",
   },
 };
@@ -79,7 +82,7 @@ describe("InactiveAccountPage", () => {
     expect(screen.queryByLabelText(/password/i)).toBeNull();
   });
 
-  it("reactivates with the carried credentials, stores the tokens, and lands on /", async () => {
+  it("reactivates with the carried credentials, stores the tokens, and lands on /community (server nextStep: none)", async () => {
     vi.mocked(reactivateAccount).mockResolvedValueOnce(TOKENS);
     renderWithCreds();
 
@@ -88,7 +91,7 @@ describe("InactiveAccountPage", () => {
     await waitFor(() => expect(reactivateAccount).toHaveBeenCalledWith("sam@example.com", "hunter2"));
     expect(window.sessionStorage.getItem("sn_access_token")).toBe("new-access");
     expect(window.sessionStorage.getItem("sn_refresh_token")).toBe("new-refresh");
-    expect(navigateMock).toHaveBeenCalledWith("/");
+    expect(navigateMock).toHaveBeenCalledWith("/community");
   });
 
   it("shows an inline error and does not navigate when reactivation is rejected", async () => {
@@ -101,7 +104,7 @@ describe("InactiveAccountPage", () => {
 
     expect(await screen.findByRole("alert")).not.toBeNull();
     expect(window.sessionStorage.getItem("sn_access_token")).toBeNull();
-    expect(navigateMock).not.toHaveBeenCalledWith("/");
+    expect(navigateMock).not.toHaveBeenCalledWith("/community");
   });
 
   it("Delete account → 30-day-grace confirm step with a required password re-entry", async () => {

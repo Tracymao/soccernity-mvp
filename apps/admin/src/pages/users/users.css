@@ -144,6 +144,11 @@
   color: var(--sn-text-primary);
 }
 
+/* the frames write these labels in sentence case ("Support action"), unlike the lowercase status values */
+.us-pill--plain {
+  text-transform: none;
+}
+
 /* actions */
 
 .us-actions {
@@ -214,4 +219,252 @@
 .us-confirm span {
   font-size: 12px;
   color: var(--sn-text-primary);
+}
+
+/* User Detail + Correct date of birth (B-109 / B-104; Figma W0 pass C
+ * 6647:25540, 6649:24980-25952). Light mode, tokens only; blocking and
+ * destructive actions are navy, never red (non-negotiable #3). */
+
+.ud-titlerow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ud-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+}
+
+.ud-fields__row {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 16px;
+  font-size: 14px;
+}
+
+.ud-fields__row dt {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.ud-fields__row dd {
+  margin: 0;
+  color: var(--sn-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.ud-fields__mono {
+  font-variant-numeric: tabular-nums;
+}
+
+.ud-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ud-action--divided {
+  border-top: 1px solid var(--sn-icon-inactive);
+  padding-top: 16px;
+}
+
+.ud-action__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.ud-action__body {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.ud-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 320px;
+}
+
+.ud-field label {
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.ud-input {
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--sn-icon-inactive);
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.ud-input--readonly {
+  background-color: var(--sn-background-surface);
+}
+
+.ud-textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+#dob-reason,
+.ud-field:has(#dob-reason) {
+  max-width: none;
+}
+
+.ud-field__help {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.ud-field__error {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.ud-callout {
+  padding: 12px 14px;
+  border-left: 3px solid var(--sn-brand-navy);
+  border-radius: 6px;
+  background-color: var(--sn-green-tint-12);
+  font-size: 13px;
+  color: var(--sn-text-primary);
+}
+
+/* The "never put a date of birth in the reason" warning is the one callout
+ * that must not be skimmed past: heavier border, same two-colour palette. */
+.ud-callout--warning {
+  border: 1px solid var(--sn-brand-navy);
+  border-left-width: 6px;
+}
+
+.ud-guardian {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+
+.ud-guardian legend {
+  padding: 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.ud-buttons,
+.ud-dialog__buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.us-btn--lg {
+  padding: 10px 20px;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+a.us-btn {
+  text-decoration: none;
+}
+
+.ud-scrim {
+  position: fixed;
+  inset: 0;
+  background-color: var(--sn-overlay-scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 50;
+}
+
+.ud-dialog {
+  width: min(520px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  border-radius: 12px;
+  background-color: var(--sn-background-surface);
+  box-shadow: 0 4px 16px var(--sn-shadow-elevated);
+}
+
+.ud-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+}
+
+.ud-dialog__head h2 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--sn-text-primary);
+}
+
+.ud-dialog__close {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--sn-icon-inactive);
+  background: var(--sn-background-surface);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.ud-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 22px 22px;
+  font-size: 13px;
+  color: var(--sn-text-primary);
+}
+
+.ud-dialog__summary {
+  padding: 12px 14px;
+  border-radius: 6px;
+  background-color: var(--sn-green-tint-12);
+}
+
+.ud-dialog__summary p {
+  margin: 0 0 4px;
+}
+
+.ud-dialog__reason {
+  color: var(--sn-text-secondary);
+}
+
+.ud-dialog__subtitle {
+  margin: 0;
+  font-weight: 600;
+}
+
+.ud-dialog__list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ud-dialog__buttons {
+  justify-content: flex-end;
 }

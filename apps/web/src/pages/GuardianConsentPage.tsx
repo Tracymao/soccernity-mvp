@@ -27,6 +27,16 @@
 // participation in Banter Rooms beyond read-only"), only those three
 // restrictions are rendered below -- the open scope question is left
 // exactly as open as the Figma frame itself left it, not resolved here.
+// B-110 / B-125 (Decision Log #395, #402): `declined` is its own state here,
+// never rendered as pending. After decline 1 or 2 the minor keeps a valid
+// session and sees THIS page's decline view inside the account (Figma
+// 5491:8241 desktop / 5501:8453 mobile) with the existing resend and
+// change-guardian-email actions; no decline COUNT is ever shown (the status
+// response has none, #395 B2, #403 item 2). The third decline revokes the
+// session server-side, so that case never reaches this page. The Figma frame
+// names the guardian and the decision date; GET /auth/guardian-consent/status
+// returns neither, so the heading and sentence are the generic equivalents
+// (flagged in docs/fc2-gates-routing-report.md).
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import {
@@ -58,16 +68,62 @@ const RESTRICTIONS = [
 
 const NOW_UNLOCKED = [
   {
-    title: "Your profile is visible",
+    title: "Your profile will be visible",
     body: "Other Soccernity members can find and view your profile.",
   },
   {
-    title: "Direct messages are on",
+    title: "Direct messages will be on",
     body: "People you follow can message you.",
   },
   {
-    title: "You can post in Banter Rooms & Community Groups",
+    title: "You will be able to post in Banter Rooms & Community Groups",
     body: "Join the conversation in both, not just read it.",
+  },
+];
+
+const STAYS_ON = [
+  {
+    title: "You’re hidden from search engines",
+    body: "Your profile won’t appear on Google or to logged-out visitors.",
+  },
+  {
+    title: "Only people you follow can message you",
+    body: "Strangers still can’t start a chat.",
+  },
+  {
+    title: "No ad targeting",
+    body: "Under-18 accounts are excluded from targeted advertising.",
+  },
+];
+
+// Decline view (Figma 5491:8241 / 5501:8453).
+const DECLINED_OFF = [
+  {
+    title: "Your profile is hidden",
+    body: "Other people can’t find or view your profile yet.",
+  },
+  {
+    title: "Direct messages are off",
+    body: "No one can message you until a guardian approves your account.",
+  },
+  {
+    title: "Posting is limited",
+    body: "You can read Banter Rooms and Community Groups, but not post in them.",
+  },
+];
+
+const DECLINED_CAN_DO = [
+  {
+    title: "Send a new approval request",
+    body: "We’ll email a fresh link to your guardian. The previous link stops working.",
+  },
+  {
+    title: "Change your guardian’s email",
+    body: "If the address is wrong, update it and a new request goes to the new email.",
+  },
+  {
+    title: "Keep exploring while you wait",
+    body: "You can still browse, follow teams and check scores.",
   },
 ];
 
@@ -107,6 +163,9 @@ export default function GuardianConsentPage() {
     try {
       await resendGuardianConsentRequest(status.guardianEmail);
       setResendState("sent");
+      // A resend after decline 1 or 2 reopens the request as pending on the
+      // server; re-read the status so the page moves out of the decline view.
+      if (status.consentStatus === "declined") await loadStatus();
     } catch {
       setResendState("error");
     }
@@ -183,18 +242,22 @@ export default function GuardianConsentPage() {
     return (
       <div className="consent-page" style={darkConsentThemeVars} data-testid="guardian-consent-confirmed">
         <div className="consent-page__column">
-          <h1 className="consent-page__heading">You&rsquo;re all set</h1>
+          <div className="consent-icon-circle consent-icon-circle--approved" aria-hidden="true">
+            ✓
+          </div>
+          <h1 className="consent-page__heading">Your account is approved</h1>
           <p className="consent-page__subheading">
             {status.consentTimestamp
               ? `Your guardian approved your account on ${new Date(status.consentTimestamp).toLocaleDateString(
                   "en-GB",
                   { day: "numeric", month: "long", year: "numeric" },
-                )}. Everything that was switched off is now on.`
-              : "Your guardian has approved your account. Everything that was switched off is now on."}
+                )}. `
+              : "Your guardian has approved your account. "}
+            Continue registration to finish setting up your profile. [COPY PENDING LEGAL REVIEW]
           </p>
 
           <div className="consent-card">
-            <p className="consent-card__title">Now switched on</p>
+            <p className="consent-card__title">Switched on when you finish registration</p>
             <div className="consent-list">
               {NOW_UNLOCKED.map((row) => (
                 <div className="consent-row" key={row.title}>
@@ -205,7 +268,7 @@ export default function GuardianConsentPage() {
                     <span className="consent-row__title">{row.title}</span>
                     <span className="consent-row__body">{row.body}</span>
                   </div>
-                  <span className="consent-pill--status consent-pill--status-on">ON</span>
+                  <span className="consent-pill--status consent-pill--status-on">SOON</span>
                 </div>
               ))}
             </div>
@@ -213,26 +276,127 @@ export default function GuardianConsentPage() {
 
           <div className="consent-card consent-card--tint">
             <p className="consent-card__title">Some protections stay on because you&rsquo;re under 18</p>
-            <p className="consent-row__body">
-              You&rsquo;re hidden from search engines, only people you follow can message you, and there&rsquo;s no
-              ad targeting for under-18 accounts.
-            </p>
+            <div className="consent-list consent-list--plain">
+              {STAYS_ON.map((row) => (
+                <div className="consent-row" key={row.title}>
+                  <span className="consent-row__icon consent-row__icon--on" aria-hidden="true">
+                    ✓
+                  </span>
+                  <div className="consent-row__text">
+                    <span className="consent-row__title">{row.title}</span>
+                    <span className="consent-row__body">{row.body}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="consent-footnote">Your guardian can review or withdraw consent at any time.</p>
           </div>
 
           <div className="consent-actions">
+            {/* B-125: "Continue registration" resolves the next onboarding
+                step from the server (Create Profile), never a hard-coded
+                destination. */}
             <Link
-              to="/profile"
+              to="/continue"
               className="consent-button consent-button--primary"
               style={{ textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center" }}
             >
-              Go to my profile
+              Continue registration
             </Link>
-            {/* No /privacy-settings route or backend page exists anywhere in
-                this app yet -- flagged, not silently linked to nothing. */}
+            {/* The privacy settings page exists now, but is not part of this
+                routing change -- left as the disabled placeholder it was. */}
             <button type="button" className="consent-button consent-button--secondary" disabled title="Coming soon">
               Review privacy settings
             </button>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (status.consentStatus === "declined") {
+    return (
+      <div className="consent-page" style={darkConsentThemeVars} data-testid="guardian-consent-declined">
+        <div className="consent-page__column">
+          <div className="consent-icon-circle" aria-hidden="true">
+            ✓
+          </div>
+          <div>
+            <h1 className="consent-page__heading">Your guardian hasn&rsquo;t approved your account</h1>
+            <p className="consent-page__subheading">
+              They chose not to approve your account. You can send a new request, or use a different guardian
+              email.
+            </p>
+          </div>
+
+          <div className="consent-card">
+            <p className="consent-card__title">Still switched off</p>
+            <div className="consent-list">
+              {DECLINED_OFF.map((row) => (
+                <div className="consent-row" key={row.title}>
+                  <span className="consent-row__icon consent-row__icon--off" aria-hidden="true">
+                    ✓
+                  </span>
+                  <div className="consent-row__text">
+                    <span className="consent-row__title">{row.title}</span>
+                    <span className="consent-row__body">{row.body}</span>
+                  </div>
+                  <span className="consent-pill--status">OFF</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="consent-card consent-card--tint">
+            <p className="consent-card__title">What you can do now</p>
+            <div className="consent-list consent-list--plain">
+              {DECLINED_CAN_DO.map((row) => (
+                <div className="consent-row" key={row.title}>
+                  <span className="consent-row__icon consent-row__icon--on" aria-hidden="true">
+                    ✓
+                  </span>
+                  <div className="consent-row__text">
+                    <span className="consent-row__title">{row.title}</span>
+                    <span className="consent-row__body">{row.body}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="consent-footnote">
+              Not sure why they declined? Ask your parent or guardian directly &mdash; Soccernity can&rsquo;t share
+              the reason.
+            </p>
+            {/* Static sentence from the frame (Decision Log #403 item 2): it
+                states the cap but never a running count. */}
+            <p className="consent-footnote" data-testid="decline-cap-sentence">
+              A guardian can decline up to 3 times. Changing your guardian&rsquo;s email does not reset the count.
+              After the third decline your account is scheduled for deletion. [COPY PENDING LEGAL REVIEW]
+            </p>
+          </div>
+
+          <div className="consent-actions">
+            <button
+              type="button"
+              className="consent-button consent-button--primary"
+              onClick={handleResend}
+              disabled={!status.canResend || resendState === "sending"}
+            >
+              {resendState === "sending" ? "Sending…" : "Resend approval request"}
+            </button>
+            <Link
+              to="/guardian-consent/change-email"
+              className="consent-button consent-button--secondary"
+              style={{ textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center" }}
+            >
+              Change guardian email
+            </Link>
+          </div>
+
+          {resendState === "error" && (
+            <p className="consent-status-message consent-status-message--error" role="alert">
+              Couldn&rsquo;t send that just now. Please try again shortly.
+            </p>
+          )}
         </div>
       </div>
     );

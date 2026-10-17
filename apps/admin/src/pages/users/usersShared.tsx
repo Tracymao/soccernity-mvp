@@ -53,3 +53,19 @@ export function useAsyncData<T>(fetcher: () => Promise<T>, deps: unknown[] = [])
 
   return { data, loading, error, reload };
 }
+
+// B-103: the correction reason is stored verbatim in the audit log, which never
+// holds a date of birth, and the server does not enforce that -- so the form
+// refuses anything shaped like a full date (see CorrectDobPage.tsx).
+const MONTHS = "jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december";
+const DATE_SHAPES: RegExp[] = [
+  /\b\d{4}-\d{1,2}-\d{1,2}\b/, // 2005-09-04
+  /\b\d{1,2}\s*[/.-]\s*\d{1,2}\s*[/.-]\s*\d{2,4}\b/, // 04/09/2005, 4 - 9 - 05
+  new RegExp(`\\b\\d{1,2}(st|nd|rd|th)?\\s+(${MONTHS})\\.?,?\\s+\\d{2,4}\\b`, "i"), // 4 Sep 2005
+  new RegExp(`\\b(${MONTHS})\\.?\\s+\\d{1,2}(st|nd|rd|th)?,?\\s+\\d{2,4}\\b`, "i"), // Sep 4, 2005
+];
+
+/** True when the reason contains something shaped like a full date. */
+export function reasonHasDate(reason: string): boolean {
+  return DATE_SHAPES.some((shape) => shape.test(reason));
+}

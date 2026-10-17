@@ -139,7 +139,7 @@ describe("GuardianConsentPage", () => {
     expect(screen.queryByText(/once every 24 hours/i)).toBeNull();
   });
 
-  it("renders the activation confirmation state (screen 6) when consentStatus is confirmed", async () => {
+  it("renders the approved state when consentStatus is confirmed, and Continue registration goes to /continue", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({
       consentStatus: "confirmed",
@@ -150,9 +150,83 @@ describe("GuardianConsentPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText(/you.re all set/i)).not.toBeNull();
-    expect(screen.getByText("Your profile is visible")).not.toBeNull();
-    expect(screen.getByRole("link", { name: /go to my profile/i })).not.toBeNull();
+    expect(await screen.findByText("Your account is approved")).not.toBeNull();
+    expect(screen.getByText("Your profile will be visible")).not.toBeNull();
+    // B-125: the CTA resolves the next onboarding step from the server.
+    const cta = screen.getByRole("link", { name: /continue registration/i }) as HTMLAnchorElement;
+    expect(cta.getAttribute("href")).toBe("/continue");
+    expect(screen.queryByRole("link", { name: /go to my profile/i })).toBeNull();
+  });
+
+  // B-110 / B-125 (Decision Log #395, #402): `declined` is its own state and is
+  // never rendered as pending. After decline 1 or 2 the session stays valid and
+  // this is the page the minor sees.
+  describe("declined (after guardian decline 1 or 2)", () => {
+    function seedDeclined(canResend = true) {
+      window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+      vi.mocked(getGuardianConsentStatus).mockResolvedValue({
+        consentStatus: "declined",
+        guardianEmail: "guardian@example.com",
+        canResend,
+        consentTimestamp: null,
+      });
+    }
+
+    it("renders the decline view, not the pending view", async () => {
+      seedDeclined();
+      renderPage();
+
+      expect(await screen.findByText(/your guardian hasn.t approved your account/i)).not.toBeNull();
+      expect(screen.getByTestId("guardian-consent-declined")).not.toBeNull();
+      expect(screen.queryByTestId("guardian-consent-pending")).toBeNull();
+      expect(screen.queryByText(/waiting for approval/i)).toBeNull();
+      expect(screen.getByText("Posting is limited")).not.toBeNull();
+    });
+
+    it("shows the static cap sentence but never a running decline count", async () => {
+      seedDeclined();
+      renderPage();
+
+      const sentence = await screen.findByTestId("decline-cap-sentence");
+      expect(sentence.textContent).toMatch(/a guardian can decline up to 3 times/i);
+      // No "1 of 3" / "2 of 3" / "declined N times" counter anywhere on the page.
+      const text = document.body.textContent ?? "";
+      expect(text).not.toMatch(/\b[123] of 3\b/);
+      expect(text).not.toMatch(/declined \d+ time/i);
+      expect(text).not.toMatch(/\d+ (declines|attempts) (left|remaining)/i);
+    });
+
+    it("offers resend and change-guardian-email", async () => {
+      seedDeclined();
+      renderPage();
+
+      const link = (await screen.findByRole("link", { name: /change guardian email/i })) as HTMLAnchorElement;
+      expect(link.getAttribute("href")).toBe("/guardian-consent/change-email");
+      const resend = screen.getByRole("button", { name: /resend approval request/i }) as HTMLButtonElement;
+      expect(resend.disabled).toBe(false);
+    });
+
+    it("resending posts the account's own guardian email, then re-reads the status", async () => {
+      seedDeclined();
+      vi.mocked(resendGuardianConsentRequest).mockResolvedValueOnce({ message: "sent" });
+      renderPage();
+
+      fireEvent.click(await screen.findByRole("button", { name: /resend approval request/i }));
+
+      await waitFor(() => expect(resendGuardianConsentRequest).toHaveBeenCalledWith("guardian@example.com"));
+      // Initial load + the re-read after a successful resend.
+      await waitFor(() => expect(getGuardianConsentStatus).toHaveBeenCalledTimes(2));
+    });
+
+    it("disables resend when the server says the request cannot be reopened", async () => {
+      seedDeclined(false);
+      renderPage();
+
+      const resend = (await screen.findByRole("button", {
+        name: /resend approval request/i,
+      })) as HTMLButtonElement;
+      expect(resend.disabled).toBe(true);
+    });
   });
 
   it("shows a not-a-minor message on a 404 from the status endpoint", async () => {

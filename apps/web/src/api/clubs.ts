@@ -64,11 +64,19 @@ export interface ClubMemberPage {
 
 export class ClubsApiError extends Error {
   readonly status?: number;
+  /**
+   * Machine-readable discriminator from a guard's 403 body, when present --
+   * "email_verification_required" (EmailVerifiedGuard, B-118) or
+   * "guardian_consent_pending" (GuardianConsentGuard). Callers branch on this
+   * instead of parsing the message.
+   */
+  readonly code?: string;
 
-  constructor(message: string, options?: { status?: number }) {
+  constructor(message: string, options?: { status?: number; code?: string }) {
     super(message);
     this.name = "ClubsApiError";
     this.status = options?.status;
+    this.code = options?.code;
   }
 }
 
@@ -195,7 +203,15 @@ export async function joinClub(accessToken: string, clubId: string): Promise<Joi
   }
 
   if (!response.ok) {
-    throw new ClubsApiError(`Couldn't join that club (${response.status}).`, { status: response.status });
+    // B-118: a 403 from EmailVerifiedGuard / GuardianConsentGuard carries a
+    // stable `code`; surface it so the Club Picker can send the person to
+    // verify their email instead of showing a generic failure.
+    let code: string | undefined;
+    if (response.status === 403) {
+      const body = (await response.json().catch(() => null)) as { code?: unknown } | null;
+      if (typeof body?.code === "string") code = body.code;
+    }
+    throw new ClubsApiError(`Couldn't join that club (${response.status}).`, { status: response.status, code });
   }
 
   return (await response.json()) as JoinClubResult;

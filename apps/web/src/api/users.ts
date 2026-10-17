@@ -7,6 +7,8 @@
 //
 // Shape mirrors services/api/src/modules/users/users.service.ts's
 // OWN_PROFILE_SELECT / OwnProfile exactly.
+import type { GuardianConsentState, OnboardingNextStep } from "./auth";
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
 
 export interface UserProfile {
@@ -36,6 +38,11 @@ export interface UserProfile {
   // only via setRepresentedClub below. `name` is included so the selector and
   // Leaderboard can show it without a second request.
   representedClub: { id: string; name: string } | null;
+  // B-030 -- the server-computed onboarding state, the same three fields the
+  // login/register response carries. Read fresh from Postgres on every call.
+  profileComplete: boolean;
+  guardianConsentStatus: GuardianConsentState;
+  nextStep: OnboardingNextStep;
 }
 
 export interface RepresentedClubResult {

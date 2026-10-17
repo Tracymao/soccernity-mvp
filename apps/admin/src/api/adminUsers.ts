@@ -69,3 +69,77 @@ export function listUsers(
 export function updateUserStatus(id: string, status: AdminUserAction): Promise<UpdateUserStatusResult> {
   return adminFetch<UpdateUserStatusResult>(`/admin/users/${id}`, { method: "PATCH", body: { status } });
 }
+
+// --- B-109 / B-103: single-user read and audited date-of-birth correction ---
+//
+// Mirrors services/api's admin-user-detail.service.ts (`AdminUserDetail`) and
+// admin-user-dob-correction.service.ts (`DobCorrectionResult`).
+//
+// AUDIT SIDE EFFECT YOU MUST KNOW ABOUT: GET /admin/users/:id decrypts the
+// date of birth server-side and writes a `user.dob_viewed` audit row for EVERY
+// response that contains one, with no way to ask for the record without it.
+// So every call to getUserDetail() below is an audited DOB read, whether or not
+// the screen shows the date. Call it only when a screen needs the record.
+export type AdminAgeTier = "under_13" | "under_16" | "under_18" | "adult";
+
+export interface AdminUserDetail {
+  id: string;
+  email: string;
+  displayName: string;
+  username: string | null;
+  role: string;
+  accountStatus: string;
+  verificationStatus: string;
+  isMinor: boolean;
+  isUnder16: boolean;
+  /** 'YYYY-MM-DD'; null only for an anonymised account. */
+  dateOfBirth: string | null;
+  ageTier: AdminAgeTier | null;
+  createdAt: string;
+  pendingDeletionAt: string | null;
+  guardian: {
+    name: string;
+    email: string;
+    relationship: string;
+    consentStatus: string;
+    incorrectDetailsReportedAt: string | null;
+  } | null;
+}
+
+export function getUserDetail(id: string): Promise<AdminUserDetail> {
+  return adminFetch<AdminUserDetail>(`/admin/users/${id}`);
+}
+
+export const GUARDIAN_RELATIONSHIPS = ["Parent", "Legal Guardian", "Grandparent", "Other"] as const;
+export type GuardianRelationship = (typeof GUARDIAN_RELATIONSHIPS)[number];
+
+export interface CorrectDobRequest {
+  /** 'YYYY-MM-DD'. */
+  dateOfBirth: string;
+  /** 10-500 characters, stored verbatim in the audit log -- must not contain a date of birth. */
+  reason: string;
+  /** Only when an adult account is corrected to a minor and no guardian is on file. */
+  guardian?: { name: string; email: string; relationship: GuardianRelationship };
+}
+
+export type DobCorrectionGuardianOutcome =
+  | "unchanged"
+  | "cancelled"
+  | "restarted"
+  | "created"
+  | "kept_confirmed"
+  | "skipped_pending_deletion";
+
+export interface DobCorrectionResult {
+  userId: string;
+  ageTierBefore: AdminAgeTier;
+  ageTierAfter: AdminAgeTier;
+  guardianRequest: DobCorrectionGuardianOutcome;
+  declineCounterReset: boolean;
+  incorrectDetailsFlagCleared: boolean;
+}
+
+// The response deliberately echoes neither date.
+export function correctDateOfBirth(id: string, payload: CorrectDobRequest): Promise<DobCorrectionResult> {
+  return adminFetch<DobCorrectionResult>(`/admin/users/${id}/dob-correction`, { method: "POST", body: payload });
+}

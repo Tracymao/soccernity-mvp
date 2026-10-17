@@ -2,7 +2,7 @@
 // pattern -- plain DOM assertions only, no @testing-library/jest-dom.
 // Mocks src/api/auth.ts rather than hitting a real network call.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import GuardianConsentConfirmPage from "./GuardianConsentConfirmPage";
 import { AuthApiError } from "../api/auth";
@@ -13,16 +13,39 @@ vi.mock("../api/auth", async () => {
     ...actual,
     confirmGuardianConsent: vi.fn(),
     declineGuardianConsent: vi.fn(),
+    getGuardianRequestSummary: vi.fn(),
+    reportIncorrectGuardianDetails: vi.fn(),
   };
 });
 
-import { confirmGuardianConsent, declineGuardianConsent } from "../api/auth";
+import {
+  confirmGuardianConsent,
+  declineGuardianConsent,
+  getGuardianRequestSummary,
+  reportIncorrectGuardianDetails,
+} from "../api/auth";
+import type { GuardianRequestSummary } from "../api/auth";
 
 afterEach(cleanup);
 beforeEach(() => {
   vi.mocked(confirmGuardianConsent).mockReset();
   vi.mocked(declineGuardianConsent).mockReset();
+  vi.mocked(getGuardianRequestSummary).mockReset();
+  vi.mocked(reportIncorrectGuardianDetails).mockReset();
+  // Most tests do not care about the summary: a rejected lookup is the
+  // page's documented "carry on as before" path (an invalid token).
+  vi.mocked(getGuardianRequestSummary).mockRejectedValue(new Error("no summary"));
 });
+
+const SUMMARY: GuardianRequestSummary = {
+  minorName: "Ade Bello",
+  dateOfBirth: "2011-09-04",
+  guardianName: "Sarah Bello",
+  guardianRelationship: "Parent",
+  requestedAt: "2026-08-15T10:00:00.000Z",
+  incorrectDetailsReported: false,
+  notices: { guardianEmailShownOnMinorProfile: true, photoAndUsernameVisibleToOthers: true },
+};
 
 function renderConfirmPage(searchParams = "?token=real-token-123") {
   render(
@@ -149,5 +172,85 @@ describe("GuardianConsentConfirmPage", () => {
   it("never calls decline when ?token= is absent", () => {
     renderConfirmPage("");
     expect(declineGuardianConsent).not.toHaveBeenCalled();
+  });
+
+  // B-021 / B-029 (Decision Log #372): the request summary, the "Report
+  // incorrect details" action and the approval-on-hold state.
+  describe("request summary, report incorrect details and approval on hold", () => {
+    it("loads the summary with the URL token and shows what the guardian is being asked to approve", async () => {
+      vi.mocked(getGuardianRequestSummary).mockResolvedValue(SUMMARY);
+      renderConfirmPage();
+
+      const panel = await screen.findByTestId("request-summary");
+      expect(getGuardianRequestSummary).toHaveBeenCalledWith("real-token-123");
+      expect(panel.textContent).toContain("Ade Bello");
+      expect(panel.textContent).toContain("4 September 2011");
+      expect(panel.textContent).toContain("Parent");
+      expect(panel.textContent).toContain("15 August 2026");
+      expect(screen.queryByTestId("approval-on-hold")).toBeNull();
+    });
+
+    it("posts only the token when the guardian reports incorrect details, then shows approval on hold", async () => {
+      vi.mocked(getGuardianRequestSummary).mockResolvedValue(SUMMARY);
+      vi.mocked(reportIncorrectGuardianDetails).mockResolvedValue({ message: "ok" });
+      renderConfirmPage();
+
+      fireEvent.click(await screen.findByRole("button", { name: /report incorrect details/i }));
+
+      await waitFor(() => expect(reportIncorrectGuardianDetails).toHaveBeenCalledWith("real-token-123"));
+      expect(await screen.findByTestId("approval-on-hold")).not.toBeNull();
+      // The action is used up, not offered twice.
+      expect(screen.queryByRole("button", { name: /report incorrect details/i })).toBeNull();
+    });
+
+    it("shows approval on hold from the first paint when a report is already open, and blocks approving", async () => {
+      vi.mocked(getGuardianRequestSummary).mockResolvedValue({ ...SUMMARY, incorrectDetailsReported: true });
+      renderConfirmPage();
+
+      expect(await screen.findByTestId("approval-on-hold")).not.toBeNull();
+      expect(screen.queryByRole("button", { name: /report incorrect details/i })).toBeNull();
+
+      fireEvent.click(screen.getByRole("checkbox"));
+      const consent = screen.getByRole("button", { name: "I consent" }) as HTMLButtonElement;
+      expect(consent.disabled).toBe(true);
+      fireEvent.click(consent);
+      expect(confirmGuardianConsent).not.toHaveBeenCalled();
+    });
+
+    it("keeps DECLINE available while approval is on hold", async () => {
+      vi.mocked(getGuardianRequestSummary).mockResolvedValue({ ...SUMMARY, incorrectDetailsReported: true });
+      vi.mocked(declineGuardianConsent).mockResolvedValue({ message: "declined" });
+      renderConfirmPage();
+
+      await screen.findByTestId("approval-on-hold");
+      const decline = screen.getByRole("button", { name: "I do not consent" }) as HTMLButtonElement;
+      expect(decline.disabled).toBe(false);
+      fireEvent.click(decline);
+      await waitFor(() => expect(declineGuardianConsent).toHaveBeenCalledWith("real-token-123"));
+    });
+
+    it("shows an error and no hold when the report call fails", async () => {
+      vi.mocked(getGuardianRequestSummary).mockResolvedValue(SUMMARY);
+      vi.mocked(reportIncorrectGuardianDetails).mockRejectedValue(new AuthApiError("nope", { status: 429 }));
+      renderConfirmPage();
+
+      fireEvent.click(await screen.findByRole("button", { name: /report incorrect details/i }));
+
+      expect((await screen.findByRole("alert")).textContent).toMatch(/couldn.t send that just now/i);
+      expect(screen.queryByTestId("approval-on-hold")).toBeNull();
+    });
+
+    it("carries on as before when the summary lookup fails (invalid token): no panel, no hold", async () => {
+      renderConfirmPage();
+      await waitFor(() => expect(getGuardianRequestSummary).toHaveBeenCalled());
+      expect(screen.queryByTestId("request-summary")).toBeNull();
+      expect(screen.queryByTestId("approval-on-hold")).toBeNull();
+      expect(screen.getByRole("button", { name: "I do not consent" })).not.toBeNull();
+    });
+
+    it("does not look up a summary when ?token= is absent", () => {
+      renderConfirmPage("");
+      expect(getGuardianRequestSummary).not.toHaveBeenCalled();
+    });
   });
 });
