@@ -1,6 +1,6 @@
 # Contest and leaderboard points specification
 
-Version: 2026-10-14, updated 2026-10-15 (Decision Log #393) and 2026-10-16 (Decision Log #394-#401, and #402 for the week-4 scope of the exposure settings). Docs only: no code, schema or Figma is changed by this file. Everything below is DECIDED, NOT BUILT, unless a section says otherwise. Follow-up 2026-10-16 (Decision Log #403): non-finalist tab visible, forfeit pop-up, final task text, Final-week carousel, Voting page design.
+Version: 2026-10-14, updated 2026-10-15 (Decision Log #393) and 2026-10-16 (Decision Log #394-#401, and #402 for the week-4 scope of the exposure settings). Docs only: no code, schema or Figma is changed by this file. Everything below is DECIDED, NOT BUILT, unless a section says otherwise. Follow-up 2026-10-16 (Decision Log #403): non-finalist tab visible, forfeit pop-up, final task text, Final-week carousel, Voting page design. Follow-up 2026-10-17 (Decision Log #404): pop-up reading, vote-toggle count, carousel impressions, final-week journey, pinned-entry lifecycle, day-1 Contest tab, Contest notifications (Section 14e).
 
 ## 1. Status and sources
 
@@ -30,6 +30,7 @@ Decision Log numbers used here (all in `docs/Soccernity_MVP_Build_Plan_v1.7.docx
 | Vote control is one toggle | #401 |
 | Tolerance and per-viewer cap are week 4 only (founder-adopted default, veto-able) | #402 |
 | Follow-up 2026-10-16: non-finalist tab stays visible, forfeit pop-up scope, final task text states, Final-week carousel, Voting page adopts Already Voted design | #403 |
+| Follow-up 2026-10-17: forfeit pop-up reading, vote-toggle count, carousel impressions, final-week journey, pin lifecycle, day-1 Contest tab, Contest notifications | #404 |
 | Sign-up, decline, block, 2FA, admin moderation (not contest; see Section 14c) | #394-#398 |
 
 ## 2. Boundary: Contest vs Competition
@@ -389,6 +390,31 @@ DECIDED, NOT BUILT. Contest items are applied in sections 7, 8, 10, 10b, 11 and 
 | 11 | Community-feed 'Final week' module stays as a carousel, final week only; amends #400 E10 | #403 | Section 10b |
 | 2-6, 8, 12-19 | Decline-page cap sentence, Approved screens, admin components and shell search bar, Create Post deletion exception, lift hold, mobile Block, accepted Create Post changes, Montserrat Field, defaults, Bants open forum, two country fields, deferred production wiring, new register rows | #403 | Not contest |
 
+### 14e. Founder decisions 2026-10-17 (Decision Log #404)
+
+Everything below is DECIDED, NOT BUILT. Items 4, 5, 6, 9 and 13 are founder-adopted defaults (veto-able); items 15 and 16 are founder decisions. Earlier text in this file is not rewritten; where it differs, this section prevails.
+
+- **Forfeit pop-up (item 4; refines #403 item 9).** 'Contest page' means the Contest details page and the Voting page. When several weeks are forfeited, one pop-up opens after another, oldest week first. Unchanged: every load, reason shown, nothing remembered, no pop-up on the leaderboard tab.
+- **Vote toggle (item 5; #401).** The vote count updates live by one, in either direction, when the toggle flips. No banner on toggle.
+- **Carousel impressions (item 6; closes the open point of #403 item 11).** Final-week carousel views count as impressions when a tile is actually visible, and tile order follows the balanced rotation of section 10b. OPEN: the numeric definition of 'actually visible' (share of the tile in view, time in view). The per-viewer daily cap and tolerance of section 10b are unchanged.
+- **Pinned final entry and the journey (items 9 and 15).** Others see nothing before the reveal. After the reveal the entry is pinned on the finalist's profile until the contest ends at the end of that month, then the pin is removed; the label stays 'Contest post'. Finalist names on the leaderboard Contest tab open the finalist's profile; carousel tiles open the entry itself. The entry does not also appear as a normal Community-feed post; the carousel is the daily exposure. Item 15 prevails where its wording differs from item 9. OPEN: whether the entry reaches the Community feed after the pin is removed (item 9 says it becomes an ordinary post; item 15 says only that the pin is removed).
+- **Contest tab on day 1 (item 13; closes the open E6 point of #403).** From 00:00 to 08:00 on day 1 the Contest tab shows the Between Weeks state, variant 'Week 1 opens at 08:00'. This window is 8 hours; the Between Weeks state of #400 stays at 12 hours for days 7/8, 14/15 and 21/22.
+- **Contest notifications (item 16; the spec had none).** In-app only, Europe/London, to every non-restricted account that is eligible for the Contest under sections 6 and 8 (minors included; restricted accounts excluded). One notification per account per event; a re-run never duplicates. Push and email are not decided and stay deferred to launch gate B-090. Wording is functional and tagged [COPY PENDING LEGAL REVIEW] where it reaches minors.
+
+| Event | When | Who | Status |
+|---|---|---|---|
+| a. Week opens | 08:00 on days 1, 8, 15, 22 | Every eligible account | Decided |
+| b. Votes-closing reminder | 19:00 on days 7, 14, 21 | Eligible accounts that have not voted that week | Decided |
+| c. Week result | At the 20:00 lock on days 7, 14, 21 | Winners announced to everyone; a personal notification to each winner | Decided. A forfeited week sends none (g). |
+| d. Final qualification | When the finalists are known: ASSUMED at the week-3 result (20:00 on day 21) | Each finalist: the entry stays hidden until the reveal | Decided; timing ASSUMED |
+| e. Reveal | 00:00 on day 25 | Everyone: 'The final is live' | Decided |
+| f. Final result | ASSUMED at the end of the contest month (the spec states no crown moment) | Everyone: the winners, or 'No winner this month' | Decided; timing ASSUMED |
+| g. Forfeit | No extra notification | None (the pop-up covers it) | Decided |
+| h. Finalist upload reminder | 12:00 on day 24 | Finalists who have not uploaded | Default added by Claude, veto-able |
+
+  OPEN or BACKEND TO CONFIRM: whether an account with an unverified email receives them (not stated); a uniqueness key per (account, event, cycle, week) is needed for 'never duplicates', possibly a schema addition; `Notification.type` is a free string, but `NotificationsService` and the Notification Centre must learn each new type (an unrendered type shows the generic row). Register rows: B-121 (Figma), B-122 (backend), B-123 (frontend).
+- **Not contest decisions of #404** (see `docs/build-register.md` Section 14): Account Information Country, profile design direction, admin components, 2FA recovery details, blocked users list, Bants thread model, Block and the age rules, the W3 judgment calls, the standing Figma check.
+
 ## 15. Where each decision lives
 
 | Decision | Decision Log | This file | Build register |
@@ -417,6 +443,8 @@ DECIDED, NOT BUILT. Contest items are applied in sections 7, 8, 10, 10b, 11 and 
 | Calendar: 20:00 lock, 08:00 open, Between Weeks kept | #400 | 5, 8, 11 | B-091, B-096, B-099 |
 | Hidden non-finalist tab; minimum tally admin-only; final entries pinned on profile; forfeit pop-up | #400 | 7, 10, 10b, 11 | B-092, B-096, B-107 |
 | Vote toggle button | #401 | 8 | B-091, B-098, B-107 |
+| Forfeit pop-up reading, vote-toggle count, carousel impressions, final-week journey, pin lifecycle, day-1 Contest tab | #404 | 7, 8, 10, 10b, 11, 14e | B-091, B-092, B-096, B-098, B-099, B-082 |
+| Contest notifications (a-h) | #404 | 14e | B-121, B-122, B-123, B-090 |
 | Non-finalist tab visible; forfeit pop-up on the Contest page only; final task text on two states; Final-week carousel; Voting page adopts Already Voted design | #403 | 7, 8, 10, 10b, 11, 12 | B-091, B-092, B-096, B-098, B-099, B-113 |
 
 ## 16. Change history
@@ -460,3 +488,9 @@ Changes versus chat 9 (Aug 2026) and chat 11 (Sept 2026):
 - Decision Log #403 (founder decisions 2026-10-16): the Contest tab is NOT hidden for a non-finalist - it stays visible and shows the restored 'Closed (not a finalist)' frames in days 22-24 (amends #400 E8, section 10); the forfeit pop-up is shown on the Contest page only, on every load, one per forfeited week, reason shown, not remembered, and the leaderboard tab shows the forfeited writing in place of the three names (amends #400 E11, sections 7 and 11); the final task text shows on the live-ranking and uploading states only (changes #399 E3, sections 10 and 11); the Community-feed 'Final week' module stays as a carousel, final week only, dead link removed (amends #400 E10, section 10b); the Voting page adopts the Already Voted design and the Already Voted screens are archived afterwards (closes the #401 open point, sections 8 and 12).
 - Not changed: calendar, placement points, baseline points, view qualification, the week-4 upload deadline (23:59:59 on day 24), the vote lock (20:00:00).
 - Decision Log #403 also records non-contest decisions (decline-page cap sentence, Approved screens, admin components, lift hold, Bants, country, defaults); see section 14d and `docs/build-register.md` Section 12.
+
+### 2026-10-17
+
+- Decision Log #404 (founder decisions 2026-10-17): the forfeit pop-up reading of 'Contest page' (Contest details and Voting) and several forfeited weeks in order (refines #403 item 9, section 7); the vote count updates live by one with no banner (section 8); carousel views count as impressions when a tile is actually visible, in balanced-rotation order (closes the #403 item 11 open point, section 10b); finalist names open the profile, carousel tiles open the entry, no normal feed post, pin lasts to month end (extends #400 E10 and #403 item 11, section 10); the Contest tab on day 1 from 00:00 to 08:00 shows Between Weeks 'Week 1 opens at 08:00' (closes the #403 E6 point, section 11); Contest notifications a-h (new, section 14e).
+- Not changed: calendar, placement points, baseline points, view qualification, the week-4 upload deadline (23:59:59 on day 24), the vote lock (20:00:00).
+- Decision Log #404 also records non-contest decisions; see section 14e and `docs/build-register.md` Section 14.
