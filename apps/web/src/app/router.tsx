@@ -66,6 +66,10 @@ import GuardianConsentPage from "../pages/GuardianConsentPage";
 import ChangeGuardianEmailPage from "../pages/guardian-consent/ChangeGuardianEmailPage";
 import GuardianConsentConfirmPage from "../pages/GuardianConsentConfirmPage";
 import VerifyEmailPage from "../pages/VerifyEmailPage";
+import VerifyEmailPromptPage from "../pages/VerifyEmailPromptPage";
+import CreateProfilePage from "../pages/CreateProfilePage";
+import ContinuePage from "../pages/ContinuePage";
+import ClubPickerRoute from "../pages/signup/ClubPickerRoute";
 import ProfilePage from "../pages/ProfilePage";
 import NotificationCentrePage from "../pages/NotificationCentrePage";
 import PrivacySettingsPage from "../pages/PrivacySettingsPage";
@@ -113,6 +117,17 @@ export const routes: RouteObject[] = [
       // Account" 1662:2782 -> "— Delete (Confirm)" 6217:14677 (Decision
       // Log #220/#221). See InactiveAccountPage.tsx.
       { path: "account/inactive", element: <InactiveAccountPage /> },
+      // B-125 (Decision Log #367, #394 A6): the sign-up flow after Register,
+      // driven by the server's `nextStep` (lib/onboarding.ts). Register -> a
+      // minor goes to /guardian-consent (Restricted Pending); an adult goes
+      // to the verify prompt -> Create Profile -> the one-time Club Picker ->
+      // /community. All under the logo-only Top Bar like the rest of the
+      // pre-app flow. `continue` is a resolver for places with no fresh
+      // `nextStep` of their own (Verified screen, approved-consent page).
+      { path: "verify-email/prompt", element: <VerifyEmailPromptPage /> },
+      { path: "create-profile", element: <CreateProfilePage /> },
+      { path: "signup/clubs", element: <ClubPickerRoute /> },
+      { path: "continue", element: <ContinuePage /> },
     ],
   },
   {

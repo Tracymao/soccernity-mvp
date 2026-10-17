@@ -10,6 +10,10 @@
 // sign-in (Google / Facebook, Figma 5418:7097) arrives with the oauth_login
 // work (build register W10) and is not built here.
 //
+// B-125: after a successful registration this routes on the server's
+// `nextStep` (restricted_pending / verify_email / create_profile / none); it
+// no longer renders the Club Picker inline (see handleSubmit).
+//
 // B-017: a successful registration persists the session (access + refresh
 // token, sessionStorage like an un-ticked "Stay signed in" login) so the
 // Club Picker, the shell Header and every later request are authenticated,
@@ -23,7 +27,7 @@ import { toIsoDate } from "./age";
 import { storeSession } from "../../lib/session";
 import { registerUser, AuthApiError } from "../../api/auth";
 import type { RegisterRequest } from "../../api/auth";
-import ClubPickerStep from "./ClubPickerStep";
+import { routeForNextStep } from "../../lib/onboarding";
 import illustration from "../../assets/signup/register-illustration.svg";
 import type { AgeGateValues, GuardianDetailsValues } from "./types";
 import "./SignupSplitScreen.css";
@@ -47,9 +51,6 @@ export default function RegisterStep({ dob, country, isMinor, guardianDetails }:
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState<{ isMinor: boolean; guardianEmail?: string; accessToken: string } | null>(
-    null,
-  );
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -95,7 +96,14 @@ export default function RegisterStep({ dob, country, isMinor, guardianDetails }:
     try {
       const result = await registerUser(payload);
       storeSession(result, false);
-      setSuccess({ isMinor, guardianEmail: guardianDetails?.email, accessToken: result.accessToken });
+      // B-125 (Decision Log #367, #394 A6): the server decides what comes
+      // next. A minor goes to the Restricted Pending page (it names the
+      // guardian email the request went to); an adult goes to the
+      // verify-email prompt, then Create Profile, then the Club Picker. The
+      // Club Picker is no longer shown inline here: it comes after Create
+      // Profile, and joining a club needs a verified email (B-118) and, for a
+      // minor, guardian approval (B-026) -- neither is true at this point.
+      navigate(routeForNextStep(result.user.nextStep));
     } catch (err) {
       setError(err instanceof AuthApiError ? err.message : "Something went wrong. Try again.");
     } finally {
@@ -104,39 +112,6 @@ export default function RegisterStep({ dob, country, isMinor, guardianDetails }:
   }
 
   const rightPanel = <img src={illustration} alt="" className="signup-split__illustration" />;
-
-  // SHELL DECISION: the Figma Club Picker frames are full-bleed dark and
-  // single-column -- structurally incompatible with SignupSplitScreen's
-  // light two-panel shell this used to render inside. ClubPickerStep now
-  // owns its own full-bleed dark shell (see its header comment), so it's
-  // rendered here as a full replacement of the success view, not nested
-  // inside SignupSplitScreen any more. The "Account created" / guardian-
-  // email confirmation text that used to live in a separate
-  // .signup-success block is passed into ClubPickerStep's new, optional
-  // confirmationMessage prop instead, rendered above its own "Join a
-  // club" heading.
-  if (success) {
-    return (
-      <ClubPickerStep
-        accessToken={success.accessToken}
-        onDone={() => navigate("/")}
-        confirmationMessage={
-          <>
-            <h1 className="club-picker__confirmation-heading">Account created</h1>
-            {success.isMinor ? (
-              <p className="club-picker__confirmation-body">
-                We&rsquo;ve emailed {success.guardianEmail} to ask them to approve your account. Until they approve,
-                your profile stays private and some features are limited (Build Plan Section 8.3, restricted-pending
-                state).
-              </p>
-            ) : (
-              <p className="club-picker__confirmation-body">Welcome to Soccernity.</p>
-            )}
-          </>
-        }
-      />
-    );
-  }
 
   return (
     <SignupSplitScreen variant="light" themeVars={lightAuthThemeVars} rightPanel={rightPanel}>

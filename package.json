@@ -15,6 +15,8 @@
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
+    "check:pending-copy": "node scripts/check-pending-copy-dist.mjs",
+    "build:release": "npm run build --workspace=apps/web --workspace=apps/admin && npm run check:pending-copy",
     "prisma:generate": "npm run prisma:generate --workspace=services/api",
     "prisma:migrate": "npm run prisma:migrate --workspace=services/api"
   },

@@ -240,3 +240,80 @@
   color: var(--consent-text-secondary);
   font-style: italic;
 }
+
+/* B-125: the large round icon above the decline / approved headings
+ * (Figma 5491:8241 neutral, 5108:6631 approved). Tokens only. */
+.consent-icon-circle {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  line-height: 1;
+  background-color: var(--consent-icon-inactive);
+  color: var(--consent-brand-navy);
+}
+
+.consent-icon-circle--approved {
+  background-color: var(--consent-green-tint-28);
+  color: var(--consent-brand-green);
+}
+
+/* B-021 / B-029: request summary rows and the "Report incorrect details"
+ * action on the guardian confirm page (Figma 5108:6629). Tokens only. */
+.consent-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+}
+
+.consent-summary__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 14px;
+}
+
+.consent-summary__row dt {
+  margin: 0;
+  color: var(--consent-text-secondary);
+}
+
+.consent-summary__row dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--consent-text-primary);
+  text-align: right;
+}
+
+.consent-link-button {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--consent-text-secondary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.consent-link-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Figma mobile frames (5501:8453) stack the two actions full width. */
+@media (max-width: 520px) {
+  .consent-actions {
+    flex-direction: column;
+  }
+
+  /* Stacked, the buttons no longer get height from the row's flex stretch. */
+  .consent-actions .consent-button {
+    min-height: 52px;
+  }
+}

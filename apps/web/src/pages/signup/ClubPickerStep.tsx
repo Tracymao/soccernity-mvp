@@ -49,6 +49,7 @@
 // users POST /clubs/:id/join itself, after account creation, using the
 // access token RegisterResponse already returns.
 import { useEffect, useState, type ReactNode } from "react";
+import { Link } from "react-router";
 import { joinClub, listClubs, ClubsApiError } from "../../api/clubs";
 import type { ClubSummary } from "../../api/clubs";
 import { darkClubPickerThemeVars } from "./clubPickerThemeVars";
@@ -76,6 +77,10 @@ export default function ClubPickerStep({ accessToken, onDone, confirmationMessag
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [joinState, setJoinState] = useState<JoinedState>({});
+  // B-118: joining a club needs a verified email. The first 403
+  // `email_verification_required` flips this, and the person is prompted to
+  // verify before anything else (Decision Log #403 item 15).
+  const [needsVerification, setNeedsVerification] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,10 +126,15 @@ export default function ClubPickerStep({ accessToken, onDone, confirmationMessag
     try {
       await joinClub(accessToken, clubId);
       setJoinState((prev) => ({ ...prev, [clubId]: "joined" }));
-    } catch {
+    } catch (err) {
       // A failed join attempt must not block proceeding to the app --
       // the "Continue" action below is always available regardless of
       // this state.
+      if (err instanceof ClubsApiError && err.code === "email_verification_required") {
+        setNeedsVerification(true);
+        setJoinState((prev) => ({ ...prev, [clubId]: "idle" }));
+        return;
+      }
       setJoinState((prev) => ({ ...prev, [clubId]: "error" }));
     }
   }
@@ -165,6 +175,13 @@ export default function ClubPickerStep({ accessToken, onDone, confirmationMessag
               disabled={loading}
             />
           </div>
+
+          {needsVerification && (
+            <div className="club-picker__item-error" role="alert" data-testid="club-picker-verify-prompt">
+              Verify your email address before joining a club. We sent you a link when you signed up.{" "}
+              <Link to="/verify-email/prompt">What to do</Link>
+            </div>
+          )}
 
           {loading && <p className="club-picker__status">Loading clubs…</p>}
 

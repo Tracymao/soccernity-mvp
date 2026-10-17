@@ -12,6 +12,7 @@
 // displayName, plus the optional @username when the user has set one
 // (User.username, profile/username-column-and-display-convention).
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { AdminApiError } from "../../api/adminClient";
 import {
@@ -96,6 +97,10 @@ function UserRow({
           </div>
         ) : (
           <div className="us-actions__row">
+            {/* B-109: opens the audited User Detail screen (support actions). */}
+            <Link to={`/users/${user.id}`} className="us-btn us-btn--outline">
+              View
+            </Link>
             <button type="button" className="us-btn us-btn--outline" onClick={handleBlockToggle} disabled={busy}>
               {busy ? "Updating…" : isSuspended ? "Unblock" : "Block"}
             </button>

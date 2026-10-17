@@ -46,9 +46,25 @@
 // deletion server-side, so the success state says so plainly rather than
 // implying the account merely stays pending. The backend's non-generic
 // 400s ("already confirmed", "declined or withdrawn") are shown verbatim.
-import { useState, type FormEvent } from "react";
+// B-021 / B-029 (Decision Log #372): the request summary the Figma frame
+// draws is now built, from GET /auth/guardian-consent/request-summary (token
+// in a header). The "Report incorrect details" action posts the token only --
+// no note and no corrected date is collected from an unauthenticated caller.
+// While a report is open the server refuses approval and card payment but
+// keeps DECLINE available, so this page shows "approval is on hold", disables
+// "I consent", and leaves "I do not consent" alone. A failed summary lookup
+// (invalid / expired token) is not shown as its own error: the page keeps its
+// existing behaviour and the real POST returns the real rejection.
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
-import { confirmGuardianConsent, declineGuardianConsent, AuthApiError } from "../api/auth";
+import {
+  confirmGuardianConsent,
+  declineGuardianConsent,
+  getGuardianRequestSummary,
+  reportIncorrectGuardianDetails,
+  AuthApiError,
+  type GuardianRequestSummary,
+} from "../api/auth";
 import CardVerificationPanel, { type CardGate } from "./guardian-consent/CardVerificationPanel";
 import { darkConsentThemeVars } from "./guardian-consent/consentThemeVars";
 import "./guardian-consent/GuardianConsent.css";
@@ -57,6 +73,21 @@ const GENERIC_ERROR_MESSAGE =
   "This link is invalid or has expired. Ask the account holder to resend the approval request from their account.";
 
 type Status = "idle" | "submitting" | "confirmed" | "declined" | "error";
+type ReportState = "idle" | "sending" | "sent" | "error";
+
+function ageOn(dobIso: string, today: Date): number | null {
+  const [y, m, d] = dobIso.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  let age = today.getFullYear() - y;
+  if (today.getMonth() + 1 < m || (today.getMonth() + 1 === m && today.getDate() < d)) age -= 1;
+  return age;
+}
+
+function formatLongDate(iso: string): string {
+  const date = new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+}
 
 const WHAT_THEY_CAN_DO = [
   {
@@ -103,6 +134,10 @@ const GUARDIAN_CONTACT_NOTICE = {
     "automatically when they turn 18.",
 };
 
+function firstName(fullName: string): string {
+  return fullName.trim().split(/\s+/)[0] || "the account holder";
+}
+
 export default function GuardianConsentConfirmPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
@@ -113,10 +148,41 @@ export default function GuardianConsentConfirmPage() {
   // sprint-1/coppa-card-verification: only "needed" blocks the consent button;
   // the server enforces the same rule regardless.
   const [cardGate, setCardGate] = useState<CardGate>("loading");
+  const [summary, setSummary] = useState<GuardianRequestSummary | null>(null);
+  const [reportState, setReportState] = useState<ReportState>("idle");
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    getGuardianRequestSummary(token)
+      .then((result) => {
+        if (!cancelled) setSummary(result);
+      })
+      .catch(() => {
+        // Deliberately silent -- see the header comment.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  // True while support has not resolved a report (this session's or an earlier one).
+  const onHold = (summary?.incorrectDetailsReported ?? false) || reportState === "sent";
+
+  async function handleReport() {
+    if (!token) return;
+    setReportState("sending");
+    try {
+      await reportIncorrectGuardianDetails(token);
+      setReportState("sent");
+    } catch {
+      setReportState("error");
+    }
+  }
 
   async function handleConsent(event: FormEvent) {
     event.preventDefault();
-    if (!token || !agreed || cardGate === "needed") return;
+    if (!token || !agreed || cardGate === "needed" || onHold) return;
 
     setStatus("submitting");
     try {
@@ -175,6 +241,69 @@ export default function GuardianConsentConfirmPage() {
                 decide -- it explains what the account can do and what we collect.
               </p>
             </div>
+
+            {summary && (
+              <div className="consent-card consent-card--tint" data-testid="request-summary">
+                <p className="consent-card__title">About this request</p>
+                <dl className="consent-summary">
+                  <div className="consent-summary__row">
+                    <dt>Who is asking</dt>
+                    <dd>{summary.minorName}</dd>
+                  </div>
+                  <div className="consent-summary__row">
+                    <dt>Date of birth given</dt>
+                    <dd>
+                      {formatLongDate(summary.dateOfBirth)}
+                      {ageOn(summary.dateOfBirth, new Date()) !== null
+                        ? ` (age ${ageOn(summary.dateOfBirth, new Date())})`
+                        : ""}
+                    </dd>
+                  </div>
+                  <div className="consent-summary__row">
+                    <dt>You were named as</dt>
+                    <dd>{summary.guardianRelationship}</dd>
+                  </div>
+                  <div className="consent-summary__row">
+                    <dt>Requested on</dt>
+                    <dd>{formatLongDate(summary.requestedAt)}</dd>
+                  </div>
+                </dl>
+                <p className="consent-footnote">
+                  Your email address appears on {firstName(summary.minorName)}&rsquo;s profile as their line of
+                  contact. [COPY PENDING LEGAL REVIEW]
+                </p>
+                <p className="consent-footnote">
+                  {firstName(summary.minorName)}&rsquo;s photo and username are visible to other Soccernity
+                  members. [COPY PENDING LEGAL REVIEW]
+                </p>
+                {reportState !== "sent" && !summary.incorrectDetailsReported && (
+                  <button
+                    type="button"
+                    className="consent-link-button"
+                    onClick={handleReport}
+                    disabled={reportState === "sending"}
+                  >
+                    Report incorrect details [COPY PENDING LEGAL REVIEW]
+                  </button>
+                )}
+                {reportState === "error" && (
+                  <p className="consent-status-message consent-status-message--error" role="alert">
+                    Couldn&rsquo;t send that just now. Please try again shortly.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {onHold && (
+              <div className="consent-card consent-card--tint" role="status" data-testid="approval-on-hold">
+                <p className="consent-card__title">Approval is on hold</p>
+                <p className="consent-page__subheading">
+                  You told us some of these details are incorrect. Support will review them and contact you, and
+                  you can approve once that is done. You can still decline this request below. [COPY PENDING LEGAL
+                  REVIEW]
+                </p>
+              </div>
+            )}
 
             <div className="consent-card">
               <p className="consent-card__title">What the account holder will be able to do</p>
@@ -243,7 +372,7 @@ export default function GuardianConsentConfirmPage() {
                     <button
                       type="submit"
                       className="consent-button consent-button--primary"
-                      disabled={!agreed || status === "submitting" || cardGate === "needed"}
+                      disabled={!agreed || status === "submitting" || cardGate === "needed" || onHold}
                     >
                       {status === "submitting" ? "Submitting…" : "I consent"}
                     </button>

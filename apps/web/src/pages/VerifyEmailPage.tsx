@@ -203,7 +203,11 @@ export default function VerifyEmailPage() {
               </div>
             </div>
             <div className="verify-actions">
-              <Link to="/profile" className="verify-button verify-button--primary">
+              {/* B-125: the server decides where a verified account goes next
+                  (Create Profile, then the Club Picker); /continue resolves
+                  that from `nextStep`, and sends a visitor with no session
+                  (link opened on another device) to log in first. */}
+              <Link to="/continue" className="verify-button verify-button--primary">
                 Continue to Soccernity
               </Link>
             </div>

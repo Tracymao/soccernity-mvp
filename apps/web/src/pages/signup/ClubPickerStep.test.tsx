@@ -6,6 +6,7 @@
 // them live is services/api's own e2e layer's job (test/clubs.e2e-spec.ts),
 // not this component test's.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { MemoryRouter } from "react-router";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import ClubPickerStep from "./ClubPickerStep";
 import { ClubsApiError } from "../../api/clubs";
@@ -49,7 +50,11 @@ const CLUB_B: ClubSummary = {
 };
 
 function renderStep(onDone = vi.fn()) {
-  render(<ClubPickerStep accessToken="test-token" onDone={onDone} />);
+  render(
+    <MemoryRouter>
+      <ClubPickerStep accessToken="test-token" onDone={onDone} />
+    </MemoryRouter>,
+  );
   return { onDone };
 }
 
@@ -91,6 +96,32 @@ describe("ClubPickerStep", () => {
     expect(alert.textContent).toMatch(/couldn.t join/i);
     // The join button itself is still enabled (not stuck disabled from a
     // failed attempt) and the continue/skip action always works regardless.
+    expect((screen.getByRole("button", { name: "Join" }) as HTMLButtonElement).disabled).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: /skip for now/i }));
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  // B-118 (Decision Log #403 item 15): joining needs a verified email. A 403
+  // `email_verification_required` is not a generic failure -- the person is
+  // prompted to verify first, the club is not marked failed, and continuing
+  // still works.
+  it("prompts verification on a 403 email_verification_required instead of a generic join error", async () => {
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [CLUB_A], nextCursor: null });
+    vi.mocked(joinClub).mockRejectedValueOnce(
+      new ClubsApiError("Couldn't join that club (403).", { status: 403, code: "email_verification_required" }),
+    );
+
+    const { onDone } = renderStep();
+    await screen.findByText("Riverside FC");
+    fireEvent.click(screen.getByRole("button", { name: "Join" }));
+
+    const prompt = await screen.findByTestId("club-picker-verify-prompt");
+    expect(prompt.textContent).toMatch(/verify your email address before joining a club/i);
+    const link = prompt.querySelector("a") as HTMLAnchorElement;
+    expect(link.getAttribute("href")).toBe("/verify-email/prompt");
+    // Not the generic per-club failure, and the button is usable again.
+    expect(screen.queryByText(/couldn.t join\. try again/i)).toBeNull();
     expect((screen.getByRole("button", { name: "Join" }) as HTMLButtonElement).disabled).toBe(false);
 
     fireEvent.click(screen.getByRole("button", { name: /skip for now/i }));

@@ -118,7 +118,7 @@ export default function AgeGateStep({ initialValues, initialCountry = "", onCont
         <h1 className="signup-split__heading">Soccernity isn&rsquo;t for you just yet</h1>
         <p className="signup-split__subheading">
           Thanks for your interest. You need to be at least {MINIMUM_SIGNUP_AGE} years old to have a Soccernity
-          account.
+          account. [COPY PENDING LEGAL REVIEW]
         </p>
 
         <div className="signup-form">
@@ -127,7 +127,8 @@ export default function AgeGateStep({ initialValues, initialCountry = "", onCont
             <p className="signup-info-panel__body">
               Soccernity is built around real grassroots football. In the UK, youth football starts at around age
               5&ndash;6. Below that, a profile wouldn&rsquo;t reflect anything about you as a player yet &mdash; so we
-              keep signups closed until then, no matter what a parent or guardian agrees to.
+              keep signups closed until then, no matter what a parent or guardian agrees to. [COPY PENDING LEGAL
+              REVIEW]
             </p>
           </div>
 
@@ -165,7 +166,8 @@ export default function AgeGateStep({ initialValues, initialCountry = "", onCont
           Figma (chip 6669:27179) -- implemented as drawn, pending counsel. */}
       <h1 className="signup-split__heading">Date of birth and country</h1>
       <p className="signup-split__subheading">
-        We ask everyone this when they join. Your date of birth is never shown on your profile.
+        We ask everyone this when they join. Your date of birth is never shown on your profile. [COPY PENDING LEGAL
+        REVIEW]
       </p>
 
       <form className="signup-form" onSubmit={handleSubmit} noValidate>
@@ -225,7 +227,8 @@ export default function AgeGateStep({ initialValues, initialCountry = "", onCont
             ))}
           </select>
           <p className="signup-form__hint">
-            Some countries ask for an extra check when a guardian approves an account for a younger child.
+            Some countries ask for an extra check when a guardian approves an account for a younger child. [COPY
+            PENDING LEGAL REVIEW]
           </p>
           {error && (
             <p className="signup-form-error" role="alert">

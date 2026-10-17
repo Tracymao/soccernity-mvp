@@ -36,6 +36,7 @@ import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { AuthApiError, login } from "../api/auth";
 import { storeSession } from "../lib/session";
+import { routeForNextStep } from "../lib/onboarding";
 import loginHero from "../assets/illustrations/login-hero.svg";
 import "./LoginPage.css";
 
@@ -70,7 +71,12 @@ export default function LoginPage() {
       // and should be revisited once real session management lands.
       storeSession(result, staySignedIn);
 
-      navigate("/");
+      // B-125 (Decision Log #367, #394 A6): route on the server's onboarding
+      // state instead of a blanket "/". A restricted-pending minor lands on
+      // the Restricted Pending page on EVERY login (never /community), an
+      // unverified account on the verify prompt, an incomplete profile on
+      // Create Profile.
+      navigate(routeForNextStep(result.user.nextStep));
     } catch (error) {
       // A deactivated account (credentials were correct -- see
       // src/api/auth.ts's login()). Hand the known-good email + password

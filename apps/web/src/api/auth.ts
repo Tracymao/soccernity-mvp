@@ -44,6 +44,13 @@ export interface LoginResponse {
 // services/api's auth-response.mapper.ts's AuthUserSummary exactly.
 // Never includes `passwordHash`; deliberately does include
 // `isMinor`/`verificationStatus` (see the comment above LoginResponse).
+// B-030 (Decision Log #367, #394 A6): where an account stands in the sign-up
+// flow, computed on the server and mirrored from
+// services/api/src/modules/auth/onboarding-state.util.ts. A routing HINT only:
+// every protected write is still enforced server-side.
+export type GuardianConsentState = "not_applicable" | "pending" | "confirmed" | "declined";
+export type OnboardingNextStep = "restricted_pending" | "verify_email" | "create_profile" | "none";
+
 export interface AuthUserSummary {
   id: string;
   email: string;
@@ -56,6 +63,10 @@ export interface AuthUserSummary {
   role: "fan" | "player" | "admin";
   verificationStatus: string;
   createdAt: string;
+  profileComplete: boolean;
+  /** `declined` is never folded into `pending` (B-030). */
+  guardianConsentStatus: GuardianConsentState;
+  nextStep: OnboardingNextStep;
 }
 
 export interface RegisterRequest {
@@ -303,6 +314,49 @@ export function createGuardianCardIntent(consentToken: string) {
 
 export function completeGuardianCardVerification(consentToken: string) {
   return postGuardianJson<GuardianVerificationRequirements>("/auth/guardian-consent/card/complete", consentToken);
+}
+
+// B-021 / B-029 (Decision Log #372): the guardian's request summary and the
+// "Report incorrect details" action. Both are token-credentialed and
+// unauthenticated, like confirm/decline; the token goes in a header for the
+// GET (so it stays out of URLs and access logs) and in the body for the POST.
+export interface GuardianRequestSummary {
+  minorName: string;
+  /** YYYY-MM-DD. */
+  dateOfBirth: string;
+  guardianName: string;
+  guardianRelationship: string;
+  requestedAt: string;
+  /** True once the guardian reported incorrect details and support has not resolved it: approval is on hold. */
+  incorrectDetailsReported: boolean;
+  notices: {
+    guardianEmailShownOnMinorProfile: true;
+    photoAndUsernameVisibleToOthers: true;
+  };
+}
+
+export async function getGuardianRequestSummary(consentToken: string): Promise<GuardianRequestSummary> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/guardian-consent/request-summary`, {
+      headers: { "X-Consent-Token": consentToken },
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+  if (!response.ok) {
+    throw await guardianConsentRejection(response);
+  }
+  return (await response.json()) as GuardianRequestSummary;
+}
+
+// POST /auth/guardian-consent/report-incorrect-details. Sends the token only:
+// no note and no "correct" date is collected from an unauthenticated caller
+// (data minimisation, legal-copy Part C row 22).
+export function reportIncorrectGuardianDetails(consentToken: string): Promise<{ message: string }> {
+  return postGuardianConsentToken("/auth/guardian-consent/report-incorrect-details", consentToken);
 }
 
 export async function getGuardianConsentStatus(accessToken: string): Promise<GuardianConsentStatus> {

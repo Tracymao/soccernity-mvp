@@ -49,6 +49,9 @@ const TOKENS: LoginResponse = {
     isMinor: false,
     role: "fan",
     verificationStatus: "verified",
+    profileComplete: true,
+    guardianConsentStatus: "not_applicable",
+    nextStep: "none",
     createdAt: "2026-01-01T00:00:00.000Z",
   },
 };
@@ -79,7 +82,7 @@ function renderApp() {
   render(
     <MemoryRouter initialEntries={["/settings/deactivate"]}>
       <Routes>
-        <Route path="/" element={<HomeStub />} />
+        <Route path="/community" element={<HomeStub />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/account/inactive" element={<InactiveAccountPage />} />
         <Route path="/settings/deactivate" element={<DeactivateAccountPage />} />

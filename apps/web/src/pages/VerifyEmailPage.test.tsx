@@ -64,7 +64,7 @@ describe("VerifyEmailPage", () => {
     const heading = await screen.findByText("Email verified");
     expect(heading).not.toBeNull();
     const cta = screen.getByRole("link", { name: /continue to soccernity/i }) as HTMLAnchorElement;
-    expect(cta.getAttribute("href")).toBe("/profile");
+    expect(cta.getAttribute("href")).toBe("/continue");
     // Never the distinct pending-consent copy.
     expect(screen.queryByText(/approval still pending/i)).toBeNull();
   });
