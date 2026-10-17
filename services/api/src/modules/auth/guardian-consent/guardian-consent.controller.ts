@@ -9,6 +9,7 @@ import { ChangeGuardianEmailDto } from './dto/change-guardian-email.dto';
 import { GuardianCardVerificationService } from './guardian-card-verification.service';
 import { DeclineGuardianConsentDto } from './dto/decline-guardian-consent.dto';
 import { GuardianConsentDto } from './dto/guardian-consent.dto';
+import { ReportIncorrectDetailsDto } from './dto/report-incorrect-details.dto';
 import { RequestConsentWithdrawalDto } from './dto/request-consent-withdrawal.dto';
 import { ResendGuardianConsentDto } from './dto/resend-guardian-consent.dto';
 import { WithdrawGuardianConsentDto } from './dto/withdraw-guardian-consent.dto';
@@ -139,6 +140,18 @@ export class GuardianConsentController {
   async decline(@Body() dto: DeclineGuardianConsentDto): Promise<{ message: string }> {
     await this.guardianConsentService.declineConsent(dto.consentToken);
     return { message: 'Guardian consent declined.' };
+  }
+
+  // B-029 (Decision Log #372) -- "Report incorrect details". No guard, same
+  // trust model as confirm()/decline(): the consent token is the credential.
+  // Rate-limited because it writes a flag that holds the minor's approval, so
+  // it must not be spammable by someone who only guessed at tokens.
+  @AuthRateLimit()
+  @Post('guardian-consent/report-incorrect-details')
+  @HttpCode(HttpStatus.OK)
+  async reportIncorrectDetails(@Body() dto: ReportIncorrectDetailsDto): Promise<{ message: string }> {
+    await this.guardianConsentService.reportIncorrectDetails(dto.consentToken);
+    return { message: 'Thank you. Support will review the details and contact you.' };
   }
 
   // sprint-1/guardian-consent-decline-withdraw-expiry — step 1 of 2 for a

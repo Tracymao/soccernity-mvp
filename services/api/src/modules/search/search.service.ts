@@ -245,8 +245,9 @@ export class SearchService {
   ): Promise<SearchResultPage<SearchUserResult>> {
     const filters: Prisma.UserWhereInput[] = [
       VISIBLE_SEARCH_USER_FILTER,
-      // Matches the PUBLIC name only (username, or displayName when there is no
-      // username) so a real name cannot be used to find a pseudonymous account.
+      // Matches the username only (B-027, #369): an account with no username has
+      // only the shared placeholder as its public name, and a real name must not
+      // be usable to find the account behind it.
       publicNameContains(q) as Prisma.UserWhereInput,
     ];
     if (cursor) {

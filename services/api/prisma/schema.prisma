@@ -384,6 +384,27 @@ model Guardian {
   // No existing pending account is ever fast-tracked to deletion.
   consentAutoResentAt DateTime?
 
+  // B-029 (Decision Log #372, build register W3) -- the guardian pressed
+  // "Report incorrect details" on the consent page: the minor's name / date of
+  // birth shown in the request summary is wrong. NULL = no open report;
+  // non-NULL = when it was raised (re-reporting keeps the FIRST time).
+  //
+  // WHILE OPEN: confirmConsent() and card-verification createIntent() refuse
+  // (approving a request whose facts the approver says are wrong is not
+  // consent to the right thing), but DECLINE and WITHDRAW stay available --
+  // #372's "decline remains available". Cleared only by support, through
+  // POST /admin/users/:id/incorrect-details-report/resolve (audited), or by
+  // the DOB-correction tool (B-103, not built yet). Deliberately NOT cleared
+  // by changeGuardianEmail: the report is about the minor's details, not the
+  // guardian, so swapping in a different guardian must not wipe it.
+  //
+  // Nothing free-text is collected from the unauthenticated token holder: no
+  // note, no "correct" DOB (data minimisation, Part C row 22). Support
+  // contacts the guardian at Guardian.email. What an open flag should do to
+  // the consent flow is the OPEN point of #372; "blocks approve only" is the
+  // adopted, veto-able default.
+  incorrectDetailsReportedAt DateTime?
+
   // sprint-1/guardian-consent-decline-withdraw-expiry -- the withdrawal
   // credential, deliberately SEPARATE from consentToken rather than
   // reusing it. Withdrawal is only ever available once consentStatus is

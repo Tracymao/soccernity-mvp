@@ -21,6 +21,8 @@ import { CreatePostDto } from './dto/create-post.dto';
 import { FeedQueryDto } from './dto/feed-query.dto';
 import { UpdateCommentSettingsDto } from './dto/update-comment-settings.dto';
 import { FeedService } from './feed.service';
+import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
+import { ProfileCompleteGuard } from '../auth/guards/profile-complete.guard';
 
 // Build Plan Section 4.3 (Feed Service). Slice one (merged, PR #53) was
 // POST /posts and GET /posts/feed only. Slice two (merged, PR #54) added
@@ -59,7 +61,7 @@ export class FeedController {
   // include "creating a general feed post." Section 5.7's explicit,
   // broader instruction is what this guard placement actually rests on.
   @Post()
-  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard, ProfileCompleteGuard)
   async create(@CurrentUser() user: AccessTokenPayload, @Body() dto: CreatePostDto) {
     return this.feedService.createPost(user.sub, dto);
   }
@@ -112,13 +114,13 @@ export class FeedController {
   // FeedService.likePost's idempotency handling).
   @Post(':id/like')
   @HttpCode(200)
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard)
   async like(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
     return this.feedService.likePost(user.sub, id);
   }
 
   @Delete(':id/like')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
   async unlike(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
     return this.feedService.unlikePost(user.sub, id);
   }
@@ -131,7 +133,7 @@ export class FeedController {
   // argued for POST /posts: Section 5.7's "posting" language is read as
   // covering it.
   @Post(':id/comments')
-  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard, ProfileCompleteGuard)
   async addComment(
     @Param('id') id: string,
     @CurrentUser() user: AccessTokenPayload,
@@ -157,14 +159,14 @@ export class FeedController {
   // DELETE .../comments/:commentId). 204.
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
   async deletePost(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload): Promise<void> {
     return this.feedService.deletePost(id, user.sub);
   }
 
   // PATCH /posts/:id/comment-settings -- post author only.
   @Patch(':id/comment-settings')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
   async updateCommentSettings(
     @Param('id') id: string,
     @CurrentUser() user: AccessTokenPayload,
@@ -176,7 +178,7 @@ export class FeedController {
   // Two routes (hide / unhide), not a toggle body: each is idempotent and
   // the intent is explicit in the URL. Post author only.
   @Patch(':id/comments/:commentId/hide')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
   async hideComment(
     @Param('id') id: string,
     @Param('commentId') commentId: string,
@@ -186,7 +188,7 @@ export class FeedController {
   }
 
   @Patch(':id/comments/:commentId/unhide')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
   async unhideComment(
     @Param('id') id: string,
     @Param('commentId') commentId: string,
@@ -213,7 +215,7 @@ export class FeedController {
   // whole point is reporting the resulting state.
   @Delete(':id/comments/:commentId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
   async deleteComment(
     @Param('id') id: string,
     @Param('commentId') commentId: string,
@@ -230,13 +232,13 @@ export class FeedController {
   // toggle, not a resource creation in the POST /posts sense.
   @Post(':id/save')
   @HttpCode(200)
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard)
   async save(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
     return this.feedService.savePost(user.sub, id);
   }
 
   @Delete(':id/save')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
   async unsave(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
     return this.feedService.unsavePost(user.sub, id);
   }

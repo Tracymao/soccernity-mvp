@@ -2,6 +2,7 @@ import { BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CardVerificationGateway } from '../../../payments/card-verification.gateway';
 import { GuardianCardVerificationService } from './guardian-card-verification.service';
+import { INCORRECT_DETAILS_OPEN_MESSAGE } from './incorrect-details.constants';
 
 const HOUR = 60 * 60 * 1000;
 
@@ -66,6 +67,22 @@ describe('GuardianCardVerificationService', () => {
   });
 
   describe('createIntent', () => {
+    // B-029 (Decision Log #372): no card payment for an approval that is on hold.
+    it('refuses to start a charge while an incorrect-details report is open, and never calls Stripe', async () => {
+      const { service, gateway, prisma } = build(guardian({ incorrectDetailsReportedAt: new Date() }));
+      await expect(service.createIntent('tok')).rejects.toThrow(INCORRECT_DETAILS_OPEN_MESSAGE);
+      expect(gateway.createVerificationIntent).not.toHaveBeenCalled();
+      expect(prisma.guardian.update).not.toHaveBeenCalled();
+    });
+
+    it('still lets complete() record and refund a charge that already happened, flag or not', async () => {
+      const { service, gateway } = build(
+        guardian({ stripePaymentIntentId: 'pi_1', incorrectDetailsReportedAt: new Date() }),
+      );
+      await expect(service.complete('tok')).resolves.toEqual({ cardRequired: true, cardVerified: true });
+      expect(gateway.refundIntent).toHaveBeenCalledWith('pi_1');
+    });
+
     it('creates a 50-cent USD intent with a receipt to the guardian, stores only the reference id', async () => {
       const { service, prisma, gateway } = build(guardian());
 

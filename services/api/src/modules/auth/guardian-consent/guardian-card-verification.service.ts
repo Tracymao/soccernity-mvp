@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Guardian } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CardVerificationGateway } from '../../../payments/card-verification.gateway';
+import { INCORRECT_DETAILS_OPEN_MESSAGE } from './incorrect-details.constants';
 
 // sprint-1/coppa-card-verification.
 //
@@ -74,6 +75,12 @@ export class GuardianCardVerificationService {
     }
     if (guardian.cardVerifiedAt) {
       throw new BadRequestException('Card verification has already been completed.');
+    }
+    // B-029 (Decision Log #372): do not take a card payment for an approval
+    // that is on hold. Only createIntent is gated: complete() must still be
+    // able to record and refund a charge that has already happened.
+    if (guardian.incorrectDetailsReportedAt) {
+      throw new BadRequestException(INCORRECT_DETAILS_OPEN_MESSAGE);
     }
 
     // Idempotent per guardian + token generation: a retry after a declined

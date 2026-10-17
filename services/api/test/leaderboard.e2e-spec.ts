@@ -73,6 +73,7 @@ describe('Leaderboard e2e (Section 4.9)', () => {
         email: `e2e-lb-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E Leaderboard ${label}`,
+        username: `E2E Leaderboard ${label}`, // B-027: the public name is the username (no displayName fallback)
         dateOfBirth: seedDob('1994-05-05'),
         isMinor: false,
         accountStatus: over.accountStatus ?? 'active',

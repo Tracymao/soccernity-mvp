@@ -7,6 +7,7 @@ import { FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE, FeedQueryDto } from '../fee
 import { ENGAGEMENT_POINTS } from '../points/points.constants';
 import { awardPoints } from '../points/points.util';
 import { calculateAge } from '../auth/registration/age.util';
+import { deriveOnboardingState, GuardianConsentState, OnboardingNextStep } from '../auth/onboarding-state.util';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PUBLIC_NAME_SELECT, resolvePublicName, toPublicUser } from './public-name.util';
 
@@ -47,7 +48,7 @@ const OWN_PROFILE_SELECT = {
   isTeamOrganiser: true,
   // safeguarding/guardian-contact-public-visibility: only ever forwarded
   // (as guardianContact) for a current minor -- see guardianContactFor.
-  guardian: { select: { email: true } },
+  guardian: { select: { email: true, consentStatus: true } },
   // Decision Log #74 -- the one club this user represents (Leaderboard
   // By-club scope). Read-only here; written only by setRepresentedClub.
   representedClub: { select: { id: true, name: true } },
@@ -103,11 +104,21 @@ export type OwnProfile = {
   // same shape is shown to any viewer via getPublicProfile.
   guardianContact: GuardianContact | null;
   representedClub: { id: string; name: string } | null;
+  // B-027 / B-030: same onboarding state the login response carries (see
+  // AuthUserSummary), so a page load with an existing session routes the same
+  // way a fresh login does -- including a restricted-pending minor, who must
+  // land on the Restricted Pending page on EVERY visit, not only on login.
+  profileComplete: boolean;
+  guardianConsentStatus: GuardianConsentState;
+  nextStep: OnboardingNextStep;
 };
 
-type OwnProfileRow = Omit<OwnProfile, 'guardianContact' | 'dateOfBirth' | 'publicName'> & {
+type OwnProfileRow = Omit<
+  OwnProfile,
+  'guardianContact' | 'dateOfBirth' | 'publicName' | 'profileComplete' | 'guardianConsentStatus' | 'nextStep'
+> & {
   dateOfBirth: string | null; // ciphertext
-  guardian: { email: string } | null;
+  guardian: { email: string; consentStatus: string } | null;
 };
 
 export interface RepresentedClubResult {
@@ -118,6 +129,12 @@ function toOwnProfile({ guardian, dateOfBirth, ...rest }: OwnProfileRow, dob: Do
   const plainDob = dob.decryptNullable(dateOfBirth);
   return {
     ...rest,
+    ...deriveOnboardingState({
+      isMinor: rest.isMinor,
+      guardianConsentStatus: guardian?.consentStatus,
+      verificationStatus: rest.verificationStatus,
+      username: rest.username,
+    }),
     publicName: resolvePublicName(rest),
     dateOfBirth: plainDob,
     guardianContact: guardianContactFor(rest.isMinor, guardian, plainDob),

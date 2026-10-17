@@ -728,3 +728,23 @@ plain `findMany` against `User`'s already-existing columns and FKs (the
 are already read elsewhere), no raw SQL, no transaction, no novel Prisma
 relation or constraint — none of `test/README.md`'s own three e2e-add
 triggers apply.
+
+
+## Status update -- uniform write block and the placeholder name (B-026, B-027, B-118; 2026-10-17)
+
+This **supersedes** the guard reasoning earlier in this file and in
+`feed/README.md` / `clubs/README.md` that kept follow, like, save, club join and
+`PATCH /users/:id` at `JwtAuthGuard` only. Decision Log #370 widens the rule to a
+uniform restricted-pending write block, so those routes now also carry
+`GuardianConsentGuard` (and, for the creating forms, `EmailVerifiedGuard` --
+#403 item 15). Reads, the follower/following lists and `GET /users/:id` stay open
+so a restricted-pending minor can read their own state. The complete route table is
+in `docs/backend-w3-gates-report.md` and is pinned by
+`src/write-route-guards.spec.ts`.
+
+`publicName` (every payload that shows a user to *other* users) is now the username
+or the placeholder **`Soccernity member`** -- the displayName fallback from #364 is
+gone (`public-name.util.ts`). People search matches the username only.
+`GET /users/:id` additionally returns `profileComplete`, `guardianConsentStatus`
+and `nextStep` (see `auth/README.md`). Roster and people-search cursors and
+ordering still use `displayName` (B-034, open).

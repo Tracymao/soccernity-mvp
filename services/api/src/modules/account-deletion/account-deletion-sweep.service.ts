@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
+import { DELETED_USER_PUBLIC_NAME } from '../users/public-name.util';
 
 // Build Plan Section 9, Decision Log #42 (30-day grace period + consent-
 // record retention) as RECONSIDERED by Decision Log #341
@@ -95,7 +96,7 @@ export interface PurgeConsentAuditRecordsResult {
 
 // What an anonymized User row looks like. The email is deterministic on
 // the user's own id, so it is unique with no collision checking.
-export const DELETED_USER_DISPLAY_NAME = '[deleted user]';
+export const DELETED_USER_DISPLAY_NAME = DELETED_USER_PUBLIC_NAME;
 // Not a valid argon2 PHC string: PasswordService.verify returns false for
 // it (it catches the parse error), so it can never authenticate. Defence
 // in depth -- accountStatus 'deleted' is the primary login block.

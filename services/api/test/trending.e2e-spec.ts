@@ -64,6 +64,8 @@ describe('Trending topics e2e (Section 4.7)', () => {
         email: `e2e-trending-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E Trending ${label}`,
+        verificationStatus: 'verified', // W3 gates: a verified email (B-118) and a username (B-027) so this actor can post
+        username: `e2e_${Math.random().toString(36).slice(2, 12)}`,
         dateOfBirth: seedDob('1994-05-05'),
         isMinor: false,
         accountStatus: 'active',

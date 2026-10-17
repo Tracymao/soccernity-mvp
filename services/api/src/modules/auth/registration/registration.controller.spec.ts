@@ -94,6 +94,62 @@ describe('RegistrationController (HTTP layer)', () => {
       expect(response.body.refreshToken).toBe('refresh-id.secret');
     });
 
+    // B-030 / B-027: the response carries the onboarding state so a brand-new
+    // account is routed correctly from the very first response.
+    it('includes the onboarding state: an adult is told to verify their email first', async () => {
+      registrationService.register.mockResolvedValueOnce({
+        dateOfBirth: new Date('1990-01-01'),
+        user: {
+          id: 'user-1', email: 'adult@example.com', phone: null, displayName: 'Adult User', username: null,
+          dateOfBirth: new Date('1990-01-01'), isMinor: false, role: 'fan', verificationStatus: 'unverified',
+          createdAt: new Date('2026-08-16T00:00:00.000Z'),
+        },
+        guardian: null,
+        tokens: {
+          accessToken: { token: 'access-token', expiresIn: 900 },
+          refreshToken: { token: 'refresh-id.secret', expiresAt: new Date() },
+        },
+      });
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({ email: 'adult@example.com', password: 'password123', displayName: 'Adult User', dateOfBirth: '1990-01-01' })
+        .expect(201);
+
+      expect(response.body.user).toMatchObject({
+        profileComplete: false,
+        guardianConsentStatus: 'not_applicable',
+        nextStep: 'verify_email',
+        publicName: 'Soccernity member',
+      });
+    });
+
+    it('a freshly registered MINOR is restricted_pending from the first response', async () => {
+      registrationService.register.mockResolvedValueOnce({
+        dateOfBirth: new Date('2012-01-01'),
+        user: {
+          id: 'user-2', email: 'minor@example.com', phone: null, displayName: 'Minor User', username: null,
+          dateOfBirth: new Date('2012-01-01'), isMinor: true, role: 'fan', verificationStatus: 'unverified',
+          createdAt: new Date('2026-08-16T00:00:00.000Z'),
+        },
+        guardian: { id: 'g1', name: 'Parent', email: 'parent@example.com', relationship: 'Parent', consentStatus: 'pending' },
+        tokens: {
+          accessToken: { token: 'access-token', expiresIn: 900 },
+          refreshToken: { token: 'refresh-id.secret', expiresAt: new Date() },
+        },
+      });
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({
+          email: 'minor@example.com', password: 'password123', displayName: 'Minor User', dateOfBirth: '2012-01-01',
+          guardian: { name: 'Parent', email: 'parent@example.com', relationship: 'Parent' },
+        })
+        .expect(201);
+
+      expect(response.body.user).toMatchObject({ guardianConsentStatus: 'pending', nextStep: 'restricted_pending' });
+    });
+
     it('rejects a body missing required fields with 400', async () => {
       await request(app.getHttpServer())
         .post('/auth/register')

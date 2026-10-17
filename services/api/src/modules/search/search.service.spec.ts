@@ -157,7 +157,7 @@ describe('SearchService', () => {
       );
     });
 
-    it('applies a case-insensitive contains filter on the PUBLIC name (username, or displayName only when there is no username)', async () => {
+    it('applies a case-insensitive contains filter on the username only (B-027: no real-name or placeholder matching)', async () => {
       const prisma = buildPrismaMock();
       const service = new SearchService(prisma);
 
@@ -167,10 +167,7 @@ describe('SearchService', () => {
       expect(call.where.AND).toEqual(
         expect.arrayContaining([
           {
-            OR: [
-              { username: { contains: 'chelsea', mode: 'insensitive' } },
-              { AND: [{ username: null }, { displayName: { contains: 'chelsea', mode: 'insensitive' } }] },
-            ],
+            OR: [{ username: { contains: 'chelsea', mode: 'insensitive' } }],
           },
         ]),
       );
@@ -222,7 +219,7 @@ describe('SearchService', () => {
 
       const page = await service.searchUsers('chelsea', undefined, 20);
 
-      expect(page.items[0]).toEqual({ id: 'user-1', publicName: 'Chelsea Fan' });
+      expect(page.items[0]).toEqual({ id: 'user-1', publicName: 'Soccernity member' });
     });
 
     it('shows the username as publicName when set, and never returns the real displayName', async () => {
@@ -355,7 +352,7 @@ describe('SearchService', () => {
       expect(page.items[0]).toEqual({
         id: 'post-1',
         contentText: 'Chelsea won again',
-        author: { id: 'user-1', publicName: 'Chelsea Fan' },
+        author: { id: 'user-1', publicName: 'Soccernity member' },
         createdAt: new Date('2026-09-01T10:00:00.000Z'),
         likeCount: 3,
         commentCount: 1,

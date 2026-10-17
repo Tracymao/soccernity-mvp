@@ -12,6 +12,7 @@ import * as request from 'supertest';
 import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
 import { AdminRolesGuard } from '../admin/guards/admin-roles.guard';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
+import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GrassrootsFixturesController } from './grassroots-fixtures.controller';
 import { GrassrootsTeamsController } from './grassroots-teams.controller';
@@ -45,6 +46,10 @@ describe('Grassroots controllers (HTTP layer)', () => {
       controllers: [GrassrootsTeamsController, GrassrootsFixturesController],
       providers: [{ provide: GrassrootsService, useValue: grassroots }],
     })
+      // W3 gates (B-026/B-118/B-027): guard behaviour is covered by the guard specs,
+      // write-route-guards.spec.ts and test/w3-gates.e2e-spec.ts; pass-through here.
+      .overrideGuard(EmailVerifiedGuard)
+      .useValue({ canActivate: () => true })
       .overrideGuard(JwtAuthGuard)
       .useValue({
         canActivate: (context: ExecutionContext) => {

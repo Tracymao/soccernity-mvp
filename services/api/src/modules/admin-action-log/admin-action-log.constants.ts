@@ -13,6 +13,10 @@ export const ADMIN_ACTION_LOG_ACTIONS = {
   REPORT_ESCALATED: 'report.escalated',
   ADMIN_CHILD_SAFETY_VETTING_UPDATED: 'admin_user.child_safety_vetting_updated',
   USER_STATUS_UPDATED: 'user.status_updated',
+  // POST /admin/users/:id/incorrect-details-report/resolve (B-029, Decision
+  // Log #372) -- support cleared a guardian's "report incorrect details"
+  // flag, releasing the hold on approval. targetType 'user' (the minor).
+  GUARDIAN_INCORRECT_DETAILS_RESOLVED: 'guardian.incorrect_details_resolved',
   // Reserved, NOT yet wired to a real call site — no AdminUser
   // role-change endpoint exists anywhere in this codebase yet
   // (grep-confirmed; no branch/PR for one either, at the time this

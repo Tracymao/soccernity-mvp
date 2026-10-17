@@ -158,7 +158,7 @@ describe('ContestService', () => {
       const res = await new ContestService(prisma).getCurrentContest('u-1');
       expect(res.phase).toBe('week_1');
       expect(res.weeklyWinners).toEqual([
-        { weekNumber: 1, position: 1, userId: 'u-9', publicName: 'Nina', entryId: 'e-1', postId: 'post-9' },
+        { weekNumber: 1, position: 1, userId: 'u-9', publicName: 'Soccernity member', entryId: 'e-1', postId: 'post-9' },
       ]);
       expect(res.monthlyStandings).toEqual([]);
     });
@@ -190,8 +190,8 @@ describe('ContestService', () => {
       // Position 2 (u-2) is gone -- position 1 and position 3 remain
       // exactly as-is, position 3 is NOT renumbered to position 2.
       expect(res.weeklyWinners).toEqual([
-        { weekNumber: 1, position: 1, userId: 'u-1', publicName: 'Ada', entryId: 'e-1', postId: 'post-1' },
-        { weekNumber: 1, position: 3, userId: 'u-3', publicName: 'Chinedu', entryId: 'e-3', postId: 'post-3' },
+        { weekNumber: 1, position: 1, userId: 'u-1', publicName: 'Soccernity member', entryId: 'e-1', postId: 'post-1' },
+        { weekNumber: 1, position: 3, userId: 'u-3', publicName: 'Soccernity member', entryId: 'e-3', postId: 'post-3' },
       ]);
       expect((prisma.guardian.findMany as jest.Mock).mock.calls[0][0]).toEqual({
         where: { minorUserId: { in: ['u-1', 'u-2', 'u-3'] }, consentStatus: 'declined' },
@@ -213,7 +213,7 @@ describe('ContestService', () => {
 
       const res = await new ContestService(prisma).getCurrentContest('u-1');
       expect(res.phase).toBe('crowned');
-      expect(res.monthlyStandings).toEqual([{ position: 1, userId: 'u-9', publicName: 'Nina' }]);
+      expect(res.monthlyStandings).toEqual([{ position: 1, userId: 'u-9', publicName: 'Soccernity member' }]);
       expect(res.isAcceptingEntries).toBe(false);
     });
 
@@ -236,8 +236,8 @@ describe('ContestService', () => {
 
       const res = await new ContestService(prisma).getCurrentContest('u-1');
       expect(res.monthlyStandings).toEqual([
-        { position: 1, userId: 'u-1', publicName: 'Ada' },
-        { position: 3, userId: 'u-3', publicName: 'Chinedu' },
+        { position: 1, userId: 'u-1', publicName: 'Soccernity member' },
+        { position: 3, userId: 'u-3', publicName: 'Soccernity member' },
       ]);
     });
 
@@ -613,8 +613,8 @@ describe('ContestService', () => {
       const res = await new ContestService(prisma).getCycleById('cyc-1');
       expect(res.phase).toBe('crowned');
       expect(res.rounds).toHaveLength(3);
-      expect(res.weeklyWinners[0]).toMatchObject({ weekNumber: 1, position: 1, publicName: 'Nina', postId: 'p-9' });
-      expect(res.monthlyStandings).toEqual([{ position: 1, userId: 'u-9', publicName: 'Nina' }]);
+      expect(res.weeklyWinners[0]).toMatchObject({ weekNumber: 1, position: 1, publicName: 'Soccernity member', postId: 'p-9' });
+      expect(res.monthlyStandings).toEqual([{ position: 1, userId: 'u-9', publicName: 'Soccernity member' }]);
     });
 
     // Decision Log #339 resolution -- sprint-2/contest-withdrawn-consent-visibility.
@@ -643,9 +643,9 @@ describe('ContestService', () => {
 
       const res = await new ContestService(prisma).getCycleById('cyc-1');
       expect(res.weeklyWinners).toEqual([
-        { weekNumber: 1, position: 1, userId: 'u-1', publicName: 'Ada', entryId: 'e-1', postId: 'post-1' },
+        { weekNumber: 1, position: 1, userId: 'u-1', publicName: 'Soccernity member', entryId: 'e-1', postId: 'post-1' },
       ]);
-      expect(res.monthlyStandings).toEqual([{ position: 1, userId: 'u-1', publicName: 'Ada' }]);
+      expect(res.monthlyStandings).toEqual([{ position: 1, userId: 'u-1', publicName: 'Soccernity member' }]);
     });
   });
 
@@ -705,9 +705,9 @@ describe('ContestService', () => {
       expect(res.items[0].cycle.id).toBe('cyc-new');
       expect(res.items[0].phase).toBe('week_1');
       expect(res.items[0].rounds.map((r) => r.entryCount)).toEqual([3, 1, 0]);
-      expect(res.items[0].weeklyWinners[0]).toMatchObject({ weekNumber: 1, publicName: 'Nina' });
+      expect(res.items[0].weeklyWinners[0]).toMatchObject({ weekNumber: 1, publicName: 'Soccernity member' });
       expect(res.items[1].cycle.id).toBe('cyc-old');
-      expect(res.items[1].monthlyStandings).toEqual([{ position: 1, userId: 'u-9', publicName: 'Nina' }]);
+      expect(res.items[1].monthlyStandings).toEqual([{ position: 1, userId: 'u-9', publicName: 'Soccernity member' }]);
     });
 
     it('returns an empty items array when no cycle exists', async () => {
@@ -750,7 +750,7 @@ describe('ContestService', () => {
       // an admin still needs it to reconcile round scoring -- but the
       // real identity/content is redacted.
       expect(res.items[0].weeklyWinners).toEqual([
-        { weekNumber: 1, position: 1, userId: 'u-1', publicName: 'Ada', entryId: 'e-1', postId: 'post-1' },
+        { weekNumber: 1, position: 1, userId: 'u-1', publicName: 'Soccernity member', entryId: 'e-1', postId: 'post-1' },
         {
           weekNumber: 1,
           position: 2,
@@ -794,7 +794,7 @@ describe('ContestService', () => {
         {
           entryId: 'e-win',
           submittedAt: winning.submittedAt,
-          entrant: { userId: 'u-a', publicName: 'Ada' },
+          entrant: { userId: 'u-a', publicName: 'Soccernity member' },
           post: {
             id: 'post-1',
             contentText: 'my keepie-uppie clip',
@@ -891,7 +891,7 @@ describe('ContestService', () => {
       expect(res.rounds[0].entries).toEqual([
         expect.objectContaining({
           entryId: 'e-real',
-          entrant: { userId: 'u-real', publicName: 'Rita' },
+          entrant: { userId: 'u-real', publicName: 'Soccernity member' },
           post: expect.objectContaining({ contentText: 'my keepie-uppie clip' }),
         }),
         expect.objectContaining({
@@ -915,7 +915,7 @@ describe('ContestService', () => {
 
       const res = await new ContestService(prisma).getCurrentContestForAdmin();
       expect(res.phase).toBe('final_live');
-      expect(res.rounds[0].entries[0].entrant.publicName).toBe('Alice');
+      expect(res.rounds[0].entries[0].entrant.publicName).toBe('Soccernity member');
     });
 
     it('falls back to the most-recently completed cycle when none is running', async () => {

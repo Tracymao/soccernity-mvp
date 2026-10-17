@@ -45,6 +45,8 @@ describe('Under-16 restrictions e2e', () => {
         email: `e2e-u16-${kind}-${n}-${Date.now()}@example.com`,
         passwordHash: 'unused',
         displayName: `U16 ${kind} ${n}`,
+        verificationStatus: 'verified', // W3 gates: a verified email (B-118) and a username (B-027) so this actor can post
+        username: `e2e_${Math.random().toString(36).slice(2, 12)}`,
         dateOfBirth: seedDob(dob),
         isMinor: minor,
         isUnder16: kind === 'under16',

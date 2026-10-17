@@ -80,7 +80,7 @@ describe('LeaderboardService', () => {
       expect(call.orderBy).toEqual([{ rank: 'asc' }, { userId: 'asc' }]);
     });
 
-    it('shows the username as publicName when set and falls back to displayName otherwise, never both', async () => {
+    it('shows the username as publicName when set and falls back to the placeholder otherwise, never the real name', async () => {
       const prisma = buildMock();
       (prisma.leaderboardEntry.findMany as jest.Mock).mockResolvedValue([
         row({ userId: 'u-1', rank: 1, displayName: 'Alice Real', username: 'ali_9' }),
@@ -89,7 +89,7 @@ describe('LeaderboardService', () => {
 
       const result = await new LeaderboardService(prisma).getLeaderboard('caller-1', { period: '2026-W33', limit: 20 });
 
-      expect(result.items.map((i) => i.publicName)).toEqual(['ali_9', 'Bob Real']);
+      expect(result.items.map((i) => i.publicName)).toEqual(['ali_9', 'Soccernity member']);
       expect(JSON.stringify(result)).not.toContain('Alice Real');
     });
 
@@ -104,8 +104,8 @@ describe('LeaderboardService', () => {
 
       expect(result).toEqual({
         items: [
-          { userId: 'u-1', publicName: 'Alice', points: 250, rank: 1 },
-          { userId: 'u-2', publicName: 'Bob', points: 180, rank: 2 },
+          { userId: 'u-1', publicName: 'Soccernity member', points: 250, rank: 1 },
+          { userId: 'u-2', publicName: 'Soccernity member', points: 180, rank: 2 },
         ],
         nextCursor: null,
       });

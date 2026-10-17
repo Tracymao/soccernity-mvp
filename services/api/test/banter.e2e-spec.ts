@@ -65,6 +65,8 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
         email: `e2e-banter-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E Banter ${label}`,
+        verificationStatus: 'verified', // W3 gates: a verified email (B-118) and a username (B-027) so this actor can post
+        username: `e2e_${Math.random().toString(36).slice(2, 12)}`,
         dateOfBirth: seedDob('1994-05-05'), // adult — GuardianConsentGuard passes
         isMinor: false,
       },
@@ -83,6 +85,8 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
         email: `e2e-banter-minor-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
         passwordHash: 'unused',
         displayName: `E2E Banter Minor ${label}`,
+        verificationStatus: 'verified', // W3 gates: a verified email (B-118) and a username (B-027) so this actor can post
+        username: `e2e_${Math.random().toString(36).slice(2, 12)}`,
         dateOfBirth: seedDob('2014-01-01'),
         isMinor: true,
         guardian: {
@@ -806,12 +810,13 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
   });
 
   describe('GET /banter-rooms?tagQuery= (free-text Tag search)', () => {
-    it('matches case-insensitively across topic name, creator displayName, and scoped club name, and ANDs with scopeType', async () => {
+    it('matches case-insensitively across topic name, creator USERNAME, and scoped club name, and ANDs with scopeType', async () => {
       const creator = await createUser('tag-creator');
       const prisma = getTestPrismaClient();
+      // B-027 (#369): the creator is matched on the username only, never the real name.
       await prisma.user.update({
         where: { id: creator.userId },
-        data: { displayName: 'Kwame Asante' },
+        data: { displayName: 'Real Person', username: 'kwame_asante' },
       });
       const club = await seedClubFor(creator.userId, 'Arsenal Ladies');
 
@@ -837,11 +842,18 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
         .get('/banter-rooms?tagQuery=KWAME')
         .set('Authorization', `Bearer ${creator.accessToken}`)
         .expect(200);
-      // The creator's displayName matches every room they created, so all
+      // The creator's username matches every room they created, so all
       // four rooms match on the name, not just the one tagged for it.
       const nameHitIds = nameHit.body.items.map((r: { id: string }) => r.id);
       expect(nameHitIds).toHaveLength(4);
       expect(nameHitIds).toEqual(expect.arrayContaining([byName.id, byTopic.id, byClub.id]));
+
+      // The creator's REAL name is not searchable (B-027, #369).
+      const realNameHit = await request(server())
+        .get('/banter-rooms?tagQuery=real%20person')
+        .set('Authorization', `Bearer ${creator.accessToken}`)
+        .expect(200);
+      expect(realNameHit.body.items).toEqual([]);
 
       const topicHit = await request(server())
         .get('/banter-rooms?tagQuery=deadline')

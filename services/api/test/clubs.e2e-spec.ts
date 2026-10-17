@@ -78,6 +78,14 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
     // POST /auth/register now returns the token pair in the same flat
     // shape POST /auth/login does (sprint-2/auth-response-shape-
     // reconciliation) -- see auth.e2e-spec.ts's note and auth/README.md.
+    // W3 gates (B-118): a freshly registered account is unverified and may not
+    // join a club until its email is verified. Mark it verified directly; the
+    // real verify-email route is covered by email-verification.e2e-spec.ts.
+    await getTestPrismaClient().user.update({
+      where: { id: registerResponse.body.user.id as string },
+      data: { verificationStatus: 'verified' },
+    });
+
     return {
       userId: registerResponse.body.user.id as string,
       accessToken: registerResponse.body.accessToken as string,
@@ -115,6 +123,8 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
         email: uniqueLeaveEmail(label),
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E Clubs Leave User ${label}`,
+        verificationStatus: 'verified', // W3 gates: a verified email (B-118) and a username (B-027) so this actor can post
+        username: `E2E Clubs Leave User ${label}`, // = displayName so publicName assertions read naturally (unique per test)
         dateOfBirth: seedDob('1998-07-04'), // adult, no guardian-consent branch
         isMinor: false,
       },
@@ -518,6 +528,8 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
           email: `e2e-clubs-minor-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
           passwordHash: 'unused-in-this-e2e-spec-file',
           displayName: `Zzz Minor ${label}`, // sorts last, so it's never the trimmed lookahead row
+          verificationStatus: 'verified', // W3 gates: a verified email (B-118) and a username (B-027) so this actor can post
+          username: `Zzz Minor ${label}`, // = displayName so publicName assertions read naturally (unique per test)
           dateOfBirth: seedDob('2015-01-01'),
           isMinor: true,
           guardian: {
@@ -625,6 +637,8 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
           email: `roster-alice-${Date.now()}@example.com`,
           passwordHash: 'x',
           displayName: 'Alice Adult',
+          verificationStatus: 'verified', // W3 gates: a verified email (B-118) and a username (B-027) so this actor can post
+          username: 'Alice Adult', // = displayName so publicName assertions read naturally (unique per test)
           dateOfBirth: seedDob('1990-01-01'),
           isMinor: false,
         },
@@ -634,6 +648,8 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
           email: `roster-bob-${Date.now()}@example.com`,
           passwordHash: 'x',
           displayName: 'Bob Adult',
+          verificationStatus: 'verified', // W3 gates: a verified email (B-118) and a username (B-027) so this actor can post
+          username: 'Bob Adult', // = displayName so publicName assertions read naturally (unique per test)
           dateOfBirth: seedDob('1990-01-01'),
           isMinor: false,
         },
@@ -667,6 +683,8 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
           email: `consented-minor-${Date.now()}@example.com`,
           passwordHash: 'x',
           displayName: 'Consented Minor',
+          verificationStatus: 'verified', // W3 gates: a verified email (B-118) and a username (B-027) so this actor can post
+          username: 'Consented Minor', // = displayName so publicName assertions read naturally (unique per test)
           dateOfBirth: seedDob('2015-01-01'),
           isMinor: true,
           guardian: {
@@ -702,6 +720,8 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
             email: `mp-${name}-${Date.now()}@example.com`,
             passwordHash: 'x',
             displayName: name,
+            verificationStatus: 'verified', // W3 gates: a verified email (B-118) and a username (B-027) so this actor can post
+            username: name, // = displayName so publicName assertions read naturally (unique per test)
             dateOfBirth: seedDob('1990-01-01'),
             isMinor: false,
           },
@@ -739,6 +759,8 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
           email: `if-amy-${Date.now()}@example.com`,
           passwordHash: 'x',
           displayName: 'Amy',
+          verificationStatus: 'verified', // W3 gates: a verified email (B-118) and a username (B-027) so this actor can post
+          username: 'Amy', // = displayName so publicName assertions read naturally (unique per test)
           dateOfBirth: seedDob('1990-01-01'),
           isMinor: false,
         },
@@ -748,6 +770,8 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
           email: `if-ben-${Date.now()}@example.com`,
           passwordHash: 'x',
           displayName: 'Ben',
+          verificationStatus: 'verified', // W3 gates: a verified email (B-118) and a username (B-027) so this actor can post
+          username: 'Ben', // = displayName so publicName assertions read naturally (unique per test)
           dateOfBirth: seedDob('1990-01-01'),
           isMinor: false,
         },

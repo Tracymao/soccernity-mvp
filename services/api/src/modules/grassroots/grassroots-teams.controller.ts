@@ -10,6 +10,7 @@ import { CreateTeamDto } from './dto/create-team.dto';
 import { ListFixturesQueryDto } from './dto/list-fixtures-query.dto';
 import { ListTeamsQueryDto } from './dto/list-teams-query.dto';
 import { GrassrootsService } from './grassroots.service';
+import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
 
 // Build Plan Section 4.5 (Grassroots Records Service) — the /teams routes.
 // The /fixtures routes live on GrassrootsFixturesController; both share
@@ -25,7 +26,7 @@ export class GrassrootsTeamsController {
   // Section 5.7's broad reading (Decision Log #21), so a restricted-
   // pending minor cannot do it. createdById is the caller.
   @Post()
-  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard)
   async create(@CurrentUser() user: AccessTokenPayload, @Body() dto: CreateTeamDto) {
     return this.grassroots.createTeam(user.sub, dto);
   }

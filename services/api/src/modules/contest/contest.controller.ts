@@ -5,6 +5,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
 import { ContestService } from './contest.service';
 import { SubmitEntryDto } from './dto/submit-entry.dto';
+import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
+import { ProfileCompleteGuard } from '../auth/guards/profile-complete.guard';
 
 // sprint-2/contest-data-model-backend — the user-facing Contest endpoints.
 // None of these are in Build Plan Section 4 (which has no Contest lines at
@@ -53,7 +55,7 @@ export class ContestController {
   // submission always creates exactly one new ContestEntry row.
   @Post('entries')
   @HttpCode(201)
-  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard, ProfileCompleteGuard)
   async submitEntry(@CurrentUser() user: AccessTokenPayload, @Body() dto: SubmitEntryDto) {
     return this.contestService.submitEntry(user.sub, dto.postId);
   }

@@ -7,6 +7,8 @@ import { AccessTokenPayload } from '../auth/token/token.types';
 import { ClubsService } from './clubs.service';
 import { ListClubMembersQueryDto } from './dto/list-club-members-query.dto';
 import { ListClubsQueryDto } from './dto/list-clubs-query.dto';
+import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
+import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
 
 // Build Plan Section 4.4 (Club & Banter Service) — the club subset only:
 // GET /clubs, GET /clubs/:id, POST /clubs/:id/join. /banter-rooms* (the
@@ -135,7 +137,7 @@ export class ClubsController {
   // Log candidate this closes.
   @Post(':id/join')
   @HttpCode(200)
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard)
   async join(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
     return this.clubsService.joinClub(user.sub, id);
   }
@@ -165,7 +167,7 @@ export class ClubsController {
   // assertClubExists), identical to join's own 404 case.
   @Delete(':id/join')
   @HttpCode(200)
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
   async leave(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
     return this.clubsService.leaveClub(user.sub, id);
   }

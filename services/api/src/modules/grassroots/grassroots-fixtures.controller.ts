@@ -7,6 +7,7 @@ import { CreateFixtureDto } from './dto/create-fixture.dto';
 import { LogResultDto } from './dto/log-result.dto';
 import { UpdateFixtureStatusDto } from './dto/update-fixture-status.dto';
 import { GrassrootsService } from './grassroots.service';
+import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
 
 // Build Plan Section 4.5 (Grassroots Records Service) — the /fixtures
 // routes, including PATCH /fixtures/:id/status (Decision Log #254) and the
@@ -21,7 +22,7 @@ export class GrassrootsFixturesController {
   // creator of teamA -> else 403. Team existence (404) is settled before
   // the authz check.
   @Post()
-  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard)
   async create(@CurrentUser() user: AccessTokenPayload, @Body() dto: CreateFixtureDto) {
     return this.grassroots.createFixture(user.sub, dto);
   }
@@ -47,7 +48,7 @@ export class GrassrootsFixturesController {
   // convention like/join/leave use rather than a 201.
   @Post(':id/result')
   @HttpCode(200)
-  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard)
   async logResult(
     @CurrentUser() user: AccessTokenPayload,
     @Param('id') id: string,
@@ -62,7 +63,7 @@ export class GrassrootsFixturesController {
   // live, live -> full_time; everything else 409) is enforced server-side
   // in GrassrootsService.updateFixtureStatus. Returns the updated fixture.
   @Patch(':id/status')
-  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard)
   async updateStatus(
     @CurrentUser() user: AccessTokenPayload,
     @Param('id') id: string,

@@ -37,6 +37,8 @@ describe('GuardianConsentController (HTTP layer)', () => {
     withdrawConsent: jest.fn(),
     // safeguarding/guardian-email-change-endpoint
     changeGuardianEmail: jest.fn(),
+    // B-029
+    reportIncorrectDetails: jest.fn(),
   };
   const cardVerification = { getRequirements: jest.fn(), createIntent: jest.fn(), complete: jest.fn() };
   // Pass-through by default; individual tests make it throw 429.
@@ -378,6 +380,51 @@ describe('GuardianConsentController (HTTP layer)', () => {
         .post('/auth/guardian-consent/decline')
         .send({ consentToken: 'stale' })
         .expect(400);
+    });
+  });
+
+  // B-029 (Decision Log #372)
+  describe('POST /auth/guardian-consent/report-incorrect-details', () => {
+    it('returns 200 and forwards only the consent token', async () => {
+      guardianConsentService.reportIncorrectDetails.mockResolvedValueOnce(undefined);
+
+      const res = await request(app.getHttpServer())
+        .post('/auth/guardian-consent/report-incorrect-details')
+        .send({ consentToken: 'token-123' })
+        .expect(200);
+
+      expect(res.body.message).toMatch(/support will review/i);
+      expect(guardianConsentService.reportIncorrectDetails).toHaveBeenCalledWith('token-123');
+    });
+
+    it('rejects a missing consentToken with 400 before reaching the service', async () => {
+      await request(app.getHttpServer()).post('/auth/guardian-consent/report-incorrect-details').send({}).expect(400);
+      expect(guardianConsentService.reportIncorrectDetails).not.toHaveBeenCalled();
+    });
+
+    it('accepts NOTHING else: a smuggled date of birth or note is a 400 (data minimisation)', async () => {
+      for (const extra of [{ dateOfBirth: '2012-01-01' }, { note: 'wrong birthday' }, { correctDob: '2011-05-05' }]) {
+        await request(app.getHttpServer())
+          .post('/auth/guardian-consent/report-incorrect-details')
+          .send({ consentToken: 'token-123', ...extra })
+          .expect(400);
+      }
+      expect(guardianConsentService.reportIncorrectDetails).not.toHaveBeenCalled();
+    });
+
+    it("surfaces the service's BadRequestException as a 400", async () => {
+      guardianConsentService.reportIncorrectDetails.mockRejectedValueOnce(
+        new BadRequestException('Invalid or expired consent token'),
+      );
+      await request(app.getHttpServer())
+        .post('/auth/guardian-consent/report-incorrect-details')
+        .send({ consentToken: 'stale' })
+        .expect(400);
+    });
+
+    it('is rate limited like the other token routes (AuthRateLimit metadata present)', () => {
+      const guards = Reflect.getMetadata('__guards__', GuardianConsentController.prototype.reportIncorrectDetails) ?? [];
+      expect(guards.length).toBeGreaterThan(0);
     });
   });
 

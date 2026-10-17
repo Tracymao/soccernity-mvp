@@ -64,6 +64,8 @@ describe('Follow e2e: follow/unfollow, notification direction, and followers/fol
         email: uniqueEmail(label),
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E Follow User ${label}`,
+        verificationStatus: 'verified', // W3 gates: a verified email (B-118) and a username (B-027) so this actor can post
+        username: `e2e_${Math.random().toString(36).slice(2, 12)}`,
         dateOfBirth: seedDob('1998-07-04'), // adult, no guardian-consent branch
         isMinor: false,
       },

@@ -8,6 +8,8 @@ import { CommunityGroupsService } from './community-groups.service';
 import { CreateCommunityGroupDto } from './dto/create-community-group.dto';
 import { ListCommunityGroupMembersQueryDto } from './dto/list-community-group-members-query.dto';
 import { ListCommunityGroupsQueryDto } from './dto/list-community-groups-query.dto';
+import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
+import { ProfileCompleteGuard } from '../auth/guards/profile-complete.guard';
 
 // Build Plan Sprint 3 — Community Groups (Decision Log #281, design by
 // `sprint-3/community-groups-design`; schema by
@@ -37,7 +39,7 @@ export class CommunityGroupsController {
   // sprint-1/under-16-restrictions: creating a group is content creation;
   // isUnder16 accounts are read-only. Join/leave stay open (see README).
   @Post()
-  @UseGuards(JwtAuthGuard, GuardianConsentGuard, Under16RestrictionGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, Under16RestrictionGuard, EmailVerifiedGuard, ProfileCompleteGuard)
   @RestrictUnder16('community_groups')
   async create(@CurrentUser() user: AccessTokenPayload, @Body() dto: CreateCommunityGroupDto) {
     return this.communityGroups.createGroup(user.sub, dto);
@@ -97,7 +99,7 @@ export class CommunityGroupsController {
   // as like/save/follow/club-join/banter-room-join.
   @Post(':id/join')
   @HttpCode(200)
-  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard)
   async join(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
     return this.communityGroups.joinGroup(user.sub, id);
   }

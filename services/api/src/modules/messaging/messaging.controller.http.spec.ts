@@ -3,6 +3,8 @@ import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { Under16RestrictionGuard } from '../auth/guards/under-16-restriction.guard';
+import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
+import { ProfileCompleteGuard } from '../auth/guards/profile-complete.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ConversationsController } from './conversations.controller';
 import { MessagingService } from './messaging.service';
@@ -32,6 +34,12 @@ describe('ConversationsController (HTTP layer)', () => {
       controllers: [ConversationsController],
       providers: [{ provide: MessagingService, useValue: messaging }],
     })
+      // W3 gates (B-026/B-118/B-027): guard behaviour is covered by the guard specs,
+      // write-route-guards.spec.ts and test/w3-gates.e2e-spec.ts; pass-through here.
+      .overrideGuard(EmailVerifiedGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(ProfileCompleteGuard)
+      .useValue({ canActivate: () => true })
       .overrideGuard(JwtAuthGuard)
       .useValue({
         canActivate: (context: ExecutionContext) => {

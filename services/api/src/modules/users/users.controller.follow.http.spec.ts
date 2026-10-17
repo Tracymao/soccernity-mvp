@@ -2,6 +2,7 @@ import { BadRequestException, ExecutionContext, INestApplication, NotFoundExcept
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
+import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
@@ -39,6 +40,10 @@ describe('UsersController (HTTP layer) — follow/follower routes', () => {
       // B-020: PATCH /users/:id is behind EmailVerifiedGuard; its own behaviour is
       // covered by email-verified.guard.spec.ts and test/email-verification.e2e-spec.ts.
       .overrideGuard(EmailVerifiedGuard)
+      .useValue({ canActivate: () => true })
+      // W3 gates (B-026/B-118/B-027): guard behaviour is covered by the guard specs,
+      // write-route-guards.spec.ts and test/w3-gates.e2e-spec.ts; pass-through here.
+      .overrideGuard(GuardianConsentGuard)
       .useValue({ canActivate: () => true })
       .overrideGuard(JwtAuthGuard)
       .useValue({

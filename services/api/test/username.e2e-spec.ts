@@ -91,11 +91,13 @@ describe('Username e2e: unique-where-set column + public name convention against
       expect(get.body.publicName).toBe('goalie_9');
     });
 
-    it('a user with no username has publicName equal to their displayName (fallback path)', async () => {
+    it("a user with no username has publicName 'Soccernity member', never their displayName (B-027)", async () => {
       const ben = await createUser('Ben Cole');
       const get = await request(app.getHttpServer()).get(`/users/${ben.userId}`).set(auth(ben)).expect(200);
       expect(get.body.username).toBeNull();
-      expect(get.body.publicName).toBe('Ben Cole');
+      expect(get.body.publicName).toBe('Soccernity member');
+      // The owner still sees their own real name; only OTHERS see the placeholder.
+      expect(get.body.displayName).toBe('Ben Cole');
     });
 
     it('a second user claiming the same name in a different case gets 409, and the first holder is unaffected', async () => {
@@ -124,13 +126,13 @@ describe('Username e2e: unique-where-set column + public name convention against
       expect((await getTestPrismaClient().user.findUnique({ where: { id: ada.userId } }))!.username).toBeNull();
     });
 
-    it('null clears the username, restoring the displayName and freeing the name for someone else', async () => {
+    it('null clears the username, returning to the placeholder name and freeing the name for someone else', async () => {
       const ada = await createUser('Ada Obi', 'goalie_9');
       const ben = await createUser('Ben Cole');
 
       const cleared = await request(app.getHttpServer()).patch(`/users/${ada.userId}`).set(auth(ada)).send({ username: null }).expect(200);
       expect(cleared.body.username).toBeNull();
-      expect(cleared.body.publicName).toBe('Ada Obi');
+      expect(cleared.body.publicName).toBe('Soccernity member');
 
       await request(app.getHttpServer()).patch(`/users/${ben.userId}`).set(auth(ben)).send({ username: 'goalie_9' }).expect(200);
     });
@@ -148,17 +150,19 @@ describe('Username e2e: unique-where-set column + public name convention against
       expect(JSON.stringify(seen.body)).not.toContain('Ada Obi');
     });
 
-    it('a post by a user with no username shows the displayName (fallback path)', async () => {
+    it("a post by a user with no username shows 'Soccernity member' (B-027); such a user cannot post any more, so the post is seeded", async () => {
       const ben = await createUser('Ben Cole');
       const viewer = await createUser('Viewer Vee');
-      const created = await request(app.getHttpServer()).post('/posts').set(auth(ben)).send({ contentText: 'Hello' }).expect(201);
-      const seen = await request(app.getHttpServer()).get(`/posts/${created.body.id}`).set(auth(viewer)).expect(200);
-      expect(seen.body.author).toMatchObject({ id: ben.userId, publicName: 'Ben Cole' });
+      await request(app.getHttpServer()).post('/posts').set(auth(ben)).send({ contentText: 'Hello' }).expect(403);
+      const post = await getTestPrismaClient().post.create({ data: { authorId: ben.userId, contentText: 'Hello' } });
+      const seen = await request(app.getHttpServer()).get(`/posts/${post.id}`).set(auth(viewer)).expect(200);
+      expect(seen.body.author).toEqual({ id: ben.userId, publicName: 'Soccernity member', isFollowing: false });
+      expect(JSON.stringify(seen.body)).not.toContain('Ben Cole');
     });
 
     it('comments show the commenter public name', async () => {
       const ada = await createUser('Ada Obi', 'goalie_9');
-      const ben = await createUser('Ben Cole');
+      const ben = await createUser('Ben Cole', 'ben_c');
       const post = await request(app.getHttpServer()).post('/posts').set(auth(ben)).send({ contentText: 'Hello' }).expect(201);
       await request(app.getHttpServer()).post(`/posts/${post.body.id}/comments`).set(auth(ada)).send({ contentText: 'Nice' }).expect(201);
       const comments = await request(app.getHttpServer()).get(`/posts/${post.body.id}/comments`).set(auth(ben)).expect(200);
@@ -203,10 +207,12 @@ describe('Username e2e: unique-where-set column + public name convention against
       expect(byRealName.body.items).toEqual([]);
     });
 
-    it('finds a user with no username by displayName (fallback path)', async () => {
+    it('does NOT find a user with no username, by real name or by the placeholder (B-027)', async () => {
       await createUser('Ben Cole');
-      const found = await request(app.getHttpServer()).get('/search').query({ q: 'ben', scope: 'users' }).expect(200);
-      expect(found.body.items.map((i: { publicName: string }) => i.publicName)).toEqual(['Ben Cole']);
+      const byReal = await request(app.getHttpServer()).get('/search').query({ q: 'ben', scope: 'users' }).expect(200);
+      expect(byReal.body.items).toEqual([]);
+      const byPlaceholder = await request(app.getHttpServer()).get('/search').query({ q: 'soccernity member', scope: 'users' }).expect(200);
+      expect(byPlaceholder.body.items).toEqual([]);
     });
   });
 

@@ -112,7 +112,7 @@ const AUTHOR = { id: 'author-1', username: null as string | null, displayName: '
 
 // What the API returns for a row: the embedded author is { id, publicName } only.
 function asView<T extends { author: { id: string; username: string | null; displayName: string } }>(row: T) {
-  return { ...row, author: { id: row.author.id, publicName: row.author.username ?? row.author.displayName } };
+  return { ...row, author: { id: row.author.id, publicName: row.author.username ?? 'Soccernity member' } };
 }
 
 function buildPostRow(overrides: Partial<Record<string, unknown>> = {}) {
@@ -1770,11 +1770,11 @@ describe('FeedService', () => {
       expect(JSON.stringify(result)).not.toContain('Ada Obi');
     });
 
-    it('getPostById falls back to the displayName when the author has no username', async () => {
+    it('getPostById shows the placeholder, never the real name, when the author has no username', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(buildPostRow());
       const result = await new FeedService(prisma).getPostById('post-1', 'viewer-1');
-      expect(result.author.publicName).toBe('Author One');
+      expect(result.author.publicName).toBe('Soccernity member');
     });
 
     it('createPost and addComment resolve the author name the same way', async () => {

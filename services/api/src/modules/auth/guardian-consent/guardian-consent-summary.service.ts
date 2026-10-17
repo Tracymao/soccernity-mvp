@@ -20,6 +20,11 @@ export interface GuardianRequestSummary {
   guardianRelationship: string;
   // When the account (and so the first request) was created.
   requestedAt: string;
+  // B-029: true once the guardian has pressed "Report incorrect details" and
+  // support has not yet resolved it. The page uses it to show that approval is
+  // on hold instead of letting the guardian press a button that will be
+  // refused. A boolean only -- no detail of what was reported.
+  incorrectDetailsReported: boolean;
   notices: {
     guardianEmailShownOnMinorProfile: true;
     photoAndUsernameVisibleToOthers: true;
@@ -58,6 +63,7 @@ export class GuardianConsentSummaryService {
         relationship: true,
         consentStatus: true,
         consentTokenExpiresAt: true,
+        incorrectDetailsReportedAt: true,
         minorUser: {
           select: { displayName: true, dateOfBirth: true, isMinor: true, accountStatus: true, createdAt: true },
         },
@@ -96,6 +102,7 @@ export class GuardianConsentSummaryService {
       guardianName: guardian.name,
       guardianRelationship: guardian.relationship,
       requestedAt: guardian.minorUser.createdAt.toISOString(),
+      incorrectDetailsReported: Boolean(guardian.incorrectDetailsReportedAt),
       notices: { guardianEmailShownOnMinorProfile: true, photoAndUsernameVisibleToOthers: true },
     };
   }

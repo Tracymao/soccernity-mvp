@@ -1443,3 +1443,37 @@ the optimistic-lock where clause), 4 new cases in
 `guardian-consent.controller.spec.ts`, and `test/guardian-email-change.e2e-spec.ts`
 (5, real Postgres: restart on the same row, old link dead / new link confirms,
 confirmed consent byte-identical, refusals, concurrent changes).
+
+
+## Status update -- W3 gates: write block, profile gate, onboarding state, approval email, incorrect-details flag (build register B-026/B-027/B-028/B-029/B-030/B-118, 2026-10-17)
+
+Full detail and the route table: `docs/backend-w3-gates-report.md`. Summary of what changed in `auth`:
+
+- **`nextStep` / onboarding state (B-030).** `AuthUserSummary` (login, register,
+  reactivate) and the own-profile response gain `profileComplete`,
+  `guardianConsentStatus` (`not_applicable | pending | confirmed | declined`;
+  `declined` is never folded into `pending`) and `nextStep`
+  (`restricted_pending | verify_email | create_profile | none`), computed by
+  `onboarding-state.util.ts` from a fresh read (a minor's Guardian row is looked
+  up at login; adults skip the query). A routing hint only: the guards enforce.
+  Still never in the JWT (`{ sub, role }` only).
+- **`ProfileCompleteGuard` (B-027)** -- `403 profile_incomplete` until a username
+  is set; fresh read, fails closed. Applied to content-publishing routes only
+  (see the report's table and `src/write-route-guards.spec.ts`).
+- **Approval email (B-028).** `confirmConsent` sends `guardian-approved-minor`
+  to the minor only when *that* request made the `pending -> confirmed`
+  transition (the idempotent re-click and a lost race send nothing).
+  Fire-and-forget; link is `${WEB_APP_BASE_URL}/login`; nothing is sent if the base
+  URL is unusable. Copy is functional and not counsel-reviewed.
+- **Incorrect-details flag (B-029, Decision Log #372).**
+  `POST /auth/guardian-consent/report-incorrect-details { consentToken }`
+  sets `Guardian.incorrectDetailsReportedAt` (migration
+  `20261017120000_add_guardian_incorrect_details_report`, additive). While open:
+  `confirmConsent` and card `createIntent` refuse; decline and withdraw do not;
+  `complete()` still records/refunds a charge already made. Survives a
+  guardian-email change on purpose. Collects no note and no DOB. The adopted
+  default for #372's open point ("what the flag does to the consent flow") is
+  *blocks approval only* -- veto-able.
+- **Write-route guards (B-026/B-118).** `GuardianConsentGuard` and
+  `EmailVerifiedGuard` extended across the social/profile write routes; see the
+  report. `auth` routes themselves stay open by design.

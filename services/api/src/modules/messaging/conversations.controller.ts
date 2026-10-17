@@ -20,6 +20,8 @@ import { MessagingQueryDto } from './dto/messaging-query.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { StartConversationDto } from './dto/start-conversation.dto';
 import { MessagingService } from './messaging.service';
+import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
+import { ProfileCompleteGuard } from '../auth/guards/profile-complete.guard';
 
 // Build Plan Section 4.7 (Content, Messaging, Notification & Search
 // Services) — the Messaging slice. Section 4.7's literal list:
@@ -54,7 +56,7 @@ export class ConversationsController {
   // documented way to set the status conditionally while still returning
   // a serialized body.
   @Post()
-  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard, ProfileCompleteGuard)
   async start(
     @CurrentUser() user: AccessTokenPayload,
     @Body() dto: StartConversationDto,
@@ -91,7 +93,7 @@ export class ConversationsController {
   // JwtAuthGuard + GuardianConsentGuard + participant check. Nest's
   // default 201 (this really does create a Message).
   @Post(':id/messages')
-  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard, ProfileCompleteGuard)
   async send(
     @Param('id') id: string,
     @CurrentUser() user: AccessTokenPayload,
