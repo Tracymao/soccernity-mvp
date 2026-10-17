@@ -44,6 +44,8 @@ describe('Contest e2e: the weekly-progression state machine + points ledger', ()
         email: `e2e-contest-${label}-${Date.now()}-${rand()}@example.com`,
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName,
+        verificationStatus: 'verified', // W3 gates: a verified email (B-118) and a username (B-027) so this actor can post
+        username: displayName, // = displayName so publicName assertions read naturally (unique per test)
         dateOfBirth: seedDob('1998-07-04'),
         isMinor: false,
       },

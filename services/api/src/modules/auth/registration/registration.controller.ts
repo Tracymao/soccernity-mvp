@@ -69,7 +69,8 @@ export class RegistrationController {
 function toRegisterResponse(result: RegisterResult) {
   const { user, dateOfBirth, guardian, tokens } = result;
   return {
-    user: toAuthUserSummary(user, dateOfBirth),
+    // A freshly registered minor's guardian row is always 'pending' (B-030).
+    user: toAuthUserSummary(user, dateOfBirth, guardian?.consentStatus ?? null),
     guardian: guardian
       ? {
           id: guardian.id,

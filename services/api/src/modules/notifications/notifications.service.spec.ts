@@ -126,7 +126,7 @@ describe('NotificationsService', () => {
 
       const page = await service.listNotifications(CALLER, {});
 
-      expect(page.items[0].data).toEqual({ actor: { id: 'actor-1', publicName: 'Jane' } });
+      expect(page.items[0].data).toEqual({ actor: { id: 'actor-1', publicName: 'Soccernity member' } });
       expect(prisma.user.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: { in: ['actor-1'] } } }),
       );
@@ -173,7 +173,7 @@ describe('NotificationsService', () => {
 
       expect(page.items[0].data).toEqual({
         conversationId: 'convo-1',
-        otherParticipant: { id: 'other-1', publicName: 'Sam' },
+        otherParticipant: { id: 'other-1', publicName: 'Soccernity member' },
       });
     });
 
@@ -401,7 +401,7 @@ describe('NotificationsService', () => {
         data: { read: true },
       });
       expect(result.read).toBe(true);
-      expect(result.data).toEqual({ actor: { id: 'actor-1', publicName: 'Jane' } });
+      expect(result.data).toEqual({ actor: { id: 'actor-1', publicName: 'Soccernity member' } });
     });
 
     it('is idempotent — an already-read notification is a no-op 200, not a duplicate update', async () => {

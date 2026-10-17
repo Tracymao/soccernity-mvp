@@ -62,6 +62,8 @@ describe('Messaging e2e (Section 4.7, DM slice)', () => {
         email: `e2e-msg-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName,
+        verificationStatus: 'verified', // W3 gates: a verified email (B-118) and a username (B-027) so this actor can post
+        username: displayName, // = displayName so publicName assertions read naturally (unique per test)
         dateOfBirth: seedDob('1993-03-03'), // adult — GuardianConsentGuard passes
         isMinor: false,
       },
@@ -81,6 +83,8 @@ describe('Messaging e2e (Section 4.7, DM slice)', () => {
         email: `e2e-msg-minor-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
         passwordHash: 'unused',
         displayName: `E2E Msg Minor ${label}`,
+        verificationStatus: 'verified', // W3 gates: a verified email (B-118) and a username (B-027) so this actor can post
+        username: `E2E Msg Minor ${label}`, // = displayName so publicName assertions read naturally (unique per test)
         dateOfBirth: seedDob('2014-01-01'),
         isMinor: true,
         guardian: {

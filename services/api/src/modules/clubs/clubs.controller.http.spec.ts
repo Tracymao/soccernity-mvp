@@ -2,6 +2,8 @@ import { ExecutionContext, INestApplication, NotFoundException, ValidationPipe }
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { FeedService } from '../feed/feed.service';
+import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
+import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ClubsController } from './clubs.controller';
 import { ClubsService } from './clubs.service';
@@ -35,6 +37,12 @@ describe('ClubsController (HTTP layer)', () => {
         { provide: FeedService, useValue: feedService },
       ],
     })
+      // W3 gates (B-026/B-118/B-027): guard behaviour is covered by the guard specs,
+      // write-route-guards.spec.ts and test/w3-gates.e2e-spec.ts; pass-through here.
+      .overrideGuard(GuardianConsentGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(EmailVerifiedGuard)
+      .useValue({ canActivate: () => true })
       .overrideGuard(JwtAuthGuard)
       .useValue({
         canActivate: (context: ExecutionContext) => {

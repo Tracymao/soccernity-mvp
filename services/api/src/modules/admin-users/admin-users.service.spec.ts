@@ -57,6 +57,77 @@ function user(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 describe('AdminUsersService', () => {
+  // B-029 (Decision Log #372)
+  describe('incorrect-details reports', () => {
+    function build() {
+      const deps = buildDeps();
+      (deps.prisma as any).guardian = { findMany: jest.fn().mockResolvedValue([]), updateMany: jest.fn() };
+      const service = new AdminUsersService(deps.prisma, deps.tokenService, deps.accountDeletionSweepService, deps.adminActionLogService);
+      return { ...deps, service, guardian: (deps.prisma as any).guardian };
+    }
+
+    it('lists open reports oldest-first, with who-to-contact and NO date of birth, token or minor email', async () => {
+      const { service, guardian } = build();
+      guardian.findMany.mockResolvedValue([
+        {
+          minorUserId: 'u1', name: 'Grace Parent', email: 'grace@example.com', consentStatus: 'pending',
+          incorrectDetailsReportedAt: new Date('2026-10-02T00:00:00Z'),
+          minorUser: { displayName: 'Ada Minor', accountStatus: 'active' },
+        },
+      ]);
+
+      const out = await service.listIncorrectDetailsReports();
+
+      expect(out).toEqual({
+        items: [
+          {
+            userId: 'u1', minorDisplayName: 'Ada Minor', minorAccountStatus: 'active', guardianName: 'Grace Parent',
+            guardianEmail: 'grace@example.com', consentStatus: 'pending', reportedAt: new Date('2026-10-02T00:00:00Z'),
+          },
+        ],
+        truncated: false,
+      });
+      const arg = guardian.findMany.mock.calls[0][0];
+      expect(arg.where).toEqual({ incorrectDetailsReportedAt: { not: null } });
+      expect(arg.orderBy[0]).toEqual({ incorrectDetailsReportedAt: 'asc' });
+      expect(JSON.stringify(arg.select)).not.toMatch(/consentToken|dateOfBirth|withdrawalToken/);
+      expect(JSON.stringify(out)).not.toMatch(/dateOfBirth|consentToken/);
+    });
+
+    it('says so honestly when the cap is hit', async () => {
+      const { service, guardian } = build();
+      const row = (i: number) => ({
+        minorUserId: `u${i}`, name: 'G', email: 'g@example.com', consentStatus: 'pending',
+        incorrectDetailsReportedAt: new Date(), minorUser: { displayName: 'M', accountStatus: 'active' },
+      });
+      guardian.findMany.mockResolvedValue(Array.from({ length: 201 }, (_, i) => row(i)));
+      const out = await service.listIncorrectDetailsReports();
+      expect(out.items).toHaveLength(200);
+      expect(out.truncated).toBe(true);
+    });
+
+    it('resolve clears the flag only where it is open, and writes ONE audit row naming the admin and the user', async () => {
+      const { service, guardian, adminActionLogService } = build();
+      guardian.updateMany.mockResolvedValue({ count: 1 });
+
+      await expect(service.resolveIncorrectDetailsReport('u1', 'admin-1')).resolves.toEqual({ resolved: true });
+
+      expect(guardian.updateMany).toHaveBeenCalledWith({
+        where: { minorUserId: 'u1', incorrectDetailsReportedAt: { not: null } },
+        data: { incorrectDetailsReportedAt: null },
+      });
+      expect(adminActionLogService.record).toHaveBeenCalledTimes(1);
+      expect(adminActionLogService.record).toHaveBeenCalledWith('admin-1', 'guardian.incorrect_details_resolved', 'user', 'u1');
+    });
+
+    it('resolve is a 404 and writes NO audit row when there is nothing open (also what a lost race sees)', async () => {
+      const { service, guardian, adminActionLogService } = build();
+      guardian.updateMany.mockResolvedValue({ count: 0 });
+      await expect(service.resolveIncorrectDetailsReport('u1', 'admin-1')).rejects.toBeInstanceOf(NotFoundException);
+      expect(adminActionLogService.record).not.toHaveBeenCalled();
+    });
+  });
+
   describe('listStalledHolds', () => {
     it('defaults the threshold to 90 days and only reads', async () => {
       const { prisma, tokenService, accountDeletionSweepService, adminActionLogService } = buildDeps();

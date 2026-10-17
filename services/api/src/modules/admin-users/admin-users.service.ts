@@ -28,6 +28,10 @@ const USER_LIST_SELECT = {
   createdAt: true,
 } as const;
 
+// B-029: how many open incorrect-details reports one read returns before
+// reporting truncation. Open reports are rare; this is a safety cap.
+const INCORRECT_DETAILS_LIST_CAP = 200;
+
 export type UserListItem = Prisma.UserGetPayload<{ select: typeof USER_LIST_SELECT }>;
 
 export interface UserListPage {
@@ -71,6 +75,66 @@ export class AdminUsersService {
   async listStalledHolds(olderThanDays?: number) {
     const items = await this.accountDeletionSweepService.listStalledHolds(olderThanDays);
     return { thresholdDays: olderThanDays ?? resolveHeldInvestigationAlertDays(), items };
+  }
+
+  // -------------------------------------------------------------------
+  // B-029 (Decision Log #372): the support side of a guardian's "report
+  // incorrect details" flag. The flag itself is written by
+  // GuardianConsentService.reportIncorrectDetails (token-credentialed); this
+  // is how support SEES the open ones and CLEARS one.
+  //
+  // The list is deliberately small in what it returns: who, who to contact,
+  // when. No date of birth (the guardian is saying it is WRONG, and B-109 is
+  // the audited place support reads it), no consent token. Open reports are
+  // rare by nature, so it is one capped read, not a paginated feed; the
+  // `truncated` flag says so honestly if the cap is ever hit.
+  // -------------------------------------------------------------------
+  async listIncorrectDetailsReports() {
+    const rows = await this.prisma.guardian.findMany({
+      where: { incorrectDetailsReportedAt: { not: null } },
+      orderBy: [{ incorrectDetailsReportedAt: 'asc' }, { id: 'asc' }],
+      take: INCORRECT_DETAILS_LIST_CAP + 1,
+      select: {
+        minorUserId: true,
+        name: true,
+        email: true,
+        consentStatus: true,
+        incorrectDetailsReportedAt: true,
+        minorUser: { select: { displayName: true, accountStatus: true } },
+      },
+    });
+    const truncated = rows.length > INCORRECT_DETAILS_LIST_CAP;
+    const items = (truncated ? rows.slice(0, INCORRECT_DETAILS_LIST_CAP) : rows).map((r) => ({
+      userId: r.minorUserId,
+      minorDisplayName: r.minorUser.displayName,
+      minorAccountStatus: r.minorUser.accountStatus,
+      guardianName: r.name,
+      guardianEmail: r.email,
+      consentStatus: r.consentStatus,
+      reportedAt: r.incorrectDetailsReportedAt as Date,
+    }));
+    return { items, truncated };
+  }
+
+  async resolveIncorrectDetailsReport(userId: string, adminId: string): Promise<{ resolved: true }> {
+    // updateMany keyed on the flag being open, so a double-click or two
+    // admins racing resolves it once and the loser gets the same 404 as
+    // "nothing to resolve" -- and the audit log gets exactly one row.
+    const cleared = await this.prisma.guardian.updateMany({
+      where: { minorUserId: userId, incorrectDetailsReportedAt: { not: null } },
+      data: { incorrectDetailsReportedAt: null },
+    });
+    if (cleared.count === 0) {
+      throw new NotFoundException('No open incorrect-details report for this user');
+    }
+    this.logger.log(`Admin ${adminId} resolved the incorrect-details report for user ${userId}.`);
+    await this.adminActionLogService.record(
+      adminId,
+      ADMIN_ACTION_LOG_ACTIONS.GUARDIAN_INCORRECT_DETAILS_RESOLVED,
+      ADMIN_ACTION_LOG_TARGET_TYPES.USER,
+      userId,
+    );
+    return { resolved: true };
   }
 
   private async assertUserExists(id: string): Promise<{ id: string; isMinor: boolean; accountStatus: string }> {

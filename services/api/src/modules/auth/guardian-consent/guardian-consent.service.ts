@@ -8,6 +8,7 @@ import { RegistrationEmailService } from '../registration/email/registration-ema
 import { verificationMethodFor } from './card-verification-policy.util';
 import { CONSENT_SCREEN_VERSION } from './consent-screen-version.constants';
 import { ConsentDeviceType } from './device-type.util';
+import { INCORRECT_DETAILS_OPEN_MESSAGE } from './incorrect-details.constants';
 import { computeConsentTokenExpiresAt, computeWithdrawalTokenExpiresAt } from './consent-token.constants';
 
 // sprint-1/guardian-consent-decline-withdraw-expiry -- the three distinct
@@ -141,6 +142,16 @@ export class GuardianConsentService {
       );
     }
 
+    // B-029 (Decision Log #372): an OPEN "report incorrect details" flag
+    // holds approval. The guardian has said the facts on the request are
+    // wrong, so a confirmation now would be consent to the wrong thing.
+    // DECLINE and WITHDRAW are deliberately not gated (#372: "decline remains
+    // available"), and the caller holds the real token so a plain message is
+    // fine. Support clears the flag (POST /admin/users/:id/incorrect-details-report/resolve).
+    if (guardian.incorrectDetailsReportedAt) {
+      throw new BadRequestException(INCORRECT_DETAILS_OPEN_MESSAGE);
+    }
+
     // sprint-1/coppa-card-verification -- for a guardian whose row was
     // flagged cardVerificationRequired at registration (under 13 AND
     // US/undeclared), the emailed link alone is NOT enough: the small
@@ -173,8 +184,11 @@ export class GuardianConsentService {
     // exactly equivalent for every pre-existing case (pending was always
     // the only other value this line could match).
     const confirmedAt = new Date();
-    await this.prisma.guardian.updateMany({
-      where: { consentToken, consentStatus: 'pending' },
+    const transition = await this.prisma.guardian.updateMany({
+      // incorrectDetailsReportedAt: null closes the race with B-029's flag:
+      // a report landing between the check above and this write must still
+      // hold the approval.
+      where: { consentToken, consentStatus: 'pending', incorrectDetailsReportedAt: null },
       data: {
         consentStatus: 'confirmed',
         consentTimestamp: confirmedAt,
@@ -187,6 +201,71 @@ export class GuardianConsentService {
         consentScreenVersion: CONSENT_SCREEN_VERSION,
         consentDeviceType: deviceType,
       },
+    });
+
+    // Zero rows matched. Usually a concurrent request already finished the
+    // transition (nothing more to do: that request owns the email). But if the
+    // row is STILL pending and carries a report, the report landed between the
+    // check above and this write: tell the guardian approval is on hold rather
+    // than letting them believe it succeeded.
+    if (transition && transition.count === 0) {
+      const current = await this.prisma.guardian.findUnique({ where: { consentToken } });
+      if (current?.consentStatus === 'pending' && current.incorrectDetailsReportedAt) {
+        throw new BadRequestException(INCORRECT_DETAILS_OPEN_MESSAGE);
+      }
+    }
+
+    // B-028 (Decision Log #373): tell the MINOR their guardian approved --
+    // only when THIS request made the transition. The idempotent re-click
+    // returns above and a lost race matches zero rows, so neither emails
+    // again. Fire-and-forget: a mail failure must never undo or fail the
+    // guardian's approval (RegistrationEmailService.dispatch also catches).
+    if (transition?.count === 1) {
+      void this.notifyMinorOfApproval(guardian.minorUserId).catch((err: Error) =>
+        this.logger.error(`Could not notify minor ${guardian.minorUserId} of approval: ${err.message}`),
+      );
+    }
+  }
+
+  // B-028. Looks the minor up fresh (the Guardian row carries no email for
+  // them) and sends nothing for an account that has since gone: only an
+  // 'active' account is told "continue registration".
+  private async notifyMinorOfApproval(minorUserId: string): Promise<void> {
+    const minor = await this.prisma.user.findUnique({
+      where: { id: minorUserId },
+      select: { email: true, displayName: true, accountStatus: true },
+    });
+    if (!minor || minor.accountStatus !== 'active') return;
+    await this.emailService.sendGuardianApprovedMinorEmail(minor.email, minor.displayName);
+  }
+
+  // B-029 (Decision Log #372): the guardian says the minor's details shown on
+  // the request are wrong. Token-credentialed like confirm/decline (the
+  // guardian has no account); the controller rate-limits it.
+  //
+  // Only a LIVE request can be flagged: pending and unexpired. An unknown or
+  // expired token gets the same generic rejection every other token route
+  // gives; a confirmed / declined request gets a plain message, because the
+  // caller already proved possession of the real token (nothing to
+  // enumerate). Idempotent: re-reporting is a success and keeps the FIRST
+  // timestamp, so a double-click or a second email click is harmless.
+  async reportIncorrectDetails(consentToken: string): Promise<void> {
+    const guardian = await this.prisma.guardian.findUnique({ where: { consentToken } });
+
+    if (!guardian || guardian.consentTokenExpiresAt.getTime() < Date.now()) {
+      throw new BadRequestException('Invalid or expired consent token');
+    }
+    if (guardian.consentStatus !== 'pending') {
+      throw new BadRequestException('This consent request is no longer awaiting a response.');
+    }
+    if (guardian.incorrectDetailsReportedAt) return;
+
+    // incorrectDetailsReportedAt: null in the where clause keeps the first
+    // timestamp under a concurrent double-submit; consentStatus: 'pending'
+    // stops a flag landing on a row that was approved or declined in between.
+    await this.prisma.guardian.updateMany({
+      where: { consentToken, consentStatus: 'pending', incorrectDetailsReportedAt: null },
+      data: { incorrectDetailsReportedAt: new Date() },
     });
   }
 

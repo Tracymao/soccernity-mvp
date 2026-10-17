@@ -124,6 +124,52 @@ describe('RegistrationEmailService', () => {
       expect(sent.TextBody).not.toMatch(/token|code is|consent code/i);
     });
 
+    // B-028 (Decision Log #373, #394 A5)
+    describe('guardian-approved-minor (B-028)', () => {
+      const liveConfig = {
+        EMAIL_PROVIDER_API_KEY: 'a-real-key',
+        POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example',
+        WEB_APP_BASE_URL: 'https://app.soccernity.com',
+      };
+
+      it("goes to the minor, says 'approved ... continue registration', links to /login, and carries no token", async () => {
+        mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-approved' });
+        const service = new RegistrationEmailService(buildConfig(liveConfig));
+
+        await service.sendGuardianApprovedMinorEmail('minor@example.com', 'Ada Minor');
+
+        const sent = mockSendEmail.mock.calls[0][0] as { To: string; Subject: string; TextBody: string; HtmlBody: string };
+        expect(sent.To).toBe('minor@example.com');
+        expect(sent.Subject).toBe('Your guardian approved your Soccernity account');
+        expect(sent.TextBody).toContain('Hi Ada Minor,');
+        expect(sent.TextBody).toMatch(/approved your Soccernity account/i);
+        expect(sent.TextBody).toMatch(/continue registration/i);
+        expect(sent.TextBody).toContain('https://app.soccernity.com/login');
+        expect(sent.HtmlBody).toContain('href="https://app.soccernity.com/login"');
+        // #394 A5: the flow is NOT finished, so it must not claim everything is switched on.
+        expect(sent.TextBody).not.toMatch(/switched on|all set|fully active|full access/i);
+        // A plain link: no credential in the URL.
+        expect(sent.TextBody).not.toMatch(/token=/);
+      });
+
+      it('sends NOTHING (and logs the reason) when WEB_APP_BASE_URL is unusable, rather than an email with no link', async () => {
+        const error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+        const service = new RegistrationEmailService(buildConfig({ ...liveConfig, WEB_APP_BASE_URL: undefined }));
+
+        await expect(service.sendGuardianApprovedMinorEmail('minor@example.com', 'Ada Minor')).resolves.toBeUndefined();
+
+        expect(mockSendEmail).not.toHaveBeenCalled();
+        expect(error).toHaveBeenCalledWith(expect.stringContaining('guardian-approved-minor'));
+        error.mockRestore();
+      });
+
+      it('is wired but inactive without a Postmark key: resolves, calls nothing', async () => {
+        const service = new RegistrationEmailService(buildConfig({ ...liveConfig, EMAIL_PROVIDER_API_KEY: undefined }));
+        await expect(service.sendGuardianApprovedMinorEmail('minor@example.com', 'Ada Minor')).resolves.toBeUndefined();
+        expect(mockSendEmail).not.toHaveBeenCalled();
+      });
+    });
+
     it('sends a public-report acknowledgement with no outcome/timeline promise', async () => {
       mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-report' });
       const service = new RegistrationEmailService(

@@ -60,6 +60,8 @@ describe('Community Groups e2e (Build Plan Sprint 3, Decision Log #281)', () => 
         email: `e2e-cg-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
         passwordHash: 'unused-in-this-e2e-spec-file',
         displayName: `E2E CG ${label}`,
+        verificationStatus: 'verified', // W3 gates: a verified email (B-118) and a username (B-027) so this actor can post
+        username: `e2e_${Math.random().toString(36).slice(2, 12)}`,
         dateOfBirth: seedDob('1994-05-05'), // adult — GuardianConsentGuard passes
         isMinor: false,
       },
@@ -80,6 +82,8 @@ describe('Community Groups e2e (Build Plan Sprint 3, Decision Log #281)', () => 
         email: `e2e-cg-minor-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
         passwordHash: 'unused',
         displayName: `E2E CG Minor ${label}`,
+        verificationStatus: 'verified', // W3 gates: a verified email (B-118) and a username (B-027) so this actor can post
+        username: `e2e_${Math.random().toString(36).slice(2, 12)}`,
         dateOfBirth: seedDob('2014-01-01'),
         isMinor: true,
         guardian: {
@@ -457,6 +461,8 @@ describe('Community Groups e2e (Build Plan Sprint 3, Decision Log #281)', () => 
           email: `e2e-cg-roster-minor-${Date.now()}@example.com`,
           passwordHash: 'unused',
           displayName: 'A Restricted Minor',
+          verificationStatus: 'verified', // W3 gates: a verified email (B-118) and a username (B-027) so this actor can post
+          username: `e2e_${Math.random().toString(36).slice(2, 12)}`,
           dateOfBirth: seedDob('2014-01-01'),
           isMinor: true,
           guardian: {

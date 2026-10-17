@@ -41,6 +41,19 @@ export class AuthService implements OnModuleInit {
     private readonly dobEncryption: DobEncryptionService,
   ) {}
 
+  // B-030: the minor's current Guardian.consentStatus, read fresh, for the
+  // onboarding state in the login response. Adults skip the query entirely.
+  // null for an adult or a (corrupt) minor with no Guardian row; the onboarding
+  // derivation treats the latter as restricted (fail-closed).
+  private async guardianConsentStatusOf(user: { id: string; isMinor: boolean }): Promise<string | null> {
+    if (!user.isMinor) return null;
+    const guardian = await this.prisma.guardian.findUnique({
+      where: { minorUserId: user.id },
+      select: { consentStatus: true },
+    });
+    return guardian?.consentStatus ?? null;
+  }
+
   async onModuleInit(): Promise<void> {
     this.dummyPasswordHash = await this.passwordService.hash(randomBytes(32).toString('hex'));
   }
@@ -106,7 +119,10 @@ export class AuthService implements OnModuleInit {
     // AuthResponse/toAuthUserSummary comments for why isMinor/
     // verificationStatus are safe to include here even though they must
     // never appear inside the access token itself.
-    return { ...toTokenPairResponse(tokenPair), user: toAuthUserSummary(user, this.dobEncryption.decryptNullable(user.dateOfBirth)) };
+    return {
+      ...toTokenPairResponse(tokenPair),
+      user: toAuthUserSummary(user, this.dobEncryption.decryptNullable(user.dateOfBirth), await this.guardianConsentStatusOf(user)),
+    };
   }
 
   // POST /auth/change-password. userId comes from the verified JWT
@@ -325,7 +341,10 @@ export class AuthService implements OnModuleInit {
         : user;
 
     const tokenPair = await this.tokenService.issueTokenPair(activeUser.id, activeUser.role);
-    return { ...toTokenPairResponse(tokenPair), user: toAuthUserSummary(activeUser, this.dobEncryption.decryptNullable(activeUser.dateOfBirth)) };
+    return {
+      ...toTokenPairResponse(tokenPair),
+      user: toAuthUserSummary(activeUser, this.dobEncryption.decryptNullable(activeUser.dateOfBirth), await this.guardianConsentStatusOf(activeUser)),
+    };
   }
 
   // Shared re-auth step for deactivateAccount/deleteAccount: both require

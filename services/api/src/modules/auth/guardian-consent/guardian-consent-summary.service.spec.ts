@@ -40,8 +40,27 @@ describe('GuardianConsentSummaryService (B-021, Decision Log #372)', () => {
       guardianName: 'Grace Parent',
       guardianRelationship: 'Parent',
       requestedAt: '2026-10-01T09:30:00.000Z',
+      incorrectDetailsReported: false,
       notices: { guardianEmailShownOnMinorProfile: true, photoAndUsernameVisibleToOthers: true },
     });
+  });
+
+  // B-029: lets the page show "approval is on hold" instead of a button that
+  // will be refused. A boolean only -- nothing about WHAT was reported.
+  it('reports an open incorrect-details flag as a boolean, and nothing more', async () => {
+    const dob = buildTestDobEncryption();
+    const { svc } = build(liveRow(dob, { incorrectDetailsReportedAt: new Date('2026-10-02T00:00:00Z') }));
+    const summary = await svc.getSummary('tok');
+    expect(summary.incorrectDetailsReported).toBe(true);
+    expect(JSON.stringify(summary)).not.toContain('2026-10-02');
+  });
+
+  it('reads the flag column in the same query (no second lookup)', async () => {
+    const dob = buildTestDobEncryption();
+    const { svc, prisma } = build(liveRow(dob));
+    await svc.getSummary('tok');
+    expect(prisma.guardian.findUnique).toHaveBeenCalledTimes(1);
+    expect(prisma.guardian.findUnique.mock.calls[0][0].select.incorrectDetailsReportedAt).toBe(true);
   });
 
   it('looks the request up by the token alone, selecting no guardian email or token back out', async () => {

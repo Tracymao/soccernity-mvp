@@ -18,6 +18,7 @@ export type RegistrationEmailTemplate =
   | 'verify-email'
   | 'guardian-consent'
   | 'guardian-consent-withdrawal-request'
+  | 'guardian-approved-minor'
   | 'guardian-consent-declined'
   | 'guardian-consent-withdrawn'
   | 'guardian-consent-reminder'
@@ -130,6 +131,38 @@ export class RegistrationEmailService {
       subject: `Confirm withdrawing consent for ${minorDisplayName}'s Soccernity account`,
       template: 'guardian-consent-withdrawal-request',
       data: { link, withdrawalToken, minorDisplayName },
+    });
+  }
+
+  // B-028 (Decision Log #373, #394 A5): To the MINOR, when their guardian
+  // approves. Closes the audit's finding that confirmConsent sent nothing.
+  // The wording is "approved, continue registration" -- NOT "everything is
+  // switched on": approval is only the middle of the sign-up flow (#367), and
+  // the account still has to complete its profile. Plain functional copy,
+  // [COPY PENDING LEGAL REVIEW], not counsel-reviewed.
+  //
+  // The link goes to /login, deliberately and not to a Create Profile route:
+  // the minor is usually logged out when this arrives, and the login response
+  // tells the web app where to send them (`nextStep`, B-030), so /login is
+  // correct before and after the Create Profile screen exists. It carries no
+  // token, so unlike the other link emails there is nothing to protect in the
+  // URL. As everywhere in this file, an unusable WEB_APP_BASE_URL means NO
+  // email (a dead link is worse than none) -- see linkFor().
+  async sendGuardianApprovedMinorEmail(to: string, minorDisplayName: string): Promise<void> {
+    const link = buildWebAppLink(this.config.get<string>('WEB_APP_BASE_URL'), '/login', {});
+    if (!link) {
+      this.logger.error(
+        `[email] WEB_APP_BASE_URL is missing, a placeholder, or not https -- NOT sending ` +
+          `"guardian-approved-minor" because it would contain no usable link. ` +
+          `Set WEB_APP_BASE_URL (docs/deployment.md).`,
+      );
+      return;
+    }
+    await this.dispatch({
+      to,
+      subject: 'Your guardian approved your Soccernity account',
+      template: 'guardian-approved-minor',
+      data: { minorDisplayName, link },
     });
   }
 
@@ -377,6 +410,21 @@ ${data.link}
 ` +
         `If you did not request this, you can safely ignore this email — nothing changes unless the code above is used.`
       );
+    case 'guardian-approved-minor':
+      return (
+        `Hi ${data.minorDisplayName},
+
+` +
+        `Your guardian has approved your Soccernity account.
+
+` +
+        `There are still a few steps to finish setting up. Log in to continue registration:
+
+${data.link}
+
+` +
+        `If you did not create a Soccernity account, you can ignore this email.`
+      );
     case 'guardian-consent-declined':
       return (
         `Hi ${data.minorDisplayName},
@@ -519,6 +567,15 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
         `<p>Or enter this withdrawal code on the page: <strong>${data.withdrawalToken}</strong></p>` +
         `<p>Confirming will close the account and schedule it for deletion.</p>` +
         `<p>If you did not request this, you can safely ignore this email — nothing changes unless the code above is used.</p>`
+      );
+    case 'guardian-approved-minor':
+      return (
+        `<p>Hi ${data.minorDisplayName},</p>` +
+        `<p>Your guardian has approved your Soccernity account.</p>` +
+        `<p>There are still a few steps to finish setting up.</p>` +
+        `<p><a href="${data.link}">Log in to continue registration</a></p>` +
+        `<p>If the button does not work, copy this link into your browser: ${data.link}</p>` +
+        `<p>If you did not create a Soccernity account, you can ignore this email.</p>`
       );
     case 'guardian-consent-declined':
       return (

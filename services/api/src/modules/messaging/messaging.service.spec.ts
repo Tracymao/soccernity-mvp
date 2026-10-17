@@ -293,7 +293,7 @@ describe('MessagingService', () => {
       expect(page.items).toHaveLength(1);
       expect(page.items[0]).toMatchObject({
         id: 'c-1',
-        otherParticipant: { id: RECIPIENT, publicName: 'Jordan' },
+        otherParticipant: { id: RECIPIENT, publicName: 'Soccernity member' },
         unreadCount: 4,
         lastMessage: { contentText: 'yo', senderId: RECIPIENT },
       });

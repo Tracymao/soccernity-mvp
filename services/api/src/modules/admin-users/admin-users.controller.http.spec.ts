@@ -1,4 +1,4 @@
-import { ExecutionContext, INestApplication, ValidationPipe } from '@nestjs/common';
+import { ExecutionContext, INestApplication, NotFoundException, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
@@ -12,6 +12,8 @@ describe('AdminUsersController (HTTP layer)', () => {
     listUsers: jest.fn(),
     updateUserStatus: jest.fn(),
     listStalledHolds: jest.fn(),
+    listIncorrectDetailsReports: jest.fn(),
+    resolveIncorrectDetailsReport: jest.fn(),
   };
 
   let currentAdmin: { sub: string; role: string; aud: string };
@@ -93,6 +95,44 @@ describe('AdminUsersController (HTTP layer)', () => {
     it('rejects a negative threshold with 400', async () => {
       currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
       await request(app.getHttpServer()).get('/admin/users/held-investigations?olderThanDays=-1').expect(400);
+    });
+  });
+
+  // B-029 (Decision Log #372): the support side of the guardian's "report incorrect details" flag.
+  describe('incorrect-details reports (B-029)', () => {
+    it('GET rejects an editor with 403 and does not reach the service', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'editor', aud: 'admin-console' };
+      await request(app.getHttpServer()).get('/admin/users/incorrect-details-reports').expect(403);
+      expect(adminUsersService.listIncorrectDetailsReports).not.toHaveBeenCalled();
+    });
+
+    it('GET returns the list for a moderator', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
+      adminUsersService.listIncorrectDetailsReports.mockResolvedValue({ items: [{ userId: 'u1' }], truncated: false });
+      const res = await request(app.getHttpServer()).get('/admin/users/incorrect-details-reports').expect(200);
+      expect(res.body).toEqual({ items: [{ userId: 'u1' }], truncated: false });
+    });
+
+    it('POST resolve rejects an editor with 403 and does not reach the service', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'editor', aud: 'admin-console' };
+      await request(app.getHttpServer()).post('/admin/users/u1/incorrect-details-report/resolve').expect(403);
+      expect(adminUsersService.resolveIncorrectDetailsReport).not.toHaveBeenCalled();
+    });
+
+    it('POST resolve passes the user id and the CALLING admin id, and returns 200', async () => {
+      currentAdmin = { sub: 'admin-7', role: 'superadmin', aud: 'admin-console' };
+      adminUsersService.resolveIncorrectDetailsReport.mockResolvedValue({ resolved: true });
+      const res = await request(app.getHttpServer()).post('/admin/users/u1/incorrect-details-report/resolve').expect(200);
+      expect(res.body).toEqual({ resolved: true });
+      expect(adminUsersService.resolveIncorrectDetailsReport).toHaveBeenCalledWith('u1', 'admin-7');
+    });
+
+    it('POST resolve surfaces the service 404 (no open report)', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
+      adminUsersService.resolveIncorrectDetailsReport.mockRejectedValue(
+        new NotFoundException('No open incorrect-details report for this user'),
+      );
+      await request(app.getHttpServer()).post('/admin/users/u1/incorrect-details-report/resolve').expect(404);
     });
   });
 

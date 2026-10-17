@@ -9,6 +9,7 @@ import { SuggestedUsersQueryDto } from './dto/suggested-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { SUGGESTED_USERS_DEFAULT_LIMIT, SUGGESTED_USERS_MAX_LIMIT } from './suggested-users.constants';
 import { UsersService } from './users.service';
+import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 
 // ---------------------------------------------------------------------
 // SPEC NOTE (flagged, not silently resolved — see PR report): this PR's
@@ -88,7 +89,7 @@ export class UsersController {
   // profile can be completed. This is the write Create Profile will call, so it
   // is the one route gated here; reads and every other write are unchanged.
   // JwtAuthGuard (class level) has already attached request.user by now.
-  @UseGuards(EmailVerifiedGuard)
+  @UseGuards(GuardianConsentGuard, EmailVerifiedGuard)
   @Patch(':id')
   async updateById(
     @Param('id') id: string,
@@ -104,6 +105,7 @@ export class UsersController {
   // a cross-entity check (must be one of the caller's own club
   // memberships). Self-only, same assertSelf check as PATCH /users/:id.
   @Patch(':id/represented-club')
+  @UseGuards(GuardianConsentGuard, EmailVerifiedGuard)
   async setRepresentedClub(
     @Param('id') id: string,
     @CurrentUser() user: AccessTokenPayload,
@@ -146,11 +148,13 @@ export class UsersController {
   // rules belong in the service" precedent FeedService established.
   @Post(':id/follow')
   @HttpCode(200)
+  @UseGuards(GuardianConsentGuard, EmailVerifiedGuard)
   async follow(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
     return this.usersService.followUser(user.sub, id);
   }
 
   @Delete(':id/follow')
+  @UseGuards(GuardianConsentGuard)
   async unfollow(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
     return this.usersService.unfollowUser(user.sub, id);
   }

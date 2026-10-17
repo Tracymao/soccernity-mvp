@@ -59,7 +59,7 @@ const FULL_DB_ROW = {
   // GrassrootsService.createTeam.
   isTeamOrganiser: false,
   isUnder16: false,
-  guardian: null as { email: string } | null,
+  guardian: null as { email: string; consentStatus?: string } | null,
 };
 
 // Mirrors what UsersService's Prisma `select` clause would actually
@@ -210,7 +210,7 @@ describe('UsersService', () => {
       const result = await run(row());
       expect(result).toEqual({
         id: 'minor-1',
-        publicName: 'Young Player',
+        publicName: 'Soccernity member',
         guardianContact: { label: 'Guardian contact', email: 'parent@example.com' },
       });
     });
@@ -534,7 +534,7 @@ describe('UsersService', () => {
 
       const page = await service.getFollowers('user-1', {});
 
-      expect(page.items).toEqual([{ id: 'follower-1', publicName: 'Follower One' }]);
+      expect(page.items).toEqual([{ id: 'follower-1', publicName: 'Soccernity member' }]);
 
       const callArgs = (prisma.follow.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.select.follower.select).not.toHaveProperty('passwordHash');
@@ -611,7 +611,7 @@ describe('UsersService', () => {
 
       const callArgs = (prisma.follow.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.where).toEqual({ followerId: 'user-1', followee: { is: { accountStatus: 'active' } } });
-      expect(page.items).toEqual([{ id: 'followee-1', publicName: 'Followee One' }]);
+      expect(page.items).toEqual([{ id: 'followee-1', publicName: 'Soccernity member' }]);
     });
   });
 
@@ -795,7 +795,7 @@ describe('UsersService', () => {
 
       const result = await service.getSuggestedUsers('caller-1', 10);
 
-      expect(result.items).toEqual([{ id: 'user-2', publicName: 'Suggested Person' }]);
+      expect(result.items).toEqual([{ id: 'user-2', publicName: 'Soccernity member' }]);
 
       const callArgs = (prisma.user.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.select).not.toHaveProperty('passwordHash');
@@ -814,8 +814,8 @@ describe('UsersService', () => {
 
       expect(result).toEqual({
         items: [
-          { id: 'user-2', publicName: 'Suggested Person' },
-          { id: 'user-3', publicName: 'Suggested Person' },
+          { id: 'user-2', publicName: 'Soccernity member' },
+          { id: 'user-3', publicName: 'Soccernity member' },
         ],
       });
       expect(result).not.toHaveProperty('nextCursor');
@@ -834,6 +834,57 @@ describe('UsersService', () => {
     });
   });
 
+  // B-030 / B-027 (Decision Log #367, #369, #394 A6): the same onboarding state the
+  // login response carries, so a page load with an existing session routes the same way.
+  describe('onboarding state on the own profile (B-030 / B-027)', () => {
+    const get = async (row: Record<string, unknown>) => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(withoutPasswordHash({ ...FULL_DB_ROW, ...row } as never));
+      return new UsersService(prisma, buildTestDobEncryption()).getOwnProfile('user-1');
+    };
+
+    it('selects the Guardian consent status in the same single read (no second query)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(withoutPasswordHash(FULL_DB_ROW));
+      await new UsersService(prisma, buildTestDobEncryption()).getOwnProfile('user-1');
+      expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
+      const select = (prisma.user.findUnique as jest.Mock).mock.calls[0][0].select;
+      expect(select.guardian).toEqual({ select: { email: true, consentStatus: true } });
+    });
+
+    it('a pending minor -> restricted_pending, whatever else is true', async () => {
+      const r = await get({ isMinor: true, verificationStatus: 'verified', username: 'x_9', guardian: { email: 'g@e.com', consentStatus: 'pending' } });
+      expect(r).toMatchObject({ nextStep: 'restricted_pending', guardianConsentStatus: 'pending', profileComplete: true });
+    });
+
+    it("a declined minor is reported as 'declined'", async () => {
+      const r = await get({ isMinor: true, guardian: { email: 'g@e.com', consentStatus: 'declined' } });
+      expect(r).toMatchObject({ nextStep: 'restricted_pending', guardianConsentStatus: 'declined' });
+    });
+
+    it('an approved minor with no username -> create_profile; an unverified adult -> verify_email; a complete adult -> none', async () => {
+      expect(
+        (await get({ isMinor: true, verificationStatus: 'verified', guardian: { email: 'g@e.com', consentStatus: 'confirmed' } })).nextStep,
+      ).toBe('create_profile');
+      expect((await get({ verificationStatus: 'unverified' })).nextStep).toBe('verify_email');
+      expect((await get({ verificationStatus: 'verified', username: 'done_9' })).nextStep).toBe('none');
+    });
+
+    it('a legacy adult (verified, no username) is incomplete and routed to create_profile', async () => {
+      const r = await get({ verificationStatus: 'verified', username: null });
+      expect(r).toMatchObject({ profileComplete: false, nextStep: 'create_profile', guardianConsentStatus: 'not_applicable' });
+    });
+
+    it('a username set through updateOwnProfile completes the profile in the response', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.update as jest.Mock).mockResolvedValue(
+        withoutPasswordHash({ ...FULL_DB_ROW, verificationStatus: 'verified', username: 'finally_me' } as never),
+      );
+      const r = await new UsersService(prisma, buildTestDobEncryption()).updateOwnProfile('user-1', { username: 'finally_me' } as never);
+      expect(r).toMatchObject({ profileComplete: true, nextStep: 'none' });
+    });
+  });
+
   describe('username / public name (profile/username-column-and-display-convention)', () => {
     it("getOwnProfile exposes both the owner's username and the resolved publicName (username wins)", async () => {
       const prisma = buildPrismaMock();
@@ -846,12 +897,12 @@ describe('UsersService', () => {
       expect(result.displayName).toBe('Old Name');
     });
 
-    it('getOwnProfile falls back to displayName as publicName when no username is set', async () => {
+    it('getOwnProfile shows the placeholder as publicName when no username is set (B-027)', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(withoutPasswordHash(FULL_DB_ROW));
       const result = await new UsersService(prisma, buildTestDobEncryption()).getOwnProfile('user-1');
       expect(result.username).toBeNull();
-      expect(result.publicName).toBe('Old Name');
+      expect(result.publicName).toBe('Soccernity member');
     });
 
     it('getPublicProfile returns the username as publicName and never leaks the real displayName', async () => {
@@ -882,7 +933,7 @@ describe('UsersService', () => {
       const page = await new UsersService(prisma, buildTestDobEncryption()).getFollowers('user-1', {});
       expect(page.items).toEqual([
         { id: 'a', publicName: 'goalie_9' },
-        { id: 'b', publicName: 'Ben Cole' },
+        { id: 'b', publicName: 'Soccernity member' },
       ]);
     });
 
@@ -897,14 +948,14 @@ describe('UsersService', () => {
       );
     });
 
-    it('updateOwnProfile clears the username with null (returning to displayName)', async () => {
+    it('updateOwnProfile clears the username with null (returning to the placeholder name)', async () => {
       const prisma = buildPrismaMock();
       (prisma.user.update as jest.Mock).mockResolvedValue(withoutPasswordHash(FULL_DB_ROW));
       const result = await new UsersService(prisma, buildTestDobEncryption()).updateOwnProfile('user-1', {
         username: null,
       });
       expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: { username: null } }));
-      expect(result.publicName).toBe('Old Name');
+      expect(result.publicName).toBe('Soccernity member');
     });
 
     it('updateOwnProfile leaves the username untouched when the field is omitted', async () => {

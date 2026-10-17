@@ -79,13 +79,22 @@ describe('Email-verification enforcement e2e (B-020)', () => {
     await request(app.getHttpServer()).patch(`/users/${u.id}`).send({ displayName: 'x' }).expect(401);
   });
 
-  it('is not applied to the other self-service profile routes (represented club is unaffected)', async () => {
+  // B-118 (Decision Log #403 item 15) extended this guard from PATCH /users/:id to
+  // the social writes. Represented club is a profile write, so it is covered now.
+  it('is applied to the other profile/social writes too (represented club, follow) but NOT to reads', async () => {
     const u = await createUser('unverified');
-    // Reaches the handler (which rejects the made-up club) rather than the guard.
-    const res = await request(app.getHttpServer())
+    const other = await createUser('verified');
+    const club = await request(app.getHttpServer())
       .patch(`/users/${u.id}/represented-club`)
       .set(u.auth)
-      .send({ clubId: '00000000-0000-4000-8000-000000000000' });
-    expect(res.body.code).not.toBe('email_verification_required');
+      .send({ clubId: '00000000-0000-4000-8000-000000000000' })
+      .expect(403);
+    expect(club.body.code).toBe('email_verification_required');
+
+    const follow = await request(app.getHttpServer()).post(`/users/${other.id}/follow`).set(u.auth).expect(403);
+    expect(follow.body.code).toBe('email_verification_required');
+
+    // The unverified user can still read who they are and why they are blocked.
+    await request(app.getHttpServer()).get(`/users/${u.id}`).set(u.auth).expect(200);
   });
 });

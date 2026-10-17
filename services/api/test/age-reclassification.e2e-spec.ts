@@ -58,6 +58,8 @@ describe('Age reclassification sweep e2e', () => {
         email: `e2e-age-${n}-${Date.now()}@example.com`,
         passwordHash: 'unused',
         displayName: `Age ${n}`,
+        verificationStatus: 'verified', // W3 gates: a verified email (B-118) and a username (B-027) so this actor can post
+        username: `e2e_${Math.random().toString(36).slice(2, 12)}`,
         dateOfBirth: seedDob(opts.dob),
         isMinor: opts.isMinor,
         isUnder16: opts.isUnder16,

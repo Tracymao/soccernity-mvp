@@ -10,6 +10,8 @@ import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
+import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
+import { ProfileCompleteGuard } from '../auth/guards/profile-complete.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { TokenService } from '../auth/token/token.service';
@@ -77,6 +79,12 @@ describe('FeedController (HTTP layer)', () => {
         { provide: TokenService, useValue: tokenService },
       ],
     })
+      // W3 gates (B-026/B-118/B-027): guard behaviour is covered by the guard specs,
+      // write-route-guards.spec.ts and test/w3-gates.e2e-spec.ts; pass-through here.
+      .overrideGuard(EmailVerifiedGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(ProfileCompleteGuard)
+      .useValue({ canActivate: () => true })
       .overrideGuard(JwtAuthGuard)
       .useValue({
         canActivate: (context: ExecutionContext) => {
@@ -98,6 +106,11 @@ describe('FeedController (HTTP layer)', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+    // clearAllMocks keeps mockResolvedValue implementations; the consent guard now
+    // runs on most write routes (B-026), so a leftover "pending minor" row would
+    // leak into the next test. Reset both fakes to "no row" (guard lets through).
+    prisma.user.findUnique.mockReset();
+    prisma.guardian.findUnique.mockReset();
     currentUser = ADULT;
   });
 
@@ -277,15 +290,30 @@ describe('FeedController (HTTP layer)', () => {
   });
 
   describe('POST/DELETE /posts/:id/like', () => {
-    it('POST likes a post with 200 (not 201 — an idempotent toggle, not always a fresh creation), JwtAuthGuard only', async () => {
-      currentUser = PENDING_MINOR;
+    it('POST likes a post with 200 (not 201 — an idempotent toggle, not always a fresh creation); consent guard now runs (B-026)', async () => {
+      currentUser = CONFIRMED_MINOR;
+      prisma.user.findUnique.mockResolvedValue({ isMinor: true });
+      prisma.guardian.findUnique.mockResolvedValue({ consentStatus: 'confirmed' });
       feedService.likePost.mockResolvedValue({ postId: 'post-1', liked: true, likeCount: 1 });
 
       const response = await request(app.getHttpServer()).post('/posts/post-1/like').expect(200);
 
       expect(response.body).toEqual({ postId: 'post-1', liked: true, likeCount: 1 });
-      expect(feedService.likePost).toHaveBeenCalledWith('minor-1', 'post-1');
-      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      expect(feedService.likePost).toHaveBeenCalledWith('minor-2', 'post-1');
+      expect(prisma.user.findUnique).toHaveBeenCalled();
+    });
+
+    it('B-026: like and unlike are both REFUSED (403) for a restricted-pending minor, never reaching FeedService', async () => {
+      currentUser = PENDING_MINOR;
+      prisma.user.findUnique.mockResolvedValue({ isMinor: true });
+      prisma.guardian.findUnique.mockResolvedValue({ consentStatus: 'pending' });
+
+      const like = await request(app.getHttpServer()).post('/posts/post-1/like').expect(403);
+      await request(app.getHttpServer()).delete('/posts/post-1/like').expect(403);
+
+      expect(like.body.code).toBe('guardian_consent_pending');
+      expect(feedService.likePost).not.toHaveBeenCalled();
+      expect(feedService.unlikePost).not.toHaveBeenCalled();
     });
 
     it('POST /like is idempotent on a double-like (still 200, FeedService owns the no-op)', async () => {
@@ -422,8 +450,9 @@ describe('FeedController (HTTP layer)', () => {
   });
 
   describe('DELETE /posts/:id/comments/:commentId', () => {
-    it('deletes a comment with 204 (no body), JwtAuthGuard only — GuardianConsentGuard never queried', async () => {
-      currentUser = PENDING_MINOR;
+    it('deletes a comment with 204 (no body); the consent guard now runs here too (B-026), and an adult passes it', async () => {
+      currentUser = ADULT;
+      prisma.user.findUnique.mockResolvedValue({ isMinor: false });
       feedService.deleteComment.mockResolvedValue(undefined);
 
       const response = await request(app.getHttpServer())
@@ -431,8 +460,18 @@ describe('FeedController (HTTP layer)', () => {
         .expect(204);
 
       expect(response.body).toEqual({});
-      expect(feedService.deleteComment).toHaveBeenCalledWith('post-1', 'comment-1', 'minor-1');
-      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      expect(feedService.deleteComment).toHaveBeenCalledWith('post-1', 'comment-1', 'adult-1');
+      expect(prisma.user.findUnique).toHaveBeenCalled();
+    });
+
+    it('B-026: a restricted-pending minor cannot delete a comment either (uniform write block)', async () => {
+      currentUser = PENDING_MINOR;
+      prisma.user.findUnique.mockResolvedValue({ isMinor: true });
+      prisma.guardian.findUnique.mockResolvedValue({ consentStatus: 'pending' });
+
+      await request(app.getHttpServer()).delete('/posts/post-1/comments/comment-1').expect(403);
+
+      expect(feedService.deleteComment).not.toHaveBeenCalled();
     });
 
     it('propagates a 404 from FeedService when commentId does not reference a real comment', async () => {
@@ -472,15 +511,28 @@ describe('FeedController (HTTP layer)', () => {
   });
 
   describe('POST/DELETE /posts/:id/save', () => {
-    it('POST saves a post with 200, JwtAuthGuard only', async () => {
-      currentUser = PENDING_MINOR;
+    it('POST saves a post with 200; the consent guard now runs (B-026)', async () => {
+      currentUser = ADULT;
+      prisma.user.findUnique.mockResolvedValue({ isMinor: false });
       feedService.savePost.mockResolvedValue({ postId: 'post-1', saved: true });
 
       const response = await request(app.getHttpServer()).post('/posts/post-1/save').expect(200);
 
       expect(response.body).toEqual({ postId: 'post-1', saved: true });
-      expect(feedService.savePost).toHaveBeenCalledWith('minor-1', 'post-1');
-      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      expect(feedService.savePost).toHaveBeenCalledWith('adult-1', 'post-1');
+      expect(prisma.user.findUnique).toHaveBeenCalled();
+    });
+
+    it('B-026: save and unsave are REFUSED (403) for a restricted-pending minor', async () => {
+      currentUser = PENDING_MINOR;
+      prisma.user.findUnique.mockResolvedValue({ isMinor: true });
+      prisma.guardian.findUnique.mockResolvedValue({ consentStatus: 'pending' });
+
+      await request(app.getHttpServer()).post('/posts/post-1/save').expect(403);
+      await request(app.getHttpServer()).delete('/posts/post-1/save').expect(403);
+
+      expect(feedService.savePost).not.toHaveBeenCalled();
+      expect(feedService.unsavePost).not.toHaveBeenCalled();
     });
 
     it('POST /save is idempotent on a double-save (still 200)', async () => {

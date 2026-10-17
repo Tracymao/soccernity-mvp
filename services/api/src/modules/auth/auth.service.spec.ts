@@ -56,6 +56,23 @@ const DEFAULT_SEED_FIELDS = {
 class FakePrismaUsers {
   private usersByEmail = new Map<string, FakeUserRecord>();
   private usersById = new Map<string, FakeUserRecord>();
+  // B-030: login() looks a MINOR's Guardian.consentStatus up fresh so the
+  // response can carry the onboarding state. Records every lookup so a test
+  // can prove adults never trigger one.
+  private guardianStatusByMinorId = new Map<string, string>();
+  guardianLookups: string[] = [];
+
+  guardian = {
+    findUnique: async ({ where }: { where: { minorUserId: string } }) => {
+      this.guardianLookups.push(where.minorUserId);
+      const status = this.guardianStatusByMinorId.get(where.minorUserId);
+      return status === undefined ? null : { consentStatus: status };
+    },
+  };
+
+  seedGuardian(minorUserId: string, consentStatus: string) {
+    this.guardianStatusByMinorId.set(minorUserId, consentStatus);
+  }
 
   user = {
     findUnique: async ({ where }: { where: { email?: string; id?: string } }) => {
@@ -151,18 +168,91 @@ describe('AuthService', () => {
         phone: null,
         displayName: 'Player One',
         username: null,
-        publicName: 'Player One',
+        publicName: 'Soccernity member',
         dateOfBirth: new Date('1995-01-01'),
         isMinor: true,
         role: 'fan',
         verificationStatus: 'verified',
         createdAt: new Date('2026-08-16T00:00:00.000Z'),
+        // B-027 / B-030: this seeded minor has no username, a verified email and
+        // no Guardian row (fail-closed -> pending) => restricted_pending.
+        profileComplete: false,
+        guardianConsentStatus: 'pending',
+        nextStep: 'restricted_pending',
       });
       expect(result.user).not.toHaveProperty('passwordHash');
-      // consentStatus is a Guardian-row field, never part of the User
-      // summary at all -- must never appear anywhere in the response.
-      expect(JSON.stringify(result).toLowerCase()).not.toContain('consentstatus');
-      expect(JSON.stringify(result).toLowerCase()).not.toContain('consent_status');
+      // The raw Guardian row (token, email, name) is never part of the response;
+      // only the caller's OWN derived consent state is (B-030). The non-negotiable
+      // that consent state stays out of the TOKEN is the next test.
+      expect(JSON.stringify(result).toLowerCase()).not.toContain('consenttoken');
+    });
+
+    // B-030 (Decision Log #394 A6): the response tells the web app where to send
+    // the account on EVERY login. The Guardian row is read fresh, for minors only.
+    describe('onboarding state (B-030 / B-027)', () => {
+      const PW = 'correct-horse-battery-staple';
+
+      it('a pending minor is routed to restricted_pending, and the status is read from the Guardian row', async () => {
+        const { authService, prisma, passwordService } = await buildHarness();
+        prisma.seed('kid@example.com', {
+          id: 'kid-1', role: 'fan', passwordHash: await passwordService.hash(PW),
+          isMinor: true, verificationStatus: 'verified', username: 'kid_9',
+        });
+        prisma.seedGuardian('kid-1', 'pending');
+        const { user } = await authService.login('kid@example.com', PW);
+        expect(user).toMatchObject({ nextStep: 'restricted_pending', guardianConsentStatus: 'pending', profileComplete: true });
+        expect(prisma.guardianLookups).toEqual(['kid-1']);
+      });
+
+      it("a declined minor is reported as 'declined' (not folded into pending) and still restricted_pending", async () => {
+        const { authService, prisma, passwordService } = await buildHarness();
+        prisma.seed('kid@example.com', {
+          id: 'kid-1', role: 'fan', passwordHash: await passwordService.hash(PW), isMinor: true, verificationStatus: 'verified',
+        });
+        prisma.seedGuardian('kid-1', 'declined');
+        const { user } = await authService.login('kid@example.com', PW);
+        expect(user).toMatchObject({ nextStep: 'restricted_pending', guardianConsentStatus: 'declined' });
+      });
+
+      it('an approved minor without a username goes to create_profile; with one, nowhere', async () => {
+        const { authService, prisma, passwordService } = await buildHarness();
+        prisma.seed('a@example.com', {
+          id: 'm-1', role: 'fan', passwordHash: await passwordService.hash(PW), isMinor: true, verificationStatus: 'verified', username: null,
+        });
+        prisma.seed('b@example.com', {
+          id: 'm-2', role: 'fan', passwordHash: await passwordService.hash(PW), isMinor: true, verificationStatus: 'verified', username: 'done_9',
+        });
+        prisma.seedGuardian('m-1', 'confirmed');
+        prisma.seedGuardian('m-2', 'confirmed');
+        expect((await authService.login('a@example.com', PW)).user.nextStep).toBe('create_profile');
+        expect((await authService.login('b@example.com', PW)).user.nextStep).toBe('none');
+      });
+
+      it('an adult never triggers a Guardian lookup; unverified -> verify_email, then no username -> create_profile', async () => {
+        const { authService, prisma, passwordService } = await buildHarness();
+        prisma.seed('adult@example.com', {
+          id: 'ad-1', role: 'fan', passwordHash: await passwordService.hash(PW), verificationStatus: 'unverified', username: null,
+        });
+        const first = await authService.login('adult@example.com', PW);
+        expect(first.user).toMatchObject({ nextStep: 'verify_email', guardianConsentStatus: 'not_applicable', profileComplete: false });
+        expect(prisma.guardianLookups).toEqual([]);
+
+        prisma.user.update({ where: { id: 'ad-1' }, data: { verificationStatus: 'verified' } });
+        const second = await authService.login('adult@example.com', PW);
+        expect(second.user.nextStep).toBe('create_profile');
+      });
+
+      it('a legacy account (no username) is shown as the placeholder, never its real name', async () => {
+        const { authService, prisma, passwordService } = await buildHarness();
+        prisma.seed('legacy@example.com', {
+          id: 'lg-1', role: 'fan', passwordHash: await passwordService.hash(PW), verificationStatus: 'verified',
+          displayName: 'Legacy Realname', username: null,
+        });
+        const { user } = await authService.login('legacy@example.com', PW);
+        expect(user.publicName).toBe('Soccernity member');
+        // The owner still gets their own real name back; only OTHERS see the placeholder.
+        expect(user.displayName).toBe('Legacy Realname');
+      });
     });
 
     // The non-negotiable this test guards is about the JWT *payload*

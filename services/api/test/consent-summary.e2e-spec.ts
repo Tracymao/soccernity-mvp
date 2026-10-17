@@ -77,6 +77,7 @@ describe('Guardian consent request summary e2e (B-021)', () => {
       guardianName: 'Grace Parent',
       guardianRelationship: 'Parent',
       requestedAt: createdAt.toISOString(),
+      incorrectDetailsReported: false, // B-029
       notices: { guardianEmailShownOnMinorProfile: true, photoAndUsernameVisibleToOthers: true },
     });
   });

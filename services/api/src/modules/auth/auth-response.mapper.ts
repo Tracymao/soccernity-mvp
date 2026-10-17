@@ -1,6 +1,7 @@
 import { User } from '@prisma/client';
 import { TokenPair } from './token/token.types';
 import { resolvePublicName } from '../users/public-name.util';
+import { deriveOnboardingState, GuardianConsentState, OnboardingNextStep } from './onboarding-state.util';
 
 // The HTTP-facing shape returned by /auth/refresh (and embedded inside
 // AuthResponse below for /auth/login and /auth/register).
@@ -59,12 +60,41 @@ export interface AuthUserSummary {
   role: string;
   verificationStatus: string;
   createdAt: Date;
+  // B-027 / B-030 (Decision Log #367, #369, #394 A6): where this account stands
+  // in the sign-up flow, so the web app can route on EVERY login without
+  // re-deriving safeguarding rules. A routing hint only -- the guards enforce.
+  //   profileComplete        a username has been chosen (the incomplete-profile
+  //                          gate; incomplete accounts show as the placeholder
+  //                          name and cannot post)
+  //   guardianConsentStatus  'not_applicable' for an adult; 'pending' |
+  //                          'confirmed' | 'declined' for a minor. 'declined'
+  //                          is reported as itself, never folded into 'pending'
+  //                          (audit section 5 item 5)
+  //   nextStep               'restricted_pending' | 'verify_email' |
+  //                          'create_profile' | 'none'
+  // Not in the JWT (non-negotiable, token.types.ts): a fresh response body.
+  profileComplete: boolean;
+  guardianConsentStatus: GuardianConsentState;
+  nextStep: OnboardingNextStep;
 }
 
 // `dateOfBirth` is passed in already decrypted (User.dateOfBirth is stored
 // as ciphertext; see src/crypto/dob-encryption.service.ts) -- the mapper
 // never sees or forwards the stored ciphertext.
-export function toAuthUserSummary(user: User, dateOfBirth: Date | null): AuthUserSummary {
+export function toAuthUserSummary(
+  user: User,
+  dateOfBirth: Date | null,
+  // The minor's Guardian.consentStatus, or null for an adult / no row. The
+  // caller supplies it (one indexed lookup, minors only) so this mapper stays
+  // a pure function of its arguments.
+  guardianConsentStatus: string | null = null,
+): AuthUserSummary {
+  const onboarding = deriveOnboardingState({
+    isMinor: user.isMinor,
+    guardianConsentStatus,
+    verificationStatus: user.verificationStatus,
+    username: user.username,
+  });
   return {
     id: user.id,
     email: user.email,
@@ -77,6 +107,7 @@ export function toAuthUserSummary(user: User, dateOfBirth: Date | null): AuthUse
     role: user.role,
     verificationStatus: user.verificationStatus,
     createdAt: user.createdAt,
+    ...onboarding,
   };
 }
 

@@ -235,7 +235,9 @@ describe('ClubsService', () => {
   describe('getClubMembers', () => {
     const memberRow = (id: string, displayName: string) => ({ id, username: null, displayName });
     // What the API returns for a row: publicName only, no raw displayName.
-    const memberView = (id: string, name: string) => ({ id, publicName: name });
+    // B-027: fixtures here carry no username, so every member shows as the placeholder
+    // (the `name` argument is the fixture's displayName, which must NOT surface).
+    const memberView = (id: string, _name: string) => ({ id, publicName: 'Soccernity member' });
 
     it('throws NotFoundException for a non-existent club, before querying users', async () => {
       const prisma = buildPrismaMock();
