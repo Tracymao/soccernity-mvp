@@ -4,14 +4,18 @@ import { PrismaService } from '../../prisma/prisma.service';
 import {
   decodeSearchClubCursor,
   decodeSearchPostCursor,
-  decodeSearchUserCursor,
   encodeSearchClubCursor,
   encodeSearchPostCursor,
-  encodeSearchUserCursor,
 } from './cursor.util';
 import { SearchQueryDto } from './dto/search-query.dto';
 import { SEARCH_DEFAULT_PAGE_SIZE, SEARCH_MAX_PAGE_SIZE } from './search.constants';
 import { PUBLIC_NAME_SELECT, publicNameContains, toPublicUser } from '../users/public-name.util';
+import {
+  decodeUserNameCursor,
+  USER_NAME_ORDER_BY,
+  userNameAfterCursor,
+  userNameCursorOf,
+} from '../users/user-name-keyset.util';
 
 // v1 simplification, disclosed rather than silently shipped: matching
 // is Postgres ILIKE-equivalent substring matching (Prisma's `contains` +
@@ -234,8 +238,8 @@ export class SearchService {
     }
   }
 
-  // Alphabetical by displayName (displayName asc, id asc; flagged follow-up:
-  // order by the public name instead) — see
+  // Alphabetical by PUBLIC name (username asc, no-username last, id; B-034,
+  // users/user-name-keyset.util.ts) -- never the real displayName. See
   // cursor.util.ts's header comment for why this differs from posts'
   // own newest-first order.
   async searchUsers(
@@ -250,20 +254,12 @@ export class SearchService {
       // be usable to find the account behind it.
       publicNameContains(q) as Prisma.UserWhereInput,
     ];
-    if (cursor) {
-      const c = decodeSearchUserCursor(cursor);
-      filters.push({
-        OR: [
-          { displayName: { gt: c.displayName } },
-          { displayName: c.displayName, id: { gt: c.id } },
-        ],
-      });
-    }
+    if (cursor) filters.push(userNameAfterCursor(decodeUserNameCursor(cursor)));
 
     const rows = await this.prisma.user.findMany({
       where: { AND: filters },
       select: SEARCH_USER_SELECT,
-      orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+      orderBy: USER_NAME_ORDER_BY,
       take: limit + 1,
     });
 
@@ -271,8 +267,7 @@ export class SearchService {
     const pageRows = hasMore ? rows.slice(0, limit) : rows;
     const items = pageRows.map(toSearchUserResult);
     const last = pageRows[pageRows.length - 1];
-    const nextCursor =
-      hasMore && last ? encodeSearchUserCursor({ displayName: last.displayName, id: last.id }) : null;
+    const nextCursor = hasMore && last ? userNameCursorOf(last) : null;
 
     return { items, nextCursor };
   }

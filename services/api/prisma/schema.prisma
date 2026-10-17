@@ -46,6 +46,13 @@ model User {
   // resolvePublicName(): username if set, else displayName -- the real
   // displayName is NOT sent to other users when a username exists.
   username           String?   @unique
+  // B-032 (Decision Log #369): when the CURRENT username was last CHANGED from
+  // another value. Starts the change cooldown (UsernamePolicyService). Setting
+  // a username from none (first choice at Create Profile, or the pick after an
+  // admin revoke) does NOT write it, so a typo made at first choice can be
+  // fixed once for free; only a change from one value to another does. Cleared
+  // by an admin revoke (B-033).
+  usernameChangedAt  DateTime?
   // AES-256-GCM ciphertext ("v1:<iv>:<tag>:<ct>"), NEVER plaintext --
   // security/dob-field-encryption. Encrypted/decrypted only via
   // DobEncryptionService (src/crypto). Not queryable by range: age logic
@@ -438,6 +445,28 @@ model Guardian {
   // User.@@index([accountStatus, pendingDeletionAt]) for the account
   // deletion sweep.
   @@index([consentStatus, consentTokenExpiresAt])
+}
+
+// B-032 / B-033 (Decision Log #398 D3, #402 item 3): one row per username an
+// admin has REVOKED. Two rules read it:
+//   1. For `holdUntil` (30 days after the revoke) NOBODY can take that handle.
+//   2. For ever, the revoked USER (`userId`) can never pick that handle again.
+// `userId` is a plain string, not a foreign key, on purpose (same reasoning as
+// ConsentAuditRecord.minorUserId): a moderation record must survive the
+// account's later anonymization or deletion, and a real FK would add one more
+// RESTRICT reference to User (Decision Log #341). The admin's REASON is not
+// stored here: it lives in the AdminActionLog row written in the same
+// transaction (action 'user.username_revoked'). `username` is stored
+// lowercase, exactly as User.username is.
+model RevokedUsername {
+  id        String   @id @default(uuid())
+  username  String
+  userId    String
+  revokedAt DateTime @default(now())
+  holdUntil DateTime
+
+  @@unique([username, userId])
+  @@index([username, holdUntil])
 }
 
 // sprint-2/account-deletion-sweep, implementing Decision Log #42's

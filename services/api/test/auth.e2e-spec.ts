@@ -61,6 +61,7 @@ describe('Auth e2e: register -> login -> GET /users/:id (real Postgres, no mocke
     const registerResponse = await request(app.getHttpServer())
       .post('/auth/register')
       .send({
+        countryCode: 'GB',
         email,
         password,
         displayName: 'E2E Test Player',
@@ -108,6 +109,7 @@ describe('Auth e2e: register -> login -> GET /users/:id (real Postgres, no mocke
     await request(app.getHttpServer())
       .post('/auth/register')
       .send({
+        countryCode: 'GB',
         email,
         password: 'a-different-password-456',
         displayName: 'Duplicate Attempt',
@@ -158,6 +160,7 @@ describe('Auth e2e: register -> login -> GET /users/:id (real Postgres, no mocke
     await request(app.getHttpServer())
       .post('/auth/register')
       .send({
+        countryCode: 'GB',
         email,
         password: 'the-real-password-123',
         displayName: 'Wrong Password Test',

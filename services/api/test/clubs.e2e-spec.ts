@@ -68,6 +68,7 @@ describe('Clubs e2e: POST/DELETE /clubs/:id/join against the real "_ClubMembersh
     const registerResponse = await request(app.getHttpServer())
       .post('/auth/register')
       .send({
+        countryCode: 'GB',
         email,
         password,
         displayName: 'E2E Clubs Test User',

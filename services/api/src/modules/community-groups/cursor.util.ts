@@ -64,40 +64,5 @@ export function decodeCommunityGroupCursor(raw: string): CommunityGroupCursor {
   return { createdAt: date, id };
 }
 
-// ---------- Member roster cursor: { name, id } ----------
-// `name` here is the member User's displayName — same envelope shape as
-// clubs/cursor.util.ts's own { name, id }, re-declared locally rather
-// than imported across the module boundary (the same small deliberate
-// duplicate ListClubMembersQueryDto's own comment already argues for).
-
-export interface CommunityGroupMemberCursor {
-  name: string;
-  id: string;
-}
-
-export function encodeCommunityGroupMemberCursor(cursor: CommunityGroupMemberCursor): string {
-  return Buffer.from(JSON.stringify({ name: cursor.name, id: cursor.id }), 'utf8').toString(
-    'base64url',
-  );
-}
-
-export function decodeCommunityGroupMemberCursor(raw: string): CommunityGroupMemberCursor {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
-  } catch {
-    throw new BadRequestException('Invalid pagination cursor');
-  }
-
-  if (
-    typeof parsed !== 'object' ||
-    parsed === null ||
-    typeof (parsed as { name?: unknown }).name !== 'string' ||
-    typeof (parsed as { id?: unknown }).id !== 'string'
-  ) {
-    throw new BadRequestException('Invalid pagination cursor');
-  }
-
-  const { name, id } = parsed as { name: string; id: string };
-  return { name, id };
-}
+// The member roster's cursor lives in users/user-name-keyset.util.ts (B-034): it
+// is keyed on the PUBLIC name (username), never the real displayName.

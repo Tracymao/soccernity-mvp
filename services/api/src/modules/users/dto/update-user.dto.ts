@@ -28,9 +28,12 @@ export class UpdateUserDto {
 
   // profile/username-column-and-display-convention. 3-30 chars, letters,
   // digits and underscore; any case is accepted and stored lowercase
-  // (UsersService), so uniqueness is case-insensitive. `null` clears it
-  // (IsOptional skips validation for null as well as undefined), which
-  // returns the user to showing their displayName.
+  // (UsersService), so uniqueness is case-insensitive. The username RULES
+  // (reserved words, impersonation, profanity, personal data, revoked
+  // handles, change cooldown) are enforced by UsernamePolicyService, not here.
+  // `null` is still ACCEPTED by this DTO (IsOptional skips null) but is refused
+  // by UsersService with 400 username_required: since B-031 a user cannot clear
+  // their own username; only an admin revoke (B-033) removes one.
   @IsOptional()
   @IsString()
   @Matches(/^[A-Za-z0-9_]{3,30}$/, {

@@ -6,6 +6,7 @@ import { AdminRolesGuard } from '../admin/guards/admin-roles.guard';
 import { AdminUsersController } from './admin-users.controller';
 import { AdminUserDetailService } from './admin-user-detail.service';
 import { AdminUserDobCorrectionService } from './admin-user-dob-correction.service';
+import { AdminUserUsernameRevokeService } from './admin-user-username-revoke.service';
 import { AdminUsersService } from './admin-users.service';
 
 describe('AdminUsersController (HTTP layer)', () => {
@@ -21,6 +22,7 @@ describe('AdminUsersController (HTTP layer)', () => {
   // B-109 / B-103.
   const adminUserDetailService = { getUserDetail: jest.fn() };
   const adminUserDobCorrectionService = { correctDateOfBirth: jest.fn() };
+  const adminUserUsernameRevokeService = { revokeUsername: jest.fn() };
 
   let currentAdmin: { sub: string; role: string; aud: string };
 
@@ -31,6 +33,7 @@ describe('AdminUsersController (HTTP layer)', () => {
         { provide: AdminUsersService, useValue: adminUsersService },
         { provide: AdminUserDetailService, useValue: adminUserDetailService },
         { provide: AdminUserDobCorrectionService, useValue: adminUserDobCorrectionService },
+        { provide: AdminUserUsernameRevokeService, useValue: adminUserUsernameRevokeService },
         AdminRolesGuard,
       ],
     })
@@ -180,6 +183,40 @@ describe('AdminUsersController (HTTP layer)', () => {
   });
 
   // B-103 (Decision Log #390, #395 B4): the audited DOB correction.
+  describe('POST /admin/users/:id/username-revoke (B-033)', () => {
+    const valid = { reason: 'Impersonates a club account, reported twice' };
+
+    it('rejects an editor with 403 and never reaches the service', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'editor', aud: 'admin-console' };
+      await request(app.getHttpServer()).post('/admin/users/u1/username-revoke').send(valid).expect(403);
+      expect(adminUserUsernameRevokeService.revokeUsername).not.toHaveBeenCalled();
+    });
+
+    it.each(['moderator', 'superadmin'])('passes the target id, the CALLING admin id and the body for a %s, and returns 200', async (role) => {
+      currentAdmin = { sub: 'admin-7', role, aud: 'admin-console' };
+      adminUserUsernameRevokeService.revokeUsername.mockResolvedValue({ userId: 'u1' });
+      await request(app.getHttpServer()).post('/admin/users/u1/username-revoke').send(valid).expect(200);
+      expect(adminUserUsernameRevokeService.revokeUsername).toHaveBeenCalledWith('u1', 'admin-7', expect.objectContaining(valid));
+    });
+
+    it.each([
+      ['no reason', {}],
+      ['a too-short reason', { reason: 'bad' }],
+      ['a reason over 500 characters', { reason: 'x'.repeat(501) }],
+      ['an unknown field', { ...valid, username: 'someone_else' }],
+    ])('rejects %s with 400', async (_label, body) => {
+      currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
+      await request(app.getHttpServer()).post('/admin/users/u1/username-revoke').send(body).expect(400);
+      expect(adminUserUsernameRevokeService.revokeUsername).not.toHaveBeenCalled();
+    });
+
+    it('surfaces the service 404', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
+      adminUserUsernameRevokeService.revokeUsername.mockRejectedValue(new NotFoundException('User not found'));
+      await request(app.getHttpServer()).post('/admin/users/missing/username-revoke').send(valid).expect(404);
+    });
+  });
+
   describe('POST /admin/users/:id/dob-correction (B-103)', () => {
     const valid = { dateOfBirth: '2012-03-04', reason: 'Parent supplied a birth certificate' };
 

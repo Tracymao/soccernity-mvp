@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { encodeSearchClubCursor, encodeSearchPostCursor, encodeSearchUserCursor } from './cursor.util';
+import { encodeSearchClubCursor, encodeSearchPostCursor } from './cursor.util';
+import { encodeUserNameCursor, USER_NAME_ORDER_BY } from '../users/user-name-keyset.util';
 import { SearchService } from './search.service';
 
 // Mocked-Prisma unit tests, following blog.service.spec.ts /
@@ -171,7 +172,8 @@ describe('SearchService', () => {
           },
         ]),
       );
-      expect(call.orderBy).toEqual([{ displayName: 'asc' }, { id: 'asc' }]);
+      expect(call.orderBy).toEqual(USER_NAME_ORDER_BY);
+      expect(JSON.stringify(call.orderBy)).not.toContain('displayName');
     });
 
     it('never selects isMinor, accountStatus, or any other field beyond id/displayName', async () => {
@@ -184,10 +186,10 @@ describe('SearchService', () => {
       expect(call.select).toEqual({ id: true, username: true, displayName: true });
     });
 
-    it('applies the cursor as an additional AND condition on displayName/id, ascending', async () => {
+    it('applies the cursor as an additional AND condition on username/id, ascending, admitting the no-username group (B-034)', async () => {
       const prisma = buildPrismaMock();
       const service = new SearchService(prisma);
-      const cursor = encodeSearchUserCursor({ displayName: 'Ade', id: 'user-0' });
+      const cursor = encodeUserNameCursor({ username: 'ade_9', id: 'user-0' });
 
       await service.searchUsers('chelsea', cursor, 5);
 
@@ -195,7 +197,7 @@ describe('SearchService', () => {
       expect(call.take).toBe(6);
       expect(call.where.AND).toEqual(
         expect.arrayContaining([
-          { OR: [{ displayName: { gt: 'Ade' } }, { displayName: 'Ade', id: { gt: 'user-0' } }] },
+          { OR: [{ username: { gt: 'ade_9' } }, { username: 'ade_9', id: { gt: 'user-0' } }, { username: null }] },
         ]),
       );
     });
@@ -210,6 +212,24 @@ describe('SearchService', () => {
 
       expect(page.items).toHaveLength(2);
       expect(page.nextCursor).not.toBeNull();
+    });
+
+    it('the nextCursor carries the username (or null) and the id, never the real displayName (B-034)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([
+        userRow({ id: 'user-0', username: 'chelsea_9', displayName: 'Real Person' }),
+        userRow({ id: 'user-1', displayName: 'Other Person' }),
+      ]);
+      const page = await new SearchService(prisma).searchUsers('chelsea', undefined, 1);
+      expect(page.nextCursor).toBe(encodeUserNameCursor({ username: 'chelsea_9', id: 'user-0' }));
+      expect(Buffer.from(page.nextCursor as string, 'base64url').toString('utf8')).not.toContain('Real');
+    });
+
+    it('rejects a legacy displayName-keyed cursor with a 400', async () => {
+      const legacy = Buffer.from(JSON.stringify({ displayName: 'Ade', id: 'user-0' })).toString('base64url');
+      await expect(new SearchService(buildPrismaMock()).searchUsers('chelsea', legacy, 5)).rejects.toThrow(
+        'Invalid pagination cursor',
+      );
     });
 
     it('shapes each result to exactly {id, publicName}', async () => {

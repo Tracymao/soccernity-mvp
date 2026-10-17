@@ -126,15 +126,11 @@ describe('Username e2e: unique-where-set column + public name convention against
       expect((await getTestPrismaClient().user.findUnique({ where: { id: ada.userId } }))!.username).toBeNull();
     });
 
-    it('null clears the username, returning to the placeholder name and freeing the name for someone else', async () => {
+    it('a user can NOT clear their own username: null is a 400 username_required and the username stays (B-031)', async () => {
       const ada = await createUser('Ada Obi', 'goalie_9');
-      const ben = await createUser('Ben Cole');
-
-      const cleared = await request(app.getHttpServer()).patch(`/users/${ada.userId}`).set(auth(ada)).send({ username: null }).expect(200);
-      expect(cleared.body.username).toBeNull();
-      expect(cleared.body.publicName).toBe('Soccernity member');
-
-      await request(app.getHttpServer()).patch(`/users/${ben.userId}`).set(auth(ben)).send({ username: 'goalie_9' }).expect(200);
+      const res = await request(app.getHttpServer()).patch(`/users/${ada.userId}`).set(auth(ada)).send({ username: null }).expect(400);
+      expect(res.body.code).toBe('username_required');
+      expect((await getTestPrismaClient().user.findUnique({ where: { id: ada.userId } }))!.username).toBe('goalie_9');
     });
   });
 

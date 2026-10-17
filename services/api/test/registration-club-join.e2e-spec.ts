@@ -65,6 +65,7 @@ describe('Registration + club auto-join e2e (real Postgres, no mocked PrismaServ
     const registerResponse = await request(app.getHttpServer())
       .post('/auth/register')
       .send({
+        countryCode: 'GB',
         email,
         password: 'a-real-password-123',
         displayName: 'Club Joiner',
@@ -92,6 +93,7 @@ describe('Registration + club auto-join e2e (real Postgres, no mocked PrismaServ
     const registerResponse = await request(app.getHttpServer())
       .post('/auth/register')
       .send({
+        countryCode: 'GB',
         email,
         password: 'a-real-password-123',
         displayName: 'No Club For Now',
@@ -121,6 +123,7 @@ describe('Registration + club auto-join e2e (real Postgres, no mocked PrismaServ
     await request(app.getHttpServer())
       .post('/auth/register')
       .send({
+        countryCode: 'GB',
         email,
         password: 'a-real-password-123',
         displayName: 'Bad Club Attempt',
@@ -143,6 +146,7 @@ describe('Registration + club auto-join e2e (real Postgres, no mocked PrismaServ
     await request(app.getHttpServer())
       .post('/auth/register')
       .send({
+        countryCode: 'GB',
         email,
         password: 'a-real-password-123',
         displayName: 'Retry After Bad Club',

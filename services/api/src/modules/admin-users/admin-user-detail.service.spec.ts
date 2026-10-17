@@ -44,7 +44,10 @@ function row(overrides: Record<string, unknown> = {}) {
 
 function build(found: unknown) {
   const order: string[] = [];
-  const prisma = { user: { findUnique: jest.fn(async () => found) } };
+  const prisma = {
+    user: { findUnique: jest.fn(async () => found) },
+    revokedUsername: { findMany: jest.fn(async () => [] as unknown[]) },
+  };
   const audit = {
     record: jest.fn(async () => {
       order.push('audit');
@@ -60,6 +63,25 @@ describe('AdminUserDetailService.getUserDetail', () => {
     const { service, audit } = build(null);
     await expect(service.getUserDetail('nope', 'admin-1')).rejects.toBeInstanceOf(NotFoundException);
     expect(audit.record).not.toHaveBeenCalled();
+  });
+
+  it('lists the handles revoked from this user, newest first, with when everyone else may take them (B-033)', async () => {
+    const { service, prisma } = build(row());
+    const revokedAt = new Date('2026-10-01T00:00:00Z');
+    const holdUntil = new Date('2026-10-31T00:00:00Z');
+    prisma.revokedUsername.findMany.mockResolvedValue([{ username: 'old_handle', revokedAt, holdUntil }]);
+    const detail = await service.getUserDetail('user-1', 'admin-1');
+    expect(prisma.revokedUsername.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'user-1' }, orderBy: { revokedAt: 'desc' } }),
+    );
+    expect(detail.usernameRevocations).toEqual([{ username: 'old_handle', revokedAt, heldUntil: holdUntil }]);
+    // the reason lives in the audit log only
+    expect(JSON.stringify(detail.usernameRevocations)).not.toContain('reason');
+  });
+
+  it('has an empty revocation list for a user with none', async () => {
+    const { service } = build(row());
+    expect((await service.getUserDetail('user-1', 'admin-1')).usernameRevocations).toEqual([]);
   });
 
   it('returns the DOB decrypted server-side as YYYY-MM-DD, with the age tier', async () => {

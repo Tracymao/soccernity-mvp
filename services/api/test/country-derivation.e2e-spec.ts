@@ -39,6 +39,8 @@ function registerBody(over: Record<string, unknown> = {}) {
     password: 'password123',
     displayName: `Country ${counter}`,
     dateOfBirth: yearsAgo(30),
+    // Required since B-073 (RegisterDto): every registration declares a country.
+    countryCode: 'GB',
     ...over,
   } as Record<string, any>;
 }
@@ -106,10 +108,17 @@ describe('Country derivation e2e (B-023/B-024/B-025): stubbed GeoLite2 lookup', 
     expect(user.countryDerivedAt).toBeInstanceOf(Date);
   });
 
-  it('declared country is null when none is sent (the web Age Gate does not send it yet)', async () => {
+  it('a registration without a countryCode is refused with a 400 and creates no user', async () => {
     const body = registerBody();
-    await register(body, ipFor('GB')).expect(201);
-    expect((await userAndGuardian(body.email)).user.declaredCountry).toBeNull();
+    delete body.countryCode;
+    const res = await register(body, ipFor('GB')).expect(400);
+    expect(JSON.stringify(res.body.message)).toContain('countryCode');
+    expect(await getTestPrismaClient().user.findUnique({ where: { email: body.email } })).toBeNull();
+  });
+
+  it('a malformed countryCode is refused with a 400 too', async () => {
+    await register(registerBody({ countryCode: 'USA' }), ipFor('GB')).expect(400);
+    await register(registerBody({ countryCode: '' }), ipFor('GB')).expect(400);
   });
 
   describe('card verification is keyed off the DERIVED country', () => {

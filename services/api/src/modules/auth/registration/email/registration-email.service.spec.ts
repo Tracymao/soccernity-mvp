@@ -185,6 +185,35 @@ describe('RegistrationEmailService', () => {
       expect(sent.TextBody).not.toMatch(/\d+\s*(day|hour|week)/i);
     });
 
+    // B-033 (Decision Log #398 D3)
+    it('sends the username-revoked email: no admin reason, no link, escaped name, the consequences stated', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-revoked' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
+      );
+
+      await service.sendUsernameRevokedEmail('user@example.com', 'Ada <b>Obi</b>');
+
+      const sent = mockSendEmail.mock.calls[0][0] as { To: string; Subject: string; TextBody: string; HtmlBody: string };
+      expect(sent.To).toBe('user@example.com');
+      expect(sent.Subject).toBe('Your Soccernity username was removed');
+      for (const body of [sent.TextBody, sent.HtmlBody]) {
+        expect(body).toContain('Soccernity member');
+        expect(body).toContain("can't use the removed username again");
+        expect(body).toContain('30 days');
+        expect(body).toContain('support@soccernity.com');
+        expect(body).not.toMatch(/https?:\/\//);
+      }
+      expect(sent.HtmlBody).toContain('Ada &lt;b&gt;Obi&lt;/b&gt;');
+      expect(sent.HtmlBody).not.toContain('<b>Obi</b>');
+    });
+
+    it('does not send a username-revoked email while the provider is not configured (logs only)', async () => {
+      const service = new RegistrationEmailService(buildConfig({ EMAIL_PROVIDER_API_KEY: 'replace-me' }));
+      await expect(service.sendUsernameRevokedEmail('user@example.com', 'Ada')).resolves.toBeUndefined();
+      expect(mockSendEmail).not.toHaveBeenCalled();
+    });
+
     // feat/moderation-outcome-appeal-emails
     it('sends the reporter an outcome email with the mapped copy and no reported-party details', async () => {
       mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-actioned' });

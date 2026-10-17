@@ -9,6 +9,12 @@ import {
 } from './dto/list-club-members-query.dto';
 import { CLUBS_DEFAULT_PAGE_SIZE, CLUBS_MAX_PAGE_SIZE, ListClubsQueryDto } from './dto/list-clubs-query.dto';
 import { PUBLIC_NAME_SELECT, toPublicUser } from '../users/public-name.util';
+import {
+  decodeUserNameCursor,
+  USER_NAME_ORDER_BY,
+  userNameAfterCursor,
+  userNameCursorOf,
+} from '../users/user-name-keyset.util';
 
 // Response shape for every GET /clubs and GET /clubs/:id entry (Build
 // Plan Section 4.4). Deliberately does NOT select `members` or
@@ -266,12 +272,13 @@ export class ClubsService {
   // represented-club lands, whether the roster should show fans vs.
   // representers is a real open question — flagged, not pre-decided.
   //
-  // Keyset pagination (Section 5.5) alphabetically by displayName, `id`
-  // as the tiebreaker — the same "no timestamp on the model, order by
-  // name" approach GET /clubs itself uses (User has no per-club "joined
-  // at" timestamp; the implicit _ClubMembership table has only its A/B
-  // id columns). Reuses clubs/cursor.util.ts's { name, id } envelope
-  // verbatim (name = displayName), no third cursor shape invented.
+  // Keyset pagination (Section 5.5) alphabetically by PUBLIC name -- the
+  // username, accounts without one last, `id` as the tiebreaker (B-034,
+  // users/user-name-keyset.util.ts) -- the same "no timestamp on the model,
+  // order by name" approach GET /clubs itself uses (User has no per-club
+  // "joined at" timestamp; the implicit _ClubMembership table has only its
+  // A/B id columns). Neither the order nor the cursor ever carries a real
+  // displayName.
   //
   // JwtAuthGuard only (ClubsController) — reading a roster is no more
   // safety-sensitive than GET /clubs or GET /clubs/:id, same reasoning
@@ -291,11 +298,11 @@ export class ClubsService {
       { clubMemberships: { some: { id: clubId } } },
       VISIBLE_CLUB_MEMBER_FILTER,
     ];
-    if (query.cursor) filters.push(this.buildMemberCursorFilter(query.cursor));
+    if (query.cursor) filters.push(userNameAfterCursor(decodeUserNameCursor(query.cursor)));
 
     const rows = await this.prisma.user.findMany({
       where: { AND: filters },
-      orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+      orderBy: USER_NAME_ORDER_BY,
       take: limit + 1,
       select: CLUB_MEMBER_SELECT,
     });
@@ -303,8 +310,7 @@ export class ClubsService {
     const hasMore = rows.length > limit;
     const trimmed = hasMore ? rows.slice(0, limit) : rows;
     const last = trimmed[trimmed.length - 1];
-    const nextCursor =
-      hasMore && last ? encodeClubCursor({ name: last.displayName, id: last.id }) : null;
+    const nextCursor = hasMore && last ? userNameCursorOf(last) : null;
 
     const followedIds = await this.followedSubset(
       userId,
@@ -330,19 +336,6 @@ export class ClubsService {
       select: { followeeId: true },
     });
     return new Set(rows.map((r) => r.followeeId));
-  }
-
-  private buildMemberCursorFilter(rawCursor: string): Prisma.UserWhereInput {
-    const cursor = decodeClubCursor(rawCursor);
-    // Ascending-order (alphabetical) "after this (displayName, id)"
-    // filter — the User-model counterpart of buildCursorFilter above
-    // (which does the same for ClubPage.name).
-    return {
-      OR: [
-        { displayName: { gt: cursor.name } },
-        { displayName: cursor.name, id: { gt: cursor.id } },
-      ],
-    };
   }
 
   // POST /clubs/:id/join. See clubs/README.md's "verified Prisma

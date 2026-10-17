@@ -64,7 +64,7 @@ describe('Email links e2e (B-016)', () => {
     const email = `e2e-links-adult-${Date.now()}@example.com`;
     await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ email, password: 'password123', displayName: 'Adult', dateOfBirth: yearsAgo(30) })
+      .send({ countryCode: 'GB', email, password: 'password123', displayName: 'Adult', dateOfBirth: yearsAgo(30) })
       .expect(201);
 
     const emails = await waitForEmails(1);
@@ -87,6 +87,7 @@ describe('Email links e2e (B-016)', () => {
       .post('/auth/register')
       .set('X-Forwarded-For', '198.18.9.1')
       .send({
+        countryCode: 'GB',
         email,
         password: 'password123',
         displayName: 'Minor',
@@ -120,6 +121,7 @@ describe('Email links e2e (B-016)', () => {
       .post('/auth/register')
       .set('X-Forwarded-For', '198.18.9.2')
       .send({
+        countryCode: 'GB',
         email,
         password: 'password123',
         displayName: 'Minor',

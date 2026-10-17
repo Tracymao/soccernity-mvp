@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { encodeClubCursor } from './cursor.util';
+import { encodeUserNameCursor, USER_NAME_ORDER_BY } from '../users/user-name-keyset.util';
 import { ClubsService } from './clubs.service';
 
 function buildPrismaMock() {
@@ -248,7 +249,7 @@ describe('ClubsService', () => {
       expect((prisma as unknown as { user: { findMany: jest.Mock } }).user.findMany).not.toHaveBeenCalled();
     });
 
-    it('queries ClubPage.members for this club, excludes restricted-pending minors and non-active accounts, and orders by displayName asc, id asc', async () => {
+    it('queries ClubPage.members for this club, excludes restricted-pending minors and non-active accounts, and orders by username asc (no-username last), id asc (B-034)', async () => {
       const prisma = buildPrismaMock();
       (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue({ id: 'club-1' });
       (prisma as unknown as { user: { findMany: jest.Mock } }).user.findMany.mockResolvedValue([
@@ -269,7 +270,8 @@ describe('ClubsService', () => {
           OR: [{ isMinor: false }, { guardian: { consentStatus: 'confirmed' } }],
         },
       ]);
-      expect(callArgs.orderBy).toEqual([{ displayName: 'asc' }, { id: 'asc' }]);
+      expect(callArgs.orderBy).toEqual(USER_NAME_ORDER_BY);
+      expect(JSON.stringify(callArgs.orderBy)).not.toContain('displayName');
       expect(callArgs.select).toEqual({ id: true, username: true, displayName: true });
       expect(result).toEqual({
         items: [{ ...memberView('u-1', 'Ada Lovelace'), isFollowing: false }],
@@ -290,33 +292,55 @@ describe('ClubsService', () => {
       expect(select).not.toHaveProperty('passwordHash');
     });
 
-    it('builds a nextCursor (displayName, id) from the last kept row when a lookahead row exists', async () => {
+    it('builds the nextCursor from the PUBLIC identifier (username, id) and never carries the real displayName (B-034)', async () => {
       const prisma = buildPrismaMock();
       (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue({ id: 'club-1' });
       (prisma as unknown as { user: { findMany: jest.Mock } }).user.findMany.mockResolvedValue([
-        memberRow('u-1', 'Ada'),
-        memberRow('u-2', 'Bo'), // lookahead
+        { id: 'u-1', username: 'ada_9', displayName: 'Ada Lovelace' },
+        memberRow('u-2', 'Bo Real Name'), // lookahead
       ]);
 
       const service = new ClubsService(prisma);
       const result = await service.getClubMembers('club-1', 'caller-1', { limit: 1 });
 
-      expect(result.items).toEqual([{ ...memberView('u-1', 'Ada'), isFollowing: false }]);
-      expect(result.nextCursor).toBe(encodeClubCursor({ name: 'Ada', id: 'u-1' }));
+      expect(result.nextCursor).toBe(encodeUserNameCursor({ username: 'ada_9', id: 'u-1' }));
+      const decoded = Buffer.from(result.nextCursor as string, 'base64url').toString('utf8');
+      expect(decoded).not.toContain('Ada');
+      expect(decoded).not.toContain('Lovelace');
     });
 
-    it('applies the cursor as a strict "after this (displayName, id)" filter ANDed with the club + visibility filters', async () => {
+    it('a username-less last row yields a cursor with username null, still never the real name', async () => {
       const prisma = buildPrismaMock();
       (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue({ id: 'club-1' });
-      const cursor = encodeClubCursor({ name: 'Ada', id: 'u-1' });
+      (prisma as unknown as { user: { findMany: jest.Mock } }).user.findMany.mockResolvedValue([
+        memberRow('u-1', 'Ada Real Name'),
+        memberRow('u-2', 'Bo'), // lookahead
+      ]);
+      const result = await new ClubsService(prisma).getClubMembers('club-1', 'caller-1', { limit: 1 });
+      expect(result.nextCursor).toBe(encodeUserNameCursor({ username: null, id: 'u-1' }));
+      expect(Buffer.from(result.nextCursor as string, 'base64url').toString('utf8')).not.toContain('Ada');
+    });
 
-      const service = new ClubsService(prisma);
-      await service.getClubMembers('club-1', 'caller-1', { cursor });
+    it('applies a username cursor as a strict "after this (username, id)" filter that also admits the no-username group', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue({ id: 'club-1' });
+      const cursor = encodeUserNameCursor({ username: 'ada_9', id: 'u-1' });
+
+      await new ClubsService(prisma).getClubMembers('club-1', 'caller-1', { cursor });
 
       const where = (prisma as unknown as { user: { findMany: jest.Mock } }).user.findMany.mock.calls[0][0].where;
       expect(where.AND[2]).toEqual({
-        OR: [{ displayName: { gt: 'Ada' } }, { displayName: 'Ada', id: { gt: 'u-1' } }],
+        OR: [{ username: { gt: 'ada_9' } }, { username: 'ada_9', id: { gt: 'u-1' } }, { username: null }],
       });
+    });
+
+    it('rejects a legacy displayName-keyed cursor with a 400 (cursors from before B-034 no longer decode)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.clubPage.findUnique as jest.Mock).mockResolvedValue({ id: 'club-1' });
+      const legacy = encodeClubCursor({ name: 'Ada', id: 'u-1' });
+      await expect(new ClubsService(prisma).getClubMembers('club-1', 'caller-1', { cursor: legacy })).rejects.toThrow(
+        'Invalid pagination cursor',
+      );
     });
 
     it('rejects a malformed cursor with a 400', async () => {
