@@ -614,3 +614,21 @@ export async function registerUser(payload: RegisterRequest): Promise<RegisterRe
 
   return body as RegisterResponse;
 }
+
+// B-017 -- server-side logout (POST /auth/logout, 204). Revokes the session's
+// refresh token so a copied token cannot be replayed after the user logs out.
+// Deliberately sends NO Authorization header: single-session logout only
+// needs the refresh token, and the header would only matter for
+// `allSessions`. Best-effort -- the caller clears local state regardless of
+// the outcome, so this never throws.
+export async function logoutSession(refreshToken: string): Promise<void> {
+  try {
+    await fetch(`${API_BASE_URL}/auth/logout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+    });
+  } catch {
+    // Network failure: the local session is cleared by the caller anyway.
+  }
+}

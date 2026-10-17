@@ -25,6 +25,38 @@ export function getStoredAccessToken(): string | null {
   return window.sessionStorage.getItem(ACCESS_TOKEN_KEY) ?? window.localStorage.getItem(ACCESS_TOKEN_KEY);
 }
 
+export function getStoredRefreshToken(): string | null {
+  return window.sessionStorage.getItem(REFRESH_TOKEN_KEY) ?? window.localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+export interface SessionTokens {
+  accessToken: string;
+  refreshToken: string;
+}
+
+// sprint-1 B-017 -- the one writer for a session, so login, registration,
+// reactivation and the silent refresh all store tokens the same way.
+// `persistent` = localStorage ("Stay signed in"), otherwise sessionStorage.
+// Writing to one location removes the pair from the other, so
+// getStoredAccessToken() can never read a stale token from the location
+// that was not just written.
+export function storeSession(tokens: SessionTokens, persistent: boolean): void {
+  const target = persistent ? window.localStorage : window.sessionStorage;
+  const other = persistent ? window.sessionStorage : window.localStorage;
+  other.removeItem(ACCESS_TOKEN_KEY);
+  other.removeItem(REFRESH_TOKEN_KEY);
+  target.setItem(ACCESS_TOKEN_KEY, tokens.accessToken);
+  target.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
+}
+
+// Replaces the tokens in whichever location already holds the session
+// (used by the silent refresh, which must not move a session between
+// sessionStorage and localStorage).
+export function replaceStoredTokens(tokens: SessionTokens): void {
+  const persistent = window.localStorage.getItem(REFRESH_TOKEN_KEY) !== null;
+  storeSession(tokens, persistent);
+}
+
 // sprint-1/f5-f6-bugfixes -- Bug 2 fix. Genuinely new: no clear/logout
 // helper existed anywhere in apps/web before this fix (confirmed by grep
 // across apps/web/src -- LoginPage.tsx only ever WRITES a session; nothing

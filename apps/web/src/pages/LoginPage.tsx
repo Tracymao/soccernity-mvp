@@ -35,6 +35,7 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { AuthApiError, login } from "../api/auth";
+import { storeSession } from "../lib/session";
 import loginHero from "../assets/illustrations/login-hero.svg";
 import "./LoginPage.css";
 
@@ -67,9 +68,7 @@ export default function LoginPage() {
       // of the Section 4.1 contract; storage choice (session vs.
       // persistent) is the closest honest approximation of its intent
       // and should be revisited once real session management lands.
-      const storage = staySignedIn ? window.localStorage : window.sessionStorage;
-      storage.setItem("sn_access_token", result.accessToken);
-      storage.setItem("sn_refresh_token", result.refreshToken);
+      storeSession(result, staySignedIn);
 
       navigate("/");
     } catch (error) {

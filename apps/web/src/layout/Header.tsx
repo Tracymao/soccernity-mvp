@@ -46,7 +46,8 @@ import searchIcon from "../assets/icons/search.svg";
 import messagesIcon from "../assets/icons/messages.svg";
 import { getUser, type UserProfile } from "../api/users";
 import { getUnreadCount } from "../api/notifications";
-import { clearStoredSession, decodeAccessToken, getStoredAccessToken } from "../lib/session";
+import { clearStoredSession, decodeAccessToken, getStoredAccessToken, getStoredRefreshToken } from "../lib/session";
+import { logoutSession } from "../api/auth";
 import { primaryNavItems } from "./navigation";
 import { useIsMobile } from "./useIsMobile";
 import AccountDropdown from "./AccountDropdown";
@@ -141,6 +142,10 @@ export default function Header() {
   }, [accessToken, location.key]);
 
   function handleLogout() {
+    // B-017: revoke the refresh token server-side (best-effort, not awaited)
+    // before the local copy is cleared; the UI never waits on the network.
+    const refreshToken = getStoredRefreshToken();
+    if (refreshToken) void logoutSession(refreshToken);
     clearStoredSession();
     setMenuOpen(false);
     navigate("/");

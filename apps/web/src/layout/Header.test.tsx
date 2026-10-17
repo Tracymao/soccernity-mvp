@@ -23,7 +23,12 @@ vi.mock("../api/notifications", async () => {
   return { ...actual, getUnreadCount: vi.fn() };
 });
 
+vi.mock("../api/auth", async () => {
+  const actual = await vi.importActual<typeof import("../api/auth")>("../api/auth");
+  return { ...actual, logoutSession: vi.fn().mockResolvedValue(undefined) };
+});
 import { getUser } from "../api/users";
+import { logoutSession } from "../api/auth";
 import { getUnreadCount } from "../api/notifications";
 
 const TOKEN_KEY = "sn_access_token";
@@ -274,6 +279,18 @@ describe("Header -- logged in (desktop)", () => {
     expect(window.sessionStorage.getItem(TOKEN_KEY)).toBeNull();
     expect(screen.getByTestId("pathname").textContent).toBe("/");
     expect(screen.getByRole("link", { name: "Login" })).not.toBeNull();
+  });
+
+  // B-017: logout also revokes the refresh token server-side.
+  it("logs out: revokes the refresh token via POST /auth/logout, then clears both tokens", () => {
+    window.sessionStorage.setItem("sn_refresh_token", "refresh-abc");
+    renderHeader();
+    fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Log out" }));
+
+    expect(logoutSession).toHaveBeenCalledWith("refresh-abc");
+    expect(window.sessionStorage.getItem("sn_refresh_token")).toBeNull();
+    expect(window.sessionStorage.getItem(TOKEN_KEY)).toBeNull();
   });
 
   it("a mousedown inside the open menu does not close it before the item's own click fires", () => {
