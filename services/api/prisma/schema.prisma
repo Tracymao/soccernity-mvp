@@ -354,6 +354,17 @@ model Guardian {
   // Prisma cannot model -- a String, not a Prisma enum, on purpose.
   consentDeclineSource String?
 
+  // B-102 / B-110 (Decision Log #389, #395 B2, #402, #403): how many times a
+  // guardian has EXPLICITLY declined this minor's request. INTERNAL -- no API
+  // exposes it (the decline page shows a static sentence, never "N of 3").
+  // Declines 1 and 2 leave the account open and the row reopenable (resend /
+  // change guardian email); the third (MAX_EXPLICIT_DECLINES) blocks login and
+  // enters pending_deletion with the 30-day grace. Expiry, the second lapse
+  // and post-approval withdrawal never increment it. Changing the guardian
+  // email does NOT reset it; only a support DOB-correction restart does (B-103,
+  // #403 item 15). CHECK >= 0 in migration 20261017140000_add_guardian_decline_count.
+  declineCount Int @default(0)
+
   // sprint-1/guardian-consent-decline-withdraw-expiry -- records the ONE
   // automatic re-send GuardianConsentExpirySweepService performs when the
   // original consent token lapses unanswered. This is the field that
@@ -394,7 +405,7 @@ model Guardian {
   // consent to the right thing), but DECLINE and WITHDRAW stay available --
   // #372's "decline remains available". Cleared only by support, through
   // POST /admin/users/:id/incorrect-details-report/resolve (audited), or by
-  // the DOB-correction tool (B-103, not built yet). Deliberately NOT cleared
+  // the DOB-correction tool (B-103, built). Deliberately NOT cleared
   // by changeGuardianEmail: the report is about the minor's details, not the
   // guardian, so swapping in a different guardian must not wipe it.
   //

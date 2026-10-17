@@ -8,6 +8,7 @@ import { RegistrationEmailService } from '../registration/email/registration-ema
 import { verificationMethodFor } from './card-verification-policy.util';
 import { CONSENT_SCREEN_VERSION } from './consent-screen-version.constants';
 import { ConsentDeviceType } from './device-type.util';
+import { EXPLICIT_DECLINE_SOURCE, MAX_EXPLICIT_DECLINES, isReopenableDecline } from './guardian-decline-cap.constants';
 import { INCORRECT_DETAILS_OPEN_MESSAGE } from './incorrect-details.constants';
 import { computeConsentTokenExpiresAt, computeWithdrawalTokenExpiresAt } from './consent-token.constants';
 
@@ -293,7 +294,18 @@ export class GuardianConsentService {
     }
 
     const guardian = await this.prisma.guardian.findUnique({ where: { minorUserId: user.id } });
-    if (!guardian || guardian.consentStatus !== 'pending') {
+    if (!guardian) {
+      return;
+    }
+
+    // B-110 / B-102 (Decision Log #402): after decline 1 or 2 the minor may
+    // resend. That reopens the row, so it is only allowed while the account is
+    // still open and still a minor's, and only for an EXPLICIT decline with
+    // fewer than MAX_EXPLICIT_DECLINES recorded -- an expiry or withdrawal row
+    // (account already on the deletion path) is never reopened here. Same
+    // generic silent return as every other no-match, so nothing is revealed.
+    const reopen = isReopenableDecline(guardian) && user.isMinor && user.accountStatus === 'active';
+    if (guardian.consentStatus !== 'pending' && !reopen) {
       return;
     }
 
@@ -301,6 +313,7 @@ export class GuardianConsentService {
       guardianId: guardian.id,
       minorDisplayName: user.displayName,
       markAutoResent: false,
+      reopenDeclined: reopen,
     });
   }
 
@@ -329,7 +342,40 @@ export class GuardianConsentService {
     guardianId: string;
     minorDisplayName: string;
     markAutoResent: boolean;
+    // B-110: reopen a 'declined' row (decline 1 or 2) as a fresh 'pending'
+    // request. Guarded in the WHERE clause so a decline that became final, or
+    // an account that left 'active', in the meantime is not reopened.
+    reopenDeclined?: boolean;
   }): Promise<void> {
+    if (params.reopenDeclined) {
+      const token = randomUUID();
+      const reopened = await this.prisma.guardian.updateMany({
+        where: {
+          id: params.guardianId,
+          consentStatus: 'declined',
+          consentDeclineSource: EXPLICIT_DECLINE_SOURCE,
+          declineCount: { lt: MAX_EXPLICIT_DECLINES },
+          minorUser: { isMinor: true, accountStatus: 'active' },
+        },
+        data: {
+          consentStatus: 'pending',
+          // The row is pending again, so the decline cause no longer applies.
+          consentDeclineSource: null,
+          consentToken: token,
+          consentTokenExpiresAt: computeConsentTokenExpiresAt(this.config),
+          // declineCount is deliberately NOT touched: three in total, ever.
+        },
+      });
+      if (reopened.count === 0) {
+        return;
+      }
+      const row = await this.prisma.guardian.findUnique({ where: { id: params.guardianId } });
+      if (row) {
+        await this.emailService.sendGuardianConsentEmail(row.email, token, params.minorDisplayName);
+      }
+      return;
+    }
+
     const updated = await this.prisma.guardian.update({
       where: { id: params.guardianId },
       data: {
@@ -383,7 +429,7 @@ export class GuardianConsentService {
     const minor = guardian
       ? await this.prisma.user.findUnique({
           where: { id: minorUserId },
-          select: { id: true, email: true, displayName: true, isMinor: true },
+          select: { id: true, email: true, displayName: true, isMinor: true, accountStatus: true },
         })
       : null;
 
@@ -401,7 +447,12 @@ export class GuardianConsentService {
           'Ask your guardian to withdraw consent if they need to.',
       );
     }
-    if (guardian.consentStatus !== 'pending') {
+    // B-110 (Decision Log #402): after decline 1 or 2 the minor may change the
+    // guardian email, which reopens the request. Same conditions as resend: an
+    // explicit decline under the cap, on a still-open minor account. Anything
+    // else declined (withdrawal, expiry, the third decline) is terminal.
+    const reopening = isReopenableDecline(guardian) && minor.accountStatus === 'active';
+    if (guardian.consentStatus !== 'pending' && !reopening) {
       throw new ConflictException('Consent for this account was declined or withdrawn.');
     }
 
@@ -436,7 +487,8 @@ export class GuardianConsentService {
     const changed = await this.prisma.guardian.updateMany({
       where: {
         id: guardian.id,
-        consentStatus: 'pending',
+        consentStatus: guardian.consentStatus,
+        declineCount: guardian.declineCount,
         consentToken: guardian.consentToken,
         cardVerifiedAt: guardian.cardVerifiedAt,
         cardRefundedAt: guardian.cardRefundedAt,
@@ -449,6 +501,11 @@ export class GuardianConsentService {
         // guardian's name/relationship must not stay attached to it.
         name: details.name.trim(),
         relationship: details.relationship,
+        // A reopened (declined) row is a live request again; harmless no-op
+        // for a row that was already pending. declineCount is NOT reset by a
+        // guardian email change (only a DOB-correction restart resets it).
+        consentStatus: 'pending',
+        consentDeclineSource: null,
         consentToken: newToken,
         consentTokenExpiresAt: computeConsentTokenExpiresAt(this.config),
         consentAutoResentAt: null,
@@ -557,10 +614,45 @@ export class GuardianConsentService {
       );
     }
 
+    // B-102 (Decision Log #389, #395 B2): only the THIRD explicit decline is
+    // final. Declines 1 and 2 are recorded and leave the account open.
+    if (guardian.declineCount + 1 < MAX_EXPLICIT_DECLINES) {
+      await this.recordNonFinalDecline(guardian);
+      return;
+    }
+
     await this.refuseConsentAndScheduleDeletion({
       guardianId: guardian.id,
       minorUserId: guardian.minorUserId,
       reason: 'declined',
+    });
+  }
+
+  // Decline 1 or 2. The row becomes 'declined' (so every allowlist-based
+  // enforcement site keeps the minor restricted, and the web app can render
+  // the decline page INSIDE the account) and the counter moves up by one.
+  // Nothing else happens: sessions stay valid, the account stays 'active', no
+  // deletion clock starts, and -- deliberately -- no email is sent (the minor
+  // sees the decline page in the account; the founder-specified email is for
+  // the final decline only, #395 B2).
+  //
+  // The WHERE pins the counter value that was read, so two concurrent declines
+  // of the same request cannot both count: the loser matches zero rows and is a
+  // silent no-op. `minorUser.isMinor` mirrors the refusal primitive's guard for
+  // a user reclassified as an adult (Decision Log #349).
+  private async recordNonFinalDecline(guardian: { id: string; declineCount: number }): Promise<void> {
+    await this.prisma.guardian.updateMany({
+      where: {
+        id: guardian.id,
+        consentStatus: 'pending',
+        declineCount: guardian.declineCount,
+        minorUser: { isMinor: true },
+      },
+      data: {
+        consentStatus: 'declined',
+        consentDeclineSource: DECLINE_SOURCE_BY_REASON.declined,
+        declineCount: { increment: 1 },
+      },
     });
   }
 
@@ -706,6 +798,9 @@ export class GuardianConsentService {
         // Decision Log #338 -- the one place all three refusal paths
         // converge, so the source is recorded here and nowhere else.
         consentDeclineSource: DECLINE_SOURCE_BY_REASON[params.reason],
+        // B-102: only an EXPLICIT decline counts (this is the third one, the
+        // final one). Withdrawal and expiry never touch the counter.
+        ...(params.reason === 'declined' ? { declineCount: { increment: 1 } } : {}),
         withdrawalToken: null,
         withdrawalTokenExpiresAt: null,
       },
@@ -812,7 +907,11 @@ export class GuardianConsentService {
       // Mirrors resendConsent()'s own gate exactly (`consentStatus !==
       // 'pending'` -> no resend) so the frontend never has to re-derive
       // this business rule itself.
-      canResend: guardian.consentStatus === 'pending',
+      // B-110: also true for a reopenable decline (1 or 2 recorded), so the
+      // web app can offer "resend" on the decline page. The decline count
+      // itself is never exposed. The account-state half of the resend rule
+      // lives on the User row; a closed account cannot call this route anyway.
+      canResend: guardian.consentStatus === 'pending' || isReopenableDecline(guardian),
       consentTimestamp: guardian.consentTimestamp,
     };
   }

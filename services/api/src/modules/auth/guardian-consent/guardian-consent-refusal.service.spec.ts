@@ -25,6 +25,7 @@ interface GuardianRow {
   withdrawalToken: string | null;
   withdrawalTokenExpiresAt: Date | null;
   consentDeclineSource: string | null;
+  declineCount: number;
 }
 
 interface UserRow {
@@ -51,6 +52,11 @@ function buildService(
     withdrawalToken: null,
     withdrawalTokenExpiresAt: null,
     consentDeclineSource: null,
+    // B-102: this file exercises the FINAL refusal path, so the default is two
+    // earlier explicit declines already on record -- the next one is the third
+    // and closes the account. Declines 1 and 2 (account stays open) are
+    // covered in guardian-consent-decline-cap.service.spec.ts.
+    declineCount: 2,
     ...overrides.guardian,
   };
 
@@ -105,7 +111,16 @@ function buildService(
           if (guard && typeof guard === 'object' && guard.not === guardian.consentStatus) {
             return { count: 0 };
           }
-          Object.assign(guardian, data);
+          // Prisma's { increment: n } form (B-102's decline counter).
+          const { declineCount, ...rest } = data as unknown as Omit<Partial<GuardianRow>, 'declineCount'> & {
+            declineCount?: number | { increment: number };
+          };
+          Object.assign(guardian, rest);
+          if (typeof declineCount === 'object' && declineCount !== null) {
+            guardian.declineCount += declineCount.increment;
+          } else if (typeof declineCount === 'number') {
+            guardian.declineCount = declineCount;
+          }
           return { count: 1 };
         },
       ),

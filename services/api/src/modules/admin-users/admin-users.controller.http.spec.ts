@@ -4,6 +4,8 @@ import * as request from 'supertest';
 import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
 import { AdminRolesGuard } from '../admin/guards/admin-roles.guard';
 import { AdminUsersController } from './admin-users.controller';
+import { AdminUserDetailService } from './admin-user-detail.service';
+import { AdminUserDobCorrectionService } from './admin-user-dob-correction.service';
 import { AdminUsersService } from './admin-users.service';
 
 describe('AdminUsersController (HTTP layer)', () => {
@@ -16,12 +18,21 @@ describe('AdminUsersController (HTTP layer)', () => {
     resolveIncorrectDetailsReport: jest.fn(),
   };
 
+  // B-109 / B-103.
+  const adminUserDetailService = { getUserDetail: jest.fn() };
+  const adminUserDobCorrectionService = { correctDateOfBirth: jest.fn() };
+
   let currentAdmin: { sub: string; role: string; aud: string };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [AdminUsersController],
-      providers: [{ provide: AdminUsersService, useValue: adminUsersService }, AdminRolesGuard],
+      providers: [
+        { provide: AdminUsersService, useValue: adminUsersService },
+        { provide: AdminUserDetailService, useValue: adminUserDetailService },
+        { provide: AdminUserDobCorrectionService, useValue: adminUserDobCorrectionService },
+        AdminRolesGuard,
+      ],
     })
       .overrideGuard(AdminJwtAuthGuard)
       .useValue({
@@ -133,6 +144,88 @@ describe('AdminUsersController (HTTP layer)', () => {
         new NotFoundException('No open incorrect-details report for this user'),
       );
       await request(app.getHttpServer()).post('/admin/users/u1/incorrect-details-report/resolve').expect(404);
+    });
+  });
+
+  // B-109 (Decision Log #398 D4): the single-user read.
+  describe('GET /admin/users/:id (B-109)', () => {
+    it('rejects an editor with 403 and never reaches the service', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'editor', aud: 'admin-console' };
+      await request(app.getHttpServer()).get('/admin/users/u1').expect(403);
+      expect(adminUserDetailService.getUserDetail).not.toHaveBeenCalled();
+    });
+
+    it.each(['moderator', 'superadmin'])('passes the user id and the CALLING admin id for a %s', async (role) => {
+      currentAdmin = { sub: 'admin-9', role, aud: 'admin-console' };
+      adminUserDetailService.getUserDetail.mockResolvedValue({ id: 'u1', dateOfBirth: '2012-03-04' });
+      const res = await request(app.getHttpServer()).get('/admin/users/u1').expect(200);
+      expect(res.body).toEqual({ id: 'u1', dateOfBirth: '2012-03-04' });
+      expect(adminUserDetailService.getUserDetail).toHaveBeenCalledWith('u1', 'admin-9');
+    });
+
+    it('surfaces the service 404', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
+      adminUserDetailService.getUserDetail.mockRejectedValue(new NotFoundException('User not found'));
+      await request(app.getHttpServer()).get('/admin/users/nope').expect(404);
+    });
+
+    it('does not shadow the literal-path GETs', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
+      adminUsersService.listIncorrectDetailsReports.mockResolvedValue({ items: [], truncated: false });
+      adminUsersService.listStalledHolds.mockResolvedValue({ thresholdDays: 90, items: [] });
+      await request(app.getHttpServer()).get('/admin/users/incorrect-details-reports').expect(200);
+      await request(app.getHttpServer()).get('/admin/users/held-investigations').expect(200);
+      expect(adminUserDetailService.getUserDetail).not.toHaveBeenCalled();
+    });
+  });
+
+  // B-103 (Decision Log #390, #395 B4): the audited DOB correction.
+  describe('POST /admin/users/:id/dob-correction (B-103)', () => {
+    const valid = { dateOfBirth: '2012-03-04', reason: 'Parent supplied a birth certificate' };
+
+    it('rejects an editor with 403', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'editor', aud: 'admin-console' };
+      await request(app.getHttpServer()).post('/admin/users/u1/dob-correction').send(valid).expect(403);
+      expect(adminUserDobCorrectionService.correctDateOfBirth).not.toHaveBeenCalled();
+    });
+
+    it('passes the target id, the CALLING admin id and the body, and returns 200', async () => {
+      currentAdmin = { sub: 'admin-7', role: 'moderator', aud: 'admin-console' };
+      adminUserDobCorrectionService.correctDateOfBirth.mockResolvedValue({ userId: 'u1' });
+      await request(app.getHttpServer()).post('/admin/users/u1/dob-correction').send(valid).expect(200);
+      expect(adminUserDobCorrectionService.correctDateOfBirth).toHaveBeenCalledWith(
+        'u1',
+        'admin-7',
+        expect.objectContaining(valid),
+      );
+    });
+
+    it.each([
+      ['no reason', { dateOfBirth: '2012-03-04' }],
+      ['a too-short reason', { dateOfBirth: '2012-03-04', reason: 'oops' }],
+      ['a non-date', { dateOfBirth: 'yesterday', reason: 'Parent supplied a birth certificate' }],
+      ['an unknown field', { ...valid, accountStatus: 'active' }],
+    ])('rejects %s with 400', async (_label, body) => {
+      currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
+      await request(app.getHttpServer()).post('/admin/users/u1/dob-correction').send(body).expect(400);
+      expect(adminUserDobCorrectionService.correctDateOfBirth).not.toHaveBeenCalled();
+    });
+
+    it('validates a nested guardian (bad relationship is a 400)', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
+      await request(app.getHttpServer())
+        .post('/admin/users/u1/dob-correction')
+        .send({ ...valid, guardian: { name: 'G', email: 'g@example.com', relationship: 'Neighbour' } })
+        .expect(400);
+    });
+
+    it('accepts a valid nested guardian', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
+      adminUserDobCorrectionService.correctDateOfBirth.mockResolvedValue({ userId: 'u1' });
+      await request(app.getHttpServer())
+        .post('/admin/users/u1/dob-correction')
+        .send({ ...valid, guardian: { name: 'G', email: 'g@example.com', relationship: 'Parent' } })
+        .expect(200);
     });
   });
 

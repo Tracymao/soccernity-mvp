@@ -266,3 +266,43 @@ dto/list-users-query.dto.ts
 dto/update-user-status.dto.ts
 ../admin-action-log/        — AdminActionLogService.record(...) (own module, own README)
 ```
+
+## B-109 single-user read and B-103 DOB correction (`backend/w3b-decline-cap-dob-correction`)
+
+Both sit on the existing `AdminUsersController`, so both inherit its class-level
+`AdminJwtAuthGuard` + `AdminRolesGuard('moderator', 'superadmin')`.
+
+| Route | Service | Notes |
+|---|---|---|
+| `GET /admin/users/:id` | `AdminUserDetailService` | user, age tier, safeguarding country, guardian summary; DOB decrypted server-side only |
+| `POST /admin/users/:id/dob-correction` | `AdminUserDobCorrectionService` | body `dateOfBirth`, `reason` (10-500 chars), optional `guardian` |
+
+`GET :id` is declared after the literal-path GETs so it cannot shadow them.
+
+**B-109 audit rule.** Every response that contains a date of birth writes one
+`user.dob_viewed` row (admin, target, no notes), repeat reads included. The DOB is
+decrypted first, the audit row second, the response last: if the audit write fails
+the request fails and no DOB leaves the server. An anonymized account holds no DOB
+and writes no row. The payload is an explicit `select`: no password hash, no
+consent or withdrawal token, no Stripe reference, no decline counter.
+
+**B-103 rules** (one transaction, audit row inside it):
+- the corrected date goes through `isPlausibleDateOfBirth` (the registration check);
+  `isMinor` / `isUnder16` are recomputed with the registration functions and move
+  at once; the card-verification policy is re-run against the DERIVED country;
+- if the age tier (under 13 / under 16 / under 18 / adult) changes: moving to an
+  adult cancels an open request (token replaced and expired, row and history kept);
+  moving to a minor tier restarts it (fresh token and expiry, status `pending`, decline
+  counter reset, card progress wiped, consent email sent); an adult account that
+  becomes a minor needs `guardian` in the body (nobody to ask otherwise) and gets a
+  new Guardian row;
+- the guardian's incorrect-details flag is cleared on every correction;
+- the audit row `user.dob_corrected` holds admin, target, reason, old tier, new tier,
+  timestamp and what happened to the request, never a DOB. Do not type either date
+  into the reason field.
+
+Adopted defaults (veto-able): confirmed consent is kept on a minor-to-minor
+correction unless the account was an adult or the corrected age newly needs the card
+step; an account on the deletion path has its DOB fixed but no request restarted;
+moderators may correct and read a DOB (the register left the role open).
+

@@ -4,7 +4,10 @@ import { AdminRoles } from '../admin/guards/admin-roles.decorator';
 import { AdminRolesGuard } from '../admin/guards/admin-roles.guard';
 import { CurrentAdmin } from '../admin/guards/current-admin.decorator';
 import { AdminAccessTokenPayload } from '../admin/token/admin-token.types';
+import { AdminUserDetailService } from './admin-user-detail.service';
+import { AdminUserDobCorrectionService } from './admin-user-dob-correction.service';
 import { AdminUsersService } from './admin-users.service';
+import { CorrectDobDto } from './dto/correct-dob.dto';
 import { HeldInvestigationsQueryDto } from './dto/held-investigations-query.dto';
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
@@ -23,7 +26,11 @@ import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 @UseGuards(AdminJwtAuthGuard, AdminRolesGuard)
 @AdminRoles('moderator', 'superadmin')
 export class AdminUsersController {
-  constructor(private readonly adminUsersService: AdminUsersService) {}
+  constructor(
+    private readonly adminUsersService: AdminUsersService,
+    private readonly adminUserDetailService: AdminUserDetailService,
+    private readonly adminUserDobCorrectionService: AdminUserDobCorrectionService,
+  ) {}
 
   @Get()
   async list(@Query() query: ListUsersQueryDto) {
@@ -43,6 +50,27 @@ export class AdminUsersController {
   @Get('incorrect-details-reports')
   async incorrectDetailsReports() {
     return this.adminUsersService.listIncorrectDetailsReports();
+  }
+
+  // B-109 (Decision Log #398 D4): the single-user read, including the
+  // decrypted date of birth. Every response that contains a DOB writes an
+  // audit row first. Registered AFTER the literal-path GETs above so it cannot
+  // shadow them.
+  @Get(':id')
+  async detail(@Param('id') id: string, @CurrentAdmin() admin: AdminAccessTokenPayload) {
+    return this.adminUserDetailService.getUserDetail(id, admin.sub);
+  }
+
+  // B-103 (Decision Log #390, #395 B4): audited DOB correction. Moderator /
+  // superadmin, the same class-level gate as the rest of this controller.
+  @Post(':id/dob-correction')
+  @HttpCode(200)
+  async correctDateOfBirth(
+    @Param('id') id: string,
+    @CurrentAdmin() admin: AdminAccessTokenPayload,
+    @Body() dto: CorrectDobDto,
+  ) {
+    return this.adminUserDobCorrectionService.correctDateOfBirth(id, admin.sub, dto);
   }
 
   // B-029: support has dealt with the report; releases the hold on approval.

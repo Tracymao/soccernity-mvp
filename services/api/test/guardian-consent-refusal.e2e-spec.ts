@@ -67,6 +67,7 @@ async function seedMinorWithGuardian(
     consentTimestamp?: Date | null;
     consentTokenExpiresAt?: Date;
     consentAutoResentAt?: Date | null;
+    declineCount?: number;
   } = {},
 ): Promise<SeededMinor> {
   const prisma = getTestPrismaClient();
@@ -98,6 +99,7 @@ async function seedMinorWithGuardian(
       consentTokenExpiresAt: guardianOverrides.consentTokenExpiresAt ?? new Date(Date.now() + 48 * HOUR),
       consentTimestamp: guardianOverrides.consentTimestamp ?? null,
       consentAutoResentAt: guardianOverrides.consentAutoResentAt ?? null,
+      declineCount: guardianOverrides.declineCount ?? 0,
     },
   });
 
@@ -120,7 +122,10 @@ describe('Guardian consent refusal e2e: explicit decline -> pending_deletion -> 
 
   it('declines, closes the account, and the existing deletion sweep then hard-deletes it normally', async () => {
     const prisma = getTestPrismaClient();
-    const seeded = await seedMinorWithGuardian(app, 'decline');
+    // B-102: only the THIRD explicit decline closes the account, so this seeds
+    // two earlier declines. Declines 1 and 2 are covered in
+    // guardian-decline-cap.e2e-spec.ts.
+    const seeded = await seedMinorWithGuardian(app, 'decline', { declineCount: 2 });
 
     await request(app.getHttpServer())
       .post('/auth/guardian-consent/decline')
@@ -131,6 +136,7 @@ describe('Guardian consent refusal e2e: explicit decline -> pending_deletion -> 
     expect(guardian?.consentStatus).toBe('declined');
     // Decision Log #338 — distinguishable from a timeout.
     expect(guardian?.consentDeclineSource).toBe('guardian_explicit');
+    expect(guardian?.declineCount).toBe(3);
     // A decline never sets consentTimestamp — that field means "consent
     // was given at", and this is the value ConsentAuditRecord snapshots.
     expect(guardian?.consentTimestamp).toBeNull();

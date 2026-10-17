@@ -1477,3 +1477,32 @@ Full detail and the route table: `docs/backend-w3-gates-report.md`. Summary of w
 - **Write-route guards (B-026/B-118).** `GuardianConsentGuard` and
   `EmailVerifiedGuard` extended across the social/profile write routes; see the
   report. `auth` routes themselves stay open by design.
+- **Guardian decline cap (B-110 + B-102, Decision Log #389, #395 B2, #402, #403
+  items 2 and 15; `backend/w3b-decline-cap-dob-correction`).** `Guardian.declineCount`
+  (migration `20261017140000_add_guardian_decline_count`, additive, CHECK >= 0;
+  pre-existing explicit declines are backfilled to 1) is an INTERNAL counter:
+  no API returns it and the status response gained no field.
+  - **Declines 1 and 2** (`GuardianConsentService.recordNonFinalDecline`): the row
+    becomes `declined` (`consentDeclineSource = guardian_explicit`) and the counter
+    moves up by one. The account is NOT touched: still `active`, sessions valid,
+    login works, no deletion clock, and no email (the minor sees the decline page
+    inside the account). Every consent enforcement site is an allowlist, so a
+    `declined` minor stays restricted. The write pins the counter value it read,
+    so two concurrent clicks count once; re-clicking the same link is idempotent.
+  - **Reopening.** `POST /auth/guardian-consent/resend` (still keyed on the minor's
+    email, not JWT) and `POST /auth/guardian-consent/change-guardian-email` accept a
+    `declined` row only when it is an EXPLICIT decline with fewer than three on
+    record (`isReopenableDecline`) AND the account is an `active` minor's. They
+    reopen it as `pending` with a fresh token and expiry and clear
+    `consentDeclineSource`. Withdrawal rows, expiry rows and the third decline are
+    never reopenable. Changing the guardian email does NOT reset the counter.
+  - **Decline 3** (any time, three in one day included) goes through
+    `refuseConsentAndScheduleDeletion` unchanged: login blocked at once, sessions
+    revoked, `pending_deletion` with the existing 30-day grace, and the existing
+    `sendConsentDeclinedEmail` (wording rewritten for the cap,
+    **[COPY PENDING LEGAL REVIEW]**) is the only message. Expiry, the second lapse
+    and post-approval withdrawal go through the same primitive but never increment.
+  - **Open:** a row declined at 1 or 2 that the minor never resends has no expiry;
+    nothing sends a reminder. Frontend (GuardianConsentPage rendering, frames
+    5491:8241 / 5501:8453) not built.
+
