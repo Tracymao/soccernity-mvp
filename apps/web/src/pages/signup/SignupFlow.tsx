@@ -5,6 +5,10 @@
 //        -> Register (407:1051)
 //   -> 18+: Register (407:1051) directly
 //
+// B-073: the Age Gate also collects the country, held here and sent on
+// Register for every signup (RegisterDto.countryCode). B-075: Guardian
+// Details no longer asks for a country.
+//
 // All three steps live under the single /signup route wired by F1
 // (src/app/router.tsx: "F3 (age gate + signup)") -- this is deliberate,
 // matching how Register (407:1051) has no dedicated Figma screen of its
@@ -24,11 +28,12 @@ import type { AgeGateValues, GuardianDetailsValues } from "./types";
 type Step = "age-gate" | "guardian-details" | "register";
 
 const EMPTY_DOB: AgeGateValues = { day: "", month: "", year: "" };
-const EMPTY_GUARDIAN: GuardianDetailsValues = { firstName: "", lastName: "", email: "", relationship: "", country: "" };
+const EMPTY_GUARDIAN: GuardianDetailsValues = { name: "", email: "", relationship: "" };
 
 export default function SignupFlow() {
   const [step, setStep] = useState<Step>("age-gate");
   const [dob, setDob] = useState<AgeGateValues>(EMPTY_DOB);
+  const [country, setCountry] = useState("");
   const [age, setAge] = useState(0);
   const [isMinor, setIsMinor] = useState(false);
   const [guardianDetails, setGuardianDetails] = useState<GuardianDetailsValues>(EMPTY_GUARDIAN);
@@ -38,8 +43,16 @@ export default function SignupFlow() {
       return (
         <AgeGateStep
           initialValues={dob}
-          onContinue={(values, computedAge, minor) => {
+          initialCountry={country}
+          // B-073 / Decision Log #394 A4: a below-minimum-age denial followed
+          // by "Back to sign up" drops the held date of birth AND country.
+          onDenialBack={() => {
+            setDob(EMPTY_DOB);
+            setCountry("");
+          }}
+          onContinue={(values, computedAge, minor, selectedCountry) => {
             setDob(values);
+            setCountry(selectedCountry);
             setAge(computedAge);
             setIsMinor(minor);
             setStep(minor ? "guardian-details" : "register");
@@ -62,7 +75,9 @@ export default function SignupFlow() {
       );
 
     case "register":
-      return <RegisterStep dob={dob} isMinor={isMinor} guardianDetails={isMinor ? guardianDetails : null} />;
+      return (
+        <RegisterStep dob={dob} country={country} isMinor={isMinor} guardianDetails={isMinor ? guardianDetails : null} />
+      );
 
     default:
       return null;

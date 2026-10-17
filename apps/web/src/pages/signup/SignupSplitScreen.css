@@ -171,6 +171,11 @@
   border-color: transparent;
 }
 
+/* Read-only value (Register's date of birth, set at the Age Gate). */
+.signup-form__input[readonly] {
+  cursor: default;
+}
+
 .signup-form__input::placeholder {
   color: var(--signup-text-secondary);
 }
@@ -229,6 +234,14 @@
 .signup-split--light .signup-button {
   background-color: var(--signup-brand-navy);
   box-shadow: 0px 30px 30px rgba(40, 46, 101, 0.15);
+}
+
+/* Navy primary button on the dark (Age Gate family) shell -- the "Back to
+   sign up" button of the below-minimum-age screen (Figma 5464:7113). */
+.signup-button--navy {
+  background-color: var(--signup-brand-navy);
+  color: #fff;
+  border: 1px solid var(--signup-icon-inactive, transparent);
 }
 
 .signup-button:disabled {

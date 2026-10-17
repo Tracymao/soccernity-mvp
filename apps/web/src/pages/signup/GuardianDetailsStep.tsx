@@ -11,13 +11,19 @@
 // these details carried forward, rather than firing a network request of
 // its own -- the actual account-creation + guardian-consent-request
 // happens together once Register is submitted. See SignupFlow.tsx.
+//
+// B-075 (Decision Log #393 (a), Option A): ONE "Guardian's full name" field
+// (Figma 5108:6627 / mobile 5539:7354) posted as the single `guardian.name`
+// RegisterDto already takes, and NO country select -- the country is
+// collected once, at the Age Gate (B-073). Link lifetime reads "3 days" per
+// the frame (72h TTL, Decision Log #62).
 import { useState } from "react";
 import type { FormEvent } from "react";
 import SignupSplitScreen from "./SignupSplitScreen";
 import DecorativeRings from "./DecorativeRings";
 import { darkAuthThemeVars } from "./authThemeVars";
 import { formatLongDate } from "./age";
-import { COUNTRY_OPTIONS, GUARDIAN_RELATIONSHIP_OPTIONS } from "./types";
+import { GUARDIAN_RELATIONSHIP_OPTIONS } from "./types";
 import type { AgeGateValues, GuardianDetailsValues } from "./types";
 import "./SignupSplitScreen.css";
 
@@ -36,17 +42,15 @@ function isValidEmail(value: string): boolean {
 }
 
 export default function GuardianDetailsStep({ dob, age, initialValues, onBack, onContinue }: GuardianDetailsStepProps) {
-  const [firstName, setFirstName] = useState(initialValues.firstName);
-  const [lastName, setLastName] = useState(initialValues.lastName);
+  const [name, setName] = useState(initialValues.name);
   const [email, setEmail] = useState(initialValues.email);
   const [relationship, setRelationship] = useState(initialValues.relationship);
-  const [country, setCountry] = useState(initialValues.country);
   const [error, setError] = useState<string | null>(null);
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
 
-    if (!firstName.trim() || !lastName.trim()) {
+    if (!name.trim()) {
       setError("Enter your guardian's full name.");
       return;
     }
@@ -59,13 +63,8 @@ export default function GuardianDetailsStep({ dob, age, initialValues, onBack, o
       return;
     }
 
-    if (!country) {
-      setError("Select the country you live in.");
-      return;
-    }
-
     setError(null);
-    onContinue({ firstName, lastName, email, relationship, country });
+    onContinue({ name: name.trim(), email, relationship });
   }
 
   return (
@@ -94,27 +93,17 @@ export default function GuardianDetailsStep({ dob, age, initialValues, onBack, o
 
       <form className="signup-form" onSubmit={handleSubmit} noValidate>
         <div className="signup-form__group">
-          <span className="signup-form__label" id="guardian-name-label">
+          <label className="signup-form__label" htmlFor="guardian-name">
             Guardian&rsquo;s full name
-          </span>
-          <div className="signup-form__row" role="group" aria-labelledby="guardian-name-label">
-            <input
-              className="signup-form__input"
-              placeholder="First Name"
-              value={firstName}
-              onChange={(event) => setFirstName(event.target.value)}
-              aria-label="Guardian's first name"
-              autoComplete="given-name"
-            />
-            <input
-              className="signup-form__input"
-              placeholder="Last Name"
-              value={lastName}
-              onChange={(event) => setLastName(event.target.value)}
-              aria-label="Guardian's last name"
-              autoComplete="family-name"
-            />
-          </div>
+          </label>
+          <input
+            id="guardian-name"
+            className="signup-form__input"
+            placeholder="Parent or guardian’s name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            autoComplete="name"
+          />
         </div>
 
         <div className="signup-form__group">
@@ -154,30 +143,6 @@ export default function GuardianDetailsStep({ dob, age, initialValues, onBack, o
           </select>
         </div>
 
-        <div className="signup-form__group">
-          <label className="signup-form__label" htmlFor="guardian-country">
-            Country you live in
-          </label>
-          <select
-            id="guardian-country"
-            className="signup-form__select"
-            value={country}
-            onChange={(event) => setCountry(event.target.value)}
-          >
-            <option value="" disabled>
-              Select country
-            </option>
-            {COUNTRY_OPTIONS.map((option) => (
-              <option key={option.code} value={option.code}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <p className="signup-form__hint">
-            Some countries ask for an extra check when a guardian approves an account for a younger child.
-          </p>
-        </div>
-
         {error && (
           <p className="signup-form-error" role="alert">
             {error}
@@ -188,7 +153,7 @@ export default function GuardianDetailsStep({ dob, age, initialValues, onBack, o
           <p className="signup-info-panel__title">What we send them</p>
           <p className="signup-info-panel__body">
             One email with a secure link. It explains what your account can do, what we collect, and lets them
-            approve or decline. The link expires after 7 days.
+            approve or decline. The link expires after 3 days.
           </p>
         </div>
 

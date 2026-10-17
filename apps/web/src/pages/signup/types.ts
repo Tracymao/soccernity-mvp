@@ -23,9 +23,11 @@ export interface AgeGateValues {
   year: string;
 }
 
-// sprint-1/coppa-card-verification -- the child's SELF-DECLARED country of
-// residence, ISO-3166 alpha-2. Never derived from IP. It only decides which
-// consent path applies (an under-13 in the US needs an extra card step).
+// The registrant's SELF-DECLARED country of residence, ISO-3166 alpha-2,
+// collected once at the Age Gate for every signup (Decision Log #367/#368,
+// B-073) and sent as RegisterDto.countryCode. The server derives its own
+// authoritative country from the request IP (B-025), so this value is audit
+// data and can never loosen a safeguarding decision.
 // "ZZ" is the ISO user-assigned code, used here for "somewhere not listed";
 // it is treated as non-US by the API.
 export const COUNTRY_OPTIONS = [
@@ -35,12 +37,13 @@ export const COUNTRY_OPTIONS = [
   { code: "ZZ", label: "Another country" },
 ] as const;
 
+// B-075 (Decision Log #393 (a), Option A): ONE "Guardian's full name" field,
+// matching RegisterDto's single guardian `name`, and no country here --
+// country is collected once, at the Age Gate.
 export interface GuardianDetailsValues {
-  firstName: string;
-  lastName: string;
+  name: string;
   email: string;
   relationship: GuardianRelationship | "";
-  country: string;
 }
 
 export interface RegisterValues {
