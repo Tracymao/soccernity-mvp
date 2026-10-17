@@ -1,6 +1,6 @@
 # FC2 - onboarding routing, decline view, admin DOB correction, pending-copy guard (B-030, B-081 interim, B-102, B-103, B-104, B-109, B-110, B-118, B-124, B-125)
 
-Branch `feat/fc2-gates-routing`, 2026-10-17, from `origin/main` `309f8ad`. Agent scope: figma-to-code. `apps/web`, `apps/admin`, `scripts/`, `docs/` only. **`services/api`, Figma, the Decision Log docx, legal copy and DPIA are untouched.** PR opened against `main`, not merged.
+Branch `feat/fc2-gates-routing`, 2026-10-17, from `origin/main` `309f8ad`. Agent scope: figma-to-code. `apps/web`, `apps/admin`, `scripts/`, `docs/` only. **Figma, the Decision Log docx, legal copy and DPIA are untouched. `services/api` is untouched except `consent-screen-version.constants.ts`: `CONSENT_SCREEN_VERSION` v2 -> v3 and the tripwire hash, required by Decision Log #348 because this PR changed the guardian confirm page wording (CI caught it after the first push). Guardian confirmations made from this build are stamped v3.** PR opened against `main`, not merged.
 
 Read first: `docs/backend-w3-gates-report.md`, `docs/backend-w3b-report.md`, `docs/fc1-signup-flow-report.md`, build-register rows B-030 / B-081 / B-104 / B-118 (and B-029, B-102, B-103, B-109, B-110, B-119, B-124, B-125), Decision Log #374, #375, #389, #402-#404 as recorded in `CLAUDE.md` and the register (the docx itself was not opened). Figma frames re-read live: 5491:8241, 5501:8453, 5108:6629, 5108:6631, 6647:25540, 6649:24980 / 25463 / 25721.
 
@@ -47,7 +47,7 @@ Read first: `docs/backend-w3-gates-report.md`, `docs/backend-w3b-report.md`, `do
 
 New tests: `lib/onboarding.test.ts` (3), `LoginPage.test.tsx` (6, new: the app had no login test), `CreateProfilePage.test.tsx` (7), `VerifyEmailPromptPage.test.tsx` (7, also covers `/continue`), `userDetailDob.test.tsx` (23), `pendingCopyManifest.test.ts` (15), plus additions to `GuardianConsentPage.test.tsx` (declined view, no count, resend), `GuardianConsentConfirmPage.test.tsx` (summary, report, hold, decline stays available), `RegisterStep.test.tsx` (routing per `nextStep`), `ClubPickerStep.test.tsx` (403 prompt). Existing tests that encoded the old behaviour were **changed, not deleted**: the Verified CTA is `/continue`, reactivation lands on `/community`, the approved-state wording, and ~12 fixtures gained the three new fields.
 
-Not run: the API test suites (nothing in `services/api` changed).
+Not run: the full API test suites; only `src/modules/auth/guardian-consent` was run, for the constants change.
 
 ## 3. Browser check (real Chrome, screenshots in `docs/fc2-gates-routing-screens/`)
 
