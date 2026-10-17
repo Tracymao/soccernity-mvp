@@ -3,14 +3,24 @@
 // from the Age Gate for 18+ users, or after Guardian Details Capture for
 // under-18 users (Build Plan Section 8.3 step 2 -- guardian details are
 // captured "before account creation completes", and account creation is
-// this screen). No date-of-birth field here by design -- Age Gate already
-// collected it (the gap flagged in PR #5).
+// this screen). The date of birth is NOT editable here (Decision Log #367,
+// B-074): Age Gate collected it, and Register shows it as a read-only value
+// (Figma 407:1051 "Date of Birth" row) with no date picker. The country the
+// Age Gate collected is sent for every signup. No Apple button: social
+// sign-in (Google / Facebook, Figma 5418:7097) arrives with the oauth_login
+// work (build register W10) and is not built here.
+//
+// B-017: a successful registration persists the session (access + refresh
+// token, sessionStorage like an un-ticked "Stay signed in" login) so the
+// Club Picker, the shell Header and every later request are authenticated,
+// and the silent refresh (lib/silentRefresh.ts) keeps it alive.
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import SignupSplitScreen from "./SignupSplitScreen";
 import { lightAuthThemeVars } from "./authThemeVars";
 import { toIsoDate } from "./age";
+import { storeSession } from "../../lib/session";
 import { registerUser, AuthApiError } from "../../api/auth";
 import type { RegisterRequest } from "../../api/auth";
 import ClubPickerStep from "./ClubPickerStep";
@@ -20,6 +30,7 @@ import "./SignupSplitScreen.css";
 
 interface RegisterStepProps {
   dob: AgeGateValues;
+  country: string;
   isMinor: boolean;
   guardianDetails: GuardianDetailsValues | null;
 }
@@ -28,7 +39,7 @@ function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-export default function RegisterStep({ dob, isMinor, guardianDetails }: RegisterStepProps) {
+export default function RegisterStep({ dob, country, isMinor, guardianDetails }: RegisterStepProps) {
   const navigate = useNavigate();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -61,11 +72,12 @@ export default function RegisterStep({ dob, isMinor, guardianDetails }: Register
       password,
       displayName: `${firstName.trim()} ${lastName.trim()}`,
       dateOfBirth: toIsoDate(dob),
+      // Self-declared at the Age Gate, sent for every registrant (B-073).
+      countryCode: country,
       ...(isMinor && guardianDetails
         ? {
-            countryCode: guardianDetails.country,
             guardian: {
-              name: `${guardianDetails.firstName.trim()} ${guardianDetails.lastName.trim()}`,
+              name: guardianDetails.name.trim(),
               email: guardianDetails.email.trim(),
               // Non-empty, validated on GuardianDetailsStep before this
               // step is reachable at all.
@@ -82,6 +94,7 @@ export default function RegisterStep({ dob, isMinor, guardianDetails }: Register
     setSubmitting(true);
     try {
       const result = await registerUser(payload);
+      storeSession(result, false);
       setSuccess({ isMinor, guardianEmail: guardianDetails?.email, accessToken: result.accessToken });
     } catch (err) {
       setError(err instanceof AuthApiError ? err.message : "Something went wrong. Try again.");
@@ -128,7 +141,7 @@ export default function RegisterStep({ dob, isMinor, guardianDetails }: Register
   return (
     <SignupSplitScreen variant="light" themeVars={lightAuthThemeVars} rightPanel={rightPanel}>
       <h1 className="signup-split__heading">Register</h1>
-      <p className="signup-split__subheading">Sign up to Soccernity.</p>
+      <p className="signup-split__subheading">Create your Soccernity account.</p>
 
       <form className="signup-form" onSubmit={handleSubmit} noValidate>
         <div className="signup-form__group">
@@ -184,6 +197,24 @@ export default function RegisterStep({ dob, isMinor, guardianDetails }: Register
           />
         </div>
 
+        <div className="signup-form__group">
+          <label className="signup-form__label" htmlFor="register-dob">
+            Date of Birth
+          </label>
+          <input
+            id="register-dob"
+            className="signup-form__input"
+            value={`${dob.day.padStart(2, "0")} / ${dob.month.padStart(2, "0")} / ${dob.year}`}
+            readOnly
+            aria-readonly="true"
+          />
+          {/* Tagged [COPY PENDING LEGAL REVIEW] in Figma (6627:22258) --
+              implemented as drawn, pending counsel. */}
+          <p className="signup-form__hint">
+            Set when you signed up and cannot be changed here. [COPY PENDING LEGAL REVIEW]
+          </p>
+        </div>
+
         {error && (
           <p className="signup-form-error" role="alert">
             {error}
@@ -198,7 +229,7 @@ export default function RegisterStep({ dob, isMinor, guardianDetails }: Register
         </p>
 
         <button type="submit" className="signup-button" disabled={submitting}>
-          {submitting ? "Creating account…" : "Register"}
+          {submitting ? "Creating account…" : "Create account"}
         </button>
       </form>
 

@@ -25,14 +25,25 @@ function dobForAge(age: number): AgeGateValues {
   };
 }
 
-function renderAgeGate(initialValues: AgeGateValues = EMPTY_DOB) {
+function renderAgeGate(initialValues: AgeGateValues = EMPTY_DOB, initialCountry = "") {
   const onContinue = vi.fn();
+  const onDenialBack = vi.fn();
   render(
     <MemoryRouter>
-      <AgeGateStep initialValues={initialValues} onContinue={onContinue} />
+      <AgeGateStep
+        initialValues={initialValues}
+        initialCountry={initialCountry}
+        onContinue={onContinue}
+        onDenialBack={onDenialBack}
+      />
     </MemoryRouter>,
   );
-  return { onContinue };
+  return { onContinue, onDenialBack };
+}
+
+// B-073: the country is required for every signup.
+function selectCountry(code = "GB") {
+  fireEvent.change(screen.getByLabelText("Country you live in"), { target: { value: code } });
 }
 
 function fillDob(dob: AgeGateValues) {
@@ -51,9 +62,11 @@ describe("AgeGateStep", () => {
       const { onContinue } = renderAgeGate();
 
       fillDob(dobForAge(4));
+      selectCountry();
       submit();
 
-      expect(screen.getByRole("alert").textContent).toMatch(/aged 5 and up/i);
+      expect(screen.getByRole("heading", { name: /isn.t for you just yet/i })).not.toBeNull();
+      expect(screen.getByText(/at least 5 years old/i)).not.toBeNull();
       expect(onContinue).not.toHaveBeenCalled();
     });
 
@@ -61,11 +74,12 @@ describe("AgeGateStep", () => {
       const { onContinue } = renderAgeGate();
 
       fillDob(dobForAge(5));
+      selectCountry();
       submit();
 
       expect(screen.queryByRole("alert")).toBeNull();
       expect(onContinue).toHaveBeenCalledTimes(1);
-      expect(onContinue).toHaveBeenCalledWith(dobForAge(5), 5, true);
+      expect(onContinue).toHaveBeenCalledWith(dobForAge(5), 5, true, "GB");
     });
 
     // "Guardian details already filled in" doesn't map onto AgeGateStep
@@ -85,10 +99,61 @@ describe("AgeGateStep", () => {
       const { onContinue } = renderAgeGate(dobForAge(10));
 
       fillDob(dobForAge(4));
+      selectCountry();
       submit();
 
-      expect(screen.getByRole("alert").textContent).toMatch(/aged 5 and up/i);
+      expect(screen.getByRole("heading", { name: /isn.t for you just yet/i })).not.toBeNull();
       expect(onContinue).not.toHaveBeenCalled();
+    });
+
+    // Decision Log #394 A4 (Figma 5464:7077): "Back to sign up" CLEARS the
+    // date of birth AND the country, and tells the parent flow to drop its
+    // copy too.
+    it("clears date of birth and country when 'Back to sign up' is pressed after a denial", () => {
+      const { onDenialBack } = renderAgeGate();
+
+      fillDob(dobForAge(4));
+      selectCountry("NG");
+      submit();
+      fireEvent.click(screen.getByRole("button", { name: "Back to sign up" }));
+
+      expect(onDenialBack).toHaveBeenCalledTimes(1);
+      expect((screen.getByLabelText("Day of birth") as HTMLInputElement).value).toBe("");
+      expect((screen.getByLabelText("Month of birth") as HTMLInputElement).value).toBe("");
+      expect((screen.getByLabelText("Year of birth") as HTMLInputElement).value).toBe("");
+      expect((screen.getByLabelText("Country you live in") as HTMLSelectElement).value).toBe("");
+    });
+  });
+
+  describe("country (B-073, Decision Log #367/#368)", () => {
+    it("shows the 'Date of birth and country' heading", () => {
+      renderAgeGate();
+      expect(screen.getByRole("heading", { name: "Date of birth and country" })).not.toBeNull();
+    });
+
+    it("requires a country before continuing, for an adult as well as a minor", () => {
+      const { onContinue } = renderAgeGate();
+
+      fillDob(dobForAge(30));
+      submit();
+
+      expect(screen.getByRole("alert").textContent).toMatch(/select the country you live in/i);
+      expect(onContinue).not.toHaveBeenCalled();
+    });
+
+    it("passes the selected ISO country code to onContinue", () => {
+      const { onContinue } = renderAgeGate();
+
+      fillDob(dobForAge(30));
+      selectCountry("US");
+      submit();
+
+      expect(onContinue).toHaveBeenCalledWith(dobForAge(30), 30, false, "US");
+    });
+
+    it("keeps a previously chosen country when returning to the step", () => {
+      renderAgeGate(dobForAge(30), "NG");
+      expect((screen.getByLabelText("Country you live in") as HTMLSelectElement).value).toBe("NG");
     });
   });
 
@@ -97,27 +162,30 @@ describe("AgeGateStep", () => {
       const { onContinue } = renderAgeGate();
 
       fillDob(dobForAge(10));
+      selectCountry();
       submit();
 
-      expect(onContinue).toHaveBeenCalledWith(dobForAge(10), 10, true);
+      expect(onContinue).toHaveBeenCalledWith(dobForAge(10), 10, true, "GB");
     });
 
     it("declares a 25-year-old not a minor", () => {
       const { onContinue } = renderAgeGate();
 
       fillDob(dobForAge(25));
+      selectCountry();
       submit();
 
-      expect(onContinue).toHaveBeenCalledWith(dobForAge(25), 25, false);
+      expect(onContinue).toHaveBeenCalledWith(dobForAge(25), 25, false, "GB");
     });
 
     it("declares exactly age 18 not a minor (threshold is exclusive)", () => {
       const { onContinue } = renderAgeGate();
 
       fillDob(dobForAge(18));
+      selectCountry();
       submit();
 
-      expect(onContinue).toHaveBeenCalledWith(dobForAge(18), 18, false);
+      expect(onContinue).toHaveBeenCalledWith(dobForAge(18), 18, false, "GB");
     });
   });
 

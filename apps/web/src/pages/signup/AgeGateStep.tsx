@@ -1,7 +1,14 @@
-// Age Gate -- Figma node 5108:6626 ("Guardian Consent — 1 Age Gate").
-// First step of signup, reached before Register (Build Plan Section 8.3,
-// step 1) -- this is exactly what avoids needing a date-of-birth field on
-// Register itself (the gap flagged in PR #5).
+// Age Gate -- Figma node 5108:6626 ("Guardian Consent — 1 Age Gate"),
+// mobile 5539:7264. First step of signup, reached before Register (Build
+// Plan Section 8.3, step 1) -- this is exactly what avoids needing a
+// date-of-birth field on Register itself (the gap flagged in PR #5).
+//
+// B-073 (Decision Log #367, #368, #394 A4): the step now collects the
+// date of birth AND the country the registrant lives in ("Date of birth and
+// country"). Below the minimum age (Decision Log #19) the step swaps to the
+// "Soccernity isn't for you just yet" screen (Figma 5464:7077 / 5539:7314);
+// "Back to sign up" CLEARS both the date of birth and the country, so a
+// child cannot retry with a different age by editing in place (#394 A4).
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router";
@@ -9,6 +16,7 @@ import SignupSplitScreen from "./SignupSplitScreen";
 import DecorativeRings from "./DecorativeRings";
 import { darkAuthThemeVars } from "./authThemeVars";
 import { parseDateOfBirth } from "./age";
+import { COUNTRY_OPTIONS } from "./types";
 import type { AgeGateValues } from "./types";
 import "./SignupSplitScreen.css";
 
@@ -33,22 +41,38 @@ const MINIMUM_SIGNUP_AGE = 5;
 
 interface AgeGateStepProps {
   initialValues: AgeGateValues;
+  initialCountry?: string;
   // eslint-disable-next-line no-unused-vars -- named params in a function-
   // type signature, not a real function body; base eslint:recommended's
   // no-unused-vars (not @typescript-eslint's) doesn't understand that and
   // misflags them.
-  onContinue: (values: AgeGateValues, age: number, isMinor: boolean) => void;
+  onContinue: (values: AgeGateValues, age: number, isMinor: boolean, country: string) => void;
+  // Called when "Back to sign up" is pressed after a below-minimum-age
+  // denial, so the parent flow can drop any previously-held DOB/country too.
+  onDenialBack?: () => void;
 }
 
 function onlyDigits(value: string, maxLength: number): string {
   return value.replace(/\D/g, "").slice(0, maxLength);
 }
 
-export default function AgeGateStep({ initialValues, onContinue }: AgeGateStepProps) {
+export default function AgeGateStep({ initialValues, initialCountry = "", onContinue, onDenialBack }: AgeGateStepProps) {
   const [day, setDay] = useState(initialValues.day);
   const [month, setMonth] = useState(initialValues.month);
   const [year, setYear] = useState(initialValues.year);
+  const [country, setCountry] = useState(initialCountry);
   const [error, setError] = useState<string | null>(null);
+  const [denied, setDenied] = useState(false);
+
+  function handleDenialBack() {
+    setDay("");
+    setMonth("");
+    setYear("");
+    setCountry("");
+    setError(null);
+    setDenied(false);
+    onDenialBack?.();
+  }
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -58,17 +82,65 @@ export default function AgeGateStep({ initialValues, onContinue }: AgeGateStepPr
       return;
     }
     // Decision Log #19: hard block below age 5, unconditional on
-    // guardian consent -- this form is filled out by/with a guardian for
-    // a young child, so the error is worded for that audience, not the
-    // child themself.
+    // guardian consent -- shown as its own screen (Figma 5464:7077).
     if (parsed.age < MINIMUM_SIGNUP_AGE) {
-      setError(
-        `Soccernity accounts are for players aged ${MINIMUM_SIGNUP_AGE} and up. Please wait until your child is old enough to create an account for them.`,
-      );
+      setError(null);
+      setDenied(true);
+      return;
+    }
+    if (!country) {
+      setError("Select the country you live in.");
       return;
     }
     setError(null);
-    onContinue({ day, month, year }, parsed.age, parsed.age < MINOR_AGE_THRESHOLD);
+    onContinue({ day, month, year }, parsed.age, parsed.age < MINOR_AGE_THRESHOLD, country);
+  }
+
+  if (denied) {
+    return (
+      <SignupSplitScreen
+        variant="dark"
+        themeVars={darkAuthThemeVars}
+        rightPanel={
+          <>
+            <DecorativeRings className="signup-split__rings" />
+            <div className="signup-split__right-copy">
+              <h2>Come back when you&rsquo;re older.</h2>
+              <p>
+                Soccernity accounts start at age {MINIMUM_SIGNUP_AGE}. When you&rsquo;re old enough, a parent or
+                guardian can help you sign up and approve your account.
+              </p>
+            </div>
+          </>
+        }
+      >
+        <p className="signup-split__eyebrow">Create your account</p>
+        <h1 className="signup-split__heading">Soccernity isn&rsquo;t for you just yet</h1>
+        <p className="signup-split__subheading">
+          Thanks for your interest. You need to be at least {MINIMUM_SIGNUP_AGE} years old to have a Soccernity
+          account.
+        </p>
+
+        <div className="signup-form">
+          <div className="signup-info-panel">
+            <p className="signup-info-panel__title">Why there&rsquo;s an age limit</p>
+            <p className="signup-info-panel__body">
+              Soccernity is built around real grassroots football. In the UK, youth football starts at around age
+              5&ndash;6. Below that, a profile wouldn&rsquo;t reflect anything about you as a player yet &mdash; so we
+              keep signups closed until then, no matter what a parent or guardian agrees to.
+            </p>
+          </div>
+
+          <button type="button" className="signup-button signup-button--navy" onClick={handleDenialBack}>
+            Back to sign up
+          </button>
+        </div>
+
+        <p className="signup-split__footer">
+          Already have an account? <Link to="/login">Log in.</Link>
+        </p>
+      </SignupSplitScreen>
+    );
   }
 
   return (
@@ -89,8 +161,12 @@ export default function AgeGateStep({ initialValues, onContinue }: AgeGateStepPr
       }
     >
       <p className="signup-split__eyebrow">Create your account</p>
-      <h1 className="signup-split__heading">What&rsquo;s your date of birth?</h1>
-      <p className="signup-split__subheading">We ask everyone this when they join. It is never shown on your profile.</p>
+      {/* Heading and subheading are tagged [COPY PENDING LEGAL REVIEW] in
+          Figma (chip 6669:27179) -- implemented as drawn, pending counsel. */}
+      <h1 className="signup-split__heading">Date of birth and country</h1>
+      <p className="signup-split__subheading">
+        We ask everyone this when they join. Your date of birth is never shown on your profile.
+      </p>
 
       <form className="signup-form" onSubmit={handleSubmit} noValidate>
         <div className="signup-form__group">
@@ -127,6 +203,30 @@ export default function AgeGateStep({ initialValues, onContinue }: AgeGateStepPr
             />
           </div>
           <p className="signup-form__hint">For example: 04 / 09 / 2011</p>
+        </div>
+
+        <div className="signup-form__group">
+          <label className="signup-form__label" htmlFor="age-gate-country">
+            Country you live in
+          </label>
+          <select
+            id="age-gate-country"
+            className="signup-form__select"
+            value={country}
+            onChange={(event) => setCountry(event.target.value)}
+          >
+            <option value="" disabled>
+              Select country
+            </option>
+            {COUNTRY_OPTIONS.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <p className="signup-form__hint">
+            Some countries ask for an extra check when a guardian approves an account for a younger child.
+          </p>
           {error && (
             <p className="signup-form-error" role="alert">
               {error}
