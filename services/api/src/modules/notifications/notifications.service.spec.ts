@@ -32,6 +32,9 @@ function buildPrismaMock() {
     contestCycle: {
       findMany: jest.fn().mockResolvedValue([]),
     },
+    contestStanding: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     matchData: {
       findMany: jest.fn().mockResolvedValue([]),
     },
@@ -282,6 +285,90 @@ describe('NotificationsService', () => {
       const page = await service.listNotifications(CALLER, {});
 
       expect(page.items[0].data).toEqual({ cycle: { id: 'cyc-1', title: 'September Contest' } });
+    });
+
+    it.each([
+      ['contest_week_opens', 'cyc-1:2', 2],
+      ['contest_votes_closing', 'cyc-1:3', 3],
+      ['contest_week_result', 'cyc-1:1', 1],
+      ['contest_finalist', 'cyc-1', null],
+      ['contest_reveal', 'cyc-1', null],
+      ['contest_upload_reminder', 'cyc-1', null],
+    ])('resolves %s (payloadRefId %s) to the cycle plus its week (%s)', async (type, payloadRefId, week) => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([row({ type, payloadRefId })]);
+      (prisma.contestCycle.findMany as jest.Mock).mockResolvedValue([{ id: 'cyc-1', title: 'November Challenge' }]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(page.items[0].data).toEqual({ cycle: { id: 'cyc-1', title: 'November Challenge' }, week });
+      // The cycle id is the part before the colon, whatever the suffix.
+      expect(prisma.contestCycle.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: { in: ['cyc-1'] } } }),
+      );
+      expect(prisma.contestStanding.findMany).not.toHaveBeenCalled();
+    });
+
+    it('resolves contest_final_result to "winners" when the cycle has crowned standings', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ type: 'contest_final_result', payloadRefId: 'cyc-1' }),
+      ]);
+      (prisma.contestCycle.findMany as jest.Mock).mockResolvedValue([{ id: 'cyc-1', title: 'November Challenge' }]);
+      (prisma.contestStanding.findMany as jest.Mock).mockResolvedValue([{ cycleId: 'cyc-1' }]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(page.items[0].data).toEqual({
+        cycle: { id: 'cyc-1', title: 'November Challenge' },
+        week: null,
+        outcome: 'winners',
+      });
+    });
+
+    it('resolves contest_final_result to "no_winner" when the cycle has no standings', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ type: 'contest_final_result', payloadRefId: 'cyc-1' }),
+      ]);
+      (prisma.contestCycle.findMany as jest.Mock).mockResolvedValue([{ id: 'cyc-1', title: 'November Challenge' }]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(page.items[0].data).toMatchObject({ outcome: 'no_winner' });
+    });
+
+    it('batches several Contest events of one cycle into a single cycle query', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ id: 'n1', type: 'contest_week_opens', payloadRefId: 'cyc-1:1' }),
+        row({ id: 'n2', type: 'contest_week_result', payloadRefId: 'cyc-1:1' }),
+        row({ id: 'n3', type: 'contest_win', payloadRefId: 'cyc-1' }),
+      ]);
+      (prisma.contestCycle.findMany as jest.Mock).mockResolvedValue([{ id: 'cyc-1', title: 'November Challenge' }]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(prisma.contestCycle.findMany).toHaveBeenCalledTimes(1);
+      expect(page.items.map((i) => i.data !== null)).toEqual([true, true, true]);
+      // contest_win keeps its original, unchanged shape.
+      expect(page.items[2].data).toEqual({ cycle: { id: 'cyc-1', title: 'November Challenge' } });
+    });
+
+    it('degrades a Contest event whose cycle is gone to data: null', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ type: 'contest_reveal', payloadRefId: 'gone' }),
+      ]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(page.items[0].data).toBeNull();
     });
 
     it('resolves match_kickoff to the match summary, batched into one MatchData query', async () => {

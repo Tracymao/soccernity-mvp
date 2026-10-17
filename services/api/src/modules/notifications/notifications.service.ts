@@ -94,6 +94,23 @@ export interface NotificationContestCycle {
   title: string;
 }
 
+// The seven scheduled Contest events (backend/w3c-contest-notifications, B-122, Decision Log #404
+// item 16). payloadRefId is "<cycleId>:<week>" for the week-level types and "<cycleId>" for the
+// cycle-level ones; both resolve to the cycle plus `week` (null for cycle-level). For
+// contest_final_result only, `outcome` says whether the month produced winners or "No winner this
+// month" (derived from the cycle's standings when the notification is read, so the row itself
+// stays a plain pointer).
+export const CONTEST_EVENT_NOTIFICATION_TYPES = [
+  'contest_week_opens',
+  'contest_votes_closing',
+  'contest_week_result',
+  'contest_finalist',
+  'contest_reveal',
+  'contest_final_result',
+  'contest_upload_reminder',
+] as const;
+export type ContestOutcome = 'winners' | 'no_winner';
+
 // match_kickoff — payloadRefId is MatchData.externalRef (sprint-4/match-kickoff-alerts, Decision Log
 // #336 item 2). Structured fields only, copy stays a frontend concern. Nullable: the match row can be
 // absent if it was never refreshed again after the subscription (a subscription itself is a plain
@@ -113,7 +130,7 @@ export type NotificationData =
   | { post: NotificationPost }
   | { conversationId: string; otherParticipant: NotificationOtherParticipant | null }
   | { fixture: NotificationFixture }
-  | { cycle: NotificationContestCycle }
+  | { cycle: NotificationContestCycle; week?: number | null; outcome?: ContestOutcome }
   // age_milestone: payloadRefId is the milestone key (e.g. 'under_16_lifted').
   | { milestone: string };
 
@@ -262,10 +279,18 @@ export class NotificationsService {
     const postRefIds = refIdsFor(['like', 'comment']);
     const conversationRefIds = refIdsFor(['message']);
     const fixtureRefIds = refIdsFor(['fixture_scheduled', 'result_logged']);
-    const cycleRefIds = refIdsFor(['contest_win']);
+    // contest_win's payloadRefId is the bare cycleId; the scheduled Contest events add an optional
+    // ":<week>" suffix, so the cycle id is everything before the colon.
+    const contestEventRefIds = refIdsFor([...CONTEST_EVENT_NOTIFICATION_TYPES]);
+    const cycleRefIds = [
+      ...new Set([...refIdsFor(['contest_win']), ...contestEventRefIds.map((r) => splitContestRef(r).cycleId)]),
+    ];
+    const finalResultCycleIds = [
+      ...new Set(refIdsFor(['contest_final_result']).map((r) => splitContestRef(r).cycleId)),
+    ];
     const matchRefIds = refIdsFor(['match_kickoff']);
 
-    const [posts, conversations, fixtures, cycles, matches] = await Promise.all([
+    const [posts, conversations, fixtures, cycles, matches, standingCycleRows] = await Promise.all([
       postRefIds.length > 0
         ? this.prisma.post.findMany({
             where: { id: { in: postRefIds } },
@@ -330,7 +355,17 @@ export class NotificationsService {
               status: string;
             }[],
           ),
+      // Which of the final-result cycles actually have crowned standings (one row per cycle is
+      // enough): the rest read as "No winner this month".
+      finalResultCycleIds.length > 0
+        ? this.prisma.contestStanding.findMany({
+            where: { cycleId: { in: finalResultCycleIds } },
+            select: { cycleId: true },
+            distinct: ['cycleId'],
+          })
+        : Promise.resolve([] as { cycleId: string }[]),
     ]);
+    const cyclesWithStandings = new Set(standingCycleRows.map((r) => r.cycleId));
 
     // "Other participant" ids, derived from the conversations above —
     // needs the conversations fetched first (this mirrors
@@ -388,6 +423,7 @@ export class NotificationsService {
         fixtureById,
         cycleById,
         matchByRef,
+        cyclesWithStandings,
       }),
     }));
   }
@@ -411,6 +447,7 @@ export class NotificationsService {
         }
       >;
       cycleById: Map<string, { id: string; title: string }>;
+      cyclesWithStandings: Set<string>;
       matchByRef: Map<
         string,
         {
@@ -462,6 +499,24 @@ export class NotificationsService {
         const cycle = lookups.cycleById.get(row.payloadRefId);
         return cycle ? { cycle } : null;
       }
+      case 'contest_week_opens':
+      case 'contest_votes_closing':
+      case 'contest_week_result':
+      case 'contest_finalist':
+      case 'contest_reveal':
+      case 'contest_final_result':
+      case 'contest_upload_reminder': {
+        const { cycleId, week } = splitContestRef(row.payloadRefId);
+        const cycle = lookups.cycleById.get(cycleId);
+        if (!cycle) return null;
+        return {
+          cycle,
+          week,
+          ...(row.type === 'contest_final_result'
+            ? { outcome: (lookups.cyclesWithStandings.has(cycleId) ? 'winners' : 'no_winner') as ContestOutcome }
+            : {}),
+        };
+      }
       case 'match_kickoff': {
         const match = lookups.matchByRef.get(row.payloadRefId);
         return match ? { match } : null;
@@ -472,4 +527,13 @@ export class NotificationsService {
         return null;
     }
   }
+}
+
+// "<cycleId>" or "<cycleId>:<week>". Cycle ids are UUIDs (no colon), so the first colon is
+// unambiguous.
+function splitContestRef(ref: string): { cycleId: string; week: number | null } {
+  const i = ref.indexOf(':');
+  if (i === -1) return { cycleId: ref, week: null };
+  const week = Number(ref.slice(i + 1));
+  return { cycleId: ref.slice(0, i), week: Number.isInteger(week) ? week : null };
 }
