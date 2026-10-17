@@ -1,3 +1,4 @@
+/* eslint-env jest */
 import { UsernamePolicyService } from './username-policy.service';
 
 // Spec helper: a UsernamePolicyService that allows everything, so specs about
