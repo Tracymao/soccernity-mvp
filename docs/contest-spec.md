@@ -1,6 +1,6 @@
 # Contest and leaderboard points specification
 
-Version: 2026-10-14, updated 2026-10-15 (Decision Log #393) and 2026-10-16 (Decision Log #394-#401, and #402 for the week-4 scope of the exposure settings). Docs only: no code, schema or Figma is changed by this file. Everything below is DECIDED, NOT BUILT, unless a section says otherwise. Follow-up 2026-10-16 (Decision Log #403): non-finalist tab visible, forfeit pop-up, final task text, Final-week carousel, Voting page design. Follow-up 2026-10-17 (Decision Log #404): pop-up reading, vote-toggle count, carousel impressions, final-week journey, pinned-entry lifecycle, day-1 Contest tab, Contest notifications (Section 14e). Follow-up 2026-10-17, second round (Decision Log #405): the final entry becomes an ordinary feed post after the pin is removed, notification destinations, impression threshold (Section 14f).
+Version: 2026-10-14, updated 2026-10-15 (Decision Log #393) and 2026-10-16 (Decision Log #394-#401, and #402 for the week-4 scope of the exposure settings). Docs only: no code, schema or Figma is changed by this file. Everything below is DECIDED, NOT BUILT, unless a section says otherwise. Follow-up 2026-10-16 (Decision Log #403): non-finalist tab visible, forfeit pop-up, final task text, Final-week carousel, Voting page design. Follow-up 2026-10-17 (Decision Log #404): pop-up reading, vote-toggle count, carousel impressions, final-week journey, pinned-entry lifecycle, day-1 Contest tab, Contest notifications (Section 14e). Follow-up 2026-10-17, second round (Decision Log #405): the final entry becomes an ordinary feed post after the pin is removed, notification destinations, impression threshold (Section 14f). Follow-up 2026-10-18 (Decision Log #406): the time of the pin removal and the continuous-second rule of the carousel impression (section 14g).
 
 ## 1. Status and sources
 
@@ -426,6 +426,14 @@ Everything below is DECIDED, NOT BUILT. All are founder-adopted defaults (veto-a
 - **Carousel impression threshold (item 7; closes the open point of 14e, item 6).** A carousel tile counts as an impression when at least 50 percent of it is in view for at least 1 second. Not stated: whether the second must be continuous, and whether a tile counts again on re-entry. The per-viewer daily cap and the tolerance of section 10b are unchanged.
 - **Not contest decisions of #405** (see `docs/build-register.md` Section 19): the date-of-birth tool roles, the email-keyed guardian resend route, the 2FA backup-code format and TOTP secret storage, the archive of the legacy profile frames, the Figma component adoption.
 
+### 14g. Founder decisions 2026-10-18 (Decision Log #406)
+
+Everything below is DECIDED, NOT BUILT. Both are founder-adopted defaults (veto-able). Earlier text in this file is not rewritten; where it differs, this section prevails.
+
+- **Pin removal at 00:00 London time on the 1st (item 5; closes the open point of 14f, item 1).** The pin is removed from the finalist's profile at 00:00 Europe/London on the 1st day of the month after the contest month, and at the same moment the final entry becomes an ordinary post in the Community feed (14f, item 1). Before that moment the entry is pinned and is not a normal feed post.
+- **The one second is continuous; re-entry counts again (item 6; closes the open points of 14f, item 7).** A carousel tile counts as an impression when at least 50 percent of it stays in view for one uninterrupted second. A tile that leaves view before the second is complete counts nothing, and the timer restarts when it re-enters. A tile that re-enters and again stays in view for one uninterrupted second counts again, up to the per-viewer daily cap of section 10b (3 views per viewer per day, week 4 only). The tolerance of section 10b is unchanged.
+- **Not contest decisions of #406** (see `docs/build-register.md` Section 22): the declined-row lapse, the light theme, the resend-verification endpoint, the User Detail date-of-birth rule, the username rules, the status response fields, the blocked not-found view and the guardian confirm page footnote.
+
 ## 15. Where each decision lives
 
 | Decision | Decision Log | This file | Build register |
@@ -511,3 +519,9 @@ Changes versus chat 9 (Aug 2026) and chat 11 (Sept 2026):
 - Decision Log #405 (founder decisions 2026-10-17, second round): once the pin is removed the final entry becomes an ordinary Community-feed post (closes the 14e open point on items 9 and 15, section 14f); notification destinations as drawn in Figma pass J2 and no profile link (section 14f); the personal winner notification stays contest_win; accounts with an unverified email get no Contest notifications; a carousel tile is an impression at 50% in view for 1 second (section 10b, 14f).
 - Not changed: calendar, placement points, baseline points, view qualification, the week-4 upload deadline (23:59:59 on day 24), the vote lock (20:00:00).
 - Decision Log #405 also records non-contest decisions; see `docs/build-register.md` Section 19.
+
+### 2026-10-18
+
+- Decision Log #406 (founder decisions 2026-10-18): the pin is removed, and the final entry becomes an ordinary Community-feed post, at 00:00 Europe/London on the 1st of the following month (section 14g); the one-second impression view is continuous and re-entry counts again within the per-viewer daily cap (section 14g).
+- Not changed: calendar, placement points, baseline points, view qualification, the week-4 upload deadline (23:59:59 on day 24), the vote lock (20:00:00).
+- Decision Log #406 also records non-contest decisions; see `docs/build-register.md` Section 22.

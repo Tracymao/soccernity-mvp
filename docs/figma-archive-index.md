@@ -2,7 +2,7 @@
 
 Generated 2026-10-18 (Figma pass K, `figma/pass-k-admin-incorrect-details-archive`) from a live read of the file `weZWWqggy9j13eX8bhFgs6`, page `0:1` (`findAll` on every node whose name starts with `ARCHIVED`). Nothing was deleted by this pass: an archived node is hidden and prefixed `ARCHIVED — `. Coordinates are canvas coordinates of the top-level frame (x, y), width x height.
 
-Counts at the time of writing: **398** archived nodes = **57 top-level frames** (section 1) + **341 nested nodes** (section 2) inside **81** host frames. A 342nd nested node (a hidden `ARCHIVED — Button — Retry` that came along when the incorrect-details Load Error frame was cloned) was removed in the same pass because it was an artefact of the clone, not an original.
+Counts (corrected 2026-10-18 to the live figures given by the founder): **397** archived nodes = **57 top-level frames** (section 1) + **340 nested nodes** (section 2) inside **81** host frames. The first version of this index said 398 = 57 + 341; the live count is one lower. The figures are the founder's; this docs-only change did not re-count the canvas, and the host-frame count (81) was not re-checked. Nothing in this index lists a node removed after pass K, so the one-node difference is recorded, not explained. Pass K also removed one hidden `ARCHIVED — Button — Retry` that came along when the incorrect-details Load Error frame was cloned, because it was an artefact of the clone, not an original; it was never one of the counted nodes.
 
 How to use it: section 1 answers "where is the old frame and what replaced it". Section 2 answers "which hidden originals sit inside this live frame". To find an id on the canvas, paste it into Figma search or use the id in a plugin call.
 
@@ -111,7 +111,7 @@ All at y -13200. Names state: contests are not admin-judged (Decision Log #381, 
 
 Pass K note: the two archived Contest-page Final week frames sample 9 finalists; the live carousel samples 6 (see the note on `6664:27284` and `6664:27301`). They were not edited.
 
-## 2. Nested archived nodes (341), grouped by host frame
+## 2. Nested archived nodes (340), grouped by host frame
 
 Each host frame is live (visible) unless it says otherwise. "Pass J" nodes are the original local Pill, Button, Banner, Callout, Dialog frames that were replaced by an instance of the shared component and kept hidden next to it. The name of each node carries the reason in brackets; the ids are listed so every one is findable.
 

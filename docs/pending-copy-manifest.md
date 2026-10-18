@@ -41,3 +41,14 @@ Add the tag to the string in source and add a row here (file, the string exactly
 | `apps/web/src/pages/signup/AgeGateStep.tsx` | Some countries ask for an extra check when a guardian approves an account for a younger child. [COPY PENDING LEGAL REVIEW] | Age Gate `5108:6626` (mobile `5539:7264`), country hint |
 | `apps/web/src/pages/signup/GuardianDetailsStep.tsx` | We only use this email address to request and record consent. [COPY PENDING LEGAL REVIEW] | Guardian Details Capture `5108:6627` (mobile `5539:7354`), fineprint `5111:6669` |
 | `apps/web/src/pages/signup/RegisterStep.tsx` | Set when you signed up and cannot be changed here. [COPY PENDING LEGAL REVIEW] | Register `407:1051`, date of birth note `6627:22258` |
+
+## OPEN: services/api email wording (Decision Log #406, build register B-124)
+
+The guard above covers `apps/web` and `apps/admin` only. That scope is decided (#406, register instruction R1) and is not extended to `services/api`. Wording tagged `[COPY PENDING LEGAL REVIEW]` in `services/api` is listed here as OPEN: nothing checks it, and no test fails when it changes. This list is bullets, not table rows, so the inventory test ignores it.
+
+- `services/api/src/modules/auth/registration/email/registration-email.service.ts`, template `guardian-approved-minor`: the approval email to the minor ("approved, continue registration"). The tag is in a code comment, not in the string.
+- Same file, template `guardian-consent-declined`: the email sent only for the third decline (no running count). The tag is in a code comment.
+- Same file, template `username-revoked`: the email to a user whose username an admin revoked (carries no admin free text). The tag is in a code comment.
+- Not tagged, and not decided whether they should be: the other templates that describe a child or a guardian (`guardian-consent`, `guardian-consent-withdrawal-request`, `guardian-consent-withdrawn`, `guardian-consent-reminder`, `guardian-consent-expired`, `guardian-minor-turned-18`, `guardian-email-replaced`, `report-actioned`, `appeal-decision`).
+- Open: whether the guard is ever extended to `services/api` (for example a manifest of email templates and a release check), and who clears these strings with counsel.
+
