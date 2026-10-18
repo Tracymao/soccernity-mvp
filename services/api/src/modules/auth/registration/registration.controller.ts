@@ -12,7 +12,12 @@ import type { Request } from 'express';
 import { toAuthUserSummary, toTokenPairResponse } from '../auth-response.mapper';
 import { AuthRateLimit } from '../rate-limit/auth-rate-limit.decorator';
 import { RegisterDto } from './dto/register.dto';
+import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
+import {
+  RESEND_VERIFICATION_GENERIC_MESSAGE,
+  ResendVerificationService,
+} from './email-verification/resend-verification.service';
 import { RegisterResult, RegistrationService } from './registration.service';
 
 // Build Plan Section 4.1 (Auth Service): POST /auth/register and
@@ -29,7 +34,10 @@ import { RegisterResult, RegistrationService } from './registration.service';
 @Controller('auth')
 @UsePipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }))
 export class RegistrationController {
-  constructor(private readonly registrationService: RegistrationService) {}
+  constructor(
+    private readonly registrationService: RegistrationService,
+    private readonly resendVerificationService: ResendVerificationService,
+  ) {}
 
   @Post('register')
   @AuthRateLimit()
@@ -53,6 +61,19 @@ export class RegistrationController {
   async verifyEmail(@Body() dto: VerifyEmailDto) {
     const { userId, guardianConsentStatus } = await this.registrationService.verifyEmail(dto.token);
     return { verified: true, userId, guardianConsentStatus };
+  }
+
+  // B-128 (Decision Log #406 item 3, #37): send a fresh verification link.
+  // Unauthenticated, keyed by email, per-IP throttled by @AuthRateLimit() and
+  // per-account capped inside the service. ONE response for every outcome (no
+  // such account, already verified, closed account, over the cap), so the route
+  // cannot be used to find out which addresses are registered.
+  @Post('resend-verification-email')
+  @AuthRateLimit()
+  @HttpCode(HttpStatus.OK)
+  async resendVerificationEmail(@Body() dto: ResendVerificationDto): Promise<{ message: string }> {
+    await this.resendVerificationService.resend(dto.email);
+    return { message: RESEND_VERIFICATION_GENERIC_MESSAGE };
   }
 }
 

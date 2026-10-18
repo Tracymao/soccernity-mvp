@@ -22,6 +22,7 @@ export type RegistrationEmailTemplate =
   | 'guardian-consent-declined'
   | 'guardian-consent-withdrawn'
   | 'guardian-consent-reminder'
+  | 'guardian-consent-decline-lapse-reminder'
   | 'guardian-consent-expired'
   | 'guardian-minor-turned-18'
   | 'guardian-email-replaced'
@@ -207,6 +208,28 @@ export class RegistrationEmailService {
       to,
       subject: 'Your Soccernity account is still waiting for guardian approval',
       template: 'guardian-consent-reminder',
+      data: { minorDisplayName, guardianEmail },
+    });
+  }
+
+  // B-126 (Decision Log #406 item 1). To the MINOR -- the platform's own chase of
+  // a row that was declined at decline 1 or 2 and never reopened for
+  // GUARDIAN_DECLINE_LAPSE_DAYS (default 14). It is NOT the 'guardian-consent-
+  // reminder' above: that one says "the first request has now expired", which is
+  // untrue here (the guardian answered; the minor did nothing). A new request
+  // has gone to the guardian, and a second lapse of THAT request closes the
+  // account, so this is the warning the unanswered-request path always gives
+  // before closure. [COPY PENDING LEGAL REVIEW] -- plain functional wording, not
+  // counsel-reviewed. No decline count is mentioned (#395 B2).
+  async sendConsentDeclineLapseReminderEmail(
+    to: string,
+    minorDisplayName: string,
+    guardianEmail: string,
+  ): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: 'Your Soccernity account still needs guardian approval',
+      template: 'guardian-consent-decline-lapse-reminder',
       data: { minorDisplayName, guardianEmail },
     });
   }
@@ -507,6 +530,19 @@ ${data.link}
 ` +
         `If this second request is not answered either, your account will be closed and scheduled for deletion.`
       );
+    case 'guardian-consent-decline-lapse-reminder':
+      return (
+        `Hi ${data.minorDisplayName},
+
+` +
+        `Your Soccernity account is still not approved, and nothing has changed on it for a while.
+
+` +
+        `We have sent a new approval request to ${data.guardianEmail}. Please ask them to check their email, including their spam folder. You can also change your guardian's email address from your account.
+
+` +
+        `If this new request is not answered, your account will be closed and scheduled for deletion.`
+      );
     case 'guardian-consent-expired':
       return (
         `Hi ${data.minorDisplayName},
@@ -652,6 +688,13 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
         `<p>Your Soccernity account is still waiting for your guardian to approve it, and the first request has now expired.</p>` +
         `<p>We have sent a new request to <strong>${data.guardianEmail}</strong>. Please ask them to check their email, including their spam folder.</p>` +
         `<p>If this second request is not answered either, your account will be closed and scheduled for deletion.</p>`
+      );
+    case 'guardian-consent-decline-lapse-reminder':
+      return (
+        `<p>Hi ${data.minorDisplayName},</p>` +
+        `<p>Your Soccernity account is still not approved, and nothing has changed on it for a while.</p>` +
+        `<p>We have sent a new approval request to <strong>${data.guardianEmail}</strong>. Please ask them to check their email, including their spam folder. You can also change your guardian's email address from your account.</p>` +
+        `<p>If this new request is not answered, your account will be closed and scheduled for deletion.</p>`
       );
     case 'guardian-consent-expired':
       return (

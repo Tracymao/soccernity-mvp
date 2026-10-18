@@ -35,6 +35,7 @@ interface GuardianRow {
   cardRefundedAt: Date | null;
   stripePaymentIntentId: string | null;
   incorrectDetailsReportedAt: Date | null;
+  consentDeclinedAt: Date | null;
 }
 
 interface UserRow {
@@ -69,6 +70,7 @@ function buildHarness(overrides: { guardian?: Partial<GuardianRow>; user?: Parti
     cardRefundedAt: null,
     stripePaymentIntentId: null,
     incorrectDetailsReportedAt: null,
+    consentDeclinedAt: null,
     ...overrides.guardian,
   };
   const user: UserRow = {
@@ -447,7 +449,14 @@ describe('the counter is never exposed', () => {
       guardian: { consentStatus: 'declined', consentDeclineSource: 'guardian_explicit', declineCount: 1 },
     });
     const status = await reopenable.service.getConsentStatus('minor-1');
-    expect(Object.keys(status).sort()).toEqual(['canResend', 'consentStatus', 'consentTimestamp', 'guardianEmail']);
+    expect(Object.keys(status).sort()).toEqual([
+      'canResend',
+      'consentStatus',
+      'consentTimestamp',
+      'guardianEmail',
+      'guardianFirstName',
+      'lastDecisionAt',
+    ]);
     expect(JSON.stringify(status)).not.toMatch(/declineCount/);
     expect(status.consentStatus).toBe('declined');
     expect(status.canResend).toBe(true);

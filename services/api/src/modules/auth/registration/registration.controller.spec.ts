@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AuthThrottlerGuard } from '../rate-limit/auth-throttler.guard';
 import { RegistrationController } from './registration.controller';
+import { RESEND_VERIFICATION_GENERIC_MESSAGE, ResendVerificationService } from './email-verification/resend-verification.service';
 import { RegistrationService } from './registration.service';
 
 // Exercises real HTTP request/response handling (routing, DTO
@@ -16,11 +17,15 @@ describe('RegistrationController (HTTP layer)', () => {
     register: jest.fn(),
     verifyEmail: jest.fn(),
   };
+  const resendVerificationService = { resend: jest.fn() };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [RegistrationController],
-      providers: [{ provide: RegistrationService, useValue: registrationService }],
+      providers: [
+        { provide: RegistrationService, useValue: registrationService },
+        { provide: ResendVerificationService, useValue: resendVerificationService },
+      ],
     })
       // AuthThrottlerGuard (behind @AuthRateLimit(), applied via
       // @UseGuards() directly on the /register handler) needs
@@ -306,6 +311,52 @@ describe('RegistrationController (HTTP layer)', () => {
 
     it('rejects a missing token with 400', async () => {
       await request(app.getHttpServer()).post('/auth/verify-email').send({}).expect(400);
+    });
+  });
+
+  // B-128 (Decision Log #406 item 3): the route answers identically whatever
+  // the service did, so it cannot reveal which addresses are registered.
+  describe('POST /auth/resend-verification-email', () => {
+    it('returns 200 and the one generic message', async () => {
+      resendVerificationService.resend.mockResolvedValueOnce(undefined);
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/resend-verification-email')
+        .send({ email: 'someone@example.com' })
+        .expect(200);
+
+      expect(response.body).toEqual({ message: RESEND_VERIFICATION_GENERIC_MESSAGE });
+      expect(resendVerificationService.resend).toHaveBeenCalledWith('someone@example.com');
+    });
+
+    it('returns the byte-identical response for every address (service is silent either way)', async () => {
+      resendVerificationService.resend.mockResolvedValue(undefined);
+      const a = await request(app.getHttpServer())
+        .post('/auth/resend-verification-email')
+        .send({ email: 'registered@example.com' });
+      const b = await request(app.getHttpServer())
+        .post('/auth/resend-verification-email')
+        .send({ email: 'nobody@example.com' });
+      expect(a.status).toBe(b.status);
+      expect(a.body).toEqual(b.body);
+    });
+
+    it('rejects a malformed or missing email with 400, before the service is reached', async () => {
+      await request(app.getHttpServer()).post('/auth/resend-verification-email').send({ email: 'nope' }).expect(400);
+      await request(app.getHttpServer()).post('/auth/resend-verification-email').send({}).expect(400);
+      expect(resendVerificationService.resend).not.toHaveBeenCalled();
+    });
+
+    it('rejects unknown fields (whitelist enforcement)', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/resend-verification-email')
+        .send({ email: 'a@example.com', userId: 'x' })
+        .expect(400);
+    });
+
+    it('is protected by the auth rate limiter', () => {
+      const guards = Reflect.getMetadata('__guards__', RegistrationController.prototype.resendVerificationEmail) as unknown[];
+      expect(guards).toContain(AuthThrottlerGuard);
     });
   });
 });

@@ -1506,3 +1506,33 @@ Full detail and the route table: `docs/backend-w3-gates-report.md`. Summary of w
     nothing sends a reminder. Frontend (GuardianConsentPage rendering, frames
     5491:8241 / 5501:8453) not built.
 
+- **Stale-decline lapse, status fields, resend-verification (B-126, B-131, B-128;
+  Decision Log #406 items 1, 11, 3; `backend/w3d-decline-lapse-resend-summary`).**
+  - **`Guardian.consentDeclinedAt`** (migration
+    `20261018120000_add_guardian_consent_declined_at`, additive: one nullable column,
+    one index; rows that are still reopenable are stamped with the migration time) =
+    when a row last became `declined`, for ANY reason. Stamped in
+    `recordNonFinalDecline` and `refuseConsentAndScheduleDeletion`; kept when a row is
+    reopened; cleared by a DOB-correction restart.
+  - **`GuardianStaleDeclineSweepService`** (hourly). A row declined at decline 1 or 2
+    (explicit source, fewer than three recorded, active minor) and not reopened within
+    `GUARDIAN_DECLINE_LAPSE_DAYS` (default 14) of `consentDeclinedAt` is reopened as
+    `pending` through `reissueConsentToken({ reopenDeclined, markAutoResent })`
+    (fresh token and expiry, `consentAutoResentAt` stamped) and the minor gets a
+    warning email (`guardian-consent-decline-lapse-reminder`,
+    **[COPY PENDING LEGAL REVIEW]**). That is stage 1 of the unanswered-request path:
+    when the new request lapses the existing `GuardianConsentExpirySweepService`
+    sees `consentAutoResentAt` set and closes the account (`pending_deletion`,
+    30-day grace). `declineCount` is never touched: an expiry is not a decline.
+    `reissueConsentToken` now returns `boolean` (false = a reopen lost a race, nothing
+    was sent) so the sweep never warns about an email that did not go.
+  - **`GET /auth/guardian-consent/status`** adds `guardianFirstName` (first
+    whitespace-separated word of `Guardian.name`, an approximation) and
+    `lastDecisionAt` (the later of `consentTimestamp` and `consentDeclinedAt`, so
+    approval, decline and withdrawal are covered). The decline count is still never
+    returned.
+  - **`POST /auth/resend-verification-email`** `{ email }`: unauthenticated,
+    `@AuthRateLimit()` per IP plus a per-account cap (3 per hour, Redis, silent over
+    the cap). ONE 200 response for every outcome. Sends only for an `active`,
+    unverified account. Earlier links are not revoked (the token store has no
+    per-user index); the cap bounds how many are live.

@@ -53,6 +53,31 @@ export interface GuardianConsentStatusResponse {
   guardianEmail: string;
   canResend: boolean;
   consentTimestamp: Date | null;
+  // B-131 (Decision Log #406 item 11). The guardian's FIRST name, for copy such
+  // as "Your guardian Mary declined ...". Guardian.name is one full-name field
+  // (Option A, #393), so this is its first whitespace-separated word -- an
+  // approximation: "Dr Mary Smith" gives "Dr", and a single-word name is
+  // returned whole. null only if the stored name is blank, which registration
+  // does not allow.
+  guardianFirstName: string | null;
+  // B-131. When the guardian last made a decision about this request: the later
+  // of the approval time (consentTimestamp) and the time the row last became
+  // 'declined' (decline, withdrawal or expiry refusal). null while no decision
+  // has been made. The decline COUNT is deliberately NOT exposed (#395 B2,
+  // #403 item 2): this response never carries it, directly or by implication.
+  lastDecisionAt: Date | null;
+}
+
+// First whitespace-separated word of the guardian's single full-name field.
+export function guardianFirstNameOf(fullName: string): string | null {
+  const first = fullName.trim().split(/\s+/)[0];
+  return first ? first : null;
+}
+
+// Later of two nullable timestamps.
+function latestOf(a: Date | null, b: Date | null): Date | null {
+  if (a && b) return a.getTime() >= b.getTime() ? a : b;
+  return a ?? b;
 }
 
 // Build Plan Section 8.3, step 4: the guardian-facing confirmation
@@ -346,7 +371,7 @@ export class GuardianConsentService {
     // request. Guarded in the WHERE clause so a decline that became final, or
     // an account that left 'active', in the meantime is not reopened.
     reopenDeclined?: boolean;
-  }): Promise<void> {
+  }): Promise<boolean> {
     if (params.reopenDeclined) {
       const token = randomUUID();
       const reopened = await this.prisma.guardian.updateMany({
@@ -363,17 +388,25 @@ export class GuardianConsentService {
           consentDeclineSource: null,
           consentToken: token,
           consentTokenExpiresAt: computeConsentTokenExpiresAt(this.config),
+          // B-126: the platform's own stale-decline chase spends the one
+          // automatic re-send, so the NEXT lapse is the terminal one. Set
+          // (overwritten) even if an earlier chase had already stamped it: the
+          // minor is warned again at THIS stage, and the budget restarts from
+          // now. A manual reopen by the minor leaves it untouched.
+          ...(params.markAutoResent ? { consentAutoResentAt: new Date() } : {}),
           // declineCount is deliberately NOT touched: three in total, ever.
         },
       });
       if (reopened.count === 0) {
-        return;
+        // Lost a race (the row was reopened, made final, or its account left
+        // 'active'): nothing was sent, and the caller must not warn the minor.
+        return false;
       }
       const row = await this.prisma.guardian.findUnique({ where: { id: params.guardianId } });
       if (row) {
         await this.emailService.sendGuardianConsentEmail(row.email, token, params.minorDisplayName);
       }
-      return;
+      return true;
     }
 
     const updated = await this.prisma.guardian.update({
@@ -390,6 +423,7 @@ export class GuardianConsentService {
       updated.consentToken,
       params.minorDisplayName,
     );
+    return true;
   }
 
   // -------------------------------------------------------------------
@@ -651,6 +685,8 @@ export class GuardianConsentService {
       data: {
         consentStatus: 'declined',
         consentDeclineSource: DECLINE_SOURCE_BY_REASON.declined,
+        // B-126: where the stale-decline window starts.
+        consentDeclinedAt: new Date(),
         declineCount: { increment: 1 },
       },
     });
@@ -798,6 +834,7 @@ export class GuardianConsentService {
         // Decision Log #338 -- the one place all three refusal paths
         // converge, so the source is recorded here and nowhere else.
         consentDeclineSource: DECLINE_SOURCE_BY_REASON[params.reason],
+        consentDeclinedAt: new Date(),
         // B-102: only an EXPLICIT decline counts (this is the third one, the
         // final one). Withdrawal and expiry never touch the counter.
         ...(params.reason === 'declined' ? { declineCount: { increment: 1 } } : {}),
@@ -913,6 +950,8 @@ export class GuardianConsentService {
       // lives on the User row; a closed account cannot call this route anyway.
       canResend: guardian.consentStatus === 'pending' || isReopenableDecline(guardian),
       consentTimestamp: guardian.consentTimestamp,
+      guardianFirstName: guardianFirstNameOf(guardian.name),
+      lastDecisionAt: latestOf(guardian.consentTimestamp, guardian.consentDeclinedAt),
     };
   }
 

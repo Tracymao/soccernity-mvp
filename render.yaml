@@ -96,6 +96,9 @@ services:
       # GUARDIAN_CONSENT_WITHDRAWAL_TOKEN_TTL_HOURS: code default (consent-token.constants.ts)
       - key: GUARDIAN_CONSENT_WITHDRAWAL_TOKEN_TTL_HOURS
         value: "72"
+      # GUARDIAN_DECLINE_LAPSE_DAYS: code default (guardian-decline-cap.constants.ts)
+      - key: GUARDIAN_DECLINE_LAPSE_DAYS
+        value: "14"
       # --- Email (Postmark) and links ---
       - key: EMAIL_PROVIDER_API_KEY
         sync: false
@@ -240,6 +243,9 @@ services:
       # GUARDIAN_CONSENT_WITHDRAWAL_TOKEN_TTL_HOURS: code default (consent-token.constants.ts)
       - key: GUARDIAN_CONSENT_WITHDRAWAL_TOKEN_TTL_HOURS
         value: "72"
+      # GUARDIAN_DECLINE_LAPSE_DAYS: code default (guardian-decline-cap.constants.ts)
+      - key: GUARDIAN_DECLINE_LAPSE_DAYS
+        value: "14"
       # --- Email (Postmark) and links ---
       - key: EMAIL_PROVIDER_API_KEY
         sync: false

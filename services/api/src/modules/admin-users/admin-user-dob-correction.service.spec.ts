@@ -185,6 +185,33 @@ describe('validation and refusals', () => {
     expect(h.prisma.$transaction).not.toHaveBeenCalled();
   });
 
+  // B-129 (Decision Log #406 item 4): the audit row never holds a date of birth,
+  // so the SERVER refuses a reason that is date-shaped, before any database work.
+  describe('a reason containing a date is refused (B-129)', () => {
+    it.each([
+      ['Birth certificate shows 2012-03-04'],
+      ['Seen passport, born 4 March 2012'],
+      ['User typed 04/03/2012 by mistake'],
+      ['Corrected from March 2013 to the right month'],
+    ])('%j -> 400 reason_contains_date, nothing read or written', async (reason) => {
+      const h = build({ age: 10 });
+      const err = await h.service
+        .correctDateOfBirth('user-1', 'admin-1', { dateOfBirth: isoDay(dobForAge(11)), reason } as never)
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(BadRequestException);
+      expect((err as BadRequestException).getResponse()).toEqual(
+        expect.objectContaining({ code: 'reason_contains_date' }),
+      );
+      expect(h.prisma.$transaction).not.toHaveBeenCalled();
+      expect(h.auditRows).toHaveLength(0);
+    });
+
+    it('an ordinary reason still passes the check', async () => {
+      const h = build({ age: 10 });
+      await expect(call(h, 11)).resolves.toBeDefined();
+    });
+  });
+
   it('404s for an unknown user', async () => {
     const h = build({ age: 10 });
     h.tx.user.findUnique.mockResolvedValueOnce(null as never);

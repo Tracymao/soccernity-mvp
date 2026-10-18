@@ -13,11 +13,18 @@ import { AgeTier, ageTierFor } from '../auth/registration/age-tier.util';
 // rest (Decision Log #362) and decrypted here, server-side, for this response
 // only.
 //
+// B-129 (Decision Log #406 item 4) split it in two:
+//   - GET /admin/users/:id/summary  -> getUserSummary(): User Detail WITHOUT the
+//     date of birth. It never selects the DOB column, so there is nothing to
+//     decrypt and nothing to audit (no user.dob_viewed row).
+//   - GET /admin/users/:id          -> getUserDetail(): the same plus the DOB,
+//     kept for the correction form, with the audit row.
+//
 // EXPLICIT SELECT, never a row spread: passwordHash, the guardian's consent /
 // withdrawal tokens, the Stripe payment-intent reference and the internal
 // decline counter (#395 B2: "no count is exposed by any API") are simply not
 // selected, so there is no code path by which they could reach the payload.
-const USER_DETAIL_SELECT = {
+const USER_SUMMARY_SELECT = {
   id: true,
   email: true,
   displayName: true,
@@ -27,7 +34,6 @@ const USER_DETAIL_SELECT = {
   verificationStatus: true,
   isMinor: true,
   isUnder16: true,
-  dateOfBirth: true, // ciphertext; decrypted below, never returned as stored
   createdAt: true,
   pendingDeletionAt: true,
   declaredCountry: true,
@@ -51,7 +57,14 @@ const USER_DETAIL_SELECT = {
   },
 } as const;
 
-export interface AdminUserDetail {
+// The full detail read adds the DOB ciphertext (decrypted below, never returned
+// as stored). The summary read does NOT select it at all.
+const USER_DETAIL_SELECT = { ...USER_SUMMARY_SELECT, dateOfBirth: true } as const;
+
+// Everything User Detail shows EXCEPT the date of birth and the age tier
+// derived from it (isMinor / isUnder16 stay: they are the flags the platform
+// acts on, and the response already carried them).
+export interface AdminUserSummary {
   id: string;
   email: string;
   displayName: string;
@@ -61,10 +74,6 @@ export interface AdminUserDetail {
   verificationStatus: string;
   isMinor: boolean;
   isUnder16: boolean;
-  // 'YYYY-MM-DD'. null only for an anonymized account (Decision Log #341),
-  // which has no DOB left to show.
-  dateOfBirth: string | null;
-  ageTier: AgeTier | null;
   createdAt: Date;
   pendingDeletionAt: Date | null;
   // The safeguarding country (Decision Log #368, #403 item 17), shown to
@@ -97,6 +106,32 @@ export interface AdminUserDetail {
   usernameRevocations: Array<{ username: string; revokedAt: Date; heldUntil: Date }>;
 }
 
+export interface AdminUserDetail extends AdminUserSummary {
+  // 'YYYY-MM-DD'. null only for an anonymized account (Decision Log #341),
+  // which has no DOB left to show.
+  dateOfBirth: string | null;
+  ageTier: AgeTier | null;
+}
+
+type SummaryRow = {
+  id: string;
+  email: string;
+  displayName: string;
+  username: string | null;
+  role: string;
+  accountStatus: string;
+  verificationStatus: string;
+  isMinor: boolean;
+  isUnder16: boolean;
+  createdAt: Date;
+  pendingDeletionAt: Date | null;
+  declaredCountry: string | null;
+  derivedCountry: string | null;
+  countryDerivationMethod: string | null;
+  countryDerivedAt: Date | null;
+  guardian: AdminUserSummary['guardian'];
+};
+
 @Injectable()
 export class AdminUserDetailService {
   constructor(
@@ -105,16 +140,22 @@ export class AdminUserDetailService {
     private readonly adminActionLogService: AdminActionLogService,
   ) {}
 
+  // B-129: User Detail without the date of birth. The DOB column is not even
+  // selected, so this path cannot leak it and writes no audit row.
+  async getUserSummary(userId: string): Promise<AdminUserSummary> {
+    const row = await this.prisma.user.findUnique({ where: { id: userId }, select: USER_SUMMARY_SELECT });
+    if (!row) {
+      throw new NotFoundException('User not found');
+    }
+    return this.toSummary(row, await this.loadRevocations(userId));
+  }
+
   async getUserDetail(userId: string, adminId: string): Promise<AdminUserDetail> {
     const row = await this.prisma.user.findUnique({ where: { id: userId }, select: USER_DETAIL_SELECT });
     if (!row) {
       throw new NotFoundException('User not found');
     }
-    const usernameRevocations = await this.prisma.revokedUsername.findMany({
-      where: { userId },
-      orderBy: { revokedAt: 'desc' },
-      select: { username: true, revokedAt: true, holdUntil: true },
-    });
+    const usernameRevocations = await this.loadRevocations(userId);
 
     // Decrypt FIRST (held in memory only), then write the audit row, then
     // return. If the audit write fails the request fails and no DOB leaves the
@@ -133,6 +174,28 @@ export class AdminUserDetailService {
     }
 
     return {
+      ...this.toSummary(row, usernameRevocations),
+      dateOfBirth: dob ? dob.toISOString().slice(0, 10) : null,
+      ageTier: dob ? ageTierFor(dob) : null,
+    };
+  }
+
+  private async loadRevocations(userId: string) {
+    return this.prisma.revokedUsername.findMany({
+      where: { userId },
+      orderBy: { revokedAt: 'desc' },
+      select: { username: true, revokedAt: true, holdUntil: true },
+    });
+  }
+
+  // Field-by-field (not a spread) so a column added to the select later cannot
+  // reach the payload by accident -- and the DOB ciphertext on the detail row
+  // can never ride along.
+  private toSummary(
+    row: SummaryRow,
+    usernameRevocations: Array<{ username: string; revokedAt: Date; holdUntil: Date }>,
+  ): AdminUserSummary {
+    return {
       id: row.id,
       email: row.email,
       displayName: row.displayName,
@@ -142,8 +205,6 @@ export class AdminUserDetailService {
       verificationStatus: row.verificationStatus,
       isMinor: row.isMinor,
       isUnder16: row.isUnder16,
-      dateOfBirth: dob ? dob.toISOString().slice(0, 10) : null,
-      ageTier: dob ? ageTierFor(dob) : null,
       createdAt: row.createdAt,
       pendingDeletionAt: row.pendingDeletionAt,
       safeguardingCountry: {

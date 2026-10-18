@@ -6,6 +6,8 @@ import { ClubsModule } from '../../clubs/clubs.module';
 import { AuthFoundationModule } from '../auth-foundation.module';
 import { GuardianConsentModule } from '../guardian-consent/guardian-consent.module';
 import { EmailVerificationTokenStore } from './email-verification/email-verification-token.store';
+import { ResendVerificationLimiter } from './email-verification/resend-verification.limiter';
+import { ResendVerificationService } from './email-verification/resend-verification.service';
 import { RegistrationEmailService } from './email/registration-email.service';
 import { RegistrationController } from './registration.controller';
 import { RegistrationService } from './registration.service';
@@ -37,6 +39,14 @@ import { RegistrationService } from './registration.service';
 @Module({
   imports: [AuthFoundationModule, RedisModule, ClubsModule, GuardianConsentModule, GeoIpModule],
   controllers: [RegistrationController],
-  providers: [PrismaService, RegistrationService, EmailVerificationTokenStore, RegistrationEmailService],
+  providers: [
+    PrismaService,
+    RegistrationService,
+    EmailVerificationTokenStore,
+    RegistrationEmailService,
+    // B-128: POST /auth/resend-verification-email.
+    ResendVerificationService,
+    ResendVerificationLimiter,
+  ],
 })
 export class AuthRegistrationModule {}
