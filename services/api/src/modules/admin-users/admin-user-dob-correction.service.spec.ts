@@ -162,6 +162,13 @@ const call = (h: ReturnType<typeof build>, newAge: number, extra: Record<string,
   } as never);
 
 describe('validation and refusals', () => {
+  it('refuses a correction below the age-5 signup floor (Decision Log #19, QA D-02) before any read, accepts exactly 5', async () => {
+    const h = build({ age: 10 });
+    await expect(call(h, 4)).rejects.toMatchObject({ response: { code: 'below_minimum_age' } });
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
+    await expect(call(h, 5)).resolves.toBeDefined();
+  });
+
   it('rejects an implausible or future date with the registration message, before any read', async () => {
     const h = build({ age: 10 });
     const future = new Date(Date.now() + 86400000 * 30).toISOString().slice(0, 10);

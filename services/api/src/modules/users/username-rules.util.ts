@@ -7,6 +7,7 @@ import {
   PHONE_LIKE_DIGIT_RUN,
   PHONE_LIKE_TOTAL_DIGITS,
   PROFANITY_CONTAINS,
+  PROFANITY_CONTAINS_GUARDED,
   PROFANITY_EXACT,
   RESERVED_HANDLES,
 } from './username-rules.constants';
@@ -72,6 +73,20 @@ function isReservedForm(form: string): boolean {
 
 function isProfane(raw: string, forms: string[]): boolean {
   if (forms.some((f) => PROFANITY_CONTAINS.some((w) => f.includes(w)))) return true;
+  // CONTAINS with named innocent exceptions ('nazi' inside Nazir, Nazim, ...): cut the
+  // innocent names out, then search what is left. A space stands in for the cut so
+  // the two halves cannot join up into the term.
+  if (
+    forms.some((f) =>
+      PROFANITY_CONTAINS_GUARDED.some(({ term, innocent }) => {
+        let rest = f;
+        for (const name of innocent) rest = rest.split(name).join(' ');
+        return rest.includes(term);
+      }),
+    )
+  ) {
+    return true;
+  }
   if (forms.some((f) => PROFANITY_EXACT.includes(f))) return true;
   // An underscore-separated token that IS a short word ("big_dick_77").
   const tokens = raw

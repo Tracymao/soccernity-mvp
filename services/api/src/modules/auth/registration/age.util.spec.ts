@@ -1,4 +1,11 @@
-import { calculateAge, computeIsMinor, computeIsUnder16, isPlausibleDateOfBirth } from './age.util';
+import {
+  calculateAge,
+  computeIsMinor,
+  computeIsUnder16,
+  isPlausibleDateOfBirth,
+  MINIMUM_SIGNUP_AGE,
+  meetsMinimumSignupAge,
+} from './age.util';
 
 describe('age.util', () => {
   const asOf = new Date('2026-08-16T00:00:00.000Z');
@@ -64,6 +71,22 @@ describe('age.util', () => {
 
     it('rejects an implausibly old date of birth', () => {
       expect(isPlausibleDateOfBirth(new Date('1850-01-01'), asOf)).toBe(false);
+    });
+  });
+
+  describe('meetsMinimumSignupAge (Decision Log #19, QA D-02)', () => {
+    const now = new Date(2026, 5, 15, 12);
+    it('the floor is 5', () => {
+      expect(MINIMUM_SIGNUP_AGE).toBe(5);
+    });
+    it('is false at 4, including the day before the 5th birthday', () => {
+      expect(meetsMinimumSignupAge(new Date(2022, 5, 15), now)).toBe(false);
+      expect(meetsMinimumSignupAge(new Date(2021, 5, 16), now)).toBe(false);
+    });
+    it('is true on the 5th birthday and after', () => {
+      expect(meetsMinimumSignupAge(new Date(2021, 5, 15), now)).toBe(true);
+      expect(meetsMinimumSignupAge(new Date(2021, 5, 14), now)).toBe(true);
+      expect(meetsMinimumSignupAge(new Date(1990, 0, 1), now)).toBe(true);
     });
   });
 });

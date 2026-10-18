@@ -124,23 +124,47 @@ export const PROFANITY_CONTAINS: readonly string[] = [
   'blowjob',
   'handjob',
   'terrorist',
+  // QA D-06 (Decision Log #407 item 3): long, unambiguous hate and sexual
+  // terms. Before this they sat in PROFANITY_EXACT, so a handle with letters
+  // glued on either side (xxhitlerxx) passed. No ordinary name or word that a
+  // person is likely to choose contains any of these, so the Scunthorpe-style
+  // false positive is accepted, as for the terms above.
+  'hitler',
+  'pussy',
+  'paedo',
+  'swastika',
+  'whitepower',
+  'gangbang',
+  'deepthroat',
+  'creampie',
+  'orgasm',
+  'masturbat',
+  'erotic',
+];
+
+// CONTAINS, with named exceptions. 'nazi' is four letters and sits inside real
+// given names (Nazir, Nazim, Nazia, Nazih, Nazik), so a plain CONTAINS would
+// refuse them. The innocent names are cut out of the handle first; whatever is
+// left is then searched. 'nazifan' / 'xxnazixx' / 'nazirnazi' are refused;
+// 'nazir10' / 'nazim_fc' are accepted. 'Nazif' / 'Nazifa' are real names too but
+// cannot be told from 'nazi' + 'fan' (the founder's own example), so they are
+// refused and the user is asked to choose another handle.
+export const PROFANITY_CONTAINS_GUARDED: ReadonlyArray<{ term: string; innocent: readonly string[] }> = [
+  { term: 'nazi', innocent: ['nazir', 'nazim', 'nazia', 'nazih', 'nazik'] },
 ];
 
 export const PROFANITY_EXACT: readonly string[] = [
   'dick',
   'cock',
-  'pussy',
   'anal',
   'anus',
   'sex',
   'sexy',
   'rape',
   'nazi',
-  'hitler',
   'kkk',
   'isis',
   'pedo',
-  'paedo',
   'tits',
   'boobs',
   'ass',

@@ -6,12 +6,11 @@ import * as path from 'path';
 export const REPO = path.resolve(__dirname, '..', '..');
 export const RUN_DIR = path.resolve(__dirname, '..', '.run');
 
-// `api` is what the browsers talk to (a thin CORS-header proxy, see
-// support/cors-proxy.ts); `rawApi` is the real services/api behind it.
-export const PORTS = { api: 3100, rawApi: 3101, web: 5273, admin: 5274 } as const;
+// `api` is the real services/api; the browsers talk to it directly (the CORS
+// proxy this suite used before QA defect D-01 was fixed is gone).
+export const PORTS = { api: 3100, web: 5273, admin: 5274 } as const;
 export const URLS = {
   api: `http://localhost:${PORTS.api}`,
-  rawApi: `http://localhost:${PORTS.rawApi}`,
   web: `http://localhost:${PORTS.web}`,
   admin: `http://localhost:${PORTS.admin}`,
 } as const;

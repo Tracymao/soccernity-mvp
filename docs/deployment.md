@@ -129,7 +129,16 @@ No two may be the same.
      sent at all** and an error naming `WEB_APP_BASE_URL` is logged: an email
      whose only call to action is a dead link is worse than none. (The
      password-reset email still falls back to a placeholder address; it is a
-     known follow-up.)
+     known follow-up.) `WEB_APP_BASE_URL` is also the **CORS allowlist** entry
+     for `apps/web`: the API answers cross-origin browser requests only from
+     this origin and from `ADMIN_APP_BASE_URL`, never `*`.
+   - `ADMIN_APP_BASE_URL` — the real deployed **https** URL of `apps/admin` for
+     that environment. Used **only** for the CORS allowlist (QA D-01, Decision
+     Log #407). In production each of the two must be a real https URL, not a
+     placeholder and not localhost; a value that is unset or unusable
+     contributes no origin (that app cannot call the API from a browser) and is
+     logged at boot as `[cors] ...`. Outside production, localhost origins on
+     any port are also allowed.
    - `TRUST_PROXY_HOPS`, `MAXMIND_ACCOUNT_ID`, `MAXMIND_LICENSE_KEY`,
      `GEOLITE2_DB_PATH` — country derivation; see "Country derivation
      (GeoLite2)" below. All optional, all fail safe (stronger safeguarding

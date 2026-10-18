@@ -144,6 +144,33 @@ describe('RegistrationEmailService', () => {
       expect(sent.TextBody + sent.HtmlBody).not.toMatch(/token|declined \d|\d of 3|three times/i);
     });
 
+    // Wording fix (backend/w3e): reached by an unanswered request, by a second
+    // lapse, AND by a request that was declined, reopened by the stale-decline
+    // sweep (B-126) and then not answered. The old text claimed "Your guardian
+    // did not respond to either approval request", untrue for a guardian who
+    // did respond by declining.
+    it('the second-expiry email says only what is true on every route: not approved in time, closed, grace days; never that the guardian did not respond', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-expired' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
+      );
+
+      await service.sendConsentExpiredEmail('minor@example.com', 'Ada', 30);
+
+      const sent = mockSendEmail.mock.calls[0][0] as { To: string; Subject: string; TextBody: string; HtmlBody: string };
+      expect(sent.To).toBe('minor@example.com');
+      expect(sent.Subject).toBe('Your Soccernity account was not approved in time');
+      expect(sent.TextBody).toContain('Hi Ada,');
+      expect(sent.TextBody).toContain('was not approved in time');
+      expect(sent.TextBody).toContain('permanently deleted in 30 days');
+      expect(sent.HtmlBody).toContain('was not approved in time');
+      expect(sent.HtmlBody).toContain('<strong>30 days</strong>');
+      // The untrue claim, in either body.
+      expect(sent.TextBody + sent.HtmlBody).not.toMatch(/did not respond|either approval request|either request/i);
+      // No history, no count, no credential.
+      expect(sent.TextBody + sent.HtmlBody).not.toMatch(/declin|\d of 3|three times|token/i);
+    });
+
     // B-028 (Decision Log #373, #394 A5)
     describe('guardian-approved-minor (B-028)', () => {
       const liveConfig = {
