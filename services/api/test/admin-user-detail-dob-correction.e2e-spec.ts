@@ -117,6 +117,92 @@ describe('Admin user detail + DOB correction e2e (real Postgres)', () => {
   const auditFor = (userId: string, action: string) =>
     getTestPrismaClient().adminActionLog.findMany({ where: { targetId: userId, action }, orderBy: { createdAt: 'asc' } });
 
+  // B-129 (Decision Log #406 item 4): User Detail WITHOUT the date of birth.
+  describe('GET /admin/users/:id/summary (B-129)', () => {
+    it('rejects an editor', async () => {
+      const editor = await createAdmin('summary-editor', 'editor');
+      const u = await createUser('summary-editor-blocked', 12);
+      await request(server()).get(`/admin/users/${u.userId}/summary`).set(auth(editor.token)).expect(403);
+    });
+
+    it('404s for an unknown user', async () => {
+      const moderator = await createAdmin('summary-404', 'moderator');
+      await request(server())
+        .get('/admin/users/00000000-0000-4000-8000-000000000000/summary')
+        .set(auth(moderator.token))
+        .expect(404);
+    });
+
+    it('returns the user with no DOB, no age tier and no stored ciphertext, and writes NO dob_viewed row', async () => {
+      const moderator = await createAdmin('summary-mod', 'moderator');
+      const u = await createUser('summary', 12);
+
+      const res = await request(server()).get(`/admin/users/${u.userId}/summary`).set(auth(moderator.token)).expect(200);
+
+      expect(res.body).toMatchObject({ id: u.userId, isMinor: true, isUnder16: true, accountStatus: 'active' });
+      expect(res.body.guardian.consentStatus).toBe('pending');
+      expect(res.body).not.toHaveProperty('dateOfBirth');
+      expect(res.body).not.toHaveProperty('ageTier');
+      // Neither the plaintext date nor the stored ciphertext is anywhere in the body.
+      const raw = JSON.stringify(res.body);
+      expect(raw).not.toContain(dobForAge(12));
+      expect(raw).not.toContain(String(new Date().getUTCFullYear() - 12));
+      expect(raw).not.toMatch(/"v1:/);
+      // And no token / counter leaked through the guardian block.
+      expect(raw).not.toMatch(/"(consentToken|withdrawalToken|stripePaymentIntentId|declineCount)"/);
+
+      expect(await getTestPrismaClient().adminActionLog.count({ where: { action: 'user.dob_viewed' } })).toBe(0);
+    });
+
+    it('the full read still returns the DOB and still audits it, after any number of summary reads', async () => {
+      const moderator = await createAdmin('summary-then-full', 'moderator');
+      const u = await createUser('summary-then-full', 12);
+      await request(server()).get(`/admin/users/${u.userId}/summary`).set(auth(moderator.token)).expect(200);
+      await request(server()).get(`/admin/users/${u.userId}/summary`).set(auth(moderator.token)).expect(200);
+      expect(await auditFor(u.userId, 'user.dob_viewed')).toHaveLength(0);
+
+      const full = await request(server()).get(`/admin/users/${u.userId}`).set(auth(moderator.token)).expect(200);
+      expect(full.body.dateOfBirth).toBe(dobForAge(12));
+      expect(await auditFor(u.userId, 'user.dob_viewed')).toHaveLength(1);
+    });
+  });
+
+  describe('a date in the correction reason is refused (B-129)', () => {
+    it.each([['Passport shows 2012-03-04'], ['Born 4 March 2012 per the certificate'], ['Entered 04/03/2012 by mistake']])(
+      '%j -> 400 reason_contains_date; the DOB, the guardian and the audit log are untouched',
+      async (reason) => {
+        const moderator = await createAdmin('reason-date', 'moderator');
+        const u = await createUser('reason-date', 12);
+        const before = await getTestPrismaClient().user.findUniqueOrThrow({ where: { id: u.userId } });
+
+        const res = await request(server())
+          .post(`/admin/users/${u.userId}/dob-correction`)
+          .set(auth(moderator.token))
+          .send({ dateOfBirth: dobForAge(15), reason })
+          .expect(400);
+
+        expect(res.body).toMatchObject({ code: 'reason_contains_date' });
+        const after = await getTestPrismaClient().user.findUniqueOrThrow({ where: { id: u.userId } });
+        expect(after.dateOfBirth).toBe(before.dateOfBirth);
+        expect(after.isUnder16).toBe(before.isUnder16);
+        expect(await auditFor(u.userId, 'user.dob_corrected')).toHaveLength(0);
+      },
+    );
+
+    it('the same correction with an ordinary reason succeeds and its audit row carries that reason', async () => {
+      const moderator = await createAdmin('reason-ok', 'moderator');
+      const u = await createUser('reason-ok', 12);
+      await request(server())
+        .post(`/admin/users/${u.userId}/dob-correction`)
+        .set(auth(moderator.token))
+        .send({ dateOfBirth: dobForAge(15), reason: 'Parent supplied a birth certificate showing a different year' })
+        .expect(200);
+      const rows = await auditFor(u.userId, 'user.dob_corrected');
+      expect(rows).toHaveLength(1);
+      expect(JSON.stringify(rows[0])).not.toContain(dobForAge(15));
+    });
+  });
+
   describe('GET /admin/users/:id (B-109)', () => {
     it('rejects an editor and writes no audit row', async () => {
       const editor = await createAdmin('editor', 'editor');

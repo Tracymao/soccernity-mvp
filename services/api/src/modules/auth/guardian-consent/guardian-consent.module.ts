@@ -9,6 +9,7 @@ import { CardRefundRetrySweepService } from './card-refund-retry-sweep.service';
 import { GuardianCardVerificationService } from './guardian-card-verification.service';
 import { GuardianConsentExpirySweepService } from './guardian-consent-expiry-sweep.service';
 import { GuardianConsentController } from './guardian-consent.controller';
+import { GuardianStaleDeclineSweepService } from './guardian-stale-decline-sweep.service';
 import { GuardianConsentSummaryController } from './guardian-consent-summary.controller';
 import { GuardianConsentSummaryService } from './guardian-consent-summary.service';
 import { GuardianConsentService } from './guardian-consent.service';
@@ -85,6 +86,8 @@ import { RedisModule } from '../../../redis/redis.module';
     GuardianConsentSummaryService,
     GuardianEmailChangeLimiter,
     GuardianConsentExpirySweepService,
+    // B-126: acts on declined-at-1-or-2 rows the minor never reopened.
+    GuardianStaleDeclineSweepService,
     GuardianCardVerificationService,
     CardRefundRetrySweepService,
     PrismaService,

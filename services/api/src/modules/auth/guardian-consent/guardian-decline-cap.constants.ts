@@ -1,3 +1,5 @@
+import { ConfigService } from '@nestjs/config';
+
 // B-102 / B-110 (Decision Log #389, #395 B2, #402, #403 items 2 and 15): the
 // guardian decline cap.
 //
@@ -18,6 +20,20 @@
 // it (#395 B2, #403 item 2 -- the decline page shows a static sentence, never
 // a running "N of 3").
 export const MAX_EXPLICIT_DECLINES = 3;
+
+// B-126 (Decision Log #406 item 1): how long a row declined at decline 1 or 2
+// may sit un-reopened (no resend, no change of guardian email) before the
+// platform puts it on the lapse path of an unanswered request. Measured from
+// Guardian.consentDeclinedAt. A configuration value, not a constant, because
+// counsel has not reviewed it: GUARDIAN_DECLINE_LAPSE_DAYS, default 14. A
+// missing, non-numeric or non-positive value falls back to the default (same
+// shape as getConsentTokenTtlHours).
+export const DEFAULT_DECLINE_LAPSE_DAYS = 14;
+
+export function getDeclineLapseDays(config: ConfigService): number {
+  const configured = Number(config.get('GUARDIAN_DECLINE_LAPSE_DAYS'));
+  return configured > 0 ? configured : DEFAULT_DECLINE_LAPSE_DAYS;
+}
 
 // Guardian.consentDeclineSource value written for an explicit decline
 // (mirrors DECLINE_SOURCE_BY_REASON.declined in guardian-consent.service.ts and

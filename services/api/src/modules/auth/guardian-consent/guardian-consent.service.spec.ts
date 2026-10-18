@@ -16,6 +16,7 @@ function buildFakeGuardian(
     consentStatus: string;
     consentTokenExpiresAt: Date;
     consentTimestamp: Date | null;
+    consentDeclinedAt: Date | null;
     cardVerificationRequired: boolean;
     cardVerifiedAt: Date | null;
   }> = {},
@@ -33,6 +34,7 @@ function buildFakeGuardian(
     // test deliberately overrides this into the past.
     consentTokenExpiresAt: new Date(Date.now() + ONE_HOUR_MS),
     consentTimestamp: null as Date | null,
+    consentDeclinedAt: null as Date | null,
     cardVerificationRequired: false,
     cardVerifiedAt: null as Date | null,
     ...overrides,
@@ -362,6 +364,8 @@ describe('GuardianConsentService', () => {
         guardianEmail: guardian!.email,
         canResend: true,
         consentTimestamp: null,
+        guardianFirstName: 'Guardian',
+        lastDecisionAt: null,
       });
     });
 
@@ -378,6 +382,8 @@ describe('GuardianConsentService', () => {
         guardianEmail: guardian!.email,
         canResend: false,
         consentTimestamp: confirmedAt,
+        guardianFirstName: 'Guardian',
+        lastDecisionAt: confirmedAt,
       });
     });
 
@@ -435,6 +441,8 @@ describe('GuardianConsentService', () => {
         guardianEmail: guardian!.email,
         canResend: true,
         consentTimestamp: null,
+        guardianFirstName: 'Guardian',
+        lastDecisionAt: null,
       });
     });
 

@@ -20,7 +20,7 @@ describe('AdminUsersController (HTTP layer)', () => {
   };
 
   // B-109 / B-103.
-  const adminUserDetailService = { getUserDetail: jest.fn() };
+  const adminUserDetailService = { getUserDetail: jest.fn(), getUserSummary: jest.fn() };
   const adminUserDobCorrectionService = { correctDateOfBirth: jest.fn() };
   const adminUserUsernameRevokeService = { revokeUsername: jest.fn() };
 
@@ -109,6 +109,33 @@ describe('AdminUsersController (HTTP layer)', () => {
     it('rejects a negative threshold with 400', async () => {
       currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
       await request(app.getHttpServer()).get('/admin/users/held-investigations?olderThanDays=-1').expect(400);
+    });
+  });
+
+  // B-129 (Decision Log #406 item 4): User Detail without the date of birth.
+  describe('GET /admin/users/:id/summary (B-129)', () => {
+    it('is closed to an editor (moderator / superadmin only, like the rest of the controller)', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'editor', aud: 'admin-console' };
+      await request(app.getHttpServer()).get('/admin/users/u1/summary').expect(403);
+      expect(adminUserDetailService.getUserSummary).not.toHaveBeenCalled();
+    });
+
+    it.each(['moderator', 'superadmin'])('serves the summary to a %s, and never touches the DOB read', async (role) => {
+      currentAdmin = { sub: 'admin-1', role, aud: 'admin-console' };
+      adminUserDetailService.getUserSummary.mockResolvedValue({ id: 'u1', email: 'a@example.com' });
+      const res = await request(app.getHttpServer()).get('/admin/users/u1/summary').expect(200);
+      expect(res.body).toEqual({ id: 'u1', email: 'a@example.com' });
+      expect(adminUserDetailService.getUserSummary).toHaveBeenCalledWith('u1');
+      // The audited DOB read is a different route and a different method.
+      expect(adminUserDetailService.getUserDetail).not.toHaveBeenCalled();
+    });
+
+    it('the full read is still its own route, still audited under the admin id', async () => {
+      currentAdmin = { sub: 'admin-9', role: 'moderator', aud: 'admin-console' };
+      adminUserDetailService.getUserDetail.mockResolvedValue({ id: 'u1' });
+      await request(app.getHttpServer()).get('/admin/users/u1').expect(200);
+      expect(adminUserDetailService.getUserDetail).toHaveBeenCalledWith('u1', 'admin-9');
+      expect(adminUserDetailService.getUserSummary).not.toHaveBeenCalled();
     });
   });
 

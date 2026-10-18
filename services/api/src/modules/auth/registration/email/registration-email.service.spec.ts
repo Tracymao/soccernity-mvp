@@ -124,6 +124,26 @@ describe('RegistrationEmailService', () => {
       expect(sent.TextBody).not.toMatch(/token|code is|consent code/i);
     });
 
+    // B-126 (Decision Log #406 item 1)
+    it('warns the minor after a declined-and-abandoned request: new request sent, closure if unanswered, no decline count, not the "first request expired" wording', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-lapse' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
+      );
+
+      await service.sendConsentDeclineLapseReminderEmail('minor@example.com', 'Ada', 'parent@example.com');
+
+      const sent = mockSendEmail.mock.calls[0][0] as { To: string; Subject: string; TextBody: string; HtmlBody: string };
+      expect(sent.To).toBe('minor@example.com');
+      expect(sent.Subject).toBe('Your Soccernity account still needs guardian approval');
+      expect(sent.TextBody).toContain('parent@example.com');
+      expect(sent.TextBody).toContain('closed and scheduled for deletion');
+      // The existing reminder's claim would be untrue here: the guardian answered.
+      expect(sent.TextBody).not.toMatch(/first request has now expired/i);
+      // Never a credential, never a running count.
+      expect(sent.TextBody + sent.HtmlBody).not.toMatch(/token|declined \d|\d of 3|three times/i);
+    });
+
     // B-028 (Decision Log #373, #394 A5)
     describe('guardian-approved-minor (B-028)', () => {
       const liveConfig = {

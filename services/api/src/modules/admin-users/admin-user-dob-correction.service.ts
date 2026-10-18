@@ -13,6 +13,11 @@ import { computeIsMinor, computeIsUnder16, isPlausibleDateOfBirth } from '../aut
 import { AgeTier, ageTierFor } from '../auth/registration/age-tier.util';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
 import { CorrectDobDto } from './dto/correct-dob.dto';
+import {
+  REASON_CONTAINS_DATE_CODE,
+  REASON_CONTAINS_DATE_MESSAGE,
+  containsDateShapedString,
+} from './reason-date-check.util';
 
 // What the correction did to the guardian request. Reported to the admin and
 // recorded in the audit entry.
@@ -87,6 +92,13 @@ export class AdminUserDobCorrectionService {
     const reason = dto.reason.trim();
     if (reason.length < 10) {
       throw new BadRequestException('A reason of at least 10 characters is required.');
+    }
+    // B-129 (Decision Log #406 item 4): the audit row never holds a date of
+    // birth. Checked before any database work, so a refused call changes and
+    // reads nothing. See reason-date-check.util.ts for what it can and cannot
+    // catch.
+    if (containsDateShapedString(reason)) {
+      throw new BadRequestException({ code: REASON_CONTAINS_DATE_CODE, message: REASON_CONTAINS_DATE_MESSAGE });
     }
 
     const now = new Date();
@@ -168,6 +180,8 @@ export class AdminUserDobCorrectionService {
             consentTokenExpiresAt: computeConsentTokenExpiresAt(this.config),
             consentAutoResentAt: null,
             consentDeclineSource: null,
+            // B-126/B-131: the request this described no longer exists.
+            consentDeclinedAt: null,
             declineCount: 0,
             incorrectDetailsReportedAt: null,
             withdrawalToken: null,

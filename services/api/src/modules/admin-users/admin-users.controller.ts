@@ -64,6 +64,15 @@ export class AdminUsersController {
     return this.adminUserDetailService.getUserDetail(id, admin.sub);
   }
 
+  // B-129 (Decision Log #406 item 4): User Detail WITHOUT the date of birth.
+  // Neither selects nor decrypts a DOB, so it writes no user.dob_viewed audit
+  // row. The screen uses this; GET /admin/users/:id above stays for the
+  // correction form only.
+  @Get(':id/summary')
+  async summary(@Param('id') id: string) {
+    return this.adminUserDetailService.getUserSummary(id);
+  }
+
   // B-103 (Decision Log #390, #395 B4): audited DOB correction. Moderator /
   // superadmin, the same class-level gate as the rest of this controller.
   @Post(':id/dob-correction')

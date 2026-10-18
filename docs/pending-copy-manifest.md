@@ -48,6 +48,7 @@ The guard above covers `apps/web` and `apps/admin` only. That scope is decided (
 
 - `services/api/src/modules/auth/registration/email/registration-email.service.ts`, template `guardian-approved-minor`: the approval email to the minor ("approved, continue registration"). The tag is in a code comment, not in the string.
 - Same file, template `guardian-consent-declined`: the email sent only for the third decline (no running count). The tag is in a code comment.
+- Same file, template `guardian-consent-decline-lapse-reminder` (B-126): the email to the minor when a declined-and-never-reopened request is put on the lapse path (a new request has gone to the guardian; a second lapse closes the account; no decline count). The tag is in a code comment.
 - Same file, template `username-revoked`: the email to a user whose username an admin revoked (carries no admin free text). The tag is in a code comment.
 - Not tagged, and not decided whether they should be: the other templates that describe a child or a guardian (`guardian-consent`, `guardian-consent-withdrawal-request`, `guardian-consent-withdrawn`, `guardian-consent-reminder`, `guardian-consent-expired`, `guardian-minor-turned-18`, `guardian-email-replaced`, `report-actioned`, `appeal-decision`).
 - Open: whether the guard is ever extended to `services/api` (for example a manifest of email templates and a release check), and who clears these strings with counsel.

@@ -306,3 +306,21 @@ correction unless the account was an adult or the corrected age newly needs the 
 step; an account on the deletion path has its DOB fixed but no request restarted;
 moderators may correct and read a DOB (the register left the role open).
 
+
+## B-129 User Detail without the date of birth (`backend/w3d-decline-lapse-resend-summary`)
+
+| Route | Service | Notes |
+|---|---|---|
+| `GET /admin/users/:id/summary` | `AdminUserDetailService.getUserSummary` | the User Detail read WITHOUT the date of birth and the age tier |
+
+Same class-level guards as the rest of the controller. The DOB column is never
+selected, so there is nothing to decrypt and **no `user.dob_viewed` row is written**.
+`GET /admin/users/:id` is unchanged and stays for the correction form (audited).
+
+**Reason check.** `POST /admin/users/:id/dob-correction` now rejects a `reason` that
+contains a date-shaped string with `400 { code: "reason_contains_date" }`, before any
+database work (`reason-date-check.util.ts`). It catches numeric dates with separators
+(2010-03-04, 04/03/2010, 4.3.10), eight-digit dates, and month names beside a day or a
+year. It does NOT catch a bare year, a date spelled out in words, or an obfuscated one:
+free text cannot be proven free of every date form, so it errs towards false positives
+(a version number such as 1.2.34 is rejected).
