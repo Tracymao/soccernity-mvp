@@ -4,6 +4,8 @@ Generated 2026-10-18 (Figma pass K, `figma/pass-k-admin-incorrect-details-archiv
 
 **Updated 2026-10-18 by Figma pass K2** (`figma/pass-k2-profile-frames-and-states`): the four legacy profile frames are now archived (section 1g), the carousel and Message archive-name findings are fixed (section 4), and 13 hidden archived nodes that came along when frames were cloned are listed in section 2f. Live count taken at the end of K2 with `findAll` on every node whose name starts with `ARCHIVED`: **414** = **61 top-level** + **353 nested**, in **83** host frames. The figures below (397 = 57 + 340, 81 hosts) were the founder's count before K2; 397 + 4 top-level (section 1g) + 13 nested (section 2f) = 414, so K2 closes the gap, and no unexplained difference remains.
 
+**Updated 2026-10-18 by Figma pass K3** (`figma/pass-k3-own-saved-desktop`): the legacy own-Saved desktop frame `1460:8940` is now archived (section 1g, fifth row) after its replacement `6747:29445` was rebuilt to match it, and one hidden nested node, `6747:29556` (the K2 profile column that K3 replaced inside `6747:29445`), is listed in section 2g. Live count taken at the end of K3 with `findAll` on every node whose name starts with `ARCHIVED`: **416** = **62 top-level** + **354 nested** (K2: 414 = 61 + 353; +1 top-level for `1460:8940`, +1 nested for `6747:29556`; no other change). The K3 report is `docs/figma-pass-k3-report.md`.
+
 Previous counts (corrected 2026-10-18 to the live figures given by the founder): **397** archived nodes = **57 top-level frames** (section 1) + **340 nested nodes** (section 2) inside **81** host frames. The first version of this index said 398 = 57 + 341; the live count is one lower. The figures are the founder's; this docs-only change did not re-count the canvas, and the host-frame count (81) was not re-checked. Nothing in this index lists a node removed after pass K, so the one-node difference is recorded, not explained. Pass K also removed one hidden `ARCHIVED — Button — Retry` that came along when the incorrect-details Load Error frame was cloned, because it was an artefact of the clone, not an original; it was never one of the counted nodes.
 
 How to use it: section 1 answers "where is the old frame and what replaced it". Section 2 answers "which hidden originals sit inside this live frame". To find an id on the canvas, paste it into Figma search or use the id in a plugin call.
@@ -113,7 +115,7 @@ All at y -13200. Names state: contests are not admin-judged (Decision Log #381, 
 
 Pass K note: the two archived Contest-page Final week frames sample 9 finalists; the live carousel samples 6 (see the note on `6664:27284` and `6664:27301`). They were not edited.
 
-### 1g. Legacy profile frames (4), superseded by the general profile frames (pass K2, B-138)
+### 1g. Legacy profile frames (5), superseded by the general profile frames (pass K2 for four, pass K3 for the fifth; B-138)
 
 Archived in pass K2 only after each replacement existed and a page-wide scan found no reaction still pointing at it (the one reaction that did, the mobile drawer "Signed in as" link, was re-pointed first). Hidden; names now read "ARCHIVED — ... (superseded by id name)". Not deleted.
 
@@ -123,12 +125,13 @@ Archived in pass K2 only after each replacement existed and a page-wide scan fou
 | `1455:6626` | User's Media feed — Own profile variant (#396 C1), desktop, legacy absolute layout | `6747:29291` Profile — Own — Media — Desktop (own Posts `6747:29094`, own Saved `6747:29445`) | -43832, -8208, 1440 x 2660 |
 | `5702:8250` | Community — Profile — Own — Mobile (#396 C1) | `6747:29642` Profile — Own — Posts — Mobile (the mobile drawer "Signed in as" link now targets it) | 8531, 23522, 390 x 630 |
 | `5778:8490` | Community — Profile · Media — Mobile | `6747:29709` Profile — Own — Media — Mobile | 9531, 23522, 390 x 833 |
+| `1460:8940` | User's Saved Posts — Own profile variant (#396 C1), desktop, legacy absolute layout (archived by pass K3; name now "ARCHIVED — Profile — Own — Saved — Desktop (superseded by 6747:29445)") | `6747:29445` Profile — Own — Saved — Desktop, rebuilt in K3 to match it (`docs/figma-pass-k3-report.md`) | -42236, -8208, 1440 x 2709 |
 
-Not archived and still live: `1460:8940` Saved Posts — Own profile variant (legacy, absolute layout; replacement `6747:29445` now exists, see `docs/figma-pass-k2-report.md` candidate 6), `5778:8567` Profile · Saved — Mobile, `6669:27188` other-user mobile.
+Not archived and still live: `5778:8567` Profile · Saved — Mobile, `6669:27188` other-user mobile.
 
 Inside the two desktop frames the Navbar instance reports 0 sub-layers while the frame is hidden (105 when visible, as on the unarchived `1460:8940`), so a `findAll` count of each hidden frame is 105 lower than before (2336 to 2231, 2291 to 2186). Verified by counting the same frame hidden and shown and by comparing with `1460:8940`; nothing was removed.
 
-## 2. Nested archived nodes (353), grouped by host frame
+## 2. Nested archived nodes (354 after K3; 353 before), grouped by host frame
 
 Each host frame is live (visible) unless it says otherwise. "Pass J" nodes are the original local Pill, Button, Banner, Callout, Dialog frames that were replaced by an instance of the shared component and kept hidden next to it. The name of each node carries the reason in brackets; the ids are listed so every one is findable.
 
@@ -240,6 +243,14 @@ These are copies of the hidden originals listed in sections 2b and 2e; they came
 | `6748:29450` same, Mobile (1640, 81800) | Row — Build a player profile `6748:29476` |
 | `6752:29980` Admin — User — Correct Date of Birth — Adult To Minor — Guardian Details (82840, -3400) | Pill — Support action `6752:29986`; Button — Back to user `6752:29989`; Callout — consequences `6752:30008`; Button — Review correction `6752:30013`; Button — Cancel `6752:30016` (all replaced by instance, pass J) |
 | `6752:30141` same, Validation (84460, -3400) | Pill — Support action `6752:30147`; Button — Back to user `6752:30150`; Banner — validation `6752:30154`; Callout — consequences `6752:30179`; Button — Review correction `6752:30184`; Button — Cancel `6752:30187` |
+
+### 2g. Added by pass K3
+
+| Host frame | Hidden archived node |
+|---|---|
+| `6747:29445` Profile — Own — Saved — Desktop (4920, 77200) | `6747:29556` "ARCHIVED — K2 profile column (superseded by K3 rebuild)": the 85-node single-column body that K2 built and K3 replaced with the three-column body. Kept hidden, not deleted, so the founder can compare or delete it. |
+
+The Navbar instance inside the archived `1460:8940` reports 0 sub-layers while the frame is hidden, so a `findAll` count of it is 105 lower than before (2364 to 2259). Nothing was removed.
 
 ## 3. Things this index does not cover
 
