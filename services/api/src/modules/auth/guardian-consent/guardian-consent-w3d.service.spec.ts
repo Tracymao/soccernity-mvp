@@ -6,7 +6,10 @@ import { GuardianConsentService, guardianFirstNameOf } from './guardian-consent.
 // row 'declined', and reissueConsentToken can spend the automatic chase while
 // reopening a declined row and reports whether it actually sent anything.
 
-const NOW = new Date('2026-10-18T12:00:00Z');
+// Taken from the real clock, not a fixed date: the service compares
+// consentTokenExpiresAt with Date.now(), so a hard-coded NOW makes the
+// "still valid" token fixtures expire once real time passes it (CI failed on this).
+const NOW = new Date();
 
 function guardianRow(over: Record<string, unknown> = {}) {
   return {
