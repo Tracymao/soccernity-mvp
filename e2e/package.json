@@ -1,0 +1,14 @@
+{
+  "name": "@soccernity/e2e-onboarding",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Browser end-to-end QA for the onboarding flow. NOT an npm workspace member (the root workspaces globs are apps/*, services/*, packages/*), so installing it never touches the root lockfile. See docs/qa-e2e-onboarding-report.md.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.49.1",
+    "@types/node": "^22.0.0"
+  }
+}
