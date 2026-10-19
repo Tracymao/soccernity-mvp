@@ -10,6 +10,8 @@ import {
   emailsFor,
   type Account,
 } from '../support/helpers';
+import { adminPage } from '../support/admin-ui';
+import { URLS } from '../support/stack';
 
 async function guardianPage(browser: Browser): Promise<Page> {
   return (await browser.newContext()).newPage();
@@ -72,18 +74,28 @@ test.describe.serial('guardian reports incorrect details', () => {
     expect(res.status).toBe(400);
   });
 
-  test('support (admin API) sees the report; there is no admin UI screen for it yet (B-120)', async ({ browser }) => {
+  test('support sees the report in the API and on the admin screen (B-120); no date of birth anywhere', async ({
+    browser,
+  }) => {
     const admin = await getAdminToken();
     const list = await api('GET', '/admin/users/incorrect-details-reports', { token: admin });
     expect(list.status).toBe(200);
     const rows: any[] = list.body.items ?? list.body;
     expect(rows.some((r) => r.userId === acct.userId || r.id === acct.userId || r.minorUserId === acct.userId)).toBe(true);
-    // The admin SPA has no such screen: its router falls through to Not found.
-    const ctx = await browser.newContext();
-    const page = await ctx.newPage();
-    await page.goto('http://localhost:5274/users/incorrect-details-reports');
-    await expect(page).toHaveURL(/\/login$|incorrect-details-reports$/);
-    await ctx.close();
+
+    const page = await adminPage(browser);
+    // Reached from the Users list (sidebar host: Users).
+    await page.goto(`${URLS.admin}/users`);
+    await page.getByRole('link', { name: 'Incorrect-details reports' }).click();
+    await expect(page).toHaveURL(/\/users\/incorrect-details-reports$/);
+    await expect(page.getByRole('heading', { name: 'Incorrect-details reports' })).toBeVisible();
+    const row = page.getByRole('row').filter({ hasText: acct.guardianEmail!.toLowerCase() });
+    await expect(row).toHaveCount(1);
+    await expect(row.getByText('Pending')).toBeVisible();
+    const text = (await page.locator('.us-page').innerText()).toLowerCase();
+    expect(text).not.toMatch(/date of birth:|born/);
+    await page.screenshot({ path: '.run/shots/admin-incorrect-details-reports.png', fullPage: true });
+    await page.context().close();
   });
 
   test('a non-admin token cannot reach the admin endpoints', async () => {
@@ -91,10 +103,18 @@ test.describe.serial('guardian reports incorrect details', () => {
     expect(res.status).toBe(401);
   });
 
-  test('support resolves the report; the hold is lifted and the guardian can approve', async ({ browser }) => {
-    const admin = await getAdminToken();
-    const resolved = await api('POST', `/admin/users/${acct.userId}/incorrect-details-report/resolve`, { token: admin });
-    expect([200, 201, 204]).toContain(resolved.status);
+  test('support resolves the report in the admin UI; the hold is lifted and the guardian can approve', async ({
+    browser,
+  }) => {
+    const ap = await adminPage(browser);
+    await ap.goto(`${URLS.admin}/users/incorrect-details-reports`);
+    const row = ap.getByRole('row').filter({ hasText: acct.guardianEmail!.toLowerCase() });
+    await row.getByRole('button', { name: 'Resolve' }).click();
+    const dialog = ap.getByRole('dialog');
+    await expect(dialog).toContainText('Resolve incorrect-details report');
+    await dialog.getByRole('button', { name: 'Resolve report' }).click();
+    await expect(row).toHaveCount(0); // the row leaves the list
+    await ap.context().close();
     expect((await userByEmail(acct.email)).guardian.incorrectDetailsReportedAt).toBeNull();
 
     const page = await guardianPage(browser);
@@ -106,6 +126,34 @@ test.describe.serial('guardian reports incorrect details', () => {
     await page.context().close();
     expect((await userByEmail(acct.email)).guardian.consentStatus).toBe('confirmed');
     expect(emailsFor(acct.email, 'guardian-approved-minor')).toHaveLength(1);
+  });
+
+  test('UI: resolving a report that was already resolved shows the drawn 404 message, not a crash', async ({
+    browser,
+  }) => {
+    // A second report, resolved behind the admin's back through the API after the list loaded.
+    const other = await registerViaApi({ age: 15, label: 'incorrect-404' });
+    const consent = await waitForEmail(other.guardianEmail!, 'guardian-consent');
+    const otherToken = new URL(consent.data.link).searchParams.get('token')!;
+    const reported = await api('POST', '/auth/guardian-consent/report-incorrect-details', {
+      body: { consentToken: otherToken },
+    });
+    expect(reported.status).toBeLessThan(300);
+
+    const ap = await adminPage(browser);
+    await ap.goto(`${URLS.admin}/users/incorrect-details-reports`);
+    const row = ap.getByRole('row').filter({ hasText: other.guardianEmail!.toLowerCase() });
+    await expect(row).toHaveCount(1);
+    await row.getByRole('button', { name: 'Resolve' }).click();
+    const admin = await getAdminToken();
+    const raced = await api('POST', `/admin/users/${other.userId}/incorrect-details-report/resolve`, { token: admin });
+    expect(raced.status).toBeLessThan(300);
+    await ap.getByRole('dialog').getByRole('button', { name: 'Resolve report' }).click();
+    await expect(
+      ap.getByText('No open incorrect-details report for this user. It may already have been resolved, so the list has been refreshed.'),
+    ).toBeVisible();
+    await expect(ap.getByRole('row').filter({ hasText: other.guardianEmail!.toLowerCase() })).toHaveCount(0);
+    await ap.context().close();
   });
 
   test('resolving a report that is not open is a clean 404/409, not a 500', async () => {

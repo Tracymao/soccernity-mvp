@@ -110,6 +110,98 @@ export function getUserDetail(id: string): Promise<AdminUserDetail> {
   return adminFetch<AdminUserDetail>(`/admin/users/${id}`);
 }
 
+// --- B-129: User Detail without the date of birth ---
+//
+// GET /admin/users/:id/summary (services/api admin-user-detail.service.ts,
+// `AdminUserSummary`). It never selects the date of birth, so it writes no
+// `user.dob_viewed` audit row. The User Detail screen reads THIS; only the
+// date-of-birth correction form reads getUserDetail() above.
+export interface AdminUserSummary {
+  id: string;
+  email: string;
+  displayName: string;
+  username: string | null;
+  role: string;
+  accountStatus: string;
+  verificationStatus: string;
+  isMinor: boolean;
+  isUnder16: boolean;
+  createdAt: string;
+  pendingDeletionAt: string | null;
+  safeguardingCountry: {
+    declared: string | null;
+    derived: string | null;
+    method: string | null;
+    derivedAt: string | null;
+  };
+  guardian: {
+    name: string;
+    email: string;
+    relationship: string;
+    consentStatus: string;
+    consentDeclineSource: string | null;
+    consentTimestamp: string | null;
+    consentTokenExpiresAt: string;
+    incorrectDetailsReportedAt: string | null;
+    cardVerificationRequired: boolean;
+    cardVerifiedAt: string | null;
+    consentVerificationMethod: string | null;
+  } | null;
+  usernameRevocations: Array<{ username: string; revokedAt: string; heldUntil: string }>;
+}
+
+export function getUserSummary(id: string): Promise<AdminUserSummary> {
+  return adminFetch<AdminUserSummary>(`/admin/users/${id}/summary`);
+}
+
+// --- B-033: audited username revoke ---
+//
+// POST /admin/users/:id/username-revoke. `reason` is required (10-500
+// characters) and goes to the audit log only. 409 when the user has no
+// username, was anonymised, or the handle changed mid-request; 404 for an
+// unknown user.
+export interface UsernameRevokeResult {
+  userId: string;
+  revokedUsername: string;
+  /** ISO timestamp: until when nobody can take the handle. */
+  heldUntil: string;
+}
+
+export function revokeUsername(id: string, reason: string): Promise<UsernameRevokeResult> {
+  return adminFetch<UsernameRevokeResult>(`/admin/users/${id}/username-revoke`, { method: "POST", body: { reason } });
+}
+
+// --- B-029 / B-120: guardians' incorrect-details reports ---
+//
+// GET /admin/users/incorrect-details-reports: oldest first, capped by the
+// server (`truncated` is true when more open reports exist than `items`
+// holds). Carries no date of birth. POST .../incorrect-details-report/resolve
+// takes no body; 404 means there is no open report for that user (already
+// resolved, usually by another admin), an expected outcome.
+export interface IncorrectDetailsReport {
+  userId: string;
+  minorDisplayName: string;
+  minorAccountStatus: string;
+  guardianName: string;
+  guardianEmail: string;
+  consentStatus: string;
+  /** ISO timestamp. */
+  reportedAt: string;
+}
+
+export interface IncorrectDetailsReportList {
+  items: IncorrectDetailsReport[];
+  truncated: boolean;
+}
+
+export function listIncorrectDetailsReports(): Promise<IncorrectDetailsReportList> {
+  return adminFetch<IncorrectDetailsReportList>("/admin/users/incorrect-details-reports");
+}
+
+export function resolveIncorrectDetailsReport(userId: string): Promise<{ resolved: true }> {
+  return adminFetch<{ resolved: true }>(`/admin/users/${userId}/incorrect-details-report/resolve`, { method: "POST" });
+}
+
 export const GUARDIAN_RELATIONSHIPS = ["Parent", "Legal Guardian", "Grandparent", "Other"] as const;
 export type GuardianRelationship = (typeof GUARDIAN_RELATIONSHIPS)[number];
 

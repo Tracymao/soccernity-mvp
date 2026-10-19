@@ -190,7 +190,13 @@ export default function UsersPage() {
               disabled rather than inventing a registration path (a
               Decision Log candidate for the founder, see
               admin-users/README.md). */}
-          <StubButton>Add Member</StubButton>
+          <div className="us-actions__row">
+            {/* B-120: entry to the guardians' incorrect-details reports (sidebar host: Users). */}
+            <Link to="/users/incorrect-details-reports" className="us-btn us-btn--outline">
+              Incorrect-details reports
+            </Link>
+            <StubButton>Add Member</StubButton>
+          </div>
         </div>
 
         <p className="us-note">

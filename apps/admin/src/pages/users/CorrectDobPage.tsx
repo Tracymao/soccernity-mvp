@@ -20,11 +20,18 @@
 // The response echoes neither date; the success screen shows the values the
 // admin typed, which this page still holds in memory.
 //
-// NOT IN THE FIGMA FRAMES (flagged, built plainly): when an adult account is
-// corrected to a minor and no guardian is on file the server answers 400
-// "...Provide guardian name, email and relationship." The frames do not design
-// guardian inputs, so the form reveals them only after that server message
-// rather than duplicating the age rule client-side.
+// GUARDIAN DETAILS (B-104, frames 6752:29980 and 6752:30141): when the new date
+// makes the account a minor and no guardian is on file (`user.guardian` is null
+// on the full read), the form shows the drawn "Guardian details" block up front
+// (full name, email, relationship) and refuses to continue without all three
+// ("Enter the guardian's name, email and relationship."). The server remains the
+// authority: if it still answers 400 "...Provide guardian name, email and
+// relationship." (for example the account changed under the admin), the block
+// is shown then, as before.
+//
+// A date inside the reason is refused twice: client-side (`reasonHasDate`) and,
+// authoritatively, by the server (400 `reason_contains_date`, B-129), whose
+// message is shown under the reason field.
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -42,6 +49,18 @@ import "./users.css";
 
 const REASON_MIN = 10;
 const REASON_MAX = 500;
+
+const SERVER_REASON_DATE_CODE = "reason_contains_date";
+
+/** True when `isoDate` (YYYY-MM-DD) is less than 18 years before today (UTC). */
+function isMinorOn(isoDate: string): boolean {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  if (!y || !m || !d) return false;
+  const now = new Date();
+  let age = now.getUTCFullYear() - y;
+  if (now.getUTCMonth() + 1 < m || (now.getUTCMonth() + 1 === m && now.getUTCDate() < d)) age -= 1;
+  return age < 18;
+}
 
 const TIER_LABEL: Record<AdminAgeTier, string> = {
   under_13: "under 13",
@@ -80,7 +99,8 @@ export default function CorrectDobPage() {
   const [newDob, setNewDob] = useState("");
   const [reason, setReason] = useState("");
   const [fieldError, setFieldError] = useState<{ dob?: string; reason?: string } | null>(null);
-  const [needsGuardian, setNeedsGuardian] = useState(false);
+  const [serverNeedsGuardian, setServerNeedsGuardian] = useState(false);
+  const [guardianInvalid, setGuardianInvalid] = useState(false);
   const [guardianName, setGuardianName] = useState("");
   const [guardianEmail, setGuardianEmail] = useState("");
   const [guardianRelationship, setGuardianRelationship] = useState<GuardianRelationship | "">("");
@@ -90,6 +110,9 @@ export default function CorrectDobPage() {
 
   const label = user ? `${user.displayName}${user.username ? ` (@${user.username})` : ""}` : "";
   const currentDob = user?.dateOfBirth ?? null;
+  // Adult -> minor with no guardian on file (the drawn Guardian Details state).
+  const needsGuardian =
+    serverNeedsGuardian || Boolean(user && user.guardian === null && newDob && isMinorOn(newDob));
 
   function validate(): boolean {
     const errors: { dob?: string; reason?: string } = {};
@@ -113,9 +136,11 @@ export default function CorrectDobPage() {
     setSubmitError(null);
     if (!validate()) return;
     if (needsGuardian && (!guardianName.trim() || !guardianEmail.trim() || !guardianRelationship)) {
-      setSubmitError("Enter the guardian's name, email and relationship.");
+      setGuardianInvalid(true);
+      setSubmitError("Enter the guardian’s name, email and relationship.");
       return;
     }
+    setGuardianInvalid(false);
     setStage("confirm");
   }
 
@@ -140,11 +165,16 @@ export default function CorrectDobPage() {
       setStage("done");
     } catch (err) {
       const message = err instanceof AdminApiError ? err.message : "Couldn't apply the correction.";
+      const code = err instanceof AdminApiError ? (err.body as { code?: string } | null)?.code : undefined;
       if (err instanceof AdminApiError && err.status === 400 && /provide guardian/i.test(message)) {
         // The server needs guardian details for this correction (see header comment).
-        setNeedsGuardian(true);
+        setServerNeedsGuardian(true);
         setStage("form");
         setSubmitError(message);
+      } else if (code === SERVER_REASON_DATE_CODE) {
+        // The server's own date-in-reason check (B-129): back to the form, message under the reason.
+        setStage("form");
+        setFieldError({ reason: message });
       } else {
         setSubmitError(message);
       }
@@ -181,6 +211,12 @@ export default function CorrectDobPage() {
             <button type="button" className="us-link" onClick={reload}>
               Retry
             </button>
+          </p>
+        ) : null}
+
+        {user && stage === "form" && submitError ? (
+          <p className="us-error" role="alert">
+            {submitError}
           </p>
         ) : null}
 
@@ -243,13 +279,14 @@ export default function CorrectDobPage() {
                 <legend>Guardian details</legend>
                 <p className="ud-field__help">
                   This correction makes the account a minor and no guardian is on file. The consent request goes to
-                  this address.
+                  this address. [COPY PENDING LEGAL REVIEW]
                 </p>
                 <div className="ud-field">
                   <label htmlFor="guardian-name">Guardian&rsquo;s full name</label>
                   <input
                     id="guardian-name"
                     className="ud-input"
+                    aria-invalid={guardianInvalid && !guardianName.trim() ? true : undefined}
                     value={guardianName}
                     onChange={(event) => setGuardianName(event.target.value)}
                   />
@@ -260,6 +297,7 @@ export default function CorrectDobPage() {
                     id="guardian-email"
                     type="email"
                     className="ud-input"
+                    aria-invalid={guardianInvalid && !guardianEmail.trim() ? true : undefined}
                     value={guardianEmail}
                     onChange={(event) => setGuardianEmail(event.target.value)}
                   />
@@ -269,6 +307,7 @@ export default function CorrectDobPage() {
                   <select
                     id="guardian-relationship"
                     className="ud-input"
+                    aria-invalid={guardianInvalid && !guardianRelationship ? true : undefined}
                     value={guardianRelationship}
                     onChange={(event) => setGuardianRelationship(event.target.value as GuardianRelationship | "")}
                   >
@@ -287,12 +326,6 @@ export default function CorrectDobPage() {
               Correcting the date of birth re-runs the age-tier checks and can start the guardian flow. You confirm
               the consequences before anything changes. [COPY PENDING LEGAL REVIEW]
             </div>
-
-            {submitError ? (
-              <p className="us-error" role="alert">
-                {submitError}
-              </p>
-            ) : null}
 
             <div className="ud-buttons">
               <button type="submit" className="us-btn us-btn--primary us-btn--lg">

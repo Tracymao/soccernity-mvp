@@ -40,6 +40,7 @@ import AddCategoryPage from "../pages/categories/AddCategoryPage";
 import UsersPage from "../pages/users/UsersPage";
 import UserDetailPage from "../pages/users/UserDetailPage";
 import CorrectDobPage from "../pages/users/CorrectDobPage";
+import IncorrectDetailsReportsPage from "../pages/users/IncorrectDetailsReportsPage";
 import MediaLibraryPage from "../pages/media/MediaLibraryPage";
 import MediaPreviewPage from "../pages/media/MediaPreviewPage";
 import MediaUploadPage from "../pages/media/MediaUploadPage";
@@ -84,6 +85,9 @@ export const adminRoutes: RouteObject[] = [
           // date-of-birth correction (POST /admin/users/:id/dob-correction).
           // `:id` is a UUID segment; the literal path below it wins for the
           // correction form.
+          // B-120: guardians' incorrect-details reports. A static segment, so it
+          // outranks `users/:id` above.
+          { path: "users/incorrect-details-reports", element: <IncorrectDetailsReportsPage /> },
           { path: "users/:id", element: <UserDetailPage /> },
           { path: "users/:id/dob-correction", element: <CorrectDobPage /> },
           // Real screens (sprint-5/admin-moderation-queue-frontend) — wired
