@@ -84,6 +84,9 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
   const [username, setUsername] = useState(user.username ?? "");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Errors that belong to the username field (the server's username_* codes,
+  // a 409 "already taken") show under that field instead of at the bottom.
+  const [usernameError, setUsernameError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   const [managePanel, setManagePanel] = useState<ManagePanel>(null);
@@ -117,6 +120,7 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
   async function handleSave(event: FormEvent) {
     event.preventDefault();
     setSaveError(null);
+    setUsernameError(null);
     setSaveSuccess(false);
 
     const displayName = `${firstName.trim()} ${lastName.trim()}`.trim();
@@ -125,26 +129,40 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
       return;
     }
 
-    // Username is only sent when it changed. Empty clears it (null), which
-    // returns the account to showing its full name to other users.
+    // A username is required and cannot be cleared (the server answers 400
+    // `username_required`), so this never sends `null` (B-133). It is sent only
+    // when it changed to a non-empty value; emptying an existing one is refused
+    // here with the same message instead of making a request.
     const trimmedUsername = username.trim();
     const usernameChanged = trimmedUsername !== (user.username ?? "");
-    if (usernameChanged && trimmedUsername && !USERNAME_PATTERN.test(trimmedUsername)) {
-      setSaveError("Username must be 3-30 characters: letters, numbers and underscores only.");
+    if (usernameChanged && !trimmedUsername && user.username) {
+      setUsernameError("A username can't be removed. You can change it to a different one.");
       return;
     }
+    if (usernameChanged && trimmedUsername && !USERNAME_PATTERN.test(trimmedUsername)) {
+      setUsernameError("Username must be 3-30 characters: letters, numbers and underscores only.");
+      return;
+    }
+    const sendUsername = usernameChanged && trimmedUsername !== "";
 
     setSaving(true);
     try {
       const updated = await updateUser(accessToken, user.id, {
         displayName,
         ...(phone.trim() ? { phone: phone.trim() } : {}),
-        ...(usernameChanged ? { username: trimmedUsername ? trimmedUsername : null } : {}),
+        ...(sendUsername ? { username: trimmedUsername } : {}),
       });
       setSaveSuccess(true);
       onSaved(updated);
     } catch (error) {
-      setSaveError(error instanceof UsersApiError ? error.message : "Couldn't save those changes.");
+      if (error instanceof UsersApiError) {
+        const aboutUsername =
+          (error.code?.startsWith("username_") ?? false) || (error.status === 409 && /username/i.test(error.message));
+        if (aboutUsername) setUsernameError(error.message);
+        else setSaveError(error.message);
+      } else {
+        setSaveError("Couldn't save those changes.");
+      }
     } finally {
       setSaving(false);
     }
@@ -291,11 +309,18 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
                 placeholder="e.g. goalie_9"
                 autoCapitalize="none"
                 autoCorrect="off"
+                aria-invalid={usernameError ? true : undefined}
+                aria-describedby={usernameError ? "edit-profile-username-error" : undefined}
               />
               <p className="edit-profile-field__hint">
-                Optional. If you set one, other people see your username instead of your full name. 3-30 letters,
-                numbers or underscores; not case-sensitive.
+                Other people see your username instead of your full name. 3-30 letters, numbers or underscores; not
+                case-sensitive. It can&rsquo;t be removed, and it can only be changed now and then.
               </p>
+              {usernameError && (
+                <p className="edit-profile-error" role="alert" id="edit-profile-username-error">
+                  {usernameError}
+                </p>
+              )}
             </div>
 
             <div className="edit-profile-field">
@@ -308,7 +333,7 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
                 onChange={(event) => setPhone(event.target.value)}
                 placeholder="e.g. +44 7000 000000"
               />
-              <p className="edit-profile-field__hint">Not shown on the Figma frame -- added since it's a real, functional field.</p>
+              <p className="edit-profile-field__hint">Optional.</p>
             </div>
 
             <div className="edit-profile-field">
@@ -317,9 +342,7 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
               </label>
               {/* no backend field/endpoint yet -- see PR description */}
               <textarea id="edit-profile-bio" disabled placeholder="Not available yet" />
-              <p className="edit-profile-field__hint">
-                Not editable yet -- there's no `bio` field on the User model in services/api.
-              </p>
+              <p className="edit-profile-field__hint">Coming soon.</p>
             </div>
 
             <div className="edit-profile-field">
@@ -328,9 +351,7 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
               </label>
               {/* no backend field/endpoint yet -- see PR description */}
               <input id="edit-profile-location" disabled placeholder="Not available yet" />
-              <p className="edit-profile-field__hint">
-                Not editable yet -- there's no `location` field on the User model in services/api.
-              </p>
+              <p className="edit-profile-field__hint">Coming soon.</p>
             </div>
 
             <div className="edit-profile-field">
@@ -341,8 +362,7 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
                   writes to it -- see this file's header comment. */}
               <input id="edit-profile-club" disabled value={user.clubAffiliationId ?? ""} placeholder="Not set" />
               <p className="edit-profile-field__hint">
-                Not editable yet -- no endpoint writes to `clubAffiliationId`. Club membership is managed via Join
-                Club on a club's fan page instead.
+                Coming soon. You can join clubs from a club&rsquo;s page.
               </p>
             </div>
 
@@ -357,8 +377,7 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
                 value={new Date(user.dateOfBirth).toLocaleDateString("en-GB")}
               />
               <p className="edit-profile-field__hint">
-                Not editable -- changing date of birth could affect your account's safeguarding status and isn't
-                supported yet.
+                Your date of birth can&rsquo;t be changed here. If it is wrong, contact support.
               </p>
             </div>
 

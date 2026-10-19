@@ -49,10 +49,10 @@
 // confirmed the real support destination, `support@soccernity.com`. The
 // "Contact support" button on states 3 and 4 is now a real, enabled
 // `mailto:` link rather than a disabled placeholder.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { verifyEmail, AuthApiError } from "../api/auth";
-import { darkVerifyThemeVars } from "./verify-email/verifyEmailThemeVars";
+import { verifyThemeVars } from "./verify-email/verifyEmailThemeVars";
 import "./verify-email/VerifyEmail.css";
 
 const GENERIC_ERROR_MESSAGE = "This verification link is invalid or has expired.";
@@ -133,37 +133,39 @@ export default function VerifyEmailPage() {
 
   const [status, setStatus] = useState<Status>(token ? "verifying" : "missing");
   const [errorMessage, setErrorMessage] = useState(GENERIC_ERROR_MESSAGE);
+  // QA D-16: the verification token is single-use. React StrictMode (dev
+  // servers) runs this effect twice; the old version cancelled the first
+  // (successful) response and let the second find the token already used, so
+  // the screen could say "no longer valid" for a link that had worked. The ref
+  // makes sure each token is submitted exactly once, and the one request's
+  // result is always applied (there is no "cancelled" discard).
+  const submittedToken = useRef<string | null>(null);
 
   useEffect(() => {
     if (!token) {
       setStatus("missing");
       return;
     }
+    if (submittedToken.current === token) return;
+    submittedToken.current = token;
 
-    let cancelled = false;
     setStatus("verifying");
 
     verifyEmail(token)
       .then((result) => {
-        if (cancelled) return;
         // Decision Log #38: branch on the real, additive
         // guardianConsentStatus field rather than always rendering the
         // ordinary "you're all set" Verified state.
         setStatus(result.guardianConsentStatus === "pending" ? "verified-pending-consent" : "verified");
       })
       .catch((error) => {
-        if (cancelled) return;
         setErrorMessage(error instanceof AuthApiError ? error.message : GENERIC_ERROR_MESSAGE);
         setStatus("error");
       });
-
-    return () => {
-      cancelled = true;
-    };
   }, [token]);
 
   return (
-    <div className="verify-page" style={darkVerifyThemeVars} data-testid="verify-email-page">
+    <div className="verify-page" style={verifyThemeVars} data-testid="verify-email-page">
       <div className="verify-page__column">
         {status === "verifying" && (
           <div className="verify-card verify-card--centered">

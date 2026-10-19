@@ -10,10 +10,10 @@
 // and the guardian must approve again. The "restarts from scratch" notice
 // below is quoted from the frame and is shown BEFORE the user submits.
 //
-// Only reachable meaningfully while consent is pending -- the status page
-// links here only in that state, and the page re-checks the real status
-// (GET /auth/guardian-consent/status) rather than trusting the link, because
-// the server refuses a confirmed or declined request anyway.
+// Reachable while consent is pending or declined (declines 1 and 2, QA D-04):
+// the status page links here in both states, and the page re-checks the real
+// status (GET /auth/guardian-consent/status) rather than trusting the link,
+// because the server refuses a confirmed request anyway.
 //
 // DESIGN GAP, flagged rather than invented: the Figma frame has only an email
 // field. The backend now also REQUIRES the guardian's name and relationship
@@ -139,7 +139,11 @@ export default function ChangeGuardianEmailPage() {
       </div>
     );
   }
-  if (status.consentStatus !== "pending") {
+  // A declined row can be changed too: after decline 1 or 2 the account stays
+  // active, the decline page offers "Change guardian email", and the server
+  // accepts it and restarts the request (QA D-04, Decision Log #395/#402). The
+  // server still refuses a confirmed row and a row at the third decline.
+  if (status.consentStatus !== "pending" && status.consentStatus !== "declined") {
     return (
       <div className="cge" role="status" data-testid="change-guardian-email-unavailable">
         <p className="cge__status">

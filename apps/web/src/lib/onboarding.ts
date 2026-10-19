@@ -11,7 +11,7 @@ import type { OnboardingNextStep } from "../api/auth";
 export const ONBOARDING_ROUTES = {
   /** The minor's own Restricted Pending / declined view. */
   restrictedPending: "/guardian-consent",
-  /** "Check your email" prompt -- there is no resend-verification endpoint yet (Decision Log #37). */
+  /** "Check your email" prompt -- it offers a resend (B-128, POST /auth/resend-verification-email). */
   verifyEmail: "/verify-email/prompt",
   /** Create Profile. Interim page, see pages/CreateProfilePage.tsx. */
   createProfile: "/create-profile",

@@ -1,8 +1,14 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import VerifyEmailPromptPage from "./VerifyEmailPromptPage";
 import ContinuePage from "./ContinuePage";
+
+vi.mock("../api/auth", async () => {
+  const actual = await vi.importActual<typeof import("../api/auth")>("../api/auth");
+  return { ...actual, resendVerificationEmail: vi.fn() };
+});
+import { AuthApiError, resendVerificationEmail } from "../api/auth";
 
 vi.mock("../api/users", async () => {
   const actual = await vi.importActual<typeof import("../api/users")>("../api/users");
@@ -22,6 +28,7 @@ beforeEach(() => {
   window.sessionStorage.clear();
   window.localStorage.clear();
   vi.mocked(getUser).mockReset();
+  vi.mocked(resendVerificationEmail).mockReset();
 });
 
 function renderAt(path: string) {
@@ -40,16 +47,50 @@ function renderAt(path: string) {
 }
 
 describe("VerifyEmailPromptPage", () => {
-  it("names the address the link was sent to and offers support, not a resend that does not exist", async () => {
+  function seedUnverified() {
     window.sessionStorage.setItem("sn_access_token", fakeToken());
     vi.mocked(getUser).mockResolvedValue({
       email: "tobi@example.com",
       verificationStatus: "unverified",
     } as Awaited<ReturnType<typeof getUser>>);
+  }
+
+  it("resends the verification email to the account's own address and shows the generic confirmation (QA D-08)", async () => {
+    seedUnverified();
+    vi.mocked(resendVerificationEmail).mockResolvedValueOnce({ message: "ok" });
+    renderAt("/verify-email/prompt");
+
+    fireEvent.click(await screen.findByRole("button", { name: /resend verification email/i }));
+
+    await waitFor(() => expect(resendVerificationEmail).toHaveBeenCalledWith("tobi@example.com"));
+    expect(await screen.findByText(/a new verification link has been sent/i)).not.toBeNull();
+  });
+
+  it("shows the rate-limit line when the server answers 429", async () => {
+    seedUnverified();
+    vi.mocked(resendVerificationEmail).mockRejectedValueOnce(new AuthApiError("limited", { status: 429 }));
+    renderAt("/verify-email/prompt");
+
+    fireEvent.click(await screen.findByRole("button", { name: /resend verification email/i }));
+
+    expect(await screen.findByText(/too many requests/i)).not.toBeNull();
+  });
+
+  it("shows a plain failure line on any other error", async () => {
+    seedUnverified();
+    vi.mocked(resendVerificationEmail).mockRejectedValueOnce(new AuthApiError("boom", { status: 500 }));
+    renderAt("/verify-email/prompt");
+
+    fireEvent.click(await screen.findByRole("button", { name: /resend verification email/i }));
+
+    expect(await screen.findByText(/couldn.t send that just now/i)).not.toBeNull();
+  });
+
+  it("names the address the link was sent to and offers support", async () => {
+    seedUnverified();
     renderAt("/verify-email/prompt");
 
     expect(await screen.findByText(/tobi@example\.com/)).not.toBeNull();
-    expect(screen.queryByRole("button", { name: /resend/i })).toBeNull();
     const support = screen.getByRole("link", { name: /contact support/i }) as HTMLAnchorElement;
     expect(support.getAttribute("href")).toMatch(/^mailto:support@soccernity\.com/);
   });

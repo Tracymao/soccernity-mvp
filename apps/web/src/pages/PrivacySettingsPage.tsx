@@ -222,7 +222,7 @@ export default function PrivacySettingsPage() {
                 Request a copy of your Soccernity data. We&rsquo;ll email you a link when it&rsquo;s ready.
               </p>
               <p className="privacy-row__note">
-                Not available yet — data export needs a backend endpoint first.
+                Not available yet.
               </p>
             </div>
             <span className="privacy-row__chevron" aria-hidden="true">

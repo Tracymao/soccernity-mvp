@@ -30,7 +30,7 @@ test.describe.serial('adult sign-up', () => {
     expect(String(user.dateOfBirth)).toMatch(/^v1:/);
   });
 
-  test('the verification email carries a working link to the web app (D-16 tolerant)', async ({ page }, testInfo) => {
+  test('the verification email carries a working link to the web app (D-16: shows the verified screen)', async ({ page }, testInfo) => {
     const mail = await waitForEmail(email, 'verify-email');
     expect(mail.data.link).toMatch(/^http:\/\/localhost:5273\/verify-email\?token=/);
     await page.goto(linkPath(mail.data.link));

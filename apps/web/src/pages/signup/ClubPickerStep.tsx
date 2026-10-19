@@ -52,7 +52,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { joinClub, listClubs, ClubsApiError } from "../../api/clubs";
 import type { ClubSummary } from "../../api/clubs";
-import { darkClubPickerThemeVars } from "./clubPickerThemeVars";
+import { clubPickerThemeVars } from "./clubPickerThemeVars";
 import "./ClubPickerStep.css";
 
 interface ClubPickerStepProps {
@@ -151,7 +151,7 @@ export default function ClubPickerStep({ accessToken, onDone, confirmationMessag
   const hasJoinedAny = Object.values(joinState).some((state) => state === "joined");
 
   return (
-    <div className="club-picker-page" style={darkClubPickerThemeVars} data-testid="club-picker-page">
+    <div className="club-picker-page" style={clubPickerThemeVars} data-testid="club-picker-page">
       <div className="club-picker-page__column">
         {confirmationMessage && <div className="club-picker__confirmation">{confirmationMessage}</div>}
 

@@ -312,22 +312,18 @@ export async function expireEmailVerifyToken(token: string): Promise<void> {
   }
 }
 
-// DEFECT D-16. VerifyEmailPage consumes the single-use token inside a useEffect;
-// under React StrictMode (the dev servers) the effect runs twice, the first
-// (successful) response is discarded as "cancelled" and the second request finds
-// the token already used, so a perfectly valid link can end on "no longer valid".
-// Which request wins is a race, so tests that open a verification link accept
-// either screen but ALWAYS assert the database says "verified", and record the
-// annotation when the wrong screen appeared.
+// D-16 (fixed, FC3a). VerifyEmailPage used to consume the single-use token inside
+// a useEffect that React StrictMode (the dev servers) runs twice: the first
+// (successful) response was discarded as "cancelled" and the second request
+// found the token already used, so a valid link could end on "no longer valid".
+// The page now submits each token exactly once, so opening a valid link must
+// show the verified screen. The `info` argument is kept so existing call sites
+// still compile; it is no longer used.
 export async function expectVerifyScreen(
   page: Page,
   verifiedHeading: string | RegExp,
-  info: { annotations: Array<{ type: string; description?: string }> },
+  _info?: { annotations: Array<{ type: string; description?: string }> },
 ): Promise<void> {
-  const ok = page.getByRole('heading', { name: verifiedHeading });
-  const bad = page.getByRole('heading', { name: /no longer valid/ });
-  await expect(ok.or(bad)).toBeVisible();
-  if (await bad.isVisible()) {
-    info.annotations.push({ type: 'D-16', description: 'valid link shown as "no longer valid" (StrictMode double effect)' });
-  }
+  await expect(page.getByRole('heading', { name: verifiedHeading })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /no longer valid/ })).toHaveCount(0);
 }

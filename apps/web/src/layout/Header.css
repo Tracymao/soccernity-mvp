@@ -198,3 +198,33 @@
   background-color: var(--sn-brand-green);
   border: 1.5px solid var(--sn-background-surface);
 }
+
+/* Mobile (QA D-12, register B-132): at 390px the desktop header (logo, a
+ * 240px search box, the icon row and the account cluster) was ~170px wider than
+ * the screen, so every page under it scrolled sideways. The search box is a
+ * disabled placeholder with no behaviour, so it is hidden here; padding and gaps
+ * tighten; the icon row (flex: 1, min-width: 0) takes whatever width is left and
+ * scrolls inside itself. The 820px breakpoint matches useIsMobile(). */
+@media (max-width: 820px) {
+  .sn-header {
+    gap: 12px;
+    padding: 0 16px;
+  }
+
+  .sn-header__search {
+    display: none;
+  }
+
+  .sn-header__wordmark {
+    font-size: 18px;
+  }
+
+  .sn-header__nav-list {
+    gap: 12px;
+  }
+
+  .sn-header__login-button {
+    padding: 0 16px;
+    font-size: 15px;
+  }
+}

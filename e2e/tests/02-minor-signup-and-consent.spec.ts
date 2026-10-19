@@ -62,7 +62,7 @@ for (const band of [
       expect(emailsFor(email, 'guardian-consent')).toHaveLength(0);
     });
 
-    test('verifying email while consent is pending shows the "approval still pending" state (D-16 tolerant)', async ({ page }, testInfo) => {
+    test('verifying email while consent is pending shows the "approval still pending" state (D-16: verified screen, every time)', async ({ page }, testInfo) => {
       const verify = await waitForEmail(email, 'verify-email');
       await page.goto(linkPath(verify.data.link));
       await expectVerifyScreen(page, /Email verified.*approval still pending/, testInfo);

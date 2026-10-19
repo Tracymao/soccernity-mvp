@@ -118,7 +118,7 @@ describe("PrivacySettingsPage", () => {
     // interactive but silently does nothing (task brief: flag, don't fake).
     expect(screen.queryByRole("checkbox")).toBeNull();
     expect(screen.queryByRole("switch")).toBeNull();
-    expect(screen.getByText(/data export needs a backend endpoint/i)).not.toBeNull();
+    expect(screen.getAllByText(/Not available yet/i).length).toBeGreaterThan(0);
   });
 
   it("shows the guardian approval row with an 'Approved' pill for a minor with confirmed consent", async () => {

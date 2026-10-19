@@ -59,12 +59,17 @@ test.describe('email verification edge cases', () => {
     expect(emailsFor(verified.email, 'verify-email')).toHaveLength(1);
   });
 
-  test('D-08: the verify-email prompt page has a "resend the email" action (the endpoint exists)', async ({ page }) => {
-    test.fail(true, 'D-08: VerifyEmailPromptPage only says "contact support"; POST /auth/resend-verification-email has no UI');
+  // D-08 (fixed, FC3a): the prompt page now has a "Resend verification email" control.
+  test('D-08: the verify-email prompt page has a "resend the email" action and it mails a new working link', async ({ page }) => {
     const a = await registerViaApi({ age: 30, label: 'rsv3' });
+    await waitForEmail(a.email, 'verify-email', 1);
     await loginViaUi(page, a.email);
     await expect(page).toHaveURL(/\/verify-email\/prompt$/);
-    await expect(page.getByRole('button', { name: /resend/i })).toBeVisible({ timeout: 3000 });
+    await page.getByRole('button', { name: /resend verification email/i }).click();
+    await expect(page.getByText(/a new verification link has been sent/i)).toBeVisible({ timeout: 5000 });
+    const fresh = await waitForEmail(a.email, 'verify-email', 2);
+    expect(fresh.data.link).toContain('/verify-email?token=');
+    await page.screenshot({ path: '.run/shots/verify-prompt-resent.png', fullPage: true });
   });
 });
 
@@ -111,10 +116,10 @@ test.describe('guardian link edge cases', () => {
     await g2.context().close();
   });
 
+  // D-09 (fixed, FC3a).
   test('D-09: after approval the guardian is not told the account is "now active" when it still needs email verification and a profile', async ({
     browser,
   }) => {
-    test.fail(true, 'D-09: "The account is now active" is shown although the minor still has to verify email and create a profile');
     const a = await registerViaApi({ age: 15, label: 'gcopy' });
     const mail = await waitForEmail(a.guardianEmail!, 'guardian-consent');
     const page = await guardianPage(browser);
@@ -126,10 +131,11 @@ test.describe('guardian link edge cases', () => {
     await page.context().close();
   });
 
+  // D-10 (fixed, FC3a, B-130): the footnote and the post-decline state carry the cap
+  // sentence addressed to the guardian instead.
   test('D-10: the guardian page tells the guardian "Declining closes the account and schedules it for deletion" although declines 1 and 2 do neither', async ({
     browser,
   }) => {
-    test.fail(true, 'D-10: Decision Log #406 item 13 (B-130) - footnote and post-decline text are wrong for declines 1-2');
     const a = await registerViaApi({ age: 15, label: 'gfoot' });
     const mail = await waitForEmail(a.guardianEmail!, 'guardian-consent');
     const page = await guardianPage(browser);
@@ -216,15 +222,19 @@ test.describe('390px mobile: no horizontal scroll on onboarding pages', () => {
   test.use({ viewport: { width: 390, height: 844 } });
   // [label, url, known defect]
   const pages: Array<[string, string, string | null]> = [
+    // D-11 and D-12 are fixed (FC3a, B-132): the sign-up left panel shrinks, and the
+    // site header hides its search box and tightens at <= 820px. The names keep the
+    // defect ids so a regression is easy to trace.
     ['signup (age gate)', '/signup', 'D-11: the sign-up split screen keeps a 488px left panel (98px of sideways scroll at 390px)'],
     ['login', '/login', null],
     ['forgot password', '/forgot-password', null],
     ['verify email (missing token)', '/verify-email', 'D-12: the desktop icon header does not collapse at 390px (188px of sideways scroll)'],
     ['guardian consent confirm (no token)', '/guardian-consent/confirm', 'D-12: the desktop icon header does not collapse at 390px (188px of sideways scroll)'],
+    ['community (logged out)', '/community', 'D-12: the desktop icon header does not collapse at 390px (188px of sideways scroll)'],
+    ['blog', '/blog', 'D-12: the desktop icon header does not collapse at 390px (188px of sideways scroll)'],
   ];
   for (const [label, url, defect] of pages) {
     test(`${defect ? defect.slice(0, 4) + ': ' : ''}${label}`, async ({ page }) => {
-      if (defect) test.fail(true, defect);
       await page.goto(url);
       await page.waitForLoadState('networkidle');
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -233,7 +243,6 @@ test.describe('390px mobile: no horizontal scroll on onboarding pages', () => {
   }
 
   test('D-12: signed-in onboarding pages (verify prompt, create profile, guardian status) fit 390px', async ({ page }) => {
-    test.fail(true, 'D-12: verify prompt / guardian status sit under the desktop icon header (167px of sideways scroll)');
     const a = await registerViaApi({ age: 30, label: 'mob' });
     await loginViaUi(page, a.email);
     await expect(page).toHaveURL(/\/verify-email\/prompt$/);
@@ -302,17 +311,22 @@ test.describe.serial('under 13 end to end (card requirement lifted by SQL workar
   });
 });
 
-// The restricted-pending screen promises "Browse and follow ... Follow teams,
-// players and grassroots leagues". Decision Log #370 blocks every social write
-// for that account, follow included.
+// D-13 (fixed, FC3a). The restricted-pending screen used to promise "Browse and
+// follow ... Follow teams, players and grassroots leagues", but Decision Log #370
+// blocks every social write for that account, follow included. The screens no
+// longer promise it, and the server still refuses it, so copy and behaviour agree.
 test.describe('restricted-pending copy vs behaviour', () => {
-  test('D-13: a restricted-pending minor can follow (the screen says "Browse and follow")', async () => {
-    test.fail(true, 'D-13: the pending screen says "Browse and follow"; POST /users/:id/follow is 403 for a pending minor');
+  test('D-13: the pending screen does not promise following, and the server does refuse it', async ({ page }) => {
     const minor = await registerViaApi({ age: 15, label: 'pf' });
     const target = await registerViaApi({ age: 30, label: 'pft' });
+    await loginViaUi(page, minor.email);
+    await expect(page.getByTestId('guardian-consent-pending')).toBeVisible();
+    const text = (await page.getByTestId('guardian-consent-pending').textContent()) ?? '';
+    expect(text).not.toMatch(/browse and follow|follow teams|player.s? and grassroots leagues/i);
+    expect(text).not.toMatch(/position and photo/i);
     await verifyEmailViaApi(minor);
     const { token } = await me(minor);
     const res = await api('POST', `/users/${target.userId}/follow`, { token });
-    expect([200, 201]).toContain(res.status);
+    expect(res.status).toBe(403);
   });
 });

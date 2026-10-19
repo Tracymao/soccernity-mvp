@@ -128,6 +128,21 @@ describe("ChangeGuardianEmailPage", () => {
     expect((screen.getByRole("button", { name: /send new request/i }) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it("offers the form for a declined request (declines 1 and 2) and restarts it (QA D-04)", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeToken());
+    vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({ ...PENDING, consentStatus: "declined" });
+    vi.mocked(changeGuardianEmail).mockResolvedValueOnce({ message: "ok" });
+    renderPage();
+
+    await waitFor(() => expect(screen.getByTestId("change-guardian-email")).not.toBeNull());
+    expect(screen.queryByTestId("change-guardian-email-unavailable")).toBeNull();
+
+    fill();
+    fireEvent.click(screen.getByRole("button", { name: /send new request/i }));
+    await waitFor(() => expect(screen.getByText("STATUS PAGE")).not.toBeNull());
+    expect(changeGuardianEmail).toHaveBeenCalledTimes(1);
+  });
+
   it("does not offer the form once consent is already confirmed", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeToken());
     vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({ ...PENDING, consentStatus: "confirmed" });

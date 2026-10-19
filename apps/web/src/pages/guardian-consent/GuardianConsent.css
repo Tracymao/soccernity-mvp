@@ -42,7 +42,7 @@
   padding: 6px 12px;
   border-radius: 99px;
   background-color: var(--consent-green-tint-28);
-  color: var(--consent-brand-green);
+  color: var(--consent-brand-navy);
   font: 600 12px "Inter", sans-serif;
 }
 
@@ -115,7 +115,7 @@
 
 .consent-row__icon--on {
   background-color: var(--consent-green-tint-28);
-  color: var(--consent-brand-green);
+  color: var(--consent-brand-navy);
 }
 
 .consent-row__icon--off {
@@ -153,7 +153,7 @@
 .consent-pill--status-on {
   border: none;
   background-color: var(--consent-green-tint-28);
-  color: var(--consent-brand-green);
+  color: var(--consent-brand-navy);
 }
 
 .consent-actions {
@@ -203,7 +203,8 @@
 }
 
 .consent-status-message--error {
-  color: var(--consent-brand-green);
+  color: var(--consent-text-primary);
+  font-weight: 600;
 }
 
 /* Confirm page (guardian's view) specific bits */

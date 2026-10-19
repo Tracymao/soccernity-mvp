@@ -21,7 +21,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import SignupSplitScreen from "./SignupSplitScreen";
 import DecorativeRings from "./DecorativeRings";
-import { darkAuthThemeVars } from "./authThemeVars";
+import { lightAuthThemeVars } from "./authThemeVars";
 import { formatLongDate } from "./age";
 import { GUARDIAN_RELATIONSHIP_OPTIONS } from "./types";
 import type { AgeGateValues, GuardianDetailsValues } from "./types";
@@ -69,8 +69,9 @@ export default function GuardianDetailsStep({ dob, age, initialValues, onBack, o
 
   return (
     <SignupSplitScreen
-      variant="dark"
-      themeVars={darkAuthThemeVars}
+      variant="light"
+      rightTone="navy"
+      themeVars={lightAuthThemeVars}
       rightPanel={
         <>
           <DecorativeRings className="signup-split__rings" />

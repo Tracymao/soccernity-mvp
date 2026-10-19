@@ -102,6 +102,28 @@ describe("GuardianConsentConfirmPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "I consent" }));
 
     expect(await screen.findByText(/your approval has been recorded/i)).not.toBeNull();
+    // QA D-09: the minor still has to verify email and create a profile, so the
+    // account is not "now active" at this point.
+    expect(document.body.textContent ?? "").not.toMatch(/now active/i);
+    expect(screen.getByText(/can now continue registration/i)).not.toBeNull();
+  });
+
+  it("no longer promises a player profile or following (Decision Log #377, QA D-13/D-15)", () => {
+    renderConfirmPage();
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/player profile/i);
+    expect(text).not.toMatch(/follow teams/i);
+    // The drafting note that used to sit in the footnote is gone.
+    expect(text).not.toMatch(/not reproduced here/i);
+    expect(text).not.toMatch(/isn't backed by a real policy/i);
+  });
+
+  it("states the decline cap to the guardian instead of 'declining closes the account' (B-130)", () => {
+    renderConfirmPage();
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/declining closes the account/i);
+    expect(text).toMatch(/you can decline up to 3 times/i);
+    expect(text).toMatch(/after the third decline the account is scheduled for deletion/i);
   });
 
   it("shows a generic error message on an invalid/expired token, without leaking which reason", async () => {
@@ -124,7 +146,11 @@ describe("GuardianConsentConfirmPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "I do not consent" }));
 
     expect(await screen.findByText(/your decision has been recorded/i)).not.toBeNull();
-    expect(screen.getByText(/scheduled for\s+deletion/i)).not.toBeNull();
+    // Declines 1 and 2 do NOT schedule deletion: the state carries the cap
+    // sentence, never a claim that this decline closed the account (B-130).
+    const body = document.body.textContent ?? "";
+    expect(body).not.toMatch(/will stay closed|will be scheduled for deletion/i);
+    expect(body).toMatch(/you can decline up to 3 times/i);
     expect(declineGuardianConsent).toHaveBeenCalledWith("real-token-123");
     expect(confirmGuardianConsent).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "I consent" })).toBeNull();

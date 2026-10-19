@@ -1,5 +1,4 @@
-/* Club Picker (rendered from RegisterStep's success view) -- dark-theme
- * retrofit for the merged Figma "Club Picker" screens (5146:6635,
+/* Club Picker (route /signup/clubs) -- light-theme (B-127) for the merged Figma "Club Picker" screens (5146:6635,
  * 5146:6648, 5146:6661, 5146:6674, 5146:6687). Previously this component
  * borrowed --signup-* (LIGHT-themed) custom properties while nested
  * inside SignupSplitScreen's light two-panel shell -- that nesting is
@@ -159,7 +158,7 @@
   align-items: center;
   justify-content: center;
   font: 600 20px "Inter", sans-serif;
-  color: var(--picker-brand-green);
+  color: var(--picker-brand-navy);
   background-color: var(--picker-green-tint-28);
 }
 
@@ -206,7 +205,7 @@
 
 .club-picker__join-button--joined {
   background-color: var(--picker-green-tint-28);
-  color: var(--picker-brand-green);
+  color: var(--picker-brand-navy);
   cursor: default;
 }
 

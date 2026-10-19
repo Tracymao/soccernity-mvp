@@ -193,8 +193,7 @@ export default function ArticleDetailPage() {
           Join the discussion
         </h2>
         <p className="article-comments__note">
-          Comments aren&rsquo;t available yet &mdash; the blog has no comments endpoint or social sign-in flow. The
-          thread below is a sample.
+          Comments aren&rsquo;t available yet. The thread below is a sample.
         </p>
 
         <form className="article-comment-form" onSubmit={(e) => e.preventDefault()}>

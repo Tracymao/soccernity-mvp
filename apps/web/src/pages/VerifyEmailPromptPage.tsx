@@ -3,19 +3,23 @@
 // and where the Club Picker sends someone whose join was refused with
 // `email_verification_required`.
 //
-// NO FIGMA FRAME exists for this screen (the Verify Email family covers only
-// the page the emailed link opens: Verifying / Verified / Link invalid /
-// Missing token). Built plainly from the verify-email card classes, the same
-// "no dedicated screen, built plain and flagged" precedent
-// ClubPickerStep.tsx and ChangeGuardianEmailPage.tsx set. There is NO
-// resend-verification endpoint yet (Decision Log #37), so this screen cannot
-// offer a resend; it points at the real support mailbox instead.
+// Figma: the Verify Email prompt family 6750:29378 (default), 6750:29429
+// (resend sent) and 6750:29480 (rate limited), mobile 6750:29531 / 29582 /
+// 29633. The "Resend verification email" control (QA D-08, B-128) posts the
+// signed-in account's own email to POST /auth/resend-verification-email. The
+// server answers every outcome with the same generic 200, so the "sent"
+// message is worded conditionally ("If that email belongs to an account that
+// still needs to be verified ..."), exactly as the frame draws it; a 429 from
+// the per-IP throttle shows the "too many requests" line.
+// Wording tagged [COPY PENDING LEGAL REVIEW] in the frame is implemented as
+// drawn and listed in docs/pending-copy-manifest.md.
 import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router";
+import { AuthApiError, resendVerificationEmail } from "../api/auth";
 import { getUser } from "../api/users";
 import { ONBOARDING_ROUTES } from "../lib/onboarding";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
-import { darkVerifyThemeVars } from "./verify-email/verifyEmailThemeVars";
+import { verifyThemeVars } from "./verify-email/verifyEmailThemeVars";
 import "./verify-email/VerifyEmail.css";
 
 const SUPPORT_MAILTO_HREF = "mailto:support@soccernity.com?subject=Email%20verification%20help";
@@ -31,6 +35,7 @@ export default function VerifyEmailPromptPage() {
   const userId = token ? decodeAccessToken(token)?.sub : undefined;
   const [email, setEmail] = useState<string | null>(null);
   const [alreadyVerified, setAlreadyVerified] = useState(false);
+  const [resendState, setResendState] = useState<"idle" | "sending" | "sent" | "limited" | "error">("idle");
 
   useEffect(() => {
     if (!token || !userId) return;
@@ -49,11 +54,22 @@ export default function VerifyEmailPromptPage() {
     };
   }, [token, userId]);
 
+  async function handleResend() {
+    if (!email) return;
+    setResendState("sending");
+    try {
+      await resendVerificationEmail(email);
+      setResendState("sent");
+    } catch (err) {
+      setResendState(err instanceof AuthApiError && err.status === 429 ? "limited" : "error");
+    }
+  }
+
   if (!token || !userId) return <Navigate to="/login" replace />;
   if (alreadyVerified) return <Navigate to={ONBOARDING_ROUTES.resolve} replace />;
 
   return (
-    <div className="verify-page" style={darkVerifyThemeVars} data-testid="verify-email-prompt">
+    <div className="verify-page" style={verifyThemeVars} data-testid="verify-email-prompt">
       <div className="verify-page__column">
         <div className="verify-icon-circle verify-icon-circle--neutral" aria-hidden="true">
           ✉
@@ -89,6 +105,34 @@ export default function VerifyEmailPromptPage() {
             Contact support
           </a>
         </div>
+        {email && (
+          <div className="verify-resend">
+            <button
+              type="button"
+              className="verify-link-button"
+              onClick={handleResend}
+              disabled={resendState === "sending"}
+            >
+              Resend verification email [COPY PENDING LEGAL REVIEW]
+            </button>
+            {resendState === "sent" && (
+              <p className="verify-resend__message" role="status">
+                If that email belongs to an account that still needs to be verified, a new verification link has been
+                sent.
+              </p>
+            )}
+            {resendState === "limited" && (
+              <p className="verify-resend__message" role="alert">
+                Too many requests. Please try again in a little while. [COPY PENDING LEGAL REVIEW]
+              </p>
+            )}
+            {resendState === "error" && (
+              <p className="verify-resend__message" role="alert">
+                Couldn&rsquo;t send that just now. Please try again shortly.
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

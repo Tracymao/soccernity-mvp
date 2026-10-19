@@ -41,11 +41,14 @@
 // the same frame and is kept.
 //
 // The Figma frame's "I do not consent" button is wired to the real
-// POST /auth/guardian-consent/decline (sprint-1/guardian-consent-decline-
-// withdraw-expiry). Declining closes the account and schedules it for
-// deletion server-side, so the success state says so plainly rather than
-// implying the account merely stays pending. The backend's non-generic
-// 400s ("already confirmed", "declined or withdrawn") are shown verbatim.
+// POST /auth/guardian-consent/decline. A guardian may decline up to 3 times
+// (Decision Log #389/#395): declines 1 and 2 leave the account active and
+// restricted, only the third schedules it for deletion. So neither the
+// footnote nor the post-decline state says a decline "closes the account and
+// schedules it for deletion" (QA D-10, B-130, Decision Log #406 item 13); both
+// carry the cap sentence below, addressed to the guardian. The backend's
+// non-generic 400s ("already confirmed", "declined or withdrawn") are shown
+// verbatim.
 // B-021 / B-029 (Decision Log #372): the request summary the Figma frame
 // draws is now built, from GET /auth/guardian-consent/request-summary (token
 // in a header). The "Report incorrect details" action posts the token only --
@@ -66,7 +69,7 @@ import {
   type GuardianRequestSummary,
 } from "../api/auth";
 import CardVerificationPanel, { type CardGate } from "./guardian-consent/CardVerificationPanel";
-import { darkConsentThemeVars } from "./guardian-consent/consentThemeVars";
+import { consentThemeVars } from "./guardian-consent/consentThemeVars";
 import "./guardian-consent/GuardianConsent.css";
 
 const GENERIC_ERROR_MESSAGE =
@@ -89,14 +92,19 @@ function formatLongDate(iso: string): string {
   return date.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 }
 
+// The cap sentence, addressed to the guardian (B-130, Decision Log #406 item
+// 13). Same facts as the sentence on the minor's decline page
+// (GuardianConsentPage.tsx), reworded for the person who decides.
+const GUARDIAN_CAP_SENTENCE =
+  "You can decline up to 3 times. Changing the guardian email does not reset the count. After the third decline the account is scheduled for deletion. [COPY PENDING LEGAL REVIEW]";
+
+// Decision Log #377 removed "Build a player profile" (no player profile in the
+// MVP), and #407 item 4 (QA D-13) stops promising following (a restricted-
+// pending minor cannot follow, #370).
 const WHAT_THEY_CAN_DO = [
   {
-    title: "Build a player profile",
-    body: "Position, club or school team, and stats they add themselves.",
-  },
-  {
-    title: "Follow teams and check scores",
-    body: "Browse the Sports Hub and follow grassroots and pro fixtures.",
+    title: "Check scores and fixtures",
+    body: "Browse the Sports Hub, including grassroots and pro fixtures. [COPY PENDING LEGAL REVIEW]",
   },
   {
     title: "Post and comment in Community",
@@ -208,7 +216,7 @@ export default function GuardianConsentConfirmPage() {
   }
 
   return (
-    <div className="consent-page" style={darkConsentThemeVars} data-testid="guardian-consent-confirm-page">
+    <div className="consent-page" style={consentThemeVars} data-testid="guardian-consent-confirm-page">
       <div className="consent-page__column">
         {!token ? (
           <div className="consent-card">
@@ -220,15 +228,16 @@ export default function GuardianConsentConfirmPage() {
           <div className="consent-card">
             <h1 className="consent-page__heading">Thank you</h1>
             <p className="consent-status-message" role="status">
-              Your approval has been recorded. The account is now active -- you can close this page.
+              Your approval has been recorded. The account holder can now continue registration. You can close
+              this page. [COPY PENDING LEGAL REVIEW]
             </p>
           </div>
         ) : status === "declined" ? (
           <div className="consent-card">
             <h1 className="consent-page__heading">Your decision has been recorded</h1>
             <p className="consent-status-message" role="status">
-              You have declined permission for this account. The account will stay closed and will be scheduled for
-              deletion. You can close this page.
+              You have declined permission for this account, so it stays switched off. {GUARDIAN_CAP_SENTENCE} You
+              can close this page.
             </p>
           </div>
         ) : (
@@ -387,12 +396,7 @@ export default function GuardianConsentConfirmPage() {
                   </div>
 
                   <p className="consent-footnote">
-                    Declining closes the account and schedules it for deletion.{" "}
-                    <span className="consent-fineprint">
-                      [COPY PENDING LEGAL REVIEW -- expiry/deletion/withdrawal copy from the Figma frame is not
-                      reproduced here since it isn't backed by a real policy yet.]
-                    </span>{" "}
-                    Read our <Link to="/privacy">Privacy Policy</Link>.
+                    {GUARDIAN_CAP_SENTENCE} Read our <Link to="/privacy">Privacy Policy</Link>.
                   </p>
                 </div>
             </form>
