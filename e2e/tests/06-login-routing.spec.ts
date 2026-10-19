@@ -205,7 +205,20 @@ test.describe('login form and session', () => {
     // Same shape the app decodes (sub, role) but expired and badly signed: the server answers 401.
     const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
     const expired = `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ sub: a.userId, role: 'user', iat: 1, exp: 2 })}.x`;
-    await page.evaluate((t) => window.sessionStorage.setItem('sn_access_token', t), expired);
+    // Leave the live /community page BEFORE planting the bad token. The refresh
+    // token rotates and reuse revokes the family, so if the old page is still
+    // alive its own in-flight requests can 401 on the planted token and rotate at
+    // the same moment as the new page: the second use of the same refresh token is
+    // then (correctly) treated as reuse and the session is cleared. That is a
+    // multi-tab race, not what this test checks, and it made the test fail intermittently once the harness proxy
+    // (extra latency) was gone.
+    await page.goto('about:blank');
+    await page.addInitScript((t) => {
+      if (!window.sessionStorage.getItem('e2e_expired_seeded')) {
+        window.sessionStorage.setItem('sn_access_token', t);
+        window.sessionStorage.setItem('e2e_expired_seeded', '1');
+      }
+    }, expired);
     await page.goto('/profile');
     await expect(page.getByText('Log in to view your profile.')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Edit Profile' })).toBeVisible();

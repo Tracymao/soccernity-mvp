@@ -99,17 +99,21 @@ test.describe('username rules (API)', () => {
     }
   });
 
-  // D-06. The hate/sexual terms are matched only when they ARE the handle or an
-  // underscore-separated token (username-rules.constants.ts, "EXACT" list), so
-  // gluing them to anything slips through. Probed on a real server: these all
-  // return 200. test.fail(): passes while they are accepted.
+  // D-06 (fixed, Decision Log #407 item 3). Long, unambiguous hate and sexual
+  // terms are matched by CONTAINS, so gluing letters to them no longer helps.
+  // Kept as a regression test; the test.fail() it used to carry is gone.
   test('D-06: hate terms are also refused when glued to other letters (xxhitlerxx, nazifan)', async () => {
-    test.fail(true, 'D-06: PROFANITY_EXACT is matched on whole handle / underscore token only');
     const a = await verifiedAdult('r3b');
     for (const bad of ['xxhitlerxx', 'nazifan']) {
       const res = await patchUsername(a, bad);
       expect(res.status, bad).toBe(400);
     }
+  });
+
+  test('D-06: innocent names that contain a short fragment are still accepted (Nazir, Essex, Hancock)', async () => {
+    const a = await verifiedAdult('r3c');
+    const res = await patchUsername(a, 'nazir_essex_hancock');
+    expect(res.status).toBe(200);
   });
 
   test('contact details / other platforms are refused', async () => {

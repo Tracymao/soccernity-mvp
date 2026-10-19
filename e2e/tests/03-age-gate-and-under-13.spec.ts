@@ -165,12 +165,10 @@ test.describe('Register API validation (real server)', () => {
     expect(res.status).toBe(400);
   });
 
-  // DEFECT D-02. Decision Log #19's age-5 floor lives only in the web Age Gate.
-  // The server accepts a 4-year-old (age.util.ts says so on purpose), so any
-  // API client can create the account. test.fail(): this test passes while the
-  // defect exists and starts failing - loudly - the day the server enforces it.
+  // D-02 (fixed, Decision Log #407 item 2). Decision Log #19's age-5 floor is
+  // enforced by the server as well as the web Age Gate. Kept as a regression
+  // test; the test.fail() it used to carry is gone.
   test('D-02: registering under age 5 is refused by the server too', async () => {
-    test.fail(true, 'D-02: the age-5 floor is enforced only client-side');
     const res = await api('POST', '/auth/register', {
       body: valid({
         dateOfBirth: dobForAge(4).iso,
@@ -178,6 +176,17 @@ test.describe('Register API validation (real server)', () => {
       }),
     });
     expect(res.status).toBe(400);
+    expect(res.body.code).toBe('below_minimum_age');
+  });
+
+  test('D-02: exactly age 5 is still accepted by the server', async () => {
+    const res = await api('POST', '/auth/register', {
+      body: valid({
+        dateOfBirth: dobForAge(5).iso,
+        guardian: { name: 'Pat Guardian', email: uniqueEmail('g'), relationship: 'Parent' },
+      }),
+    });
+    expect(res.status).toBe(201);
   });
 
   test('the same email cannot register twice (case-insensitive)', async () => {

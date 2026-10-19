@@ -3,7 +3,6 @@ import * as fs from 'fs';
 import * as net from 'net';
 import * as path from 'path';
 import { createRequire } from 'module';
-import { startCorsProxy } from './cors-proxy';
 import {
   ADMIN_CREDENTIALS,
   API_LOG,
@@ -58,7 +57,7 @@ async function waitForHealth(timeoutMs = 120_000): Promise<void> {
   const start = Date.now();
   for (;;) {
     try {
-      const res = await fetch(`${URLS.rawApi}/health`);
+      const res = await fetch(`${URLS.api}/health`);
       if (res.ok) return;
     } catch {
       /* not up yet */
@@ -134,7 +133,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   const apiEnv: NodeJS.ProcessEnv = {
     ...process.env,
     NO_COLOR: '1',
-    PORT: String(PORTS.rawApi),
+    PORT: String(PORTS.api),
     DATABASE_URL: dbUrl,
     DIRECT_URL: dbUrl,
     REDIS_URL: redisUrl,
@@ -142,6 +141,9 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     // un-configured on purpose so every would-be email (with its link/token)
     // is written to the API log, which the tests read.
     WEB_APP_BASE_URL: URLS.web,
+    // CORS allowlist (QA D-01 fix): the API answers cross-origin browser calls
+    // only from these two origins (plus localhost outside production).
+    ADMIN_APP_BASE_URL: URLS.admin,
     EMAIL_PROVIDER_API_KEY: 'replace-me',
     // Never let a QA run reach Stripe (the root .env may hold a real test key).
     STRIPE_SECRET_KEY: 'replace-me',
@@ -158,8 +160,6 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   });
   children.push(api);
   await waitForHealth();
-  const proxy = startCorsProxy(PORTS.api, PORTS.rawApi);
-  closers.push(() => new Promise<void>((r) => proxy.close(() => r())));
 
   // --- 5. Real frontends ---------------------------------------------------
   const vite = path.join(REPO, 'node_modules', 'vite', 'bin', 'vite.js');

@@ -9,7 +9,14 @@ import {
 } from '../admin-action-log/admin-action-log.constants';
 import { requiresCardVerification } from '../auth/guardian-consent/card-verification-policy.util';
 import { computeConsentTokenExpiresAt } from '../auth/guardian-consent/consent-token.constants';
-import { computeIsMinor, computeIsUnder16, isPlausibleDateOfBirth } from '../auth/registration/age.util';
+import {
+  BELOW_MINIMUM_AGE_CODE,
+  BELOW_MINIMUM_AGE_MESSAGE,
+  computeIsMinor,
+  computeIsUnder16,
+  isPlausibleDateOfBirth,
+  meetsMinimumSignupAge,
+} from '../auth/registration/age.util';
 import { AgeTier, ageTierFor } from '../auth/registration/age-tier.util';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
 import { CorrectDobDto } from './dto/correct-dob.dto';
@@ -87,6 +94,12 @@ export class AdminUserDobCorrectionService {
     // Same validation registration applies (RegistrationService.register).
     if (!isPlausibleDateOfBirth(newDob)) {
       throw new BadRequestException('dateOfBirth must be a real, non-future date');
+    }
+    // Decision Log #19 / #407 item 2: a correction cannot move an account below
+    // the signup floor either (it would otherwise be a back door round the
+    // registration check). Same rule, same error code.
+    if (!meetsMinimumSignupAge(newDob)) {
+      throw new BadRequestException({ code: BELOW_MINIMUM_AGE_CODE, message: BELOW_MINIMUM_AGE_MESSAGE });
     }
 
     const reason = dto.reason.trim();

@@ -73,6 +73,111 @@ describe('username rules (B-032, pure)', () => {
         expect(checkUsernameRules(ok)).toBeNull();
       }
     });
+
+    // QA D-06 / Decision Log #407 item 3: long, unambiguous hate and sexual
+    // terms are matched by CONTAINS, so letters glued on either side do not get
+    // past the filter. Short or ambiguous terms stay exact (the test above).
+    describe('hate and sexual terms are matched by CONTAINS (QA D-06)', () => {
+      it.each([
+        'xxhitlerxx', // the two examples from the QA report
+        'nazifan',
+        'hitler_1488',
+        'nazi_fan',
+        'hitlerfan',
+        'fanofhitler',
+        'xHiTlErx',
+        'xxnazixx',
+        'nazination',
+        'neonazi',
+        'pussyfc',
+        'xxpussyxx',
+        'paedo_hunter',
+        'swastika9',
+        'whitepower88',
+        'gangbanger',
+        'xxcreampiexx',
+        'erotic_dancer',
+      ])('refuses %s', (handle) => {
+        expect(checkUsernameRules(handle)).toBe('profanity');
+      });
+
+      it('sees through digit-for-letter swaps and underscores', () => {
+        for (const h of ['h1tl3r_fan', 'xxh1tl3rxx', 'n4zifan', 'h_i_t_l_e_r_9', 'p4edo_x']) {
+          expect(checkUsernameRules(h)).toBe('profanity');
+        }
+      });
+
+      it('refuses a guarded term even when an innocent name sits next to it', () => {
+        // 'nazir' is cut out, the second 'nazi' is not.
+        expect(checkUsernameRules('nazirnazi')).toBe('profanity');
+        expect(checkUsernameRules('nazimxnazifan')).toBe('profanity');
+      });
+
+      it('short ambiguous terms stay EXACT: inside a longer word they are accepted', () => {
+        for (const ok of ['cockerel_9', 'dickens_fc', 'rapeseed_boy', 'grapevine_10', 'torpedoes_fc', 'peacockfc']) {
+          expect(checkUsernameRules(ok)).toBeNull();
+        }
+        // ...but as the whole word, or a whole underscore token, they are refused.
+        expect(checkUsernameRules('cock')).toBe('profanity');
+        expect(checkUsernameRules('big_rape_77')).toBe('profanity');
+        expect(checkUsernameRules('pedo')).toBe('profanity');
+      });
+    });
+
+    // The list that must keep passing: place names, surnames and ordinary words
+    // that contain a short or ambiguous fragment. If a term is ever moved from
+    // EXACT to CONTAINS, or a new CONTAINS term is added, this list is what
+    // catches an innocent handle becoming unavailable. (Known, accepted
+    // Scunthorpe-style exceptions that ALREADY existed -- 'scunthorpe', 'penistone',
+    // 'therapist' -- are deliberately not in it: they were refused before D-06
+    // and are not changed by it.)
+    describe('innocent handles that must still be accepted', () => {
+      it.each([
+        // place names
+        'essex_boy',
+        'sussex_united',
+        'middlesex_fc',
+        'wessex_wolves',
+        'sexton_9',
+        'canal_street',
+        'bassett_fc',
+        'cumbria_lad',
+        'lagos_island',
+        'ikorodu_boy',
+        // surnames
+        'hancock_7',
+        'hitchcock_fan',
+        'peacock_wings',
+        'cockburn_10',
+        'dickson_fc9',
+        'dickens_10',
+        'wankhede_cricket',
+        'twatt_orkney',
+        'analyst_pro',
+        'cassie_9',
+        // given names that contain 'nazi'
+        'nazir_khan',
+        'nazim_10',
+        'nazia_fc',
+        'nazih_9',
+        'nazik_fan',
+        'naziru_goals',
+        // ordinary words
+        'assist_king',
+        'classic_9',
+        'passion_fc',
+        'compass_10',
+        'sassy_gal',
+        'grapes_and_cream',
+        'drape_master',
+        'torpedo_7',
+        'banal_banter',
+        'sextus_ball',
+        'cumberland_boy',
+      ])('accepts %s', (handle) => {
+        expect(checkUsernameRules(handle)).toBeNull();
+      });
+    });
   });
 
   describe('contact details', () => {

@@ -644,8 +644,11 @@ export async function registerUser(payload: RegisterRequest): Promise<RegisterRe
     response = await fetch(`${API_BASE_URL}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // Refresh token is an httpOnly cookie per Build Plan Section 5.7.
-      credentials: "include",
+      // No `credentials: "include"` (QA D-01, Decision Log #407 item 1): the API sets
+      // no cookie -- the refresh token comes back in the response body -- so the
+      // option did nothing, and browsers refuse it against a CORS answer that is
+      // not credentialed, which made sign-up fail whenever web and API are on
+      // different origins.
       body: JSON.stringify(payload),
     });
   } catch (networkError) {

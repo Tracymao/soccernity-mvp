@@ -236,6 +236,14 @@ export class RegistrationEmailService {
 
   // To the MINOR — second expiry. The re-sent request also lapsed
   // unanswered, so it is treated as an implicit decline.
+  // Wording fix (backend/w3e, Decision Log #407 follow-up): this email is also reached by a
+  // request that was DECLINED once or twice, reopened by the stale-decline sweep
+  // (B-126) and then not answered. The old text said "Your guardian did not
+  // respond to either approval request", which is untrue for a guardian who did
+  // respond (by declining). The wording now says only what is true on every
+  // route here: the account was not approved in time. It names no history, no
+  // decline count (#395 B2) and no guardian action.
+  // [COPY PENDING LEGAL REVIEW] -- plain functional wording, not counsel-reviewed.
   async sendConsentExpiredEmail(to: string, minorDisplayName: string, graceDays: number): Promise<void> {
     await this.dispatch({
       to,
@@ -548,13 +556,13 @@ ${data.link}
         `Hi ${data.minorDisplayName},
 
 ` +
-        `Your guardian did not respond to either approval request, so your Soccernity account cannot be activated.
+        `Your Soccernity account was not approved in time, so it cannot be activated.
 
 ` +
         `Your account has been closed and is scheduled to be permanently deleted in ${data.graceDays} days.
 
 ` +
-        `If you still want an account, ask your guardian to look out for the email and sign up again.`
+        `If you still want an account, talk to your guardian and sign up again.`
       );
     case 'guardian-minor-turned-18':
       return (
@@ -699,9 +707,9 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
     case 'guardian-consent-expired':
       return (
         `<p>Hi ${data.minorDisplayName},</p>` +
-        `<p>Your guardian did not respond to either approval request, so your Soccernity account cannot be activated.</p>` +
+        `<p>Your Soccernity account was not approved in time, so it cannot be activated.</p>` +
         `<p>Your account has been closed and is scheduled to be permanently deleted in <strong>${data.graceDays} days</strong>.</p>` +
-        `<p>If you still want an account, ask your guardian to look out for the email and sign up again.</p>`
+        `<p>If you still want an account, talk to your guardian and sign up again.</p>`
       );
     case 'guardian-minor-turned-18':
       return (

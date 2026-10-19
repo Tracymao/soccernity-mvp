@@ -15,7 +15,14 @@ import { GuardianConsentService } from '../guardian-consent/guardian-consent.ser
 import { PasswordService } from '../password/password.service';
 import { TokenService } from '../token/token.service';
 import { TokenPair } from '../token/token.types';
-import { computeIsMinor, computeIsUnder16, isPlausibleDateOfBirth } from './age.util';
+import {
+  BELOW_MINIMUM_AGE_CODE,
+  BELOW_MINIMUM_AGE_MESSAGE,
+  computeIsMinor,
+  computeIsUnder16,
+  isPlausibleDateOfBirth,
+  meetsMinimumSignupAge,
+} from './age.util';
 import { RegisterDto } from './dto/register.dto';
 import { EmailVerificationTokenStore } from './email-verification/email-verification-token.store';
 import { RegistrationEmailService } from './email/registration-email.service';
@@ -115,6 +122,13 @@ export class RegistrationService {
     const dateOfBirth = new Date(dto.dateOfBirth);
     if (!isPlausibleDateOfBirth(dateOfBirth)) {
       throw new BadRequestException('dateOfBirth must be a real, non-future date');
+    }
+
+    // Decision Log #19 / #407 item 2 (QA D-02): the age-5 floor is enforced here
+    // too, not only in the web Age Gate. Checked before any write and regardless
+    // of any guardian block in the request.
+    if (!meetsMinimumSignupAge(dateOfBirth)) {
+      throw new BadRequestException({ code: BELOW_MINIMUM_AGE_CODE, message: BELOW_MINIMUM_AGE_MESSAGE });
     }
 
     const isMinor = computeIsMinor(dateOfBirth);

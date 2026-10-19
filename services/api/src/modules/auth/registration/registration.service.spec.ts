@@ -151,6 +151,75 @@ describe('RegistrationService', () => {
       expect(emailService.sendGuardianConsentEmail).not.toHaveBeenCalled();
     });
 
+    // QA D-02 / Decision Log #19 + #407 item 2: the age-5 floor is server-side.
+    // Dates are built from LOCAL calendar parts and the clock is frozen at local
+    // noon, so the boundary day is the same in every time zone (calculateAge
+    // reads local getters).
+    describe('age-5 floor (QA D-02)', () => {
+      const guardianDetails = { name: 'Parent', email: 'p@example.com', relationship: 'Parent' };
+      const NOW = new Date(2026, 5, 15, 12, 0, 0);
+      const dob = (y: number, m: number, d: number) => new Date(y, m, d).toISOString();
+
+      beforeEach(() => {
+        jest.useFakeTimers().setSystemTime(NOW);
+      });
+      afterEach(() => {
+        jest.useRealTimers();
+      });
+
+      const attempt = (dateOfBirth: string, withGuardian = true) => {
+        const h = buildService();
+        const promise = h.service.register({
+          email: 'k@example.com',
+          password: 'password123',
+          displayName: 'K',
+          dateOfBirth,
+          ...(withGuardian ? { guardian: guardianDetails } : {}),
+        } as any);
+        return { ...h, promise };
+      };
+
+      it('refuses a 4-year-old with a valid guardian block: 400, below_minimum_age, nothing written, no email', async () => {
+        const { promise, prisma, emailService } = attempt(dob(2022, 5, 15));
+        await expect(promise).rejects.toBeInstanceOf(BadRequestException);
+        await expect(promise).rejects.toMatchObject({
+          response: { code: 'below_minimum_age', message: 'Soccernity accounts start at age 5.' },
+        });
+        expect(prisma.user.create).not.toHaveBeenCalled();
+        expect(prisma.guardian.create).not.toHaveBeenCalled();
+        expect(emailService.sendGuardianConsentEmail).not.toHaveBeenCalled();
+        expect(emailService.sendVerificationEmail).not.toHaveBeenCalled();
+      });
+
+      it('refuses the day before the 5th birthday (age 4 years 364 days)', async () => {
+        const { promise, prisma } = attempt(dob(2021, 5, 16));
+        await expect(promise).rejects.toMatchObject({ response: { code: 'below_minimum_age' } });
+        expect(prisma.user.create).not.toHaveBeenCalled();
+      });
+
+      it('accepts exactly age 5 (the 5th birthday is today)', async () => {
+        const { promise, prisma } = attempt(dob(2021, 5, 15));
+        await expect(promise).resolves.toBeDefined();
+        expect(prisma.user.create).toHaveBeenCalledTimes(1);
+        expect(prisma.guardian.create).toHaveBeenCalledTimes(1);
+      });
+
+      it('accepts a 6-year-old', async () => {
+        const { promise } = attempt(dob(2020, 5, 15));
+        await expect(promise).resolves.toBeDefined();
+      });
+
+      it('refuses a newborn without a guardian block with the same floor error (floor is not a guardian question)', async () => {
+        const { promise } = attempt(dob(2026, 0, 1), false);
+        await expect(promise).rejects.toMatchObject({ response: { code: 'below_minimum_age' } });
+      });
+
+      it('does not touch an adult registration', async () => {
+        const { promise } = attempt(dob(1990, 0, 1), false);
+        await expect(promise).resolves.toBeDefined();
+      });
+    });
+
     describe('consent path selection (sprint-1/coppa-card-verification, re-keyed by B-025)', () => {
       const guardianDetails = { name: 'Parent', email: 'p@example.com', relationship: 'Parent' };
       const dobYearsAgo = (years: number) => {

@@ -106,6 +106,9 @@ services:
         sync: false
       - key: WEB_APP_BASE_URL
         sync: false
+      # ADMIN_APP_BASE_URL: https origin of apps/admin. Used ONLY for the API CORS allowlist (QA D-01, Decision Log #407).
+      - key: ADMIN_APP_BASE_URL
+        sync: false
       # --- Sports data (Highlightly) ---
       - key: SPORTS_DATA_API_KEY
         sync: false
@@ -252,6 +255,9 @@ services:
       - key: POSTMARK_FROM_EMAIL
         sync: false
       - key: WEB_APP_BASE_URL
+        sync: false
+      # ADMIN_APP_BASE_URL: https origin of apps/admin. Used ONLY for the API CORS allowlist (QA D-01, Decision Log #407).
+      - key: ADMIN_APP_BASE_URL
         sync: false
       # --- Sports data (Highlightly) ---
       - key: SPORTS_DATA_API_KEY

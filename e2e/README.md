@@ -22,7 +22,7 @@ E2E_KEEP_DB=1 npx playwright test 04   # keep the scratch database between runs
 
 `support/global-setup.ts` drops and recreates a scratch database `soccernity_qa` (never your `soccernity` dev
 database), runs the repo's migrations on it, seeds the one admin account that cannot self-register, flushes Redis
-logical DB 5, builds and starts the API on :3101, a CORS proxy on :3100, `apps/web` on :5273 and `apps/admin`
+logical DB 5, builds and starts the API on :3100, `apps/web` on :5273 and `apps/admin`
 on :5274. Logs: `e2e/.run/*.log`. Screenshots/traces of failures: `e2e/.run/artifacts`.
 
 ## How emails are read
@@ -35,7 +35,6 @@ send path up to the provider call.
 
 | Change | Why |
 |---|---|
-| `support/cors-proxy.ts` sits between the browsers and the API | The API's `enableCors()` answers `*`, which browsers reject for `credentials: "include"` - sign-up cannot complete without it (defect D-01). The proxy only rewrites CORS response headers. |
 | `AUTH_RATE_LIMIT_MAX=1000` | The default 5 requests/60 s auth throttle is far below what the suite needs. |
 | `STRIPE_*=replace-me`, `EMAIL_PROVIDER_API_KEY=replace-me` | Never reach Stripe or Postmark. Under-13 card verification therefore fails closed (503). |
 | One test lifts `Guardian.cardVerificationRequired` in SQL | Local runs have no GeoLite2 database, so every under-13 needs the card step (by design). Marked `WORKAROUND` in the spec. |
@@ -43,4 +42,8 @@ send path up to the provider call.
 ## Known-defect tests
 
 Tests titled `D-nn: ...` use `test.fail()`: they **pass while the defect exists** and turn red the day it is
-fixed - that is the cue to delete the `test.fail()` line (and, for D-01, the CORS proxy).
+fixed - that is the cue to delete the `test.fail()` line.
+
+Fixed so far (Decision Log #407, backend/w3e): **D-01** (CORS; the CORS proxy is deleted, the browsers talk to the API
+directly), **D-02** (age-5 floor) and **D-06** (username CONTAINS match). Their tests stay as ordinary regression tests
+without `test.fail()`.
