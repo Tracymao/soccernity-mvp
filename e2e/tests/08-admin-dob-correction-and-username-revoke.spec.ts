@@ -19,26 +19,7 @@ import {
   type Account,
 } from '../support/helpers';
 import { ADMIN_CREDENTIALS, ADMIN_STORAGE_STATE, URLS } from '../support/stack';
-
-async function ensureAdminState(browser: Browser): Promise<void> {
-  if (fs.existsSync(ADMIN_STORAGE_STATE)) return;
-  // One real UI sign-in per run (the admin login is throttled to 5 / 15 min).
-  const ctx = await browser.newContext({ baseURL: URLS.admin });
-  const page = await ctx.newPage();
-  await page.goto('/login');
-  await page.getByLabel('Email').fill(ADMIN_CREDENTIALS.email);
-  await page.getByLabel('Password').fill(ADMIN_CREDENTIALS.password);
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page).not.toHaveURL(/\/login$/);
-  await ctx.storageState({ path: ADMIN_STORAGE_STATE });
-  await ctx.close();
-}
-
-async function adminPage(browser: Browser): Promise<Page> {
-  await ensureAdminState(browser);
-  const ctx = await browser.newContext({ storageState: ADMIN_STORAGE_STATE, baseURL: URLS.admin });
-  return ctx.newPage();
-}
+import { adminPage, ensureAdminState } from '../support/admin-ui';
 
 async function correctDobViaUi(
   page: Page,
@@ -51,16 +32,15 @@ async function correctDobViaUi(
   await expect(page.getByRole('heading', { name: 'Correct date of birth' })).toBeVisible();
   await page.locator('#dob-new').fill(newIso);
   await page.locator('#dob-reason').fill(reason);
-  await page.getByRole('button', { name: 'Review correction' }).click();
   if (guardian) {
-    // The form only asks for guardian details once the server says it needs them.
-    await page.getByRole('button', { name: 'Confirm correction' }).click();
+    // Adult -> minor with no guardian on file: the drawn "Guardian details" block appears as soon as
+    // the new date makes a minor (frames 6752:29980 / 6752:30141), so fill it before reviewing.
     await expect(page.getByTestId('guardian-fields')).toBeVisible();
     await page.locator('#guardian-name').fill(guardian.name);
     await page.locator('#guardian-email').fill(guardian.email);
     await page.locator('#guardian-relationship').selectOption(guardian.relationship);
-    await page.getByRole('button', { name: 'Review correction' }).click();
   }
+  await page.getByRole('button', { name: 'Review correction' }).click();
 }
 
 test.describe.serial('admin console sign-in', () => {
@@ -116,12 +96,11 @@ test.describe.serial('admin: user list and detail', () => {
     await page.context().close();
   });
 
-  // DEFECT D-07 (Decision Log #406 item 4 / B-129). The page still loads the
-  // DOB-bearing GET /admin/users/:id, not GET /admin/users/:id/summary, so just
-  // OPENING a user writes `user.dob_viewed` audit rows (two, in dev: StrictMode
-  // runs the effect twice) and sends the date of birth to the browser.
+  // D-07 (fixed, FC3b, B-129 / Decision Log #406 item 4). User Detail reads GET /admin/users/:id/summary,
+  // which never selects the date of birth, so just OPENING a user writes no `user.dob_viewed` audit row
+  // and the date never reaches the browser. Kept as a regression test; the test.fail() it used to carry
+  // is gone.
   test('D-07: opening User Detail is not an audited date-of-birth read', async ({ browser }) => {
-    test.fail(true, 'D-07: UserDetailPage uses getUserDetail() (DOB endpoint) instead of /summary');
     const before = await db().adminActionLog.count({ where: { action: 'user.dob_viewed', targetId: acct.userId } });
     const page = await adminPage(browser);
     await page.goto(`${URLS.admin}/users/${acct.userId}`);
@@ -131,9 +110,12 @@ test.describe.serial('admin: user list and detail', () => {
     expect(after).toBe(before);
   });
 
-  test('"Revoke username" is a disabled button on the User Detail screen (UI not built yet)', async ({ browser }) => {
+  test('"Revoke username" is disabled for an account with no username (the drawn "No username" state)', async ({
+    browser,
+  }) => {
     const page = await adminPage(browser);
     await page.goto(`${URLS.admin}/users/${acct.userId}`);
+    await expect(page.getByText('No username', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Revoke username' })).toBeDisabled();
     await page.context().close();
   });
@@ -206,7 +188,7 @@ test.describe.serial('admin: date-of-birth correction (UI)', () => {
     expect(asUser.status).toBe(401);
   });
 
-  test('adult -> minor: the server asks for guardian details; once given, the guardian flow starts and the user is restricted', async ({
+  test('adult -> minor: the form asks for guardian details up front; once given, the guardian flow starts and the user is restricted', async ({
     browser,
   }) => {
     const a = await registerViaApi({ age: 30, label: 'dob3' });
@@ -214,10 +196,15 @@ test.describe.serial('admin: date-of-birth correction (UI)', () => {
     const guardian = { name: 'Corrected Guardian', email: uniqueEmail('cg'), relationship: 'Parent' };
 
     const page = await adminPage(browser);
-    await correctDobViaUi(page, a.userId, dobForAge(15).iso, 'Support corrected the year after ID check');
-    await page.getByRole('button', { name: 'Confirm correction' }).click();
-    // First attempt has no guardian: the page must come back to the form and ask for it.
+    await page.goto(`${URLS.admin}/users/${a.userId}/dob-correction`);
+    await page.locator('#dob-new').fill(dobForAge(15).iso);
+    await page.locator('#dob-reason').fill('Support corrected the year after ID check');
+    // The drawn Guardian details block appears as soon as the new date makes a minor ...
     await expect(page.getByTestId('guardian-fields')).toBeVisible();
+    // ... and the form will not continue without all three fields (frame 6752:30141).
+    await page.getByRole('button', { name: 'Review correction' }).click();
+    await expect(page.getByText('Enter the guardian\u2019s name, email and relationship.')).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await page.locator('#guardian-name').fill(guardian.name);
     await page.locator('#guardian-email').fill(guardian.email);
     await page.locator('#guardian-relationship').selectOption(guardian.relationship);
@@ -315,7 +302,7 @@ test.describe.serial('admin: date-of-birth correction (UI)', () => {
   });
 });
 
-test.describe.serial('admin: username revoke (API - the UI button is disabled)', () => {
+test.describe.serial('admin: username revoke', () => {
   let owner: Account & { token: string; username: string };
   let other: Account & { token: string };
   let adminTok = '';
@@ -332,6 +319,40 @@ test.describe.serial('admin: username revoke (API - the UI button is disabled)',
     expect((await api('PATCH', `/users/${o.userId}`, { token: o.token, body: { username } })).status).toBe(200);
     owner = { ...o, username };
     other = await mk('rv-other');
+  });
+
+  test('UI: the revoke dialog needs a reason; confirming revokes, shows the drawn state and audits the reason', async ({
+    browser,
+  }) => {
+    // A fresh account so the API tests below keep their own username owner.
+    const u = await registerViaApi({ age: 30, label: 'rv-ui' });
+    await verifyEmailViaApi(u);
+    const uToken = (await me(u)).token;
+    const handle = uniqueUsername('uirv');
+    expect((await api('PATCH', `/users/${u.userId}`, { token: uToken, body: { username: handle } })).status).toBe(200);
+
+    const page = await adminPage(browser);
+    await page.goto(`${URLS.admin}/users/${u.userId}`);
+    await expect(page.getByText(`@${handle.toLowerCase()}`).first()).toBeVisible();
+    await page.getByRole('button', { name: 'Revoke username' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toContainText(`This removes @${handle.toLowerCase()} from`);
+    await dialog.getByRole('button', { name: 'Revoke username' }).click(); // no reason yet
+    await expect(dialog.getByText(/at least 10 characters/)).toBeVisible();
+    await dialog.getByLabel('Reason (required)').fill('Impersonates a club official account');
+    await dialog.getByRole('button', { name: 'Revoke username' }).click();
+    await expect(page.getByText('Username revoked. The action was recorded.')).toBeVisible();
+    await expect(page.getByText('No username', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Revoke username' })).toBeDisabled();
+    await page.screenshot({ path: '.run/shots/admin-username-revoked.png', fullPage: true });
+    await page.context().close();
+
+    expect((await userByEmail(u.email)).username).toBeNull();
+    const audit = await db().adminActionLog.findMany({ where: { targetId: u.userId, action: 'user.username_revoked' } });
+    expect(audit).toHaveLength(1);
+    expect(audit[0].notes ?? '').toContain('Impersonates a club official account');
+    // Opening User Detail never reads the DOB: the revoke flow added no `user.dob_viewed` row.
+    expect(await db().adminActionLog.count({ where: { targetId: u.userId, action: 'user.dob_viewed' } })).toBe(0);
   });
 
   test('a reason is required (>= 10 chars) and only admins may revoke', async () => {

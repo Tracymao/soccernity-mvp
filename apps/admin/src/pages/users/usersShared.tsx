@@ -8,11 +8,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { AdminApiError } from "../../api/adminClient";
 
+// Built by hand, not toLocaleDateString: newer ICU data renders September as
+// "Sept" in en-GB, and the frames write "03 Sep 2026".
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return `${String(d.getDate()).padStart(2, "0")} ${MONTH_SHORT[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 export interface AsyncState<T> {

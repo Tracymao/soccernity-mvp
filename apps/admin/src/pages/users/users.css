@@ -468,3 +468,58 @@ a.us-btn {
 .ud-dialog__buttons {
   justify-content: flex-end;
 }
+
+/* B-033 revoke dialog, B-120 incorrect-details reports, B-104 guardian block
+ * (Figma W0 pass C / pass K). Tokens only; no new colour. The frames draw the
+ * error bar in semantic/alert red, which apps/admin has no token for (and
+ * non-negotiable #3), so error callouts keep the navy bar, as .us-error does. */
+
+.ud-callout--error {
+  margin: 0;
+  border: 1px solid var(--sn-brand-navy);
+  border-left-width: 6px;
+  font-weight: 600;
+}
+
+p.ud-callout {
+  margin: 0;
+}
+
+.ud-fields__muted {
+  color: var(--sn-text-secondary);
+}
+
+.ud-field--wide {
+  max-width: none;
+}
+
+.ud-dialog__text {
+  margin: 0;
+}
+
+.ud-input[aria-invalid="true"] {
+  border-color: var(--sn-brand-navy);
+  border-width: 2px;
+}
+
+.us-pill--outline {
+  background-color: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  color: var(--sn-text-secondary);
+}
+
+.ir-row {
+  grid-template-columns: 1fr 150px 100px 1fr 1.5fr 80px 100px 90px;
+  gap: 12px;
+}
+
+.ir-row + .ir-row:not(.us-table__row--head) {
+  border-top: 1px solid var(--sn-icon-inactive);
+}
+
+.ir-empty {
+  padding: 28px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
