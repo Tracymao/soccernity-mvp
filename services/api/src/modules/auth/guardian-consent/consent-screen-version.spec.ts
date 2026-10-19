@@ -60,14 +60,14 @@ describe('consent screen version tripwire', () => {
 
   it('does NOT trip on whitespace, punctuation, casing, class names or comments', () => {
     const edited = source
-      .replace('Build a player profile', 'BUILD  a player profile.')
+      .replace('Check scores and fixtures', 'CHECK  scores and fixtures.')
       .replace('consent-page__column', 'consent-page__col2')
       .replace('// Route: /guardian-consent/confirm', '// Route (edited): /guardian-consent/confirm');
     expect(hashConsentText(edited)).toBe(hashConsentText(source));
   });
 
   it('DOES trip on a one-letter typo fix (documented false positive)', () => {
-    const edited = source.replace('Build a player profile', 'Build a player profil');
+    const edited = source.replace('Check scores and fixtures', 'Check scores and fixture');
     expect(hashConsentText(edited)).not.toBe(hashConsentText(source));
   });
 });

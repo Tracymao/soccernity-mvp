@@ -4,6 +4,7 @@
 // a real network call.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import { StrictMode } from "react";
 import { MemoryRouter } from "react-router";
 import VerifyEmailPage from "./VerifyEmailPage";
 import { AuthApiError } from "../api/auth";
@@ -43,6 +44,28 @@ describe("VerifyEmailPage", () => {
 
     expect(verifyEmail).toHaveBeenCalledWith("real-token-123");
     expect(screen.getByText(/verifying your email/i)).not.toBeNull();
+  });
+
+  // QA D-16: the token is single-use. React StrictMode runs effects twice in
+  // dev; the old code cancelled the first (successful) response and the second
+  // call found the token already used, so the screen could say "no longer
+  // valid" for a link that had worked.
+  it("submits a single-use token exactly once under StrictMode and shows the first result", async () => {
+    vi.mocked(verifyEmail)
+      .mockResolvedValueOnce({ verified: true, userId: "user-1", guardianConsentStatus: "not_applicable" })
+      .mockRejectedValue(new AuthApiError("This verification link is invalid or has expired."));
+
+    render(
+      <StrictMode>
+        <MemoryRouter initialEntries={["/verify-email?token=real-token-123"]}>
+          <VerifyEmailPage />
+        </MemoryRouter>
+      </StrictMode>,
+    );
+
+    expect(await screen.findByText("Email verified")).not.toBeNull();
+    expect(verifyEmail).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/invalid or has expired/i)).toBeNull();
   });
 
   it("shows the missing-token state and never calls the API when ?token= is absent", () => {

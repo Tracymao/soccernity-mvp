@@ -34,9 +34,17 @@
 // change-guardian-email actions; no decline COUNT is ever shown (the status
 // response has none, #395 B2, #403 item 2). The third decline revokes the
 // session server-side, so that case never reaches this page. The Figma frame
-// names the guardian and the decision date; GET /auth/guardian-consent/status
-// returns neither, so the heading and sentence are the generic equivalents
-// (flagged in docs/fc2-gates-routing-report.md).
+// names the guardian and the decision date: the status response now returns
+// `guardianFirstName` and `lastDecisionAt` (B-131), shown on the decline and
+// approved pages (FC3a); when either is null the sentence falls back to
+// "Your guardian" / no date.
+//
+// FC3a (docs/fc3a-onboarding-fixes-report.md): light theme (B-127); the resend
+// button sends the MINOR's own registered email, because POST
+// /auth/guardian-consent/resend looks the account up by the minor's email, not
+// the guardian's (QA D-03); the "What you can still do" lists no longer promise
+// following or a profile the server refuses a restricted-pending minor (QA
+// D-13, #370).
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import {
@@ -45,8 +53,9 @@ import {
   resendGuardianConsentRequest,
   type GuardianConsentStatus,
 } from "../api/auth";
-import { getStoredAccessToken } from "../lib/session";
-import { darkConsentThemeVars } from "./guardian-consent/consentThemeVars";
+import { getUser } from "../api/users";
+import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
+import { consentThemeVars } from "./guardian-consent/consentThemeVars";
 import "./guardian-consent/GuardianConsent.css";
 
 type LoadState = "loading" | "loaded" | "not-a-minor" | "error" | "no-session";
@@ -123,14 +132,43 @@ const DECLINED_CAN_DO = [
   },
   {
     title: "Keep exploring while you wait",
-    body: "You can still browse, follow teams and check scores.",
+    // QA D-13 (#407 item 4): following is refused for a restricted-pending
+    // minor (uniform write block, #370), so it is not promised here. The
+    // Figma frame 5491:8241 still says "follow teams" (register B-154).
+    body: "You can still browse the Sports Hub and check scores. [COPY PENDING LEGAL REVIEW]",
   },
 ];
+
+function longDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+}
+
+// "Sarah approved your account on 15 August 2026. " (Figma 5108:6631). Falls
+// back to the less specific sentence when the response has no name or date.
+function approvedSentence(status: GuardianConsentStatus): string {
+  const who = status.guardianFirstName ?? "Your guardian";
+  const when = status.lastDecisionAt ?? status.consentTimestamp;
+  return when ? `${who} approved your account on ${longDate(when)}. ` : `${who} has approved your account. `;
+}
+
+// "They chose not to approve your account on 15 August 2026. You can send a
+// new request, or use a different guardian email." (Figma 5491:8241).
+function declinedSentence(status: GuardianConsentStatus): string {
+  const first = status.lastDecisionAt
+    ? `They chose not to approve your account on ${longDate(status.lastDecisionAt)}.`
+    : "They chose not to approve your account.";
+  return `${first} You can send a new request, or use a different guardian email.`;
+}
 
 export default function GuardianConsentPage() {
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [status, setStatus] = useState<GuardianConsentStatus | null>(null);
   const [resendState, setResendState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  // The signed-in minor's own profile: its email is what the resend route
+  // looks the account up by (QA D-03), and its name personalises the approved
+  // heading. Non-fatal when it fails to load.
+  const [minorName, setMinorName] = useState<string | null>(null);
+  const [minorEmail, setMinorEmail] = useState<string | null>(null);
 
   const token = getStoredAccessToken();
 
@@ -157,11 +195,40 @@ export default function GuardianConsentPage() {
     loadStatus();
   }, [loadStatus]);
 
+  useEffect(() => {
+    const userId = token ? decodeAccessToken(token)?.sub : undefined;
+    if (!token || !userId) return;
+    let cancelled = false;
+    getUser(token, userId)
+      .then((user) => {
+        if (cancelled) return;
+        setMinorEmail(user.email);
+        setMinorName(user.displayName);
+      })
+      .catch(() => {
+        // Not fatal: the page still works; a resend then fetches it again.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
   async function handleResend() {
-    if (!status) return;
+    if (!status || !token) return;
     setResendState("sending");
     try {
-      await resendGuardianConsentRequest(status.guardianEmail);
+      // POST /auth/guardian-consent/resend takes the MINOR's registered email
+      // (guardian-consent.service.ts resendConsent), not the guardian's
+      // address from the status response -- sending that silently did nothing
+      // (QA D-03).
+      let email = minorEmail;
+      if (!email) {
+        const userId = decodeAccessToken(token)?.sub;
+        if (!userId) throw new Error("no user id in the session");
+        email = (await getUser(token, userId)).email;
+        setMinorEmail(email);
+      }
+      await resendGuardianConsentRequest(email);
       setResendState("sent");
       // A resend after decline 1 or 2 reopens the request as pending on the
       // server; re-read the status so the page moves out of the decline view.
@@ -171,9 +238,11 @@ export default function GuardianConsentPage() {
     }
   }
 
+  const minorFirstName = minorName ? minorName.trim().split(/\s+/)[0] : null;
+
   if (loadState === "no-session") {
     return (
-      <div className="consent-page" style={darkConsentThemeVars}>
+      <div className="consent-page" style={consentThemeVars}>
         <div className="consent-page__column">
           <div className="consent-card">
             <p className="consent-status-message" role="status">
@@ -192,7 +261,7 @@ export default function GuardianConsentPage() {
 
   if (loadState === "loading") {
     return (
-      <div className="consent-page" style={darkConsentThemeVars}>
+      <div className="consent-page" style={consentThemeVars}>
         <div className="consent-page__column">
           <p className="consent-status-message" role="status">
             Loading your account status…
@@ -204,7 +273,7 @@ export default function GuardianConsentPage() {
 
   if (loadState === "not-a-minor") {
     return (
-      <div className="consent-page" style={darkConsentThemeVars}>
+      <div className="consent-page" style={consentThemeVars}>
         <div className="consent-page__column">
           <div className="consent-card">
             <p className="consent-status-message" role="status">
@@ -228,7 +297,7 @@ export default function GuardianConsentPage() {
 
   if (loadState === "error" || !status) {
     return (
-      <div className="consent-page" style={darkConsentThemeVars}>
+      <div className="consent-page" style={consentThemeVars}>
         <div className="consent-page__column">
           <p className="consent-status-message consent-status-message--error" role="alert">
             Couldn&rsquo;t load your guardian consent status. Please try again shortly.
@@ -240,21 +309,20 @@ export default function GuardianConsentPage() {
 
   if (status.consentStatus === "confirmed") {
     return (
-      <div className="consent-page" style={darkConsentThemeVars} data-testid="guardian-consent-confirmed">
+      <div className="consent-page" style={consentThemeVars} data-testid="guardian-consent-confirmed">
         <div className="consent-page__column">
           <div className="consent-icon-circle consent-icon-circle--approved" aria-hidden="true">
             ✓
           </div>
-          <h1 className="consent-page__heading">Your account is approved</h1>
-          <p className="consent-page__subheading">
-            {status.consentTimestamp
-              ? `Your guardian approved your account on ${new Date(status.consentTimestamp).toLocaleDateString(
-                  "en-GB",
-                  { day: "numeric", month: "long", year: "numeric" },
-                )}. `
-              : "Your guardian has approved your account. "}
-            Continue registration to finish setting up your profile. [COPY PENDING LEGAL REVIEW]
-          </p>
+          <div>
+            <h1 className="consent-page__heading">
+              {minorFirstName ? `Your account is approved, ${minorFirstName}` : "Your account is approved"}
+            </h1>
+            <p className="consent-page__subheading">
+              {approvedSentence(status)}
+              Continue registration to finish setting up your profile. [COPY PENDING LEGAL REVIEW]
+            </p>
+          </div>
 
           <div className="consent-card">
             <p className="consent-card__title">Switched on when you finish registration</p>
@@ -316,17 +384,16 @@ export default function GuardianConsentPage() {
 
   if (status.consentStatus === "declined") {
     return (
-      <div className="consent-page" style={darkConsentThemeVars} data-testid="guardian-consent-declined">
+      <div className="consent-page" style={consentThemeVars} data-testid="guardian-consent-declined">
         <div className="consent-page__column">
           <div className="consent-icon-circle" aria-hidden="true">
             ✓
           </div>
           <div>
-            <h1 className="consent-page__heading">Your guardian hasn&rsquo;t approved your account</h1>
-            <p className="consent-page__subheading">
-              They chose not to approve your account. You can send a new request, or use a different guardian
-              email.
-            </p>
+            <h1 className="consent-page__heading">
+              {status.guardianFirstName ?? "Your guardian"} hasn&rsquo;t approved your account
+            </h1>
+            <p className="consent-page__subheading">{declinedSentence(status)}</p>
           </div>
 
           <div className="consent-card">
@@ -404,7 +471,7 @@ export default function GuardianConsentPage() {
 
   // consentStatus === "pending"
   return (
-    <div className="consent-page" style={darkConsentThemeVars} data-testid="guardian-consent-pending">
+    <div className="consent-page" style={consentThemeVars} data-testid="guardian-consent-pending">
       <div className="consent-page__column">
         <span className="consent-pill">WAITING FOR GUARDIAN APPROVAL</span>
         <div>
@@ -441,8 +508,14 @@ export default function GuardianConsentPage() {
                 ✓
               </span>
               <div className="consent-row__text">
-                <span className="consent-row__title">Browse and follow</span>
-                <span className="consent-row__body">Follow teams, players and grassroots leagues.</span>
+                <span className="consent-row__title">Browse and read</span>
+                {/* QA D-13 (#407 item 4): the old "Browse and follow" row
+                    promised following, which the server refuses until a
+                    guardian approves (#370). */}
+                <span className="consent-row__body">
+                  Look around the Sports Hub, the Blog and Banter Rooms. Following and posting switch on once your
+                  guardian approves. [COPY PENDING LEGAL REVIEW]
+                </span>
               </div>
             </div>
             <div className="consent-row">
@@ -452,15 +525,6 @@ export default function GuardianConsentPage() {
               <div className="consent-row__text">
                 <span className="consent-row__title">Check scores and fixtures</span>
                 <span className="consent-row__body">The Sports Hub works normally.</span>
-              </div>
-            </div>
-            <div className="consent-row">
-              <span className="consent-row__icon consent-row__icon--on" aria-hidden="true">
-                ✓
-              </span>
-              <div className="consent-row__text">
-                <span className="consent-row__title">Set up your profile</span>
-                <span className="consent-row__body">Add your position and photo. It stays private until approval.</span>
               </div>
             </div>
           </div>
@@ -505,7 +569,7 @@ export default function GuardianConsentPage() {
 
         {resendState === "sent" && (
           <p className="consent-footnote" role="status">
-            If your guardian&rsquo;s email is still pending, a new request has been sent.
+            We&rsquo;ve sent a new approval email to {status.guardianEmail}. The previous link no longer works.
           </p>
         )}
         {resendState === "error" && (

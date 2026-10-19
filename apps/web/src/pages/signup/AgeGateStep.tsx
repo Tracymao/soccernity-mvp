@@ -14,7 +14,7 @@ import type { FormEvent } from "react";
 import { Link } from "react-router";
 import SignupSplitScreen from "./SignupSplitScreen";
 import DecorativeRings from "./DecorativeRings";
-import { darkAuthThemeVars } from "./authThemeVars";
+import { lightAuthThemeVars } from "./authThemeVars";
 import { parseDateOfBirth } from "./age";
 import { COUNTRY_OPTIONS } from "./types";
 import type { AgeGateValues } from "./types";
@@ -99,8 +99,9 @@ export default function AgeGateStep({ initialValues, initialCountry = "", onCont
   if (denied) {
     return (
       <SignupSplitScreen
-        variant="dark"
-        themeVars={darkAuthThemeVars}
+        variant="light"
+        rightTone="navy"
+        themeVars={lightAuthThemeVars}
         rightPanel={
           <>
             <DecorativeRings className="signup-split__rings" />
@@ -146,8 +147,9 @@ export default function AgeGateStep({ initialValues, initialCountry = "", onCont
 
   return (
     <SignupSplitScreen
-      variant="dark"
-      themeVars={darkAuthThemeVars}
+      variant="light"
+      rightTone="navy"
+      themeVars={lightAuthThemeVars}
       rightPanel={
         <>
           <DecorativeRings className="signup-split__rings" />

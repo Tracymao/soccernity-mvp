@@ -18,6 +18,9 @@
 
 .signup-split__left {
   flex: 1 1 480px;
+  /* min-width: 0 lets the 480px flex-basis shrink below its content size;
+   * without it the left panel kept a 488px width at 390px (QA D-11). */
+  min-width: 0;
   max-width: 720px;
   padding: 64px 80px;
   box-sizing: border-box;
@@ -32,12 +35,18 @@
   justify-content: center;
 }
 
-.signup-split--dark .signup-split__right {
+.signup-split--dark .signup-split__right,
+.signup-split__right--navy {
   background-color: var(--signup-brand-navy);
 }
 
 .signup-split--light .signup-split__right {
   background-color: var(--signup-green-tint, rgba(123, 185, 41, 0.08));
+}
+
+/* Specificity: the navy tone wins over the light variant's tint. */
+.signup-split--light .signup-split__right.signup-split__right--navy {
+  background-color: var(--signup-brand-navy);
 }
 
 @media (max-width: 960px) {
@@ -79,8 +88,8 @@
 
 .signup-split__footer a,
 .signup-split__back {
-  color: var(--signup-brand-green);
-  text-decoration: none;
+  color: var(--signup-brand-navy);
+  text-decoration: underline;
 }
 
 .signup-split__back {
@@ -165,11 +174,22 @@
   box-sizing: border-box;
 }
 
-.signup-split--light .signup-form__input,
-.signup-split--light .signup-form__select {
-  background-color: var(--signup-input-fill);
-  border-color: transparent;
+/* D-14: `flex: 1` is a width rule inside a .signup-form__row, but inside a
+ * column group (.signup-form__group) it resolves the basis to 0 and the
+ * field collapsed to ~20px with no visible border. Fields sitting directly in
+ * a group keep their set height and fill the width. */
+.signup-form__group > .signup-form__input,
+.signup-form__group > .signup-form__select {
+  flex: none;
+  width: 100%;
 }
+
+.signup-form__input:focus,
+.signup-form__select:focus {
+  outline: 2px solid var(--signup-brand-navy);
+  outline-offset: 1px;
+}
+
 
 /* Read-only value (Register's date of birth, set at the Age Gate). */
 .signup-form__input[readonly] {
@@ -192,12 +212,8 @@
 
 .signup-form-error {
   font: 600 14px "Inter", sans-serif;
-  color: #ff6b6b;
-  margin: 0;
-}
-
-.signup-split--light .signup-form-error {
   color: #d92d20;
+  margin: 0;
 }
 
 .signup-info-panel {
@@ -233,7 +249,21 @@
 
 .signup-split--light .signup-button {
   background-color: var(--signup-brand-navy);
+  color: #fff;
   box-shadow: 0px 30px 30px rgba(40, 46, 101, 0.15);
+}
+
+/* Age Gate / Guardian Details (Figma 5108:6626, 5108:6627): light panel on the
+ * left, navy safeguarding panel on the right, GREEN primary button. */
+.signup-split--navy-right .signup-button {
+  background-color: var(--signup-brand-green);
+  color: var(--signup-text-on-green);
+  box-shadow: none;
+}
+
+.signup-split--navy-right .signup-button.signup-button--navy {
+  background-color: var(--signup-brand-navy);
+  color: #fff;
 }
 
 /* Navy primary button on the dark (Age Gate family) shell -- the "Back to

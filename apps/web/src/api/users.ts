@@ -74,11 +74,16 @@ export interface FollowPage {
 
 export class UsersApiError extends Error {
   readonly status?: number;
+  // The server's machine-readable error code when it sends one, e.g.
+  // `username_not_allowed`, `username_change_cooldown`, `username_required`
+  // (B-133). The user-readable `message` is already the server's own text.
+  readonly code?: string;
 
-  constructor(message: string, options?: { status?: number }) {
+  constructor(message: string, options?: { status?: number; code?: string }) {
     super(message);
     this.name = "UsersApiError";
     this.status = options?.status;
+    this.code = options?.code;
   }
 }
 
@@ -123,7 +128,10 @@ export async function updateUser(
     let message = `Couldn't save those changes (${response.status}).`;
     const body = await response.json().catch(() => null);
     if (body && typeof body.message === "string") message = body.message;
-    throw new UsersApiError(message, { status: response.status });
+    throw new UsersApiError(message, {
+      status: response.status,
+      code: body && typeof body.code === "string" ? body.code : undefined,
+    });
   }
   return (await response.json()) as UserProfile;
 }

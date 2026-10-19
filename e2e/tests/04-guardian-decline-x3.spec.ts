@@ -82,7 +82,9 @@ test.describe.serial('guardian declines three times', () => {
     await expect(page).toHaveURL(/\/guardian-consent$/);
     const view = page.getByTestId('guardian-consent-declined');
     await expect(view).toBeVisible();
-    await expect(page.getByRole('heading', { name: /guardian hasn.t approved your account/ })).toBeVisible();
+    // FC3a: the heading names the guardian (first name from the status response, B-131).
+    await expect(page.getByRole('heading', { name: new RegExp(`^${guardian1.name.split(' ')[0]} hasn.t approved your account`) })).toBeVisible();
+    await expect(page.getByText(/chose not to approve your account on \d{1,2} \w+ \d{4}/)).toBeVisible();
     await expect(page.getByTestId('decline-cap-sentence')).toContainText('A guardian can decline up to 3 times');
     // No running counter in any wording.
     await expect(view).not.toContainText(/\b1 of 3\b|\b1\/3\b|2 (declines )?left|remaining/i);
@@ -92,24 +94,24 @@ test.describe.serial('guardian declines three times', () => {
     await page.screenshot({ path: '.run/shots/decline-1-minor-view.png', fullPage: true });
   });
 
-  // DEFECT D-03. The button posts status.guardianEmail (the GUARDIAN's address)
-  // to POST /auth/guardian-consent/resend, which looks the account up by the
-  // MINOR's email, so it silently does nothing and the page never leaves the
-  // decline view. test.fail(): passes while the defect exists.
+  // D-03 (fixed, FC3a). The button used to post status.guardianEmail (the
+  // GUARDIAN's address) to POST /auth/guardian-consent/resend, which looks the
+  // account up by the MINOR's email, so it silently did nothing. It now sends
+  // the minor's own registered email: the request reopens, the page leaves the
+  // decline view and a fresh link is mailed.
   test('D-03: the "Resend approval request" button reopens the request and mails a fresh link', async ({ page }) => {
-    test.fail(true, 'D-03: web sends the guardian email, API expects the minor email');
     await loginViaUi(page, email);
     await expect(page).toHaveURL(/\/guardian-consent$/);
     await page.getByRole('button', { name: 'Resend approval request' }).click();
     await expect(page.getByTestId('guardian-consent-pending')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/sent a new approval email/i)).toBeVisible();
+    await page.screenshot({ path: '.run/shots/decline-1-after-resend.png', fullPage: true });
   });
 
-  test('decline 1: the resend route itself works when given the MINOR email; old link dies, fresh link mailed', async () => {
-    expect(emailsFor(guardian1.email, 'guardian-consent')).toHaveLength(1); // D-03: the button sent nothing
-    const res = await api('POST', '/auth/guardian-consent/resend', { body: { email } });
-    expect(res.status).toBe(200);
+  test('decline 1: after the web resend the old link is dead and a fresh link was mailed', async () => {
     const second = await waitForEmail(guardian1.email, 'guardian-consent', 2);
     const first = (await waitForEmail(guardian1.email, 'guardian-consent', 1)).data.link;
+    expect(emailsFor(guardian1.email, 'guardian-consent')).toHaveLength(2);
     expect(second.data.link).not.toBe(first);
     const g = (await userByEmail(email)).guardian;
     expect(g.consentStatus).toBe('pending');
@@ -141,12 +143,12 @@ test.describe.serial('guardian declines three times', () => {
     await page.screenshot({ path: '.run/shots/decline-2-minor-view.png', fullPage: true });
   });
 
-  // DEFECT D-04. The decline view offers "Change guardian email" and says "use
-  // a different guardian email", and the API accepts a change after decline 1
-  // or 2 (it reopens the request), but the page it links to treats anything
-  // other than "pending" as closed and shows "This request is closed".
+  // D-04 (fixed, FC3a). The decline view offers "Change guardian email" and the
+  // API accepts a change after decline 1 or 2 (it reopens the request); the
+  // page it links to used to treat anything other than "pending" as closed and
+  // showed "This request is closed". It now shows the change form for a declined
+  // request too.
   test('D-04: "Change guardian email" on the decline view opens the change form', async ({ page }) => {
-    test.fail(true, 'D-04: ChangeGuardianEmailPage refuses status "declined"');
     await loginViaUi(page, email);
     await page.getByRole('link', { name: 'Change guardian email' }).click();
     await expect(page).toHaveURL(/\/guardian-consent\/change-email$/);

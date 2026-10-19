@@ -326,7 +326,7 @@ export default function BanterPage() {
 
         <div className="banter-card">
           <p className="banter-card__title">Trending News</p>
-          <p className="banter-card__note">Sample &mdash; no news endpoint yet</p>
+          <p className="banter-card__note">Sample content</p>
           {TRENDS.slice(0, 3).map((t) => (
             <div key={t.topic} className="banter-trend">
               <span>{t.topic}</span>
@@ -571,7 +571,7 @@ export default function BanterPage() {
       <div className="banter__right">
         <div className="banter-card">
           <p className="banter-card__title">Fixtures</p>
-          <p className="banter-card__note">Sample &mdash; no fixtures endpoint yet (Decision Log #6)</p>
+          <p className="banter-card__note">Sample content</p>
           {FIXTURES.map((f, i) => (
             <div key={`${f.home}-${f.away}-${i}`} className="banter-fixture">
               <span>{f.home}</span>
@@ -583,7 +583,7 @@ export default function BanterPage() {
 
         <div className="banter-card">
           <p className="banter-card__title">Suggested</p>
-          <p className="banter-card__note">Sample &mdash; no suggestions endpoint yet</p>
+          <p className="banter-card__note">Sample content</p>
           {SUGGESTED.map((s) => (
             <div key={s.handle} className="banter-suggest">
               <span className="banter-suggest__avatar" aria-hidden="true">

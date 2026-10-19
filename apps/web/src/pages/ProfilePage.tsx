@@ -253,8 +253,7 @@ export default function ProfilePage() {
         <div className="profile-empty-state">
           {/* Section 4 has no GET /users/:id/posts -- see this file's
               header comment. */}
-          Posts for this profile aren&rsquo;t available yet -- there&rsquo;s no per-user posts endpoint in the API
-          yet.
+          Posts for this profile aren&rsquo;t available yet.
         </div>
       </div>
 

@@ -84,7 +84,43 @@ test('capture: verify prompt and verified screens', async ({ page }) => {
   await shot(page, '13-verify-email-prompt');
   const mail = await waitForEmail(a.email, 'verify-email');
   await page.goto(linkPath(mail.data.link));
-  await page.getByRole('heading', { name: /Email verified|no longer valid/ }).waitFor(); // D-16: either
+  await page.getByRole('heading', { name: /Email verified/ }).waitFor();
   await shot(page, '14-email-verified');
   void URLS;
+});
+
+// FC3a: the same screens at the canonical 390px mobile width (Decision Log #86),
+// to check the light theme and the overflow fixes (B-127, B-132).
+test.describe('capture: 390px', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('sign-up, verify, guardian pages, community, blog', async ({ page, browser }) => {
+    await page.goto('/signup');
+    await shot(page, 'm01-age-gate');
+    await page.goto('/blog');
+    await page.waitForLoadState('networkidle');
+    await shot(page, 'm02-blog');
+    await page.goto('/community');
+    await page.waitForLoadState('networkidle');
+    await shot(page, 'm03-community-logged-out');
+    await page.goto('/verify-email');
+    await shot(page, 'm04-verify-email-missing-token');
+
+    const m = await registerViaApi({ age: 15, label: 'mshot' });
+    await loginViaUi(page, m.email);
+    await page.waitForURL(/guardian-consent/);
+    await shot(page, 'm05-restricted-pending');
+    const consent = await waitForEmail(m.guardianEmail!, 'guardian-consent');
+    const gp = await guardianPage(browser);
+    await gp.setViewportSize({ width: 390, height: 844 });
+    await gp.goto(linkPath(consent.data.link));
+    await shot(gp, 'm06-guardian-confirm-page');
+    await gp.context().close();
+
+    const a = await registerViaApi({ age: 30, label: 'mshot2' });
+    await page.evaluate(() => window.sessionStorage.clear());
+    await loginViaUi(page, a.email);
+    await page.waitForURL(/verify-email\/prompt/);
+    await shot(page, 'm07-verify-email-prompt');
+  });
 });

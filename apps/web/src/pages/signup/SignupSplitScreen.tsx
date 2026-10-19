@@ -15,17 +15,30 @@ import "./SignupSplitScreen.css";
 interface SignupSplitScreenProps {
   variant: "dark" | "light";
   themeVars: CSSProperties;
+  /** Right panel tone. "navy" = the safeguarding panel of the Age Gate family
+   * (white copy on brand navy, Figma 5108:6626); default = the variant's own. */
+  rightTone?: "navy";
   /** Left panel content, rendered below the logo (eyebrow/heading/form/etc). */
   children: ReactNode;
   /** Right panel content -- safeguarding copy + rings, or the Register illustration. */
   rightPanel: ReactNode;
 }
 
-export default function SignupSplitScreen({ variant, themeVars, children, rightPanel }: SignupSplitScreenProps) {
+export default function SignupSplitScreen({
+  variant,
+  themeVars,
+  rightTone,
+  children,
+  rightPanel,
+}: SignupSplitScreenProps) {
+  const navyRight = rightTone === "navy";
   return (
-    <div className={`signup-split signup-split--${variant}`} style={themeVars}>
+    <div
+      className={`signup-split signup-split--${variant}${navyRight ? " signup-split--navy-right" : ""}`}
+      style={themeVars}
+    >
       <div className="signup-split__left">{children}</div>
-      <div className="signup-split__right">{rightPanel}</div>
+      <div className={`signup-split__right${navyRight ? " signup-split__right--navy" : ""}`}>{rightPanel}</div>
     </div>
   );
 }

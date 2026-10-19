@@ -168,7 +168,7 @@ export default function CommunityPage() {
     <div className="community__right">
       <div className="community-aside">
         <p className="community-aside__title">Who to follow</p>
-        <p className="community-aside__note">Sample &mdash; no suggestions endpoint yet</p>
+        <p className="community-aside__note">Sample content</p>
         {SAMPLE_SUGGESTIONS.map((s) => (
           <div key={s.handle} className="community-suggest">
             <span className="community-suggest__avatar" aria-hidden="true">
@@ -183,7 +183,7 @@ export default function CommunityPage() {
       </div>
       <div className="community-aside">
         <p className="community-aside__title">Trending News</p>
-        <p className="community-aside__note">Sample &mdash; no news endpoint yet</p>
+        <p className="community-aside__note">Sample content</p>
         {SAMPLE_NEWS.map((headline) => (
           <div key={headline} className="community-trend">
             <span className="community-trend__topic">{headline}</span>

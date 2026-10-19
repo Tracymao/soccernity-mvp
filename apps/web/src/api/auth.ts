@@ -209,6 +209,12 @@ export interface GuardianConsentStatus {
   guardianEmail: string;
   canResend: boolean;
   consentTimestamp: string | null;
+  // B-131 (Decision Log #406 item 11): the guardian's first name (an
+  // approximation of the single full-name field) and when the guardian last
+  // decided. Both are null until there is something to show. The decline COUNT
+  // is never returned. Optional here so an older server response still parses.
+  guardianFirstName?: string | null;
+  lastDecisionAt?: string | null;
 }
 
 // The backend's generic rejection body (unknown / rotated / expired token).
@@ -495,6 +501,32 @@ export async function verifyEmail(token: string): Promise<VerifyEmailResponse> {
   }
 
   return (await response.json()) as VerifyEmailResponse;
+}
+
+// POST /auth/resend-verification-email (B-128, Decision Log #406 item 3).
+// Unauthenticated and keyed by email. The server answers 200 with ONE generic
+// message for every outcome (unknown address, already verified, closed
+// account, per-account cap reached), so a 200 never tells the caller whether a
+// mail was sent. The per-IP throttle is the only visible refusal: 429.
+export async function resendVerificationEmail(email: string): Promise<{ message: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/resend-verification-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    throw new AuthApiError(`Couldn't send that request (${response.status}).`, { status: response.status });
+  }
+
+  return (await response.json()) as { message: string };
 }
 
 // --- Account lifecycle (F6, sprint-1/f5-f6-missing-endpoints) -------------

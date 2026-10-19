@@ -211,10 +211,11 @@ test.describe('username rules (API)', () => {
 });
 
 test.describe('Edit Profile', () => {
+  // D-05 (fixed, FC3a): the hint no longer calls the username optional; and the
+  // client never sends null (B-133), it shows the "can't be removed" message itself.
   test('D-05: Edit Profile no longer describes the username as optional (it is required and cannot be cleared)', async ({
     page,
   }) => {
-    test.fail(true, 'D-05: the Username hint still reads "Optional. If you set one..." though username is required and cannot be removed');
     const a = await verifiedAdult('ep1');
     const own = uniqueUsername('ep');
     expect((await patchUsername(a, own)).status).toBe(200);
@@ -229,7 +230,10 @@ test.describe('Edit Profile', () => {
     await expect(page.getByRole('alert')).toContainText(/can.t be removed/i, {
       timeout: 5000,
     });
-    // ... but the hint under the field still calls the username optional.
-    await expect(page.getByText(/^Optional\./)).toHaveCount(0);
+    // ... and the hint under the Username field no longer calls it optional (the
+    // Phone field's own "Optional." hint is a different field).
+    const usernameField = page.locator('.edit-profile-field', { has: page.locator('#edit-profile-username') });
+    await expect(usernameField.getByText(/^Optional\./)).toHaveCount(0);
+    await expect(usernameField).not.toContainText(/optional/i);
   });
 });

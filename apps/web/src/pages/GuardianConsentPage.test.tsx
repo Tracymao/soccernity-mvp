@@ -22,6 +22,12 @@ vi.mock("../api/auth", async () => {
 
 import { getGuardianConsentStatus, resendGuardianConsentRequest } from "../api/auth";
 
+vi.mock("../api/users", async () => {
+  const actual = await vi.importActual<typeof import("../api/users")>("../api/users");
+  return { ...actual, getUser: vi.fn() };
+});
+import { getUser } from "../api/users";
+
 function base64UrlEncode(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
@@ -38,6 +44,13 @@ beforeEach(() => {
   window.localStorage.clear();
   vi.mocked(getGuardianConsentStatus).mockReset();
   vi.mocked(resendGuardianConsentRequest).mockReset();
+  // The signed-in minor's own profile: its email is what the resend route needs
+  // (QA D-03), its name personalises the approved heading.
+  vi.mocked(getUser).mockReset();
+  vi.mocked(getUser).mockResolvedValue({
+    email: "minor@example.com",
+    displayName: "Ade Bello",
+  } as Awaited<ReturnType<typeof getUser>>);
 });
 
 function renderPage() {
@@ -81,7 +94,8 @@ describe("GuardianConsentPage", () => {
     expect(resendButton.disabled).toBe(false);
 
     fireEvent.click(resendButton);
-    await waitFor(() => expect(resendGuardianConsentRequest).toHaveBeenCalledWith("guardian@example.com"));
+    // QA D-03: the route looks the account up by the MINOR's own email.
+    await waitFor(() => expect(resendGuardianConsentRequest).toHaveBeenCalledWith("minor@example.com"));
   });
 
   it("offers Change guardian email as a link to the real screen in the pending state (not a disabled button)", async () => {
@@ -146,11 +160,17 @@ describe("GuardianConsentPage", () => {
       guardianEmail: "guardian@example.com",
       canResend: false,
       consentTimestamp: "2026-08-15T12:00:00.000Z",
+      guardianFirstName: "Sarah",
+      lastDecisionAt: "2026-08-15T12:00:00.000Z",
     });
 
     renderPage();
 
-    expect(await screen.findByText("Your account is approved")).not.toBeNull();
+    // Frame 5108:6631: "Your account is approved, Ade" / "Sarah approved your
+    // account on 15 August 2026." (minor's first name from the profile, the
+    // guardian's first name and date from the status response, B-131).
+    expect(await screen.findByText("Your account is approved, Ade")).not.toBeNull();
+    expect(screen.getByText(/sarah approved your account on 15 august 2026/i)).not.toBeNull();
     expect(screen.getByText("Your profile will be visible")).not.toBeNull();
     // B-125: the CTA resolves the next onboarding step from the server.
     const cta = screen.getByRole("link", { name: /continue registration/i }) as HTMLAnchorElement;
@@ -206,16 +226,40 @@ describe("GuardianConsentPage", () => {
       expect(resend.disabled).toBe(false);
     });
 
-    it("resending posts the account's own guardian email, then re-reads the status", async () => {
+    it("resending posts the MINOR's own email (not the guardian's), then re-reads the status (QA D-03)", async () => {
       seedDeclined();
       vi.mocked(resendGuardianConsentRequest).mockResolvedValueOnce({ message: "sent" });
       renderPage();
 
       fireEvent.click(await screen.findByRole("button", { name: /resend approval request/i }));
 
-      await waitFor(() => expect(resendGuardianConsentRequest).toHaveBeenCalledWith("guardian@example.com"));
+      await waitFor(() => expect(resendGuardianConsentRequest).toHaveBeenCalledWith("minor@example.com"));
+      expect(resendGuardianConsentRequest).not.toHaveBeenCalledWith("guardian@example.com");
       // Initial load + the re-read after a successful resend.
       await waitFor(() => expect(getGuardianConsentStatus).toHaveBeenCalledTimes(2));
+    });
+
+    it("names the guardian and the decision date when the status carries them (B-131, frame 5491:8241)", async () => {
+      window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+      vi.mocked(getGuardianConsentStatus).mockResolvedValue({
+        consentStatus: "declined",
+        guardianEmail: "guardian@example.com",
+        canResend: true,
+        consentTimestamp: null,
+        guardianFirstName: "Sarah",
+        lastDecisionAt: "2026-08-15T10:00:00.000Z",
+      });
+      renderPage();
+
+      expect(await screen.findByRole("heading", { name: /sarah hasn.t approved your account/i })).not.toBeNull();
+      expect(screen.getByText(/chose not to approve your account on 15 august 2026/i)).not.toBeNull();
+    });
+
+    it("does not promise following to a restricted minor (QA D-13)", async () => {
+      seedDeclined();
+      renderPage();
+      await screen.findByTestId("guardian-consent-declined");
+      expect(document.body.textContent ?? "").not.toMatch(/follow teams/i);
     });
 
     it("disables resend when the server says the request cannot be reopened", async () => {

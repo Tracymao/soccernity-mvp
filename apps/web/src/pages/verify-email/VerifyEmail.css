@@ -8,7 +8,7 @@
  * which renders the shared site Header above routed content
  * (src/layout/AppShell.tsx) -- duplicating a second wordmark bar here
  * would double up under it. Built to render *within* AppShell's content
- * area instead, using a negative margin to cancel its padding so the dark
+ * area instead, using a negative margin to cancel its padding so the
  * background still reads as full-bleed below the real header. (The four
  * core auth routes use the AuthChrome logo-only Top Bar instead --
  * Decision Log #172 -- but /verify-email is not one of them.)
@@ -166,7 +166,7 @@
   font-size: 12px;
   font-weight: 700;
   background-color: var(--verify-green-tint-28);
-  color: var(--verify-brand-green);
+  color: var(--verify-brand-navy);
 }
 
 .verify-row__text {
@@ -225,4 +225,42 @@
   font: 400 16px/1.6 "Inter", sans-serif;
   color: var(--verify-text-secondary);
   margin: 0;
+}
+
+/* "Resend verification email" (Figma 6750:29429 / 6750:29480): an underlined
+ * text link under the buttons, with its status line below. */
+.verify-resend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.verify-link-button {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  font: 400 14px "Inter", sans-serif;
+  color: var(--verify-text-primary);
+  text-decoration: underline;
+  cursor: pointer;
+  text-align: left;
+}
+
+.verify-link-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.verify-resend__message {
+  font: 400 13px/1.5 "Inter", sans-serif;
+  color: var(--verify-text-secondary);
+  margin: 0;
+}
+
+@media (max-width: 520px) {
+  .verify-button {
+    width: 100%;
+  }
 }

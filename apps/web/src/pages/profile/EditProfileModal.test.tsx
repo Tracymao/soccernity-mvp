@@ -190,17 +190,36 @@ describe("EditProfileModal -- Username (profile/username-column-and-display-conv
     expect(vi.mocked(updateUser).mock.calls[0][2]).not.toHaveProperty("username");
   });
 
-  it("clearing an existing username sends null, returning the account to its full name", async () => {
+  it("never sends username null: emptying an existing username is refused client-side (B-133)", async () => {
     const withHandle = { ...USER, username: "goalie_9", publicName: "goalie_9" };
-    vi.mocked(updateUser).mockResolvedValueOnce(USER);
     renderWith(withHandle);
     expect(usernameInput().value).toBe("goalie_9");
 
     fireEvent.change(usernameInput(), { target: { value: "" } });
     save();
 
-    await waitFor(() => expect(updateUser).toHaveBeenCalledTimes(1));
-    expect(vi.mocked(updateUser).mock.calls[0][2]).toMatchObject({ username: null });
+    expect(await screen.findByText(/a username can.t be removed/i)).not.toBeNull();
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it("no longer calls the username optional (QA D-05)", () => {
+    renderWith(USER);
+    expect(document.body.textContent ?? "").not.toMatch(/optional\. if you set one/i);
+  });
+
+  it("shows the server's username_* error under the username field, with its message verbatim (B-133)", async () => {
+    vi.mocked(updateUser).mockRejectedValueOnce(
+      new UsersApiError("You changed your username recently. You can change it again on 2026-11-18.", {
+        status: 429,
+        code: "username_change_cooldown",
+      }),
+    );
+    renderWith({ ...USER, username: "goalie_9", publicName: "goalie_9" });
+    fireEvent.change(usernameInput(), { target: { value: "goalie_10" } });
+    save();
+
+    const alert = await screen.findByText(/you changed your username recently/i);
+    expect(alert.id).toBe("edit-profile-username-error");
   });
 
   it("rejects an invalid username client-side without calling the API", async () => {

@@ -169,9 +169,8 @@ export default function CreateCommunityGroupPage() {
         <div className="groups-callout">
           <p className="groups-callout__title">No group photo or logo</p>
           <p className="groups-callout__body">
-            Deliberately omitted, not overlooked. Soccernity has no image-upload endpoint and no avatar/badge column
-            on any entity today, so Club pages and Grassroots teams both use a monogram tile — Community Groups does
-            the same. Flagged rather than silently adding an upload control (same precedent as Decision Log #58).
+            Groups don&rsquo;t have a photo or logo yet. Club pages and Grassroots teams use a monogram tile, and
+            so do Community Groups.
           </p>
         </div>
 
