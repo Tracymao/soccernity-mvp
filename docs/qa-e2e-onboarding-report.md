@@ -23,6 +23,8 @@ What the harness changes, and why (all in `e2e/support`, none in product code):
 | `STRIPE_*` and `EMAIL_PROVIDER_API_KEY` set to `replace-me` | The root `.env` holds what looks like a real Stripe *test* key; the run must never reach Stripe. Under-13 card verification therefore fails closed (503). |
 | One test sets `Guardian.cardVerificationRequired=false` in SQL | Local runs have no GeoLite2 database, so every under-13 needs the card step (by design, Decision Log #368). Marked `WORKAROUND` in `tests/09-edge-cases.spec.ts`. |
 
+**Update 2026-10-19:** the CORS proxy described in the first row above was removed in PR #429 (backend/w3e): D-01 is fixed, the API listens on :3100 directly, and the D-01, D-02 and D-06 `test.fail()` lines are gone.
+
 ## 2. Scope coverage
 
 | Requested | Covered by | Result |
