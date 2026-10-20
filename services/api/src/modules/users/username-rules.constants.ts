@@ -146,14 +146,22 @@ export const PROFANITY_CONTAINS: readonly string[] = [
 // given names (Nazir, Nazim, Nazia, Nazih, Nazik), so a plain CONTAINS would
 // refuse them. The innocent names are cut out of the handle first; whatever is
 // left is then searched. 'nazifan' / 'xxnazixx' / 'nazirnazi' are refused;
-// 'nazir10' / 'nazim_fc' are accepted. 'Nazif' / 'Nazifa' are real names too but
-// cannot be told from 'nazi' + 'fan' (the founder's own example), so they are
-// refused and the user is asked to choose another handle.
+// 'nazir10' / 'nazim_fc' are accepted. 'Nazif' / 'Nazifa' / 'Nazifah' are real
+// names too, but a named exception ('nazif') would cut them out of 'nazifan'
+// and accept it (B-165, Decision Log #408 item 3), so they are allowed as
+// WHOLE handles only: see PROFANITY_ALLOWED_WHOLE_HANDLES.
 export const PROFANITY_CONTAINS_GUARDED: ReadonlyArray<{ term: string; innocent: readonly string[] }> = [
   { term: 'nazi', innocent: ['nazir', 'nazim', 'nazia', 'nazih', 'nazik'] },
 ];
 
-export const PROFANITY_EXACT: readonly string[] = [
+// B-165 (Decision Log #408 item 3): real given names that start with 'nazi'.
+// Allowed only when the handle IS the name (letters and digits with underscores
+// removed, no digit-to-letter mapping); this exempts the CONTAINS rule above and
+// nothing else. 'nazifan', 'nazifah_fan', 'xxnazifxx' and 'nazif_10' are NOT
+// covered and stay refused; whether suffixes should be accepted is not decided.
+export const PROFANITY_ALLOWED_WHOLE_HANDLES: readonly string[] = ['nazif', 'nazifa', 'nazifah'];
+
+export const PROFANITY_EXACT:readonly string[] = [
   'dick',
   'cock',
   'anal',

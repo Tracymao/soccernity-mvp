@@ -113,6 +113,42 @@ describe('username rules (B-032, pure)', () => {
         expect(checkUsernameRules('nazimxnazifan')).toBe('profanity');
       });
 
+      // B-165 (Decision Log #408 item 3): Nazif, Nazifa and Nazifah are real given
+      // names, allowed as WHOLE handles only. A named exception for 'nazif' would
+      // cut it out of 'nazifan' and accept it, so this is an allow-list checked
+      // before the CONTAINS rule instead.
+      it.each(['nazif', 'nazifa', 'nazifah', 'Nazif', 'NAZIFA', 'Nazifah', 'naz_ifa', '_nazif_'])(
+        'accepts the whole handle %s',
+        (handle) => {
+          expect(checkUsernameRules(handle)).toBeNull();
+        },
+      );
+
+      it.each([
+        'nazifan', // the founder's own example: still refused
+        'nazifan_10',
+        'nazif_an',
+        'nazifah_fan',
+        'nazifahfan',
+        'xxnazifxx',
+        'xnazifa',
+        'nazifax',
+        'nazifaan',
+        'nazif_10', // contains a name, is not a name: not covered by the decision
+        'nazifa2',
+        'n4zifan', // digit-for-letter forms are not allow-listed
+        'n4zif',
+        'nazinazif',
+        'nazifnazi',
+      ])('still refuses %s', (handle) => {
+        expect(checkUsernameRules(handle)).toBe('profanity');
+      });
+
+      it('the allow-list exempts the guarded nazi rule only, not other terms', () => {
+        expect(checkUsernameRules('nazifhitler')).toBe('profanity');
+        expect(checkUsernameRules('nazif_porn')).toBe('profanity');
+      });
+
       it('short ambiguous terms stay EXACT: inside a longer word they are accepted', () => {
         for (const ok of ['cockerel_9', 'dickens_fc', 'rapeseed_boy', 'grapevine_10', 'torpedoes_fc', 'peacockfc']) {
           expect(checkUsernameRules(ok)).toBeNull();
@@ -162,6 +198,10 @@ describe('username rules (B-032, pure)', () => {
         'nazih_9',
         'nazik_fan',
         'naziru_goals',
+        // ...and the three whole-handle names of B-165
+        'nazif',
+        'nazifa',
+        'nazifah',
         // ordinary words
         'assist_king',
         'classic_9',

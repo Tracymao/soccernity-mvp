@@ -15,13 +15,12 @@
 // a CORS request and is untouched. A disallowed browser origin gets no
 // Access-Control-Allow-Origin header, so the browser blocks the response.
 //
-// Fail-closed, not a boot failure: a variable that is unset, unparseable, a
-// placeholder host, or (in production) not https contributes NO origin, and
-// the problem is logged at boot. With both unusable in production nothing
-// cross-origin is allowed, which is visible at once (the apps cannot reach the
-// API) rather than silently permissive. Whether an unset origin variable
-// should instead refuse to start is NOT decided (Decision Log #407, "Not
-// decided"); it is flagged in docs/backend-w3e-report.md.
+// Fail-closed: a variable that is unset, unparseable, a placeholder host, or
+// (in production) not https contributes NO origin. In production the process
+// never gets this far with such a value: assertProductionEnv
+// (validate-runtime-env.ts, B-163, Decision Log #408 item 1) refuses to boot
+// first. The `problems` log below therefore only matters outside production,
+// and as a second line if the boot check is ever bypassed.
 
 export interface CorsEnv {
   NODE_ENV?: string;
