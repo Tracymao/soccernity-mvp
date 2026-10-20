@@ -239,3 +239,32 @@
   cursor: pointer;
   padding: 4px 0;
 }
+
+/* FC4 (B-178): no horizontal scroll at 390px. The 120px avatar, 32px padding and a long
+ * email address left the name block 179px wider than the screen. At <= 820px the header
+ * stacks, the name/email block may shrink and long values wrap. */
+@media (max-width: 820px) {
+  .profile-header {
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px;
+  }
+
+  .profile-header__top {
+    flex-wrap: wrap;
+  }
+
+  .profile-header__top > * {
+    min-width: 0;
+  }
+
+  .profile-header__name,
+  .profile-header__meta {
+    overflow-wrap: anywhere;
+  }
+
+  .profile-header__stats {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+}

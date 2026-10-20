@@ -207,7 +207,8 @@ describe("Add / Delete Role — disclosed stubs, Decision Log #191", () => {
         <AddRolePage />
       </MemoryRouter>,
     );
-    expect(screen.getByRole("note").textContent).toMatch(/Decision Log #191/);
+    expect(screen.getByRole("note").textContent).toMatch(/can.t be added or removed from this screen yet/i);
+    expect(screen.getByRole("note").textContent).not.toMatch(/Decision Log|endpoint|DB insert/i);
     for (const el of [...screen.queryAllByRole("textbox"), ...screen.queryAllByRole("combobox")]) {
       expect(el.hasAttribute("disabled")).toBe(true);
     }
@@ -220,7 +221,8 @@ describe("Add / Delete Role — disclosed stubs, Decision Log #191", () => {
         <DeleteRolePage />
       </MemoryRouter>,
     );
-    expect(screen.getByRole("note").textContent).toMatch(/Decision Log #191/);
+    expect(screen.getByRole("note").textContent).toMatch(/can.t be added or removed from this screen yet/i);
+    expect(screen.getByRole("note").textContent).not.toMatch(/Decision Log|endpoint|DB insert/i);
     const del = screen.getByRole("button", { name: "Delete Role" });
     expect(del.hasAttribute("disabled")).toBe(true);
     expect(del.className).toContain("admin-stub__btn--primary"); // navy, not a red variant

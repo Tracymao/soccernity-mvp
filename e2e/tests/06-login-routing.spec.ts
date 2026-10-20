@@ -210,7 +210,7 @@ test.describe('login form and session', () => {
     // alive its own in-flight requests can 401 on the planted token and rotate at
     // the same moment as the new page: the second use of the same refresh token is
     // then (correctly) treated as reuse and the session is cleared. That is a
-    // multi-tab race, not what this test checks, and it made the test fail intermittently once the harness proxy
+    // multi-tab race (cross-tab lock added in FC4/B-164, which covers two TABS; this workaround is kept because removing it still failed 3 of 8 repeats, see docs/fc4-report.md), not what this test checks, and it made the test fail intermittently once the harness proxy
     // (extra latency) was gone.
     await page.goto('about:blank');
     await page.addInitScript((t) => {

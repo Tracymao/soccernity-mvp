@@ -15,9 +15,7 @@ export default function CreateCompetitionPage() {
       title="Create Competition"
       banner={
         <>
-          No competitions admin endpoint exists. The Competition umbrella (Prediction / Commentary
-          types, votes) is parked — Build Plan Section 2.2, Decision Log #72/#73. This form is not
-          submittable.
+          Competitions can't be created yet. This form is a preview and can't be submitted.
         </>
       }
     >

@@ -133,8 +133,8 @@ export default function ModerationQueuePage() {
 
         <p className="mod-note">
           Appeals are reviewed by a <strong>different</strong> admin or moderator than the one who
-          made the original decision (Decision Log #138). Both the reporter and the reported user
-          are notified of the outcome (Build Plan Section 8.4).
+          made the original decision. Both the reporter and the reported user are notified of the
+          outcome.
         </p>
 
         {loading ? <p className="mod-loading">Loading the moderation queue…</p> : null}
@@ -186,21 +186,18 @@ export default function ModerationQueuePage() {
         <div className="mod-callout">
           <span className="mod-callout__bar" aria-hidden />
           <p>
-            Reported content and the reporter are shown by id — the queue endpoint
-            (<code>GET /admin/moderation/reports</code>) doesn&rsquo;t return a display name or a
-            content preview, only the raw <code>Report</code> row. A future pass could join in
-            reporter/author names; flagged, not built here.
+            Reported content and the reporter are shown by id. Names and a content preview are not
+            shown in the queue.
           </p>
         </div>
         <div className="mod-callout">
           <span className="mod-callout__bar" aria-hidden />
           <p>
-            Recording an action on a report does not by itself enforce it — there is still no
-            content-removal mechanism. A real account-suspension mechanism now exists
-            (<code>PATCH /admin/users/:id</code>, Users), but actioning a report as
-            &ldquo;Suspend User&rdquo; here does not automatically call it — a moderator suspends a
-            reported user separately, on the Users screen, if the decision warrants it. Actioning a
-            report only records the decision and notifies both parties.
+            Recording an action on a report does not by itself enforce it, and content is not
+            removed automatically. Actioning a report as &ldquo;Suspend User&rdquo; does not
+            suspend the account: a moderator suspends a reported user separately, on the Users
+            screen, if the decision warrants it. Actioning a report only records the decision and
+            notifies both parties.
           </p>
         </div>
       </div>

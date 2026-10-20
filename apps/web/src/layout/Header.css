@@ -199,12 +199,10 @@
   border: 1.5px solid var(--sn-background-surface);
 }
 
-/* Mobile (QA D-12, register B-132): at 390px the desktop header (logo, a
- * 240px search box, the icon row and the account cluster) was ~170px wider than
- * the screen, so every page under it scrolled sideways. The search box is a
- * disabled placeholder with no behaviour, so it is hidden here; padding and gaps
- * tighten; the icon row (flex: 1, min-width: 0) takes whatever width is left and
- * scrolls inside itself. The 820px breakpoint matches useIsMobile(). */
+/* Mobile (QA D-12, register B-132; superseded by FC4, B-178 below): at <= 820px Header.tsx no
+ * longer renders the search box or the nine-icon row at all -- the Figma mobile header draws
+ * neither -- so what is left here only tightens spacing. The 820px breakpoint matches
+ * useIsMobile(). */
 @media (max-width: 820px) {
   .sn-header {
     gap: 12px;
@@ -226,5 +224,72 @@
   .sn-header__login-button {
     padding: 0 16px;
     font-size: 15px;
+  }
+}
+
+/* FC4 (Decision Log #408 item 8, B-178): the mobile header as the Figma header 4 / header 7
+ * -- mobile frames (K4 frames 6784:29454 / 6784:29476) draw it. 64px tall; the logo on the
+ * left; a search icon, then (signed in) the messages glyph and the avatar, or (logged out)
+ * the Login button and a menu control. The nine-icon row and the search box are not rendered
+ * on mobile (Header.tsx), so nothing here can overflow at 390px. */
+.sn-header__search-link,
+.sn-header__menu-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.sn-header__search-link img,
+.sn-header__menu-button img {
+  display: block;
+}
+
+.sn-header__menu-button {
+  width: 48px;
+  height: 48px;
+}
+
+.sn-header__search-link:focus-visible,
+.sn-header__menu-button:focus-visible {
+  outline: 2px solid var(--sn-brand-green);
+  outline-offset: 2px;
+}
+
+@media (min-width: 821px) {
+  .sn-header__search-link,
+  .sn-header__menu-button {
+    display: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .sn-header--mobile {
+    justify-content: space-between;
+    height: 64px;
+    gap: 8px;
+    padding: 0 8px 0 16px;
+  }
+
+  .sn-header--mobile .sn-header__auth {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  /* The Figma Login button is 80 x 41 at 16px / 600; the shared rule above is a touch wider. */
+  .sn-header--mobile .sn-header__login-button {
+    height: 41px;
+    padding: 0 16px;
+  }
+
+  .sn-header--mobile .sn-header__account {
+    gap: 18px;
+    padding-right: 8px;
   }
 }

@@ -47,8 +47,7 @@ function StubShell({ title, children }: { title: string; children: ReactNode }) 
       </div>
       <AdminPageHeader title={title} hideSearch />
       <StubBanner>
-        There is no self-service admin/moderator account creation or deletion endpoint — accounts
-        are provisioned by direct DB insert (Decision Log #191).
+        Admin and moderator accounts can't be added or removed from this screen yet.
       </StubBanner>
       <div className="admin-stub__body">{children}</div>
     </>
@@ -59,8 +58,7 @@ export function AddRolePage() {
   return (
     <StubShell title="Add a new role">
       <p className="admin-stub__note">
-        This screen really creates an admin/moderator account (name, email, password) — see
-        Decision Log #191 for why that is not self-service.
+        This screen would create an admin or moderator account (name, email, password).
       </p>
       <StubField label="Name" value="" />
       <StubField label="Email" value="" />

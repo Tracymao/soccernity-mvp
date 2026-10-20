@@ -198,9 +198,8 @@ export default function AppealReviewPage() {
 
         <p className="mod-note">
           You are reviewing this appeal because a <strong>different</strong> admin or moderator
-          actioned the original report (Decision Log #138) — the backend rejects this decision
-          outright if you were that reviewer. The outcome is final, and the reported user is
-          notified.
+          actioned the original report. If you were that reviewer, this decision is rejected. The
+          outcome is final, and the reported user is notified.
         </p>
 
         <div className="mod-card">
@@ -242,9 +241,7 @@ export default function AppealReviewPage() {
         <div className="mod-card">
           <h2 className="mod-card__title">Appeal submitted by the reported user</h2>
           <p className="mod-note">
-            The reported user&rsquo;s own identity isn&rsquo;t part of this response — `Report` has
-            no denormalized reported-user column (it&rsquo;s resolved dynamically depending on
-            <code> targetType</code>, see the moderation module&rsquo;s README).
+            The reported user&rsquo;s identity is not shown here.
           </p>
           <div className="mod-field">
             <span className="mod-field__label">Appeal reason</span>

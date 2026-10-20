@@ -101,6 +101,12 @@ function RevokeUsernameDialog({
           <p className="ud-dialog__text">
             This removes @{user.username} from {user.displayName}&rsquo;s account. [COPY PENDING LEGAL REVIEW]
           </p>
+          {/* B-168 (Decision Log #408 item 5): the hold line as K4 drew it on frames 6647:25789 and
+              6649:24714. Admin-facing; the frames carry no tag on it and no held-until date. */}
+          <p className="ud-dialog__text">
+            The username is held for 30 days after it is revoked: nobody can take it, and this user cannot choose it
+            again.
+          </p>
           <div className="ud-field ud-field--wide">
             <label htmlFor="revoke-reason">Reason (required)</label>
             <textarea
@@ -179,7 +185,7 @@ export default function UserDetailPage() {
 
         {revoked ? (
           <p className="ud-callout" role="status">
-            Username revoked. The action was recorded.
+            Username revoked. The action was recorded. The username is held for 30 days.
           </p>
         ) : null}
 

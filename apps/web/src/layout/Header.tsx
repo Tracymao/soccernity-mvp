@@ -14,6 +14,14 @@
 // useLocation().key), so the login redirect and the logout redirect both
 // flip the header between the two variants without a full reload.
 //
+// FC4 (Decision Log #408 item 8, B-178): at <= 820px the header is the Figma
+// header 4 / header 7 -- mobile (K4 frames 6784:29454 / 6784:29476): logo, a
+// search icon, then the messages glyph and avatar (signed in) or the Login
+// button and a menu control (logged out). The nine-icon row and the search box
+// are desktop only. Signed in, the avatar opens NavDrawer; logged out, the menu
+// control opens NavDrawer's "logged-out" variant (the public sections plus
+// Login and Sign up).
+//
 // The avatar opens two different real overlays by design (Decision Log
 // #162): the account dropdown on desktop, the Navigation Drawer on
 // mobile -- picked by useIsMobile().
@@ -44,6 +52,8 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import logoMark from "../assets/icons/soccernity-logo-mark.svg";
 import searchIcon from "../assets/icons/search.svg";
 import messagesIcon from "../assets/icons/messages.svg";
+import searchMobileIcon from "../assets/icons/search-mobile.svg";
+import menuIcon from "../assets/icons/menu-hamburger.svg";
 import { getUser, type UserProfile } from "../api/users";
 import { getUnreadCount } from "../api/notifications";
 import { clearStoredSession, decodeAccessToken, getStoredAccessToken, getStoredRefreshToken } from "../lib/session";
@@ -152,7 +162,7 @@ export default function Header() {
   }
 
   return (
-    <header className="sn-header">
+    <header className={isMobile ? "sn-header sn-header--mobile" : "sn-header"}>
       <div className="sn-header__brand">
         <NavLink to="/" className="sn-header__logo-link" aria-label="Soccernity home">
           <img src={logoMark} alt="" className="sn-header__logo-mark" width={32} height={32} />
@@ -160,45 +170,58 @@ export default function Header() {
         </NavLink>
       </div>
 
-      <div className="sn-header__search" role="search">
-        <img src={searchIcon} alt="" className="sn-header__search-icon" width={16} height={16} />
-        {/* Placeholder only -- no search functionality yet, out of scope for the app shell. */}
-        <input
-          type="search"
-          className="sn-header__search-input"
-          placeholder="Search Soccernity"
-          aria-label="Search Soccernity"
-          disabled
-        />
-      </div>
+      {/* Desktop (> 820 px): the search box and the nine-icon row. On mobile neither is
+          rendered: the Figma mobile header (header 4 / header 7 -- mobile, FC4, B-178)
+          draws the logo, a search icon and the account / Login controls only; the sections
+          are reached through the Navigation Drawer. */}
+      {!isMobile && (
+        <>
+          <div className="sn-header__search" role="search">
+            <img src={searchIcon} alt="" className="sn-header__search-icon" width={16} height={16} />
+            {/* Placeholder only -- no search functionality yet, out of scope for the app shell. */}
+            <input
+              type="search"
+              className="sn-header__search-input"
+              placeholder="Search Soccernity"
+              aria-label="Search Soccernity"
+              disabled
+            />
+          </div>
 
-      <nav className="sn-header__nav" aria-label="Primary">
-        <ul className="sn-header__nav-list">
-          {primaryNavItems.map((item) => (
-            <li key={item.to}>
-              <NavLink
-                to={item.to}
-                aria-label={item.label}
-                className={({ isActive }) =>
-                  isActive ? "sn-header__nav-link sn-header__nav-link--active" : "sn-header__nav-link"
-                }
-              >
-                <span
-                  className={
-                    item.tinted
-                      ? "sn-header__nav-icon sn-header__nav-icon--tinted"
-                      : "sn-header__nav-icon"
-                  }
-                >
-                  <img src={item.icon} alt="" />
-                </span>
-              </NavLink>
-            </li>
-          ))}
-        </ul>
-      </nav>
+          <nav className="sn-header__nav" aria-label="Primary">
+            <ul className="sn-header__nav-list">
+              {primaryNavItems.map((item) => (
+                <li key={item.to}>
+                  <NavLink
+                    to={item.to}
+                    aria-label={item.label}
+                    className={({ isActive }) =>
+                      isActive ? "sn-header__nav-link sn-header__nav-link--active" : "sn-header__nav-link"
+                    }
+                  >
+                    <span
+                      className={
+                        item.tinted
+                          ? "sn-header__nav-icon sn-header__nav-icon--tinted"
+                          : "sn-header__nav-icon"
+                      }
+                    >
+                      <img src={item.icon} alt="" />
+                    </span>
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </>
+      )}
 
       <div className="sn-header__auth">
+        {isMobile && (
+          <Link to="/search" className="sn-header__search-link" aria-label="Search">
+            <img src={searchMobileIcon} alt="" width={24} height={24} />
+          </Link>
+        )}
         {hasSession ? (
           <div className="sn-header__account" ref={accountRef}>
             {/* Messages: /messages now resolves (sprint-3/banter-
@@ -228,13 +251,31 @@ export default function Header() {
             )}
           </div>
         ) : (
-          <Link to="/login" className="sn-header__login-button">
-            Login
-          </Link>
+          <>
+            <Link to="/login" className="sn-header__login-button">
+              Login
+            </Link>
+            {isMobile && (
+              <button
+                type="button"
+                className="sn-header__menu-button"
+                aria-label="Open menu"
+                aria-haspopup="dialog"
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen((open) => !open)}
+              >
+                <img src={menuIcon} alt="" width={24} height={24} />
+              </button>
+            )}
+          </>
         )}
       </div>
 
-      {menuOpen && isMobile && (
+      {menuOpen && isMobile && !hasSession && (
+        <NavDrawer variant="logged-out" onClose={() => setMenuOpen(false)} onLogout={handleLogout} />
+      )}
+
+      {menuOpen && isMobile && hasSession && (
         <NavDrawer
           onClose={() => setMenuOpen(false)}
           onLogout={handleLogout}

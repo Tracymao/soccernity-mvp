@@ -142,6 +142,10 @@ describe("UserDetailPage", () => {
     it("opens the drawn dialog naming the handle and the user, and sends nothing yet", async () => {
       const dialog = await openDialog();
       expect(dialog.textContent).toContain("This removes @adab from Ada Bello’s account.");
+      // B-168: the 30-day hold line as drawn in frame 6647:25789 (no tag, no date).
+      expect(dialog.textContent).toContain(
+        "The username is held for 30 days after it is revoked: nobody can take it, and this user cannot choose it again.",
+      );
       expect(within(dialog).getByLabelText("Reason (required)")).not.toBeNull();
       expect(revokeUsername).not.toHaveBeenCalled();
     });
@@ -176,7 +180,7 @@ describe("UserDetailPage", () => {
       fireEvent.click(within(dialog).getByRole("button", { name: "Revoke username" }));
 
       await waitFor(() => expect(revokeUsername).toHaveBeenCalledWith("user-1", "Impersonates a club official account"));
-      expect(await screen.findByText("Username revoked. The action was recorded.")).not.toBeNull();
+      expect(await screen.findByText("Username revoked. The action was recorded. The username is held for 30 days.")).not.toBeNull();
       expect(screen.queryByRole("dialog")).toBeNull();
       await waitFor(() => expect(screen.getByText("No username")).not.toBeNull());
       expect(screen.getByText("This account has no username.")).not.toBeNull();
@@ -193,7 +197,7 @@ describe("UserDetailPage", () => {
       expect((await within(dialog).findByRole("alert")).textContent).toBe(
         "The username could not be revoked. Nothing was changed. Try again.",
       );
-      expect(screen.queryByText("Username revoked. The action was recorded.")).toBeNull();
+      expect(screen.queryByText("Username revoked. The action was recorded. The username is held for 30 days.")).toBeNull();
     });
 
     it("shows a specific 4xx message from the server (for example the handle changed mid-request)", async () => {

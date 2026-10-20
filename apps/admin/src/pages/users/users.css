@@ -55,6 +55,9 @@
 .us-error {
   padding: 10px 12px;
   border: 1px solid var(--sn-brand-navy);
+  /* Error accent bar: semantic/alert, as the frames draw it (Decision Log
+   * #408 item 4, B-166). Accent only; the text stays navy. */
+  border-left: 6px solid var(--sn-semantic-alert);
   border-radius: 4px;
   background-color: var(--sn-green-tint-12);
   color: var(--sn-text-primary);
@@ -331,6 +334,8 @@
 
 .ud-field__error {
   margin: 0;
+  padding-left: 8px;
+  border-left: 3px solid var(--sn-semantic-alert);
   font-size: 12px;
   font-weight: 600;
   color: var(--sn-text-primary);
@@ -470,14 +475,16 @@ a.us-btn {
 }
 
 /* B-033 revoke dialog, B-120 incorrect-details reports, B-104 guardian block
- * (Figma W0 pass C / pass K). Tokens only; no new colour. The frames draw the
- * error bar in semantic/alert red, which apps/admin has no token for (and
- * non-negotiable #3), so error callouts keep the navy bar, as .us-error does. */
+ * (Figma W0 pass C / pass K). Tokens only. The frames draw the error bar and
+ * the invalid-field stroke in semantic/alert (#FA0606), a founder-authorised
+ * exception to non-negotiable #3 (Decision Log #99, #408 item 4, B-166). It is
+ * used for the accent only (bar, border); error text and buttons stay navy,
+ * because white-on-alert is 4.12:1, below AA. */
 
 .ud-callout--error {
   margin: 0;
   border: 1px solid var(--sn-brand-navy);
-  border-left-width: 6px;
+  border-left: 6px solid var(--sn-semantic-alert);
   font-weight: 600;
 }
 
@@ -498,7 +505,7 @@ p.ud-callout {
 }
 
 .ud-input[aria-invalid="true"] {
-  border-color: var(--sn-brand-navy);
+  border-color: var(--sn-semantic-alert);
   border-width: 2px;
 }
 

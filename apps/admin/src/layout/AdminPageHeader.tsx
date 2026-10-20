@@ -33,7 +33,7 @@ export default function AdminPageHeader({ title, subtitle, action, hideSearch }:
         {!hideSearch ? (
           <span
             className="admin-page-header__search"
-            title="Admin search is not available yet — no search endpoint exists in services/api."
+            title="Admin search is not available yet."
           >
             <img src={searchIcon} alt="" className="admin-page-header__search-icon" />
             <input

@@ -10,7 +10,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router";
 import Header from "./Header";
-import { primaryNavItems, drawerNavItems, accountMenuItems } from "./navigation";
+import { primaryNavItems, drawerNavItems, accountMenuItems, loggedOutDrawerNavItems } from "./navigation";
 import type { UserProfile } from "../api/users";
 
 vi.mock("../api/users", async () => {
@@ -481,5 +481,84 @@ describe("Header -- drawer identity block (Decision Log #168)", () => {
     expect(within(drawer).getByRole("link", { name: "Signed in" }).getAttribute("href")).toBe(
       "/profile",
     );
+  });
+});
+
+// FC4 (Decision Log #408 item 8, B-178): the mobile header follows the Figma header 4 / header 7
+// -- mobile frames (K4): logo, a search icon, then the account controls (signed in) or Login and
+// a menu control (logged out). The nine-icon row stays on desktop only.
+describe("Header -- mobile (FC4, B-178)", () => {
+  beforeEach(() => setViewport(390));
+
+  it("signed in: no nine-icon row and no search box, a search icon, messages and the avatar", () => {
+    window.sessionStorage.setItem(TOKEN_KEY, "not-a-real-jwt");
+    renderHeader();
+    expect(screen.queryByRole("navigation", { name: "Primary" })).toBeNull();
+    for (const item of primaryNavItems) expect(screen.queryByRole("link", { name: item.label })).toBeNull();
+    expect(screen.queryByRole("searchbox")).toBeNull();
+    expect(screen.getByRole("link", { name: "Search" }).getAttribute("href")).toBe("/search");
+    expect(screen.getByRole("link", { name: "Messages" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Account menu" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Open menu" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Login" })).toBeNull();
+  });
+
+  it("signed in: the avatar opens the existing Navigation Drawer (with Log out)", () => {
+    window.sessionStorage.setItem(TOKEN_KEY, "not-a-real-jwt");
+    renderHeader();
+    fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
+    const drawer = screen.getByRole("dialog", { name: "Navigation" });
+    expect(within(drawer).getByRole("button", { name: "Log out" })).not.toBeNull();
+    expect(within(drawer).queryByRole("link", { name: "Sign up" })).toBeNull();
+  });
+
+  it("logged out: no icon row; Login, a search icon and a menu control", () => {
+    renderHeader("/");
+    expect(screen.queryByRole("navigation", { name: "Primary" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Login" }).getAttribute("href")).toBe("/login");
+    expect(screen.getByRole("link", { name: "Search" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Open menu" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Account menu" })).toBeNull();
+  });
+
+  it("logged out: the menu opens the visitor drawer with only the public sections, Login and Sign up", () => {
+    renderHeader("/");
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    const drawer = screen.getByRole("dialog", { name: "Navigation" });
+    const rows = within(within(drawer).getByRole("navigation", { name: "Primary" })).getAllByRole("link");
+    expect(rows.map((r) => r.textContent)).toEqual(loggedOutDrawerNavItems.map((i) => i.label));
+    expect(rows.map((r) => r.textContent)).toEqual(["Sports Hub", "Blog", "Scouting", "Academy"]);
+    expect(within(drawer).getByRole("link", { name: "Login" }).getAttribute("href")).toBe("/login");
+    expect(within(drawer).getByRole("link", { name: "Sign up" }).getAttribute("href")).toBe("/signup");
+    // No identity block and no Log out for a visitor; no gated section is listed.
+    expect(within(drawer).queryByRole("button", { name: "Log out" })).toBeNull();
+    for (const gated of ["Community", "Notifications", "Bants", "Leaderboard", "Clubs", "Groups", "Grassroots", "Settings"]) {
+      expect(within(drawer).queryByText(gated)).toBeNull();
+    }
+  });
+
+  it("logged out: choosing a section navigates and closes the drawer; Escape and the scrim close it too", () => {
+    renderHeader("/");
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Navigation" })).getByRole("link", { name: "Sports Hub" }));
+    expect(screen.getByTestId("pathname").textContent).toBe("/sports-hub");
+    expect(screen.queryByRole("dialog", { name: "Navigation" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Navigation" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close navigation" }));
+    expect(screen.queryByRole("dialog", { name: "Navigation" })).toBeNull();
+  });
+
+  it("desktop keeps the icon row and shows neither the search icon nor the menu control", () => {
+    setViewport(1200);
+    renderHeader("/");
+    expect(screen.getByRole("navigation", { name: "Primary" })).not.toBeNull();
+    expect(screen.getByRole("searchbox")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Open menu" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Search" })).toBeNull();
   });
 });
