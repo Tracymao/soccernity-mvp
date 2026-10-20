@@ -32,6 +32,11 @@ export const colors = {
     shadowAmbient: "rgba(40, 46, 101, 0.08)",
     shadowElevated: "rgba(40, 46, 101, 0.14)",
     shadowKey: "rgba(40, 46, 101, 0.12)",
+    // semantic/alert (Figma VariableID:5670:8226, Decision Log #99): the one
+    // founder-authorised exception to the two-colour palette. #FA0606 in both
+    // modes. Error-callout accent only (bar / border / icon), never text or a
+    // button fill (Decision Log #408 item 4, B-166).
+    semanticAlert: "#FA0606",
   },
   dark: {
     brandGreen: "#7BB929",
@@ -48,5 +53,6 @@ export const colors = {
     shadowAmbient: "rgba(13, 15, 33, 0.30)",
     shadowElevated: "rgba(13, 15, 33, 0.45)",
     shadowKey: "rgba(13, 15, 33, 0.55)",
+    semanticAlert: "#FA0606",
   },
 };

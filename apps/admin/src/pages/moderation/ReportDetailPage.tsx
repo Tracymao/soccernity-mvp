@@ -260,9 +260,8 @@ export default function ReportDetailPage() {
               ))}
             </div>
             <p className="mod-note">
-              Once actioned, both the reporter and the reported user are notified of the outcome
-              (Build Plan Section 8.4). Recording an action does not by itself remove content or
-              suspend an account — see the moderation module's own disclosed-limitation note.
+              Once actioned, both the reporter and the reported user are notified of the outcome.
+              Recording an action does not by itself remove content or suspend an account.
             </p>
           </div>
         )}

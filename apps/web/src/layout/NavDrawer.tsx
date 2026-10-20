@@ -31,7 +31,7 @@ import { useEffect } from "react";
 import { NavLink } from "react-router";
 import logoMark from "../assets/icons/soccernity-logo-mark.svg";
 import type { UserProfile } from "../api/users";
-import { drawerNavItems } from "./navigation";
+import { drawerNavItems, loggedOutDrawerNavItems } from "./navigation";
 import "./NavDrawer.css";
 
 interface NavDrawerProps {
@@ -46,6 +46,12 @@ interface NavDrawerProps {
   profile?: UserProfile | null;
   /** From Header's GET /notifications/unread-count fetch. */
   unreadCount?: number;
+  /**
+   * "logged-out" (FC4, B-178): the visitor drawer drawn in Figma pass K4 -- Login and Sign up
+   * buttons instead of the identity block, only the sections a logged-out visitor can open,
+   * no Log out. Defaults to the signed-in drawer.
+   */
+  variant?: "signed-in" | "logged-out";
 }
 
 // Same pattern as ProfilePage.tsx / PostCard.tsx (a third small local
@@ -57,7 +63,15 @@ function initialsFor(displayName: string): string {
   return `${parts[0][0] ?? ""}${parts[parts.length - 1][0] ?? ""}`.toUpperCase();
 }
 
-export default function NavDrawer({ onClose, onLogout, profile, unreadCount = 0 }: NavDrawerProps) {
+export default function NavDrawer({
+  onClose,
+  onLogout,
+  profile,
+  unreadCount = 0,
+  variant = "signed-in",
+}: NavDrawerProps) {
+  const loggedOut = variant === "logged-out";
+  const navItems = loggedOut ? loggedOutDrawerNavItems : drawerNavItems;
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
@@ -67,7 +81,12 @@ export default function NavDrawer({ onClose, onLogout, profile, unreadCount = 0 
   }, [onClose]);
 
   return (
-    <div className="sn-drawer" role="dialog" aria-modal="true" aria-label="Navigation">
+    <div
+      className={loggedOut ? "sn-drawer sn-drawer--logged-out" : "sn-drawer"}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Navigation"
+    >
       <button
         type="button"
         className="sn-drawer__scrim"
@@ -80,24 +99,35 @@ export default function NavDrawer({ onClose, onLogout, profile, unreadCount = 0 
           <span className="sn-drawer__wordmark">Soccernity</span>
         </div>
 
-        <NavLink to="/profile" className="sn-drawer__identity" onClick={onClose}>
-          {profile ? (
-            <>
-              <span className="sn-drawer__avatar" aria-hidden="true">
-                {initialsFor(profile.publicName)}
-              </span>
-              <span className="sn-drawer__name">{profile.publicName}</span>
-            </>
-          ) : (
-            <>
-              <span className="sn-drawer__avatar" aria-hidden="true" />
-              <span className="sn-drawer__signed-in">Signed in</span>
-            </>
-          )}
-        </NavLink>
+        {loggedOut ? (
+          <div className="sn-drawer__auth">
+            <NavLink to="/login" className="sn-drawer__auth-button sn-drawer__auth-button--primary" onClick={onClose}>
+              Login
+            </NavLink>
+            <NavLink to="/signup" className="sn-drawer__auth-button sn-drawer__auth-button--outline" onClick={onClose}>
+              Sign up
+            </NavLink>
+          </div>
+        ) : (
+          <NavLink to="/profile" className="sn-drawer__identity" onClick={onClose}>
+            {profile ? (
+              <>
+                <span className="sn-drawer__avatar" aria-hidden="true">
+                  {initialsFor(profile.publicName)}
+                </span>
+                <span className="sn-drawer__name">{profile.publicName}</span>
+              </>
+            ) : (
+              <>
+                <span className="sn-drawer__avatar" aria-hidden="true" />
+                <span className="sn-drawer__signed-in">Signed in</span>
+              </>
+            )}
+          </NavLink>
+        )}
 
         <nav className="sn-drawer__nav" aria-label="Primary">
-          {drawerNavItems.map((item) =>
+          {navItems.map((item) =>
             item.available === false ? (
               <span
                 key={item.to}
@@ -126,11 +156,15 @@ export default function NavDrawer({ onClose, onLogout, profile, unreadCount = 0 
           )}
         </nav>
 
-        <div className="sn-drawer__divider" />
+        {loggedOut ? null : (
+          <>
+            <div className="sn-drawer__divider" />
 
-        <button type="button" className="sn-drawer__logout" onClick={onLogout}>
-          Log out
-        </button>
+            <button type="button" className="sn-drawer__logout" onClick={onLogout}>
+              Log out
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

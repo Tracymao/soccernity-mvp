@@ -158,7 +158,7 @@ export default function CreateArticlePage() {
               Upload Images
             </button>
           </div>
-          <p className="ac-hint">Image attachment ships once the Media library backend exists.</p>
+          <p className="ac-hint">Uploading images from this form is not available yet.</p>
         </div>
 
         <div className="ac-action-row">

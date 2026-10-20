@@ -152,3 +152,51 @@
   color: var(--sn-text-secondary);
   cursor: pointer;
 }
+
+/* FC4 (Decision Log #408 item 8, B-178): logged-out drawer, Figma pass K4 frame 6785:29485.
+ * Login (navy, filled) and Sign up (outlined) take the place of the identity block; rows
+ * carry the small marker dot the Figma drawer draws. */
+.sn-drawer__auth {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 20px 0 18px;
+}
+
+.sn-drawer__auth-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  border-radius: 6px;
+  font-family: "Montserrat", sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  text-decoration: none;
+}
+
+.sn-drawer__auth-button--primary {
+  background-color: var(--sn-brand-navy);
+  border: 1px solid var(--sn-brand-navy);
+  color: white;
+}
+
+.sn-drawer__auth-button--outline {
+  background-color: var(--sn-background-surface);
+  border: 1px solid var(--sn-brand-navy);
+  color: var(--sn-text-primary);
+}
+
+.sn-drawer--logged-out .sn-drawer__link {
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.sn-drawer--logged-out .sn-drawer__link::before {
+  content: "";
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--sn-icon-inactive);
+}

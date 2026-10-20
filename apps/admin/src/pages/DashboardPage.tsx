@@ -126,7 +126,7 @@ export default function DashboardPage() {
 
         <StubSection title="New users by league">
           <p className="admin-stub__sample-caption">
-            Sample — not real data. No league concept exists on User; blocked on Decision Log #6.
+            Sample — not real data.
           </p>
           <ul className="admin-dashboard__breakdown">
             {LEAGUE_BREAKDOWN.map((l) => (

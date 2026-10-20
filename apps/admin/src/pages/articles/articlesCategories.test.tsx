@@ -303,7 +303,7 @@ describe("CreateArticlePage", () => {
     );
 
     expect(screen.getByRole("button", { name: "Upload Images" }).hasAttribute("disabled")).toBe(true);
-    expect(screen.getByText(/image attachment ships once the Media library backend exists/i)).not.toBeNull();
+    expect(screen.getByText(/uploading images from this form is not available yet/i)).not.toBeNull();
   });
 
   // Decision Log #334, resolved — the cover image picker.

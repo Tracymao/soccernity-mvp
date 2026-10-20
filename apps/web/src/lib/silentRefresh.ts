@@ -10,6 +10,15 @@
 // family) and replays the request once with the new token. If the refresh
 // itself is rejected the stored session is cleared; the original 401 is
 // returned, so each page's existing "signed out" handling still applies.
+//
+// B-164 -- cross-tab. The single-flight above only protects ONE tab. The
+// refresh token rotates and the server treats a second use of an old token as
+// reuse (revoking the family), so two tabs sharing a "Stay signed in"
+// (localStorage) session that 401 together used to be able to log the person
+// out. The rotation therefore runs under a cross-tab lock (the Web Locks API;
+// a localStorage lease where it is unavailable). The tab that takes the lock
+// re-reads the stored tokens FIRST: if another tab already rotated them it
+// uses the new pair and does not call the server at all.
 import { clearStoredSession, getStoredAccessToken, getStoredRefreshToken, replaceStoredTokens } from "./session";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
@@ -32,13 +41,96 @@ type FetchInit = NonNullable<Parameters<typeof fetch>[1]>;
 
 let inFlight: Promise<boolean> | null = null;
 
+const LOCK_NAME = "sn-refresh-token-rotation";
+// Fallback lease (no Web Locks): key in localStorage holding { owner, until }.
+const LEASE_KEY = "sn_refresh_lock";
+// Longer than a slow refresh round trip, short enough that a tab that died
+// holding the lease does not block the others for long.
+const LEASE_TTL_MS = 10_000;
+const LEASE_POLL_MS = 40;
+const LEASE_MAX_WAIT_MS = 12_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+interface Lease {
+  owner: string;
+  until: number;
+}
+
+function readLease(): Lease | null {
+  try {
+    const raw = window.localStorage.getItem(LEASE_KEY);
+    return raw ? (JSON.parse(raw) as Lease) : null;
+  } catch {
+    return null;
+  }
+}
+
+// Best-effort mutual exclusion over localStorage, used only where
+// navigator.locks is missing. Not perfectly atomic (two tabs writing in the
+// same instant can both think they won), so after writing it waits one poll
+// and re-reads: the last writer wins and the other backs off. The token-
+// freshness re-check inside the lock is the second line of defence.
+async function withLeaseLock<T>(task: () => Promise<T>): Promise<T> {
+  const owner = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const deadline = Date.now() + LEASE_MAX_WAIT_MS;
+  for (;;) {
+    const held = readLease();
+    if (!held || held.until < Date.now() || held.owner === owner) {
+      try {
+        window.localStorage.setItem(LEASE_KEY, JSON.stringify({ owner, until: Date.now() + LEASE_TTL_MS }));
+      } catch {
+        break; // storage unavailable: run unlocked rather than never
+      }
+      await sleep(LEASE_POLL_MS);
+      if (readLease()?.owner === owner) break;
+    } else {
+      await sleep(LEASE_POLL_MS);
+    }
+    if (Date.now() >= deadline) break; // a stuck lease never blocks forever
+  }
+  try {
+    return await task();
+  } finally {
+    if (readLease()?.owner === owner) {
+      try {
+        window.localStorage.removeItem(LEASE_KEY);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
+function withCrossTabLock<T>(task: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
+  if (locks && typeof locks.request === "function") {
+    return locks.request(LOCK_NAME, task) as Promise<T>;
+  }
+  return withLeaseLock(task);
+}
+
 function bearerFrom(headers: FetchInit["headers"]): string | null {
   if (!headers) return null;
   const value = new Headers(headers).get("Authorization");
   return value && value.startsWith("Bearer ") ? value.slice("Bearer ".length) : null;
 }
 
-async function rotateSession(originalFetch: typeof fetch): Promise<boolean> {
+async function rotateSession(originalFetch: typeof fetch, usedToken: string): Promise<boolean> {
+  return withCrossTabLock(async () => {
+    // Another tab may have rotated while this one waited for the lock: if the
+    // stored access token is no longer the one that just 401'd, use the new
+    // pair and do not call the server (that would be a second use of the old
+    // refresh token).
+    const current = getStoredAccessToken();
+    if (current && current !== usedToken) return true;
+    return callRefresh(originalFetch);
+  });
+}
+
+async function callRefresh(originalFetch: typeof fetch): Promise<boolean> {
   const refreshToken = getStoredRefreshToken();
   if (!refreshToken) return false;
   try {
@@ -82,7 +174,7 @@ export function installSilentRefresh(): void {
     // was in flight: replay with the stored token instead of rotating again.
     let currentToken = getStoredAccessToken();
     if (currentToken === usedToken) {
-      inFlight ??= rotateSession(originalFetch).finally(() => {
+      inFlight ??= rotateSession(originalFetch, usedToken).finally(() => {
         inFlight = null;
       });
       if (!(await inFlight)) return response;

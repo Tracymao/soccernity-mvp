@@ -34,6 +34,7 @@ const CSS_VAR_MAP: Record<keyof Palette, string> = {
   shadowAmbient: "--sn-shadow-ambient",
   shadowElevated: "--sn-shadow-elevated",
   shadowKey: "--sn-shadow-key",
+  semanticAlert: "--sn-semantic-alert",
 };
 
 export function applyTheme(mode: ThemeMode = "light"): void {

@@ -12,8 +12,8 @@ export default function CompetitionCreatedPage() {
       backLink={<Link to="/competitions">← Create Competition</Link>}
       banner={
         <>
-          No competitions backend exists (Decision Log #72/#73) — this success screen is not
-          reachable from a real flow. Shown for design fidelity.
+          Competitions can't be created yet, so this screen can't be reached. It is shown as a
+          preview of the success message.
         </>
       }
     >
@@ -22,7 +22,7 @@ export default function CompetitionCreatedPage() {
         board <em>(sample)</em>.
       </p>
       <div className="admin-stub__actions">
-        <span className="admin-stub__note">View competition board (not built)</span>
+        <span className="admin-stub__note">View competition board (not available yet)</span>
         <Link to="/competitions" className="admin-stub__linkbtn">
           Create another
         </Link>

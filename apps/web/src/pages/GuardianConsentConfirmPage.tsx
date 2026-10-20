@@ -236,8 +236,8 @@ export default function GuardianConsentConfirmPage() {
           <div className="consent-card">
             <h1 className="consent-page__heading">Your decision has been recorded</h1>
             <p className="consent-status-message" role="status">
-              You have declined permission for this account, so it stays switched off. {GUARDIAN_CAP_SENTENCE} You
-              can close this page.
+              <span>You have declined permission for this account, so it stays switched off. [COPY PENDING LEGAL REVIEW]</span>{" "}
+              {GUARDIAN_CAP_SENTENCE} You can close this page.
             </p>
           </div>
         ) : (

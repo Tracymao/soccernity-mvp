@@ -168,3 +168,17 @@ export const accountMenuItems: DrawerNavItem[] = [
   { label: "Settings", to: "/settings" },
   { label: "Groups", to: "/groups" },
 ];
+
+// FC4 (Decision Log #408 item 8, B-178): the logged-out mobile drawer, as drawn in Figma
+// pass K4 (frame 6785:29485). A logged-out visitor can open only the sections that have no
+// login gate -- confirmed against router.tsx and the page sources in the K4 report
+// (section 6): Sports Hub, Blog, Scouting and Academy (both Coming Soon pages). Every other
+// section renders a "Log in to..." prompt, so it is not listed. Login and Sign up are
+// buttons in the drawer itself, not rows. No Home row (the header logo links home), as in
+// the signed-in drawer (Decision Log #282).
+export const loggedOutDrawerNavItems: DrawerNavItem[] = [
+  { label: "Sports Hub", to: "/sports-hub" },
+  { label: "Blog", to: "/blog" },
+  { label: "Scouting", to: "/scouting" },
+  { label: "Academy", to: "/academy" },
+];
