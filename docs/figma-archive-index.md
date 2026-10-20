@@ -8,6 +8,8 @@ Generated 2026-10-18 (Figma pass K, `figma/pass-k-admin-incorrect-details-archiv
 
 **Updated 2026-10-20 by Figma pass K4** (`figma/pass-k4-profile-diffs-copy-logged-out-nav`): three more hidden nested nodes, the K2 profile columns inside `6747:28894`, `6747:29094` and `6747:29291`, are listed in section 2h. Live count taken at the end of K4 with `findAll` on every node whose name starts with `ARCHIVED`: **419** = **62 top-level** + **357 nested** (K3: 416 = 62 + 354; +3 nested, no change at top level). The other-user replacement `6747:28894` was moved from (0, 77200) to (6560, 77200) because it grew from 926 to 2710 high and would otherwise overlap the mobile profile frames. The K4 report is `docs/figma-pass-k4-report.md`.
 
+**Updated 2026-10-20 by Figma pass K5** (`figma/pass-k5-restricted-pending-mobile-logged-out`): eight more hidden nested nodes are listed in section 2i (the posts-count stat on three mobile profile frames, the pieces of the two K4 logged-out frames that were replaced by instances of the new header variant and drawer component, and the K4 detached drawer copy). Live count taken at the end of K5 with `findAll` on every node whose name starts with `ARCHIVED`: **427** = **62 top-level** + **365 nested** (K4: 419 = 62 + 357; +8 nested, no change at top level). The K5 report is `docs/figma-pass-k5-report.md`.
+
 Previous counts (corrected 2026-10-18 to the live figures given by the founder): **397** archived nodes = **57 top-level frames** (section 1) + **340 nested nodes** (section 2) inside **81** host frames. The first version of this index said 398 = 57 + 341; the live count is one lower. The figures are the founder's; this docs-only change did not re-count the canvas, and the host-frame count (81) was not re-checked. Nothing in this index lists a node removed after pass K, so the one-node difference is recorded, not explained. Pass K also removed one hidden `ARCHIVED — Button — Retry` that came along when the incorrect-details Load Error frame was cloned, because it was an artefact of the clone, not an original; it was never one of the counted nodes.
 
 How to use it: section 1 answers "where is the old frame and what replaced it". Section 2 answers "which hidden originals sit inside this live frame". To find an id on the canvas, paste it into Figma search or use the id in a plugin call.
@@ -261,6 +263,19 @@ The Navbar instance inside the archived `1460:8940` reports 0 sub-layers while t
 | `6747:28894` Profile — Other User — Posts — Desktop (6560, 77200; moved by K4) | `6747:29005` "ARCHIVED — K2 profile column (superseded by K4 rebuild)": the single-column body K2 built, replaced by the three-column body. Kept hidden, not deleted. |
 | `6747:29094` Profile — Own — Posts — Desktop (1640, 77200) | `6747:29205` same name; same reason. |
 | `6747:29291` Profile — Own — Media — Desktop (3280, 77200) | `6747:29402` same name; same reason. |
+
+### 2i. Added by pass K5
+
+| Host frame | Hidden archived node |
+|---|---|
+| `6747:29642` Profile — Own — Posts — Mobile | `6747:29666` "ARCHIVED — Stat — Posts (no posts count, Decision Log #410 item 5)" |
+| `6747:29709` Profile — Own — Media — Mobile | `6747:29733` same name |
+| `5778:8567` Community — Profile · Saved — Mobile | `5778:8591` same name |
+| `6784:29476` Mobile Header — Logged Out — Closed | `6784:29477` "ARCHIVED — Navbar (instance: header 7 — mobile) (replaced by instance of header 7 — mobile — menu, K5)"; `6784:29489` "ARCHIVED — Menu button (replaced ...)" |
+| `6785:29486` (header inside `6785:29485` Mobile — Logged Out — Navigation Drawer Open) | `6785:29487` and `6785:29488`, same two names as above |
+| `6785:29485` Mobile — Logged Out — Navigation Drawer Open | `6785:29539` "ARCHIVED — Navigation Drawer — Logged Out — Mobile (detached ...) (replaced by instance of Navigation Drawer — Mobile — Logged Out, K5)" |
+
+All eight are kept hidden, not deleted.
 
 ## 3. Things this index does not cover
 
