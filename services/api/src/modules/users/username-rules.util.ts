@@ -7,6 +7,7 @@ import {
   PHONE_LIKE_DIGIT_RUN,
   PHONE_LIKE_TOTAL_DIGITS,
   PROFANITY_CONTAINS,
+  PROFANITY_ALLOWED_WHOLE_HANDLES,
   PROFANITY_CONTAINS_GUARDED,
   PROFANITY_EXACT,
   RESERVED_HANDLES,
@@ -76,7 +77,10 @@ function isProfane(raw: string, forms: string[]): boolean {
   // CONTAINS with named innocent exceptions ('nazi' inside Nazir, Nazim, ...): cut the
   // innocent names out, then search what is left. A space stands in for the cut so
   // the two halves cannot join up into the term.
+  // B-165: a handle that IS one of the allowed given names skips this rule only.
+  const allowedWholeHandle = PROFANITY_ALLOWED_WHOLE_HANDLES.includes(squash(raw));
   if (
+    !allowedWholeHandle &&
     forms.some((f) =>
       PROFANITY_CONTAINS_GUARDED.some(({ term, innocent }) => {
         let rest = f;

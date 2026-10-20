@@ -1,3 +1,5 @@
+import { originFromBaseUrl } from './cors-options';
+
 // B-018. Refuse to start a PRODUCTION process with signing secrets that are
 // missing or still the .env.example placeholder.
 //
@@ -16,6 +18,13 @@
 // and are deliberately not checked here.
 export const REQUIRED_PRODUCTION_SECRETS = ['JWT_SECRET', 'ADMIN_JWT_SECRET'] as const;
 
+// B-163 (Decision Log #408 item 1, settling #407 item 1): the two app origins
+// feed the CORS allowlist (cors-options.ts) and, for WEB_APP_BASE_URL, every
+// emailed link. In production an unset, non-URL, placeholder-host, non-https
+// (or localhost) value now refuses to boot, instead of only logging at boot
+// and leaving the apps unable to call the API.
+export const REQUIRED_PRODUCTION_ORIGINS = ['WEB_APP_BASE_URL', 'ADMIN_APP_BASE_URL'] as const;
+
 const PLACEHOLDER = /^(replace[-_ ]?me.*|changeme|change-me|secret|example)$/i;
 
 export function findInvalidProductionSecrets(env: Record<string, string | undefined>): string[] {
@@ -33,6 +42,12 @@ export function findInvalidProductionSecrets(env: Record<string, string | undefi
   return bad;
 }
 
+export function findInvalidProductionOrigins(env: Record<string, string | undefined>): string[] {
+  // originFromBaseUrl(..., production=true) returns null for: unset/blank, not a
+  // URL, not http(s), a placeholder host, not https, or localhost.
+  return REQUIRED_PRODUCTION_ORIGINS.filter((name) => originFromBaseUrl(env[name], true) === null);
+}
+
 export function assertProductionEnv(env: Record<string, string | undefined> = process.env): void {
   if (env.NODE_ENV !== 'production') return;
   const bad = findInvalidProductionSecrets(env);
@@ -40,6 +55,13 @@ export function assertProductionEnv(env: Record<string, string | undefined> = pr
     throw new Error(
       `Refusing to start: these secrets are missing or still a placeholder: ${bad.join(', ')}. ` +
         'Set real values in the Render dashboard (see docs/deployment.md).',
+    );
+  }
+  const badOrigins = findInvalidProductionOrigins(env);
+  if (badOrigins.length > 0) {
+    throw new Error(
+      `Refusing to start: these app URLs are missing or not a real https URL (unset, not a URL, a placeholder host, http, or localhost): ${badOrigins.join(', ')}. ` +
+        'Set the deployed https origins in the Render dashboard (see docs/deployment.md).',
     );
   }
 }

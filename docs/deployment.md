@@ -127,7 +127,8 @@ No two may be the same.
      verify-email, guardian-consent and withdrawal emails. If it is unset, a
      placeholder, or plain `http` (outside localhost), those emails are **not
      sent at all** and an error naming `WEB_APP_BASE_URL` is logged: an email
-     whose only call to action is a dead link is worse than none. (The
+     whose only call to action is a dead link is worse than none. (In
+     production an unusable value now stops the API from starting at all.) (The
      password-reset email still falls back to a placeholder address; it is a
      known follow-up.) `WEB_APP_BASE_URL` is also the **CORS allowlist** entry
      for `apps/web`: the API answers cross-origin browser requests only from
@@ -135,10 +136,10 @@ No two may be the same.
    - `ADMIN_APP_BASE_URL` — the real deployed **https** URL of `apps/admin` for
      that environment. Used **only** for the CORS allowlist (QA D-01, Decision
      Log #407). In production each of the two must be a real https URL, not a
-     placeholder and not localhost; a value that is unset or unusable
-     contributes no origin (that app cannot call the API from a browser) and is
-     logged at boot as `[cors] ...`. Outside production, localhost origins on
-     any port are also allowed.
+     placeholder and not localhost. **A value that is unset, not a URL, a
+     placeholder host, `http`, or localhost makes the API refuse to start**
+     (`assertProductionEnv`, B-163; Decision Log #408). Outside production
+     nothing is checked and localhost origins on any port are allowed.
    - `TRUST_PROXY_HOPS`, `MAXMIND_ACCOUNT_ID`, `MAXMIND_LICENSE_KEY`,
      `GEOLITE2_DB_PATH` — country derivation; see "Country derivation
      (GeoLite2)" below. All optional, all fail safe (stronger safeguarding
