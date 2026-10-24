@@ -3,6 +3,7 @@ import { RequestMethod } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import { EmailVerifiedGuard } from './modules/auth/guards/email-verified.guard';
+import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { GuardianConsentGuard } from './modules/auth/guards/guardian-consent.guard';
 import { ProfileCompleteGuard } from './modules/auth/guards/profile-complete.guard';
 import { BanterController } from './modules/banter/banter.controller';
@@ -19,6 +20,7 @@ import { ReportsController } from './modules/moderation/reports.controller';
 import { NotificationsController } from './modules/notifications/notifications.controller';
 import { SportsMatchesController } from './modules/sports/sports-matches.controller';
 import { UserAvatarController } from './modules/users/user-avatar.controller';
+import { UserCoverController } from './modules/users/user-cover.controller';
 import { UsersController } from './modules/users/users.controller';
 
 // B-026 / B-118 / B-027 (Decision Log #370, #403 item 15, #369): the route
@@ -56,6 +58,9 @@ const OPEN_ROUTES: Record<string, string> = {
   'DELETE /sports/matches/:id/subscription': 'private kickoff-alert preference',
   'POST /posts/:id/view': 'anonymous aggregate view tally; OptionalJwtAuthGuard by design',
   'DELETE /teams/:id': 'admin-only (AdminJwtAuthGuard), a different auth domain',
+  // B-197 (Decision Log #411 item 5): a safety action needs authentication only (JwtAuthGuard stays, pinned below).
+  'POST /users/:id/block': 'a restricted-pending or unverified account must still be able to block (#411 item 5)',
+  'DELETE /users/:id/block': 'a restricted-pending or unverified account must still be able to unblock (#411 item 5)',
 };
 
 const EXPECTED: Record<string, Flags> = {
@@ -64,12 +69,13 @@ const EXPECTED: Record<string, Flags> = {
   'PATCH /users/:id/represented-club': 'CE',
   'POST /users/:id/follow': 'CE',
   'DELETE /users/:id/follow': 'C',
-  // B-039 (Block): the literal pinned rule, no special case -- C on both forms, E on the creating form.
-  'POST /users/:id/block': 'CE',
-  'DELETE /users/:id/block': 'C',
   // B-035 (avatar): a profile write. Deliberately NOT P: the avatar is chosen at Create Profile, before the username exists.
   'POST /users/:id/avatar': 'CE',
   'DELETE /users/:id/avatar': 'C',
+  // B-196 (cover photo): the avatar's rule exactly -- a profile write, so C on both forms and E on the creating
+  // form; deliberately NOT P (the cover is optional at Create Profile, before the username exists).
+  'POST /users/:id/cover': 'CE',
+  'DELETE /users/:id/cover': 'C',
   // posts
   'POST /posts': 'CEP',
   'POST /posts/:id/like': 'CE',
@@ -116,6 +122,7 @@ const CONTROLLERS = [
   UsersController,
   BlockController,
   UserAvatarController,
+  UserCoverController,
   FeedController,
   ClubsController,
   BanterController,
@@ -222,6 +229,16 @@ describe('write-route guard inventory (B-026 / B-118 / B-027)', () => {
     for (const key of Object.keys(OPEN_ROUTES)) {
       const route = routes.find((r) => r.key === key);
       expect(route?.flags).toBe('');
+    }
+  });
+
+  // B-197: exempt from the consent and email guards, but NOT unauthenticated.
+  it('Block, unblock and the blocked list keep JwtAuthGuard and carry no consent / email guard anywhere', () => {
+    expect(guardsOf(BlockController)).toContain(JwtAuthGuard);
+    for (const name of ['block', 'unblock', 'list']) {
+      const handler = (BlockController.prototype as unknown as Record<string, object>)[name];
+      expect(handler).toBeDefined();
+      expect(flagsFor(BlockController as never, handler)).toBe('');
     }
   });
 

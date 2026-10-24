@@ -72,13 +72,22 @@ function isReservedForm(form: string): boolean {
   return BRAND_FRAGMENTS.some((b) => form.includes(b));
 }
 
+// B-181 (Decision Log #410 item 2): the handle AS TYPED, case-insensitive, is an
+// allowed given name, or the name then digits only with at most one underscore
+// between them. No underscore is removed first.
+export function isAllowedNameHandle(raw: string): boolean {
+  const names = PROFANITY_ALLOWED_WHOLE_HANDLES.join('|');
+  return new RegExp(`^(?:${names})(?:_?[0-9]+)?$`, 'i').test(raw);
+}
+
 function isProfane(raw: string, forms: string[]): boolean {
   if (forms.some((f) => PROFANITY_CONTAINS.some((w) => f.includes(w)))) return true;
   // CONTAINS with named innocent exceptions ('nazi' inside Nazir, Nazim, ...): cut the
   // innocent names out, then search what is left. A space stands in for the cut so
   // the two halves cannot join up into the term.
-  // B-165: a handle that IS one of the allowed given names skips this rule only.
-  const allowedWholeHandle = PROFANITY_ALLOWED_WHOLE_HANDLES.includes(squash(raw));
+  // B-181: a handle that IS one of the allowed given names (or the name plus
+  // digits), as typed, skips this rule only.
+  const allowedWholeHandle = isAllowedNameHandle(raw);
   if (
     !allowedWholeHandle &&
     forms.some((f) =>

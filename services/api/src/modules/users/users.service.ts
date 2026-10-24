@@ -11,6 +11,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   blockedPairWhere,
+  hasBlockBetween,
   notBlockedWith,
   relationFromRows,
   YOU_BLOCKED_THIS_USER_CODE,
@@ -79,6 +80,10 @@ const OWN_PROFILE_SELECT = {
   avatarUrl: true,
   avatarKey: true,
   avatarStatus: true,
+  // B-196: the cover photo, same rules as the avatar (coverKey is internal).
+  coverUrl: true,
+  coverKey: true,
+  coverStatus: true,
 } as const;
 
 export type GuardianContact = { label: 'Guardian contact'; email: string };
@@ -105,6 +110,9 @@ export type PublicProfile = {
   // 'approved' until the automatic image check (B-036) exists, so today this is
   // always null for every viewer except in the owner's own profile.
   avatarUrl: string | null;
+  // B-196: same rule for the cover photo -- only an 'approved' cover is served
+  // to another viewer, so today this is null for everyone but the owner's view.
+  coverUrl: string | null;
   // Per-viewer state the page needs on first paint (the #153 / #224 precedent):
   // does the viewer already follow this user, and has the viewer blocked them.
   // viewerHasBlocked is safe to return: a user who is blocked by the target
@@ -160,6 +168,8 @@ export type OwnProfile = {
   preferredClub: string | null;
   profileCountry: string | null;
   avatar: OwnAvatar | null;
+  // B-196: the owner's cover photo with its review status (same shape as avatar).
+  cover: OwnAvatar | null;
   // B-027 / B-030: same onboarding state the login response carries (see
   // AuthUserSummary), so a page load with an existing session routes the same
   // way a fresh login does -- including a restricted-pending minor, who must
@@ -171,13 +181,16 @@ export type OwnProfile = {
 
 type OwnProfileRow = Omit<
   OwnProfile,
-  'guardianContact' | 'dateOfBirth' | 'publicName' | 'profileComplete' | 'guardianConsentStatus' | 'nextStep' | 'avatar'
+  'guardianContact' | 'dateOfBirth' | 'publicName' | 'profileComplete' | 'guardianConsentStatus' | 'nextStep' | 'avatar' | 'cover'
 > & {
   dateOfBirth: string | null; // ciphertext
   guardian: { email: string; consentStatus: string } | null;
   avatarUrl: string | null;
   avatarKey: string | null;
   avatarStatus: string | null;
+  coverUrl: string | null;
+  coverKey: string | null;
+  coverStatus: string | null;
 };
 
 export interface RepresentedClubResult {
@@ -185,14 +198,26 @@ export interface RepresentedClubResult {
 }
 
 function toOwnProfile(
-  { guardian, dateOfBirth, avatarUrl, avatarKey: _avatarKey, avatarStatus, ...rest }: OwnProfileRow,
+  {
+    guardian,
+    dateOfBirth,
+    avatarUrl,
+    avatarKey: _avatarKey,
+    avatarStatus,
+    coverUrl,
+    coverKey: _coverKey,
+    coverStatus,
+    ...rest
+  }: OwnProfileRow,
   dob: DobEncryptionService,
 ): OwnProfile {
   void _avatarKey; // internal storage key, never returned
+  void _coverKey; // internal storage key, never returned
   const plainDob = dob.decryptNullable(dateOfBirth);
   return {
     ...rest,
     avatar: avatarUrl && avatarStatus ? { url: avatarUrl, status: avatarStatus as OwnAvatar['status'] } : null,
+    cover: coverUrl && coverStatus ? { url: coverUrl, status: coverStatus as OwnAvatar['status'] } : null,
     ...deriveOnboardingState({
       isMinor: rest.isMinor,
       guardianConsentStatus: guardian?.consentStatus,
@@ -343,6 +368,8 @@ export class UsersService {
           profileCountry: true,
           avatarUrl: true,
           avatarStatus: true,
+          coverUrl: true,
+          coverStatus: true,
         },
       }),
       isSelf
@@ -378,6 +405,7 @@ export class UsersService {
       bio: user.bio,
       country: user.profileCountry,
       avatarUrl: user.avatarStatus === 'approved' ? user.avatarUrl : null,
+      coverUrl: user.coverStatus === 'approved' ? user.coverUrl : null,
       isFollowing: followRow !== null,
       viewerHasBlocked: relation === 'viewer_blocked_other',
     };
@@ -647,9 +675,13 @@ export class UsersService {
     try {
       await this.prisma.$transaction(async (tx) => {
         await tx.follow.create({ data: { followerId, followeeId } });
-        await tx.notification.create({
-          data: { userId: followeeId, type: 'follow', payloadRefId: followerId },
-        });
+        // B-197: no new Notification where the pair has a Block (the follow itself is
+        // refused earlier for a blocked pair; this keeps the rule in one place).
+        if (!(await hasBlockBetween(tx, followerId, followeeId))) {
+          await tx.notification.create({
+            data: { userId: followeeId, type: 'follow', payloadRefId: followerId },
+          });
+        }
         // Baseline-engagement point for the FOLLOWER (the action-taker) —
         // sprint-2/contest-data-model-backend, Decision Log #219. Only
         // reached on a genuine first follow (a duplicate throws P2002 on

@@ -30,6 +30,11 @@ function buildPrismaMock() {
     result: {
       create: jest.fn(),
     },
+    // B-197 (Decision Log #411 item 5): the notification triggers check for a Block
+    // between actor and recipient inside their transaction.
+    block: {
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
     notification: {
       create: jest.fn(),
     },
@@ -489,6 +494,20 @@ describe('GrassrootsService', () => {
       });
     });
 
+    it('B-197: does NOT create a fixture_scheduled Notification when a Block stands between the two organisers (the fixture is still created)', async () => {
+      const prisma = buildPrismaMock();
+      armTeamExists(prisma, { a: true, b: true });
+      armCreatedBy(prisma, { a: 'user-1', b: 'owner-b' });
+      (prisma.fixture.create as jest.Mock).mockResolvedValue({ id: 'f-1' });
+      (prisma.block.findFirst as jest.Mock).mockResolvedValue({ id: 'block-1' });
+
+      const service = new GrassrootsService(prisma);
+      await service.createFixture('user-1', dto);
+
+      expect(prisma.fixture.create).toHaveBeenCalled();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
     it('does NOT create a fixture_scheduled Notification when the away side is a free-text opponentName, not a registered team', async () => {
       const prisma = buildPrismaMock();
       armTeamExists(prisma, { a: true });
@@ -712,6 +731,26 @@ describe('GrassrootsService', () => {
       expect(prisma.notification.create).toHaveBeenCalledWith({
         data: { userId: 'owner-b', type: 'result_logged', payloadRefId: 'f-1' },
       });
+    });
+
+    it('B-197: does NOT create a result_logged Notification when a Block stands between the two organisers (the result is still recorded)', async () => {
+      const prisma = buildPrismaMock();
+      armFixture(prisma, {
+        id: 'f-1', status: 'scheduled', teamBId: 'b',
+        teamA: { createdById: 'owner-a' }, teamB: { createdById: 'owner-b' }, result: null,
+      });
+      (prisma.fixture.findUniqueOrThrow as jest.Mock)
+        .mockResolvedValueOnce({ status: 'scheduled', result: null })
+        .mockResolvedValueOnce({ id: 'f-1', status: 'full_time' });
+      (prisma.result.create as jest.Mock).mockResolvedValue({});
+      (prisma.fixture.update as jest.Mock).mockResolvedValue({});
+      (prisma.block.findFirst as jest.Mock).mockResolvedValue({ id: 'block-1' });
+
+      const service = new GrassrootsService(prisma);
+      await service.logResult('owner-a', 'f-1', dto);
+
+      expect(prisma.result.create).toHaveBeenCalled();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
     });
 
     it('does NOT create a result_logged Notification when there is no registered teamB (free-text opponent — no one to notify)', async () => {

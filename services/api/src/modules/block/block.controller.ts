@@ -1,7 +1,5 @@
 import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../auth/guards/current-user.decorator';
-import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
-import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
 import { FeedQueryDto } from '../feed/dto/feed-query.dto';
@@ -14,11 +12,12 @@ import { BlockUserDto } from './dto/block-user.dto';
 // OWN list (:id must be the caller, the same self-scoped convention as GET
 // /users/:id and GET /users/:id/saved-posts).
 //
-// Guards follow the rule B-026/B-118 pinned in write-route-guards.spec.ts, with no
-// special case: GuardianConsentGuard on every write (the undo form included),
-// EmailVerifiedGuard on the CREATING form only. Whether a safety action like
-// Block should be exempt from either is NOT decided; the literal rule is applied
-// and the question is listed OPEN in docs/backend-w5-report.md.
+// Guards (B-197, Decision Log #411 item 5): AUTHENTICATION ONLY. Block, unblock and
+// the blocked-users list are exempt from GuardianConsentGuard and EmailVerifiedGuard
+// (a safety action: a restricted-pending or unverified account must still be able to
+// block someone who is bothering them). This amends how #370's uniform write block
+// applied to Block, like report/appeal and change-guardian-email, which are already
+// open. write-route-guards.spec.ts pins it (OPEN_ROUTES) and that JwtAuthGuard stays.
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class BlockController {
@@ -26,13 +25,11 @@ export class BlockController {
 
   @Post(':id/block')
   @HttpCode(200)
-  @UseGuards(GuardianConsentGuard, EmailVerifiedGuard)
   async block(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload, @Body() dto: BlockUserDto) {
     return this.blockService.blockUser(user.sub, id, dto);
   }
 
   @Delete(':id/block')
-  @UseGuards(GuardianConsentGuard)
   async unblock(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
     return this.blockService.unblockUser(user.sub, id);
   }

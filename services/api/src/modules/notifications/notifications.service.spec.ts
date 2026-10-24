@@ -12,10 +12,13 @@ function buildPrismaMock() {
   const prisma = {
     notification: {
       findMany: jest.fn().mockResolvedValue([]),
-      findUnique: jest.fn(),
+      findFirst: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       count: jest.fn().mockResolvedValue(0),
+    },
+    block: {
+      findMany: jest.fn().mockResolvedValue([]),
     },
     post: {
       findMany: jest.fn().mockResolvedValue([]),
@@ -459,25 +462,29 @@ describe('NotificationsService', () => {
   describe('markRead', () => {
     it('404s for a non-existent notification id', async () => {
       const prisma = buildPrismaMock();
-      (prisma.notification.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.notification.findFirst as jest.Mock).mockResolvedValue(null);
       const service = new NotificationsService(prisma);
 
       await expect(service.markRead(CALLER, 'missing')).rejects.toThrow(NotFoundException);
       expect(prisma.notification.update).not.toHaveBeenCalled();
     });
 
-    it('404s (never 403) for a notification owned by someone else', async () => {
+    it('404s (never 403) for a notification owned by someone else: the lookup is scoped to the caller', async () => {
       const prisma = buildPrismaMock();
-      (prisma.notification.findUnique as jest.Mock).mockResolvedValue(row({ userId: 'someone-else' }));
+      (prisma.notification.findFirst as jest.Mock).mockResolvedValue(null);
       const service = new NotificationsService(prisma);
 
       await expect(service.markRead(CALLER, 'notif-1')).rejects.toThrow(NotFoundException);
+      expect((prisma.notification.findFirst as jest.Mock).mock.calls[0][0].where).toEqual({
+        id: 'notif-1',
+        userId: CALLER,
+      });
       expect(prisma.notification.update).not.toHaveBeenCalled();
     });
 
     it('marks an unread notification read and returns the resolved item', async () => {
       const prisma = buildPrismaMock();
-      (prisma.notification.findUnique as jest.Mock).mockResolvedValue(row({ read: false }));
+      (prisma.notification.findFirst as jest.Mock).mockResolvedValue(row({ read: false }));
       (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'actor-1', username: null, displayName: 'Jane' }]);
       const service = new NotificationsService(prisma);
 
@@ -493,7 +500,7 @@ describe('NotificationsService', () => {
 
     it('is idempotent — an already-read notification is a no-op 200, not a duplicate update', async () => {
       const prisma = buildPrismaMock();
-      (prisma.notification.findUnique as jest.Mock).mockResolvedValue(row({ read: true }));
+      (prisma.notification.findFirst as jest.Mock).mockResolvedValue(row({ read: true }));
       const service = new NotificationsService(prisma);
 
       const result = await service.markRead(CALLER, 'notif-1');
@@ -516,6 +523,97 @@ describe('NotificationsService', () => {
         data: { read: true },
       });
       expect(result).toEqual({ markedRead: 4 });
+    });
+  });
+
+  // B-197 (Decision Log #411 item 5): rows between a blocked pair are hidden from both
+  // sides' reads, at read time, and left untouched by read-all / mark-one-read.
+  describe('hiding rows between a blocked pair (B-197)', () => {
+    function withBlocks(prisma: PrismaService, rows: Array<{ blockerId: string; blockedId: string }>) {
+      (prisma.block.findMany as jest.Mock).mockResolvedValue(rows);
+    }
+
+    it('with no Block on either side there is no exclusion and no extra lookup', async () => {
+      const prisma = buildPrismaMock();
+      const service = new NotificationsService(prisma);
+      await service.listNotifications(CALLER, {});
+      expect((prisma.notification.findMany as jest.Mock).mock.calls[0][0].where).toEqual({ userId: CALLER });
+      expect(prisma.conversation.findMany).not.toHaveBeenCalled();
+      expect(prisma.fixture.findMany).not.toHaveBeenCalled();
+    });
+
+    it('hides follow rows by the blocked user, message rows of their thread and fixture rows against their team - in both block directions', async () => {
+      const prisma = buildPrismaMock();
+      withBlocks(prisma, [
+        { blockerId: CALLER, blockedId: 'b-1' },
+        { blockerId: 'b-2', blockedId: CALLER },
+      ]);
+      (prisma.conversation.findMany as jest.Mock).mockResolvedValue([{ id: 'conv-9' }]);
+      (prisma.fixture.findMany as jest.Mock).mockResolvedValue([{ id: 'fix-7' }]);
+      const service = new NotificationsService(prisma);
+
+      await service.listNotifications(CALLER, {});
+
+      const where = (prisma.notification.findMany as jest.Mock).mock.calls[0][0].where;
+      expect(where).toEqual({
+        userId: CALLER,
+        NOT: {
+          OR: [
+            { type: 'follow', payloadRefId: { in: ['b-1', 'b-2'] } },
+            { type: 'message', payloadRefId: { in: ['conv-9'] } },
+            { type: { in: ['fixture_scheduled', 'result_logged'] }, payloadRefId: { in: ['fix-7'] } },
+          ],
+        },
+      });
+      // the conversation / fixture lookups are scoped to the viewer and the blocked users only
+      expect((prisma.conversation.findMany as jest.Mock).mock.calls[0][0].where).toEqual({
+        AND: [{ participantIds: { has: CALLER } }, { participantIds: { hasSome: ['b-1', 'b-2'] } }],
+      });
+      // like / comment rows carry no actor, so they are never excluded (OPEN)
+      expect(JSON.stringify(where)).not.toContain('"like"');
+      expect(JSON.stringify(where)).not.toContain('"comment"');
+    });
+
+    it('the unread count and the page share ONE Block read and the same exclusion', async () => {
+      const prisma = buildPrismaMock();
+      withBlocks(prisma, [{ blockerId: CALLER, blockedId: 'b-1' }]);
+      const service = new NotificationsService(prisma);
+
+      await service.listNotifications(CALLER, {});
+
+      expect(prisma.block.findMany).toHaveBeenCalledTimes(1);
+      const countWhere = (prisma.notification.count as jest.Mock).mock.calls[0][0].where;
+      expect(countWhere).toMatchObject({ userId: CALLER, read: false, NOT: { OR: [{ type: 'follow', payloadRefId: { in: ['b-1'] } }] } });
+    });
+
+    it('getUnreadCount alone excludes the hidden rows', async () => {
+      const prisma = buildPrismaMock();
+      withBlocks(prisma, [{ blockerId: 'b-1', blockedId: CALLER }]);
+      const service = new NotificationsService(prisma);
+      await service.getUnreadCount(CALLER);
+      expect((prisma.notification.count as jest.Mock).mock.calls[0][0].where.NOT).toBeDefined();
+    });
+
+    it('read-all leaves hidden rows untouched (not marked read, not counted)', async () => {
+      const prisma = buildPrismaMock();
+      withBlocks(prisma, [{ blockerId: CALLER, blockedId: 'b-1' }]);
+      const service = new NotificationsService(prisma);
+      await service.markAllRead(CALLER);
+      expect((prisma.notification.updateMany as jest.Mock).mock.calls[0][0].where).toMatchObject({
+        userId: CALLER,
+        read: false,
+        NOT: { OR: [{ type: 'follow', payloadRefId: { in: ['b-1'] } }] },
+      });
+    });
+
+    it('a hidden row cannot be marked read by id: it is the same 404 as a missing one', async () => {
+      const prisma = buildPrismaMock();
+      withBlocks(prisma, [{ blockerId: CALLER, blockedId: 'b-1' }]);
+      (prisma.notification.findFirst as jest.Mock).mockResolvedValue(null); // the filtered lookup finds nothing
+      const service = new NotificationsService(prisma);
+      await expect(service.markRead(CALLER, 'notif-1')).rejects.toThrow(NotFoundException);
+      expect((prisma.notification.findFirst as jest.Mock).mock.calls[0][0].where.NOT).toBeDefined();
+      expect(prisma.notification.update).not.toHaveBeenCalled();
     });
   });
 });

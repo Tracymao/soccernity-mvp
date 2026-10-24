@@ -10,11 +10,11 @@ One model, `Block` (`blockerId`, `blockedId`, optional `reason`, `createdAt`, mo
 
 | Route | Guards | Behaviour |
 |---|---|---|
-| `POST /users/:id/block` `{ reason? }` | Consent + EmailVerified | 200 `{ userId, blocked: true }`. One transaction: writes the row and removes follows **in both directions**. Idempotent; the first reason stands (not editable: unblock and re-block). Target must be a profile the blocker could see (active, not restricted-pending), else 404. Self 400. |
-| `DELETE /users/:id/block` | Consent | 200 `{ userId, blocked: false }`. No-op when not blocked (never a 404). Does **not** restore follows (#402). |
+| `POST /users/:id/block` `{ reason? }` | authentication only | 200 `{ userId, blocked: true }`. One transaction: writes the row and removes follows **in both directions**. Idempotent; the first reason stands (not editable: unblock and re-block). Target must be a profile the blocker could see (active, not restricted-pending), else 404. Self 400. |
+| `DELETE /users/:id/block` | authentication only | 200 `{ userId, blocked: false }`. No-op when not blocked (never a 404). Does **not** restore follows (#402). |
 | `GET /users/:id/blocks` | — (self only, else 403) | The blocker's own list, newest first: `{ id, publicName, reason }`, **no date**. Keyset by `sequence`; the cursor carries only the sequence (a `createdAt` in a decodable cursor would leak the date). |
 
-Guards are the pinned B-026/B-118 rule with no special case (`write-route-guards.spec.ts`). Whether a safety action should be exempt from either guard is **not decided** (OPEN in `docs/backend-w5-report.md`).
+**Guards (B-197, Decision Log #411 item 5, `backend/w6-username-cover-block`):** block, unblock and the blocked list need **authentication only**. `GuardianConsentGuard` and `EmailVerifiedGuard` were removed from both write routes (W5 had put Consent on both and EmailVerified on the creating form), so a restricted-pending minor or an unverified account can still block someone. This amends how #370's uniform write block applied to Block. `write-route-guards.spec.ts` now lists both routes under OPEN_ROUTES and a dedicated test pins that `JwtAuthGuard` stays and that no handler carries a consent or email guard. The *target* rules are unchanged (a hidden or restricted-pending target is still the plain 404).
 
 ## Where it is enforced
 
@@ -33,12 +33,15 @@ The helpers in `block.util.ts` are pure (`notBlockedWith(viewerId)`, `blockedPai
 | `GET /users/:id/public-profile` | the blocked user gets the same 404 as a non-existent profile (same class, status, body); the blocker still reaches it (`viewerHasBlocked: true`) |
 | leaderboard | **unaffected** (#402) |
 
+| Notifications (B-197) | **No new row** is created where actor and recipient have a Block between them (either direction): follow, like, comment, message, fixture_scheduled, result_logged (`hasBlockBetween`, checked inside each trigger's transaction, so the action itself still succeeds). **Existing** rows between the pair are hidden from both sides' `GET /notifications`, the unread count, `PATCH /notifications/read-all` (hidden rows are left unread and uncounted) and `PATCH /notifications/:id/read` (404). Hiding is at read time, so the rows reappear if the Block is removed. See `notifications/block-visibility.util.ts`. |
+
 A block never reveals itself: no response, count or error tells the blocked user; the only distinct answer (`403 you_blocked_this_user`) is one only the blocker can receive.
 
 ## Not decided / not built (OPEN)
 
 - Whether the blocker should see a 403 or the same 404 on follow/message attempts (a coded 403 was chosen: they know, and "Unblock them to do that" is actionable).
 - Whether a blocked pair's existing DM thread disappears from either inbox (it stays listed, history readable).
-- Existing `Notification` rows between the pair are untouched; Bants rooms (listing/membership), the Contest page and contest winners lists are not filtered.
-- Whether Block is exempt from `EmailVerifiedGuard`/`GuardianConsentGuard`.
+- Bants room listing is unaffected (decided, #411 item 5); the Contest page and contest winners lists are unaffected (decided: names are still listed, a tap on a blocker's name opens the generic not-found).
+- **Existing `like` and `comment` notification rows cannot be hidden**: a `Notification` stores no actor for those two types (`payloadRefId` is the post), so a row cannot be attributed to a person. The fix is an `actorId` column on `Notification`, which is not decided. They render as "Someone" and name no one. `moderation_decision`, `contest_*`, `age_milestone` and `match_kickoff` rows have no user actor and are not touched.
+- Whether hidden notification rows should be deleted instead of hidden (adopted default: hidden at read time).
 - Like identities: no list exists anywhere, so the "like identities" clause hides nothing today (recorded as an interpretation in #404).

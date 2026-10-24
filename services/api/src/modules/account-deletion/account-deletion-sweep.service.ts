@@ -233,12 +233,14 @@ export class AccountDeletionSweepService {
   // authorization/confirmation gate. Idempotent: re-running on an
   // already-anonymized row rewrites the same values.
   async anonymizeUser(userId: string, isMinor: boolean): Promise<void> {
-    const stored: { avatarKey: string | null } = { avatarKey: null };
+    const stored: { avatarKey: string | null; coverKey: string | null } = { avatarKey: null, coverKey: null };
     await this.prisma.$transaction(async (tx) => {
       // B-035: remember where the avatar object lives, so it can be removed from
       // storage once the row no longer points at it.
-      const before = await tx.user.findUnique({ where: { id: userId }, select: { avatarKey: true } });
+      // B-196: the cover photo object is removed the same way.
+      const before = await tx.user.findUnique({ where: { id: userId }, select: { avatarKey: true, coverKey: true } });
       stored.avatarKey = before?.avatarKey ?? null;
+      stored.coverKey = before?.coverKey ?? null;
 
       // Decision Log #349: no longer gated on isMinor -- a user reclassified
       // as an adult (turned 18) may still hold a Guardian row whose consent
@@ -348,6 +350,10 @@ export class AccountDeletionSweepService {
           avatarUrl: null,
           avatarKey: null,
           avatarStatus: null,
+          // B-196: the cover photo reference, all three columns together.
+          coverUrl: null,
+          coverKey: null,
+          coverStatus: null,
           accountStatus: 'deleted',
           pendingDeletionAt: null,
         },
@@ -358,13 +364,16 @@ export class AccountDeletionSweepService {
     // outage (or an unconfigured store) must not undo or fail the anonymization.
     // A failure leaves an orphaned object whose only pointer is gone; it is
     // logged with the key so it can be cleaned up by hand.
-    const avatarKey = stored.avatarKey;
-    if (avatarKey && this.storage) {
+    for (const [label, key] of [
+      ['avatar', stored.avatarKey],
+      ['cover', stored.coverKey],
+    ] as const) {
+      if (!key || !this.storage) continue;
       try {
-        await this.storage.delete(avatarKey);
+        await this.storage.delete(key);
       } catch (err) {
         this.logger.warn(
-          `Anonymization of ${userId}: avatar object ${avatarKey} was NOT removed from storage (${
+          `Anonymization of ${userId}: ${label} object ${key} was NOT removed from storage (${
             err instanceof Error ? err.message : String(err)
           }).`,
         );

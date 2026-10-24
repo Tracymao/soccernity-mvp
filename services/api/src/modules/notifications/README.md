@@ -151,3 +151,8 @@ elsewhere (`GET /banter-rooms/mine` before `GET /banter-rooms/:id`).
   nothing in Section 4.7 or the Figma design calls for one, and
   `PATCH /notifications/:id/read`'s own response already returns the
   resolved item.
+
+## Block visibility (B-197, `backend/w6-username-cover-block`)
+
+Decision Log #411 item 5. Existing rows between a blocked pair are **hidden at read time** from both sides' `GET /notifications`, `GET /notifications/unread-count`, `PATCH /notifications/read-all` (left unread, not counted) and `PATCH /notifications/:id/read` (the same 404 as a missing row). `block-visibility.util.ts` derives "between the pair" per type: `follow` from the follower id, `message` from the shared Conversation, `fixture_scheduled` / `result_logged` from a Fixture whose teams the two users manage. A user with no Block on either side pays one extra read and gets an empty fragment. **`like` / `comment` rows cannot be attributed to a person** (no actor stored) and are not hidden: OPEN, the fix is an `actorId` column (not decided). New rows are suppressed at the six actor-based trigger sites (see `block/README.md`).
+

@@ -113,12 +113,13 @@ describe('username rules (B-032, pure)', () => {
         expect(checkUsernameRules('nazimxnazifan')).toBe('profanity');
       });
 
-      // B-165 (Decision Log #408 item 3): Nazif, Nazifa and Nazifah are real given
-      // names, allowed as WHOLE handles only. A named exception for 'nazif' would
-      // cut it out of 'nazifan' and accept it, so this is an allow-list checked
-      // before the CONTAINS rule instead.
-      it.each(['nazif', 'nazifa', 'nazifah', 'Nazif', 'NAZIFA', 'Nazifah', 'naz_ifa', '_nazif_'])(
-        'accepts the whole handle %s',
+      // B-165 / B-181 (Decision Log #408 item 3, #410 item 2): Nazif, Nazifa and
+      // Nazifah are real given names, allowed as the handle AS TYPED (case-insensitive,
+      // no underscore removal), or the name followed only by digits. A named
+      // exception for 'nazif' would cut it out of 'nazifan' and accept it, so this
+      // is an allow-list checked before the CONTAINS rule instead.
+      it.each(['nazif', 'nazifa', 'nazifah', 'Nazif', 'NAZIFA', 'Nazifah', 'nazifa2', 'nazif_10', 'Nazifah_2024', 'nazif7'])(
+        'accepts the handle %s',
         (handle) => {
           expect(checkUsernameRules(handle)).toBeNull();
         },
@@ -126,7 +127,6 @@ describe('username rules (B-032, pure)', () => {
 
       it.each([
         'nazifan', // the founder's own example: still refused
-        'nazifan_10',
         'nazif_an',
         'nazifah_fan',
         'nazifahfan',
@@ -134,8 +134,13 @@ describe('username rules (B-032, pure)', () => {
         'xnazifa',
         'nazifax',
         'nazifaan',
-        'nazif_10', // contains a name, is not a name: not covered by the decision
-        'nazifa2',
+        'naz_ifa', // B-181: underscores are NOT removed, so these are no longer names
+        '_nazif_',
+        'nazi_f',
+        'nazif_a',
+        'nazifan_10', // letters after the name
+        'nazif__10', // at most one underscore between name and digits
+        '10nazif', // digits before the name are not decided: refused
         'n4zifan', // digit-for-letter forms are not allow-listed
         'n4zif',
         'nazinazif',
