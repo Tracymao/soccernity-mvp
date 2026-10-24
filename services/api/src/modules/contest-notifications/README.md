@@ -5,6 +5,28 @@ The scheduled, **in-app only** fan-out of the Contest notification events. No pu
 (deferred to launch gate B-090). No controller: the module exists to register one `@Cron` job
 (every 5 minutes) and the read side lives in `NotificationsService`.
 
+## Status update: B-091 has landed (backend/w7-contest)
+
+The text below was written when the Contest was still admin-judged; it is kept as the record of what
+this module assumed. The seams it lists are now filled, and **this module did not change** except for
+one file:
+
+1. **Votes** - `ContestVotingService` writes `ContestVote`; the `not_voted` filter is unchanged and the
+   e2e (`test/contest.e2e-spec.ts`) proves a voter is skipped and a non-voter (or one who retracted) is
+   reminded.
+2. **Final entries** - `ContestNotificationFacts.getFinalEntryUserIds` now reads the cycle's week-4
+   `ContestEntry` rows (the one file changed here).
+3. **Forfeit** - a forfeited week is stored (`ContestRound.forfeited`) AND is `judged` with no winners,
+   so the planner's approximation ("judged with no winners sends no result and no reminder") still
+   gives exactly the right behaviour; `planCycle` was not changed.
+4. **No winner this month** - reachable: the lifecycle completes a cycle with no standings
+   (`ContestCycle.noWinner`).
+5. **Calendar-driven state** - the lifecycle stamps `judgedAt` with the lock INSTANT (20:00), so
+   `later(lock, judgedAt)` is the lock itself and (c) / (d) fire at 20:00 as the spec says.
+
+Round 4 (the final) now exists as a `ContestRound` with no winners; the planner only loops weeks 1-3
+and takes finalists from weekly winners, so it is unaffected.
+
 ## What this module is, and what it is not
 
 The Contest backend on `main` is still the **admin-judged model** (Decision Log #218/#241):

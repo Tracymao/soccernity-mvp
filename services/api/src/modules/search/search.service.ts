@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
 import { notBlockedWith } from '../block/block.util';
 import {
@@ -203,7 +204,11 @@ export interface SearchAllResult {
 // GET /posts/feed.
 @Injectable()
 export class SearchService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // backend/w7-contest: the clock decides whether a final contest entry has been revealed yet.
+    @Optional() @Inject(APP_CLOCK) private readonly clock: Clock = systemClock,
+  ) {}
 
   async search(
     query: SearchQueryDto,
@@ -316,9 +321,19 @@ export class SearchService {
     limit: number,
     viewerId?: string,
   ): Promise<SearchResultPage<SearchPostResult>> {
+    const now = this.clock.now();
     const filters: Prisma.PostWhereInput[] = [
       ACTIVE_AUTHOR_SEARCH_FILTER,
       ...(viewerId ? [{ author: { is: notBlockedWith(viewerId) } } as Prisma.PostWhereInput] : []),
+      // A FINAL contest entry is invisible to everyone but its author until the reveal
+      // (Post.visibleFrom, backend/w7-contest): search must not leak it either.
+      {
+        OR: [
+          { visibleFrom: null },
+          { visibleFrom: { lte: now } },
+          ...(viewerId ? [{ authorId: viewerId }] : []),
+        ],
+      },
       { contentText: { contains: q, mode: 'insensitive' } },
     ];
     if (cursor) {

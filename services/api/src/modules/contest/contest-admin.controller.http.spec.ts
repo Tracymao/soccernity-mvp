@@ -1,189 +1,195 @@
-import {
-  ConflictException,
-  ExecutionContext,
-  INestApplication,
-  NotFoundException,
-  ValidationPipe,
-} from '@nestjs/common';
+import { ExecutionContext, INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
 import { ContestAdminController } from './contest-admin.controller';
-import { ContestService } from './contest.service';
+import { ContestAdminService } from './contest-admin.service';
 
+// HTTP-layer coverage of the Admin Console's Contest endpoints (backend/w7-contest, B-091): the DTO
+// validation ranges of docs/contest-spec.md section 4 / Decision Log #399 E5, and the removal of the
+// admin-judging endpoints. The locking rules themselves are in contest-admin.service.spec.ts.
 describe('ContestAdminController (HTTP layer)', () => {
   let app: INestApplication;
-  const contestService = {
-    createCycle: jest.fn(),
-    recordRoundResults: jest.fn(),
-    openFinal: jest.fn(),
-    crownCycle: jest.fn(),
+  const service = {
     listCyclesForAdmin: jest.fn(),
-    getCycleByIdForAdmin: jest.fn(),
     getCurrentContestForAdmin: jest.fn(),
+    getCycleByIdForAdmin: jest.fn(),
+    createCycle: jest.fn(),
+    updateCycle: jest.fn(),
   };
+  const ADMIN = { sub: 'admin-1', role: 'superadmin' };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [ContestAdminController],
-      providers: [{ provide: ContestService, useValue: contestService }],
+      providers: [{ provide: ContestAdminService, useValue: service }],
     })
       .overrideGuard(AdminJwtAuthGuard)
       .useValue({
         canActivate: (context: ExecutionContext) => {
-          context.switchToHttp().getRequest().admin = { sub: 'admin-1', role: 'superadmin', aud: 'admin-console' };
+          context.switchToHttp().getRequest().admin = ADMIN;
           return true;
         },
       })
       .compile();
-
     app = moduleRef.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     await app.init();
   });
 
   afterAll(async () => {
     await app.close();
   });
-
   afterEach(() => jest.clearAllMocks());
 
-  // ---- read surface (sprint-2/admin-contest-read-endpoints, DL #241) ----
-
-  it('GET /admin/contest/cycles returns the service list', async () => {
-    contestService.listCyclesForAdmin.mockResolvedValue({ items: [{ cycle: { id: 'cyc-1' }, phase: 'week_1' }] });
-    const res = await request(app.getHttpServer()).get('/admin/contest/cycles').expect(200);
-    expect(res.body.items).toHaveLength(1);
-    expect(contestService.listCyclesForAdmin).toHaveBeenCalledTimes(1);
+  const valid = () => ({
+    month: '2026-11',
+    title: 'November Challenge',
+    description: 'Show us your best skill.',
+    weeks: [
+      { weekNumber: 1, task: 'Juggling', viewWatchLimitSeconds: 10 },
+      { weekNumber: 2, task: 'Dribbling', viewWatchLimitSeconds: 20 },
+      { weekNumber: 3, task: 'Finishing', viewWatchLimitSeconds: 30 },
+    ],
+    finalTask: 'Your best goal',
+    minimumTally: 5,
   });
 
-  it('GET /admin/contest/current returns the service response, no :id collision', async () => {
-    contestService.getCurrentContestForAdmin.mockResolvedValue({ cycle: null, phase: null, rounds: [] });
-    await request(app.getHttpServer()).get('/admin/contest/current').expect(200);
-    expect(contestService.getCurrentContestForAdmin).toHaveBeenCalledTimes(1);
-    expect(contestService.getCycleByIdForAdmin).not.toHaveBeenCalled();
-  });
-
-  it('GET /admin/contest/cycles/:id forwards the id and does not hit the list handler', async () => {
-    contestService.getCycleByIdForAdmin.mockResolvedValue({ cycle: { id: 'cyc-7' }, phase: 'crowned', rounds: [] });
-    await request(app.getHttpServer()).get('/admin/contest/cycles/cyc-7').expect(200);
-    expect(contestService.getCycleByIdForAdmin).toHaveBeenCalledWith('cyc-7');
-    expect(contestService.listCyclesForAdmin).not.toHaveBeenCalled();
-  });
-
-  it('GET /admin/contest/cycles/:id propagates a 404 from the service', async () => {
-    contestService.getCycleByIdForAdmin.mockRejectedValue(new NotFoundException('Contest cycle not found'));
-    await request(app.getHttpServer()).get('/admin/contest/cycles/missing').expect(404);
-  });
-
-  it('POST /admin/contest/cycles validates the DTO (missing title -> 400)', async () => {
-    await request(app.getHttpServer())
-      .post('/admin/contest/cycles')
-      .send({ startsAt: '2026-09-01T00:00:00.000Z', endsAt: '2026-09-28T00:00:00.000Z' })
-      .expect(400);
-    expect(contestService.createCycle).not.toHaveBeenCalled();
-  });
-
-  it('POST /admin/contest/cycles passes a valid DTO through', async () => {
-    contestService.createCycle.mockResolvedValue({ cycle: { id: 'cyc-1' }, phase: 'vacant' });
-    await request(app.getHttpServer())
-      .post('/admin/contest/cycles')
-      .send({ title: 'Sept', startsAt: '2026-09-01T00:00:00.000Z', endsAt: '2026-09-28T00:00:00.000Z' })
-      .expect(201);
-    expect(contestService.createCycle).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Sept' }),
-    );
-  });
-
-  it('POST .../rounds/:week/results parses :week as an int and forwards winners', async () => {
-    contestService.recordRoundResults.mockResolvedValue({ cycle: { id: 'cyc-1' }, phase: 'week_1' });
-    await request(app.getHttpServer())
-      .post('/admin/contest/cycles/cyc-1/rounds/2/results')
-      .send({ winners: [{ entryId: '11111111-1111-4111-8111-111111111111', position: 1 }] })
-      .expect(201);
-    expect(contestService.recordRoundResults).toHaveBeenCalledWith('cyc-1', 2, {
-      winners: [{ entryId: '11111111-1111-4111-8111-111111111111', position: 1 }],
+  describe('reads', () => {
+    it('GET cycles / current / cycles/:id, with "current" not swallowed by :id', async () => {
+      service.listCyclesForAdmin.mockResolvedValue({ items: [] });
+      service.getCurrentContestForAdmin.mockResolvedValue({ cycle: null });
+      service.getCycleByIdForAdmin.mockResolvedValue({});
+      await request(app.getHttpServer()).get('/admin/contest/cycles').expect(200);
+      await request(app.getHttpServer()).get('/admin/contest/current').expect(200);
+      await request(app.getHttpServer()).get('/admin/contest/cycles/abc').expect(200);
+      expect(service.getCycleByIdForAdmin).toHaveBeenCalledWith('abc');
+      expect(service.getCurrentContestForAdmin).toHaveBeenCalledTimes(1);
     });
   });
 
-  it('POST .../rounds/:week/results rejects a non-integer :week with 400', async () => {
-    await request(app.getHttpServer())
-      .post('/admin/contest/cycles/cyc-1/rounds/abc/results')
-      .send({ winners: [] })
-      .expect(400);
-  });
-
-  it('POST .../rounds/:week/results rejects position out of 1..3', async () => {
-    await request(app.getHttpServer())
-      .post('/admin/contest/cycles/cyc-1/rounds/1/results')
-      .send({ winners: [{ entryId: '11111111-1111-4111-8111-111111111111', position: 4 }] })
-      .expect(400);
-  });
-
-  it('POST .../final/open forwards and propagates a 409', async () => {
-    contestService.openFinal.mockRejectedValue(new ConflictException('All three weekly rounds must be judged'));
-    await request(app.getHttpServer()).post('/admin/contest/cycles/cyc-1/final/open').expect(409);
-    expect(contestService.openFinal).toHaveBeenCalledWith('cyc-1');
-  });
-
-  it('POST .../crown requires at least one standing', async () => {
-    await request(app.getHttpServer())
-      .post('/admin/contest/cycles/cyc-1/crown')
-      .send({ standings: [] })
-      .expect(400);
-  });
-
-  it('POST .../crown forwards a valid standings payload', async () => {
-    contestService.crownCycle.mockResolvedValue({ cycle: { id: 'cyc-1' }, phase: 'crowned' });
-    await request(app.getHttpServer())
-      .post('/admin/contest/cycles/cyc-1/crown')
-      .send({ standings: [{ userId: '11111111-1111-4111-8111-111111111111', position: 1 }] })
-      .expect(201);
-    expect(contestService.crownCycle).toHaveBeenCalledWith('cyc-1', {
-      standings: [{ userId: '11111111-1111-4111-8111-111111111111', position: 1 }],
+  describe('the admin-judging endpoints are gone (contests are not admin-judged, spec section 3)', () => {
+    it.each([
+      ['POST', '/admin/contest/cycles/c1/rounds/1/results'],
+      ['POST', '/admin/contest/cycles/c1/final/open'],
+      ['POST', '/admin/contest/cycles/c1/crown'],
+    ])('%s %s -> 404', async (method, path) => {
+      const server = app.getHttpServer();
+      const res = method === 'POST' ? await request(server).post(path).send({}) : await request(server).get(path);
+      expect(res.status).toBe(404);
     });
   });
-});
 
-// The read routes are AdminJwtAuthGuard-protected via the class decorator
-// — proven here by denying the guard and asserting every GET is 403,
-// service untouched (sprint-2/admin-contest-read-endpoints, DL #241).
-describe('ContestAdminController — read routes are guarded', () => {
-  let app: INestApplication;
-  const contestService = {
-    listCyclesForAdmin: jest.fn(),
-    getCycleByIdForAdmin: jest.fn(),
-    getCurrentContestForAdmin: jest.fn(),
-    createCycle: jest.fn(),
-    recordRoundResults: jest.fn(),
-    openFinal: jest.fn(),
-    crownCycle: jest.fn(),
-  };
+  describe('POST /admin/contest/cycles', () => {
+    it('creates with the admin id and the DTO', async () => {
+      service.createCycle.mockResolvedValue({ cycle: { id: 'c1' } });
+      await request(app.getHttpServer()).post('/admin/contest/cycles').send(valid()).expect(201);
+      expect(service.createCycle).toHaveBeenCalledWith('admin-1', expect.objectContaining({ month: '2026-11', minimumTally: 5 }));
+    });
 
-  beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
-      controllers: [ContestAdminController],
-      providers: [{ provide: ContestService, useValue: contestService }],
-    })
-      .overrideGuard(AdminJwtAuthGuard)
-      .useValue({ canActivate: () => false })
-      .compile();
-    app = moduleRef.createNestApplication();
-    await app.init();
+    it('requires the minimum tally (no default) and it must be at least 1', async () => {
+      const without: Record<string, unknown> = { ...valid() };
+      delete without.minimumTally;
+      await request(app.getHttpServer()).post('/admin/contest/cycles').send(without).expect(400);
+      await request(app.getHttpServer()).post('/admin/contest/cycles').send({ ...valid(), minimumTally: 0 }).expect(400);
+    });
+
+    it('title is required and at most 80 characters (#399 E1)', async () => {
+      await request(app.getHttpServer()).post('/admin/contest/cycles').send({ ...valid(), title: '' }).expect(400);
+      await request(app.getHttpServer()).post('/admin/contest/cycles').send({ ...valid(), title: 'x'.repeat(81) }).expect(400);
+      service.createCycle.mockResolvedValue({});
+      await request(app.getHttpServer()).post('/admin/contest/cycles').send({ ...valid(), title: 'x'.repeat(80) }).expect(201);
+    });
+
+    it('the watch limit is required per week and must be 3-120 seconds (#399 E5)', async () => {
+      const bad = (limit: unknown) => ({
+        ...valid(),
+        weeks: valid().weeks.map((w, i) => (i === 0 ? { ...w, viewWatchLimitSeconds: limit } : w)),
+      });
+      service.createCycle.mockResolvedValue({});
+      await request(app.getHttpServer()).post('/admin/contest/cycles').send(bad(2)).expect(400);
+      await request(app.getHttpServer()).post('/admin/contest/cycles').send(bad(121)).expect(400);
+      await request(app.getHttpServer()).post('/admin/contest/cycles').send(bad(undefined)).expect(400);
+      await request(app.getHttpServer()).post('/admin/contest/cycles').send(bad(3)).expect(201);
+      await request(app.getHttpServer()).post('/admin/contest/cycles').send(bad(120)).expect(201);
+    });
+
+    it('needs exactly three weeks, each with a task', async () => {
+      await request(app.getHttpServer()).post('/admin/contest/cycles').send({ ...valid(), weeks: valid().weeks.slice(0, 2) }).expect(400);
+      await request(app.getHttpServer())
+        .post('/admin/contest/cycles')
+        .send({ ...valid(), weeks: valid().weeks.map((w, i) => (i === 1 ? { ...w, task: '' } : w)) })
+        .expect(400);
+      await request(app.getHttpServer())
+        .post('/admin/contest/cycles')
+        .send({ ...valid(), weeks: [...valid().weeks, { weekNumber: 4, task: 'x', viewWatchLimitSeconds: 5 }] })
+        .expect(400);
+    });
+
+    it('the week-4 settings have ranges 1-50 (tolerance, per-viewer cap)', async () => {
+      service.createCycle.mockResolvedValue({});
+      for (const field of ['exposureTolerancePercent', 'exposureViewerDailyCap']) {
+        await request(app.getHttpServer()).post('/admin/contest/cycles').send({ ...valid(), [field]: 0 }).expect(400);
+        await request(app.getHttpServer()).post('/admin/contest/cycles').send({ ...valid(), [field]: 51 }).expect(400);
+        await request(app.getHttpServer()).post('/admin/contest/cycles').send({ ...valid(), [field]: 1 }).expect(201);
+        await request(app.getHttpServer()).post('/admin/contest/cycles').send({ ...valid(), [field]: 50 }).expect(201);
+      }
+    });
+
+    it('placement points are three non-negative integers each', async () => {
+      service.createCycle.mockResolvedValue({});
+      await request(app.getHttpServer())
+        .post('/admin/contest/cycles')
+        .send({ ...valid(), placementPoints: { weekly: [500, 300], monthly: [1, 2, 3] } })
+        .expect(400);
+      await request(app.getHttpServer())
+        .post('/admin/contest/cycles')
+        .send({ ...valid(), placementPoints: { weekly: [500, -1, 150] } })
+        .expect(400);
+      await request(app.getHttpServer())
+        .post('/admin/contest/cycles')
+        .send({ ...valid(), placementPoints: { weekly: [100, 50, 25], monthly: [400, 200, 100] } })
+        .expect(201);
+    });
+
+    it('the month must be YYYY-MM; there is no date field (dates are derived, never editable)', async () => {
+      await request(app.getHttpServer()).post('/admin/contest/cycles').send({ ...valid(), month: '2026-13' }).expect(400);
+      await request(app.getHttpServer()).post('/admin/contest/cycles').send({ ...valid(), month: 'November' }).expect(400);
+      await request(app.getHttpServer())
+        .post('/admin/contest/cycles')
+        .send({ ...valid(), startsAt: '2026-11-01T00:00:00Z' })
+        .expect(400);
+    });
   });
 
-  afterAll(async () => {
-    await app.close();
-  });
+  describe('PATCH /admin/contest/cycles/:id', () => {
+    it('passes the admin id, the cycle and the changes through', async () => {
+      service.updateCycle.mockResolvedValue({});
+      await request(app.getHttpServer())
+        .patch('/admin/contest/cycles/c1')
+        .send({ description: 'New text', weeks: [{ weekNumber: 2, task: 'Better task' }] })
+        .expect(200);
+      expect(service.updateCycle).toHaveBeenCalledWith(
+        'admin-1',
+        'c1',
+        expect.objectContaining({ description: 'New text' }),
+      );
+    });
 
-  it.each([
-    ['/admin/contest/cycles'],
-    ['/admin/contest/current'],
-    ['/admin/contest/cycles/cyc-1'],
-  ])('GET %s is 403 when the admin guard denies, service never called', async (path) => {
-    await request(app.getHttpServer()).get(path).expect(403);
-    expect(contestService.listCyclesForAdmin).not.toHaveBeenCalled();
-    expect(contestService.getCycleByIdForAdmin).not.toHaveBeenCalled();
-    expect(contestService.getCurrentContestForAdmin).not.toHaveBeenCalled();
+    it('rejects any attempt to change a date or the month', async () => {
+      for (const field of ['month', 'startsAt', 'endsAt', 'monthKey']) {
+        await request(app.getHttpServer()).patch('/admin/contest/cycles/c1').send({ [field]: '2026-12' }).expect(400);
+      }
+      expect(service.updateCycle).not.toHaveBeenCalled();
+    });
+
+    it('applies the same ranges on edit', async () => {
+      await request(app.getHttpServer())
+        .patch('/admin/contest/cycles/c1')
+        .send({ weeks: [{ weekNumber: 1, viewWatchLimitSeconds: 500 }] })
+        .expect(400);
+      await request(app.getHttpServer()).patch('/admin/contest/cycles/c1').send({ exposureTolerancePercent: 99 }).expect(400);
+      await request(app.getHttpServer()).patch('/admin/contest/cycles/c1').send({ minimumTally: 0 }).expect(400);
+    });
   });
 });

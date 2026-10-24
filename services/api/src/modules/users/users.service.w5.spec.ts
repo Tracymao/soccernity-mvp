@@ -18,7 +18,7 @@ function buildPrisma() {
     block: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
     guardian: { findUnique: jest.fn() },
     notification: { create: jest.fn() },
-    pointsLedgerEntry: { create: jest.fn() },
+    pointsLedgerEntry: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
   } as unknown as PrismaService;
   (prisma as unknown as { $transaction: jest.Mock }).$transaction = jest.fn((fn: (tx: unknown) => unknown) => fn(prisma));
   return prisma;
