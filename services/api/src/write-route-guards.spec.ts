@@ -105,8 +105,15 @@ const EXPECTED: Record<string, Flags> = {
   // messaging
   'POST /conversations': 'CEP',
   'POST /conversations/:id/messages': 'CEP',
-  // contest
+  // contest (backend/w7-contest, B-091)
   'POST /contest/entries': 'CEP',
+  // A finalist's final upload creates a post under the user's identity: the full CEP stack.
+  'POST /contest/final-entry': 'CEP',
+  // Voting (#370 uniform write block, #393 accounts with restrictions cannot vote): a vote is a
+  // CREATING form, so C + E; NOT P (voting publishes nothing under the user's identity). Un-voting is
+  // an undo, so C only (the like / unlike precedent).
+  'PUT /contest/entries/:entryId/vote': 'CE',
+  'DELETE /contest/entries/:entryId/vote': 'C',
   // grassroots
   'POST /teams': 'CE',
   'POST /fixtures': 'CE',

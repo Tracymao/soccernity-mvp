@@ -1,7 +1,23 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
 import { hasBlockBetween, notBlockedWith } from '../block/block.util';
+import {
+  assertFinalEntryUnlocked,
+  commentCountsForContest,
+  loadContestEntryForPost,
+  recordEntryEngagement,
+  removeEntryEngagement,
+  syncCommentEngagement,
+} from '../contest/contest-engagement.util';
 import { ENGAGEMENT_POINTS } from '../points/points.constants';
 import { awardPoints } from '../points/points.util';
 import { recordPostHashtags } from '../search/hashtag.util';
@@ -60,13 +76,79 @@ const POST_SELECT = {
   // post author's "Manage comment settings" control can show current state.
   commentPermission: true,
   createdAt: true,
+  // backend/w7-contest (B-091): is this post a contest entry? Drives the "Contest post" label and
+  // the pin. A left join on the unique ContestEntry.postId, so it costs one indexed probe per row.
+  contestEntry: {
+    select: {
+      id: true,
+      pinnedUntil: true,
+      pinRemovedAt: true,
+      round: { select: { weekNumber: true } },
+    },
+  },
 } as const;
 
 type RawFeedPost = Prisma.PostGetPayload<{ select: typeof POST_SELECT }>;
-export type FeedPost = Omit<RawFeedPost, 'author'> & { author: PublicAuthor };
 
-function toFeedPost(row: RawFeedPost): FeedPost {
-  return { ...row, author: toPublicUser(row.author) };
+// backend/w7-contest (B-091, Decision Log #404 items 9/15, #405 item 1, #406 item 5). Present when
+// the post is a contest entry. The LABEL is always "Contest post" and never changes; `pinned` is true
+// from submission until 00:00 Europe/London on the 1st of the next month, when the pin is removed and
+// the entry (a final one included) is an ordinary post.
+export interface FeedPostContest {
+  entryId: string;
+  kind: 'weekly' | 'final';
+  weekNumber: number;
+  pinned: boolean;
+  label: 'Contest post';
+}
+
+export type FeedPost = Omit<RawFeedPost, 'author' | 'contestEntry'> & {
+  author: PublicAuthor;
+  contest: FeedPostContest | null;
+};
+
+function toFeedPost(row: RawFeedPost, now: Date): FeedPost {
+  const { contestEntry, ...rest } = row;
+  const contest: FeedPostContest | null = contestEntry
+    ? {
+        entryId: contestEntry.id,
+        kind: contestEntry.round.weekNumber === 4 ? 'final' : 'weekly',
+        weekNumber: contestEntry.round.weekNumber,
+        pinned:
+          contestEntry.pinRemovedAt === null &&
+          contestEntry.pinnedUntil !== null &&
+          contestEntry.pinnedUntil.getTime() > now.getTime(),
+        label: 'Contest post',
+      }
+    : null;
+  return { ...rest, author: toPublicUser(row.author), contest };
+}
+
+// backend/w7-contest (B-091, Decision Log #386, #400, #404). Two read gates for contest entries:
+//
+//  - visibleFrom: a FINAL entry is hidden from everyone except its author until the reveal. Applied
+//    to EVERY post read for a known viewer (feeds, single post, comments, reactions): a hidden post
+//    is a 404, exactly like a post that does not exist, so nobody learns an entry was uploaded.
+//  - communityFeedFrom: GET /posts/feed omits a final entry until the pin is removed (it is "not also
+//    a normal Community-feed post" during the contest month). Only getFeed applies this one.
+function visibleToViewer(viewerId: string, now: Date): Prisma.PostWhereInput {
+  return {
+    OR: [{ visibleFrom: null }, { visibleFrom: { lte: now } }, { authorId: viewerId }],
+  };
+}
+
+function inCommunityFeed(now: Date): Prisma.PostWhereInput {
+  return { OR: [{ communityFeedFrom: null }, { communityFeedFrom: { lte: now } }] };
+}
+
+// Options for createPost that only the contest uses (the final entry's upload).
+export interface CreatePostOptions {
+  /** Hide the post from everyone but its author until this instant (Post.visibleFrom). */
+  visibleFrom?: Date;
+  /** Keep the post out of GET /posts/feed until this instant (Post.communityFeedFrom). */
+  communityFeedFrom?: Date;
+  /** Runs inside the post's own transaction, so a caller can add rows that must land atomically with it. */
+  inTransaction?: (tx: Prisma.TransactionClient, post: { id: string; createdAt: Date }) => Promise<void>;
 }
 
 // Internal-only variant of POST_SELECT that additionally pulls
@@ -214,8 +296,8 @@ const SAVED_POST_SELECT = {
 type RawSavedPostEntry = Prisma.SavedPostGetPayload<{ select: typeof SAVED_POST_SELECT }>;
 export type SavedPostEntry = Omit<RawSavedPostEntry, 'post'> & { post: FeedPost };
 
-function toSavedPostEntry(row: RawSavedPostEntry): SavedPostEntry {
-  return { ...row, post: toFeedPost(row.post) };
+function toSavedPostEntry(row: RawSavedPostEntry, now: Date): SavedPostEntry {
+  return { ...row, post: toFeedPost(row.post, now) };
 }
 
 // Internal-only variant of SAVED_POST_SELECT that additionally pulls
@@ -246,9 +328,14 @@ function stripSequence<T extends { sequence: number }>(row: T): Omit<T, 'sequenc
 
 @Injectable()
 export class FeedService {
-  constructor(private readonly prisma: PrismaService) {}
+  // The clock is optional so a unit test (or a module that does not import ClockModule) falls back to
+  // the system clock; the Contest e2e overrides APP_CLOCK to drive a whole contest month.
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() @Inject(APP_CLOCK) private readonly clock: Clock = systemClock,
+  ) {}
 
-  async createPost(authorId: string, dto: CreatePostDto): Promise<FeedPost> {
+  async createPost(authorId: string, dto: CreatePostDto, options: CreatePostOptions = {}): Promise<FeedPost> {
     // Cross-field rule ("at most one of clubPageId/banterRoomId"), so it
     // belongs in the service layer, not a static DTO decorator — same
     // precedent as RegistrationService enforcing "guardian required when
@@ -274,6 +361,8 @@ export class FeedService {
             mediaUrls: dto.mediaUrls ?? [],
             clubPageId: dto.clubPageId,
             banterRoomId: dto.banterRoomId,
+            visibleFrom: options.visibleFrom,
+            communityFeedFrom: options.communityFeedFrom,
           },
           select: POST_SELECT,
         });
@@ -293,7 +382,13 @@ export class FeedService {
         // search/hashtag.util.ts and search/README.md's "Trending
         // topics" section.
         await recordPostHashtags(tx, post.id, dto.contentText, post.createdAt);
-        return toFeedPost(post);
+        if (options.inTransaction) {
+          await options.inTransaction(tx, { id: post.id, createdAt: post.createdAt });
+          // Re-read so the returned post carries the contest label the callback just attached.
+          const withContest = await tx.post.findUniqueOrThrow({ where: { id: post.id }, select: POST_SELECT });
+          return toFeedPost(withContest, this.clock.now());
+        }
+        return toFeedPost(post, this.clock.now());
       });
     } catch (err) {
       // A clubPageId/banterRoomId that's well-formed at the DTO layer
@@ -329,6 +424,8 @@ export class FeedService {
       AND: [
         ACTIVE_AUTHOR_POST_FILTER,
         { OR: [{ authorId: userId }, { author: { followedBy: { some: { followerId: userId } } } }] },
+        // A final contest entry is not a normal Community-feed post until the pin is removed.
+        inCommunityFeed(this.clock.now()),
       ],
     };
 
@@ -434,8 +531,9 @@ export class FeedService {
     // B-039 (Decision Log #396, #402 item 4): a block hides the other user's
     // posts in BOTH directions, on every feed that goes through this pipeline
     // (own/follows feed, club feed, Banter room feed). Counts are untouched.
+    const now = this.clock.now();
     const rows = await this.prisma.post.findMany({
-      where: { AND: [where, { author: { is: notBlockedWith(userId) } }] },
+      where: { AND: [where, { author: { is: notBlockedWith(userId) } }, visibleToViewer(userId, now)] },
       orderBy: [{ createdAt: 'desc' }, { sequence: 'desc' }],
       take: limit + 1,
       select: POST_SELECT_WITH_SEQUENCE,
@@ -451,7 +549,7 @@ export class FeedService {
     // attachViewerState()/a caller — it exists only to build the cursor
     // above, and was never part of the public FeedPost shape (see
     // POST_SELECT_WITH_SEQUENCE's own comment).
-    const trimmed: FeedPost[] = trimmedWithSequence.map((row) => toFeedPost(stripSequence(row)));
+    const trimmed: FeedPost[] = trimmedWithSequence.map((row) => toFeedPost(stripSequence(row), now));
 
     const items = await this.attachViewerState(userId, trimmed);
     return { items, nextCursor };
@@ -536,14 +634,22 @@ export class FeedService {
     // pending_deletion is treated as not-found here, exactly as it's
     // absent from GET /posts/feed — the "hide via 404" convention this
     // codebase already uses for restricted content.
+    const now = this.clock.now();
     const rawPost = await this.prisma.post.findFirst({
-      where: { AND: [{ id: postId }, ACTIVE_AUTHOR_POST_FILTER, { author: { is: notBlockedWith(userId) } }] },
+      where: {
+        AND: [
+          { id: postId },
+          ACTIVE_AUTHOR_POST_FILTER,
+          { author: { is: notBlockedWith(userId) } },
+          visibleToViewer(userId, now),
+        ],
+      },
       select: POST_SELECT,
     });
     if (!rawPost) {
       throw new NotFoundException('Post not found');
     }
-    const post = toFeedPost(rawPost);
+    const post = toFeedPost(rawPost, now);
 
     const isOwnPost = post.authorId === userId;
     const [likeRow, savedRow, followRow] = await Promise.all([
@@ -595,12 +701,27 @@ export class FeedService {
   private async assertPostExists(
     postId: string,
     viewerId?: string,
+    // An ANONYMOUS read (no viewer to be the author) must not see a hidden final contest entry
+    // either; the author's own management routes pass no viewer and stay open.
+    publicOnly = false,
   ): Promise<{ id: string; authorId: string; commentPermission: string }> {
     // findUnique with a relation filter next to the unique id (Prisma 5
     // extended-where-unique): still a primary-key lookup, now also requiring
     // "no block between the viewer and the author".
     const post = await this.prisma.post.findUnique({
-      where: viewerId ? { id: postId, author: { is: notBlockedWith(viewerId) } } : { id: postId },
+      where: viewerId
+        ? {
+            id: postId,
+            author: { is: notBlockedWith(viewerId) },
+            // A final contest entry is a 404 to everyone but its author until the reveal.
+            AND: [visibleToViewer(viewerId, this.clock.now())],
+          }
+        : publicOnly
+          ? {
+              id: postId,
+              AND: [{ OR: [{ visibleFrom: null }, { visibleFrom: { lte: this.clock.now() } }] }],
+            }
+          : { id: postId },
       select: { id: true, authorId: true, commentPermission: true },
     });
     if (!post) {
@@ -640,11 +761,19 @@ export class FeedService {
   // this code today, tested explicitly).
   async likePost(userId: string, postId: string): Promise<LikeState> {
     const post = await this.assertPostExists(postId, userId);
+    // backend/w7-contest: a final entry refuses engagement (even the author's) before the reveal.
+    const now = this.clock.now();
+    const contest = await loadContestEntryForPost(this.prisma, postId);
+    assertFinalEntryUnlocked(contest, now);
 
     try {
       await this.prisma.$transaction(async (tx) => {
         await tx.like.create({ data: { userId, postId } });
         await tx.post.update({ where: { id: postId }, data: { likeCount: { increment: 1 } } });
+        // The contest's own record of this like (a no-op unless the post is a contest entry and the
+        // like falls inside its counting window). Same transaction as the Like, so a duplicate like
+        // (P2002 above) rolls it back too.
+        await recordEntryEngagement(tx, contest, { giverId: userId, kind: 'like', now });
         if (post.authorId !== userId && !(await hasBlockBetween(tx, userId, post.authorId))) {
           await tx.notification.create({
             data: { userId: post.authorId, type: 'like', payloadRefId: postId },
@@ -698,6 +827,7 @@ export class FeedService {
 
     const existing = await this.prisma.like.findUnique({ where: { userId_postId: { userId, postId } } });
     if (existing) {
+      const contest = await loadContestEntryForPost(this.prisma, postId);
       try {
         await this.prisma.$transaction(async (tx) => {
           await tx.like.delete({ where: { userId_postId: { userId, postId } } });
@@ -705,6 +835,8 @@ export class FeedService {
             where: { id: postId, likeCount: { gt: 0 } },
             data: { likeCount: { decrement: 1 } },
           });
+          // "Removed engagement excluded": an unlike takes the like out of the contest tally.
+          await removeEntryEngagement(tx, contest, { giverId: userId, kind: 'like' });
         });
       } catch (err) {
         if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025')) {
@@ -751,6 +883,9 @@ export class FeedService {
   async addComment(postId: string, authorId: string, dto: CreateCommentDto): Promise<FeedComment> {
     const post = await this.assertPostExists(postId, authorId);
     await this.assertMayComment(post, authorId);
+    const now = this.clock.now();
+    const contest = await loadContestEntryForPost(this.prisma, postId);
+    assertFinalEntryUnlocked(contest, now);
 
     return this.prisma.$transaction(async (tx) => {
       const comment = await tx.comment.create({
@@ -758,6 +893,11 @@ export class FeedService {
         select: COMMENT_SELECT,
       });
       await tx.post.update({ where: { id: postId }, data: { commentCount: { increment: 1 } } });
+      // The contest's record of this comment: ONE per account however many it writes, and only if it
+      // passes the content screening (a seam, see contest-engagement.util).
+      if (commentCountsForContest(dto.contentText)) {
+        await recordEntryEngagement(tx, contest, { giverId: authorId, kind: 'comment', now });
+      }
       if (post.authorId !== authorId && !(await hasBlockBetween(tx, authorId, post.authorId))) {
         await tx.notification.create({
           data: { userId: post.authorId, type: 'comment', payloadRefId: postId },
@@ -788,7 +928,7 @@ export class FeedService {
   // author, who still sees their own hidden comment, also flagged, so it
   // doesn't vanish from their view without explanation.
   async getComments(postId: string, query: FeedQueryDto, viewerId?: string): Promise<CommentPage> {
-    const post = await this.assertPostExists(postId, viewerId);
+    const post = await this.assertPostExists(postId, viewerId, !viewerId);
 
     const limit = Math.min(query.limit ?? FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE);
 
@@ -896,6 +1036,7 @@ export class FeedService {
       throw new ForbiddenException('You may only delete your own comments, or comments on your own post');
     }
 
+    const contest = await loadContestEntryForPost(this.prisma, postId);
     await this.prisma.$transaction(async (tx) => {
       await tx.comment.delete({ where: { id: commentId } });
       // A hidden comment was already subtracted from commentCount when it
@@ -906,6 +1047,8 @@ export class FeedService {
           data: { commentCount: { decrement: 1 } },
         });
       }
+      // The account's single contest comment point goes with its last visible comment.
+      await syncCommentEngagement(tx, contest, { postId, commentAuthorId: comment.authorId });
     });
   }
 
@@ -966,7 +1109,7 @@ export class FeedService {
     const post = await this.assertPostExists(postId);
     const comment = await this.prisma.comment.findUnique({
       where: { id: commentId },
-      select: { id: true, postId: true },
+      select: { id: true, postId: true, authorId: true, contentText: true },
     });
     if (!comment || comment.postId !== postId) {
       throw new NotFoundException('Comment not found');
@@ -974,6 +1117,7 @@ export class FeedService {
     if (post.authorId !== callerId) {
       throw new ForbiddenException('You may only hide or unhide comments on your own post');
     }
+    const contest = await loadContestEntryForPost(this.prisma, postId);
     await this.prisma.$transaction(async (tx) => {
       const flipped = await tx.comment.updateMany({
         where: { id: commentId, hidden: !hidden },
@@ -987,6 +1131,18 @@ export class FeedService {
         });
       } else {
         await tx.post.update({ where: { id: postId }, data: { commentCount: { increment: 1 } } });
+      }
+      // A hidden comment does not count toward a contest: hiding the account's last visible comment
+      // removes its point, and unhiding it records the point again (only inside the counting window,
+      // and only once: the record is idempotent).
+      if (hidden) {
+        await syncCommentEngagement(tx, contest, { postId, commentAuthorId: comment.authorId });
+      } else if (commentCountsForContest(comment.contentText)) {
+        await recordEntryEngagement(tx, contest, {
+          giverId: comment.authorId,
+          kind: 'comment',
+          now: this.clock.now(),
+        });
       }
     });
     return { id: commentId, hidden };
@@ -1082,7 +1238,7 @@ export class FeedService {
   // safety-sensitive or content-generating action the way a like/comment
   // is, so neither of those two mechanisms applies.
   async recordView(userId: string | undefined, postId: string): Promise<ViewState> {
-    await this.assertPostExists(postId, userId);
+    await this.assertPostExists(postId, userId, !userId);
 
     try {
       await this.prisma.$transaction(async (tx) => {
@@ -1132,7 +1288,9 @@ export class FeedService {
     // B-039: a saved post whose author is blocked (either direction) is hidden
     // from the saver's list; the SavedPost row itself is kept, so unblocking
     // brings it back.
-    const notBlocked: Prisma.SavedPostWhereInput = { post: { is: { author: { is: notBlockedWith(userId) } } } };
+    const notBlocked: Prisma.SavedPostWhereInput = {
+      post: { is: { AND: [{ author: { is: notBlockedWith(userId) } }, visibleToViewer(userId, this.clock.now())] } },
+    };
     const where: Prisma.SavedPostWhereInput = query.cursor
       ? { userId, ...notBlocked, ...this.buildSavedPostsCursorFilter(query.cursor) }
       : { userId, ...notBlocked };
@@ -1152,7 +1310,8 @@ export class FeedService {
 
     // Strip `sequence` back off — see SAVED_POST_SELECT_WITH_SEQUENCE's
     // own comment; it was never part of the public SavedPostEntry shape.
-    const items: SavedPostEntry[] = rowsWithSequence.map((row) => toSavedPostEntry(stripSequence(row)));
+    const now = this.clock.now();
+    const items: SavedPostEntry[] = rowsWithSequence.map((row) => toSavedPostEntry(stripSequence(row), now));
 
     return { items, nextCursor };
   }

@@ -4,7 +4,7 @@ import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { TokenService } from '../src/modules/auth/token/token.service';
-import { ContestService } from '../src/modules/contest/contest.service';
+import { ContestLifecycleService } from '../src/modules/contest/contest-lifecycle.service';
 import { ContestNotificationFacts } from '../src/modules/contest-notifications/contest-notification-facts.service';
 import { ContestNotificationSweepService } from '../src/modules/contest-notifications/contest-notification-sweep.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
@@ -321,15 +321,17 @@ describe('Contest notifications e2e: scheduled in-app fan-out', () => {
       const prisma = getTestPrismaClient();
       const { cycleId, roundIds } = await createCycle('2026-11-01T08:00:00Z');
       const post = await prisma.post.create({ data: { authorId: winner, contentText: 'x', mediaUrls: [] } });
+      const voter = await createUser('voter');
+      // A new-model cycle (monthKey set) whose week 1 is in its voting phase with one qualified entry
+      // and one vote; the real lock job (B-091) then decides the week and writes the personal notice.
+      await prisma.contestCycle.update({ where: { id: cycleId }, data: { monthKey: '2026-11', minimumTally: 1 } });
+      await prisma.contestRound.update({ where: { id: roundIds[0] }, data: { status: 'voting' } });
       const entry = await prisma.contestEntry.create({
-        data: { cycleId, roundId: roundIds[0], postId: post.id, userId: winner },
+        data: { cycleId, roundId: roundIds[0], postId: post.id, userId: winner, qualified: true, phase1Tally: 1, phase1Rank: 1 },
       });
-
-      // The real judging path writes the personal notification in its own transaction...
-      await app.get(ContestService).recordRoundResults(cycleId, 1, { winners: [{ entryId: entry.id, position: 1 }] });
-      // ...stamped with the real "now"; pin judgedAt to the lock so the sweep runs at a known instant.
+      await prisma.contestVote.create({ data: { roundId: roundIds[0], voterId: voter, entryId: entry.id } });
       const at = new Date('2026-11-07T20:00:00Z');
-      await prisma.contestRound.update({ where: { id: roundIds[0] }, data: { judgedAt: at } });
+      await app.get(ContestLifecycleService).runOnce(at);
 
       await sweep.runOnce(at);
       await sweep.runOnce(at);

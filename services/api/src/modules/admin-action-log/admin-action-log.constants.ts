@@ -46,6 +46,12 @@ export const ADMIN_ACTION_LOG_ACTIONS = {
   // (active/deactivated). Mirrors USER_STATUS_UPDATED's naming for the
   // User-side equivalent.
   ADMIN_ACCOUNT_STATUS_UPDATED: 'admin_user.status_updated',
+  // POST /admin/contest/cycles (backend/w7-contest, B-091) -- an admin created a month's Contest.
+  // targetType 'contest_cycle'. Notes carry the month and the title, never the minimum tally.
+  CONTEST_CYCLE_CREATED: 'contest_cycle.created',
+  // PATCH /admin/contest/cycles/:id -- an admin edited a Contest within the locking rules. Notes list
+  // the field NAMES that changed (the minimum tally and points are recorded as changed, not by value).
+  CONTEST_CYCLE_UPDATED: 'contest_cycle.updated',
 } as const;
 
 export type AdminActionLogAction = (typeof ADMIN_ACTION_LOG_ACTIONS)[keyof typeof ADMIN_ACTION_LOG_ACTIONS];
@@ -60,6 +66,7 @@ export const ADMIN_ACTION_LOG_TARGET_TYPES = {
   REPORT: 'report',
   ADMIN_USER: 'admin_user',
   USER: 'user',
+  CONTEST_CYCLE: 'contest_cycle',
 } as const;
 
 export type AdminActionLogTargetType =

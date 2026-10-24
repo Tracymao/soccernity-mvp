@@ -277,6 +277,8 @@ model User {
   contestRoundWins ContestRoundWinner[]
   contestVotes     ContestVote[]
   contestStandings ContestStanding[]
+  // backend/w7-contest (B-091): the engagement this account GAVE to contest entries.
+  contestEngagements ContestEngagement[]
   pointsLedger     PointsLedgerEntry[]
 
   // sprint-2/account-deletion-sweep -- backs AccountDeletionSweepService's
@@ -812,6 +814,16 @@ model Post {
   // (commentCount: { gt: 0 }) pattern unlikePost() already established
   // for likeCount — see feed.service.ts.
   commentCount Int           @default(0)
+  // backend/w7-contest (B-091, Decision Log #386/#400/#405). A FINAL (week 4) contest entry is
+  // hidden from everyone but its author until the reveal at 00:00 on day 25: while
+  // visibleFrom > now() the post is invisible to every other viewer and engagement on it is
+  // refused. NULL on every ordinary post. Cleared by the pin-removal step.
+  visibleFrom  DateTime?
+  // A final entry is "not also a normal Community-feed post" during the contest month (#404 item
+  // 15): GET /posts/feed omits it until this instant (00:00 Europe/London on the 1st of the next
+  // month = the pin removal, #406 item 5), after which it is an ordinary post. NULL on every
+  // ordinary post.
+  communityFeedFrom DateTime?
   // Who may add NEW comments: everyone | followers (the commenter must follow
   // the post's author) | off. The author can always comment. Bare String with
   // a service-enforced allow-list (BanterRoom.scopeType/status convention).
@@ -1963,32 +1975,61 @@ model LeaderboardEntry {
 // mechanic is the one with real designed screens and a real user flow
 // today. PointsLedgerEntry.source reserves 'competition_result' for it.
 
-// One monthly Contest cycle. Runs as 3 weekly rounds (weeks 1–3), then a
-// week-4 "Level 1 Final" ranking phase, then crowning — Decision Log
-// #61/#70. Phases (vacant / week_1 / weeks_1_2 / weeks_1_3 / final_live /
-// crowned) are DERIVED (ContestService.derivePhase) from `status` plus
-// how many rounds are judged — never stored, so they can't drift.
+// One monthly Contest cycle (Decision Log #381, #386, #387, #399, #400; docs/contest-spec.md).
 //
-// Status transitions are explicit admin actions
-// (POST /admin/contest/cycles* — ContestAdminController), never a
-// scheduler. Cron-driven auto-advance is Sprint 6 hardening, out of scope
-// here. At most one cycle may be non-"completed" at a time (enforced in
-// ContestService.createCycle, not by a DB constraint — a partial unique
-// index on a string literal isn't worth it).
+// backend/w7-contest (B-091) REPLACES the admin-judged model of Decision Log #218/#241: a contest
+// is no longer judged by an admin. It runs itself on the fixed Europe/London calendar of the spec
+// -- weeks 1-3 (entries, engagement ranking, a vote, a 20:00 lock), then the week-4 final (finalist
+// uploads, the 00:00 reveal on day 25, likes + comments to month end) -- driven by
+// ContestLifecycleService. An admin only CREATES and (within the locking rules of section 4a) EDITS
+// the contest; the dates are derived from `monthKey` and never editable.
+//
+// `monthKey` ("YYYY-MM", the London month, @unique) is what marks a cycle as one of the new
+// self-running ones. Rows from the old admin-judged model have monthKey NULL and are never touched
+// by the lifecycle service. New-model rows are held to their invariants by the CHECK constraints in
+// migration 20261025090000.
+//
+// Status: active (weeks 1-3 and the upload window) -> final (after the reveal, only if there are
+// finalists) -> completed (crowned, or the month ended with no final / no winner).
+// Phases for the existing read model (vacant / week_1 / ... / crowned) are still DERIVED
+// (ContestService.derivePhase), never stored.
 model ContestCycle {
   id            String    @id @default(uuid())
   title         String
-  // active     — weekly rounds (weeks 1–3) accepting entries / being judged
-  // final      — week-4 "Level 1 Final" live-ranking phase (DL #61 state 2)
-  // completed  — monthly top-3 crowned (DL #61 state 3), archived
   status        String    @default("active")
   startsAt      DateTime
   endsAt        DateTime
-  // Set by POST .../final/open and POST .../crown respectively — the
-  // timestamps the derived phase and the Leaderboard "Crowned" state read.
+  // finalOpenedAt: set at the reveal (status -> final). crownedAt: set when the cycle completes.
   finalOpenedAt DateTime?
   crownedAt     DateTime?
   createdAt     DateTime  @default(now())
+
+  // ---- backend/w7-contest (B-091) ----
+  // "YYYY-MM", the London calendar month this contest runs in. NULL = a legacy admin-judged cycle.
+  monthKey      String?   @unique
+  description   String?
+  // x: the points a finalist needs to be considered for the final top 3 (section 4, 10). ADMIN-ONLY:
+  // never returned by a user-facing endpoint. Required (>= 1) for every new-model cycle.
+  minimumTally  Int?
+  // Placement points (section 9d), set per contest; defaults are the spec's. Awarded to the ledger
+  // when the week is decided (weekly) or the month is crowned (monthly).
+  weeklyPoints1  Int @default(500)
+  weeklyPoints2  Int @default(300)
+  weeklyPoints3  Int @default(150)
+  monthlyPoints1 Int @default(2000)
+  monthlyPoints2 Int @default(1200)
+  monthlyPoints3 Int @default(600)
+  // Week 4 only (Decision Log #399 E2, #402). Lock when week 4 starts.
+  followersExcludedWeek4   Boolean @default(false)
+  exposureTolerancePercent Int     @default(10)
+  exposureViewerDailyCap   Int     @default(3)
+  // Lifecycle stamps. All set once, by the lifecycle service, from the calendar.
+  finalistsSelectedAt DateTime?
+  revealedAt          DateTime?
+  pinsRemovedAt       DateTime?
+  // true when the month ended with no final (no finalist) or with no finalist reaching the minimum
+  // tally: the leaderboard shows "No winner this month" / no final.
+  noWinner            Boolean   @default(false)
 
   rounds    ContestRound[]
   entries   ContestEntry[]
@@ -1997,19 +2038,38 @@ model ContestCycle {
   @@index([status])
 }
 
-// One weekly round (week 1, 2 or 3) within a cycle.
+// One round of a cycle: weeks 1-3 (the weekly challenge) and week 4 (the final).
+//
+// backend/w7-contest: week 4 now has a round row too (weekNumber = 4). It carries the final's task
+// text and window, and a finalist's final entry is a ContestEntry in it -- which is what "the server
+// flags it as a final entry" means: ContestEntry.round.weekNumber = 4, no hashtag parsing.
+//
+// status: open (Phase 1: entries) -> voting (Phase 2: the top 10 are voted on) -> judged (the 20:00
+// lock calculated the result, or the week was forfeited at the end of Phase 1). Week 4: open -> judged.
+// opensAt = the week's 08:00 opening; closesAt = the (exclusive) end of the round's last window:
+// the vote lock for weeks 1-3, the reveal for week 4.
 model ContestRound {
   id         String       @id @default(uuid())
   cycleId    String
   cycle      ContestCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
-  weekNumber Int // 1 | 2 | 3
-  // open   — within [opensAt, closesAt] and accepting entries
-  // judged — closed, weekly top-3 winners recorded (ContestRoundWinner)
+  weekNumber Int // 1 | 2 | 3 | 4
   status     String       @default("open")
   opensAt    DateTime
   closesAt   DateTime
   judgedAt   DateTime?
   createdAt  DateTime     @default(now())
+
+  // ---- backend/w7-contest (B-091) ----
+  // The admin's free-text task for the week (weeks 1-3) / the final (week 4). Editable until the week starts.
+  task                  String?
+  // Weeks 1-3: the view-qualifying watch limit L in seconds (3-120, section 9c). Locked once the week
+  // has started. NULL for week 4 (views are not counted in the final).
+  viewWatchLimitSeconds Int?
+  // Set at the end of Phase 1 when fewer than 3 entries were made: the week is forfeited, nobody is
+  // placed, no points are awarded, and the reason is shown to users (section 7).
+  forfeited             Boolean   @default(false)
+  forfeitReason         String?
+  phase1ClosedAt        DateTime?
 
   entries ContestEntry[]
   winners ContestRoundWinner[]
@@ -2018,12 +2078,9 @@ model ContestRound {
   @@unique([cycleId, weekNumber])
 }
 
-// A Post submitted AS a Contest entry, into the round open at submission
-// time. Decision Log #218 judgment call: ONE entry per user per weekly
-// round (@@unique([roundId, userId])) — "entries per player" is a
-// Competition field (DL #73), not spec'd for Contest, but one entry per
-// week is the natural reading of a weekly skill challenge and keeps
-// "weekly winners: top 3" unambiguous.
+// A Post submitted AS a contest entry. A weekly entry goes into round 1-3 during Phase 1; a final
+// entry goes into round 4 (finalists only, days 22-24). ONE entry per user per round
+// (@@unique([roundId, userId])).
 model ContestEntry {
   id          String       @id @default(uuid())
   cycleId     String
@@ -2032,23 +2089,39 @@ model ContestEntry {
   round       ContestRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
   postId      String       @unique
   post        Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
-  // Denormalised author (= post.authorId) — backs the per-round one-entry
-  // rule and "my entries" reads without a Post join. Cascade per DL #44.
+  // Denormalised author (= post.authorId) -- backs the per-round one-entry rule and "my entries"
+  // reads without a Post join. Cascade per DL #44.
   userId      String
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   submittedAt DateTime     @default(now())
 
-  winner ContestRoundWinner?
-  votes  ContestVote[]
+  // ---- backend/w7-contest (B-091) ----
+  // Phase 1 result, written once at the end of Phase 1 (weeks 1-3 only).
+  phase1Tally Int?
+  phase1Rank  Int?
+  // true for the top 10 (or all, if fewer): only these can be voted on.
+  qualified   Boolean @default(false)
+  // Final (week 4) result, written once at the crown.
+  finalTally  Int?
+  finalRank   Int?
+  // The pin (section 6, #404 item 9): the entry is pinned on its author's profile from submission
+  // until the contest ends (00:00 London on the 1st). pinnedUntil is that instant, fixed at
+  // submission; pinRemovedAt is stamped by the lifecycle service when it removes the pin. The label
+  // stays "Contest post" after the pin is gone.
+  pinnedUntil  DateTime?
+  pinRemovedAt DateTime?
+
+  winner      ContestRoundWinner?
+  votes       ContestVote[]
+  engagements ContestEngagement[]
 
   @@unique([roundId, userId])
+  @@index([cycleId])
 }
 
-// The weekly top-3 for one round — written when the round is judged
-// (POST /admin/contest/cycles/:id/rounds/:week/results). `position` is
-// 1|2|3 and MAY repeat within a round: Decision Log #61(c) renders ties
-// as two rows sharing an ordinal, so there is no @@unique([roundId,
-// position]) — only one winner row per entry.
+// The weekly top-3 for one round -- written by ContestLifecycleService at the 20:00 lock. `position`
+// is 1|2|3 and is unique within a round now that the vote tie-break is total (section 8); the schema
+// still does not enforce it, to keep legacy rows (which allowed ties) valid.
 model ContestRoundWinner {
   id        String       @id @default(uuid())
   roundId   String
@@ -2058,18 +2131,18 @@ model ContestRoundWinner {
   // Denormalised (= entry.userId). Cascade per DL #44.
   userId    String
   user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  position  Int // 1 | 2 | 3 (ties allowed)
+  position  Int // 1 | 2 | 3
   createdAt DateTime     @default(now())
 }
 
-// backend/w3c-contest-notifications (B-122, Decision Log #404 item 16). MINIMAL on purpose: the
-// one fact the votes-closing reminder needs -- "has this account voted in this round?" -- and
-// nothing else. docs/contest-spec.md section 8: one vote per user per round (self-vote allowed),
-// so @@unique([roundId, voterId]). NOTHING WRITES THIS TABLE YET: the voting endpoints, the
-// retract/event-log semantics (a retract is a plain delete of the row here), the tie-break
-// timestamps and the restricted-account vote block are all B-091. B-091 owns this model and may
-// extend or replace it; the reminder only reads it through a relation filter
-// (User.contestVotes none { roundId }).
+// A vote in Phase 2: ONE per account per round (section 8), self-vote allowed. Retracting a vote
+// DELETES the row (a retracted vote reduces the tally and no longer counts toward "earliest vote
+// reached"); changing a vote is a retract then a new vote (Decision Log #401, no separate "Change
+// vote"). The history of casts and retractions is kept in ContestVoteEvent.
+//
+// backend/w3c-contest-notifications created this table for the votes-closing reminder; B-091 owns it
+// now and writes it (ContestVotingService). Its shape is unchanged, so the reminder's relation
+// filter (User.contestVotes none { roundId }) still means "has not voted in this round".
 model ContestVote {
   id        String       @id @default(uuid())
   roundId   String
@@ -2083,6 +2156,54 @@ model ContestVote {
 
   @@unique([roundId, voterId])
   @@index([entryId])
+}
+
+// backend/w7-contest (B-091, spec section 13: "one per user per round, retractable, with an event
+// log and timestamps"). Append-only history of every vote cast and retracted. Plain string ids and
+// no foreign keys, like ConsentAuditRecord / PointsLedgerEntry: an audit trail must outlive the rows
+// it describes. Holds no personal data beyond opaque ids.
+model ContestVoteEvent {
+  id         String   @id @default(uuid())
+  roundId    String
+  voterId    String
+  entryId    String
+  // cast | retract
+  action     String
+  occurredAt DateTime
+
+  @@index([roundId, voterId, occurredAt])
+}
+
+// backend/w7-contest (B-091, Decision Log #382, #386; spec sections 9a, 10). The log of qualifying
+// engagement on contest entries: ONE row per (entry, giver, kind) -- a like, a comment, a qualified
+// view. It exists because two contest rules cannot be answered from the Like / Comment tables:
+//   1. "Follow status is FROZEN at the moment an account engages" (week-4 followers-excluded mode):
+//      followedAtEngagement is the snapshot taken then.
+//   2. Engagement before a contest's counting window opens (before the reveal, or on a post that
+//      was not an entry yet) must not count, and engagement after it closes must not either.
+// Written inside the same transaction as the Like / Comment by FeedService (through
+// contest-engagement.util), removed in the same transaction when the like is undone or the last
+// visible comment is removed ("removed engagement excluded"). Only engagement INSIDE the entry's
+// counting window is recorded: weeks 1-3 from the submission to the end of Phase 1, the final from
+// the reveal to the end of the month.
+//
+// Whether the giver is allowed to count (active, verified email, not restricted) is NOT stored: it is
+// evaluated when the tally is taken, so an account restricted later stops counting.
+// kind 'view' is the seam for B-093's server-validated view heartbeats: nothing writes it yet.
+model ContestEngagement {
+  id                   String       @id @default(uuid())
+  entryId              String
+  entry                ContestEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  userId               String
+  // Decision Log #341: RESTRICT, as ContestVote.voter.
+  user                 User         @relation(fields: [userId], references: [id])
+  // like | comment | view
+  kind                 String
+  followedAtEngagement Boolean
+  occurredAt           DateTime
+
+  @@unique([entryId, userId, kind])
+  @@index([entryId, occurredAt])
 }
 
 // The monthly crowned top-3 (Decision Log #61 state 3 / #69 medals) —

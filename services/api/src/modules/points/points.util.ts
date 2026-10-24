@@ -37,10 +37,20 @@ export interface AwardPointsInput {
 }
 
 // Idempotent: PointsLedgerEntry has @@unique([source, refId, userId]), so
-// a second award for the same (source, refId, user) — a re-like of a
-// post already liked once, or re-running round judging — is swallowed as
+// a second award for the same (source, refId, user) -- a re-like of a
+// post already liked once, or re-running round judging -- is swallowed as
 // a no-op rather than double-paying or throwing. Returns true if a row
 // was actually written, false if it was a duplicate no-op.
+//
+// IMPLEMENTATION NOTE (backend/w7-contest): this used to be `create()` inside a
+// try/catch that swallowed P2002. That is WRONG inside a transaction: a failed
+// statement aborts the whole Postgres transaction, so the caller's later statements
+// and its COMMIT silently became a ROLLBACK -- a like -> unlike -> re-like returned
+// 200 `liked: true` but wrote no Like row and moved no counter (found by the Contest
+// e2e: the re-liked entry never re-counted). `createMany({ skipDuplicates: true })`
+// is `INSERT ... ON CONFLICT DO NOTHING`: a duplicate is a no-op that does NOT abort
+// the transaction. Every call site runs inside a $transaction, so this is the only
+// correct form.
 export async function awardPoints(
   tx: Prisma.TransactionClient,
   input: AwardPointsInput,
@@ -50,9 +60,9 @@ export async function awardPoints(
       ? input.clubId
       : ((await tx.user.findUnique({ where: { id: input.userId }, select: { representedClubId: true } }))
           ?.representedClubId ?? null);
-  try {
-    await tx.pointsLedgerEntry.create({
-      data: {
+  const result = await tx.pointsLedgerEntry.createMany({
+    data: [
+      {
         userId: input.userId,
         source: input.source,
         refId: input.refId,
@@ -60,12 +70,8 @@ export async function awardPoints(
         clubId,
         occurredAt: input.occurredAt ?? new Date(),
       },
-    });
-    return true;
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-      return false;
-    }
-    throw err;
-  }
+    ],
+    skipDuplicates: true,
+  });
+  return result.count > 0;
 }

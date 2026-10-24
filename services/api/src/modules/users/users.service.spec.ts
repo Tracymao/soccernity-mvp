@@ -37,7 +37,7 @@ function buildPrismaMock() {
     // now writes a baseline-engagement PointsLedgerEntry for the follower
     // inside its transaction callback (via awardPoints).
     pointsLedgerEntry: {
-      create: jest.fn(),
+      createMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
   } as unknown as PrismaService;
 
@@ -392,15 +392,18 @@ describe('UsersService', () => {
       });
       // Decision Log #219: the FOLLOWER (action-taker) earns a
       // baseline-engagement point, keyed on the followee id.
-      expect((prisma as unknown as { pointsLedgerEntry: { create: jest.Mock } }).pointsLedgerEntry.create).toHaveBeenCalledWith({
-        data: {
-          userId: 'follower-1',
-          source: 'engagement_follow',
-          refId: 'followee-1',
-          points: 1,
-          clubId: null,
-          occurredAt: expect.any(Date),
-        },
+      expect((prisma as unknown as { pointsLedgerEntry: { createMany: jest.Mock } }).pointsLedgerEntry.createMany).toHaveBeenCalledWith({
+        data: [
+          {
+            userId: 'follower-1',
+            source: 'engagement_follow',
+            refId: 'followee-1',
+            points: 1,
+            clubId: null,
+            occurredAt: expect.any(Date),
+          },
+        ],
+        skipDuplicates: true,
       });
       expect(result).toEqual({ following: true });
     });
@@ -419,7 +422,7 @@ describe('UsersService', () => {
 
       // tx.follow.create threw before awardPoints was reached — the whole
       // callback rolled back.
-      expect((prisma as unknown as { pointsLedgerEntry: { create: jest.Mock } }).pointsLedgerEntry.create).not.toHaveBeenCalled();
+      expect((prisma as unknown as { pointsLedgerEntry: { createMany: jest.Mock } }).pointsLedgerEntry.createMany).not.toHaveBeenCalled();
     });
 
     it('the Notification recipient is the followee, never the follower (actor)', async () => {

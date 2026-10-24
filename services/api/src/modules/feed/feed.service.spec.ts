@@ -15,6 +15,17 @@ function notBlockedWith(viewerId: string) {
 }
 const notBlockedAuthor = (viewerId: string) => ({ author: { is: notBlockedWith(viewerId) } });
 
+// backend/w7-contest (B-091): the service reads time through an injectable clock, so the contest's
+// read gates have an exact instant to assert against.
+const FIXED_NOW = new Date('2026-08-15T12:00:00.000Z');
+const FIXED_CLOCK = { now: () => new Date(FIXED_NOW) };
+// A final contest entry is a 404 to everyone but its author until the reveal (Post.visibleFrom).
+const visibleTo = (viewerId: string) => ({
+  OR: [{ visibleFrom: null }, { visibleFrom: { lte: FIXED_NOW } }, { authorId: viewerId }],
+});
+// GET /posts/feed omits a final entry until the pin is removed (Post.communityFeedFrom).
+const inCommunityFeed = { OR: [{ communityFeedFrom: null }, { communityFeedFrom: { lte: FIXED_NOW } }] };
+
 function buildPrismaMock() {
   const prisma = {
     post: {
@@ -85,7 +96,7 @@ function buildPrismaMock() {
     // that exercises either runs through this mock whether or not it
     // asserts on points, so it must exist unconditionally.
     pointsLedgerEntry: {
-      create: jest.fn(),
+      createMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     // Decision Log #128: awardPoints snapshots the caller's represented club
     // from the user row inside the same transaction.
@@ -101,6 +112,16 @@ function buildPrismaMock() {
       upsert: jest.fn().mockResolvedValue({ id: 'hashtag-1' }),
       // DELETE /posts/:id decrements Hashtag.postCount per linked tag.
       updateMany: jest.fn(),
+    },
+    // backend/w7-contest (B-091): likes / comments / comment removals look up whether the post is a
+    // contest entry (loadContestEntryForPost) and, if so, write the contest's engagement row. Every
+    // existing test is about an ordinary post, so the default is 'not an entry'.
+    contestEntry: {
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
+    contestEngagement: {
+      createMany: jest.fn(),
+      deleteMany: jest.fn(),
     },
     postHashtag: {
       create: jest.fn(),
@@ -127,7 +148,12 @@ const AUTHOR = { id: 'author-1', username: null as string | null, displayName: '
 
 // What the API returns for a row: the embedded author is { id, publicName } only.
 function asView<T extends { author: { id: string; username: string | null; displayName: string } }>(row: T) {
-  return { ...row, author: { id: row.author.id, publicName: row.author.username ?? 'Soccernity member' } };
+  return {
+    ...row,
+    author: { id: row.author.id, publicName: row.author.username ?? 'Soccernity member' },
+    // backend/w7-contest: an ordinary post carries no contest label.
+    contest: null,
+  };
 }
 
 function buildPostRow(overrides: Partial<Record<string, unknown>> = {}) {
@@ -158,7 +184,7 @@ describe('FeedService', () => {
       const row = buildPostRow();
       (prisma.post.create as jest.Mock).mockResolvedValue(row);
 
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
       const result = await service.createPost('author-1', { contentText: 'Great match today' });
 
       expect(prisma.post.create).toHaveBeenCalledWith({
@@ -179,18 +205,21 @@ describe('FeedService', () => {
       const row = buildPostRow({ id: 'post-77', createdAt: new Date('2026-08-09T10:00:00.000Z') });
       (prisma.post.create as jest.Mock).mockResolvedValue(row);
 
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
       await service.createPost('author-1', { contentText: 'Great match today' });
 
-      expect((prisma as unknown as { pointsLedgerEntry: { create: jest.Mock } }).pointsLedgerEntry.create).toHaveBeenCalledWith({
-        data: {
-          userId: 'author-1',
-          source: 'engagement_post',
-          refId: 'post-77',
-          points: 3,
-          clubId: null,
-          occurredAt: new Date('2026-08-09T10:00:00.000Z'),
-        },
+      expect((prisma as unknown as { pointsLedgerEntry: { createMany: jest.Mock } }).pointsLedgerEntry.createMany).toHaveBeenCalledWith({
+        data: [
+          {
+            userId: 'author-1',
+            source: 'engagement_post',
+            refId: 'post-77',
+            points: 3,
+            clubId: null,
+            occurredAt: new Date('2026-08-09T10:00:00.000Z'),
+          },
+        ],
+        skipDuplicates: true,
       });
     });
 
@@ -199,7 +228,7 @@ describe('FeedService', () => {
       const row = buildPostRow({ likeCount: 0, commentCount: 0 });
       (prisma.post.create as jest.Mock).mockResolvedValue(row);
 
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
       const result = await service.createPost('author-1', { contentText: 'Hello' });
 
       const callArgs = (prisma.post.create as jest.Mock).mock.calls[0][0];
@@ -211,7 +240,7 @@ describe('FeedService', () => {
 
     it('rejects a post with both clubPageId and banterRoomId set, without calling Prisma', async () => {
       const prisma = buildPrismaMock();
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(
         service.createPost('author-1', {
@@ -226,7 +255,7 @@ describe('FeedService', () => {
     it('allows a post with only clubPageId set', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.create as jest.Mock).mockResolvedValue(buildPostRow({ clubPageId: 'club-1' }));
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(
         service.createPost('author-1', { contentText: 'Club post', clubPageId: 'club-1' }),
@@ -252,7 +281,7 @@ describe('FeedService', () => {
           .mockResolvedValueOnce({ id: 'hashtag-chelsea' })
           .mockResolvedValueOnce({ id: 'hashtag-epl' });
 
-        const service = new FeedService(prisma);
+        const service = new FeedService(prisma, FIXED_CLOCK);
         await service.createPost('author-1', { contentText: row.contentText });
 
         // "#Chelsea" and "#CHELSEA" both normalize to the same lowercase
@@ -289,7 +318,7 @@ describe('FeedService', () => {
           buildPostRow({ id: 'post-1', contentText: '#throwback', createdAt: postCreatedAt }),
         );
 
-        const service = new FeedService(prisma);
+        const service = new FeedService(prisma, FIXED_CLOCK);
         await service.createPost('author-1', { contentText: '#throwback' });
 
         const callArgs = (prisma.postHashtag.create as jest.Mock).mock.calls[0][0];
@@ -302,7 +331,7 @@ describe('FeedService', () => {
           buildPostRow({ contentText: 'No tags here' }),
         );
 
-        const service = new FeedService(prisma);
+        const service = new FeedService(prisma, FIXED_CLOCK);
         await service.createPost('author-1', { contentText: 'No tags here' });
 
         expect(prisma.hashtag.upsert).not.toHaveBeenCalled();
@@ -316,7 +345,7 @@ describe('FeedService', () => {
           buildPostRow({ contentText: `${longTag} #ok` }),
         );
 
-        const service = new FeedService(prisma);
+        const service = new FeedService(prisma, FIXED_CLOCK);
         await service.createPost('author-1', { contentText: `${longTag} #ok` });
 
         expect(prisma.hashtag.upsert).toHaveBeenCalledTimes(1);
@@ -333,7 +362,7 @@ describe('FeedService', () => {
         clientVersion: '5.0.0',
       });
       (prisma.post.create as jest.Mock).mockRejectedValue(fkError);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(
         service.createPost('author-1', { contentText: 'Bad club', clubPageId: 'does-not-exist' }),
@@ -347,7 +376,7 @@ describe('FeedService', () => {
         clientVersion: '5.0.0',
       });
       (prisma.post.create as jest.Mock).mockRejectedValue(otherError);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.createPost('author-1', { contentText: 'x' })).rejects.toBe(otherError);
     });
@@ -355,7 +384,7 @@ describe('FeedService', () => {
     it("never selects the author's passwordHash", async () => {
       const prisma = buildPrismaMock();
       (prisma.post.create as jest.Mock).mockResolvedValue(buildPostRow());
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.createPost('author-1', { contentText: 'x' });
 
@@ -369,7 +398,7 @@ describe('FeedService', () => {
     it('scopes to the caller\'s own posts plus posts by users they follow, all AND-ed with an active-author filter', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.getFeed('user-1', {});
 
@@ -389,9 +418,12 @@ describe('FeedService', () => {
                   { author: { followedBy: { some: { followerId: 'user-1' } } } },
                 ],
               },
+              // backend/w7-contest: a final contest entry is not a normal Community-feed post.
+              inCommunityFeed,
             ],
           },
           notBlockedAuthor('user-1'),
+          visibleTo('user-1'),
         ],
       });
     });
@@ -399,7 +431,7 @@ describe('FeedService', () => {
     it('orders most-recent-first, keyed on (createdAt, sequence) — NOT id, a random UUID unrelated to insertion order', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.getFeed('user-1', {});
 
@@ -411,7 +443,7 @@ describe('FeedService', () => {
     it('defaults to a page size of FEED_DEFAULT_PAGE_SIZE, requesting one extra row', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.getFeed('user-1', {});
 
@@ -422,7 +454,7 @@ describe('FeedService', () => {
     it('clamps a limit above FEED_MAX_PAGE_SIZE even if the DTO boundary is bypassed', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.getFeed('user-1', { limit: 9999 });
 
@@ -434,7 +466,7 @@ describe('FeedService', () => {
       const prisma = buildPrismaMock();
       const rows = [buildPostRow({ id: 'post-1' }), buildPostRow({ id: 'post-2' })];
       (prisma.post.findMany as jest.Mock).mockResolvedValue(rows);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const page = await service.getFeed('user-1', { limit: 10 });
 
@@ -450,7 +482,7 @@ describe('FeedService', () => {
         buildPostRow({ id: 'post-1', sequence: 1, createdAt: new Date('2026-08-01T00:00:00.000Z') }), // lookahead row
       ];
       (prisma.post.findMany as jest.Mock).mockResolvedValue(rows);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const page = await service.getFeed('user-1', { limit: 2 });
 
@@ -469,14 +501,15 @@ describe('FeedService', () => {
     it('applies a cursor filter (createdAt < cursor OR createdAt = cursor AND sequence < cursor.sequence) when a cursor is given — NOT id, which was never monotonic', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
       const cursor = encodeFeedSequenceCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), sequence: 2 });
 
       await service.getFeed('user-1', { cursor });
 
       const callArgs = (prisma.post.findMany as jest.Mock).mock.calls[0][0];
-      expect(callArgs.where.AND).toHaveLength(2);
+      expect(callArgs.where.AND).toHaveLength(3);
       expect(callArgs.where.AND[1]).toEqual(notBlockedAuthor('user-1'));
+      expect(callArgs.where.AND[2]).toEqual(visibleTo('user-1'));
       expect(callArgs.where.AND[0].AND).toHaveLength(2);
       expect(callArgs.where.AND[0].AND[1]).toEqual({
         OR: [
@@ -488,7 +521,7 @@ describe('FeedService', () => {
 
     it('rejects a malformed cursor with a 400 rather than passing garbage to Prisma', async () => {
       const prisma = buildPrismaMock();
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.getFeed('user-1', { cursor: 'not-valid-base64-json' })).rejects.toBeInstanceOf(
         BadRequestException,
@@ -499,7 +532,7 @@ describe('FeedService', () => {
     it('never selects the author\'s passwordHash or isMinor in the list query', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.getFeed('user-1', {});
 
@@ -511,7 +544,7 @@ describe('FeedService', () => {
     it('does not select comments or likes relations on the list payload (Section 5.5 leanness)', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.getFeed('user-1', {});
 
@@ -534,7 +567,7 @@ describe('FeedService', () => {
       (prisma.like.findMany as jest.Mock).mockResolvedValue([{ postId: 'p-liked-followed' }]);
       (prisma.savedPost.findMany as jest.Mock).mockResolvedValue([{ postId: 'p-saved-unfollowed' }]);
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([{ followeeId: 'author-x' }]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const page = await service.getFeed('viewer-1', { limit: 10 });
 
@@ -555,7 +588,7 @@ describe('FeedService', () => {
         buildPostRow({ id: 'p3', authorId: 'author-a' }),
       ];
       (prisma.post.findMany as jest.Mock).mockResolvedValue(rows);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.getFeed('viewer-1', { limit: 10 });
 
@@ -585,7 +618,7 @@ describe('FeedService', () => {
         { followeeId: 'viewer-1' },
         { followeeId: 'author-x' },
       ]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const page = await service.getFeed('viewer-1', { limit: 10 });
       const byId = Object.fromEntries(page.items.map((p) => [p.id, p]));
@@ -598,7 +631,7 @@ describe('FeedService', () => {
     it('skips ALL three viewer-state lookups entirely when the page has zero posts', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const page = await service.getFeed('viewer-1', {});
 
@@ -614,7 +647,7 @@ describe('FeedService', () => {
         buildPostRow({ id: 'own-1', authorId: 'viewer-1' }),
         buildPostRow({ id: 'own-2', authorId: 'viewer-1' }),
       ]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.getFeed('viewer-1', {});
 
@@ -634,7 +667,7 @@ describe('FeedService', () => {
     it('scopes strictly to posts whose clubPageId matches — not the caller\'s follows', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.getClubFeed('club-1', 'user-1', {});
 
@@ -644,6 +677,7 @@ describe('FeedService', () => {
         AND: [
           { clubPageId: 'club-1', author: { accountStatus: { in: ['active', 'deleted'] } } },
           notBlockedAuthor('user-1'),
+          visibleTo('user-1'),
         ],
       });
       expect(callArgs.orderBy).toEqual([{ createdAt: 'desc' }, { sequence: 'desc' }]);
@@ -653,7 +687,7 @@ describe('FeedService', () => {
     it('clamps a limit above FEED_MAX_PAGE_SIZE', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.getClubFeed('club-1', 'user-1', { limit: 9999 });
 
@@ -668,7 +702,7 @@ describe('FeedService', () => {
         buildPostRow({ id: 'post-1', sequence: 1, clubPageId: 'club-1', createdAt: new Date('2026-08-01T00:00:00.000Z') }),
       ];
       (prisma.post.findMany as jest.Mock).mockResolvedValue(rows);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
       const cursor = encodeFeedSequenceCursor({ createdAt: new Date('2026-08-09T00:00:00.000Z'), sequence: 9 });
 
       const page = await service.getClubFeed('club-1', 'user-1', { cursor, limit: 2 });
@@ -693,7 +727,7 @@ describe('FeedService', () => {
 
     it('rejects a malformed cursor with a 400 before touching Prisma', async () => {
       const prisma = buildPrismaMock();
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.getClubFeed('club-1', 'user-1', { cursor: 'garbage' })).rejects.toBeInstanceOf(
         BadRequestException,
@@ -711,7 +745,7 @@ describe('FeedService', () => {
       (prisma.like.findMany as jest.Mock).mockResolvedValue([{ postId: 'p-a' }]);
       (prisma.savedPost.findMany as jest.Mock).mockResolvedValue([]);
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([{ followeeId: 'author-x' }]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const page = await service.getClubFeed('club-1', 'viewer-1', { limit: 10 });
       const byId = Object.fromEntries(page.items.map((p) => [p.id, p]));
@@ -726,7 +760,7 @@ describe('FeedService', () => {
     it('skips all viewer-state lookups when the club has no posts', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const page = await service.getClubFeed('club-1', 'viewer-1', {});
 
@@ -741,7 +775,7 @@ describe('FeedService', () => {
       const prisma = buildPrismaMock();
       const row = buildPostRow(); // authorId: 'author-1'
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(row);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.getPostById('post-1', 'viewer-1')).resolves.toEqual({
         ...asView(row),
@@ -755,7 +789,7 @@ describe('FeedService', () => {
       const prisma = buildPrismaMock();
       // findFirst returns null because the active-author filter excluded it.
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(null);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.getPostById('post-1', 'viewer-1')).rejects.toBeInstanceOf(NotFoundException);
       const callArgs = (prisma.post.findFirst as jest.Mock).mock.calls[0][0];
@@ -765,6 +799,7 @@ describe('FeedService', () => {
           { id: 'post-1' },
           { author: { accountStatus: { in: ['active', 'deleted'] } } },
           notBlockedAuthor('viewer-1'),
+          visibleTo('viewer-1'),
         ],
       });
     });
@@ -772,7 +807,7 @@ describe('FeedService', () => {
     it('throws NotFoundException, not a silent null, for a non-existent id (before any viewer-state lookup)', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(null);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.getPostById('does-not-exist', 'viewer-1')).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.like.findUnique).not.toHaveBeenCalled();
@@ -788,7 +823,7 @@ describe('FeedService', () => {
       (prisma.like.findUnique as jest.Mock).mockResolvedValue({ id: 'like-1' });
       (prisma.savedPost.findUnique as jest.Mock).mockResolvedValue(null);
       (prisma.follow.findUnique as jest.Mock).mockResolvedValue({ id: 'follow-1' });
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const result = await service.getPostById('post-1', 'viewer-1');
 
@@ -810,7 +845,7 @@ describe('FeedService', () => {
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(buildPostRow({ authorId: 'viewer-1' }));
       // Even if a (bogus) self-follow row somehow existed, it must not be consulted.
       (prisma.follow.findUnique as jest.Mock).mockResolvedValue({ id: 'should-not-be-read' });
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const result = await service.getPostById('post-1', 'viewer-1');
 
@@ -833,7 +868,7 @@ describe('FeedService', () => {
     it('throws NotFoundException when postId does not reference a real post (like)', async () => {
       const prisma = buildPrismaMock();
       mockPostExists(prisma, false);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.likePost('user-1', 'missing-post')).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.like.create).not.toHaveBeenCalled();
@@ -848,7 +883,7 @@ describe('FeedService', () => {
         if ((args.select as Record<string, unknown>)?.likeCount) return Promise.resolve({ likeCount: 1 });
         return Promise.resolve({ id: 'post-1' });
       });
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const result = await service.likePost('user-1', 'post-1');
 
@@ -870,7 +905,7 @@ describe('FeedService', () => {
         .mockResolvedValueOnce({ id: 'post-1' }) // assertPostExists
         .mockResolvedValueOnce({ likeCount: 1 }); // currentLikeCount, unchanged by this call
       (prisma.like.create as jest.Mock).mockRejectedValue(dupError);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const result = await service.likePost('user-1', 'post-1');
 
@@ -886,7 +921,7 @@ describe('FeedService', () => {
       });
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
       (prisma.like.create as jest.Mock).mockRejectedValue(otherError);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.likePost('user-1', 'post-1')).rejects.toBe(otherError);
     });
@@ -894,7 +929,7 @@ describe('FeedService', () => {
     it('throws NotFoundException when postId does not reference a real post (unlike)', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.unlikePost('user-1', 'missing-post')).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.like.delete).not.toHaveBeenCalled();
@@ -908,7 +943,7 @@ describe('FeedService', () => {
       (prisma.like.findUnique as jest.Mock).mockResolvedValue({ id: 'like-1' });
       (prisma.like.delete as jest.Mock).mockResolvedValue({ id: 'like-1' });
       (prisma.post.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const result = await service.unlikePost('user-1', 'post-1');
 
@@ -922,7 +957,7 @@ describe('FeedService', () => {
       expect(result).toEqual({ postId: 'post-1', liked: false, likeCount: 0 });
       // Decision Log #219: engagement points are never revoked — unlike
       // does NOT touch the ledger (no negative row, no delete).
-      expect((prisma as unknown as { pointsLedgerEntry: { create: jest.Mock } }).pointsLedgerEntry.create).not.toHaveBeenCalled();
+      expect((prisma as unknown as { pointsLedgerEntry: { createMany: jest.Mock } }).pointsLedgerEntry.createMany).not.toHaveBeenCalled();
     });
 
     it('is idempotent (no-op, no error) when unliking a post that was never liked', async () => {
@@ -931,7 +966,7 @@ describe('FeedService', () => {
         .mockResolvedValueOnce({ id: 'post-1' }) // assertPostExists
         .mockResolvedValueOnce({ likeCount: 0 }); // currentLikeCount
       (prisma.like.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const result = await service.unlikePost('user-1', 'post-1');
 
@@ -951,7 +986,7 @@ describe('FeedService', () => {
         .mockResolvedValueOnce({ likeCount: 0 }); // currentLikeCount
       (prisma.like.findUnique as jest.Mock).mockResolvedValue({ id: 'like-1' });
       (prisma.like.delete as jest.Mock).mockRejectedValue(raceError);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const result = await service.unlikePost('user-1', 'post-1');
 
@@ -994,7 +1029,7 @@ describe('FeedService', () => {
         return Promise.resolve({ count: 1 });
       });
 
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.likePost('user-1', 'post-1'); // 0 -> 1
       const second = await service.likePost('user-1', 'post-1'); // already liked -> stays 1
@@ -1021,7 +1056,7 @@ describe('FeedService', () => {
         });
         (prisma.like.create as jest.Mock).mockResolvedValue({ id: 'like-1' });
         (prisma.post.update as jest.Mock).mockResolvedValue({});
-        const service = new FeedService(prisma);
+        const service = new FeedService(prisma, FIXED_CLOCK);
 
         await service.likePost('liker-1', 'post-1');
 
@@ -1045,7 +1080,7 @@ describe('FeedService', () => {
         });
         (prisma.like.create as jest.Mock).mockResolvedValue({ id: 'like-1' });
         (prisma.post.update as jest.Mock).mockResolvedValue({});
-        const service = new FeedService(prisma);
+        const service = new FeedService(prisma, FIXED_CLOCK);
 
         await service.likePost('self-1', 'post-1');
 
@@ -1053,15 +1088,18 @@ describe('FeedService', () => {
         // ...but the liker still earns their own baseline-engagement
         // point, even on their own post (Decision Log #219 — the point is
         // for the ACT of liking, self-notification is a separate concern).
-        expect((prisma as unknown as { pointsLedgerEntry: { create: jest.Mock } }).pointsLedgerEntry.create).toHaveBeenCalledWith({
-          data: {
-            userId: 'self-1',
-            source: 'engagement_like',
-            refId: 'post-1',
-            points: 1,
-            clubId: null,
-            occurredAt: expect.any(Date),
-          },
+        expect((prisma as unknown as { pointsLedgerEntry: { createMany: jest.Mock } }).pointsLedgerEntry.createMany).toHaveBeenCalledWith({
+          data: [
+            {
+              userId: 'self-1',
+              source: 'engagement_like',
+              refId: 'post-1',
+              points: 1,
+              clubId: null,
+              occurredAt: expect.any(Date),
+            },
+          ],
+          skipDuplicates: true,
         });
       });
 
@@ -1075,7 +1113,7 @@ describe('FeedService', () => {
         (prisma.like.create as jest.Mock).mockResolvedValue({ id: 'like-1' });
         (prisma.post.update as jest.Mock).mockResolvedValue({});
         (prisma.block.findFirst as jest.Mock).mockResolvedValue({ id: 'block-1' });
-        const service = new FeedService(prisma);
+        const service = new FeedService(prisma, FIXED_CLOCK);
 
         await service.likePost('liker-1', 'post-1');
 
@@ -1104,7 +1142,7 @@ describe('FeedService', () => {
           return Promise.resolve({ id: 'like-1' });
         });
         (prisma.post.update as jest.Mock).mockResolvedValue({});
-        const service = new FeedService(prisma);
+        const service = new FeedService(prisma, FIXED_CLOCK);
 
         await service.likePost('liker-1', 'post-1');
         await service.likePost('liker-1', 'post-1'); // duplicate — P2002, idempotent
@@ -1136,7 +1174,7 @@ describe('FeedService', () => {
     it('throws NotFoundException when postId does not reference a real post', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.addComment('missing-post', 'author-1', { contentText: 'x' })).rejects.toBeInstanceOf(
         NotFoundException,
@@ -1150,7 +1188,7 @@ describe('FeedService', () => {
       const row = buildCommentRow();
       (prisma.comment.create as jest.Mock).mockResolvedValue(row);
       (prisma.post.update as jest.Mock).mockResolvedValue({});
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const result = await service.addComment('post-1', 'author-1', { contentText: 'Nice goal' });
 
@@ -1163,7 +1201,7 @@ describe('FeedService', () => {
         where: { id: 'post-1' },
         data: { commentCount: { increment: 1 } },
       });
-      expect(result).toEqual(asView(row));
+      expect(result).toEqual({ ...asView(row), contest: undefined }); // a comment row carries no contest label
     });
 
     it("never selects the comment author's passwordHash or isMinor", async () => {
@@ -1171,7 +1209,7 @@ describe('FeedService', () => {
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
       (prisma.comment.create as jest.Mock).mockResolvedValue(buildCommentRow());
       (prisma.post.update as jest.Mock).mockResolvedValue({});
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.addComment('post-1', 'author-1', { contentText: 'x' });
 
@@ -1183,7 +1221,7 @@ describe('FeedService', () => {
     it('throws NotFoundException from getComments when postId does not reference a real post', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.getComments('missing-post', {})).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.comment.findMany).not.toHaveBeenCalled();
@@ -1193,7 +1231,7 @@ describe('FeedService', () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
       (prisma.comment.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.getComments('post-1', {});
 
@@ -1207,7 +1245,7 @@ describe('FeedService', () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
       (prisma.comment.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
       const cursor = encodeFeedSequenceCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), sequence: 2 });
 
       await service.getComments('post-1', { cursor });
@@ -1237,7 +1275,7 @@ describe('FeedService', () => {
         buildCommentRow({ id: 'comment-3', sequence: 3, createdAt: new Date('2026-08-03T00:00:00.000Z') }), // lookahead row
       ];
       (prisma.comment.findMany as jest.Mock).mockResolvedValue(rows);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const page = await service.getComments('post-1', { limit: 2 });
 
@@ -1256,7 +1294,7 @@ describe('FeedService', () => {
         (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1', authorId: 'post-author-1' });
         (prisma.comment.create as jest.Mock).mockResolvedValue(buildCommentRow({ authorId: 'commenter-1' }));
         (prisma.post.update as jest.Mock).mockResolvedValue({});
-        const service = new FeedService(prisma);
+        const service = new FeedService(prisma, FIXED_CLOCK);
 
         await service.addComment('post-1', 'commenter-1', { contentText: 'Nice goal' });
 
@@ -1274,7 +1312,7 @@ describe('FeedService', () => {
         (prisma.comment.create as jest.Mock).mockResolvedValue(buildCommentRow({ authorId: 'commenter-1' }));
         (prisma.post.update as jest.Mock).mockResolvedValue({});
         (prisma.block.findFirst as jest.Mock).mockResolvedValue({ id: 'block-1' });
-        const service = new FeedService(prisma);
+        const service = new FeedService(prisma, FIXED_CLOCK);
 
         await service.addComment('post-1', 'commenter-1', { contentText: 'Nice goal' });
 
@@ -1293,7 +1331,7 @@ describe('FeedService', () => {
         (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1', authorId: 'self-1' });
         (prisma.comment.create as jest.Mock).mockResolvedValue(buildCommentRow({ authorId: 'self-1' }));
         (prisma.post.update as jest.Mock).mockResolvedValue({});
-        const service = new FeedService(prisma);
+        const service = new FeedService(prisma, FIXED_CLOCK);
 
         await service.addComment('post-1', 'self-1', { contentText: 'Nice goal' });
 
@@ -1316,7 +1354,7 @@ describe('FeedService', () => {
     it('throws NotFoundException when commentId does not reference a real comment', async () => {
       const prisma = buildPrismaMock();
       (prisma.comment.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.deleteComment('post-1', 'missing-comment', 'commenter-1')).rejects.toBeInstanceOf(
         NotFoundException,
@@ -1329,7 +1367,7 @@ describe('FeedService', () => {
       (prisma.comment.findUnique as jest.Mock).mockResolvedValue(
         mockComment({ postId: 'a-different-post', authorId: 'commenter-1' }),
       );
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(
         service.deleteComment('post-1', 'comment-1', 'commenter-1'),
@@ -1342,7 +1380,7 @@ describe('FeedService', () => {
       (prisma.comment.findUnique as jest.Mock).mockResolvedValue(
         mockComment({ authorId: 'commenter-1', postAuthorId: 'post-author-1' }),
       );
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(
         service.deleteComment('post-1', 'comment-1', 'someone-else'),
@@ -1357,7 +1395,7 @@ describe('FeedService', () => {
       );
       (prisma.comment.delete as jest.Mock).mockResolvedValue({ id: 'comment-1' });
       (prisma.post.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.deleteComment('post-1', 'comment-1', 'commenter-1');
 
@@ -1371,7 +1409,7 @@ describe('FeedService', () => {
       );
       (prisma.comment.delete as jest.Mock).mockResolvedValue({ id: 'comment-1' });
       (prisma.post.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.deleteComment('post-1', 'comment-1', 'post-author-1');
 
@@ -1385,7 +1423,7 @@ describe('FeedService', () => {
       );
       (prisma.comment.delete as jest.Mock).mockResolvedValue({ id: 'comment-1' });
       (prisma.post.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.deleteComment('post-1', 'comment-1', 'commenter-1');
 
@@ -1403,7 +1441,7 @@ describe('FeedService', () => {
         .mockResolvedValueOnce(null); // gone after the first delete
       (prisma.comment.delete as jest.Mock).mockResolvedValue({ id: 'comment-1' });
       (prisma.post.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.deleteComment('post-1', 'comment-1', 'commenter-1');
       await expect(service.deleteComment('post-1', 'comment-1', 'commenter-1')).rejects.toBeInstanceOf(
@@ -1415,7 +1453,7 @@ describe('FeedService', () => {
   describe('deletePost', () => {
     it('404s for a missing post, 403s for a non-author, and deletes nothing in either case', async () => {
       const prisma = buildPrismaMock();
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
       (prisma.post.findUnique as jest.Mock).mockResolvedValueOnce(null);
       await expect(service.deletePost('p', 'u')).rejects.toBeInstanceOf(NotFoundException);
       (prisma.post.findUnique as jest.Mock).mockResolvedValueOnce({ id: 'p', authorId: 'owner' });
@@ -1427,7 +1465,7 @@ describe('FeedService', () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'p', authorId: 'owner' });
       (prisma.postHashtag.findMany as jest.Mock).mockResolvedValue([{ hashtagId: 'h1' }, { hashtagId: 'h2' }]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.deletePost('p', 'owner');
 
@@ -1459,7 +1497,7 @@ describe('FeedService', () => {
         id: 'p', authorId: 'owner', commentPermission: 'off',
       });
       (prisma.comment.create as jest.Mock).mockResolvedValue(commentRow());
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.addComment('p', 'other', { contentText: 'hi' })).rejects.toBeInstanceOf(
         ForbiddenException,
@@ -1475,7 +1513,7 @@ describe('FeedService', () => {
         id: 'p', authorId: 'owner', commentPermission: 'followers',
       });
       (prisma.comment.create as jest.Mock).mockResolvedValue(commentRow());
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.addComment('p', 'other', { contentText: 'hi' })).rejects.toBeInstanceOf(
         ForbiddenException,
@@ -1495,13 +1533,13 @@ describe('FeedService', () => {
         id: 'p', authorId: 'owner', commentPermission: 'everyone',
       });
       (prisma.comment.create as jest.Mock).mockResolvedValue(commentRow());
-      await new FeedService(prisma).addComment('p', 'other', { contentText: 'hi' });
+      await new FeedService(prisma, FIXED_CLOCK).addComment('p', 'other', { contentText: 'hi' });
       expect(prisma.follow.findUnique).not.toHaveBeenCalled();
     });
 
     it('updateCommentSettings: 404 / 403 / success, and never touches existing comments', async () => {
       const prisma = buildPrismaMock();
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
       (prisma.post.findUnique as jest.Mock).mockResolvedValueOnce(null);
       await expect(service.updateCommentSettings('p', 'u', { commentPermission: 'off' })).rejects.toBeInstanceOf(
         NotFoundException,
@@ -1524,7 +1562,7 @@ describe('FeedService', () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'p', authorId: 'owner' });
       (prisma.comment.findUnique as jest.Mock).mockResolvedValue({ id: 'c', postId: 'p' });
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.setCommentHidden('p', 'c', 'other', true)).rejects.toBeInstanceOf(ForbiddenException);
       (prisma.comment.findUnique as jest.Mock).mockResolvedValueOnce({ id: 'c', postId: 'other-post' });
@@ -1554,7 +1592,7 @@ describe('FeedService', () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'p', authorId: 'owner' });
       (prisma.comment.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
       const whereFor = async (viewer: string) => {
         (prisma.comment.findMany as jest.Mock).mockClear();
         await service.getComments('p', {}, viewer);
@@ -1572,7 +1610,7 @@ describe('FeedService', () => {
       (prisma.comment.findUnique as jest.Mock).mockResolvedValue({
         id: 'c', postId: 'p', authorId: 'me', hidden: true, post: { authorId: 'owner' },
       });
-      await new FeedService(prisma).deleteComment('p', 'c', 'me');
+      await new FeedService(prisma, FIXED_CLOCK).deleteComment('p', 'c', 'me');
       expect(prisma.comment.delete).toHaveBeenCalled();
       expect(prisma.post.updateMany).not.toHaveBeenCalled();
     });
@@ -1582,7 +1620,7 @@ describe('FeedService', () => {
     it('throws NotFoundException when postId does not reference a real post (save)', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.savePost('user-1', 'missing-post')).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.savedPost.create).not.toHaveBeenCalled();
@@ -1592,7 +1630,7 @@ describe('FeedService', () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
       (prisma.savedPost.create as jest.Mock).mockResolvedValue({ id: 'saved-1' });
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const result = await service.savePost('user-1', 'post-1');
 
@@ -1608,7 +1646,7 @@ describe('FeedService', () => {
         clientVersion: '5.0.0',
       });
       (prisma.savedPost.create as jest.Mock).mockRejectedValue(dupError);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.savePost('user-1', 'post-1')).resolves.toEqual({ postId: 'post-1', saved: true });
     });
@@ -1616,7 +1654,7 @@ describe('FeedService', () => {
     it('throws NotFoundException when postId does not reference a real post (unsave)', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.unsavePost('user-1', 'missing-post')).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.savedPost.delete).not.toHaveBeenCalled();
@@ -1630,7 +1668,7 @@ describe('FeedService', () => {
         clientVersion: '5.0.0',
       });
       (prisma.savedPost.delete as jest.Mock).mockRejectedValue(notFoundError);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.unsavePost('user-1', 'post-1')).resolves.toEqual({ postId: 'post-1', saved: false });
     });
@@ -1639,7 +1677,7 @@ describe('FeedService', () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
       (prisma.savedPost.delete as jest.Mock).mockResolvedValue({ id: 'saved-1' });
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const result = await service.unsavePost('user-1', 'post-1');
 
@@ -1664,7 +1702,7 @@ describe('FeedService', () => {
     it('throws NotFoundException when postId does not reference a real post', async () => {
       const prisma = buildPrismaMock();
       mockPostExists(prisma, false);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.recordView('user-1', 'missing-post')).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.postView.create).not.toHaveBeenCalled();
@@ -1675,7 +1713,7 @@ describe('FeedService', () => {
       mockPostExists(prisma);
       (prisma.postView.create as jest.Mock).mockResolvedValue({ id: 'view-1' });
       (prisma.post.update as jest.Mock).mockResolvedValue({});
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const result = await service.recordView('user-1', 'post-1');
 
@@ -1694,7 +1732,7 @@ describe('FeedService', () => {
       mockPostExists(prisma);
       (prisma.postView.create as jest.Mock).mockResolvedValue({ id: 'view-1' });
       (prisma.post.update as jest.Mock).mockResolvedValue({});
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const result = await service.recordView(undefined, 'post-1');
 
@@ -1714,7 +1752,7 @@ describe('FeedService', () => {
         .mockResolvedValueOnce({ id: 'post-1' }) // assertPostExists
         .mockResolvedValueOnce({ viewCount: 1 }); // currentViewCount, unchanged by this call
       (prisma.postView.create as jest.Mock).mockRejectedValue(dupError);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const result = await service.recordView('user-1', 'post-1');
 
@@ -1730,7 +1768,7 @@ describe('FeedService', () => {
       });
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
       (prisma.postView.create as jest.Mock).mockRejectedValue(otherError);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await expect(service.recordView('user-1', 'post-1')).rejects.toBe(otherError);
     });
@@ -1740,12 +1778,12 @@ describe('FeedService', () => {
       mockPostExists(prisma);
       (prisma.postView.create as jest.Mock).mockResolvedValue({ id: 'view-1' });
       (prisma.post.update as jest.Mock).mockResolvedValue({});
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.recordView('user-1', 'post-1');
 
       expect(prisma.notification.create).not.toHaveBeenCalled();
-      expect(prisma.pointsLedgerEntry.create).not.toHaveBeenCalled();
+      expect(prisma.pointsLedgerEntry.createMany).not.toHaveBeenCalled();
     });
   });
 
@@ -1767,13 +1805,16 @@ describe('FeedService', () => {
     it('scopes the query to the given userId', async () => {
       const prisma = buildPrismaMock();
       (prisma.savedPost.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.getSavedPosts('user-1', {});
 
       const callArgs = (prisma.savedPost.findMany as jest.Mock).mock.calls[0][0];
       // B-039: a saved post whose author is blocked (either direction) is hidden.
-      expect(callArgs.where).toEqual({ userId: 'user-1', post: { is: notBlockedAuthor('user-1') } });
+      expect(callArgs.where).toEqual({
+        userId: 'user-1',
+        post: { is: { AND: [notBlockedAuthor('user-1'), visibleTo('user-1')] } },
+      });
       // NOT `postId` — that's a foreign key to Post.id (a random UUID)
       // with no relation to WHEN this row was saved. See
       // SAVED_POST_SELECT_WITH_SEQUENCE's own comment.
@@ -1789,7 +1830,7 @@ describe('FeedService', () => {
         buildSavedRow({ postId: 'post-1', sequence: 1, savedAt: new Date('2026-08-01T00:00:00.000Z') }), // lookahead
       ];
       (prisma.savedPost.findMany as jest.Mock).mockResolvedValue(rows);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       const page = await service.getSavedPosts('user-1', { limit: 2 });
 
@@ -1804,7 +1845,7 @@ describe('FeedService', () => {
     it('applies a descending cursor filter keyed on savedAt/sequence when a cursor is given', async () => {
       const prisma = buildPrismaMock();
       (prisma.savedPost.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
       const cursor = encodeFeedSequenceCursor({ createdAt: new Date('2026-08-02T00:00:00.000Z'), sequence: 2 });
 
       await service.getSavedPosts('user-1', { cursor });
@@ -1812,7 +1853,7 @@ describe('FeedService', () => {
       const callArgs = (prisma.savedPost.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.where).toEqual({
         userId: 'user-1',
-        post: { is: notBlockedAuthor('user-1') },
+        post: { is: { AND: [notBlockedAuthor('user-1'), visibleTo('user-1')] } },
         OR: [
           { savedAt: { lt: new Date('2026-08-02T00:00:00.000Z') } },
           { savedAt: new Date('2026-08-02T00:00:00.000Z'), sequence: { lt: 2 } },
@@ -1823,7 +1864,7 @@ describe('FeedService', () => {
     it('embeds the full post without leaking passwordHash/isMinor', async () => {
       const prisma = buildPrismaMock();
       (prisma.savedPost.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new FeedService(prisma);
+      const service = new FeedService(prisma, FIXED_CLOCK);
 
       await service.getSavedPosts('user-1', {});
 
@@ -1839,7 +1880,7 @@ describe('FeedService', () => {
     it('getPostById shows the username as the author publicName and never forwards the real displayName', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(buildPostRow({ author: withUsername }));
-      const result = await new FeedService(prisma).getPostById('post-1', 'viewer-1');
+      const result = await new FeedService(prisma, FIXED_CLOCK).getPostById('post-1', 'viewer-1');
       expect(result.author.publicName).toBe('goalie_9');
       expect(result.author).not.toHaveProperty('displayName');
       expect(JSON.stringify(result)).not.toContain('Ada Obi');
@@ -1848,21 +1889,21 @@ describe('FeedService', () => {
     it('getPostById shows the placeholder, never the real name, when the author has no username', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(buildPostRow());
-      const result = await new FeedService(prisma).getPostById('post-1', 'viewer-1');
+      const result = await new FeedService(prisma, FIXED_CLOCK).getPostById('post-1', 'viewer-1');
       expect(result.author.publicName).toBe('Soccernity member');
     });
 
     it('createPost and addComment resolve the author name the same way', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.create as jest.Mock).mockResolvedValue(buildPostRow({ author: withUsername }));
-      const post = await new FeedService(prisma).createPost('author-1', { contentText: 'hi' });
+      const post = await new FeedService(prisma, FIXED_CLOCK).createPost('author-1', { contentText: 'hi' });
       expect(post.author).toEqual({ id: 'author-1', publicName: 'goalie_9' });
     });
 
     it('the Prisma author select requests username + displayName (both needed to resolve), never isMinor', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(buildPostRow());
-      await new FeedService(prisma).getPostById('post-1', 'viewer-1');
+      await new FeedService(prisma, FIXED_CLOCK).getPostById('post-1', 'viewer-1');
       const sel = (prisma.post.findFirst as jest.Mock).mock.calls[0][0].select.author.select;
       expect(sel).toEqual({ id: true, username: true, displayName: true });
     });
@@ -1882,10 +1923,12 @@ describe('FeedService', () => {
     ])('%s looks the post up WITH the block filter, so a blocked author is the plain 404', async (_n, call) => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue(null); // filtered out by the block clause
-      await expect(call(new FeedService(prisma))).rejects.toBeInstanceOf(NotFoundException);
+      await expect(call(new FeedService(prisma, FIXED_CLOCK))).rejects.toBeInstanceOf(NotFoundException);
       expect((prisma.post.findUnique as jest.Mock).mock.calls[0][0].where).toEqual({
         id: 'post-1',
         author: { is: notBlocked },
+        // backend/w7-contest: and a final contest entry is invisible to everyone but its author.
+        AND: [visibleTo('viewer-1')],
       });
       expect(prisma.like.create).not.toHaveBeenCalled();
       expect(prisma.comment.create).not.toHaveBeenCalled();
@@ -1893,12 +1936,26 @@ describe('FeedService', () => {
       expect(prisma.notification.create).not.toHaveBeenCalled();
     });
 
-    it('anonymous getComments looks the post up with NO block clause', async () => {
+    it('anonymous getComments looks the post up with NO block clause, but a hidden final contest entry is still a 404', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1', authorId: 'a' });
       (prisma.comment.findMany as jest.Mock).mockResolvedValue([]);
-      await new FeedService(prisma).getComments('post-1', {});
-      expect((prisma.post.findUnique as jest.Mock).mock.calls[0][0].where).toEqual({ id: 'post-1' });
+      await new FeedService(prisma, FIXED_CLOCK).getComments('post-1', {});
+      expect((prisma.post.findUnique as jest.Mock).mock.calls[0][0].where).toEqual({
+        id: 'post-1',
+        // backend/w7-contest: an anonymous read cannot be the author, so it only sees revealed posts.
+        AND: [{ OR: [{ visibleFrom: null }, { visibleFrom: { lte: FIXED_NOW } }] }],
+      });
+    });
+
+    it('an anonymous view (POST /posts/:id/view with no token) cannot reach a hidden final contest entry either', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
+      await expect(new FeedService(prisma, FIXED_CLOCK).recordView(undefined, 'post-1')).rejects.toBeInstanceOf(NotFoundException);
+      expect((prisma.post.findUnique as jest.Mock).mock.calls[0][0].where).toEqual({
+        id: 'post-1',
+        AND: [{ OR: [{ visibleFrom: null }, { visibleFrom: { lte: FIXED_NOW } }] }],
+      });
     });
 
     it('the undo form (unsave) stays open: no block clause', async () => {
@@ -1907,14 +1964,14 @@ describe('FeedService', () => {
       (prisma.savedPost.delete as jest.Mock).mockRejectedValue(
         new Prisma.PrismaClientKnownRequestError('x', { code: 'P2025', clientVersion: 'x' }),
       );
-      await new FeedService(prisma).unsavePost('viewer-1', 'post-1');
+      await new FeedService(prisma, FIXED_CLOCK).unsavePost('viewer-1', 'post-1');
       expect((prisma.post.findUnique as jest.Mock).mock.calls[0][0].where).toEqual({ id: 'post-1' });
     });
 
     it('every feed (own, club, Banter room) is scoped to authors with no block against the viewer', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
-      const svc = new FeedService(prisma);
+      const svc = new FeedService(prisma, FIXED_CLOCK);
       await svc.getFeed('viewer-1', {});
       await svc.getClubFeed('club-1', 'viewer-1', {});
       await svc.getBanterRoomFeed('room-1', 'viewer-1', {});
@@ -1926,9 +1983,211 @@ describe('FeedService', () => {
     it('does not adjust any counter: reading a feed never updates likeCount / commentCount', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
-      await new FeedService(prisma).getFeed('viewer-1', {});
+      await new FeedService(prisma, FIXED_CLOCK).getFeed('viewer-1', {});
       expect(prisma.post.update).not.toHaveBeenCalled();
       expect(prisma.post.updateMany).not.toHaveBeenCalled();
+    });
+  });
+});
+
+// backend/w7-contest (B-091). What FeedService does for a post that is a CONTEST ENTRY: the contest's
+// engagement row lands in the same transaction as the Like / Comment, the final entry is locked
+// before the reveal, and a final entry can be created hidden. The rest of the Contest is in
+// src/modules/contest and test/contest.e2e-spec.ts.
+describe('FeedService: contest entries (B-091)', () => {
+  const entryRow = (weekNumber: number, over: Record<string, unknown> = {}) => ({
+    id: 'entry-1',
+    userId: 'author-1',
+    submittedAt: new Date('2026-08-02T09:00:00.000Z'),
+    round: { weekNumber },
+    cycle: { monthKey: '2026-08' },
+    ...over,
+  });
+  // August 2026 is BST. Phase 1 of week 1 ends 2026-08-04T23:00Z; the reveal is 2026-08-24T23:00Z.
+  const clockAt = (iso: string) => ({ now: () => new Date(iso) });
+  const postExists = (prisma: PrismaService) => {
+    (prisma.post.findUnique as jest.Mock).mockImplementation((args: { select?: Record<string, unknown> }) =>
+      Promise.resolve(args?.select?.likeCount ? { likeCount: 1 } : { id: 'post-1', authorId: 'author-1', commentPermission: 'everyone' }),
+    );
+    (prisma.post.update as jest.Mock).mockResolvedValue({});
+  };
+  const mocks = (prisma: PrismaService) =>
+    prisma as unknown as { contestEntry: { findUnique: jest.Mock }; contestEngagement: { createMany: jest.Mock; deleteMany: jest.Mock } };
+
+  describe('likePost', () => {
+    it('records the contest engagement row in the same transaction when the post is an entry and the like is inside its window', async () => {
+      const prisma = buildPrismaMock();
+      postExists(prisma);
+      mocks(prisma).contestEntry.findUnique.mockResolvedValue(entryRow(1));
+      const now = '2026-08-03T12:00:00.000Z';
+
+      await new FeedService(prisma, clockAt(now)).likePost('fan-1', 'post-1');
+
+      expect(mocks(prisma).contestEngagement.createMany).toHaveBeenCalledWith({
+        data: [{ entryId: 'entry-1', userId: 'fan-1', kind: 'like', followedAtEngagement: false, occurredAt: new Date(now) }],
+        skipDuplicates: true,
+      });
+    });
+
+    it('records nothing for an ordinary post, nor for a like after Phase 1 has ended', async () => {
+      const a = buildPrismaMock();
+      postExists(a);
+      await new FeedService(a, clockAt('2026-08-03T12:00:00.000Z')).likePost('fan-1', 'post-1');
+      expect(mocks(a).contestEngagement.createMany).not.toHaveBeenCalled();
+
+      const b = buildPrismaMock();
+      postExists(b);
+      mocks(b).contestEntry.findUnique.mockResolvedValue(entryRow(1));
+      await new FeedService(b, clockAt('2026-08-04T23:00:00.000Z')).likePost('fan-1', 'post-1');
+      expect(mocks(b).contestEngagement.createMany).not.toHaveBeenCalled();
+      expect(b.like.create).toHaveBeenCalled(); // the like itself still happens
+    });
+
+    it('a duplicate like (P2002) rolls the contest row back with the Like: the sequence stops before it', async () => {
+      const prisma = buildPrismaMock();
+      postExists(prisma);
+      mocks(prisma).contestEntry.findUnique.mockResolvedValue(entryRow(1));
+      (prisma.like.create as jest.Mock).mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('dup', { code: 'P2002', clientVersion: 'x' }),
+      );
+      await new FeedService(prisma, clockAt('2026-08-03T12:00:00.000Z')).likePost('fan-1', 'post-1');
+      expect(mocks(prisma).contestEngagement.createMany).not.toHaveBeenCalled();
+    });
+
+    it('a FINAL entry refuses a like before the reveal with a coded 403, even from its author, and records nothing', async () => {
+      const prisma = buildPrismaMock();
+      postExists(prisma);
+      mocks(prisma).contestEntry.findUnique.mockResolvedValue(entryRow(4));
+      const service = new FeedService(prisma, clockAt('2026-08-24T22:59:59.999Z'));
+
+      await expect(service.likePost('author-1', 'post-1')).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(service.likePost('fan-1', 'post-1')).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'contest_final_locked' }),
+      });
+      expect(prisma.like.create).not.toHaveBeenCalled();
+      expect(mocks(prisma).contestEngagement.createMany).not.toHaveBeenCalled();
+    });
+
+    it('a FINAL entry accepts a like from the reveal on, and records it', async () => {
+      const prisma = buildPrismaMock();
+      postExists(prisma);
+      mocks(prisma).contestEntry.findUnique.mockResolvedValue(entryRow(4, { submittedAt: new Date('2026-08-23T10:00:00Z') }));
+      await new FeedService(prisma, clockAt('2026-08-24T23:00:00.000Z')).likePost('fan-1', 'post-1');
+      expect(mocks(prisma).contestEngagement.createMany).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('unlikePost', () => {
+    it('removes that account\'s like from the contest tally in the same transaction', async () => {
+      const prisma = buildPrismaMock();
+      postExists(prisma);
+      (prisma.like.findUnique as jest.Mock).mockResolvedValue({ id: 'like-1' });
+      mocks(prisma).contestEntry.findUnique.mockResolvedValue(entryRow(1));
+
+      await new FeedService(prisma, FIXED_CLOCK).unlikePost('fan-1', 'post-1');
+
+      expect(prisma.like.delete).toHaveBeenCalled();
+      expect(mocks(prisma).contestEngagement.deleteMany).toHaveBeenCalledWith({
+        where: { entryId: 'entry-1', userId: 'fan-1', kind: 'like' },
+      });
+    });
+  });
+
+  describe('addComment / deleteComment', () => {
+    it('records ONE comment engagement for the commenter (idempotent insert, so ten comments are one point)', async () => {
+      const prisma = buildPrismaMock();
+      postExists(prisma);
+      mocks(prisma).contestEntry.findUnique.mockResolvedValue(entryRow(1));
+      (prisma.comment.create as jest.Mock).mockResolvedValue({ id: 'c', postId: 'post-1', authorId: 'fan-1', author: AUTHOR, contentText: 'x', hidden: false, createdAt: new Date() });
+      const service = new FeedService(prisma, clockAt('2026-08-03T12:00:00.000Z'));
+
+      await service.addComment('post-1', 'fan-1', { contentText: 'great' });
+      await service.addComment('post-1', 'fan-1', { contentText: 'again' });
+
+      const calls = mocks(prisma).contestEngagement.createMany.mock.calls;
+      expect(calls).toHaveLength(2);
+      for (const c of calls) {
+        expect(c[0]).toMatchObject({ skipDuplicates: true });
+        expect(c[0].data[0]).toMatchObject({ entryId: 'entry-1', userId: 'fan-1', kind: 'comment' });
+      }
+    });
+
+    it('refuses a comment on a FINAL entry before the reveal', async () => {
+      const prisma = buildPrismaMock();
+      postExists(prisma);
+      mocks(prisma).contestEntry.findUnique.mockResolvedValue(entryRow(4));
+      await expect(
+        new FeedService(prisma, clockAt('2026-08-24T12:00:00.000Z')).addComment('post-1', 'fan-1', { contentText: 'x' }),
+      ).rejects.toMatchObject({ response: expect.objectContaining({ code: 'contest_final_locked' }) });
+      expect(prisma.comment.create).not.toHaveBeenCalled();
+    });
+
+    it('deleting the last visible comment removes the commenter\'s point; deleting one of several keeps it', async () => {
+      for (const [remaining, removed] of [[0, true], [2, false]] as const) {
+        const prisma = buildPrismaMock();
+        mocks(prisma).contestEntry.findUnique.mockResolvedValue(entryRow(1));
+        (prisma.comment.findUnique as jest.Mock).mockResolvedValue({
+          id: 'c1', postId: 'post-1', authorId: 'fan-1', hidden: false, post: { authorId: 'author-1' },
+        });
+        (prisma.comment as unknown as { count: jest.Mock }).count = jest.fn().mockResolvedValue(remaining);
+        await new FeedService(prisma, FIXED_CLOCK).deleteComment('post-1', 'c1', 'fan-1');
+        expect(mocks(prisma).contestEngagement.deleteMany).toHaveBeenCalledTimes(removed ? 1 : 0);
+      }
+    });
+  });
+
+  describe('createPost for the final entry', () => {
+    it('stores the reveal and community-feed gates on the post and runs the caller\'s step inside the same transaction', async () => {
+      const prisma = buildPrismaMock();
+      const row = buildPostRow({ id: 'post-final' });
+      (prisma.post.create as jest.Mock).mockResolvedValue(row);
+      (prisma.post as unknown as { findUniqueOrThrow: jest.Mock }).findUniqueOrThrow = jest.fn().mockResolvedValue({
+        ...row,
+        contestEntry: { id: 'entry-9', pinnedUntil: new Date('2026-09-01T00:00:00Z'), pinRemovedAt: null, round: { weekNumber: 4 } },
+      });
+      const visibleFrom = new Date('2026-08-24T23:00:00Z');
+      const communityFeedFrom = new Date('2026-08-31T23:00:00Z');
+      const inTransaction = jest.fn().mockResolvedValue(undefined);
+
+      const result = await new FeedService(prisma, FIXED_CLOCK).createPost(
+        'author-1',
+        { contentText: 'final', mediaUrls: ['https://cdn.example.com/f.mp4'] },
+        { visibleFrom, communityFeedFrom, inTransaction },
+      );
+
+      expect((prisma.post.create as jest.Mock).mock.calls[0][0].data).toMatchObject({ visibleFrom, communityFeedFrom });
+      expect(inTransaction).toHaveBeenCalledWith(prisma, { id: 'post-final', createdAt: row.createdAt });
+      expect(result.contest).toEqual({ entryId: 'entry-9', kind: 'final', weekNumber: 4, pinned: true, label: 'Contest post' });
+    });
+
+    it('an ordinary post sets neither gate', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.create as jest.Mock).mockResolvedValue(buildPostRow());
+      await new FeedService(prisma, FIXED_CLOCK).createPost('author-1', { contentText: 'hi' });
+      const data = (prisma.post.create as jest.Mock).mock.calls[0][0].data;
+      expect(data.visibleFrom).toBeUndefined();
+      expect(data.communityFeedFrom).toBeUndefined();
+    });
+  });
+
+  describe('the contest label on a post', () => {
+    it('is pinned until the pin is removed or the month ends, and the label never changes', async () => {
+      const mk = (over: Record<string, unknown>) =>
+        buildPostRow({
+          contestEntry: { id: 'e', pinnedUntil: new Date('2026-09-01T00:00:00Z'), pinRemovedAt: null, round: { weekNumber: 1 }, ...over },
+        });
+      const prisma = buildPrismaMock();
+      (prisma.post.findFirst as jest.Mock).mockResolvedValue(mk({}));
+      const during = await new FeedService(prisma, clockAt('2026-08-20T00:00:00Z')).getPostById('post-1', 'viewer-1');
+      expect(during.contest).toEqual({ entryId: 'e', kind: 'weekly', weekNumber: 1, pinned: true, label: 'Contest post' });
+
+      (prisma.post.findFirst as jest.Mock).mockResolvedValue(mk({}));
+      const after = await new FeedService(prisma, clockAt('2026-09-01T00:00:00Z')).getPostById('post-1', 'viewer-1');
+      expect(after.contest).toMatchObject({ pinned: false, label: 'Contest post' });
+
+      (prisma.post.findFirst as jest.Mock).mockResolvedValue(mk({ pinRemovedAt: new Date('2026-08-31T23:00:00Z') }));
+      const removed = await new FeedService(prisma, clockAt('2026-08-31T23:30:00Z')).getPostById('post-1', 'viewer-1');
+      expect(removed.contest).toMatchObject({ pinned: false });
     });
   });
 });
