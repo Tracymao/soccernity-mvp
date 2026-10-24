@@ -1,7 +1,23 @@
 import { DobEncryptionService } from '../../crypto/dob-encryption.service';
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  blockedPairWhere,
+  notBlockedWith,
+  relationFromRows,
+  YOU_BLOCKED_THIS_USER_CODE,
+  YOU_BLOCKED_THIS_USER_MESSAGE,
+} from '../block/block.util';
+import { screenSensitiveContent } from '../sensitive-content/sensitive-content.util';
+import { normaliseProfileCountry, SENSITIVE_PROFILE_REPHRASE_CODE } from './profile-country.constants';
 import { decodeFeedSequenceCursor, encodeFeedSequenceCursor } from '../feed/cursor.util';
 import { FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE, FeedQueryDto } from '../feed/dto/feed-query.dto';
 import { ENGAGEMENT_POINTS } from '../points/points.constants';
@@ -54,15 +70,47 @@ const OWN_PROFILE_SELECT = {
   // Decision Log #74 -- the one club this user represents (Leaderboard
   // By-club scope). Read-only here; written only by setRepresentedClub.
   representedClub: { select: { id: true, name: true } },
+  // backend/w5-profile-block (B-038, B-035): the owner's own profile content.
+  // avatarKey is selected only so the owner mapping can drop it; it is an
+  // internal storage detail and never leaves this service.
+  bio: true,
+  preferredClub: true,
+  profileCountry: true,
+  avatarUrl: true,
+  avatarKey: true,
+  avatarStatus: true,
 } as const;
 
 export type GuardianContact = { label: 'Guardian contact'; email: string };
+
+// What a viewer's own avatar looks like to the OWNER: the stored status is
+// shown so the owner knows why nobody else can see it yet.
+export type OwnAvatar = { url: string; status: 'pending' | 'approved' | 'rejected' };
 
 export type PublicProfile = {
   id: string;
   // username if set, else displayName -- the real displayName is not sent.
   publicName: string;
   guardianContact: GuardianContact | null;
+  // backend/w5-profile-block (B-082; Decision Log #371, #403 item 17).
+  // bio: free text the user wrote, visible to every viewer including for a minor
+  // (#371). null when not filled in.
+  bio: string | null;
+  // The optional PROFILE country (ISO alpha-2), present ONLY if the user filled
+  // it in -- never the declared or derived safeguarding country, so a minor's
+  // country is visible only if the minor entered it. null otherwise (the client
+  // shows no country line at all).
+  country: string | null;
+  // Only an 'approved' avatar is ever served to another user. Nothing sets
+  // 'approved' until the automatic image check (B-036) exists, so today this is
+  // always null for every viewer except in the owner's own profile.
+  avatarUrl: string | null;
+  // Per-viewer state the page needs on first paint (the #153 / #224 precedent):
+  // does the viewer already follow this user, and has the viewer blocked them.
+  // viewerHasBlocked is safe to return: a user who is blocked by the target
+  // never gets this far (they receive the not-found response instead).
+  isFollowing: boolean;
+  viewerHasBlocked: boolean;
 };
 
 // safeguarding/guardian-contact-public-visibility (legal-copy Part C row
@@ -106,6 +154,12 @@ export type OwnProfile = {
   // same shape is shown to any viewer via getPublicProfile.
   guardianContact: GuardianContact | null;
   representedClub: { id: string; name: string } | null;
+  // backend/w5-profile-block: the owner's own profile content. preferredClub is
+  // free text held for the owner only (not exposed on the other-user profile).
+  bio: string | null;
+  preferredClub: string | null;
+  profileCountry: string | null;
+  avatar: OwnAvatar | null;
   // B-027 / B-030: same onboarding state the login response carries (see
   // AuthUserSummary), so a page load with an existing session routes the same
   // way a fresh login does -- including a restricted-pending minor, who must
@@ -117,20 +171,28 @@ export type OwnProfile = {
 
 type OwnProfileRow = Omit<
   OwnProfile,
-  'guardianContact' | 'dateOfBirth' | 'publicName' | 'profileComplete' | 'guardianConsentStatus' | 'nextStep'
+  'guardianContact' | 'dateOfBirth' | 'publicName' | 'profileComplete' | 'guardianConsentStatus' | 'nextStep' | 'avatar'
 > & {
   dateOfBirth: string | null; // ciphertext
   guardian: { email: string; consentStatus: string } | null;
+  avatarUrl: string | null;
+  avatarKey: string | null;
+  avatarStatus: string | null;
 };
 
 export interface RepresentedClubResult {
   representedClub: { id: string; name: string } | null;
 }
 
-function toOwnProfile({ guardian, dateOfBirth, ...rest }: OwnProfileRow, dob: DobEncryptionService): OwnProfile {
+function toOwnProfile(
+  { guardian, dateOfBirth, avatarUrl, avatarKey: _avatarKey, avatarStatus, ...rest }: OwnProfileRow,
+  dob: DobEncryptionService,
+): OwnProfile {
+  void _avatarKey; // internal storage key, never returned
   const plainDob = dob.decryptNullable(dateOfBirth);
   return {
     ...rest,
+    avatar: avatarUrl && avatarStatus ? { url: avatarUrl, status: avatarStatus as OwnAvatar['status'] } : null,
     ...deriveOnboardingState({
       isMinor: rest.isMinor,
       guardianConsentStatus: guardian?.consentStatus,
@@ -152,10 +214,30 @@ function toOwnProfile({ guardian, dateOfBirth, ...rest }: OwnProfileRow, dob: Do
 function toUpdateData(dto: UpdateUserDto): {
   displayName?: string;
   phone?: string;
+  bio?: string | null;
+  preferredClub?: string | null;
+  profileCountry?: string | null;
 } {
-  const data: { displayName?: string; phone?: string } = {};
+  const data: {
+    displayName?: string;
+    phone?: string;
+    bio?: string | null;
+    preferredClub?: string | null;
+    profileCountry?: string | null;
+  } = {};
   if (dto.displayName !== undefined) data.displayName = dto.displayName;
   if (dto.phone !== undefined) data.phone = dto.phone;
+  // backend/w5-profile-block (B-038): free-text profile content. Trimmed; null or
+  // whitespace-only CLEARS the field (unlike the username, these may be removed).
+  // The sensitive-content screen runs in updateOwnProfile BEFORE this is used.
+  if (dto.bio !== undefined) data.bio = dto.bio === null || dto.bio.trim() === '' ? null : dto.bio.trim();
+  if (dto.preferredClub !== undefined) {
+    data.preferredClub = dto.preferredClub === null || dto.preferredClub.trim() === '' ? null : dto.preferredClub.trim();
+  }
+  // The optional profile country (#403 item 17): validated against the ISO list,
+  // stored upper-case, null/blank clears. NEVER touches declaredCountry /
+  // derivedCountry (the safeguarding country).
+  if (dto.profileCountry !== undefined) data.profileCountry = normaliseProfileCountry(dto.profileCountry);
   // `username` is deliberately NOT forwarded from here: it needs the rules,
   // revoked-handle and cooldown checks and an optimistic lock, so
   // UsersService.updateOwnProfile handles it explicitly (B-031/B-032).
@@ -230,22 +312,60 @@ export class UsersService {
   // Visibility mirrors assertFollowGraphVisible: a non-active account and
   // a restricted-pending minor (consent not confirmed) are a 404, never a
   // 200/403 that confirms they exist. Fresh Postgres read every call.
-  async getPublicProfile(userId: string): Promise<PublicProfile> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        ...PUBLIC_NAME_SELECT,
-        dateOfBirth: true,
-        isMinor: true,
-        accountStatus: true,
-        guardian: { select: { email: true, consentStatus: true } },
-      },
-    });
+  //
+  // backend/w5-profile-block (B-082 backend leg, B-039; #371, #396, #403 item
+  // 17, #404 item 8, #406 item 12). Adds bio, the OPTIONAL profile country, the
+  // avatar (approved only) and the viewer's own follow/block state.
+  //   - Block: if the TARGET has blocked the VIEWER, the answer is the SAME 404
+  //     'User not found' a non-existent profile gets -- same class, same body,
+  //     same status -- so nothing reveals the block. The block read runs for
+  //     every call (in parallel with the user read), so the not-found paths do
+  //     the same work. The viewer's OWN block of the target does not hide the
+  //     profile (they must be able to reach it to unblock); it is reported as
+  //     viewerHasBlocked.
+  //   - Block applies on top of the age rules: the restricted-pending / non-active
+  //     404s below are decided first, exactly as before (#404 item 11).
+  //   - Country: profileCountry only. The safeguarding country is never selected.
+  //   - Preferred club is NOT exposed (not in the #371 list; OPEN).
+  async getPublicProfile(userId: string, viewerId: string): Promise<PublicProfile> {
+    const isSelf = userId === viewerId;
+    const [user, blockRows, followRow] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          ...PUBLIC_NAME_SELECT,
+          dateOfBirth: true,
+          isMinor: true,
+          accountStatus: true,
+          guardian: { select: { email: true, consentStatus: true } },
+          bio: true,
+          profileCountry: true,
+          avatarUrl: true,
+          avatarStatus: true,
+        },
+      }),
+      isSelf
+        ? Promise.resolve([] as Array<{ blockerId: string; blockedId: string }>)
+        : this.prisma.block.findMany({
+            where: blockedPairWhere(viewerId, userId),
+            select: { blockerId: true, blockedId: true },
+          }),
+      isSelf
+        ? Promise.resolve(null)
+        : this.prisma.follow.findUnique({
+            where: { followerId_followeeId: { followerId: viewerId, followeeId: userId } },
+            select: { id: true },
+          }),
+    ]);
     if (!user || user.accountStatus !== 'active') {
       throw new NotFoundException('User not found');
     }
     if (user.isMinor && user.guardian?.consentStatus !== 'confirmed') {
+      throw new NotFoundException('User not found');
+    }
+    const relation = relationFromRows(blockRows, viewerId, userId);
+    if (relation === 'other_blocked_viewer') {
       throw new NotFoundException('User not found');
     }
     return {
@@ -255,6 +375,11 @@ export class UsersService {
         user.guardian,
         this.dobEncryption.decryptNullable(user.dateOfBirth),
       ),
+      bio: user.bio,
+      country: user.profileCountry,
+      avatarUrl: user.avatarStatus === 'approved' ? user.avatarUrl : null,
+      isFollowing: followRow !== null,
+      viewerHasBlocked: relation === 'viewer_blocked_other',
     };
   }
 
@@ -274,6 +399,26 @@ export class UsersService {
       throw new BadRequestException({
         message: "A username can't be removed. You can change it to another one.",
         code: USERNAME_REQUIRED_CODE,
+      });
+    }
+
+    // B-038 (Decision Log #394 A3, #366): the pre-publication sensitive-content
+    // screen runs over the free text being SAVED (bio, preferred club). A flagged
+    // value is refused with a 422 and NOTHING is written (including the other
+    // fields of the same request); the client shows an inline 'please rephrase'
+    // state on the named field. Only the field NAMES and categories are returned,
+    // never the text. Unlike Grassroots there is no 'share anyway' confirmation
+    // and no auto-logged Report: the decision wording is 'please rephrase', and
+    // whether an override or a moderation report exists is OPEN
+    // (docs/backend-w5-report.md).
+    const flags = screenSensitiveContent({ bio: dto.bio, preferredClub: dto.preferredClub });
+    if (flags.length > 0) {
+      throw new UnprocessableEntityException({
+        statusCode: 422,
+        error: 'Unprocessable Entity',
+        code: SENSITIVE_PROFILE_REPHRASE_CODE,
+        message: 'Please rephrase this. It looks like it may mention something sensitive about someone.',
+        flaggedFields: flags,
       });
     }
 
@@ -344,6 +489,33 @@ export class UsersService {
     }
   }
 
+  // B-039 (Decision Log #396, #404 item 11): follow = a social action, so a block
+  // in either direction stops it, and a block never reveals itself.
+  //   - the followee has blocked the follower -> the SAME 404 'User not found' a
+  //     non-existent user gets (the existence read and the block read run
+  //     together for every call, so the two paths do the same work);
+  //   - the follower has blocked the followee -> 403 with a code only the blocker
+  //     can ever receive ("Unblock them to do that").
+  private async assertUserExistsAndNotBlocked(callerId: string, otherId: string): Promise<void> {
+    const [user, blockRows] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: otherId }, select: { id: true } }),
+      this.prisma.block.findMany({
+        where: blockedPairWhere(callerId, otherId),
+        select: { blockerId: true, blockedId: true },
+      }),
+    ]);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    const relation = relationFromRows(blockRows, callerId, otherId);
+    if (relation === 'other_blocked_viewer') {
+      throw new NotFoundException('User not found');
+    }
+    if (relation === 'viewer_blocked_other') {
+      throw new ForbiddenException({ message: YOU_BLOCKED_THIS_USER_MESSAGE, code: YOU_BLOCKED_THIS_USER_CODE });
+    }
+  }
+
   // Existence + safeguarding visibility check for getFollowers/getFollowing
   // ONLY -- revisits Decision Log #31 (users/README.md point 2, "followers/
   // following public-scope reasoning"), does not override it. #31 reasoned
@@ -374,12 +546,28 @@ export class UsersService {
   // this codebase's established "hide via 404, never a silent 200/403
   // that confirms a restricted account exists" convention (e.g.
   // GuardianConsentController's own "no Guardian row" 404).
-  private async assertFollowGraphVisible(userId: string): Promise<void> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, isMinor: true, accountStatus: true },
-    });
+  //
+  // B-039: when a `viewerId` is given and the TARGET has blocked the viewer, the
+  // target's graph is the same 404 as a non-existent user (their profile is "not
+  // found" to the viewer, #404 item 8). The viewer's own block of the target does
+  // not hide it (they can still reach the profile to unblock).
+  private async assertFollowGraphVisible(userId: string, viewerId?: string): Promise<void> {
+    const [user, blockedViewer] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, isMinor: true, accountStatus: true },
+      }),
+      viewerId && viewerId !== userId
+        ? this.prisma.block.findFirst({
+            where: { blockerId: userId, blockedId: viewerId },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+    ]);
     if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (blockedViewer) {
       throw new NotFoundException('User not found');
     }
     // sprint-2/account-deactivation-backend (Decision Log #221): a
@@ -454,7 +642,7 @@ export class UsersService {
     if (followerId === followeeId) {
       throw new BadRequestException('You cannot follow yourself');
     }
-    await this.assertUserExists(followeeId);
+    await this.assertUserExistsAndNotBlocked(followerId, followeeId);
 
     try {
       await this.prisma.$transaction(async (tx) => {
@@ -552,14 +740,16 @@ export class UsersService {
   // for a numeric sequence, so a second cursor shape would have to be
   // invented if FeedSequenceCursor weren't already generic enough; it is.
   // :id not referencing a real User -> 404.
-  async getFollowers(userId: string, query: FeedQueryDto): Promise<FollowPage> {
-    await this.assertFollowGraphVisible(userId);
+  async getFollowers(userId: string, query: FeedQueryDto, viewerId?: string): Promise<FollowPage> {
+    await this.assertFollowGraphVisible(userId, viewerId);
 
     const limit = Math.min(query.limit ?? FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE);
 
+    // B-039: list entries who are blocked in either direction with the VIEWER
+    // are hidden from the viewer (rosters, #402 item 4).
     const where: Prisma.FollowWhereInput = {
       followeeId: userId,
-      follower: { is: ACTIVE_FOLLOW_ENTRY_FILTER },
+      follower: { is: viewerId ? { ...ACTIVE_FOLLOW_ENTRY_FILTER, ...notBlockedWith(viewerId) } : ACTIVE_FOLLOW_ENTRY_FILTER },
       ...(query.cursor ? this.buildFollowCursorFilter(query.cursor) : {}),
     };
 
@@ -576,14 +766,14 @@ export class UsersService {
   // GET /users/:id/following -- users :id follows (Follow rows where
   // followerId = :id, each entry is the followee). Same scope/pagination
   // reasoning as getFollowers above, mirrored exactly.
-  async getFollowing(userId: string, query: FeedQueryDto): Promise<FollowPage> {
-    await this.assertFollowGraphVisible(userId);
+  async getFollowing(userId: string, query: FeedQueryDto, viewerId?: string): Promise<FollowPage> {
+    await this.assertFollowGraphVisible(userId, viewerId);
 
     const limit = Math.min(query.limit ?? FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE);
 
     const where: Prisma.FollowWhereInput = {
       followerId: userId,
-      followee: { is: ACTIVE_FOLLOW_ENTRY_FILTER },
+      followee: { is: viewerId ? { ...ACTIVE_FOLLOW_ENTRY_FILTER, ...notBlockedWith(viewerId) } : ACTIVE_FOLLOW_ENTRY_FILTER },
       ...(query.cursor ? this.buildFollowCursorFilter(query.cursor) : {}),
     };
 
@@ -630,9 +820,8 @@ export class UsersService {
   // VISIBLE_CLUB_MEMBER_FILTER already give this exact case. The caller
   // themselves and every user they already follow are excluded too.
   //
-  // There is no user-to-user "block" feature anywhere in this schema
-  // (search/README.md's own "Exclusion rules" section confirms the same
-  // grep) -- nothing further to exclude on that front. That module's own
+  // User-to-user Block (B-039, backend/w5-profile-block) is excluded in both
+  // directions via notBlockedWith below. That module's own
   // split still applies here: this is a DISCOVERY-time filter ("should
   // this person ever be suggested"), not an ACTION-time check ("am I
   // specifically allowed to message/follow this person") -- the latter
@@ -645,6 +834,8 @@ export class UsersService {
         accountStatus: 'active',
         OR: [{ isMinor: false }, { guardian: { consentStatus: 'confirmed' } }],
         followedBy: { none: { followerId: callerId } },
+        // B-039: nobody the caller has blocked, or who has blocked the caller.
+        ...notBlockedWith(callerId),
       },
       select: FOLLOW_USER_SELECT,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],

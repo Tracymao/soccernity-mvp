@@ -169,9 +169,11 @@ describe('CommunityGroupsController (HTTP layer)', () => {
     it('GET /community-groups/:id/members hits getGroupMembers, NOT getGroupById (no consent guard)', async () => {
       groups.getGroupMembers.mockResolvedValue({ items: [], nextCursor: null });
       await request(app.getHttpServer()).get('/community-groups/g-1/members?limit=10').expect(200);
+      // B-039: the caller's id is passed so their blocks hide roster entries.
       expect(groups.getGroupMembers).toHaveBeenCalledWith(
         'g-1',
         expect.objectContaining({ limit: 10 }),
+        expect.any(String),
       );
       expect(groups.getGroupById).not.toHaveBeenCalled();
       expect(consentGuardCalls).toBe(0);

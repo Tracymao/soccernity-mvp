@@ -68,9 +68,19 @@ export class S3StorageService extends StorageService {
       forcePathStyle: Boolean(endpoint),
       credentials: { accessKeyId: accessKeyId!, secretAccessKey: secretAccessKey! },
     });
-    this.publicUrlBase = endpoint
-      ? `${endpoint.replace(/\/+$/, '')}/${bucket}`
-      : `https://${bucket}.s3.${region}.amazonaws.com`;
+    // B-035 (Decision Log #307): on Cloudflare R2 the S3-API endpoint above is
+    // authenticated, so `<endpoint>/<bucket>/<key>` is NOT a URL anyone can
+    // fetch. When S3_PUBLIC_BASE_URL is set (the bucket's r2.dev subdomain or a
+    // custom domain, e.g. https://media.example.com) it is used as the base of
+    // every returned URL instead: `<S3_PUBLIC_BASE_URL>/<key>`. Unset keeps the
+    // previous behaviour exactly, so nothing changes until it is configured.
+    const publicBase = config.get<string>('S3_PUBLIC_BASE_URL')?.trim();
+    this.publicUrlBase =
+      publicBase && publicBase !== 'replace-me'
+        ? publicBase.replace(/\/+$/, '')
+        : endpoint
+          ? `${endpoint.replace(/\/+$/, '')}/${bucket}`
+          : `https://${bucket}.s3.${region}.amazonaws.com`;
   }
 
   async upload(buffer: Buffer, key: string, contentType: string): Promise<string> {

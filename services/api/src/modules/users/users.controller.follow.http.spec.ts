@@ -133,7 +133,7 @@ describe('UsersController (HTTP layer) — follow/follower routes', () => {
       const response = await request(app.getHttpServer()).get('/users/someone-else/followers').expect(200);
 
       expect(response.body).toEqual({ items: [{ id: 'follower-1', publicName: 'A Follower' }], nextCursor: null });
-      expect(usersService.getFollowers).toHaveBeenCalledWith('someone-else', {});
+      expect(usersService.getFollowers).toHaveBeenCalledWith('someone-else', {}, 'caller-1');
     });
 
     it('GET /followers passes cursor and limit query params through', async () => {
@@ -141,7 +141,7 @@ describe('UsersController (HTTP layer) — follow/follower routes', () => {
 
       await request(app.getHttpServer()).get('/users/someone-else/followers?cursor=abc123&limit=5').expect(200);
 
-      expect(usersService.getFollowers).toHaveBeenCalledWith('someone-else', { cursor: 'abc123', limit: 5 });
+      expect(usersService.getFollowers).toHaveBeenCalledWith('someone-else', { cursor: 'abc123', limit: 5 }, 'caller-1');
     });
 
     it('GET /followers rejects a limit above the max page size with 400', async () => {
@@ -161,7 +161,7 @@ describe('UsersController (HTTP layer) — follow/follower routes', () => {
       const response = await request(app.getHttpServer()).get('/users/someone-else/following').expect(200);
 
       expect(response.body).toEqual({ items: [{ id: 'followee-1', publicName: 'A Followee' }], nextCursor: null });
-      expect(usersService.getFollowing).toHaveBeenCalledWith('someone-else', {});
+      expect(usersService.getFollowing).toHaveBeenCalledWith('someone-else', {}, 'caller-1');
     });
 
     it('GET /following propagates a 404 from UsersService when :id does not reference a real user', async () => {

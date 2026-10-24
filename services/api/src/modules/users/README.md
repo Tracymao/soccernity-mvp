@@ -748,3 +748,28 @@ gone (`public-name.util.ts`). People search matches the username only.
 `GET /users/:id` additionally returns `profileComplete`, `guardianConsentStatus`
 and `nextStep` (see `auth/README.md`). Roster and people-search cursors and
 ordering still use `displayName` (B-034, open).
+
+
+## backend/w5-profile-block (B-035, B-038, B-081, B-082 backend leg)
+
+Profile content columns on `User` (migration `20261020151920_add_profile_fields_avatar_and_block`, nullable, CHECK-constrained):
+`bio` (<= 160), `preferredClub` (<= 80, free text, owner-only), `profileCountry` (ISO alpha-2, upper-case), and the avatar
+trio `avatarUrl` / `avatarKey` / `avatarStatus` (all NULL or all set).
+
+- **`PATCH /users/:id`** also accepts `bio`, `preferredClub`, `profileCountry` (`null` or blank clears; the username still cannot
+  be cleared). Bio and preferred club go through the sensitive-content screen: a flagged value is a coded
+  `422 sensitive_content_rephrase_required` ("please rephrase", #394 A3), field names and categories only, nothing saved, no
+  override, no Report. The profile country must be a real ISO 3166-1 code (`ZZ` etc. are refused) and is **never** the safeguarding
+  country: `declaredCountry` / `derivedCountry` are neither read nor written by any profile endpoint.
+- **`GET /users/:id`** (own) returns the four content fields and `avatar: { url, status } | null` (never the storage key).
+- **`GET /users/:id/public-profile`** (other users) now returns `bio`, `country` (profile country, `null` unless the user entered
+  one -- a minor's country is visible only if the minor entered it), `avatarUrl` (**approved avatars only**), `isFollowing` and
+  `viewerHasBlocked`, plus the existing `guardianContact`. It does **not** return the preferred club. A user the target has
+  blocked gets the same 404 as a non-existent profile.
+- **`POST` / `DELETE /users/:id/avatar`** (`user-avatar.*`, self only, multipart `file`, JPEG/PNG/WebP, 5 MB, magic bytes checked):
+  stored through the same `StorageService` as `POST /admin/media/upload`, so with no object store configured it is the same
+  `503` and nothing is written. An upload is **`pending`** and invisible to everyone but its owner until something sets
+  `approved` (the automatic image check, B-036, is not built). It does not create a `MediaAsset` row (that table is the admin
+  library). Bytes are stored as uploaded: no EXIF stripping yet (B-036).
+- Block: see `../block/README.md`. Follow, follower/following lists and suggested users honour it.
+- Account anonymization clears all of the above and deletes the avatar object (best effort) and every Block row.

@@ -6,6 +6,7 @@ import { EmailVerifiedGuard } from './modules/auth/guards/email-verified.guard';
 import { GuardianConsentGuard } from './modules/auth/guards/guardian-consent.guard';
 import { ProfileCompleteGuard } from './modules/auth/guards/profile-complete.guard';
 import { BanterController } from './modules/banter/banter.controller';
+import { BlockController } from './modules/block/block.controller';
 import { ClubsController } from './modules/clubs/clubs.controller';
 import { CommunityGroupsController } from './modules/community-groups/community-groups.controller';
 import { ContestController } from './modules/contest/contest.controller';
@@ -17,6 +18,7 @@ import { PublicReportsController } from './modules/moderation/public-reports.con
 import { ReportsController } from './modules/moderation/reports.controller';
 import { NotificationsController } from './modules/notifications/notifications.controller';
 import { SportsMatchesController } from './modules/sports/sports-matches.controller';
+import { UserAvatarController } from './modules/users/user-avatar.controller';
 import { UsersController } from './modules/users/users.controller';
 
 // B-026 / B-118 / B-027 (Decision Log #370, #403 item 15, #369): the route
@@ -62,6 +64,12 @@ const EXPECTED: Record<string, Flags> = {
   'PATCH /users/:id/represented-club': 'CE',
   'POST /users/:id/follow': 'CE',
   'DELETE /users/:id/follow': 'C',
+  // B-039 (Block): the literal pinned rule, no special case -- C on both forms, E on the creating form.
+  'POST /users/:id/block': 'CE',
+  'DELETE /users/:id/block': 'C',
+  // B-035 (avatar): a profile write. Deliberately NOT P: the avatar is chosen at Create Profile, before the username exists.
+  'POST /users/:id/avatar': 'CE',
+  'DELETE /users/:id/avatar': 'C',
   // posts
   'POST /posts': 'CEP',
   'POST /posts/:id/like': 'CE',
@@ -106,6 +114,8 @@ const EXPECTED: Record<string, Flags> = {
 // guardian-consent token routes, change-guardian-email, logout).
 const CONTROLLERS = [
   UsersController,
+  BlockController,
+  UserAvatarController,
   FeedController,
   ClubsController,
   BanterController,

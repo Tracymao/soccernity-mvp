@@ -1,6 +1,12 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  blockedPairWhere,
+  relationFromRows,
+  YOU_BLOCKED_THIS_USER_CODE,
+  YOU_BLOCKED_THIS_USER_MESSAGE,
+} from '../block/block.util';
 import {
   MESSAGING_DEFAULT_PAGE_SIZE,
   MESSAGING_MAX_PAGE_SIZE,
@@ -152,10 +158,30 @@ export class MessagingService {
       where: { participantKey: key },
       select: CONVERSATION_SELECT,
     });
+    // B-039: the Block read is part of the same fixed set of reads, done for
+    // EVERY attempt whatever the outcome, so a blocked attempt costs the same as
+    // a missing/restricted one (timing parity, #350's reasoning).
+    const blockRows = await this.prisma.block.findMany({
+      where: blockedPairWhere(callerId, recipientId),
+      select: { blockerId: true, blockedId: true },
+    });
 
     const recipient = users.find((u) => u.id === recipientId);
     const caller = users.find((u) => u.id === callerId);
     const recipientIsMinor = this.assertRecipientMessageable(recipient);
+
+    // B-039 (Decision Log #396, #404 item 11): a Block applies ON TOP of the age
+    // and consent rules above, which are decided first. Messages stop in both
+    // directions, and a block never reveals itself: if the RECIPIENT blocked the
+    // caller the answer is the same 404 'User not found' every other
+    // not-messageable recipient gets; only the BLOCKER (who knows) gets the 403.
+    const blockRelation = relationFromRows(blockRows, callerId, recipientId);
+    if (blockRelation === 'other_blocked_viewer') {
+      throw new NotFoundException('User not found');
+    }
+    if (blockRelation === 'viewer_blocked_other') {
+      throw new ForbiddenException({ message: YOU_BLOCKED_THIS_USER_MESSAGE, code: YOU_BLOCKED_THIS_USER_CODE });
+    }
 
     // sprint-1/adult-to-minor-dm-block (Decision Log #347): an adult
     // cannot CREATE a new conversation with a minor (answered with the
@@ -346,6 +372,26 @@ export class MessagingService {
   ): Promise<MessageView> {
     const conversation = await this.assertParticipant(conversationId, senderId);
     const recipientId = conversation.participantIds.find((id) => id !== senderId) ?? null;
+
+    // B-039: messages stop in both directions once either side has blocked the
+    // other. The blocked SENDER gets the 404 an unreachable conversation gets
+    // (never a message saying they are blocked, #404 item 11); the blocker gets
+    // the explicit 403. The existing thread and its history stay readable and
+    // listed -- whether a blocked pair's thread should disappear from either
+    // inbox is NOT decided (docs/backend-w5-report.md, OPEN).
+    if (recipientId !== null) {
+      const blockRows = await this.prisma.block.findMany({
+        where: blockedPairWhere(senderId, recipientId),
+        select: { blockerId: true, blockedId: true },
+      });
+      const relation = relationFromRows(blockRows, senderId, recipientId);
+      if (relation === 'other_blocked_viewer') {
+        throw new NotFoundException('Conversation not found');
+      }
+      if (relation === 'viewer_blocked_other') {
+        throw new ForbiddenException({ message: YOU_BLOCKED_THIS_USER_MESSAGE, code: YOU_BLOCKED_THIS_USER_CODE });
+      }
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const message = await tx.message.create({

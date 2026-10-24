@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { notBlockedWith } from '../block/block.util';
 import {
   decodeSearchClubCursor,
   decodeSearchPostCursor,
@@ -77,12 +78,14 @@ export interface SearchUserResult {
 //    assertFollowGraphVisible and clubs.service.ts's
 //    VISIBLE_CLUB_MEMBER_FILTER already give this exact case.
 //
-// There is no dedicated user-to-user "block" feature anywhere in this
-// schema (grep confirms it — the only "block" surfaces in this codebase
-// are the under-16 messaging restriction, the adult-cannot-message-minor
-// rule, and admin-imposed account suspension, none of which are a
-// per-pair block a search filter could apply). Those safeguarding rules
-// are enforced at the point of ACTION (starting a conversation, sending
+// User-to-user Block (B-039, backend/w5-profile-block; Decision Log #396,
+// #402 item 4): when the caller is LOGGED IN (GET /search stays public, but
+// SearchController now reads the bearer token optionally), people and post
+// results involving anyone they have blocked, or anyone who has blocked
+// them, are hidden -- both directions. An anonymous caller has no blocks. The
+// under-16 messaging restriction, the adult-cannot-message-minor rule and
+// admin suspension are NOT per-pair blocks a search filter could apply. Those
+// safeguarding rules are enforced at the point of ACTION (starting a conversation, sending
 // a message — messaging.service.ts's own assertRecipientMessageable),
 // not at the point of discovery — the same split GET /users/:id/followers
 // already draws between "can this profile be found/listed at all" (this
@@ -204,6 +207,7 @@ export class SearchService {
 
   async search(
     query: SearchQueryDto,
+    viewerId?: string,
   ): Promise<SearchResultPage<SearchUserResult> | SearchResultPage<SearchClubResult> | SearchResultPage<SearchPostResult> | SearchAllResult> {
     const q = this.normalizeQuery(query.q);
     const limit = Math.min(query.limit ?? SEARCH_DEFAULT_PAGE_SIZE, SEARCH_MAX_PAGE_SIZE);
@@ -221,20 +225,20 @@ export class SearchService {
         throw new BadRequestException('cursor requires scope to be specified');
       }
       const [users, clubs, posts] = await Promise.all([
-        this.searchUsers(q, undefined, limit),
+        this.searchUsers(q, undefined, limit, viewerId),
         this.searchClubs(q, undefined, limit),
-        this.searchPosts(q, undefined, limit),
+        this.searchPosts(q, undefined, limit, viewerId),
       ]);
       return { users, clubs, posts };
     }
 
     switch (scope) {
       case 'users':
-        return this.searchUsers(q, query.cursor, limit);
+        return this.searchUsers(q, query.cursor, limit, viewerId);
       case 'clubs':
         return this.searchClubs(q, query.cursor, limit);
       case 'posts':
-        return this.searchPosts(q, query.cursor, limit);
+        return this.searchPosts(q, query.cursor, limit, viewerId);
     }
   }
 
@@ -246,9 +250,11 @@ export class SearchService {
     q: string,
     cursor: string | undefined,
     limit: number,
+    viewerId?: string,
   ): Promise<SearchResultPage<SearchUserResult>> {
     const filters: Prisma.UserWhereInput[] = [
       VISIBLE_SEARCH_USER_FILTER,
+      ...(viewerId ? [notBlockedWith(viewerId)] : []),
       // Matches the username only (B-027, #369): an account with no username has
       // only the shared placeholder as its public name, and a real name must not
       // be usable to find the account behind it.
@@ -308,9 +314,11 @@ export class SearchService {
     q: string,
     cursor: string | undefined,
     limit: number,
+    viewerId?: string,
   ): Promise<SearchResultPage<SearchPostResult>> {
     const filters: Prisma.PostWhereInput[] = [
       ACTIVE_AUTHOR_SEARCH_FILTER,
+      ...(viewerId ? [{ author: { is: notBlockedWith(viewerId) } } as Prisma.PostWhereInput] : []),
       { contentText: { contains: q, mode: 'insensitive' } },
     ];
     if (cursor) {

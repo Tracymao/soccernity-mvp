@@ -157,6 +157,10 @@ services:
         sync: false
       - key: S3_ENDPOINT
         sync: false
+      # S3_PUBLIC_BASE_URL: the public base of stored objects (R2 r2.dev or a custom domain);
+      # unset keeps <endpoint>/<bucket>/<key>, which is NOT publicly readable on R2
+      - key: S3_PUBLIC_BASE_URL
+        sync: false
       # S3_REGION: code default; R2 uses the literal 'auto'
       - key: S3_REGION
         value: "auto"
@@ -306,6 +310,10 @@ services:
       - key: S3_SECRET_KEY
         sync: false
       - key: S3_ENDPOINT
+        sync: false
+      # S3_PUBLIC_BASE_URL: the public base of stored objects (R2 r2.dev or a custom domain);
+      # unset keeps <endpoint>/<bucket>/<key>, which is NOT publicly readable on R2
+      - key: S3_PUBLIC_BASE_URL
         sync: false
       # S3_REGION: code default; R2 uses the literal 'auto'
       - key: S3_REGION

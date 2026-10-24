@@ -102,7 +102,8 @@ describe('UsersController (HTTP layer) — restricted-pending write block (B-026
     const response = await request(app.getHttpServer()).get('/users/someone-else/public-profile').expect(200);
 
     expect(response.body.guardianContact.email).toBe('parent@example.com');
-    expect(usersService.getPublicProfile).toHaveBeenCalledWith('someone-else');
+    // B-039: the viewer's id is passed so the block rules can apply.
+    expect(usersService.getPublicProfile).toHaveBeenCalledWith('someone-else', 'minor-1');
     expect(usersService.getOwnProfile).not.toHaveBeenCalled();
   });
 

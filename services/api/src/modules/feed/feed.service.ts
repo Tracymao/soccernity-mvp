@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { notBlockedWith } from '../block/block.util';
 import { ENGAGEMENT_POINTS } from '../points/points.constants';
 import { awardPoints } from '../points/points.util';
 import { recordPostHashtags } from '../search/hashtag.util';
@@ -430,8 +431,11 @@ export class FeedService {
     limit: number,
     userId: string,
   ): Promise<FeedPage> {
+    // B-039 (Decision Log #396, #402 item 4): a block hides the other user's
+    // posts in BOTH directions, on every feed that goes through this pipeline
+    // (own/follows feed, club feed, Banter room feed). Counts are untouched.
     const rows = await this.prisma.post.findMany({
-      where,
+      where: { AND: [where, { author: { is: notBlockedWith(userId) } }] },
       orderBy: [{ createdAt: 'desc' }, { sequence: 'desc' }],
       take: limit + 1,
       select: POST_SELECT_WITH_SEQUENCE,
@@ -533,7 +537,7 @@ export class FeedService {
     // absent from GET /posts/feed — the "hide via 404" convention this
     // codebase already uses for restricted content.
     const rawPost = await this.prisma.post.findFirst({
-      where: { id: postId, ...ACTIVE_AUTHOR_POST_FILTER },
+      where: { AND: [{ id: postId }, ACTIVE_AUTHOR_POST_FILTER, { author: { is: notBlockedWith(userId) } }] },
       select: POST_SELECT,
     });
     if (!rawPost) {
@@ -580,11 +584,23 @@ export class FeedService {
   // getComments still call this the same way as before and simply don't
   // use the returned value — a purely additive signature change, not a
   // restructuring of this shared check.
+  //
+  // B-039 (Decision Log #396, #402 item 4): when a `viewerId` is given and a
+  // block exists between the viewer and the post's author, in EITHER direction,
+  // the post is "not found" -- the same 404 as a post that does not exist, so a
+  // blocked user learns nothing. Used by every action that READS or REACTS to
+  // someone else's post (like, comment, view, comments list, save); the undo
+  // forms (unlike, unsave) and the author's own management routes pass no
+  // viewer and stay open.
   private async assertPostExists(
     postId: string,
+    viewerId?: string,
   ): Promise<{ id: string; authorId: string; commentPermission: string }> {
+    // findUnique with a relation filter next to the unique id (Prisma 5
+    // extended-where-unique): still a primary-key lookup, now also requiring
+    // "no block between the viewer and the author".
     const post = await this.prisma.post.findUnique({
-      where: { id: postId },
+      where: viewerId ? { id: postId, author: { is: notBlockedWith(viewerId) } } : { id: postId },
       select: { id: true, authorId: true, commentPermission: true },
     });
     if (!post) {
@@ -623,7 +639,7 @@ export class FeedService {
   // IS the post's author (liking your own post is a real path through
   // this code today, tested explicitly).
   async likePost(userId: string, postId: string): Promise<LikeState> {
-    const post = await this.assertPostExists(postId);
+    const post = await this.assertPostExists(postId, userId);
 
     try {
       await this.prisma.$transaction(async (tx) => {
@@ -733,7 +749,7 @@ export class FeedService {
   // (see the comment above), so there's no duplicate-notification case
   // analogous to the like P2002 path.
   async addComment(postId: string, authorId: string, dto: CreateCommentDto): Promise<FeedComment> {
-    const post = await this.assertPostExists(postId);
+    const post = await this.assertPostExists(postId, authorId);
     await this.assertMayComment(post, authorId);
 
     return this.prisma.$transaction(async (tx) => {
@@ -772,7 +788,7 @@ export class FeedService {
   // author, who still sees their own hidden comment, also flagged, so it
   // doesn't vanish from their view without explanation.
   async getComments(postId: string, query: FeedQueryDto, viewerId?: string): Promise<CommentPage> {
-    const post = await this.assertPostExists(postId);
+    const post = await this.assertPostExists(postId, viewerId);
 
     const limit = Math.min(query.limit ?? FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE);
 
@@ -783,9 +799,14 @@ export class FeedService {
           ? { OR: [{ hidden: false }, { authorId: viewerId }] }
           : { hidden: false };
 
+    // B-039: a comment by a user who is blocked in either direction with the
+    // viewer is hidden from that viewer. commentCount is NOT adjusted (counts
+    // are unchanged, #403 item 16). An anonymous viewer has no blocks.
+    const notBlocked: Prisma.CommentWhereInput = viewerId ? { author: { is: notBlockedWith(viewerId) } } : {};
+
     const where: Prisma.CommentWhereInput = query.cursor
-      ? { AND: [{ postId }, visibility, this.buildCommentsCursorFilter(query.cursor)] }
-      : { AND: [{ postId }, visibility] };
+      ? { AND: [{ postId }, visibility, notBlocked, this.buildCommentsCursorFilter(query.cursor)] }
+      : { AND: [{ postId }, visibility, notBlocked] };
 
     const rows = await this.prisma.comment.findMany({
       where,
@@ -1005,7 +1026,7 @@ export class FeedService {
   // increment. A duplicate save (P2002) is caught and treated as
   // success.
   async savePost(userId: string, postId: string): Promise<SaveState> {
-    await this.assertPostExists(postId);
+    await this.assertPostExists(postId, userId);
 
     try {
       await this.prisma.savedPost.create({ data: { userId, postId } });
@@ -1061,7 +1082,7 @@ export class FeedService {
   // safety-sensitive or content-generating action the way a like/comment
   // is, so neither of those two mechanisms applies.
   async recordView(userId: string | undefined, postId: string): Promise<ViewState> {
-    await this.assertPostExists(postId);
+    await this.assertPostExists(postId, userId);
 
     try {
       await this.prisma.$transaction(async (tx) => {
@@ -1108,9 +1129,13 @@ export class FeedService {
   async getSavedPosts(userId: string, query: FeedQueryDto): Promise<SavedPostPage> {
     const limit = Math.min(query.limit ?? FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE);
 
+    // B-039: a saved post whose author is blocked (either direction) is hidden
+    // from the saver's list; the SavedPost row itself is kept, so unblocking
+    // brings it back.
+    const notBlocked: Prisma.SavedPostWhereInput = { post: { is: { author: { is: notBlockedWith(userId) } } } };
     const where: Prisma.SavedPostWhereInput = query.cursor
-      ? { userId, ...this.buildSavedPostsCursorFilter(query.cursor) }
-      : { userId };
+      ? { userId, ...notBlocked, ...this.buildSavedPostsCursorFilter(query.cursor) }
+      : { userId, ...notBlocked };
 
     const rows = await this.prisma.savedPost.findMany({
       where,

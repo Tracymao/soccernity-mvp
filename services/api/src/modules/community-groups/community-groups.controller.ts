@@ -88,8 +88,12 @@ export class CommunityGroupsController {
   // declaration order.
   @Get(':id/members')
   @UseGuards(JwtAuthGuard)
-  async members(@Param('id') id: string, @Query() query: ListCommunityGroupMembersQueryDto) {
-    return this.communityGroups.getGroupMembers(id, query);
+  async members(
+    @Param('id') id: string,
+    @Query() query: ListCommunityGroupMembersQueryDto,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.communityGroups.getGroupMembers(id, query, user.sub);
   }
 
   // POST /community-groups/:id/join — JwtAuthGuard + GuardianConsentGuard,

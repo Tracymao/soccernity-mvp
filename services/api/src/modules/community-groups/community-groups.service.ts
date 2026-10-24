@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { notBlockedWith } from '../block/block.util';
 import {
   COMMUNITY_GROUPS_DEFAULT_PAGE_SIZE,
   COMMUNITY_GROUPS_MAX_PAGE_SIZE,
@@ -390,6 +391,7 @@ export class CommunityGroupsService {
   async getGroupMembers(
     groupId: string,
     query: ListCommunityGroupMembersQueryDto,
+    viewerId?: string,
   ): Promise<CommunityGroupMemberPage> {
     await this.assertGroupExists(groupId);
 
@@ -407,6 +409,9 @@ export class CommunityGroupsService {
     const filters: Prisma.UserWhereInput[] = [
       { communityGroupMemberships: { some: { communityGroupId: groupId } } },
       VISIBLE_GROUP_MEMBER_FILTER,
+      // B-039: members blocked in either direction with the caller are hidden from
+      // the caller's roster view (#402 item 4); memberCount is unchanged.
+      ...(viewerId ? [notBlockedWith(viewerId)] : []),
     ];
     if (query.cursor) filters.push(userNameAfterCursor(decodeUserNameCursor(query.cursor)));
 

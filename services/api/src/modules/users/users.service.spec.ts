@@ -18,6 +18,14 @@ function buildPrismaMock() {
       create: jest.fn(),
       delete: jest.fn(),
       findMany: jest.fn(),
+      // B-039: getPublicProfile reads the viewer's follow state.
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
+    // B-039 (Block): follow / public profile / follower lists read the block rows
+    // between the caller and the other user.
+    block: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findFirst: jest.fn().mockResolvedValue(null),
     },
     guardian: {
       findUnique: jest.fn(),
@@ -61,6 +69,13 @@ const FULL_DB_ROW = {
   // GrassrootsService.createTeam.
   isTeamOrganiser: false,
   isUnder16: false,
+  // backend/w5-profile-block: profile content columns (all optional).
+  bio: null as string | null,
+  preferredClub: null as string | null,
+  profileCountry: null as string | null,
+  avatarUrl: null as string | null,
+  avatarKey: null as string | null,
+  avatarStatus: null as string | null,
   guardian: null as { email: string; consentStatus?: string } | null,
 };
 
@@ -200,12 +215,16 @@ describe('UsersService', () => {
       isMinor: true,
       accountStatus: 'active',
       guardian: { email: 'parent@example.com', consentStatus: 'confirmed' },
+      bio: null,
+      profileCountry: null,
+      avatarUrl: null,
+      avatarStatus: null,
       ...over,
     });
     const run = async (r: unknown) => {
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(r);
-      return new UsersService(prisma, dobEnc, policyStub()).getPublicProfile('minor-1');
+      return new UsersService(prisma, dobEnc, policyStub()).getPublicProfile('minor-1', 'viewer-1');
     };
 
     it('shows a minor guardianContact to any viewer, and nothing else about them', async () => {
@@ -214,6 +233,11 @@ describe('UsersService', () => {
         id: 'minor-1',
         publicName: 'Soccernity member',
         guardianContact: { label: 'Guardian contact', email: 'parent@example.com' },
+        bio: null,
+        country: null,
+        avatarUrl: null,
+        isFollowing: false,
+        viewerHasBlocked: false,
       });
     });
 
@@ -701,19 +725,21 @@ describe('UsersService', () => {
       });
     });
 
-    it('restriction applies regardless of which existing user is asking -- getFollowers takes no caller param at all', async () => {
-      // assertFollowGraphVisible is only ever passed the route's :id
-      // (the target), never the caller -- this test documents that the
-      // service method's signature structurally cannot special-case "but
-      // the minor is asking about themselves," matching option (a)'s
-      // "regardless of caller" requirement.
+    it('restriction applies regardless of which existing user is asking -- the optional viewer id is used ONLY for block hiding', async () => {
+      // The restricted-pending decision reads only the route's :id (the
+      // target). Since B-039 getFollowers also takes an OPTIONAL viewer id, but
+      // it feeds only the block rules (assertFollowGraphVisible's block read and
+      // the list-entry filter): no value of it can special-case "but the minor
+      // is asking about themselves," matching option (a)'s "regardless of
+      // caller" requirement.
       const prisma = buildPrismaMock();
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'minor-1', isMinor: true, accountStatus: 'active' });
       (prisma.guardian.findUnique as jest.Mock).mockResolvedValue({ consentStatus: 'pending' });
       const service = new UsersService(prisma, buildTestDobEncryption(), policyStub());
 
-      expect(service.getFollowers.length).toBe(2); // (userId, query) -- no caller/actor param
       await expect(service.getFollowers('minor-1', {})).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.getFollowers('minor-1', {}, 'minor-1')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.getFollowers('minor-1', {}, 'someone-else')).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 
@@ -785,6 +811,9 @@ describe('UsersService', () => {
         accountStatus: 'active',
         OR: [{ isMinor: false }, { guardian: { consentStatus: 'confirmed' } }],
         followedBy: { none: { followerId: 'caller-1' } },
+        // B-039: nobody the caller has blocked, or who has blocked the caller.
+        blockedBy: { none: { blockerId: 'caller-1' } },
+        blocksMade: { none: { blockedId: 'caller-1' } },
       });
       expect(callArgs.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
       expect(callArgs.take).toBe(10);
@@ -923,7 +952,7 @@ describe('UsersService', () => {
         accountStatus: 'active',
         guardian: null,
       });
-      const result = await new UsersService(prisma, buildTestDobEncryption(), policyStub()).getPublicProfile('u9');
+      const result = await new UsersService(prisma, buildTestDobEncryption(), policyStub()).getPublicProfile('u9', 'viewer-1');
       expect(result.publicName).toBe('goalie_9');
       expect(JSON.stringify(result)).not.toContain('Ada Obi');
       expect(result).not.toHaveProperty('displayName');

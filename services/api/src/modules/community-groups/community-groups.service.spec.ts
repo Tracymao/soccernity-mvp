@@ -392,4 +392,21 @@ describe('CommunityGroupsService', () => {
       await expect(service.getGroupMembers('group-1', { cursor: legacy })).rejects.toThrow('Invalid pagination cursor');
     });
   });
+
+  // B-039 (Block): a roster viewer's blocks (either direction) hide members; the count is untouched.
+  describe('getGroupMembers Block filter', () => {
+    it('appends the not-blocked filter when a viewer is given, and not otherwise', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.communityGroup.findUnique as jest.Mock).mockResolvedValue({ id: 'group-1' });
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new CommunityGroupsService(prisma);
+
+      await service.getGroupMembers('group-1', {}, 'viewer-1');
+      await service.getGroupMembers('group-1', {});
+
+      const [withViewer, without] = (prisma.user.findMany as jest.Mock).mock.calls.map((c) => c[0].where.AND);
+      expect(withViewer[withViewer.length - 1]).toEqual({ blockedBy: { none: { blockerId: 'viewer-1' } }, blocksMade: { none: { blockedId: 'viewer-1' } } });
+      expect(JSON.stringify(without)).not.toContain('blockedBy');
+    });
+  });
 });

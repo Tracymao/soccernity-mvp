@@ -269,6 +269,8 @@ describe('ClubsService', () => {
           accountStatus: 'active',
           OR: [{ isMinor: false }, { guardian: { consentStatus: 'confirmed' } }],
         },
+        // B-039: blocked in either direction with the caller -> hidden from the roster.
+        { blockedBy: { none: { blockerId: 'caller-1' } }, blocksMade: { none: { blockedId: 'caller-1' } } },
       ]);
       expect(callArgs.orderBy).toEqual(USER_NAME_ORDER_BY);
       expect(JSON.stringify(callArgs.orderBy)).not.toContain('displayName');

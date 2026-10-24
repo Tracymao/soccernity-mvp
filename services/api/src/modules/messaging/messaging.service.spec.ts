@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -40,6 +40,10 @@ function buildPrismaMock() {
     },
     guardian: {
       findUnique: jest.fn(),
+    },
+    // B-039 (Block): one read per attempt, between the caller and the other party.
+    block: {
+      findMany: jest.fn().mockResolvedValue([]),
     },
     notification: {
       create: jest.fn(),
@@ -209,6 +213,14 @@ describe('MessagingService', () => {
           () => mockUsers(activeUser({ isMinor: true, guardian: { consentStatus: 'pending' } })),
         ],
         ['deactivated recipient', () => mockUsers(activeUser({ accountStatus: 'deactivated' }))],
+        // B-039: a recipient who blocked the caller is the same 404, same work.
+        [
+          'recipient blocked the caller',
+          () => {
+            mockUsers(activeUser());
+            p().block.findMany.mockResolvedValue([{ blockerId: RECIPIENT, blockedId: CALLER }]);
+          },
+        ],
       ];
 
       const fingerprints: string[] = [];
@@ -227,16 +239,73 @@ describe('MessagingService', () => {
         expect([name, p().user.findUnique.mock.calls.length]).toEqual([name, 0]);
         expect([name, p().guardian.findUnique.mock.calls.length]).toEqual([name, 0]);
         expect([name, p().conversation.findUnique.mock.calls.length]).toEqual([name, 1]);
+        expect([name, p().block.findMany.mock.calls.length]).toEqual([name, 1]);
         expect(p().conversation.create).not.toHaveBeenCalled();
         fingerprints.push(
           JSON.stringify([
             p().user.findMany.mock.calls,
             p().conversation.findUnique.mock.calls,
+            p().block.findMany.mock.calls,
           ]),
         );
       }
       // The reads are byte-identical across scenarios (same arguments).
       expect(new Set(fingerprints).size).toBe(1);
+    });
+
+    // B-039 (Block, Decision Log #396, #404 item 11, #406 item 12).
+    describe('Block', () => {
+      it('a recipient who blocked the caller gets the SAME 404 as a non-existent recipient (the block never reveals itself)', async () => {
+        mockUsers(activeUser());
+        p().conversation.findUnique.mockResolvedValue(null);
+        p().block.findMany.mockResolvedValue([{ blockerId: RECIPIENT, blockedId: CALLER }]);
+        const blocked = await service.startConversation(CALLER, RECIPIENT).catch((e) => e);
+
+        mockUsers(null);
+        p().block.findMany.mockResolvedValue([]);
+        const missing = await service.startConversation(CALLER, RECIPIENT).catch((e) => e);
+
+        expect(blocked).toBeInstanceOf(NotFoundException);
+        expect(blocked.getStatus()).toBe(missing.getStatus());
+        expect(blocked.getResponse()).toEqual(missing.getResponse());
+        expect(p().conversation.create).not.toHaveBeenCalled();
+      });
+
+      it('the BLOCKER gets an explicit 403 with a code (only they can ever receive it)', async () => {
+        mockUsers(activeUser());
+        p().conversation.findUnique.mockResolvedValue(null);
+        p().block.findMany.mockResolvedValue([{ blockerId: CALLER, blockedId: RECIPIENT }]);
+        const err = await service.startConversation(CALLER, RECIPIENT).catch((e) => e);
+        expect(err).toBeInstanceOf(ForbiddenException);
+        expect(err.getResponse()).toMatchObject({ code: 'you_blocked_this_user' });
+        expect(p().conversation.create).not.toHaveBeenCalled();
+      });
+
+      it('also stops RESUMING an existing thread, in both directions', async () => {
+        mockUsers(activeUser());
+        p().conversation.findUnique.mockResolvedValue(conversationRow());
+        p().block.findMany.mockResolvedValue([{ blockerId: RECIPIENT, blockedId: CALLER }]);
+        await expect(service.startConversation(CALLER, RECIPIENT)).rejects.toBeInstanceOf(NotFoundException);
+        p().block.findMany.mockResolvedValue([{ blockerId: CALLER, blockedId: RECIPIENT }]);
+        await expect(service.startConversation(CALLER, RECIPIENT)).rejects.toBeInstanceOf(ForbiddenException);
+      });
+
+      it('applies on top of the age rules: an under-16 recipient is still the plain 404, not a block answer', async () => {
+        mockUsers(activeUser({ isMinor: true, isUnder16: true, ...confirmed }));
+        p().conversation.findUnique.mockResolvedValue(null);
+        // Even if the CALLER blocked this user, the age rule is decided first.
+        p().block.findMany.mockResolvedValue([{ blockerId: CALLER, blockedId: RECIPIENT }]);
+        const err = await service.startConversation(CALLER, RECIPIENT).catch((e) => e);
+        expect(err).toBeInstanceOf(NotFoundException);
+      });
+
+      it('an unrelated block (a third party) changes nothing', async () => {
+        mockUsers(activeUser());
+        p().conversation.findUnique.mockResolvedValue(null);
+        p().conversation.create.mockResolvedValue(conversationRow());
+        p().block.findMany.mockResolvedValue([]);
+        expect((await service.startConversation(CALLER, RECIPIENT)).created).toBe(true);
+      });
     });
 
     it('allows minor -> adult and minor -> minor new conversations', async () => {
@@ -399,6 +468,26 @@ describe('MessagingService', () => {
         where: { id: 'convo-1' },
         data: { lastMessageAt: sentAt },
       });
+    });
+
+    // B-039 (Block): messages stop in both directions.
+    it('stops a BLOCKED sender with the same 404 an unreachable conversation gets, writing nothing', async () => {
+      p().conversation.findUnique.mockResolvedValue(conversationRow());
+      p().block.findMany.mockResolvedValue([{ blockerId: RECIPIENT, blockedId: CALLER }]);
+      const err = await service.sendMessage('convo-1', CALLER, { contentText: 'hi' }).catch((e) => e);
+      expect(err).toBeInstanceOf(NotFoundException);
+      expect(err.message).toBe('Conversation not found');
+      expect(p().message.create).not.toHaveBeenCalled();
+      expect(p().notification.create).not.toHaveBeenCalled();
+    });
+
+    it('stops the BLOCKER with an explicit 403, writing nothing', async () => {
+      p().conversation.findUnique.mockResolvedValue(conversationRow());
+      p().block.findMany.mockResolvedValue([{ blockerId: CALLER, blockedId: RECIPIENT }]);
+      const err = await service.sendMessage('convo-1', CALLER, { contentText: 'hi' }).catch((e) => e);
+      expect(err).toBeInstanceOf(ForbiddenException);
+      expect(err.getResponse()).toMatchObject({ code: 'you_blocked_this_user' });
+      expect(p().message.create).not.toHaveBeenCalled();
     });
 
     it('404s a non-participant before creating anything', async () => {

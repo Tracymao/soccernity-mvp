@@ -151,9 +151,13 @@ No two may be the same.
    - `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_ENDPOINT` — your
      Cloudflare R2 bucket, API token and
      `https://<account-id>.r2.cloudflarestorage.com` endpoint. Placeholders for
-     now. The API **does** read these (Admin Console media upload); until they
-     are real, uploads return a clear "storage not configured" error and
-     everything else keeps working.
+     now. The API **does** read these (Admin Console media upload and the
+     profile-picture upload); until they are real, uploads return a clear
+     "storage not configured" error (503) and everything else keeps working.
+   - `S3_PUBLIC_BASE_URL` — optional; the public address of the bucket (its
+     r2.dev subdomain or a custom domain). The R2 endpoint above is not
+     publicly readable, so until this is set stored files get a URL nobody can
+     open. Leave blank until the bucket has a public address.
    - `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY` — Stripe **test** keys until
      a real account exists. Placeholders mean the card-check step for
      under-13 US guardians fails closed (that guardian cannot complete
