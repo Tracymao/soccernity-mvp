@@ -10,6 +10,8 @@ Generated 2026-10-18 (Figma pass K, `figma/pass-k-admin-incorrect-details-archiv
 
 **Updated 2026-10-20 by Figma pass K5** (`figma/pass-k5-restricted-pending-mobile-logged-out`): eight more hidden nested nodes are listed in section 2i (the posts-count stat on three mobile profile frames, the pieces of the two K4 logged-out frames that were replaced by instances of the new header variant and drawer component, and the K4 detached drawer copy). Live count taken at the end of K5 with `findAll` on every node whose name starts with `ARCHIVED`: **427** = **62 top-level** + **365 nested** (K4: 419 = 62 + 357; +8 nested, no change at top level). The K5 report is `docs/figma-pass-k5-report.md`.
 
+**Updated 2026-10-24 by Figma pass K6** (`figma/pass-k6-restricted-pending-profile-states`): four more hidden nested nodes are listed in section 2j (the "Last sent" resend note and the stale SCOPE OPEN note on both Restricted Pending frames). Live count taken at the end of K6 with `findAll` on every node whose name starts with `ARCHIVED`: **431** = **62 top-level** + **369 nested** (K5: 427 = 62 + 365; +4 nested, no change at top level). The K6 report is `docs/figma-pass-k6-report.md`.
+
 Previous counts (corrected 2026-10-18 to the live figures given by the founder): **397** archived nodes = **57 top-level frames** (section 1) + **340 nested nodes** (section 2) inside **81** host frames. The first version of this index said 398 = 57 + 341; the live count is one lower. The figures are the founder's; this docs-only change did not re-count the canvas, and the host-frame count (81) was not re-checked. Nothing in this index lists a node removed after pass K, so the one-node difference is recorded, not explained. Pass K also removed one hidden `ARCHIVED — Button — Retry` that came along when the incorrect-details Load Error frame was cloned, because it was an artefact of the clone, not an original; it was never one of the counted nodes.
 
 How to use it: section 1 answers "where is the old frame and what replaced it". Section 2 answers "which hidden originals sit inside this live frame". To find an id on the canvas, paste it into Figma search or use the id in a plugin call.
@@ -276,6 +278,17 @@ The Navbar instance inside the archived `1460:8940` reports 0 sub-layers while t
 | `6785:29485` Mobile — Logged Out — Navigation Drawer Open | `6785:29539` "ARCHIVED — Navigation Drawer — Logged Out — Mobile (detached ...) (replaced by instance of Navigation Drawer — Mobile — Logged Out, K5)" |
 
 All eight are kept hidden, not deleted.
+
+### 2j. Added by pass K6
+
+| Host frame | Hidden archived node |
+|---|---|
+| `5114:6644` Content Column in `5108:6630` Guardian Consent — 5 Restricted Pending State | `5114:6704` "ARCHIVED — Resend Note (K6, #411 item 6: code renders no persistent resend note)" |
+| `5114:6650` Card — Switched Off Until Approval in `5108:6630` | `5114:6677` "ARCHIVED — Note — SCOPE OPEN (K6, #411 item 6: answered, Grassroots limited, Sports Hub works)" |
+| `5531:7473` Content Column in `5531:7461` Guardian Consent — 5 Restricted Pending State — Mobile | `5531:7533` same name as `5114:6704` |
+| `5531:7479` Card — Switched Off Until Approval in `5531:7461` | `5531:7506` same name as `5114:6677` |
+
+Decision Log #411 item 6 and build register B-198 say the SCOPE OPEN note is "deleted"; K6 hid and renamed all four nodes instead, because this file's standing rule is that nothing is deleted unless the brief names it. A page-wide scan of 894 nodes with prototype reactions found 0 inbound references to any of the four. They can be deleted later with no effect.
 
 ## 3. Things this index does not cover
 
