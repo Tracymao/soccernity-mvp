@@ -71,6 +71,11 @@ function buildPrismaMock() {
     // that exercises either method runs through this same mock, whether
     // or not it cares about notifications — so this must exist
     // unconditionally, not just in the tests added for this PR.
+    // B-197 (Decision Log #411 item 5): the notification triggers check for a Block
+    // between actor and recipient inside their transaction.
+    block: {
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
     notification: {
       create: jest.fn(),
     },
@@ -1060,6 +1065,24 @@ describe('FeedService', () => {
         });
       });
 
+      it('B-197: creates no Notification row when a Block stands between liker and post author, but still records the like', async () => {
+        const prisma = buildPrismaMock();
+        (prisma.post.findUnique as jest.Mock).mockImplementation((args: { select?: unknown }) => {
+          const select = args.select as Record<string, unknown> | undefined;
+          if (select?.likeCount) return Promise.resolve({ likeCount: 1 });
+          return Promise.resolve({ id: 'post-1', authorId: 'post-author-1' });
+        });
+        (prisma.like.create as jest.Mock).mockResolvedValue({ id: 'like-1' });
+        (prisma.post.update as jest.Mock).mockResolvedValue({});
+        (prisma.block.findFirst as jest.Mock).mockResolvedValue({ id: 'block-1' });
+        const service = new FeedService(prisma);
+
+        await service.likePost('liker-1', 'post-1');
+
+        expect(prisma.like.create).toHaveBeenCalled();
+        expect(prisma.notification.create).not.toHaveBeenCalled();
+      });
+
       it('creates exactly one Notification row across a like followed by a duplicate (idempotent) like', async () => {
         const prisma = buildPrismaMock();
         let liked = false;
@@ -1243,6 +1266,26 @@ describe('FeedService', () => {
         const callArgs = (prisma.notification.create as jest.Mock).mock.calls[0][0];
         expect(callArgs.data.userId).toBe('post-author-1');
         expect(callArgs.data.userId).not.toBe('commenter-1');
+      });
+
+      it('B-197: creates no Notification row when a Block stands between commenter and post author, but still records the comment', async () => {
+        const prisma = buildPrismaMock();
+        (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1', authorId: 'post-author-1' });
+        (prisma.comment.create as jest.Mock).mockResolvedValue(buildCommentRow({ authorId: 'commenter-1' }));
+        (prisma.post.update as jest.Mock).mockResolvedValue({});
+        (prisma.block.findFirst as jest.Mock).mockResolvedValue({ id: 'block-1' });
+        const service = new FeedService(prisma);
+
+        await service.addComment('post-1', 'commenter-1', { contentText: 'Nice goal' });
+
+        expect(prisma.comment.create).toHaveBeenCalled();
+        expect(prisma.notification.create).not.toHaveBeenCalled();
+        expect((prisma.block.findFirst as jest.Mock).mock.calls[0][0].where).toEqual({
+          OR: [
+            { blockerId: 'commenter-1', blockedId: 'post-author-1' },
+            { blockerId: 'post-author-1', blockedId: 'commenter-1' },
+          ],
+        });
       });
 
       it('creates no Notification row when a user comments on their own post (no self-notification)', async () => {

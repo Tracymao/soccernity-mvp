@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { hasBlockBetween } from '../block/block.util';
 import {
   decodeFixtureCursor,
   decodeTeamCursor,
@@ -475,7 +476,12 @@ export class GrassrootsService {
       // (two different teams they registered themselves), in which case
       // teamAId !== teamBId is true but the recipient would still be the
       // actor -- skipped in that case.
-      if (teamBCreatedById !== null && teamBCreatedById !== userId) {
+      // B-197: and not where the two organisers have a Block between them.
+      if (
+        teamBCreatedById !== null &&
+        teamBCreatedById !== userId &&
+        !(await hasBlockBetween(tx, userId, teamBCreatedById))
+      ) {
         await tx.notification.create({
           data: {
             userId: teamBCreatedById,
@@ -617,7 +623,11 @@ export class GrassrootsService {
           userId === fixture.teamA.createdById
             ? fixture.teamB?.createdById ?? null
             : fixture.teamA.createdById;
-        if (otherManagerId !== null && otherManagerId !== userId) {
+        if (
+          otherManagerId !== null &&
+          otherManagerId !== userId &&
+          !(await hasBlockBetween(tx, userId, otherManagerId))
+        ) {
           await tx.notification.create({
             data: { userId: otherManagerId, type: 'result_logged', payloadRefId: fixtureId },
           });

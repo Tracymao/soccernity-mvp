@@ -188,6 +188,15 @@ model User {
   avatarKey    String?
   avatarStatus String?
 
+  // The cover photo (B-196, #411 item 4): the avatar pipeline with the same rule.
+  // Same three-columns-move-together shape and the same visibility gate: only an
+  // 'approved' cover is served to other users, a new upload is 'pending', and
+  // nothing sets 'approved' until B-036/B-037 exist. url, key and status are all
+  // NULL or all set (CHECK constraint in the migration).
+  coverUrl    String?
+  coverKey    String?
+  coverStatus String?
+
   // Safeguarding — required per Build Plan Section 8.3. Do not remove.
   guardian Guardian?
 

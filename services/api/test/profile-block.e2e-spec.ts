@@ -36,6 +36,7 @@ interface SeedOptions {
   profileCountry?: string | null;
   bio?: string | null;
   preferredClub?: string | null;
+  unverified?: boolean;
 }
 
 async function seedUser(app: INestApplication, o: SeedOptions) {
@@ -49,7 +50,7 @@ async function seedUser(app: INestApplication, o: SeedOptions) {
       username: o.username === undefined ? `${o.label}_${rand()}`.slice(0, 24).toLowerCase() : o.username,
       dateOfBirth: seedDob(o.minor ? '2012-03-03' : '1994-05-05'),
       isMinor: Boolean(o.minor),
-      verificationStatus: 'verified',
+      verificationStatus: o.unverified ? 'unverified' : 'verified',
       declaredCountry: o.declaredCountry ?? null,
       profileCountry: o.profileCountry ?? null,
       bio: o.bio ?? null,
@@ -383,14 +384,144 @@ describe('Block + profile content e2e (real Postgres)', () => {
     });
   });
 
-  describe('a restricted-pending user cannot block or unblock (the uniform write rule)', () => {
-    it('is refused with guardian_consent_pending and nothing is written', async () => {
+  // B-197 (Decision Log #411 item 5): Block, unblock and the blocked list need
+  // authentication only. This REPLACES the W5 test that pinned the opposite.
+  describe('Block is exempt from the consent and email-verification guards (B-197)', () => {
+    it('a restricted-pending minor can block, list and unblock', async () => {
       const minor = await seedUser(app, { label: 'minor', minor: 'pending' });
       const other = await seedUser(app, { label: 'other' });
-      const res = await block(minor, other).expect(403);
-      expect(res.body.code).toBe('guardian_consent_pending');
-      await request(http()).delete(`/users/${other.id}/block`).set(minor.auth).expect(403);
+      await block(minor, other, { reason: 'bothering me' }).expect(200);
+      expect(await getTestPrismaClient().block.count({ where: { blockerId: minor.id, blockedId: other.id } })).toBe(1);
+      const list = await request(http()).get(`/users/${minor.id}/blocks`).set(minor.auth).expect(200);
+      expect(list.body.items).toHaveLength(1);
+      await request(http()).delete(`/users/${other.id}/block`).set(minor.auth).expect(200);
       expect(await getTestPrismaClient().block.count()).toBe(0);
+    });
+
+    it('an account whose e-mail is not verified can block, list and unblock', async () => {
+      const unverified = await seedUser(app, { label: 'unv', unverified: true });
+      const other = await seedUser(app, { label: 'other' });
+      await block(unverified, other).expect(200);
+      await request(http()).get(`/users/${unverified.id}/blocks`).set(unverified.auth).expect(200);
+      await request(http()).delete(`/users/${other.id}/block`).set(unverified.auth).expect(200);
+      expect(await getTestPrismaClient().block.count()).toBe(0);
+    });
+
+    it('authentication is still required on all three routes', async () => {
+      const other = await seedUser(app, { label: 'other' });
+      await request(http()).post(`/users/${other.id}/block`).send({}).expect(401);
+      await request(http()).delete(`/users/${other.id}/block`).expect(401);
+      await request(http()).get(`/users/${other.id}/blocks`).expect(401);
+    });
+
+    it('the exemption is only from the guards: the target rules still apply (a restricted-pending TARGET is the plain 404)', async () => {
+      const minor = await seedUser(app, { label: 'minor', minor: 'pending' });
+      const pendingTarget = await seedUser(app, { label: 'target', minor: 'pending' });
+      await block(minor, pendingTarget).expect(404);
+      expect(await getTestPrismaClient().block.count()).toBe(0);
+    });
+  });
+
+  // B-197: no new Notification rows between a blocked pair; existing ones hidden both ways.
+  describe('notifications between a blocked pair (B-197)', () => {
+    const listFor = async (u: U) => (await request(http()).get('/notifications').set(u.auth).expect(200)).body;
+    const unreadFor = async (u: U) => (await request(http()).get('/notifications/unread-count').set(u.auth).expect(200)).body.unreadCount;
+
+    it('existing follow rows are hidden from BOTH sides, leave the unread count, survive read-all untouched, and reappear after unblock', async () => {
+      const a = await seedUser(app, { label: 'a' });
+      const b = await seedUser(app, { label: 'b' });
+      const c = await seedUser(app, { label: 'c' });
+      // a follows b, b follows a, c follows a: a has two follow notifications, b has one.
+      await request(http()).post(`/users/${b.id}/follow`).set(a.auth).expect(200);
+      await request(http()).post(`/users/${a.id}/follow`).set(b.auth).expect(200);
+      await request(http()).post(`/users/${a.id}/follow`).set(c.auth).expect(200);
+      expect(await unreadFor(a)).toBe(2);
+      expect(await unreadFor(b)).toBe(1);
+
+      await block(a, b).expect(200);
+
+      // a sees only c's follow; b sees nothing.
+      const aList = await listFor(a);
+      expect(aList.items).toHaveLength(1);
+      expect(aList.items[0].data.actor.id).toBe(c.id);
+      expect(aList.unreadCount).toBe(1);
+      expect(await unreadFor(a)).toBe(1);
+      expect((await listFor(b)).items).toHaveLength(0);
+      expect(await unreadFor(b)).toBe(0);
+
+      // read-all marks only the visible row; the hidden row stays unread in the database.
+      const prisma = getTestPrismaClient();
+      const hiddenRow = await prisma.notification.findFirstOrThrow({ where: { userId: a.id, type: 'follow', payloadRefId: b.id } });
+      const readAll = await request(http()).patch('/notifications/read-all').set(a.auth).expect(200);
+      expect(readAll.body.markedRead).toBe(1);
+      expect((await prisma.notification.findUniqueOrThrow({ where: { id: hiddenRow.id } })).read).toBe(false);
+      // and it cannot be marked read by id: it is the same 404 as a missing row
+      await request(http()).patch(`/notifications/${hiddenRow.id}/read`).set(a.auth).expect(404);
+
+      // hidden at read time, never deleted: unblock brings it back (still unread).
+      expect(await prisma.notification.count({ where: { userId: a.id, type: 'follow', payloadRefId: b.id } })).toBe(1);
+      await request(http()).delete(`/users/${b.id}/block`).set(a.auth).expect(200);
+      const back = await listFor(a);
+      expect(back.items.map((i: { data: { actor: { id: string } } }) => i.data.actor.id).sort()).toEqual([b.id, c.id].sort());
+      expect(await unreadFor(a)).toBe(1);
+    });
+
+    it('a message notification for a thread with the blocked user is hidden, a thread with someone else is not', async () => {
+      const a = await seedUser(app, { label: 'a' });
+      const b = await seedUser(app, { label: 'b' });
+      const c = await seedUser(app, { label: 'c' });
+      const withB = (await request(http()).post('/conversations').set(b.auth).send({ recipientId: a.id }).expect(201)).body;
+      const withC = (await request(http()).post('/conversations').set(c.auth).send({ recipientId: a.id }).expect(201)).body;
+      await request(http()).post(`/conversations/${withB.id}/messages`).set(b.auth).send({ contentText: 'hi' }).expect(201);
+      await request(http()).post(`/conversations/${withC.id}/messages`).set(c.auth).send({ contentText: 'hi' }).expect(201);
+      expect(await unreadFor(a)).toBe(2);
+
+      await block(a, b).expect(200);
+
+      const list = await listFor(a);
+      expect(list.items).toHaveLength(1);
+      expect(list.items[0].data.conversationId).toBe(withC.id);
+      expect(await unreadFor(a)).toBe(1);
+      // the blocked sender's own inbox: nothing of theirs is hidden by this rule beyond the pair
+      expect(await unreadFor(b)).toBe(0);
+    });
+
+    it('scheduling a fixture or logging a result between two blocked organisers still works but creates NO notification; an unblocked pair still does', async () => {
+      const prisma = getTestPrismaClient();
+      const a = await seedUser(app, { label: 'a' });
+      const b = await seedUser(app, { label: 'b' });
+      const c = await seedUser(app, { label: 'c' });
+      const mk = (name: string, owner: U) =>
+        prisma.grassrootsTeam.create({ data: { name, city: 'Lagos', leagueType: 'informal', createdById: owner.id } });
+      const teamA = await mk('Alpha FC', a);
+      const teamB = await mk('Beta FC', b);
+      const teamC = await mk('Gamma FC', c);
+      const when = new Date(Date.now() + 86_400_000).toISOString();
+
+      await block(a, b).expect(200);
+
+      // blocked pair: allowed (a Block does not stop Grassroots), but silent.
+      const f1 = await request(http()).post('/fixtures').set(a.auth).send({ teamAId: teamA.id, teamBId: teamB.id, scheduledAt: when }).expect(201);
+      expect(await prisma.notification.count({ where: { userId: b.id, type: 'fixture_scheduled' } })).toBe(0);
+      await request(http()).post(`/fixtures/${f1.body.id}/result`).set(a.auth).send({ scoreA: 2, scoreB: 1 }).expect(200);
+      expect(await prisma.notification.count({ where: { userId: b.id, type: 'result_logged' } })).toBe(0);
+
+      // control: an unblocked pair still gets both.
+      const f2 = await request(http()).post('/fixtures').set(a.auth).send({ teamAId: teamA.id, teamBId: teamC.id, scheduledAt: when }).expect(201);
+      expect(await prisma.notification.count({ where: { userId: c.id, type: 'fixture_scheduled', payloadRefId: f2.body.id } })).toBe(1);
+      await request(http()).post(`/fixtures/${f2.body.id}/result`).set(a.auth).send({ scoreA: 0, scoreB: 0 }).expect(200);
+      expect(await prisma.notification.count({ where: { userId: c.id, type: 'result_logged', payloadRefId: f2.body.id } })).toBe(1);
+    });
+
+    it('a Block elsewhere in the system leaves an unrelated user\'s notifications and unread count unchanged', async () => {
+      const a = await seedUser(app, { label: 'a' });
+      const b = await seedUser(app, { label: 'b' });
+      const x = await seedUser(app, { label: 'x' });
+      const y = await seedUser(app, { label: 'y' });
+      await request(http()).post(`/users/${a.id}/follow`).set(x.auth).expect(200);
+      await block(b, y).expect(200);
+      expect(await unreadFor(a)).toBe(1);
+      expect((await listFor(a)).items).toHaveLength(1);
     });
   });
 
@@ -400,7 +531,13 @@ describe('Block + profile content e2e (real Postgres)', () => {
       const a = await seedUser(app, { label: 'a', bio: 'Hello', preferredClub: 'Ikoyi', profileCountry: 'NG' });
       const b = await seedUser(app, { label: 'b' });
       const c = await seedUser(app, { label: 'c' });
-      await prisma.user.update({ where: { id: a.id }, data: { avatarUrl: 'https://x/a.jpg', avatarKey: 'avatars/a/a.jpg', avatarStatus: 'approved' } });
+      await prisma.user.update({
+        where: { id: a.id },
+        data: {
+          avatarUrl: 'https://x/a.jpg', avatarKey: 'avatars/a/a.jpg', avatarStatus: 'approved',
+          coverUrl: 'https://x/c.jpg', coverKey: 'covers/a/c.jpg', coverStatus: 'pending',
+        },
+      });
       await block(a, b).expect(200);
       await block(c, a).expect(200);
       await block(b, c).expect(200);
@@ -408,7 +545,7 @@ describe('Block + profile content e2e (real Postgres)', () => {
       await app.get(AccountDeletionSweepService).anonymizeUser(a.id, false);
 
       const row = await prisma.user.findUniqueOrThrow({ where: { id: a.id } });
-      expect(row).toMatchObject({ bio: null, preferredClub: null, profileCountry: null, avatarUrl: null, avatarKey: null, avatarStatus: null, accountStatus: 'deleted' });
+      expect(row).toMatchObject({ bio: null, preferredClub: null, profileCountry: null, avatarUrl: null, avatarKey: null, avatarStatus: null, coverUrl: null, coverKey: null, coverStatus: null, accountStatus: 'deleted' });
       const left = await prisma.block.findMany();
       expect(left).toHaveLength(1);
       expect(left[0]).toMatchObject({ blockerId: b.id, blockedId: c.id });
@@ -447,6 +584,8 @@ describe('Block + profile content e2e (real Postgres)', () => {
       await expect(prisma.user.update({ where: { id: u.id }, data: { bio: 'x'.repeat(161) } })).rejects.toThrow();
       await expect(prisma.user.update({ where: { id: u.id }, data: { avatarUrl: 'https://x/a.jpg' } })).rejects.toThrow(); // avatar columns move together
       await expect(prisma.user.update({ where: { id: u.id }, data: { avatarUrl: 'u', avatarKey: 'k', avatarStatus: 'live' } })).rejects.toThrow();
+      await expect(prisma.user.update({ where: { id: u.id }, data: { coverUrl: 'https://x/c.jpg' } })).rejects.toThrow(); // cover columns move together
+      await expect(prisma.user.update({ where: { id: u.id }, data: { coverUrl: 'u', coverKey: 'k', coverStatus: 'live' } })).rejects.toThrow();
     });
 
     it('sensitive-content screen: a flagged bio or preferred club is a coded 422 "please rephrase", nothing saved, text never echoed', async () => {
@@ -464,7 +603,7 @@ describe('Block + profile content e2e (real Postgres)', () => {
 
     it('PATCH can never write the safeguarding country or the avatar columns (400, forbidNonWhitelisted)', async () => {
       const u = await seedUser(app, { label: 'u', declaredCountry: 'US' });
-      for (const body of [{ declaredCountry: 'GB' }, { derivedCountry: 'GB' }, { avatarUrl: 'x' }, { avatarStatus: 'approved' }]) {
+      for (const body of [{ declaredCountry: 'GB' }, { derivedCountry: 'GB' }, { avatarUrl: 'x' }, { avatarStatus: 'approved' }, { coverUrl: 'x' }, { coverStatus: 'approved' }]) {
         await request(http()).patch(`/users/${u.id}`).set(u.auth).send(body).expect(400);
       }
       expect((await getTestPrismaClient().user.findUniqueOrThrow({ where: { id: u.id } })).declaredCountry).toBe('US');
@@ -499,6 +638,27 @@ describe('Block + profile content e2e (real Postgres)', () => {
       const t = await seedUser(app, { label: 'target' });
       await request(http()).post(`/users/${t.id}/follow`).set(viewer.auth).expect(200);
       expect((await request(http()).get(`/users/${t.id}/public-profile`).set(viewer.auth).expect(200)).body.isFollowing).toBe(true);
+    });
+  });
+
+  describe('cover photo upload without an object store (B-196)', () => {
+    it('answers 503 EXACTLY as the admin upload and the avatar do, and writes nothing', async () => {
+      const u = await seedUser(app, { label: 'u' });
+      const admin = await getTestPrismaClient().adminUser.create({
+        data: { email: `e2e-w6-admin-${rand()}@example.com`, passwordHash: 'unused', fullName: 'W6 editor', role: 'editor' },
+      });
+      const adminToken = (await app.get(AdminTokenService).issueTokenPair(admin.id, admin.role)).accessToken.token;
+
+      const cover = await request(http()).post(`/users/${u.id}/cover`).set(u.auth).attach('file', JPEG, { filename: 'c.jpg', contentType: 'image/jpeg' });
+      const avatar = await request(http()).post(`/users/${u.id}/avatar`).set(u.auth).attach('file', JPEG, { filename: 'a.jpg', contentType: 'image/jpeg' });
+      const adminRes = await request(http()).post('/admin/media/upload').set(bearer(adminToken)).attach('file', JPEG, { filename: 'a.jpg', contentType: 'image/jpeg' });
+
+      expect(adminRes.status).toBe(503);
+      expect(cover.status).toBe(503);
+      expect(cover.body).toEqual(adminRes.body);
+      expect(cover.body).toEqual(avatar.body);
+      const row = await getTestPrismaClient().user.findUniqueOrThrow({ where: { id: u.id } });
+      expect(row).toMatchObject({ coverUrl: null, coverKey: null, coverStatus: null });
     });
   });
 
@@ -625,5 +785,140 @@ describe('Avatar lifecycle e2e (fake object store)', () => {
     await upload(owner, JPEG, 'image/jpeg').expect(503);
     const row = await getTestPrismaClient().user.findUniqueOrThrow({ where: { id: owner.id } });
     expect(row.avatarUrl).toBe(first.body.avatar.url);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe('Cover photo lifecycle e2e (fake object store, B-196)', () => {
+  let app: INestApplication;
+  const http = () => app.getHttpServer();
+  const store = new Map<string, Buffer>();
+  const fake = {
+    upload: jest.fn(async (buffer: Buffer, key: string) => {
+      store.set(key, buffer);
+      return `https://cdn.test/${key}`;
+    }),
+    delete: jest.fn(async (key: string) => {
+      store.delete(key);
+    }),
+  };
+
+  beforeAll(async () => {
+    app = await bootApp((b) => b.overrideProvider(StorageService).useValue(fake));
+  });
+  beforeEach(async () => {
+    await resetDatabase();
+    store.clear();
+    jest.clearAllMocks();
+  });
+  afterAll(async () => {
+    await app.close();
+    await disconnectTestPrismaClient();
+  });
+
+  const upload = (u: U, buf: Buffer, type: string) =>
+    request(http()).post(`/users/${u.id}/cover`).set(u.auth).attach('file', buf, { filename: 'p', contentType: type });
+
+  it('a new upload is PENDING: the owner sees it, no other user does, and only an approved cover is served', async () => {
+    const owner = await seedUser(app, { label: 'owner' });
+    const viewer = await seedUser(app, { label: 'viewer' });
+    const res = await upload(owner, JPEG, 'image/jpeg').expect(201);
+    expect(res.body.cover.status).toBe('pending');
+    expect(res.body.cover.url).toMatch(new RegExp(`^https://cdn.test/covers/${owner.id}/[0-9a-f-]{36}\\.jpg$`));
+    expect(store.size).toBe(1);
+
+    const mine = await request(http()).get(`/users/${owner.id}`).set(owner.auth).expect(200);
+    expect(mine.body.cover).toEqual(res.body.cover);
+    expect(mine.body.avatar).toBeNull(); // the two pictures are independent
+    expect(JSON.stringify(mine.body)).not.toContain('"coverKey"');
+    expect((await request(http()).get(`/users/${owner.id}/public-profile`).set(viewer.auth).expect(200)).body.coverUrl).toBeNull();
+
+    // The status flip belongs to the (unbuilt) image check, B-036; simulate it directly.
+    await getTestPrismaClient().user.update({ where: { id: owner.id }, data: { coverStatus: 'approved' } });
+    expect((await request(http()).get(`/users/${owner.id}/public-profile`).set(viewer.auth).expect(200)).body.coverUrl).toBe(res.body.cover.url);
+    await getTestPrismaClient().user.update({ where: { id: owner.id }, data: { coverStatus: 'rejected' } });
+    expect((await request(http()).get(`/users/${owner.id}/public-profile`).set(viewer.auth).expect(200)).body.coverUrl).toBeNull();
+  });
+
+  it('the cover and the avatar are independent: uploading one never touches the other', async () => {
+    const owner = await seedUser(app, { label: 'owner' });
+    await request(http()).post(`/users/${owner.id}/avatar`).set(owner.auth).attach('file', JPEG, { filename: 'p', contentType: 'image/jpeg' }).expect(201);
+    await upload(owner, JPEG, 'image/jpeg').expect(201);
+    expect(store.size).toBe(2);
+    await request(http()).delete(`/users/${owner.id}/cover`).set(owner.auth).expect(200);
+    const row = await getTestPrismaClient().user.findUniqueOrThrow({ where: { id: owner.id } });
+    expect(row.avatarUrl).not.toBeNull();
+    expect(row).toMatchObject({ coverUrl: null, coverKey: null, coverStatus: null });
+    expect(store.size).toBe(1);
+  });
+
+  it('replacing removes the previous object and re-enters review (pending again)', async () => {
+    const owner = await seedUser(app, { label: 'owner' });
+    const first = await upload(owner, JPEG, 'image/jpeg').expect(201);
+    await getTestPrismaClient().user.update({ where: { id: owner.id }, data: { coverStatus: 'approved' } });
+    const second = await upload(owner, JPEG, 'image/jpeg').expect(201);
+    expect(second.body.cover.url).not.toBe(first.body.cover.url);
+    expect(store.size).toBe(1);
+    expect((await getTestPrismaClient().user.findUniqueOrThrow({ where: { id: owner.id } })).coverStatus).toBe('pending');
+  });
+
+  it('refuses a wrong type, a mislabelled file, an empty body and an oversize file; nothing reaches storage', async () => {
+    const owner = await seedUser(app, { label: 'owner' });
+    await upload(owner, Buffer.from('GIF89a......'), 'image/gif').expect(400);
+    await upload(owner, Buffer.from('<html></html>'), 'image/png').expect(400);
+    await request(http()).post(`/users/${owner.id}/cover`).set(owner.auth).expect(400);
+    await upload(owner, Buffer.alloc(5 * 1024 * 1024 + 1024), 'image/jpeg').expect(413);
+    expect(fake.upload).not.toHaveBeenCalled();
+  });
+
+  it("only your own cover: another user's id is 403; a restricted-pending minor, an unverified account and a missing token are refused", async () => {
+    const owner = await seedUser(app, { label: 'owner' });
+    const other = await seedUser(app, { label: 'other' });
+    const minor = await seedUser(app, { label: 'minor', minor: 'pending' });
+    const unverified = await seedUser(app, { label: 'unv', unverified: true });
+    await request(http()).post(`/users/${other.id}/cover`).set(owner.auth).attach('file', JPEG, { filename: 'p', contentType: 'image/jpeg' }).expect(403);
+    const m = await upload(minor, JPEG, 'image/jpeg').expect(403);
+    expect(m.body.code).toBe('guardian_consent_pending');
+    const e = await upload(unverified, JPEG, 'image/jpeg').expect(403);
+    expect(e.body.code).toBe('email_verification_required');
+    await request(http()).post(`/users/${owner.id}/cover`).attach('file', JPEG, { filename: 'p', contentType: 'image/jpeg' }).expect(401);
+    expect(fake.upload).not.toHaveBeenCalled();
+  });
+
+  it('is allowed BEFORE the username exists (optional at Create Profile)', async () => {
+    const fresh = await seedUser(app, { label: 'fresh', username: null });
+    await upload(fresh, JPEG, 'image/jpeg').expect(201);
+  });
+
+  it('DELETE clears the reference and the object; a second DELETE is a 200 no-op', async () => {
+    const owner = await seedUser(app, { label: 'owner' });
+    await upload(owner, JPEG, 'image/jpeg').expect(201);
+    await request(http()).delete(`/users/${owner.id}/cover`).set(owner.auth).expect(200);
+    expect(store.size).toBe(0);
+    expect(await getTestPrismaClient().user.findUniqueOrThrow({ where: { id: owner.id } })).toMatchObject({ coverUrl: null, coverKey: null, coverStatus: null });
+    await request(http()).delete(`/users/${owner.id}/cover`).set(owner.auth).expect(200);
+  });
+
+  it('a storage outage is a 503 and leaves the previous cover untouched', async () => {
+    const owner = await seedUser(app, { label: 'owner' });
+    const first = await upload(owner, JPEG, 'image/jpeg').expect(201);
+    fake.upload.mockRejectedValueOnce(new ServiceUnavailableException('down'));
+    await upload(owner, JPEG, 'image/jpeg').expect(503);
+    const row = await getTestPrismaClient().user.findUniqueOrThrow({ where: { id: owner.id } });
+    expect(row.coverUrl).toBe(first.body.cover.url);
+  });
+
+  it('anonymization clears the cover reference AND removes the cover object from the store', async () => {
+    const owner = await seedUser(app, { label: 'owner' });
+    await request(http()).post(`/users/${owner.id}/avatar`).set(owner.auth).attach('file', JPEG, { filename: 'p', contentType: 'image/jpeg' }).expect(201);
+    await upload(owner, JPEG, 'image/jpeg').expect(201);
+    expect(store.size).toBe(2);
+
+    await app.get(AccountDeletionSweepService).anonymizeUser(owner.id, false);
+
+    expect(store.size).toBe(0);
+    expect(await getTestPrismaClient().user.findUniqueOrThrow({ where: { id: owner.id } })).toMatchObject({
+      avatarUrl: null, coverUrl: null, coverKey: null, coverStatus: null, accountStatus: 'deleted',
+    });
   });
 });

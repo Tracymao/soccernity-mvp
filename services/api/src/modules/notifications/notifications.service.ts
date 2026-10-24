@@ -8,6 +8,7 @@ import {
 import { decodeNotificationCursor, encodeNotificationCursor } from './cursor.util';
 import { NotificationsQueryDto } from './dto/notifications-query.dto';
 import { PUBLIC_NAME_SELECT, toPublicUser } from '../users/public-name.util';
+import { notificationBlockHiddenFilter } from './block-visibility.util';
 
 // The seven real MVP notification types — see schema.prisma's own comment
 // on Notification.type for the authoritative list and where each is
@@ -172,7 +173,8 @@ export class NotificationsService {
   ): Promise<NotificationPage> {
     const limit = Math.min(query.limit ?? NOTIFICATIONS_DEFAULT_PAGE_SIZE, NOTIFICATIONS_MAX_PAGE_SIZE);
 
-    const base: Prisma.NotificationWhereInput = { userId };
+    const hidden = await notificationBlockHiddenFilter(this.prisma, userId);
+    const base: Prisma.NotificationWhereInput = { userId, ...hidden };
     const where: Prisma.NotificationWhereInput = query.cursor
       ? { AND: [base, this.buildCursorFilter(query.cursor)] }
       : base;
@@ -184,7 +186,7 @@ export class NotificationsService {
         take: limit + 1,
         select: NOTIFICATION_ROW_SELECT,
       }),
-      this.getUnreadCount(userId),
+      this.getUnreadCount(userId, hidden),
     ]);
 
     const hasMore = rows.length > limit;
@@ -202,8 +204,12 @@ export class NotificationsService {
   // into GET /notifications alone. The Navbar avatar/badge renders on
   // EVERY page (Header.tsx), so it needs the count without paying for a
   // resolved 20-item page it will never render.
-  async getUnreadCount(userId: string): Promise<number> {
-    return this.prisma.notification.count({ where: { userId, read: false } });
+  async getUnreadCount(
+    userId: string,
+    hiddenByBlock?: Prisma.NotificationWhereInput,
+  ): Promise<number> {
+    const hidden = hiddenByBlock ?? (await notificationBlockHiddenFilter(this.prisma, userId));
+    return this.prisma.notification.count({ where: { userId, read: false, ...hidden } });
   }
 
   // PATCH /notifications/:id/read — marks one notification read.
@@ -216,11 +222,13 @@ export class NotificationsService {
   // philosophy for like/save/follow, applied here to a boolean flip
   // rather than a toggle relationship.
   async markRead(userId: string, notificationId: string): Promise<NotificationView> {
-    const row = await this.prisma.notification.findUnique({
-      where: { id: notificationId },
+    // B-197: a row hidden by a Block is not visible to its owner, so it is the
+    // same 404 as a missing row (and is left untouched).
+    const row = await this.prisma.notification.findFirst({
+      where: { id: notificationId, userId, ...(await notificationBlockHiddenFilter(this.prisma, userId)) },
       select: NOTIFICATION_ROW_SELECT,
     });
-    if (!row || row.userId !== userId) {
+    if (!row) {
       throw new NotFoundException('Notification not found');
     }
 
@@ -239,8 +247,9 @@ export class NotificationsService {
   // caller. Mirrors MessagingService.markConversationRead's own
   // `{ markedRead }` shape.
   async markAllRead(userId: string): Promise<{ markedRead: number }> {
+    // B-197: rows hidden by a Block are left untouched (and not counted).
     const result = await this.prisma.notification.updateMany({
-      where: { userId, read: false },
+      where: { userId, read: false, ...(await notificationBlockHiddenFilter(this.prisma, userId)) },
       data: { read: true },
     });
     return { markedRead: result.count };

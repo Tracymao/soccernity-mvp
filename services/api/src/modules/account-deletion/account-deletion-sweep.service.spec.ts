@@ -78,6 +78,37 @@ describe('AccountDeletionSweepService', () => {
       expect(prisma.user.update).toHaveBeenCalled();
     });
 
+    // B-196: the cover photo object goes the same way.
+    it('removes the avatar object AND the cover photo object, each by its own key', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        avatarKey: 'avatars/user-1/abc.jpg',
+        coverKey: 'covers/user-1/def.png',
+      });
+      const storage = { upload: jest.fn(), delete: jest.fn().mockResolvedValue(undefined) };
+
+      await new AccountDeletionSweepService(prisma, storage).anonymizeUser('user-1', false);
+
+      expect(storage.delete).toHaveBeenCalledWith('avatars/user-1/abc.jpg');
+      expect(storage.delete).toHaveBeenCalledWith('covers/user-1/def.png');
+      expect(storage.delete).toHaveBeenCalledTimes(2);
+    });
+
+    it('a failed avatar removal does not stop the cover removal, and never fails the anonymization', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        avatarKey: 'avatars/user-1/abc.jpg',
+        coverKey: 'covers/user-1/def.png',
+      });
+      const storage = {
+        upload: jest.fn(),
+        delete: jest.fn().mockRejectedValueOnce(new Error('503')).mockResolvedValue(undefined),
+      };
+
+      await expect(new AccountDeletionSweepService(prisma, storage).anonymizeUser('user-1', false)).resolves.toBeUndefined();
+      expect(storage.delete).toHaveBeenCalledWith('covers/user-1/def.png');
+    });
+
     it('does not touch storage when the user had no avatar', async () => {
       const prisma = buildPrismaMock();
       const storage = { upload: jest.fn(), delete: jest.fn() };
@@ -168,6 +199,10 @@ describe('AccountDeletionSweepService', () => {
           avatarUrl: null,
           avatarKey: null,
           avatarStatus: null,
+          // B-196: the cover photo reference is cleared too.
+          coverUrl: null,
+          coverKey: null,
+          coverStatus: null,
           accountStatus: 'deleted',
           pendingDeletionAt: null,
         },

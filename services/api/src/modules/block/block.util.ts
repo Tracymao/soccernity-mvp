@@ -26,6 +26,19 @@ export function blockedPairWhere(a: string, b: string): Prisma.BlockWhereInput {
   };
 }
 
+// B-197 (Decision Log #411 item 5): no NEW Notification row is created where the
+// actor and the recipient have a Block between them, in either direction. Used
+// inside the trigger transactions so the check and the insert are one unit.
+// Accepts a transaction client or the service (only `block.findFirst` is needed).
+export async function hasBlockBetween(
+  db: { block: { findFirst: (args: Prisma.BlockFindFirstArgs) => Promise<unknown> } },
+  actorId: string,
+  recipientId: string,
+): Promise<boolean> {
+  const row = await db.block.findFirst({ where: blockedPairWhere(actorId, recipientId), select: { id: true } });
+  return row !== null && row !== undefined;
+}
+
 export type BlockRelation = 'none' | 'viewer_blocked_other' | 'other_blocked_viewer';
 
 // What stands between `viewerId` and `otherId`. A pair can in principle be

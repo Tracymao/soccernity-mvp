@@ -76,6 +76,10 @@ const FULL_DB_ROW = {
   avatarUrl: null as string | null,
   avatarKey: null as string | null,
   avatarStatus: null as string | null,
+  // B-196: cover photo columns.
+  coverUrl: null as string | null,
+  coverKey: null as string | null,
+  coverStatus: null as string | null,
   guardian: null as { email: string; consentStatus?: string } | null,
 };
 
@@ -219,6 +223,8 @@ describe('UsersService', () => {
       profileCountry: null,
       avatarUrl: null,
       avatarStatus: null,
+      coverUrl: null,
+      coverStatus: null,
       ...over,
     });
     const run = async (r: unknown) => {
@@ -236,9 +242,20 @@ describe('UsersService', () => {
         bio: null,
         country: null,
         avatarUrl: null,
+        coverUrl: null,
         isFollowing: false,
         viewerHasBlocked: false,
       });
+    });
+
+    // B-196: the cover photo follows the avatar's rule exactly - only 'approved' is served.
+    it.each([
+      ['pending', null],
+      ['rejected', null],
+      ['approved', 'https://cdn/c.jpg'],
+    ])('serves a %s cover to another viewer as %s', async (status, expected) => {
+      const result = await run(row({ coverUrl: 'https://cdn/c.jpg', coverStatus: status }));
+      expect(result.coverUrl).toBe(expected);
     });
 
     it('also shows it for a 16-17 minor', async () => {
@@ -328,6 +345,19 @@ describe('UsersService', () => {
   });
 
   describe('followUser / unfollowUser', () => {
+    it('B-197: records the follow but creates no Notification when a Block stands between the pair', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'followee-1' });
+      (prisma.follow.create as jest.Mock).mockResolvedValue({ id: 'follow-1' });
+      (prisma.block.findFirst as jest.Mock).mockResolvedValue({ id: 'block-1' });
+      const service = new UsersService(prisma, buildTestDobEncryption(), policyStub());
+
+      await expect(service.followUser('follower-1', 'followee-1')).resolves.toEqual({ following: true });
+
+      expect(prisma.follow.create).toHaveBeenCalled();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
     it('rejects a self-follow with BadRequestException, without querying Prisma at all', async () => {
       const prisma = buildPrismaMock();
       const service = new UsersService(prisma, buildTestDobEncryption(), policyStub());

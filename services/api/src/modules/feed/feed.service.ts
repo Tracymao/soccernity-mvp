@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { notBlockedWith } from '../block/block.util';
+import { hasBlockBetween, notBlockedWith } from '../block/block.util';
 import { ENGAGEMENT_POINTS } from '../points/points.constants';
 import { awardPoints } from '../points/points.util';
 import { recordPostHashtags } from '../search/hashtag.util';
@@ -645,7 +645,7 @@ export class FeedService {
       await this.prisma.$transaction(async (tx) => {
         await tx.like.create({ data: { userId, postId } });
         await tx.post.update({ where: { id: postId }, data: { likeCount: { increment: 1 } } });
-        if (post.authorId !== userId) {
+        if (post.authorId !== userId && !(await hasBlockBetween(tx, userId, post.authorId))) {
           await tx.notification.create({
             data: { userId: post.authorId, type: 'like', payloadRefId: postId },
           });
@@ -758,7 +758,7 @@ export class FeedService {
         select: COMMENT_SELECT,
       });
       await tx.post.update({ where: { id: postId }, data: { commentCount: { increment: 1 } } });
-      if (post.authorId !== authorId) {
+      if (post.authorId !== authorId && !(await hasBlockBetween(tx, authorId, post.authorId))) {
         await tx.notification.create({
           data: { userId: post.authorId, type: 'comment', payloadRefId: postId },
         });

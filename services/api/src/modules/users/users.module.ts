@@ -4,6 +4,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { StorageModule } from '../../storage/storage.module';
 import { UserAvatarController } from './user-avatar.controller';
 import { UserAvatarService } from './user-avatar.service';
+import { UserCoverController } from './user-cover.controller';
+import { UserCoverService } from './user-cover.service';
 import { UsersController } from './users.controller';
 import { UsernamePolicyService } from './username-policy.service';
 import { UsersService } from './users.service';
@@ -22,7 +24,7 @@ import { UsersService } from './users.service';
 // StorageService the admin media upload uses.
 @Module({
   imports: [AuthFoundationModule, StorageModule],
-  controllers: [UsersController, UserAvatarController],
-  providers: [UsersService, UsernamePolicyService, UserAvatarService, PrismaService],
+  controllers: [UsersController, UserAvatarController, UserCoverController],
+  providers: [UsersService, UsernamePolicyService, UserAvatarService, UserCoverService, PrismaService],
 })
 export class UsersModule {}

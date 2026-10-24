@@ -1,35 +1,19 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
+import {
+  PROFILE_IMAGE_MAX_FILE_SIZE_BYTES,
+  PROFILE_IMAGE_UNSUPPORTED_MESSAGE,
+  validateProfileImage,
+} from './profile-image.util';
 
 // backend/w5-profile-block (B-035; Decision Log #371, #394 A2, #307).
 //
-// 5 MB: an avatar is a small square picture, not media. Adopted default (the
-// Decision Log fixes no size); the admin media route's 50 MB is for video.
-export const AVATAR_MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
-
-// JPEG, PNG and WebP only. No GIF (animated avatars are a moderation burden the
-// automatic image check, B-036, is not designed for) and no video. Adopted
-// default, veto-able.
-const AVATAR_TYPES = {
-  'image/jpeg': { ext: 'jpg', magic: (b: Buffer) => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
-  'image/png': {
-    ext: 'png',
-    magic: (b: Buffer) =>
-      b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 && b[4] === 0x0d && b[5] === 0x0a,
-  },
-  'image/webp': {
-    ext: 'webp',
-    magic: (b: Buffer) =>
-      b.length > 12 &&
-      b.subarray(0, 4).toString('ascii') === 'RIFF' &&
-      b.subarray(8, 12).toString('ascii') === 'WEBP',
-  },
-} as const;
-type AvatarMime = keyof typeof AVATAR_TYPES;
-
-export const AVATAR_UNSUPPORTED_MESSAGE = 'Please choose a JPEG, PNG or WebP picture.';
+// File rules are shared with the cover photo (profile-image.util.ts, B-196):
+// JPEG/PNG/WebP only, 5 MB, magic bytes must match the declared type.
+export const AVATAR_MAX_FILE_SIZE_BYTES = PROFILE_IMAGE_MAX_FILE_SIZE_BYTES;
+export const AVATAR_UNSUPPORTED_MESSAGE = PROFILE_IMAGE_UNSUPPORTED_MESSAGE;
 
 export interface UploadedAvatarFile {
   buffer: Buffer;
@@ -72,18 +56,11 @@ export class UserAvatarService {
   // store it (so an unconfigured store is a 503 BEFORE any database write), then
   // point the row at it, then remove the previous object best-effort.
   async uploadAvatar(userId: string, file: UploadedAvatarFile | undefined): Promise<AvatarResult> {
-    if (!file || !file.buffer || file.buffer.length === 0) {
-      throw new BadRequestException('No file was attached to this upload.');
-    }
-    const type = AVATAR_TYPES[file.mimetype as AvatarMime];
-    // The declared type must be allowed AND the bytes must really start like that
-    // format, so a renamed or mislabelled file is refused (same message either way).
-    if (!type || !type.magic(file.buffer)) {
-      throw new BadRequestException(AVATAR_UNSUPPORTED_MESSAGE);
-    }
+    const type = validateProfileImage(file);
+    const upload = file as UploadedAvatarFile;
 
     const key = `avatars/${userId}/${randomUUID()}.${type.ext}`;
-    const url = await this.storage.upload(file.buffer, key, file.mimetype);
+    const url = await this.storage.upload(upload.buffer, key, upload.mimetype);
 
     const previous = await this.prisma.user.findUnique({ where: { id: userId }, select: { avatarKey: true } });
     try {

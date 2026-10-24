@@ -154,11 +154,14 @@ export const PROFANITY_CONTAINS_GUARDED: ReadonlyArray<{ term: string; innocent:
   { term: 'nazi', innocent: ['nazir', 'nazim', 'nazia', 'nazih', 'nazik'] },
 ];
 
-// B-165 (Decision Log #408 item 3): real given names that start with 'nazi'.
-// Allowed only when the handle IS the name (letters and digits with underscores
-// removed, no digit-to-letter mapping); this exempts the CONTAINS rule above and
-// nothing else. 'nazifan', 'nazifah_fan', 'xxnazifxx' and 'nazif_10' are NOT
-// covered and stay refused; whether suffixes should be accepted is not decided.
+// B-165 / B-181 (Decision Log #408 item 3, #410 item 2, #411 item 9): real given
+// names that start with 'nazi'. A handle is allowed when, AS TYPED and compared
+// case-insensitively, it is one of these names exactly, or the name followed only
+// by digits (optionally one underscore between: 'nazifa2', 'nazif_10'). There is
+// NO underscore removal, so 'naz_ifa', '_nazif_' and 'nazi_f' are refused, and so
+// are 'nazifan', 'nazifan_10', 'nazif_an' and 'xnazifa'. The allowance exempts the
+// guarded 'nazi' CONTAINS rule only; every other rule still runs on the handle.
+// Not decided (B-181): a limit on the number of digits, digits before the name.
 export const PROFANITY_ALLOWED_WHOLE_HANDLES: readonly string[] = ['nazif', 'nazifa', 'nazifah'];
 
 export const PROFANITY_EXACT:readonly string[] = [

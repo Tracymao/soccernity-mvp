@@ -44,6 +44,8 @@ function buildPrismaMock() {
     // B-039 (Block): one read per attempt, between the caller and the other party.
     block: {
       findMany: jest.fn().mockResolvedValue([]),
+      // B-197: sendMessage checks for a Block before creating the notification.
+      findFirst: jest.fn().mockResolvedValue(null),
     },
     notification: {
       create: jest.fn(),
@@ -516,6 +518,18 @@ describe('MessagingService', () => {
       expect(p().notification.create).toHaveBeenCalledWith({
         data: { userId: RECIPIENT, type: 'message', payloadRefId: 'convo-1' },
       });
+    });
+
+    it('B-197: creates no message Notification when a Block stands between sender and recipient, but still records the message', async () => {
+      p().conversation.findUnique.mockResolvedValue(conversationRow());
+      p().message.create.mockResolvedValue({ id: 'm-3', sentAt: new Date() });
+      p().notification.findFirst.mockResolvedValue(null);
+      p().block.findFirst.mockResolvedValue({ id: 'block-1' });
+
+      await service.sendMessage('convo-1', CALLER, { contentText: 'hi' });
+
+      expect(p().message.create).toHaveBeenCalled();
+      expect(p().notification.create).not.toHaveBeenCalled();
     });
 
     it('does NOT create a second message Notification while an unread one already exists for this conversation (collapsed, not one row per message)', async () => {

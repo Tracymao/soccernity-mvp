@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   blockedPairWhere,
+  hasBlockBetween,
   relationFromRows,
   YOU_BLOCKED_THIS_USER_CODE,
   YOU_BLOCKED_THIS_USER_MESSAGE,
@@ -407,7 +408,10 @@ export class MessagingService {
         where: { id: conversationId },
         data: { lastMessageAt: message.sentAt },
       });
-      if (recipientId !== null && recipientId !== senderId) {
+      // B-197: no new Notification where sender and recipient have a Block between
+      // them (sending itself is refused earlier; this covers a Block landing in
+      // between and keeps the rule in one place).
+      if (recipientId !== null && recipientId !== senderId && !(await hasBlockBetween(tx, senderId, recipientId))) {
         const existingUnread = await tx.notification.findFirst({
           where: {
             userId: recipientId,
