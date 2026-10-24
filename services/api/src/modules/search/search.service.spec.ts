@@ -379,4 +379,41 @@ describe('SearchService', () => {
       });
     });
   });
+
+  // B-039 (Block, Decision Log #396, #402 item 4): a logged-in viewer's blocks (either
+  // direction) hide people and posts; an anonymous caller has none.
+  describe('Block filter', () => {
+    const notBlocked = { blockedBy: { none: { blockerId: 'viewer-1' } }, blocksMade: { none: { blockedId: 'viewer-1' } } };
+
+    it('people search ANDs the not-blocked filter for a viewer', async () => {
+      const prisma = buildPrismaMock();
+      await new SearchService(prisma).searchUsers('chelsea', undefined, 20, 'viewer-1');
+      const call = (prisma.user.findMany as jest.Mock).mock.calls[0][0];
+      expect(call.where.AND).toEqual(expect.arrayContaining([notBlocked]));
+    });
+
+    it('post search ANDs the not-blocked author filter for a viewer', async () => {
+      const prisma = buildPrismaMock();
+      await new SearchService(prisma).searchPosts('chelsea', undefined, 20, 'viewer-1');
+      const call = (prisma.post.findMany as jest.Mock).mock.calls[0][0];
+      expect(call.where.AND).toEqual(expect.arrayContaining([{ author: { is: notBlocked } }]));
+    });
+
+    it('anonymous callers get no block clause at all', async () => {
+      const prisma = buildPrismaMock();
+      const service = new SearchService(prisma);
+      await service.searchUsers('chelsea', undefined, 20);
+      await service.searchPosts('chelsea', undefined, 20);
+      expect(JSON.stringify((prisma.user.findMany as jest.Mock).mock.calls[0][0])).not.toContain('blockedBy');
+      expect(JSON.stringify((prisma.post.findMany as jest.Mock).mock.calls[0][0])).not.toContain('blockedBy');
+    });
+
+    it('search() passes the viewer to users and posts but clubs have no per-user rule', async () => {
+      const prisma = buildPrismaMock();
+      await new SearchService(prisma).search({ q: 'chelsea' }, 'viewer-1');
+      expect(JSON.stringify((prisma.user.findMany as jest.Mock).mock.calls[0][0])).toContain('blockedBy');
+      expect(JSON.stringify((prisma.post.findMany as jest.Mock).mock.calls[0][0])).toContain('blockedBy');
+      expect(JSON.stringify((prisma.clubPage.findMany as jest.Mock).mock.calls[0][0])).not.toContain('blockedBy');
+    });
+  });
 });

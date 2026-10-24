@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StorageModule } from '../../storage/storage.module';
 import { AccountDeletionSweepService } from './account-deletion-sweep.service';
 
 // sprint-2/account-deletion-sweep — Build Plan Section 9, Decision Log
@@ -10,6 +11,8 @@ import { AccountDeletionSweepService } from './account-deletion-sweep.service';
 // app.module.ts — @Cron() decorators anywhere in the app need it, so it
 // doesn't belong to this module specifically.
 @Module({
+  // StorageModule: lets anonymizeUser remove the user's avatar object (B-035).
+  imports: [StorageModule],
   providers: [AccountDeletionSweepService, PrismaService],
   exports: [AccountDeletionSweepService],
 })

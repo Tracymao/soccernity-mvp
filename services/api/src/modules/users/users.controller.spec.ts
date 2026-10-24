@@ -116,17 +116,17 @@ describe('UsersController', () => {
     it('passes :id and the query straight through to UsersService.getFollowers — no self-scoping', async () => {
       const { controller, usersService } = buildController();
 
-      await controller.followers('someone-elses-id', { cursor: 'abc', limit: 5 });
+      await controller.followers('someone-elses-id', { cursor: 'abc', limit: 5 }, { sub: 'user-1', role: 'fan' });
 
-      expect(usersService.getFollowers).toHaveBeenCalledWith('someone-elses-id', { cursor: 'abc', limit: 5 });
+      expect(usersService.getFollowers).toHaveBeenCalledWith('someone-elses-id', { cursor: 'abc', limit: 5 }, 'user-1');
     });
 
     it('passes :id and the query straight through to UsersService.getFollowing — no self-scoping', async () => {
       const { controller, usersService } = buildController();
 
-      await controller.following('someone-elses-id', { cursor: 'abc', limit: 5 });
+      await controller.following('someone-elses-id', { cursor: 'abc', limit: 5 }, { sub: 'user-1', role: 'fan' });
 
-      expect(usersService.getFollowing).toHaveBeenCalledWith('someone-elses-id', { cursor: 'abc', limit: 5 });
+      expect(usersService.getFollowing).toHaveBeenCalledWith('someone-elses-id', { cursor: 'abc', limit: 5 }, 'user-1');
     });
   });
 });

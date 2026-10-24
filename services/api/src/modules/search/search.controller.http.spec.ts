@@ -1,5 +1,7 @@
 import { BadRequestException, INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { ExecutionContext } from '@nestjs/common';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import * as request from 'supertest';
 import { SearchController } from './search.controller';
 import { SearchService } from './search.service';
@@ -13,12 +15,24 @@ import { SearchService } from './search.service';
 describe('SearchController (HTTP layer)', () => {
   let app: INestApplication;
   const searchService = { search: jest.fn() };
+  // B-039: GET /search reads the bearer token OPTIONALLY (still public). The real
+  // OptionalJwtAuthGuard is covered by its own spec; here it is replaced by one
+  // that sets whatever caller the test wants (or none).
+  let caller: { sub: string; role: string } | undefined;
 
   async function buildApp() {
     const moduleRef = await Test.createTestingModule({
       controllers: [SearchController],
       providers: [{ provide: SearchService, useValue: searchService }],
-    }).compile();
+    })
+      .overrideGuard(OptionalJwtAuthGuard)
+      .useValue({
+        canActivate: (ctx: ExecutionContext) => {
+          if (caller) ctx.switchToHttp().getRequest().user = caller;
+          return true;
+        },
+      })
+      .compile();
 
     const nestApp = moduleRef.createNestApplication();
     nestApp.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
@@ -27,6 +41,7 @@ describe('SearchController (HTTP layer)', () => {
   }
 
   beforeEach(async () => {
+    caller = undefined;
     app = await buildApp();
   });
 
@@ -44,7 +59,19 @@ describe('SearchController (HTTP layer)', () => {
 
     await request(app.getHttpServer()).get('/search').query({ q: 'chelsea' }).expect(200);
 
-    expect(searchService.search).toHaveBeenCalledWith({ q: 'chelsea' });
+    // No token: searched as an anonymous caller (no viewer id).
+    expect(searchService.search).toHaveBeenCalledWith({ q: 'chelsea' }, undefined);
+  });
+
+  // B-039 (Block): a logged-in caller's id reaches the service so their blocks
+  // (both directions) can be applied. Still public: an anonymous request works.
+  it('passes the viewer id to the service when a caller is identified', async () => {
+    caller = { sub: 'viewer-1', role: 'fan' };
+    searchService.search.mockResolvedValue({ items: [], nextCursor: null });
+
+    await request(app.getHttpServer()).get('/search').query({ q: 'chelsea', scope: 'users' }).expect(200);
+
+    expect(searchService.search).toHaveBeenCalledWith({ q: 'chelsea', scope: 'users' }, 'viewer-1');
   });
 
   it('rejects a missing q with 400 before the service is called', async () => {
@@ -94,12 +121,15 @@ describe('SearchController (HTTP layer)', () => {
       .query({ q: 'chelsea', scope: 'users', cursor: 'abc', limit: '10' })
       .expect(200);
 
-    expect(searchService.search).toHaveBeenCalledWith({
-      q: 'chelsea',
-      scope: 'users',
-      cursor: 'abc',
-      limit: 10,
-    });
+    expect(searchService.search).toHaveBeenCalledWith(
+      {
+        q: 'chelsea',
+        scope: 'users',
+        cursor: 'abc',
+        limit: 10,
+      },
+      undefined,
+    );
   });
 
   it('propagates a 400 the service throws (e.g. cursor without scope)', async () => {

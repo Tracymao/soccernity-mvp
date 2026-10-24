@@ -5,6 +5,16 @@ import { encodeFeedSequenceCursor } from './cursor.util';
 import { FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE } from './dto/feed-query.dto';
 import { FeedService } from './feed.service';
 
+// B-039: every post/comment/saved-post read is additionally scoped to authors
+// with no block (either direction) against the viewer.
+function notBlockedWith(viewerId: string) {
+  return {
+    blockedBy: { none: { blockerId: viewerId } },
+    blocksMade: { none: { blockedId: viewerId } },
+  };
+}
+const notBlockedAuthor = (viewerId: string) => ({ author: { is: notBlockedWith(viewerId) } });
+
 function buildPrismaMock() {
   const prisma = {
     post: {
@@ -362,15 +372,21 @@ describe('FeedService', () => {
       // Decision Log #221: deactivated/pending_deletion authors are
       // excluded — the scope filter is now
       // (active author) AND (own posts OR followed authors).
+      // B-039: wrapped once more with the block filter (either direction).
       expect(callArgs.where).toEqual({
         AND: [
-          { author: { accountStatus: { in: ['active', 'deleted'] } } },
           {
-            OR: [
-              { authorId: 'user-1' },
-              { author: { followedBy: { some: { followerId: 'user-1' } } } },
+            AND: [
+              { author: { accountStatus: { in: ['active', 'deleted'] } } },
+              {
+                OR: [
+                  { authorId: 'user-1' },
+                  { author: { followedBy: { some: { followerId: 'user-1' } } } },
+                ],
+              },
             ],
           },
+          notBlockedAuthor('user-1'),
         ],
       });
     });
@@ -455,7 +471,9 @@ describe('FeedService', () => {
 
       const callArgs = (prisma.post.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.where.AND).toHaveLength(2);
-      expect(callArgs.where.AND[1]).toEqual({
+      expect(callArgs.where.AND[1]).toEqual(notBlockedAuthor('user-1'));
+      expect(callArgs.where.AND[0].AND).toHaveLength(2);
+      expect(callArgs.where.AND[0].AND[1]).toEqual({
         OR: [
           { createdAt: { lt: new Date('2026-08-02T00:00:00.000Z') } },
           { createdAt: new Date('2026-08-02T00:00:00.000Z'), sequence: { lt: 2 } },
@@ -618,8 +636,10 @@ describe('FeedService', () => {
       const callArgs = (prisma.post.findMany as jest.Mock).mock.calls[0][0];
       // Decision Log #221: club feed also excludes deactivated authors.
       expect(callArgs.where).toEqual({
-        clubPageId: 'club-1',
-        author: { accountStatus: { in: ['active', 'deleted'] } },
+        AND: [
+          { clubPageId: 'club-1', author: { accountStatus: { in: ['active', 'deleted'] } } },
+          notBlockedAuthor('user-1'),
+        ],
       });
       expect(callArgs.orderBy).toEqual([{ createdAt: 'desc' }, { sequence: 'desc' }]);
       expect(callArgs.take).toBe(FEED_DEFAULT_PAGE_SIZE + 1);
@@ -649,11 +669,12 @@ describe('FeedService', () => {
       const page = await service.getClubFeed('club-1', 'user-1', { cursor, limit: 2 });
 
       const callArgs = (prisma.post.findMany as jest.Mock).mock.calls[0][0];
-      expect(callArgs.where.AND[0]).toEqual({
+      expect(callArgs.where.AND[1]).toEqual(notBlockedAuthor('user-1'));
+      expect(callArgs.where.AND[0].AND[0]).toEqual({
         clubPageId: 'club-1',
         author: { accountStatus: { in: ['active', 'deleted'] } },
       });
-      expect(callArgs.where.AND[1]).toEqual({
+      expect(callArgs.where.AND[0].AND[1]).toEqual({
         OR: [
           { createdAt: { lt: new Date('2026-08-09T00:00:00.000Z') } },
           { createdAt: new Date('2026-08-09T00:00:00.000Z'), sequence: { lt: 9 } },
@@ -733,7 +754,14 @@ describe('FeedService', () => {
 
       await expect(service.getPostById('post-1', 'viewer-1')).rejects.toBeInstanceOf(NotFoundException);
       const callArgs = (prisma.post.findFirst as jest.Mock).mock.calls[0][0];
-      expect(callArgs.where).toEqual({ id: 'post-1', author: { accountStatus: { in: ['active', 'deleted'] } } });
+      // B-039: also 404s when a block (either direction) stands between the viewer and the author.
+      expect(callArgs.where).toEqual({
+        AND: [
+          { id: 'post-1' },
+          { author: { accountStatus: { in: ['active', 'deleted'] } } },
+          notBlockedAuthor('viewer-1'),
+        ],
+      });
     });
 
     it('throws NotFoundException, not a silent null, for a non-existent id (before any viewer-state lookup)', async () => {
@@ -1148,7 +1176,7 @@ describe('FeedService', () => {
 
       const callArgs = (prisma.comment.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.orderBy).toEqual([{ createdAt: 'asc' }, { sequence: 'asc' }]);
-      expect(callArgs.where).toEqual({ AND: [{ postId: 'post-1' }, { hidden: false }] });
+      expect(callArgs.where).toEqual({ AND: [{ postId: 'post-1' }, { hidden: false }, {}] });
       expect(callArgs.select).toHaveProperty('sequence', true);
     });
 
@@ -1166,6 +1194,7 @@ describe('FeedService', () => {
         AND: [
           { postId: 'post-1' },
           { hidden: false },
+          {},
           {
             OR: [
               { createdAt: { gt: new Date('2026-08-02T00:00:00.000Z') } },
@@ -1488,9 +1517,10 @@ describe('FeedService', () => {
         await service.getComments('p', {}, viewer);
         return (prisma.comment.findMany as jest.Mock).mock.calls[0][0].where;
       };
-      expect(await whereFor('owner')).toEqual({ AND: [{ postId: 'p' }, {}] });
+      // B-039: a third clause hides comments by anyone blocked (either direction) with the viewer.
+      expect(await whereFor('owner')).toEqual({ AND: [{ postId: 'p' }, {}, notBlockedAuthor('owner')] });
       expect(await whereFor('viewer')).toEqual({
-        AND: [{ postId: 'p' }, { OR: [{ hidden: false }, { authorId: 'viewer' }] }],
+        AND: [{ postId: 'p' }, { OR: [{ hidden: false }, { authorId: 'viewer' }] }, notBlockedAuthor('viewer')],
       });
     });
 
@@ -1699,7 +1729,8 @@ describe('FeedService', () => {
       await service.getSavedPosts('user-1', {});
 
       const callArgs = (prisma.savedPost.findMany as jest.Mock).mock.calls[0][0];
-      expect(callArgs.where).toEqual({ userId: 'user-1' });
+      // B-039: a saved post whose author is blocked (either direction) is hidden.
+      expect(callArgs.where).toEqual({ userId: 'user-1', post: { is: notBlockedAuthor('user-1') } });
       // NOT `postId` — that's a foreign key to Post.id (a random UUID)
       // with no relation to WHEN this row was saved. See
       // SAVED_POST_SELECT_WITH_SEQUENCE's own comment.
@@ -1738,6 +1769,7 @@ describe('FeedService', () => {
       const callArgs = (prisma.savedPost.findMany as jest.Mock).mock.calls[0][0];
       expect(callArgs.where).toEqual({
         userId: 'user-1',
+        post: { is: notBlockedAuthor('user-1') },
         OR: [
           { savedAt: { lt: new Date('2026-08-02T00:00:00.000Z') } },
           { savedAt: new Date('2026-08-02T00:00:00.000Z'), sequence: { lt: 2 } },
@@ -1790,6 +1822,70 @@ describe('FeedService', () => {
       await new FeedService(prisma).getPostById('post-1', 'viewer-1');
       const sel = (prisma.post.findFirst as jest.Mock).mock.calls[0][0].select.author.select;
       expect(sel).toEqual({ id: true, username: true, displayName: true });
+    });
+  });
+
+  // B-039 (Block, Decision Log #396, #402 item 4): a block in either direction between the
+  // viewer and a post's author makes the post "not found"; counts are never adjusted.
+  describe('Block (B-039)', () => {
+    const notBlocked = notBlockedWith('viewer-1');
+
+    it.each([
+      ['likePost', (svc: FeedService) => svc.likePost('viewer-1', 'post-1')],
+      ['addComment', (svc: FeedService) => svc.addComment('post-1', 'viewer-1', { contentText: 'hi' })],
+      ['savePost', (svc: FeedService) => svc.savePost('viewer-1', 'post-1')],
+      ['recordView', (svc: FeedService) => svc.recordView('viewer-1', 'post-1')],
+      ['getComments', (svc: FeedService) => svc.getComments('post-1', {}, 'viewer-1')],
+    ])('%s looks the post up WITH the block filter, so a blocked author is the plain 404', async (_n, call) => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(null); // filtered out by the block clause
+      await expect(call(new FeedService(prisma))).rejects.toBeInstanceOf(NotFoundException);
+      expect((prisma.post.findUnique as jest.Mock).mock.calls[0][0].where).toEqual({
+        id: 'post-1',
+        author: { is: notBlocked },
+      });
+      expect(prisma.like.create).not.toHaveBeenCalled();
+      expect(prisma.comment.create).not.toHaveBeenCalled();
+      expect(prisma.savedPost.create).not.toHaveBeenCalled();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('anonymous getComments looks the post up with NO block clause', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1', authorId: 'a' });
+      (prisma.comment.findMany as jest.Mock).mockResolvedValue([]);
+      await new FeedService(prisma).getComments('post-1', {});
+      expect((prisma.post.findUnique as jest.Mock).mock.calls[0][0].where).toEqual({ id: 'post-1' });
+    });
+
+    it('the undo form (unsave) stays open: no block clause', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.savedPost.delete as jest.Mock).mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('x', { code: 'P2025', clientVersion: 'x' }),
+      );
+      await new FeedService(prisma).unsavePost('viewer-1', 'post-1');
+      expect((prisma.post.findUnique as jest.Mock).mock.calls[0][0].where).toEqual({ id: 'post-1' });
+    });
+
+    it('every feed (own, club, Banter room) is scoped to authors with no block against the viewer', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
+      const svc = new FeedService(prisma);
+      await svc.getFeed('viewer-1', {});
+      await svc.getClubFeed('club-1', 'viewer-1', {});
+      await svc.getBanterRoomFeed('room-1', 'viewer-1', {});
+      for (const call of (prisma.post.findMany as jest.Mock).mock.calls) {
+        expect(call[0].where.AND).toContainEqual({ author: { is: notBlocked } });
+      }
+    });
+
+    it('does not adjust any counter: reading a feed never updates likeCount / commentCount', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
+      await new FeedService(prisma).getFeed('viewer-1', {});
+      expect(prisma.post.update).not.toHaveBeenCalled();
+      expect(prisma.post.updateMany).not.toHaveBeenCalled();
     });
   });
 });

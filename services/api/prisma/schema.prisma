@@ -156,6 +156,38 @@ model User {
   countryDerivationMethod String?
   countryDerivedAt        DateTime?
 
+  // backend/w5-profile-block (B-038, B-035, B-081; Decision Log #371, #394,
+  // #403 item 17) -- genuine additions beyond Section 3's literal User field
+  // list, flagged per CLAUDE.md's "fixed spec" rule. Public-profile content
+  // chosen by the user at Create Profile / Edit Profile. All nullable; none is
+  // required to complete a profile (username alone does, #404).
+  //   bio             free text, <= 160 characters, screened by the
+  //                   pre-publication sensitive-content screen (#366/#394 A3).
+  //   preferredClub   free text (#392 item 8): NOT clubAffiliationId and not an
+  //                   FK. Held for the owner only; the other-user profile does
+  //                   not expose it (not in the #371 list, OPEN).
+  //   profileCountry  the OPTIONAL profile country (#403 item 17): ISO-3166
+  //                   alpha-2, chosen by the user, shown only if filled in. It is
+  //                   deliberately NOT declaredCountry / derivedCountry above:
+  //                   those are the SAFEGUARDING country (never shown, never
+  //                   editable, decides US under-13 card verification) and must
+  //                   never be copied into or out of this column. A minor's
+  //                   country is therefore visible only if the minor enters it.
+  bio            String?
+  preferredClub  String?
+  profileCountry String?
+
+  // The avatar (#371, B-035). The upload route stores the object through
+  // StorageService and records where. avatarStatus gates VISIBILITY: only
+  // 'approved' is served to other users. A new upload is 'pending', and nothing
+  // in this codebase sets 'approved' yet (the automatic image check, B-036, is
+  // not built), so an avatar is visible to its owner only until that check
+  // exists. 'rejected' is reserved for B-036/B-037. url, key and status are all
+  // NULL or all set (CHECK constraint in the migration).
+  avatarUrl    String?
+  avatarKey    String?
+  avatarStatus String?
+
   // Safeguarding — required per Build Plan Section 8.3. Do not remove.
   guardian Guardian?
 
@@ -215,6 +247,11 @@ model User {
   postViews        PostView[]
   followedBy       Follow[]           @relation("followee")
   following        Follow[]           @relation("follower")
+  // backend/w5-profile-block (B-039, Decision Log #396): the two sides of Block.
+  // blocksMade = rows where THIS user is the blocker; blockedBy = rows where
+  // this user is the one blocked. Mechanical relation fields, no business data.
+  blocksMade       Block[]            @relation("blocker")
+  blockedBy        Block[]            @relation("blocked")
   notifications    Notification[]
   matchSubscriptions MatchSubscription[]
   reportsFiled     Report[]           @relation("reporter")
@@ -1272,6 +1309,39 @@ model Follow {
   createdAt  DateTime @default(now())
 
   @@unique([followerId, followeeId])
+}
+
+// backend/w5-profile-block (B-039; Decision Log #396, #402 item 4, #403 item 16,
+// #404 items 8 and 11, #406 item 12) -- a genuine addition beyond Section 3's
+// 20 entities, flagged per CLAUDE.md's "fixed spec" rule.
+//
+// One row = "blocker has blocked blocked". The rules (all decided, none
+// invented): the blocked user is NOT told; a block hides posts, comments and
+// like identities (none are listed anywhere), search results and rosters in
+// BOTH directions; counts are unchanged; follows are removed in both
+// directions when the block is made and are NOT restored by an unblock;
+// messages stop in both directions; the leaderboard is unaffected; the blocked
+// user sees the blocker's profile as not found, identical to a profile that
+// does not exist; a block applies on top of the age rules (#346, #347), which
+// apply first. The reason is optional, never editable (unblock and re-block to
+// change it) and visible to the blocker only. No date is ever exposed.
+//
+// `sequence` is the stable ordering for the blocker's list (the date itself is
+// not shown and must not leak through a cursor, so the cursor carries only the
+// sequence). Both FKs are RESTRICT, like Follow (Decision Log #341: the User row
+// is anonymized in place, never deleted); anonymizeUser deletes the rows.
+model Block {
+  id        String   @id @default(uuid())
+  sequence  Int      @unique @default(autoincrement())
+  blockerId String
+  blocker   User     @relation("blocker", fields: [blockerId], references: [id])
+  blockedId String
+  blocked   User     @relation("blocked", fields: [blockedId], references: [id])
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
 }
 
 // sprint-4/trending-topics-backend -- Build Plan Section 4.7 (GET

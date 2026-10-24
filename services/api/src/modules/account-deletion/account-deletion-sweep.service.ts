@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StorageService } from '../../storage/storage.service';
 import { DELETED_USER_PUBLIC_NAME } from '../users/public-name.util';
 
 // Build Plan Section 9, Decision Log #42 (30-day grace period + consent-
@@ -109,7 +110,14 @@ export function deletedUserEmail(userId: string): string {
 export class AccountDeletionSweepService {
   private readonly logger = new Logger(AccountDeletionSweepService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  // `storage` is optional so the sweep still runs where no object store is wired
+  // (unit specs); in the app it is always injected (AccountDeletionModule imports
+  // StorageModule). It is used for ONE thing: removing the anonymized user's
+  // avatar object after the transaction commits (B-035, best effort).
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly storage?: StorageService,
+  ) {}
 
   // Scheduled, deliberately NOT also exposed as an HTTP endpoint: an
   // irreversible sweep over every account has no legitimate on-demand
@@ -225,7 +233,13 @@ export class AccountDeletionSweepService {
   // authorization/confirmation gate. Idempotent: re-running on an
   // already-anonymized row rewrites the same values.
   async anonymizeUser(userId: string, isMinor: boolean): Promise<void> {
+    const stored: { avatarKey: string | null } = { avatarKey: null };
     await this.prisma.$transaction(async (tx) => {
+      // B-035: remember where the avatar object lives, so it can be removed from
+      // storage once the row no longer points at it.
+      const before = await tx.user.findUnique({ where: { id: userId }, select: { avatarKey: true } });
+      stored.avatarKey = before?.avatarKey ?? null;
+
       // Decision Log #349: no longer gated on isMinor -- a user reclassified
       // as an adult (turned 18) may still hold a Guardian row whose consent
       // proof must be snapshotted and the row removed like any other's.
@@ -272,6 +286,10 @@ export class AccountDeletionSweepService {
       await tx.like.deleteMany({ where: { userId } });
       await tx.savedPost.deleteMany({ where: { userId } });
       await tx.follow.deleteMany({ where: { OR: [{ followerId: userId }, { followeeId: userId }] } });
+      // B-039: a Block is a personal-relationship record in BOTH directions (the
+      // ones this user made, and the ones made against them); like Follow it is
+      // not content other users depend on, and its FKs are RESTRICT.
+      await tx.block.deleteMany({ where: { OR: [{ blockerId: userId }, { blockedId: userId }] } });
       await tx.notification.deleteMany({ where: { userId } });
       await tx.matchSubscription.deleteMany({ where: { userId } });
 
@@ -321,11 +339,37 @@ export class AccountDeletionSweepService {
           countryDerivationMethod: null,
           countryDerivedAt: null,
           clubAffiliationId: null,
+          // B-038 / B-035: free-text profile content, the optional profile
+          // country and the avatar reference are personal data too. All three
+          // avatar columns are cleared together (the CHECK needs it).
+          bio: null,
+          preferredClub: null,
+          profileCountry: null,
+          avatarUrl: null,
+          avatarKey: null,
+          avatarStatus: null,
           accountStatus: 'deleted',
           pendingDeletionAt: null,
         },
       });
     });
+
+    // Best effort, AFTER the commit: the row is already anonymized, so a storage
+    // outage (or an unconfigured store) must not undo or fail the anonymization.
+    // A failure leaves an orphaned object whose only pointer is gone; it is
+    // logged with the key so it can be cleaned up by hand.
+    const avatarKey = stored.avatarKey;
+    if (avatarKey && this.storage) {
+      try {
+        await this.storage.delete(avatarKey);
+      } catch (err) {
+        this.logger.warn(
+          `Anonymization of ${userId}: avatar object ${avatarKey} was NOT removed from storage (${
+            err instanceof Error ? err.message : String(err)
+          }).`,
+        );
+      }
+    }
   }
 
   // (b) — purges ConsentAuditRecord rows past their OWN 6-month mark,

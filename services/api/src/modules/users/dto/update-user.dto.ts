@@ -1,4 +1,4 @@
-import { IsOptional, IsString, Length, Matches } from 'class-validator';
+import { IsOptional, IsString, Length, Matches, MaxLength } from 'class-validator';
 
 // Explicit allowlist of self-editable fields for PATCH /users/:id
 // (Build Plan Section 4.2 / Section 3's User entity). This is the
@@ -40,4 +40,30 @@ export class UpdateUserDto {
     message: 'username must be 3-30 characters: letters, numbers and underscores only',
   })
   username?: string | null;
+
+  // backend/w5-profile-block (B-038, Decision Log #371, #394 A3). Free-text
+  // profile content. `null` (or a blank string) CLEARS the field, unlike the
+  // username. Length limits are adopted defaults (the Decision Log fixes none):
+  // bio 160, preferred club 80, mirrored by CHECK constraints on the columns.
+  // Both go through the pre-publication sensitive-content screen in
+  // UsersService.updateOwnProfile (a flagged value is refused with a 422
+  // 'please rephrase' and nothing is saved).
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  bio?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  preferredClub?: string | null;
+
+  // The OPTIONAL profile country (#403 item 17): an ISO 3166-1 alpha-2 code from
+  // the full list, any case, stored upper-case; null / blank clears it. Checked
+  // against the real code list in UsersService (normaliseProfileCountry), not by
+  // regex here. Distinct from the safeguarding country, which no endpoint edits.
+  @IsOptional()
+  @IsString()
+  @MaxLength(2)
+  profileCountry?: string | null;
 }

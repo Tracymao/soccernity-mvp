@@ -8,12 +8,15 @@ import {
 
 function buildPrismaMock(opts: { held?: boolean } = {}) {
   const prisma = {
-    user: { findMany: jest.fn(), update: jest.fn().mockResolvedValue({}) },
+    // findUnique: anonymizeUser reads the avatar storage key before clearing it (B-035).
+    user: { findMany: jest.fn(), findUnique: jest.fn().mockResolvedValue({ avatarKey: null }), update: jest.fn().mockResolvedValue({}) },
     guardian: { findUnique: jest.fn(), delete: jest.fn() },
     consentAuditRecord: { create: jest.fn(), deleteMany: jest.fn() },
     like: { deleteMany: jest.fn() },
     savedPost: { deleteMany: jest.fn() },
     follow: { deleteMany: jest.fn() },
+    // B-039: Block rows (both directions) are removed with the user's other relationship rows.
+    block: { deleteMany: jest.fn() },
     notification: { deleteMany: jest.fn() },
     matchSubscription: { deleteMany: jest.fn() },
     banterRoomMember: { deleteMany: jest.fn() },
@@ -47,6 +50,39 @@ describe('AccountDeletionSweepService', () => {
       const clubUpdate = sql.findIndex((q) => q.includes('UPDATE "ClubPage"'));
       const clubDelete = sql.findIndex((q) => q.includes('DELETE FROM "_ClubMembership"'));
       expect(clubUpdate).toBeLessThan(clubDelete);
+    });
+  });
+
+  // B-035: the avatar OBJECT is removed from storage after the commit, best effort.
+  describe('anonymizeUser avatar object', () => {
+    it('removes the stored avatar object by key after the transaction commits', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ avatarKey: 'avatars/user-1/abc.jpg' });
+      const storage = { upload: jest.fn(), delete: jest.fn().mockResolvedValue(undefined) };
+      const service = new AccountDeletionSweepService(prisma, storage);
+
+      await service.anonymizeUser('user-1', false);
+
+      expect(storage.delete).toHaveBeenCalledWith('avatars/user-1/abc.jpg');
+      const upd = (prisma.user.update as jest.Mock).mock.invocationCallOrder[0];
+      expect(storage.delete.mock.invocationCallOrder[0]).toBeGreaterThan(upd);
+    });
+
+    it('a storage failure never undoes or fails the anonymization', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ avatarKey: 'avatars/user-1/abc.jpg' });
+      const storage = { upload: jest.fn(), delete: jest.fn().mockRejectedValue(new Error('503')) };
+      const service = new AccountDeletionSweepService(prisma, storage);
+
+      await expect(service.anonymizeUser('user-1', false)).resolves.toBeUndefined();
+      expect(prisma.user.update).toHaveBeenCalled();
+    });
+
+    it('does not touch storage when the user had no avatar', async () => {
+      const prisma = buildPrismaMock();
+      const storage = { upload: jest.fn(), delete: jest.fn() };
+      await new AccountDeletionSweepService(prisma, storage).anonymizeUser('user-1', false);
+      expect(storage.delete).not.toHaveBeenCalled();
     });
   });
 
@@ -125,6 +161,13 @@ describe('AccountDeletionSweepService', () => {
           derivedCountry: null,
           countryDerivationMethod: null,
           countryDerivedAt: null,
+          // B-038 / B-035: profile content, the optional profile country and the avatar reference.
+          bio: null,
+          preferredClub: null,
+          profileCountry: null,
+          avatarUrl: null,
+          avatarKey: null,
+          avatarStatus: null,
           accountStatus: 'deleted',
           pendingDeletionAt: null,
         },
@@ -147,6 +190,9 @@ describe('AccountDeletionSweepService', () => {
       expect(prisma.savedPost.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.follow.deleteMany).toHaveBeenCalledWith({
         where: { OR: [{ followerId: 'user-1' }, { followeeId: 'user-1' }] },
+      });
+      expect(prisma.block.deleteMany).toHaveBeenCalledWith({
+        where: { OR: [{ blockerId: 'user-1' }, { blockedId: 'user-1' }] },
       });
       expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.matchSubscription.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });

@@ -1,4 +1,7 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { CurrentUser } from '../auth/guards/current-user.decorator';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
+import { AccessTokenPayload } from '../auth/token/token.types';
 import { SearchQueryDto } from './dto/search-query.dto';
 import { SearchService } from './search.service';
 
@@ -13,8 +16,12 @@ import { SearchService } from './search.service';
 export class SearchController {
   constructor(private readonly searchService: SearchService) {}
 
+  // B-039: still public (OptionalJwtAuthGuard never rejects). A valid token only
+  // tells the service WHO is searching so their blocks (both directions) can be
+  // applied; an absent or invalid token searches as an anonymous caller.
   @Get()
-  async search(@Query() query: SearchQueryDto) {
-    return this.searchService.search(query);
+  @UseGuards(OptionalJwtAuthGuard)
+  async search(@Query() query: SearchQueryDto, @CurrentUser() user?: AccessTokenPayload) {
+    return this.searchService.search(query, user?.sub);
   }
 }

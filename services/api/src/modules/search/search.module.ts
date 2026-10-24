@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { SearchController } from './search.controller';
 import { SearchService } from './search.service';
 import { TrendingController } from './trending.controller';
@@ -33,6 +34,8 @@ import { TrendingService } from './trending.service';
 // points/points.util.ts's awardPoints() already set, so FeedModule needs
 // no import of this module at all.
 @Module({
+  // B-039: AuthFoundationModule only for OptionalJwtAuthGuard on GET /search.
+  imports: [AuthFoundationModule],
   controllers: [SearchController, TrendingController],
   providers: [SearchService, TrendingService, PrismaService],
 })

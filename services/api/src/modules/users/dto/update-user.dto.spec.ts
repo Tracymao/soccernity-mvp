@@ -64,4 +64,33 @@ describe('UpdateUserDto', () => {
       expect(errors.map((e) => e.property)).toContain('username');
     });
   });
+
+  // backend/w5-profile-block (B-038)
+  describe('profile content fields', () => {
+    const opts = { whitelist: true, forbidNonWhitelisted: true };
+
+    it('accepts bio, preferredClub and profileCountry, and null to clear each', async () => {
+      for (const body of [
+        { bio: 'Left back', preferredClub: 'Ikoyi Rovers', profileCountry: 'NG' },
+        { bio: null, preferredClub: null, profileCountry: null },
+      ]) {
+        expect(await validate(plainToInstance(UpdateUserDto, body), opts)).toHaveLength(0);
+      }
+    });
+
+    it('bio is capped at 160 characters, preferredClub at 80, profileCountry at 2', async () => {
+      expect((await validate(plainToInstance(UpdateUserDto, { bio: 'x'.repeat(160) }), opts))).toHaveLength(0);
+      expect((await validate(plainToInstance(UpdateUserDto, { bio: 'x'.repeat(161) }), opts)).map((e) => e.property)).toEqual(['bio']);
+      expect((await validate(plainToInstance(UpdateUserDto, { preferredClub: 'x'.repeat(81) }), opts)).map((e) => e.property)).toEqual(['preferredClub']);
+      expect((await validate(plainToInstance(UpdateUserDto, { profileCountry: 'NGA' }), opts)).map((e) => e.property)).toEqual(['profileCountry']);
+    });
+
+    it('still refuses the safeguarding country and avatar columns (no client may write them here)', async () => {
+      const errors = await validate(
+        plainToInstance(UpdateUserDto, { declaredCountry: 'US', derivedCountry: 'US', avatarUrl: 'x', avatarStatus: 'approved' }),
+        opts,
+      );
+      expect(errors.map((e) => e.property).sort()).toEqual(['avatarStatus', 'avatarUrl', 'declaredCountry', 'derivedCountry']);
+    });
+  });
 });

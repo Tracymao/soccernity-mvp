@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { notBlockedWith } from '../block/block.util';
 import { decodeClubCursor, encodeClubCursor } from './cursor.util';
 import {
   CLUB_MEMBERS_DEFAULT_PAGE_SIZE,
@@ -299,6 +300,9 @@ export class ClubsService {
       VISIBLE_CLUB_MEMBER_FILTER,
     ];
     if (query.cursor) filters.push(userNameAfterCursor(decodeUserNameCursor(query.cursor)));
+    // B-039: members blocked in either direction with the caller are hidden from
+    // the caller's roster view (#402 item 4); memberCount is unchanged.
+    filters.push(notBlockedWith(userId));
 
     const rows = await this.prisma.user.findMany({
       where: { AND: filters },

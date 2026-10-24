@@ -9,6 +9,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { AuthRegistrationModule } from './modules/auth/registration/registration.module';
 import { GuardianConsentModule } from './modules/auth/guardian-consent/guardian-consent.module';
 import { UsersModule } from './modules/users/users.module';
+import { BlockModule } from './modules/block/block.module';
 import { FeedModule } from './modules/feed/feed.module';
 import { ClubsModule } from './modules/clubs/clubs.module';
 import { AccountDeletionModule } from './modules/account-deletion/account-deletion.module';
@@ -93,6 +94,7 @@ import { CryptoModule } from './crypto/crypto.module';
     AuthRegistrationModule,
     GuardianConsentModule, // Sprint 1 / PR B5 — /auth/guardian-consent (Section 4.1 / 8.3 step 4)
     UsersModule, // Sprint 1 — B6 (profile endpoints, Section 4.2, self-scope only for now)
+    BlockModule, // backend/w5-profile-block — B-039 (Block: POST/DELETE /users/:id/block, GET /users/:id/blocks)
     // Sprint 2 — Section 4.3 slice one only: POST /posts + GET /posts/feed.
     // GET /posts/:id, like, comment, save (also Section 4.3) are a
     // separate follow-up slice — see modules/feed/README.md.

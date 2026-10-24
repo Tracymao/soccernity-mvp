@@ -75,8 +75,8 @@ export class UsersController {
   // user): displayName + guardianContact for a current minor. GET /users/:id
   // stays self-only. See UsersService.getPublicProfile.
   @Get(':id/public-profile')
-  async getPublicProfile(@Param('id') id: string) {
-    return this.usersService.getPublicProfile(id);
+  async getPublicProfile(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
+    return this.usersService.getPublicProfile(id, user.sub);
   }
 
   @Get(':id')
@@ -190,12 +190,12 @@ export class UsersController {
   // pending founder review before the Build Plan's own Decision Log text
   // is updated.
   @Get(':id/followers')
-  async followers(@Param('id') id: string, @Query() query: FeedQueryDto) {
-    return this.usersService.getFollowers(id, query);
+  async followers(@Param('id') id: string, @Query() query: FeedQueryDto, @CurrentUser() user: AccessTokenPayload) {
+    return this.usersService.getFollowers(id, query, user.sub);
   }
 
   @Get(':id/following')
-  async following(@Param('id') id: string, @Query() query: FeedQueryDto) {
-    return this.usersService.getFollowing(id, query);
+  async following(@Param('id') id: string, @Query() query: FeedQueryDto, @CurrentUser() user: AccessTokenPayload) {
+    return this.usersService.getFollowing(id, query, user.sub);
   }
 }

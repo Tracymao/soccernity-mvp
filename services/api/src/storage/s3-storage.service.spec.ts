@@ -153,4 +153,25 @@ describe('S3StorageService', () => {
       expect(url).toBe('https://abc123.r2.cloudflarestorage.com/soccernity-media/media/a-key.jpg');
     });
   });
+
+  // B-035 (Decision Log #307): on R2 the S3-API endpoint is not publicly readable.
+  describe('S3_PUBLIC_BASE_URL', () => {
+    const base = { S3_BUCKET: 'b', S3_ACCESS_KEY: 'k', S3_SECRET_KEY: 's', S3_ENDPOINT: 'https://acct.r2.cloudflarestorage.com' };
+
+    it('when set, every returned URL is <S3_PUBLIC_BASE_URL>/<key> (trailing slash tolerated)', async () => {
+      mockSend.mockResolvedValue({});
+      const service = new S3StorageService(buildConfig({ ...base, S3_PUBLIC_BASE_URL: 'https://media.example.com/' }));
+      expect(await service.upload(Buffer.from('x'), 'avatars/u1/a.jpg', 'image/jpeg')).toBe(
+        'https://media.example.com/avatars/u1/a.jpg',
+      );
+      // The upload itself still goes to the authenticated endpoint.
+      expect(MockedS3Client).toHaveBeenCalledWith(expect.objectContaining({ endpoint: base.S3_ENDPOINT, forcePathStyle: true }));
+    });
+
+    it.each([undefined, '', '   ', 'replace-me'])('unset / blank / placeholder (%p) keeps the previous <endpoint>/<bucket>/<key> behaviour', async (v) => {
+      mockSend.mockResolvedValue({});
+      const service = new S3StorageService(buildConfig({ ...base, S3_PUBLIC_BASE_URL: v }));
+      expect(await service.upload(Buffer.from('x'), 'k/1.jpg', 'image/jpeg')).toBe('https://acct.r2.cloudflarestorage.com/b/k/1.jpg');
+    });
+  });
 });

@@ -54,9 +54,12 @@ into a real `.env`, storage stays **wired-but-inactive** and
 builds `MediaAsset.url` as `<endpoint>/<bucket>/<key>`. On R2 that is the
 authenticated S3-API endpoint, **not publicly readable** — public access
 needs the bucket's `r2.dev` subdomain or a custom domain, whose URLs also
-omit the bucket segment. A follow-up (e.g. an `S3_PUBLIC_BASE_URL` env
-var used for `url` construction) is needed before uploaded media can be
-displayed to users.
+omit the bucket segment. **Update (backend/w5-profile-block, B-035):**
+the optional `S3_PUBLIC_BASE_URL` variable now exists. When set, every URL
+`S3StorageService.upload` returns is `<S3_PUBLIC_BASE_URL>/<key>`; unset
+keeps the behaviour above. It must still be set (to the real r2.dev
+subdomain or custom domain) by a human before any uploaded media is
+publicly viewable.
 
 `S3_ENDPOINT` is the one env var that changes *behaviour*, not just a
 value: leaving it unset targets real AWS S3 (virtual-hosted-style URLs
