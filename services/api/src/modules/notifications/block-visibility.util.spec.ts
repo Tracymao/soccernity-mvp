@@ -32,7 +32,14 @@ describe('notificationBlockHiddenFilter (B-197)', () => {
       { blockerId: 'x', blockedId: 'me' },
     ]);
     const filter = await notificationBlockHiddenFilter(prisma, 'me');
-    expect(filter).toEqual({ NOT: { OR: [{ type: 'follow', payloadRefId: { in: ['x'] } }] } });
+    expect(filter).toEqual({
+      NOT: {
+        OR: [
+          { type: 'follow', payloadRefId: { in: ['x'] } },
+          { type: { in: ['like', 'comment'] }, actorId: { not: null, in: ['x'] } },
+        ],
+      },
+    });
   });
 
   it('adds the message and fixture clauses only when a matching thread / fixture exists', async () => {
@@ -43,6 +50,7 @@ describe('notificationBlockHiddenFilter (B-197)', () => {
       NOT: {
         OR: [
           { type: 'follow', payloadRefId: { in: ['x'] } },
+          { type: { in: ['like', 'comment'] }, actorId: { not: null, in: ['x'] } },
           { type: 'message', payloadRefId: { in: ['c1', 'c2'] } },
         ],
       },
@@ -56,12 +64,20 @@ describe('notificationBlockHiddenFilter (B-197)', () => {
     });
   });
 
-  it('never excludes like or comment rows (no actor is stored: OPEN)', async () => {
+  it('hides like and comment rows by actorId, and only those two types', async () => {
+    const prisma = prismaWith([{ blockerId: 'me', blockedId: 'x' }]);
+    const filter = await notificationBlockHiddenFilter(prisma, 'me');
+    expect(JSON.stringify(filter)).toContain('"actorId":{"not":null,"in":["x"]}');
+    const clause = (filter.NOT as { OR: Array<Record<string, unknown>> }).OR.find((c) => 'actorId' in c);
+    expect(clause).toEqual({ type: { in: ['like', 'comment'] }, actorId: { not: null, in: ['x'] } });
+  });
+
+  it('never names a system notification type (moderation_decision, contest_*, ...)', async () => {
     const prisma = prismaWith([{ blockerId: 'me', blockedId: 'x' }]);
     (prisma.conversation.findMany as jest.Mock).mockResolvedValue([{ id: 'c1' }]);
     (prisma.fixture.findMany as jest.Mock).mockResolvedValue([{ id: 'f1' }]);
     const text = JSON.stringify(await notificationBlockHiddenFilter(prisma, 'me'));
-    expect(text).not.toMatch(/"(like|comment)"/);
+    expect(text).not.toMatch(/moderation_decision|contest_|age_milestone|match_kickoff/);
   });
 });
 

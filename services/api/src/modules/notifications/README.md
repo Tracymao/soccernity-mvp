@@ -70,10 +70,12 @@ is resolve the *post* (`{ post: { id, contentText, authorId } }`), so the
 frontend can render something like "New like on your post: '...'" with
 no name attached. Adding an `actorId` column to `Notification` would fix
 this, but requires editing the `like`/`comment` trigger call sites
-(`feed.service.ts`), which is explicitly out of this PR's scope. **Open
-Decision Log candidate, not resolved here**: add `actorId String?` to
-`Notification`, written by the `like`/`comment` (and arguably `follow`,
-for symmetry) trigger sites.
+(`feed.service.ts`), which was explicitly out of this PR's scope. **Since
+resolved (Decision Log #412 item 1, build register B-213,
+`backend/notification-actor-id`)**: `Notification.actorId String?` exists,
+written by the `like`/`comment` trigger sites only. It is used only to hide
+a blocked pair's rows at read time and is never returned in a payload, so
+the response is still "who is not named" (the resolved `data` is the post).
 
 **`payloadRefId` is not an FK, so a referenced row can be gone by the
 time this reads it** (a hard account-deletion, Decision Log #44's
@@ -145,8 +147,8 @@ elsewhere (`GET /banter-rooms/mine` before `GET /banter-rooms/:id`).
 - Does not touch Figma or `apps/web` — a `figma-to-code` pass converts the
   already-finalized Notification Centre design (Decision Log #279) against
   these endpoints as its own follow-up.
-- Does not add an `actorId` column for `like`/`comment` (see above — a
-  real, flagged gap, not silently worked around).
+- `actorId` for `like`/`comment` was added later (B-213, see above); it is
+  not exposed in any payload and the "Someone" wording is unchanged.
 - Does not build `GET /notifications/:id` (a single-notification read) —
   nothing in Section 4.7 or the Figma design calls for one, and
   `PATCH /notifications/:id/read`'s own response already returns the
@@ -154,5 +156,5 @@ elsewhere (`GET /banter-rooms/mine` before `GET /banter-rooms/:id`).
 
 ## Block visibility (B-197, `backend/w6-username-cover-block`)
 
-Decision Log #411 item 5. Existing rows between a blocked pair are **hidden at read time** from both sides' `GET /notifications`, `GET /notifications/unread-count`, `PATCH /notifications/read-all` (left unread, not counted) and `PATCH /notifications/:id/read` (the same 404 as a missing row). `block-visibility.util.ts` derives "between the pair" per type: `follow` from the follower id, `message` from the shared Conversation, `fixture_scheduled` / `result_logged` from a Fixture whose teams the two users manage. A user with no Block on either side pays one extra read and gets an empty fragment. **`like` / `comment` rows cannot be attributed to a person** (no actor stored) and are not hidden: OPEN, the fix is an `actorId` column (not decided). New rows are suppressed at the six actor-based trigger sites (see `block/README.md`).
+Decision Log #411 item 5. Existing rows between a blocked pair are **hidden at read time** from both sides' `GET /notifications`, `GET /notifications/unread-count`, `PATCH /notifications/read-all` (left unread, not counted) and `PATCH /notifications/:id/read` (the same 404 as a missing row). `block-visibility.util.ts` derives "between the pair" per type: `follow` from the follower id, `message` from the shared Conversation, `fixture_scheduled` / `result_logged` from a Fixture whose teams the two users manage. A user with no Block on either side pays one extra read and gets an empty fragment. `like` / `comment` rows are hidden by `Notification.actorId` (Decision Log #412 item 1, B-213): the filter requires a non-null actor (`actorId: { not: null, in: [...] }`), because the exclusion is wrapped in `NOT(...)` and SQL three-valued logic would otherwise hide every row whose `actorId` is NULL (rows written before the column). System notification types (`moderation_decision`, `contest_*`, `age_milestone`, `match_kickoff`) have no user actor and are never filtered. New rows are suppressed at the six actor-based trigger sites (see `block/README.md`).
 

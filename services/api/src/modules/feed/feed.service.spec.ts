@@ -1061,7 +1061,7 @@ describe('FeedService', () => {
         await service.likePost('liker-1', 'post-1');
 
         expect(prisma.notification.create).toHaveBeenCalledWith({
-          data: { userId: 'post-author-1', type: 'like', payloadRefId: 'post-1' },
+          data: { userId: 'post-author-1', type: 'like', payloadRefId: 'post-1', actorId: 'liker-1' },
         });
         // Explicit recipient-identity assertion, not just "a row exists"
         // — getting this backwards would silently notify the wrong
@@ -1299,7 +1299,7 @@ describe('FeedService', () => {
         await service.addComment('post-1', 'commenter-1', { contentText: 'Nice goal' });
 
         expect(prisma.notification.create).toHaveBeenCalledWith({
-          data: { userId: 'post-author-1', type: 'comment', payloadRefId: 'post-1' },
+          data: { userId: 'post-author-1', type: 'comment', payloadRefId: 'post-1', actorId: 'commenter-1' },
         });
         const callArgs = (prisma.notification.create as jest.Mock).mock.calls[0][0];
         expect(callArgs.data.userId).toBe('post-author-1');

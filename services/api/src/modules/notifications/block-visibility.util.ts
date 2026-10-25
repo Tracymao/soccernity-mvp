@@ -14,10 +14,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 //   fixture_scheduled / result_logged
 //                     a Fixture whose two teams are managed by the viewer and a
 //                     blocked user (the other team's organiser is the actor)
-// like / comment rows (payloadRefId is the POST, actor never stored, #290) CANNOT
-// be attributed to a person, so they are NOT hidden -- OPEN in
-// docs/backend-w6-report.md (the fix is an `actorId` column, not decided). They
-// show "Someone" and name no one, so no identity is exposed.
+//   like / comment   Notification.actorId (Decision Log #412 item 1; payloadRefId is
+//                     the POST, so the actor needed its own column). Rows written
+//                     before that column existed have a NULL actorId and stay visible.
+// System notifications (moderation_decision, contest_*, age_milestone, match_kickoff)
+// have no user actor and are never filtered (#412 item 1).
 //
 // Cost: one Block read per call. A user with no Block on either side (almost
 // everyone) pays nothing more and gets back an empty fragment.
@@ -49,7 +50,14 @@ export async function notificationBlockHiddenFilter(
     }),
   ]);
 
-  const hidden: Prisma.NotificationWhereInput[] = [{ type: 'follow', payloadRefId: { in: otherIds } }];
+  const hidden: Prisma.NotificationWhereInput[] = [
+    { type: 'follow', payloadRefId: { in: otherIds } },
+    // `not: null` is load-bearing: the filter is wrapped in NOT(...), and in SQL
+    // `NOT (type IN (...) AND actorId IN (...))` is NULL, not true, for a row whose actorId
+    // is NULL -- which would silently hide every pre-column like/comment row. Requiring a
+    // non-null actor makes the clause plainly false for those rows, so they stay visible.
+    { type: { in: ['like', 'comment'] }, actorId: { not: null, in: otherIds } },
+  ];
   if (conversations.length > 0) {
     hidden.push({ type: 'message', payloadRefId: { in: conversations.map((c) => c.id) } });
   }
