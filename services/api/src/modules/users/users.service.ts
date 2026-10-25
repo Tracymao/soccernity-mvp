@@ -21,8 +21,6 @@ import { screenSensitiveContent } from '../sensitive-content/sensitive-content.u
 import { normaliseProfileCountry, SENSITIVE_PROFILE_REPHRASE_CODE } from './profile-country.constants';
 import { decodeFeedSequenceCursor, encodeFeedSequenceCursor } from '../feed/cursor.util';
 import { FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE, FeedQueryDto } from '../feed/dto/feed-query.dto';
-import { ENGAGEMENT_POINTS } from '../points/points.constants';
-import { awardPoints } from '../points/points.util';
 import { calculateAge } from '../auth/registration/age.util';
 import { deriveOnboardingState, GuardianConsentState, OnboardingNextStep } from '../auth/onboarding-state.util';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -708,17 +706,7 @@ export class UsersService {
             data: { userId: followeeId, type: 'follow', payloadRefId: followerId },
           });
         }
-        // Baseline-engagement point for the FOLLOWER (the action-taker) —
-        // sprint-2/contest-data-model-backend, Decision Log #219. Only
-        // reached on a genuine first follow (a duplicate throws P2002 on
-        // tx.follow.create above and rolls this back); the ledger's own
-        // @@unique([source, refId, userId]) backstops re-follow.
-        await awardPoints(tx, {
-          userId: followerId,
-          source: 'engagement_follow',
-          refId: followeeId,
-          points: ENGAGEMENT_POINTS.FOLLOW_MADE,
-        });
+        // B-094 (Decision Log #382): a follow earns no points.
       });
     } catch (err) {
       if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')) {

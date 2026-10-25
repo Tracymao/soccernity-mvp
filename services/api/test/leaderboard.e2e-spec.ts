@@ -107,9 +107,9 @@ describe('Leaderboard e2e (Section 4.9)', () => {
       const alice = await createUser('alice');
       const bob = await createUser('bob');
 
-      await awardLedgerEntry(alice.userId, 'engagement_post', 3, 'post-1');
-      await awardLedgerEntry(alice.userId, 'engagement_post', 3, 'post-2');
-      await awardLedgerEntry(bob.userId, 'engagement_post', 3, 'post-3');
+      await awardLedgerEntry(alice.userId, 'engagement_like', 3, 'post-1');
+      await awardLedgerEntry(alice.userId, 'engagement_like', 3, 'post-2');
+      await awardLedgerEntry(bob.userId, 'engagement_like', 3, 'post-3');
 
       await rollup.rollupPeriod(PERIOD);
 
@@ -132,14 +132,14 @@ describe('Leaderboard e2e (Section 4.9)', () => {
 
       // 40 posts * 3 points = 120 raw engagement -> capped to 100.
       for (let i = 0; i < 40; i++) {
-        await awardLedgerEntry(grinder.userId, 'engagement_post', 3, `grind-post-${i}`);
+        await awardLedgerEntry(grinder.userId, 'engagement_like', 3, `grind-post-${i}`);
       }
 
       // A single weekly win (50, uncapped) plus modest, well-under-cap
       // engagement (2 posts = 6) -> 56 total, NOT reduced.
       await awardLedgerEntry(champion.userId, 'contest_weekly_win', 50, 'round-1');
-      await awardLedgerEntry(champion.userId, 'engagement_post', 3, 'champ-post-1');
-      await awardLedgerEntry(champion.userId, 'engagement_post', 3, 'champ-post-2');
+      await awardLedgerEntry(champion.userId, 'engagement_like', 3, 'champ-post-1');
+      await awardLedgerEntry(champion.userId, 'engagement_like', 3, 'champ-post-2');
 
       await rollup.rollupPeriod(PERIOD);
 
@@ -177,8 +177,8 @@ describe('Leaderboard e2e (Section 4.9)', () => {
       const deactivated = await createUser('deactivated', { accountStatus: 'deactivated' });
       const active = await createUser('active-peer');
 
-      await awardLedgerEntry(deactivated.userId, 'engagement_post', 3, 'ghost-post');
-      await awardLedgerEntry(active.userId, 'engagement_post', 3, 'real-post');
+      await awardLedgerEntry(deactivated.userId, 'engagement_like', 3, 'ghost-post');
+      await awardLedgerEntry(active.userId, 'engagement_like', 3, 'real-post');
 
       await rollup.rollupPeriod(PERIOD);
 
@@ -191,8 +191,8 @@ describe('Leaderboard e2e (Section 4.9)', () => {
       const user = await createUser('later-deactivated');
       const peer = await createUser('peer');
 
-      await awardLedgerEntry(user.userId, 'engagement_post', 3, 'p-1');
-      await awardLedgerEntry(peer.userId, 'engagement_post', 3, 'p-2');
+      await awardLedgerEntry(user.userId, 'engagement_like', 3, 'p-1');
+      await awardLedgerEntry(peer.userId, 'engagement_like', 3, 'p-2');
 
       // First rollup tick, while `user` is still active — their row IS written.
       await rollup.rollupPeriod(PERIOD);
@@ -222,8 +222,8 @@ describe('Leaderboard e2e (Section 4.9)', () => {
 
     it('isolates periods — a point earned in one ISO week never counts toward another', async () => {
       const user = await createUser('cross-period');
-      await awardLedgerEntry(user.userId, 'engagement_post', 3, 'this-week-post', IN_PERIOD_AT);
-      await awardLedgerEntry(user.userId, 'engagement_post', 3, 'last-week-post', IN_OTHER_PERIOD_AT);
+      await awardLedgerEntry(user.userId, 'engagement_like', 3, 'this-week-post', IN_PERIOD_AT);
+      await awardLedgerEntry(user.userId, 'engagement_like', 3, 'last-week-post', IN_OTHER_PERIOD_AT);
 
       await rollup.rollupPeriod(PERIOD);
       await rollup.rollupPeriod(OTHER_PERIOD);
@@ -256,7 +256,7 @@ describe('Leaderboard e2e (Section 4.9)', () => {
 
     it('defaults to the current UTC ISO week when no period is supplied', async () => {
       const user = await createUser('default-period');
-      await awardLedgerEntry(user.userId, 'engagement_post', 3, 'p-1', new Date());
+      await awardLedgerEntry(user.userId, 'engagement_like', 3, 'p-1', new Date());
       const now = new Date();
       const { getCurrentIsoWeekPeriod } = await import('../src/modules/leaderboard/iso-week.util');
       await rollup.rollupPeriod(getCurrentIsoWeekPeriod(now));
@@ -272,8 +272,8 @@ describe('Leaderboard e2e (Section 4.9)', () => {
     it('ties are allowed — two users with equal points share the same rank', async () => {
       const a = await createUser('tie-a');
       const b = await createUser('tie-b');
-      await awardLedgerEntry(a.userId, 'engagement_post', 3, 'a-1');
-      await awardLedgerEntry(b.userId, 'engagement_post', 3, 'b-1');
+      await awardLedgerEntry(a.userId, 'engagement_like', 3, 'a-1');
+      await awardLedgerEntry(b.userId, 'engagement_like', 3, 'b-1');
 
       await rollup.rollupPeriod(PERIOD);
 
@@ -289,7 +289,7 @@ describe('Leaderboard e2e (Section 4.9)', () => {
 
     it('re-running rollupPeriod on the same period is idempotent (upsert, not duplicate rows)', async () => {
       const user = await createUser('idempotent');
-      await awardLedgerEntry(user.userId, 'engagement_post', 3, 'p-1');
+      await awardLedgerEntry(user.userId, 'engagement_like', 3, 'p-1');
 
       await rollup.rollupPeriod(PERIOD);
       await rollup.rollupPeriod(PERIOD);
@@ -305,7 +305,7 @@ describe('Leaderboard e2e (Section 4.9)', () => {
       const users = [];
       for (let i = 0; i < 5; i++) {
         const u = await createUser(`page-${i}`);
-        await awardLedgerEntry(u.userId, 'engagement_post', 3 + i, `page-post-${i}`); // distinct points -> distinct ranks
+        await awardLedgerEntry(u.userId, 'engagement_like', 3 + i, `page-post-${i}`); // distinct points -> distinct ranks
         users.push(u);
       }
 
@@ -395,7 +395,7 @@ describe('Leaderboard e2e (Section 4.9)', () => {
       await setRepresented(alice.userId, clubA);
       await setRepresented(bob.userId, clubA);
 
-      await awardWhileRepresenting(alice.userId, 'engagement_post', 3, 'post-a');
+      await awardWhileRepresenting(alice.userId, 'engagement_like', 3, 'post-a');
       await awardWhileRepresenting(bob.userId, 'contest_weekly_win', 6, 'round-b');
       // Carol represents no club, so her points are unattributed.
       await awardLedgerEntry(carol.userId, 'contest_weekly_win', 9, 'round-c');
@@ -424,11 +424,11 @@ describe('Leaderboard e2e (Section 4.9)', () => {
       await setRepresented(alice.userId, clubA);
       await setRepresented(bob.userId, clubA);
 
-      await awardWhileRepresenting(alice.userId, 'engagement_post', 3, 'post-before');
+      await awardWhileRepresenting(alice.userId, 'engagement_like', 3, 'post-before');
 
       // Alice switches to Club B, then earns more.
       await setRepresented(alice.userId, clubB);
-      await awardWhileRepresenting(alice.userId, 'engagement_post', 6, 'post-after');
+      await awardWhileRepresenting(alice.userId, 'engagement_like', 6, 'post-after');
 
       await rollup.rollupPeriod(PERIOD);
 
@@ -453,8 +453,8 @@ describe('Leaderboard e2e (Section 4.9)', () => {
       const alice = await createUser('alice');
       await setRepresented(alice.userId, clubA);
 
-      await awardWhileRepresenting(alice.userId, 'engagement_post', 80, 'post-1');
-      await awardWhileRepresenting(alice.userId, 'engagement_follow', 80, 'followee-1');
+      await awardWhileRepresenting(alice.userId, 'engagement_like', 80, 'post-1');
+      await awardWhileRepresenting(alice.userId, 'engagement_like', 80, 'post-2');
 
       await rollup.rollupPeriod(PERIOD);
 

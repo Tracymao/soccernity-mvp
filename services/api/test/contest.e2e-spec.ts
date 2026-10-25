@@ -716,20 +716,19 @@ describe('Contest e2e: the self-running month', () => {
   });
 
   // =============================================================================================
-  describe('baseline engagement points (unchanged by B-091; follows and posts are removed by B-094)', () => {
-    it('POST /posts awards 3, a like awards the liker 1, a follow awards the follower 1', async () => {
+  describe('baseline engagement points (B-094: only likes earn points)', () => {
+    it('POST /posts and a follow earn nothing; a like awards the liker 1 (once, never revoked)', async () => {
       const author = await createUser('eng-author');
       const fan = await createUser('eng-fan');
       const postId = await post(author);
-      expect((await prisma().pointsLedgerEntry.findMany({ where: { userId: author.userId } })).map((r) => [r.source, r.points])).toEqual([
-        ['engagement_post', 3],
-      ]);
+      expect(await prisma().pointsLedgerEntry.findMany({ where: { userId: author.userId } })).toEqual([]);
       await like(fan, postId).expect(200);
       await request(server()).delete(`/posts/${postId}/like`).set(auth(fan.token)).expect(200);
       await like(fan, postId).expect(200);
       await request(server()).post(`/users/${author.userId}/follow`).set(auth(fan.token)).expect(200);
       const rows = await prisma().pointsLedgerEntry.findMany({ where: { userId: fan.userId } });
-      expect(rows.map((r) => r.source).sort()).toEqual(['engagement_follow', 'engagement_like']);
+      expect(rows.map((r) => r.source)).toEqual(['engagement_like']);
+      expect(await prisma().pointsLedgerEntry.findMany({ where: { userId: author.userId } })).toEqual([]);
     });
   });
 

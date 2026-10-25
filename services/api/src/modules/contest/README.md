@@ -53,6 +53,6 @@ Create: `month` ("YYYY-MM", not yet started), `title` (<= 80), `description`, `w
 
 * **View qualification** (B-093): no heartbeat endpoint exists, so no view is ever recorded; Phase 1 effectively ranks on likes + comments. `recordQualifiedView` is the one call B-093 makes.
 * **The exposure engine** (B-092): the tolerance and per-viewer cap are stored and validated but nothing serves a balanced rotation yet.
-* **Removing the follow / post point awards** (B-094) and the quarter-point ledger (B-093).
+* **The quarter-point ledger** (B-093). The follow / post point awards were removed by B-094.
 * **`apps/admin`** still calls the removed judging endpoints (B-097) and `apps/web` does not render the new states (B-098, B-099).
 * Open questions and every judgment call: `docs/backend-w7-contest-report.md`.

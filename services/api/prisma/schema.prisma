@@ -2259,7 +2259,7 @@ model PointsLedgerEntry {
   userId     String
   // Cascade per DL #44 — the sweep's tx.user.delete() must keep working.
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  // engagement_post | engagement_like | engagement_follow
+  // engagement_like
   //   | contest_weekly_win | contest_monthly_crown
   // ('competition_result' reserved for DL #73's unbuilt Competition system.)
   source     String

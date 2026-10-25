@@ -366,13 +366,6 @@ export class FeedService {
           },
           select: POST_SELECT,
         });
-        await awardPoints(tx, {
-          userId: authorId,
-          source: 'engagement_post',
-          refId: post.id,
-          points: ENGAGEMENT_POINTS.POST_CREATED,
-          occurredAt: post.createdAt,
-        });
         // sprint-4/trending-topics-backend — same "land atomically with
         // the Post" discipline as the points award immediately above:
         // extracts every #hashtag in dto.contentText and records it

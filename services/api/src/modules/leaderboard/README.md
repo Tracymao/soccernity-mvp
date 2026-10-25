@@ -218,8 +218,8 @@ flagged follow-up, not built here — the Sprint 6 Leaderboard aggregation
 is the natural place to cap engagement contribution at read time
 anyway."*
 
-Applied to the summed contribution from `engagement_post`/
-`engagement_like`/`engagement_follow` **only**, via `LEAST(SUM(...), 100)`
+Applied to the summed contribution from `engagement_like`
+**only** (since B-094, posts and follows earn no points), via `LEAST(SUM(...), 100)`
 in the raw SQL, added to the **uncapped** sum of everything else (today:
 `contest_weekly_win`, `contest_monthly_crown`; `competition_result` is
 reserved and unused). Contest points are never capped.
@@ -231,8 +231,7 @@ dominate ~7 posts — a board driven by unbounded engagement volume would
 break that. 100 points is roughly 2x a single 3rd-place weekly win (20)
 and under half of the smallest 1st-place weekly win (50), so a user
 cannot out-earn even one real Contest placement through engagement spam
-alone. At the same time, 100 points (~33 posts at 3 each, ~100 likes, or
-~100 follows within one ISO week) comfortably exceeds what a real single
+alone. At the same time, 100 points (~100 likes within one ISO week) comfortably exceeds what a real single
 user does in a week of genuine, unspammed use — the cap targets spam
 volume, not ordinary participation.
 

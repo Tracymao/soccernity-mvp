@@ -15,15 +15,15 @@ describe('awardPoints', () => {
 
     const wrote = await awardPoints(tx, {
       userId: 'u-1',
-      source: 'engagement_post',
+      source: 'engagement_like',
       refId: 'post-1',
-      points: 3,
+      points: 1,
     });
 
     expect(wrote).toBe(true);
     const args = (tx.pointsLedgerEntry.createMany as jest.Mock).mock.calls[0][0];
     expect(args.skipDuplicates).toBe(true);
-    expect(args.data[0]).toMatchObject({ userId: 'u-1', source: 'engagement_post', refId: 'post-1', points: 3, clubId: null });
+    expect(args.data[0]).toMatchObject({ userId: 'u-1', source: 'engagement_like', refId: 'post-1', points: 1, clubId: null });
     expect(args.data[0].occurredAt.getTime()).toBeGreaterThanOrEqual(before);
   });
 

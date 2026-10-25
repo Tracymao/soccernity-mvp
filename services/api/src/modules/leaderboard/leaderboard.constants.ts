@@ -21,9 +21,7 @@ import { PointsSource } from '../points/points.constants';
 // SQL sums separately from everything else, via `= ANY(...)` /
 // `Prisma.join`.
 export const ENGAGEMENT_POINTS_SOURCES: readonly PointsSource[] = [
-  'engagement_post',
   'engagement_like',
-  'engagement_follow',
 ];
 
 // Anti-gaming cap on a single user's TOTAL engagement contribution

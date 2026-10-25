@@ -17,12 +17,10 @@
 // ---------------------------------------------------------------------
 //
 // Deliberately rewards *participation*, not *popularity*: a user earns
-// engagement points for creating posts, giving likes, and following
-// people — NOT for receiving likes/followers. Reasoning:
+// engagement points for giving likes — NOT for receiving likes. Posts
+// and follows earn no points at all (B-094, Decision Log #382; the older
+// Decision Log #130 / #219 text that lists them is superseded). Reasoning:
 //
-//   - Decision Log #130 lists "likes, follows, and posts" alongside each
-//     other; "posts" is unambiguously an action you take, so the natural
-//     reading is that all three are actions taken.
 //   - The Leaderboard's stated purpose is grassroots-player visibility to
 //     scouts and clubs (Decision Log #45), and minors appear on it. A
 //     board driven by *received* engagement would be a follower-count
@@ -40,12 +38,9 @@
 // to out-rank a contest performer through sheer volume (see the ratio
 // note under CONTEST_* below).
 export const ENGAGEMENT_POINTS = {
-  // Creating a post — the highest-effort routine action.
-  POST_CREATED: 3,
-  // Giving a like.
+  // Giving a like. B-094 (Decision Log #382): posts and follows earn no
+  // points, so POST_CREATED and FOLLOW_MADE no longer exist.
   LIKE_GIVEN: 1,
-  // Following another user.
-  FOLLOW_MADE: 1,
 } as const;
 
 // ---------------------------------------------------------------------
@@ -88,9 +83,7 @@ export const CONTEST_PODIUM_POSITIONS = [1, 2, 3] as const;
 // built (Build Plan Section 2.2 defers it) and nothing writes this value
 // yet — it's listed here so the enum doesn't need touching when it is.
 export type PointsSource =
-  | 'engagement_post'
   | 'engagement_like'
-  | 'engagement_follow'
   | 'contest_weekly_win'
   | 'contest_monthly_crown'
   | 'competition_result';
