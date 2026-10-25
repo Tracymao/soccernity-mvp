@@ -13,8 +13,8 @@ represented club), the `GET /leaderboard` endpoint (Build Plan Section
 4.9), and the scheduled `LeaderboardEntry` rollup are **all Sprint 6** and
 not built here.
 
-- `points.constants.ts` — `ENGAGEMENT_POINTS` (post 3 / like 1 / follow
-  1), `CONTEST_WEEKLY_WIN_POINTS` (50 / 30 / 20), `CONTEST_MONTHLY_CROWN_POINTS`
+- `points.constants.ts` — `ENGAGEMENT_POINTS` (like 1 only; posts and
+  follows earn no points since B-094, Decision Log #382), `CONTEST_WEEKLY_WIN_POINTS` (50 / 30 / 20), `CONTEST_MONTHLY_CROWN_POINTS`
   (250 / 150 / 100), and the `PointsSource` union. See Decision Log #219
   for the full rationale — the short version: baseline engagement rewards
   *actions a user takes* (not popularity received), at small absolute
@@ -43,8 +43,7 @@ stateless util, not a provider).
 - **Engagement points are awarded once per distinct event and never
   revoked.** Like → unlike → re-like the same post earns **1** point
   total (the re-like's `Like` row succeeds, reaches `awardPoints`, and
-  hits the ledger `@@unique` → no-op). Same for follow → unfollow →
-  re-follow. A user who likes 100 distinct posts earns 100 — they did
+  hits the ledger `@@unique` → no-op). A user who likes 100 distinct posts earns 100 — they did
   engage with 100 posts.
 - **Re-running contest round judging cannot double-pay** — the ledger
   `@@unique([source, refId, userId])` is the backstop
@@ -53,7 +52,7 @@ stateless util, not a provider).
 
 ## Flagged follow-ups (not built here)
 
-- **Per-day engagement cap / anti-spam.** Like/follow points are the
+- **Per-day engagement cap / anti-spam.** Like points are the
   obvious spam vector; only the "once per distinct target" rule blunts it
   today. The Sprint 6 Leaderboard aggregation is the natural place to cap
   engagement contribution at read time.

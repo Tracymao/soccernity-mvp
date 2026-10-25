@@ -200,7 +200,7 @@ describe('FeedService', () => {
       expect(result).toEqual(asView(row));
     });
 
-    it('awards the creator a baseline-engagement point (source engagement_post), keyed on the new post id, at the post createdAt (Decision Log #219)', async () => {
+    it('awards no points for creating a post (B-094, Decision Log #382)', async () => {
       const prisma = buildPrismaMock();
       const row = buildPostRow({ id: 'post-77', createdAt: new Date('2026-08-09T10:00:00.000Z') });
       (prisma.post.create as jest.Mock).mockResolvedValue(row);
@@ -208,19 +208,7 @@ describe('FeedService', () => {
       const service = new FeedService(prisma, FIXED_CLOCK);
       await service.createPost('author-1', { contentText: 'Great match today' });
 
-      expect((prisma as unknown as { pointsLedgerEntry: { createMany: jest.Mock } }).pointsLedgerEntry.createMany).toHaveBeenCalledWith({
-        data: [
-          {
-            userId: 'author-1',
-            source: 'engagement_post',
-            refId: 'post-77',
-            points: 3,
-            clubId: null,
-            occurredAt: new Date('2026-08-09T10:00:00.000Z'),
-          },
-        ],
-        skipDuplicates: true,
-      });
+      expect((prisma as unknown as { pointsLedgerEntry: { createMany: jest.Mock } }).pointsLedgerEntry.createMany).not.toHaveBeenCalled();
     });
 
     it('leaves likeCount and commentCount untouched (schema default 0) — this slice never creates a Like or Comment', async () => {

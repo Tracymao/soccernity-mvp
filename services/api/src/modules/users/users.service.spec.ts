@@ -390,21 +390,8 @@ describe('UsersService', () => {
       expect(prisma.notification.create).toHaveBeenCalledWith({
         data: { userId: 'followee-1', type: 'follow', payloadRefId: 'follower-1' },
       });
-      // Decision Log #219: the FOLLOWER (action-taker) earns a
-      // baseline-engagement point, keyed on the followee id.
-      expect((prisma as unknown as { pointsLedgerEntry: { createMany: jest.Mock } }).pointsLedgerEntry.createMany).toHaveBeenCalledWith({
-        data: [
-          {
-            userId: 'follower-1',
-            source: 'engagement_follow',
-            refId: 'followee-1',
-            points: 1,
-            clubId: null,
-            occurredAt: expect.any(Date),
-          },
-        ],
-        skipDuplicates: true,
-      });
+      // B-094 (Decision Log #382): a follow earns no points.
+      expect((prisma as unknown as { pointsLedgerEntry: { createMany: jest.Mock } }).pointsLedgerEntry.createMany).not.toHaveBeenCalled();
       expect(result).toEqual({ following: true });
     });
 
