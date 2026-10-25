@@ -776,7 +776,7 @@ export class FeedService {
         await recordEntryEngagement(tx, contest, { giverId: userId, kind: 'like', now });
         if (post.authorId !== userId && !(await hasBlockBetween(tx, userId, post.authorId))) {
           await tx.notification.create({
-            data: { userId: post.authorId, type: 'like', payloadRefId: postId },
+            data: { userId: post.authorId, type: 'like', payloadRefId: postId, actorId: userId },
           });
         }
         // Baseline-engagement point for the LIKER (the action-taker, not
@@ -900,7 +900,7 @@ export class FeedService {
       }
       if (post.authorId !== authorId && !(await hasBlockBetween(tx, authorId, post.authorId))) {
         await tx.notification.create({
-          data: { userId: post.authorId, type: 'comment', payloadRefId: postId },
+          data: { userId: post.authorId, type: 'comment', payloadRefId: postId, actorId: authorId },
         });
       }
       return toFeedComment(comment);

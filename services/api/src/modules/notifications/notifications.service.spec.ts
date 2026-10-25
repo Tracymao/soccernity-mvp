@@ -560,6 +560,7 @@ describe('NotificationsService', () => {
         NOT: {
           OR: [
             { type: 'follow', payloadRefId: { in: ['b-1', 'b-2'] } },
+            { type: { in: ['like', 'comment'] }, actorId: { not: null, in: ['b-1', 'b-2'] } },
             { type: 'message', payloadRefId: { in: ['conv-9'] } },
             { type: { in: ['fixture_scheduled', 'result_logged'] }, payloadRefId: { in: ['fix-7'] } },
           ],
@@ -569,9 +570,10 @@ describe('NotificationsService', () => {
       expect((prisma.conversation.findMany as jest.Mock).mock.calls[0][0].where).toEqual({
         AND: [{ participantIds: { has: CALLER } }, { participantIds: { hasSome: ['b-1', 'b-2'] } }],
       });
-      // like / comment rows carry no actor, so they are never excluded (OPEN)
-      expect(JSON.stringify(where)).not.toContain('"like"');
-      expect(JSON.stringify(where)).not.toContain('"comment"');
+      // like / comment rows are excluded by Notification.actorId (Decision Log #412 item 1),
+      // and system notification types are never named
+      expect(JSON.stringify(where)).toContain('"actorId":{"not":null,"in":["b-1","b-2"]}');
+      expect(JSON.stringify(where)).not.toMatch(/moderation_decision|contest_/);
     });
 
     it('the unread count and the page share ONE Block read and the same exclusion', async () => {
@@ -583,7 +585,7 @@ describe('NotificationsService', () => {
 
       expect(prisma.block.findMany).toHaveBeenCalledTimes(1);
       const countWhere = (prisma.notification.count as jest.Mock).mock.calls[0][0].where;
-      expect(countWhere).toMatchObject({ userId: CALLER, read: false, NOT: { OR: [{ type: 'follow', payloadRefId: { in: ['b-1'] } }] } });
+      expect(countWhere).toMatchObject({ userId: CALLER, read: false, NOT: { OR: [{ type: 'follow', payloadRefId: { in: ['b-1'] } }, { type: { in: ['like', 'comment'] }, actorId: { not: null, in: ['b-1'] } }] } });
     });
 
     it('getUnreadCount alone excludes the hidden rows', async () => {
@@ -602,7 +604,7 @@ describe('NotificationsService', () => {
       expect((prisma.notification.updateMany as jest.Mock).mock.calls[0][0].where).toMatchObject({
         userId: CALLER,
         read: false,
-        NOT: { OR: [{ type: 'follow', payloadRefId: { in: ['b-1'] } }] },
+        NOT: { OR: [{ type: 'follow', payloadRefId: { in: ['b-1'] } }, { type: { in: ['like', 'comment'] }, actorId: { not: null, in: ['b-1'] } }] },
       });
     });
 

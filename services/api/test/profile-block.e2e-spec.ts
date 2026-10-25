@@ -513,6 +513,65 @@ describe('Block + profile content e2e (real Postgres)', () => {
       expect(await prisma.notification.count({ where: { userId: c.id, type: 'result_logged', payloadRefId: f2.body.id } })).toBe(1);
     });
 
+    it('like and comment rows carry the actor and are hidden both ways from list and unread count, never deleted; system rows are unfiltered (Decision Log #412 item 1)', async () => {
+      const prisma = getTestPrismaClient();
+      const a = await seedUser(app, { label: 'a' });
+      const b = await seedUser(app, { label: 'b' });
+      const c = await seedUser(app, { label: 'c' });
+      const x = await seedUser(app, { label: 'x' });
+      const postA = await prisma.post.create({ data: { authorId: a.id, contentText: 'post by A' } });
+      const postX = await prisma.post.create({ data: { authorId: x.id, contentText: 'post by X' } });
+
+      // b and c like and comment on a's post; b likes x's post.
+      for (const u of [b, c]) {
+        await request(http()).post(`/posts/${postA.id}/like`).set(u.auth).expect(200);
+        await request(http()).post(`/posts/${postA.id}/comments`).set(u.auth).send({ contentText: `hi from ${u.username}` }).expect(201);
+      }
+      await request(http()).post(`/posts/${postX.id}/like`).set(b.auth).expect(200);
+
+      // The actor is recorded on exactly these two types (the actor, never the recipient).
+      const rows = await prisma.notification.findMany({ where: { type: { in: ['like', 'comment'] } } });
+      expect(rows).toHaveLength(5);
+      for (const r of rows) {
+        expect(r.actorId).not.toBeNull();
+        expect(r.actorId).not.toBe(r.userId);
+      }
+      expect(rows.filter((r) => r.userId === a.id && r.actorId === b.id)).toHaveLength(2);
+
+      // A system notification has no user actor: it must never be filtered.
+      await prisma.notification.create({ data: { userId: a.id, type: 'moderation_decision', payloadRefId: 'rep-1' } });
+      // A like row written before the column existed (NULL actorId) is not attributable, so it must
+      // stay visible even while a Block exists (SQL three-valued logic must not swallow it).
+      await prisma.notification.create({ data: { userId: a.id, type: 'like', payloadRefId: postA.id } });
+      expect(await unreadFor(a)).toBe(6);
+      expect(await unreadFor(x)).toBe(1);
+
+      // a blocks b: a (the blocker, the recipient) loses b's like and comment, keeps c's and the system row.
+      await block(a, b).expect(200);
+      const aList = await listFor(a);
+      expect(aList.items).toHaveLength(4);
+      expect(aList.items.map((i: { type: string }) => i.type).sort()).toEqual(['comment', 'like', 'like', 'moderation_decision']);
+      expect(aList.unreadCount).toBe(4);
+      expect(await unreadFor(a)).toBe(4);
+
+      // The other direction, with the BLOCKED user as recipient: b blocks x, so x (blocked) no longer
+      // sees b's like on x's own post.
+      await block(b, x).expect(200);
+      expect((await listFor(x)).items).toHaveLength(0);
+      expect(await unreadFor(x)).toBe(0);
+
+      // read-all touches only the visible rows; hidden ones stay unread in the database.
+      const readAll = await request(http()).patch('/notifications/read-all').set(a.auth).expect(200);
+      expect(readAll.body.markedRead).toBe(4);
+      expect(await prisma.notification.count({ where: { userId: a.id, actorId: b.id, read: false } })).toBe(2);
+
+      // Hidden at read time, not deleted; unblocking brings b's rows back.
+      expect(await prisma.notification.count({ where: { type: { in: ['like', 'comment'] }, actorId: { not: null } } })).toBe(5);
+      await request(http()).delete(`/users/${b.id}/block`).set(a.auth).expect(200);
+      expect((await listFor(a)).items).toHaveLength(6);
+      expect(await unreadFor(a)).toBe(2);
+    });
+
     it('a Block elsewhere in the system leaves an unrelated user\'s notifications and unread count unchanged', async () => {
       const a = await seedUser(app, { label: 'a' });
       const b = await seedUser(app, { label: 'b' });

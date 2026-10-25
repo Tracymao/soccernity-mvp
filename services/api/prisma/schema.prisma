@@ -1244,6 +1244,17 @@ model Notification {
   // collision into a no-op. Postgres treats NULLs as distinct, so unkeyed rows never clash.
   // Never selected into any API payload.
   dedupeKey    String?  @unique
+  // Decision Log #412 item 1: the user whose action caused this row. Set ONLY for
+  // like and comment (FeedService.likePost / addComment), the two types whose payloadRefId is a
+  // Post and so could not otherwise be attributed to a person (#290). NULL for every other type
+  // (their actor is derivable from payloadRefId, or there is none: system notifications) and for
+  // every row written before this column existed. Deliberately a plain string, not an FK, like
+  // payloadRefId: an anonymized User row is never deleted (#341), so an FK would add a User
+  // reverse relation for no integrity gain. Used only to hide a blocked pair's rows at read time
+  // (notifications/block-visibility.util.ts); never selected into any API payload.
+  actorId      String?
+
+  @@index([userId, actorId])
 }
 
 model SavedPost {
