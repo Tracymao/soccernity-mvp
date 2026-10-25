@@ -52,6 +52,23 @@ Add the tag to the string in source and add a row here (file, the string exactly
 | `apps/web/src/pages/signup/AgeGateStep.tsx` | Some countries ask for an extra check when a guardian approves an account for a younger child. [COPY PENDING LEGAL REVIEW] | Age Gate `5108:6626` (mobile `5539:7264`), country hint |
 | `apps/web/src/pages/signup/GuardianDetailsStep.tsx` | We only use this email address to request and record consent. [COPY PENDING LEGAL REVIEW] | Guardian Details Capture `5108:6627` (mobile `5539:7354`), fineprint `5111:6669` |
 | `apps/web/src/pages/signup/RegisterStep.tsx` | Set when you signed up and cannot be changed here. [COPY PENDING LEGAL REVIEW] | Register `407:1051`, date of birth note `6627:22258` |
+| `apps/web/src/pages/CreateProfilePage.tsx` | Set when you signed up and cannot be changed here. [COPY PENDING LEGAL REVIEW] | Create Profile `1498:2303` / `1629:2449`, read-only date of birth note (K6 / Decision Log #394) |
+| `apps/web/src/pages/GuardianConsentConfirmPage.tsx` | This link expires on {…}. [COPY PENDING LEGAL REVIEW] | Guardian confirm footnote, sentence 1 (K5 report section 6, B-185); the date is the request's `expiresAt` |
+| `apps/web/src/pages/GuardianConsentConfirmPage.tsx` | You can withdraw consent at any time on the guardian withdrawal page. [COPY PENDING LEGAL REVIEW] | Guardian confirm footnote, sentence 3 (K5 report section 6, B-185); the withdrawal page is not yet a web route (B-112) |
+| `apps/web/src/pages/GuardianConsentPage.tsx` | Registration cannot be completed until your guardian approves, including card verification where required. [COPY PENDING LEGAL REVIEW] | Restricted Pending `5108:6630` / `5531:7461`, registration status line (Decision Log #367, B-199) |
+| `apps/web/src/pages/OtherProfilePage.tsx` | You can undo it at any time in Settings; unblocking does not restore follows. They are not told. [COPY PENDING LEGAL REVIEW] | Block confirmation `6655:29600` / `6655:27355` (closing sentence; Decision Log #396, #402 item 4) |
+| `apps/web/src/pages/profile/EditProfileModal.tsx` | Shown on your profile only if you fill it in. It does not change the country used for safeguarding. [COPY PENDING LEGAL REVIEW] | Edit Profile `1466:15934` / `5702:8317`, Country hint (Decision Log #403 item 17) |
+| `apps/web/src/pages/profile/EditProfileModal.tsx` | Set when you signed up and cannot be changed here. [COPY PENDING LEGAL REVIEW] | Edit Profile `1466:15934` / `5702:8317`, read-only date of birth note (Decision Log #367) |
+| `apps/web/src/pages/profile/ProfileImageControl.tsx` | Only you can see this picture until it has been checked. [COPY PENDING LEGAL REVIEW] | Avatar, under review state (K6 pass, Decision Log #371, #411 item 1) |
+| `apps/web/src/pages/profile/ProfileImageControl.tsx` | This picture wasn’t approved. [COPY PENDING LEGAL REVIEW] | Avatar, rejected state (K6 pass; the reason line appears only when the server returns one) |
+| `apps/web/src/pages/profile/ProfileImageControl.tsx` | This picture is visible on your profile. [COPY PENDING LEGAL REVIEW] | Avatar, approved state (K6 pass) |
+| `apps/web/src/pages/profile/ProfileImageControl.tsx` | Only you can see this cover photo until it has been checked. [COPY PENDING LEGAL REVIEW] | Cover photo, under review state (K6 pass, Decision Log #411 item 4) |
+| `apps/web/src/pages/profile/ProfileImageControl.tsx` | This cover photo wasn’t approved. [COPY PENDING LEGAL REVIEW] | Cover photo, rejected state (K6 pass) |
+| `apps/web/src/pages/profile/ProfileImageControl.tsx` | This cover photo is visible on your profile. [COPY PENDING LEGAL REVIEW] | Cover photo, approved state (K6 pass) |
+| `apps/web/src/pages/profile/ProfileImageControl.tsx` | Pictures are checked automatically before they appear on your profile. [COPY PENDING LEGAL REVIEW] | Avatar, note under the control (K6 pass) |
+| `apps/web/src/pages/profile/ProfileImageControl.tsx` | Cover photos are checked automatically before they appear on your profile. [COPY PENDING LEGAL REVIEW] | Cover photo, note under the control (K6 pass) |
+| `apps/web/src/pages/settings/BlockedUsersPage.tsx` | You can unblock someone at any time. Unblocking does not restore follows. [COPY PENDING LEGAL REVIEW] | Blocked users list `6705:26172` / `6706:26580`, lead line (Decision Log #396) |
+| `apps/web/src/pages/settings/BlockedUsersPage.tsx` | They will be able to see your posts again, and you will see theirs. Follows that were removed when you blocked them are not restored. [COPY PENDING LEGAL REVIEW] | Unblock confirmation `6705:26659` (body; Decision Log #396) |
 
 ## OPEN: services/api email wording (Decision Log #406, build register B-124)
 

@@ -79,8 +79,7 @@ export default function MutedAccountsPage() {
               <p className="notif-row__title">{r.label}</p>
               {r.desc ? <p className="notif-row__desc">{r.desc}</p> : null}
               <p className="notif-row__note">
-                Not adjustable yet — muting isn&rsquo;t available yet. This needs a backend
-                notification-preferences module first.
+                Not adjustable yet — muting isn&rsquo;t available yet.
               </p>
             </div>
             <DisabledToggle label={r.label} />

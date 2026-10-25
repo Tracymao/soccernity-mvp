@@ -42,6 +42,7 @@ const SUMMARY: GuardianRequestSummary = {
   dateOfBirth: "2011-09-04",
   guardianName: "Sarah Bello",
   guardianRelationship: "Parent",
+  expiresAt: "2026-09-05T10:00:00.000Z",
   requestedAt: "2026-08-15T10:00:00.000Z",
   incorrectDetailsReported: false,
   notices: { guardianEmailShownOnMinorProfile: true, photoAndUsernameVisibleToOthers: true },
@@ -214,6 +215,28 @@ describe("GuardianConsentConfirmPage", () => {
       expect(panel.textContent).toContain("Parent");
       expect(panel.textContent).toContain("15 August 2026");
       expect(screen.queryByTestId("approval-on-hold")).toBeNull();
+    });
+
+    it("the footnote has the link-expiry sentence (from the summary), the cap, and the withdrawal sentence, each tagged", async () => {
+      vi.mocked(getGuardianRequestSummary).mockResolvedValue(SUMMARY);
+      renderConfirmPage();
+      await screen.findByTestId("request-summary");
+      const footnote = [...document.querySelectorAll(".consent-footnote")].find((el) =>
+        /guardian withdrawal page/.test(el.textContent ?? ""),
+      ) as HTMLElement;
+      expect(footnote.textContent).toMatch(/This link expires on 5 September 2026\. \[COPY PENDING LEGAL REVIEW\]/);
+      expect(footnote.textContent).toMatch(/You can decline up to 3 times/);
+      expect(footnote.textContent).toMatch(/withdraw consent at any time on the guardian withdrawal page\. \[COPY PENDING LEGAL REVIEW\]/);
+      expect(screen.getByRole("link", { name: "Privacy Policy" })).not.toBeNull();
+    });
+
+    it("without a summary the expiry sentence is left out rather than guessed", () => {
+      renderConfirmPage();
+      const footnote = [...document.querySelectorAll(".consent-footnote")].find((el) =>
+        /guardian withdrawal page/.test(el.textContent ?? ""),
+      ) as HTMLElement;
+      expect(footnote.textContent).not.toMatch(/This link expires/);
+      expect(footnote.textContent).toMatch(/withdraw consent at any time/);
     });
 
     it("posts only the token when the guardian reports incorrect details, then shows approval on hold", async () => {

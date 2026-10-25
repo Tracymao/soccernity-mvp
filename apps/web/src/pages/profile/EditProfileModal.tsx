@@ -1,33 +1,25 @@
-// Edit Profile modal. Figma source: "Edit Profile" (node 1466:15934,
-// specifically the form modal at node 1466:18196), "Soccernity-MVP" file
-// (weZWWqggy9j13eX8bhFgs6).
+// Edit Profile modal. Figma: "Edit Profile" (node 1466:15934, form modal
+// 1466:18196) and mobile 5702:8317, "Soccernity-MVP" file
+// (weZWWqggy9j13eX8bhFgs6), as updated by Figma pass L (free-text Preferred
+// Club, Username field).
 //
-// REAL, CONFIRMED BACKEND GAP (flagged plainly here and in this PR's
-// description, not silently worked around): PATCH /users/:id
-// (services/api/src/modules/users/dto/update-user.dto.ts) accepts ONLY
-// `displayName`, `phone` and (profile/username-column-and-display-convention)
-// `username` -- the Username field below has no dedicated Figma frame beyond
-// the unbuilt Create Profile screen (Decision Log #58), so it is built plainly.
-// The Figma frame's Bio, Location, Preferred
-// Club, and Date of Birth fields have NO real persistence path today --
-//   - dateOfBirth is deliberately excluded server-side (changing it could
-//     flip the safeguarding-sensitive `isMinor` field, and this codebase
-//     has no dedicated re-verification flow for that yet).
-//   - Bio and Location don't exist as columns on the User model AT ALL
-//     (confirmed by reading prisma/schema.prisma's User model directly).
-//   - Preferred Club: `clubAffiliationId` DOES exist on the schema, but
-//     zero endpoint anywhere writes to it (club membership instead goes
-//     through ClubPage.members / POST /clubs/:id/join -- see
-//     modules/clubs/README.md). Treated the same as Bio/Location here --
-//     visibly present, disabled, flagged -- since there's no real reason
-//     to treat it differently absent an endpoint.
-// Each of those four fields below is rendered disabled with a short
-// flagged comment, never silently accepting input that goes nowhere.
+// What is real, through endpoints that exist (build register B-194, B-215,
+// B-216; Decision Log #371, #394 A3, #403 item 17, #411 items 2 and 4):
+//   - Profile picture and cover photo: ProfileImageControl (upload, review
+//     status, remove). Uploads happen on choosing the file, not on Save.
+//   - Full name, phone, username (PATCH /users/:id). The username can never be
+//     removed (the server answers 400 `username_required`), so this never
+//     sends null.
+//   - Bio (160) and Preferred Club (free text, 80, shown to the owner only):
+//     screened by the server. A flagged value is the inline "Please rephrase"
+//     state, the typed text stays, there is NO override.
+//   - Country: the optional PROFILE country only, from the full list. It does
+//     not change the country used for safeguarding, which this page never
+//     shows or sends.
+//   - Date of birth: read-only, set at the Age Gate (#367).
 //
 // `phone` is a real, wired field that the Figma frame does NOT include at
-// all -- added here anyway (flagged) because it's fully functional
-// server-side and there's no reason to withhold a real capability just
-// because the mock didn't happen to draw it.
+// all -- kept (flagged) because it is fully functional server-side.
 //
 // "Manage Account" (Change Password / Deactivate / Delete) has NO Figma
 // screen anywhere in this file -- same real design gap ClubPickerStep.tsx
@@ -43,8 +35,19 @@ import {
   deactivateAccount,
   deleteAccount,
 } from "../../api/auth";
-import { UsersApiError, updateUser, type UserProfile } from "../../api/users";
+import { UsersApiError, updateUser, type ProfileImage, type UserProfile } from "../../api/users";
+import { profileCountryOptions } from "../../lib/countries";
 import { clearStoredSession } from "../../lib/session";
+import ProfileImageControl from "./ProfileImageControl";
+import { NOT_FLAGGED, RephraseNote, flaggedFieldsFrom, type FlaggedFields } from "./rephrase";
+import {
+  BIO_MAX_LENGTH,
+  PREFERRED_CLUB_MAX_LENGTH,
+  USERNAME_PATTERN,
+  formatDobField,
+  initialsFor,
+  splitDisplayName,
+} from "./profileFields";
 import "./EditProfileModal.css";
 
 // sprint-1/f5-f6-bugfixes -- Bug 2 fix. How long the success message stays
@@ -63,16 +66,6 @@ interface EditProfileModalProps {
   onSaved: (updated: UserProfile) => void;
 }
 
-function splitDisplayName(displayName: string): { firstName: string; lastName: string } {
-  const trimmed = displayName.trim();
-  const spaceIndex = trimmed.indexOf(" ");
-  if (spaceIndex === -1) return { firstName: trimmed, lastName: "" };
-  return { firstName: trimmed.slice(0, spaceIndex), lastName: trimmed.slice(spaceIndex + 1) };
-}
-
-// Mirrors services/api's UpdateUserDto.username rule.
-const USERNAME_PATTERN = /^[A-Za-z0-9_]{3,30}$/;
-
 type ManagePanel = null | "password" | "deactivate" | "delete";
 
 export default function EditProfileModal({ accessToken, user, onClose, onSaved }: EditProfileModalProps) {
@@ -82,6 +75,12 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
   const [lastName, setLastName] = useState(initialName.lastName);
   const [phone, setPhone] = useState(user.phone ?? "");
   const [username, setUsername] = useState(user.username ?? "");
+  const [bio, setBio] = useState(user.bio ?? "");
+  const [preferredClub, setPreferredClub] = useState(user.preferredClub ?? "");
+  const [country, setCountry] = useState(user.profileCountry ?? "");
+  const [avatar, setAvatar] = useState<ProfileImage | null>(user.avatar ?? null);
+  const [cover, setCover] = useState<ProfileImage | null>(user.cover ?? null);
+  const [flagged, setFlagged] = useState<FlaggedFields>(NOT_FLAGGED);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   // Errors that belong to the username field (the server's username_* codes,
@@ -122,6 +121,7 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
     setSaveError(null);
     setUsernameError(null);
     setSaveSuccess(false);
+    setFlagged(NOT_FLAGGED);
 
     const displayName = `${firstName.trim()} ${lastName.trim()}`.trim();
     if (!displayName) {
@@ -151,11 +151,21 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
         displayName,
         ...(phone.trim() ? { phone: phone.trim() } : {}),
         ...(sendUsername ? { username: trimmedUsername } : {}),
+        // Only what changed, so an unchanged field is never screened again.
+        ...(bio.trim() !== (user.bio ?? "") ? { bio: bio.trim() || null } : {}),
+        ...(preferredClub.trim() !== (user.preferredClub ?? "")
+          ? { preferredClub: preferredClub.trim() || null }
+          : {}),
+        ...(country !== (user.profileCountry ?? "") ? { profileCountry: country || null } : {}),
       });
       setSaveSuccess(true);
       onSaved(updated);
     } catch (error) {
-      if (error instanceof UsersApiError) {
+      const flaggedNow = flaggedFieldsFrom(error);
+      if (flaggedNow) {
+        // Nothing was saved. The typed text stays so it can be edited.
+        setFlagged(flaggedNow);
+      } else if (error instanceof UsersApiError) {
         const aboutUsername =
           (error.code?.startsWith("username_") ?? false) || (error.status === 409 && /username/i.test(error.message));
         if (aboutUsername) setUsernameError(error.message);
@@ -280,6 +290,22 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
 
         <div className="edit-profile-modal__body">
           <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <ProfileImageControl
+              kind="cover"
+              accessToken={accessToken}
+              userId={user.id}
+              image={cover}
+              onChange={setCover}
+            />
+            <ProfileImageControl
+              kind="avatar"
+              accessToken={accessToken}
+              userId={user.id}
+              image={avatar}
+              onChange={setAvatar}
+              initials={initialsFor(user.publicName)}
+            />
+
             <div className="edit-profile-field">
               <span className="edit-profile-field__label">Full Name</span>
               <div className="edit-profile-field__row">
@@ -313,8 +339,8 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
                 aria-describedby={usernameError ? "edit-profile-username-error" : undefined}
               />
               <p className="edit-profile-field__hint">
-                Other people see your username instead of your full name. 3-30 letters, numbers or underscores; not
-                case-sensitive. It can&rsquo;t be removed, and it can only be changed now and then.
+                {username.trim() ? `Shown as @${username.trim().toLowerCase()}. ` : ""}3–30 letters, numbers or
+                underscores. You can change it once every 30 days (one free correction). It can&rsquo;t be removed.
               </p>
               {usernameError && (
                 <p className="edit-profile-error" role="alert" id="edit-profile-username-error">
@@ -340,44 +366,68 @@ export default function EditProfileModal({ accessToken, user, onClose, onSaved }
               <label className="edit-profile-field__label" htmlFor="edit-profile-bio">
                 Bio
               </label>
-              {/* no backend field/endpoint yet -- see PR description */}
-              <textarea id="edit-profile-bio" disabled placeholder="Not available yet" />
-              <p className="edit-profile-field__hint">Coming soon.</p>
+              <textarea
+                id="edit-profile-bio"
+                className={flagged.bio ? "profile-flagged" : undefined}
+                value={bio}
+                maxLength={BIO_MAX_LENGTH}
+                onChange={(event) => {
+                  setBio(event.target.value);
+                  if (flagged.bio) setFlagged((f) => ({ ...f, bio: false }));
+                }}
+                placeholder="Write a short bio"
+                aria-invalid={flagged.bio || undefined}
+                aria-describedby={flagged.bio ? "edit-profile-bio-rephrase" : undefined}
+              />
+              {flagged.bio && <RephraseNote id="edit-profile-bio-rephrase" />}
             </div>
 
             <div className="edit-profile-field">
-              <label className="edit-profile-field__label" htmlFor="edit-profile-location">
-                Location
+              <label className="edit-profile-field__label" htmlFor="edit-profile-country">
+                Country
               </label>
-              {/* no backend field/endpoint yet -- see PR description */}
-              <input id="edit-profile-location" disabled placeholder="Not available yet" />
-              <p className="edit-profile-field__hint">Coming soon.</p>
+              <select id="edit-profile-country" value={country} onChange={(event) => setCountry(event.target.value)}>
+                <option value="">Select country</option>
+                {profileCountryOptions().map((option) => (
+                  <option key={option.code} value={option.code}>
+                    {option.name}
+                  </option>
+                ))}
+              </select>
+              <p className="edit-profile-field__hint">
+                Shown on your profile only if you fill it in. It does not change the country used for safeguarding.
+                [COPY PENDING LEGAL REVIEW]
+              </p>
             </div>
 
             <div className="edit-profile-field">
               <label className="edit-profile-field__label" htmlFor="edit-profile-club">
                 Preferred Club
               </label>
-              {/* clubAffiliationId exists on the schema, but no endpoint
-                  writes to it -- see this file's header comment. */}
-              <input id="edit-profile-club" disabled value={user.clubAffiliationId ?? ""} placeholder="Not set" />
-              <p className="edit-profile-field__hint">
-                Coming soon. You can join clubs from a club&rsquo;s page.
-              </p>
+              {/* Free text, shown to the owner only (Decision Log #412 item 4, #411 item 3). */}
+              <input
+                id="edit-profile-club"
+                className={flagged.preferredClub ? "profile-flagged" : undefined}
+                value={preferredClub}
+                maxLength={PREFERRED_CLUB_MAX_LENGTH}
+                onChange={(event) => {
+                  setPreferredClub(event.target.value);
+                  if (flagged.preferredClub) setFlagged((f) => ({ ...f, preferredClub: false }));
+                }}
+                placeholder="Enter your preferred club"
+                aria-invalid={flagged.preferredClub || undefined}
+                aria-describedby={flagged.preferredClub ? "edit-profile-club-rephrase" : undefined}
+              />
+              {flagged.preferredClub && <RephraseNote id="edit-profile-club-rephrase" />}
             </div>
 
             <div className="edit-profile-field">
               <label className="edit-profile-field__label" htmlFor="edit-profile-dob">
                 Date of Birth
               </label>
-              {/* deliberately excluded server-side -- see header comment */}
-              <input
-                id="edit-profile-dob"
-                disabled
-                value={new Date(user.dateOfBirth).toLocaleDateString("en-GB")}
-              />
+              <input id="edit-profile-dob" readOnly aria-readonly="true" value={formatDobField(user.dateOfBirth)} />
               <p className="edit-profile-field__hint">
-                Your date of birth can&rsquo;t be changed here. If it is wrong, contact support.
+                Set when you signed up and cannot be changed here. [COPY PENDING LEGAL REVIEW]
               </p>
             </div>
 

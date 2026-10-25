@@ -1,0 +1,26 @@
+/* Create Profile additions on top of the shared signup form (SignupSplitScreen.css).
+ * Figma 1498:2303. Colours come from the flow's own --signup-* variables. */
+.create-profile {
+  gap: 28px;
+}
+
+.create-profile__required {
+  color: var(--sn-semantic-alert);
+  margin-left: 2px;
+}
+
+.create-profile__optional {
+  font-weight: 600;
+  color: var(--signup-text-secondary);
+}
+
+.signup-form__group > .signup-form__input.create-profile__textarea {
+  height: 194px;
+  padding: 20px 24px;
+  resize: vertical;
+  font-family: "Inter", sans-serif;
+}
+
+.create-profile .profile-image__label {
+  color: var(--signup-text-primary);
+}

@@ -333,6 +333,8 @@ export interface GuardianRequestSummary {
   guardianName: string;
   guardianRelationship: string;
   requestedAt: string;
+  /** When this request's link stops working (ISO). Moves forward if the minor resends. */
+  expiresAt: string;
   /** True once the guardian reported incorrect details and support has not resolved it: approval is on hold. */
   incorrectDetailsReported: boolean;
   notices: {

@@ -47,26 +47,76 @@ describe("CreateProfilePage", () => {
     expect(getUser).not.toHaveBeenCalled();
   });
 
-  it("saves a username, then goes to the Club Picker", async () => {
+  const PROFILE = {
+    nextStep: "create_profile",
+    displayName: "Ade Bello",
+    username: null,
+    dateOfBirth: "2011-09-04T00:00:00.000Z",
+    profileCountry: null,
+    bio: null,
+    preferredClub: null,
+    avatar: null,
+    cover: null,
+  } as unknown as Awaited<ReturnType<typeof getUser>>;
+
+  function continueButton() {
+    return screen.getByRole("button", { name: "Continue" });
+  }
+
+  it("renders every field: picture, cover, name, username, read-only date of birth, blank optional country, bio and club", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeToken("user-1"));
-    vi.mocked(getUser).mockResolvedValue({ nextStep: "create_profile" } as Awaited<ReturnType<typeof getUser>>);
+    vi.mocked(getUser).mockResolvedValue(PROFILE);
+    renderPage();
+
+    expect(((await screen.findByLabelText("First name")) as HTMLInputElement).value).toBe("Ade");
+    expect((screen.getByLabelText("Last name") as HTMLInputElement).value).toBe("Bello");
+    const dob = screen.getByLabelText("Date of Birth") as HTMLInputElement;
+    expect(dob.readOnly).toBe(true);
+    expect(dob.value).toBe("04 / 09 / 2011");
+    // Country is optional, editable and BLANK at first (Decision Log #403 item 17).
+    const country = screen.getByLabelText(/Country/) as HTMLSelectElement;
+    expect(country.value).toBe("");
+    expect(country.disabled).toBe(false);
+    expect(screen.getByLabelText(/Bio/)).not.toBeNull();
+    expect(screen.getByLabelText(/Preferred Club/)).not.toBeNull();
+    expect(screen.getAllByText(/profile picture/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/cover photo/i).length).toBeGreaterThan(0);
+  });
+
+  it("saves the profile (username required), then goes to the Club Picker", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeToken("user-1"));
+    vi.mocked(getUser).mockResolvedValue(PROFILE);
     vi.mocked(updateUser).mockResolvedValue({} as Awaited<ReturnType<typeof updateUser>>);
     renderPage();
 
-    fireEvent.change(await screen.findByLabelText("Username"), { target: { value: "tobi_9" } });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.change(await screen.findByLabelText(/^Username/), { target: { value: "tobi_9" } });
+    fireEvent.change(screen.getByLabelText(/Country/), { target: { value: "NG" } });
+    fireEvent.change(screen.getByLabelText(/Bio/), { target: { value: "Winger from Lagos" } });
+    fireEvent.change(screen.getByLabelText(/Preferred Club/), { target: { value: "Ikoyi Rovers" } });
+    fireEvent.click(continueButton());
 
-    await waitFor(() => expect(updateUser).toHaveBeenCalledWith(expect.any(String), "user-1", { username: "tobi_9" }));
+    await waitFor(() => expect(updateUser).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(updateUser).mock.calls[0]).toEqual([
+      expect.any(String),
+      "user-1",
+      {
+        displayName: "Ade Bello",
+        username: "tobi_9",
+        profileCountry: "NG",
+        bio: "Winger from Lagos",
+        preferredClub: "Ikoyi Rovers",
+      },
+    ]);
     expect(await screen.findByText("club picker page")).not.toBeNull();
   });
 
   it("rejects a malformed username locally and never calls the API", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeToken());
-    vi.mocked(getUser).mockResolvedValue({ nextStep: "create_profile" } as Awaited<ReturnType<typeof getUser>>);
+    vi.mocked(getUser).mockResolvedValue(PROFILE);
     renderPage();
 
-    fireEvent.change(await screen.findByLabelText("Username"), { target: { value: "no spaces!" } });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.change(await screen.findByLabelText(/^Username/), { target: { value: "no spaces!" } });
+    fireEvent.click(continueButton());
 
     expect((await screen.findByRole("alert")).textContent).toMatch(/3-30 characters/i);
     expect(updateUser).not.toHaveBeenCalled();
@@ -74,15 +124,41 @@ describe("CreateProfilePage", () => {
 
   it("shows the server's own message when the username is refused", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeToken());
-    vi.mocked(getUser).mockResolvedValue({ nextStep: "create_profile" } as Awaited<ReturnType<typeof getUser>>);
+    vi.mocked(getUser).mockResolvedValue(PROFILE);
     vi.mocked(updateUser).mockRejectedValue(new UsersApiError("That username isn't available.", { status: 409 }));
     renderPage();
 
-    fireEvent.change(await screen.findByLabelText("Username"), { target: { value: "taken_name" } });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.change(await screen.findByLabelText(/^Username/), { target: { value: "taken_name" } });
+    fireEvent.click(continueButton());
 
     expect((await screen.findByRole("alert")).textContent).toBe("That username isn't available.");
     expect(screen.queryByText("club picker page")).toBeNull();
+  });
+
+  it("a flagged bio shows 'Please rephrase', keeps the typed text and has no override", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeToken());
+    vi.mocked(getUser).mockResolvedValue(PROFILE);
+    vi.mocked(updateUser).mockRejectedValue(
+      new UsersApiError("Please rephrase.", {
+        status: 422,
+        code: "sensitive_content_rephrase_required",
+        flaggedFields: [{ field: "bio", categories: ["health"] }],
+      }),
+    );
+    renderPage();
+
+    fireEvent.change(await screen.findByLabelText(/^Username/), { target: { value: "tobi_9" } });
+    fireEvent.change(screen.getByLabelText(/Bio/), { target: { value: "my typed bio" } });
+    fireEvent.click(continueButton());
+
+    expect(await screen.findByText("Please rephrase")).not.toBeNull();
+    expect((screen.getByLabelText(/Bio/) as HTMLTextAreaElement).value).toBe("my typed bio");
+    expect(screen.queryByRole("button", { name: /anyway|override|confirm/i })).toBeNull();
+    expect(screen.queryByText("club picker page")).toBeNull();
+
+    // Editing the flagged field clears its flag; the next save is screened again by the server.
+    fireEvent.change(screen.getByLabelText(/Bio/), { target: { value: "a different bio" } });
+    expect(screen.queryByText("Please rephrase")).toBeNull();
   });
 
   it("sends a restricted-pending account back to /guardian-consent instead of showing the form", async () => {

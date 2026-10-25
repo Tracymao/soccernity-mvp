@@ -25,6 +25,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { getUser, getFollowers, getFollowing, UsersApiError, type UserProfile, type FollowUserSummary } from "../api/users";
+import { countryName } from "../lib/countries";
 import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
 import EditProfileModal from "./profile/EditProfileModal";
 import "./profile/ProfilePage.css";
@@ -134,12 +135,16 @@ export default function ProfilePage() {
 
   return (
     <div className="profile-page">
+      {/* The owner always sees their own cover and picture, including one still
+          under review (W5/W6: nobody else sees it until the image check exists). */}
+      {profile.cover && <img className="profile-cover" src={profile.cover.url} alt="" />}
       <div className="profile-header">
-        {/* No avatar/photo field exists on the User model -- see
-            EditProfileModal.tsx's header comment for the same gap on the
-            edit side. Rendered as initials, not a broken/missing image. */}
         <div className="profile-header__avatar" aria-hidden="true">
-          {initialsFor(profile.publicName)}
+          {profile.avatar ? (
+            <img className="profile-header__avatar-image" src={profile.avatar.url} alt="" />
+          ) : (
+            initialsFor(profile.publicName)
+          )}
         </div>
 
         <div className="profile-header__body">
@@ -217,18 +222,29 @@ export default function ProfilePage() {
         <p className="profile-section__title">About</p>
         <div className="profile-field-row">
           <span className="profile-field-row__label">Bio</span>
-          {/* no backend field/endpoint yet -- see EditProfileModal.tsx */}
-          <span className="profile-field-row__value profile-field-row__value--disabled">Not available yet</span>
+          <span className={profile.bio ? "profile-field-row__value" : "profile-field-row__value profile-field-row__value--disabled"}>
+            {profile.bio ?? "Not set"}
+          </span>
         </div>
         <div className="profile-field-row">
-          <span className="profile-field-row__label">Location</span>
-          {/* no backend field/endpoint yet -- see EditProfileModal.tsx */}
-          <span className="profile-field-row__value profile-field-row__value--disabled">Not available yet</span>
+          <span className="profile-field-row__label">Country</span>
+          <span
+            className={
+              profile.profileCountry ? "profile-field-row__value" : "profile-field-row__value profile-field-row__value--disabled"
+            }
+          >
+            {profile.profileCountry ? countryName(profile.profileCountry) : "Not set"}
+          </span>
         </div>
         <div className="profile-field-row">
           <span className="profile-field-row__label">Preferred Club</span>
-          <span className="profile-field-row__value profile-field-row__value--disabled">
-            {profile.clubAffiliationId ?? "Not set"}
+          {/* Owner only: no other user's response carries it (Decision Log #411 item 3). */}
+          <span
+            className={
+              profile.preferredClub ? "profile-field-row__value" : "profile-field-row__value profile-field-row__value--disabled"
+            }
+          >
+            {profile.preferredClub ?? "Not set"}
           </span>
         </div>
       </div>

@@ -67,6 +67,11 @@ function profile(overrides: Partial<UserProfile> = {}): UserProfile {
     clubAffiliationId: null,
     isTeamOrganiser: false,
     representedClub: null,
+    bio: null,
+    preferredClub: null,
+    profileCountry: null,
+    avatar: null,
+    cover: null,
     ...overrides,
   };
 }

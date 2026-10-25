@@ -65,13 +65,35 @@ export interface NotificationMatch {
   status: string;
 }
 
+export type ContestNotificationOutcome = "winners" | "no_winner";
+
+// The seven scheduled Contest event types (services/api contest-notifications, B-122). No push and no
+// email: these are in-app rows only.
+export const CONTEST_EVENT_TYPES = [
+  "contest_week_opens",
+  "contest_votes_closing",
+  "contest_week_result",
+  "contest_finalist",
+  "contest_reveal",
+  "contest_final_result",
+  "contest_upload_reminder",
+] as const;
+export type ContestEventType = (typeof CONTEST_EVENT_TYPES)[number];
+
+export function isContestEventType(type: string): type is ContestEventType {
+  return (CONTEST_EVENT_TYPES as readonly string[]).includes(type);
+}
+
 export type NotificationData =
   | { actor: NotificationActor }
   | { match: NotificationMatch }
   | { post: NotificationPost }
   | { conversationId: string; otherParticipant: NotificationOtherParticipant | null }
   | { fixture: NotificationFixture }
-  | { cycle: NotificationContestCycle }
+  // contest_win resolves to just the cycle. The seven scheduled Contest events (B-122, B-123;
+  // Decision Log #404 item 16) add `week` (null for the cycle-level events) and, for
+  // contest_final_result only, `outcome`.
+  | { cycle: NotificationContestCycle; week?: number | null; outcome?: ContestNotificationOutcome }
   // age_milestone: only the milestone key (e.g. 'under_16_lifted') is
   // resolved server-side; copy is this app's concern.
   | { milestone: string };

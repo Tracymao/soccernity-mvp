@@ -57,8 +57,7 @@ export default function PushNotificationsPage() {
               Soccernity. You can turn them off anytime.
             </p>
             <p className="notif-row__note">
-              Not adjustable yet — push notifications aren&rsquo;t available yet. This needs a backend
-              push-delivery module first.
+              Not adjustable yet — push notifications aren&rsquo;t available yet.
             </p>
           </div>
           <DisabledToggle label="Turn on push notifications" />

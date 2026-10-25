@@ -204,8 +204,21 @@ export default function PostCard({ post, accessToken, currentUserId, onDeleted }
           {initialsFor(post.author.publicName)}
         </div>
         <div className="post__identity">
-          <span className="post__author">{post.author.publicName}</span>
+          {isOwnPost ? (
+            <span className="post__author">{post.author.publicName}</span>
+          ) : (
+            // Opens their profile (B-082). A viewer a Block hides this author from
+            // never sees the post at all, so the link never leads to a surprise.
+            <Link to={`/users/${post.authorId}`} className="post__author post__author--link">
+              {post.author.publicName}
+            </Link>
+          )}
           <span className="post__time">{relativeTime(post.createdAt)}</span>
+          {post.contest && (
+            <span className="post__contest-label" title="This post is a Contest entry">
+              {post.contest.label}
+            </span>
+          )}
         </div>
         {!isOwnPost && (
           <button

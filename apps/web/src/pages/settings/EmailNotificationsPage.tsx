@@ -77,8 +77,7 @@ export default function EmailNotificationsPage() {
               Soccernity. You can turn them off anytime.
             </p>
             <p className="notif-row__note">
-              Not adjustable yet — email notification preferences aren&rsquo;t available yet. This
-              needs a backend notification-preferences module first.
+              Not adjustable yet — email notification preferences aren&rsquo;t available yet.
             </p>
           </div>
           <DisabledToggle label="Turn on email notifications" />

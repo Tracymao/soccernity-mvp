@@ -30,10 +30,17 @@
 // Both POST /posts and POST /contest/entries are gated by GuardianConsentGuard in
 // addition to JwtAuthGuard, so a restricted-pending minor gets a 403 on either —
 // surfaced as an inline message linking to /guardian-consent, not a silent failure.
+//
+// WEEK 4 (B-096, Decision Log #386, #403 item 1): during the finalist upload window (days 22-24,
+// `calendarState.kind === "final_upload"`) the Contest tab is still shown to everyone, but the
+// weekly flow above does not apply (POST /contest/entries is refused outside the weekly windows).
+// FinalWeekPanel renders instead: a finalist uploads a final entry (POST /contest/final-entry, which
+// creates the hidden post itself), a non-finalist sees the "finalists only" closed state.
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { createPost, FeedApiError, type CreatedPost } from "../../api/feed";
 import { submitContestEntry, ContestApiError, type CurrentContestResponse } from "../../api/contest";
+import FinalWeekPanel from "./FinalWeekPanel";
 
 const MAX_LENGTH = 3000;
 
@@ -68,6 +75,7 @@ export default function PostComposer({
 }: PostComposerProps) {
   const contestOpen = contest?.isAcceptingEntries === true;
   const alreadyEntered = contest?.callerEntry != null;
+  const finalWeek = contest?.calendarState?.kind === "final_upload";
 
   const [mode, setMode] = useState<Mode>(contestOpen && initialMode === "contest" ? "contest" : "post");
   // GET /contest/current usually resolves AFTER this component first mounts, so a
@@ -177,11 +185,22 @@ export default function PostComposer({
         </div>
       )}
 
-      {effectiveMode === "contest" && alreadyEntered ? (
+      {effectiveMode === "contest" && finalWeek && contest ? (
+        <FinalWeekPanel
+          accessToken={accessToken}
+          authorName={authorName}
+          contest={contest}
+          onSubmitted={onContestSubmitted}
+        />
+      ) : effectiveMode === "contest" && alreadyEntered ? (
         <p className="composer__contest-done" role="status">
           You&rsquo;ve entered this week&rsquo;s contest (week {contest?.callerEntry?.weekNumber}). Your entry is locked in
           &mdash; you can enter again when next week&rsquo;s round opens.{" "}
           <Link to="/contest">See the contest</Link>.
+        </p>
+      ) : effectiveMode === "contest" && contest && !contest.callerCanEnter ? (
+        <p className="composer__contest-done" role="status">
+          You can&rsquo;t enter this week&rsquo;s contest right now. <Link to="/contest">See the contest</Link>.
         </p>
       ) : (
         <div className="composer__row">

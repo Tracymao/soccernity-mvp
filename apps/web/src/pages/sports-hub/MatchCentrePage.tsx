@@ -349,7 +349,7 @@ function PlayerRatings({ home, away }: { home: TeamBoxScore; away: TeamBoxScore 
           </ul>
         </div>
       ))}
-      <StatusMessage>Ratings are the vendor&rsquo;s match rating; how it is calculated is not published.</StatusMessage>
+      <StatusMessage>Ratings are the data provider&rsquo;s match rating; how it is calculated is not published.</StatusMessage>
     </Section>
   );
 }

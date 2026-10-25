@@ -44,6 +44,11 @@ function organiserProfile(overrides: Partial<UserProfile> = {}): UserProfile {
     clubAffiliationId: null,
     isTeamOrganiser: true,
     representedClub: null,
+    bio: null,
+    preferredClub: null,
+    profileCountry: null,
+    avatar: null,
+    cover: null,
     ...overrides,
   };
 }

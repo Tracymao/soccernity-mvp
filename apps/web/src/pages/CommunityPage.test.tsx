@@ -44,48 +44,9 @@ vi.mock("../api/contest", async () => {
 import { getFeed, createPost, likePost } from "../api/feed";
 import { getUser } from "../api/users";
 import { getCurrentContest, submitContestEntry, type CurrentContestResponse } from "../api/contest";
+import { noContest, openContest as baseOpenContest } from "./contest/contestFixtures";
 
-function noContest(): CurrentContestResponse {
-  return {
-    cycle: null,
-    phase: null,
-    isAcceptingEntries: false,
-    activeRound: null,
-    rounds: [],
-    weeklyWinners: [],
-    monthlyStandings: [],
-    callerEntry: null,
-  };
-}
-
-function openContest(overrides: Partial<CurrentContestResponse> = {}): CurrentContestResponse {
-  return {
-    cycle: {
-      id: "cycle-1",
-      title: "September Contest",
-      status: "active",
-      startsAt: new Date().toISOString(),
-      endsAt: new Date().toISOString(),
-      finalOpenedAt: null,
-      crownedAt: null,
-    },
-    phase: "week_1",
-    isAcceptingEntries: true,
-    activeRound: {
-      id: "round-2",
-      weekNumber: 2,
-      status: "open",
-      opensAt: new Date().toISOString(),
-      closesAt: new Date(Date.now() + 86400000).toISOString(),
-      judgedAt: null,
-    },
-    rounds: [],
-    weeklyWinners: [],
-    monthlyStandings: [],
-    callerEntry: null,
-    ...overrides,
-  };
-}
+const openContest = (overrides: Partial<CurrentContestResponse> = {}) => baseOpenContest(overrides);
 
 function base64UrlEncode(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");

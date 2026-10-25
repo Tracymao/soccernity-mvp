@@ -98,6 +98,34 @@ describe("GuardianConsentPage", () => {
     await waitFor(() => expect(resendGuardianConsentRequest).toHaveBeenCalledWith("minor@example.com"));
   });
 
+  it("shows the registration status line on the pending view only (B-199, Decision Log #367)", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({
+      consentStatus: "pending",
+      guardianEmail: "guardian@example.com",
+      canResend: true,
+      consentTimestamp: null,
+    });
+    renderPage();
+    const line = await screen.findByTestId("registration-status-line");
+    expect(line.textContent).toMatch(/Registration cannot be completed until your guardian approves/);
+    expect(line.textContent).toMatch(/card verification where required/);
+    expect(line.textContent).toMatch(/\[COPY PENDING LEGAL REVIEW\]/);
+  });
+
+  it("does not show the registration status line once consent is confirmed", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({
+      consentStatus: "confirmed",
+      guardianEmail: "guardian@example.com",
+      canResend: false,
+      consentTimestamp: "2026-09-01T10:00:00.000Z",
+    });
+    renderPage();
+    await screen.findAllByText(/continue registration/i);
+    expect(screen.queryByTestId("registration-status-line")).toBeNull();
+  });
+
   it("offers Change guardian email as a link to the real screen in the pending state (not a disabled button)", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({

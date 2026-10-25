@@ -18,7 +18,7 @@
  * full-bleed shell regardless.) */
 
 .club-picker-page {
-  min-height: calc(100vh - 90px);
+  min-height: calc(100vh - var(--sn-chrome-height, 90px)); /* B-187: AppShell 90/64px, AuthChrome 90px */
   margin: -32px;
   padding: 64px 32px;
   background-color: var(--picker-bg);

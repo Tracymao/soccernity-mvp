@@ -49,6 +49,11 @@ export interface FeedPost {
   // Who may add NEW comments. Optional only so older fixtures/payloads
   // without it read as "everyone".
   commentPermission?: CommentPermission;
+  // Set when the post IS a Contest entry (backend/w7-contest): the card shows the
+  // "Contest post" label. `pinned` is true while the entry is pinned on its author's
+  // profile (until the end of the contest month); after that it is an ordinary post that
+  // keeps the label. Optional so older fixtures without it read as "not a contest entry".
+  contest?: { entryId: string; kind: "weekly" | "final"; weekNumber: number; pinned: boolean; label: string } | null;
   createdAt: string;
   // Per-calling-user viewer state (Decision Log #153). `true` iff the
   // caller has already liked / saved this post. Returned by GET

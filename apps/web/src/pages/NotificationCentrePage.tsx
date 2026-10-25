@@ -57,6 +57,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
   NotificationsApiError,
+  isContestEventType,
   type Notification,
 } from "../api/notifications";
 import { getStoredAccessToken } from "../lib/session";
@@ -95,6 +96,24 @@ function linkFor(n: Notification): string | null {
     return `/grassroots/fixtures/${n.data.fixture.id}`;
   }
   if (n.type === "contest_win") return "/contest";
+  // The scheduled Contest events (B-123). Destinations are the ones drawn in Figma pass J2 and
+  // fixed by Decision Log #405 item 2; NO Contest notification opens a profile.
+  switch (n.type) {
+    case "contest_week_opens":
+      return "/contest";
+    case "contest_votes_closing":
+      return "/contest/voting";
+    case "contest_week_result":
+    case "contest_final_result":
+      return "/leaderboard?tab=contest";
+    case "contest_finalist":
+    case "contest_upload_reminder":
+      return "/community?compose=contest";
+    case "contest_reveal":
+      // "The final is live" opens the Final week carousel in the Community feed; the carousel
+      // itself is not built (it needs the exposure engine, B-092), so this lands on the feed.
+      return "/community";
+  }
   if (n.type === "match_kickoff" && "match" in n.data) return `/sports-hub/matches/${n.data.match.externalRef}`;
   return null;
 }
@@ -133,6 +152,31 @@ function bodyFor(n: Notification): { subject: string; rest: string } {
       const cycle = data && "cycle" in data ? data.cycle : null;
       return { subject: "Contest", rest: cycle ? ` — you won a round in ${cycle.title}` : " — you won a round" };
     }
+    // Scheduled Contest events (B-123). Plain functional wording; the cycle title comes from the data.
+    case "contest_week_opens": {
+      const week = data && "week" in data ? data.week : null;
+      return { subject: week ? `Week ${week}` : "A new week", rest: " of the Contest is open. Post your entry." };
+    }
+    case "contest_votes_closing": {
+      const week = data && "week" in data ? data.week : null;
+      return { subject: week ? `Week ${week}` : "This week", rest: " voting closes soon. Cast your vote." };
+    }
+    case "contest_week_result": {
+      const week = data && "week" in data ? data.week : null;
+      return { subject: week ? `Week ${week}` : "This week", rest: " result is in. See the winners." };
+    }
+    case "contest_finalist":
+      return { subject: "You’re a finalist", rest: ". Upload your final entry during the upload window." };
+    case "contest_reveal":
+      return { subject: "The final", rest: " is live. See the finalists’ entries." };
+    case "contest_final_result": {
+      const noWinner = data && "outcome" in data && data.outcome === "no_winner";
+      return noWinner
+        ? { subject: "No winner", rest: " this month. See the final result." }
+        : { subject: "The final result", rest: " is in. See this month’s winners." };
+    }
+    case "contest_upload_reminder":
+      return { subject: "Reminder", rest: ": upload your final entry before the deadline at 23:59:59 on day 24." };
     case "match_kickoff": {
       const match = data && "match" in data ? data.match : null;
       const teams = [match?.homeTeamName, match?.awayTeamName].filter((t): t is string => Boolean(t));
@@ -151,7 +195,13 @@ function bodyFor(n: Notification): { subject: string; rest: string } {
 
 function RowAvatar({ notification }: { notification: Notification }) {
   const { type, data, read } = notification;
-  const usesIconDisc = type === "message" || type === "fixture_scheduled" || type === "result_logged" || type === "contest_win" || type === "age_milestone";
+  const usesIconDisc =
+    type === "message" ||
+    type === "fixture_scheduled" ||
+    type === "result_logged" ||
+    type === "contest_win" ||
+    isContestEventType(type) ||
+    type === "age_milestone";
   const className = usesIconDisc
     ? "notif-row__avatar notif-row__avatar--icon"
     : `notif-row__avatar ${read ? "notif-row__avatar--read" : "notif-row__avatar--unread"}`;
@@ -184,7 +234,7 @@ function RowAvatar({ notification }: { notification: Notification }) {
       </span>
     );
   }
-  if (type === "contest_win") {
+  if (type === "contest_win" || isContestEventType(type)) {
     return (
       <span className={className}>
         <img src={notifTrophy} alt="" width={20} height={20} />

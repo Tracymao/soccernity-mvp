@@ -40,6 +40,7 @@ import BlogPage from "../pages/BlogPage";
 import ArticleDetailPage from "../pages/blog/ArticleDetailPage";
 import LeaderboardPage from "../pages/LeaderboardPage";
 import ContestPage from "../pages/ContestPage";
+import ContestVotingPage from "../pages/ContestVotingPage";
 import CommunityPage from "../pages/CommunityPage";
 import SearchTrendingPage from "../pages/SearchTrendingPage";
 import ClubsPage from "../pages/ClubsPage";
@@ -73,6 +74,8 @@ import ClubPickerRoute from "../pages/signup/ClubPickerRoute";
 import ProfilePage from "../pages/ProfilePage";
 import NotificationCentrePage from "../pages/NotificationCentrePage";
 import PrivacySettingsPage from "../pages/PrivacySettingsPage";
+import BlockedUsersPage from "../pages/settings/BlockedUsersPage";
+import OtherProfilePage from "../pages/OtherProfilePage";
 import DeactivateAccountPage from "../pages/settings/DeactivateAccountPage";
 import DeleteAccountPage from "../pages/settings/DeleteAccountPage";
 import SettingsLayout from "../pages/settings/SettingsLayout";
@@ -302,6 +305,8 @@ export const routes: RouteObject[] = [
       // message. See LeaderboardPage.tsx / ContestPage.tsx.
       { path: "leaderboard", element: <LeaderboardPage /> },
       { path: "contest", element: <ContestPage /> },
+      // Phase 2 voting (B-098): the entries and the one-vote toggle. No site footer, like /contest.
+      { path: "contest/voting", element: <ContestVotingPage /> },
 
       // Report a concern -- an unauthenticated public reporting page
       // (POST /reports/public, ModerationModule's PublicReportsController).
@@ -330,6 +335,8 @@ export const routes: RouteObject[] = [
       // (Figma 5498:7164); authenticated, pending-consent only.
       { path: "guardian-consent/change-email", element: <ChangeGuardianEmailPage /> },
       { path: "profile", element: <ProfilePage /> }, // F6
+      // Another person's profile (B-082, B-108): public-profile, Follow, Message, Block.
+      { path: "users/:userId", element: <OtherProfilePage /> },
 
       // Notification Centre (Build Plan Section 4.7, NotificationsModule —
       // sprint-3/notifications-read-api, Decision Log #290) converting the
@@ -367,6 +374,8 @@ export const routes: RouteObject[] = [
           { path: "account/deactivate", element: <DeactivateAccountPage /> },
           { path: "account/delete", element: <DeleteAccountPage /> },
           { path: "privacy", element: <PrivacySettingsPage /> },
+          // B-108: the blocker's own list, with Unblock (Figma 6705:26172).
+          { path: "privacy/blocked", element: <BlockedUsersPage /> },
           { path: "security", element: <SecurityOverviewPage /> },
           { path: "security/two-factor", element: <TwoFactorAuthPage /> },
           { path: "notifications", element: <NotificationPreferencesPage /> },

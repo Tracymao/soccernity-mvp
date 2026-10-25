@@ -230,6 +230,80 @@ describe("NotificationCentrePage", () => {
     expect(row.textContent).not.toContain("vs");
   });
 
+  describe("scheduled Contest events (B-123, Decision Log #404 item 16, #405 item 2)", () => {
+    const base = { read: false, createdAt: "2026-10-08T08:00:00.000Z", payloadRefId: "cycle-1:2" };
+    const cases: Array<[string, Notification, RegExp, string]> = [
+      [
+        "week opens",
+        { ...base, id: "c1", type: "contest_week_opens", data: { cycle: { id: "cycle-1", title: "October" }, week: 2 } } as Notification,
+        /Week 2 of the Contest is open/,
+        "/contest",
+      ],
+      [
+        "votes closing",
+        { ...base, id: "c2", type: "contest_votes_closing", data: { cycle: { id: "cycle-1", title: "October" }, week: 1 } } as Notification,
+        /Week 1 voting closes soon/,
+        "/contest/voting",
+      ],
+      [
+        "week result",
+        { ...base, id: "c3", type: "contest_week_result", data: { cycle: { id: "cycle-1", title: "October" }, week: 3 } } as Notification,
+        /Week 3 result is in/,
+        "/leaderboard?tab=contest",
+      ],
+      [
+        "finalist",
+        { ...base, id: "c4", type: "contest_finalist", data: { cycle: { id: "cycle-1", title: "October" } } } as Notification,
+        /You.re a finalist/,
+        "/community?compose=contest",
+      ],
+      [
+        "reveal",
+        { ...base, id: "c5", type: "contest_reveal", data: { cycle: { id: "cycle-1", title: "October" } } } as Notification,
+        /The final is live/,
+        "/community",
+      ],
+      [
+        "final result",
+        { ...base, id: "c6", type: "contest_final_result", data: { cycle: { id: "cycle-1", title: "October" }, outcome: "winners" } } as Notification,
+        /The final result is in/,
+        "/leaderboard?tab=contest",
+      ],
+      [
+        "no winner",
+        { ...base, id: "c7", type: "contest_final_result", data: { cycle: { id: "cycle-1", title: "October" }, outcome: "no_winner" } } as Notification,
+        /No winner this month/,
+        "/leaderboard?tab=contest",
+      ],
+      [
+        "upload reminder",
+        { ...base, id: "c8", type: "contest_upload_reminder", data: { cycle: { id: "cycle-1", title: "October" } } } as Notification,
+        /upload your final entry before the deadline/,
+        "/community?compose=contest",
+      ],
+    ];
+
+    it.each(cases)("%s: real wording and the Figma-drawn destination (never a profile)", async (_name, notification, text, href) => {
+      window.sessionStorage.setItem("sn_access_token", "test-token");
+      vi.mocked(listNotifications).mockResolvedValueOnce({ items: [notification], nextCursor: null, unreadCount: 1 });
+      renderPage();
+      await screen.findByRole("link", { name: text });
+      const link = screen.getByRole("link", { name: text });
+      expect(link.getAttribute("href")).toBe(href);
+      expect(link.getAttribute("href")).not.toMatch(/^\/users\//);
+    });
+  });
+
+  it("renders exactly the rows the server returns: like/comment rows between a blocked pair are hidden server-side (B-213) and the client neither filters nor re-adds them", async () => {
+    window.sessionStorage.setItem("sn_access_token", "test-token");
+    vi.mocked(listNotifications).mockResolvedValueOnce({ items: [FOLLOW], nextCursor: null, unreadCount: 1 });
+    renderPage();
+    await screen.findByText(/started following you/i);
+    expect(screen.queryByText(/liked your post/i)).toBeNull();
+    expect(screen.queryByText(/commented on your post/i)).toBeNull();
+    expect(listNotifications).toHaveBeenCalledTimes(1);
+  });
+
   it("renders a generic message for a notification whose referenced entity is gone (data: null)", async () => {
     window.sessionStorage.setItem("sn_access_token", "test-token");
     vi.mocked(listNotifications).mockResolvedValueOnce({

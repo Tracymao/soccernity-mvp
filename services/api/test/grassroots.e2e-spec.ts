@@ -861,4 +861,92 @@ describe('Grassroots Records Service e2e (Section 4.5)', () => {
         .expect(403);
     });
   });
+
+  // B-199 (Decision Log #411 item 6, #367, #370): Grassroots record-keeping is
+  // limited while an account is restricted-pending. Every Grassroots WRITE carries
+  // the consent and email guards (write-route-guards.spec.ts pins that at unit
+  // level); this proves it end to end for a real minor whose guardian has not yet
+  // approved, and that the reads stay open.
+  describe('a restricted-pending minor (guardian consent not yet confirmed)', () => {
+    async function createPendingMinor(): Promise<{ userId: string; accessToken: string }> {
+      const prisma = getTestPrismaClient();
+      const user = await prisma.user.create({
+        data: {
+          email: `e2e-grassroots-pending-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
+          passwordHash: 'unused-in-this-e2e-spec-file',
+          displayName: 'E2E Grassroots Pending Minor',
+          verificationStatus: 'verified',
+          username: `e2e_${Math.random().toString(36).slice(2, 12)}`,
+          dateOfBirth: seedDob('2011-09-04'),
+          isMinor: true,
+          guardian: {
+            create: {
+              name: 'Guardian',
+              email: `guardian-pending-${Date.now()}@example.com`,
+              relationship: 'Parent',
+              consentStatus: 'pending',
+              consentToken: `tok-pending-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              consentTokenExpiresAt: new Date(Date.now() + 86_400_000),
+            },
+          },
+        },
+      });
+      const { accessToken } = await app.get(TokenService).issueTokenPair(user.id, user.role);
+      return { userId: user.id, accessToken: accessToken.token };
+    }
+
+    it('is refused (403, guardian_consent_pending) on POST /teams, POST /fixtures, POST /fixtures/:id/result and PATCH /fixtures/:id/status', async () => {
+      const organiser = await createUser('pending-organiser');
+      const teamId = await createTeam(organiser.accessToken, { name: 'Pending Test FC' });
+      const fixture = await request(server())
+        .post('/fixtures')
+        .set('Authorization', `Bearer ${organiser.accessToken}`)
+        .send({ teamAId: teamId, scheduledAt: '2026-11-01T14:00:00.000Z' })
+        .expect(201);
+      const fixtureId = fixture.body.id as string;
+
+      const pending = await createPendingMinor();
+      const auth = { Authorization: `Bearer ${pending.accessToken}` };
+
+      const team = await request(server())
+        .post('/teams')
+        .set(auth)
+        .send({ name: 'Minor FC', city: 'London', leagueType: 'school' })
+        .expect(403);
+      expect(team.body.code).toBe('guardian_consent_pending');
+
+      await request(server())
+        .post('/fixtures')
+        .set(auth)
+        .send({ teamAId: teamId, scheduledAt: '2026-11-02T14:00:00.000Z' })
+        .expect(403);
+      await request(server())
+        .patch(`/fixtures/${fixtureId}/status`)
+        .set(auth)
+        .send({ status: 'live' })
+        .expect(403);
+      await request(server())
+        .post(`/fixtures/${fixtureId}/result`)
+        .set(auth)
+        .send({ scoreA: 1, scoreB: 0 })
+        .expect(403);
+
+      // Nothing was written by any of the four refused calls.
+      const prisma = getTestPrismaClient();
+      expect(await prisma.grassrootsTeam.count({ where: { createdById: pending.userId } })).toBe(0);
+      expect((await prisma.fixture.findUniqueOrThrow({ where: { id: fixtureId } })).status).toBe('scheduled');
+      expect(await prisma.result.count({ where: { fixtureId } })).toBe(0);
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: pending.userId } })).isTeamOrganiser).toBe(false);
+    });
+
+    it('can still read: GET /teams and GET /teams/:id are open', async () => {
+      const organiser = await createUser('pending-reader-owner');
+      const teamId = await createTeam(organiser.accessToken, { name: 'Readable FC' });
+      const pending = await createPendingMinor();
+      const auth = { Authorization: `Bearer ${pending.accessToken}` };
+
+      await request(server()).get('/teams').set(auth).expect(200);
+      await request(server()).get(`/teams/${teamId}`).set(auth).expect(200);
+    });
+  });
 });

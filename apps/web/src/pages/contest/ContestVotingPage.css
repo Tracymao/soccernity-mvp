@@ -1,0 +1,118 @@
+/* Contest Voting. Tokens only (--sn-*). Figma 2094:994 / 5802:8726. */
+.voting-page {
+  max-width: 1040px;
+}
+
+.voting-page__back {
+  align-self: flex-start;
+  font: 500 14px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  text-decoration: none;
+}
+
+.voting-page__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 32px;
+  align-items: start;
+}
+
+.voting-page__main {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.voting-entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.voting-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.voting-entry__media {
+  width: 100%;
+  max-height: 420px;
+  object-fit: cover;
+  border-radius: 12px;
+  background-color: var(--sn-green-tint-12);
+}
+
+.voting-entry__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px;
+  text-align: center;
+  background-color: var(--sn-green-tint-12);
+  border-radius: 12px;
+}
+
+.voting-entry__name {
+  font: 600 16px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  text-decoration: none;
+}
+
+.voting-entry__text {
+  margin: 0;
+  font: 400 14px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.voting-entry__error {
+  margin: 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--sn-semantic-alert);
+  font: 500 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  text-align: left;
+}
+
+.voting-page__board {
+  background-color: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.voting-page__board-title {
+  margin: 0 0 12px;
+  font: 600 15px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  text-align: center;
+}
+
+.voting-board {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.voting-board__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font: 400 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+@media (max-width: 820px) {
+  .voting-page__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

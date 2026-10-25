@@ -55,6 +55,11 @@ function profileWithRepresented(club: { id: string; name: string } | null): User
     clubAffiliationId: null,
     isTeamOrganiser: false,
     representedClub: club,
+    bio: null,
+    preferredClub: null,
+    profileCountry: null,
+    avatar: null,
+    cover: null,
   };
 }
 
@@ -71,37 +76,16 @@ import { getCurrentContest } from "../api/contest";
 import { getLeaderboard } from "../api/leaderboard";
 import type { LeaderboardPage as LeaderboardPageData } from "../api/leaderboard";
 import type { CurrentContestResponse } from "../api/contest";
+import { openContest } from "./contest/contestFixtures";
 
 function contestResponse(overrides: Partial<CurrentContestResponse> = {}): CurrentContestResponse {
-  return {
-    cycle: {
-      id: "cycle-1",
-      title: "September Contest",
-      status: "active",
-      startsAt: new Date().toISOString(),
-      endsAt: new Date().toISOString(),
-      finalOpenedAt: null,
-      crownedAt: null,
-    },
-    phase: "week_1",
-    isAcceptingEntries: true,
-    activeRound: {
-      id: "round-2",
-      weekNumber: 2,
-      status: "open",
-      opensAt: new Date().toISOString(),
-      closesAt: new Date(Date.now() + 3 * 86400000).toISOString(),
-      judgedAt: null,
-    },
-    rounds: [],
+  return openContest({
     weeklyWinners: [
       { weekNumber: 1, position: 1, userId: "u1", publicName: "Emeka John", entryId: "e1", postId: "p1" },
       { weekNumber: 1, position: 2, userId: "u2", publicName: "Chukwu James", entryId: "e2", postId: "p2" },
     ],
-    monthlyStandings: [],
-    callerEntry: null,
     ...overrides,
-  };
+  });
 }
 
 const LB_PAGE: LeaderboardPageData = {
@@ -304,6 +288,8 @@ describe("LeaderboardPage", () => {
     vi.mocked(getCurrentContest).mockResolvedValue(
       contestResponse({
         phase: "crowned",
+        calendarState: { kind: "completed", endedAt: "2026-10-01T00:00:00.000Z" },
+        finalOutcome: "winners",
         isAcceptingEntries: false,
         monthlyStandings: [
           { position: 1, userId: "u1", publicName: "Emeka John" },
@@ -322,7 +308,7 @@ describe("LeaderboardPage", () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
     vi.mocked(getCurrentContest).mockResolvedValue(
-      contestResponse({ phase: "vacant", weeklyWinners: [] }),
+      contestResponse({ phase: "vacant", weeklyWinners: [], rounds: [] }),
     );
 
     renderPage("/leaderboard?tab=contest");

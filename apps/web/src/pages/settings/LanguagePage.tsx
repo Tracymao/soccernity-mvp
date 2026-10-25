@@ -72,8 +72,8 @@ export default function LanguagePage() {
       </div>
 
       <p className="display-callout">
-        Only English is available today. The other options are illustrative &mdash; no translations
-        ship yet.
+        Only English is available today. The other languages are shown for reference; translations
+        aren&rsquo;t available yet.
       </p>
     </div>
   );

@@ -67,8 +67,7 @@ export default function NotificationFiltersPage() {
               with recently.
             </p>
             <p className="notif-row__note">
-              Not adjustable yet — notification filtering isn&rsquo;t available yet. This needs a
-              backend notification-preferences module first.
+              Not adjustable yet — notification filtering isn&rsquo;t available yet.
             </p>
           </div>
           <DisabledToggle label="Quality filter" />

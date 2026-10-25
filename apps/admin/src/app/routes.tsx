@@ -47,11 +47,9 @@ import MediaUploadPage from "../pages/media/MediaUploadPage";
 import CreateCompetitionPage from "../pages/competitions/CreateCompetitionPage";
 import CompetitionCreatedPage from "../pages/competitions/CompetitionCreatedPage";
 import ContestConsolePage from "../pages/contest/ContestConsolePage";
-import ContestStartCyclePage from "../pages/contest/ContestStartCyclePage";
+import ContestFormPage from "../pages/contest/ContestFormPage";
+import ContestImpressionsPage from "../pages/contest/ContestImpressionsPage";
 import ContestCycleDetailPage from "../pages/contest/ContestCycleDetailPage";
-import ContestJudgeWeekPage from "../pages/contest/ContestJudgeWeekPage";
-import ContestOpenFinalPage from "../pages/contest/ContestOpenFinalPage";
-import ContestCrownWinnersPage from "../pages/contest/ContestCrownWinnersPage";
 import ContestHistoryPage from "../pages/contest/ContestHistoryPage";
 import SettingsRolesPage from "../pages/settings/SettingsRolesPage";
 import { AddRolePage, EditRolePage, DeleteRolePage } from "../pages/settings/RoleFormPages";
@@ -107,17 +105,16 @@ export const adminRoutes: RouteObject[] = [
           // active/inactive toggle).
           { path: "categories", element: <CategoriesPage /> },
           { path: "categories/new", element: <AddCategoryPage /> },
-          // Real screens (sprint-2/admin-contest-to-code, Decision Log #243 —
-          // closes #239). Wired to the admin read endpoints (#241) and the 4
-          // write endpoints (#218/#219). The hub is the only entry point to
-          // the write actions — its phase-contextual primary routes onward.
+          // Real screens (B-097): the Contest runs itself on the Europe/London
+          // calendar (Decision Log #381), so there is no judge/open-final/crown
+          // route. The console is read-only status; create and edit are the only
+          // writes (POST/PATCH /admin/contest/cycles).
           { path: "contest", element: <ContestConsolePage /> },
           { path: "contest/history", element: <ContestHistoryPage /> },
-          { path: "contest/cycles/new", element: <ContestStartCyclePage /> },
+          { path: "contest/cycles/new", element: <ContestFormPage mode="create" /> },
+          { path: "contest/impressions", element: <ContestImpressionsPage /> },
           { path: "contest/cycles/:id", element: <ContestCycleDetailPage /> },
-          { path: "contest/cycles/:id/rounds/:week", element: <ContestJudgeWeekPage /> },
-          { path: "contest/cycles/:id/final/open", element: <ContestOpenFinalPage /> },
-          { path: "contest/cycles/:id/crown", element: <ContestCrownWinnersPage /> },
+          { path: "contest/cycles/:id/edit", element: <ContestFormPage mode="edit" /> },
           // Stubs (sprint-2/admin-competitions-stub) — Competition umbrella parked (Decision Log #72/#73).
           { path: "competitions", element: <CreateCompetitionPage /> },
           { path: "competitions/created", element: <CompetitionCreatedPage /> },
