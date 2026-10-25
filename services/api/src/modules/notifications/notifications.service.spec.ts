@@ -409,6 +409,29 @@ describe('NotificationsService', () => {
       expect(page.items[1].data).toBeNull();
     });
 
+    // B-214: a profile-image rejection names the image only. No query is needed and the
+    // moderator's reason is never part of the notification.
+    it('resolves profile_image_rejected to { image } with no extra query, and never carries a reason', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ type: 'profile_image_rejected', payloadRefId: 'avatar' }),
+        row({ id: 'notif-2', type: 'profile_image_rejected', payloadRefId: 'cover' }),
+        row({ id: 'notif-3', type: 'profile_image_rejected', payloadRefId: 'banner' }),
+      ]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(page.items[0].data).toEqual({ image: 'avatar' });
+      expect(page.items[1].data).toEqual({ image: 'cover' });
+      // An unrecognised reference degrades to null rather than inventing a kind.
+      expect(page.items[2].data).toBeNull();
+      expect(JSON.stringify(page.items)).not.toMatch(/reason/i);
+      for (const model of ['post', 'conversation', 'user', 'fixture', 'contestCycle', 'matchData'] as const) {
+        expect((prisma[model].findMany as jest.Mock)).not.toHaveBeenCalled();
+      }
+    });
+
     it('resolves to null data when the referenced entity is gone (orphaned payloadRefId)', async () => {
       const prisma = buildPrismaMock();
       (prisma.notification.findMany as jest.Mock).mockResolvedValue([

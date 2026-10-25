@@ -32,6 +32,7 @@ your post" from a `Notification` row alone — it needs to know what
 | `result_logged` | the `Fixture` | Yes, via the fixture's other team |
 | `contest_win` | the `ContestCycle` (deliberately not `roundId`/`entryId` — `contest.service.ts`'s own comment says this is "the one single-resource read endpoint that exists today") | N/A — the recipient is already the actor |
 | `match_kickoff` | the `MatchData` row, keyed by `externalRef` (sprint-4/match-kickoff-alerts, Decision Log #336 item 2) | N/A — the recipient subscribed to the match themselves |
+| `profile_image_rejected` | the image kind, `'avatar'` or `'cover'` (backend/w8-image-rejection-reason, B-214, Decision Log #412 item 2) | N/A — the recipient owns the image. Resolves to `data: { image }` with no query; the moderator's reason is **not** copied here, it is on the owner's own `GET /users/:id` (`avatar.rejectionReason` / `cover.rejectionReason`) |
 
 ## Decision: option (a) — server-side resolution, denormalized
 

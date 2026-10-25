@@ -80,17 +80,28 @@ const OWN_PROFILE_SELECT = {
   avatarUrl: true,
   avatarKey: true,
   avatarStatus: true,
+  // B-214: the moderator's reason, owner-only -- this select is the OWNER's own profile
+  // read; the other-user read (getPublicProfile) never selects it.
+  avatarRejectionReason: true,
   // B-196: the cover photo, same rules as the avatar (coverKey is internal).
   coverUrl: true,
   coverKey: true,
   coverStatus: true,
+  coverRejectionReason: true,
 } as const;
 
 export type GuardianContact = { label: 'Guardian contact'; email: string };
 
 // What a viewer's own avatar looks like to the OWNER: the stored status is
 // shown so the owner knows why nobody else can see it yet.
-export type OwnAvatar = { url: string; status: 'pending' | 'approved' | 'rejected' };
+// rejectionReason (B-214, Decision Log #412 item 2): the moderator's reason, present only
+// when status is 'rejected', null otherwise. Owner-only: it exists on this type and on no
+// type returned for another user.
+export type OwnAvatar = {
+  url: string;
+  status: 'pending' | 'approved' | 'rejected';
+  rejectionReason: string | null;
+};
 
 export type PublicProfile = {
   id: string;
@@ -188,13 +199,26 @@ type OwnProfileRow = Omit<
   avatarUrl: string | null;
   avatarKey: string | null;
   avatarStatus: string | null;
+  avatarRejectionReason: string | null;
   coverUrl: string | null;
   coverKey: string | null;
   coverStatus: string | null;
+  coverRejectionReason: string | null;
 };
 
 export interface RepresentedClubResult {
   representedClub: { id: string; name: string } | null;
+}
+
+// The reason is surfaced only for a 'rejected' image (the CHECK constraint guarantees it is
+// null otherwise; this keeps the API honest even if a row were ever written around it).
+function toOwnImage(url: string | null, status: string | null, reason: string | null): OwnAvatar | null {
+  if (!url || !status) return null;
+  return {
+    url,
+    status: status as OwnAvatar['status'],
+    rejectionReason: status === 'rejected' ? reason : null,
+  };
 }
 
 function toOwnProfile(
@@ -204,9 +228,11 @@ function toOwnProfile(
     avatarUrl,
     avatarKey: _avatarKey,
     avatarStatus,
+    avatarRejectionReason,
     coverUrl,
     coverKey: _coverKey,
     coverStatus,
+    coverRejectionReason,
     ...rest
   }: OwnProfileRow,
   dob: DobEncryptionService,
@@ -216,8 +242,8 @@ function toOwnProfile(
   const plainDob = dob.decryptNullable(dateOfBirth);
   return {
     ...rest,
-    avatar: avatarUrl && avatarStatus ? { url: avatarUrl, status: avatarStatus as OwnAvatar['status'] } : null,
-    cover: coverUrl && coverStatus ? { url: coverUrl, status: coverStatus as OwnAvatar['status'] } : null,
+    avatar: toOwnImage(avatarUrl, avatarStatus, avatarRejectionReason),
+    cover: toOwnImage(coverUrl, coverStatus, coverRejectionReason),
     ...deriveOnboardingState({
       isMinor: rest.isMinor,
       guardianConsentStatus: guardian?.consentStatus,

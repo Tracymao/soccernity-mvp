@@ -187,6 +187,13 @@ model User {
   avatarUrl    String?
   avatarKey    String?
   avatarStatus String?
+  // B-214 (Decision Log #412 item 2, #398 D2): why a moderator rejected the avatar.
+  // Set ONLY together with avatarStatus 'rejected' (UserImageReviewService, one
+  // transaction that also writes the Notification), cleared by the next upload,
+  // by delete and by anonymization. Admin-written text, owner-only: returned on the
+  // owner's own GET /users/:id and never selected by any other-user read. The
+  // Notification does not copy it. CHECK in the migration: only on a rejected image.
+  avatarRejectionReason String?
 
   // The cover photo (B-196, #411 item 4): the avatar pipeline with the same rule.
   // Same three-columns-move-together shape and the same visibility gate: only an
@@ -196,6 +203,8 @@ model User {
   coverUrl    String?
   coverKey    String?
   coverStatus String?
+  // B-214: the cover's rejection reason, same rules as avatarRejectionReason.
+  coverRejectionReason String?
 
   // Safeguarding — required per Build Plan Section 8.3. Do not remove.
   guardian Guardian?
@@ -1232,7 +1241,7 @@ model Notification {
   // (contest.service.ts, one per ContestRoundWinner row, not the monthly
   // ContestStanding crown). `reply` / `system` (this comment's previous
   // wording) were never actually implemented anywhere -- dropped.
-  type         String // follow | like | comment | message | fixture_scheduled | result_logged | contest_win | age_milestone (age-reclassification sweep, user turned 16; payloadRefId = milestone key) | match_kickoff (sports kickoff watch, payloadRefId = MatchData.externalRef) | contest_week_opens | contest_votes_closing | contest_week_result (payloadRefId = "<cycleId>:<week>") | contest_finalist | contest_reveal | contest_final_result | contest_upload_reminder (payloadRefId = "<cycleId>") -- backend/w3c-contest-notifications, Decision Log #404 item 16
+  type         String // follow | like | comment | message | fixture_scheduled | result_logged | contest_win | profile_image_rejected (B-214, payloadRefId = 'avatar' | 'cover'; the reason is NOT copied, it lives on User) | age_milestone (age-reclassification sweep, user turned 16; payloadRefId = milestone key) | match_kickoff (sports kickoff watch, payloadRefId = MatchData.externalRef) | contest_week_opens | contest_votes_closing | contest_week_result (payloadRefId = "<cycleId>:<week>") | contest_finalist | contest_reveal | contest_final_result | contest_upload_reminder (payloadRefId = "<cycleId>") -- backend/w3c-contest-notifications, Decision Log #404 item 16
   payloadRefId String?
   read         Boolean  @default(false)
   createdAt    DateTime @default(now())

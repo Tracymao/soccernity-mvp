@@ -9,6 +9,7 @@ import { decodeNotificationCursor, encodeNotificationCursor } from './cursor.uti
 import { NotificationsQueryDto } from './dto/notifications-query.dto';
 import { PUBLIC_NAME_SELECT, toPublicUser } from '../users/public-name.util';
 import { notificationBlockHiddenFilter } from './block-visibility.util';
+import { PROFILE_IMAGE_KINDS, ProfileImageKind } from '../users/user-image-review.service';
 
 // The seven real MVP notification types — see schema.prisma's own comment
 // on Notification.type for the authoritative list and where each is
@@ -133,7 +134,10 @@ export type NotificationData =
   | { fixture: NotificationFixture }
   | { cycle: NotificationContestCycle; week?: number | null; outcome?: ContestOutcome }
   // age_milestone: payloadRefId is the milestone key (e.g. 'under_16_lifted').
-  | { milestone: string };
+  | { milestone: string }
+  // profile_image_rejected (B-214): payloadRefId is 'avatar' | 'cover'. Names which image only;
+  // the moderator's reason is NOT here, it is on the owner's own GET /users/:id.
+  | { image: ProfileImageKind };
 
 export interface NotificationView {
   id: string;
@@ -532,6 +536,10 @@ export class NotificationsService {
       }
       case 'age_milestone':
         return { milestone: row.payloadRefId };
+      case 'profile_image_rejected':
+        return (PROFILE_IMAGE_KINDS as readonly string[]).includes(row.payloadRefId)
+          ? { image: row.payloadRefId as ProfileImageKind }
+          : null;
       default:
         return null;
     }

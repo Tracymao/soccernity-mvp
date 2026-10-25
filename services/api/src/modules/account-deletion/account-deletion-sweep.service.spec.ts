@@ -199,10 +199,12 @@ describe('AccountDeletionSweepService', () => {
           avatarUrl: null,
           avatarKey: null,
           avatarStatus: null,
+          avatarRejectionReason: null,
           // B-196: the cover photo reference is cleared too.
           coverUrl: null,
           coverKey: null,
           coverStatus: null,
+          coverRejectionReason: null,
           accountStatus: 'deleted',
           pendingDeletionAt: null,
         },

@@ -21,7 +21,9 @@ import { UploadedProfileImage, validateProfileImage } from './profile-image.util
 // aspect ratio.
 
 export interface CoverResult {
-  cover: { url: string; status: 'pending' | 'approved' | 'rejected' } | null;
+  // rejectionReason (B-214): always null here -- an upload clears any earlier reason; a
+  // reason exists only on a 'rejected' cover and is read from the owner's GET /users/:id.
+  cover: { url: string; status: 'pending' | 'approved' | 'rejected'; rejectionReason: string | null } | null;
 }
 
 @Injectable()
@@ -47,7 +49,7 @@ export class UserCoverService {
     try {
       await this.prisma.user.update({
         where: { id: userId },
-        data: { coverUrl: url, coverKey: key, coverStatus: 'pending' },
+        data: { coverUrl: url, coverKey: key, coverStatus: 'pending', coverRejectionReason: null },
         select: { id: true },
       });
     } catch (err) {
@@ -56,7 +58,7 @@ export class UserCoverService {
     }
     if (previous?.coverKey) await this.removeObject(previous.coverKey);
 
-    return { cover: { url, status: 'pending' } };
+    return { cover: { url, status: 'pending', rejectionReason: null } };
   }
 
   // DELETE /users/:id/cover (self only). Idempotent: no cover is a 200 no-op.
@@ -64,7 +66,7 @@ export class UserCoverService {
     const current = await this.prisma.user.findUnique({ where: { id: userId }, select: { coverKey: true } });
     await this.prisma.user.update({
       where: { id: userId },
-      data: { coverUrl: null, coverKey: null, coverStatus: null },
+      data: { coverUrl: null, coverKey: null, coverStatus: null, coverRejectionReason: null },
       select: { id: true },
     });
     if (current?.coverKey) await this.removeObject(current.coverKey);

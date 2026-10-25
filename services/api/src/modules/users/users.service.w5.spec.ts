@@ -55,6 +55,32 @@ function service(prisma: PrismaService) {
 }
 
 describe('UsersService — profile content (B-038, B-081)', () => {
+  // B-214: the owner's own GET /users/:id is the one place the reason is returned.
+  it('the owner profile carries the rejection reason of a REJECTED avatar and cover, and null otherwise', async () => {
+    const prisma = buildPrisma();
+    p(prisma).user.findUnique.mockResolvedValue({
+      ...OWN_ROW,
+      avatarUrl: 'https://cdn/a.jpg', avatarKey: 'avatars/u1/a.jpg', avatarStatus: 'rejected', avatarRejectionReason: 'Not a clear photo of you',
+      coverUrl: 'https://cdn/c.jpg', coverKey: 'covers/u1/c.jpg', coverStatus: 'pending', coverRejectionReason: null,
+    });
+    const me = await service(prisma).getOwnProfile('u1');
+    expect(me.avatar).toEqual({ url: 'https://cdn/a.jpg', status: 'rejected', rejectionReason: 'Not a clear photo of you' });
+    expect(me.cover).toEqual({ url: 'https://cdn/c.jpg', status: 'pending', rejectionReason: null });
+    expect(p(prisma).user.findUnique.mock.calls[0][0].select).toMatchObject({ avatarRejectionReason: true, coverRejectionReason: true });
+    // The flat columns are folded into avatar/cover, not returned beside them.
+    expect(me).not.toHaveProperty('avatarRejectionReason');
+    expect(me).not.toHaveProperty('coverRejectionReason');
+  });
+
+  it('a reason on a row that is not rejected is never returned (the API does not trust a stale column)', async () => {
+    const prisma = buildPrisma();
+    p(prisma).user.findUnique.mockResolvedValue({
+      ...OWN_ROW,
+      avatarUrl: 'https://cdn/a.jpg', avatarKey: 'k', avatarStatus: 'pending', avatarRejectionReason: 'stale',
+    });
+    expect((await service(prisma).getOwnProfile('u1')).avatar?.rejectionReason).toBeNull();
+  });
+
   it('the owner profile carries bio, preferredClub, profileCountry and the avatar WITHOUT its storage key', async () => {
     const prisma = buildPrisma();
     p(prisma).user.findUnique.mockResolvedValue({
@@ -68,7 +94,7 @@ describe('UsersService — profile content (B-038, B-081)', () => {
     });
     const me = await service(prisma).getOwnProfile('u1');
     expect(me).toMatchObject({ bio: 'Left back', preferredClub: 'Ikoyi Rovers', profileCountry: 'NG' });
-    expect(me.avatar).toEqual({ url: 'https://cdn/x.jpg', status: 'pending' });
+    expect(me.avatar).toEqual({ url: 'https://cdn/x.jpg', status: 'pending', rejectionReason: null });
     expect(JSON.stringify(me)).not.toContain('avatars/u1/x.jpg');
     expect(me).not.toHaveProperty('avatarKey');
     // The select asks for the safeguarding country NOWHERE.
@@ -187,6 +213,21 @@ describe('UsersService — other-user public profile (B-082 backend leg, B-039)'
     for (const k of ['preferredClub', 'declaredCountry', 'derivedCountry', 'avatarKey', 'avatarStatus']) expect(res).not.toHaveProperty(k);
     const select = p(prisma).user.findUnique.mock.calls[0][0].select;
     for (const k of ['preferredClub', 'declaredCountry', 'derivedCountry', 'avatarKey']) expect(select).not.toHaveProperty(k);
+  });
+
+  // B-214 (Decision Log #412 item 2): the moderator's reason is shown to the owner alone.
+  it('never selects either rejection reason for another user, and never returns one', async () => {
+    const prisma = buildPrisma();
+    p(prisma).user.findUnique.mockResolvedValue(
+      row({ avatarStatus: 'rejected', avatarRejectionReason: 'Not a clear photo of you', coverUrl: 'https://cdn/c.jpg', coverStatus: 'rejected', coverRejectionReason: 'Contains text' }),
+    );
+    const res = await get(prisma);
+    const select = p(prisma).user.findUnique.mock.calls[0][0].select;
+    expect(select).not.toHaveProperty('avatarRejectionReason');
+    expect(select).not.toHaveProperty('coverRejectionReason');
+    expect(JSON.stringify(res)).not.toContain('Not a clear photo of you');
+    expect(JSON.stringify(res)).not.toContain('Contains text');
+    expect(JSON.stringify(res)).not.toContain('RejectionReason');
   });
 
   it.each(['pending', 'rejected'])('never serves an avatar whose status is %s (nothing sets approved yet, B-036)', async (status) => {
