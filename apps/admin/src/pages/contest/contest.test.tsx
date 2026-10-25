@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { AdminApiError } from "../../api/adminClient";
 
@@ -12,35 +12,34 @@ vi.mock("../../api/contest", async (importOriginal) => {
     getContestCycle: vi.fn(),
     listContestCycles: vi.fn(),
     createContestCycle: vi.fn(),
-    judgeContestRound: vi.fn(),
-    openContestFinal: vi.fn(),
-    crownContestCycle: vi.fn(),
+    updateContestCycle: vi.fn(),
   };
 });
 
 import {
   getCurrentContest,
   getContestCycle,
+  listContestCycles,
   createContestCycle,
-  judgeContestRound,
-  crownContestCycle,
+  updateContestCycle,
+  type AdminContestCycleDetail,
+  type AdminContestEditability,
   type AdminContestRoundDetail,
   type AdminCurrentContest,
-  type ContestPhase,
 } from "../../api/contest";
 import ContestConsolePage from "./ContestConsolePage";
-import ContestStartCyclePage from "./ContestStartCyclePage";
-import ContestJudgeWeekPage from "./ContestJudgeWeekPage";
-import ContestCrownWinnersPage from "./ContestCrownWinnersPage";
+import ContestFormPage from "./ContestFormPage";
+import ContestHistoryPage from "./ContestHistoryPage";
+import ContestImpressionsPage from "./ContestImpressionsPage";
 import ContestCycleDetailPage from "./ContestCycleDetailPage";
 
 afterEach(cleanup);
 beforeEach(() => {
   vi.mocked(getCurrentContest).mockReset();
   vi.mocked(getContestCycle).mockReset();
+  vi.mocked(listContestCycles).mockReset();
   vi.mocked(createContestCycle).mockReset();
-  vi.mocked(judgeContestRound).mockReset();
-  vi.mocked(crownContestCycle).mockReset();
+  vi.mocked(updateContestCycle).mockReset();
 });
 
 function Probe() {
@@ -61,288 +60,381 @@ function renderAt(ui: ReactNode, routePath: string, initialPath: string) {
 
 // ---- fixtures --------------------------------------------------------
 
-function round(
-  weekNumber: number,
-  status: "open" | "judged",
-  entryCount = 0,
-): AdminContestRoundDetail {
+function round(weekNumber: number, over: Partial<AdminContestRoundDetail> = {}): AdminContestRoundDetail {
   return {
     id: `r${weekNumber}`,
     weekNumber,
-    status,
-    opensAt: `2026-09-0${weekNumber}T00:00:00.000Z`,
-    closesAt: `2026-09-1${weekNumber}T00:00:00.000Z`,
-    judgedAt: status === "judged" ? "2026-09-08T10:04:00.000Z" : null,
-    entryCount,
+    status: "open",
+    opensAt: `2026-11-0${weekNumber}T08:00:00.000Z`,
+    closesAt: `2026-11-1${weekNumber}T20:00:00.000Z`,
+    judgedAt: null,
+    task: weekNumber < 4 ? `Task for week ${weekNumber}` : "Final task text",
+    entriesCloseAt: `2026-11-0${weekNumber}T23:59:00.000Z`,
+    votesLockAt: `2026-11-0${weekNumber}T20:00:00.000Z`,
+    viewWatchLimitSeconds: weekNumber < 4 ? 10 : null,
+    forfeited: false,
+    forfeitReason: null,
+    entryCount: 0,
     entries: [],
+    ...over,
   };
 }
 
-function current(phase: ContestPhase, judged: number): AdminCurrentContest {
+const allLocked: AdminContestEditability = {
+  beforeLaunch: false,
+  title: false,
+  description: true,
+  minimumTally: false,
+  placementPoints: false,
+  followersExcludedWeek4: true,
+  exposureTolerancePercent: true,
+  exposureViewerDailyCap: true,
+  taskByWeek: { 1: false, 2: true, 3: true, 4: true },
+  watchLimitByWeek: { 1: false, 2: true, 3: true },
+};
+
+const allOpen: AdminContestEditability = {
+  beforeLaunch: true,
+  title: true,
+  description: true,
+  minimumTally: true,
+  placementPoints: true,
+  followersExcludedWeek4: true,
+  exposureTolerancePercent: true,
+  exposureViewerDailyCap: true,
+  taskByWeek: { 1: true, 2: true, 3: true, 4: true },
+  watchLimitByWeek: { 1: true, 2: true, 3: true },
+};
+
+function detail(over: Partial<AdminContestCycleDetail> = {}): AdminContestCycleDetail {
   return {
     cycle: {
       id: "c1",
-      title: "September 2026 Contest",
-      status: phase === "crowned" ? "completed" : phase === "final_live" ? "final" : "active",
-      startsAt: "2026-09-01T00:00:00.000Z",
-      endsAt: "2026-11-30T00:00:00.000Z",
-      finalOpenedAt:
-        phase === "final_live" || phase === "crowned" ? "2026-09-25T09:00:00.000Z" : null,
-      crownedAt: phase === "crowned" ? "2026-09-30T18:00:00.000Z" : null,
+      title: "November Challenge",
+      description: "Show your skills",
+      monthKey: "2026-11",
+      status: "active",
+      startsAt: "2026-11-01T08:00:00.000Z",
+      endsAt: "2026-12-01T00:00:00.000Z",
+      finalOpenedAt: null,
+      crownedAt: null,
     },
-    phase,
-    rounds: [
-      round(1, judged >= 1 ? "judged" : "open"),
-      round(2, judged >= 2 ? "judged" : "open"),
-      round(3, judged >= 3 ? "judged" : "open"),
-    ],
-    weeklyWinners:
-      judged >= 1
-        ? [
-            { weekNumber: 1, position: 1, userId: "u-ada", publicName: "Ada B.", entryId: "e1", postId: "p1" },
-            { weekNumber: 1, position: 2, userId: "u-ben", publicName: "Ben C.", entryId: "e2", postId: "p2" },
-          ]
-        : [],
-    monthlyStandings:
-      phase === "crowned" ? [{ position: 1, userId: "u-ada", publicName: "Ada B." }] : [],
+    settings: {
+      minimumTally: 40,
+      weeklyPoints: [500, 300, 150],
+      monthlyPoints: [2000, 1200, 600],
+      followersExcludedWeek4: false,
+      exposureTolerancePercent: 10,
+      exposureViewerDailyCap: 3,
+    },
+    editable: allOpen,
+    phase: "vacant",
+    calendarState: { kind: "week_entries", weekNumber: 1, entriesCloseAt: "2026-11-05T00:00:00.000Z" },
+    rounds: [round(1), round(2), round(3), round(4)],
+    weeklyWinners: [],
+    finalists: [],
+    forfeitedWeeks: [],
+    finalRanking: null,
+    monthlyStandings: [],
+    finalOutcome: "pending",
+    ...over,
   };
 }
 
-// ---- Contest Console hub -------------------------------------------
-
-describe("ContestConsolePage — phase branches", () => {
-  it("no cycle: shows 'No cycle running' and a Start a cycle link", async () => {
-    vi.mocked(getCurrentContest).mockResolvedValue({
-      cycle: null,
-      phase: null,
-      rounds: [],
-      weeklyWinners: [],
-      monthlyStandings: [],
-    });
-    renderAt(<ContestConsolePage />, "/contest", "/contest");
-    await screen.findByText("No cycle running");
-    expect(screen.getByRole("link", { name: "Start a cycle" }).getAttribute("href")).toBe(
-      "/contest/cycles/new",
-    );
-  });
-
-  it("vacant: primary action is 'Judge week 1'", async () => {
-    vi.mocked(getCurrentContest).mockResolvedValue(current("vacant", 0));
-    renderAt(<ContestConsolePage />, "/contest", "/contest");
-    await screen.findByRole("button", { name: "Judge week 1" });
-  });
-
-  it("weeks_1_2 (2 judged): primary action is 'Judge week 3'", async () => {
-    vi.mocked(getCurrentContest).mockResolvedValue(current("weeks_1_2", 2));
-    renderAt(<ContestConsolePage />, "/contest", "/contest");
-    await screen.findByRole("button", { name: "Judge week 3" });
-  });
-
-  it("weeks_1_3: primary action is 'Open the final'", async () => {
-    vi.mocked(getCurrentContest).mockResolvedValue(current("weeks_1_3", 3));
-    renderAt(<ContestConsolePage />, "/contest", "/contest");
-    await screen.findByRole("button", { name: "Open the final" });
-  });
-
-  it("final_live: primary action is 'Crown winners' and routes there", async () => {
-    vi.mocked(getCurrentContest).mockResolvedValue(current("final_live", 3));
-    renderAt(<ContestConsolePage />, "/contest", "/contest");
-    const btn = await screen.findByRole("button", { name: "Crown winners" });
-    fireEvent.click(btn);
-    expect(screen.getByTestId("loc").textContent).toBe("/contest/cycles/c1/crown");
-  });
-
-  it("crowned: primary action is 'Start a new cycle', monthly standings rendered", async () => {
-    vi.mocked(getCurrentContest).mockResolvedValue(current("crowned", 3));
-    renderAt(<ContestConsolePage />, "/contest", "/contest");
-    await screen.findByRole("button", { name: "Start a new cycle" });
-    expect(screen.getAllByText("Ada B.").length).toBeGreaterThan(0);
-  });
-});
-
-// ---- Start a Cycle ------------------------------------------------
-
-describe("ContestStartCyclePage", () => {
-  it("submits title + dates with rounds omitted (auto), then navigates to the hub", async () => {
-    vi.mocked(createContestCycle).mockResolvedValue({} as never);
-    renderAt(<ContestStartCyclePage />, "/contest/cycles/new", "/contest/cycles/new");
-
-    fireEvent.change(screen.getByPlaceholderText(/September 2026 Contest/i), {
-      target: { value: "October 2026 Contest" },
-    });
-    const dateInputs = document.querySelectorAll('input[type="date"]');
-    fireEvent.change(dateInputs[0], { target: { value: "2026-10-01" } });
-    fireEvent.change(dateInputs[1], { target: { value: "2026-10-31" } });
-    fireEvent.click(screen.getByRole("button", { name: "Start cycle" }));
-
-    await waitFor(() => expect(createContestCycle).toHaveBeenCalledTimes(1));
-    const arg = vi.mocked(createContestCycle).mock.calls[0][0];
-    expect(arg.title).toBe("October 2026 Contest");
-    expect(arg.startsAt).toBe(new Date("2026-10-01").toISOString());
-    expect(arg.rounds).toBeUndefined();
-    await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/contest"));
-  });
-
-  it("renders the real 409 message as a blocked state with a forward action", async () => {
-    vi.mocked(createContestCycle).mockRejectedValue(
-      new AdminApiError(
-        409,
-        "A contest cycle is already running; crown it before starting another",
-      ),
-    );
-    renderAt(<ContestStartCyclePage />, "/contest/cycles/new", "/contest/cycles/new");
-
-    fireEvent.change(screen.getByPlaceholderText(/September 2026 Contest/i), {
-      target: { value: "Dupe" },
-    });
-    const dateInputs = document.querySelectorAll('input[type="date"]');
-    fireEvent.change(dateInputs[0], { target: { value: "2026-10-01" } });
-    fireEvent.change(dateInputs[1], { target: { value: "2026-10-31" } });
-    fireEvent.click(screen.getByRole("button", { name: "Start cycle" }));
-
-    await screen.findByText(/already running; crown it before starting another/i);
-    expect(screen.getByRole("link", { name: "Go to Contest Console" }).getAttribute("href")).toBe(
-      "/contest",
-    );
-  });
-});
-
-// ---- Judge Week -------------------------------------------------
-
-function cycleWithOpenWeek(entries: number): AdminCurrentContest {
-  const base = current("weeks_1_2", 2);
-  const w3 = round(3, "open", entries);
-  w3.entries = Array.from({ length: entries }, (_, i) => ({
-    entryId: `w3e${i}`,
-    submittedAt: "2026-09-17T09:12:00.000Z",
-    entrant: { userId: `u${i}`, publicName: `Player ${i}` },
-    post: {
-      id: `pw3${i}`,
-      contentText: `entry ${i}`,
-      mediaUrls: i === 0 ? ["https://cdn/x.mp4"] : [],
-      createdAt: "2026-09-17T09:10:00.000Z",
-      likeCount: i,
-      commentCount: 0,
-    },
-    position: null,
-  }));
-  return { ...base, rounds: [base.rounds[0], base.rounds[1], w3] };
+function current(over: Partial<AdminContestCycleDetail> = {}): AdminCurrentContest {
+  return detail(over) as AdminCurrentContest;
 }
 
-describe("ContestJudgeWeekPage", () => {
-  it("open round: assigns a position and submits winners[]", async () => {
-    vi.mocked(getContestCycle).mockResolvedValue(cycleWithOpenWeek(2) as never);
-    vi.mocked(judgeContestRound).mockResolvedValue({} as never);
-    renderAt(
-      <ContestJudgeWeekPage />,
-      "/contest/cycles/:id/rounds/:week",
-      "/contest/cycles/c1/rounds/3",
-    );
+// ---- Contest console: read-only status -----------------------------------
 
-    const group = await screen.findByRole("group", { name: "Position for Player 0" });
-    fireEvent.click(within(group).getByRole("button", { name: "1st" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save week 3 results" }));
-
-    await waitFor(() =>
-      expect(judgeContestRound).toHaveBeenCalledWith("c1", 3, [{ entryId: "w3e0", position: 1 }]),
-    );
-    await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/contest"));
+describe("ContestConsolePage — read-only status", () => {
+  it("no cycle: says so and offers Create a contest", async () => {
+    vi.mocked(getCurrentContest).mockResolvedValue({
+      cycle: null,
+      settings: null,
+      editable: null,
+      phase: null,
+      calendarState: null,
+      rounds: [],
+      weeklyWinners: [],
+      finalists: [],
+      forfeitedWeeks: [],
+      finalRanking: null,
+      monthlyStandings: [],
+      finalOutcome: null,
+    });
+    renderAt(<ContestConsolePage />, "/contest", "/contest");
+    await screen.findByText("No contest yet");
+    expect(screen.getAllByRole("link", { name: "Create a contest" })[0].getAttribute("href")).toBe("/contest/cycles/new");
   });
 
-  it("thin week: 0 entries still closes the round with winners: []", async () => {
-    vi.mocked(getContestCycle).mockResolvedValue(cycleWithOpenWeek(0) as never);
-    vi.mocked(judgeContestRound).mockResolvedValue({} as never);
-    renderAt(
-      <ContestJudgeWeekPage />,
-      "/contest/cycles/:id/rounds/:week",
-      "/contest/cycles/c1/rounds/3",
-    );
-    const btn = await screen.findByRole("button", { name: "Close week 3 with no winners" });
-    fireEvent.click(btn);
-    await waitFor(() => expect(judgeContestRound).toHaveBeenCalledWith("c1", 3, []));
+  it("running: shows the calendar position and admin-only settings, with NO judge / open-final / crown control", async () => {
+    vi.mocked(getCurrentContest).mockResolvedValue(current());
+    renderAt(<ContestConsolePage />, "/contest", "/contest");
+    await screen.findByText("Week 1 · Phase 1 · entries");
+    expect(screen.getByText("40 points")).toBeTruthy();
+    expect(screen.getByText("500 / 300 / 150")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /judge/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /crown/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /open the final/i })).toBeNull();
+    expect(screen.getByRole("link", { name: "Edit contest" }).getAttribute("href")).toBe("/contest/cycles/c1/edit");
   });
 
-  it("out of sequence: an earlier unjudged week blocks judging", async () => {
-    const c = current("vacant", 0);
-    c.rounds[2] = round(3, "open", 1);
-    vi.mocked(getContestCycle).mockResolvedValue(c as never);
-    renderAt(
-      <ContestJudgeWeekPage />,
-      "/contest/cycles/:id/rounds/:week",
-      "/contest/cycles/c1/rounds/3",
+  it("a forfeited week is shown as status with its reason", async () => {
+    vi.mocked(getCurrentContest).mockResolvedValue(
+      current({
+        rounds: [
+          round(1, { forfeited: true, forfeitReason: "Fewer than three entries", status: "judged" }),
+          round(2),
+          round(3),
+          round(4),
+        ],
+      }),
     );
-    await screen.findByText(/Week 1 must be judged before week 3/i);
-    expect(screen.queryByRole("button", { name: "Save week 3 results" })).toBeNull();
+    renderAt(<ContestConsolePage />, "/contest", "/contest");
+    await screen.findByText("Fewer than three entries");
+    expect(screen.getAllByText("Forfeited").length).toBeGreaterThan(0);
   });
 
-  it("already judged: renders read-only with the recorded positions", async () => {
-    const c = current("weeks_1_3", 3);
-    const w1 = round(1, "judged", 1);
-    w1.entries = [
-      {
-        entryId: "j1",
-        submittedAt: "2026-09-03T09:12:00.000Z",
-        entrant: { userId: "u-ada", publicName: "Ada B." },
-        post: {
-          id: "p",
-          contentText: "x",
-          mediaUrls: [],
-          createdAt: "2026-09-03T09:10:00.000Z",
-          likeCount: 1,
-          commentCount: 0,
+  it("No winner this month is a read-only outcome", async () => {
+    vi.mocked(getCurrentContest).mockResolvedValue(
+      current({
+        cycle: { ...detail().cycle, status: "completed", crownedAt: "2026-12-01T00:00:00.000Z" },
+        calendarState: { kind: "completed", endedAt: "2026-12-01T00:00:00.000Z" },
+        finalOutcome: "no_winner",
+      }),
+    );
+    renderAt(<ContestConsolePage />, "/contest", "/contest");
+    await screen.findByText("No winner this month");
+  });
+
+  it("expands a week's entries with the Phase 1 tally and rank", async () => {
+    vi.mocked(getCurrentContest).mockResolvedValue(
+      current({
+        rounds: [
+          round(1, {
+            entryCount: 1,
+            entries: [
+              {
+                entryId: "e1",
+                kind: "weekly",
+                submittedAt: "2026-11-02T10:00:00.000Z",
+                entrant: { userId: "u1", publicName: "Ada B." },
+                post: { id: "p1", contentText: "x", mediaUrls: [], createdAt: "2026-11-02T10:00:00.000Z", likeCount: 1, commentCount: 0 },
+                qualified: true,
+                phase1Tally: 7,
+                phase1Rank: 1,
+                voteCount: 0,
+                finalTally: null,
+                finalRank: null,
+                position: null,
+              },
+            ],
+          }),
+          round(2),
+          round(3),
+          round(4),
+        ],
+      }),
+    );
+    renderAt(<ContestConsolePage />, "/contest", "/contest");
+    fireEvent.click(await screen.findByRole("button", { name: /Show 1/ }));
+    expect(screen.getByText("Ada B.")).toBeTruthy();
+    expect(screen.getByText("Tally 7")).toBeTruthy();
+    expect(screen.getByText("Phase 1 rank 1")).toBeTruthy();
+  });
+
+  it("a failed load shows the error with a retry", async () => {
+    vi.mocked(getCurrentContest).mockRejectedValueOnce(new Error("boom"));
+    renderAt(<ContestConsolePage />, "/contest", "/contest");
+    await screen.findByText(/boom/);
+    vi.mocked(getCurrentContest).mockResolvedValueOnce(current());
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await screen.findByText("Week 1 · Phase 1 · entries");
+  });
+});
+
+// ---- Create ------------------------------------------------------------
+
+function fillCreateForm(over: { tally?: string } = {}) {
+  fireEvent.change(screen.getByPlaceholderText("e.g. November Challenge"), { target: { value: "December Challenge" } });
+  if (over.tally !== "") {
+    fireEvent.change(screen.getByPlaceholderText("Enter points"), { target: { value: over.tally ?? "50" } });
+  }
+  for (let i = 1; i <= 3; i += 1) {
+    fireEvent.change(screen.getByLabelText(`Weekly task (week ${i})`), { target: { value: `Do trick ${i}` } });
+    fireEvent.change(screen.getByLabelText(new RegExp(`View-qualifying watch limit, week ${i}`)), { target: { value: "10" } });
+  }
+}
+
+describe("ContestFormPage — create", () => {
+  it("is blocked until title, tally and every watch limit are set (the tally has no default)", () => {
+    renderAt(<ContestFormPage mode="create" />, "/contest/cycles/new", "/contest/cycles/new");
+    const create = screen.getByRole("button", { name: "Create contest" }) as HTMLButtonElement;
+    expect(create.disabled).toBe(true);
+    expect((screen.getByPlaceholderText("Enter points") as HTMLInputElement).value).toBe("");
+    expect(screen.getByText(/Create is blocked until/)).toBeTruthy();
+  });
+
+  it("prefills the confirmed placement points", () => {
+    renderAt(<ContestFormPage mode="create" />, "/contest/cycles/new", "/contest/cycles/new");
+    expect((screen.getByLabelText("Weekly placement points, 1st") as HTMLInputElement).value).toBe("500");
+    expect((screen.getByLabelText("Weekly placement points, 3rd") as HTMLInputElement).value).toBe("150");
+    expect((screen.getByLabelText("Monthly placement points, 1st") as HTMLInputElement).value).toBe("2000");
+    expect((screen.getByLabelText("Monthly placement points, 3rd") as HTMLInputElement).value).toBe("600");
+  });
+
+  it("stays blocked when a watch limit is outside 3-120 seconds", () => {
+    renderAt(<ContestFormPage mode="create" />, "/contest/cycles/new", "/contest/cycles/new");
+    fillCreateForm();
+    fireEvent.change(screen.getByLabelText(/View-qualifying watch limit, week 2/), { target: { value: "500" } });
+    expect((screen.getByRole("button", { name: "Create contest" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("submits the full contest and returns to the console", async () => {
+    vi.mocked(createContestCycle).mockResolvedValue(detail());
+    renderAt(<ContestFormPage mode="create" />, "/contest/cycles/new", "/contest/cycles/new");
+    fillCreateForm();
+    fireEvent.click(screen.getByLabelText(/Followers-excluded counting/));
+    const create = screen.getByRole("button", { name: "Create contest" }) as HTMLButtonElement;
+    expect(create.disabled).toBe(false);
+    fireEvent.click(create);
+    await waitFor(() => expect(createContestCycle).toHaveBeenCalledTimes(1));
+    const body = vi.mocked(createContestCycle).mock.calls[0][0];
+    expect(body.title).toBe("December Challenge");
+    expect(body.minimumTally).toBe(50);
+    expect(body.weeks).toHaveLength(3);
+    expect(body.weeks[0]).toEqual({ weekNumber: 1, task: "Do trick 1", viewWatchLimitSeconds: 10 });
+    expect(body.placementPoints).toEqual({ weekly: [500, 300, 150], monthly: [2000, 1200, 600] });
+    expect(body.followersExcludedWeek4).toBe(true);
+    await screen.findByTestId("loc");
+    expect(screen.getByTestId("loc").textContent).toBe("/contest");
+  });
+
+  it("shows the server's error and stays on the form", async () => {
+    vi.mocked(createContestCycle).mockRejectedValue(new AdminApiError(409, "A contest already exists for that month."));
+    renderAt(<ContestFormPage mode="create" />, "/contest/cycles/new", "/contest/cycles/new");
+    fillCreateForm();
+    fireEvent.click(screen.getByRole("button", { name: "Create contest" }));
+    await screen.findByText("A contest already exists for that month.");
+    expect(screen.queryByTestId("loc")).toBeNull();
+  });
+});
+
+// ---- Edit --------------------------------------------------------------
+
+describe("ContestFormPage — edit and locking", () => {
+  it("before launch everything but the month is editable", async () => {
+    vi.mocked(getContestCycle).mockResolvedValue(detail());
+    renderAt(<ContestFormPage mode="edit" />, "/contest/cycles/:id/edit", "/contest/cycles/c1/edit");
+    await screen.findByDisplayValue("November Challenge");
+    expect((screen.getByPlaceholderText("Enter points") as HTMLInputElement).disabled).toBe(false);
+    expect((screen.getByLabelText("Contest month") as HTMLInputElement).disabled).toBe(true);
+    expect(screen.queryByTestId("ct-locked-note")).toBeNull();
+  });
+
+  it("after launch the locked fields are disabled and the note says so", async () => {
+    vi.mocked(getContestCycle).mockResolvedValue(detail({ editable: allLocked }));
+    renderAt(<ContestFormPage mode="edit" />, "/contest/cycles/:id/edit", "/contest/cycles/c1/edit");
+    await screen.findByDisplayValue("November Challenge");
+    expect(screen.getByTestId("ct-locked-note")).toBeTruthy();
+    expect((screen.getByPlaceholderText("Enter points") as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText("Weekly placement points, 1st") as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText("Weekly task (week 1)") as HTMLTextAreaElement).disabled).toBe(true);
+    expect((screen.getByLabelText("Weekly task (week 2)") as HTMLTextAreaElement).disabled).toBe(false);
+  });
+
+  it("sends only the fields that changed", async () => {
+    vi.mocked(getContestCycle).mockResolvedValue(detail({ editable: allLocked }));
+    vi.mocked(updateContestCycle).mockResolvedValue(detail({ editable: allLocked }));
+    renderAt(<ContestFormPage mode="edit" />, "/contest/cycles/:id/edit", "/contest/cycles/c1/edit");
+    await screen.findByDisplayValue("November Challenge");
+    fireEvent.change(screen.getByLabelText("Weekly task (week 2)"), { target: { value: "A new week 2 task" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(updateContestCycle).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(updateContestCycle).mock.calls[0]).toEqual([
+      "c1",
+      { weeks: [{ weekNumber: 2, task: "A new week 2 task" }] },
+    ]);
+    await screen.findByText("Saved.");
+  });
+
+  it("surfaces a 409 contest_field_locked from the server without changing the form", async () => {
+    vi.mocked(getContestCycle).mockResolvedValue(detail());
+    vi.mocked(updateContestCycle).mockRejectedValue(new AdminApiError(409, "That field is locked now."));
+    renderAt(<ContestFormPage mode="edit" />, "/contest/cycles/:id/edit", "/contest/cycles/c1/edit");
+    await screen.findByDisplayValue("November Challenge");
+    fireEvent.change(screen.getByPlaceholderText("Enter points"), { target: { value: "99" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await screen.findByText("That field is locked now.");
+    expect((screen.getByPlaceholderText("Enter points") as HTMLInputElement).value).toBe("99");
+  });
+
+  it("a 404 load shows an error, not a form", async () => {
+    vi.mocked(getContestCycle).mockRejectedValue(new AdminApiError(404, "Contest not found"));
+    renderAt(<ContestFormPage mode="edit" />, "/contest/cycles/:id/edit", "/contest/cycles/zzz/edit");
+    await screen.findByText("Contest not found");
+    expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull();
+  });
+});
+
+// ---- History, detail, impressions -----------------------------------------
+
+describe("ContestHistoryPage", () => {
+  it("lists contests newest first with entries per week and the outcome", async () => {
+    vi.mocked(listContestCycles).mockResolvedValue({
+      items: [
+        {
+          cycle: detail().cycle,
+          settings: detail().settings,
+          phase: "crowned",
+          calendarState: { kind: "completed", endedAt: "2026-12-01T00:00:00.000Z" },
+          rounds: [round(1, { entryCount: 12 }), round(2, { entryCount: 8 }), round(3, { entryCount: 5 }), round(4, { entryCount: 3 })],
+          weeklyWinners: [],
+          monthlyStandings: [{ position: 1, userId: "u1", publicName: "Ada B." }],
+          finalOutcome: "winners",
         },
-        position: 1,
-      },
-    ];
-    c.rounds = [w1, round(2, "judged"), round(3, "judged")];
-    vi.mocked(getContestCycle).mockResolvedValue(c as never);
-    renderAt(
-      <ContestJudgeWeekPage />,
-      "/contest/cycles/:id/rounds/:week",
-      "/contest/cycles/c1/rounds/1",
-    );
-    await screen.findByText("Ada B.");
-    expect(screen.getByText("1st")).not.toBeNull();
-    expect(screen.queryByRole("group", { name: /Position for/ })).toBeNull();
+      ],
+    });
+    renderAt(<ContestHistoryPage />, "/contest/history", "/contest/history");
+    await screen.findByText("November Challenge");
+    expect(screen.getByText("12 · 8 · 5 · 3")).toBeTruthy();
+    expect(screen.getByText("Won by Ada B.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "View ›" }).getAttribute("href")).toBe("/contest/cycles/c1");
+  });
+
+  it("empty and error states", async () => {
+    vi.mocked(listContestCycles).mockResolvedValueOnce({ items: [] });
+    renderAt(<ContestHistoryPage />, "/contest/history", "/contest/history");
+    await screen.findByText("No contests yet");
+    cleanup();
+    vi.mocked(listContestCycles).mockRejectedValueOnce(new Error("history down"));
+    renderAt(<ContestHistoryPage />, "/contest/history", "/contest/history");
+    await screen.findByText(/history down/);
   });
 });
-
-// ---- Crown Winners --------------------------------------------
-
-describe("ContestCrownWinnersPage", () => {
-  it("deduplicates the finalist pool by userId and submits standings", async () => {
-    const c = current("final_live", 3);
-    c.weeklyWinners = [
-      { weekNumber: 1, position: 1, userId: "u-ada", publicName: "Ada B.", entryId: "e1", postId: "p1" },
-      { weekNumber: 2, position: 2, userId: "u-ada", publicName: "Ada B.", entryId: "e2", postId: "p2" },
-      { weekNumber: 3, position: 1, userId: "u-ada", publicName: "Ada B.", entryId: "e3", postId: "p3" },
-      { weekNumber: 1, position: 2, userId: "u-ben", publicName: "Ben C.", entryId: "e4", postId: "p4" },
-    ];
-    vi.mocked(getContestCycle).mockResolvedValue(c as never);
-    vi.mocked(crownContestCycle).mockResolvedValue({} as never);
-    renderAt(<ContestCrownWinnersPage />, "/contest/cycles/:id/crown", "/contest/cycles/c1/crown");
-
-    await screen.findByText("Ada B.");
-    const groups = await screen.findAllByRole("group");
-    expect(groups.length).toBe(2); // 4 weekly placings → 2 finalists
-    expect(screen.getByText("Week 1 · 1st · Week 2 · 2nd · Week 3 · 1st")).not.toBeNull();
-
-    const crownBtn = screen.getByRole("button", { name: "Crown and close the cycle" });
-    expect(crownBtn.hasAttribute("disabled")).toBe(true);
-    fireEvent.click(within(groups[0]).getByRole("button", { name: "1st" }));
-    fireEvent.click(screen.getByRole("button", { name: "Crown and close the cycle" }));
-    await waitFor(() =>
-      expect(crownContestCycle).toHaveBeenCalledWith("c1", [{ userId: "u-ada", position: 1 }]),
-    );
-  });
-});
-
-// ---- 404 -----------------------------------------------------
 
 describe("ContestCycleDetailPage", () => {
-  it("renders a not-found state on a 404", async () => {
-    vi.mocked(getContestCycle).mockRejectedValue(new AdminApiError(404, "Contest cycle not found"));
-    renderAt(<ContestCycleDetailPage />, "/contest/cycles/:id", "/contest/cycles/missing");
-    await screen.findByText("Cycle not found");
+  it("shows a past cycle read-only", async () => {
+    vi.mocked(getContestCycle).mockResolvedValue(detail());
+    renderAt(<ContestCycleDetailPage />, "/contest/cycles/:id", "/contest/cycles/c1");
+    await screen.findAllByRole("heading", { name: "November Challenge" });
+    expect(screen.queryByRole("button", { name: /judge|crown/i })).toBeNull();
+  });
+
+  it("a 404 renders an honest not-found state", async () => {
+    vi.mocked(getContestCycle).mockRejectedValue(new AdminApiError(404, "nope"));
+    renderAt(<ContestCycleDetailPage />, "/contest/cycles/:id", "/contest/cycles/zzz");
+    await screen.findByText("Contest not found");
+  });
+});
+
+describe("ContestImpressionsPage", () => {
+  it("shows the stored exposure settings and says impression counts are not available yet", async () => {
+    vi.mocked(getCurrentContest).mockResolvedValue(current());
+    renderAt(<ContestImpressionsPage />, "/contest/impressions", "/contest/impressions");
+    await screen.findByText("10%");
+    expect(screen.getByText("3")).toBeTruthy();
+    expect(screen.getByTestId("ct-impressions-pending")).toBeTruthy();
   });
 });

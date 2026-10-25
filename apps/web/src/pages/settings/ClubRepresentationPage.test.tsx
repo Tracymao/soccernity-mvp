@@ -75,6 +75,11 @@ function profile(represented: { id: string; name: string } | null): UserProfile 
     clubAffiliationId: null,
     isTeamOrganiser: false,
     representedClub: represented,
+    bio: null,
+    preferredClub: null,
+    profileCountry: null,
+    avatar: null,
+    cover: null,
   };
 }
 

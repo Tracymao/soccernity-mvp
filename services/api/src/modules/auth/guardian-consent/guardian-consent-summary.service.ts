@@ -20,6 +20,11 @@ export interface GuardianRequestSummary {
   guardianRelationship: string;
   // When the account (and so the first request) was created.
   requestedAt: string;
+  // When THIS request's link stops working (Guardian.consentTokenExpiresAt, ISO).
+  // The guardian's own token already proves they hold the link, so this tells
+  // them nothing new about anyone else. The page's footnote says "This link
+  // expires on {date}" (K5, B-185). It moves forward when the minor resends.
+  expiresAt: string;
   // B-029: true once the guardian has pressed "Report incorrect details" and
   // support has not yet resolved it. The page uses it to show that approval is
   // on hold instead of letting the guardian press a button that will be
@@ -102,6 +107,7 @@ export class GuardianConsentSummaryService {
       guardianName: guardian.name,
       guardianRelationship: guardian.relationship,
       requestedAt: guardian.minorUser.createdAt.toISOString(),
+      expiresAt: guardian.consentTokenExpiresAt.toISOString(),
       incorrectDetailsReported: Boolean(guardian.incorrectDetailsReportedAt),
       notices: { guardianEmailShownOnMinorProfile: true, photoAndUsernameVisibleToOthers: true },
     };

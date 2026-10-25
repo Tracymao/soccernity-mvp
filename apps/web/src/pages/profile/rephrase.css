@@ -1,0 +1,22 @@
+/* Error row: a 3px semantic/alert bar and the text in the primary colour (the
+ * alert token is an accent only, Decision Log #408 item 4). */
+.profile-rephrase {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font: 500 12px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.profile-rephrase__bar {
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  background-color: var(--sn-semantic-alert);
+}
+
+/* The flagged input itself: a 1.5px semantic/alert outline. */
+.profile-flagged {
+  border: 1.5px solid var(--sn-semantic-alert) !important;
+}

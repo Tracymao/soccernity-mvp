@@ -1,144 +1,61 @@
-// The cycle overview block shared by the Contest Console hub (live,
-// phase-contextual primary action) and the read-only past-cycle detail
-// page. Figma: the "Cycle Card" + "Table — Weekly Rounds" + "Panels"
-// group on frames 6266:14767 / 6269:* / 6270:*.
-import type { ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import type {
-  AdminContestCycleDetail,
-  AdminContestRoundDetail,
-  ContestCycleSummary,
-  ContestPhase,
-  ContestStandingSummary,
-  ContestWinnerSummary,
-} from "../../api/contest";
+// The read-only overview of a contest month, shared by the Contest page (the running or latest month) and
+// the past-cycle detail page. Figma: "Overview -- Running" 6644:22559, "Overview -- Final (No winner this
+// month)" 6644:22852 (pass C, B-095).
+//
+// READ-ONLY STATUS. Winners are decided by engagement and community votes, so there is no Judge, Open the
+// Final or Crown control anywhere (the admin-judged model is gone, Decision Log #381). "Forfeited" and "No
+// winner this month" are shown as status, never as an action.
+//
+// Admin-only figures shown here (never in any user-facing screen): the minimum tally, the placement-point
+// settings, each entry's Phase 1 tally and rank, and the final points. Impression figures are not shown:
+// the exposure engine does not exist yet (B-092), see ContestImpressionsPage.
+import { useState } from "react";
+import type { AdminContestCycleDetail, AdminCurrentContest, AdminContestRoundDetail } from "../../api/contest";
 import {
-  PHASE_LABEL,
-  PhaseStrip,
   StatusPill,
-  formatDate,
+  calendarLabel,
   formatDateTime,
+  monthLabel,
   ordinal,
+  roundStatusLabel,
 } from "./contestShared";
 
-interface CycleOverviewData {
-  cycle: ContestCycleSummary;
-  phase: ContestPhase;
-  rounds: AdminContestRoundDetail[];
-  weeklyWinners: ContestWinnerSummary[];
-  monthlyStandings: ContestStandingSummary[];
+type Overview = AdminContestCycleDetail | (AdminCurrentContest & { cycle: NonNullable<AdminCurrentContest["cycle"]> });
+
+function points(values: [number, number, number]): string {
+  return values.map((v) => v.toLocaleString("en-GB")).join(" / ");
 }
 
-function judgedCount(rounds: { status: string }[]): number {
-  return rounds.filter((r) => r.status === "judged").length;
-}
-
-function PrimaryAction({ data }: { data: CycleOverviewData }) {
-  const navigate = useNavigate();
-  const { cycle, phase, rounds } = data;
-  const nextWeek = Math.min(judgedCount(rounds) + 1, 3);
-
-  let label: string;
-  let hint: string;
-  let go: () => void;
-
-  switch (phase) {
-    case "vacant":
-    case "week_1":
-    case "weeks_1_2":
-      label = `Judge week ${nextWeek}`;
-      hint = `Weeks are judged in order — week ${nextWeek} is next.`;
-      go = () => navigate(`/contest/cycles/${cycle.id}/rounds/${nextWeek}`);
-      break;
-    case "weeks_1_3":
-      label = "Open the final";
-      hint = "All three weekly rounds are judged.";
-      go = () => navigate(`/contest/cycles/${cycle.id}/final/open`);
-      break;
-    case "final_live":
-      label = "Crown winners";
-      hint = "The final is open — set the monthly top 3.";
-      go = () => navigate(`/contest/cycles/${cycle.id}/crown`);
-      break;
-    case "crowned":
-      label = "Start a new cycle";
-      hint = "This cycle is crowned and closed.";
-      go = () => navigate("/contest/cycles/new");
-      break;
-    default:
-      return null;
-  }
-
+function RoundEntries({ round }: { round: AdminContestRoundDetail }) {
+  const [open, setOpen] = useState(false);
+  if (round.entries.length === 0) return <span className="ct-cell--secondary">—</span>;
   return (
-    <div className="ct-action-row">
-      <button type="button" className="ct-btn ct-btn--primary" onClick={go}>
-        {label}
+    <>
+      <button type="button" className="ct-link ct-link--button" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        {open ? "Hide" : "Show"} {round.entries.length}
       </button>
-      <span className="ct-action-hint">{hint}</span>
-    </div>
+      {open && (
+        <div className="ct-entries" data-testid={`ct-entries-${round.weekNumber}`}>
+          {round.entries.map((e) => (
+            <div className="ct-entry-row" key={e.entryId}>
+              <span className="ct-cell--primary">{e.entrant.publicName}</span>
+              <span>{e.qualified ? "Qualified" : "Not qualified"}</span>
+              <span>{e.phase1Rank ? `Phase 1 rank ${e.phase1Rank}` : "No rank yet"}</span>
+              <span>{e.phase1Tally !== null ? `Tally ${e.phase1Tally}` : ""}</span>
+              <span>{`${e.voteCount} ${e.voteCount === 1 ? "vote" : "votes"}`}</span>
+              {e.finalRank ? <span>{`Final rank ${e.finalRank} · ${e.finalTally ?? 0} pts`}</span> : null}
+              {e.position ? <span className="ct-pill ct-pill--soft">{ordinal(e.position)}</span> : null}
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
-function RoundRow({
-  round,
-  cycleId,
-  nextWeek,
-  readOnly,
-}: {
-  round: AdminContestRoundDetail;
-  cycleId: string;
-  nextWeek: number;
-  readOnly: boolean;
-}) {
-  const isJudged = round.status === "judged";
-  const isNext = !isJudged && round.weekNumber === nextWeek;
-
-  let action: ReactNode;
-  if (isJudged) {
-    action = (
-      <Link className="ct-link" to={`/contest/cycles/${cycleId}/rounds/${round.weekNumber}`}>
-        View results
-      </Link>
-    );
-  } else if (isNext && !readOnly) {
-    action = (
-      <Link className="ct-link" to={`/contest/cycles/${cycleId}/rounds/${round.weekNumber}`}>
-        Judge week {round.weekNumber}
-      </Link>
-    );
-  } else {
-    action = (
-      <span className="ct-link ct-link--muted">
-        Judge week {round.weekNumber - 1} first
-      </span>
-    );
-  }
-
-  return (
-    <div className="ct-table__row">
-      <span className="ct-cell--primary">{round.weekNumber}</span>
-      <span className="ct-cell--primary">
-        {formatDate(round.opensAt)} — {formatDate(round.closesAt)}
-      </span>
-      <span>
-        <StatusPill value={round.status} />
-      </span>
-      <span className="ct-cell--primary">{round.entryCount}</span>
-      <span className="ct-cell--secondary">{formatDateTime(round.judgedAt)}</span>
-      <span>{action}</span>
-    </div>
-  );
-}
-
-export default function CycleOverview({
-  data,
-  readOnly = false,
-}: {
-  data: AdminContestCycleDetail | CycleOverviewData;
-  readOnly?: boolean;
-}) {
-  const { cycle, phase, rounds, weeklyWinners, monthlyStandings } = data;
-  const nextWeek = Math.min(judgedCount(rounds) + 1, 3);
+export default function CycleOverview({ data }: { data: Overview }) {
+  const { cycle, settings, calendarState, rounds, weeklyWinners, monthlyStandings, finalOutcome, finalists } = data;
+  const header = cycle.monthKey ? `${monthLabel(cycle.monthKey)} Contest` : cycle.title;
 
   return (
     <>
@@ -146,41 +63,70 @@ export default function CycleOverview({
         <div className="ct-card__head">
           <h2 className="ct-card__title">{cycle.title}</h2>
           <StatusPill value={cycle.status} />
-          <span className="ct-pill ct-pill--soft">{PHASE_LABEL[phase]}</span>
+          {calendarLabel(calendarState) ? (
+            <span className="ct-pill ct-pill--soft">{calendarLabel(calendarState)}</span>
+          ) : null}
         </div>
         <div className="ct-meta">
-          <span>
-            {formatDate(cycle.startsAt)} → {formatDate(cycle.endsAt)}
-          </span>
-          <span>Cycle ID {cycle.id}</span>
-          {cycle.finalOpenedAt ? <span>Final opened {formatDateTime(cycle.finalOpenedAt)}</span> : null}
-          {cycle.crownedAt ? <span>Crowned {formatDateTime(cycle.crownedAt)}</span> : null}
+          {cycle.monthKey ? <span>{header}</span> : null}
+          {cycle.finalOpenedAt ? <span>Final revealed {formatDateTime(cycle.finalOpenedAt)}</span> : null}
+          {cycle.crownedAt ? <span>Completed {formatDateTime(cycle.crownedAt)}</span> : null}
         </div>
-        <div className="ct-divider" />
-        <PhaseStrip phase={phase} />
-        <p className="ct-note">
-          phase = &quot;{phase}&quot; · derived by ContestService.derivePhase(), never stored
-        </p>
-        {!readOnly ? <PrimaryAction data={{ ...data, phase }} /> : null}
+        {cycle.description ? <p className="ct-note">{cycle.description}</p> : null}
+        {settings ? (
+          <>
+            <div className="ct-divider" />
+            <div className="ct-settings">
+              <div>
+                <span className="ct-settings__label">Minimum tally</span>
+                <strong>{settings.minimumTally !== null ? `${settings.minimumTally} points` : "—"}</strong>
+              </div>
+              <div>
+                <span className="ct-settings__label">Weekly placement points</span>
+                <strong>{points(settings.weeklyPoints)}</strong>
+              </div>
+              <div>
+                <span className="ct-settings__label">Monthly final placement points</span>
+                <strong>{points(settings.monthlyPoints)}</strong>
+              </div>
+              <div>
+                <span className="ct-settings__label">Followers excluded (week 4)</span>
+                <strong>{settings.followersExcludedWeek4 ? "On" : "Off"}</strong>
+              </div>
+            </div>
+          </>
+        ) : null}
       </div>
 
       <div className="ct-table ct-rounds">
         <div className="ct-table__row ct-table__row--head">
           <span>Week</span>
-          <span>Window</span>
-          <span>Status</span>
+          <span>Dates (Europe/London)</span>
+          <span>Phase 1 · entries</span>
+          <span>Phase 2 · votes lock</span>
           <span>Entries</span>
-          <span>Judged</span>
-          <span aria-hidden />
+          <span>Status</span>
         </div>
         {rounds.map((r) => (
-          <RoundRow
-            key={r.weekNumber}
-            round={r}
-            cycleId={cycle.id}
-            nextWeek={nextWeek}
-            readOnly={readOnly}
-          />
+          <div className="ct-table__row" key={r.weekNumber}>
+            <span className="ct-cell--primary">{r.weekNumber}</span>
+            <span className="ct-cell--primary">
+              {formatDateTime(r.opensAt)} → {formatDateTime(r.closesAt)}
+            </span>
+            <span className="ct-cell--secondary">
+              {r.weekNumber === 4 ? "Uploads, then reveal" : `Until ${formatDateTime(r.entriesCloseAt)}`}
+            </span>
+            <span className="ct-cell--secondary">
+              {r.weekNumber === 4 ? "No vote: likes and comments rank" : formatDateTime(r.votesLockAt)}
+            </span>
+            <span className="ct-cell--primary">
+              {r.entryCount} <RoundEntries round={r as AdminContestRoundDetail} />
+            </span>
+            <span>
+              <StatusPill value={roundStatusLabel(r, calendarState)} />
+              {r.forfeited && r.forfeitReason ? <span className="ct-cell--secondary"> {r.forfeitReason}</span> : null}
+            </span>
+          </div>
         ))}
       </div>
 
@@ -188,12 +134,12 @@ export default function CycleOverview({
         <div className="ct-panel">
           <div className="ct-panel__head">
             <span className="ct-panel__title">Weekly winners</span>
-            <span className="ct-panel__sub">weeklyWinners[] — fills as each round is judged</span>
+            <span className="ct-panel__sub">Decided at each week&rsquo;s 20:00 vote lock</span>
           </div>
           {weeklyWinners.length === 0 ? (
             <div className="ct-panel__empty">
-              <strong>No weeks judged yet</strong>
-              <span>Weekly winners appear here as each round is judged, in order.</span>
+              <strong>No weekly winners yet</strong>
+              <span>The top 3 of each week appear here once its votes lock.</span>
             </div>
           ) : (
             weeklyWinners.map((w) => (
@@ -209,26 +155,40 @@ export default function CycleOverview({
 
         <div className="ct-panel">
           <div className="ct-panel__head">
-            <span className="ct-panel__title">Monthly standings</span>
-            <span className="ct-panel__sub">monthlyStandings[] — set by the crown step</span>
+            <span className="ct-panel__title">Week 4 final</span>
+            <span className="ct-panel__sub">
+              {finalists.length > 0 ? `${finalists.length} finalist${finalists.length === 1 ? "" : "s"}` : "Finalists are set after week 3"}
+            </span>
           </div>
-          {monthlyStandings.length === 0 ? (
+          {finalOutcome === "no_winner" ? (
             <div className="ct-panel__empty">
-              <strong>Nothing crowned yet</strong>
-              <span>
-                The monthly top 3 is set when the cycle is crowned, after the final opens.
-                Finalists are drawn from this cycle’s weekly winners.
-              </span>
+              <strong>No winner this month</strong>
+              <span>Nobody reached the minimum tally, so no final placings were awarded.</span>
             </div>
-          ) : (
+          ) : monthlyStandings.length > 0 ? (
             monthlyStandings.map((s) => (
               <div className="ct-panel__row" key={`${s.position}-${s.userId}`}>
                 <span className="ct-pill ct-pill--soft">{ordinal(s.position)}</span>
                 <span>{s.publicName}</span>
               </div>
             ))
+          ) : finalOutcome === "no_final" ? (
+            <div className="ct-panel__empty">
+              <strong>No final this month</strong>
+              <span>No weekly winner came through, so there was nothing to run.</span>
+            </div>
+          ) : (
+            <div className="ct-panel__empty">
+              <strong>Not decided yet</strong>
+              <span>The monthly top 3 is set automatically at the end of the month.</span>
+            </div>
           )}
         </div>
+      </div>
+
+      <div className="ct-callout">
+        <span className="ct-callout__bar" aria-hidden />
+        <p>Read-only status. Winners are decided by engagement and community votes &mdash; admins do not judge or crown.</p>
       </div>
     </>
   );

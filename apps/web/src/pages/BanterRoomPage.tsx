@@ -246,7 +246,7 @@ export default function BanterRoomPage() {
                 type="button"
                 className="banter-room-composer__attach"
                 disabled
-                title="Attaching photos or videos isn't wired up yet"
+                title="Attaching photos or videos isn't available yet"
               >
                 Attach photo/video
               </button>

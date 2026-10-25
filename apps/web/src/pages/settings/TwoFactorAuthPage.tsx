@@ -87,8 +87,7 @@ export default function TwoFactorAuthPage() {
               <p className="security-row__title">{r.label}</p>
               <p className="security-row__desc">{r.desc}</p>
               <p className="security-row__note">
-                Not adjustable yet — two-factor authentication isn&rsquo;t available yet. This needs a
-                backend security module first.
+                Not adjustable yet — two-factor authentication isn&rsquo;t available yet.
               </p>
             </div>
             <DisabledToggle label={r.label} />

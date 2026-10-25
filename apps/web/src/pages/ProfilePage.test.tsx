@@ -61,6 +61,11 @@ const BASE_PROFILE: UserProfile = {
   clubAffiliationId: null,
   isTeamOrganiser: false,
   representedClub: null,
+  bio: null,
+  preferredClub: null,
+  profileCountry: null,
+  avatar: null,
+  cover: null,
 };
 
 afterEach(cleanup);
@@ -134,7 +139,7 @@ describe("ProfilePage", () => {
     expect(getFollowers).toHaveBeenLastCalledWith(expect.any(String), "user-1", "cursor-1");
   });
 
-  it("opens Edit Profile, renders Bio/Location/Preferred Club/Date of Birth as disabled, and saves via PATCH /users/:id", async () => {
+  it("opens Edit Profile with Bio, Country and Preferred Club editable and Date of Birth read-only, and saves only what changed via PATCH /users/:id", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
     vi.mocked(getUser).mockResolvedValueOnce(BASE_PROFILE);
     vi.mocked(updateUser).mockResolvedValueOnce({ ...BASE_PROFILE, publicName: "Adeniyi Okafor" });
@@ -144,14 +149,11 @@ describe("ProfilePage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Profile" }));
 
-    const bioField = screen.getByLabelText("Bio") as HTMLTextAreaElement;
-    const locationField = screen.getByLabelText("Location") as HTMLInputElement;
-    const clubField = screen.getByLabelText("Preferred Club") as HTMLInputElement;
-    const dobField = screen.getByLabelText("Date of Birth") as HTMLInputElement;
-    expect(bioField.disabled).toBe(true);
-    expect(locationField.disabled).toBe(true);
-    expect(clubField.disabled).toBe(true);
-    expect(dobField.disabled).toBe(true);
+    expect((screen.getByLabelText(/Bio/) as HTMLTextAreaElement).disabled).toBe(false);
+    expect((screen.getByLabelText(/Country/) as HTMLSelectElement).disabled).toBe(false);
+    expect((screen.getByLabelText(/Preferred Club/) as HTMLInputElement).disabled).toBe(false);
+    const dobField = screen.getByLabelText(/Date of Birth/) as HTMLInputElement;
+    expect(dobField.readOnly).toBe(true);
 
     fireEvent.change(screen.getByLabelText("Last name"), { target: { value: "Okafor" } });
     fireEvent.click(screen.getByRole("button", { name: "Update Profile" }));

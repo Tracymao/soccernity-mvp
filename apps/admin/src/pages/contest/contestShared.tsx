@@ -1,33 +1,38 @@
-// Shared helpers + presentational bits for the Contest admin console
-// screens (Figma row A/B/C, nodes 6266–6278; Decision Log #242/#243).
+// Shared helpers + small presentational bits for the Contest admin screens (build register B-097; Figma
+// pass C frames 6643:21602 to 6646:24345; Decision Log #381-#406).
 //
-// The console models the real state machine: one ContestCycle → three
-// weekly ContestRounds judged strictly in order → open the final → crown
-// the monthly top 3. `phase` is derived server-side (never stored) and
-// drives which primary action the hub offers.
+// The Contest runs itself on the fixed Europe/London calendar, so every date here is shown in
+// Europe/London whatever the admin's own clock says (docs/contest-spec.md section 5). There is no
+// judging, opening or crowning to drive: the screens only show status and edit the contest.
 import { useCallback, useEffect, useState } from "react";
 import { AdminApiError } from "../../api/adminClient";
-import type { ContestPhase, ContestWinnerSummary } from "../../api/contest";
+import type { AdminContestRoundSummary, ContestCalendarState } from "../../api/contest";
 import "./contest.css";
 
-// ---- formatting --------------------------------------------------------
+const TZ = "Europe/London";
+
+// ---- formatting (Europe/London) --------------------------------------------
 
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return new Intl.DateTimeFormat("en-GB", { timeZone: TZ, day: "numeric", month: "short", year: "numeric" }).format(d);
 }
 
+/** "5 Oct, 20:00" in London time. */
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return (
-    d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) +
-    ", " +
-    d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
-  );
+  const day = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, day: "numeric", month: "short" }).format(d);
+  const time = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(d);
+  return `${day}, ${time}`;
 }
 
 export function ordinal(n: number): string {
@@ -37,118 +42,66 @@ export function ordinal(n: number): string {
   return `${n}th`;
 }
 
-// ---- phase ------------------------------------------------------------
-
-export const PHASE_ORDER: ContestPhase[] = [
-  "vacant",
-  "week_1",
-  "weeks_1_2",
-  "weeks_1_3",
-  "final_live",
-  "crowned",
-];
-
-export const PHASE_LABEL: Record<ContestPhase, string> = {
-  vacant: "No weeks judged",
-  week_1: "Week 1",
-  weeks_1_2: "Weeks 1–2",
-  weeks_1_3: "Weeks 1–3",
-  final_live: "Final live",
-  crowned: "Crowned",
-};
-
-export function PhaseStrip({ phase }: { phase: ContestPhase | null }) {
-  const activeIdx = phase ? PHASE_ORDER.indexOf(phase) : -1;
-  return (
-    <div className="ct-phase-strip" data-testid="ct-phase-strip">
-      {PHASE_ORDER.map((p, i) => {
-        const state = i === activeIdx ? "active" : i < activeIdx ? "past" : "future";
-        return (
-          <span key={p} className={`ct-phase-chip ct-phase-chip--${state}`}>
-            {PHASE_LABEL[p]}
-          </span>
-        );
-      })}
-    </div>
+/** "October 2026" from a "YYYY-MM" month key. */
+export function monthLabel(monthKey: string | null | undefined): string {
+  if (!monthKey) return "";
+  const [y, m] = monthKey.split("-").map(Number);
+  if (!y || !m) return monthKey;
+  return new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", month: "long", year: "numeric" }).format(
+    new Date(Date.UTC(y, m - 1, 1)),
   );
+}
+
+// ---- status -------------------------------------------------------------
+
+/** What a round is doing right now, from the round's own fields and the calendar state. */
+export function roundStatusLabel(round: AdminContestRoundSummary, calendar: ContestCalendarState | null): string {
+  if (round.forfeited) return "Forfeited";
+  if (round.status === "judged") return round.weekNumber === 4 ? "Final decided" : "Winners confirmed";
+  const week = round.weekNumber;
+  if (calendar) {
+    if (calendar.kind === "week_entries" && calendar.weekNumber === week) return "Entries open";
+    if (calendar.kind === "week_voting" && calendar.weekNumber === week) return "Voting open";
+    if (calendar.kind === "week_forfeited" && calendar.weekNumber === week) return "Forfeited";
+    if (week === 4 && calendar.kind === "final_upload") return "Uploads open";
+    if (week === 4 && calendar.kind === "final_live") return "Live ranking";
+  }
+  return "Scheduled";
 }
 
 export function StatusPill({ value }: { value: string }) {
-  // "open" / "final" / "active" render navy; "judged" / "completed" render
-  // as the calmer green-tint pill — matching the Figma treatment.
-  const strong = value === "open" || value === "final" || value === "active";
+  // Live states render navy; settled or waiting states the calmer green-tint pill.
+  const strong = ["open", "final", "active", "Entries open", "Voting open", "Uploads open", "Live ranking"].includes(
+    value,
+  );
   return <span className={`ct-pill ${strong ? "ct-pill--strong" : "ct-pill--soft"}`}>{value}</span>;
 }
 
-// ---- position selector (Judge Week / Crown Winners) ------------------
-
-export type PositionValue = 1 | 2 | 3 | null;
-
-const POSITION_OPTIONS: { label: string; value: PositionValue }[] = [
-  { label: "1st", value: 1 },
-  { label: "2nd", value: 2 },
-  { label: "3rd", value: 3 },
-  { label: "None", value: null },
-];
-
-export function PositionChips({
-  value,
-  onChange,
-  disabled,
-  ariaLabel,
-}: {
-  value: PositionValue;
-  onChange: (v: PositionValue) => void;
-  disabled?: boolean;
-  ariaLabel: string;
-}) {
-  return (
-    <div className="ct-chips" role="group" aria-label={ariaLabel}>
-      {POSITION_OPTIONS.map((opt) => {
-        const selected = opt.value === value;
-        return (
-          <button
-            key={opt.label}
-            type="button"
-            disabled={disabled}
-            aria-pressed={selected}
-            className={`ct-chip ${selected ? "ct-chip--selected" : ""}`}
-            onClick={() => onChange(opt.value)}
-          >
-            {opt.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// ---- finalist pool (Crown Winners) ---------------------------------
-
-export interface Finalist {
-  userId: string;
-  publicName: string;
-  placings: string; // "Week 1 · 1st · Week 2 · 2nd"
-}
-
-// The crown picker's pool is the weekly winners DEDUPLICATED by userId —
-// CrownCycleDto rejects a repeated userId (Task 2 §1 / Figma report).
-export function dedupeFinalists(weeklyWinners: ContestWinnerSummary[]): Finalist[] {
-  const byUser = new Map<string, Finalist>();
-  for (const w of weeklyWinners) {
-    const existing = byUser.get(w.userId);
-    const placing = `Week ${w.weekNumber} · ${ordinal(w.position)}`;
-    if (existing) {
-      existing.placings += ` · ${placing}`;
-    } else {
-      byUser.set(w.userId, {
-        userId: w.userId,
-        publicName: w.publicName,
-        placings: placing,
-      });
-    }
+/** One line describing where the contest is, for the header pill. */
+export function calendarLabel(calendar: ContestCalendarState | null): string {
+  if (!calendar) return "";
+  switch (calendar.kind) {
+    case "upcoming":
+      return "Starts soon";
+    case "week_entries":
+      return `Week ${calendar.weekNumber} · Phase 1 · entries`;
+    case "week_voting":
+      return `Week ${calendar.weekNumber} · Phase 2 · voting`;
+    case "week_forfeited":
+      return `Week ${calendar.weekNumber} · forfeited`;
+    case "between_weeks":
+      return `Between weeks ${calendar.afterWeek} and ${calendar.nextWeek}`;
+    case "final_upload":
+      return "Week 4 · final uploads";
+    case "final_live":
+      return "Week 4 · final live";
+    case "no_final":
+      return "No final this month";
+    case "completed":
+      return "Completed";
+    default:
+      return "";
   }
-  return [...byUser.values()];
 }
 
 // ---- async data hook -------------------------------------------------

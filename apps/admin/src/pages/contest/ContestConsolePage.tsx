@@ -1,86 +1,77 @@
-// Contest Console — the hub. One page that branches on `phase`
-// (GET /admin/contest/current). Figma frames 6271:15272 (No Cycle),
-// 6269:14868 (Vacant), 6266:14767 (Weeks In Progress — covers week_1 /
-// weeks_1_2), 6269:15107 (All Weeks Judged), 6270:15070 (Final Live),
-// 6270:15346 (Crowned).
+// The Contest page of the admin console: the running (or latest) contest month, read-only.
+// Figma: Overview -- Running 6644:22559, Overview -- Final 6644:22852, Overview -- No Contest 6644:23174,
+// Overview -- Load Error 6644:23391 (pass C, B-095; build register B-097).
 //
-// GET /admin/contest/current resolves the running cycle, or the
-// most-recently completed one — so the "Crowned" state is where the next
-// cycle is started from, rather than the console going blank after a crown.
-//
-// This is the ONLY entry point to the write actions: the phase-contextual
-// primary routes to Judge week N / Open the final / Crown winners / Start a
-// cycle, so the sequential-judging rule is enforced by the UI's shape
-// before the backend ever returns a 409.
+// GET /admin/contest/current resolves the running month, or the most recently completed one, so the page
+// never goes blank after a month ends. There is nothing to judge, open or crown: the month runs itself.
+// The only actions are create a contest, edit the contest (within the locking rules), cycle history and
+// the finalist impressions view.
 import { Link } from "react-router-dom";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { getCurrentContest } from "../../api/contest";
 import CycleOverview from "./CycleOverview";
-import { PhaseStrip, useAsyncData } from "./contestShared";
+import { useAsyncData } from "./contestShared";
 
 export default function ContestConsolePage() {
-  const { data, loading, error } = useAsyncData(getCurrentContest);
+  const { data, loading, error, reload } = useAsyncData(getCurrentContest);
 
   return (
     <>
-      <AdminPageHeader title="Contest Console" hideSearch />
+      <AdminPageHeader title="Contest" hideSearch />
       <div className="ct-page">
         <div className="ct-top-row">
-          <h1 className="ct-title">Contest Console</h1>
-          <Link className="ct-btn ct-btn--outline ct-btn--sm" to="/contest/history">
-            Cycle history
-          </Link>
+          <h1 className="ct-title">{data?.cycle ? data.cycle.title : "Contest"}</h1>
+          <div className="ct-top-actions">
+            {data?.cycle ? (
+              <>
+                <Link className="ct-btn ct-btn--outline ct-btn--sm" to={`/contest/cycles/${data.cycle.id}/edit`}>
+                  Edit contest
+                </Link>
+                <Link className="ct-btn ct-btn--outline ct-btn--sm" to="/contest/impressions">
+                  Finalist impressions
+                </Link>
+              </>
+            ) : null}
+            <Link className="ct-btn ct-btn--outline ct-btn--sm" to="/contest/history">
+              Cycle history
+            </Link>
+            <Link className="ct-btn ct-btn--primary ct-btn--sm" to="/contest/cycles/new">
+              Create a contest
+            </Link>
+          </div>
         </div>
 
-        {loading ? <p className="ct-loading">Loading the Contest console…</p> : null}
+        {loading ? <p className="ct-loading">Loading the Contest…</p> : null}
         {error ? (
-          <p className="ct-error" role="alert">
-            {error}
-          </p>
+          <div className="ct-callout ct-callout--alert" role="alert">
+            <span className="ct-callout__bar" aria-hidden />
+            <p>
+              {error}{" "}
+              <button type="button" className="ct-link ct-link--button" onClick={reload}>
+                Try again
+              </button>
+            </p>
+          </div>
         ) : null}
 
         {data && !data.cycle ? (
-          <>
-            <div className="ct-card">
-              <div className="ct-card__head">
-                <h2 className="ct-card__title">No cycle running</h2>
-              </div>
-              <p className="ct-note">
-                No contest cycle has ever been created. Starting one opens week 1 for entries
-                immediately.
-              </p>
-              <div className="ct-divider" />
-              <PhaseStrip phase={null} />
-              <p className="ct-note">cycle = null · phase = null — the only state where both are null</p>
-              <div className="ct-action-row">
-                <Link className="ct-btn ct-btn--primary" to="/contest/cycles/new">
-                  Start a cycle
-                </Link>
-                <span className="ct-action-hint">Only one cycle can run at a time.</span>
-              </div>
+          <div className="ct-card">
+            <div className="ct-card__head">
+              <h2 className="ct-card__title">No contest yet</h2>
             </div>
-            <div className="ct-callout">
-              <span className="ct-callout__bar" aria-hidden />
-              <p>
-                How a cycle runs: create the cycle (three weekly rounds open) → judge week 1, then
-                2, then 3, strictly in order → open the final → crown the monthly top 3, which closes
-                the cycle. A cycle cannot be deleted once created.
-              </p>
+            <p className="ct-note">
+              No contest has ever been created. A contest is a calendar month: create it before the month starts and
+              it runs itself from 08:00 on day 1.
+            </p>
+            <div className="ct-action-row">
+              <Link className="ct-btn ct-btn--primary" to="/contest/cycles/new">
+                Create a contest
+              </Link>
             </div>
-          </>
+          </div>
         ) : null}
 
-        {data && data.cycle ? (
-          <CycleOverview
-            data={{
-              cycle: data.cycle,
-              phase: data.phase ?? "vacant",
-              rounds: data.rounds,
-              weeklyWinners: data.weeklyWinners,
-              monthlyStandings: data.monthlyStandings,
-            }}
-          />
-        ) : null}
+        {data && data.cycle ? <CycleOverview data={{ ...data, cycle: data.cycle }} /> : null}
       </div>
     </>
   );

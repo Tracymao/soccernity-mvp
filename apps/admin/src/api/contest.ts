@@ -1,28 +1,42 @@
-// Contest admin console client — services/api `/admin/contest/*`
-// (Decision Log #218/#219 for the data model, #241 for the read surface,
-// #243 for this frontend wiring).
+// Contest admin client -- services/api `/admin/contest/*`, as rebuilt by backend/w7-contest (B-091,
+// Decision Log #381-#406; build register B-097). The Contest is NOT admin-judged: an admin creates a
+// month (a "cycle") and edits it within the locking rules, and after that the month runs itself on the
+// fixed Europe/London calendar. There are no judging, opening or crowning endpoints any more.
 //
-// Response shapes mirror
-// services/api/src/modules/contest/contest.types.ts's `Admin*` interfaces
-// exactly. Date fields are ISO strings over HTTP even though the server
-// type annotates them `Date` — typed `string` here, same as apps/web's
-// api clients do. Read that file, not this comment, if a shape changes.
+// Response shapes mirror services/api/src/modules/contest/contest.types.ts's `Admin*` interfaces. Date
+// fields are ISO strings over HTTP even though the server type annotates them `Date`. Read that file,
+// not this comment, if a shape changes.
 //
-// Every call goes through adminFetch (isolated admin auth path, ADMIN_JWT_SECRET,
-// transparent 401→refresh — adminClient.ts / Decision Log #54).
+// Every call goes through adminFetch (isolated admin auth path, ADMIN_JWT_SECRET, transparent
+// 401 -> refresh, Decision Log #54).
 import { adminFetch } from "./adminClient";
 
-export type ContestPhase =
-  | "vacant"
-  | "week_1"
-  | "weeks_1_2"
-  | "weeks_1_3"
-  | "final_live"
-  | "crowned";
+export type ContestPhase = "vacant" | "week_1" | "weeks_1_2" | "weeks_1_3" | "final_live" | "crowned";
+export type ContestFinalOutcome = "pending" | "winners" | "no_winner" | "no_final";
+
+export type ContestCalendarState =
+  | { kind: "upcoming"; opensAt: string }
+  | { kind: "week_entries"; weekNumber: 1 | 2 | 3; entriesCloseAt: string }
+  | { kind: "week_voting"; weekNumber: 1 | 2 | 3; locksAt: string }
+  | { kind: "week_forfeited"; weekNumber: 1 | 2 | 3; locksAt: string }
+  | {
+      kind: "between_weeks";
+      afterWeek: 1 | 2 | 3;
+      nextWeek: 2 | 3 | 4;
+      nextOpensAt: string;
+      result: "winners" | "forfeited";
+    }
+  | { kind: "final_upload"; opensAt: string; revealsAt: string }
+  | { kind: "final_live"; revealedAt: string; endsAt: string }
+  | { kind: "no_final" }
+  | { kind: "completed"; endedAt: string };
 
 export interface ContestCycleSummary {
   id: string;
   title: string;
+  description: string | null;
+  /** "YYYY-MM"; null for a legacy admin-judged cycle. */
+  monthKey: string | null;
   status: string; // "active" | "final" | "completed"
   startsAt: string;
   endsAt: string;
@@ -45,8 +59,52 @@ export interface ContestStandingSummary {
   publicName: string;
 }
 
+export interface ContestFinalistSummary {
+  userId: string;
+  publicName: string;
+}
+
+export interface ContestForfeitedWeek {
+  weekNumber: number;
+  reason: string;
+}
+
+export interface ContestFinalRankingRow {
+  rank: number;
+  entryId: string;
+  postId: string;
+  userId: string;
+  publicName: string;
+  points: number;
+}
+
+/** ADMIN-ONLY settings. The minimum tally never reaches a user-facing response. */
+export interface AdminContestSettings {
+  minimumTally: number | null;
+  weeklyPoints: [number, number, number];
+  monthlyPoints: [number, number, number];
+  followersExcludedWeek4: boolean;
+  exposureTolerancePercent: number;
+  exposureViewerDailyCap: number;
+}
+
+/** Which fields an edit may still change right now (spec section 4a). */
+export interface AdminContestEditability {
+  beforeLaunch: boolean;
+  title: boolean;
+  description: boolean;
+  minimumTally: boolean;
+  placementPoints: boolean;
+  followersExcludedWeek4: boolean;
+  exposureTolerancePercent: boolean;
+  exposureViewerDailyCap: boolean;
+  taskByWeek: Record<number, boolean>;
+  watchLimitByWeek: Record<number, boolean>;
+}
+
 export interface AdminContestEntry {
   entryId: string;
+  kind: "weekly" | "final";
   submittedAt: string;
   entrant: { userId: string; publicName: string };
   post: {
@@ -57,16 +115,29 @@ export interface AdminContestEntry {
     likeCount: number;
     commentCount: number;
   };
+  qualified: boolean;
+  phase1Tally: number | null;
+  phase1Rank: number | null;
+  voteCount: number;
+  finalTally: number | null;
+  finalRank: number | null;
   position: number | null;
 }
 
 export interface AdminContestRoundSummary {
   id: string;
   weekNumber: number;
-  status: string; // "open" | "judged"
+  status: string;
   opensAt: string;
   closesAt: string;
   judgedAt: string | null;
+  /** For an admin the task is never hidden (a future week's, and the final's). */
+  task: string | null;
+  entriesCloseAt: string | null;
+  votesLockAt: string | null;
+  viewWatchLimitSeconds: number | null;
+  forfeited: boolean;
+  forfeitReason: string | null;
   entryCount: number;
 }
 
@@ -76,27 +147,44 @@ export interface AdminContestRoundDetail extends AdminContestRoundSummary {
 
 export interface AdminContestCycleDetail {
   cycle: ContestCycleSummary;
+  settings: AdminContestSettings;
+  editable: AdminContestEditability;
   phase: ContestPhase;
+  calendarState: ContestCalendarState | null;
   rounds: AdminContestRoundDetail[];
   weeklyWinners: ContestWinnerSummary[];
+  finalists: ContestFinalistSummary[];
+  forfeitedWeeks: ContestForfeitedWeek[];
+  finalRanking: ContestFinalRankingRow[] | null;
   monthlyStandings: ContestStandingSummary[];
+  finalOutcome: ContestFinalOutcome | null;
 }
 
+// cycle / settings / editable null and arrays empty ONLY when no cycle has ever been created.
 export interface AdminCurrentContest {
-  // cycle / phase null + arrays empty ONLY when no cycle has ever been created.
   cycle: ContestCycleSummary | null;
+  settings: AdminContestSettings | null;
+  editable: AdminContestEditability | null;
   phase: ContestPhase | null;
+  calendarState: ContestCalendarState | null;
   rounds: AdminContestRoundDetail[];
   weeklyWinners: ContestWinnerSummary[];
+  finalists: ContestFinalistSummary[];
+  forfeitedWeeks: ContestForfeitedWeek[];
+  finalRanking: ContestFinalRankingRow[] | null;
   monthlyStandings: ContestStandingSummary[];
+  finalOutcome: ContestFinalOutcome | null;
 }
 
 export interface AdminContestCycleListItem {
   cycle: ContestCycleSummary;
+  settings: AdminContestSettings;
   phase: ContestPhase;
-  rounds: AdminContestRoundSummary[]; // NOTE: summary — no per-entry `entries`
+  calendarState: ContestCalendarState | null;
+  rounds: AdminContestRoundSummary[]; // summaries: no per-entry `entries`
   weeklyWinners: ContestWinnerSummary[];
   monthlyStandings: ContestStandingSummary[];
+  finalOutcome: ContestFinalOutcome | null;
 }
 
 export interface AdminContestCycleList {
@@ -117,65 +205,59 @@ export function listContestCycles(): Promise<AdminContestCycleList> {
   return adminFetch<AdminContestCycleList>("/admin/contest/cycles");
 }
 
-// ---- writes -------------------------------------------------------------
+// ---- writes (create and edit only) ----------------------------------------
 
-export interface CreateCycleRoundInput {
+export const CONTEST_TITLE_MAX_LENGTH = 80;
+export const CONTEST_TASK_MAX_LENGTH = 2000;
+export const CONTEST_DESCRIPTION_MAX_LENGTH = 5000;
+export const WATCH_LIMIT_MIN_SECONDS = 3;
+export const WATCH_LIMIT_MAX_SECONDS = 120;
+export const EXPOSURE_RANGE_MIN = 1;
+export const EXPOSURE_RANGE_MAX = 50;
+
+export interface ContestWeekInput {
   weekNumber: 1 | 2 | 3;
-  opensAt: string;
-  closesAt: string;
+  task: string;
+  viewWatchLimitSeconds: number;
+}
+
+export interface PlacementPointsInput {
+  weekly?: [number, number, number];
+  monthly?: [number, number, number];
 }
 
 export interface CreateCycleInput {
+  /** "YYYY-MM"; the month must not have started. */
+  month: string;
   title: string;
-  startsAt: string;
-  endsAt: string;
-  // Omit entirely → server auto-generates three consecutive 7-day rounds.
-  rounds?: CreateCycleRoundInput[];
+  description?: string;
+  weeks: ContestWeekInput[];
+  finalTask?: string;
+  /** REQUIRED, no default (spec section 4). */
+  minimumTally: number;
+  placementPoints?: PlacementPointsInput;
+  followersExcludedWeek4?: boolean;
+  exposureTolerancePercent?: number;
+  exposureViewerDailyCap?: number;
 }
 
 export function createContestCycle(input: CreateCycleInput): Promise<AdminContestCycleDetail> {
-  return adminFetch<AdminContestCycleDetail>("/admin/contest/cycles", {
-    method: "POST",
-    body: input,
-  });
+  return adminFetch<AdminContestCycleDetail>("/admin/contest/cycles", { method: "POST", body: input });
 }
 
-export interface RoundWinnerInput {
-  entryId: string;
-  position: 1 | 2 | 3;
+export interface UpdateCycleInput {
+  title?: string;
+  description?: string;
+  weeks?: { weekNumber: 1 | 2 | 3; task?: string; viewWatchLimitSeconds?: number }[];
+  finalTask?: string;
+  minimumTally?: number;
+  placementPoints?: PlacementPointsInput;
+  followersExcludedWeek4?: boolean;
+  exposureTolerancePercent?: number;
+  exposureViewerDailyCap?: number;
 }
 
-// `winners` MAY be empty (a "thin week" — the round still closes).
-export function judgeContestRound(
-  cycleId: string,
-  week: number,
-  winners: RoundWinnerInput[],
-): Promise<AdminContestCycleDetail> {
-  return adminFetch<AdminContestCycleDetail>(
-    `/admin/contest/cycles/${cycleId}/rounds/${week}/results`,
-    { method: "POST", body: { winners } },
-  );
-}
-
-export function openContestFinal(cycleId: string): Promise<AdminContestCycleDetail> {
-  return adminFetch<AdminContestCycleDetail>(
-    `/admin/contest/cycles/${cycleId}/final/open`,
-    { method: "POST" },
-  );
-}
-
-export interface CrownStandingInput {
-  userId: string;
-  position: 1 | 2 | 3;
-}
-
-// Each `userId` must be a weekly winner of this cycle; min 1, max 6.
-export function crownContestCycle(
-  cycleId: string,
-  standings: CrownStandingInput[],
-): Promise<AdminContestCycleDetail> {
-  return adminFetch<AdminContestCycleDetail>(`/admin/contest/cycles/${cycleId}/crown`, {
-    method: "POST",
-    body: { standings },
-  });
+/** A field that is locked once the contest starts is a 409 `contest_field_locked`; dates are never editable. */
+export function updateContestCycle(id: string, input: UpdateCycleInput): Promise<AdminContestCycleDetail> {
+  return adminFetch<AdminContestCycleDetail>(`/admin/contest/cycles/${id}`, { method: "PATCH", body: input });
 }

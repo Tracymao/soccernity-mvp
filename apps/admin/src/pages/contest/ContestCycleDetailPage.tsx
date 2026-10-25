@@ -1,7 +1,5 @@
-// Read-only detail for a past cycle — the "View cycle ›" target from
-// Cycle History. A read-only variant of the console hub
-// (GET /admin/contest/cycles/:id). 404 renders an honest not-found state,
-// never a crash.
+// Read-only detail for a past (or any) contest month: the "View" target from Cycle History
+// (GET /admin/contest/cycles/:id). A 404 renders an honest not-found state, never a crash.
 import { Link, useParams } from "react-router-dom";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { getContestCycle } from "../../api/contest";
@@ -16,39 +14,44 @@ export default function ContestCycleDetailPage() {
 
   return (
     <>
-      <AdminPageHeader title="Contest cycle" hideSearch />
+      <AdminPageHeader title="Contest" hideSearch />
       <div className="ct-page">
         <div className="ct-back">
-          <Link to="/contest">← Contest Console</Link>
+          <Link to="/contest">← Contest</Link>
         </div>
         <div className="ct-top-row">
-          <h1 className="ct-title">{data ? data.cycle.title : "Contest cycle"}</h1>
-          <Link className="ct-btn ct-btn--outline ct-btn--sm" to="/contest/history">
-            Cycle history
-          </Link>
+          <h1 className="ct-title">{data ? data.cycle.title : "Contest"}</h1>
+          <div className="ct-top-actions">
+            {data ? (
+              <Link className="ct-btn ct-btn--outline ct-btn--sm" to={`/contest/cycles/${data.cycle.id}/edit`}>
+                Edit contest
+              </Link>
+            ) : null}
+            <Link className="ct-btn ct-btn--outline ct-btn--sm" to="/contest/history">
+              Cycle history
+            </Link>
+          </div>
         </div>
 
-        {loading ? <p className="ct-loading">Loading the cycle…</p> : null}
+        {loading ? <p className="ct-loading">Loading the contest…</p> : null}
 
         {notFound ? (
           <div className="ct-card">
-            <h2 className="ct-card__title">Cycle not found</h2>
-            <p className="ct-note">
-              No contest cycle matches that id. It may have never existed.
-            </p>
+            <h2 className="ct-card__title">Contest not found</h2>
+            <p className="ct-note">No contest matches that id. It may never have existed.</p>
             <div className="ct-action-row">
               <Link className="ct-btn ct-btn--primary" to="/contest/history">
                 Back to Cycle history
               </Link>
             </div>
           </div>
-        ) : error && !notFound ? (
+        ) : error ? (
           <p className="ct-error" role="alert">
             {error}
           </p>
         ) : null}
 
-        {data ? <CycleOverview data={data} readOnly /> : null}
+        {data ? <CycleOverview data={data} /> : null}
       </div>
     </>
   );

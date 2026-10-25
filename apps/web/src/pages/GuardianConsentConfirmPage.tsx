@@ -395,8 +395,25 @@ export default function GuardianConsentConfirmPage() {
                     </button>
                   </div>
 
+                  {/* The Figma footnote (K5, B-185): link expiry, the cap, withdrawal,
+                      then the Privacy Policy link. Each sentence that describes a guardian
+                      or a child is its own span so it carries its own tag and its own
+                      manifest row. The expiry sentence needs the request summary (the
+                      date comes from it); without a summary it is left out rather than
+                      guessed. */}
                   <p className="consent-footnote">
-                    {GUARDIAN_CAP_SENTENCE} Read our <Link to="/privacy">Privacy Policy</Link>.
+                    {summary && (
+                      <>
+                        <span>
+                          This link expires on {formatLongDate(summary.expiresAt)}. [COPY PENDING LEGAL REVIEW]
+                        </span>{" "}
+                      </>
+                    )}
+                    <span>{GUARDIAN_CAP_SENTENCE}</span>{" "}
+                    <span>
+                      You can withdraw consent at any time on the guardian withdrawal page. [COPY PENDING LEGAL REVIEW]
+                    </span>{" "}
+                    Read our <Link to="/privacy">Privacy Policy</Link>.
                   </p>
                 </div>
             </form>

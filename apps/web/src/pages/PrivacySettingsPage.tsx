@@ -173,8 +173,7 @@ export default function PrivacySettingsPage() {
                 When this is off, only people who follow you can see your profile, posts, and activity.
               </p>
               <p className="privacy-row__note">
-                Not adjustable yet — profiles are currently visible to all signed-in members. A visibility
-                control needs a backend field first.
+                Not adjustable yet — profiles are currently visible to all signed-in members.
               </p>
             </div>
             <VisualToggle on label="Public profile" />
@@ -228,6 +227,22 @@ export default function PrivacySettingsPage() {
             <span className="privacy-row__chevron" aria-hidden="true">
               ›
             </span>
+          </li>
+
+          {/* Blocked users: real (W5 Block). The blocker's own list, with Unblock. */}
+          <li className="privacy-row">
+            <span className="privacy-row__icon" aria-hidden="true">
+              ⊘
+            </span>
+            <div className="privacy-row__body">
+              <p className="privacy-row__title">Blocked users</p>
+              <p className="privacy-row__desc">See the people you have blocked, and unblock them.</p>
+              <div className="privacy-row__actions">
+                <Link to="/settings/privacy/blocked" className="privacy-row__link">
+                  Manage blocked users&nbsp;›
+                </Link>
+              </div>
+            </div>
           </li>
 
           {/* Account status — real routes (currently stubs). "Active" is

@@ -49,6 +49,11 @@ const ADULT: UserProfile = {
   clubAffiliationId: null,
   isTeamOrganiser: false,
   representedClub: null,
+  bio: null,
+  preferredClub: null,
+  profileCountry: null,
+  avatar: null,
+  cover: null,
 };
 
 const MINOR: UserProfile = { ...ADULT, id: "user-2", email: "minor@example.com", isMinor: true };
@@ -105,6 +110,16 @@ describe("PrivacySettingsPage", () => {
     const del = screen.getByRole("link", { name: /delete account/i });
     expect(deactivate.getAttribute("href")).toBe("/settings/account/deactivate");
     expect(del.getAttribute("href")).toBe("/settings/account/delete");
+  });
+
+  it("has a real Blocked users row linking to the list (B-108)", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    vi.mocked(getUser).mockResolvedValueOnce(ADULT);
+    renderPage();
+    await screen.findByText("Blocked users");
+    expect(screen.getByRole("link", { name: /manage blocked users/i }).getAttribute("href")).toBe(
+      "/settings/privacy/blocked",
+    );
   });
 
   it("does not render any live control: the toggles are not real inputs", async () => {

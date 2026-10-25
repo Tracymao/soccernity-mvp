@@ -145,3 +145,52 @@
   color: var(--sn-brand-green);
   font: 600 14px "Inter", sans-serif;
 }
+
+.contest-winner__name--link {
+  color: var(--sn-text-primary);
+  text-decoration: none;
+}
+
+.contest-winner__name--link:hover,
+.contest-winner__name--link:focus-visible {
+  text-decoration: underline;
+}
+
+/* Between Weeks: this week's result card (Figma 5802:9183). */
+.contest-result {
+  background: var(--sn-green-tint-12);
+  border-radius: 10px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contest-result__title {
+  margin: 0;
+  font: 600 14px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.contest-result__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.contest-result__row {
+  display: flex;
+  gap: 12px;
+  margin: 0;
+  font: 400 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.contest-result__note {
+  margin: 0;
+  font: 400 12px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}

@@ -55,6 +55,11 @@ const USER: UserProfile = {
   clubAffiliationId: null,
   isTeamOrganiser: false,
   representedClub: null,
+  bio: null,
+  preferredClub: null,
+  profileCountry: null,
+  avatar: null,
+  cover: null,
 };
 
 afterEach(cleanup);
@@ -240,5 +245,66 @@ describe("EditProfileModal -- Username (profile/username-column-and-display-conv
     save();
 
     expect(await screen.findByText("That username is already taken")).not.toBeNull();
+  });
+});
+
+describe("EditProfileModal -- bio, country, preferred club, images (B-081, B-194, B-195, B-196)", () => {
+  const save = () => fireEvent.click(screen.getByRole("button", { name: "Update Profile" }));
+
+  function renderWith(user: UserProfile) {
+    render(
+      <MemoryRouter>
+        <EditProfileModal accessToken="token-abc" user={user} onClose={vi.fn()} onSaved={vi.fn()} />
+      </MemoryRouter>,
+    );
+  }
+
+  it("shows a read-only date of birth and both image controls", () => {
+    renderWith(USER);
+    const dob = screen.getByLabelText(/Date of Birth/) as HTMLInputElement;
+    expect(dob.readOnly).toBe(true);
+    expect(screen.getByTestId("profile-image-avatar")).not.toBeNull();
+    expect(screen.getByTestId("profile-image-cover")).not.toBeNull();
+  });
+
+  it("sends the changed profile fields (and no username when it did not change)", async () => {
+    vi.mocked(updateUser).mockResolvedValueOnce(USER);
+    renderWith(USER);
+    fireEvent.change(screen.getByLabelText(/Bio/), { target: { value: "Winger from Lagos" } });
+    fireEvent.change(screen.getByLabelText(/Country/), { target: { value: "NG" } });
+    fireEvent.change(screen.getByLabelText(/Preferred Club/), { target: { value: "Ikoyi Rovers" } });
+    save();
+    await waitFor(() => expect(updateUser).toHaveBeenCalledTimes(1));
+    const body = vi.mocked(updateUser).mock.calls[0][2];
+    expect(body).toMatchObject({ bio: "Winger from Lagos", profileCountry: "NG", preferredClub: "Ikoyi Rovers" });
+    // The unchanged username is not sent.
+    expect(body).not.toHaveProperty("username");
+  });
+
+  it("a flagged bio shows 'Please rephrase', keeps the typed text and offers no override", async () => {
+    vi.mocked(updateUser).mockRejectedValueOnce(
+      new UsersApiError("Please rephrase.", {
+        status: 422,
+        code: "sensitive_content_rephrase_required",
+        flaggedFields: [{ field: "bio", categories: ["health"] }],
+      }),
+    );
+    renderWith(USER);
+    fireEvent.change(screen.getByLabelText(/Bio/), { target: { value: "my typed bio" } });
+    save();
+    expect(await screen.findByText("Please rephrase")).not.toBeNull();
+    expect((screen.getByLabelText(/Bio/) as HTMLTextAreaElement).value).toBe("my typed bio");
+    expect(screen.queryByRole("button", { name: /anyway|override/i })).toBeNull();
+  });
+
+  it("clearing a previously-set country sends null (the country is optional)", async () => {
+    vi.mocked(updateUser).mockResolvedValueOnce(USER);
+    renderWith({ ...USER, profileCountry: "NG" });
+    fireEvent.change(screen.getByLabelText(/Country/), { target: { value: "" } });
+    save();
+    await waitFor(() => expect(updateUser).toHaveBeenCalledTimes(1));
+    const body = vi.mocked(updateUser).mock.calls[0][2];
+    expect(body).toMatchObject({ profileCountry: null });
+    expect(body).not.toHaveProperty("bio");
   });
 });

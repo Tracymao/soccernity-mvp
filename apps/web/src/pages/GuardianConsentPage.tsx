@@ -530,6 +530,16 @@ export default function GuardianConsentPage() {
           </div>
         </div>
 
+        {/* B-199 (Decision Log #411 item 6, #367): the Registration status line the
+            Figma frame draws (6627:22218 / 6627:22219). Pending view only. It says
+            registration cannot be completed until the guardian approves, which is
+            also why Grassroots record-keeping is limited while restricted-pending
+            (the B-026 write block, proven by services/api's grassroots e2e). */}
+        <p className="consent-footnote" data-testid="registration-status-line">
+          Registration cannot be completed until your guardian approves, including card verification where
+          required. [COPY PENDING LEGAL REVIEW]
+        </p>
+
         {/* sprint-1/f5-f6-bugfixes -- Bug 1 fix, option (a): the dead
             "you can resend once every 24 hours" footnote that used to sit
             below this block is removed, not reworded. Its condition

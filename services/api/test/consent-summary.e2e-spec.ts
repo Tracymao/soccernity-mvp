@@ -77,6 +77,7 @@ describe('Guardian consent request summary e2e (B-021)', () => {
       guardianName: 'Grace Parent',
       guardianRelationship: 'Parent',
       requestedAt: createdAt.toISOString(),
+      expiresAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/), // the link's own expiry (B-185)
       incorrectDetailsReported: false, // B-029
       notices: { guardianEmailShownOnMinorProfile: true, photoAndUsernameVisibleToOthers: true },
     });

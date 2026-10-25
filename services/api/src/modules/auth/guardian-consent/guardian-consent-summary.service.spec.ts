@@ -40,6 +40,7 @@ describe('GuardianConsentSummaryService (B-021, Decision Log #372)', () => {
       guardianName: 'Grace Parent',
       guardianRelationship: 'Parent',
       requestedAt: '2026-10-01T09:30:00.000Z',
+      expiresAt: FUTURE.toISOString(), // K5 / B-185: the footnote's "This link expires on {date}"
       incorrectDetailsReported: false,
       notices: { guardianEmailShownOnMinorProfile: true, photoAndUsernameVisibleToOthers: true },
     });

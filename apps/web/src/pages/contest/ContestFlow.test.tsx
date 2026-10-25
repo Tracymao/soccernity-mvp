@@ -14,6 +14,7 @@ import ContestPage from "../ContestPage";
 import LeaderboardPage from "../LeaderboardPage";
 import type { CurrentContestResponse } from "../../api/contest";
 import type { FeedPost } from "../../api/feed";
+import { openContest as baseOpenContest } from "./contestFixtures";
 
 vi.mock("../../api/feed", async () => {
   const actual = await vi.importActual<typeof import("../../api/feed")>("../../api/feed");
@@ -42,34 +43,7 @@ function b64(v: object): string {
 }
 const TOKEN = `${b64({ alg: "none" })}.${b64({ sub: "user-1", role: "fan" })}.sig`;
 
-function openContest(overrides: Partial<CurrentContestResponse> = {}): CurrentContestResponse {
-  return {
-    cycle: {
-      id: "cycle-1",
-      title: "September Contest",
-      status: "active",
-      startsAt: new Date().toISOString(),
-      endsAt: new Date().toISOString(),
-      finalOpenedAt: null,
-      crownedAt: null,
-    },
-    phase: "week_1",
-    isAcceptingEntries: true,
-    activeRound: {
-      id: "round-2",
-      weekNumber: 2,
-      status: "open",
-      opensAt: new Date().toISOString(),
-      closesAt: new Date(Date.now() + 86400000).toISOString(),
-      judgedAt: null,
-    },
-    rounds: [],
-    weeklyWinners: [],
-    monthlyStandings: [],
-    callerEntry: null,
-    ...overrides,
-  };
-}
+const openContest = (overrides: Partial<CurrentContestResponse> = {}) => baseOpenContest(overrides);
 
 function feedPost(): FeedPost {
   return {
@@ -151,6 +125,7 @@ describe("contest posting flow", () => {
     vi.mocked(getCurrentContest).mockResolvedValue(
       openContest({
         phase: "weeks_1_2",
+        callerEntry: null,
         weeklyWinners: [
           {
             weekNumber: 2,

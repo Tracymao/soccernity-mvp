@@ -1,4 +1,9 @@
+/* B-187: the height of the chrome ABOVE the routed content, so full-height pages
+ * (guardian consent, verify email) can fill the rest of the viewport with
+ * calc(100vh - var(--sn-chrome-height)). Under AppShell the chrome is the site
+ * Header: 90px on desktop, 64px at <= 820px (layout/Header.css, B-178). */
 .sn-app-shell {
+  --sn-chrome-height: 90px;
   min-height: 100%;
   display: flex;
   flex-direction: column;
@@ -8,4 +13,10 @@
 .sn-app-shell__content {
   flex: 1;
   padding: 32px;
+}
+
+@media (max-width: 820px) {
+  .sn-app-shell {
+    --sn-chrome-height: 64px;
+  }
 }

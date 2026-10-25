@@ -200,3 +200,10 @@
   gap: 12px;
   margin-top: 8px;
 }
+
+/* Read-only value (date of birth, set at the Age Gate). */
+.edit-profile-field input[readonly] {
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-secondary);
+  cursor: default;
+}

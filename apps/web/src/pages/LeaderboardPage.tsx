@@ -21,14 +21,13 @@
 //   - COMPETITION board: still illustrative -- the Competition data model
 //     (Prediction / Commentary) does not exist (Decision Log #72/#73). See
 //     ./leaderboard/leaderboardData.ts.
-//   - CONTEST board: REAL, as of sprint-2/contest-posting-flow-to-code.
-//     Wired to GET /contest/current (sprint-2/contest-data-model-backend),
-//     rendering the derived phase (vacant -> week_1 -> weeks_1_2 ->
-//     weeks_1_3 -> final_live -> crowned) and the real weeklyWinners /
-//     monthlyStandings (Decision Log #61/#70/#71). A submitted contest
-//     entry that gets judged appears here as a weekly winner. See
-//     ContestBoard below. `?tab=contest` deep-links this tab (used by the
-//     Contest page's connector).
+//   - CONTEST board: REAL. Wired to GET /contest/current and rendered by
+//     ./leaderboard/ContestBoard.tsx against the self-running Contest
+//     (backend/w7-contest, B-099): the clock-driven calendar state, weekly
+//     winners with "Forfeited" in place of a forfeited week's names, the
+//     week-4 final's live ranking and the crowned / "No winner this month"
+//     states. `?tab=contest` deep-links this tab (used by the Contest page's
+//     connector and the contest notifications).
 //
 // The CLUB filter's options are the caller's real joined clubs (Decision
 // Log #128 ties "By club" to clubMemberships; GET /clubs, Decision Log
@@ -45,6 +44,7 @@ import { getUser } from "../api/users";
 import { getCurrentContest, type CurrentContestResponse } from "../api/contest";
 import { getLeaderboard, type LeaderboardEntryView } from "../api/leaderboard";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
+import ContestBoard from "./leaderboard/ContestBoard";
 import { COMPETITION_ROWS, initialsFor, type CompetitionType } from "./leaderboard/leaderboardData";
 import "./leaderboard/LeaderboardPage.css";
 
@@ -58,137 +58,6 @@ function medalClass(rank: number): string | null {
   if (rank === 2) return "lb-medal lb-medal--2";
   if (rank === 3) return "lb-medal lb-medal--3";
   return null;
-}
-
-function ordinal(position: number): string {
-  return position === 1 ? "1st" : position === 2 ? "2nd" : position === 3 ? "3rd" : `${position}th`;
-}
-
-const CONTEST_PHASE_BANNER: Record<string, string> = {
-  vacant: "Week 1 round in progress — weekly winners run on the Contest page",
-  week_1: "Week 1 winners are in. The board fills as weeks 2 and 3 close.",
-  weeks_1_2: "Weeks 1–2 winners are in. Week 3 closes next.",
-  weeks_1_3: "All weekly rounds complete. Every weekly winner goes through to the Week 4 Level 1 final.",
-  final_live: "LEVEL 1 FINAL · LIVE — every weekly winner is competing for the month's overall top 3.",
-  crowned: "Monthly winners decided. These are this month's overall top 3 from the Week 4 Level 1 final.",
-};
-
-// The Contest board — wired to GET /contest/current (Decision Log #61/#70/#71). Shows
-// the derived phase and the real weekly / monthly winners. Winner rows carry only
-// { weekNumber, position, displayName, postId } (the endpoint has no club or points
-// field for a winner), so the Figma "CLUB" / "WEEKLY POINTS" columns are deliberately
-// omitted rather than filled with dummy data — the same honesty ProfilePage.tsx applies
-// to its unbacked fields. Scope / club / time-period filters do not apply here (nothing
-// to filter on) — kept visible only to match the Figma filter bar.
-function ContestBoard({
-  contest,
-  contestError,
-}: {
-  contest: CurrentContestResponse | null;
-  contestError: boolean;
-}) {
-  if (contestError || !contest) {
-    return (
-      <p className="lb-status lb-status--inline" role="alert">
-        Couldn&rsquo;t load the contest right now. <Link to="/contest">Open the Contest page</Link>
-      </p>
-    );
-  }
-
-  if (!contest.cycle) {
-    return (
-      <p className="lb-status lb-status--inline" role="status">
-        No contest is running right now. <Link to="/contest">See how Contest works</Link>
-      </p>
-    );
-  }
-
-  const banner = contest.phase ? CONTEST_PHASE_BANNER[contest.phase] : null;
-  const crowned = contest.phase === "crowned" && contest.monthlyStandings.length > 0;
-  const hasWeekly = contest.weeklyWinners.length > 0;
-
-  return (
-    <div className="lb-contest">
-      {banner && (
-        <p className="lb-contest__banner" role="status">
-          {banner}
-        </p>
-      )}
-
-      {crowned ? (
-        <table className="lb-table">
-          <thead>
-            <tr>
-              <th scope="col">Rank</th>
-              <th scope="col">Player</th>
-            </tr>
-          </thead>
-          <tbody>
-            {contest.monthlyStandings.map((s) => (
-              <tr key={s.userId} className="lb-row">
-                <td>
-                  {medalClass(s.position) ? (
-                    <span className={medalClass(s.position) as string} aria-hidden="true">
-                      {s.position}
-                    </span>
-                  ) : (
-                    s.position
-                  )}
-                </td>
-                <td>
-                  <div className="lb-player">
-                    <span className="lb-avatar" aria-hidden="true">
-                      {initialsFor(s.publicName)}
-                    </span>
-                    <span className="lb-player__text">
-                      <span className="lb-player__name">{s.publicName}</span>
-                      <span className="lb-player__handle">{ordinal(s.position)} · Monthly winner</span>
-                    </span>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : hasWeekly ? (
-        <table className="lb-table">
-          <thead>
-            <tr>
-              <th scope="col">Weekly round</th>
-              <th scope="col">Winner</th>
-            </tr>
-          </thead>
-          <tbody>
-            {contest.weeklyWinners.map((w) => (
-              <tr key={w.entryId} className="lb-row">
-                <td>
-                  Week {w.weekNumber}
-                  <span className="lb-player__handle"> · {ordinal(w.position)} place</span>
-                </td>
-                <td>
-                  <div className="lb-player">
-                    <span className="lb-avatar" aria-hidden="true">
-                      {initialsFor(w.publicName)}
-                    </span>
-                    <span className="lb-player__name">{w.publicName}</span>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : (
-        <p className="lb-status lb-status--inline" role="status">
-          The first weekly round is running now. Weekly winners land here as each round closes.{" "}
-          <Link to="/contest">View this week&rsquo;s contest &rsaquo;</Link>
-        </p>
-      )}
-
-      <p className="lb-contest__footer">
-        <Link to="/contest">View this week&rsquo;s contest &rsaquo;</Link>
-      </p>
-    </div>
-  );
 }
 
 export default function LeaderboardPage() {
@@ -341,7 +210,7 @@ export default function LeaderboardPage() {
           <p>Points update every 15 minutes</p>
           <p className="lb-meta__muted">
             {tab === "competition"
-              ? "Competition board uses illustrative data — no data model yet"
+              ? "Competition board shows sample data for now"
               : tab === "contest"
                 ? "Contest board — live data"
                 : "Overall board — live data, current week"}
@@ -581,8 +450,8 @@ export default function LeaderboardPage() {
 
       {tab === "competition" && (
         <p className="lb-note">
-          The Competition board (Prediction / Commentary) has no data model yet &mdash; this table is illustrative
-          (Decision Log #72/#73).
+          The Competition board (Prediction / Commentary) isn&rsquo;t live yet &mdash; this table shows sample
+          data.
         </p>
       )}
 
