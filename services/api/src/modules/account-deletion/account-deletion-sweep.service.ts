@@ -350,10 +350,13 @@ export class AccountDeletionSweepService {
           avatarUrl: null,
           avatarKey: null,
           avatarStatus: null,
+          // B-214: the rejection reasons go with the status (the CHECK needs it).
+          avatarRejectionReason: null,
           // B-196: the cover photo reference, all three columns together.
           coverUrl: null,
           coverKey: null,
           coverStatus: null,
+          coverRejectionReason: null,
           accountStatus: 'deleted',
           pendingDeletionAt: null,
         },

@@ -23,7 +23,9 @@ export interface UploadedAvatarFile {
 }
 
 export interface AvatarResult {
-  avatar: { url: string; status: 'pending' | 'approved' | 'rejected' } | null;
+  // rejectionReason (B-214): always null here -- an upload clears any earlier reason; a
+  // reason exists only on a 'rejected' avatar and is read from the owner's GET /users/:id.
+  avatar: { url: string; status: 'pending' | 'approved' | 'rejected'; rejectionReason: string | null } | null;
 }
 
 // An avatar is the owner's picture on their profile. It reuses the SAME
@@ -66,7 +68,7 @@ export class UserAvatarService {
     try {
       await this.prisma.user.update({
         where: { id: userId },
-        data: { avatarUrl: url, avatarKey: key, avatarStatus: 'pending' },
+        data: { avatarUrl: url, avatarKey: key, avatarStatus: 'pending', avatarRejectionReason: null },
         select: { id: true },
       });
     } catch (err) {
@@ -75,7 +77,7 @@ export class UserAvatarService {
     }
     if (previous?.avatarKey) await this.removeObject(previous.avatarKey);
 
-    return { avatar: { url, status: 'pending' } };
+    return { avatar: { url, status: 'pending', rejectionReason: null } };
   }
 
   // DELETE /users/:id/avatar (self only). Idempotent: no avatar is a 200 no-op.
@@ -83,7 +85,7 @@ export class UserAvatarService {
     const current = await this.prisma.user.findUnique({ where: { id: userId }, select: { avatarKey: true } });
     await this.prisma.user.update({
       where: { id: userId },
-      data: { avatarUrl: null, avatarKey: null, avatarStatus: null },
+      data: { avatarUrl: null, avatarKey: null, avatarStatus: null, avatarRejectionReason: null },
       select: { id: true },
     });
     if (current?.avatarKey) await this.removeObject(current.avatarKey);

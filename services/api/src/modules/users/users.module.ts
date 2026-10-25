@@ -6,6 +6,7 @@ import { UserAvatarController } from './user-avatar.controller';
 import { UserAvatarService } from './user-avatar.service';
 import { UserCoverController } from './user-cover.controller';
 import { UserCoverService } from './user-cover.service';
+import { UserImageReviewService } from './user-image-review.service';
 import { UsersController } from './users.controller';
 import { UsernamePolicyService } from './username-policy.service';
 import { UsersService } from './users.service';
@@ -25,6 +26,8 @@ import { UsersService } from './users.service';
 @Module({
   imports: [AuthFoundationModule, StorageModule],
   controllers: [UsersController, UserAvatarController, UserCoverController],
-  providers: [UsersService, UsernamePolicyService, UserAvatarService, UserCoverService, PrismaService],
+  providers: [UsersService, UsernamePolicyService, UserAvatarService, UserCoverService, UserImageReviewService, PrismaService],
+  // B-214: the image review queue (B-037) will import UsersModule and call this.
+  exports: [UserImageReviewService],
 })
 export class UsersModule {}

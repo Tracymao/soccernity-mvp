@@ -30,13 +30,13 @@ describe('UserAvatarService (B-035)', () => {
     const { prisma, store, service } = build();
     const res = await service.uploadAvatar('u1', file(JPEG, 'image/jpeg'));
 
-    expect(res).toEqual({ avatar: { url: 'https://cdn.example/avatars/u1/x.jpg', status: 'pending' } });
+    expect(res).toEqual({ avatar: { url: 'https://cdn.example/avatars/u1/x.jpg', status: 'pending', rejectionReason: null } });
     const [, key, type] = (store.upload as jest.Mock).mock.calls[0];
     expect(key).toMatch(/^avatars\/u1\/[0-9a-f-]{36}\.jpg$/);
     expect(type).toBe('image/jpeg');
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: 'u1' },
-      data: { avatarUrl: 'https://cdn.example/avatars/u1/x.jpg', avatarKey: key, avatarStatus: 'pending' },
+      data: { avatarUrl: 'https://cdn.example/avatars/u1/x.jpg', avatarKey: key, avatarStatus: 'pending', avatarRejectionReason: null },
       select: { id: true },
     });
   });
@@ -113,7 +113,7 @@ describe('UserAvatarService (B-035)', () => {
       await expect(service.deleteAvatar('u1')).resolves.toEqual({ avatar: null });
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'u1' },
-        data: { avatarUrl: null, avatarKey: null, avatarStatus: null },
+        data: { avatarUrl: null, avatarKey: null, avatarStatus: null, avatarRejectionReason: null },
         select: { id: true },
       });
       expect(store.delete).toHaveBeenCalledWith('avatars/u1/a.jpg');

@@ -39,13 +39,13 @@ describe('UserCoverService (B-196)', () => {
     const { prisma, store, service } = build();
     const res = await service.uploadCover('u1', file(JPEG, 'image/jpeg'));
 
-    expect(res).toEqual({ cover: { url: 'https://cdn.example/covers/u1/x.jpg', status: 'pending' } });
+    expect(res).toEqual({ cover: { url: 'https://cdn.example/covers/u1/x.jpg', status: 'pending', rejectionReason: null } });
     const [, key, type] = (store.upload as jest.Mock).mock.calls[0];
     expect(key).toMatch(/^covers\/u1\/[0-9a-f-]{36}\.jpg$/);
     expect(type).toBe('image/jpeg');
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: 'u1' },
-      data: { coverUrl: 'https://cdn.example/covers/u1/x.jpg', coverKey: key, coverStatus: 'pending' },
+      data: { coverUrl: 'https://cdn.example/covers/u1/x.jpg', coverKey: key, coverStatus: 'pending', coverRejectionReason: null },
       select: { id: true },
     });
   });
@@ -54,7 +54,7 @@ describe('UserCoverService (B-196)', () => {
     const { prisma, service } = build();
     await service.uploadCover('u1', file(JPEG, 'image/jpeg'));
     const data = (prisma.user.update as jest.Mock).mock.calls[0][0].data;
-    expect(Object.keys(data).sort()).toEqual(['coverKey', 'coverStatus', 'coverUrl']);
+    expect(Object.keys(data).sort()).toEqual(['coverKey', 'coverRejectionReason', 'coverStatus', 'coverUrl']);
   });
 
   it.each([
@@ -125,7 +125,7 @@ describe('UserCoverService (B-196)', () => {
       await expect(service.deleteCover('u1')).resolves.toEqual({ cover: null });
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'u1' },
-        data: { coverUrl: null, coverKey: null, coverStatus: null },
+        data: { coverUrl: null, coverKey: null, coverStatus: null, coverRejectionReason: null },
         select: { id: true },
       });
       expect(store.delete).toHaveBeenCalledWith('covers/u1/a.jpg');
