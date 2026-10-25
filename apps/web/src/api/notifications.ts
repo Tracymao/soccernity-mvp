@@ -96,7 +96,11 @@ export type NotificationData =
   | { cycle: NotificationContestCycle; week?: number | null; outcome?: ContestNotificationOutcome }
   // age_milestone: only the milestone key (e.g. 'under_16_lifted') is
   // resolved server-side; copy is this app's concern.
-  | { milestone: string };
+  | { milestone: string }
+  // profile_image_rejected (B-214, W8): which image was not approved. The moderator's
+  // reason is NOT here; it is on the owner's own GET /users/:id (avatar/cover
+  // `rejectionReason`), which is where the row sends them.
+  | { image: "avatar" | "cover" };
 
 export interface Notification {
   id: string;

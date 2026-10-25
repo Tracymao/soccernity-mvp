@@ -1,0 +1,284 @@
+/* Colour values reference the app-wide --sn-* custom properties -- no hex here.
+ * Figma: Cover Photo -- Crop, desktop 6812:29354 / mobile 6812:29396 (pass N,
+ * one crop at 796:192 for both breakpoints). The dimmed area outside the crop
+ * window uses --sn-overlay-scrim (the file's color/overlay/scrim). */
+
+.cover-crop__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background-color: var(--sn-overlay-scrim);
+}
+
+.cover-crop {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 560px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px 20px;
+  background-color: var(--sn-background-page);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px var(--sn-shadow-key);
+}
+
+.cover-crop__title {
+  margin: 0;
+  font: 600 16px "Montserrat", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.cover-crop__lead,
+.cover-crop__caption {
+  margin: 0;
+  font: 400 12px "Montserrat", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.cover-crop__stage {
+  overflow: hidden;
+  border-radius: 10px;
+  background-color: var(--sn-background-surface);
+}
+
+/* The window is the 796:192 shape. The 10% margin above and below shows the dimmed
+ * rest of the picture, as in the frame (a 125px window inside a 230px stage). */
+.cover-crop__window {
+  position: relative;
+  margin: 10% 0;
+  aspect-ratio: 796 / 192;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  /* Dims everything outside the window; the stage clips it. */
+  box-shadow: 0 0 0 100vmax var(--sn-overlay-scrim);
+}
+
+/* The white frame is drawn over the window, not as its border, so the percentages that place the
+ * picture are exactly the crop region. */
+.cover-crop__window::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--sn-background-surface);
+  pointer-events: none;
+}
+
+.cover-crop__window:active {
+  cursor: grabbing;
+}
+
+.cover-crop__window:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 2px;
+}
+
+.cover-crop__picture {
+  position: absolute;
+  max-width: none;
+  display: block;
+  pointer-events: none;
+}
+
+.cover-crop__grid {
+  position: absolute;
+  background-color: var(--sn-background-surface);
+  pointer-events: none;
+}
+
+.cover-crop__grid--v1,
+.cover-crop__grid--v2 {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.cover-crop__grid--v1 {
+  left: 33.333%;
+}
+
+.cover-crop__grid--v2 {
+  left: 66.666%;
+}
+
+.cover-crop__grid--h1,
+.cover-crop__grid--h2 {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+.cover-crop__grid--h1 {
+  top: 33.333%;
+}
+
+.cover-crop__grid--h2 {
+  top: 66.666%;
+}
+
+.cover-crop__handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  background-color: var(--sn-background-surface);
+  border: 1.5px solid var(--sn-brand-navy);
+  pointer-events: none;
+}
+
+.cover-crop__handle--tl {
+  left: -2px;
+  top: -2px;
+}
+
+.cover-crop__handle--tr {
+  right: -2px;
+  top: -2px;
+}
+
+.cover-crop__handle--bl {
+  left: -2px;
+  bottom: -2px;
+}
+
+.cover-crop__handle--br {
+  right: -2px;
+  bottom: -2px;
+}
+
+.cover-crop__hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 6px 12px;
+  border-radius: 6px;
+  background-color: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+  font: 400 12px "Montserrat", sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.cover-crop__zoom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--sn-text-primary);
+}
+
+.cover-crop__zoom-label {
+  font: 500 13px "Montserrat", sans-serif;
+}
+
+.cover-crop__zoom-step {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sn-text-primary);
+  font: 500 18px "Montserrat", sans-serif;
+  cursor: pointer;
+}
+
+.cover-crop__zoom-step:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.cover-crop__slider {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 300px;
+  accent-color: var(--sn-brand-green);
+}
+
+.cover-crop__zoom-value {
+  font: 400 13px "Montserrat", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.cover-crop__preview-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cover-crop__preview {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  aspect-ratio: 796 / 192;
+  overflow: hidden;
+  border-radius: 10px;
+  background-color: var(--sn-green-tint-12);
+}
+
+.cover-crop__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.cover-crop__button {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 6px;
+  border: 1px solid var(--sn-brand-navy);
+  background-color: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+  font: 500 13px "Montserrat", sans-serif;
+  cursor: pointer;
+}
+
+.cover-crop__button--primary {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-background-surface);
+}
+
+.cover-crop__button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cover-crop__error {
+  margin: 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--sn-semantic-alert);
+  font: 600 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.cover-crop__notice {
+  margin: 0;
+  font: 400 13px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+@media (max-width: 480px) {
+  .cover-crop__scrim {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .cover-crop {
+    max-width: none;
+    max-height: 100vh;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .cover-crop__preview {
+    max-width: 280px;
+  }
+
+  .cover-crop__slider {
+    max-width: 170px;
+  }
+}

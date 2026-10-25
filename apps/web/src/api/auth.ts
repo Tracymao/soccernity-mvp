@@ -457,6 +457,44 @@ export async function resendGuardianConsentRequest(email: string): Promise<{ mes
   return (await response.json()) as { message: string };
 }
 
+// --- Guardian consent withdrawal (B-080 / B-112, Decision Log #340 / #414 item 1) -------
+//
+// Two unauthenticated, token-credentialed steps. The guardian holds no Soccernity account.
+//   1. POST /auth/guardian-consent/withdraw/request { email }  -- the MINOR's account email. ONE fixed
+//      200 for every outcome (unknown address, no guardian, pending, declined or confirmed), so the
+//      page can never tell the guardian whether anything matched. The single-use withdrawal token only
+//      ever goes to the guardian's own inbox.
+//   2. POST /auth/guardian-consent/withdraw { withdrawalToken } -- 200 closes the account at once; a 400
+//      is the generic "invalid or expired" (unknown, expired, used, or consent not confirmed).
+// Both routes share a dedicated throttle (5 attempts per 15 minutes per IP, held in configuration); a
+// throttled caller gets a bare 429. The page maps the status to a state, so only `status` matters here.
+export async function requestGuardianWithdrawal(email: string): Promise<{ message: string }> {
+  return postWithdrawalJson("/auth/guardian-consent/withdraw/request", { email });
+}
+
+export async function withdrawGuardianConsent(withdrawalToken: string): Promise<{ message: string }> {
+  return postWithdrawalJson("/auth/guardian-consent/withdraw", { withdrawalToken });
+}
+
+async function postWithdrawalJson(path: string, body: Record<string, string>): Promise<{ message: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+  if (!response.ok) {
+    throw new AuthApiError(`Couldn't complete that request (${response.status}).`, { status: response.status });
+  }
+  return (await response.json()) as { message: string };
+}
+
 // --- Email verification (F7, Build Plan Section 4.1) ----------------------
 //
 // POST /auth/verify-email is unauthenticated -- the user clicking the

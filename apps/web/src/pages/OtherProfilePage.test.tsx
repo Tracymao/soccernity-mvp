@@ -140,6 +140,29 @@ describe("OtherProfilePage", () => {
     expect(screen.queryByRole("button", { name: "Message" })).toBeNull();
   });
 
+  it("Block labels match the Figma frames word for word (pass N, B-218): menu item, dialog, blocked notice", async () => {
+    vi.mocked(getPublicProfile).mockResolvedValue(profile());
+    vi.mocked(blockUser).mockResolvedValue(undefined);
+    renderAt();
+    fireEvent.click(await screen.findByRole("button", { name: "More options" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Block tobi_9" }));
+    // Dialog 6655:29600 / 6655:27355.
+    expect(screen.getByRole("heading", { name: "Block tobi_9?" })).not.toBeNull();
+    expect(screen.getByText("Blocking tobi_9:")).not.toBeNull();
+    expect(screen.getByText("hides their posts, comments, likes and search results from you, and yours from them")).not.toBeNull();
+    expect(screen.getByText("stops messages in both directions")).not.toBeNull();
+    expect(screen.getByText("removes follows in both directions")).not.toBeNull();
+    expect(screen.getByText(/You can undo it at any time in Settings; unblocking does not restore follows\. They are not told\./)).not.toBeNull();
+    expect(screen.getByLabelText("Reason (optional)").getAttribute("placeholder")).toBe("Add a note for yourself");
+    fireEvent.click(screen.getByRole("button", { name: "Block" }));
+    // Blocked notice 6706:26750 / 6707:26595.
+    expect(await screen.findByText("You blocked tobi_9")).not.toBeNull();
+    expect(
+      screen.getByText("You can’t follow or message them, and you won’t see their posts. Unblocking does not restore follows."),
+    ).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Unblock tobi_9" }).textContent).toBe("Unblock tobi_9");
+  });
+
   it("Cancel closes the block dialog without calling the API", async () => {
     vi.mocked(getPublicProfile).mockResolvedValue(profile());
     renderAt();

@@ -16,18 +16,23 @@
 //   error       the upload failed (type, size, no storage, network)
 //   confirm     "Remove this picture?"  Remove / Keep
 //
-// What the server does (W5 / W6): POST /users/:id/avatar|cover takes a JPEG,
+// What the server does (W5 / W6 / W8): POST /users/:id/avatar|cover takes a JPEG,
 // PNG or WebP of at most 5 MB; a new upload is always `pending` and nobody but
 // its owner can see it until the image check and review queue exist (#411
 // item 1), so on today's backend `approved` and `rejected` are never reached
 // by a real upload. They are built because the server's own status values
 // include them and a reviewer's decision must have somewhere to show. The
-// REASON for a rejection is not sent yet (B-214 is not built): it renders when
-// present and the rejection is shown without it when absent.
+// moderator's REASON for a rejection (B-214, W8) comes back as
+// `rejectionReason` on the owner's own GET /users/:id and is shown on the
+// rejected state (B-217 / FC6); an absent reason shows the rejection without
+// one. A new upload clears it server-side.
 //
-// Cover crop (#412 item 3, B-215): the browser crops the chosen file to the
-// cover slot's aspect ratio before upload (lib/imageCrop.ts). The avatar is not
-// cropped (#412: "an avatar crop step" is not decided); CSS shows it as a circle.
+// Cover crop (#414 item 2, B-210 / B-227): choosing a cover photo opens
+// CoverCropDialog, ONE interactive crop at the cover slot's 796:192 ratio (drag
+// to move, zoom 1x to 3x, refusal under 796 px wide), done in the browser
+// before upload. Only the cropped file is uploaded; the original never leaves
+// the browser. The avatar is not cropped (#412: "an avatar crop step" is not
+// decided); CSS shows it as a circle.
 //
 // Wording (#412 item 5): a string carries the tag only when it makes a legal or
 // safety promise (what is checked, who sees it). Buttons, progress and status
@@ -42,7 +47,7 @@ import {
   type ProfileImage,
   type ProfileImageKind,
 } from "../../api/users";
-import { COVER_ASPECT_RATIO, cropToAspectRatio } from "../../lib/imageCrop";
+import CoverCropDialog from "./CoverCropDialog";
 import "./ProfileImageControl.css";
 
 const COPY = {
@@ -56,8 +61,8 @@ const COPY = {
     removeTitle: "Remove this picture?",
     removeBody: "Your profile will show a placeholder instead.",
     underReviewNote: "Only you can see this picture until it has been checked. [COPY PENDING LEGAL REVIEW]",
-    rejectedTitle: "This picture wasn’t approved. [COPY PENDING LEGAL REVIEW]",
-    approvedNote: "This picture is visible on your profile. [COPY PENDING LEGAL REVIEW]",
+    rejectedTitle: "This picture wasn’t approved.",
+    approvedNote: "This picture is visible on your profile.",
   },
   cover: {
     noun: "cover photo",
@@ -69,8 +74,8 @@ const COPY = {
     removeTitle: "Remove this cover photo?",
     removeBody: "Your profile will show the default cover instead.",
     underReviewNote: "Only you can see this cover photo until it has been checked. [COPY PENDING LEGAL REVIEW]",
-    rejectedTitle: "This cover photo wasn’t approved. [COPY PENDING LEGAL REVIEW]",
-    approvedNote: "This cover photo is visible on your profile. [COPY PENDING LEGAL REVIEW]",
+    rejectedTitle: "This cover photo wasn’t approved.",
+    approvedNote: "This cover photo is visible on your profile.",
   },
 } as const;
 
@@ -106,6 +111,8 @@ export default function ProfileImageControl({ kind, accessToken, userId, image, 
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
+  // The chosen cover file while the crop step is open (B-210 / B-227). Nothing has been uploaded yet.
+  const [cropFile, setCropFile] = useState<File | null>(null);
 
   useEffect(() => {
     setCurrent(image);
@@ -126,19 +133,38 @@ export default function ProfileImageControl({ kind, accessToken, userId, image, 
   async function handleFile(file: File | undefined) {
     if (inputRef.current) inputRef.current.value = "";
     if (!file) return;
-    if (!(PROFILE_IMAGE_TYPES as readonly string[]).includes(file.type) || file.size > PROFILE_IMAGE_MAX_BYTES) {
+    // The 5 MB limit is on the file that is UPLOADED: the avatar as chosen, the cover after the crop
+    // (a large phone photo is often well under the limit once cropped), so a cover is size-checked in upload().
+    const tooBig = kind === "avatar" && file.size > PROFILE_IMAGE_MAX_BYTES;
+    if (!(PROFILE_IMAGE_TYPES as readonly string[]).includes(file.type) || tooBig) {
+      setPhase("error");
+      setError(ERROR_FALLBACK);
+      return;
+    }
+    setError(null);
+    // The cover goes through the crop step first; the avatar uploads as chosen.
+    if (kind === "cover") {
+      setCropFile(file);
+      return;
+    }
+    await upload(file, file);
+  }
+
+  // `body` is what is sent: the cropped Blob for a cover, the chosen file for an avatar. The original
+  // cover file is never sent.
+  async function upload(body: Blob, source: File) {
+    if (body.size > PROFILE_IMAGE_MAX_BYTES) {
       setPhase("error");
       setError(ERROR_FALLBACK);
       return;
     }
     const controller = new AbortController();
     abortRef.current = controller;
-    setFileName(file.name);
+    setFileName(source.name);
     setError(null);
     setPhase("uploading");
     try {
-      const body = kind === "cover" ? await cropToAspectRatio(file, COVER_ASPECT_RATIO) : file;
-      const uploaded = await uploadProfileImage(accessToken, userId, kind, body, file.name, controller.signal);
+      const uploaded = await uploadProfileImage(accessToken, userId, kind, body, source.name, controller.signal);
       // A new upload clears any reason shown for the previous one (#412 item 2).
       update(uploaded);
       setPhase("idle");
@@ -152,6 +178,17 @@ export default function ProfileImageControl({ kind, accessToken, userId, image, 
     } finally {
       abortRef.current = null;
     }
+  }
+
+  function saveCrop(cropped: Blob) {
+    const source = cropFile;
+    setCropFile(null);
+    if (source) void upload(cropped, source);
+  }
+
+  function chooseAnotherCover() {
+    setCropFile(null);
+    choose();
   }
 
   function cancelUpload() {
@@ -267,8 +304,10 @@ export default function ProfileImageControl({ kind, accessToken, userId, image, 
               <p className="profile-image__alert" role="alert">
                 {copy.rejectedTitle}
               </p>
-              {current.reason ? (
-                <p className="profile-image__note">Reason: {current.reason}</p>
+              {current.rejectionReason ? (
+                <p className="profile-image__note" data-testid={`profile-image-${kind}-reason`}>
+                  Reason: {current.rejectionReason}
+                </p>
               ) : null}
               <button type="button" className="profile-image__button" onClick={choose}>
                 {copy.chooseAnother}
@@ -277,6 +316,16 @@ export default function ProfileImageControl({ kind, accessToken, userId, image, 
           )}
         </div>
       </div>
+
+      {cropFile && (
+        <CoverCropDialog
+          file={cropFile}
+          notice={CHECKED_NOTE.cover}
+          onSave={saveCrop}
+          onCancel={() => setCropFile(null)}
+          onChooseAnother={chooseAnotherCover}
+        />
+      )}
 
       <input
         ref={inputRef}

@@ -66,6 +66,7 @@ import ResetPasswordPage from "../pages/ResetPasswordPage";
 import GuardianConsentPage from "../pages/GuardianConsentPage";
 import ChangeGuardianEmailPage from "../pages/guardian-consent/ChangeGuardianEmailPage";
 import GuardianConsentConfirmPage from "../pages/GuardianConsentConfirmPage";
+import GuardianWithdrawalPage from "../pages/guardian-consent/GuardianWithdrawalPage";
 import VerifyEmailPage from "../pages/VerifyEmailPage";
 import VerifyEmailPromptPage from "../pages/VerifyEmailPromptPage";
 import CreateProfilePage from "../pages/CreateProfilePage";
@@ -131,6 +132,11 @@ export const routes: RouteObject[] = [
       { path: "create-profile", element: <CreateProfilePage /> },
       { path: "signup/clubs", element: <ClubPickerRoute /> },
       { path: "continue", element: <ContinuePage /> },
+      // Guardian withdrawal (B-080 / B-112, Decision Log #414 item 1): a guardian taking back consent.
+      // The guardian has no account, so this is under the logo-only Top Bar like the Figma frames
+      // (6654:2 and the five that follow). `?token=` is the withdrawal email's link and pre-fills the
+      // code; the consent email links here without a token. See GuardianWithdrawalPage.tsx.
+      { path: "guardian-consent/withdraw", element: <GuardianWithdrawalPage /> },
     ],
   },
   {

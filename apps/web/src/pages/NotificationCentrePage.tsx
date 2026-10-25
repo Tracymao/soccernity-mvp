@@ -36,6 +36,11 @@
 //     linking to its match-centre page by externalRef. A TBD team name
 //     falls back to whichever side is known. Icon disc is still the
 //     generic "?" placeholder — a figma-screen-builder pass is pending.
+//   - profile_image_rejected (B-217, Decision Log #414 item 3): ONE row for both the
+//     picture and the cover ("Your picture/cover photo wasn't approved — see why in
+//     Edit Profile"), linking to /profile?edit=1. No reason text is in the notification;
+//     it is read from the owner's own profile. Untagged functional wording (#412 item 5).
+//   - an unknown type: a generic "You have a new notification" row, not a link.
 //   - `data: null` (a stale/orphaned payloadRefId — Decision Log #290) is
 //     rendered as a generic "This notification is no longer available."
 //
@@ -66,6 +71,7 @@ import navGrassroots from "../assets/icons/nav-grassroots.svg";
 import notifWhistle from "../assets/icons/notif-whistle.svg";
 import notifTrophy from "../assets/icons/notif-trophy.svg";
 import notifBell from "../assets/icons/notif-bell.svg";
+import notifImageAdd from "../assets/icons/notif-image-add.svg";
 import "./notifications/NotificationCentrePage.css";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
@@ -114,6 +120,9 @@ function linkFor(n: Notification): string | null {
       // itself is not built (it needs the exposure engine, B-092), so this lands on the feed.
       return "/community";
   }
+  // The image-decision row (B-217): the reason lives on the owner's own record, shown in Edit Profile,
+  // so the row opens the profile with the edit form already open.
+  if (n.type === "profile_image_rejected" && "image" in n.data) return "/profile?edit=1";
   if (n.type === "match_kickoff" && "match" in n.data) return `/sports-hub/matches/${n.data.match.externalRef}`;
   return null;
 }
@@ -183,14 +192,38 @@ function bodyFor(n: Notification): { subject: string; rest: string } {
       const subject = teams.length === 2 ? `${teams[0]} vs ${teams[1]}` : (teams[0] ?? "A match");
       return { subject, rest: " kicks off soon" };
     }
+    case "profile_image_rejected": {
+      // ONE row serves both images (Decision Log #414 item 3, B-224); the wording names which.
+      const noun = data && "image" in data && data.image === "cover" ? "cover photo" : "picture";
+      return { subject: `Your ${noun}`, rest: " wasn’t approved — see why in Edit Profile" };
+    }
     case "age_milestone":
       // Plain, non-alarming, no age threshold in the copy (PR #277's
       // under-16 UI tone). Any milestone key gets the same message: the
       // only one the backend emits today is 'under_16_lifted'.
       return { subject: "Your account", rest: " now has access to more of Soccernity." };
     default:
-      return { subject: "Notification", rest: "" };
+      // A type this page does not know yet (a newer server): a generic row, never a blank or broken one.
+      return { subject: "You have a new notification", rest: "" };
   }
+}
+
+// Types this page has copy for. Any other type (a newer server) renders the generic row.
+const KNOWN_TYPES = new Set([
+  "follow",
+  "like",
+  "comment",
+  "message",
+  "fixture_scheduled",
+  "result_logged",
+  "contest_win",
+  "match_kickoff",
+  "age_milestone",
+  "profile_image_rejected",
+]);
+
+function isKnownType(type: string): boolean {
+  return KNOWN_TYPES.has(type) || isContestEventType(type);
 }
 
 function RowAvatar({ notification }: { notification: Notification }) {
@@ -201,7 +234,8 @@ function RowAvatar({ notification }: { notification: Notification }) {
     type === "result_logged" ||
     type === "contest_win" ||
     isContestEventType(type) ||
-    type === "age_milestone";
+    type === "age_milestone" ||
+    type === "profile_image_rejected";
   const className = usesIconDisc
     ? "notif-row__avatar notif-row__avatar--icon"
     : `notif-row__avatar ${read ? "notif-row__avatar--read" : "notif-row__avatar--unread"}`;
@@ -241,6 +275,13 @@ function RowAvatar({ notification }: { notification: Notification }) {
       </span>
     );
   }
+  if (type === "profile_image_rejected") {
+    return (
+      <span className={className}>
+        <img src={notifImageAdd} alt="" width={24} height={24} />
+      </span>
+    );
+  }
   if (type === "age_milestone") {
     return (
       <span className={className} aria-hidden="true">
@@ -264,7 +305,7 @@ function NotificationRow({ notification, onOpen }: RowProps) {
     <>
       <RowAvatar notification={notification} />
       <span className="notif-row__body">
-        {notification.data ? (
+        {notification.data || !isKnownType(notification.type) ? (
           <span className="notif-row__text">
             <strong>{subject}</strong>
             {rest}

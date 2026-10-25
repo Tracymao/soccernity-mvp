@@ -78,9 +78,9 @@ beforeEach(() => {
   vi.mocked(getFollowing).mockReset();
 });
 
-function renderProfilePage() {
+function renderProfilePage(entry = "/profile") {
   render(
-    <MemoryRouter initialEntries={["/profile"]}>
+    <MemoryRouter initialEntries={[entry]}>
       <ProfilePage />
     </MemoryRouter>,
   );
@@ -103,6 +103,30 @@ describe("ProfilePage", () => {
     expect(await screen.findByText("Adeniyi Christiana")).not.toBeNull();
     expect(screen.getByText("adeniyi@example.com")).not.toBeNull();
     expect(getUser).toHaveBeenCalledWith(expect.any(String), "user-1");
+  });
+
+  it("/profile?edit=1 opens the edit form straight away (the image-decision notification row lands here)", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    vi.mocked(getUser).mockResolvedValueOnce({
+      ...BASE_PROFILE,
+      avatar: { url: "u", status: "rejected", rejectionReason: "Not a clear photo of you" },
+    });
+
+    renderProfilePage("/profile?edit=1");
+
+    expect(await screen.findByTestId("profile-image-avatar")).not.toBeNull();
+    // The owner sees the moderator's reason on the rejected picture.
+    expect(await screen.findByText(/Reason: Not a clear photo of you/)).not.toBeNull();
+  });
+
+  it("without ?edit=1 the edit form stays closed", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    vi.mocked(getUser).mockResolvedValueOnce(BASE_PROFILE);
+
+    renderProfilePage();
+
+    await screen.findByRole("button", { name: "Edit Profile" });
+    expect(screen.queryByTestId("profile-image-avatar")).toBeNull();
   });
 
   it("shows a guardian consent status link when the profile is a minor", async () => {
