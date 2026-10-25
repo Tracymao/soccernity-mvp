@@ -17,6 +17,7 @@ import { GuardianConsentController } from './guardian-consent.controller';
 import { GuardianCardVerificationService } from './guardian-card-verification.service';
 import { GuardianConsentService } from './guardian-consent.service';
 import { GuardianEmailChangeLimiter } from './guardian-email-change.limiter';
+import { GuardianWithdrawalThrottlerGuard } from './guardian-withdrawal-throttle';
 
 const AUTHENTICATED_MINOR = { sub: 'minor-1', role: 'fan' };
 const VALID_CHANGE = { name: 'New Guardian', email: 'new-guardian@example.com', relationship: 'Legal Guardian' };
@@ -59,6 +60,11 @@ describe('GuardianConsentController (HTTP layer)', () => {
       // so these unrelated assertions aren't affected by request count.
       // Real rate-limit enforcement is exercised separately below.
       .overrideGuard(AuthThrottlerGuard)
+      .useValue({ canActivate: () => true })
+      // B-112: the two withdrawal routes carry their own throttle guard;
+      // overridden for the same reason. Real enforcement is exercised in the
+      // "withdrawal routes (real rate limiting)" block below.
+      .overrideGuard(GuardianWithdrawalThrottlerGuard)
       .useValue({ canActivate: () => true })
       // GET /auth/guardian-consent/status (sprint-1/f5-f6-missing-endpoints)
       // carries JwtAuthGuard -- overridden here, same pattern

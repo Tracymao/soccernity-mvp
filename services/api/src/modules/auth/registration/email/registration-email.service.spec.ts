@@ -390,6 +390,29 @@ describe('RegistrationEmailService', () => {
       expect(sent.TextBody).not.toMatch(/consent code/i);
     });
 
+    // B-112 / B-225 (Decision Log #414 item 1).
+    it('guardian-consent also links the withdrawal REQUEST page, with no token and no pre-fill', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'm' });
+      const service = new RegistrationEmailService(buildConfig({ ...live, WEB_APP_BASE_URL: 'https://app.soccernity.com/' }));
+      await service.sendGuardianConsentEmail('g@example.com', 'uuid-1', 'Minor Name');
+      const sent = mockSendEmail.mock.calls[0][0];
+      expect(sent.TextBody).toContain('withdraw your consent at any time:\n\nhttps://app.soccernity.com/guardian-consent/withdraw\n');
+      expect(sent.HtmlBody).toContain('<a href="https://app.soccernity.com/guardian-consent/withdraw">withdraw your consent</a>');
+      // The consent token must not leak into the withdrawal link, and the
+      // withdrawal link must not carry any query at all.
+      expect(sent.TextBody).not.toContain('guardian-consent/withdraw?');
+      expect(sent.HtmlBody).not.toContain('guardian-consent/withdraw?');
+      // The confirm link is unchanged.
+      expect(sent.TextBody).toContain('https://app.soccernity.com/guardian-consent/confirm?token=uuid-1');
+    });
+
+    it('keeps the withdrawal link when the base URL carries a path prefix', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'm' });
+      const service = new RegistrationEmailService(buildConfig({ ...live, WEB_APP_BASE_URL: 'https://soccernity.com/app' }));
+      await service.sendGuardianConsentEmail('g@example.com', 'uuid-1', 'Minor Name');
+      expect(mockSendEmail.mock.calls[0][0].TextBody).toContain('https://soccernity.com/app/guardian-consent/withdraw\n');
+    });
+
     it('withdrawal request carries a link AND keeps the code the designed screen accepts', async () => {
       mockSendEmail.mockResolvedValueOnce({ MessageID: 'm' });
       const service = new RegistrationEmailService(buildConfig({ ...live, WEB_APP_BASE_URL: 'https://app.soccernity.com' }));

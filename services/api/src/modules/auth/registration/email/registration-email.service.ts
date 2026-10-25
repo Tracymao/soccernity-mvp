@@ -98,11 +98,26 @@ export class RegistrationEmailService {
     // page (reads ?token=). No account, no app install, as step 3 requires.
     const link = this.linkFor('guardian-consent', '/guardian-consent/confirm', consentToken);
     if (!link) return;
+    // B-112 / B-225 (Decision Log #414 item 1): a second link to the guardian
+    // withdrawal REQUEST page, WITHOUT a token. The guardian keeps this email
+    // after approving, and it is where they would look to take consent back
+    // later. No token: a withdrawal token is only issued on request
+    // (POST /auth/guardian-consent/withdraw/request, Decision Log #340), so the
+    // page asks for the minor's email first. buildWebAppLink cannot return null
+    // here because linkFor() above already accepted the same base URL.
+    // [COPY PENDING LEGAL REVIEW]: the sentence that introduces this link, in
+    // both bodies below, is guardian-facing wording counsel has not approved.
+    const withdrawalPageLink = buildWebAppLink(
+      this.config.get<string>('WEB_APP_BASE_URL'),
+      '/guardian-consent/withdraw',
+      {},
+    );
+    if (!withdrawalPageLink) return;
     await this.dispatch({
       to,
       subject: `Consent requested for ${minorDisplayName}'s Soccernity account`,
       template: 'guardian-consent',
-      data: { link, minorDisplayName },
+      data: { link, minorDisplayName, withdrawalPageLink },
     });
   }
 
@@ -122,10 +137,12 @@ export class RegistrationEmailService {
     withdrawalToken: string,
     minorDisplayName: string,
   ): Promise<void> {
-    // B-016. The withdrawal page does not exist in apps/web yet (B-080); this
-    // path is an ASSUMPTION that ticket must adopt or change. The code itself
+    // B-016 / B-112. The link carries the single-use token as ?token= so the
+    // page opens its Confirm step with the code pre-filled (Decision Log #414
+    // item 1; the same route without a token is the request step). The code
     // stays in the body too: the designed confirm screen (Figma 6654:57) has a
     // "withdrawal code" input, so a guardian can paste it if the link fails.
+    // The web page itself is FC6 (B-080); this path is the contract it adopts.
     const link = this.linkFor('guardian-consent-withdrawal-request', '/guardian-consent/withdraw', withdrawalToken);
     if (!link) return;
     await this.dispatch({
@@ -464,6 +481,7 @@ function renderTextBody(template: RegistrationEmailTemplate, data: Record<string
       return (
         `${data.minorDisplayName} has registered for a Soccernity account and listed you as their guardian.\n\n` +
         `To review and respond to the request, open this link (no account needed):\n\n${data.link}\n\n` +
+        `If you approve and later change your mind, you can withdraw your consent at any time:\n\n${data.withdrawalPageLink}\n\n` +
         `If you did not expect this email, you can safely ignore it.`
       );
     case 'guardian-consent-withdrawal-request':
@@ -656,6 +674,7 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
         `<p><strong>${data.minorDisplayName}</strong> has registered for a Soccernity account and listed you as their guardian.</p>` +
         `<p>To review and respond to the request (no account needed):</p><p><a href="${data.link}">Review the request</a></p>` +
         `<p>If the button does not work, copy this link into your browser: ${data.link}</p>` +
+        `<p>If you approve and later change your mind, you can <a href="${data.withdrawalPageLink}">withdraw your consent</a> at any time.</p>` +
         `<p>If you did not expect this email, you can safely ignore it.</p>`
       );
     case 'guardian-consent-withdrawal-request':

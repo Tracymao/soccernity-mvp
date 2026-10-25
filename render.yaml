@@ -83,6 +83,11 @@ services:
         sync: false
       - key: AUTH_RATE_LIMIT_WINDOW_MS
         sync: false
+      # GUARDIAN_WITHDRAWAL_RATE_LIMIT_*: code defaults (guardian-withdrawal-throttle.ts), B-112
+      - key: GUARDIAN_WITHDRAWAL_RATE_LIMIT_MAX
+        value: "5"
+      - key: GUARDIAN_WITHDRAWAL_RATE_LIMIT_WINDOW_MS
+        value: "900000"
       - key: RESET_TOKEN_TTL_MINUTES
         sync: false
       # ADMIN_JWT_ACCESS_TTL_SECONDS: code default (admin-token.constants.ts)
@@ -237,6 +242,11 @@ services:
         sync: false
       - key: AUTH_RATE_LIMIT_WINDOW_MS
         sync: false
+      # GUARDIAN_WITHDRAWAL_RATE_LIMIT_*: code defaults (guardian-withdrawal-throttle.ts), B-112
+      - key: GUARDIAN_WITHDRAWAL_RATE_LIMIT_MAX
+        value: "5"
+      - key: GUARDIAN_WITHDRAWAL_RATE_LIMIT_WINDOW_MS
+        value: "900000"
       - key: RESET_TOKEN_TTL_MINUTES
         sync: false
       # ADMIN_JWT_ACCESS_TTL_SECONDS: code default (admin-token.constants.ts)
