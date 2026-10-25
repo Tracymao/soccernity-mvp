@@ -15,6 +15,7 @@ import { ResendGuardianConsentDto } from './dto/resend-guardian-consent.dto';
 import { WithdrawGuardianConsentDto } from './dto/withdraw-guardian-consent.dto';
 import { GuardianConsentService, GuardianConsentStatusResponse } from './guardian-consent.service';
 import { GuardianEmailChangeLimiter } from './guardian-email-change.limiter';
+import { GuardianWithdrawalRateLimit } from './guardian-withdrawal-throttle';
 
 // Build Plan Section 4.1 (Auth Service): POST /auth/guardian-consent.
 // No JwtAuthGuard here (unlike /users/* — see users/README.md) — the
@@ -161,7 +162,13 @@ export class GuardianConsentController {
   // and for the same non-enumeration reasons. The withdrawal link itself
   // only ever goes to Guardian.email, so this endpoint reveals nothing
   // and grants nothing to a caller who guessed an address.
-  @AuthRateLimit()
+  //
+  // B-112 (Decision Log #414 item 1): the response is ONE fixed message for every
+  // outcome -- unknown address, a user with no guardian, a pending or declined
+  // request, a confirmed one -- and a throttled caller gets the equally fixed
+  // 'Too many attempts'. Throttle: 5 per 15 minutes, held in configuration
+  // (guardian-withdrawal-throttle.ts); it replaces the shared @AuthRateLimit().
+  @GuardianWithdrawalRateLimit()
   @Post('guardian-consent/withdraw/request')
   @HttpCode(HttpStatus.OK)
   async requestWithdrawal(@Body() dto: RequestConsentWithdrawalDto): Promise<{ message: string }> {
@@ -175,8 +182,9 @@ export class GuardianConsentController {
   // sprint-1/guardian-consent-decline-withdraw-expiry — step 2 of 2.
   // Consumes the single-use Guardian.withdrawalToken from that email and
   // closes the account. Same destructive-consequence reasoning as
-  // decline() for the rate limit.
-  @AuthRateLimit()
+  // decline() for the rate limit. B-112: same dedicated 5-per-15-minutes throttle
+  // as the request route above (counted separately per route).
+  @GuardianWithdrawalRateLimit()
   @Post('guardian-consent/withdraw')
   @HttpCode(HttpStatus.OK)
   async withdraw(@Body() dto: WithdrawGuardianConsentDto): Promise<{ message: string }> {
