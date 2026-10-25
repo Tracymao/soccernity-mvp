@@ -62,10 +62,11 @@ export type ProfileImageStatus = "pending" | "approved" | "rejected";
 export interface ProfileImage {
   url: string;
   status: ProfileImageStatus;
-  // Why a rejected picture was not approved, shown to its owner (#398 D2,
-  // #412 item 2). The server does not send this yet (B-214 is not built), so
-  // it is absent today and the page shows the rejection without a reason.
-  reason?: string | null;
+  // Why a rejected picture was not approved, shown to its owner only (#398 D2,
+  // #412 item 2). The server (W8, B-214) sends it as `rejectionReason` on the
+  // owner's own GET /users/:id, present only while the status is 'rejected'; a
+  // new upload clears it. Absent or null means no reason was recorded.
+  rejectionReason?: string | null;
 }
 
 export interface RepresentedClubResult {

@@ -1,22 +1,44 @@
-// Browser-side centre crop for the cover photo (Decision Log #412 item 3, B-215):
-// "the cover is cropped to the aspect ratio of the cover frame", done in the
-// browser so the server still receives and checks an ordinary image file.
+// Browser-side cover photo crop (Decision Log #414 item 2, build register B-210 /
+// B-222 / B-227). ONE saved crop at the cover slot's 796:192 ratio: the person moves
+// and zooms the picture inside a fixed crop window, and only the CROPPED file is
+// uploaded -- the original never leaves the browser. Mobile profile frames show
+// that same saved crop with `object-fit: cover`; there is no second mobile crop.
 //
-// The ratio is the profile cover slot in the Figma profile frames
-// (6747:28894 and the other K2/K4 frames: 796 x 192). B-210 (K7) was to record
-// the measured number in a frame note; that pass has not run, so this is the
-// number read off the frame, and only the DESKTOP slot (the mobile cover slot is
-// a different shape, about 390 x 120, and is shown with `object-fit: cover`).
-// A crop step with position and zoom controls is not drawn (B-210) and is not
-// built: this crops automatically around the centre.
+// Figma: crop frames 6812:29354 (desktop) and 6812:29396 (mobile, redrawn at
+// 796:192 by pass N), "image too small" state B-222.
+//
+// Parameters the founder fixed (#414 item 2): ratio 796:192, zoom 1x to 3x,
+// minimum width 796 px. Adopted readings, not stated by the founder (B-222):
+//   - the 796 px minimum applies to the image the person CHOOSES, because an
+//     image narrower than the crop window cannot fill it;
+//   - 1x means the image just covers the crop window;
+//   - the saved file keeps the cropped region's own pixels (no upscaling), so a
+//     zoomed-in crop from a small image is a small file. Its pixel size and any
+//     server-side size or ratio check are NOT decided (B-205).
 export const COVER_ASPECT_RATIO = 796 / 192;
+export const COVER_MIN_WIDTH_PX = 796;
+export const COVER_ZOOM_MIN = 1;
+export const COVER_ZOOM_MAX = 3;
+
+export interface CropRect {
+  sx: number;
+  sy: number;
+  sw: number;
+  sh: number;
+}
+
+/** True when the chosen image is wide enough to fill the crop window (>= 796 px). */
+export function isCoverWideEnough(naturalWidth: number): boolean {
+  return naturalWidth >= COVER_MIN_WIDTH_PX;
+}
+
+export function clampZoom(zoom: number): number {
+  if (!Number.isFinite(zoom)) return COVER_ZOOM_MIN;
+  return Math.min(COVER_ZOOM_MAX, Math.max(COVER_ZOOM_MIN, zoom));
+}
 
 /** The largest centred rectangle of the given aspect ratio that fits inside width x height. */
-export function centreCropRect(
-  width: number,
-  height: number,
-  ratio: number,
-): { sx: number; sy: number; sw: number; sh: number } {
+export function centreCropRect(width: number, height: number, ratio: number): CropRect {
   const current = width / height;
   if (current > ratio) {
     const sw = Math.round(height * ratio);
@@ -27,28 +49,82 @@ export function centreCropRect(
 }
 
 /**
- * Crops `file` to `ratio` and returns a new image Blob of the same type (PNG and
- * WebP stay lossless-or-near; JPEG is re-encoded at 0.92). If the browser cannot
- * decode or draw the image (no canvas, a decode failure) the ORIGINAL file is
- * returned unchanged: the server still validates it, and a cover that is not
- * cropped is still displayed cropped by CSS.
+ * The source region at 1x: the largest region of `ratio` that fits the image (so the image just
+ * covers the crop window). Zoom z shows a region 1/z as large.
  */
-export async function cropToAspectRatio(file: File, ratio: number): Promise<Blob> {
-  try {
-    if (typeof createImageBitmap !== "function") return file;
-    const bitmap = await createImageBitmap(file);
-    const { sx, sy, sw, sh } = centreCropRect(bitmap.width, bitmap.height, ratio);
-    const canvas = document.createElement("canvas");
-    canvas.width = sw;
-    canvas.height = sh;
-    const context = canvas.getContext("2d");
-    if (!context) return file;
-    context.drawImage(bitmap, sx, sy, sw, sh, 0, 0, sw, sh);
-    bitmap.close?.();
-    const type = file.type === "image/png" || file.type === "image/webp" ? file.type : "image/jpeg";
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, 0.92));
-    return blob ?? file;
-  } catch {
-    return file;
-  }
+function regionAtOneX(naturalWidth: number, naturalHeight: number, ratio: number): { w: number; h: number } {
+  if (naturalWidth / naturalHeight > ratio) return { w: naturalHeight * ratio, h: naturalHeight };
+  return { w: naturalWidth, h: naturalWidth / ratio };
+}
+
+/** Source-pixel size of the crop region at this zoom. */
+export function cropRegionSize(
+  naturalWidth: number,
+  naturalHeight: number,
+  zoom: number,
+  ratio: number = COVER_ASPECT_RATIO,
+): { w: number; h: number } {
+  const base = regionAtOneX(naturalWidth, naturalHeight, ratio);
+  const z = clampZoom(zoom);
+  return { w: base.w / z, h: base.h / z };
+}
+
+/**
+ * The crop rectangle, in source pixels, for a crop window centred at fractions (cx, cy) of the image
+ * (0..1 across and down) at the given zoom. The window is clamped so it never leaves the image.
+ */
+export function cropRectFor(
+  naturalWidth: number,
+  naturalHeight: number,
+  zoom: number,
+  cx: number,
+  cy: number,
+  ratio: number = COVER_ASPECT_RATIO,
+): CropRect {
+  const { w, h } = cropRegionSize(naturalWidth, naturalHeight, zoom, ratio);
+  const sx = Math.min(naturalWidth - w, Math.max(0, cx * naturalWidth - w / 2));
+  const sy = Math.min(naturalHeight - h, Math.max(0, cy * naturalHeight - h / 2));
+  return { sx, sy, sw: w, sh: h };
+}
+
+/** Keeps a window centre (as fractions of the image) in the range where the window stays inside the image. */
+export function clampCentre(
+  naturalWidth: number,
+  naturalHeight: number,
+  zoom: number,
+  cx: number,
+  cy: number,
+  ratio: number = COVER_ASPECT_RATIO,
+): { cx: number; cy: number } {
+  const { w, h } = cropRegionSize(naturalWidth, naturalHeight, zoom, ratio);
+  const minX = w / 2 / naturalWidth;
+  const minY = h / 2 / naturalHeight;
+  return {
+    cx: Math.min(1 - minX, Math.max(minX, cx)),
+    cy: Math.min(1 - minY, Math.max(minY, cy)),
+  };
+}
+
+/**
+ * Crops a loaded image to `rect` and returns the cropped image as a Blob. PNG and WebP keep their type;
+ * anything else (JPEG) is re-encoded as JPEG at 0.92. THROWS when the browser cannot draw or encode it:
+ * the caller must not fall back to uploading the original (it is never stored).
+ */
+export async function cropImageToBlob(
+  image: HTMLImageElement | HTMLCanvasElement | ImageBitmap,
+  rect: CropRect,
+  fileType: string,
+): Promise<Blob> {
+  const sw = Math.max(1, Math.round(rect.sw));
+  const sh = Math.max(1, Math.round(rect.sh));
+  const canvas = document.createElement("canvas");
+  canvas.width = sw;
+  canvas.height = sh;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Canvas is not available");
+  context.drawImage(image, Math.round(rect.sx), Math.round(rect.sy), sw, sh, 0, 0, sw, sh);
+  const type = fileType === "image/png" || fileType === "image/webp" ? fileType : "image/jpeg";
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, 0.92));
+  if (!blob) throw new Error("Could not encode the cropped image");
+  return blob;
 }

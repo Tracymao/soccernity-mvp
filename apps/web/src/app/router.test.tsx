@@ -136,3 +136,24 @@ describe("router — match-centre carries the shared navbar (Decision Log #311)"
     expect(screen.queryByRole("link", { name: "Login" })).toBeNull();
   });
 });
+
+describe("router - guardian withdrawal route (B-080 / B-112)", () => {
+  it("/guardian-consent/withdraw renders the request step under the logo-only Top Bar, with no site nav and no footer", async () => {
+    await renderAt("/guardian-consent/withdraw");
+    expect(screen.getByRole("heading", { name: "Withdraw your consent" })).not.toBeNull();
+    expect(screen.getByRole("link", { name: "Soccernity home" })).not.toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Primary" })).toBeNull();
+    expect(document.querySelector("footer")).toBeNull();
+  });
+
+  it("?token= on that route opens Confirm with the code pre-filled", async () => {
+    await renderAt("/guardian-consent/withdraw?token=tok-123");
+    expect(screen.getByRole("heading", { name: "Confirm withdrawing consent" })).not.toBeNull();
+    expect((screen.getByLabelText("Withdrawal code") as HTMLInputElement).value).toBe("tok-123");
+  });
+
+  it("the guardian confirm route is unaffected by it", async () => {
+    await renderAt("/guardian-consent/confirm");
+    expect(screen.queryByRole("heading", { name: "Withdraw your consent" })).toBeNull();
+  });
+});

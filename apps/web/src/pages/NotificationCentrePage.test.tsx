@@ -428,4 +428,72 @@ describe("NotificationCentrePage", () => {
     expect(await screen.findByText(/sent you a message/i)).not.toBeNull();
     expect(listNotifications).toHaveBeenLastCalledWith("test-token", "cursor-1");
   });
+  describe("image-decision row (profile_image_rejected, B-217 / Decision Log #414 item 3)", () => {
+    function imageRow(image: "avatar" | "cover", over: Partial<Notification> = {}): Notification {
+      return {
+        id: `n-image-${image}`,
+        type: "profile_image_rejected",
+        read: false,
+        createdAt: "2026-10-25T09:00:00.000Z",
+        payloadRefId: image,
+        data: { image },
+        ...over,
+      };
+    }
+
+    it("one row serves the picture: 'Your picture wasn't approved - see why in Edit Profile'", async () => {
+      window.sessionStorage.setItem("sn_access_token", "test-token");
+      vi.mocked(listNotifications).mockResolvedValueOnce({ items: [imageRow("avatar")], nextCursor: null, unreadCount: 1 });
+      renderPage();
+      const row = (await screen.findByText(/wasn’t approved — see why in Edit Profile/)).closest("a");
+      expect(row?.textContent).toMatch(/^Your picture wasn’t approved/);
+      expect(row?.getAttribute("href")).toBe("/profile?edit=1");
+    });
+
+    it("the same row serves the cover photo, naming it", async () => {
+      window.sessionStorage.setItem("sn_access_token", "test-token");
+      vi.mocked(listNotifications).mockResolvedValueOnce({ items: [imageRow("cover")], nextCursor: null, unreadCount: 1 });
+      renderPage();
+      const row = (await screen.findByText(/wasn’t approved — see why in Edit Profile/)).closest("a");
+      expect(row?.textContent).toMatch(/^Your cover photo wasn’t approved/);
+      expect(row?.getAttribute("href")).toBe("/profile?edit=1");
+    });
+
+    it("never shows the reason or any COPY PENDING tag, and marks the row read on open", async () => {
+      window.sessionStorage.setItem("sn_access_token", "test-token");
+      vi.mocked(listNotifications).mockResolvedValueOnce({ items: [imageRow("avatar")], nextCursor: null, unreadCount: 1 });
+      vi.mocked(markNotificationRead).mockResolvedValue(undefined as never);
+      renderPage();
+      const link = (await screen.findByText(/wasn’t approved/)).closest("a") as HTMLAnchorElement;
+      expect(link.textContent).not.toMatch(/reason|COPY PENDING/i);
+      fireEvent.click(link);
+      await waitFor(() => expect(markNotificationRead).toHaveBeenCalledWith("test-token", "n-image-avatar"));
+    });
+
+    it("an image row whose data is gone (payloadRefId neither avatar nor cover) is the 'no longer available' row", async () => {
+      window.sessionStorage.setItem("sn_access_token", "test-token");
+      vi.mocked(listNotifications).mockResolvedValueOnce({
+        items: [imageRow("avatar", { payloadRefId: "banner", data: null })],
+        nextCursor: null,
+        unreadCount: 1,
+      });
+      renderPage();
+      expect(await screen.findByText("This notification is no longer available.")).not.toBeNull();
+    });
+  });
+
+  it("a type this page does not know shows a generic row (not a blank or broken one), with or without data", async () => {
+    window.sessionStorage.setItem("sn_access_token", "test-token");
+    vi.mocked(listNotifications).mockResolvedValueOnce({
+      items: [
+        { id: "n-new-1", type: "brand_new_type", read: false, createdAt: "2026-10-25T09:00:00.000Z", payloadRefId: "x", data: null },
+        { id: "n-new-2", type: "another_new_type", read: true, createdAt: "2026-10-25T08:00:00.000Z", payloadRefId: null, data: { milestone: "m" } },
+      ],
+      nextCursor: null,
+      unreadCount: 1,
+    });
+    renderPage();
+    expect(await screen.findAllByText("You have a new notification")).toHaveLength(2);
+    expect(screen.queryByText(/no longer available/i)).toBeNull();
+  });
 });

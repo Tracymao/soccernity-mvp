@@ -23,7 +23,7 @@
 // scoped to the caller's own posts + follows, not filterable by an
 // arbitrary :id), so there's no real data to show there.
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { getUser, getFollowers, getFollowing, UsersApiError, type UserProfile, type FollowUserSummary } from "../api/users";
 import { countryName } from "../lib/countries";
 import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
@@ -48,7 +48,19 @@ export default function ProfilePage() {
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [tab, setTab] = useState<Tab>("posts");
-  const [editing, setEditing] = useState(false);
+  // `/profile?edit=1` opens the edit form straight away: the image-decision notification row
+  // (B-217) sends the owner there, because the rejection reason is shown on the rejected image.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [editing, setEditing] = useState(() => searchParams.get("edit") === "1");
+
+  function closeEditing() {
+    setEditing(false);
+    if (searchParams.has("edit")) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("edit");
+      setSearchParams(next, { replace: true });
+    }
+  }
 
   const [followPanel, setFollowPanel] = useState<FollowPanel>(null);
   const [followItems, setFollowItems] = useState<FollowUserSummary[]>([]);
@@ -277,10 +289,10 @@ export default function ProfilePage() {
         <EditProfileModal
           accessToken={token}
           user={profile}
-          onClose={() => setEditing(false)}
+          onClose={closeEditing}
           onSaved={(updated) => {
             setProfile(updated);
-            setEditing(false);
+            closeEditing();
           }}
         />
       )}

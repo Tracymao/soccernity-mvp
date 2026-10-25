@@ -1,0 +1,220 @@
+/* Guardian withdrawal page -- Figma "Guardian Withdrawal" 6654:2 (desktop) and
+ * 6654:26727 (mobile). Light theme, app-wide --sn-* custom properties
+ * (src/theme/applyTheme.ts); never hardcode hex. Desktop: 560px content column,
+ * 26px gaps, 34/42 heading. Mobile (<= 480px): 22px gaps, 26/32 heading,
+ * full-width stacked buttons. The page sits under AuthChrome (the logo-only Top Bar). */
+
+.gw {
+  display: flex;
+  justify-content: center;
+  padding: 58px 0 64px; /* 90px bar + 58px = the frame's 150px column top */
+}
+
+.gw__column {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 26px;
+  width: 100%;
+  max-width: 560px;
+}
+
+.gw__icon {
+  flex: none;
+  width: 88px;
+  height: 88px;
+}
+
+.gw__icon--alert {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background-color: var(--sn-icon-inactive);
+  color: var(--sn-text-primary);
+  font: 600 44px "Inter", sans-serif;
+}
+
+.gw__header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.gw__heading {
+  margin: 0;
+  font: 600 34px/42px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.gw__heading:focus {
+  outline: none;
+}
+
+.gw__lead {
+  margin: 0;
+  font: 400 16px/24px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.gw__form {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  width: 100%;
+}
+
+.gw__field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gw__label {
+  font: 600 16px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.gw__input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 20px 24px;
+  background-color: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+  font: 400 16px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.gw__input::placeholder {
+  color: var(--sn-text-secondary);
+}
+
+.gw__input:focus-visible,
+.gw__button:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 2px;
+}
+
+.gw__hint {
+  margin: 0;
+  font: 400 13px/18px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.gw__panel {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 18px 20px;
+  background-color: var(--sn-green-tint-12);
+  border-radius: 8px;
+}
+
+.gw__panel-text {
+  margin: 0;
+  font: 400 14px/21px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.gw__card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 24px 28px;
+  background-color: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 12px;
+}
+
+.gw__card-title {
+  margin: 0;
+  font: 600 18px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.gw__card-text {
+  margin: 0;
+  font: 400 16px/24px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+/* semantic/alert as an accent bar only, never a text colour (Decision Log #408 item 4). */
+.gw__alert {
+  margin: 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--sn-semantic-alert);
+  font: 600 14px/21px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.gw__actions {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+}
+
+.gw__button {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px 25px;
+  border-radius: 6px;
+  font: 600 16px "Inter", sans-serif;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.gw__button--primary {
+  flex: 0 0 316px;
+  border: 0;
+  background-color: var(--sn-brand-green);
+  color: var(--sn-text-on-green);
+}
+
+.gw__button--outline {
+  flex: 0 0 200px;
+  border: 1.5px solid var(--sn-brand-navy);
+  background-color: transparent;
+  color: var(--sn-text-primary);
+}
+
+/* Success has one outline button that takes the primary's width (frame 6654:116). */
+.gw__actions > .gw__button--outline:only-child {
+  flex-basis: 316px;
+}
+
+.gw__button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .gw {
+    padding: 24px 0 48px;
+  }
+
+  .gw__column {
+    gap: 22px;
+  }
+
+  .gw__heading {
+    font-size: 26px;
+    line-height: 32px;
+  }
+
+  .gw__actions {
+    flex-direction: column;
+  }
+
+  .gw__button--primary,
+  .gw__button--outline,
+  .gw__actions > .gw__button--outline:only-child {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+}

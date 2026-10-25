@@ -105,10 +105,39 @@ describe("ProfileImageControl", () => {
         kind="avatar"
         accessToken="t"
         userId="u1"
-        image={{ url: "u", status: "rejected", reason: "Shows a face" }}
+        image={{ url: "u", status: "rejected", rejectionReason: "Shows a face" }}
       />,
     );
     expect(screen.getByText(/Reason: Shows a face/)).not.toBeNull();
+    // A null reason (a rejection with nothing recorded) shows no Reason line.
+    rerender(
+      <ProfileImageControl
+        kind="avatar"
+        accessToken="t"
+        userId="u1"
+        image={{ url: "u", status: "rejected", rejectionReason: null }}
+      />,
+    );
+    expect(screen.queryByText(/Reason:/)).toBeNull();
+  });
+
+  it("cover rejected: shows the reason the server sent, and the rejected line names the cover photo", () => {
+    renderControl({
+      kind: "cover",
+      image: { url: "u", status: "rejected", rejectionReason: "Not a football image" },
+    });
+    expect(screen.getByRole("alert").textContent).toMatch(/cover photo wasn’t approved/);
+    expect(screen.getByTestId("profile-image-cover-reason").textContent).toBe("Reason: Not a football image");
+    expect(screen.getByRole("button", { name: "Choose another cover photo" })).not.toBeNull();
+  });
+
+  it("the rejected and approved lines carry no pending-copy tag (Decision Log #412 item 5)", () => {
+    const { container, rerender } = renderControl({ image: { url: "u", status: "rejected" } });
+    expect(container.textContent).not.toMatch(/COPY PENDING/);
+    rerender(
+      <ProfileImageControl kind="avatar" accessToken="t" userId="u1" image={{ url: "u", status: "approved" }} />,
+    );
+    expect(container.textContent).not.toMatch(/COPY PENDING/);
   });
 
   it("approved: shows the Approved pill", () => {
@@ -137,5 +166,72 @@ describe("ProfileImageControl", () => {
     render(<ProfileImageControl kind="cover" accessToken="t" userId="u1" image={null} />);
     expect(screen.getByRole("button", { name: "Choose a cover photo" })).not.toBeNull();
     expect(screen.getByText(/cover photos are checked automatically/i)).not.toBeNull();
+  });
+});
+
+describe("ProfileImageControl: cover crop step (B-210 / B-227)", () => {
+  beforeEach(() => {
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: vi.fn(() => "blob:x"), revokeObjectURL: vi.fn() }));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function chooseCover() {
+    const view = renderControl({ kind: "cover" });
+    fireEvent.change(screen.getByTestId("profile-image-cover-input"), { target: { files: [file("c.png")] } });
+    return view;
+  }
+
+  it("choosing a cover opens the crop step and uploads nothing yet", () => {
+    chooseCover();
+    expect(screen.getByRole("dialog", { name: "Crop your cover photo" })).not.toBeNull();
+    expect(uploadProfileImage).not.toHaveBeenCalled();
+  });
+
+  it("Cancel in the crop step leaves nothing behind: no upload, back to Choose a cover photo", () => {
+    chooseCover();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(uploadProfileImage).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Choose a cover photo" })).not.toBeNull();
+  });
+
+  it("an avatar is not cropped: it uploads straight away as chosen", async () => {
+    vi.mocked(uploadProfileImage).mockResolvedValue({ url: "u", status: "pending" });
+    renderControl();
+    fireEvent.change(screen.getByTestId("profile-image-avatar-input"), { target: { files: [file()] } });
+    await screen.findByText("Under review");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("Choose another image in the crop step re-opens the file chooser and closes the dialog", () => {
+    chooseCover();
+    const source = screen.getByTestId("cover-crop-source");
+    Object.defineProperty(source, "naturalWidth", { value: 400 });
+    Object.defineProperty(source, "naturalHeight", { value: 300 });
+    fireEvent.load(source);
+    const click = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {});
+    fireEvent.click(screen.getByRole("button", { name: "Choose another image" }));
+    expect(click).toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    click.mockRestore();
+  });
+
+  it("a cover over 5 MB is allowed into the crop step (the limit applies to the cropped upload)", () => {
+    renderControl({ kind: "cover" });
+    fireEvent.change(screen.getByTestId("profile-image-cover-input"), {
+      target: { files: [file("big.png", "image/png", 9 * 1024 * 1024)] },
+    });
+    expect(screen.getByRole("dialog")).not.toBeNull();
+  });
+
+  it("an unsupported type is refused before the crop step", () => {
+    renderControl({ kind: "cover" });
+    fireEvent.change(screen.getByTestId("profile-image-cover-input"), {
+      target: { files: [file("x.gif", "image/gif")] },
+    });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("alert")).not.toBeNull();
   });
 });
