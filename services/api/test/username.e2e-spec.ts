@@ -180,7 +180,10 @@ describe('Username e2e: unique-where-set column + public name convention against
 
     it('leaderboard rows use the public name', async () => {
       const ada = await createUser('Ada Obi', 'goalie_9');
-      await request(app.getHttpServer()).post('/posts').set(auth(ada)).send({ contentText: 'Points please' }).expect(201);
+      // B-094: posts earn no points, so ada earns hers by liking someone else's post.
+      const other = await createUser('Ben Cole', 'striker_7');
+      const posted = await request(app.getHttpServer()).post('/posts').set(auth(other)).send({ contentText: 'Points please' }).expect(201);
+      await request(app.getHttpServer()).post(`/posts/${posted.body.id}/like`).set(auth(ada)).expect(200);
       const { LeaderboardRollupService } = await import('../src/modules/leaderboard/leaderboard-rollup.service');
       const { getIsoWeekPeriod } = await import('../src/modules/leaderboard/iso-week.util');
       const period = getIsoWeekPeriod(new Date());
