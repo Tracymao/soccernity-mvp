@@ -13,7 +13,10 @@
 // Stamped onto Guardian.consentScreenVersion at confirmation time, then
 // snapshotted into ConsentAuditRecord. Rows confirmed before this existed
 // carry NULL, deliberately not backfilled with a guess.
-export const CONSENT_SCREEN_VERSION = 'v6';
+// v7 (Decision Log #415 item 1): "guardian withdrawal page" in the footnote is now a link to
+// /guardian-consent/withdraw. The hashed wording is unchanged; the version moves because what the
+// guardian is shown changed (a route to withdraw).
+export const CONSENT_SCREEN_VERSION = 'v7';
 
 
 // TRIPWIRE (consent-screen-version.spec.ts): sha256 of the normalised

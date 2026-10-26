@@ -17,7 +17,8 @@
 //
 // `?token=` selects the Confirm step with the code PRE-FILLED: that is the link in the
 // withdrawal email (services/api registration-email.service.ts, B-016). The consent email and the
-// Approved screen link here WITHOUT a token and so land on the request step (#414 item 1). Opening
+// guardian confirm page's footnote (the words "guardian withdrawal page", GuardianConsentConfirmPage.tsx,
+// Decision Log #415 item 1) link here WITHOUT a token and so land on the request step. Opening
 // Confirm from "Enter a withdrawal code" leaves the field empty to paste into.
 //
 // Throttle: 5 attempts per 15 minutes per IP, held in configuration on the server (#403 item 15).

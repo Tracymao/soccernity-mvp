@@ -42,6 +42,12 @@
   color: var(--sn-text-secondary);
 }
 
+.cover-crop__alert {
+  padding-left: 10px;
+  border-left: 3px solid var(--sn-semantic-alert);
+  color: var(--sn-text-primary);
+}
+
 .cover-crop__stage {
   overflow: hidden;
   border-radius: 10px;
@@ -194,11 +200,25 @@
   cursor: not-allowed;
 }
 
-.cover-crop__slider {
+.cover-crop__zoom-track {
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-width: 0;
   max-width: 300px;
+}
+
+.cover-crop__slider {
+  width: 100%;
+  min-width: 0;
   accent-color: var(--sn-brand-green);
+}
+
+.cover-crop__zoom-ends {
+  display: flex;
+  justify-content: space-between;
+  font: 400 11px "Montserrat", sans-serif;
+  color: var(--sn-text-secondary);
 }
 
 .cover-crop__zoom-value {
@@ -220,6 +240,17 @@
   overflow: hidden;
   border-radius: 10px;
   background-color: var(--sn-green-tint-12);
+}
+
+/* The picture is placed with percentages of THIS layer (see placement() in the component), so it is
+ * always the 796:192 crop. Height follows the slot; width follows the ratio and is centred. */
+.cover-crop__preview-crop {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  height: 100%;
+  aspect-ratio: 796 / 192;
+  transform: translateX(-50%);
 }
 
 .cover-crop__actions {
@@ -274,11 +305,13 @@
     border-radius: 12px 12px 0 0;
   }
 
+  /* Cover-fit result on the phone profile: the 390:120 slot the mobile profile uses. */
   .cover-crop__preview {
-    max-width: 280px;
+    max-width: none;
+    aspect-ratio: 390 / 120;
   }
 
-  .cover-crop__slider {
+  .cover-crop__zoom-track {
     max-width: 170px;
   }
 }

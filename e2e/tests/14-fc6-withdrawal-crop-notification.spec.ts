@@ -169,11 +169,13 @@ test.describe('cover photo crop (B-210 / B-227)', () => {
     await chooseGeneratedImage(page, 'profile-image-cover-input', 1600, 1200);
     const dialog = page.getByRole('dialog', { name: 'Crop your cover photo' });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByTestId('cover-crop-zoom-value')).toHaveText('100%');
+    await expect(dialog.getByTestId('cover-crop-zoom-value')).toHaveText('1.0x');
+    // K10 / FC7: "1x" and "3x" sit under the ends of the track.
+    await expect(dialog.locator('.cover-crop__zoom-ends')).toHaveText('1x3x');
 
     // Zoom to 2x with the real slider.
     await dialog.getByLabel('Zoom', { exact: true }).fill('2');
-    await expect(dialog.getByTestId('cover-crop-zoom-value')).toHaveText('200%');
+    await expect(dialog.getByTestId('cover-crop-zoom-value')).toHaveText('2.0x');
 
     // Drag the picture inside the crop window (real pointer events).
     const box = (await dialog.getByTestId('cover-crop-window').boundingBox())!;
@@ -209,6 +211,10 @@ test.describe('cover photo crop (B-210 / B-227)', () => {
     await chooseGeneratedImage(page, 'profile-image-cover-input', 700, 500);
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('alert')).toContainText('at least 796 pixels wide');
+    await expect(dialog.getByRole('alert')).toContainText('This one is 700 pixels wide');
+    await expect(dialog.getByRole('heading', { name: 'This image is too small' })).toBeVisible();
+    // FC7: the refusal carries the semantic/alert accent bar (a 3px left border).
+    expect(await dialog.getByRole('alert').evaluate((el) => getComputedStyle(el).borderLeftWidth)).toBe('3px');
     await expect(dialog.getByRole('button', { name: 'Save cover photo' })).toHaveCount(0);
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(dialog).toBeHidden();
@@ -266,5 +272,79 @@ test.describe('rejection reason and the image-decision notification (B-217, #414
 
     await page.getByText(/Your cover photo wasn’t approved/).click();
     await expect(page.getByTestId('profile-image-cover-reason')).toHaveText('Reason: Contains a logo we cannot show');
+  });
+});
+
+test.describe('FC7: footnote link, phone cover preview, withdrawal inline errors (Decision Log #415)', () => {
+  test('the guardian confirm page footnote links "guardian withdrawal page" to the request step (no token)', async ({ page }) => {
+    const minor = await registerViaApi({ age: 15, label: 'fc7a' });
+    await verifyEmailViaApi(minor);
+    const mail = await waitForEmail(minor.guardianEmail!, 'guardian-consent');
+    await page.goto(linkPath(mail.data.link));
+    const link = page.getByRole('link', { name: 'guardian withdrawal page' });
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute('href', '/guardian-consent/withdraw');
+    await link.click();
+    await expect(page).toHaveURL(/\/guardian-consent\/withdraw$/);
+    await expect(page.getByRole('heading', { name: 'Withdraw your consent' })).toBeVisible();
+    // The consent token must not travel to the withdrawal page.
+    await expect(page.getByLabel('Email address of the Soccernity account')).toHaveValue('');
+  });
+
+  test('phone: the cover preview is the cover-fit result at 390:120 with the "sides are trimmed" caption', async ({ page }) => {
+    const a = await verifiedAdultWithUsername('fc7b');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signIn(page, a.email);
+    await page.goto('/profile');
+    await page.getByRole('button', { name: 'Edit Profile' }).click();
+    await chooseGeneratedImage(page, 'profile-image-cover-input', 1600, 1200);
+    const dialog = page.getByRole('dialog', { name: 'Crop your cover photo' });
+    await expect(dialog).toBeVisible();
+
+    const preview = dialog.getByTestId('cover-crop-preview');
+    await expect(preview).toHaveAttribute('data-fit', 'cover-phone');
+    await expect(dialog.getByTestId('cover-crop-preview-caption')).toHaveText(
+      'This is how your cover will look on a phone. The sides are trimmed to fit.',
+    );
+    const slot = (await preview.boundingBox())!;
+    expect(slot.width / slot.height).toBeCloseTo(390 / 120, 1);
+    // The crop-shaped layer is as tall as the slot and wider than it: the sides are clipped.
+    const layer = (await preview.locator('.cover-crop__preview-crop').boundingBox())!;
+    expect(layer.height).toBeCloseTo(slot.height, 0);
+    expect(layer.width / layer.height).toBeCloseTo(796 / 192, 1);
+    expect(layer.width).toBeGreaterThan(slot.width + 20);
+  });
+
+  test('desktop: the preview keeps the 796:192 shape and the profile caption', async ({ page }) => {
+    const a = await verifiedAdultWithUsername('fc7c');
+    await signIn(page, a.email);
+    await page.goto('/profile');
+    await page.getByRole('button', { name: 'Edit Profile' }).click();
+    await chooseGeneratedImage(page, 'profile-image-cover-input', 1600, 1200);
+    const dialog = page.getByRole('dialog', { name: 'Crop your cover photo' });
+    const preview = dialog.getByTestId('cover-crop-preview');
+    await expect(preview).toHaveAttribute('data-fit', 'crop');
+    await expect(dialog.getByTestId('cover-crop-preview-caption')).toHaveText(
+      'This is how your cover will look on your profile.',
+    );
+    const slot = (await preview.boundingBox())!;
+    expect(slot.width / slot.height).toBeCloseTo(796 / 192, 1);
+  });
+
+  test('withdrawal: a malformed address and an empty code each show the inline message and call nothing', async ({ page }) => {
+    let withdrawCalls = 0;
+    page.on('request', (r) => {
+      if (r.method() === 'POST' && /guardian-consent\/withdraw/.test(r.url())) withdrawCalls += 1;
+    });
+    await page.goto('/guardian-consent/withdraw');
+    await page.getByLabel('Email address of the Soccernity account').fill('not-an-email');
+    await page.getByRole('button', { name: 'Send withdrawal link' }).click();
+    await expect(page.getByRole('alert')).toHaveText('Enter the email address of the Soccernity account.');
+
+    await page.goto('/guardian-consent/withdraw?token=placeholder-code');
+    await page.getByLabel('Withdrawal code').fill('   ');
+    await page.getByRole('button', { name: 'Withdraw consent' }).click();
+    await expect(page.getByRole('alert')).toHaveText('Paste the withdrawal code from the email.');
+    expect(withdrawCalls).toBe(0);
   });
 });

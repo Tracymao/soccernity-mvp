@@ -230,6 +230,13 @@ describe("GuardianConsentConfirmPage", () => {
       expect(screen.getByRole("link", { name: "Privacy Policy" })).not.toBeNull();
     });
 
+    it("'guardian withdrawal page' is a link to /guardian-consent/withdraw with no token (Decision Log #415 item 1)", () => {
+      renderConfirmPage();
+      const link = screen.getByRole("link", { name: "guardian withdrawal page" }) as HTMLAnchorElement;
+      // No ?token=: the guardian lands on the request step, not on a Confirm step for this consent token.
+      expect(link.getAttribute("href")).toBe("/guardian-consent/withdraw");
+    });
+
     it("without a summary the expiry sentence is left out rather than guessed", () => {
       renderConfirmPage();
       const footnote = [...document.querySelectorAll(".consent-footnote")].find((el) =>
