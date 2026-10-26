@@ -2,13 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
-import { UploadedProfileImage, validateProfileImage } from './profile-image.util';
+import { UploadedProfileImage, uploadProfileImage, validateProfileImage } from './profile-image.util';
 
 // B-196 (Decision Log #411 item 4, #371, #394 A2): the cover photo, built on the
 // avatar pipeline with the SAME rules -- not a second design:
 //   - the same StorageService, so with no object store configured the upload is
-//     the same 503 as POST /admin/media/upload and POST /users/:id/avatar and
-//     NOTHING is written;
+//     a 503 and NOTHING is written (the message a person sees is the friendly one
+//     from profile-image.util.ts; the S3_* detail stays in the server log);
 //   - the same file rules (profile-image.util.ts: JPEG/PNG/WebP, 5 MB, magic bytes);
 //   - the same PENDING-AND-INVISIBLE rule: a new upload is stored 'pending' and
 //     is visible to its owner only; only an 'approved' cover is ever served to
@@ -43,7 +43,7 @@ export class UserCoverService {
     const upload = file as UploadedProfileImage;
 
     const key = `covers/${userId}/${randomUUID()}.${type.ext}`;
-    const url = await this.storage.upload(upload.buffer, key, upload.mimetype);
+    const url = await uploadProfileImage(this.storage, this.logger, upload.buffer, key, upload.mimetype);
 
     const previous = await this.prisma.user.findUnique({ where: { id: userId }, select: { coverKey: true } });
     try {

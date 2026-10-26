@@ -29,7 +29,7 @@
 //
 // Nothing here asks for a position, a school team or any other field no endpoint
 // stores.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router";
 import SignupSplitScreen from "./signup/SignupSplitScreen";
@@ -71,6 +71,14 @@ export default function CreateProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Fields the person has already touched. The profile read below fills a field
+  // only if it is not in this set, so a slow response can never wipe what has
+  // been typed (QA second run D-18).
+  const touched = useRef<Set<string>>(new Set());
+  const touch = (field: string) => {
+    touched.current.add(field);
+  };
+
   // Server-driven: only an account whose own state says `create_profile` may
   // use this page. A restricted-pending minor or an unverified account is sent
   // back to where they belong; an already-complete profile moves on. The same
@@ -88,15 +96,16 @@ export default function CreateProfilePage() {
           return;
         }
         const name = splitDisplayName(user.displayName ?? "");
+        const untouched = (field: string) => !touched.current.has(field);
         setLoaded(user);
-        setFirstName(name.firstName);
-        setLastName(name.lastName);
-        setUsername(user.username ?? "");
-        setCountry(user.profileCountry ?? "");
-        setBio(user.bio ?? "");
-        setPreferredClub(user.preferredClub ?? "");
-        setAvatar(user.avatar ?? null);
-        setCover(user.cover ?? null);
+        if (untouched("firstName")) setFirstName(name.firstName);
+        if (untouched("lastName")) setLastName(name.lastName);
+        if (untouched("username")) setUsername(user.username ?? "");
+        if (untouched("country")) setCountry(user.profileCountry ?? "");
+        if (untouched("bio")) setBio(user.bio ?? "");
+        if (untouched("preferredClub")) setPreferredClub(user.preferredClub ?? "");
+        if (untouched("avatar")) setAvatar(user.avatar ?? null);
+        if (untouched("cover")) setCover(user.cover ?? null);
       })
       .catch(() => {
         // Leave the form usable; the server still decides on submit.
@@ -162,11 +171,18 @@ export default function CreateProfilePage() {
           accessToken={token}
           userId={userId}
           image={avatar}
-          onChange={setAvatar}
+          onChange={(image) => {
+            touch("avatar");
+            setAvatar(image);
+          }}
           initials={initialsFor(`${firstName} ${lastName}`)}
         />
 
-        <ProfileImageControl kind="cover" accessToken={token} userId={userId} image={cover} onChange={setCover} />
+        <ProfileImageControl kind="cover" accessToken={token} userId={userId} image={cover} onChange={(image) => {
+            touch("cover");
+            setCover(image);
+          }}
+        />
 
         <div className="signup-form__group">
           <span className="signup-form__label">
@@ -176,7 +192,10 @@ export default function CreateProfilePage() {
             <input
               className="signup-form__input"
               value={firstName}
-              onChange={(event) => setFirstName(event.target.value)}
+              onChange={(event) => {
+                touch("firstName");
+                setFirstName(event.target.value);
+              }}
               placeholder="First Name"
               aria-label="First name"
               autoComplete="given-name"
@@ -185,7 +204,10 @@ export default function CreateProfilePage() {
             <input
               className="signup-form__input"
               value={lastName}
-              onChange={(event) => setLastName(event.target.value)}
+              onChange={(event) => {
+                touch("lastName");
+                setLastName(event.target.value);
+              }}
               placeholder="Last Name"
               aria-label="Last name"
               autoComplete="family-name"
@@ -202,7 +224,10 @@ export default function CreateProfilePage() {
             id="create-profile-username"
             className="signup-form__input"
             value={username}
-            onChange={(event) => setUsername(event.target.value)}
+            onChange={(event) => {
+              touch("username");
+              setUsername(event.target.value);
+            }}
             placeholder="Choose a Username"
             autoComplete="username"
             autoCapitalize="none"
@@ -237,7 +262,10 @@ export default function CreateProfilePage() {
             id="create-profile-country"
             className="signup-form__select"
             value={country}
-            onChange={(event) => setCountry(event.target.value)}
+            onChange={(event) => {
+              touch("country");
+              setCountry(event.target.value);
+            }}
             disabled={submitting}
           >
             <option value="">Select country</option>
@@ -259,6 +287,7 @@ export default function CreateProfilePage() {
             value={bio}
             maxLength={BIO_MAX_LENGTH}
             onChange={(event) => {
+              touch("bio");
               setBio(event.target.value);
               if (flagged.bio) setFlagged((f) => ({ ...f, bio: false }));
             }}
@@ -280,6 +309,7 @@ export default function CreateProfilePage() {
             value={preferredClub}
             maxLength={PREFERRED_CLUB_MAX_LENGTH}
             onChange={(event) => {
+              touch("preferredClub");
               setPreferredClub(event.target.value);
               if (flagged.preferredClub) setFlagged((f) => ({ ...f, preferredClub: false }));
             }}

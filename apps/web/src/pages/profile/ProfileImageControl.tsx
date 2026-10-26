@@ -54,6 +54,7 @@ const COPY = {
   avatar: {
     noun: "picture",
     addLabel: "Add a Profile Picture (Optional)",
+    hasLabel: "Profile Picture",
     replaceLabel: "Replace picture",
     removeLabel: "Remove picture",
     keepLabel: "Keep picture",
@@ -67,6 +68,7 @@ const COPY = {
   cover: {
     noun: "cover photo",
     addLabel: "Add a Cover Photo (Optional)",
+    hasLabel: "Cover Photo",
     replaceLabel: "Replace cover photo",
     removeLabel: "Remove cover photo",
     keepLabel: "Keep cover photo",
@@ -210,13 +212,17 @@ export default function ProfileImageControl({ kind, accessToken, userId, image, 
     }
   }
 
+  // "Add a ..." only while there is nothing to show; once an image exists (approved, under review or
+  // rejected) the section is just named (QA second run D-21).
+  const sectionLabel = current ? copy.hasLabel : copy.addLabel;
+
   const preview = current ? (
     <img className="profile-image__preview" src={current.url} alt="" />
   ) : null;
 
   return (
     <div className={`profile-image profile-image--${kind}`} data-testid={`profile-image-${kind}`}>
-      <p className="profile-image__label">{copy.addLabel}</p>
+      <p className="profile-image__label">{sectionLabel}</p>
 
       <div className="profile-image__row">
         <div className="profile-image__frame" aria-hidden="true">
@@ -333,7 +339,7 @@ export default function ProfileImageControl({ kind, accessToken, userId, image, 
         accept={PROFILE_IMAGE_TYPES.join(",")}
         className="profile-image__input"
         data-testid={`profile-image-${kind}-input`}
-        aria-label={copy.addLabel}
+        aria-label={sectionLabel}
         onChange={(event) => void handleFile(event.target.files?.[0])}
         hidden
       />

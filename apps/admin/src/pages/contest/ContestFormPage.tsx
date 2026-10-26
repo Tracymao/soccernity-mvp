@@ -132,6 +132,9 @@ export default function ContestFormPage({ mode }: { mode: "create" | "edit" }) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [touched, setTouched] = useState(false);
+  // True once the admin has changed anything. On Create, the per-field messages show from then on, so the
+  // admin sees what is missing without having to submit (Create is disabled while the form is invalid).
+  const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
     if (!editing) return;
@@ -164,11 +167,18 @@ export default function ContestFormPage({ mode }: { mode: "create" | "edit" }) {
   const limitEditable = (week: number) => !editing || e?.watchLimitByWeek[week] === true;
   const finalTaskEditable = !editing || e?.taskByWeek[4] === true;
 
-  const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }));
-  const setWeek = (i: number, patch: Partial<WeekState>) =>
+  const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+    setDirty(true);
+    setForm((f) => ({ ...f, [key]: value }));
+  };
+  const setWeek = (i: number, patch: Partial<WeekState>) => {
+    setDirty(true);
     setForm((f) => ({ ...f, weeks: f.weeks.map((w, j) => (j === i ? { ...w, ...patch } : w)) }));
-  const setPoints = (key: "weekly" | "monthly", i: number, value: string) =>
+  };
+  const setPoints = (key: "weekly" | "monthly", i: number, value: string) => {
+    setDirty(true);
     setForm((f) => ({ ...f, [key]: f[key].map((v, j) => (j === i ? value : v)) }));
+  };
 
   // ---- validation (mirrors the server's DTO rules; the server stays the authority) ----
   const errors = {
@@ -192,7 +202,19 @@ export default function ContestFormPage({ mode }: { mode: "create" | "edit" }) {
     !errors.cap &&
     errors.weeks.every((w) => !w.task && !w.limit);
 
-  const show = (message: string | null) => (touched && message ? message : null);
+  const show = (message: string | null) => ((touched || (!editing && dirty)) && message ? message : null);
+
+  // The one-line reason shown next to a disabled Create button: every field that is still missing or invalid.
+  const missing: string[] = [];
+  if (errors.title) missing.push("contest title");
+  if (errors.tally) missing.push("minimum tally");
+  if (errors.points) missing.push("placement points");
+  errors.weeks.forEach((w, i) => {
+    if (w.task) missing.push(`week ${i + 1} task`);
+    if (w.limit) missing.push(`week ${i + 1} watch limit`);
+  });
+  if (errors.tolerance) missing.push("exposure tolerance");
+  if (errors.cap) missing.push("views per viewer per day");
 
   async function submit() {
     setTouched(true);
@@ -457,8 +479,8 @@ export default function ContestFormPage({ mode }: { mode: "create" | "edit" }) {
                   disabled={!can(e?.followersExcludedWeek4)}
                 />
                 <span>
-                  <strong>Followers-excluded counting</strong>
-                  <span className="ct-field__hint">
+                  <strong>Followers-excluded counting</strong>{" "}
+                  <span className="ct-field__hint ct-switch__hint">
                     Count only engagement from accounts that do not follow the finalist, for this week only. Views are
                     not counted in the final, so week 4 has no watch limit.
                   </span>
@@ -502,7 +524,7 @@ export default function ContestFormPage({ mode }: { mode: "create" | "edit" }) {
               </Link>
               {!editing && !valid ? (
                 <span className="ct-action-hint">
-                  Create is blocked until the contest title, the minimum tally and every weekly watch limit are set.
+                  Create is blocked until these are set: {missing.join(", ")}.
                 </span>
               ) : null}
             </div>

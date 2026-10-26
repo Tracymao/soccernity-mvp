@@ -5,6 +5,7 @@ import { StorageService } from '../../storage/storage.service';
 import {
   PROFILE_IMAGE_MAX_FILE_SIZE_BYTES,
   PROFILE_IMAGE_UNSUPPORTED_MESSAGE,
+  uploadProfileImage,
   validateProfileImage,
 } from './profile-image.util';
 
@@ -62,7 +63,7 @@ export class UserAvatarService {
     const upload = file as UploadedAvatarFile;
 
     const key = `avatars/${userId}/${randomUUID()}.${type.ext}`;
-    const url = await this.storage.upload(upload.buffer, key, upload.mimetype);
+    const url = await uploadProfileImage(this.storage, this.logger, upload.buffer, key, upload.mimetype);
 
     const previous = await this.prisma.user.findUnique({ where: { id: userId }, select: { avatarKey: true } });
     try {

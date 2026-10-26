@@ -1,4 +1,5 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { StorageService } from '../../storage/storage.service';
 
 // Shared file rules for the two profile pictures: the avatar (B-035) and the
 // cover photo (B-196, Decision Log #411 item 4: "built on the avatar pipeline
@@ -51,4 +52,30 @@ export function validateProfileImage(
     throw new BadRequestException(PROFILE_IMAGE_UNSUPPORTED_MESSAGE);
   }
   return type;
+}
+
+// What a person sees when no object store is available (QA second run D-20). The
+// storage layer's own 503 names the S3_* variables, which is configuration detail
+// for the server logs and for POST /admin/media/upload, not for an end user.
+export const PROFILE_IMAGE_UNAVAILABLE_MESSAGE = "Picture uploads aren't available right now. Please try again later.";
+
+// Uploads a profile picture, turning the storage layer's 503 into the friendly
+// message above. The original message (with the S3_* detail) goes to the server
+// log only. Any other failure is rethrown unchanged.
+export async function uploadProfileImage(
+  storage: StorageService,
+  logger: Logger,
+  buffer: Buffer,
+  key: string,
+  contentType: string,
+): Promise<string> {
+  try {
+    return await storage.upload(buffer, key, contentType);
+  } catch (err) {
+    if (err instanceof ServiceUnavailableException) {
+      logger.warn(`Profile image upload refused (storage unavailable): ${err.message}`);
+      throw new ServiceUnavailableException(PROFILE_IMAGE_UNAVAILABLE_MESSAGE);
+    }
+    throw err;
+  }
 }

@@ -105,7 +105,7 @@ describe('UserCoverService (B-196)', () => {
     expect(store.delete).toHaveBeenCalledWith((store.upload as jest.Mock).mock.calls[0][1]);
   });
 
-  it('unconfigured storage is the SAME 503 as POST /admin/media/upload and writes nothing', async () => {
+  it('unconfigured storage is a 503 with a friendly message (no S3_* detail) and writes nothing', async () => {
     const config = { get: () => undefined } as unknown as ConfigService;
     const real = new S3StorageService(config);
     const prisma = { user: { findUnique: jest.fn(), update: jest.fn() } } as unknown as PrismaService;
@@ -113,7 +113,8 @@ describe('UserCoverService (B-196)', () => {
 
     const err = await service.uploadCover('u1', file(JPEG, 'image/jpeg')).catch((e) => e);
     expect(err).toBeInstanceOf(ServiceUnavailableException);
-    expect(err.message).toContain('Media storage is not configured');
+    expect(err.message).toBe("Picture uploads aren't available right now. Please try again later.");
+    expect(err.message).not.toMatch(/S3_|environment|configured/i);
     expect(prisma.user.update).not.toHaveBeenCalled();
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });

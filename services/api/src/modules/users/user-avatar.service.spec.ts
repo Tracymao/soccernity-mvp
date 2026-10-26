@@ -1,4 +1,4 @@
-import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { S3StorageService } from '../../storage/s3-storage.service';
@@ -89,7 +89,7 @@ describe('UserAvatarService (B-035)', () => {
     expect(store.delete).toHaveBeenCalledWith((store.upload as jest.Mock).mock.calls[0][1]);
   });
 
-  it('unconfigured storage is the SAME 503 as POST /admin/media/upload and writes nothing', async () => {
+  it('unconfigured storage is a 503 with a friendly message (no S3_* detail) and writes nothing', async () => {
     // The real S3StorageService with its placeholder credentials: the exact object
     // the admin media route uses when no store is configured.
     const config = { get: () => undefined } as unknown as ConfigService;
@@ -101,9 +101,24 @@ describe('UserAvatarService (B-035)', () => {
 
     const err = await service.uploadAvatar('u1', file(JPEG, 'image/jpeg')).catch((e) => e);
     expect(err).toBeInstanceOf(ServiceUnavailableException);
-    expect(err.message).toContain('Media storage is not configured');
+    expect(err.message).toBe("Picture uploads aren't available right now. Please try again later.");
+    expect(err.message).not.toMatch(/S3_|environment|configured/i);
     expect(prisma.user.update).not.toHaveBeenCalled();
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('keeps the S3_* detail in the server log and out of the response (D-20)', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      const config = { get: () => undefined } as unknown as ConfigService;
+      const prisma = { user: { findUnique: jest.fn(), update: jest.fn() } } as unknown as PrismaService;
+      const service = new UserAvatarService(prisma, new S3StorageService(config));
+      const err = await service.uploadAvatar('u1', file(JPEG, 'image/jpeg')).catch((e) => e);
+      expect(err.message).not.toMatch(/S3_/);
+      expect(warn.mock.calls.some(([m]) => /S3_BUCKET/.test(String(m)))).toBe(true);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   describe('deleteAvatar', () => {

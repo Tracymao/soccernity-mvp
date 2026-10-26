@@ -262,7 +262,7 @@ function fillCreateForm(over: { tally?: string } = {}) {
     fireEvent.change(screen.getByPlaceholderText("Enter points"), { target: { value: over.tally ?? "50" } });
   }
   for (let i = 1; i <= 3; i += 1) {
-    fireEvent.change(screen.getByLabelText(`Weekly task (week ${i})`), { target: { value: `Do trick ${i}` } });
+    fireEvent.change(screen.getByLabelText(new RegExp("^Weekly task [(]week " + i + "[)]")), { target: { value: `Do trick ${i}` } });
     fireEvent.change(screen.getByLabelText(new RegExp(`View-qualifying watch limit, week ${i}`)), { target: { value: "10" } });
   }
 }
@@ -274,6 +274,38 @@ describe("ContestFormPage — create", () => {
     expect(create.disabled).toBe(true);
     expect((screen.getByPlaceholderText("Enter points") as HTMLInputElement).value).toBe("");
     expect(screen.getByText(/Create is blocked until/)).toBeTruthy();
+  });
+
+  it("D-19: names every missing field next to the disabled Create button and shows the per-field errors without a submit", () => {
+    renderAt(<ContestFormPage mode="create" />, "/contest/cycles/new", "/contest/cycles/new");
+    // Nothing changed yet: no red on a pristine form, but the reason is already there.
+    expect(screen.queryByText("Write the week 1 task.")).toBeNull();
+    const reason = screen.getByText(/Create is blocked until these are set:/);
+    expect(reason.textContent).toMatch(/contest title/);
+    expect(reason.textContent).toMatch(/minimum tally/);
+    expect(reason.textContent).toMatch(/week 1 task/);
+    expect(reason.textContent).toMatch(/week 3 watch limit/);
+
+    // Fill exactly what the old hint listed (title, tally, watch limits): the tasks are still missing.
+    fireEvent.change(screen.getByPlaceholderText("e.g. November Challenge"), { target: { value: "QA Month" } });
+    fireEvent.change(screen.getByPlaceholderText("Enter points"), { target: { value: "3" } });
+    for (let i = 1; i <= 3; i += 1) {
+      fireEvent.change(screen.getByLabelText(new RegExp(`View-qualifying watch limit, week ${i}`)), { target: { value: "10" } });
+    }
+    expect((screen.getByRole("button", { name: "Create contest" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Write the week 1 task.")).toBeTruthy();
+    expect(screen.getByText("Write the week 3 task.")).toBeTruthy();
+    const after = screen.getByText(/Create is blocked until these are set:/).textContent ?? "";
+    expect(after).toMatch(/week 1 task/);
+    expect(after).not.toMatch(/contest title|minimum tally|watch limit/);
+  });
+
+  it("D-22: the followers-excluded helper text is separated from its label", () => {
+    renderAt(<ContestFormPage mode="create" />, "/contest/cycles/new", "/contest/cycles/new");
+    const label = screen.getByText("Followers-excluded counting");
+    const hint = screen.getByText(/Count only engagement from accounts that do not follow the finalist/);
+    expect(label.parentElement?.textContent).toMatch(/Followers-excluded counting\s+Count only/);
+    expect(hint.className).toMatch(/ct-switch__hint/);
   });
 
   it("prefills the confirmed placement points", () => {
