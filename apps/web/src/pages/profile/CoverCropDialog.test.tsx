@@ -42,13 +42,13 @@ function loadImage(width: number, height: number) {
 }
 
 describe("CoverCropDialog", () => {
-  it("shows the crop step: title, window, zoom at 100%, preview, notice, Save and Cancel", () => {
+  it("shows the crop step: title, window, zoom at 1.0x, preview, notice, Save and Cancel", () => {
     renderDialog();
     loadImage(1600, 1200);
     expect(screen.getByRole("dialog", { name: "Crop your cover photo" })).not.toBeNull();
     expect(screen.getByTestId("cover-crop-window")).not.toBeNull();
     expect(screen.getByText("Drag to move")).not.toBeNull();
-    expect(screen.getByTestId("cover-crop-zoom-value").textContent).toBe("100%");
+    expect(screen.getByTestId("cover-crop-zoom-value").textContent).toBe("1.0x");
     expect(screen.getByTestId("cover-crop-preview")).not.toBeNull();
     expect(screen.getByText(NOTICE)).not.toBeNull();
     expect((screen.getByRole("button", { name: "Save cover photo" }) as HTMLButtonElement).disabled).toBe(false);
@@ -62,14 +62,64 @@ describe("CoverCropDialog", () => {
     expect(slider.min).toBe("1");
     expect(slider.max).toBe("3");
     fireEvent.change(slider, { target: { value: "2" } });
-    expect(screen.getByTestId("cover-crop-zoom-value").textContent).toBe("200%");
+    expect(screen.getByTestId("cover-crop-zoom-value").textContent).toBe("2.0x");
     fireEvent.change(slider, { target: { value: "3" } });
-    expect(screen.getByTestId("cover-crop-zoom-value").textContent).toBe("300%");
+    expect(screen.getByTestId("cover-crop-zoom-value").textContent).toBe("3.0x");
     expect((screen.getByRole("button", { name: "Zoom in" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Zoom out" }));
-    expect(screen.getByTestId("cover-crop-zoom-value").textContent).toBe("290%");
+    expect(screen.getByTestId("cover-crop-zoom-value").textContent).toBe("2.9x");
     fireEvent.change(slider, { target: { value: "1" } });
     expect((screen.getByRole("button", { name: "Zoom out" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("labels the ends of the zoom track 1x and 3x (K10)", () => {
+    renderDialog();
+    loadImage(1600, 1200);
+    const ends = document.querySelector(".cover-crop__zoom-ends") as HTMLElement;
+    expect(Array.from(ends.children).map((c) => c.textContent)).toEqual(["1x", "3x"]);
+  });
+
+  it("the too-small state: its own title, the width, and the alert accent bar", () => {
+    renderDialog();
+    loadImage(640, 400);
+    expect(screen.getByRole("dialog", { name: "This image is too small" })).not.toBeNull();
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toBe(
+      "A cover photo needs to be at least 796 pixels wide. This one is 640 pixels wide. Choose a larger image.",
+    );
+    expect(alert.className).toContain("cover-crop__alert");
+    expect(screen.getByRole("button", { name: "Cancel" })).not.toBeNull();
+  });
+
+  describe("preview (K10)", () => {
+    const original = window.innerWidth;
+    afterEach(() => {
+      Object.defineProperty(window, "innerWidth", { value: original, configurable: true, writable: true });
+    });
+
+    it("desktop: the 796:192 preview and the profile caption", () => {
+      Object.defineProperty(window, "innerWidth", { value: 1280, configurable: true, writable: true });
+      renderDialog();
+      loadImage(1600, 1200);
+      expect(screen.getByTestId("cover-crop-preview").getAttribute("data-fit")).toBe("crop");
+      expect(screen.getByTestId("cover-crop-preview-caption").textContent).toBe(
+        "This is how your cover will look on your profile.",
+      );
+    });
+
+    it("phone: the cover-fit preview and the caption that says the sides are trimmed", () => {
+      Object.defineProperty(window, "innerWidth", { value: 390, configurable: true, writable: true });
+      renderDialog();
+      loadImage(1600, 1200);
+      const preview = screen.getByTestId("cover-crop-preview");
+      expect(preview.getAttribute("data-fit")).toBe("cover-phone");
+      expect(screen.getByTestId("cover-crop-preview-caption").textContent).toBe(
+        "This is how your cover will look on a phone. The sides are trimmed to fit.",
+      );
+      // The picture sits in the crop-shaped layer, the same percentages as the crop window itself.
+      const layer = preview.querySelector(".cover-crop__preview-crop") as HTMLElement;
+      expect(layer.querySelector("img")).not.toBeNull();
+    });
   });
 
   it("the arrow keys move the picture, and it never leaves the crop window", () => {

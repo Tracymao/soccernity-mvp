@@ -411,7 +411,8 @@ export default function GuardianConsentConfirmPage() {
                     )}
                     <span>{GUARDIAN_CAP_SENTENCE}</span>{" "}
                     <span>
-                      You can withdraw consent at any time on the guardian withdrawal page. [COPY PENDING LEGAL REVIEW]
+                      You can withdraw consent at any time on the{" "}
+                      <Link to="/guardian-consent/withdraw">guardian withdrawal page</Link>. [COPY PENDING LEGAL REVIEW]
                     </span>{" "}
                     Read our <Link to="/privacy">Privacy Policy</Link>.
                   </p>

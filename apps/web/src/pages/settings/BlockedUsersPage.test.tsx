@@ -51,6 +51,19 @@ describe("BlockedUsersPage", () => {
     expect(getBlockedUsers).toHaveBeenCalledWith(expect.any(String), "me", undefined);
   });
 
+  it("each row shows the public name once, with a one-letter avatar and no @handle line (K10, Decision Log #415 item 3)", async () => {
+    vi.mocked(getBlockedUsers).mockResolvedValue({
+      items: [{ id: "u2", publicName: "tobi_9", reason: null }],
+      nextCursor: null,
+    });
+    renderPage();
+    const name = await screen.findByText("tobi_9");
+    const row = name.closest("li") as HTMLElement;
+    expect(row.textContent).toBe("Ttobi_9Unblock");
+    expect(row.textContent).not.toContain("@");
+    expect(row.querySelectorAll(".blocked-users__name")).toHaveLength(1);
+  });
+
   it("empty state", async () => {
     vi.mocked(getBlockedUsers).mockResolvedValue({ items: [], nextCursor: null });
     renderPage();

@@ -17,6 +17,12 @@
 // written here: it is the tagged string ProfileImageControl already owns (and
 // the manifest already lists), so the parent passes it in as `notice`.
 //
+// K10 / FC7 (Decision Log #415 items 2 and 5): the zoom reads "1.4x" with "1x" and "3x"
+// under the ends of the track; the "too small" refusal carries the semantic/alert accent bar; and on
+// a phone-width screen the preview is the REAL cover-fit result -- the one 796:192 crop scaled to
+// cover the 390:120 slot the mobile profile uses, so about 12% of the crop is trimmed from each
+// side -- with a caption that says so. Desktop keeps the 796:192 preview and its own caption.
+//
 // Keyboard: the crop window is focusable and the arrow keys move the picture, so
 // the crop does not need a pointer. The zoom slider and its - / + buttons are
 // ordinary controls.
@@ -47,6 +53,28 @@ interface Props {
 type Natural = { w: number; h: number } | null;
 
 const ZOOM_BUTTON_STEP = 0.1;
+// Matches the max-width of the dialog's bottom-sheet layout in CoverCropDialog.css.
+const PHONE_MAX_WIDTH = 480;
+
+function readIsPhone(): boolean {
+  return typeof window !== "undefined" && window.innerWidth <= PHONE_MAX_WIDTH;
+}
+
+// innerWidth rather than matchMedia: jsdom has no matchMedia (same reason layout/useIsMobile reads it).
+function useIsPhone(): boolean {
+  const [isPhone, setIsPhone] = useState(readIsPhone);
+  useEffect(() => {
+    const onResize = () => setIsPhone(readIsPhone());
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return isPhone;
+}
+
+function formatZoom(zoom: number): string {
+  return `${zoom.toFixed(1)}x`;
+}
 const KEY_STEP = 0.02; // fraction of the crop window moved per arrow key press
 
 export default function CoverCropDialog({ file, notice, onSave, onCancel, onChooseAnother }: Props) {
@@ -54,6 +82,7 @@ export default function CoverCropDialog({ file, notice, onSave, onCancel, onChoo
   const windowRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; y: number; cx: number; cy: number } | null>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const isPhone = useIsPhone();
 
   // The blob URL is created INSIDE the effect that revokes it. Creating it in render (useMemo) and
   // revoking it in an effect cleanup breaks under React StrictMode in development: the effect runs, is
@@ -183,7 +212,7 @@ export default function CoverCropDialog({ file, notice, onSave, onCancel, onChoo
             <h2 id="cover-crop-title" className="cover-crop__title">
               This image is too small
             </h2>
-            <p className="cover-crop__lead" role="alert">
+            <p className="cover-crop__lead cover-crop__alert" role="alert">
               A cover photo needs to be at least {COVER_MIN_WIDTH_PX} pixels wide. This one is {natural!.w} pixels wide.
               Choose a larger image.
             </p>
@@ -201,7 +230,7 @@ export default function CoverCropDialog({ file, notice, onSave, onCancel, onChoo
             <h2 id="cover-crop-title" className="cover-crop__title">
               We couldn’t open that image
             </h2>
-            <p className="cover-crop__lead" role="alert">
+            <p className="cover-crop__lead cover-crop__alert" role="alert">
               Choose a JPEG, PNG or WebP file and try again.
             </p>
             <div className="cover-crop__actions">
@@ -266,17 +295,23 @@ export default function CoverCropDialog({ file, notice, onSave, onCancel, onChoo
               >
                 −
               </button>
-              <input
-                id="cover-crop-zoom"
-                className="cover-crop__slider"
-                type="range"
-                min={COVER_ZOOM_MIN}
-                max={COVER_ZOOM_MAX}
-                step={0.01}
-                value={zoom}
-                disabled={!ready}
-                onChange={(event) => changeZoom(Number(event.target.value))}
-              />
+              <div className="cover-crop__zoom-track">
+                <input
+                  id="cover-crop-zoom"
+                  className="cover-crop__slider"
+                  type="range"
+                  min={COVER_ZOOM_MIN}
+                  max={COVER_ZOOM_MAX}
+                  step={0.01}
+                  value={zoom}
+                  disabled={!ready}
+                  onChange={(event) => changeZoom(Number(event.target.value))}
+                />
+                <span className="cover-crop__zoom-ends" aria-hidden="true">
+                  <span>{COVER_ZOOM_MIN}x</span>
+                  <span>{COVER_ZOOM_MAX}x</span>
+                </span>
+              </div>
               <button
                 type="button"
                 className="cover-crop__zoom-step"
@@ -287,16 +322,25 @@ export default function CoverCropDialog({ file, notice, onSave, onCancel, onChoo
                 +
               </button>
               <span className="cover-crop__zoom-value" data-testid="cover-crop-zoom-value">
-                {Math.round(zoom * 100)}%
+                {formatZoom(zoom)}
               </span>
             </div>
 
             <div className="cover-crop__preview-block">
               <p className="cover-crop__caption">Cropped preview</p>
-              <div className="cover-crop__preview" data-testid="cover-crop-preview">
-                {rect && objectUrl && <img className="cover-crop__picture" src={objectUrl} alt="" style={placement(rect)} />}
+              <div className="cover-crop__preview" data-testid="cover-crop-preview" data-fit={isPhone ? "cover-phone" : "crop"}>
+                {/* The crop-shaped layer is centred and as tall as the slot. On desktop the slot has the
+                    crop's own ratio, so the layer fills it; on a phone the slot is 390:120, wider than
+                    tall relative to the crop, so the layer is wider than the slot and its sides are clipped. */}
+                <div className="cover-crop__preview-crop">
+                  {rect && objectUrl && <img className="cover-crop__picture" src={objectUrl} alt="" style={placement(rect)} />}
+                </div>
               </div>
-              <p className="cover-crop__caption">This is how your cover will look on your profile.</p>
+              <p className="cover-crop__caption" data-testid="cover-crop-preview-caption">
+                {isPhone
+                  ? "This is how your cover will look on a phone. The sides are trimmed to fit."
+                  : "This is how your cover will look on your profile."}
+              </p>
             </div>
 
             {error && (

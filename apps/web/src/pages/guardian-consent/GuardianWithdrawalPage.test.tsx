@@ -58,6 +58,22 @@ describe("GuardianWithdrawalPage", () => {
       expect(requestGuardianWithdrawal).not.toHaveBeenCalled();
     });
 
+    it("a 400 from the server shows the same inline message and stays on the request step (K10)", async () => {
+      vi.mocked(requestGuardianWithdrawal).mockRejectedValue(new AuthApiError("email must be an email", { status: 400 }));
+      renderPage();
+      await sendRequest("kid@example.com");
+      const alert = await screen.findByRole("alert");
+      // The fixed message, not the server's validation text.
+      expect(alert.textContent).toBe("Enter the email address of the Soccernity account.");
+      expect(alert.className).toContain("gw__alert");
+      expect(step()).toBe("request");
+      expect(requestGuardianWithdrawal).toHaveBeenCalledTimes(1);
+      // Typing again and resending clears the message.
+      vi.mocked(requestGuardianWithdrawal).mockResolvedValue({ message: "ok" });
+      await sendRequest("kid2@example.com");
+      await screen.findByRole("heading", { name: "Check the guardian’s inbox" });
+    });
+
     it("sends the (trimmed) email and moves to frame 2", async () => {
       vi.mocked(requestGuardianWithdrawal).mockResolvedValue({ message: "ok" });
       renderPage();
@@ -117,6 +133,17 @@ describe("GuardianWithdrawalPage", () => {
         "7c1d4e9a-3b52-4f0e-9a6d-2e8f1b5c0a47",
       );
       // Opening the link never withdraws anything by itself.
+      expect(withdrawGuardianConsent).not.toHaveBeenCalled();
+    });
+
+    it("an empty code shows the inline message and does not call the API (K10)", async () => {
+      renderPage("/guardian-consent/withdraw?token=abc");
+      fireEvent.change(screen.getByLabelText("Withdrawal code"), { target: { value: "   " } });
+      fireEvent.click(screen.getByRole("button", { name: "Withdraw consent" }));
+      const alert = await screen.findByRole("alert");
+      expect(alert.textContent).toBe("Paste the withdrawal code from the email.");
+      expect(alert.className).toContain("gw__alert");
+      expect(step()).toBe("confirm");
       expect(withdrawGuardianConsent).not.toHaveBeenCalled();
     });
 
