@@ -25,6 +25,32 @@ database), runs the repo's migrations on it, seeds the one admin account that ca
 logical DB 5, builds and starts the API on :3100, `apps/web` on :5273 and `apps/admin`
 on :5274. Logs: `e2e/.run/*.log`. Screenshots/traces of failures: `e2e/.run/artifacts`.
 
+## Driving a live Contest phase (the API test clock)
+
+The Contest follows the Europe/London calendar, so the real clock only ever shows one phase. To see the
+others in a real browser, start the suite with `QA_CONTEST_PHASE`; `support/global-setup.ts` then starts the API with
+`TEST_CLOCK_ISO` (and `E2E_TEST_CLOCK=1`) set to that phase's instant, and `support/contest-clock.ts`
+(`seedContestAtPhase`) seeds a consistent month: a cycle with its four rounds, members, weekly entries, votes and,
+for `final_live`, the final entries. The decisions themselves (ranking, vote lock, winners, finalists, reveal) are
+made by the real lifecycle service on its one-minute tick, on the test clock; the helper waits for that tick
+(under two minutes), then asks the real API which phase it believes it is in.
+
+```
+QA_CONTEST_PHASE=week1_phase2 npx playwright test 17     # one phase per run: the API clock is set when the stack starts
+QA_CONTEST_PHASE=final_live QA_CONTEST_MONTH=2026-12 npx playwright test 17
+QA_TEST_CLOCK_ISO=2026-11-05T10:00:00Z npx playwright test 17   # an explicit instant (add QA_TEST_CLOCK_ADVANCE=1 to let it run on)
+```
+
+Phases: `week{1,2,3}_phase1`, `week{1,2,3}_phase2`, `between_weeks_after_week{1,2,3}`, `week4_upload`, `final_live`.
+Seeded members log in with `Sup3r-secret-pass` (returned by `seedContestAtPhase`). Without `QA_CONTEST_PHASE` or
+`QA_TEST_CLOCK_ISO` the API runs on the real clock and spec 17 skips.
+
+Safety: the clock is read from the environment only; there is no HTTP endpoint that sets it. It is honoured only when
+`NODE_ENV=test` or `E2E_TEST_CLOCK=1`, and the API refuses to start when `NODE_ENV=production` and any of
+`TEST_CLOCK_ISO`, `TEST_CLOCK_ADVANCE`, `E2E_TEST_CLOCK` is set (`services/api/src/validate-runtime-env.ts`). Never
+add them to `render.yaml`. Database defaults (`createdAt DEFAULT now()`) are not on the test clock; the helper
+sets explicit timestamps on everything the contest reads.
+
 ## How emails are read
 
 The API runs with no Postmark key, so every email it would send is written to its log with the full template

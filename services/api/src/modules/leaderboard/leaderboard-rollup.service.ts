@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
 import { getCurrentIsoWeekPeriod, getIsoWeekBoundaries, getPreviousIsoWeekPeriod } from './iso-week.util';
 import { GLOBAL_BOARD_CLUB_ID } from './leaderboard.constants';
@@ -41,7 +42,11 @@ export interface RollupPeriodResult {
 export class LeaderboardRollupService {
   private readonly logger = new Logger(LeaderboardRollupService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // backend/test-clock-qa: the app clock, so the weekly period follows the QA test clock.
+    @Optional() @Inject(APP_CLOCK) private readonly clock: Clock = systemClock,
+  ) {}
 
   // Every 15 minutes, recompute BOTH the current ISO week AND the
   // immediately-preceding one. Recomputing the previous period too is
@@ -66,7 +71,7 @@ export class LeaderboardRollupService {
   // use (confirmed against cron-expression.enum.d.ts), avoids either
   // over- or under-shooting the requested 15-minute cadence.
   @Cron('0 */15 * * * *')
-  async runRollup(now: Date = new Date()): Promise<void> {
+  async runRollup(now: Date = this.clock.now()): Promise<void> {
     const currentPeriod = getCurrentIsoWeekPeriod(now);
     const previousPeriod = getPreviousIsoWeekPeriod(currentPeriod);
 

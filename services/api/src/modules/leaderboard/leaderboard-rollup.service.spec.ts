@@ -111,6 +111,19 @@ describe('LeaderboardRollupService', () => {
       expect(spy).toHaveBeenCalledWith('2008-W52');
     });
 
+    it('reads "now" from the injected app clock when called with no arguments (backend/test-clock-qa)', async () => {
+      const prisma = buildMock();
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
+      const clock = { now: () => new Date(Date.UTC(2026, 7, 12)) };
+      const service = new LeaderboardRollupService(prisma, clock);
+      const spy = jest.spyOn(service, 'rollupPeriod');
+
+      await service.runRollup();
+
+      expect(spy).toHaveBeenCalledWith('2026-W33');
+      expect(spy).toHaveBeenCalledWith('2026-W32');
+    });
+
     it('defaults to the real clock when called with no arguments (the actual @Cron() call shape)', async () => {
       const prisma = buildMock();
       (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);

@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
+import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ContestNotificationFacts } from './contest-notification-facts.service';
 import {
@@ -50,6 +51,8 @@ export class ContestNotificationSweepService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly facts: ContestNotificationFacts,
+    // backend/test-clock-qa: the app clock, so the QA test clock also drives these events.
+    @Optional() @Inject(APP_CLOCK) private readonly clock: Clock = systemClock,
   ) {}
 
   @Cron(CronExpression.EVERY_5_MINUTES)
@@ -60,7 +63,7 @@ export class ContestNotificationSweepService {
     }
     this.running = true;
     try {
-      const result = await this.runOnce(new Date());
+      const result = await this.runOnce(this.clock.now());
       if (result.eventsDue > 0) {
         this.logger.log(`Contest notification sweep: ${JSON.stringify(result.created)}`);
       }
