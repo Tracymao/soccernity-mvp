@@ -6,6 +6,7 @@ import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { FeedModule } from '../feed/feed.module';
 import { ContestAdminController } from './contest-admin.controller';
 import { ContestAdminService } from './contest-admin.service';
+import { ContestExposureService } from './contest-exposure.service';
 import { ContestLifecycleService } from './contest-lifecycle.service';
 import { ContestReadModel } from './contest-read-model.service';
 import { ContestVotingService } from './contest-voting.service';
@@ -30,6 +31,7 @@ import { ContestService } from './contest.service';
     ContestService,
     ContestAdminService,
     ContestVotingService,
+    ContestExposureService,
     ContestLifecycleService,
     ContestReadModel,
     PrismaService,

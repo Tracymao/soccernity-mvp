@@ -288,6 +288,8 @@ model User {
   contestStandings ContestStanding[]
   // backend/w7-contest (B-091): the engagement this account GAVE to contest entries.
   contestEngagements ContestEngagement[]
+  // backend/w11-exposure (B-092): the Final-week carousel impressions this account generated as a VIEWER.
+  contestImpressions ContestImpression[]
   pointsLedger     PointsLedgerEntry[]
 
   // sprint-2/account-deletion-sweep -- backs AccountDeletionSweepService's
@@ -2130,10 +2132,15 @@ model ContestEntry {
   // stays "Contest post" after the pin is gone.
   pinnedUntil  DateTime?
   pinRemovedAt DateTime?
+  // backend/w11-exposure (B-092): the Final-week carousel impressions this entry received, as ONE
+  // total per entry. Written once, at the crown, from the per-viewer ContestImpression rows (which
+  // are deleted in the same transaction). NULL until then, and always NULL for weekly entries.
+  impressionTotal Int?
 
   winner      ContestRoundWinner?
   votes       ContestVote[]
   engagements ContestEngagement[]
+  impressions ContestImpression[]
 
   @@unique([roundId, userId])
   @@index([cycleId])
@@ -2224,6 +2231,40 @@ model ContestEngagement {
 
   @@unique([entryId, userId, kind])
   @@index([entryId, occurredAt])
+}
+
+// backend/w11-exposure (B-092; Decision Log #388, #400, #403 item 11, #404 items 6 and 15, #405 items
+// 1 and 7; docs/contest-spec.md section 10b). One row per QUALIFYING carousel impression of a
+// Week-4 final entry: the "Final week" carousel tile was at least 50% in view for one uninterrupted
+// second (the client sends that event; the server validates window, eligibility, ownership and cap).
+//
+// It exists for ONE purpose: the balanced-impression rotation (serve the finalist with the fewest
+// impressions next, keep counts within the tolerance) and the per-viewer daily cap. It is NEVER a
+// score, never ranked on, and no impression count is ever returned to a user.
+//
+// What is stored about the VIEWER is exactly: viewerId, eventId (a random id the client generated for
+// the event -- the idempotency key), dayKey (the Europe/London calendar day, the cap window) and
+// occurredAt. No IP, no user agent, no dwell time, no scroll position, no device, no entry-order.
+//
+// Retention: per-viewer rows live only while the final week is live. At the crown
+// (ContestLifecycleService.complete) they are folded into ContestEntry.impressionTotal and DELETED in
+// the same transaction; anonymising a viewer's account deletes that viewer's rows at once. The
+// viewer FK is RESTRICT, like ContestVote / ContestEngagement (Decision Log #341).
+model ContestImpression {
+  id         String       @id @default(uuid())
+  entryId    String
+  entry      ContestEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  viewerId   String
+  viewer     User         @relation(fields: [viewerId], references: [id])
+  // Client-generated id of the qualifying event: the idempotency key (replaying it never counts twice).
+  eventId    String
+  // Europe/London calendar day, "YYYY-MM-DD": the window of the per-viewer daily cap.
+  dayKey     String
+  occurredAt DateTime
+
+  @@unique([viewerId, entryId, eventId])
+  @@index([entryId])
+  @@index([viewerId, entryId, dayKey])
 }
 
 // The monthly crowned top-3 (Decision Log #61 state 3 / #69 medals) —

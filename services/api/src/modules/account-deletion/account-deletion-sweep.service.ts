@@ -293,6 +293,9 @@ export class AccountDeletionSweepService {
       // not content other users depend on, and its FKs are RESTRICT.
       await tx.block.deleteMany({ where: { OR: [{ blockerId: userId }, { blockedId: userId }] } });
       await tx.notification.deleteMany({ where: { userId } });
+      // B-092: per-viewer Final-week carousel impressions are behavioural data about this viewer and
+      // serve no purpose once they are gone (the entry's folded total is an aggregate, not theirs).
+      await tx.contestImpression.deleteMany({ where: { viewerId: userId } });
       await tx.matchSubscription.deleteMany({ where: { userId } });
 
       // Membership rows (Banter Rooms, Community Groups, Club pages) are

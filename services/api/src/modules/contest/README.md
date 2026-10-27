@@ -33,6 +33,8 @@ Every boundary is **exclusive at its end, to the millisecond** (`contest-schedul
 | `contest-voting.service.ts` | `PUT` / `DELETE /contest/entries/:entryId/vote` |
 | `contest.service.ts` | `GET /contest/current`, `/cycles/:id`, `/rounds/:roundId/entries`, `/users/:userId/pinned-entry`; `POST /contest/entries`, `/contest/final-entry` |
 | `contest-admin.service.ts` | `POST` / `PATCH /admin/contest/cycles`, the admin reads |
+| `contest-exposure.util.ts` | B-092: the impression thresholds, the London-day key, the seeded shuffle, the balanced-rotation ordering and the admin spread. Pure |
+| `contest-exposure.service.ts` | B-092: the Final-week carousel, the impression event, the admin distribution view |
 | `contest-read-model.service.ts` | The part of every response that is the same for users and admins |
 
 ## Rules worth knowing
@@ -49,10 +51,27 @@ Every boundary is **exclusive at its end, to the millisecond** (`contest-schedul
 
 Create: `month` ("YYYY-MM", not yet started), `title` (<= 80), `description`, `weeks[1..3]` (`task` text + required `viewWatchLimitSeconds` 3-120), `finalTask`, **`minimumTally` (required, >= 1, admin-only)**, `placementPoints` (defaults 500/300/150 and 2000/1200/600), and the week-4 settings `followersExcludedWeek4`, `exposureTolerancePercent` (1-50), `exposureViewerDailyCap` (1-50). Dates are derived and never editable. Edit: locked from the instant week 1 opens (title, minimum tally, points, the watch limit of any started week); the week-4 settings lock when week 4 starts; the description and the tasks of weeks not yet started stay editable. A locked field posted unchanged is not an edit. Every create / edit is written to `AdminActionLog` (field names only).
 
+## The Week-4 finalist exposure engine (B-092; Decision Log #388, #400, #403 item 11, #404 items 6 and 15, #405 item 7, #406 item 6; spec section 10b)
+
+Goal: every finalist gets comparable community exposure, independent of follower count, prior engagement or upload time. **Live = by the clock**, from the reveal (00:00 on day 25) to the month end (00:00 on the 1st, exclusive); no status column opens or extends it. Full detail and every adopted default: `docs/backend-w11-exposure-report.md`.
+
+| Endpoint | Who | What |
+|---|---|---|
+| `GET /contest/final-week/carousel?limit=` (default 6, max 9) | any signed-in account (`JwtAuthGuard`); a **restricted** viewer gets `live: false` | `{ live, items[] }`: entry id, post id, finalist public name, narrow post. **No count of any kind**, ever |
+| `POST /contest/entries/:entryId/impression` `{ eventId, visibleRatio, visibleMs }` | `JwtAuthGuard` + `GuardianConsentGuard` | the client's qualifying event (>= 50% of the tile in view for one uninterrupted second). Always 200 `{ counted }`; 409 `contest_exposure_not_live` outside the window; 404 for an unknown, hidden, non-final, ineligible or **blocked** entry (all the same body) |
+| `GET /admin/contest/cycles/:id/exposure` | `AdminJwtAuthGuard` | aggregate impressions per finalist, the mean, the tolerance band, the spread and which videos are outside it. **No per-viewer data** |
+
+* **Ordering** is the balanced-impression rotation, never engagement, rank, follower count or recency: videos are grouped into bands (a video is in the lowest remaining band when its count is within `tolerancePercent` of the **mean across all live finalist videos** of that band's lowest count), the band with the fewest impressions is served first, and each band is shuffled by a per-viewer, per-London-day seeded shuffle. Stable within a day for one viewer; different between viewers and days.
+* **Left out of a viewer's carousel**: their own entry, a blocked pair's entries (either direction), a video they have already seen `exposureViewerDailyCap` times today, a finalist whose account is no longer eligible. The mean ignores the viewer's own exclusions (the tolerance is against the whole field).
+* **Settings enforced** from the cycle: `exposureTolerancePercent` and `exposureViewerDailyCap` (week 4 only, locked once week 4 starts - W7).
+* **Idempotent and race-safe**: unique `(viewerId, entryId, eventId)`; a per-(viewer, entry, London day) advisory lock makes the cap exact under concurrency.
+* **Stored about a viewer** (`ContestImpression`): `viewerId`, `eventId`, `dayKey`, `occurredAt`, and the entry. Nothing else (no IP, user agent, dwell time, device). **Retention**: deleted at the crown (folded into `ContestEntry.impressionTotal`, one aggregate per entry) and deleted at once when the viewer's account is anonymised.
+* The carousel entries are **not** normal feed posts: `Post.communityFeedFrom` (W7) keeps them out of `GET /posts/feed` until the pin is removed.
+
 ## Not built here (flagged)
 
 * **View qualification** (B-093): no heartbeat endpoint exists, so no view is ever recorded; Phase 1 effectively ranks on likes + comments. `recordQualifiedView` is the one call B-093 makes.
-* **The exposure engine** (B-092): the tolerance and per-viewer cap are stored and validated but nothing serves a balanced rotation yet.
+* ~~The exposure engine~~ is built (B-092): see "The Week-4 finalist exposure engine" below.
 * **The quarter-point ledger** (B-093). The follow / post point awards were removed by B-094.
 * **`apps/admin`** still calls the removed judging endpoints (B-097) and `apps/web` does not render the new states (B-098, B-099).
 * Open questions and every judgment call: `docs/backend-w7-contest-report.md`.
