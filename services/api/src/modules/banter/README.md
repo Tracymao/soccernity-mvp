@@ -532,3 +532,9 @@ imports neither). Two delegations, both the same pattern
 including reads, joining and posting (`Under16RestrictionGuard` +
 `@RestrictUnder16('banter')` at class level). Layered on top of
 `GuardianConsentGuard`, which stays on the write routes unchanged.
+
+## Post media (backend/w14-post-media-pipeline)
+
+`POST /banter-rooms/:id/posts` takes `mediaIds` (uploaded files by id) instead of `mediaUrls`; it still delegates to
+`FeedService.createPost`, so the ownership checks, the one-video rule and the "visible to the author only until approved" gate
+are the same as for `POST /posts`. See `../post-media/README.md`.

@@ -12,7 +12,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { hasBlockBetween, notBlockedWith } from '../block/block.util';
 import { decodeFeedCursor, encodeFeedCursor } from '../feed/cursor.util';
 import { FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE, FeedQueryDto } from '../feed/dto/feed-query.dto';
-import { FeedPost, FeedService } from '../feed/feed.service';
+import { FeedPost, FeedService, visibleToViewer } from '../feed/feed.service';
 import { PUBLIC_NAME_SELECT, resolvePublicName } from '../users/public-name.util';
 import { CONTEST_ELIGIBLE_USER } from './contest-eligibility';
 import { CYCLE_GRAPH_INCLUDE, ContestReadModel, CycleGraph } from './contest-read-model.service';
@@ -327,8 +327,9 @@ export class ContestService {
       let entryId = '';
       const post = await this.feed.createPost(
         userId,
-        { contentText: dto.contentText, mediaUrls: dto.mediaUrls },
+        { contentText: dto.contentText, mediaIds: [dto.mediaId] },
         {
+          singleVideoOnly: true,
           // Hidden from everyone but its author until the reveal, and not a normal Community-feed
           // post until the pin is removed at the end of the month.
           visibleFrom: schedule.final.revealAt,
@@ -392,9 +393,8 @@ export class ContestService {
       roundId,
       user: { is: { AND: [{ accountStatus: { in: ['active', 'deleted'] } }, notBlockedWith(userId)] } },
       // A final entry is a 404 to everyone but its author until the reveal.
-      post: {
-        is: { OR: [{ visibleFrom: null }, { visibleFrom: { lte: now } }, { authorId: userId }] },
-      },
+      // ...and so is any entry whose uploaded media is not all approved yet (Decision Log #419 item 5/7).
+      post: { is: visibleToViewer(userId, now) },
     };
 
     let rows: EntryViewRow[];
@@ -505,7 +505,7 @@ export class ContestService {
         userId: targetUserId,
         pinRemovedAt: null,
         pinnedUntil: { gt: now },
-        post: { is: { OR: [{ visibleFrom: null }, { visibleFrom: { lte: now } }, { authorId: viewerId }] } },
+        post: { is: visibleToViewer(viewerId, now) },
       },
       orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
       select: { id: true, postId: true, pinnedUntil: true, round: { select: { weekNumber: true } } },

@@ -44,6 +44,8 @@ function envVarsReadInCode(): Map<string, string> {
     /\.get(?:OrThrow)?(?:<[^>]*>)?\(\s*['"]([A-Z][A-Z0-9_]{2,})['"]/g,
     /process\.env\.([A-Z][A-Z0-9_]{2,})/g,
     /process\.env\[\s*['"]([A-Z][A-Z0-9_]{2,})['"]\s*\]/g,
+    // PostMediaConfig's validated-number reader: `this.num('NAME', default, min, max)`.
+    /this\.num\(\s*['"]([A-Z][A-Z0-9_]{2,})['"]/g,
   ];
   for (const file of walk(SRC)) {
     const text = fs.readFileSync(file, 'utf8');

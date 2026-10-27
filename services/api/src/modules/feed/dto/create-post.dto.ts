@@ -1,12 +1,4 @@
-import {
-  ArrayMaxSize,
-  IsArray,
-  IsOptional,
-  IsString,
-  IsUrl,
-  MaxLength,
-  MinLength,
-} from 'class-validator';
+import { ArrayMaxSize, IsArray, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
 // Build Plan Section 4.3 (POST /posts) and Section 3 (Post entity fields
 // this maps onto: contentText, mediaUrls, clubPageId, banterRoomId).
@@ -18,14 +10,11 @@ import {
 // size per Section 5.5's low-bandwidth discipline. Revisit if product
 // feedback wants longer posts.
 //
-// mediaUrls max size: 10 items is a conservative cap against a single
-// post being used to smuggle an unbounded payload into a feed row —
-// Section 5.5 applies to list *endpoints*, but an unbounded array on a
-// single post has the same "someone can make this arbitrarily large"
-// shape. Each entry is validated as a URL: no media-upload endpoint
-// exists yet in this slice (that's Admin/media, Section 4.8, later
-// sprint), so the caller is expected to already hold a real, hosted
-// media URL by the time this DTO is hit.
+// mediaIds (backend/w14-post-media-pipeline, Decision Log #419): the ids of files the caller uploaded
+// through POST /media/uploads (at most 10, the same cap the free-URL field had). A post no longer takes
+// free URLs from a user: `mediaUrls` is not a field of this DTO, so the global ValidationPipe
+// (forbidNonWhitelisted) answers a request carrying it with a 400. Ownership, "not already attached" and
+// "not rejected" are checked in FeedService (post-media-attach.util.ts).
 //
 // authorId is deliberately NOT a field here — it comes from the verified
 // JWT (@CurrentUser()) in the controller, never from the request body.
@@ -45,8 +34,8 @@ export class CreatePostDto {
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(10)
-  @IsUrl({}, { each: true })
-  mediaUrls?: string[];
+  @IsUUID(undefined, { each: true })
+  mediaIds?: string[];
 
   @IsOptional()
   @IsString()

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { DirectUploadStorageService } from './direct-upload-storage.service';
 import { S3StorageService } from './s3-storage.service';
 import { StorageService } from './storage.service';
 
@@ -10,7 +11,13 @@ import { StorageService } from './storage.service';
 // ConfigService-driven setup itself.
 @Module({
   imports: [ConfigModule],
-  providers: [{ provide: StorageService, useClass: S3StorageService }],
-  exports: [StorageService],
+  // One S3StorageService instance behind both tokens: StorageService (upload/delete, what most callers
+  // use) and DirectUploadStorageService (the user-media pipeline's upload links and read-back).
+  providers: [
+    S3StorageService,
+    { provide: StorageService, useExisting: S3StorageService },
+    { provide: DirectUploadStorageService, useExisting: S3StorageService },
+  ],
+  exports: [StorageService, DirectUploadStorageService],
 })
 export class StorageModule {}

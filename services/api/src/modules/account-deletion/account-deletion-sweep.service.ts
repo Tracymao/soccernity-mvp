@@ -2,6 +2,7 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
+import { deleteStoredObjects, deleteUserPostMedia } from '../post-media/post-media-cleanup.util';
 import { DELETED_USER_PUBLIC_NAME } from '../users/public-name.util';
 
 // Build Plan Section 9, Decision Log #42 (30-day grace period + consent-
@@ -234,6 +235,7 @@ export class AccountDeletionSweepService {
   // already-anonymized row rewrites the same values.
   async anonymizeUser(userId: string, isMinor: boolean): Promise<void> {
     const stored: { avatarKey: string | null; coverKey: string | null } = { avatarKey: null, coverKey: null };
+    let postMediaKeys: string[] = [];
     await this.prisma.$transaction(async (tx) => {
       // B-035: remember where the avatar object lives, so it can be removed from
       // storage once the row no longer points at it.
@@ -293,6 +295,10 @@ export class AccountDeletionSweepService {
       // not content other users depend on, and its FKs are RESTRICT.
       await tx.block.deleteMany({ where: { OR: [{ blockerId: userId }, { blockedId: userId }] } });
       await tx.notification.deleteMany({ where: { userId } });
+      // backend/w14-post-media-pipeline (Decision Log #419 item 9): the files this user uploaded for posts
+      // and contest entries go with the account. The rows are deleted here, their URLs are removed from
+      // the (surviving, #341) posts, and the stored objects are removed after the commit below.
+      postMediaKeys = await deleteUserPostMedia(tx, userId);
       // B-092: per-viewer Final-week carousel impressions are behavioural data about this viewer and
       // serve no purpose once they are gone (the entry's folded total is an aggregate, not theirs).
       await tx.contestImpression.deleteMany({ where: { viewerId: userId } });
@@ -370,6 +376,7 @@ export class AccountDeletionSweepService {
     // outage (or an unconfigured store) must not undo or fail the anonymization.
     // A failure leaves an orphaned object whose only pointer is gone; it is
     // logged with the key so it can be cleaned up by hand.
+    await deleteStoredObjects(this.storage, this.logger, postMediaKeys, `Anonymization of ${userId}: post media`);
     for (const [label, key] of [
       ['avatar', stored.avatarKey],
       ['cover', stored.coverKey],

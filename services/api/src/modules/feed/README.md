@@ -943,3 +943,21 @@ post revoke the rows, and a re-like or an unhide restores them (earned once). `c
 nothing (B-094). `FeedService` takes an optional `PointsConfig` (the two daily caps) as its third constructor
 argument. Views earn points through `POST /posts/:id/view-heartbeat` (`modules/view-qualification`), not
 `POST /posts/:id/view`, which stays the anonymous display-count tally.
+
+## Post media (backend/w14-post-media-pipeline; Decision Log #419)
+
+`POST /posts` no longer takes `mediaUrls`. It takes `mediaIds`: the ids of files the caller uploaded through
+`POST /media/uploads` (see `../post-media/README.md`). A request that still carries `mediaUrls` is a 400 (the DTO does not
+have the field and the global pipe forbids unknown ones). `FeedService.createPost` (the single post-creation path, also used by
+`POST /banter-rooms/:id/posts` and `POST /contest/final-entry`) loads the caller's media, refuses anything not theirs /
+already attached / rejected / not yet verified with one indistinguishable 400 `media_not_attachable`, copies the files'
+public URLs into `Post.mediaUrls` and attaches the rows inside the post's own transaction (a race for the same file rolls the
+losing post back whole).
+
+**Visibility.** A post with ANY attached media that is not `approved` is visible to its author only. The fragment lives in
+`../post-media/post-media-visibility.util.ts` and is ANDed into `visibleToViewer()`, so every read path that already used it
+(feed pages, club and Banter feeds, `GET /posts/:id`, saved posts, comments, like/save/view, view heartbeats) inherits it;
+search and the anonymous view path apply the same fragment. Others get the plain 404 of a post that does not exist.
+
+**Deleting.** `DELETE /posts/:id` reads the post's media keys first, deletes the post (the `PostMedia` rows cascade), then removes
+the stored objects best effort (a storage failure never fails the deletion; the key is logged).

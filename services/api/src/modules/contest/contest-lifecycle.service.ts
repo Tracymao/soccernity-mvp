@@ -1,3 +1,4 @@
+import { POST_MEDIA_ALL_APPROVED } from '../post-media/post-media-visibility.util';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
@@ -199,8 +200,10 @@ export class ContestLifecycleService {
 
       // Only eligible entrants take part: a deactivated or restricted account's entry is not ranked
       // and cannot be voted on. They are not counted toward "fewer than 3 entries" either.
+      // ...and an entry whose uploaded media is not all approved is hidden from every voter (Decision
+      // Log #419 item 5/7), so it cannot be ranked or voted on either.
       const entries = await tx.contestEntry.findMany({
-        where: { roundId, user: CONTEST_ELIGIBLE_USER },
+        where: { roundId, user: CONTEST_ELIGIBLE_USER, post: { is: POST_MEDIA_ALL_APPROVED } },
         select: { id: true, submittedAt: true },
       });
 
@@ -418,7 +421,8 @@ export class ContestLifecycleService {
       });
       const entries = round4
         ? await tx.contestEntry.findMany({
-            where: { roundId: round4.id },
+            // A final entry whose video is not approved by the reveal is not shown, so it is not ranked (#419 item 7).
+            where: { roundId: round4.id, post: { is: POST_MEDIA_ALL_APPROVED } },
             select: { id: true, userId: true, submittedAt: true },
           })
         : [];

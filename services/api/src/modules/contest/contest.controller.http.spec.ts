@@ -191,7 +191,8 @@ describe('ContestController (HTTP layer)', () => {
   });
 
   describe('POST /contest/final-entry', () => {
-    const body = { contentText: 'my final', mediaUrls: ['https://cdn.example.com/v.mp4'] };
+    const MEDIA_ID = '3f1b8c7e-6a53-4f0e-9d77-2f6f6f0a1b11';
+    const body = { contentText: 'my final', mediaId: MEDIA_ID };
 
     it('is consent-gated', async () => {
       restrictedMinor();
@@ -206,15 +207,19 @@ describe('ContestController (HTTP layer)', () => {
       expect(contestService.submitFinalEntry).toHaveBeenCalledWith('user-1', body);
     });
 
-    it('requires at least one media URL (the final is a video) and valid URLs', async () => {
+    // backend/w14-post-media-pipeline (Decision Log #419 item 7): the final's video is an UPLOADED file named
+    // by id; the pasted-link field is gone and a request that still carries it is refused.
+    it('requires one uploaded video id, and refuses the old free-URL field', async () => {
       consentOk();
-      await request(app.getHttpServer()).post('/contest/final-entry').send({ contentText: 'x', mediaUrls: [] }).expect(400);
       await request(app.getHttpServer()).post('/contest/final-entry').send({ contentText: 'x' }).expect(400);
+      await request(app.getHttpServer()).post('/contest/final-entry').send({ contentText: 'x', mediaId: 'not-a-uuid' }).expect(400);
+      await request(app.getHttpServer()).post('/contest/final-entry').send({ contentText: 'x', mediaIds: [MEDIA_ID] }).expect(400);
       await request(app.getHttpServer())
         .post('/contest/final-entry')
-        .send({ contentText: 'x', mediaUrls: ['not a url'] })
+        .send({ contentText: 'x', mediaUrls: ['https://a.co/v.mp4'] })
         .expect(400);
-      await request(app.getHttpServer()).post('/contest/final-entry').send({ contentText: '', mediaUrls: ['https://a.co/v.mp4'] }).expect(400);
+      await request(app.getHttpServer()).post('/contest/final-entry').send({ contentText: '', mediaId: MEDIA_ID }).expect(400);
+      expect(contestService.submitFinalEntry).not.toHaveBeenCalled();
     });
   });
 

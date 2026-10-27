@@ -8,7 +8,8 @@ import {
   revokeEngagementPoints,
   revokeEngagementPointsForPost,
 } from '../points/engagement-points.util';
-import { FeedService } from './feed.service';
+import { FeedService, visibleToViewer } from './feed.service';
+import { POST_MEDIA_ALL_APPROVED } from '../post-media/post-media-visibility.util';
 
 // backend/w12-points (B-093): the baseline points engine has its own unit spec (engagement-points.util.spec.ts)
 // and a real-Postgres e2e. FeedService is tested here for WHEN it calls the engine, so the engine is mocked.
@@ -39,8 +40,12 @@ const notBlockedAuthor = (viewerId: string) => ({ author: { is: notBlockedWith(v
 const FIXED_NOW = new Date('2026-08-15T12:00:00.000Z');
 const FIXED_CLOCK = { now: () => new Date(FIXED_NOW) };
 // A final contest entry is a 404 to everyone but its author until the reveal (Post.visibleFrom).
+// ...and (backend/w14-post-media-pipeline) to everyone but its author while any of its uploaded media is unapproved.
 const visibleTo = (viewerId: string) => ({
-  OR: [{ visibleFrom: null }, { visibleFrom: { lte: FIXED_NOW } }, { authorId: viewerId }],
+  AND: [
+    { OR: [{ visibleFrom: null }, { visibleFrom: { lte: FIXED_NOW } }, { authorId: viewerId }] },
+    { OR: [{ authorId: viewerId }, POST_MEDIA_ALL_APPROVED] },
+  ],
 });
 // GET /posts/feed omits a final entry until the pin is removed (Post.communityFeedFrom).
 const inCommunityFeed = { OR: [{ communityFeedFrom: null }, { communityFeedFrom: { lte: FIXED_NOW } }] };
@@ -76,6 +81,12 @@ function buildPrismaMock() {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       // backend/w12-points: syncCommentPoints counts the author's remaining visible comments.
       count: jest.fn().mockResolvedValue(0),
+    },
+    // backend/w14-post-media-pipeline: createPost loads the media it attaches; deletePost reads the keys
+    // of the files to remove. Both default to "none".
+    postMedia: {
+      findMany: jest.fn().mockResolvedValue([]),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     savedPost: {
       create: jest.fn(),
@@ -219,6 +230,67 @@ describe('FeedService', () => {
         select: expect.objectContaining({ contentText: true, author: expect.anything() }),
       });
       expect(result).toEqual(asView(row));
+    });
+
+    // backend/w14-post-media-pipeline (Decision Log #419): media comes only from the caller's own uploads.
+    describe('with uploaded media (mediaIds)', () => {
+      const MEDIA = [
+        { id: 'm1', kind: 'image', publicUrl: 'https://cdn.test/post-media/author-1/m1.jpg' },
+        { id: 'm2', kind: 'image', publicUrl: 'https://cdn.test/post-media/author-1/m2.jpg' },
+      ];
+
+      it("stores the uploads' public URLs on the post (in the caller's order) and attaches the files inside the same transaction", async () => {
+        const prisma = buildPrismaMock();
+        (prisma.postMedia.findMany as jest.Mock).mockResolvedValue([MEDIA[1], MEDIA[0]]);
+        (prisma.postMedia.updateMany as jest.Mock).mockResolvedValue({ count: 2 });
+        (prisma.post.create as jest.Mock).mockResolvedValue(buildPostRow({ id: 'post-9' }));
+
+        await new FeedService(prisma, FIXED_CLOCK).createPost('author-1', { contentText: 'two pics', mediaIds: ['m1', 'm2'] });
+
+        expect((prisma.post.create as jest.Mock).mock.calls[0][0].data.mediaUrls).toEqual([MEDIA[0].publicUrl, MEDIA[1].publicUrl]);
+        expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
+          where: { id: { in: ['m1', 'm2'] }, uploaderId: 'author-1', postId: null, uploadState: 'ready', status: { not: 'rejected' } },
+          data: { postId: 'post-9' },
+        });
+        // loaded for THIS author only
+        expect((prisma.postMedia.findMany as jest.Mock).mock.calls[0][0].where).toMatchObject({ uploaderId: 'author-1', postId: null });
+      });
+
+      it('refuses (400) before any write when a file is not attachable', async () => {
+        const prisma = buildPrismaMock();
+        (prisma.postMedia.findMany as jest.Mock).mockResolvedValue([MEDIA[0]]); // m2 missing
+        await expect(
+          new FeedService(prisma, FIXED_CLOCK).createPost('author-1', { contentText: 'x', mediaIds: ['m1', 'm2'] }),
+        ).rejects.toMatchObject({ status: 400, response: { code: 'media_not_attachable' } });
+        expect(prisma.post.create).not.toHaveBeenCalled();
+      });
+
+      it('rolls the post back (throws) when a concurrent post took a file first', async () => {
+        const prisma = buildPrismaMock();
+        (prisma.postMedia.findMany as jest.Mock).mockResolvedValue(MEDIA);
+        (prisma.postMedia.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+        (prisma.post.create as jest.Mock).mockResolvedValue(buildPostRow());
+        await expect(
+          new FeedService(prisma, FIXED_CLOCK).createPost('author-1', { contentText: 'x', mediaIds: ['m1', 'm2'] }),
+        ).rejects.toMatchObject({ status: 400, response: { code: 'media_not_attachable' } });
+      });
+
+      it('the contest final entry demands exactly one VIDEO', async () => {
+        const prisma = buildPrismaMock();
+        (prisma.postMedia.findMany as jest.Mock).mockResolvedValue([MEDIA[0]]); // an image
+        await expect(
+          new FeedService(prisma, FIXED_CLOCK).createPost('author-1', { contentText: 'x', mediaIds: ['m1'] }, { singleVideoOnly: true }),
+        ).rejects.toMatchObject({ response: { code: 'final_entry_needs_one_video' } });
+        expect(prisma.post.create).not.toHaveBeenCalled();
+      });
+
+      it('a post with no mediaIds never touches the media table', async () => {
+        const prisma = buildPrismaMock();
+        (prisma.post.create as jest.Mock).mockResolvedValue(buildPostRow());
+        await new FeedService(prisma, FIXED_CLOCK).createPost('author-1', { contentText: 'plain' });
+        expect(prisma.postMedia.findMany).not.toHaveBeenCalled();
+        expect(prisma.postMedia.updateMany).not.toHaveBeenCalled();
+      });
     });
 
     it('awards no points for creating a post (B-094, Decision Log #382)', async () => {
@@ -1481,6 +1553,46 @@ describe('FeedService', () => {
     });
   });
 
+  // backend/w14-post-media-pipeline (Decision Log #419 item 9): the post's stored files go with it.
+  describe('deletePost removes the stored media objects', () => {
+    const storage = () => ({ upload: jest.fn(), delete: jest.fn().mockResolvedValue(undefined) });
+
+    it('reads the keys BEFORE the post (and its rows) is deleted, then deletes the objects after the transaction', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'p', authorId: 'owner' });
+      (prisma.postMedia.findMany as jest.Mock).mockResolvedValue([
+        { publicKey: 'post-media/owner/a.jpg', quarantineKey: null },
+        { publicKey: 'post-media/owner/b.mp4', quarantineKey: 'quarantine/owner/b' },
+      ]);
+      const st = storage();
+
+      await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, st).deletePost('p', 'owner');
+
+      expect(prisma.postMedia.findMany).toHaveBeenCalledWith({ where: { postId: 'p' }, select: { publicKey: true, quarantineKey: true } });
+      expect(st.delete.mock.calls.map((c) => c[0])).toEqual(['post-media/owner/a.jpg', 'post-media/owner/b.mp4', 'quarantine/owner/b']);
+      const del = (prisma.post.delete as jest.Mock).mock.invocationCallOrder[0];
+      expect((prisma.postMedia.findMany as jest.Mock).mock.invocationCallOrder[0]).toBeLessThan(del);
+      expect(st.delete.mock.invocationCallOrder[0]).toBeGreaterThan(del);
+    });
+
+    it('a storage failure never fails or undoes the deletion', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'p', authorId: 'owner' });
+      (prisma.postMedia.findMany as jest.Mock).mockResolvedValue([{ publicKey: 'post-media/owner/a.jpg', quarantineKey: null }]);
+      const st = { upload: jest.fn(), delete: jest.fn().mockRejectedValue(new Error('503')) };
+      await expect(new FeedService(prisma, FIXED_CLOCK, undefined, undefined, st).deletePost('p', 'owner')).resolves.toBeUndefined();
+      expect(prisma.post.delete).toHaveBeenCalled();
+    });
+
+    it('a post with no media touches no object', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'p', authorId: 'owner' });
+      const st = storage();
+      await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, st).deletePost('p', 'owner');
+      expect(st.delete).not.toHaveBeenCalled();
+    });
+  });
+
   describe('comment settings', () => {
     // A realistic comment row (embedded author included) -- the service maps it
     // to the public shape, so a bare { id } is not a valid mock.
@@ -1947,7 +2059,7 @@ describe('FeedService', () => {
       expect((prisma.post.findUnique as jest.Mock).mock.calls[0][0].where).toEqual({
         id: 'post-1',
         // backend/w7-contest: an anonymous read cannot be the author, so it only sees revealed posts.
-        AND: [{ OR: [{ visibleFrom: null }, { visibleFrom: { lte: FIXED_NOW } }] }],
+        AND: [{ OR: [{ visibleFrom: null }, { visibleFrom: { lte: FIXED_NOW } }] }, POST_MEDIA_ALL_APPROVED],
       });
     });
 
@@ -1957,7 +2069,7 @@ describe('FeedService', () => {
       await expect(new FeedService(prisma, FIXED_CLOCK).recordView(undefined, 'post-1')).rejects.toBeInstanceOf(NotFoundException);
       expect((prisma.post.findUnique as jest.Mock).mock.calls[0][0].where).toEqual({
         id: 'post-1',
-        AND: [{ OR: [{ visibleFrom: null }, { visibleFrom: { lte: FIXED_NOW } }] }],
+        AND: [{ OR: [{ visibleFrom: null }, { visibleFrom: { lte: FIXED_NOW } }] }, POST_MEDIA_ALL_APPROVED],
       });
     });
 
@@ -2154,7 +2266,7 @@ describe('FeedService: contest entries (B-091)', () => {
 
       const result = await new FeedService(prisma, FIXED_CLOCK).createPost(
         'author-1',
-        { contentText: 'final', mediaUrls: ['https://cdn.example.com/f.mp4'] },
+        { contentText: 'final' },
         { visibleFrom, communityFeedFrom, inTransaction },
       );
 
@@ -2336,5 +2448,19 @@ describe('FeedService: baseline points wiring (B-093)', () => {
     });
     await buildService(prisma).createPost('a', { contentText: 'x' });
     expect(awardEngagementPoints).not.toHaveBeenCalled();
+  });
+});
+
+// backend/w14-post-media-pipeline (Decision Log #419 item 5): the one gate every post read path inherits.
+describe('visibleToViewer (post media gate)', () => {
+  const NOW = new Date('2026-11-05T10:00:00Z');
+
+  it("ANDs the existing reveal gate with the media gate, so a post with unapproved media is the author's alone", () => {
+    expect(visibleToViewer('me', NOW)).toEqual({
+      AND: [
+        { OR: [{ visibleFrom: null }, { visibleFrom: { lte: NOW } }, { authorId: 'me' }] },
+        { OR: [{ authorId: 'me' }, POST_MEDIA_ALL_APPROVED] },
+      ],
+    });
   });
 });

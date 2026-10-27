@@ -17,6 +17,7 @@ import { GrassrootsTeamsController } from './modules/grassroots/grassroots-teams
 import { ConversationsController } from './modules/messaging/conversations.controller';
 import { PublicReportsController } from './modules/moderation/public-reports.controller';
 import { ReportsController } from './modules/moderation/reports.controller';
+import { PostMediaController } from './modules/post-media/post-media.controller';
 import { NotificationsController } from './modules/notifications/notifications.controller';
 import { SportsMatchesController } from './modules/sports/sports-matches.controller';
 import { UserAvatarController } from './modules/users/user-avatar.controller';
@@ -61,6 +62,9 @@ const OPEN_ROUTES: Record<string, string> = {
   'POST /posts/:id/view-heartbeat':
     'looking at a post is not a social write (B-093): a restricted or unverified account may keep reading and simply earns nothing',
   'DELETE /teams/:id': 'admin-only (AdminJwtAuthGuard), a different auth domain',
+  // backend/w14-post-media-pipeline: removing your OWN upload is an undo that touches no one else, so an
+  // account that was restricted after uploading can still delete what it holds (JwtAuthGuard stays).
+  'DELETE /media/uploads/:id': 'removing your own upload is an undo; a restricted account may still delete its own files',
   // B-197 (Decision Log #411 item 5): a safety action needs authentication only (JwtAuthGuard stays, pinned below).
   'POST /users/:id/block': 'a restricted-pending or unverified account must still be able to block (#411 item 5)',
   'DELETE /users/:id/block': 'a restricted-pending or unverified account must still be able to unblock (#411 item 5)',
@@ -121,6 +125,10 @@ const EXPECTED: Record<string, Flags> = {
   // and is not a social write, so C only (a restricted account is not the audience, spec 10b); NOT E
   // (an unverified viewer is still a viewer) and NOT P.
   'POST /contest/entries/:entryId/impression': 'C',
+  // post media (backend/w14-post-media-pipeline, Decision Log #419 item 8): a restricted-pending account
+  // cannot upload. C only: the upload itself publishes nothing (the post that carries it takes E and P).
+  'POST /media/uploads': 'C',
+  'POST /media/uploads/:id/confirm': 'C',
   // grassroots
   'POST /teams': 'CE',
   'POST /fixtures': 'CE',
@@ -150,6 +158,7 @@ const CONTROLLERS = [
   NotificationsController,
   SportsMatchesController,
   ViewQualificationController,
+  PostMediaController,
 ];
 
 // Controller files deliberately NOT in CONTROLLERS, with the reason. A new

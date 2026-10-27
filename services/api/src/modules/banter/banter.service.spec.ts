@@ -652,12 +652,12 @@ describe('BanterService', () => {
 
       const result = await service.postToRoom('user-1', 'room-1', {
         contentText: 'up the arse',
-        mediaUrls: ['https://cdn.example.com/x.jpg'],
+        mediaIds: ['3f1b8c7e-6a53-4f0e-9d77-2f6f6f0a1b11'],
       });
 
       expect(feed.createPost).toHaveBeenCalledWith('user-1', {
         contentText: 'up the arse',
-        mediaUrls: ['https://cdn.example.com/x.jpg'],
+        mediaIds: ['3f1b8c7e-6a53-4f0e-9d77-2f6f6f0a1b11'],
         banterRoomId: 'room-1',
       });
       expect(result).toEqual({ id: 'post-1' });

@@ -1,11 +1,11 @@
-import { ArrayMaxSize, IsArray, IsOptional, IsString, IsUrl, MaxLength, MinLength } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
 // POST /banter-rooms/:id/posts. The room-scoped post-creation body.
 // Deliberately the fields of CreatePostDto MINUS clubPageId/banterRoomId
 // (feed/dto/create-post.dto.ts): `banterRoomId` comes from the URL param,
 // never the body, and a post can't be club-scoped and room-scoped at
-// once. Same contentText 1-3000 / mediaUrls max-10-URLs bounds and
-// reasoning as CreatePostDto — this is the same kind of content, just
+// once. Same contentText 1-3000 / mediaIds max-10 bounds and
+// reasoning as CreatePostDto (backend/w14-post-media-pipeline: uploaded files by id, no free URLs) — this is the same kind of content, just
 // scoped to a room. authorId comes from the access token in the
 // controller.
 //
@@ -21,6 +21,6 @@ export class CreateBanterPostDto {
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(10)
-  @IsUrl({}, { each: true })
-  mediaUrls?: string[];
+  @IsUUID(undefined, { each: true })
+  mediaIds?: string[];
 }

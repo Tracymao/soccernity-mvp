@@ -351,6 +351,18 @@ relation/constraint in one of those areas should add a sibling
 `*.e2e-spec.ts` here, per the guiding principle above — not treat this PR
 as having already covered them.
 
+- **`post-media.e2e-spec.ts`** (backend/w14-post-media-pipeline, B-041/B-036) — the user post and
+  contest-entry media pipeline against real Postgres: the one-time upload link, confirm (magic bytes,
+  size, duration, metadata stripping, quarantine original deleted, public prefix written), the three
+  Rekognition outcomes with the adult/minor thresholds, retry/back-off/give-up and "never approved by
+  default", the "visible to the author only until every file is approved" gate across every read
+  path, attaching rules, post deletion and account anonymisation deleting the objects, the 24 h
+  quarantine purge, and the contest final entry taking a video `mediaId`. The three external seams
+  are in-memory doubles in `test/support/post-media-doubles.ts` (an object store, Rekognition and the
+  ffmpeg video tools); images still go through the REAL sharp, so EXIF stripping is proven for real.
+  The fake clock (`APP_CLOCK`) is why the throttle window and the purge are exact: the service writes
+  `PostMedia.createdAt` from the app clock, not the database's `now()`.
+
 ## Running locally
 
 1. `docker compose up -d` (repo root) — real local Postgres + Redis.
