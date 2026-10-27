@@ -99,7 +99,9 @@ describe('attachMediaToPost', () => {
 
 describe('post media visibility fragment', () => {
   it('hides a post that has ANY media which is not approved', () => {
-    expect(POST_MEDIA_ALL_APPROVED).toEqual({ media: { none: { status: { not: 'approved' } } } });
+    expect(POST_MEDIA_ALL_APPROVED).toEqual({
+      media: { none: { OR: [{ status: { not: 'approved' } }, { hiddenPendingReview: true }] } },
+    });
   });
 
   it('lets the author through, and anonymous callers need every file approved', () => {

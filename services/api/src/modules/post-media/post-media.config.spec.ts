@@ -67,6 +67,16 @@ describe('PostMediaConfig', () => {
     });
   });
 
+  it('the review-queue settings have bounded defaults and are configurable (B-037)', () => {
+    expect(cfg().reportHideThreshold).toBe(3);
+    expect(cfg().uncheckedToReviewAfterMinutes).toBe(30);
+    expect(cfg().reviewViewUrlTtlSeconds).toBe(300);
+    expect(cfg({ MEDIA_REPORT_HIDE_THRESHOLD: '5', MEDIA_REVIEW_UNCHECKED_AFTER_MINUTES: '10' }).reportHideThreshold).toBe(5);
+    expect(cfg({ MEDIA_REPORT_HIDE_THRESHOLD: '0' }).reportHideThreshold).toBe(0); // 0 = never hide automatically
+    expect(cfg({ MEDIA_REPORT_HIDE_THRESHOLD: '-1' }).reportHideThreshold).toBe(3);
+    expect(cfg({ MEDIA_REVIEW_UNCHECKED_AFTER_MINUTES: 'soon' }).uncheckedToReviewAfterMinutes).toBe(30);
+  });
+
   it('video sampling and retry settings have bounded defaults', () => {
     const c = cfg();
     expect(c.videoSampling).toEqual({ intervalSeconds: 5, maxFrames: 30 });

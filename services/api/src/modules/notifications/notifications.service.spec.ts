@@ -38,6 +38,9 @@ function buildPrismaMock() {
     contestStanding: {
       findMany: jest.fn().mockResolvedValue([]),
     },
+    postMedia: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     matchData: {
       findMany: jest.fn().mockResolvedValue([]),
     },
@@ -430,6 +433,29 @@ describe('NotificationsService', () => {
       for (const model of ['post', 'conversation', 'user', 'fixture', 'contestCycle', 'matchData'] as const) {
         expect((prisma[model].findMany as jest.Mock)).not.toHaveBeenCalled();
       }
+    });
+
+    // B-037: post_media_approved / post_media_rejected name the file (kind only); the reason is never here.
+    it('resolves post_media_approved and post_media_rejected to { media: { id, kind } } with one batched lookup, and a deleted file to null', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ type: 'post_media_approved', payloadRefId: 'media-1' }),
+        row({ id: 'notif-2', type: 'post_media_rejected', payloadRefId: 'media-2' }),
+        row({ id: 'notif-3', type: 'post_media_rejected', payloadRefId: 'media-gone' }),
+      ]);
+      (prisma.postMedia.findMany as jest.Mock).mockResolvedValue([
+        { id: 'media-1', kind: 'image' },
+        { id: 'media-2', kind: 'video' },
+      ]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(prisma.postMedia.findMany).toHaveBeenCalledTimes(1);
+      expect(page.items[0].data).toEqual({ media: { id: 'media-1', kind: 'image' } });
+      expect(page.items[1].data).toEqual({ media: { id: 'media-2', kind: 'video' } });
+      expect(page.items[2].data).toBeNull();
+      expect(JSON.stringify(page.items)).not.toMatch(/reason/i);
     });
 
     it('resolves to null data when the referenced entity is gone (orphaned payloadRefId)', async () => {

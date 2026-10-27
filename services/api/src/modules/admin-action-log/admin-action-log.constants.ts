@@ -52,6 +52,11 @@ export const ADMIN_ACTION_LOG_ACTIONS = {
   // PATCH /admin/contest/cycles/:id -- an admin edited a Contest within the locking rules. Notes list
   // the field NAMES that changed (the minimum tally and points are recorded as changed, not by value).
   CONTEST_CYCLE_UPDATED: 'contest_cycle.updated',
+  // POST /admin/media-review/:id/approve and /reject (backend/w15-media-review-queue, B-037). targetType
+  // 'post_media'. Approving an approved-but-reported item (keeping it) is logged as MEDIA_APPROVED with a note.
+  // The reject note carries the reason the uploader reads.
+  MEDIA_APPROVED: 'media.approved',
+  MEDIA_REJECTED: 'media.rejected',
 } as const;
 
 export type AdminActionLogAction = (typeof ADMIN_ACTION_LOG_ACTIONS)[keyof typeof ADMIN_ACTION_LOG_ACTIONS];
@@ -67,6 +72,7 @@ export const ADMIN_ACTION_LOG_TARGET_TYPES = {
   ADMIN_USER: 'admin_user',
   USER: 'user',
   CONTEST_CYCLE: 'contest_cycle',
+  POST_MEDIA: 'post_media',
 } as const;
 
 export type AdminActionLogTargetType =

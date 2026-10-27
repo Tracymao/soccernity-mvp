@@ -267,6 +267,7 @@ model User {
   // uploaded for a post or a contest entry. RESTRICT like the other user-owned tables; the
   // anonymiser deletes the rows (and the stored objects) first.
   postMedia        PostMedia[]
+  postMediaReports PostMediaReport[]
   followedBy       Follow[]           @relation("followee")
   following        Follow[]           @relation("follower")
   // backend/w5-profile-block (B-039, Decision Log #396): the two sides of Block.
@@ -2481,8 +2482,40 @@ model PostMedia {
   confirmedAt         DateTime?
   createdAt           DateTime  @default(now())
 
+  // backend/w15-media-review-queue (B-037; Decision Log #419 item 4). The moderator review queue.
+  // reviewEnteredAt / reviewEntrySource: when and how the item FIRST entered the queue ('auto_check' =
+  // the automatic check left it uncertain, gave up, or never ran; 'user_report' = a user reported an
+  // approved item). NULL for an item that never needed a human. An item is in the queue while it is
+  // pending with reviewEnteredAt set, or while reportCount > 0.
+  reviewEnteredAt     DateTime?
+  reviewEntrySource   String?
+  // OPEN (undecided) user reports on an approved item; reset to 0 by a moderator decision.
+  reportCount         Int       @default(0)
+  // Set when reportCount reaches the configured threshold: the item (and so its post) is hidden from
+  // everyone but its author until a moderator decides. Cleared by the decision.
+  hiddenPendingReview Boolean   @default(false)
+  reports             PostMediaReport[]
+
   @@index([postId])
   @@index([uploaderId, createdAt])
   @@index([status, checkState, checkNextAt])
+  @@index([createdAt])
+  @@index([reviewEnteredAt])
+  @@index([reportCount])
+}
+
+// backend/w15-media-review-queue (B-037). One user's report of one approved item. Unique per
+// (media, reporter): a user can report an item once, ever (a resolved report still blocks a repeat).
+// resolvedAt is set when a moderator decides the item.
+model PostMediaReport {
+  id         String    @id @default(uuid())
+  mediaId    String
+  media      PostMedia @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  reporterId String
+  reporter   User      @relation(fields: [reporterId], references: [id])
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  @@unique([mediaId, reporterId])
   @@index([createdAt])
 }

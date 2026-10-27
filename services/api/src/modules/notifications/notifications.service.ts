@@ -10,6 +10,7 @@ import { NotificationsQueryDto } from './dto/notifications-query.dto';
 import { PUBLIC_NAME_SELECT, toPublicUser } from '../users/public-name.util';
 import { notificationBlockHiddenFilter } from './block-visibility.util';
 import { PROFILE_IMAGE_KINDS, ProfileImageKind } from '../users/user-image-review.service';
+import { POST_MEDIA_NOTIFICATION_TYPES } from '../post-media/post-media-review.constants';
 
 // The seven real MVP notification types — see schema.prisma's own comment
 // on Notification.type for the authoritative list and where each is
@@ -137,7 +138,10 @@ export type NotificationData =
   | { milestone: string }
   // profile_image_rejected (B-214): payloadRefId is 'avatar' | 'cover'. Names which image only;
   // the moderator's reason is NOT here, it is on the owner's own GET /users/:id.
-  | { image: ProfileImageKind };
+  | { image: ProfileImageKind }
+  // post_media_approved / post_media_rejected (B-037): payloadRefId is the PostMedia id. Names which file
+  // only; the moderator's reason is NOT here, it is on the uploader's own GET /media/uploads/:id.
+  | { media: { id: string; kind: string } };
 
 export interface NotificationView {
   id: string;
@@ -302,8 +306,9 @@ export class NotificationsService {
       ...new Set(refIdsFor(['contest_final_result']).map((r) => splitContestRef(r).cycleId)),
     ];
     const matchRefIds = refIdsFor(['match_kickoff']);
+    const mediaRefIds = refIdsFor([...POST_MEDIA_NOTIFICATION_TYPES]);
 
-    const [posts, conversations, fixtures, cycles, matches, standingCycleRows] = await Promise.all([
+    const [posts, conversations, fixtures, cycles, matches, standingCycleRows, mediaRows] = await Promise.all([
       postRefIds.length > 0
         ? this.prisma.post.findMany({
             where: { id: { in: postRefIds } },
@@ -377,7 +382,12 @@ export class NotificationsService {
             distinct: ['cycleId'],
           })
         : Promise.resolve([] as { cycleId: string }[]),
+      // Which file a post_media_* notification names (kind only). A deleted file degrades to data: null.
+      mediaRefIds.length > 0
+        ? this.prisma.postMedia.findMany({ where: { id: { in: mediaRefIds } }, select: { id: true, kind: true } })
+        : Promise.resolve([] as { id: string; kind: string }[]),
     ]);
+    const mediaById = new Map(mediaRows.map((m) => [m.id, m]));
     const cyclesWithStandings = new Set(standingCycleRows.map((r) => r.cycleId));
 
     // "Other participant" ids, derived from the conversations above —
@@ -437,6 +447,7 @@ export class NotificationsService {
         cycleById,
         matchByRef,
         cyclesWithStandings,
+        mediaById,
       }),
     }));
   }
@@ -461,6 +472,7 @@ export class NotificationsService {
       >;
       cycleById: Map<string, { id: string; title: string }>;
       cyclesWithStandings: Set<string>;
+      mediaById: Map<string, { id: string; kind: string }>;
       matchByRef: Map<
         string,
         {
@@ -536,6 +548,11 @@ export class NotificationsService {
       }
       case 'age_milestone':
         return { milestone: row.payloadRefId };
+      case 'post_media_approved':
+      case 'post_media_rejected': {
+        const media = lookups.mediaById.get(row.payloadRefId);
+        return media ? { media: { id: media.id, kind: media.kind } } : null;
+      }
       case 'profile_image_rejected':
         return (PROFILE_IMAGE_KINDS as readonly string[]).includes(row.payloadRefId)
           ? { image: row.payloadRefId as ProfileImageKind }

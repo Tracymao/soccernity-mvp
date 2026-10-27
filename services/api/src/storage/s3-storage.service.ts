@@ -153,6 +153,11 @@ export class S3StorageService extends DirectUploadStorageService {
     return { url, headers: { 'Content-Type': contentType } };
   }
 
+  async createDownloadUrl(key: string, expiresInSeconds: number): Promise<string> {
+    const { client, bucket } = this.requireClient('creating a view link');
+    return getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: expiresInSeconds });
+  }
+
   async head(key: string): Promise<{ size: number; contentType: string | null } | null> {
     const { client, bucket } = this.requireClient('reading an upload');
     try {

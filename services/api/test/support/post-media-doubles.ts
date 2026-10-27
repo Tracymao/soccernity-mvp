@@ -61,6 +61,14 @@ export class InMemoryStorage extends DirectUploadStorageService {
     return { url: `https://upload.test/${key}?len=${contentLength}`, headers: { 'Content-Type': contentType } };
   }
 
+  readonly issuedViewLinks: { key: string; expiresInSeconds: number }[] = [];
+
+  async createDownloadUrl(key: string, expiresInSeconds: number): Promise<string> {
+    this.ensure();
+    this.issuedViewLinks.push({ key, expiresInSeconds });
+    return `https://view.test/${key}?ttl=${expiresInSeconds}`;
+  }
+
   async head(key: string) {
     this.ensure();
     const o = this.objects.get(key);
