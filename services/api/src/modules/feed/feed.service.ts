@@ -3,12 +3,14 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StorageService } from '../../storage/storage.service';
 import { hasBlockBetween, notBlockedWith } from '../block/block.util';
 import {
   assertFinalEntryUnlocked,
@@ -24,6 +26,10 @@ import {
   revokeEngagementPointsForPost,
 } from '../points/engagement-points.util';
 import { DEFAULT_POINTS_CAPS, PointsCaps, PointsConfig } from '../points/points-config.service';
+import { attachMediaToPost, loadAttachableMedia } from '../post-media/post-media-attach.util';
+import { collectPostMediaKeys, deleteStoredObjects } from '../post-media/post-media-cleanup.util';
+import { POST_MEDIA_ALL_APPROVED, postMediaVisibleTo } from '../post-media/post-media-visibility.util';
+import { PostMediaConfig } from '../post-media/post-media.config';
 import { recordPostHashtags } from '../search/hashtag.util';
 import { PUBLIC_NAME_SELECT, toPublicUser } from '../users/public-name.util';
 import { decodeFeedSequenceCursor, encodeFeedSequenceCursor } from './cursor.util';
@@ -135,9 +141,15 @@ function toFeedPost(row: RawFeedPost, now: Date): FeedPost {
 //    is a 404, exactly like a post that does not exist, so nobody learns an entry was uploaded.
 //  - communityFeedFrom: GET /posts/feed omits a final entry until the pin is removed (it is "not also
 //    a normal Community-feed post" during the contest month). Only getFeed applies this one.
+//  - post media (backend/w14-post-media-pipeline, Decision Log #419 item 5): a post with ANY attached
+//    media that is not 'approved' is visible to its author only (post-media-visibility.util.ts). ANDed
+//    in here so every read path that already calls this inherits it.
 export function visibleToViewer(viewerId: string, now: Date): Prisma.PostWhereInput {
   return {
-    OR: [{ visibleFrom: null }, { visibleFrom: { lte: now } }, { authorId: viewerId }],
+    AND: [
+      { OR: [{ visibleFrom: null }, { visibleFrom: { lte: now } }, { authorId: viewerId }] },
+      postMediaVisibleTo(viewerId),
+    ],
   };
 }
 
@@ -151,6 +163,8 @@ export interface CreatePostOptions {
   visibleFrom?: Date;
   /** Keep the post out of GET /posts/feed until this instant (Post.communityFeedFrom). */
   communityFeedFrom?: Date;
+  /** The final contest entry takes exactly one uploaded VIDEO (Decision Log #419 item 7). */
+  singleVideoOnly?: boolean;
   /** Runs inside the post's own transaction, so a caller can add rows that must land atomically with it. */
   inTransaction?: (tx: Prisma.TransactionClient, post: { id: string; createdAt: Date }) => Promise<void>;
 }
@@ -340,7 +354,13 @@ export class FeedService {
     // backend/w12-points (B-093): the two daily caps, held in configuration. Optional so a unit test or
     // a module that does not import PointsModule falls back to the spec's defaults (40 / 20).
     @Optional() private readonly pointsConfig?: PointsConfig,
+    // backend/w14-post-media-pipeline: the per-post file limit (configuration) and the object store the
+    // deleted post's files are removed from. Both optional for the same reason as the two above.
+    @Optional() private readonly postMediaConfig?: PostMediaConfig,
+    @Optional() private readonly storage?: StorageService,
   ) {}
+
+  private readonly mediaLogger = new Logger('FeedService.media');
 
   private get pointsCaps(): PointsCaps {
     return this.pointsConfig?.caps ?? DEFAULT_POINTS_CAPS;
@@ -356,6 +376,16 @@ export class FeedService {
       throw new BadRequestException('A post cannot belong to both a club page and a Banter Room');
     }
 
+    // backend/w14-post-media-pipeline (Decision Log #419): media comes ONLY from the caller's own verified
+    // uploads (mediaIds); a free URL is no longer accepted on any user route. The files must be the
+    // author's, unattached, verified and not rejected. They need not be approved yet: a post with media
+    // still under review is simply visible to its author only (post-media-visibility.util.ts).
+    const mediaIds = dto.mediaIds ?? [];
+    const media = await loadAttachableMedia(this.prisma, authorId, mediaIds, {
+      singleVideoOnly: options.singleVideoOnly,
+      maxPerPost: this.postMediaConfig?.limits.maxPerPost,
+    });
+
     try {
       // Wrapped in a transaction (previously a bare create) so the
       // baseline-engagement points award lands atomically with the Post
@@ -369,7 +399,7 @@ export class FeedService {
           data: {
             authorId,
             contentText: dto.contentText,
-            mediaUrls: dto.mediaUrls ?? [],
+            mediaUrls: media.map((m) => m.publicUrl),
             clubPageId: dto.clubPageId,
             banterRoomId: dto.banterRoomId,
             visibleFrom: options.visibleFrom,
@@ -386,6 +416,7 @@ export class FeedService {
         // search/hashtag.util.ts and search/README.md's "Trending
         // topics" section.
         await recordPostHashtags(tx, post.id, dto.contentText, post.createdAt);
+        await attachMediaToPost(tx, post.id, authorId, mediaIds);
         if (options.inTransaction) {
           await options.inTransaction(tx, { id: post.id, createdAt: post.createdAt });
           // Re-read so the returned post carries the contest label the callback just attached.
@@ -723,7 +754,7 @@ export class FeedService {
         : publicOnly
           ? {
               id: postId,
-              AND: [{ OR: [{ visibleFrom: null }, { visibleFrom: { lte: this.clock.now() } }] }],
+              AND: [{ OR: [{ visibleFrom: null }, { visibleFrom: { lte: this.clock.now() } }] }, POST_MEDIA_ALL_APPROVED],
             }
           : { id: postId },
       select: { id: true, authorId: true, commentPermission: true },
@@ -1221,7 +1252,11 @@ export class FeedService {
     if (post.authorId !== callerId) {
       throw new ForbiddenException('You may only delete your own posts');
     }
+    // The rows cascade with the post; the stored objects are removed by the application afterwards
+    // (Decision Log #419 item 9), so read their keys first.
+    let mediaKeys: string[] = [];
     await this.prisma.$transaction(async (tx) => {
+      mediaKeys = await collectPostMediaKeys(tx, postId);
       const links = await tx.postHashtag.findMany({ where: { postId }, select: { hashtagId: true } });
       for (const { hashtagId } of links) {
         await tx.hashtag.updateMany({
@@ -1234,6 +1269,7 @@ export class FeedService {
       await revokeEngagementPointsForPost(tx, postId, this.clock.now());
       await tx.post.delete({ where: { id: postId } });
     });
+    await deleteStoredObjects(this.storage, this.mediaLogger, mediaKeys, `Delete of post ${postId}`);
   }
 
   // POST /posts/:id/save. SavedPost.@@unique([userId, postId]) backs the

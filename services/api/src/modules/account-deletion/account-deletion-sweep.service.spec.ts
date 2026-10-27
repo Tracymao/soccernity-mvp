@@ -18,6 +18,8 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
     // B-039: Block rows (both directions) are removed with the user's other relationship rows.
     block: { deleteMany: jest.fn() },
     notification: { deleteMany: jest.fn() },
+    // backend/w14-post-media-pipeline: the user's uploaded post media (none by default).
+    postMedia: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() },
     matchSubscription: { deleteMany: jest.fn() },
     // B-092: a viewer's Final-week carousel impression rows go with their account.
     contestImpression: { deleteMany: jest.fn() },
@@ -116,6 +118,48 @@ describe('AccountDeletionSweepService', () => {
       const storage = { upload: jest.fn(), delete: jest.fn() };
       await new AccountDeletionSweepService(prisma, storage).anonymizeUser('user-1', false);
       expect(storage.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  // backend/w14-post-media-pipeline (Decision Log #419 item 9): the user's uploaded post and contest files
+  // go with the account, even though #341 keeps their posts.
+  describe('anonymizeUser post media', () => {
+    const rows = [
+      { id: 'm1', postId: 'post-1', publicUrl: 'https://cdn.test/post-media/user-1/m1.jpg', publicKey: 'post-media/user-1/m1.jpg', quarantineKey: null },
+      { id: 'm2', postId: null, publicUrl: null, publicKey: null, quarantineKey: 'quarantine/user-1/m2' },
+    ];
+
+    it('deletes the rows, strips their URLs from surviving posts, and removes the objects after the commit', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.postMedia.findMany as jest.Mock).mockResolvedValue(rows);
+      const storage = { upload: jest.fn(), delete: jest.fn().mockResolvedValue(undefined) };
+
+      await new AccountDeletionSweepService(prisma, storage).anonymizeUser('user-1', false);
+
+      expect(prisma.postMedia.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { uploaderId: 'user-1' } }));
+      expect(prisma.postMedia.deleteMany).toHaveBeenCalledWith({ where: { uploaderId: 'user-1' } });
+      const sql = (prisma.$executeRaw as unknown as jest.Mock).mock.calls.map((c) => (c[0] as string[]).join('?'));
+      expect(sql.some((q) => q.includes('array_remove("mediaUrls"'))).toBe(true);
+      expect(storage.delete).toHaveBeenCalledWith('post-media/user-1/m1.jpg');
+      expect(storage.delete).toHaveBeenCalledWith('quarantine/user-1/m2');
+      const upd = (prisma.user.update as jest.Mock).mock.invocationCallOrder[0];
+      expect(storage.delete.mock.invocationCallOrder[0]).toBeGreaterThan(upd);
+    });
+
+    it('a user with no uploaded media triggers no media deletion at all', async () => {
+      const prisma = buildPrismaMock();
+      const storage = { upload: jest.fn(), delete: jest.fn() };
+      await new AccountDeletionSweepService(prisma, storage).anonymizeUser('user-1', false);
+      expect(prisma.postMedia.deleteMany).not.toHaveBeenCalled();
+      expect(storage.delete).not.toHaveBeenCalled();
+    });
+
+    it('a storage failure removing the files never fails the anonymization', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.postMedia.findMany as jest.Mock).mockResolvedValue(rows);
+      const storage = { upload: jest.fn(), delete: jest.fn().mockRejectedValue(new Error('503')) };
+      await expect(new AccountDeletionSweepService(prisma, storage).anonymizeUser('user-1', false)).resolves.toBeUndefined();
+      expect(prisma.user.update).toHaveBeenCalled();
     });
   });
 

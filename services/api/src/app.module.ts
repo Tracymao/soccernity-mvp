@@ -31,6 +31,7 @@ import { AdminStaffVettingModule } from './modules/admin-staff-vetting/admin-sta
 import { AdminStaffRolesModule } from './modules/admin-staff-roles/admin-staff-roles.module';
 import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module';
 import { MediaModule } from './modules/media/media.module';
+import { PostMediaModule } from './modules/post-media/post-media.module';
 import { BlogModule } from './modules/blog/blog.module';
 import { SportsModule } from './modules/sports/sports.module';
 import { SearchModule } from './modules/search/search.module';
@@ -221,6 +222,8 @@ import { ClockModule } from './clock/clock.module';
     // modules/media/README.md. Live-bucket upload is UNVERIFIED pending
     // real provider credentials — tests inject a fake StorageService.
     MediaModule,
+    // backend/w14-post-media-pipeline (B-041, B-036; Decision Log #419): user post and contest-entry media.
+    PostMediaModule,
     // sprint-2/contest-data-model-backend — Decision Log #218/#219. The
     // Contest weekly-cycle data model + scoring ledger + the
     // active-contest query (Decision Log #61/#70/#71/#130/#188). New

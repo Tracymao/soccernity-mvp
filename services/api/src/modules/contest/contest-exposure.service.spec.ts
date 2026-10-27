@@ -1,3 +1,4 @@
+import { POST_MEDIA_ALL_APPROVED } from '../post-media/post-media-visibility.util';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -102,7 +103,9 @@ describe('ContestExposureService.getCarousel', () => {
     const where = prisma.contestEntry.findMany.mock.calls[0][0].where;
     expect(where.roundId).toBe('round-4');
     expect(where.user).toEqual({ is: CONTEST_ELIGIBLE_USER });
-    expect(where.post.is.OR).toEqual([{ visibleFrom: null }, { visibleFrom: { lte: LIVE } }]);
+    // Revealed AND every uploaded file approved (Decision Log #419).
+    expect(where.post.is.AND[0].OR).toEqual([{ visibleFrom: null }, { visibleFrom: { lte: LIVE } }]);
+    expect(where.post.is.AND[1]).toEqual(POST_MEDIA_ALL_APPROVED);
   });
 
   it('never returns the viewer’s own entry and never a blocked pair’s entry (either direction)', async () => {
@@ -242,7 +245,9 @@ describe('ContestExposureService.recordImpression', () => {
     await expect(service.recordImpression(VIEWER, 'e1', EVENT, LIVE)).rejects.toBeInstanceOf(NotFoundException);
     const where = prisma.contestEntry.findFirst.mock.calls[0][0].where;
     expect(where).toMatchObject({ id: 'e1', roundId: 'round-4', user: { is: CONTEST_ELIGIBLE_USER } });
-    expect(where.post.is.OR).toEqual([{ visibleFrom: null }, { visibleFrom: { lte: LIVE } }]);
+    // Revealed AND every uploaded file approved (Decision Log #419).
+    expect(where.post.is.AND[0].OR).toEqual([{ visibleFrom: null }, { visibleFrom: { lte: LIVE } }]);
+    expect(where.post.is.AND[1]).toEqual(POST_MEDIA_ALL_APPROVED);
     expect(prisma.contestImpression.create).not.toHaveBeenCalled();
   });
 

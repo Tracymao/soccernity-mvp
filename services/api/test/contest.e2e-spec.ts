@@ -1,4 +1,5 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
@@ -133,6 +134,33 @@ describe('Contest e2e: the self-running month', () => {
 
   const ledger = (userId: string, source: string) =>
     prisma().pointsLedgerEntry.findMany({ where: { userId, source } });
+
+  // backend/w14-post-media-pipeline (Decision Log #419 item 7): a final entry is an UPLOADED video named by
+  // id, not a pasted link. This seeds an already-approved, verified, unattached video upload for `user`
+  // (the upload pipeline itself is covered by post-media.e2e-spec.ts) and returns the request body.
+  async function finalBody(user: TestUser, text = 'my final') {
+    const id = randomUUID();
+    await prisma().postMedia.create({
+      data: {
+        id,
+        uploaderId: user.userId,
+        kind: 'video',
+        declaredContentType: 'video/mp4',
+        declaredSize: 1000,
+        uploadState: 'ready',
+        publicKey: `post-media/${user.userId}/${id}.mp4`,
+        publicUrl: `https://cdn.example.com/post-media/${user.userId}/${id}.mp4`,
+        byteSize: 1000,
+        contentType: 'video/mp4',
+        durationSeconds: 20,
+        status: 'approved',
+        decisionSource: 'auto',
+        decidedAt: new Date(),
+        confirmedAt: new Date(),
+      },
+    });
+    return { contentText: text, mediaId: id };
+  }
 
   // Seeds a decided weekly round directly (the stage under test is later), so a test about the final
   // does not have to replay three weeks. A real post, a real entry, a real winner row.
@@ -364,8 +392,7 @@ describe('Contest e2e: the self-running month', () => {
 
     // ---- week 4: the finalist upload window (08:00 day 22 to 00:00 day 25) ----------------------
     at('2026-10-22T06:59:59.999Z');
-    const body = { contentText: 'my final', mediaUrls: ['https://cdn.example.com/final.mp4'] };
-    expect((await request(server()).post('/contest/final-entry').set(auth(A.token)).send(body).expect(409)).body.code).toBe(
+    expect((await request(server()).post('/contest/final-entry').set(auth(A.token)).send(await finalBody(A)).expect(409)).body.code).toBe(
       'contest_final_upload_closed',
     );
     at('2026-10-22T07:00:00.000Z');
@@ -373,17 +400,17 @@ describe('Contest e2e: the self-running month', () => {
     expect((await current(A)).body.callerCanEnter).toBe(true);
     expect((await current(F)).body.callerCanEnter).toBe(false); // not a finalist
     expect(JSON.stringify((await current(F)).body.rounds)).toMatch(/Your best goal/); // the final's task shows while uploading
-    const notFinalist = await request(server()).post('/contest/final-entry').set(auth(F.token)).send(body).expect(403);
+    const notFinalist = await request(server()).post('/contest/final-entry').set(auth(F.token)).send(await finalBody(F)).expect(403);
     expect(notFinalist.body.code).toBe('contest_not_finalist');
     await request(server()).post('/contest/final-entry').set(auth(A.token)).send({ contentText: 'x', mediaUrls: [] }).expect(400);
 
     // A follows nobody; B follows A (to prove the final is not in a follower's feed)
     await request(server()).post(`/users/${A.userId}/follow`).set(auth(B.token)).expect(200);
 
-    const finalA = (await request(server()).post('/contest/final-entry').set(auth(A.token)).send(body).expect(201)).body;
+    const finalA = (await request(server()).post('/contest/final-entry').set(auth(A.token)).send(await finalBody(A)).expect(201)).body;
     expect(finalA.post.contest).toMatchObject({ kind: 'final', weekNumber: 4, pinned: true, label: 'Contest post' });
     const finalPostA: string = finalA.post.id;
-    await request(server()).post('/contest/final-entry').set(auth(A.token)).send(body).expect(409); // one final entry
+    await request(server()).post('/contest/final-entry').set(auth(A.token)).send(await finalBody(A)).expect(409); // one final entry
 
     // HIDDEN from everyone but its author until the reveal -- a 404, like a post that does not exist
     await request(server()).get(`/posts/${finalPostA}`).set(auth(B.token)).expect(404);
@@ -420,11 +447,11 @@ describe('Contest e2e: the self-running month', () => {
 
     // B uploads on the last second; the window closes at 00:00 on day 25 even before the sweep runs
     at('2026-10-24T22:59:59.999Z');
-    const finalB = (await request(server()).post('/contest/final-entry').set(auth(B.token)).send(body).expect(201)).body;
+    const finalB = (await request(server()).post('/contest/final-entry').set(auth(B.token)).send(await finalBody(B)).expect(201)).body;
     const finalPostB: string = finalB.post.id;
     like(L[0], finalPostB); // (not awaited: a request that was never sent cannot count)
     at('2026-10-24T23:00:00.000Z');
-    expect((await request(server()).post('/contest/final-entry').set(auth(C.token)).send(body).expect(409)).body.code).toBe(
+    expect((await request(server()).post('/contest/final-entry').set(auth(C.token)).send(await finalBody(C)).expect(409)).body.code).toBe(
       'contest_final_upload_closed',
     );
 
@@ -512,10 +539,9 @@ describe('Contest e2e: the self-running month', () => {
 
     at('2027-02-22T08:00:00Z');
     await tick();
-    const body = { contentText: 'final', mediaUrls: ['https://cdn.example.com/f.mp4'] };
-    const fx = (await request(server()).post('/contest/final-entry').set(auth(X.token)).send(body).expect(201)).body.post.id;
+    const fx = (await request(server()).post('/contest/final-entry').set(auth(X.token)).send(await finalBody(X)).expect(201)).body.post.id;
     at('2027-02-22T09:00:00Z');
-    const fy = (await request(server()).post('/contest/final-entry').set(auth(Y.token)).send(body).expect(201)).body.post.id;
+    const fy = (await request(server()).post('/contest/final-entry').set(auth(Y.token)).send(await finalBody(Y)).expect(201)).body.post.id;
 
     // S1-S3 follow X from the start; S4 does NOT follow X when it likes, and follows afterwards
     for (const s of [S[0], S[1], S[2]]) await request(server()).post(`/users/${X.userId}/follow`).set(auth(s.token)).expect(200);
@@ -558,8 +584,7 @@ describe('Contest e2e: the self-running month', () => {
     await seedWeeklyWinner(cycle.id, 3, Z, 1);
     at('2026-12-22T08:00:00Z');
     await tick();
-    const body = { contentText: 'final', mediaUrls: ['https://cdn.example.com/f.mp4'] };
-    const fx = (await request(server()).post('/contest/final-entry').set(auth(X.token)).send(body).expect(201)).body.post.id;
+    const fx = (await request(server()).post('/contest/final-entry').set(auth(X.token)).send(await finalBody(X)).expect(201)).body.post.id;
     at('2026-12-25T00:00:00Z');
     await tick();
     await like(fan, fx).expect(200);
@@ -594,8 +619,7 @@ describe('Contest e2e: the self-running month', () => {
     expect(state.calendarState).toMatchObject({ kind: 'no_final' });
     expect(state.finalists).toEqual([]);
     expect(state.forfeitedWeeks.map((w: { weekNumber: number }) => w.weekNumber)).toEqual([1, 2, 3]);
-    const body = { contentText: 'final', mediaUrls: ['https://cdn.example.com/f.mp4'] };
-    expect((await request(server()).post('/contest/final-entry').set(auth(user.token)).send(body).expect(403)).body.code).toBe('contest_not_finalist');
+    expect((await request(server()).post('/contest/final-entry').set(auth(user.token)).send(await finalBody(user)).expect(403)).body.code).toBe('contest_not_finalist');
 
     at('2027-01-01T00:00:00Z');
     expect((await tick()).completed).toBe(1);

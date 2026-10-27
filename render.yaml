@@ -175,6 +175,59 @@ services:
       # S3_REGION: code default; R2 uses the literal 'auto'
       - key: S3_REGION
         value: "auto"
+      # --- User post and contest-entry media (backend/w14-post-media-pipeline, Decision Log #419) ---
+      # All limits below equal the code defaults; they exist so each can be changed without a deploy of code.
+      - key: POST_MEDIA_IMAGE_MAX_BYTES
+        value: "10485760"
+      - key: POST_MEDIA_VIDEO_MAX_BYTES
+        value: "104857600"
+      - key: POST_MEDIA_VIDEO_MAX_SECONDS
+        value: "120"
+      - key: POST_MEDIA_MAX_PER_POST
+        value: "10"
+      - key: POST_MEDIA_UPLOAD_LINK_TTL_SECONDS
+        value: "900"
+      # Per-user upload throttle: at most MAX upload links per WINDOW_SECONDS.
+      - key: POST_MEDIA_UPLOAD_RATE_LIMIT_MAX
+        value: "30"
+      - key: POST_MEDIA_UPLOAD_RATE_LIMIT_WINDOW_SECONDS
+        value: "3600"
+      - key: POST_MEDIA_QUARANTINE_MAX_AGE_HOURS
+        value: "24"
+      # ffmpeg / ffprobe strip a video's metadata and sample frames for the check. NOT installed on Render's
+      # native Node runtime: until they are on the host, every video upload fails closed (503).
+      - key: FFMPEG_PATH
+        value: "ffmpeg"
+      - key: FFPROBE_PATH
+        value: "ffprobe"
+      # --- Automatic media check (Amazon Rekognition, EU region; Decision Log #419 item 4) ---
+      # Placeholders/unset = wired but inactive: nothing is checked and NOTHING is approved automatically.
+      - key: REKOGNITION_ACCESS_KEY_ID
+        sync: false
+      - key: REKOGNITION_SECRET_ACCESS_KEY
+        sync: false
+      - key: REKOGNITION_REGION
+        value: "eu-west-1"
+      # Labels at or above PASS keep a file out of auto-approval; a reject category at or above REJECT is
+      # auto-rejected. Stricter for an uploader who is a minor.
+      - key: MEDIA_CHECK_PASS_THRESHOLD
+        value: "40"
+      - key: MEDIA_CHECK_REJECT_THRESHOLD
+        value: "90"
+      - key: MEDIA_CHECK_PASS_THRESHOLD_MINOR
+        value: "20"
+      - key: MEDIA_CHECK_REJECT_THRESHOLD_MINOR
+        value: "80"
+      - key: MEDIA_CHECK_REJECT_CATEGORIES
+        value: "Explicit,Violence,Visually Disturbing,Hate Symbols"
+      - key: MEDIA_CHECK_VIDEO_FRAME_INTERVAL_SECONDS
+        value: "5"
+      - key: MEDIA_CHECK_VIDEO_MAX_FRAMES
+        value: "30"
+      - key: MEDIA_CHECK_MAX_ATTEMPTS
+        value: "5"
+      - key: MEDIA_CHECK_BATCH_SIZE
+        value: "10"
       # --- Guardian card verification (Stripe; use TEST keys until a real account exists) ---
       - key: STRIPE_SECRET_KEY
         sync: false
@@ -340,6 +393,59 @@ services:
       # S3_REGION: code default; R2 uses the literal 'auto'
       - key: S3_REGION
         value: "auto"
+      # --- User post and contest-entry media (backend/w14-post-media-pipeline, Decision Log #419) ---
+      # All limits below equal the code defaults; they exist so each can be changed without a deploy of code.
+      - key: POST_MEDIA_IMAGE_MAX_BYTES
+        value: "10485760"
+      - key: POST_MEDIA_VIDEO_MAX_BYTES
+        value: "104857600"
+      - key: POST_MEDIA_VIDEO_MAX_SECONDS
+        value: "120"
+      - key: POST_MEDIA_MAX_PER_POST
+        value: "10"
+      - key: POST_MEDIA_UPLOAD_LINK_TTL_SECONDS
+        value: "900"
+      # Per-user upload throttle: at most MAX upload links per WINDOW_SECONDS.
+      - key: POST_MEDIA_UPLOAD_RATE_LIMIT_MAX
+        value: "30"
+      - key: POST_MEDIA_UPLOAD_RATE_LIMIT_WINDOW_SECONDS
+        value: "3600"
+      - key: POST_MEDIA_QUARANTINE_MAX_AGE_HOURS
+        value: "24"
+      # ffmpeg / ffprobe strip a video's metadata and sample frames for the check. NOT installed on Render's
+      # native Node runtime: until they are on the host, every video upload fails closed (503).
+      - key: FFMPEG_PATH
+        value: "ffmpeg"
+      - key: FFPROBE_PATH
+        value: "ffprobe"
+      # --- Automatic media check (Amazon Rekognition, EU region; Decision Log #419 item 4) ---
+      # Placeholders/unset = wired but inactive: nothing is checked and NOTHING is approved automatically.
+      - key: REKOGNITION_ACCESS_KEY_ID
+        sync: false
+      - key: REKOGNITION_SECRET_ACCESS_KEY
+        sync: false
+      - key: REKOGNITION_REGION
+        value: "eu-west-1"
+      # Labels at or above PASS keep a file out of auto-approval; a reject category at or above REJECT is
+      # auto-rejected. Stricter for an uploader who is a minor.
+      - key: MEDIA_CHECK_PASS_THRESHOLD
+        value: "40"
+      - key: MEDIA_CHECK_REJECT_THRESHOLD
+        value: "90"
+      - key: MEDIA_CHECK_PASS_THRESHOLD_MINOR
+        value: "20"
+      - key: MEDIA_CHECK_REJECT_THRESHOLD_MINOR
+        value: "80"
+      - key: MEDIA_CHECK_REJECT_CATEGORIES
+        value: "Explicit,Violence,Visually Disturbing,Hate Symbols"
+      - key: MEDIA_CHECK_VIDEO_FRAME_INTERVAL_SECONDS
+        value: "5"
+      - key: MEDIA_CHECK_VIDEO_MAX_FRAMES
+        value: "30"
+      - key: MEDIA_CHECK_MAX_ATTEMPTS
+        value: "5"
+      - key: MEDIA_CHECK_BATCH_SIZE
+        value: "10"
       # --- Guardian card verification (Stripe; use TEST keys until a real account exists) ---
       - key: STRIPE_SECRET_KEY
         sync: false

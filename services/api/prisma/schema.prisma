@@ -263,6 +263,10 @@ model User {
   // view has no viewer), so this array is simply every view a LOGGED-IN
   // account is on record for; no business data of its own.
   postViews        PostView[]
+  // backend/w14-post-media-pipeline (B-041, B-036; Decision Log #419): every file this user has
+  // uploaded for a post or a contest entry. RESTRICT like the other user-owned tables; the
+  // anonymiser deletes the rows (and the stored objects) first.
+  postMedia        PostMedia[]
   followedBy       Follow[]           @relation("followee")
   following        Follow[]           @relation("follower")
   // backend/w5-profile-block (B-039, Decision Log #396): the two sides of Block.
@@ -809,6 +813,11 @@ model Post {
   // entry per Post (ContestEntry.postId is @unique). onDelete: Cascade on
   // that side, so deleting a Post takes its entry with it.
   contestEntry ContestEntry?
+  // backend/w14-post-media-pipeline (B-041, B-036; Decision Log #419): the uploaded media attached to
+  // this post. A post with ANY attached media that is not 'approved' is visible to its author only
+  // (post-visibility.util.ts). Deleting the post deletes these rows (Cascade); the stored objects are
+  // removed by the application, not the database.
+  media        PostMedia[]
   likeCount    Int           @default(0)
   // Same denormalized-cache obligation as likeCount immediately above:
   // must be incremented transactionally alongside Comment row creation
@@ -2408,4 +2417,72 @@ model PageView {
 
   @@index([route])
   @@index([occurredAt])
+}
+
+
+// backend/w14-post-media-pipeline (B-041, B-036; Decision Log #419). One file a user uploaded for a post
+// or a contest entry. The file goes browser -> object store through a one-time link into a QUARANTINE
+// prefix, then the server verifies it, strips its metadata and moves it to the public prefix. It is then
+// 'pending' and invisible to everyone but its uploader until it is approved (automatically by the
+// Rekognition check, or by a moderator). decisionSource records which.
+//
+// Status flow: pending -> approved | rejected. 'pending' with decisionSource NULL is the moderator queue
+// (the automatic check found something between the pass and reject thresholds, gave up after its retries,
+// or the check service is not configured). Nothing here is EVER approved by default.
+//
+// checkLabels holds moderation CATEGORY NAMES only (never confidences, never an image), and is never
+// returned to the uploader. decidedBy is a plain admin id (no foreign key: the decision must survive the
+// admin account).
+model PostMedia {
+  id                  String    @id @default(uuid())
+  // Insertion order, for keyset pagination of the (future) moderator queue.
+  sequence            Int       @unique @default(autoincrement())
+  uploaderId          String
+  uploader            User      @relation(fields: [uploaderId], references: [id])
+  // 'image' | 'video'. Fixed at link creation from the declared content type.
+  kind                String
+  declaredContentType String
+  declaredSize        Int
+  // 'awaiting_upload' (link issued) | 'processing' (confirm in progress) | 'ready' (verified, stripped,
+  // stored in the public prefix).
+  uploadState         String    @default("awaiting_upload")
+  processingUntil     DateTime?
+  // Set while the unprocessed original exists; cleared once it is deleted. A row whose quarantineKey is
+  // still set 24 h after createdAt is purged.
+  quarantineKey       String?   @unique
+  publicKey           String?   @unique
+  publicUrl           String?
+  // The PROCESSED file's size and type (after stripping), and a video's duration.
+  byteSize            Int?
+  contentType         String?
+  durationSeconds     Float?
+  // 'pending' | 'approved' | 'rejected'
+  status              String    @default("pending")
+  // 'auto' | 'moderator'; NULL while pending.
+  decisionSource      String?
+  rejectionReason     String?
+  checkLabels         Json?
+  decidedAt           DateTime?
+  decidedBy           String?
+  // The automatic check's own bookkeeping. 'not_queued' (nothing to check yet) | 'queued' | 'checking'
+  // | 'done' | 'gave_up'. checkNextAt is when a queued row is next due; checkLeaseUntil frees a row
+  // whose worker died mid-check.
+  checkState          String    @default("not_queued")
+  checkAttempts       Int       @default(0)
+  checkNextAt         DateTime?
+  checkLeaseUntil     DateTime?
+  checkedAt           DateTime?
+  // The last failure's error NAME only (never content).
+  checkError          String?
+  // NULL until attached to a post. Cascade: deleting the post deletes the row; the stored objects are
+  // deleted by the application.
+  postId              String?
+  post                Post?     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  confirmedAt         DateTime?
+  createdAt           DateTime  @default(now())
+
+  @@index([postId])
+  @@index([uploaderId, createdAt])
+  @@index([status, checkState, checkNextAt])
+  @@index([createdAt])
 }

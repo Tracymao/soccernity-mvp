@@ -461,3 +461,9 @@ comment for the caller-responsibility note (a real, irreversible hard
 delete with no confirmation step of its own — the caller owns
 authorization/confirmation, here `AdminRolesGuard` plus the admin having
 already chosen "delete" in the Users console).
+
+## Post media (backend/w14-post-media-pipeline; Decision Log #419 item 9)
+
+`anonymizeUser` also deletes every `PostMedia` row the user uploaded, removes those files' URLs from the `Post.mediaUrls` of posts
+that survive anonymisation (#341 keeps the post), and, after the transaction commits, removes the stored objects (public and
+quarantine) best effort. A storage failure never fails the anonymisation; the key is logged for manual cleanup.

@@ -158,6 +158,24 @@ No two may be the same.
      r2.dev subdomain or a custom domain). The R2 endpoint above is not
      publicly readable, so until this is set stored files get a URL nobody can
      open. Leave blank until the bucket has a public address.
+   - **Post and contest-entry media** (backend/w14-post-media-pipeline,
+     Decision Log #419). Users upload photos and videos straight to the same R2
+     bucket through a one-time link. Four things are a human job and are not
+     in `render.yaml`: (1) a **CORS rule on the R2 bucket** that allows `PUT`
+     from your web app's address (without it every browser upload is blocked);
+     (2) **ffmpeg and ffprobe on the API host**: Render's native Node runtime
+     does not include them, so until they are installed (for example by moving
+     the API to a Docker image that has them) every video upload is refused
+     with a 503 and stores nothing; photos are unaffected; (3) an **AWS
+     account and an IAM user** allowed `rekognition:DetectModerationLabels`,
+     whose keys go in `REKOGNITION_ACCESS_KEY_ID` and
+     `REKOGNITION_SECRET_ACCESS_KEY` (region `eu-west-1`); until then no
+     automatic check runs and every upload waits for a moderator (nothing is
+     ever approved automatically); (4) optionally a bucket lifecycle rule that
+     expires the `quarantine/` prefix after 1 day, as a backstop to the API's
+     own hourly cleanup. The size, length and moderation limits
+     (`POST_MEDIA_*`, `MEDIA_CHECK_*`) already carry their defaults in
+     `render.yaml`.
    - `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY` — Stripe **test** keys until
      a real account exists. Placeholders mean the card-check step for
      under-13 US guardians fails closed (that guardian cannot complete

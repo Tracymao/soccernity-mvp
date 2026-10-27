@@ -369,3 +369,8 @@ pages/media/mediaShared.tsx           — formatDate/formatBytes/displayNameFrom
 pages/media/media.css
 pages/media/media.test.tsx
 ```
+
+## Not the user pipeline (backend/w14-post-media-pipeline)
+
+This module is the ADMIN media library (`/admin/media`, `MediaAsset`, an admin picks a cover image). It is unchanged. User post and
+contest-entry media is a separate pipeline in `../post-media/`; the two share only the `StorageService` abstraction.

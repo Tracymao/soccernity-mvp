@@ -1,4 +1,4 @@
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsString, IsUrl, MaxLength, MinLength } from 'class-validator';
+import { IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
 // POST /contest/final-entry -- a finalist uploads their NEW final video (docs/contest-spec.md
 // section 10). Unlike the weekly flow (create a post, then POST /contest/entries), the final entry's
@@ -6,18 +6,17 @@ import { ArrayMaxSize, ArrayMinSize, IsArray, IsString, IsUrl, MaxLength, MinLen
 // would be a public post until the second call flagged it, and "finalist videos are hidden from
 // everyone except their owner until the reveal" would not hold.
 //
-// Same field limits as CreatePostDto (3000 characters of text, up to 10 URLs), but at least one media
-// URL is required: the final is a video upload. The server cannot check the URL is a video (no
-// media-upload endpoint exists for posts; the URL is whatever the client holds) -- OPEN in the report.
+// backend/w14-post-media-pipeline (Decision Log #419 item 7): the final's video is an UPLOAD, not a
+// pasted link. `mediaId` is the id of a video the caller uploaded through POST /media/uploads (exactly
+// one, owned by the caller, unattached, not rejected, kind 'video' -- checked in FeedService via
+// post-media-attach.util.ts). A final entry whose video is not APPROVED by the reveal is not shown
+// (post-media-visibility.util.ts), however the reveal clock stands.
 export class SubmitFinalEntryDto {
   @IsString()
   @MinLength(1)
   @MaxLength(3000)
   contentText!: string;
 
-  @IsArray()
-  @ArrayMinSize(1)
-  @ArrayMaxSize(10)
-  @IsUrl({}, { each: true })
-  mediaUrls!: string[];
+  @IsUUID()
+  mediaId!: string;
 }

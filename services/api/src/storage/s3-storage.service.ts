@@ -1,7 +1,18 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { StorageService } from './storage.service';
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { createReadStream, createWriteStream } from 'fs';
+import { stat } from 'fs/promises';
+import { Readable } from 'stream';
+import { pipeline } from 'stream/promises';
+import { DirectUploadStorageService } from './direct-upload-storage.service';
 
 // The real StorageService implementation — configured ENTIRELY through
 // env vars (S3_ENDPOINT, S3_REGION, S3_BUCKET, S3_ACCESS_KEY,
@@ -22,7 +33,7 @@ import { StorageService } from './storage.service';
 // below both key off the same "is a custom endpoint set" check, so they
 // can never disagree with each other.
 @Injectable()
-export class S3StorageService extends StorageService {
+export class S3StorageService extends DirectUploadStorageService {
   private readonly logger = new Logger(S3StorageService.name);
   private readonly isConfigured: boolean;
   private readonly client?: S3Client;
@@ -110,5 +121,70 @@ export class S3StorageService extends StorageService {
     }
 
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+  }
+
+  // ---- backend/w14-post-media-pipeline (B-041; Decision Log #419) --------------------------------
+
+  private requireClient(action: string): { client: S3Client; bucket: string; publicUrlBase: string } {
+    if (!this.isConfigured || !this.client || !this.bucket || !this.publicUrlBase) {
+      throw new ServiceUnavailableException(
+        `Media storage is not configured yet — set S3_BUCKET/S3_ACCESS_KEY/S3_SECRET_KEY to a real provider before ${action}.`,
+      );
+    }
+    return { client: this.client, bucket: this.bucket, publicUrlBase: this.publicUrlBase };
+  }
+
+  async createUploadUrl(
+    key: string,
+    contentType: string,
+    contentLength: number,
+    expiresInSeconds: number,
+  ): Promise<{ url: string; headers: Record<string, string> }> {
+    const { client, bucket } = this.requireClient('creating an upload link');
+    const url = await getSignedUrl(
+      client,
+      new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: contentType, ContentLength: contentLength }),
+      {
+        expiresIn: expiresInSeconds,
+        // Bind the type and the exact length into the signature (they are otherwise left unsigned).
+        signableHeaders: new Set(['content-type', 'content-length']),
+      },
+    );
+    return { url, headers: { 'Content-Type': contentType } };
+  }
+
+  async head(key: string): Promise<{ size: number; contentType: string | null } | null> {
+    const { client, bucket } = this.requireClient('reading an upload');
+    try {
+      const res = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+      return { size: res.ContentLength ?? 0, contentType: res.ContentType ?? null };
+    } catch (err) {
+      const name = (err as { name?: string }).name;
+      const status = (err as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+      if (name === 'NotFound' || name === 'NoSuchKey' || status === 404) return null;
+      throw err;
+    }
+  }
+
+  async downloadToFile(key: string, destPath: string): Promise<void> {
+    const { client, bucket } = this.requireClient('reading an upload');
+    const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    if (!res.Body) throw new Error(`Object ${key} has no body`);
+    await pipeline(res.Body as Readable, createWriteStream(destPath));
+  }
+
+  async uploadFile(filePath: string, key: string, contentType: string): Promise<string> {
+    const { client, bucket, publicUrlBase } = this.requireClient('uploading');
+    const { size } = await stat(filePath);
+    await client.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: createReadStream(filePath),
+        ContentType: contentType,
+        ContentLength: size,
+      }),
+    );
+    return `${publicUrlBase}/${key}`;
   }
 }

@@ -1,3 +1,4 @@
+import { postMediaVisibleTo } from '../post-media/post-media-visibility.util';
 import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
@@ -334,6 +335,8 @@ export class SearchService {
           ...(viewerId ? [{ authorId: viewerId }] : []),
         ],
       },
+      // A post with uploaded media still under review is visible to its author only (Decision Log #419).
+      postMediaVisibleTo(viewerId),
       { contentText: { contains: q, mode: 'insensitive' } },
     ];
     if (cursor) {

@@ -598,7 +598,7 @@ export class BanterService {
 
     return this.feed.createPost(userId, {
       contentText: dto.contentText,
-      mediaUrls: dto.mediaUrls,
+      mediaIds: dto.mediaIds,
       banterRoomId: roomId,
     });
   }

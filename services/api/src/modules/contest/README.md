@@ -75,3 +75,13 @@ Goal: every finalist gets comparable community exposure, independent of follower
 * **The quarter-point ledger** (B-093, built): placement prizes are written in quarter-point units (the admin's whole-point figures x 4) by `ContestLifecycleService`; everyday giver / receiver points, caps and revocation are in `modules/points`. The follow / post point awards were removed by B-094.
 * **`apps/admin`** still calls the removed judging endpoints (B-097) and `apps/web` does not render the new states (B-098, B-099).
 * Open questions and every judgment call: `docs/backend-w7-contest-report.md`.
+
+## Final-entry media and the media gate (backend/w14-post-media-pipeline; Decision Log #419 item 7)
+
+`POST /contest/final-entry` takes `{ contentText, mediaId }`: exactly one VIDEO the caller uploaded through `POST /media/uploads`
+(owned, unattached, not rejected). The pasted-link field (`mediaUrls`) is gone and refused. A final entry whose video is not
+APPROVED is not shown however the reveal clock stands: the entry list, the pinned entry, the Final-week carousel and the
+impression endpoint all apply the post-media gate, and the lifecycle leaves such an entry out of the weekly Phase 1 ranking
+(`closePhase1`) and out of the final ranking (`complete`), so it can never win. A contest entry's file cannot be removed by its
+owner (409 `media_in_contest_entry`). OPEN: the upload deadline (23:59:59 on day 24) leaves no time for a moderator to review a
+file the automatic check held, so such an entry is simply not shown (recorded in the W14 report).
