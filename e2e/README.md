@@ -25,7 +25,20 @@ database), runs the repo's migrations on it, seeds the one admin account that ca
 logical DB 5, builds and starts the API on :3100, `apps/web` on :5273 and `apps/admin`
 on :5274. Logs: `e2e/.run/*.log`. Screenshots/traces of failures: `e2e/.run/artifacts`.
 
-## Driving a live Contest phase (the API test clock)
+## The whole Contest month in one run (spec 17, FC9)
+
+`tests/17-contest-phases-test-clock.spec.ts` plays a full month in real Chrome with **no environment variable**. The API
+clock is environment-only, so each scene restarts the real API on the instant it needs (`support/api-process.ts`:
+`restartApi({ iso })`; the pid of the running API is in `.run/api.pid`, and global teardown stops whichever one is
+running). Only inputs are seeded (`support/contest-journey.ts`: members, entries, votes, the other finalists' final
+entries); every decision is made by the real lifecycle service on its one-minute tick, and each scene waits for the
+database to show it before looking at the page. Scenes, in order: a forfeited week (pop-up on every load of the Contest
+and Voting pages), week 1 Phase 1 (join and enter), week 1 Phase 2 (vote -> voted -> vote -> voted), Between Weeks,
+weeks 2 and 3 Phase 1 and 2, Between Weeks before the final, the week-4 upload, the reveal (nine finalists on three
+carousel pages, desktop and 390 px), and the crowned state. It takes about ten minutes (the tick waits dominate) and puts
+the API back on the real clock at the end. It skips when `QA_CONTEST_PHASE` / `QA_TEST_CLOCK_ISO` pin the clock.
+
+## Driving ONE live Contest phase (the API test clock)
 
 The Contest follows the Europe/London calendar, so the real clock only ever shows one phase. To see the
 others in a real browser, start the suite with `QA_CONTEST_PHASE`; `support/global-setup.ts` then starts the API with

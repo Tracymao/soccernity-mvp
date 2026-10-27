@@ -38,6 +38,10 @@ import { useQualifiedImpression, type QualifiedImpression } from "../../lib/useQ
 import "./FinalWeekCarousel.css";
 
 export const FINAL_WEEK_PAGE_SIZE = 3;
+// Up to nine finalists (three weekly winners in each of weeks 1-3), so the module asks for the
+// server's maximum (CAROUSEL_MAX_LIMIT = 9) rather than its default of 6. Three pages of three
+// (Decision Log #418 item 4; Figma pass P component sets 6841:29675 / 6843:29675).
+export const FINAL_WEEK_MAX_FINALISTS = 9;
 
 interface TileProps {
   item: FinalWeekCarouselItem;
@@ -78,7 +82,7 @@ export default function FinalWeekCarousel({ accessToken }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    getFinalWeekCarousel(accessToken)
+    getFinalWeekCarousel(accessToken, FINAL_WEEK_MAX_FINALISTS)
       .then((response) => {
         if (cancelled) return;
         setLive(response.live && response.items.length > 0);
