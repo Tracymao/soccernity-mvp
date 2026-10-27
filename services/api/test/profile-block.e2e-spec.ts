@@ -77,6 +77,9 @@ async function seedUser(app: INestApplication, o: SeedOptions) {
 type U = Awaited<ReturnType<typeof seedUser>>;
 
 // ---------------------------------------------------------------------------
+// D-20: what a person sees when no object store is available (the admin upload keeps the detailed message).
+const FRIENDLY_503 = "Picture uploads aren't available right now. Please try again later.";
+
 describe('Block + profile content e2e (real Postgres)', () => {
   let app: INestApplication;
   const http = () => app.getHttpServer();
@@ -701,7 +704,7 @@ describe('Block + profile content e2e (real Postgres)', () => {
   });
 
   describe('cover photo upload without an object store (B-196)', () => {
-    it('answers 503 EXACTLY as the admin upload and the avatar do, and writes nothing', async () => {
+    it('answers the same 503 as the avatar with the friendly message (admin upload keeps its own), and writes nothing', async () => {
       const u = await seedUser(app, { label: 'u' });
       const admin = await getTestPrismaClient().adminUser.create({
         data: { email: `e2e-w6-admin-${rand()}@example.com`, passwordHash: 'unused', fullName: 'W6 editor', role: 'editor' },
@@ -714,7 +717,8 @@ describe('Block + profile content e2e (real Postgres)', () => {
 
       expect(adminRes.status).toBe(503);
       expect(cover.status).toBe(503);
-      expect(cover.body).toEqual(adminRes.body);
+      expect(cover.body.message).toBe(FRIENDLY_503);
+      expect(adminRes.body.message).toMatch(/S3_BUCKET/);
       expect(cover.body).toEqual(avatar.body);
       const row = await getTestPrismaClient().user.findUniqueOrThrow({ where: { id: u.id } });
       expect(row).toMatchObject({ coverUrl: null, coverKey: null, coverStatus: null });
@@ -722,7 +726,7 @@ describe('Block + profile content e2e (real Postgres)', () => {
   });
 
   describe('avatar upload without an object store (B-035)', () => {
-    it('answers 503 EXACTLY as POST /admin/media/upload does, and writes nothing', async () => {
+    it('answers 503 with the friendly message while POST /admin/media/upload keeps its own, and writes nothing', async () => {
       const u = await seedUser(app, { label: 'u' });
       const admin = await getTestPrismaClient().adminUser.create({
         data: { email: `e2e-w5-admin-${rand()}@example.com`, passwordHash: 'unused', fullName: 'W5 editor', role: 'editor' },
@@ -734,7 +738,9 @@ describe('Block + profile content e2e (real Postgres)', () => {
 
       expect(adminRes.status).toBe(503);
       expect(user.status).toBe(503);
-      expect(user.body).toEqual(adminRes.body);
+      expect(user.body.message).toBe(FRIENDLY_503);
+      expect(JSON.stringify(user.body)).not.toMatch(/S3_/);
+      expect(adminRes.body.message).toMatch(/S3_BUCKET/);
       const row = await getTestPrismaClient().user.findUniqueOrThrow({ where: { id: u.id } });
       expect(row).toMatchObject({ avatarUrl: null, avatarKey: null, avatarStatus: null });
     });

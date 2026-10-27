@@ -99,11 +99,10 @@ test.describe('avatar and cover states (Create Profile, Edit Profile)', () => {
     await shot(page, 'create-profile-avatar-after-upload');
   });
 
-  // QA-2 D-18: CreateProfilePage fills every field from GET /users/:id when it resolves, overwriting what
-  // the person has already typed. Pins the race deterministically by delaying that response.
-  // test.fail(): passes while the defect exists; turns red the day it is fixed (then delete the line).
+  // QA-2 D-18 (fixed): CreateProfilePage used to fill every field from GET /users/:id when it resolved,
+  // overwriting what the person had already typed. Regression test: the race is pinned deterministically by
+  // delaying that response.
   test('D-18: text typed before the profile read returns is not wiped', async ({ page }) => {
-    test.fail();
     const a = await registerViaApi({ age: 30, label: 'img0', displayName: 'Quinn Player' });
     await verifyEmailViaApi(a);
     let release: () => void = () => undefined;
@@ -567,13 +566,11 @@ test.describe('Restricted Pending', () => {
 
 
 test.describe('admin Contest form known defects', () => {
-  // QA-2 D-19: the footer hint says Create is blocked until "the contest title, the minimum tally and every
-  // weekly watch limit are set". Filling exactly those leaves Create disabled, because every weekly TASK is
-  // also required; and the per-field messages ("Write the week 1 task.") only show once `touched` is set,
-  // which only happens inside submit() -- unreachable while the button is disabled. The admin is never told
-  // what is missing. Asserts TODAY's (defective) behaviour: green while the defect exists, red the day it is
-  // fixed (then flip the expectation).
-  test('D-19 (known defect): filling what the hint lists leaves Create disabled and names nothing', async ({ browser }) => {
+  // QA-2 D-19 (fixed): the footer hint used to list only the title, the minimum tally and the watch limits,
+  // while every weekly TASK is also required, and no per-field message showed until a submit that the
+  // disabled Create button made impossible. Now the one-line reason next to Create names every missing
+  // field, and the per-field messages show as soon as the form is edited.
+  test('D-19: Create stays disabled until the tasks are written, and the form says which fields are missing', async ({ browser }) => {
     const page = await adminPage(browser);
     try {
     await page.setViewportSize({ width: 1440, height: 1184 });
@@ -583,10 +580,16 @@ test.describe('admin Contest form known defects', () => {
     for (const n of [1, 2, 3]) await page.getByLabel(new RegExp(`watch limit, week ${n}`, 'i')).fill('10');
     const create = page.getByRole('button', { name: 'Create contest' });
     await page.waitForTimeout(500);
-    const enabled = await create.isEnabled();
-    const named = await page.getByText('Write the week 1 task.', { exact: true }).first().isVisible().catch(() => false);
+    await expect(create).toBeDisabled();
+    await expect(page.getByText('Write the week 1 task.', { exact: true }).first()).toBeVisible();
+    const reason = page.getByText(/Create is blocked until these are set:/);
+    await expect(reason).toBeVisible();
+    await expect(reason).toContainText('week 1 task');
+    await expect(reason).not.toContainText(/contest title|minimum tally|watch limit/);
     await shot(page, 'admin-contest-create-hint-only-fields');
-    expect({ enabled, named }).toEqual({ enabled: false, named: false });
+    // Writing the three tasks enables Create.
+    for (const n of [1, 2, 3]) await page.getByLabel(new RegExp(`^Weekly task [(]week ${n}[)]`)).fill(`Task ${n}`);
+    await expect(create).toBeEnabled();
     } finally {
       await page.context().close();
     }
@@ -669,11 +672,10 @@ function solidPng(width: number, height: number): Uint8Array {
 }
 
 test.describe('image upload without an object store', () => {
-  // QA-2 D-20 (known defect): the API's 503 for "no object store" names the S3_* environment variables,
-  // and the Create Profile / Edit Profile page shows that message to the person verbatim
-  // (see docs/qa-second-run-screens/create-profile-avatar-after-upload.png). Asserts TODAY's behaviour:
-  // green while the leak exists, red the day it is fixed (then flip to .not.toMatch).
-  test('D-20 (known defect): the 503 shown to a user names S3_BUCKET / S3_ACCESS_KEY / S3_SECRET_KEY', async () => {
+  // QA-2 D-20 (fixed): the API's 503 for "no object store" used to name the S3_* environment variables and
+  // the Create Profile / Edit Profile page showed that message to the person verbatim. It now answers with a
+  // plain sentence; the S3_* detail stays in the server log. (The admin media upload keeps its own message.)
+  test("D-20: the 503 shown to a user says uploads aren't available and names no configuration", async () => {
     const u = await verifiedAdult('img9');
     const form = new FormData();
     form.append('file', new Blob([solidPng(400, 400) as unknown as BlobPart], { type: 'image/png' }), 'a.png');
@@ -683,6 +685,8 @@ test.describe('image upload without an object store', () => {
       body: form,
     });
     expect(res.status).toBe(503);
-    expect(JSON.stringify(await res.json())).toMatch(/S3_BUCKET/);
+    const body = JSON.stringify(await res.json());
+    expect(body).toContain("Picture uploads aren't available right now. Please try again later.");
+    expect(body).not.toMatch(/S3_|environment|configured/i);
   });
 });

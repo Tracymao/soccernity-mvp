@@ -27,6 +27,23 @@ function renderControl(props: Partial<ComponentProps<typeof ProfileImageControl>
 }
 
 describe("ProfileImageControl", () => {
+  it("D-21: says 'Add a ...' only when there is no image, and just names the section once one exists", () => {
+    const { unmount } = renderControl();
+    expect(screen.getByText("Add a Profile Picture (Optional)")).not.toBeNull();
+    unmount();
+    for (const status of ["approved", "pending", "rejected"] as const) {
+      const view = renderControl({ image: { url: "https://img/x.png", status } });
+      expect(screen.getByText("Profile Picture")).not.toBeNull();
+      expect(screen.queryByText(/^Add a/)).toBeNull();
+      view.unmount();
+    }
+    const cover = renderControl({ kind: "cover", image: { url: "https://img/c.png", status: "approved" } });
+    expect(screen.getByText("Cover Photo")).not.toBeNull();
+    cover.unmount();
+    renderControl({ kind: "cover" });
+    expect(screen.getByText("Add a Cover Photo (Optional)")).not.toBeNull();
+  });
+
   it("none: offers a choose button and the 'checked automatically' note", () => {
     renderControl();
     expect(screen.getByRole("button", { name: "Choose a picture" })).not.toBeNull();

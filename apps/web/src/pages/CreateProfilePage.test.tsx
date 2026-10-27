@@ -83,6 +83,27 @@ describe("CreateProfilePage", () => {
     expect(screen.getAllByText(/cover photo/i).length).toBeGreaterThan(0);
   });
 
+  it("D-18: a slow profile read never wipes what was typed, but still fills untouched fields", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeToken("user-1"));
+    let resolveUser: (value: typeof PROFILE) => void = () => undefined;
+    vi.mocked(getUser).mockReturnValue(new Promise((resolve) => (resolveUser = resolve)));
+    renderPage();
+
+    fireEvent.change(screen.getByLabelText(/^Username/), { target: { value: "typed_before_load" } });
+    fireEvent.change(screen.getByLabelText(/Bio/), { target: { value: "typed bio" } });
+    fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Typed" } });
+
+    resolveUser({ ...PROFILE, username: "from_server", bio: "server bio", preferredClub: "Server FC" });
+
+    // An untouched field is filled from the server...
+    await waitFor(() => expect((screen.getByLabelText(/Preferred Club/) as HTMLInputElement).value).toBe("Server FC"));
+    expect((screen.getByLabelText("Last name") as HTMLInputElement).value).toBe("Bello");
+    // ...and the touched ones keep what the person typed.
+    expect((screen.getByLabelText(/^Username/) as HTMLInputElement).value).toBe("typed_before_load");
+    expect((screen.getByLabelText(/Bio/) as HTMLTextAreaElement).value).toBe("typed bio");
+    expect((screen.getByLabelText("First name") as HTMLInputElement).value).toBe("Typed");
+  });
+
   it("saves the profile (username required), then goes to the Club Picker", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeToken("user-1"));
     vi.mocked(getUser).mockResolvedValue(PROFILE);

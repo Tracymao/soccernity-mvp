@@ -63,6 +63,8 @@ Screenshots of every screen above are in `docs/qa-second-run-screens/` (24 image
 
 ## 4. Defects
 
+> **Update 2026-10-26 (`fix/qa-second-run-defects-d18-d22`):** D-18 to D-22 below are fixed. Each section keeps its original description and ends with a **Fixed** line. The D-18, D-19 and D-20 pin tests in `e2e/tests/15-second-run-new-work.spec.ts` are now ordinary regression tests.
+
 Severity: **High** = blocks launch or loses/exposes data; **Medium** = a real user can hit it and it costs them something;
 **Low** = copy, visual or admin-only inconvenience. Nothing was fixed.
 
@@ -78,6 +80,7 @@ Severity: **High** = blocks launch or loses/exposes data; **Medium** = a real us
   a route handler), type a username in the field, release the response: the field is empty again. Pinned by
   `D-18: text typed before the profile read returns is not wiped` (an expected-fail test, red the day it is fixed, then delete `test.fail()`).
 - **Suggested direction (not done):** apply the fetched values only to fields the person has not touched.
+- **Fixed:** `CreateProfilePage.tsx` records which fields the person has touched and the profile read fills only the untouched ones. Edit Profile seeds its state from the already-loaded `user` prop, so it has no load-then-set race; `ClubRepresentationPage`, `RoleFormPages` (admin) and `ContestFormPage` (edit) only render their inputs after the read, so none of them can be overwritten. Regression tests: `CreateProfilePage.test.tsx` and the spec 15 test.
 
 ### D-19 - Admin "Create a Contest": Create stays disabled and nothing says why; the hint omits a required field - **Low**
 - **What:** the footer hint says Create "is blocked until the contest title, the minimum tally and every weekly watch limit are set".
@@ -88,6 +91,7 @@ Severity: **High** = blocks launch or loses/exposes data; **Medium** = a real us
 - **Reproduction:** `/contest/cycles/new`, fill title, minimum tally and the three watch limits, leave the tasks empty: button disabled,
   no error text. Screenshot `docs/qa-second-run-screens/admin-contest-create-hint-only-fields.png`. Pinned by
   `D-19 (known defect)` (green while the defect exists, red when fixed).
+- **Fixed:** the disabled Create button now has a one-line reason next to it that lists every missing field (including each week's task), and on Create the per-field messages show as soon as the form is edited. Regression tests: `contest.test.tsx` and the spec 15 test.
 
 ### D-20 - The "no object store" error shown to people names the `S3_*` environment variables - **Medium (becomes irrelevant once storage is live)**
 - **What:** with no object store configured, `POST /users/:id/avatar` (and cover) answers 503 with
@@ -98,14 +102,17 @@ Severity: **High** = blocks launch or loses/exposes data; **Medium** = a real us
   The page does degrade correctly (visible error, Try again, no stuck spinner).
 - **Reproduction:** register and verify an adult, `POST /users/:id/avatar` with a real PNG: 503 with the message above. Pinned by
   `D-20 (known defect)`.
+- **Fixed:** the avatar and cover uploads answer 503 "Picture uploads aren't available right now. Please try again later."; the `S3_*` detail is written to the server log only. `POST /admin/media/upload` keeps its own message. Tests: `user-avatar.service.spec.ts`, `user-cover.service.spec.ts`, spec 15.
 
 ### D-21 - Edit Profile labels say "Add a ..." even when an image exists - **Low (copy)**
 `Add a Cover Photo (Optional)` and `Add a Profile Picture (Optional)` stay as the section labels in the Approved, Under review and
 Rejected states (screenshots `edit-profile-approved.png`, `edit-profile-rejected.png`). Not asserted by any test.
+**Fixed:** the section label reads `Profile Picture` / `Cover Photo` when an image exists (approved, under review or rejected) and `Add a ... (Optional)` only when none does. Test: `ProfileImageControl.test.tsx`.
 
 ### D-22 - Admin create form: "Followers-excluded counting" label runs straight into its helper text - **Low (visual)**
 No space between the switch label and the "Count only engagement from accounts that do not follow the finalist..." text (screenshot
 `admin-contest-create-form.png`, Week 4 block). Not asserted.
+**Fixed:** the string is in `apps/admin/src/pages/contest/ContestFormPage.tsx` (the Week 4 block, `<strong>Followers-excluded counting</strong>`); the helper text is now on its own line (`.ct-switch__hint { display: block }`) with a space between. Test: `contest.test.tsx`.
 
 ### Observations that are not defects
 - **`[COPY PENDING LEGAL REVIEW]` shows on user screens** (Block dialog, Blocked users page, Create Profile date-of-birth hint, Restricted
