@@ -28,6 +28,7 @@ import { getUser, getFollowers, getFollowing, UsersApiError, type UserProfile, t
 import { countryName } from "../lib/countries";
 import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
 import EditProfileModal from "./profile/EditProfileModal";
+import PinnedEntry from "./community/PinnedEntry";
 import "./profile/ProfilePage.css";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
@@ -278,6 +279,9 @@ export default function ProfilePage() {
             Media
           </button>
         </div>
+        {tab === "posts" && token && decoded && (
+          <PinnedEntry accessToken={token} userId={decoded.sub} currentUserId={decoded.sub} />
+        )}
         <div className="profile-empty-state">
           {/* Section 4 has no GET /users/:id/posts -- see this file's
               header comment. */}

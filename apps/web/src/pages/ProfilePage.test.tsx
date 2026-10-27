@@ -31,6 +31,13 @@ vi.mock("../api/auth", async () => {
   };
 });
 
+// The pinned contest entry is covered by community/PinnedEntry.test.tsx; here only the wiring.
+vi.mock("./community/PinnedEntry", () => ({
+  default: (props: { userId: string; currentUserId: string }) => (
+    <div data-testid="pinned-entry-stub">{`${props.userId}|${props.currentUserId}`}</div>
+  ),
+}));
+
 import { getUser, updateUser, getFollowers, getFollowing } from "../api/users";
 
 function base64UrlEncode(value: object): string {
@@ -103,6 +110,19 @@ describe("ProfilePage", () => {
     expect(await screen.findByText("Adeniyi Christiana")).not.toBeNull();
     expect(screen.getByText("adeniyi@example.com")).not.toBeNull();
     expect(getUser).toHaveBeenCalledWith(expect.any(String), "user-1");
+  });
+
+  it("shows the pinned contest entry for the owner on the Posts tab, and not on the Media tab", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    vi.mocked(getUser).mockResolvedValueOnce(BASE_PROFILE);
+
+    renderProfilePage();
+
+    expect((await screen.findByTestId("pinned-entry-stub")).textContent).toBe("user-1|user-1");
+    fireEvent.click(screen.getByRole("button", { name: "Media" }));
+    expect(screen.queryByTestId("pinned-entry-stub")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Posts" }));
+    expect(screen.getByTestId("pinned-entry-stub")).not.toBeNull();
   });
 
   it("/profile?edit=1 opens the edit form straight away (the image-decision notification row lands here)", async () => {

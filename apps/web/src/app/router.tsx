@@ -42,6 +42,7 @@ import LeaderboardPage from "../pages/LeaderboardPage";
 import ContestPage from "../pages/ContestPage";
 import ContestVotingPage from "../pages/ContestVotingPage";
 import CommunityPage from "../pages/CommunityPage";
+import PostPage from "../pages/PostPage";
 import SearchTrendingPage from "../pages/SearchTrendingPage";
 import ClubsPage from "../pages/ClubsPage";
 import ClubFanPage from "../pages/ClubFanPage";
@@ -201,6 +202,8 @@ export const routes: RouteObject[] = [
       // Follow, Build Plan Section 4.3 / 4.2). See CommunityPage.tsx. No
       // footer -- not in the Figma frame.
       { path: "community", element: <CommunityPage /> },
+      // One post on its own page: where a Final week carousel tile opens the entry (B-092).
+      { path: "posts/:postId", element: <PostPage /> },
       // Search & Trending (Build Plan Section 4.7's GET /search, Decision
       // Log #139). No site footer -- not in the Figma frame (2876:4628 /
       // 5780:8581), same as Community/Clubs/Banter. No Navbar/drawer entry

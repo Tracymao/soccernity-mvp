@@ -20,6 +20,7 @@
 import type { ReactElement } from "react";
 import { Link } from "react-router";
 import type { ContestFinalRankingRow, CurrentContestResponse } from "../../api/contest";
+import { formatPoints } from "../../lib/points";
 import { londonClock, londonDayOfMonth, londonLongDate, ordinalPlace } from "../contest/contestTime";
 import { initialsFor } from "./leaderboardData";
 
@@ -147,7 +148,7 @@ function FinalRankingTable({ rows }: { rows: ContestFinalRankingRow[] }) {
             <td>
               <Player userId={row.userId} name={row.publicName} />
             </td>
-            <td>{row.points}</td>
+            <td>{formatPoints(row.points)}</td>
           </tr>
         ))}
       </tbody>

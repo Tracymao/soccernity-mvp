@@ -116,8 +116,7 @@ function linkFor(n: Notification): string | null {
     case "contest_upload_reminder":
       return "/community?compose=contest";
     case "contest_reveal":
-      // "The final is live" opens the Final week carousel in the Community feed; the carousel
-      // itself is not built (it needs the exposure engine, B-092), so this lands on the feed.
+      // "The final is live" opens the Final week carousel at the top of the Community feed.
       return "/community";
   }
   // The image-decision row (B-217): the reason lives on the owner's own record, shown in Edit Profile,

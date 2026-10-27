@@ -15,13 +15,14 @@
 // with these three hardcoded to false on mount and a documented
 // session-local workaround. This is the follow-up #153 called out as
 // "the separate follow-up this unblocks".)
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import {
   addComment,
   FeedApiError,
   getComments,
   likePost,
+  recordViewHeartbeat,
   savePost,
   setCommentHidden,
   unlikePost,
@@ -31,6 +32,8 @@ import {
   type FeedPost,
 } from "../../api/feed";
 import { followUser, unfollowUser, UsersApiError } from "../../api/users";
+import { isVideoUrl } from "../../lib/media";
+import { useViewHeartbeat } from "../../lib/useViewHeartbeat";
 import OwnPostMenu from "./OwnPostMenu";
 import ReportAction from "./ReportAction";
 
@@ -57,9 +60,28 @@ interface PostCardProps {
   currentUserId: string;
   /** Called after the author hard-deletes the post. The card also removes itself. */
   onDeleted?: (postId: string) => void;
+  /**
+   * A final contest entry before the reveal: all engagement is locked (the server refuses a like,
+   * comment or save with `contest_final_locked`, even from the author), so the controls are drawn
+   * disabled, the counts are hidden and a note says why (Decision Log #404 item 15; Figma 6707:26727
+   * / 6709:26922). The server stays the source of truth; this only stops offering what it refuses.
+   */
+  engagementLocked?: boolean;
+  /** The standalone entry page opens the comment thread straight away (Figma 6836:29397). */
+  initialCommentsOpen?: boolean;
+  /** Show video media as a player instead of a bare link (the standalone entry page). */
+  playVideo?: boolean;
 }
 
-export default function PostCard({ post, accessToken, currentUserId, onDeleted }: PostCardProps) {
+export default function PostCard({
+  post,
+  accessToken,
+  currentUserId,
+  onDeleted,
+  engagementLocked = false,
+  initialCommentsOpen = false,
+  playVideo = false,
+}: PostCardProps) {
   const [deleted, setDeleted] = useState(false);
   const [commentPermission, setCommentPermission] = useState<CommentPermission>(post.commentPermission ?? "everyone");
   const [liked, setLiked] = useState(post.isLiked);
@@ -74,6 +96,8 @@ export default function PostCard({ post, accessToken, currentUserId, onDeleted }
   const [followPending, setFollowPending] = useState(false);
 
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const autoOpened = useRef(false);
+  const articleRef = useRef<HTMLElement | null>(null);
   const [comments, setComments] = useState<FeedComment[]>([]);
   const [commentCursor, setCommentCursor] = useState<string | null>(null);
   const [commentsLoading, setCommentsLoading] = useState(false);
@@ -195,10 +219,27 @@ export default function PostCard({ post, accessToken, currentUserId, onDeleted }
     }
   }
 
+  useEffect(() => {
+    if (initialCommentsOpen && !engagementLocked && !autoOpened.current) {
+      autoOpened.current = true;
+      void openComments();
+    }
+    // openComments is stable enough for a one-shot open on mount.
+  }, [initialCommentsOpen, engagementLocked]);
+
+  // View qualification (B-093): while this post is on screen the client reports that it is active, and
+  // the server decides what counts. Not for the viewer's own post (self-engagement earns nothing) or a
+  // locked final entry; and only a real player counts for a video (see lib/useViewHeartbeat).
+  useViewHeartbeat(articleRef, {
+    enabled: !deleted && !isOwnPost && !engagementLocked,
+    hasVideo: post.mediaUrls.some(isVideoUrl),
+    send: (beat) => recordViewHeartbeat(accessToken, post.id, beat),
+  });
+
   if (deleted) return null;
 
   return (
-    <article className="post">
+    <article className="post" ref={articleRef}>
       <div className="post__head">
         <div className="post__avatar" aria-hidden="true">
           {initialsFor(post.author.publicName)}
@@ -262,45 +303,68 @@ export default function PostCard({ post, accessToken, currentUserId, onDeleted }
 
       {post.mediaUrls.length > 0 && (
         <div className="post__media">
-          {post.mediaUrls.map((url) => (
-            <a key={url} href={url} target="_blank" rel="noreferrer noopener">
-              {url}
-            </a>
-          ))}
+          {post.mediaUrls.map((url) =>
+            playVideo && isVideoUrl(url) ? (
+              <video key={url} className="post__video" src={url} controls preload="metadata" playsInline />
+            ) : (
+              <a key={url} href={url} target="_blank" rel="noreferrer noopener">
+                {url}
+              </a>
+            ),
+          )}
         </div>
       )}
 
       {post.clubPageId && <p className="post__context">Posted to a club page</p>}
       {post.banterRoomId && <p className="post__context">Posted in a Banter Room</p>}
 
-      <div className="post__actions">
-        <button
-          type="button"
-          className={liked ? "post__action post__action--active" : "post__action"}
-          onClick={toggleLike}
-          disabled={likePending}
-          aria-pressed={liked}
-        >
-          &#9829; {likeCount} {likeCount === 1 ? "like" : "likes"}
-        </button>
-        <button
-          type="button"
-          className="post__action"
-          onClick={() => (commentsOpen ? setCommentsOpen(false) : openComments())}
-          aria-expanded={commentsOpen}
-        >
-          &#128172; {commentCount} {commentCount === 1 ? "comment" : "comments"}
-        </button>
-        <button
-          type="button"
-          className={saved ? "post__action post__action--active" : "post__action"}
-          onClick={toggleSave}
-          disabled={savePending}
-          aria-pressed={saved}
-        >
-          &#128278; {saved ? "Saved" : "Save"}
-        </button>
-      </div>
+      {engagementLocked ? (
+        <>
+          <p className="post__locked" role="status" data-testid="engagement-locked">
+            Engagement is locked until the reveal. Only you can see this entry until then. [COPY PENDING LEGAL REVIEW]
+          </p>
+          <div className="post__actions post__actions--locked">
+            <button type="button" className="post__action" disabled aria-label="Comments (locked until the reveal)">
+              &#128172;
+            </button>
+            <button type="button" className="post__action" disabled aria-label="Like (locked until the reveal)">
+              &#9829;
+            </button>
+            <button type="button" className="post__action" disabled aria-label="Save (locked until the reveal)">
+              &#128278;
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="post__actions">
+          <button
+            type="button"
+            className={liked ? "post__action post__action--active" : "post__action"}
+            onClick={toggleLike}
+            disabled={likePending}
+            aria-pressed={liked}
+          >
+            &#9829; {likeCount} {likeCount === 1 ? "like" : "likes"}
+          </button>
+          <button
+            type="button"
+            className="post__action"
+            onClick={() => (commentsOpen ? setCommentsOpen(false) : openComments())}
+            aria-expanded={commentsOpen}
+          >
+            &#128172; {commentCount} {commentCount === 1 ? "comment" : "comments"}
+          </button>
+          <button
+            type="button"
+            className={saved ? "post__action post__action--active" : "post__action"}
+            onClick={toggleSave}
+            disabled={savePending}
+            aria-pressed={saved}
+          >
+            &#128278; {saved ? "Saved" : "Save"}
+          </button>
+        </div>
+      )}
 
       {actionError && (
         <p className="post__error" role="alert">

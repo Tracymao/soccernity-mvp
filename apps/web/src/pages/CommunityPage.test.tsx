@@ -38,12 +38,19 @@ vi.mock("../api/contest", async () => {
     ...actual,
     getCurrentContest: vi.fn(),
     submitContestEntry: vi.fn(),
+    getFinalWeekCarousel: vi.fn(),
+    recordImpression: vi.fn(),
   };
 });
 
 import { getFeed, createPost, likePost } from "../api/feed";
 import { getUser } from "../api/users";
-import { getCurrentContest, submitContestEntry, type CurrentContestResponse } from "../api/contest";
+import {
+  getCurrentContest,
+  getFinalWeekCarousel,
+  submitContestEntry,
+  type CurrentContestResponse,
+} from "../api/contest";
 import { noContest, openContest as baseOpenContest } from "./contest/contestFixtures";
 
 const openContest = (overrides: Partial<CurrentContestResponse> = {}) => baseOpenContest(overrides);
@@ -85,6 +92,8 @@ beforeEach(() => {
   vi.mocked(getCurrentContest).mockReset();
   vi.mocked(getCurrentContest).mockResolvedValue(noContest());
   vi.mocked(submitContestEntry).mockReset();
+  vi.mocked(getFinalWeekCarousel).mockReset();
+  vi.mocked(getFinalWeekCarousel).mockResolvedValue({ live: false, items: [] });
 });
 
 function renderPage(path = "/community") {
@@ -111,6 +120,41 @@ describe("CommunityPage", () => {
 
     expect(await screen.findByText(/first goal of the season/i)).not.toBeNull();
     expect(getFeed).toHaveBeenCalledWith(expect.any(String));
+  });
+
+  it("shows the Final week carousel above the feed during a live final week, and nothing otherwise", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    vi.mocked(getFeed).mockResolvedValue({ items: [post()], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValue({ publicName: "Ada Player" } as never);
+    vi.mocked(getFinalWeekCarousel).mockResolvedValue({
+      live: true,
+      items: [
+        {
+          entryId: "e1",
+          postId: "p1",
+          finalist: { userId: "u9", publicName: "Sarah Bello" },
+          post: { id: "p1", contentText: "Drill", mediaUrls: [], createdAt: "2026-09-24T10:00:00.000Z" },
+        },
+      ],
+    });
+
+    renderPage();
+
+    const carousel = await screen.findByTestId("final-week-carousel");
+    expect(carousel.textContent).toContain("Sarah Bello");
+    const feedPost = await screen.findByText(/first goal of the season/i);
+    // The module sits above the first post.
+    expect(carousel.compareDocumentPosition(feedPost) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("renders no carousel when the final week is not live", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    vi.mocked(getFeed).mockResolvedValue({ items: [post()], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValue({ publicName: "Ada Player" } as never);
+    renderPage();
+    await screen.findByText(/first goal of the season/i);
+    expect(getFinalWeekCarousel).toHaveBeenCalled();
+    expect(screen.queryByTestId("final-week-carousel")).toBeNull();
   });
 
   it("publishes a post via POST /posts and prepends it to the feed", async () => {

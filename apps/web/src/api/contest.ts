@@ -311,3 +311,80 @@ export async function submitFinalEntry(accessToken: string, input: SubmitFinalEn
   if (!response.ok) throw await failure(response, `Couldn't submit your final entry (${response.status}).`);
   return (await response.json()) as SubmittedContestEntry;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Final week (B-092; Decision Log #388, #400, #403 item 11, #405 item 7, #406 item 6)
+// ---------------------------------------------------------------------------------------------
+
+// One tile of the Community-feed "Final week" carousel. NO count of any kind: the server never
+// returns a view, impression, like or rank figure for a finalist video.
+export interface FinalWeekCarouselItem {
+  entryId: string;
+  postId: string;
+  finalist: { userId: string; publicName: string };
+  post: { id: string; contentText: string; mediaUrls: string[]; createdAt: string };
+}
+
+// GET /contest/final-week/carousel. `live: false` (and an empty list) outside the final week and
+// for a restricted viewer: the module is simply not shown.
+export interface FinalWeekCarouselResponse {
+  live: boolean;
+  items: FinalWeekCarouselItem[];
+}
+
+// POST /contest/entries/:entryId/impression -- always 200 `{ counted }` for a valid event.
+export interface RecordImpressionResponse {
+  counted: boolean;
+}
+
+// What the client sends: the qualifying event only (>= 50% of the tile in view for >= 1000 ms,
+// continuous). `eventId` is the idempotency key (a retry never counts twice).
+export interface ImpressionEvent {
+  eventId: string;
+  visibleRatio: number;
+  visibleMs: number;
+}
+
+// GET /contest/users/:userId/pinned-entry -- `entry: null` when nothing is pinned or visible.
+export interface PinnedContestEntry {
+  entryId: string;
+  kind: "weekly" | "final";
+  weekNumber: number;
+  pinnedUntil: string | null;
+  postId: string;
+}
+
+export interface PinnedEntryResponse {
+  entry: PinnedContestEntry | null;
+}
+
+// GET /contest/final-week/carousel?limit= -- default 6, max 9. The order is the server's balanced
+// rotation for THIS viewer; it is never re-sorted client-side.
+export async function getFinalWeekCarousel(accessToken: string, limit?: number): Promise<FinalWeekCarouselResponse> {
+  const qs = limit ? `?limit=${limit}` : "";
+  const response = await authedFetch(`/contest/final-week/carousel${qs}`, accessToken);
+  if (!response.ok) throw await failure(response, `Couldn't load the final week (${response.status}).`);
+  return (await response.json()) as FinalWeekCarouselResponse;
+}
+
+// POST /contest/entries/:entryId/impression. Only ever called for an event that already met the
+// threshold. 409 `contest_exposure_not_live` (outside the window), 403 (a restricted viewer) and 404
+// are thrown as ContestApiError; the caller treats every failure as "not counted" and shows nothing.
+export async function recordImpression(
+  accessToken: string,
+  entryId: string,
+  event: ImpressionEvent,
+): Promise<RecordImpressionResponse> {
+  const response = await authedFetch(`/contest/entries/${entryId}/impression`, accessToken, {
+    method: "POST",
+    body: JSON.stringify(event),
+  });
+  if (!response.ok) throw await failure(response, `Couldn't record that view (${response.status}).`);
+  return (await response.json()) as RecordImpressionResponse;
+}
+
+export async function getPinnedEntry(accessToken: string, userId: string): Promise<PinnedEntryResponse> {
+  const response = await authedFetch(`/contest/users/${userId}/pinned-entry`, accessToken);
+  if (!response.ok) throw await failure(response, `Couldn't load the pinned entry (${response.status}).`);
+  return (await response.json()) as PinnedEntryResponse;
+}

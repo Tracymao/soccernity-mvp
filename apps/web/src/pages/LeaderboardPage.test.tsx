@@ -162,6 +162,34 @@ describe("LeaderboardPage", () => {
     expect(listClubs).not.toHaveBeenCalled();
   });
 
+  it("shows points as whole numbers, equal for two ranks that differ on the exact total, with the note that says so (#383)", async () => {
+    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
+    vi.mocked(getLeaderboard).mockResolvedValue({
+      items: [
+        { userId: "u1", publicName: "Ada Eze", points: 3318, rank: 5 },
+        { userId: "u2", publicName: "Ben Okoro", points: 3318, rank: 6 },
+        // A fraction would be a server bug, but the screen must still never print one.
+        { userId: "u3", publicName: "Cid Musa", points: 1204.25, rank: 7 },
+      ],
+      nextCursor: null,
+    });
+
+    renderPage();
+
+    await screen.findByText("Ada Eze");
+    expect(screen.getAllByText("3,318")).toHaveLength(2);
+    expect(screen.getByText("1,204")).not.toBeNull();
+    expect(screen.queryByText(/\.\d/)).toBeNull();
+    // Both rows keep their own rank: the display rounds, the ranking does not.
+    const rows = screen.getAllByRole("row");
+    expect(within(rows[1]).getByText("5")).not.toBeNull();
+    expect(within(rows[2]).getByText("6")).not.toBeNull();
+    expect(screen.getByTestId("rounded-points-note").textContent).toMatch(
+      /rounded to the nearest whole number.*Ranking uses the exact total/,
+    );
+  });
+
   it("renders the Overall board from GET /leaderboard once a session exists", async () => {
     window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI, PORT_HARCOURT, NOT_JOINED], nextCursor: null });

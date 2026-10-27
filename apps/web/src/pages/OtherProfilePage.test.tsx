@@ -20,6 +20,12 @@ vi.mock("../api/messaging", async () => {
   const actual = await vi.importActual<typeof import("../api/messaging")>("../api/messaging");
   return { ...actual, startConversation: vi.fn() };
 });
+// The pinned contest entry is covered by community/PinnedEntry.test.tsx; here only the wiring.
+vi.mock("./community/PinnedEntry", () => ({
+  default: (props: { userId: string; currentUserId: string }) => (
+    <div data-testid="pinned-entry-stub">{`${props.userId}|${props.currentUserId}`}</div>
+  ),
+}));
 import { getPublicProfile, followUser, unfollowUser, blockUser, unblockUser } from "../api/users";
 
 function b64(value: object): string {
@@ -73,6 +79,12 @@ describe("OtherProfilePage", () => {
     await screen.findByRole("heading", { name: "tobi_9" });
     expect(screen.getByText("Winger from Lagos")).not.toBeNull();
     expect(screen.getByText("Nigeria")).not.toBeNull();
+  });
+
+  it("shows the person's pinned contest entry (the server decides whether this viewer may see it)", async () => {
+    vi.mocked(getPublicProfile).mockResolvedValue(profile());
+    renderAt();
+    expect((await screen.findByTestId("pinned-entry-stub")).textContent).toBe("u2|me");
   });
 
   it("draws no country line when none is set", async () => {

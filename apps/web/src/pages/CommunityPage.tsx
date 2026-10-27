@@ -34,6 +34,7 @@ import { getCurrentContest, type CurrentContestResponse } from "../api/contest";
 import { getUser, type UserProfile } from "../api/users";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
 import PostCard from "./community/PostCard";
+import FinalWeekCarousel from "./community/FinalWeekCarousel";
 import PostComposer from "./community/PostComposer";
 import "./community/CommunityPage.css";
 
@@ -216,6 +217,9 @@ export default function CommunityPage() {
             onContestSubmitted={loadContest}
           />
         )}
+
+        {/* The Final week carousel: only renders while a final week is live (B-092). */}
+        {token && <FinalWeekCarousel accessToken={token} />}
 
         {loadState === "loading" && (
           <div className="community-status" role="status">

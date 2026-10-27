@@ -261,3 +261,48 @@ export interface UpdateCycleInput {
 export function updateContestCycle(id: string, input: UpdateCycleInput): Promise<AdminContestCycleDetail> {
   return adminFetch<AdminContestCycleDetail>(`/admin/contest/cycles/${id}`, { method: "PATCH", body: input });
 }
+
+// ---- the Week-4 impression distribution (B-092, Decision Log #388, #405 item 7) ----------------
+
+export type ExposureStatus = "within" | "above" | "below";
+
+/**
+ * One finalist's row. Aggregates only: the server never returns a viewer, an event or a day, so
+ * nothing on the screen can identify who saw a video.
+ */
+export interface AdminExposureEntry {
+  entryId: string;
+  finalist: { userId: string; publicName: string };
+  /** false: the author is no longer eligible, so the video is out of the rotation and out of the mean. */
+  inRotation: boolean;
+  impressions: number;
+  /** Against the tolerance band around the mean; null when the video is not in the rotation. */
+  status: ExposureStatus | null;
+  /** Signed deviation from the mean, percent of the mean; null when the mean is 0 or not in rotation. */
+  deviationPercent: number | null;
+}
+
+// GET /admin/contest/cycles/:id/exposure
+export interface AdminExposureResponse {
+  cycleId: string;
+  title: string;
+  monthKey: string | null;
+  settings: { tolerancePercent: number; viewerDailyCap: number };
+  /** true while the final week is live (reveal <= now < month end). */
+  live: boolean;
+  revealed: boolean;
+  /** 'live': counted from the per-viewer rows; 'final_totals': the per-entry totals kept at the crown. */
+  source: "live" | "final_totals";
+  finalistCount: number;
+  mean: number;
+  lowerBound: number;
+  upperBound: number;
+  min: number;
+  max: number;
+  outsideTolerance: number;
+  entries: AdminExposureEntry[];
+}
+
+export function getContestExposure(cycleId: string): Promise<AdminExposureResponse> {
+  return adminFetch<AdminExposureResponse>(`/admin/contest/cycles/${cycleId}/exposure`);
+}
