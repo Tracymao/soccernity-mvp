@@ -119,19 +119,63 @@ check with counsel/the founder** (not decided here): whether to opt out of AWS u
 - **Other users**: the URL only of a file attached to a post they can see, i.e. only after approval. They can never list or read another user's `PostMedia`.
 - **The object store**: a processed file sits in the public prefix **before it is approved**; it is fetchable by anyone who has its URL
   (an unguessable `<uploaderId>/<uploadId>` key the API shows only to the uploader). OPEN: see the report.
-- **Admins**: no admin endpoint exists yet (B-037, the review queue, is a separate task).
+- **Admins**: moderators and superadmins read the review queue through `/admin/media-review` (see "The review queue" below); that module returns the uploader's public name and id, never an email, and a short-lived view link.
 - **Rekognition (AWS)**: only the still image(s) described above, for the duration of the call.
+
+## The review queue (B-037, `backend/w15-media-review-queue`)
+
+Server half; the admin screen and the web report control are FC10. Routes live in `modules/admin-media-review/` (moderator,
+superadmin) and `post-media-report.controller.ts` (users).
+
+**What is in the queue.** Only (a) pending files the automatic check left uncertain, gave up on, or never ran for
+(`reviewEnteredAt` set, `reviewEntrySource = 'auto_check'`), and (b) approved files users have reported (`reportCount > 0`).
+A file the check approved or rejected on its own is never here; a file still waiting for its check is not either. With the check
+**not configured at all**, an upload that has waited `MEDIA_REVIEW_UNCHECKED_AFTER_MINUTES` (default 30) is sent to the queue so
+it is not stuck forever; it is still never approved by default.
+
+**Moderator routes** (`AdminJwtAuthGuard` + `AdminRolesGuard('moderator','superadmin')`):
+
+```
+GET  /admin/media-review?status=pending|approved|rejected&source=auto_check|user_report&order=newest|oldest&limit&cursor
+GET  /admin/media-review/stats?days=7        counts over a window: autoApproved, autoRejected, sentToReview, reported, decidedByModerator
+GET  /admin/media-review/:id                 one item that has been in the queue (404 otherwise)
+POST /admin/media-review/:id/approve         pending -> approved;  approved-with-reports -> KEPT (hold lifted, uploader not told)
+POST /admin/media-review/:id/reject  {reason}  pending or reported-approved -> rejected; reason required, 1 to 300 characters
+```
+
+`status=pending` (the default) means "waiting for a decision". A decision is one transaction: the status (guarded in the
+`WHERE`, so two moderators acting at once cannot both win), the resolution of the open reports, and the uploader's `Notification`
+(`post_media_approved` / `post_media_rejected`, `payloadRefId` = the media id, reason NOT copied). A repeat or a decided item is
+`409 already_decided`; an item the check has not finished with is `409 not_in_review_queue`. The admin action log
+(`media.approved`, `media.rejected`, target `post_media`) is written after the commit. The automatic check writes the same two
+notifications when it approves or rejects on its own.
+
+**What a moderator sees:** the uploader's public name and id (never email or real name), kind, size, age, why it is here
+(`sources`), the check's category labels, the open report count, and a 5-minute signed view link
+(`DirectUploadStorageService.createDownloadUrl`; if storage is down the item comes back without a link). Never any reporter.
+
+**User report** `POST /media/:id/report` (`JwtAuthGuard` + `GuardianConsentGuard`): the file must be approved, attached to a post
+the reporter can see right now, and not already held; your own file is `400 cannot_report_own_media`; anything else the reporter
+cannot see (pending, rejected, unattached, hidden, a blocked pair either way, unknown id) is the same 404. One report per user per
+item, ever (a repeat is `200 { alreadyReported: true }`). The item enters the queue on the first report and stays **visible**; when
+the open report count reaches `MEDIA_REPORT_HIDE_THRESHOLD` (default 3 distinct reporters, 0 = never) `hiddenPendingReview` is
+set and the item and its post are hidden from everyone but the author (`POST_MEDIA_ALL_APPROVED` in
+`post-media-visibility.util.ts`) until a moderator decides.
+
+**The uploader's own view of a rejection** is the existing `GET /media/uploads/:id` (status, `rejectionReason`); anyone else gets 404.
+
+Open points and the defaults chosen: `docs/backend-w15-review-queue-report.md`.
 
 ## Configuration
 
 All in `.env.example` and `render.yaml` (both services): `POST_MEDIA_*` limits, `FFMPEG_PATH`/`FFPROBE_PATH`,
-`REKOGNITION_*`, `MEDIA_CHECK_*` thresholds. Human steps before it works in production: R2 bucket + keys and a **CORS rule
+`REKOGNITION_*`, `MEDIA_CHECK_*` thresholds, and (B-037) `MEDIA_REPORT_HIDE_THRESHOLD`, `MEDIA_REVIEW_UNCHECKED_AFTER_MINUTES`. Human steps before it works in production: R2 bucket + keys and a **CORS rule
 allowing PUT from the web app origin** (B-207, B-090), ffmpeg/ffprobe on the host (not on Render's native Node runtime), an AWS
 account and a `rekognition:DetectModerationLabels` IAM user, optionally a bucket lifecycle rule expiring `quarantine/` after 1 day
 as a backstop to the purge.
 
 ## Not built here
 
-The admin review queue and its approve/reject endpoints (B-037, W15); the web composer (FC10); the Figma upload states (K13);
+The admin screen for the review queue and the web report control (FC10); the child-safety-vetting gate for reviewers of minors' media (undecided, #419); the web composer (FC10); the Figma upload states (K13);
 a feed-level "under review" flag on the author's own posts; DMs (`Message.mediaUrl` is still a free URL); admin article/cover
 media (`MediaAsset`, the admin-only path, is unchanged); avatars and covers (they have their own pipeline).

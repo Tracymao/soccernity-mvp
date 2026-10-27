@@ -11,7 +11,9 @@ import { Prisma } from '@prisma/client';
 
 /** True for a post whose attached media are ALL approved (vacuously true with none). */
 export const POST_MEDIA_ALL_APPROVED: Prisma.PostWhereInput = {
-  media: { none: { status: { not: 'approved' } } },
+  // backend/w15-media-review-queue: an approved item that reached the report threshold is held out of view
+  // (hiddenPendingReview) until a moderator decides, exactly like a pending one.
+  media: { none: { OR: [{ status: { not: 'approved' } }, { hiddenPendingReview: true }] } },
 };
 
 /** The media gate for a viewer: the author always passes; anyone else needs every media approved. */

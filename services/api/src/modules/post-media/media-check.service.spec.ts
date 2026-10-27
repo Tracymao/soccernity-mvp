@@ -17,7 +17,10 @@ function build(opts: { configured?: boolean; env?: Record<string, string> } = {}
       findUnique: jest.fn(),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
+    notification: { create: jest.fn().mockResolvedValue({ id: 'n1' }) },
+    $transaction: jest.fn(),
   };
+  prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(prisma));
   const storage = { downloadToFile: jest.fn(async (_key: string, dest: string) => writeFile(dest, Buffer.from('image-bytes'))) };
   const processor = {
     assertVideoToolsAvailable: jest.fn().mockResolvedValue(undefined),
@@ -41,6 +44,7 @@ function build(opts: { configured?: boolean; env?: Record<string, string> } = {}
 
 const imageRow = (over: Record<string, unknown> = {}) => ({
   id: 'm1',
+  uploaderId: 'u1',
   kind: 'image',
   publicKey: 'post-media/u1/m1.jpg',
   durationSeconds: null,
@@ -50,13 +54,31 @@ const imageRow = (over: Record<string, unknown> = {}) => ({
 });
 
 describe('MediaCheckService.runDueChecks', () => {
-  it('does nothing at all when Rekognition is not configured: no query, no download, no decision', async () => {
+  it('when Rekognition is not configured it runs no check and decides NOTHING: no download, no approval, no notification', async () => {
     const { service, prisma, storage, moderation } = build({ configured: false });
     expect(await service.runDueChecks(NOW)).toEqual({ checked: 0, outcomes: {} });
     expect(prisma.postMedia.findMany).not.toHaveBeenCalled();
     expect(storage.downloadToFile).not.toHaveBeenCalled();
     expect(moderation.detectModerationLabels).not.toHaveBeenCalled();
-    expect(prisma.postMedia.updateMany).not.toHaveBeenCalled();
+    expect(prisma.notification.create).not.toHaveBeenCalled();
+    // The only write: rows that waited past the configured time go to the moderator queue (B-037).
+    expect(prisma.postMedia.updateMany).toHaveBeenCalledTimes(1);
+    const call = prisma.postMedia.updateMany.mock.calls[0][0];
+    expect(call.data).toEqual({ reviewEnteredAt: NOW, reviewEntrySource: 'auto_check' });
+    expect(call.data.status).toBeUndefined();
+    expect(call.where).toEqual({
+      uploadState: 'ready',
+      status: 'pending',
+      decisionSource: null,
+      reviewEnteredAt: null,
+      confirmedAt: { lte: new Date(NOW.getTime() - 30 * 60_000) },
+    });
+  });
+
+  it('the unchecked wait is configurable', async () => {
+    const { service, prisma } = build({ configured: false, env: { MEDIA_REVIEW_UNCHECKED_AFTER_MINUTES: '5' } });
+    await service.runDueChecks(NOW);
+    expect(prisma.postMedia.updateMany.mock.calls[0][0].where.confirmedAt).toEqual({ lte: new Date(NOW.getTime() - 5 * 60_000) });
   });
 
   it('selects only ready, still-pending, undecided rows that are due (queued and due, or a checking row whose lease expired), oldest first, one batch', async () => {
@@ -117,6 +139,34 @@ describe('MediaCheckService.checkOne', () => {
     const write = prisma.postMedia.updateMany.mock.calls[1][0];
     expect(write.where).toEqual({ id: 'm1', status: 'pending', decisionSource: null });
     expect(write.data).toMatchObject({ status: 'approved', decisionSource: 'auto', decidedAt: NOW, checkState: 'done', checkLabels: [] });
+    // The uploader is told in the same transaction (B-037): the "approved" variant, naming the file.
+    expect(prisma.notification.create).toHaveBeenCalledWith({
+      data: { userId: 'u1', type: 'post_media_approved', payloadRefId: 'm1' },
+      select: { id: true },
+    });
+  });
+
+  it('an automatic rejection writes the generic reason and the "rejected" notification, never the labels', async () => {
+    const { service, prisma, moderation } = build();
+    prisma.postMedia.findUnique.mockResolvedValue(imageRow());
+    moderation.detectModerationLabels.mockResolvedValue([{ name: 'Explicit', parentName: '', confidence: 99 }]);
+    expect(await service.checkOne('m1', NOW)).toBe('rejected');
+    expect(prisma.postMedia.updateMany.mock.calls[1][0].data).toMatchObject({ status: 'rejected', decisionSource: 'auto' });
+    expect(prisma.notification.create).toHaveBeenCalledWith({
+      data: { userId: 'u1', type: 'post_media_rejected', payloadRefId: 'm1' },
+      select: { id: true },
+    });
+  });
+
+  it('an uncertain result enters the moderator queue and writes NO decision and NO notification', async () => {
+    const { service, prisma, moderation } = build();
+    prisma.postMedia.findUnique.mockResolvedValue(imageRow());
+    moderation.detectModerationLabels.mockResolvedValue([{ name: 'Suggestive', parentName: '', confidence: 60 }]);
+    expect(await service.checkOne('m1', NOW)).toBe('pending');
+    const data = prisma.postMedia.updateMany.mock.calls[1][0].data;
+    expect(data).toMatchObject({ checkState: 'done', reviewEnteredAt: NOW, reviewEntrySource: 'auto_check' });
+    expect(data.status).toBeUndefined();
+    expect(prisma.notification.create).not.toHaveBeenCalled();
   });
 
   it('a moderator who decided first wins: the guarded write matches nothing and the outcome is "skipped"', async () => {
@@ -124,6 +174,7 @@ describe('MediaCheckService.checkOne', () => {
     prisma.postMedia.findUnique.mockResolvedValue(imageRow());
     prisma.postMedia.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
     expect(await service.checkOne('m1', NOW)).toBe('skipped');
+    expect(prisma.notification.create).not.toHaveBeenCalled(); // nothing decided by the check, nothing to announce
   });
 
   it('a video is sampled at the configured interval and every frame goes to Rekognition', async () => {
@@ -164,7 +215,7 @@ describe('MediaCheckService.checkOne', () => {
     moderation.detectModerationLabels.mockRejectedValue(new Error('x'));
     expect(await service.checkOne('m1', NOW)).toBe('gave_up');
     const data = prisma.postMedia.updateMany.mock.calls[1][0].data;
-    expect(data).toMatchObject({ checkState: 'gave_up', checkAttempts: 5 });
+    expect(data).toMatchObject({ checkState: 'gave_up', checkAttempts: 5, reviewEnteredAt: NOW, reviewEntrySource: 'auto_check' });
     expect(data.status).toBeUndefined();
     expect(data.decisionSource).toBeUndefined();
   });

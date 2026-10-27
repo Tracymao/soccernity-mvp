@@ -11,6 +11,7 @@ import { MediaProcessor } from './media-processor';
 import { MODERATION_MAX_IMAGE_BYTES, MediaModerationClient } from './media-moderation-client';
 import { AUTO_REJECTION_REASON, ModerationLabel, decideModeration, sampleFrameTimes } from './media-moderation-decision.util';
 import { POST_MEDIA_DEFAULTS, PostMediaConfig } from './post-media.config';
+import { writeDecisionNotification } from './post-media-decision.service';
 import { PostMediaService } from './post-media.service';
 
 // backend/w14-post-media-pipeline (B-036; Decision Log #419 item 4). The automatic check, run in the
@@ -53,7 +54,12 @@ export class MediaCheckService {
    * not configured (the rows simply wait). Returns the outcomes, for tests and the log line.
    */
   async runDueChecks(now: Date = this.clock.now()): Promise<{ checked: number; outcomes: Record<string, number> }> {
-    if (!this.moderation.isConfigured) return { checked: 0, outcomes: {} };
+    if (!this.moderation.isConfigured) {
+      // Nothing is ever approved by default, and a row that is never checked would never reach a human.
+      // After a configured wait, hand the unchecked rows to the moderator queue (B-037).
+      await this.sendUncheckedToReview(now);
+      return { checked: 0, outcomes: {} };
+    }
 
     const due = await this.prisma.postMedia.findMany({
       where: {
@@ -78,6 +84,21 @@ export class MediaCheckService {
     return { checked: due.length, outcomes };
   }
 
+  /** Unconfigured check: ready, pending, undecided, never-queued-for-review rows older than the wait go to the queue. */
+  private async sendUncheckedToReview(now: Date): Promise<void> {
+    const waitMs = this.config.uncheckedToReviewAfterMinutes * 60_000;
+    await this.prisma.postMedia.updateMany({
+      where: {
+        uploadState: 'ready',
+        status: 'pending',
+        decisionSource: null,
+        reviewEnteredAt: null,
+        confirmedAt: { lte: new Date(now.getTime() - waitMs) },
+      },
+      data: { reviewEnteredAt: now, reviewEntrySource: 'auto_check' },
+    });
+  }
+
   /** Claims and checks one row. Safe to call concurrently from several workers: only one wins the claim. */
   async checkOne(id: string, now: Date = this.clock.now()): Promise<CheckOutcome> {
     const lease = new Date(now.getTime() + POST_MEDIA_DEFAULTS.checkLeaseSeconds * 1000);
@@ -100,6 +121,7 @@ export class MediaCheckService {
       where: { id },
       select: {
         id: true,
+        uploaderId: true,
         kind: true,
         publicKey: true,
         durationSeconds: true,
@@ -113,7 +135,7 @@ export class MediaCheckService {
 
     try {
       const decision = await this.evaluate(row);
-      return await this.apply(id, decision, now);
+      return await this.apply(id, row.uploaderId, decision, now);
     } catch (err) {
       return this.recordFailure(id, row.checkAttempts, err, now);
     }
@@ -157,52 +179,40 @@ export class MediaCheckService {
     }
   }
 
-  /** Writes the outcome, but only if no moderator decided while the check ran. */
+  /**
+   * Writes the outcome, but only if no moderator decided while the check ran. An automatic approval or
+   * rejection writes the uploader's Notification in the SAME transaction (B-037); an uncertain result enters
+   * the moderator queue.
+   */
   private async apply(
     id: string,
+    uploaderId: string,
     decision: { outcome: 'approved' | 'rejected' | 'pending'; categories: string[] },
     now: Date,
   ): Promise<CheckOutcome> {
     const labels = decision.categories as unknown as Prisma.InputJsonValue;
     const guard = { id, status: 'pending', decisionSource: null } as const;
+    const done = { checkState: 'done', checkedAt: now, checkLeaseUntil: null, checkError: null, checkLabels: labels };
 
-    if (decision.outcome === 'approved') {
-      const r = await this.prisma.postMedia.updateMany({
-        where: guard,
-        data: {
-          status: 'approved',
-          decisionSource: 'auto',
-          decidedAt: now,
-          checkState: 'done',
-          checkedAt: now,
-          checkLeaseUntil: null,
-          checkError: null,
-          checkLabels: labels,
-        },
+    if (decision.outcome === 'approved' || decision.outcome === 'rejected') {
+      const outcome = decision.outcome;
+      const written = await this.prisma.$transaction(async (tx) => {
+        const r = await tx.postMedia.updateMany({
+          where: guard,
+          data:
+            outcome === 'approved'
+              ? { ...done, status: 'approved', decisionSource: 'auto', decidedAt: now }
+              : { ...done, status: 'rejected', decisionSource: 'auto', decidedAt: now, rejectionReason: AUTO_REJECTION_REASON },
+        });
+        if (r.count === 1) await writeDecisionNotification(tx, uploaderId, id, outcome);
+        return r.count === 1;
       });
-      return r.count === 1 ? 'approved' : 'skipped';
+      return written ? outcome : 'skipped';
     }
-    if (decision.outcome === 'rejected') {
-      const r = await this.prisma.postMedia.updateMany({
-        where: guard,
-        data: {
-          status: 'rejected',
-          decisionSource: 'auto',
-          decidedAt: now,
-          rejectionReason: AUTO_REJECTION_REASON,
-          checkState: 'done',
-          checkedAt: now,
-          checkLeaseUntil: null,
-          checkError: null,
-          checkLabels: labels,
-        },
-      });
-      return r.count === 1 ? 'rejected' : 'skipped';
-    }
-    // Between the thresholds: stays pending and waits for a moderator.
+    // Between the thresholds: stays pending and enters the moderator queue.
     await this.prisma.postMedia.updateMany({
       where: guard,
-      data: { checkState: 'done', checkedAt: now, checkLeaseUntil: null, checkError: null, checkLabels: labels },
+      data: { ...done, reviewEnteredAt: now, reviewEntrySource: 'auto_check' },
     });
     return 'pending';
   }
@@ -216,7 +226,16 @@ export class MediaCheckService {
     if (attempts >= this.config.checkMaxAttempts) {
       await this.prisma.postMedia.updateMany({
         where: { id, status: 'pending', decisionSource: null },
-        data: { checkState: 'gave_up', checkAttempts: attempts, checkLeaseUntil: null, checkError: errorName, checkedAt: now },
+        data: {
+          checkState: 'gave_up',
+          checkAttempts: attempts,
+          checkLeaseUntil: null,
+          checkError: errorName,
+          checkedAt: now,
+          // Gave up: a person has to look at it (B-037).
+          reviewEnteredAt: now,
+          reviewEntrySource: 'auto_check',
+        },
       });
       return 'gave_up';
     }

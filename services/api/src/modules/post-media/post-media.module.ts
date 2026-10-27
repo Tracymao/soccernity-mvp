@@ -9,6 +9,9 @@ import { MediaProcessor } from './media-processor';
 import { MediaCheckService, PostMediaSweepService } from './media-check.service';
 import { PostMediaConfig } from './post-media.config';
 import { PostMediaController } from './post-media.controller';
+import { PostMediaDecisionService } from './post-media-decision.service';
+import { PostMediaReportController } from './post-media-report.controller';
+import { PostMediaReportService } from './post-media-report.service';
 import { PostMediaService } from './post-media.service';
 
 // backend/w14-post-media-pipeline (B-041, B-036; Decision Log #419). User post and contest-entry media:
@@ -22,7 +25,7 @@ import { PostMediaService } from './post-media.service';
 // single post-creation path), so FeedModule does not need to import this module's services.
 @Module({
   imports: [ConfigModule, StorageModule, AuthFoundationModule],
-  controllers: [PostMediaController],
+  controllers: [PostMediaController, PostMediaReportController],
   providers: [
     PrismaService,
     PostMediaConfig,
@@ -31,7 +34,10 @@ import { PostMediaService } from './post-media.service';
     PostMediaService,
     MediaCheckService,
     PostMediaSweepService,
+    PostMediaReportService,
+    PostMediaDecisionService,
   ],
-  exports: [PostMediaConfig],
+  // PostMediaDecisionService + DirectUploadStorageService reach AdminMediaReviewModule (B-037).
+  exports: [PostMediaConfig, PostMediaDecisionService],
 })
 export class PostMediaModule {}

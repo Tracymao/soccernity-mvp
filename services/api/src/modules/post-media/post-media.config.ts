@@ -28,6 +28,15 @@ export const POST_MEDIA_DEFAULTS = {
   checkBatchSize: 10,
   // The longest an in-flight check may hold a row before another worker may take it over.
   checkLeaseSeconds: 600,
+  // backend/w15-media-review-queue (B-037). Adopted defaults, veto-able (docs/backend-w15-review-queue-report.md).
+  // Distinct reporters at which an approved item is hidden from everyone but its author pending review.
+  // 0 turns the automatic hiding off (reports still queue the item).
+  reportHideThreshold: 3,
+  // When the automatic check is not configured at all, a confirmed upload waits this long and is then
+  // sent to the moderator queue (otherwise it would sit unseen forever: nothing is ever approved by default).
+  uncheckedToReviewAfterMinutes: 30,
+  // How long a moderator's view link for a file stays valid.
+  reviewViewUrlTtlSeconds: 300,
 } as const;
 
 export interface PostMediaLimits {
@@ -132,6 +141,18 @@ export class PostMediaConfig {
 
   get checkMaxAttempts(): number {
     return this.num('MEDIA_CHECK_MAX_ATTEMPTS', POST_MEDIA_DEFAULTS.checkMaxAttempts, 1, 20);
+  }
+
+  get reportHideThreshold(): number {
+    return this.num('MEDIA_REPORT_HIDE_THRESHOLD', POST_MEDIA_DEFAULTS.reportHideThreshold, 0, 1000);
+  }
+
+  get uncheckedToReviewAfterMinutes(): number {
+    return this.num('MEDIA_REVIEW_UNCHECKED_AFTER_MINUTES', POST_MEDIA_DEFAULTS.uncheckedToReviewAfterMinutes, 0, 24 * 60);
+  }
+
+  get reviewViewUrlTtlSeconds(): number {
+    return POST_MEDIA_DEFAULTS.reviewViewUrlTtlSeconds;
   }
 
   get checkBatchSize(): number {

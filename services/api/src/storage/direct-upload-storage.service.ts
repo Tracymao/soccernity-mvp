@@ -29,4 +29,10 @@ export abstract class DirectUploadStorageService extends StorageService {
 
   /** Streams the local file at `filePath` to `key` and returns its public URL (like upload()). */
   abstract uploadFile(filePath: string, key: string, contentType: string): Promise<string>;
+
+  /**
+   * A SHORT-LIVED link a moderator's browser can GET to view the object at `key` (backend/w15-media-
+   * review-queue, B-037). It expires after `expiresInSeconds`; it is never stored.
+   */
+  abstract createDownloadUrl(key: string, expiresInSeconds: number): Promise<string>;
 }

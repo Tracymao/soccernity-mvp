@@ -18,6 +18,7 @@ import { ConversationsController } from './modules/messaging/conversations.contr
 import { PublicReportsController } from './modules/moderation/public-reports.controller';
 import { ReportsController } from './modules/moderation/reports.controller';
 import { PostMediaController } from './modules/post-media/post-media.controller';
+import { PostMediaReportController } from './modules/post-media/post-media-report.controller';
 import { NotificationsController } from './modules/notifications/notifications.controller';
 import { SportsMatchesController } from './modules/sports/sports-matches.controller';
 import { UserAvatarController } from './modules/users/user-avatar.controller';
@@ -129,6 +130,8 @@ const EXPECTED: Record<string, Flags> = {
   // cannot upload. C only: the upload itself publishes nothing (the post that carries it takes E and P).
   'POST /media/uploads': 'C',
   'POST /media/uploads/:id/confirm': 'C',
+  // backend/w15-media-review-queue (B-037): reporting a file is a write that touches another user's content.
+  'POST /media/:id/report': 'C',
   // grassroots
   'POST /teams': 'CE',
   'POST /fixtures': 'CE',
@@ -159,6 +162,7 @@ const CONTROLLERS = [
   SportsMatchesController,
   ViewQualificationController,
   PostMediaController,
+  PostMediaReportController,
 ];
 
 // Controller files deliberately NOT in CONTROLLERS, with the reason. A new

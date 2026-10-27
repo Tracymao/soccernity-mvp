@@ -228,6 +228,12 @@ services:
         value: "5"
       - key: MEDIA_CHECK_BATCH_SIZE
         value: "10"
+      # Moderator review queue (B-037). Distinct reporters at which an approved file is hidden pending review
+      # (0 = never hide automatically); minutes an UNCHECKED upload waits before it is sent to the queue.
+      - key: MEDIA_REPORT_HIDE_THRESHOLD
+        value: "3"
+      - key: MEDIA_REVIEW_UNCHECKED_AFTER_MINUTES
+        value: "30"
       # --- Guardian card verification (Stripe; use TEST keys until a real account exists) ---
       - key: STRIPE_SECRET_KEY
         sync: false
@@ -446,6 +452,12 @@ services:
         value: "5"
       - key: MEDIA_CHECK_BATCH_SIZE
         value: "10"
+      # Moderator review queue (B-037). Distinct reporters at which an approved file is hidden pending review
+      # (0 = never hide automatically); minutes an UNCHECKED upload waits before it is sent to the queue.
+      - key: MEDIA_REPORT_HIDE_THRESHOLD
+        value: "3"
+      - key: MEDIA_REVIEW_UNCHECKED_AFTER_MINUTES
+        value: "30"
       # --- Guardian card verification (Stripe; use TEST keys until a real account exists) ---
       - key: STRIPE_SECRET_KEY
         sync: false

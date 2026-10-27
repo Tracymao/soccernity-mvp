@@ -29,3 +29,10 @@ export const POST_MEDIA_CODES = {
 } as const;
 
 export const UPLOADS_UNAVAILABLE_MESSAGE = "Uploads aren't available right now. Please try again later.";
+
+// backend/w15-media-review-queue (B-037).
+export const MEDIA_REVIEW_CODES = {
+  alreadyDecided: 'already_decided',
+  notInQueue: 'not_in_review_queue',
+  cannotReportOwn: 'cannot_report_own_media',
+} as const;
