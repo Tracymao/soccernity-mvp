@@ -126,6 +126,12 @@ services:
       # SPORTS_DATA_PROVIDER: code default
       - key: SPORTS_DATA_PROVIDER
         value: "highlightly"
+      # POINTS_DAILY_CAP_GIVEN / POINTS_DAILY_CAP_RECEIVED: the leaderboard daily caps in whole points,
+      # per Europe/London day (docs/contest-spec.md 9b; code defaults 40 and 20)
+      - key: POINTS_DAILY_CAP_GIVEN
+        value: "40"
+      - key: POINTS_DAILY_CAP_RECEIVED
+        value: "20"
       # HIGHLIGHTLY_DAILY_REQUEST_BUDGET: code default = free-tier limit
       - key: HIGHLIGHTLY_DAILY_REQUEST_BUDGET
         value: "100"
@@ -285,6 +291,12 @@ services:
       # SPORTS_DATA_PROVIDER: code default
       - key: SPORTS_DATA_PROVIDER
         value: "highlightly"
+      # POINTS_DAILY_CAP_GIVEN / POINTS_DAILY_CAP_RECEIVED: the leaderboard daily caps in whole points,
+      # per Europe/London day (docs/contest-spec.md 9b; code defaults 40 and 20)
+      - key: POINTS_DAILY_CAP_GIVEN
+        value: "40"
+      - key: POINTS_DAILY_CAP_RECEIVED
+        value: "20"
       # HIGHLIGHTLY_DAILY_REQUEST_BUDGET: code default = free-tier limit
       - key: HIGHLIGHTLY_DAILY_REQUEST_BUDGET
         value: "100"

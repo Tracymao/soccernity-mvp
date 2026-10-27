@@ -1967,7 +1967,9 @@ model LeaderboardEntry {
   userId String
   // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
   user   User   @relation(fields: [userId], references: [id])
-  points Int    @default(0)
+  // backend/w12-points (B-093, Decision Log #383): QUARTER-POINT units (1 point = 4 units). Ranking
+  // uses this exact value; the API shows it rounded to the nearest whole point (half rounds up).
+  quarterPoints Int @default(0)
   rank   Int?
   period String // e.g. "2026-W33"
   // Decision Log #128 -- which board this row belongs to: '' = the Overall
@@ -2300,17 +2302,30 @@ model PointsLedgerEntry {
   userId     String
   // Cascade per DL #44 — the sweep's tx.user.delete() must keep working.
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  // engagement_like
-  //   | contest_weekly_win | contest_monthly_crown
+  // Baseline engagement (Decision Log #382/#383), one source per side per kind:
+  //   engagement_view_given | engagement_like_given | engagement_comment_given     (the giver, 1 point)
+  //   engagement_view_received | engagement_like_received | engagement_comment_received  (the creator, 0.25)
+  // Contest placement: contest_weekly_win | contest_monthly_crown
   // ('competition_result' reserved for DL #73's unbuilt Competition system.)
   source     String
-  // The domain row this award is for — a Post id (engagement), a
-  // ContestRound id (weekly win) or a ContestCycle id (crown). A plain
-  // string, NOT a foreign key: the ledger is an audit trail that must
-  // outlive whatever it references, the same reasoning as
-  // ConsentAuditRecord.minorUserId.
+  // The domain row this award is for. Given rows: the Post id. Received rows: "<postId>:<giverId>"
+  // (one quarter point per unique account per post). Placement rows: a ContestRound id (weekly) or
+  // ContestCycle id (crown). A plain string, NOT a foreign key: the ledger is an audit trail that must
+  // outlive whatever it references, the same reasoning as ConsentAuditRecord.minorUserId.
   refId      String
-  points     Int
+  // backend/w12-points (B-093): QUARTER-POINT units (1 point = 4 units; a received view/like/comment is
+  // 1 unit). Stored exactly, displayed rounded (half up), ranked on the exact value.
+  quarterPoints Int
+  // Baseline engagement rows only: the Post the engagement was on (so "post removed" can revoke every
+  // row for it) and, on a RECEIVED row, the account whose engagement earned it (so "account later
+  // restricted" can revoke what that account earned others). Plain strings, no foreign keys.
+  postId        String?
+  counterpartId String?
+  // Revocation (spec 9b): set when the engagement is removed (unlike, comment removed, post removed) or
+  // the account is later restricted. A revoked row counts for nothing, including the daily cap counters
+  // ("revoking a point also reduces that day's cap counter"). A removed-then-restored engagement clears
+  // it again, so the engagement earns its point once. The row itself is never deleted.
+  revokedAt     DateTime?
   // Snapshot of the user's represented club at award time (Decision Log
   // #128). Populated by awardPoints() from User.representedClubId, so a
   // later change of represented club never moves already-earned points.
@@ -2324,6 +2339,8 @@ model PointsLedgerEntry {
   // like on the same post, or re-running round judging, cannot double-pay.
   @@unique([source, refId, userId])
   @@index([userId, occurredAt])
+  @@index([postId])
+  @@index([counterpartId])
 }
 
 // Decision Log #349 (sprint-1/age-reclassification-sweep) -- append-only

@@ -26,6 +26,8 @@ export interface ContestEntryContext {
   submittedAt: Date;
   /** The cycle's "YYYY-MM"; null for a legacy admin-judged cycle (which never records engagement). */
   monthKey: string | null;
+  /** Weeks 1-3: the round's view-qualifying watch limit L in seconds (spec 9c); null for week 4. */
+  viewWatchLimitSeconds?: number | null;
 }
 
 type EntryReader = Pick<Prisma.TransactionClient, 'contestEntry'>;
@@ -42,7 +44,7 @@ export async function loadContestEntryForPost(
       id: true,
       userId: true,
       submittedAt: true,
-      round: { select: { weekNumber: true } },
+      round: { select: { weekNumber: true, viewWatchLimitSeconds: true } },
       cycle: { select: { monthKey: true } },
     },
   });
@@ -53,6 +55,7 @@ export async function loadContestEntryForPost(
     authorId: entry.userId,
     submittedAt: entry.submittedAt,
     monthKey: entry.cycle.monthKey,
+    viewWatchLimitSeconds: entry.round.viewWatchLimitSeconds,
   };
 }
 
@@ -183,9 +186,9 @@ export async function syncCommentEngagement(
 }
 
 /**
- * The seam for B-093's server-validated view heartbeats: records a QUALIFIED view of a contest
- * entry. Nothing calls it yet -- until B-093 lands no view is ever recorded, so Phase 1 ranks on
- * likes + comments only. Exported (and tested) so B-093 has one call to make.
+ * Records a QUALIFIED view of a contest entry. Called by ViewQualificationService (backend/w12-points,
+ * B-093) once a viewer has met the contest view threshold of spec 9c (min(video length, L) for a video,
+ * 5 seconds for a photo), so Phase 1 now ranks on views + likes + comments.
  */
 export async function recordQualifiedView(
   db: EngagementWriter,

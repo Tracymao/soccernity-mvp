@@ -16,8 +16,8 @@ describe('LeaderboardRollupService', () => {
       const prisma = buildMock();
       (prisma.$queryRaw as jest.Mock)
         .mockResolvedValueOnce([
-          { userId: 'u-1', totalPoints: 250, rank: 1 },
-          { userId: 'u-2', totalPoints: 180, rank: 2 },
+          { userId: 'u-1', totalQuarterPoints: 250, rank: 1 },
+          { userId: 'u-2', totalQuarterPoints: 180, rank: 2 },
         ])
         .mockResolvedValueOnce([]);
 
@@ -26,13 +26,13 @@ describe('LeaderboardRollupService', () => {
       expect(prisma.leaderboardEntry.upsert).toHaveBeenCalledTimes(2);
       expect(prisma.leaderboardEntry.upsert).toHaveBeenNthCalledWith(1, {
         where: { userId_period_clubId: { userId: 'u-1', period: '2026-W33', clubId: '' } },
-        update: { points: 250, rank: 1 },
-        create: { userId: 'u-1', period: '2026-W33', clubId: '', points: 250, rank: 1 },
+        update: { quarterPoints: 250, rank: 1 },
+        create: { userId: 'u-1', period: '2026-W33', clubId: '', quarterPoints: 250, rank: 1 },
       });
       expect(prisma.leaderboardEntry.upsert).toHaveBeenNthCalledWith(2, {
         where: { userId_period_clubId: { userId: 'u-2', period: '2026-W33', clubId: '' } },
-        update: { points: 180, rank: 2 },
-        create: { userId: 'u-2', period: '2026-W33', clubId: '', points: 180, rank: 2 },
+        update: { quarterPoints: 180, rank: 2 },
+        create: { userId: 'u-2', period: '2026-W33', clubId: '', quarterPoints: 180, rank: 2 },
       });
       expect(result).toEqual({ period: '2026-W33', upserted: 2 });
     });
@@ -63,7 +63,7 @@ describe('LeaderboardRollupService', () => {
       expect(values).toContainEqual(end);
     });
 
-    it('the raw query text references the active-account exclusion and the engagement sources', async () => {
+    it('the raw query sums unrevoked quarter points, excludes inactive accounts and applies no weekly cap', async () => {
       const prisma = buildMock();
       (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
 
@@ -72,9 +72,12 @@ describe('LeaderboardRollupService', () => {
       const [strings] = (prisma.$queryRaw as jest.Mock).mock.calls[0];
       const sql = strings.join('?');
       expect(sql).toContain(`u."accountStatus" = 'active'`);
-      expect(sql).toContain('LEAST(');
+      expect(sql).toContain('SUM(ple."quarterPoints")');
+      expect(sql).toContain('ple."revokedAt" IS NULL');
+      // B-093: the old weekly cap of 100 is gone (the daily caps are applied when a point is awarded).
+      expect(sql).not.toContain('LEAST(');
       expect(sql).toContain('RANK() OVER');
-      expect(sql).toContain('"totalPoints" > 0');
+      expect(sql).toContain('"totalQuarterPoints" > 0');
     });
   });
 
@@ -123,10 +126,10 @@ describe('LeaderboardRollupService', () => {
     it('upserts each club board row under that club id, separately from the global board', async () => {
       const prisma = buildMock();
       (prisma.$queryRaw as jest.Mock)
-        .mockResolvedValueOnce([{ userId: 'u-1', totalPoints: 90, rank: 1 }])
+        .mockResolvedValueOnce([{ userId: 'u-1', totalQuarterPoints: 90, rank: 1 }])
         .mockResolvedValueOnce([
-          { clubId: 'club-a', userId: 'u-1', totalPoints: 60, rank: 1 },
-          { clubId: 'club-a', userId: 'u-2', totalPoints: 30, rank: 2 },
+          { clubId: 'club-a', userId: 'u-1', totalQuarterPoints: 60, rank: 1 },
+          { clubId: 'club-a', userId: 'u-2', totalQuarterPoints: 30, rank: 2 },
         ]);
 
       const result = await new LeaderboardRollupService(prisma).rollupPeriod('2026-W33');
@@ -134,13 +137,13 @@ describe('LeaderboardRollupService', () => {
       expect(result).toEqual({ period: '2026-W33', upserted: 3 });
       expect(prisma.leaderboardEntry.upsert).toHaveBeenCalledWith({
         where: { userId_period_clubId: { userId: 'u-1', period: '2026-W33', clubId: '' } },
-        update: { points: 90, rank: 1 },
-        create: { userId: 'u-1', period: '2026-W33', clubId: '', points: 90, rank: 1 },
+        update: { quarterPoints: 90, rank: 1 },
+        create: { userId: 'u-1', period: '2026-W33', clubId: '', quarterPoints: 90, rank: 1 },
       });
       expect(prisma.leaderboardEntry.upsert).toHaveBeenCalledWith({
         where: { userId_period_clubId: { userId: 'u-1', period: '2026-W33', clubId: 'club-a' } },
-        update: { points: 60, rank: 1 },
-        create: { userId: 'u-1', period: '2026-W33', clubId: 'club-a', points: 60, rank: 1 },
+        update: { quarterPoints: 60, rank: 1 },
+        create: { userId: 'u-1', period: '2026-W33', clubId: 'club-a', quarterPoints: 60, rank: 1 },
       });
     });
 

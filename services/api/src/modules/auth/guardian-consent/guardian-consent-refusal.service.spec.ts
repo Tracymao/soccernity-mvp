@@ -125,6 +125,8 @@ function buildService(
         },
       ),
     },
+    // backend/w12-points: a final refusal revokes the minor's baseline points.
+    pointsLedgerEntry: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     user: {
       findUnique: jest.fn(async ({ where }: { where: Record<string, unknown> }) => {
         if (where.id !== undefined) return where.id === user.id ? { ...user } : null;
@@ -380,6 +382,45 @@ describe('GuardianConsentService — refuseConsentAndScheduleDeletion', () => {
 
     expect(guardian.consentStatus).toBe('declined');
     expect(guardian.consentDeclineSource).toBe('expiry_timeout');
+  });
+
+  it('revokes the minors baseline points (what they earned, and what they earned others) on a final refusal', async () => {
+    const { service, prisma } = buildService();
+
+    await service.refuseConsentAndScheduleDeletion({
+      guardianId: 'guardian-1',
+      minorUserId: 'minor-1',
+      reason: 'withdrawn',
+    });
+
+    const call = (prisma.pointsLedgerEntry.updateMany as jest.Mock).mock.calls[0][0];
+    expect(call.where.OR).toEqual([{ userId: 'minor-1' }, { counterpartId: 'minor-1' }]);
+    expect(call.where.revokedAt).toBeNull();
+    expect(call.data).toEqual({ revokedAt: expect.any(Date) });
+  });
+
+  it('does not revoke again on a repeat refusal (the guarded write found nothing to refuse)', async () => {
+    const { service, prisma } = buildService();
+    await service.declineConsent('consent-token-1');
+    (prisma.pointsLedgerEntry.updateMany as jest.Mock).mockClear();
+
+    await service.refuseConsentAndScheduleDeletion({
+      guardianId: 'guardian-1',
+      minorUserId: 'minor-1',
+      reason: 'expired',
+    });
+
+    expect(prisma.pointsLedgerEntry.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('still refuses consent if revoking the points fails (the refusal is the safeguarding-critical write)', async () => {
+    const { service, prisma, guardian } = buildService();
+    (prisma.pointsLedgerEntry.updateMany as jest.Mock).mockRejectedValueOnce(new Error('db hiccup'));
+
+    await expect(
+      service.refuseConsentAndScheduleDeletion({ guardianId: 'guardian-1', minorUserId: 'minor-1', reason: 'withdrawn' }),
+    ).resolves.toBeUndefined();
+    expect(guardian.consentStatus).toBe('declined');
   });
 
   it('does not overwrite the source when a second refusal arrives (first source wins)', async () => {

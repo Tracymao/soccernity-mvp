@@ -18,8 +18,12 @@ import {
   removeEntryEngagement,
   syncCommentEngagement,
 } from '../contest/contest-engagement.util';
-import { ENGAGEMENT_POINTS } from '../points/points.constants';
-import { awardPoints } from '../points/points.util';
+import {
+  awardEngagementPoints,
+  revokeEngagementPoints,
+  revokeEngagementPointsForPost,
+} from '../points/engagement-points.util';
+import { DEFAULT_POINTS_CAPS, PointsCaps, PointsConfig } from '../points/points-config.service';
 import { recordPostHashtags } from '../search/hashtag.util';
 import { PUBLIC_NAME_SELECT, toPublicUser } from '../users/public-name.util';
 import { decodeFeedSequenceCursor, encodeFeedSequenceCursor } from './cursor.util';
@@ -131,7 +135,7 @@ function toFeedPost(row: RawFeedPost, now: Date): FeedPost {
 //    is a 404, exactly like a post that does not exist, so nobody learns an entry was uploaded.
 //  - communityFeedFrom: GET /posts/feed omits a final entry until the pin is removed (it is "not also
 //    a normal Community-feed post" during the contest month). Only getFeed applies this one.
-function visibleToViewer(viewerId: string, now: Date): Prisma.PostWhereInput {
+export function visibleToViewer(viewerId: string, now: Date): Prisma.PostWhereInput {
   return {
     OR: [{ visibleFrom: null }, { visibleFrom: { lte: now } }, { authorId: viewerId }],
   };
@@ -333,7 +337,14 @@ export class FeedService {
   constructor(
     private readonly prisma: PrismaService,
     @Optional() @Inject(APP_CLOCK) private readonly clock: Clock = systemClock,
+    // backend/w12-points (B-093): the two daily caps, held in configuration. Optional so a unit test or
+    // a module that does not import PointsModule falls back to the spec's defaults (40 / 20).
+    @Optional() private readonly pointsConfig?: PointsConfig,
   ) {}
+
+  private get pointsCaps(): PointsCaps {
+    return this.pointsConfig?.caps ?? DEFAULT_POINTS_CAPS;
+  }
 
   async createPost(authorId: string, dto: CreatePostDto, options: CreatePostOptions = {}): Promise<FeedPost> {
     // Cross-field rule ("at most one of clubPageId/banterRoomId"), so it
@@ -772,18 +783,17 @@ export class FeedService {
             data: { userId: post.authorId, type: 'like', payloadRefId: postId, actorId: userId },
           });
         }
-        // Baseline-engagement point for the LIKER (the action-taker, not
-        // the post author) — sprint-2/contest-data-model-backend,
-        // Decision Log #219. Only reached on a genuine first like (a
-        // duplicate like throws P2002 on tx.like.create above and this
-        // whole callback rolls back), and the ledger's own
-        // @@unique([source, refId, userId]) is a backstop so a
-        // like → unlike → re-like never re-awards.
-        await awardPoints(tx, {
-          userId,
-          source: 'engagement_like',
-          refId: postId,
-          points: ENGAGEMENT_POINTS.LIKE_GIVEN,
+        // Baseline points (backend/w12-points, Decision Log #382/#383): the LIKER earns 1 point and the
+        // post's creator 0.25, subject to self-exemption, eligibility and the daily caps. Only reached on
+        // a genuine first like (a duplicate like throws P2002 on tx.like.create above and this whole
+        // callback rolls back); a like -> unlike -> re-like restores the revoked rows, earning once.
+        await awardEngagementPoints(tx, {
+          kind: 'like',
+          postId,
+          postAuthorId: post.authorId,
+          giverId: userId,
+          now,
+          caps: this.pointsCaps,
         });
       });
     } catch (err) {
@@ -816,7 +826,7 @@ export class FeedService {
   // existence check passed) as the same idempotent success, rather than
   // a 500.
   async unlikePost(userId: string, postId: string): Promise<LikeState> {
-    await this.assertPostExists(postId);
+    const post = await this.assertPostExists(postId);
 
     const existing = await this.prisma.like.findUnique({ where: { userId_postId: { userId, postId } } });
     if (existing) {
@@ -830,6 +840,14 @@ export class FeedService {
           });
           // "Removed engagement excluded": an unlike takes the like out of the contest tally.
           await removeEntryEngagement(tx, contest, { giverId: userId, kind: 'like' });
+          // Spec 9b: points are REVOKED when the engagement is removed (and the day's cap is freed).
+          await revokeEngagementPoints(tx, {
+            kind: 'like',
+            postId,
+            postAuthorId: post.authorId,
+            giverId: userId,
+            now: this.clock.now(),
+          });
         });
       } catch (err) {
         if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025')) {
@@ -890,6 +908,16 @@ export class FeedService {
       // passes the content screening (a seam, see contest-engagement.util).
       if (commentCountsForContest(dto.contentText)) {
         await recordEntryEngagement(tx, contest, { giverId: authorId, kind: 'comment', now });
+        // The same screening decides the baseline points (spec 9b): ONE comment point per account per
+        // post however many comments it writes (ten comments = 1); the creator earns 0.25 for it.
+        await awardEngagementPoints(tx, {
+          kind: 'comment',
+          postId,
+          postAuthorId: post.authorId,
+          giverId: authorId,
+          now,
+          caps: this.pointsCaps,
+        });
       }
       if (post.authorId !== authorId && !(await hasBlockBetween(tx, authorId, post.authorId))) {
         await tx.notification.create({
@@ -1042,6 +1070,31 @@ export class FeedService {
       }
       // The account's single contest comment point goes with its last visible comment.
       await syncCommentEngagement(tx, contest, { postId, commentAuthorId: comment.authorId });
+      await this.syncCommentPoints(tx, {
+        postId,
+        postAuthorId: comment.post.authorId,
+        commentAuthorId: comment.authorId,
+      });
+    });
+  }
+
+  // The baseline counterpart of syncCommentEngagement: the account's single comment point (and the
+  // creator's 0.25 for it) stays while the account has ANY visible comment on the post, and is revoked
+  // when its last one goes (deleted or hidden).
+  private async syncCommentPoints(
+    tx: Prisma.TransactionClient,
+    input: { postId: string; postAuthorId: string; commentAuthorId: string },
+  ): Promise<void> {
+    const remaining = await tx.comment.count({
+      where: { postId: input.postId, authorId: input.commentAuthorId, hidden: false },
+    });
+    if (remaining > 0) return;
+    await revokeEngagementPoints(tx, {
+      kind: 'comment',
+      postId: input.postId,
+      postAuthorId: input.postAuthorId,
+      giverId: input.commentAuthorId,
+      now: this.clock.now(),
     });
   }
 
@@ -1130,11 +1183,22 @@ export class FeedService {
       // and only once: the record is idempotent).
       if (hidden) {
         await syncCommentEngagement(tx, contest, { postId, commentAuthorId: comment.authorId });
+        await this.syncCommentPoints(tx, {
+          postId,
+          postAuthorId: post.authorId,
+          commentAuthorId: comment.authorId,
+        });
       } else if (commentCountsForContest(comment.contentText)) {
-        await recordEntryEngagement(tx, contest, {
-          giverId: comment.authorId,
+        const now = this.clock.now();
+        await recordEntryEngagement(tx, contest, { giverId: comment.authorId, kind: 'comment', now });
+        // Unhiding restores the revoked comment point (earned once, never twice).
+        await awardEngagementPoints(tx, {
           kind: 'comment',
-          now: this.clock.now(),
+          postId,
+          postAuthorId: post.authorId,
+          giverId: comment.authorId,
+          now,
+          caps: this.pointsCaps,
         });
       }
     });
@@ -1165,6 +1229,9 @@ export class FeedService {
           data: { postCount: { decrement: 1 } },
         });
       }
+      // Spec 9b: a removed post revokes every baseline point anyone earned on it (the ledger rows stay,
+      // marked, as the audit trail; PointsLedgerEntry has no foreign key to Post).
+      await revokeEngagementPointsForPost(tx, postId, this.clock.now());
       await tx.post.delete({ where: { id: postId } });
     });
   }

@@ -933,3 +933,13 @@ a real, deferred v2 concern.
 safety-sensitive action nor new user-generated content, so neither of
 `likePost`'s two side effects (notification, `awardPoints`) applies
 here.
+
+## Baseline leaderboard points (backend/w12-points, B-093)
+
+Likes, comments and their removal now go through the points engine (`modules/points`): a like or a comment
+earns the giver 1 point and the post's creator 0.25, subject to the self-exemption, eligibility and the
+daily caps; an unlike, the removal or hiding of the account's last visible comment, and the removal of a
+post revoke the rows, and a re-like or an unhide restores them (earned once). `createPost` and follows earn
+nothing (B-094). `FeedService` takes an optional `PointsConfig` (the two daily caps) as its third constructor
+argument. Views earn points through `POST /posts/:id/view-heartbeat` (`modules/view-qualification`), not
+`POST /posts/:id/view`, which stays the anonymous display-count tally.

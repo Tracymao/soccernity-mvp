@@ -28,7 +28,7 @@ Every boundary is **exclusive at its end, to the millisecond** (`contest-schedul
 | `contest-ranking.util.ts` | Engagement tally, Phase 1 / vote / final rankings and every tie-break. Pure |
 | `contest-editability.util.ts` | What an admin may still edit (spec 4a). Pure |
 | `contest-eligibility.ts` | Who counts: active, verified email, not restricted |
-| `contest-engagement.util.ts` | The contest side of a like / comment (called by `FeedService` in its own transaction); the final-entry lock; the B-093 view seam |
+| `contest-engagement.util.ts` | The contest side of a like / comment (called by `FeedService` in its own transaction); the final-entry lock; `recordQualifiedView`, called by `ViewQualificationService` (B-093) |
 | `contest-lifecycle.service.ts` | The scheduler (`@Cron` every minute): Phase 1 close, forfeit, lock, finalists, reveal, crown, pin removal |
 | `contest-voting.service.ts` | `PUT` / `DELETE /contest/entries/:entryId/vote` |
 | `contest.service.ts` | `GET /contest/current`, `/cycles/:id`, `/rounds/:roundId/entries`, `/users/:userId/pinned-entry`; `POST /contest/entries`, `/contest/final-entry` |
@@ -70,8 +70,8 @@ Goal: every finalist gets comparable community exposure, independent of follower
 
 ## Not built here (flagged)
 
-* **View qualification** (B-093): no heartbeat endpoint exists, so no view is ever recorded; Phase 1 effectively ranks on likes + comments. `recordQualifiedView` is the one call B-093 makes.
+* **View qualification** (B-093, built by `backend/w12-points`): `POST /posts/:id/view-heartbeat` (`modules/view-qualification`) records a `ContestEngagement` row of kind `view` once the server-credited watch time meets the contest threshold (video: min(length, the round's `viewWatchLimitSeconds`); photo and text: 5 s; never in the week-4 final), so Phase 1 now ranks on views + likes + comments. The follow snapshot and the counting window are applied by the same `recordEntryEngagement` a like uses.
 * ~~The exposure engine~~ is built (B-092): see "The Week-4 finalist exposure engine" below.
-* **The quarter-point ledger** (B-093). The follow / post point awards were removed by B-094.
+* **The quarter-point ledger** (B-093, built): placement prizes are written in quarter-point units (the admin's whole-point figures x 4) by `ContestLifecycleService`; everyday giver / receiver points, caps and revocation are in `modules/points`. The follow / post point awards were removed by B-094.
 * **`apps/admin`** still calls the removed judging endpoints (B-097) and `apps/web` does not render the new states (B-098, B-099).
 * Open questions and every judgment call: `docs/backend-w7-contest-report.md`.

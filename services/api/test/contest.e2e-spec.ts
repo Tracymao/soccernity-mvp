@@ -301,9 +301,9 @@ describe('Contest e2e: the self-running month', () => {
       [3, eA.entryId],
     ]);
     // placement points are the contest's own (defaults 500 / 300 / 150), awarded once
-    expect((await ledger(C.userId, 'contest_weekly_win')).map((r) => r.points)).toEqual([500]);
-    expect((await ledger(B.userId, 'contest_weekly_win')).map((r) => r.points)).toEqual([300]);
-    expect((await ledger(A.userId, 'contest_weekly_win')).map((r) => r.points)).toEqual([150]);
+    expect((await ledger(C.userId, 'contest_weekly_win')).map((r) => r.quarterPoints)).toEqual([2000]);
+    expect((await ledger(B.userId, 'contest_weekly_win')).map((r) => r.quarterPoints)).toEqual([1200]);
+    expect((await ledger(A.userId, 'contest_weekly_win')).map((r) => r.quarterPoints)).toEqual([600]);
     expect(await ledger(D.userId, 'contest_weekly_win')).toHaveLength(0);
     expect(await prisma().notification.count({ where: { type: 'contest_win', userId: C.userId } })).toBe(1);
     expect((await prisma().contestRound.findUniqueOrThrow({ where: { id: r1.id } })).judgedAt?.toISOString()).toBe(
@@ -476,7 +476,7 @@ describe('Contest e2e: the self-running month', () => {
       [1, A.userId, 7],
       [2, B.userId, 4],
     ]);
-    expect((await ledger(A.userId, 'contest_monthly_crown')).map((r) => r.points)).toEqual([2000]);
+    expect((await ledger(A.userId, 'contest_monthly_crown')).map((r) => r.quarterPoints)).toEqual([8000]);
     expect(await ledger(B.userId, 'contest_monthly_crown')).toHaveLength(0);
     const done = await prisma().contestCycle.findUniqueOrThrow({ where: { id: cycleId } });
     expect(done).toMatchObject({ status: 'completed', noWinner: false });
@@ -650,7 +650,7 @@ describe('Contest e2e: the self-running month', () => {
       [2, eA.entryId], // 1 vote
       [3, eB.entryId], // 0 votes
     ]);
-    expect((await ledger(C.userId, 'contest_weekly_win')).map((r) => r.points)).toEqual([500]);
+    expect((await ledger(C.userId, 'contest_weekly_win')).map((r) => r.quarterPoints)).toEqual([2000]);
     expect(detail.forfeitedWeeks.map((w: { weekNumber: number }) => w.weekNumber)).toEqual([2, 3]);
     // no final entries were made, so the month ends without a winner (finalists existed, none uploaded)
     expect(detail.finalOutcome).toBe('no_winner');
@@ -716,19 +716,20 @@ describe('Contest e2e: the self-running month', () => {
   });
 
   // =============================================================================================
-  describe('baseline engagement points (B-094: only likes earn points)', () => {
-    it('POST /posts and a follow earn nothing; a like awards the liker 1 (once, never revoked)', async () => {
+  describe('baseline engagement points (B-093 / B-094: posts and follows earn nothing)', () => {
+    it('POST /posts and a follow earn nothing; a like earns the liker 1 point and the creator a quarter point, once', async () => {
       const author = await createUser('eng-author');
       const fan = await createUser('eng-fan');
       const postId = await post(author);
       expect(await prisma().pointsLedgerEntry.findMany({ where: { userId: author.userId } })).toEqual([]);
       await like(fan, postId).expect(200);
       await request(server()).delete(`/posts/${postId}/like`).set(auth(fan.token)).expect(200);
-      await like(fan, postId).expect(200);
+      await like(fan, postId).expect(200); // restored, not earned twice
       await request(server()).post(`/users/${author.userId}/follow`).set(auth(fan.token)).expect(200);
-      const rows = await prisma().pointsLedgerEntry.findMany({ where: { userId: fan.userId } });
-      expect(rows.map((r) => r.source)).toEqual(['engagement_like']);
-      expect(await prisma().pointsLedgerEntry.findMany({ where: { userId: author.userId } })).toEqual([]);
+      const fanRows = await prisma().pointsLedgerEntry.findMany({ where: { userId: fan.userId } });
+      expect(fanRows.map((r) => [r.source, r.quarterPoints, r.revokedAt])).toEqual([['engagement_like_given', 4, null]]);
+      const authorRows = await prisma().pointsLedgerEntry.findMany({ where: { userId: author.userId } });
+      expect(authorRows.map((r) => [r.source, r.quarterPoints, r.revokedAt])).toEqual([['engagement_like_received', 1, null]]);
     });
   });
 

@@ -15,22 +15,22 @@ describe('awardPoints', () => {
 
     const wrote = await awardPoints(tx, {
       userId: 'u-1',
-      source: 'engagement_like',
+      source: 'engagement_like_given',
       refId: 'post-1',
-      points: 1,
+      quarterPoints: 4,
     });
 
     expect(wrote).toBe(true);
     const args = (tx.pointsLedgerEntry.createMany as jest.Mock).mock.calls[0][0];
     expect(args.skipDuplicates).toBe(true);
-    expect(args.data[0]).toMatchObject({ userId: 'u-1', source: 'engagement_like', refId: 'post-1', points: 1, clubId: null });
+    expect(args.data[0]).toMatchObject({ userId: 'u-1', source: 'engagement_like_given', refId: 'post-1', quarterPoints: 4, clubId: null });
     expect(args.data[0].occurredAt.getTime()).toBeGreaterThanOrEqual(before);
   });
 
   it('snapshots the represented club of the user at award time when no clubId is passed (Decision Log #128)', async () => {
     const tx = txMock('club-a');
 
-    await awardPoints(tx, { userId: 'u-1', source: 'engagement_like', refId: 'post-1', points: 1 });
+    await awardPoints(tx, { userId: 'u-1', source: 'engagement_like_given', refId: 'post-1', quarterPoints: 4 });
 
     expect(tx.user.findUnique).toHaveBeenCalledWith({
       where: { id: 'u-1' },
@@ -42,7 +42,7 @@ describe('awardPoints', () => {
   it('uses an explicit clubId without consulting the user row', async () => {
     const tx = txMock('club-a');
 
-    await awardPoints(tx, { userId: 'u-1', source: 'engagement_like', refId: 'post-1', points: 1, clubId: 'club-z' });
+    await awardPoints(tx, { userId: 'u-1', source: 'engagement_like_given', refId: 'post-1', quarterPoints: 4, clubId: 'club-z' });
 
     expect(tx.user.findUnique).not.toHaveBeenCalled();
     expect((tx.pointsLedgerEntry.createMany as jest.Mock).mock.calls[0][0].data[0]).toMatchObject({ clubId: 'club-z' });
@@ -56,7 +56,7 @@ describe('awardPoints', () => {
       userId: 'u-1',
       source: 'contest_weekly_win',
       refId: 'round-1',
-      points: 50,
+      quarterPoints: 200,
       clubId: 'club-9',
       occurredAt: when,
     });
@@ -72,7 +72,7 @@ describe('awardPoints', () => {
     (tx.pointsLedgerEntry.createMany as jest.Mock).mockResolvedValue({ count: 0 });
 
     await expect(
-      awardPoints(tx, { userId: 'u-1', source: 'engagement_like', refId: 'post-1', points: 1 }),
+      awardPoints(tx, { userId: 'u-1', source: 'engagement_like_given', refId: 'post-1', quarterPoints: 4 }),
     ).resolves.toBe(false);
     expect((tx.pointsLedgerEntry.createMany as jest.Mock).mock.calls[0][0].skipDuplicates).toBe(true);
   });
@@ -84,7 +84,7 @@ describe('awardPoints', () => {
     );
 
     await expect(
-      awardPoints(tx, { userId: 'ghost', source: 'engagement_like', refId: 'post-1', points: 1 }),
+      awardPoints(tx, { userId: 'ghost', source: 'engagement_like_given', refId: 'post-1', quarterPoints: 4 }),
     ).rejects.toBeInstanceOf(Prisma.PrismaClientKnownRequestError);
   });
 });

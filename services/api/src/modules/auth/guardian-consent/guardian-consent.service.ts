@@ -10,6 +10,7 @@ import { CONSENT_SCREEN_VERSION } from './consent-screen-version.constants';
 import { ConsentDeviceType } from './device-type.util';
 import { EXPLICIT_DECLINE_SOURCE, MAX_EXPLICIT_DECLINES, isReopenableDecline } from './guardian-decline-cap.constants';
 import { INCORRECT_DETAILS_OPEN_MESSAGE } from './incorrect-details.constants';
+import { revokeEngagementPointsForAccount } from '../../points/engagement-points.util';
 import { computeConsentTokenExpiresAt, computeWithdrawalTokenExpiresAt } from './consent-token.constants';
 
 // sprint-1/guardian-consent-decline-withdraw-expiry -- the three distinct
@@ -845,6 +846,16 @@ export class GuardianConsentService {
 
     if (refused.count === 0) {
       return;
+    }
+
+    // backend/w12-points (B-093, spec 9b): the account is now restricted, and "restricted accounts never
+    // earn" - every baseline point it earned, and every quarter point it earned others by engaging with
+    // them, is revoked. Placement prizes are not touched. Best effort: the refusal above is the
+    // safeguarding-critical write and has already committed; a failure here is logged, never thrown.
+    try {
+      await revokeEngagementPointsForAccount(this.prisma, params.minorUserId, new Date());
+    } catch (err) {
+      this.logger.error(`Could not revoke the baseline points of refused minor ${params.minorUserId}: ${String(err)}`);
     }
 
     const minor = await this.prisma.user.findUnique({

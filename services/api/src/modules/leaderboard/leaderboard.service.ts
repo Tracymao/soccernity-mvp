@@ -1,3 +1,4 @@
+import { quartersToDisplayPoints } from '../points/quarter-points.util';
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { decodeLeaderboardCursor, encodeLeaderboardCursor } from './cursor.util';
@@ -99,7 +100,9 @@ export class LeaderboardService {
     const items: LeaderboardEntryView[] = page.map((row) => ({
       userId: row.userId,
       publicName: resolvePublicName(row.user),
-      points: row.points,
+      // Display value: the exact quarter units rounded to the nearest whole point, half up (spec 9b).
+      // Rank was computed on the exact units, so rounding never creates a false tie.
+      points: quartersToDisplayPoints(row.quarterPoints),
       rank: row.rank ?? 0,
     }));
 
