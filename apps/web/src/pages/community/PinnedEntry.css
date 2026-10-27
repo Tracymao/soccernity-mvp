@@ -1,0 +1,15 @@
+/* The pinned contest entry on a profile. Figma 6707:26727 / 6707:26938 / 6709:26922 / 6709:27056. */
+.pinned-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.pinned-entry__label {
+  margin: 0;
+  font: 600 12px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}

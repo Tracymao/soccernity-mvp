@@ -10,6 +10,7 @@ vi.mock("../../api/contest", async (importOriginal) => {
     ...actual,
     getCurrentContest: vi.fn(),
     getContestCycle: vi.fn(),
+    getContestExposure: vi.fn(),
     listContestCycles: vi.fn(),
     createContestCycle: vi.fn(),
     updateContestCycle: vi.fn(),
@@ -19,12 +20,15 @@ vi.mock("../../api/contest", async (importOriginal) => {
 import {
   getCurrentContest,
   getContestCycle,
+  getContestExposure,
   listContestCycles,
   createContestCycle,
   updateContestCycle,
   type AdminContestCycleDetail,
   type AdminContestEditability,
   type AdminContestRoundDetail,
+  type AdminExposureEntry,
+  type AdminExposureResponse,
   type AdminCurrentContest,
 } from "../../api/contest";
 import ContestConsolePage from "./ContestConsolePage";
@@ -37,6 +41,7 @@ afterEach(cleanup);
 beforeEach(() => {
   vi.mocked(getCurrentContest).mockReset();
   vi.mocked(getContestCycle).mockReset();
+  vi.mocked(getContestExposure).mockReset();
   vi.mocked(listContestCycles).mockReset();
   vi.mocked(createContestCycle).mockReset();
   vi.mocked(updateContestCycle).mockReset();
@@ -461,12 +466,206 @@ describe("ContestCycleDetailPage", () => {
   });
 });
 
+// ---- Finalist impressions (B-092 / B-095) ---------------------------------
+
+function expo(over: Partial<AdminExposureResponse> = {}): AdminExposureResponse {
+  const names = ["Ada B.", "Ben C.", "Cid D.", "Ken O.", "Bola A.", "Tolu M.", "Femi S.", "Zara K.", "Nia P."];
+  const counts = [1262, 1198, 1305, 1241, 1176, 1339, 1290, 1122, 1087];
+  const entries: AdminExposureEntry[] = names.map((n, i) => ({
+    entryId: `e${i}`,
+    finalist: { userId: `u${i}`, publicName: n },
+    inRotation: true,
+    impressions: counts[i],
+    status: n === "Nia P." ? "below" : "within",
+    deviationPercent: n === "Nia P." ? -11.2 : 3.1,
+  }));
+  return {
+    cycleId: "c1",
+    title: "November Challenge",
+    monthKey: "2026-11",
+    settings: { tolerancePercent: 10, viewerDailyCap: 3 },
+    live: true,
+    revealed: true,
+    source: "live",
+    finalistCount: 9,
+    mean: 1224.44,
+    lowerBound: 1102,
+    upperBound: 1346.89,
+    min: 1087,
+    max: 1339,
+    outsideTolerance: 1,
+    entries,
+    ...over,
+  };
+}
+
+const NO_CONTEST: AdminCurrentContest = {
+  cycle: null,
+  settings: null,
+  editable: null,
+  phase: null,
+  calendarState: null,
+  rounds: [],
+  weeklyWinners: [],
+  finalists: [],
+  forfeitedWeeks: [],
+  finalRanking: null,
+  monthlyStandings: [],
+  finalOutcome: null,
+};
+
+function renderImpressions() {
+  return renderAt(<ContestImpressionsPage />, "/contest/impressions", "/contest/impressions");
+}
+
 describe("ContestImpressionsPage", () => {
-  it("shows the stored exposure settings and says impression counts are not available yet", async () => {
+  it("live: shows the mean, the tolerance band, the flag count and a row per finalist with the outside one flagged", async () => {
     vi.mocked(getCurrentContest).mockResolvedValue(current());
-    renderAt(<ContestImpressionsPage />, "/contest/impressions", "/contest/impressions");
-    await screen.findByText("10%");
-    expect(screen.getByText("3")).toBeTruthy();
-    expect(screen.getByTestId("ct-impressions-pending")).toBeTruthy();
+    vi.mocked(getContestExposure).mockResolvedValue(expo());
+    renderImpressions();
+
+    await screen.findByTestId("ct-impressions-table");
+    expect(getContestExposure).toHaveBeenCalledWith("c1");
+    expect(screen.getByTestId("ct-imp-mean").textContent).toBe("1,224.44");
+    expect(screen.getByTestId("ct-imp-band").textContent).toBe("1,102 – 1,346.89");
+    expect(screen.getByTestId("ct-imp-outside").textContent).toBe("1");
+    expect(screen.getByText("Live from reveal")).toBeTruthy();
+    const rows = screen.getAllByTestId("ct-impressions-row");
+    expect(rows).toHaveLength(9);
+    expect(rows[0].textContent).toContain("Ada B.");
+    expect(rows[0].textContent).toContain("1,262");
+    expect(rows[0].textContent).toContain("+3.1%");
+    expect(rows[0].textContent).toContain("Within tolerance");
+    const nia = rows[8];
+    expect(nia.textContent).toContain("Nia P.");
+    expect(nia.textContent).toContain("−11.2%");
+    expect(nia.textContent).toContain("Outside tolerance");
+    expect(nia.querySelector(".ct-bar__fill--outside")).not.toBeNull();
+    expect(rows[0].querySelector(".ct-bar__fill--outside")).toBeNull();
+  });
+
+  it("is aggregates only: no viewer, event or timestamp appears anywhere on the page", async () => {
+    vi.mocked(getCurrentContest).mockResolvedValue(current());
+    vi.mocked(getContestExposure).mockResolvedValue(expo());
+    const { container } = renderImpressions();
+    await screen.findByTestId("ct-impressions-table");
+    expect(screen.getByTestId("ct-impressions-method").textContent).toMatch(/no per-viewer data is shown/);
+    expect(container.textContent).not.toMatch(/viewerId|eventId|dayKey|occurredAt/);
+  });
+
+  it("states how an impression is counted, and says when the figures are the final totals", async () => {
+    vi.mocked(getCurrentContest).mockResolvedValue(current());
+    vi.mocked(getContestExposure).mockResolvedValue(expo({ live: false, source: "final_totals" }));
+    renderImpressions();
+    await screen.findByTestId("ct-impressions-table");
+    expect(screen.getByText("Final totals")).toBeTruthy();
+    const method = screen.getByTestId("ct-impressions-method").textContent ?? "";
+    expect(method).toMatch(/at least half of it is in view for at least one second/);
+    expect(method).toMatch(/final totals/);
+  });
+
+  it("fewer than nine finalists: lists exactly who is in the final", async () => {
+    vi.mocked(getCurrentContest).mockResolvedValue(current());
+    const base = expo();
+    vi.mocked(getContestExposure).mockResolvedValue(
+      expo({ finalistCount: 6, entries: base.entries.slice(0, 6), outsideTolerance: 0 }),
+    );
+    renderImpressions();
+    await screen.findByTestId("ct-impressions-table");
+    expect(screen.getAllByTestId("ct-impressions-row")).toHaveLength(6);
+    expect(screen.getByTestId("ct-imp-outside").textContent).toBe("0");
+  });
+
+  it("a finalist whose account is no longer eligible is listed as not in rotation", async () => {
+    vi.mocked(getCurrentContest).mockResolvedValue(current());
+    const entries = [...expo().entries];
+    entries[0] = { ...entries[0], inRotation: false, status: null, deviationPercent: null };
+    vi.mocked(getContestExposure).mockResolvedValue(expo({ entries }));
+    renderImpressions();
+    await screen.findByTestId("ct-impressions-table");
+    const first = screen.getAllByTestId("ct-impressions-row")[0];
+    expect(first.textContent).toContain("Not in rotation");
+  });
+
+  it("before the reveal: shows the finalists with nothing to compare and says why", async () => {
+    vi.mocked(getCurrentContest).mockResolvedValue(
+      current({
+        calendarState: { kind: "final_upload", opensAt: "2026-11-22T08:00:00.000Z", revealsAt: "2026-11-25T00:00:00.000Z" },
+      }),
+    );
+    vi.mocked(getContestExposure).mockResolvedValue(
+      expo({
+        live: false,
+        revealed: false,
+        mean: 0,
+        lowerBound: 0,
+        upperBound: 0,
+        min: 0,
+        max: 0,
+        outsideTolerance: 0,
+        entries: expo().entries.map((e) => ({ ...e, impressions: 0, status: "within", deviationPercent: null })),
+      }),
+    );
+    renderImpressions();
+    const note = await screen.findByTestId("ct-impressions-before-reveal");
+    expect(note.textContent).toMatch(/hidden until the reveal at 25 Nov, 00:00/);
+    expect(note.textContent).toMatch(/nothing to compare yet/);
+    expect(screen.getByTestId("ct-imp-mean").textContent).toBe("—");
+    expect(screen.getByTestId("ct-imp-band").textContent).toBe("—");
+    expect(screen.getAllByText("No impressions yet")).toHaveLength(9);
+    expect(screen.queryByTestId("ct-impressions-method")).toBeNull();
+  });
+
+  it("no finalists: says there is no final, and shows no table or settings", async () => {
+    vi.mocked(getCurrentContest).mockResolvedValue(current());
+    vi.mocked(getContestExposure).mockResolvedValue(
+      expo({ finalistCount: 0, entries: [], live: false, revealed: false }),
+    );
+    renderImpressions();
+    await screen.findByTestId("ct-impressions-none");
+    expect(screen.getByText("No finalists this month")).toBeTruthy();
+    expect(screen.queryByTestId("ct-impressions-table")).toBeNull();
+    expect(screen.queryByTestId("ct-impressions-settings")).toBeNull();
+  });
+
+  it("settings stay editable (via the Edit screen) until week 4 starts", async () => {
+    vi.mocked(getCurrentContest).mockResolvedValue(current());
+    vi.mocked(getContestExposure).mockResolvedValue(expo());
+    renderImpressions();
+    await screen.findByTestId("ct-impressions-settings");
+    expect(screen.getByText("10% of the mean")).toBeTruthy();
+    expect(screen.getByText("3 times per day")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Edit settings" }).getAttribute("href")).toBe("/contest/cycles/c1/edit");
+    expect(screen.queryByTestId("ct-impressions-locked")).toBeNull();
+  });
+
+  it("settings are read-only with a lock note once week 4 has started", async () => {
+    vi.mocked(getCurrentContest).mockResolvedValue(
+      current({ editable: { ...allOpen, exposureTolerancePercent: false, exposureViewerDailyCap: false } }),
+    );
+    vi.mocked(getContestExposure).mockResolvedValue(expo());
+    renderImpressions();
+    const locked = await screen.findByTestId("ct-impressions-locked");
+    expect(locked.textContent).toMatch(/cannot be changed once week 4 starts/);
+    expect(screen.getByText("Distribution settings · locked")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Edit settings" })).toBeNull();
+  });
+
+  it("no contest at all: says so and never calls the exposure endpoint", async () => {
+    vi.mocked(getCurrentContest).mockResolvedValue(NO_CONTEST);
+    renderImpressions();
+    await screen.findByText("No contest yet");
+    expect(getContestExposure).not.toHaveBeenCalled();
+  });
+
+  it("a failed load shows the error with Try again, and retrying reloads", async () => {
+    vi.mocked(getCurrentContest).mockResolvedValue(current());
+    vi.mocked(getContestExposure).mockRejectedValueOnce(new AdminApiError(500, "The server fell over"));
+    vi.mocked(getContestExposure).mockResolvedValueOnce(expo());
+    renderImpressions();
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("The server fell over");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await screen.findByTestId("ct-impressions-table");
   });
 });

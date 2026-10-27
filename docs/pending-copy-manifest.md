@@ -74,6 +74,8 @@ Add the tag to the string in source and add a row here (file, the string exactly
 | `apps/web/src/pages/guardian-consent/GuardianWithdrawalPage.tsx` | Your withdrawal has been recorded and the account has been closed. [COPY PENDING LEGAL REVIEW] | Guardian Withdrawal 4 Success `6654:91` (mobile `6654:26816`), sub-heading |
 | `apps/web/src/pages/guardian-consent/GuardianWithdrawalPage.tsx` | The details they entered are deleted after 30 days. [COPY PENDING LEGAL REVIEW] | Guardian Withdrawal 4 Success `6654:91`, card `6654:111` line 1 (as above, B-200) |
 | `apps/web/src/pages/guardian-consent/GuardianWithdrawalPage.tsx` | We have emailed the account holder to tell them. [COPY PENDING LEGAL REVIEW] | Guardian Withdrawal 4 Success `6654:91`, card `6654:111` line 2 |
+| `apps/web/src/pages/community/FinalWeekCarousel.tsx` | Finalists appear in a different order for each viewer. The order is never based on likes, comments, ranking, follower count or when a video was uploaded. [COPY PENDING LEGAL REVIEW] | Community feed "Final week" carousel, component sets `6697:26234` / `6697:27448` (transparency sentence, as drawn; frames `6661:26929` / `6661:29200`) |
+| `apps/web/src/pages/community/PostCard.tsx` | Engagement is locked until the reveal. Only you can see this entry until then. [COPY PENDING LEGAL REVIEW] | Pinned final entry on the finalist's own profile, before the reveal, `6707:26727` (desktop) / `6709:26922` (mobile) |
 
 ## OPEN: services/api email wording (Decision Log #406, build register B-124)
 

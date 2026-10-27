@@ -43,6 +43,7 @@ import { MessagingApiError, startConversation } from "../api/messaging";
 import { countryName } from "../lib/countries";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
 import NotFoundPage from "./NotFoundPage";
+import PinnedEntry from "./community/PinnedEntry";
 import { initialsFor } from "./profile/profileFields";
 import "./profile/ProfilePage.css";
 import "./profile/OtherProfilePage.css";
@@ -296,6 +297,10 @@ export default function OtherProfilePage() {
         <p className="profile-status-message profile-status-message--error" role="alert">
           {actionError}
         </p>
+      )}
+
+      {token && myId && userId && (
+        <PinnedEntry accessToken={token} userId={userId} currentUserId={myId} />
       )}
 
       <div className="profile-empty-state">

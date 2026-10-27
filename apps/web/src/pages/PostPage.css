@@ -1,0 +1,29 @@
+/* One post on its own page (Figma 6836:29397 / 6836:29312). */
+.post-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 780px;
+  margin: 0 auto;
+}
+
+.post-page__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.post-page__back {
+  border: 0;
+  background: none;
+  padding: 4px 8px;
+  font: 600 20px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  cursor: pointer;
+}
+
+.post-page__title {
+  margin: 0;
+  font: 600 18px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}

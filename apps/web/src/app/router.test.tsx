@@ -103,6 +103,12 @@ describe("router — rendered footer presence", () => {
     expect(document.querySelector("main")).not.toBeNull();
   });
 
+  it("/posts/:postId resolves (where a Final week tile opens) -- no session -> a log-in prompt, no footer", async () => {
+    await renderAt("/posts/abc");
+    expect(screen.getByText(/log in to see this post/i)).not.toBeNull();
+    expect(screen.queryByRole("contentinfo")).toBeNull();
+  });
+
   it("/search resolves — no session -> its own log-in prompt, no footer", async () => {
     await renderAt("/search");
     expect(screen.queryByRole("contentinfo")).toBeNull();

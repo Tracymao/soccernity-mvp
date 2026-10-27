@@ -6,16 +6,18 @@
 // "test the thing this PR actually built" discipline rather than
 // re-testing what's already covered elsewhere.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import PostCard from "./PostCard";
 import type { FeedComment, FeedPost } from "../../api/feed";
-import { getComments } from "../../api/feed";
+import { getComments, recordViewHeartbeat } from "../../api/feed";
 import { createReport } from "../../api/moderation";
+
+type ObserverCallback = (entries: IntersectionObserverEntry[], observer: IntersectionObserver) => void;
 
 vi.mock("../../api/feed", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../api/feed")>();
-  return { ...actual, getComments: vi.fn() };
+  return { ...actual, getComments: vi.fn(), recordViewHeartbeat: vi.fn() };
 });
 vi.mock("../../api/moderation", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../api/moderation")>();
@@ -137,5 +139,136 @@ describe("PostCard — report affordances", () => {
 
     expect(await screen.findByText(/thanks, our team will review it/i)).not.toBeNull();
     expect(createReport).toHaveBeenCalledWith("tok", { targetType: "comment", targetId: "c1", reason: "Off-topic" });
+  });
+});
+
+describe("PostCard — locked final entry (engagementLocked)", () => {
+  const finalEntry = (over: Partial<FeedPost> = {}) =>
+    post({
+      authorId: "user-1",
+      author: { id: "user-1", publicName: "Sarah Bello", isFollowing: false },
+      mediaUrls: ["https://cdn.example.com/final.mp4"],
+      contest: { entryId: "e1", kind: "final", weekNumber: 4, pinned: true, label: "Contest post" },
+      ...over,
+    });
+
+  const renderLocked = (p: FeedPost) =>
+    render(
+      <MemoryRouter>
+        <PostCard post={p} accessToken="tok" currentUserId="user-1" engagementLocked />
+      </MemoryRouter>,
+    );
+
+  it("draws the controls disabled, hides every count and says why", () => {
+    renderLocked(finalEntry({ likeCount: 8, commentCount: 31 }));
+    expect(screen.getByTestId("engagement-locked").textContent).toMatch(/Engagement is locked until the reveal/);
+    expect(screen.getByText("Contest post")).not.toBeNull();
+    for (const name of [/Comments \(locked/, /Like \(locked/, /Save \(locked/]) {
+      expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
+    }
+    expect(screen.queryByText(/\b8\b/)).toBeNull();
+    expect(screen.queryByText(/\b31\b/)).toBeNull();
+    expect(screen.queryByText(/likes?$/)).toBeNull();
+  });
+
+  it("does not open or fetch comments when locked, even if asked to", () => {
+    render(
+      <MemoryRouter>
+        <PostCard post={finalEntry()} accessToken="tok" currentUserId="user-1" engagementLocked initialCommentsOpen />
+      </MemoryRouter>,
+    );
+    expect(getComments).not.toHaveBeenCalled();
+  });
+
+  it("is an ordinary card when not locked (the default)", () => {
+    renderPost(post({ likeCount: 3 }));
+    expect(screen.queryByTestId("engagement-locked")).toBeNull();
+    expect(screen.getByRole("button", { name: /3 likes/ })).not.toBeNull();
+  });
+});
+
+describe("PostCard — standalone entry page options", () => {
+  it("plays a video inline when asked, and links to it otherwise", () => {
+    const p = post({ mediaUrls: ["https://cdn.example.com/a.mp4"] });
+    const { container, unmount } = render(
+      <MemoryRouter>
+        <PostCard post={p} accessToken="tok" currentUserId="user-1" playVideo />
+      </MemoryRouter>,
+    );
+    expect(container.querySelector("video")).not.toBeNull();
+    unmount();
+    const plain = render(
+      <MemoryRouter>
+        <PostCard post={p} accessToken="tok" currentUserId="user-1" />
+      </MemoryRouter>,
+    );
+    expect(plain.container.querySelector("video")).toBeNull();
+    expect(screen.getByRole("link", { name: "https://cdn.example.com/a.mp4" })).not.toBeNull();
+  });
+
+  it("opens the comment thread straight away with initialCommentsOpen", async () => {
+    vi.mocked(getComments).mockResolvedValue({ items: [], nextCursor: null });
+    render(
+      <MemoryRouter>
+        <PostCard post={post()} accessToken="tok" currentUserId="user-1" initialCommentsOpen />
+      </MemoryRouter>,
+    );
+    await screen.findByLabelText("Write a comment");
+    expect(getComments).toHaveBeenCalledWith("tok", "post-1");
+  });
+});
+
+describe("PostCard — view heartbeats (B-093)", () => {
+  class FakeObserver {
+    static last: FakeObserver | null = null;
+    callback: ObserverCallback;
+    constructor(cb: ObserverCallback) {
+      this.callback = cb;
+      FakeObserver.last = this;
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return [];
+    }
+    show(ratio: number) {
+      this.callback(
+        [{ intersectionRatio: ratio, isIntersecting: ratio > 0 } as IntersectionObserverEntry],
+        this as unknown as IntersectionObserver,
+      );
+    }
+  }
+
+  beforeEach(() => {
+    FakeObserver.last = null;
+    vi.stubGlobal("IntersectionObserver", FakeObserver);
+    vi.mocked(recordViewHeartbeat).mockReset();
+    vi.mocked(recordViewHeartbeat).mockResolvedValue({ done: false });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("reports another person's post that is on screen, and never says whether anything was awarded", () => {
+    renderPost(post());
+    act(() => FakeObserver.last?.show(1));
+    expect(recordViewHeartbeat).toHaveBeenCalledWith("tok", "post-1", expect.objectContaining({ active: true }));
+    expect(screen.queryByText(/point/i)).toBeNull();
+  });
+
+  it("does not report the viewer's own post", () => {
+    renderPost(post({ authorId: "user-1", author: { id: "user-1", publicName: "Me", isFollowing: false } }), "user-1");
+    expect(FakeObserver.last).toBeNull();
+    expect(recordViewHeartbeat).not.toHaveBeenCalled();
+  });
+
+  it("does not report a locked final entry", () => {
+    render(
+      <MemoryRouter>
+        <PostCard post={post()} accessToken="tok" currentUserId="user-9" engagementLocked />
+      </MemoryRouter>,
+    );
+    expect(FakeObserver.last).toBeNull();
   });
 });

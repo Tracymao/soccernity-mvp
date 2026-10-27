@@ -43,6 +43,7 @@ import { listClubs, ClubsApiError, type ClubSummary } from "../api/clubs";
 import { getUser } from "../api/users";
 import { getCurrentContest, type CurrentContestResponse } from "../api/contest";
 import { getLeaderboard, type LeaderboardEntryView } from "../api/leaderboard";
+import { formatPoints } from "../lib/points";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
 import ContestBoard from "./leaderboard/ContestBoard";
 import { COMPETITION_ROWS, initialsFor, type CompetitionType } from "./leaderboard/leaderboardData";
@@ -397,13 +398,20 @@ export default function LeaderboardPage() {
                         </span>
                       </div>
                     </td>
-                    <td className="lb-points">{row.points.toLocaleString("en-GB")}</td>
+                    <td className="lb-points">{formatPoints(row.points)}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         ))}
+
+      {tab === "overall" && !clubScopeUnavailable && !overallError && overallRows.length > 0 && (
+        <p className="lb-note" data-testid="rounded-points-note">
+          Points are shown rounded to the nearest whole number. Ranking uses the exact total, so players who show
+          the same points can hold different ranks.
+        </p>
+      )}
 
       {tab === "competition" && (
         <table className="lb-table">
@@ -441,7 +449,7 @@ export default function LeaderboardPage() {
                 </td>
                 <td>{row.club}</td>
                 <td>{row.metric}</td>
-                <td className="lb-points">{row.score.toLocaleString("en-GB")}</td>
+                <td className="lb-points">{formatPoints(row.score)}</td>
               </tr>
             ))}
           </tbody>

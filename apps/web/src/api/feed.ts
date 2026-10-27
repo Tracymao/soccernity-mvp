@@ -316,3 +316,42 @@ export async function recordPostView(accessToken: string, postId: string): Promi
   }
   return (await response.json()) as ViewState;
 }
+
+// GET /posts/:id -- one post with the per-caller viewer state. A post the caller may not see (a
+// hidden final contest entry before the reveal, a blocked author, a missing id) is the same 404.
+export async function getPostById(accessToken: string, postId: string): Promise<FeedPost> {
+  const response = await authedFetch(`/posts/${encodeURIComponent(postId)}`, accessToken);
+  if (!response.ok) {
+    throw new FeedApiError(await errorMessageFrom(response, `Couldn't load that post (${response.status}).`), {
+      status: response.status,
+    });
+  }
+  return (await response.json()) as FeedPost;
+}
+
+// POST /posts/:id/view-heartbeat -- server-validated view qualification (B-093). The client reports
+// that the post is ACTIVE on screen about every 3 seconds (and, for a video, the playhead); the server
+// keeps the clock and decides what counts. The answer is only `{ done }` -- it never says whether any
+// point was awarded, and the UI never shows one. JwtAuthGuard only (a restricted or unverified account
+// may read; it simply earns nothing).
+export interface ViewHeartbeatBody {
+  sessionId: string;
+  active: boolean;
+  positionSeconds?: number;
+  durationSeconds?: number;
+}
+
+export async function recordViewHeartbeat(
+  accessToken: string,
+  postId: string,
+  body: ViewHeartbeatBody,
+): Promise<{ done: boolean }> {
+  const response = await authedFetch(`/posts/${encodeURIComponent(postId)}/view-heartbeat`, accessToken, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new FeedApiError(`Couldn't report that view (${response.status}).`, { status: response.status });
+  }
+  return (await response.json()) as { done: boolean };
+}

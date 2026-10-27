@@ -817,3 +817,71 @@
   font-size: 13px;
   color: var(--sn-text-primary);
 }
+
+/* Finalist impressions (B-092, Figma pass C 6646:22745 and pass O 6838:29547) */
+
+/* Pills on the impressions screen read as sentences ("October 2026 · Week 4 final"), not lower-case tags. */
+.ct-pill--natural {
+  text-transform: none;
+}
+
+.ct-pill--outline {
+  background-color: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  color: var(--sn-text-primary);
+}
+
+.ct-card--center {
+  align-items: center;
+  text-align: center;
+}
+
+.ct-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.ct-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 20px;
+  border-radius: 10px;
+  background-color: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+}
+
+.ct-stat strong {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.ct-imp .ct-table__row {
+  grid-template-columns: 1.2fr 110px 1.6fr 90px 160px;
+}
+
+.ct-bar {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background-color: var(--sn-green-tint-12);
+  overflow: hidden;
+}
+
+.ct-bar__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background-color: var(--sn-brand-green);
+}
+
+.ct-bar__fill--outside {
+  background-color: var(--sn-brand-navy);
+}
+
+.ct-footnote {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
