@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { TEST_CLOCK_ENV_VARS } from './clock/clock';
 
 // B-018 regression guard. The build register found ~22 variables read in code
 // but absent from render.yaml, so a deploy silently ran with code defaults (or
@@ -18,7 +19,9 @@ const SRC = path.resolve(__dirname);
 //  - NODE_ENV: Render sets it at runtime only; setting it as an envVar would
 //    also apply at build time and make `npm install` skip devDependencies.
 //  - PORT: Render injects it.
-const NOT_IN_RENDER = new Set(['NODE_ENV', 'PORT']);
+//  - TEST_CLOCK_ISO / TEST_CLOCK_ADVANCE / E2E_TEST_CLOCK: QA only; the process REFUSES TO START if any
+//    is set in production (validate-runtime-env.ts), so they must never appear in render.yaml.
+const NOT_IN_RENDER = new Set(['NODE_ENV', 'PORT', ...TEST_CLOCK_ENV_VARS]);
 // Not in .env.example on purpose: NODE_ENV has a comment-only entry there.
 const NOT_IN_EXAMPLE = new Set(['NODE_ENV']);
 

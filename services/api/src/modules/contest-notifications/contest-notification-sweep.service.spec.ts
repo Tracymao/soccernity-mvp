@@ -267,4 +267,17 @@ describe('ContestNotificationSweepService.handleCron', () => {
 
     await expect(service.handleCron()).resolves.toBeUndefined();
   });
+
+  it('runs each cron tick at the injected app clock instant (backend/test-clock-qa)', async () => {
+    const { prisma, facts } = build([]);
+    const instant = new Date('2026-11-05T10:00:00Z');
+    const service = new ContestNotificationSweepService(prisma, facts as unknown as ContestNotificationFacts, {
+      now: () => instant,
+    });
+    const spy = jest.spyOn(service, 'runOnce');
+
+    await service.handleCron();
+
+    expect(spy).toHaveBeenCalledWith(instant);
+  });
 });

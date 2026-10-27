@@ -14,6 +14,7 @@ import {
   URLS,
   qaDatabaseUrl,
 } from './stack';
+import { contestPhaseInstant, isContestPhase, CONTEST_PHASES } from './contest-clock';
 
 // Everything below is TEST HARNESS, not product code: it creates a scratch
 // database, migrates it with the repo's own migrations, seeds the one
@@ -130,6 +131,18 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     stdio: 'inherit',
   });
   const apiLog = fs.openSync(API_LOG, 'w');
+  // backend/test-clock-qa: start the API on a chosen instant so a real browser can see a live
+  // Contest phase. QA_CONTEST_PHASE=<phase> (see support/contest-clock.ts) picks the instant for
+  // QA_CONTEST_MONTH (default 2026-11); QA_TEST_CLOCK_ISO sets it explicitly; QA_TEST_CLOCK_ADVANCE=1
+  // lets it run on from there. Nothing set = the real clock. The three variables are always written
+  // explicitly (blank when unused) so a stray value in the developer's shell can never reach the API.
+  let testClockIso = process.env.QA_TEST_CLOCK_ISO?.trim() || '';
+  const qaPhase = process.env.QA_CONTEST_PHASE?.trim();
+  if (!testClockIso && qaPhase) {
+    if (!isContestPhase(qaPhase)) throw new Error(`QA_CONTEST_PHASE must be one of: ${CONTEST_PHASES.join(', ')} (got "${qaPhase}")`);
+    testClockIso = contestPhaseInstant(qaPhase, process.env.QA_CONTEST_MONTH).toISOString();
+  }
+  if (testClockIso) console.log(`[e2e global-setup] API test clock: ${testClockIso}${process.env.QA_TEST_CLOCK_ADVANCE === '1' ? ' (advancing)' : ' (frozen)'}`);
   const apiEnv: NodeJS.ProcessEnv = {
     ...process.env,
     NO_COLOR: '1',
@@ -152,6 +165,9 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     // suite needs; the throttle itself is covered by services/api's own e2e.
     AUTH_RATE_LIMIT_MAX: '1000',
     TRUST_PROXY_HOPS: '',
+    TEST_CLOCK_ISO: testClockIso,
+    E2E_TEST_CLOCK: testClockIso ? '1' : '',
+    TEST_CLOCK_ADVANCE: testClockIso && process.env.QA_TEST_CLOCK_ADVANCE === '1' ? '1' : '',
   };
   const api = spawn('node', ['dist/main.js'], {
     cwd: path.join(REPO, 'services', 'api'),

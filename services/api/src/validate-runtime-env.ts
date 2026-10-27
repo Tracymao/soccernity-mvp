@@ -1,3 +1,4 @@
+import { testClockVarsSet } from './clock/clock';
 import { originFromBaseUrl } from './cors-options';
 
 // B-018. Refuse to start a PRODUCTION process with signing secrets that are
@@ -55,6 +56,15 @@ export function assertProductionEnv(env: Record<string, string | undefined> = pr
     throw new Error(
       `Refusing to start: these secrets are missing or still a placeholder: ${bad.join(', ')}. ` +
         'Set real values in the Render dashboard (see docs/deployment.md).',
+    );
+  }
+  // backend/test-clock-qa: the QA test clock must never reach a real deployment. A frozen or shifted
+  // clock would let Contest phases, vote locks and points run on the wrong day for real users.
+  const testClock = testClockVarsSet(env);
+  if (testClock.length > 0) {
+    throw new Error(
+      `Refusing to start: the QA test clock is configured in production (${testClock.join(', ')}). ` +
+        'Remove these variables; they are only for QA runs (see docs/deployment.md).',
     );
   }
   const badOrigins = findInvalidProductionOrigins(env);

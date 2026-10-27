@@ -109,3 +109,33 @@ describe('assertProductionEnv: app origins (B-163)', () => {
     expect(findInvalidProductionOrigins(GOOD)).toEqual([]);
   });
 });
+
+describe('assertProductionEnv: the QA test clock (backend/test-clock-qa)', () => {
+  const PROD = { NODE_ENV: 'production', ...GOOD };
+
+  it('passes in production when no test-clock variable is set (or they are blank)', () => {
+    expect(() => assertProductionEnv(PROD)).not.toThrow();
+    expect(() => assertProductionEnv({ ...PROD, TEST_CLOCK_ISO: '', E2E_TEST_CLOCK: '  ' })).not.toThrow();
+  });
+
+  it.each([
+    [{ TEST_CLOCK_ISO: '2026-11-05T10:00:00Z' }, 'TEST_CLOCK_ISO'],
+    [{ E2E_TEST_CLOCK: '1' }, 'E2E_TEST_CLOCK'],
+    [{ TEST_CLOCK_ADVANCE: '1' }, 'TEST_CLOCK_ADVANCE'],
+    [{ TEST_CLOCK_ISO: '2026-11-05T10:00:00Z', E2E_TEST_CLOCK: '1' }, 'TEST_CLOCK_ISO, E2E_TEST_CLOCK'],
+  ])('REFUSES TO START in production when %j is set', (vars, named) => {
+    expect(() => assertProductionEnv({ ...PROD, ...vars })).toThrow(/Refusing to start: the QA test clock/);
+    expect(() => assertProductionEnv({ ...PROD, ...vars })).toThrow(named);
+  });
+
+  it('refuses even when every other production check would pass', () => {
+    expect(() => assertProductionEnv({ ...PROD, TEST_CLOCK_ISO: '2026-11-05T10:00:00Z' })).toThrow();
+    expect(() => assertProductionEnv(PROD)).not.toThrow();
+  });
+
+  it('does not touch non-production processes', () => {
+    expect(() => assertProductionEnv({ NODE_ENV: 'test', TEST_CLOCK_ISO: '2026-11-05T10:00:00Z' })).not.toThrow();
+    expect(() => assertProductionEnv({ NODE_ENV: 'development', E2E_TEST_CLOCK: '1' })).not.toThrow();
+  });
+});
+
