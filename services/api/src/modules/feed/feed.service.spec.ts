@@ -3,7 +3,26 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { encodeFeedSequenceCursor } from './cursor.util';
 import { FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE } from './dto/feed-query.dto';
+import {
+  awardEngagementPoints,
+  revokeEngagementPoints,
+  revokeEngagementPointsForPost,
+} from '../points/engagement-points.util';
 import { FeedService } from './feed.service';
+
+// backend/w12-points (B-093): the baseline points engine has its own unit spec (engagement-points.util.spec.ts)
+// and a real-Postgres e2e. FeedService is tested here for WHEN it calls the engine, so the engine is mocked.
+jest.mock('../points/engagement-points.util', () => ({
+  awardEngagementPoints: jest.fn().mockResolvedValue({ giver: 'awarded', receiver: 'awarded' }),
+  revokeEngagementPoints: jest.fn().mockResolvedValue(undefined),
+  revokeEngagementPointsForPost: jest.fn().mockResolvedValue(0),
+}));
+
+beforeEach(() => {
+  (awardEngagementPoints as jest.Mock).mockClear();
+  (revokeEngagementPoints as jest.Mock).mockClear();
+  (revokeEngagementPointsForPost as jest.Mock).mockClear();
+});
 
 // B-039: every post/comment/saved-post read is additionally scoped to authors
 // with no block (either direction) against the viewer.
@@ -55,6 +74,8 @@ function buildPrismaMock() {
       findUnique: jest.fn(),
       delete: jest.fn(),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      // backend/w12-points: syncCommentPoints counts the author's remaining visible comments.
+      count: jest.fn().mockResolvedValue(0),
     },
     savedPost: {
       create: jest.fn(),
@@ -943,9 +964,13 @@ describe('FeedService', () => {
         data: { likeCount: { decrement: 1 } },
       });
       expect(result).toEqual({ postId: 'post-1', liked: false, likeCount: 0 });
-      // Decision Log #219: engagement points are never revoked — unlike
-      // does NOT touch the ledger (no negative row, no delete).
-      expect((prisma as unknown as { pointsLedgerEntry: { createMany: jest.Mock } }).pointsLedgerEntry.createMany).not.toHaveBeenCalled();
+      // backend/w12-points (spec 9b): an unlike REVOKES the giver's point and the creator's quarter point
+      // (and frees the day's cap); the ledger is never written to directly from here.
+      expect(revokeEngagementPoints).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ kind: 'like', postId: 'post-1', giverId: 'user-1', now: FIXED_NOW }),
+      );
+      expect(awardEngagementPoints).not.toHaveBeenCalled();
     });
 
     it('is idempotent (no-op, no error) when unliking a post that was never liked', async () => {
@@ -1073,22 +1098,12 @@ describe('FeedService', () => {
         await service.likePost('self-1', 'post-1');
 
         expect(prisma.notification.create).not.toHaveBeenCalled();
-        // ...but the liker still earns their own baseline-engagement
-        // point, even on their own post (Decision Log #219 — the point is
-        // for the ACT of liking, self-notification is a separate concern).
-        expect((prisma as unknown as { pointsLedgerEntry: { createMany: jest.Mock } }).pointsLedgerEntry.createMany).toHaveBeenCalledWith({
-          data: [
-            {
-              userId: 'self-1',
-              source: 'engagement_like',
-              refId: 'post-1',
-              points: 1,
-              clubId: null,
-              occurredAt: expect.any(Date),
-            },
-          ],
-          skipDuplicates: true,
-        });
+        // The engine is asked (it, not the caller, applies the self-engagement exemption of spec 9b), and
+        // it is asked with the liker and the post's creator being the same account.
+        expect(awardEngagementPoints).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({ kind: 'like', postId: 'post-1', giverId: 'self-1', postAuthorId: 'self-1' }),
+        );
       });
 
       it('B-197: creates no Notification row when a Block stands between liker and post author, but still records the like', async () => {
@@ -1771,7 +1786,7 @@ describe('FeedService', () => {
       await service.recordView('user-1', 'post-1');
 
       expect(prisma.notification.create).not.toHaveBeenCalled();
-      expect(prisma.pointsLedgerEntry.createMany).not.toHaveBeenCalled();
+      expect(awardEngagementPoints).not.toHaveBeenCalled();
     });
   });
 
@@ -2177,5 +2192,149 @@ describe('FeedService: contest entries (B-091)', () => {
       const removed = await new FeedService(prisma, clockAt('2026-08-31T23:30:00Z')).getPostById('post-1', 'viewer-1');
       expect(removed.contest).toMatchObject({ pinned: false });
     });
+  });
+});
+
+// backend/w12-points (B-093; Decision Log #382, #383; spec 9b): WHEN FeedService hands an engagement to the
+// baseline points engine, and when it revokes it. The engine's own rules (caps, eligibility, quarter
+// units) are in engagement-points.util.spec.ts and the real-Postgres e2e.
+describe('FeedService: baseline points wiring (B-093)', () => {
+  const caps = { givenQuarters: 160, receivedQuarters: 80 };
+  const buildService = (prisma: PrismaService) =>
+    new FeedService(prisma, FIXED_CLOCK, { caps } as unknown as import('../points/points-config.service').PointsConfig);
+
+  function postRow(prisma: PrismaService, authorId = 'author-1') {
+    (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1', authorId, commentPermission: 'everyone' });
+  }
+
+  it('a like hands the engine the liker, the creator, the post, the clock and the configured caps', async () => {
+    const prisma = buildPrismaMock();
+    postRow(prisma);
+    (prisma.like.create as jest.Mock).mockResolvedValue({ id: 'l' });
+    (prisma.post.update as jest.Mock).mockResolvedValue({});
+    await buildService(prisma).likePost('liker-1', 'post-1');
+    expect(awardEngagementPoints).toHaveBeenCalledWith(expect.anything(), {
+      kind: 'like',
+      postId: 'post-1',
+      postAuthorId: 'author-1',
+      giverId: 'liker-1',
+      now: FIXED_NOW,
+      caps,
+    });
+  });
+
+  it('a duplicate like (P2002) rolls the transaction back and awards nothing', async () => {
+    const prisma = buildPrismaMock();
+    postRow(prisma);
+    (prisma.like.create as jest.Mock).mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('dup', { code: 'P2002', clientVersion: '5' }),
+    );
+    await buildService(prisma).likePost('liker-1', 'post-1');
+    expect(awardEngagementPoints).not.toHaveBeenCalled();
+  });
+
+  it('a comment awards the commenter and the creator once per call (the engine dedupes ten comments to one)', async () => {
+    const prisma = buildPrismaMock();
+    postRow(prisma);
+    (prisma.comment.create as jest.Mock).mockResolvedValue({
+      id: 'c',
+      postId: 'post-1',
+      contentText: 'nice',
+      createdAt: new Date(),
+      author: { id: 'commenter-1', displayName: 'X', username: null },
+    });
+    (prisma.post.update as jest.Mock).mockResolvedValue({});
+    await buildService(prisma).addComment('post-1', 'commenter-1', { contentText: 'nice' });
+    expect(awardEngagementPoints).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ kind: 'comment', postId: 'post-1', postAuthorId: 'author-1', giverId: 'commenter-1' }),
+    );
+  });
+
+  it('deleting a comment revokes the comment points only when it was the account\'s LAST visible comment', async () => {
+    const prisma = buildPrismaMock();
+    (prisma.comment.findUnique as jest.Mock).mockResolvedValue({
+      id: 'c',
+      postId: 'post-1',
+      authorId: 'commenter-1',
+      hidden: false,
+      post: { authorId: 'author-1' },
+    });
+    (prisma.comment.delete as jest.Mock).mockResolvedValue({});
+    (prisma.post.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+    const service = buildService(prisma);
+
+    (prisma.comment.count as jest.Mock).mockResolvedValue(2); // two other visible comments remain
+    await service.deleteComment('post-1', 'c', 'commenter-1');
+    expect(revokeEngagementPoints).not.toHaveBeenCalled();
+
+    (prisma.comment.count as jest.Mock).mockResolvedValue(0);
+    await service.deleteComment('post-1', 'c', 'commenter-1');
+    expect(revokeEngagementPoints).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ kind: 'comment', postId: 'post-1', postAuthorId: 'author-1', giverId: 'commenter-1' }),
+    );
+  });
+
+  it('hiding the last visible comment revokes the points; unhiding restores them through the engine', async () => {
+    const prisma = buildPrismaMock();
+    postRow(prisma, 'owner');
+    (prisma.comment.findUnique as jest.Mock).mockResolvedValue({
+      id: 'c',
+      postId: 'post-1',
+      authorId: 'commenter-1',
+      contentText: 'hi',
+    });
+    (prisma.comment.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+    (prisma.post.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+    (prisma.post.update as jest.Mock).mockResolvedValue({});
+    (prisma.comment.count as jest.Mock).mockResolvedValue(0);
+    const service = buildService(prisma);
+
+    await service.setCommentHidden('post-1', 'c', 'owner', true);
+    expect(revokeEngagementPoints).toHaveBeenCalledTimes(1);
+
+    await service.setCommentHidden('post-1', 'c', 'owner', false);
+    expect(awardEngagementPoints).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ kind: 'comment', giverId: 'commenter-1', postAuthorId: 'owner' }),
+    );
+  });
+
+  it('a hide/unhide that changes nothing (repeat call) touches no points', async () => {
+    const prisma = buildPrismaMock();
+    postRow(prisma, 'owner');
+    (prisma.comment.findUnique as jest.Mock).mockResolvedValue({
+      id: 'c',
+      postId: 'post-1',
+      authorId: 'commenter-1',
+      contentText: 'hi',
+    });
+    (prisma.comment.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
+    await buildService(prisma).setCommentHidden('post-1', 'c', 'owner', true);
+    expect(revokeEngagementPoints).not.toHaveBeenCalled();
+    expect(awardEngagementPoints).not.toHaveBeenCalled();
+  });
+
+  it('deleting a post revokes every baseline row earned on it, inside the same transaction', async () => {
+    const prisma = buildPrismaMock();
+    postRow(prisma, 'owner');
+    (prisma.postHashtag.findMany as jest.Mock).mockResolvedValue([]);
+    await buildService(prisma).deletePost('post-1', 'owner');
+    expect(revokeEngagementPointsForPost).toHaveBeenCalledWith(expect.anything(), 'post-1', FIXED_NOW);
+    expect(prisma.post.delete).toHaveBeenCalled();
+  });
+
+  it('creating a post earns nothing (B-094): the engine is not called', async () => {
+    const prisma = buildPrismaMock();
+    (prisma.post.create as jest.Mock).mockResolvedValue({
+      id: 'p',
+      contentText: 'x',
+      mediaUrls: [],
+      createdAt: new Date(),
+      author: { id: 'a', displayName: 'A', username: null },
+    });
+    await buildService(prisma).createPost('a', { contentText: 'x' });
+    expect(awardEngagementPoints).not.toHaveBeenCalled();
   });
 });

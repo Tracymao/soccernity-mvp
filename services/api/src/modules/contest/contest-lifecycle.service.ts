@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
 import { awardPoints } from '../points/points.util';
+import { pointsToQuarters } from '../points/quarter-points.util';
 import { CONTEST_ELIGIBLE_USER } from './contest-eligibility';
 import { groupEngagementRows } from './contest-engagement.util';
 import { FORFEIT_REASON_TOO_FEW_ENTRIES } from './contest-read-model.service';
@@ -312,7 +313,7 @@ export class ContestLifecycleService {
           // One win per user per round (ContestEntry @@unique([roundId, userId])), so the round id
           // alone keys the ledger uniquely per user.
           refId: roundId,
-          points: points[index],
+          quarterPoints: pointsToQuarters(points[index]),
           occurredAt: week.votesLockAt,
         });
         // The personal winner notice (Decision Log #278, #405 item 3): the existing `contest_win`
@@ -470,7 +471,7 @@ export class ContestLifecycleService {
           userId,
           source: 'contest_monthly_crown',
           refId: cycleId,
-          points: monthly[index],
+          quarterPoints: pointsToQuarters(monthly[index]),
           occurredAt: now,
         });
       }

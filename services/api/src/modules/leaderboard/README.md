@@ -141,35 +141,29 @@ precedent in this codebase exists for (there, the implicit
 `$queryRaw`, structured as a CTE:
 
 ```sql
+-- backend/w12-points (B-093): quarter-point units, revoked rows excluded, NO weekly cap.
 WITH aggregated AS (
   SELECT
     ple."userId" AS "userId",
-    CAST(
-      LEAST(
-        COALESCE(SUM(CASE WHEN ple.source IN (<engagement sources>) THEN ple.points ELSE 0 END), 0),
-        100  -- ENGAGEMENT_POINTS_CAP_PER_PERIOD
-      )
-      + COALESCE(SUM(CASE WHEN ple.source NOT IN (<engagement sources>) THEN ple.points ELSE 0 END), 0)
-    AS INTEGER) AS "totalPoints"
+    CAST(COALESCE(SUM(ple."quarterPoints"), 0) AS INTEGER) AS "totalQuarterPoints"
   FROM "PointsLedgerEntry" ple
   INNER JOIN "User" u ON u.id = ple."userId"
   WHERE ple."occurredAt" >= <period start> AND ple."occurredAt" < <period end>
+    AND ple."revokedAt" IS NULL
     AND u."accountStatus" = 'active'
   GROUP BY ple."userId"
 )
-SELECT "userId", "totalPoints", CAST(RANK() OVER (ORDER BY "totalPoints" DESC) AS INTEGER) AS "rank"
+SELECT "userId", "totalQuarterPoints", CAST(RANK() OVER (ORDER BY "totalQuarterPoints" DESC) AS INTEGER) AS "rank"
 FROM aggregated
-WHERE "totalPoints" > 0
+WHERE "totalQuarterPoints" > 0
 ```
 
 Why a CTE, not one flat query: Postgres does not allow a `SELECT` list
 expression to reference another expression's own alias at the same
-query level — the window function's `ORDER BY` needs the
-*already-capped* total, which is itself a multi-line `CASE`/`SUM`/`LEAST`
-expression. Aggregating first in `aggregated`, then ranking over its
-`totalPoints` *output column* in the outer `SELECT`, sidesteps that
-restriction entirely rather than repeating the capped-total expression
-twice.
+query level — the window function's `ORDER BY` needs the aggregated total,
+which is itself an aggregate expression. Aggregating first in `aggregated`, then
+ranking over its `totalQuarterPoints` *output column* in the outer `SELECT`, sidesteps that
+restriction entirely rather than repeating the expression twice.
 
 `::INTEGER` casts on both computed columns: Postgres's `SUM(int)` and
 `RANK()` both return `bigint` (`int8`) by default, which node-postgres
@@ -179,7 +173,7 @@ safe-integer range, so casting down to a genuine SQL `INTEGER` keeps the
 JS side a plain `number` with no `bigint` handling needed anywhere in
 this module.
 
-`WHERE "totalPoints" > 0` in the outer query: a user with zero
+`WHERE "totalQuarterPoints" > 0` in the outer query: a user with zero
 `PointsLedgerEntry` rows in the window never appears in `aggregated` at
 all (the `INNER JOIN` only groups rows that exist) — this filter is the
 belt-and-braces case where every source happened to sum to zero, so no
@@ -193,8 +187,8 @@ key" natively):
 for (const row of aggregated) {
   await this.prisma.leaderboardEntry.upsert({
     where: { userId_period: { userId: row.userId, period } },
-    update: { points: row.totalPoints, rank: row.rank },
-    create: { userId: row.userId, period, points: row.totalPoints, rank: row.rank },
+    update: { quarterPoints: row.totalQuarterPoints, rank: row.rank },
+    create: { userId: row.userId, period, quarterPoints: row.totalQuarterPoints, rank: row.rank },
   });
 }
 ```
@@ -205,35 +199,23 @@ reproduces identical output), so a partial failure mid-loop just means
 fewer rows are current until the next 15-minute tick catches up, not a
 correctness problem for any individual row.
 
-## The anti-gaming cap
+## Units, display rounding and the caps (backend/w12-points, B-093)
 
-`ENGAGEMENT_POINTS_CAP_PER_PERIOD = 100`, in this module's own
-`leaderboard.constants.ts` — **deliberately not added to
-`points/points.constants.ts`**. That file is the write side's own set of
-constants (`points.util.ts`'s `awardPoints`, called from
-`FeedService`/`UsersService`/`ContestService`); the cap is exclusively a
-read-side/rollup concern, and `points.constants.ts`'s own comment already
-anticipated this: *"A per-day cap and spam-pattern detection are a
-flagged follow-up, not built here — the Sprint 6 Leaderboard aggregation
-is the natural place to cap engagement contribution at read time
-anyway."*
+`LeaderboardEntry.quarterPoints` and `PointsLedgerEntry.quarterPoints` are in **quarter-point units**
+(1 point = 4 units; a creator's 0.25 is exactly 1 unit). **Ranking uses the exact stored value**, so
+rounding never creates a false tie. `GET /leaderboard` shows `points` **rounded to the nearest whole
+point, a half rounding up** (`points/quarter-points.util.ts`): 2 units show as 1, 1 unit as 0, 1002
+units as 251. Two rows can therefore show the same `points` and still rank differently; a row of 0.25
+shows `0` but is still on the board.
 
-Applied to the summed contribution from `engagement_like`
-**only** (since B-094, posts and follows earn no points), via `LEAST(SUM(...), 100)`
-in the raw SQL, added to the **uncapped** sum of everything else (today:
-`contest_weekly_win`, `contest_monthly_crown`; `competition_result` is
-reserved and unused). Contest points are never capped.
-
-**Why 100**: Decision Log #219's own ratio rationale established that a
-monthly crown (250 points) should dominate ~83 posts of baseline
-engagement, and the smallest weekly-win payout (20, for 3rd place) should
-dominate ~7 posts — a board driven by unbounded engagement volume would
-break that. 100 points is roughly 2x a single 3rd-place weekly win (20)
-and under half of the smallest 1st-place weekly win (50), so a user
-cannot out-earn even one real Contest placement through engagement spam
-alone. At the same time, 100 points (~100 likes within one ISO week) comfortably exceeds what a real single
-user does in a week of genuine, unspammed use — the cap targets spam
-volume, not ordinary participation.
+The weekly anti-gaming cap this section used to describe (`ENGAGEMENT_POINTS_CAP_PER_PERIOD = 100`,
+applied here with `LEAST(SUM(...), 100)`) is **removed**. It was a read-time stand-in for a cap that did
+not exist at the write side, and it contradicted the spec's "about 1,800 per month" ceiling. The real
+caps (40 points a day earned for giving, 20 for receiving, per Europe/London calendar day, held in
+configuration) are applied **when a point is awarded**
+(`points/engagement-points.util.ts`, see `points/README.md`), so the rollup simply sums the ledger rows
+that have not been revoked (`revokedAt IS NULL`). A revoked row (an unlike, a removed comment, a removed
+post, an account later restricted) counts for nothing. Contest placement prizes are never capped.
 
 ## Active-account exclusion (Decision Log #221)
 
@@ -320,8 +302,8 @@ before/after suite counts.
 
 e2e (real Postgres, `test/leaderboard.e2e-spec.ts`, 14 tests) — the
 raw SQL's own genuine correctness against a live engine, which no mock
-can prove: the cap (including the mixed
-capped-engagement-plus-uncapped-contest case on the *same* user), both
+can prove: the absence of any weekly cap, revoked rows being excluded, exact-value ranking with rounded
+display (including a 0.25 row showing 0), both
 active-account exclusion stages (a fresh rollup never writing a
 deactivated user's row at all, and a *stale* already-written row being
 hidden at read time after the user later deactivates), period isolation,
@@ -353,10 +335,8 @@ boards therefore start counting from the deploy of this change.
 club's board. The unique key is `(userId, period, clubId)`. The rollup runs
 a second aggregation per period over attributed points only
 (`clubId IS NOT NULL`), ranked with `RANK() OVER (PARTITION BY clubId …)`.
-The engagement cap is applied per `(club, user)`. That equals per-user in
-practice, because a user represents one club at a time. The only difference
-is a mid-week club switch, where the user's engagement for that week splits
-across two boards, each capped separately.
+There is no weekly cap on a club board either (B-093). A mid-week club switch splits the user's
+engagement for that week across two boards, as before.
 
 **Judgment call to confirm:** the weekly win and monthly crown are attributed
 at award time. For contests, that is judging time, not entry time, so a user

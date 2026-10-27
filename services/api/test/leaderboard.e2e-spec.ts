@@ -98,7 +98,8 @@ describe('Leaderboard e2e (Section 4.9)', () => {
   ) {
     const prisma = getTestPrismaClient();
     await prisma.pointsLedgerEntry.create({
-      data: { userId, source, points, refId, occurredAt },
+      // The helper takes WHOLE points (readable test numbers) and stores quarter units (backend/w12-points).
+      data: { userId, source, quarterPoints: points * 4, refId, occurredAt },
     });
   }
 
@@ -107,9 +108,9 @@ describe('Leaderboard e2e (Section 4.9)', () => {
       const alice = await createUser('alice');
       const bob = await createUser('bob');
 
-      await awardLedgerEntry(alice.userId, 'engagement_like', 3, 'post-1');
-      await awardLedgerEntry(alice.userId, 'engagement_like', 3, 'post-2');
-      await awardLedgerEntry(bob.userId, 'engagement_like', 3, 'post-3');
+      await awardLedgerEntry(alice.userId, 'engagement_like_given', 3, 'post-1');
+      await awardLedgerEntry(alice.userId, 'engagement_like_given', 3, 'post-2');
+      await awardLedgerEntry(bob.userId, 'engagement_like_given', 3, 'post-3');
 
       await rollup.rollupPeriod(PERIOD);
 
@@ -126,20 +127,17 @@ describe('Leaderboard e2e (Section 4.9)', () => {
       expect(res.body.nextCursor).toBeNull();
     });
 
-    it('caps summed ENGAGEMENT points at 100 per period, but never caps Contest points', async () => {
+    it('has NO weekly cap any more (B-093): the daily caps are applied when a point is awarded, so the rollup sums every unrevoked row', async () => {
       const grinder = await createUser('grinder');
       const champion = await createUser('champion');
 
-      // 40 posts * 3 points = 120 raw engagement -> capped to 100.
+      // 40 rows * 3 points = 120 points. The old weekly cap of 100 would have cut this to 100.
       for (let i = 0; i < 40; i++) {
-        await awardLedgerEntry(grinder.userId, 'engagement_like', 3, `grind-post-${i}`);
+        await awardLedgerEntry(grinder.userId, 'engagement_like_given', 3, `grind-post-${i}`);
       }
-
-      // A single weekly win (50, uncapped) plus modest, well-under-cap
-      // engagement (2 posts = 6) -> 56 total, NOT reduced.
       await awardLedgerEntry(champion.userId, 'contest_weekly_win', 50, 'round-1');
-      await awardLedgerEntry(champion.userId, 'engagement_like', 3, 'champ-post-1');
-      await awardLedgerEntry(champion.userId, 'engagement_like', 3, 'champ-post-2');
+      await awardLedgerEntry(champion.userId, 'engagement_like_given', 3, 'champ-post-1');
+      await awardLedgerEntry(champion.userId, 'engagement_like_given', 3, 'champ-post-2');
 
       await rollup.rollupPeriod(PERIOD);
 
@@ -150,16 +148,22 @@ describe('Leaderboard e2e (Section 4.9)', () => {
         .expect(200);
 
       const byUserId = Object.fromEntries(res.body.items.map((i: { userId: string; points: number }) => [i.userId, i.points]));
-      expect(byUserId[grinder.userId]).toBe(100); // capped, not 120
-      expect(byUserId[champion.userId]).toBe(56); // uncapped contest + uncapped small engagement
+      expect(byUserId[grinder.userId]).toBe(120);
+      expect(byUserId[champion.userId]).toBe(56);
     });
 
-    it('mixes capped engagement AND uncapped contest points for the SAME user correctly', async () => {
+    it('sums engagement and contest placement points for the SAME user, and a REVOKED row counts for nothing', async () => {
       const user = await createUser('mixed');
       for (let i = 0; i < 40; i++) {
-        await awardLedgerEntry(user.userId, 'engagement_like', 1, `like-${i}`); // 40 raw, under cap
+        await awardLedgerEntry(user.userId, 'engagement_like_given', 1, `like-${i}`);
       }
       await awardLedgerEntry(user.userId, 'contest_monthly_crown', 250, 'cycle-1');
+      // A revoked row (an unlike) is marked, not deleted, and must not be summed.
+      await awardLedgerEntry(user.userId, 'engagement_like_given', 99, 'revoked-like');
+      await getTestPrismaClient().pointsLedgerEntry.updateMany({
+        where: { userId: user.userId, refId: 'revoked-like' },
+        data: { revokedAt: IN_PERIOD_AT },
+      });
 
       await rollup.rollupPeriod(PERIOD);
 
@@ -169,16 +173,59 @@ describe('Leaderboard e2e (Section 4.9)', () => {
         .set('Authorization', `Bearer ${user.accessToken}`)
         .expect(200);
 
-      // 40 (under the 100 cap, so untouched) + 250 (uncapped) = 290.
       expect(res.body.items[0]).toEqual({ userId: user.userId, publicName: 'E2E Leaderboard mixed', points: 290, rank: 1 });
+    });
+
+    it('ranks on the EXACT quarter-point value and shows the rounded points: equal displays can still rank differently (half rounds up)', async () => {
+      const prisma = getTestPrismaClient();
+      const a = await createUser('quarter-a');
+      const b = await createUser('quarter-b');
+      const c = await createUser('quarter-c');
+      const put = (userId: string, quarterPoints: number, refId: string) =>
+        prisma.pointsLedgerEntry.create({
+          data: { userId, source: 'engagement_like_received', quarterPoints, refId, occurredAt: IN_PERIOD_AT },
+        });
+      await put(a.userId, 5, 'x:a'); // 1.25 -> shows 1, ranks first
+      await put(b.userId, 4, 'x:b'); // 1.00 -> shows 1, ranks second (NOT tied with a)
+      await put(c.userId, 2, 'x:c'); // 0.50 -> shows 1 (half rounds UP), ranks third
+
+      await rollup.rollupPeriod(PERIOD);
+
+      const res = await request(server())
+        .get('/leaderboard')
+        .query({ period: PERIOD })
+        .set('Authorization', `Bearer ${a.accessToken}`)
+        .expect(200);
+      expect(res.body.items.map((i: { userId: string; points: number; rank: number }) => [i.userId, i.points, i.rank])).toEqual([
+        [a.userId, 1, 1],
+        [b.userId, 1, 2],
+        [c.userId, 1, 3],
+      ]);
+      const stored = await prisma.leaderboardEntry.findMany({ where: { period: PERIOD, clubId: '' }, orderBy: { rank: 'asc' } });
+      expect(stored.map((r) => r.quarterPoints)).toEqual([5, 4, 2]);
+    });
+
+    it('a user whose only rows are 0.25 quarter points (shows 0) is still on the board, ranked on the exact value', async () => {
+      const prisma = getTestPrismaClient();
+      const tiny = await createUser('tiny');
+      await prisma.pointsLedgerEntry.create({
+        data: { userId: tiny.userId, source: 'engagement_view_received', quarterPoints: 1, refId: 'p:v', occurredAt: IN_PERIOD_AT },
+      });
+      await rollup.rollupPeriod(PERIOD);
+      const res = await request(server())
+        .get('/leaderboard')
+        .query({ period: PERIOD })
+        .set('Authorization', `Bearer ${tiny.accessToken}`)
+        .expect(200);
+      expect(res.body.items).toEqual([{ userId: tiny.userId, publicName: 'E2E Leaderboard tiny', points: 0, rank: 1 }]);
     });
 
     it('excludes a DEACTIVATED user from a fresh rollup entirely — no LeaderboardEntry row is written at all', async () => {
       const deactivated = await createUser('deactivated', { accountStatus: 'deactivated' });
       const active = await createUser('active-peer');
 
-      await awardLedgerEntry(deactivated.userId, 'engagement_like', 3, 'ghost-post');
-      await awardLedgerEntry(active.userId, 'engagement_like', 3, 'real-post');
+      await awardLedgerEntry(deactivated.userId, 'engagement_like_given', 3, 'ghost-post');
+      await awardLedgerEntry(active.userId, 'engagement_like_given', 3, 'real-post');
 
       await rollup.rollupPeriod(PERIOD);
 
@@ -191,8 +238,8 @@ describe('Leaderboard e2e (Section 4.9)', () => {
       const user = await createUser('later-deactivated');
       const peer = await createUser('peer');
 
-      await awardLedgerEntry(user.userId, 'engagement_like', 3, 'p-1');
-      await awardLedgerEntry(peer.userId, 'engagement_like', 3, 'p-2');
+      await awardLedgerEntry(user.userId, 'engagement_like_given', 3, 'p-1');
+      await awardLedgerEntry(peer.userId, 'engagement_like_given', 3, 'p-2');
 
       // First rollup tick, while `user` is still active — their row IS written.
       await rollup.rollupPeriod(PERIOD);
@@ -222,8 +269,8 @@ describe('Leaderboard e2e (Section 4.9)', () => {
 
     it('isolates periods — a point earned in one ISO week never counts toward another', async () => {
       const user = await createUser('cross-period');
-      await awardLedgerEntry(user.userId, 'engagement_like', 3, 'this-week-post', IN_PERIOD_AT);
-      await awardLedgerEntry(user.userId, 'engagement_like', 3, 'last-week-post', IN_OTHER_PERIOD_AT);
+      await awardLedgerEntry(user.userId, 'engagement_like_given', 3, 'this-week-post', IN_PERIOD_AT);
+      await awardLedgerEntry(user.userId, 'engagement_like_given', 3, 'last-week-post', IN_OTHER_PERIOD_AT);
 
       await rollup.rollupPeriod(PERIOD);
       await rollup.rollupPeriod(OTHER_PERIOD);
@@ -256,7 +303,7 @@ describe('Leaderboard e2e (Section 4.9)', () => {
 
     it('defaults to the current UTC ISO week when no period is supplied', async () => {
       const user = await createUser('default-period');
-      await awardLedgerEntry(user.userId, 'engagement_like', 3, 'p-1', new Date());
+      await awardLedgerEntry(user.userId, 'engagement_like_given', 3, 'p-1', new Date());
       const now = new Date();
       const { getCurrentIsoWeekPeriod } = await import('../src/modules/leaderboard/iso-week.util');
       await rollup.rollupPeriod(getCurrentIsoWeekPeriod(now));
@@ -272,8 +319,8 @@ describe('Leaderboard e2e (Section 4.9)', () => {
     it('ties are allowed — two users with equal points share the same rank', async () => {
       const a = await createUser('tie-a');
       const b = await createUser('tie-b');
-      await awardLedgerEntry(a.userId, 'engagement_like', 3, 'a-1');
-      await awardLedgerEntry(b.userId, 'engagement_like', 3, 'b-1');
+      await awardLedgerEntry(a.userId, 'engagement_like_given', 3, 'a-1');
+      await awardLedgerEntry(b.userId, 'engagement_like_given', 3, 'b-1');
 
       await rollup.rollupPeriod(PERIOD);
 
@@ -289,7 +336,7 @@ describe('Leaderboard e2e (Section 4.9)', () => {
 
     it('re-running rollupPeriod on the same period is idempotent (upsert, not duplicate rows)', async () => {
       const user = await createUser('idempotent');
-      await awardLedgerEntry(user.userId, 'engagement_like', 3, 'p-1');
+      await awardLedgerEntry(user.userId, 'engagement_like_given', 3, 'p-1');
 
       await rollup.rollupPeriod(PERIOD);
       await rollup.rollupPeriod(PERIOD);
@@ -298,14 +345,14 @@ describe('Leaderboard e2e (Section 4.9)', () => {
       const prisma = getTestPrismaClient();
       const rows = await prisma.leaderboardEntry.findMany({ where: { userId: user.userId, period: PERIOD } });
       expect(rows).toHaveLength(1);
-      expect(rows[0].points).toBe(3);
+      expect(rows[0].quarterPoints).toBe(12);
     });
 
     it('keyset pagination walks the full ranked list with no duplicates and no gaps', async () => {
       const users = [];
       for (let i = 0; i < 5; i++) {
         const u = await createUser(`page-${i}`);
-        await awardLedgerEntry(u.userId, 'engagement_like', 3 + i, `page-post-${i}`); // distinct points -> distinct ranks
+        await awardLedgerEntry(u.userId, 'engagement_like_given', 3 + i, `page-post-${i}`); // distinct points -> distinct ranks
         users.push(u);
       }
 
@@ -376,7 +423,7 @@ describe('Leaderboard e2e (Section 4.9)', () => {
     async function awardWhileRepresenting(userId: string, source: PointsSource, points: number, refId: string) {
       const prisma = getTestPrismaClient();
       await prisma.$transaction((tx) =>
-        awardPoints(tx, { userId, source, points, refId, occurredAt: IN_PERIOD_AT }),
+        awardPoints(tx, { userId, source, quarterPoints: points * 4, refId, occurredAt: IN_PERIOD_AT }),
       );
     }
 
@@ -395,7 +442,7 @@ describe('Leaderboard e2e (Section 4.9)', () => {
       await setRepresented(alice.userId, clubA);
       await setRepresented(bob.userId, clubA);
 
-      await awardWhileRepresenting(alice.userId, 'engagement_like', 3, 'post-a');
+      await awardWhileRepresenting(alice.userId, 'engagement_like_given', 3, 'post-a');
       await awardWhileRepresenting(bob.userId, 'contest_weekly_win', 6, 'round-b');
       // Carol represents no club, so her points are unattributed.
       await awardLedgerEntry(carol.userId, 'contest_weekly_win', 9, 'round-c');
@@ -424,11 +471,11 @@ describe('Leaderboard e2e (Section 4.9)', () => {
       await setRepresented(alice.userId, clubA);
       await setRepresented(bob.userId, clubA);
 
-      await awardWhileRepresenting(alice.userId, 'engagement_like', 3, 'post-before');
+      await awardWhileRepresenting(alice.userId, 'engagement_like_given', 3, 'post-before');
 
       // Alice switches to Club B, then earns more.
       await setRepresented(alice.userId, clubB);
-      await awardWhileRepresenting(alice.userId, 'engagement_like', 6, 'post-after');
+      await awardWhileRepresenting(alice.userId, 'engagement_like_given', 6, 'post-after');
 
       await rollup.rollupPeriod(PERIOD);
 
@@ -438,8 +485,8 @@ describe('Leaderboard e2e (Section 4.9)', () => {
       const rowsB = await getTestPrismaClient().leaderboardEntry.findMany({
         where: { period: PERIOD, clubId: clubB },
       });
-      expect(rowsA.map((r) => [r.userId, r.points])).toEqual([[alice.userId, 3]]);
-      expect(rowsB.map((r) => [r.userId, r.points])).toEqual([[alice.userId, 6]]);
+      expect(rowsA.map((r) => [r.userId, r.quarterPoints / 4])).toEqual([[alice.userId, 3]]);
+      expect(rowsB.map((r) => [r.userId, r.quarterPoints / 4])).toEqual([[alice.userId, 6]]);
 
       // Bob still represents Club A, so he can read it and sees Alice's pre-switch points there.
       const boardA = await getBoard(bob.accessToken, { clubId: clubA }).expect(200);
@@ -448,18 +495,18 @@ describe('Leaderboard e2e (Section 4.9)', () => {
       ]);
     });
 
-    it('applies the engagement cap per club board', async () => {
+    it('sums every unrevoked row on a club board too (no weekly cap there either)', async () => {
       const clubA = await createClub('Club A');
       const alice = await createUser('alice');
       await setRepresented(alice.userId, clubA);
 
-      await awardWhileRepresenting(alice.userId, 'engagement_like', 80, 'post-1');
-      await awardWhileRepresenting(alice.userId, 'engagement_like', 80, 'post-2');
+      await awardWhileRepresenting(alice.userId, 'engagement_like_given', 80, 'post-1');
+      await awardWhileRepresenting(alice.userId, 'engagement_like_given', 80, 'post-2');
 
       await rollup.rollupPeriod(PERIOD);
 
       const board = await getBoard(alice.accessToken, { clubId: clubA }).expect(200);
-      expect(board.body.items[0].points).toBe(100);
+      expect(board.body.items[0].points).toBe(160);
     });
 
     it('refuses a club the caller does not represent, and any club when they represent none', async () => {

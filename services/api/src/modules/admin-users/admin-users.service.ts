@@ -8,6 +8,7 @@ import {
   ADMIN_ACTION_LOG_TARGET_TYPES,
 } from '../admin-action-log/admin-action-log.constants';
 import { TokenService } from '../auth/token/token.service';
+import { revokeEngagementPointsForAccount } from '../points/engagement-points.util';
 import { ADMIN_USERS_DEFAULT_PAGE_SIZE, ADMIN_USERS_MAX_PAGE_SIZE } from './admin-users.constants';
 import { decodeAdminUsersCursor, encodeAdminUsersCursor } from './cursor.util';
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
@@ -249,6 +250,10 @@ export class AdminUsersService {
       // still-valid tokens keep working — the exact reasoning
       // AuthService.deactivateAccount already documents for itself.
       await this.tokenService.revokeAllSessionsForUser(userId);
+      // backend/w12-points (B-093, spec 9b): a suspended account is restricted, so its baseline points are
+      // revoked (what it earned, and what it earned others by engaging with them). Not undone if the
+      // suspension is lifted: engagement simply earns again from then on.
+      await revokeEngagementPointsForAccount(this.prisma, userId, new Date());
     }
 
     this.logger.log(`Admin ${adminId} set user ${userId}'s accountStatus to '${dto.status}'.`);

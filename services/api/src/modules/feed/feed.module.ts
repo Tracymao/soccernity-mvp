@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
+import { PointsModule } from '../points/points.module';
 import { FeedController } from './feed.controller';
 import { FeedService } from './feed.service';
 import { SavedPostsController } from './saved-posts.controller';
@@ -22,7 +23,7 @@ import { SavedPostsController } from './saved-posts.controller';
 // uses for AuthRegistrationModule (auto-join on signup). No circular
 // import: ClubsModule imports FeedModule, FeedModule imports neither.
 @Module({
-  imports: [AuthFoundationModule],
+  imports: [AuthFoundationModule, PointsModule],
   controllers: [FeedController, SavedPostsController],
   providers: [FeedService, PrismaService],
   exports: [FeedService],

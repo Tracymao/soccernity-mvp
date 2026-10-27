@@ -1,13 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { getCurrentIsoWeekPeriod, getIsoWeekBoundaries, getPreviousIsoWeekPeriod } from './iso-week.util';
-import {
-  ENGAGEMENT_POINTS_CAP_PER_PERIOD,
-  ENGAGEMENT_POINTS_SOURCES,
-  GLOBAL_BOARD_CLUB_ID,
-} from './leaderboard.constants';
+import { GLOBAL_BOARD_CLUB_ID } from './leaderboard.constants';
 
 // The shape $queryRaw's aggregation below actually returns, after the
 // explicit ::INTEGER casts — see rollupPeriod's own comment on why those
@@ -16,7 +11,8 @@ import {
 // plain `number`).
 interface AggregatedLeaderboardRow {
   userId: string;
-  totalPoints: number;
+  // QUARTER-POINT units (backend/w12-points, Decision Log #383), ranked EXACTLY.
+  totalQuarterPoints: number;
   rank: number;
 }
 
@@ -110,107 +106,73 @@ export class LeaderboardRollupService {
   ): Promise<void> {
     await this.prisma.leaderboardEntry.upsert({
       where: { userId_period_clubId: { userId: row.userId, period, clubId } },
-      update: { points: row.totalPoints, rank: row.rank },
-      create: { userId: row.userId, period, clubId, points: row.totalPoints, rank: row.rank },
+      update: { quarterPoints: row.totalQuarterPoints, rank: row.rank },
+      create: { userId: row.userId, period, clubId, quarterPoints: row.totalQuarterPoints, rank: row.rank },
     });
   }
 
   private async aggregateGlobalBoard(start: Date, end: Date): Promise<AggregatedLeaderboardRow[]> {
-    // A CTE, not one flat query with the window function inline: Postgres
-    // does not allow a SELECT list expression to reference another
-    // expression's own alias at the same query level (the window
-    // function's ORDER BY needs the ALREADY-CAPPED total, which is
-    // itself a multi-line CASE/SUM/LEAST expression) — aggregating first
-    // in `aggregated`, then ranking over its `totalPoints` OUTPUT column
-    // in the outer SELECT, sidesteps that restriction entirely rather
-    // than repeating the capped-total expression twice.
+    // A CTE, not one flat query with the window function inline: the window function's ORDER BY needs
+    // the aggregated total, which a SELECT list cannot reference at the same query level - aggregating
+    // first in `aggregated`, then ranking over its output column in the outer SELECT, sidesteps that.
     //
-    // The cap: LEAST(SUM(engagement points), 100) — summed ONLY across
-    // ENGAGEMENT_POINTS_SOURCES — is added to the UNCAPPED sum of
-    // everything else (today: contest_weekly_win, contest_monthly_crown;
-    // competition_result is reserved and unused). Contest points are
-    // never capped — see leaderboard.constants.ts's own comment on why
-    // 100 keeps Contest performance dominant per Decision Log #219's
-    // ratio rationale.
+    // backend/w12-points (B-093): the total is SUM(quarterPoints) over the ledger rows that have NOT been
+    // revoked (revokedAt IS NULL) - baseline engagement given and received, plus contest placement
+    // prizes. There is no weekly cap here any more: the daily caps (40 given / 20 received) are applied
+    // when a point is awarded, and placement prizes are never capped. A revoked row counts for nothing.
     //
-    // `u."accountStatus" = 'active'` (Decision Log #221) — a deactivated
-    // or pending_deletion user's ledger rows are never included in a
-    // fresh rollup, so their LeaderboardEntry row for THIS run's period
-    // is simply never written/updated. An already-existing row from
-    // before they deactivated is left untouched here (not deleted) — see
-    // leaderboard/README.md's "stale rows" section for why that's fine:
-    // GET /leaderboard's own read-time filter hides it regardless.
+    // `u."accountStatus" = 'active'` (Decision Log #221) - a deactivated or pending_deletion user's
+    // ledger rows are never included in a fresh rollup, so their LeaderboardEntry row for THIS run's
+    // period is simply never written/updated. An already-existing row from before they deactivated is
+    // left untouched here (not deleted) - see leaderboard/README.md's "stale rows" section for why
+    // that's fine: GET /leaderboard's own read-time filter hides it regardless.
     //
-    // `WHERE "totalPoints" > 0` in the outer query — a user with zero
-    // PointsLedgerEntry rows in this window never appears in `aggregated`
-    // at all (INNER JOIN only groups rows that exist); this filter is
-    // the belt-and-braces case where every source happened to sum to
-    // zero, so no zero-point LeaderboardEntry row is ever materialized.
+    // `WHERE "totalQuarterPoints" > 0` - a user with no live ledger rows in this window never appears in
+    // `aggregated` at all; this filter is the belt-and-braces case where every row happened to be
+    // revoked, so no zero-point LeaderboardEntry row is ever materialized.
     //
-    // ::INTEGER casts on both computed columns: Postgres's SUM(int) and
-    // RANK() both return bigint (int8) by default, which node-postgres
-    // (and therefore Prisma's $queryRaw) would otherwise hand back as a
-    // JS `bigint`, not a `number` — every real point total here is far
-    // inside the safe-integer range, so casting down to a genuine SQL
-    // INTEGER keeps the JS side a plain `number` with no bigint handling
-    // needed anywhere in this module.
-    //
-    // ENGAGEMENT_POINTS_SOURCES is referenced TWICE below (once for the
-    // capped branch, once for the "everything else" branch) —
-    // `Prisma.join` is called fresh each time rather than reused, since
-    // each occurrence needs its own independent set of query parameters.
+    // ::INTEGER casts on both computed columns: Postgres's SUM(int) and RANK() both return bigint (int8)
+    // by default, which node-postgres (and therefore Prisma's $queryRaw) would otherwise hand back as a
+    // JS `bigint`, not a `number` - every real total here is far inside the safe-integer range, so
+    // casting down keeps the JS side a plain `number` with no bigint handling needed anywhere.
     return this.prisma.$queryRaw<AggregatedLeaderboardRow[]>`
       WITH aggregated AS (
         SELECT
           ple."userId" AS "userId",
-          CAST(
-            LEAST(
-              COALESCE(SUM(CASE WHEN ple.source IN (${Prisma.join(ENGAGEMENT_POINTS_SOURCES)}) THEN ple.points ELSE 0 END), 0),
-              ${ENGAGEMENT_POINTS_CAP_PER_PERIOD}
-            )
-            + COALESCE(SUM(CASE WHEN ple.source NOT IN (${Prisma.join(ENGAGEMENT_POINTS_SOURCES)}) THEN ple.points ELSE 0 END), 0)
-          AS INTEGER) AS "totalPoints"
+          CAST(COALESCE(SUM(ple."quarterPoints"), 0) AS INTEGER) AS "totalQuarterPoints"
         FROM "PointsLedgerEntry" ple
         INNER JOIN "User" u ON u.id = ple."userId"
         WHERE ple."occurredAt" >= ${start}
           AND ple."occurredAt" < ${end}
+          AND ple."revokedAt" IS NULL
           AND u."accountStatus" = 'active'
         GROUP BY ple."userId"
       )
       SELECT
         "userId",
-        "totalPoints",
-        CAST(RANK() OVER (ORDER BY "totalPoints" DESC) AS INTEGER) AS "rank"
+        "totalQuarterPoints",
+        CAST(RANK() OVER (ORDER BY "totalQuarterPoints" DESC) AS INTEGER) AS "rank"
       FROM aggregated
-      WHERE "totalPoints" > 0
+      WHERE "totalQuarterPoints" > 0
     `;
   }
 
-  // Decision Log #128 -- one row per (club, user) for the club boards. Same
-  // cap, same active-account filter, same ledger window as the global board,
-  // with two differences: only points attributed to a club
-  // (ple."clubId" IS NOT NULL) count, and RANK() is partitioned by club so
-  // each club board is ranked on its own. The engagement cap is still applied
-  // per (club, user), which equals per user in practice: a user represents one
-  // club at a time, so their engagement points land in one club for a given
-  // week (see leaderboard/README.md on mid-week club switches).
+  // Decision Log #128 -- one row per (club, user) for the club boards. Same revocation rule, same
+  // active-account filter, same ledger window as the global board, with two differences: only points
+  // attributed to a club (ple."clubId" IS NOT NULL) count, and RANK() is partitioned by club so each
+  // club board is ranked on its own.
   private async aggregateClubBoards(start: Date, end: Date): Promise<AggregatedClubLeaderboardRow[]> {
     return this.prisma.$queryRaw<AggregatedClubLeaderboardRow[]>`
       WITH aggregated AS (
         SELECT
           ple."clubId" AS "clubId",
           ple."userId" AS "userId",
-          CAST(
-            LEAST(
-              COALESCE(SUM(CASE WHEN ple.source IN (${Prisma.join(ENGAGEMENT_POINTS_SOURCES)}) THEN ple.points ELSE 0 END), 0),
-              ${ENGAGEMENT_POINTS_CAP_PER_PERIOD}
-            )
-            + COALESCE(SUM(CASE WHEN ple.source NOT IN (${Prisma.join(ENGAGEMENT_POINTS_SOURCES)}) THEN ple.points ELSE 0 END), 0)
-          AS INTEGER) AS "totalPoints"
+          CAST(COALESCE(SUM(ple."quarterPoints"), 0) AS INTEGER) AS "totalQuarterPoints"
         FROM "PointsLedgerEntry" ple
         INNER JOIN "User" u ON u.id = ple."userId"
         WHERE ple."occurredAt" >= ${start}
           AND ple."occurredAt" < ${end}
+          AND ple."revokedAt" IS NULL
           AND ple."clubId" IS NOT NULL
           AND u."accountStatus" = 'active'
         GROUP BY ple."clubId", ple."userId"
@@ -218,10 +180,10 @@ export class LeaderboardRollupService {
       SELECT
         "clubId",
         "userId",
-        "totalPoints",
-        CAST(RANK() OVER (PARTITION BY "clubId" ORDER BY "totalPoints" DESC) AS INTEGER) AS "rank"
+        "totalQuarterPoints",
+        CAST(RANK() OVER (PARTITION BY "clubId" ORDER BY "totalQuarterPoints" DESC) AS INTEGER) AS "rank"
       FROM aggregated
-      WHERE "totalPoints" > 0
+      WHERE "totalQuarterPoints" > 0
     `;
   }
 }

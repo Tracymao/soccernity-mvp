@@ -23,6 +23,7 @@ import { MessagingModule } from './modules/messaging/messaging.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { CommunityGroupsModule } from './modules/community-groups/community-groups.module';
 import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
+import { ViewQualificationModule } from './modules/view-qualification/view-qualification.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
 import { AdminContentModule } from './modules/admin-content/admin-content.module';
 import { AdminUsersModule } from './modules/admin-users/admin-users.module';
@@ -281,6 +282,7 @@ import { ClockModule } from './clock/clock.module';
     // rollup and read time (Decision Log #221). See
     // modules/leaderboard/README.md.
     LeaderboardModule,
+    ViewQualificationModule,
     // sprint-4/public-blog-articles-feed — Build Plan Section 4, Sprint
     // 4's public-facing Blog/Articles feed (independent of the Sports
     // Hub work — no shared code, no shared schema tables). GET

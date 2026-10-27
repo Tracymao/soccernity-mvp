@@ -12,10 +12,10 @@ function buildMock() {
   return prisma;
 }
 
-function row(over: Partial<{ userId: string; points: number; rank: number | null; displayName: string; username: string | null }> = {}) {
+function row(over: Partial<{ userId: string; quarterPoints: number; rank: number | null; displayName: string; username: string | null }> = {}) {
   return {
     userId: over.userId ?? 'u-1',
-    points: over.points ?? 100,
+    quarterPoints: over.quarterPoints ?? 400,
     rank: over.rank === undefined ? 1 : over.rank,
     period: '2026-W33',
     user: { username: over.username ?? null, displayName: over.displayName ?? 'Player One' },
@@ -96,15 +96,15 @@ describe('LeaderboardService', () => {
     it('maps rows to the response shape, no nextCursor when a page is not full', async () => {
       const prisma = buildMock();
       (prisma.leaderboardEntry.findMany as jest.Mock).mockResolvedValue([
-        row({ userId: 'u-1', rank: 1, points: 250, displayName: 'Alice' }),
-        row({ userId: 'u-2', rank: 2, points: 180, displayName: 'Bob' }),
+        row({ userId: 'u-1', rank: 1, quarterPoints: 1002, displayName: 'Alice' }),
+        row({ userId: 'u-2', rank: 2, quarterPoints: 721, displayName: 'Bob' }),
       ]);
 
       const result = await new LeaderboardService(prisma).getLeaderboard('caller-1', { period: '2026-W33', limit: 20 });
 
       expect(result).toEqual({
         items: [
-          { userId: 'u-1', publicName: 'Soccernity member', points: 250, rank: 1 },
+          { userId: 'u-1', publicName: 'Soccernity member', points: 251, rank: 1 },
           { userId: 'u-2', publicName: 'Soccernity member', points: 180, rank: 2 },
         ],
         nextCursor: null,

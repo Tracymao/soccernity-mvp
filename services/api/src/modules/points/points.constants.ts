@@ -1,89 +1,90 @@
-// sprint-2/contest-data-model-backend — Decision Log #219.
+// backend/w12-points (B-093) -- the leaderboard points engine. Decision Log #382 (platform-wide
+// engagement counting), #383 (baseline points, AMENDS #130), #384 (view qualification), #385
+// (placement points, AMENDS #130 and #219); docs/contest-spec.md sections 9a-9e.
 //
-// These are the scoring weights the founder explicitly delegated to
-// backend-api in Decision Log #130 ("Exact per-action weights ... are a
-// real, not-yet-specified backend detail — parked as a backend-api task
-// for when backend work resumes"). Decision Log #130 fixed the *shape*
-// of the model: one running points total per user, earned two ways —
-// (1) Contest/Competition results, (2) baseline platform engagement at a
-// "smaller, ongoing point trickle". This file fixes the numbers.
-//
-// Everything here is a plain named constant on purpose: tuning the
-// economy later is a one-file change, never a migration. Nothing about
-// the ledger schema (PointsLedgerEntry) encodes a specific weight.
+// This file replaces the weights Decision Log #219 fixed in sprint-2/contest-data-model-backend.
+// Everything here is a plain named constant on purpose. The two figures the founder said must not be
+// hardcoded -- the daily caps -- are NOT constants: they come from configuration (points-config.service.ts)
+// and the values below are only their defaults.
 
 // ---------------------------------------------------------------------
-// Baseline engagement — points for actions a user TAKES
+// Units
 // ---------------------------------------------------------------------
 //
-// Deliberately rewards *participation*, not *popularity*: a user earns
-// engagement points for giving likes — NOT for receiving likes. Posts
-// and follows earn no points at all (B-094, Decision Log #382; the older
-// Decision Log #130 / #219 text that lists them is superseded). Reasoning:
-//
-//   - The Leaderboard's stated purpose is grassroots-player visibility to
-//     scouts and clubs (Decision Log #45), and minors appear on it. A
-//     board driven by *received* engagement would be a follower-count
-//     race — exactly the dynamic a visibility tool for under-served
-//     players should avoid.
-//   - "Actions taken" is trivially spam-able (like/unlike/re-like); this
-//     first cut blunts the crudest abuse by awarding each engagement
-//     point ONCE per distinct target and NEVER revoking it (see
-//     "idempotency" below). A per-day cap and spam-pattern detection are
-//     a flagged follow-up, not built here — the Sprint 6 Leaderboard
-//     aggregation is the natural place to cap engagement contribution at
-//     read time anyway.
-//
-// Small absolute values: engagement is a slow, real climb, never a way
-// to out-rank a contest performer through sheer volume (see the ratio
-// note under CONTEST_* below).
-export const ENGAGEMENT_POINTS = {
-  // Giving a like. B-094 (Decision Log #382): posts and follows earn no
-  // points, so POST_CREATED and FOLLOW_MADE no longer exist.
-  LIKE_GIVEN: 1,
-} as const;
+// Points are stored in QUARTER-POINT units (spec 9b): 1 point = 4 units. A receiver's 0.25 is exactly
+// 1 unit, so every stored number is an integer and no float ever touches money-like arithmetic. They
+// are DISPLAYED rounded to the nearest whole point (half rounds up) and RANKED on the exact stored
+// value, so rounding never creates a false tie.
+export const QUARTER_UNITS_PER_POINT = 4;
 
 // ---------------------------------------------------------------------
-// Contest results — points for weekly wins and the monthly crown
+// Baseline engagement (spec 9b) -- everyday engagement, outside any contest
 // ---------------------------------------------------------------------
 //
-// Keyed by finishing position (1 | 2 | 3). Ties are allowed (Decision
-// Log #61(c)) — if the admin records two entries at position 1, both are
-// awarded the position-1 value.
-//
-// Ratio rationale: a monthly crown (250) is worth ~83 posts of baseline
-// activity; a weekly win (50) is worth ~17. This keeps Contest
-// performance clearly dominant — you cannot grind low-effort posts to
-// the top of the board — while a non-competitor still climbs slowly and
-// genuinely. A monthly winner earns BOTH their crown points AND whatever
-// weekly-win points they accumulated from weeks they won (the awards are
-// cumulative, at different times: weekly at round-judging, crown at
-// crowning).
-export const CONTEST_WEEKLY_WIN_POINTS: Readonly<Record<number, number>> = {
-  1: 50,
-  2: 30,
-  3: 20,
-};
+// "The account that GIVES the engagement earns FULL points: 1 per qualifying view / like / comment per
+// unique post. The creator who RECEIVES it earns one QUARTER point (0.25) per qualifying view / like /
+// comment per unique account per post." Founder's rationale: "it is more profitable to give than to
+// receive". FOLLOWS AND POSTS EARN NO POINTS (spec 9a, B-094); there is no source for them.
+export const GIVER_QUARTERS_PER_ENGAGEMENT = 1 * QUARTER_UNITS_PER_POINT; // 1 point
+export const RECEIVER_QUARTERS_PER_ENGAGEMENT = 1; // 0.25 point
 
-export const CONTEST_MONTHLY_CROWN_POINTS: Readonly<Record<number, number>> = {
-  1: 250,
-  2: 150,
-  3: 100,
-};
+// Daily caps (spec 9b, founder confirmed 2026-10-14): 40 points a day earned for GIVING and 20 points
+// a day earned for RECEIVING, per Europe/London calendar day (about 1,800 a month at most). These are
+// the DEFAULTS of two configuration values, not hardcoded rules.
+export const DEFAULT_DAILY_CAP_GIVEN_POINTS = 40;
+export const DEFAULT_DAILY_CAP_RECEIVED_POINTS = 20;
 
-// The valid finishing positions for a weekly round or a monthly crown.
-export const CONTEST_PODIUM_POSITIONS = [1, 2, 3] as const;
+export type EngagementPointKind = 'view' | 'like' | 'comment';
+
+export const ENGAGEMENT_POINT_KINDS: readonly EngagementPointKind[] = ['view', 'like', 'comment'];
 
 // ---------------------------------------------------------------------
-// PointsLedgerEntry.source — the closed set of reasons a row exists
+// PointsLedgerEntry.source -- the closed set of reasons a row exists
 // ---------------------------------------------------------------------
-//
-// 'competition_result' is reserved for Decision Log #73's admin-created
-// Competition system (Prediction / Commentary types). That system is not
-// built (Build Plan Section 2.2 defers it) and nothing writes this value
-// yet — it's listed here so the enum doesn't need touching when it is.
+export type GivenSource = 'engagement_view_given' | 'engagement_like_given' | 'engagement_comment_given';
+export type ReceivedSource =
+  | 'engagement_view_received'
+  | 'engagement_like_received'
+  | 'engagement_comment_received';
+
+// 'competition_result' is reserved for Decision Log #73's admin-created Competition system (B-100).
+// Nothing writes it yet -- it is listed here so the union does not need touching when it is built.
 export type PointsSource =
-  | 'engagement_like'
+  | GivenSource
+  | ReceivedSource
   | 'contest_weekly_win'
   | 'contest_monthly_crown'
   | 'competition_result';
+
+export const GIVEN_SOURCES: readonly GivenSource[] = [
+  'engagement_view_given',
+  'engagement_like_given',
+  'engagement_comment_given',
+];
+
+export const RECEIVED_SOURCES: readonly ReceivedSource[] = [
+  'engagement_view_received',
+  'engagement_like_received',
+  'engagement_comment_received',
+];
+
+export const BASELINE_ENGAGEMENT_SOURCES: readonly PointsSource[] = [...GIVEN_SOURCES, ...RECEIVED_SOURCES];
+
+export function givenSourceFor(kind: EngagementPointKind): GivenSource {
+  return `engagement_${kind}_given`;
+}
+
+export function receivedSourceFor(kind: EngagementPointKind): ReceivedSource {
+  return `engagement_${kind}_received`;
+}
+
+// ---------------------------------------------------------------------
+// Placement points (spec 9d) -- leaderboard points as a PRIZE
+// ---------------------------------------------------------------------
+//
+// The admin sets the figures per contest (ContestCycle.weeklyPoints1..3 / monthlyPoints1..3, stored by
+// W7); these are the spec's defaults and are used only as the column defaults in the schema. They are
+// listed here so the figures live in one documented place. They are awarded in WHOLE points and
+// converted to quarter units on the way into the ledger (points.util.ts / quarter-points.util.ts).
+export const DEFAULT_WEEKLY_PLACEMENT_POINTS = [500, 300, 150] as const;
+export const DEFAULT_MONTHLY_PLACEMENT_POINTS = [2000, 1200, 600] as const;

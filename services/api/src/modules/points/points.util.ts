@@ -1,9 +1,10 @@
 import { Prisma } from '@prisma/client';
 import { PointsSource } from './points.constants';
 
-// sprint-2/contest-data-model-backend — the single primitive for writing
-// to the append-only PointsLedgerEntry table.
-//
+// sprint-2/contest-data-model-backend — the primitive for writing a ONE-OFF row to the append-only
+// PointsLedgerEntry table: the contest placement prizes (ContestLifecycleService). The everyday giver/
+// receiver engagement rows (backend/w12-points) have their own, richer path with caps and revocation:
+// engagement-points.util.ts. Both write quarter-point units.
 // A plain function, not a NestJS service, deliberately: it is called from
 // FeedService (post create, like), UsersService (follow) and
 // ContestService (weekly wins, crown) — a shared *service* would force
@@ -25,7 +26,8 @@ export interface AwardPointsInput {
   // The domain row this award is for — a Post id, a ContestRound id or a
   // ContestCycle id, depending on source. See PointsLedgerEntry.refId.
   refId: string;
-  points: number;
+  // QUARTER-POINT units (backend/w12-points): 1 point = 4 units, see quarter-points.util.ts.
+  quarterPoints: number;
   // Snapshot of the user's represented club at award time (Decision Log
   // #128). Left undefined by every award site: awardPoints reads
   // User.representedClubId inside the same transaction. Passed explicitly
@@ -66,7 +68,7 @@ export async function awardPoints(
         userId: input.userId,
         source: input.source,
         refId: input.refId,
-        points: input.points,
+        quarterPoints: input.quarterPoints,
         clubId,
         occurredAt: input.occurredAt ?? new Date(),
       },

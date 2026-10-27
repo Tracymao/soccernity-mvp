@@ -22,6 +22,7 @@ import { SportsMatchesController } from './modules/sports/sports-matches.control
 import { UserAvatarController } from './modules/users/user-avatar.controller';
 import { UserCoverController } from './modules/users/user-cover.controller';
 import { UsersController } from './modules/users/users.controller';
+import { ViewQualificationController } from './modules/view-qualification/view-qualification.controller';
 
 // B-026 / B-118 / B-027 (Decision Log #370, #403 item 15, #369): the route
 // inventory, pinned. Three rules are enforced at the guard level:
@@ -57,6 +58,8 @@ const OPEN_ROUTES: Record<string, string> = {
   'PUT /sports/matches/:id/subscription': 'private kickoff-alert preference; founder-confirmed JwtAuthGuard-only (sprint-4/match-kickoff-alerts)',
   'DELETE /sports/matches/:id/subscription': 'private kickoff-alert preference',
   'POST /posts/:id/view': 'anonymous aggregate view tally; OptionalJwtAuthGuard by design',
+  'POST /posts/:id/view-heartbeat':
+    'looking at a post is not a social write (B-093): a restricted or unverified account may keep reading and simply earns nothing',
   'DELETE /teams/:id': 'admin-only (AdminJwtAuthGuard), a different auth domain',
   // B-197 (Decision Log #411 item 5): a safety action needs authentication only (JwtAuthGuard stays, pinned below).
   'POST /users/:id/block': 'a restricted-pending or unverified account must still be able to block (#411 item 5)',
@@ -146,6 +149,7 @@ const CONTROLLERS = [
   PublicReportsController,
   NotificationsController,
   SportsMatchesController,
+  ViewQualificationController,
 ];
 
 // Controller files deliberately NOT in CONTROLLERS, with the reason. A new

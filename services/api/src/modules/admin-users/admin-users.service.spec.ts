@@ -26,6 +26,8 @@ function buildDeps() {
       findMany: jest.fn().mockResolvedValue([]),
       update: jest.fn(),
     },
+    // backend/w12-points: a suspension revokes the account's baseline points.
+    pointsLedgerEntry: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
   } as unknown as PrismaService;
 
   const tokenService = {
@@ -222,6 +224,7 @@ describe('AdminUsersService', () => {
       await service.updateUserStatus('user-1', 'admin-1', { status: 'active' });
 
       expect(tokenService.revokeAllSessionsForUser).not.toHaveBeenCalled();
+      expect(prisma.pointsLedgerEntry.updateMany).not.toHaveBeenCalled();
     });
 
     // A deliberate, disclosed judgment call (see admin-users.service.ts's
