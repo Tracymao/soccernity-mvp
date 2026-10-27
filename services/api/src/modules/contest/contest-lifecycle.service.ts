@@ -484,6 +484,20 @@ export class ContestLifecycleService {
         await tx.contestRound.update({ where: { id: round4.id }, data: { status: 'judged', judgedAt: now } });
       }
 
+      // B-092: the Final-week carousel's per-viewer impression rows have done their job (balancing
+      // exposure and the daily cap). Keep ONE aggregate total per entry for the admin distribution
+      // view and DELETE the per-viewer rows, in the same transaction as the crown.
+      const impressionCounts = await tx.contestImpression.groupBy({
+        by: ['entryId'],
+        where: { entry: { cycleId } },
+        _count: { _all: true },
+      });
+      const impressionOf = new Map(impressionCounts.map((c) => [c.entryId, c._count._all]));
+      for (const e of entries) {
+        await tx.contestEntry.update({ where: { id: e.id }, data: { impressionTotal: impressionOf.get(e.id) ?? 0 } });
+      }
+      await tx.contestImpression.deleteMany({ where: { entry: { cycleId } } });
+
       // The pin comes off every entry of the contest, and a final entry stops being special: it is
       // visible and in the Community feed like any other post (Decision Log #405 item 1, #406 item 5).
       await tx.contestEntry.updateMany({ where: { cycleId, pinRemovedAt: null }, data: { pinRemovedAt: now } });

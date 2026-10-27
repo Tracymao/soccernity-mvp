@@ -114,6 +114,10 @@ const EXPECTED: Record<string, Flags> = {
   // an undo, so C only (the like / unlike precedent).
   'PUT /contest/entries/:entryId/vote': 'CE',
   'DELETE /contest/entries/:entryId/vote': 'C',
+  // B-092: the carousel's qualifying-impression event. Writes no content under the user's identity
+  // and is not a social write, so C only (a restricted account is not the audience, spec 10b); NOT E
+  // (an unverified viewer is still a viewer) and NOT P.
+  'POST /contest/entries/:entryId/impression': 'C',
   // grassroots
   'POST /teams': 'CE',
   'POST /fixtures': 'CE',

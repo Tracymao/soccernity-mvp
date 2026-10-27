@@ -6,8 +6,11 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProfileCompleteGuard } from '../auth/guards/profile-complete.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
 import { FeedQueryDto } from '../feed/dto/feed-query.dto';
+import { ContestExposureService } from './contest-exposure.service';
 import { ContestVotingService } from './contest-voting.service';
 import { ContestService } from './contest.service';
+import { CarouselQueryDto } from './dto/carousel-query.dto';
+import { RecordImpressionDto } from './dto/record-impression.dto';
 import { SubmitEntryDto } from './dto/submit-entry.dto';
 import { SubmitFinalEntryDto } from './dto/submit-final-entry.dto';
 
@@ -25,6 +28,7 @@ export class ContestController {
   constructor(
     private readonly contestService: ContestService,
     private readonly votingService: ContestVotingService,
+    private readonly exposureService: ContestExposureService,
   ) {}
 
   // GET /contest/current -- the single call the Create Post "Contest" tab (Decision Log #188), the
@@ -64,6 +68,17 @@ export class ContestController {
     return this.contestService.getPinnedEntry(userId, user.sub);
   }
 
+  // GET /contest/final-week/carousel -- the Community-feed "Final week" carousel (B-092; Decision
+  // Log #388, #403 item 11, #404 item 6). Only while a final week is live; the order is the viewer's
+  // balanced-impression rotation, never engagement or rank. JwtAuthGuard only: a restricted viewer
+  // is answered inside the service with `live: false` (the module simply does not show), not a 403
+  // on a read the feed would make on every load. No count of any kind is returned.
+  @Get('final-week/carousel')
+  @UseGuards(JwtAuthGuard)
+  async finalWeekCarousel(@CurrentUser() user: AccessTokenPayload, @Query() query: CarouselQueryDto) {
+    return this.exposureService.getCarousel(user.sub, query.limit);
+  }
+
   // POST /contest/entries -- submit an already-created Post as this week's entry (Phase 1 only). The
   // composer creates the Post via POST /posts first, so that stays the single post-creation path.
   // HttpCode(201): a successful submission always creates exactly one new ContestEntry row.
@@ -90,6 +105,23 @@ export class ContestController {
   @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard)
   async vote(@CurrentUser() user: AccessTokenPayload, @Param('entryId') entryId: string) {
     return this.votingService.castVote(user.sub, entryId);
+  }
+
+  // POST /contest/entries/:entryId/impression -- the client's qualifying carousel event (>= 50% of
+  // the tile in view for one uninterrupted second; Decision Log #405 item 7, #406 item 6). The
+  // server validates the window, the entry's eligibility, that the viewer is not the finalist, the
+  // block rules and the per-viewer daily cap; idempotent per (viewer, entry, eventId). It writes no
+  // content under the user's identity, so C only (a restricted account is not the audience): not E,
+  // not P. Always 200 `{ counted }`: an ignored event is not an error and reveals nothing.
+  @Post('entries/:entryId/impression')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
+  async recordImpression(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('entryId') entryId: string,
+    @Body() dto: RecordImpressionDto,
+  ) {
+    return this.exposureService.recordImpression(user.sub, entryId, dto);
   }
 
   // DELETE /contest/entries/:entryId/vote -- un-vote (the toggle's "off"). Idempotent.

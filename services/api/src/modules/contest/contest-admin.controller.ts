@@ -3,6 +3,7 @@ import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
 import { CurrentAdmin } from '../admin/guards/current-admin.decorator';
 import { AdminAccessTokenPayload } from '../admin/token/admin-token.types';
 import { ContestAdminService } from './contest-admin.service';
+import { ContestExposureService } from './contest-exposure.service';
 import { CreateCycleDto } from './dto/create-cycle.dto';
 import { UpdateCycleDto } from './dto/update-cycle.dto';
 
@@ -17,7 +18,10 @@ import { UpdateCycleDto } from './dto/update-cycle.dto';
 @Controller('admin/contest')
 @UseGuards(AdminJwtAuthGuard)
 export class ContestAdminController {
-  constructor(private readonly contestAdminService: ContestAdminService) {}
+  constructor(
+    private readonly contestAdminService: ContestAdminService,
+    private readonly exposureService: ContestExposureService,
+  ) {}
 
   // `current` is declared before `cycles/:id` so Nest never matches the literal "current" segment
   // against the `:id` param.
@@ -34,6 +38,13 @@ export class ContestAdminController {
   @Get('cycles/:id')
   async cycleDetail(@Param('id') id: string) {
     return this.contestAdminService.getCycleByIdForAdmin(id);
+  }
+
+  // GET /admin/contest/cycles/:id/exposure -- the week-4 impression distribution (B-092, spec 10b):
+  // aggregate counts per finalist and the spread against the tolerance. No per-viewer data.
+  @Get('cycles/:id/exposure')
+  async cycleExposure(@Param('id') id: string) {
+    return this.exposureService.getAdminExposure(id);
   }
 
   @Post('cycles')

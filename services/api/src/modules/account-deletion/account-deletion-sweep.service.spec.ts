@@ -19,6 +19,8 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
     block: { deleteMany: jest.fn() },
     notification: { deleteMany: jest.fn() },
     matchSubscription: { deleteMany: jest.fn() },
+    // B-092: a viewer's Final-week carousel impression rows go with their account.
+    contestImpression: { deleteMany: jest.fn() },
     banterRoomMember: { deleteMany: jest.fn() },
     communityGroupMember: { deleteMany: jest.fn() },
     grassrootsTeam: { updateMany: jest.fn() },
@@ -233,6 +235,7 @@ describe('AccountDeletionSweepService', () => {
       });
       expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.matchSubscription.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.contestImpression.deleteMany).toHaveBeenCalledWith({ where: { viewerId: 'user-1' } });
       expect(prisma.grassrootsTeam.updateMany).toHaveBeenCalledWith({
         where: { createdById: 'user-1' },
         data: { createdById: null },

@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
 import { ContestAdminController } from './contest-admin.controller';
 import { ContestAdminService } from './contest-admin.service';
+import { ContestExposureService } from './contest-exposure.service';
 
 // HTTP-layer coverage of the Admin Console's Contest endpoints (backend/w7-contest, B-091): the DTO
 // validation ranges of docs/contest-spec.md section 4 / Decision Log #399 E5, and the removal of the
@@ -17,12 +18,16 @@ describe('ContestAdminController (HTTP layer)', () => {
     createCycle: jest.fn(),
     updateCycle: jest.fn(),
   };
+  const exposure = { getAdminExposure: jest.fn() };
   const ADMIN = { sub: 'admin-1', role: 'superadmin' };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [ContestAdminController],
-      providers: [{ provide: ContestAdminService, useValue: service }],
+      providers: [
+        { provide: ContestAdminService, useValue: service },
+        { provide: ContestExposureService, useValue: exposure },
+      ],
     })
       .overrideGuard(AdminJwtAuthGuard)
       .useValue({
@@ -53,6 +58,15 @@ describe('ContestAdminController (HTTP layer)', () => {
     ],
     finalTask: 'Your best goal',
     minimumTally: 5,
+  });
+
+  describe('exposure distribution (B-092)', () => {
+    it('GET cycles/:id/exposure passes the cycle id through and is not swallowed by cycles/:id', async () => {
+      exposure.getAdminExposure.mockResolvedValue({ entries: [] });
+      await request(app.getHttpServer()).get('/admin/contest/cycles/c1/exposure').expect(200);
+      expect(exposure.getAdminExposure).toHaveBeenCalledWith('c1');
+      expect(service.getCycleByIdForAdmin).not.toHaveBeenCalled();
+    });
   });
 
   describe('reads', () => {

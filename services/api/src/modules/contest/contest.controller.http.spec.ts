@@ -6,6 +6,7 @@ import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProfileCompleteGuard } from '../auth/guards/profile-complete.guard';
+import { ContestExposureService } from './contest-exposure.service';
 import { ContestVotingService } from './contest-voting.service';
 import { ContestController } from './contest.controller';
 import { ContestService } from './contest.service';
@@ -26,6 +27,7 @@ describe('ContestController (HTTP layer)', () => {
     submitFinalEntry: jest.fn(),
   };
   const votingService = { castVote: jest.fn(), retractVote: jest.fn() };
+  const exposureService = { getCarousel: jest.fn(), recordImpression: jest.fn() };
   const prisma = {
     user: { findUnique: jest.fn() },
     guardian: { findUnique: jest.fn() },
@@ -40,6 +42,7 @@ describe('ContestController (HTTP layer)', () => {
       providers: [
         { provide: ContestService, useValue: contestService },
         { provide: ContestVotingService, useValue: votingService },
+        { provide: ContestExposureService, useValue: exposureService },
         GuardianConsentGuard,
         { provide: PrismaService, useValue: prisma },
       ],
@@ -101,6 +104,62 @@ describe('ContestController (HTTP layer)', () => {
       contestService.getPinnedEntry.mockResolvedValue({ entry: null });
       await request(app.getHttpServer()).get('/contest/users/u2/pinned-entry').expect(200);
       expect(contestService.getPinnedEntry).toHaveBeenCalledWith('u2', 'user-1');
+    });
+  });
+
+  describe('final-week carousel (B-092)', () => {
+    it('GET /contest/final-week/carousel passes the caller and the limit, with no consent gate', async () => {
+      exposureService.getCarousel.mockResolvedValue({ live: false, items: [] });
+      await request(app.getHttpServer()).get('/contest/final-week/carousel?limit=4').expect(200);
+      expect(exposureService.getCarousel).toHaveBeenCalledWith('user-1', 4);
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('defaults the limit to 6 and refuses a limit above 9 or below 1', async () => {
+      exposureService.getCarousel.mockResolvedValue({ live: true, items: [] });
+      await request(app.getHttpServer()).get('/contest/final-week/carousel').expect(200);
+      expect(exposureService.getCarousel).toHaveBeenCalledWith('user-1', 6);
+      await request(app.getHttpServer()).get('/contest/final-week/carousel?limit=10').expect(400);
+      await request(app.getHttpServer()).get('/contest/final-week/carousel?limit=0').expect(400);
+    });
+
+    const event = () => ({ eventId: '22222222-2222-4222-8222-222222222222', visibleRatio: 0.5, visibleMs: 1000 });
+
+    it('POST impression is consent-gated: a restricted-pending minor is refused before the service runs', async () => {
+      restrictedMinor();
+      await request(app.getHttpServer()).post(`/contest/entries/${ENTRY_ID}/impression`).send(event()).expect(403);
+      expect(exposureService.recordImpression).not.toHaveBeenCalled();
+    });
+
+    it('POST impression passes the caller, the entry and the event through with 200', async () => {
+      consentOk();
+      exposureService.recordImpression.mockResolvedValue({ counted: true });
+      const res = await request(app.getHttpServer()).post(`/contest/entries/${ENTRY_ID}/impression`).send(event()).expect(200);
+      expect(res.body).toEqual({ counted: true });
+      expect(exposureService.recordImpression).toHaveBeenCalledWith('user-1', ENTRY_ID, expect.objectContaining(event()));
+    });
+
+    it('POST impression rejects an event below the 50% / 1 s threshold, a bad id and unknown fields', async () => {
+      consentOk();
+      const url = `/contest/entries/${ENTRY_ID}/impression`;
+      await request(app.getHttpServer()).post(url).send({ ...event(), visibleRatio: 0.49 }).expect(400);
+      await request(app.getHttpServer()).post(url).send({ ...event(), visibleMs: 999 }).expect(400);
+      await request(app.getHttpServer()).post(url).send({ ...event(), visibleRatio: 1.01 }).expect(400);
+      await request(app.getHttpServer()).post(url).send({ ...event(), eventId: 'nope' }).expect(400);
+      await request(app.getHttpServer()).post(url).send({ ...event(), viewerId: 'someone-else' }).expect(400);
+      expect(exposureService.recordImpression).not.toHaveBeenCalled();
+    });
+
+    it('POST impression accepts the exact thresholds (50% and 1000 ms are enough)', async () => {
+      consentOk();
+      exposureService.recordImpression.mockResolvedValue({ counted: true });
+      await request(app.getHttpServer()).post(`/contest/entries/${ENTRY_ID}/impression`).send({ ...event(), visibleRatio: 1, visibleMs: 5000 }).expect(200);
+    });
+
+    it('POST impression passes a service 409 through', async () => {
+      consentOk();
+      exposureService.recordImpression.mockRejectedValue(new ConflictException('not live'));
+      await request(app.getHttpServer()).post(`/contest/entries/${ENTRY_ID}/impression`).send(event()).expect(409);
     });
   });
 
