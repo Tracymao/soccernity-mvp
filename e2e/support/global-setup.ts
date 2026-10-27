@@ -5,7 +5,6 @@ import * as path from 'path';
 import { createRequire } from 'module';
 import {
   ADMIN_CREDENTIALS,
-  API_LOG,
   PORTS,
   QA_DB_NAME,
   QA_REDIS_DB,
@@ -14,6 +13,7 @@ import {
   URLS,
   qaDatabaseUrl,
 } from './stack';
+import { apiEnvironment, spawnApi, stopApi, waitForApiHealth } from './api-process';
 import { contestPhaseInstant, isContestPhase, CONTEST_PHASES } from './contest-clock';
 
 // Everything below is TEST HARNESS, not product code: it creates a scratch
@@ -52,20 +52,6 @@ function waitForPort(port: number, label: string, timeoutMs = 120_000): Promise<
     };
     tryOnce();
   });
-}
-
-async function waitForHealth(timeoutMs = 120_000): Promise<void> {
-  const start = Date.now();
-  for (;;) {
-    try {
-      const res = await fetch(`${URLS.api}/health`);
-      if (res.ok) return;
-    } catch {
-      /* not up yet */
-    }
-    if (Date.now() - start > timeoutMs) throw new Error('API /health never became healthy');
-    await new Promise((r) => setTimeout(r, 500));
-  }
 }
 
 const children: ChildProcess[] = [];
@@ -130,7 +116,6 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     cwd: path.join(REPO, 'services', 'api'),
     stdio: 'inherit',
   });
-  const apiLog = fs.openSync(API_LOG, 'w');
   // backend/test-clock-qa: start the API on a chosen instant so a real browser can see a live
   // Contest phase. QA_CONTEST_PHASE=<phase> (see support/contest-clock.ts) picks the instant for
   // QA_CONTEST_MONTH (default 2026-11); QA_TEST_CLOCK_ISO sets it explicitly; QA_TEST_CLOCK_ADVANCE=1
@@ -143,39 +128,12 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     testClockIso = contestPhaseInstant(qaPhase, process.env.QA_CONTEST_MONTH).toISOString();
   }
   if (testClockIso) console.log(`[e2e global-setup] API test clock: ${testClockIso}${process.env.QA_TEST_CLOCK_ADVANCE === '1' ? ' (advancing)' : ' (frozen)'}`);
-  const apiEnv: NodeJS.ProcessEnv = {
-    ...process.env,
-    NO_COLOR: '1',
-    PORT: String(PORTS.api),
-    DATABASE_URL: dbUrl,
-    DIRECT_URL: dbUrl,
-    REDIS_URL: redisUrl,
-    // Email links must point at the QA web server; the email provider stays
-    // un-configured on purpose so every would-be email (with its link/token)
-    // is written to the API log, which the tests read.
-    WEB_APP_BASE_URL: URLS.web,
-    // CORS allowlist (QA D-01 fix): the API answers cross-origin browser calls
-    // only from these two origins (plus localhost outside production).
-    ADMIN_APP_BASE_URL: URLS.admin,
-    EMAIL_PROVIDER_API_KEY: 'replace-me',
-    // Never let a QA run reach Stripe (the root .env may hold a real test key).
-    STRIPE_SECRET_KEY: 'replace-me',
-    STRIPE_PUBLISHABLE_KEY: 'replace-me',
-    // The default 5/60s auth throttle is far below what a full onboarding
-    // suite needs; the throttle itself is covered by services/api's own e2e.
-    AUTH_RATE_LIMIT_MAX: '1000',
-    TRUST_PROXY_HOPS: '',
-    TEST_CLOCK_ISO: testClockIso,
-    E2E_TEST_CLOCK: testClockIso ? '1' : '',
-    TEST_CLOCK_ADVANCE: testClockIso && process.env.QA_TEST_CLOCK_ADVANCE === '1' ? '1' : '',
-  };
-  const api = spawn('node', ['dist/main.js'], {
-    cwd: path.join(REPO, 'services', 'api'),
-    env: apiEnv,
-    stdio: ['ignore', apiLog, apiLog],
-  });
+  const api = spawnApi(
+    apiEnvironment(dbUrl, redisUrl, { iso: testClockIso, advance: process.env.QA_TEST_CLOCK_ADVANCE === '1' }),
+    true,
+  );
   children.push(api);
-  await waitForHealth();
+  await waitForApiHealth();
 
   // --- 5. Real frontends ---------------------------------------------------
   const vite = path.join(REPO, 'node_modules', 'vite', 'bin', 'vite.js');
@@ -195,6 +153,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
 
   // Exposed to the worker processes.
   process.env.QA_DATABASE_URL = dbUrl;
+  process.env.QA_REDIS_URL = redisUrl;
 
   return async () => {
     for (const close of closers) await close().catch(() => undefined);
@@ -205,5 +164,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
         /* already gone */
       }
     }
+    // Spec 17 restarts the API on test-clock instants; whichever one is running now is the one in api.pid.
+    await stopApi().catch(() => undefined);
   };
 }

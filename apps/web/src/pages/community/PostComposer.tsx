@@ -36,7 +36,7 @@
 // weekly flow above does not apply (POST /contest/entries is refused outside the weekly windows).
 // FinalWeekPanel renders instead: a finalist uploads a final entry (POST /contest/final-entry, which
 // creates the hidden post itself), a non-finalist sees the "finalists only" closed state.
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ElementType, type FormEvent } from "react";
 import { Link } from "react-router";
 import { createPost, FeedApiError, type CreatedPost } from "../../api/feed";
 import { submitContestEntry, ContestApiError, type CurrentContestResponse } from "../../api/contest";
@@ -148,8 +148,16 @@ export default function PostComposer({
     setSubmitting(false);
   }
 
+  // The Week 4 upload panel carries its own <form>. A <form> inside a <form> is invalid HTML and,
+  // in a real browser, a click on the inner submit button reaches the OUTER form's handler (which has
+  // no caption, so it does nothing) and the entry is never sent. So while that panel is showing the
+  // composer's root is a plain <div>, and only the panel's own form exists. Found by e2e spec 17.
+  const showsFinalPanel = effectiveMode === "contest" && finalWeek && contest != null;
+  const Root: ElementType = showsFinalPanel ? "div" : "form";
+  const rootProps = showsFinalPanel ? {} : { onSubmit: handleSubmit };
+
   return (
-    <form className="composer" onSubmit={handleSubmit}>
+    <Root className="composer" {...rootProps}>
       {contestOpen && (
         <div className="composer__tabs" role="tablist" aria-label="Post type">
           <button
@@ -185,7 +193,7 @@ export default function PostComposer({
         </div>
       )}
 
-      {effectiveMode === "contest" && finalWeek && contest ? (
+      {showsFinalPanel && contest ? (
         <FinalWeekPanel
           accessToken={accessToken}
           authorName={authorName}
@@ -304,6 +312,6 @@ export default function PostComposer({
           </div>
         </div>
       )}
-    </form>
+    </Root>
   );
 }

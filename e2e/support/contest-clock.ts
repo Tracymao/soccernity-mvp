@@ -49,7 +49,7 @@ export function isContestPhase(value: string): value is ContestPhase {
   return (CONTEST_PHASES as readonly string[]).includes(value);
 }
 
-function scheduleFor(monthKey: string) {
+export function scheduleFor(monthKey: string) {
   const [y, m] = monthKey.split('-').map(Number);
   if (!y || !m) throw new Error(`monthKey must be YYYY-MM (got "${monthKey}")`);
   return buildContestSchedule(y, m);
@@ -124,7 +124,7 @@ interface Settle {
   cycleStatus?: string;
 }
 
-async function waitFor(label: string, check: () => Promise<boolean>, timeoutMs: number): Promise<void> {
+export async function waitFor(label: string, check: () => Promise<boolean>, timeoutMs: number): Promise<void> {
   const start = Date.now();
   for (;;) {
     if (await check()) return;
@@ -138,7 +138,7 @@ async function waitFor(label: string, check: () => Promise<boolean>, timeoutMs: 
   }
 }
 
-async function makeMember(label: string, displayName: string): Promise<ContestMember> {
+export async function makeMember(label: string, displayName: string): Promise<ContestMember> {
   const a = await registerViaApi({ age: 30, label, displayName });
   await verifyEmailViaApi(a);
   const { token } = await me(a);
@@ -148,29 +148,24 @@ async function makeMember(label: string, displayName: string): Promise<ContestMe
   return { userId: a.userId, email: a.email, password: USER_PASSWORD, username, token };
 }
 
-export async function seedContestAtPhase(phase: ContestPhase, opts: SeedOptions = {}): Promise<SeededContest> {
-  const monthKey = opts.monthKey ?? DEFAULT_CONTEST_MONTH;
-  const memberCount = opts.members ?? 4;
-  if (memberCount < 3) throw new Error('At least 3 members are needed (fewer than 3 entries forfeits a week).');
+/**
+ * A contest cycle with its four rounds, shaped exactly as POST /admin/contest/cycles would make it.
+ * `status` is 'draft' while the inputs are being seeded: the real lifecycle sweep (every minute) only
+ * looks at active/final cycles, and a tick that lands while entries are still being inserted would
+ * close Phase 1 on a half-seeded week (and forfeit it). Flip it to 'active' once everything is in place.
+ */
+export async function createContestCycle(
+  prisma: any,
+  monthKey: string,
+  status: 'draft' | 'active',
+): Promise<{ id: string; rounds: { id: string; weekNumber: number }[] }> {
   const schedule = scheduleFor(monthKey);
-  const instant = contestPhaseInstant(phase, monthKey);
-  const settleTimeoutMs = opts.settleTimeoutMs ?? 150_000;
-  const prisma = db();
-
-  if (opts.replace !== false) await prisma.contestCycle.deleteMany({ where: { monthKey } });
-
-  const members: ContestMember[] = [];
-  for (let i = 0; i < memberCount; i++) members.push(await makeMember(`cm${i}`, `Contest Member ${i + 1}`));
-
-  const cycle = await prisma.contestCycle.create({
+  return prisma.contestCycle.create({
     data: {
       title: `QA Challenge ${monthKey}`,
       description: 'A QA-seeded contest month (backend/test-clock-qa).',
       monthKey,
-      // Not 'active' yet: the real lifecycle sweep (every minute) only looks at active/final cycles, and
-      // a tick that lands while entries are still being inserted would close Phase 1 on a half-seeded
-      // week (and forfeit it). It is flipped to 'active' once everything is in place.
-      status: 'draft',
+      status,
       startsAt: schedule.weeks[0].opensAt,
       endsAt: schedule.final.monthEndAt,
       minimumTally: 1,
@@ -197,6 +192,23 @@ export async function seedContestAtPhase(phase: ContestPhase, opts: SeedOptions 
     },
     select: { id: true, rounds: { select: { id: true, weekNumber: true } } },
   });
+}
+
+export async function seedContestAtPhase(phase: ContestPhase, opts: SeedOptions = {}): Promise<SeededContest> {
+  const monthKey = opts.monthKey ?? DEFAULT_CONTEST_MONTH;
+  const memberCount = opts.members ?? 4;
+  if (memberCount < 3) throw new Error('At least 3 members are needed (fewer than 3 entries forfeits a week).');
+  const schedule = scheduleFor(monthKey);
+  const instant = contestPhaseInstant(phase, monthKey);
+  const settleTimeoutMs = opts.settleTimeoutMs ?? 150_000;
+  const prisma = db();
+
+  if (opts.replace !== false) await prisma.contestCycle.deleteMany({ where: { monthKey } });
+
+  const members: ContestMember[] = [];
+  for (let i = 0; i < memberCount; i++) members.push(await makeMember(`cm${i}`, `Contest Member ${i + 1}`));
+
+  const cycle = await createContestCycle(prisma, monthKey, 'draft');
   const roundId = (week: number): string => cycle.rounds.find((r: { weekNumber: number }) => r.weekNumber === week)!.id;
 
   // ---- which weeks hold entries / are fully decided --------------------------------------------

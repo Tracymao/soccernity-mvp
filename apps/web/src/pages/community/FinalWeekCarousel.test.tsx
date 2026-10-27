@@ -93,7 +93,7 @@ describe("FinalWeekCarousel: what is shown", () => {
   it("renders nothing outside a live final week", async () => {
     vi.mocked(getFinalWeekCarousel).mockResolvedValue({ live: false, items: [] });
     const { container } = renderCarousel();
-    await waitFor(() => expect(getFinalWeekCarousel).toHaveBeenCalledWith("tok"));
+    await waitFor(() => expect(getFinalWeekCarousel).toHaveBeenCalledWith("tok", 9));
     expect(container.querySelector('[data-testid="final-week-carousel"]')).toBeNull();
     expect(screen.queryByText("Final week")).toBeNull();
   });
@@ -119,6 +119,28 @@ describe("FinalWeekCarousel: what is shown", () => {
     expect(screen.getByRole("button", { name: "Page 1 of 2" }).getAttribute("aria-current")).toBe("true");
     expect((screen.getByRole("button", { name: "Previous finalists" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Next finalists" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("asks the server for up to nine finalists and pages them three at a time with one dot per page", async () => {
+    vi.mocked(getFinalWeekCarousel).mockResolvedValue({ live: true, items: items(9) });
+    renderCarousel();
+    await screen.findByText("Final week");
+    expect(getFinalWeekCarousel).toHaveBeenCalledWith("tok", 9);
+
+    const pageNames = () => screen.getAllByRole("link").map((l) => l.textContent);
+    expect(pageNames()).toEqual(["Finalist 1", "Finalist 2", "Finalist 3"]);
+    expect(screen.getByText(/Showing 1.3 of 9 finalists/)).not.toBeNull();
+    expect(screen.getAllByRole("button", { name: /^Page \d of 3$/ })).toHaveLength(3);
+
+    fireEvent.click(screen.getByRole("button", { name: "Next finalists" }));
+    expect(pageNames()).toEqual(["Finalist 4", "Finalist 5", "Finalist 6"]);
+    expect(screen.getByText(/Showing 4.6 of 9 finalists/)).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Page 3 of 3" }));
+    expect(pageNames()).toEqual(["Finalist 7", "Finalist 8", "Finalist 9"]);
+    expect(screen.getByText(/Showing 7.9 of 9 finalists/)).not.toBeNull();
+    expect((screen.getByRole("button", { name: "Next finalists" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Previous finalists" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("never shows a count of any kind", async () => {
@@ -268,6 +290,9 @@ describe("FinalWeekCarousel: impressions", () => {
     showTile("Finalist 1", 1);
     await act(async () => {
       vi.advanceTimersByTime(1000);
+      // Let the rejected request settle (its catch handler hides the module) before act() closes;
+      // under a loaded full-suite run one microtask turn was not always enough.
+      for (let i = 0; i < 5; i++) await Promise.resolve();
     });
     expect(screen.queryByTestId("final-week-carousel")).toBeNull();
   });
