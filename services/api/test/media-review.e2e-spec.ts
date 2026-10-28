@@ -65,6 +65,10 @@ describe('Media review queue e2e (B-037)', () => {
     storage.issuedLinks.length = 0;
     storage.issuedViewLinks.length = 0;
     storage.unavailable = false;
+    storage.failCopy = false;
+    storage.corruptCopyTo = null;
+    storage.copies.length = 0;
+    storage.failDeleteFor.clear();
     moderation.configured = true;
     moderation.labelsFor = () => [];
     moderation.failTimes = 0;
@@ -161,7 +165,9 @@ describe('Media review queue e2e (B-037)', () => {
         reportCount: 0,
         checkLabels: ['Suggestive'],
       });
-      expect(item.viewUrl).toContain('https://view.test/post-media/');
+      // B-257: a pending item is viewed from the PRIVATE prefix; there is no public object for it.
+      expect(item.viewUrl).toContain('https://view.test/private-media/');
+      expect(item.viewUrl).not.toContain('/post-media/');
       expect(item.ageSeconds).toBeGreaterThanOrEqual(0);
 
       // The uploader appears by public name and id only: no email, no real name.
@@ -427,6 +433,10 @@ describe('Media review queue e2e (B-037)', () => {
         await request(http()).post(`/media/${media}/report`).set(reporter.auth).expect(200);
       }
       expect(await row(media)).toMatchObject({ reportCount: 3, hiddenPendingReview: true });
+      // B-257: held by reports -> the file is moved out of the public prefix into the private one.
+      expect(storage.has(`post-media/${author.id}/${media}.jpg`)).toBe(false);
+      expect(storage.has(`private-media/${author.id}/${media}.jpg`)).toBe(true);
+      expect(await row(media)).toMatchObject({ publishedAt: null, privateKey: `private-media/${author.id}/${media}.jpg` });
       await getPost(viewer, post).expect(404);
       await getPost(author, post).expect(200);
       // A hidden item can no longer be reported (nobody else can see it).
@@ -436,6 +446,10 @@ describe('Media review queue e2e (B-037)', () => {
       const kept = await request(http()).post(`/admin/media-review/${media}/approve`).set(mod.auth).expect(200);
       expect(kept.body).toEqual({ id: media, outcome: 'kept', status: 'approved' });
       expect(await row(media)).toMatchObject({ status: 'approved', reportCount: 0, hiddenPendingReview: false });
+      // keeping it publishes it again (copy + verify) and removes the private original
+      expect(storage.has(`post-media/${author.id}/${media}.jpg`)).toBe(true);
+      expect(storage.has(`private-media/${author.id}/${media}.jpg`)).toBe(false);
+      expect((await row(media)).publishedAt).not.toBeNull();
       expect(await prisma().postMediaReport.count({ where: { mediaId: media, resolvedAt: null } })).toBe(0);
       await getPost(viewer, post).expect(200);
       expect((await notificationsOf(author)).filter((n) => n.type.startsWith('post_media_'))).toHaveLength(1); // only the original auto-approval
@@ -452,6 +466,10 @@ describe('Media review queue e2e (B-037)', () => {
       await request(http()).post(`/media/${media}/report`).set((await seedUser('r1')).auth).expect(200);
       await request(http()).post(`/admin/media-review/${media}/reject`).set(mod.auth).send({ reason: 'Contains a minor without consent' }).expect(200);
       expect(await row(media)).toMatchObject({ status: 'rejected', reportCount: 0, rejectionReason: 'Contains a minor without consent' });
+      // B-257: a rejected file leaves the public prefix and is KEPT, private (never deleted)
+      expect(storage.has(`post-media/${author.id}/${media}.jpg`)).toBe(false);
+      expect(storage.has(`private-media/${author.id}/${media}.jpg`)).toBe(true);
+      expect((await row(media)).publishedAt).toBeNull();
       await getPost(viewer, post).expect(404);
       expect((await notificationsOf(author)).filter((n) => n.type === 'post_media_rejected')).toHaveLength(1);
     });
@@ -590,6 +608,240 @@ describe('Media review queue e2e (B-037)', () => {
       storage.unavailable = true;
       const down = await request(http()).get(`/admin/media-review/${id}`).set(mod.auth).expect(200);
       expect(down.body.viewUrl).toBeNull();
+    });
+  });
+
+  // ---- B-257: private prefix, fail closed -------------------------------------------------------
+
+  describe('private and public prefixes (B-257)', () => {
+    it('approving publishes the file: a verified copy in the public prefix, the private original removed', async () => {
+      const owner = await seedUser('owner');
+      const mod = await adminAuth();
+      const id = await uploadChecked(owner, SUGGESTIVE);
+      expect(storage.has(`private-media/${owner.id}/${id}.jpg`)).toBe(true);
+      expect(storage.keysWithPrefix('post-media/')).toEqual([]);
+
+      await request(http()).post(`/admin/media-review/${id}/approve`).set(mod.auth).expect(200);
+
+      expect(storage.copies).toEqual([[`private-media/${owner.id}/${id}.jpg`, `post-media/${owner.id}/${id}.jpg`]]);
+      expect(storage.has(`post-media/${owner.id}/${id}.jpg`)).toBe(true);
+      expect(storage.has(`private-media/${owner.id}/${id}.jpg`)).toBe(false);
+      expect(await row(id)).toMatchObject({ status: 'approved', privateKey: null });
+      expect((await row(id)).publishedAt).not.toBeNull();
+    });
+
+    it('FAILS CLOSED: if the copy fails the approval is not written, nothing is public, the moderator gets a 503, and a retry works', async () => {
+      const owner = await seedUser('owner');
+      const mod = await adminAuth();
+      const id = await uploadChecked(owner, SUGGESTIVE);
+      storage.failCopy = true;
+      const res = await request(http()).post(`/admin/media-review/${id}/approve`).set(mod.auth).expect(503);
+      expect(res.body.code).toBe('media_publish_failed');
+      expect(await row(id)).toMatchObject({ status: 'pending', decisionSource: null, publishedAt: null });
+      expect(storage.keysWithPrefix('post-media/')).toEqual([]);
+      expect(storage.has(`private-media/${owner.id}/${id}.jpg`)).toBe(true);
+      expect((await notificationsOf(owner)).filter((n) => n.type === 'post_media_approved')).toHaveLength(0);
+
+      storage.failCopy = false;
+      await request(http()).post(`/admin/media-review/${id}/approve`).set(mod.auth).expect(200);
+      expect((await row(id)).status).toBe('approved');
+    });
+
+    it('a copy that does not verify (wrong size) is deleted again and nothing is approved', async () => {
+      const owner = await seedUser('owner');
+      const mod = await adminAuth();
+      const id = await uploadChecked(owner, SUGGESTIVE);
+      storage.corruptCopyTo = `post-media/${owner.id}/${id}.jpg`;
+      await request(http()).post(`/admin/media-review/${id}/approve`).set(mod.auth).expect(503);
+      expect(storage.keysWithPrefix('post-media/')).toEqual([]);
+      expect((await row(id)).status).toBe('pending');
+    });
+
+    it('an automatic approval whose publish fails stays pending (retried), never approved', async () => {
+      const owner = await seedUser('owner');
+      moderation.labelsFor = () => [];
+      storage.failCopy = true;
+      const id = await upload(owner);
+      const out = await runChecks();
+      expect(out.outcomes).toEqual({ retry: 1 });
+      expect(await row(id)).toMatchObject({ status: 'pending', decisionSource: null, publishedAt: null });
+      expect(storage.keysWithPrefix('post-media/')).toEqual([]);
+
+      storage.failCopy = false;
+      advance(61_000); // past the first back-off
+      expect((await runChecks()).outcomes).toEqual({ approved: 1 });
+      expect(storage.has(`post-media/${owner.id}/${id}.jpg`)).toBe(true);
+    });
+
+    it('rejecting a pending item moves nothing: the file stays private, and no cleanup ever deletes it (reconcile, both purges, 30 days later)', async () => {
+      const owner = await seedUser('owner');
+      const mod = await adminAuth();
+      const id = await uploadChecked(owner, SUGGESTIVE);
+      await request(http()).post(`/admin/media-review/${id}/reject`).set(mod.auth).send({ reason: 'Not suitable' }).expect(200);
+      const key = `private-media/${owner.id}/${id}.jpg`;
+      expect(storage.has(key)).toBe(true);
+
+      advance(30 * 24 * 3600 * 1000);
+      const { PostMediaObjectsService } = await import('../src/modules/post-media/post-media-objects.service');
+      const { PostMediaService } = await import('../src/modules/post-media/post-media.service');
+      await app.get(PostMediaObjectsService).reconcile();
+      await app.get(PostMediaService).purgeUnattached(new Date(clockNow));
+      await app.get(PostMediaService).purgeQuarantine(new Date(clockNow));
+
+      expect(storage.has(key)).toBe(true);
+      expect(await prisma().postMedia.count({ where: { id } })).toBe(1);
+      expect((await row(id)).status).toBe('rejected');
+    });
+
+    it('a failed move back to the private prefix is retried by the reconciler and never loses the file', async () => {
+      const author = await seedUser('author');
+      const mod = await adminAuth();
+      const media = await uploadChecked(author, []);
+      await postWith(author, [media]);
+      await request(http()).post(`/media/${media}/report`).set((await seedUser('r1')).auth).expect(200);
+      storage.failCopy = true; // the withdraw cannot make its private copy
+      await request(http()).post(`/admin/media-review/${media}/reject`).set(mod.auth).send({ reason: 'No' }).expect(200);
+      expect(await row(media)).toMatchObject({ status: 'rejected' });
+      expect(storage.has(`post-media/${author.id}/${media}.jpg`)).toBe(true); // lingering, but the DB gate already hides the post
+      expect((await row(media)).publishedAt).not.toBeNull();
+
+      storage.failCopy = false;
+      const { PostMediaObjectsService } = await import('../src/modules/post-media/post-media-objects.service');
+      expect((await app.get(PostMediaObjectsService).reconcile()).withdrawn).toBe(1);
+      expect(storage.has(`post-media/${author.id}/${media}.jpg`)).toBe(false);
+      expect(storage.has(`private-media/${author.id}/${media}.jpg`)).toBe(true);
+      expect((await row(media)).publishedAt).toBeNull();
+    });
+  });
+
+  // ---- B-258: reviewers of a minor's media must be child-safety vetted ---------------------------
+
+  describe('child-safety vetting for a minor\'s items (B-258)', () => {
+    async function minorItem() {
+      const minor = await seedUser('minor');
+      const adult = await seedUser('adult');
+      const mediaMinor = await uploadChecked(minor, SUGGESTIVE);
+      const mediaAdult = await uploadChecked(adult, SUGGESTIVE);
+      // Uploaded while the account could upload; it is now (and for the queue's purposes) a minor's.
+      await prisma().user.update({ where: { id: minor.id }, data: { isMinor: true } });
+      return { minor, mediaMinor, mediaAdult };
+    }
+    const vet = (id: string, v: boolean) => prisma().adminUser.update({ where: { id }, data: { childSafetyVetted: v } });
+
+    it('a NON-vetted moderator does not see the minor\'s item in the list and gets the same 404 as a missing id (never a 403)', async () => {
+      const { mediaMinor, mediaAdult } = await minorItem();
+      const mod = await adminAuth('moderator');
+      const list = await request(http()).get('/admin/media-review').set(mod.auth).expect(200);
+      expect(list.body.items.map((i: { id: string }) => i.id)).toEqual([mediaAdult]);
+
+      const hidden = await request(http()).get(`/admin/media-review/${mediaMinor}`).set(mod.auth).expect(404);
+      const missing = await request(http()).get('/admin/media-review/00000000-0000-0000-0000-000000000000').set(mod.auth).expect(404);
+      expect(hidden.body).toEqual(missing.body); // identical: nothing leaks
+      await request(http()).get(`/admin/media-review/${mediaAdult}`).set(mod.auth).expect(200);
+    });
+
+    it('a non-vetted moderator cannot approve or reject the minor\'s item (404, nothing changes, nothing logged, nothing published)', async () => {
+      const { minor, mediaMinor } = await minorItem();
+      const mod = await adminAuth('moderator');
+      await request(http()).post(`/admin/media-review/${mediaMinor}/approve`).set(mod.auth).expect(404);
+      await request(http()).post(`/admin/media-review/${mediaMinor}/reject`).set(mod.auth).send({ reason: 'x' }).expect(404);
+      expect(await row(mediaMinor)).toMatchObject({ status: 'pending', decisionSource: null });
+      expect(storage.keysWithPrefix(`post-media/${minor.id}/`)).toEqual([]);
+      expect(await prisma().adminActionLog.count({ where: { targetId: mediaMinor } })).toBe(0);
+      expect((await notificationsOf(minor)).filter((n) => n.type.startsWith('post_media_'))).toHaveLength(0);
+    });
+
+    it('a VETTED moderator sees and decides it; so does a vetted superadmin; an UNVETTED superadmin is blocked like any other', async () => {
+      const { mediaMinor } = await minorItem();
+      const vetted = await adminAuth('moderator');
+      await vet(vetted.id, true);
+      const list = await request(http()).get('/admin/media-review').set(vetted.auth).expect(200);
+      expect(list.body.items).toHaveLength(2);
+      await request(http()).get(`/admin/media-review/${mediaMinor}`).set(vetted.auth).expect(200);
+
+      const unvettedSuper = await adminAuth('superadmin');
+      await request(http()).get(`/admin/media-review/${mediaMinor}`).set(unvettedSuper.auth).expect(404);
+
+      await request(http()).post(`/admin/media-review/${mediaMinor}/approve`).set(vetted.auth).expect(200);
+      expect((await row(mediaMinor)).status).toBe('approved');
+    });
+
+    it('the vetting state is read fresh: revoking it takes effect on the same token, at once', async () => {
+      const { mediaMinor } = await minorItem();
+      const mod = await adminAuth('moderator');
+      await vet(mod.id, true);
+      await request(http()).get(`/admin/media-review/${mediaMinor}`).set(mod.auth).expect(200);
+      await vet(mod.id, false);
+      await request(http()).get(`/admin/media-review/${mediaMinor}`).set(mod.auth).expect(404);
+    });
+
+    it('the statistics card stays accurate for a non-vetted admin: counts only', async () => {
+      const minor = await seedUser('minor');
+      await uploadChecked(minor, []); // an automatic approval
+      await prisma().user.update({ where: { id: minor.id }, data: { isMinor: true } });
+      const mod = await adminAuth('moderator');
+      const stats = await request(http()).get('/admin/media-review/stats').set(mod.auth).expect(200);
+      expect(stats.body.autoApproved).toBe(1);
+      expect(JSON.stringify(stats.body)).not.toContain(minor.id);
+    });
+  });
+
+  // ---- B-258 / B-259: report limit and the optional reason ----------------------------------------
+
+  describe('report daily limit and reason (B-258, B-259)', () => {
+    async function twoVisibleItems() {
+      const author = await seedUser('author');
+      const a = await uploadChecked(author, []);
+      const b = await uploadChecked(author, []);
+      await postWith(author, [a]);
+      await postWith(author, [b]);
+      return { author, a, b };
+    }
+
+    it('the per-account limit (default 20 in a rolling 24 hours, configurable) answers 429 media_report_daily_limit, counted from the report records', async () => {
+      const { a, b } = await twoVisibleItems();
+      const reporter = await seedUser('rep');
+      const before = process.env.POST_MEDIA_REPORT_DAILY_LIMIT;
+      process.env.POST_MEDIA_REPORT_DAILY_LIMIT = '1';
+      try {
+        await request(http()).post(`/media/${a}/report`).set(reporter.auth).expect(200);
+        const over = await request(http()).post(`/media/${b}/report`).set(reporter.auth).expect(429);
+        expect(over.body).toMatchObject({ statusCode: 429, code: 'media_report_daily_limit' });
+        expect(await prisma().postMediaReport.count({ where: { mediaId: b } })).toBe(0);
+        // another account is unaffected, and the window rolls
+        await request(http()).post(`/media/${b}/report`).set((await seedUser('rep2')).auth).expect(200);
+        advance(24 * 3600 * 1000 + 1000);
+        await request(http()).post(`/media/${b}/report`).set(reporter.auth).expect(200);
+      } finally {
+        if (before === undefined) delete process.env.POST_MEDIA_REPORT_DAILY_LIMIT;
+        else process.env.POST_MEDIA_REPORT_DAILY_LIMIT = before;
+      }
+    });
+
+    it('stores a trimmed reason and shows it to MODERATORS only (never the reporter, the uploader or anyone else)', async () => {
+      const { author, a } = await twoVisibleItems();
+      const reporter = await seedUser('rep');
+      const mod = await adminAuth('moderator');
+      const res = await request(http()).post(`/media/${a}/report`).set(reporter.auth).send({ reason: '   shows a street name   ' }).expect(200);
+      expect(res.body).toEqual({ reported: true, alreadyReported: false });
+      expect((await prisma().postMediaReport.findFirstOrThrow({ where: { mediaId: a } })).reason).toBe('shows a street name');
+
+      const item = await request(http()).get(`/admin/media-review/${a}`).set(mod.auth).expect(200);
+      expect(item.body.reportReasons).toEqual(['shows a street name']);
+      expect(JSON.stringify(item.body)).not.toContain(reporter.id);
+
+      const own = await request(http()).get(`/media/uploads/${a}`).set(author.auth).expect(200);
+      expect(JSON.stringify(own.body)).not.toContain('street name');
+    });
+
+    it('refuses a reason over 500 characters and any other field (400); a blank reason is stored as none', async () => {
+      const { a, b } = await twoVisibleItems();
+      const reporter = await seedUser('rep');
+      await request(http()).post(`/media/${a}/report`).set(reporter.auth).send({ reason: 'x'.repeat(501) }).expect(400);
+      await request(http()).post(`/media/${a}/report`).set(reporter.auth).send({ reason: 'ok', reporterId: 'x' }).expect(400);
+      expect(await prisma().postMediaReport.count({ where: { mediaId: a } })).toBe(0);
+      await request(http()).post(`/media/${b}/report`).set(reporter.auth).send({ reason: '   ' }).expect(200);
+      expect((await prisma().postMediaReport.findFirstOrThrow({ where: { mediaId: b } })).reason).toBeNull();
     });
   });
 

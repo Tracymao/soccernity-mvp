@@ -6,6 +6,7 @@ import {
   Logger,
   NotFoundException,
   Optional,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
@@ -30,6 +31,9 @@ import { attachMediaToPost, loadAttachableMedia } from '../post-media/post-media
 import { collectPostMediaKeys, deleteStoredObjects } from '../post-media/post-media-cleanup.util';
 import { POST_MEDIA_ALL_APPROVED, postMediaVisibleTo } from '../post-media/post-media-visibility.util';
 import { PostMediaConfig } from '../post-media/post-media.config';
+import { currentObjectKey } from '../post-media/post-media.service';
+import { shouldBePublic } from '../post-media/post-media-objects.service';
+import { DirectUploadStorageService } from '../../storage/direct-upload-storage.service';
 import { recordPostHashtags } from '../search/hashtag.util';
 import { PUBLIC_NAME_SELECT, toPublicUser } from '../users/public-name.util';
 import { decodeFeedSequenceCursor, encodeFeedSequenceCursor } from './cursor.util';
@@ -86,6 +90,11 @@ const POST_SELECT = {
   // post author's "Manage comment settings" control can show current state.
   commentPermission: true,
   createdAt: true,
+  // backend/media-privacy-vetting-followups (B-259; Decision Log #430 item 4): the files attached to this
+  // post. Reduced to { id, kind } in toFeedPost (publicUrl is read only to keep the order of mediaUrls).
+  // No per-viewer filter is needed here: a post with any media the viewer may not see is already invisible
+  // to them (post-media-visibility.util.ts), so every viewer who receives the post may see all its media.
+  media: { select: { id: true, kind: true, publicUrl: true } },
   // backend/w7-contest (B-091): is this post a contest entry? Drives the "Contest post" label and
   // the pin. A left join on the unique ContestEntry.postId, so it costs one indexed probe per row.
   contestEntry: {
@@ -112,13 +121,27 @@ export interface FeedPostContest {
   label: 'Contest post';
 }
 
-export type FeedPost = Omit<RawFeedPost, 'author' | 'contestEntry'> & {
+// One file attached to a post. `viewUrl` is present ONLY for the post's AUTHOR and ONLY for a file that is not
+// publicly available yet (under review, held, or rejected): a short-lived signed link to the private object.
+// Everyone else, and the author for an approved file, sees { id, kind } and reads the file from mediaUrls.
+export interface FeedPostMedia {
+  id: string;
+  kind: 'image' | 'video';
+  viewUrl?: string;
+}
+
+export type FeedPost = Omit<RawFeedPost, 'author' | 'contestEntry' | 'media'> & {
   author: PublicAuthor;
   contest: FeedPostContest | null;
+  media: FeedPostMedia[];
 };
 
 function toFeedPost(row: RawFeedPost, now: Date): FeedPost {
-  const { contestEntry, ...rest } = row;
+  const { contestEntry, media: rawMedia, ...rest } = row;
+  // Same order as mediaUrls (the order the author listed the files), not upload order.
+  const media: FeedPostMedia[] = [...rawMedia]
+    .sort((a, b) => row.mediaUrls.indexOf(a.publicUrl ?? '') - row.mediaUrls.indexOf(b.publicUrl ?? ''))
+    .map((m) => ({ id: m.id, kind: m.kind as 'image' | 'video' }));
   const contest: FeedPostContest | null = contestEntry
     ? {
         entryId: contestEntry.id,
@@ -131,7 +154,7 @@ function toFeedPost(row: RawFeedPost, now: Date): FeedPost {
         label: 'Contest post',
       }
     : null;
-  return { ...rest, author: toPublicUser(row.author), contest };
+  return { ...rest, author: toPublicUser(row.author), contest, media };
 }
 
 // backend/w7-contest (B-091, Decision Log #386, #400, #404). Two read gates for contest entries:
@@ -358,7 +381,42 @@ export class FeedService {
     // deleted post's files are removed from. Both optional for the same reason as the two above.
     @Optional() private readonly postMediaConfig?: PostMediaConfig,
     @Optional() private readonly storage?: StorageService,
+    // backend/media-privacy-vetting-followups (B-257): signs the AUTHOR's own view links for files that are not
+    // public yet. Optional for the same reason as the rest (a unit test needs no object store).
+    @Optional() private readonly directStorage?: DirectUploadStorageService,
   ) {}
+
+  /**
+   * For posts the VIEWER wrote: adds a short-lived signed `viewUrl` to each attached file that is not publicly
+   * available (pending, held by reports, or rejected), so the author can see their own file while it is under
+   * review. Never touches anyone else's post. One query for all of the page's own media; a storage outage just
+   * leaves the links off.
+   */
+  private async withAuthorMediaViewUrls<T extends FeedPost>(viewerId: string, posts: T[]): Promise<T[]> {
+    if (!this.directStorage) return posts;
+    const ownMediaIds = posts.filter((p) => p.authorId === viewerId).flatMap((p) => p.media.map((m) => m.id));
+    if (ownMediaIds.length === 0) return posts;
+    const rows = await this.prisma.postMedia.findMany({
+      where: { id: { in: ownMediaIds }, uploaderId: viewerId, uploadState: 'ready' },
+      select: { id: true, status: true, hiddenPendingReview: true, publishedAt: true, publicKey: true, privateKey: true },
+    });
+    const ttl = this.postMediaConfig?.viewUrlTtlSeconds ?? 300;
+    const links = new Map<string, string>();
+    for (const r of rows) {
+      if (shouldBePublic(r)) continue; // public: the author reads it from mediaUrls like everyone else
+      const key = currentObjectKey(r);
+      if (!key) continue;
+      try {
+        links.set(r.id, await this.directStorage.createDownloadUrl(key, ttl));
+      } catch (err) {
+        if (!(err instanceof ServiceUnavailableException)) throw err;
+      }
+    }
+    if (links.size === 0) return posts;
+    return posts.map((p) =>
+      p.authorId !== viewerId ? p : { ...p, media: p.media.map((m) => (links.has(m.id) ? { ...m, viewUrl: links.get(m.id) } : m)) },
+    );
+  }
 
   private readonly mediaLogger = new Logger('FeedService.media');
 
@@ -419,12 +477,15 @@ export class FeedService {
         await attachMediaToPost(tx, post.id, authorId, mediaIds);
         if (options.inTransaction) {
           await options.inTransaction(tx, { id: post.id, createdAt: post.createdAt });
-          // Re-read so the returned post carries the contest label the callback just attached.
-          const withContest = await tx.post.findUniqueOrThrow({ where: { id: post.id }, select: POST_SELECT });
-          return toFeedPost(withContest, this.clock.now());
+        }
+        if (options.inTransaction || mediaIds.length > 0) {
+          // Re-read so the returned post carries the contest label the callback attached and the files that
+          // were attached AFTER the create above (its select ran before the attach).
+          const reread = await tx.post.findUniqueOrThrow({ where: { id: post.id }, select: POST_SELECT });
+          return toFeedPost(reread, this.clock.now());
         }
         return toFeedPost(post, this.clock.now());
-      });
+      }).then(async (created) => (await this.withAuthorMediaViewUrls(authorId, [created]))[0]);
     } catch (err) {
       // A clubPageId/banterRoomId that's well-formed at the DTO layer
       // (a non-empty string) but doesn't reference a real row fails at
@@ -628,7 +689,7 @@ export class FeedService {
     const savedPostIds = new Set(savedRows.map((r) => r.postId));
     const followedAuthorIds = new Set(followedRows.map((r) => r.followeeId));
 
-    return posts.map((post) => ({
+    const withState = posts.map((post) => ({
       ...post,
       isLiked: likedPostIds.has(post.id),
       isSaved: savedPostIds.has(post.id),
@@ -637,6 +698,7 @@ export class FeedService {
         isFollowing: post.authorId !== userId && followedAuthorIds.has(post.authorId),
       },
     }));
+    return this.withAuthorMediaViewUrls(userId, withState);
   }
 
   private buildCursorFilter(rawCursor: string): Prisma.PostWhereInput {
@@ -704,8 +766,9 @@ export class FeedService {
           }),
     ]);
 
+    const [withLinks] = await this.withAuthorMediaViewUrls(userId, [post]);
     return {
-      ...post,
+      ...withLinks,
       isLiked: likeRow !== null,
       isSaved: savedRow !== null,
       author: { ...post.author, isFollowing: followRow !== null },

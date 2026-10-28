@@ -114,6 +114,27 @@ export async function startFakeMediaServices(): Promise<FakeMediaServices> {
     }
     const key = decodeURIComponent(url.pathname.slice(prefix.length));
 
+    // backend/media-privacy-vetting-followups (B-257): CopyObject is a PUT carrying x-amz-copy-source
+    // ("<bucket>/<key>", URL-encoded). The API copies a file from the private prefix to the public one when it
+    // is approved, and back when a report holds it, so the stand-in must do the same.
+    const copySource = req.headers['x-amz-copy-source'];
+    if (req.method === 'PUT' && copySource) {
+      const decoded = decodeURIComponent(String(copySource)).replace(/^\//, '');
+      const sourceKey = decoded.startsWith(`${FAKE_BUCKET}/`) ? decoded.slice(FAKE_BUCKET.length + 1) : null;
+      const source = sourceKey ? store.get(sourceKey) : undefined;
+      if (!source) {
+        res
+          .writeHead(404, { ...CORS, 'Content-Type': 'application/xml' })
+          .end('<?xml version="1.0"?><Error><Code>NoSuchKey</Code><Message>not found</Message></Error>');
+        return;
+      }
+      store.set(key, { body: Buffer.from(source.body), contentType: String(req.headers['content-type'] ?? source.contentType) });
+      res
+        .writeHead(200, { ...CORS, 'Content-Type': 'application/xml' })
+        .end(`<?xml version="1.0" encoding="UTF-8"?><CopyObjectResult><ETag>"copy"</ETag><LastModified>${new Date().toISOString()}</LastModified></CopyObjectResult>`);
+      return;
+    }
+
     if (req.method === 'PUT') {
       let body = await readBody(req);
       const encoding = String(req.headers['content-encoding'] ?? '');

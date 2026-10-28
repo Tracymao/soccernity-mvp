@@ -26,6 +26,7 @@ export const POST_MEDIA_CODES = {
   tooManyVideos: 'too_many_videos',
   finalEntryNeedsVideo: 'final_entry_needs_one_video',
   mediaInContestEntry: 'media_in_contest_entry',
+  heicNotSupported: 'heic_not_supported',
 } as const;
 
 export const UPLOADS_UNAVAILABLE_MESSAGE = "Uploads aren't available right now. Please try again later.";
@@ -35,4 +36,11 @@ export const MEDIA_REVIEW_CODES = {
   alreadyDecided: 'already_decided',
   notInQueue: 'not_in_review_queue',
   cannotReportOwn: 'cannot_report_own_media',
+  publishFailed: 'media_publish_failed',
+  reportDailyLimit: 'media_report_daily_limit',
 } as const;
+
+// backend/media-privacy-vetting-followups (B-259). HEIC/HEIF (the default photo format on many iPhones) is
+// refused with this message, not a generic one. There is no conversion (OPEN, needs a real-device QA run).
+export const HEIC_NOT_SUPPORTED_MESSAGE =
+  "HEIC photos (the default on many iPhones) aren't supported yet. Please change the picture to JPEG or PNG, or choose a different one, and try again.";

@@ -1,8 +1,9 @@
-import { Controller, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../auth/guards/current-user.decorator';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
+import { ReportMediaDto } from './dto/report-media.dto';
 import { PostMediaReportService } from './post-media-report.service';
 
 // backend/w15-media-review-queue (B-037; Decision Log #419 item 4). POST /media/:id/report.
@@ -17,7 +18,7 @@ export class PostMediaReportController {
   @Post(':id/report')
   @HttpCode(200)
   @UseGuards(GuardianConsentGuard)
-  async report(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
-    return this.reports.report(user.sub, id);
+  async report(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string, @Body() dto: ReportMediaDto) {
+    return this.reports.report(user.sub, id, dto?.reason);
   }
 }

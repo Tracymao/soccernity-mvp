@@ -13,8 +13,9 @@ import { RejectMediaDto } from './dto/reject-media.dto';
 //
 // AdminJwtAuthGuard + AdminRolesGuard('moderator', 'superadmin') on the whole controller, GET included --
 // the same class-level shape as the other moderation surfaces (an editor does not review user content).
-// NOT YET DECIDED (Decision Log #419 "found, not decided"): whether reviewers of MINORS' media must also be
-// child-safety vetted. No such gate exists here; see docs/backend-w15-review-queue-report.md.
+// Decided (Decision Log #430 item 3, B-258): reviewers of MINORS' media must be child-safety vetted. A
+// non-vetted admin does not see a minor's items in the list and gets a 404 (never a 403) by id or on a
+// decision; see AdminMediaReviewService.
 //
 // `stats` is declared before `:id` so it is not captured as an id.
 @Controller('admin/media-review')
@@ -24,8 +25,8 @@ export class AdminMediaReviewController {
   constructor(private readonly review: AdminMediaReviewService) {}
 
   @Get()
-  async list(@Query() query: ListMediaReviewQueryDto) {
-    return this.review.list(query);
+  async list(@Query() query: ListMediaReviewQueryDto, @CurrentAdmin() admin: AdminAccessTokenPayload) {
+    return this.review.list(query, admin.sub);
   }
 
   @Get('stats')
@@ -34,8 +35,8 @@ export class AdminMediaReviewController {
   }
 
   @Get(':id')
-  async get(@Param('id') id: string) {
-    return this.review.get(id);
+  async get(@Param('id') id: string, @CurrentAdmin() admin: AdminAccessTokenPayload) {
+    return this.review.get(id, admin.sub);
   }
 
   @Post(':id/approve')

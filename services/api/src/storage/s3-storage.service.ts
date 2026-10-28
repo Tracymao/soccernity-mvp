@@ -1,6 +1,7 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
@@ -190,6 +191,27 @@ export class S3StorageService extends DirectUploadStorageService {
         ContentLength: size,
       }),
     );
+    return `${publicUrlBase}/${key}`;
+  }
+
+  // ---- backend/media-privacy-vetting-followups (B-257; Decision Log #430 item 2) -------------------
+
+  async copyObject(sourceKey: string, destKey: string, contentType: string): Promise<void> {
+    const { client, bucket } = this.requireClient('copying a file');
+    await client.send(
+      new CopyObjectCommand({
+        Bucket: bucket,
+        // The SDK requires CopySource as "<bucket>/<key>", URL-encoded per path segment.
+        CopySource: `${bucket}/${sourceKey.split('/').map(encodeURIComponent).join('/')}`,
+        Key: destKey,
+        ContentType: contentType,
+        MetadataDirective: 'REPLACE',
+      }),
+    );
+  }
+
+  publicUrlFor(key: string): string {
+    const { publicUrlBase } = this.requireClient('building a public URL');
     return `${publicUrlBase}/${key}`;
   }
 }

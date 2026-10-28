@@ -185,6 +185,12 @@ function asView<T extends { author: { id: string; username: string | null; displ
     author: { id: row.author.id, publicName: row.author.username ?? 'Soccernity member' },
     // backend/w7-contest: an ordinary post carries no contest label.
     contest: null,
+    // backend/media-privacy-vetting-followups (B-259): { id, kind } per attached file; the raw publicUrl used
+    // to order them is not part of the payload.
+    // Only POST rows carry files (a comment row has no mediaUrls and no media).
+    ...('mediaUrls' in row
+      ? { media: ((row as { media?: Array<{ id: string; kind: string }> }).media ?? []).map((m) => ({ id: m.id, kind: m.kind })) }
+      : {}),
   };
 }
 
@@ -200,6 +206,7 @@ function buildPostRow(overrides: Partial<Record<string, unknown>> = {}) {
     author: AUTHOR,
     contentText: 'Great match today',
     mediaUrls: [],
+    media: [] as Array<{ id: string; kind: string; publicUrl: string | null }>,
     clubPageId: null,
     banterRoomId: null,
     likeCount: 0,
@@ -244,8 +251,17 @@ describe('FeedService', () => {
         (prisma.postMedia.findMany as jest.Mock).mockResolvedValue([MEDIA[1], MEDIA[0]]);
         (prisma.postMedia.updateMany as jest.Mock).mockResolvedValue({ count: 2 });
         (prisma.post.create as jest.Mock).mockResolvedValue(buildPostRow({ id: 'post-9' }));
+        // The create runs BEFORE the attach, so a post with files is re-read afterwards to carry them.
+        (prisma.post as unknown as { findUniqueOrThrow: jest.Mock }).findUniqueOrThrow = jest.fn().mockResolvedValue(
+          buildPostRow({ id: 'post-9', mediaUrls: [MEDIA[0].publicUrl, MEDIA[1].publicUrl], media: [MEDIA[1], MEDIA[0]] }),
+        );
 
-        await new FeedService(prisma, FIXED_CLOCK).createPost('author-1', { contentText: 'two pics', mediaIds: ['m1', 'm2'] });
+        const created = await new FeedService(prisma, FIXED_CLOCK).createPost('author-1', { contentText: 'two pics', mediaIds: ['m1', 'm2'] });
+        // B-259: the payload lists the files as { id, kind }, in the order of mediaUrls (the caller's order).
+        expect(created.media).toEqual([
+          { id: 'm1', kind: 'image' },
+          { id: 'm2', kind: 'image' },
+        ]);
 
         expect((prisma.post.create as jest.Mock).mock.calls[0][0].data.mediaUrls).toEqual([MEDIA[0].publicUrl, MEDIA[1].publicUrl]);
         expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
@@ -1560,15 +1576,19 @@ describe('FeedService', () => {
     it('reads the keys BEFORE the post (and its rows) is deleted, then deletes the objects after the transaction', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'p', authorId: 'owner' });
+      const NOW_PUBLISHED = new Date('2026-08-01T00:00:00Z');
       (prisma.postMedia.findMany as jest.Mock).mockResolvedValue([
-        { publicKey: 'post-media/owner/a.jpg', quarantineKey: null },
-        { publicKey: 'post-media/owner/b.mp4', quarantineKey: 'quarantine/owner/b' },
+        { status: 'approved', publishedAt: NOW_PUBLISHED, publicKey: 'post-media/owner/a.jpg', privateKey: null, quarantineKey: null },
+        { status: 'approved', publishedAt: NOW_PUBLISHED, publicKey: 'post-media/owner/b.mp4', privateKey: null, quarantineKey: 'quarantine/owner/b' },
       ]);
       const st = storage();
 
       await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, st).deletePost('p', 'owner');
 
-      expect(prisma.postMedia.findMany).toHaveBeenCalledWith({ where: { postId: 'p' }, select: { publicKey: true, quarantineKey: true } });
+      expect(prisma.postMedia.findMany).toHaveBeenCalledWith({
+        where: { postId: 'p' },
+        select: { status: true, publishedAt: true, publicKey: true, privateKey: true, quarantineKey: true },
+      });
       expect(st.delete.mock.calls.map((c) => c[0])).toEqual(['post-media/owner/a.jpg', 'post-media/owner/b.mp4', 'quarantine/owner/b']);
       const del = (prisma.post.delete as jest.Mock).mock.invocationCallOrder[0];
       expect((prisma.postMedia.findMany as jest.Mock).mock.invocationCallOrder[0]).toBeLessThan(del);
@@ -1578,10 +1598,27 @@ describe('FeedService', () => {
     it('a storage failure never fails or undoes the deletion', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'p', authorId: 'owner' });
-      (prisma.postMedia.findMany as jest.Mock).mockResolvedValue([{ publicKey: 'post-media/owner/a.jpg', quarantineKey: null }]);
+      (prisma.postMedia.findMany as jest.Mock).mockResolvedValue([
+        { status: 'approved', publishedAt: new Date('2026-08-01T00:00:00Z'), publicKey: 'post-media/owner/a.jpg', privateKey: null, quarantineKey: null },
+      ]);
       const st = { upload: jest.fn(), delete: jest.fn().mockRejectedValue(new Error('503')) };
       await expect(new FeedService(prisma, FIXED_CLOCK, undefined, undefined, st).deletePost('p', 'owner')).resolves.toBeUndefined();
       expect(prisma.post.delete).toHaveBeenCalled();
+    });
+
+    // B-257 (Decision Log #430 item 2): a pending file's private object goes with the post; a REJECTED file's
+    // never does (evidence handling is OPEN under counsel, B-206).
+    it('deletes a pending file\'s private object but NEVER a rejected file\'s', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'p', authorId: 'owner' });
+      (prisma.postMedia.findMany as jest.Mock).mockResolvedValue([
+        { status: 'pending', publishedAt: null, publicKey: 'post-media/owner/p.jpg', privateKey: 'private-media/owner/p.jpg', quarantineKey: null },
+        { status: 'rejected', publishedAt: null, publicKey: 'post-media/owner/r.jpg', privateKey: 'private-media/owner/r.jpg', quarantineKey: null },
+      ]);
+      const st = storage();
+      await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, st).deletePost('p', 'owner');
+      expect(st.delete.mock.calls.map((c) => c[0])).toEqual(['private-media/owner/p.jpg']);
+      expect(st.delete).not.toHaveBeenCalledWith('private-media/owner/r.jpg');
     });
 
     it('a post with no media touches no object', async () => {
@@ -1590,6 +1627,119 @@ describe('FeedService', () => {
       const st = storage();
       await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, st).deletePost('p', 'owner');
       expect(st.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---- B-259 / B-257 (Decision Log #430 items 2 and 4): the post's `media` field and the author's view link ----
+  describe('post payload: media [{ id, kind }] and the author-only viewUrl', () => {
+    const files = [
+      { id: 'a', kind: 'image', publicUrl: 'https://cdn.test/post-media/author-1/a.jpg' },
+      { id: 'b', kind: 'video', publicUrl: 'https://cdn.test/post-media/author-1/b.mp4' },
+    ];
+    const withFiles = () =>
+      buildPostRow({ mediaUrls: [files[1].publicUrl, files[0].publicUrl], media: [files[0], files[1]] });
+    const directStorage = () => ({ createDownloadUrl: jest.fn(async (key: string, ttl: number) => `https://view.test/${key}?ttl=${ttl}`) });
+    const mediaRows = (over: Record<string, unknown> = {}) => [
+      { id: 'a', status: 'pending', hiddenPendingReview: false, publishedAt: null, publicKey: 'post-media/author-1/a.jpg', privateKey: 'private-media/author-1/a.jpg', ...over },
+      { id: 'b', status: 'approved', hiddenPendingReview: false, publishedAt: new Date('2026-08-01T00:00:00Z'), publicKey: 'post-media/author-1/b.mp4', privateKey: null },
+    ];
+
+    it('lists each attached file as { id, kind } only, in the order of mediaUrls, and never the raw url or keys', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findFirst as jest.Mock).mockResolvedValue(withFiles());
+      const post = await new FeedService(prisma, FIXED_CLOCK).getPostById('post-1', 'viewer-9');
+      expect(post.media).toEqual([
+        { id: 'b', kind: 'video' },
+        { id: 'a', kind: 'image' },
+      ]);
+      expect(JSON.stringify(post.media)).not.toMatch(/publicUrl|privateKey|publicKey|cdn\.test/);
+    });
+
+    it('selects the files through the post, so a viewer who may see the post (the existing visibility rules) sees exactly its files', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findFirst as jest.Mock).mockResolvedValue(withFiles());
+      await new FeedService(prisma, FIXED_CLOCK).getPostById('post-1', 'viewer-9');
+      const call = (prisma.post.findFirst as jest.Mock).mock.calls[0][0];
+      expect(call.select.media).toEqual({ select: { id: true, kind: true, publicUrl: true } });
+      // The media gate itself is the unchanged existing fragment: the post is invisible to a non-author
+      // unless every attached file is approved.
+      expect(JSON.stringify(call.where)).toContain('"hiddenPendingReview":true');
+    });
+
+    it('a post with no files has an empty media list', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findFirst as jest.Mock).mockResolvedValue(buildPostRow());
+      expect((await new FeedService(prisma, FIXED_CLOCK).getPostById('post-1', 'viewer-9')).media).toEqual([]);
+    });
+
+    it('the AUTHOR gets a short-lived signed viewUrl for a file that is not public yet (the private object), not for an approved one', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findFirst as jest.Mock).mockResolvedValue(withFiles());
+      (prisma.postMedia.findMany as jest.Mock).mockResolvedValue(mediaRows());
+      const ds = directStorage();
+      const post = await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, undefined, ds as never).getPostById('post-1', 'author-1');
+      expect(post.media).toEqual([
+        { id: 'b', kind: 'video' },
+        { id: 'a', kind: 'image', viewUrl: 'https://view.test/private-media/author-1/a.jpg?ttl=300' },
+      ]);
+      expect(ds.createDownloadUrl).toHaveBeenCalledTimes(1);
+      expect(ds.createDownloadUrl).toHaveBeenCalledWith('private-media/author-1/a.jpg', 300);
+      // looked up for THIS uploader only
+      expect((prisma.postMedia.findMany as jest.Mock).mock.calls[0][0].where).toMatchObject({ uploaderId: 'author-1' });
+    });
+
+    it('a REJECTED file is viewable by its author too (private object); a held one as well', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findFirst as jest.Mock).mockResolvedValue(withFiles());
+      (prisma.postMedia.findMany as jest.Mock).mockResolvedValue(mediaRows({ status: 'rejected' }));
+      const ds = directStorage();
+      const post = await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, undefined, ds as never).getPostById('post-1', 'author-1');
+      expect(post.media.find((m) => m.id === 'a')?.viewUrl).toContain('private-media/author-1/a.jpg');
+    });
+
+    it('NOBODY ELSE gets a viewUrl, and no signing or media lookup happens for another viewer', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findFirst as jest.Mock).mockResolvedValue(withFiles());
+      const ds = directStorage();
+      const post = await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, undefined, ds as never).getPostById('post-1', 'viewer-9');
+      expect(post.media.every((m) => !('viewUrl' in m))).toBe(true);
+      expect(ds.createDownloadUrl).not.toHaveBeenCalled();
+      expect(prisma.postMedia.findMany).not.toHaveBeenCalled();
+    });
+
+    it('is signed once for a whole page of the author\'s own posts, and skipped for a page with no media', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findMany as jest.Mock).mockResolvedValue([
+        { ...withFiles(), sequence: 2 },
+        { ...buildPostRow({ id: 'post-2' }), sequence: 1 },
+      ]);
+      (prisma.postMedia.findMany as jest.Mock).mockResolvedValue(mediaRows());
+      const ds = directStorage();
+      const page = await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, undefined, ds as never).getFeed('author-1', {});
+      expect(prisma.postMedia.findMany).toHaveBeenCalledTimes(1);
+      expect(page.items[0].media.find((m) => m.id === 'a')?.viewUrl).toBeDefined();
+      expect(page.items[1].media).toEqual([]);
+    });
+
+    it('a storage outage just leaves the link off; it never fails the read', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findFirst as jest.Mock).mockResolvedValue(withFiles());
+      (prisma.postMedia.findMany as jest.Mock).mockResolvedValue(mediaRows());
+      const { ServiceUnavailableException } = jest.requireActual('@nestjs/common');
+      const ds = { createDownloadUrl: jest.fn().mockRejectedValue(new ServiceUnavailableException('no store')) };
+      const post = await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, undefined, ds as never).getPostById('post-1', 'author-1');
+      expect(post.media.every((m) => !('viewUrl' in m))).toBe(true);
+    });
+
+    it('is optional: without an object store the author still gets { id, kind }', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findFirst as jest.Mock).mockResolvedValue(withFiles());
+      const post = await new FeedService(prisma, FIXED_CLOCK).getPostById('post-1', 'author-1');
+      expect(post.media).toEqual([
+        { id: 'b', kind: 'video' },
+        { id: 'a', kind: 'image' },
+      ]);
+      expect(prisma.postMedia.findMany).not.toHaveBeenCalled();
     });
   });
 
@@ -2443,6 +2593,7 @@ describe('FeedService: baseline points wiring (B-093)', () => {
       id: 'p',
       contentText: 'x',
       mediaUrls: [],
+      media: [],
       createdAt: new Date(),
       author: { id: 'a', displayName: 'A', username: null },
     });

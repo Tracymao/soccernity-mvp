@@ -71,6 +71,10 @@ describe('Post media pipeline e2e', () => {
     storage.issuedLinks.length = 0;
     storage.unavailable = false;
     storage.failDeleteFor.clear();
+    storage.failCopy = false;
+    storage.corruptCopyTo = null;
+    storage.copies.length = 0;
+    storage.issuedViewLinks.length = 0;
     processor.videoToolsAvailable = true;
     processor.probe = { durationSeconds: 30, hasVideoStream: true };
     processor.stripCalls.length = 0;
@@ -275,8 +279,8 @@ describe('Post media pipeline e2e', () => {
   });
 
   // =================================================================================================
-  describe('POST /media/uploads/:id/confirm (verify, strip, move to the public prefix)', () => {
-    it('an image: EXIF is really stripped, the original is deleted from quarantine, the clean file sits in the public prefix, pending review', async () => {
+  describe('POST /media/uploads/:id/confirm (verify, strip, store in the PRIVATE prefix)', () => {
+    it('an image: EXIF is really stripped, the original is deleted from quarantine, the clean file sits in the PRIVATE prefix (nothing public), pending review', async () => {
       const u = await seedUser('a');
       const original = await makeJpeg({ exifCopyright: 'secret-photographer', width: 40, height: 20 });
       expect(original.toString('latin1')).toContain('secret-photographer');
@@ -297,7 +301,10 @@ describe('Post media pipeline e2e', () => {
       expect(res.body).toMatchObject({ id, kind: 'image', uploadState: 'ready', status: 'pending', url: `https://cdn.test/post-media/${u.id}/${id}.jpg`, rejectionReason: null });
       expect(res.body).not.toHaveProperty('checkLabels');
 
-      const stored = storage.objects.get(`post-media/${u.id}/${id}.jpg`)!;
+      const stored = storage.objects.get(`private-media/${u.id}/${id}.jpg`)!;
+      expect(r.privateKey).toBe(`private-media/${u.id}/${id}.jpg`);
+      expect(r.publishedAt).toBeNull();
+      expect(storage.keysWithPrefix('post-media/')).toEqual([]); // nothing is public until it is approved
       expect(stored.contentType).toBe('image/jpeg');
       expect(stored.buffer.toString('latin1')).not.toContain('secret-photographer');
       expect(stored.buffer.length).toBe(r.byteSize);
@@ -314,7 +321,7 @@ describe('Post media pipeline e2e', () => {
       const r = await row(id);
       expect(r).toMatchObject({ uploadState: 'ready', kind: 'video', durationSeconds: 42.5, contentType: 'video/mp4', checkState: 'queued', status: 'pending' });
       expect(processor.stripCalls).toHaveLength(1);
-      const stored = storage.objects.get(`post-media/${u.id}/${id}.mp4`)!;
+      const stored = storage.objects.get(`private-media/${u.id}/${id}.mp4`)!;
       expect(stored.buffer.subarray(0, 9).toString()).toBe('STRIPPED:'); // what was stored is the strip step's output
       expect(storage.has(qKey(u, id))).toBe(false);
     });
@@ -322,10 +329,10 @@ describe('Post media pipeline e2e', () => {
     it('is idempotent: confirming a ready upload again returns it without reprocessing', async () => {
       const u = await seedUser('a');
       const id = await uploadImage(u);
-      const writes = storage.keysWithPrefix('post-media/').length;
+      const writes = storage.keysWithPrefix('private-media/').length;
       const again = await confirm(u, id).expect(200);
       expect(again.body).toMatchObject({ id, uploadState: 'ready' });
-      expect(storage.keysWithPrefix('post-media/')).toHaveLength(writes);
+      expect(storage.keysWithPrefix('private-media/')).toHaveLength(writes);
     });
 
     it('answers 409 upload_not_received when nothing was uploaded yet, keeps the row, and works once the file arrives', async () => {
@@ -364,6 +371,7 @@ describe('Post media pipeline e2e', () => {
       const out = await confirm(u, id).expect(400);
       expect(out.body.code).toBe('unsupported_file');
       expect(storage.keysWithPrefix('post-media/')).toEqual([]);
+      expect(storage.keysWithPrefix('private-media/')).toEqual([]);
       expect(storage.has(qKey(u, id))).toBe(false);
       expect(await prisma().postMedia.count({ where: { id } })).toBe(0);
     });
@@ -375,6 +383,7 @@ describe('Post media pipeline e2e', () => {
       const out = await confirm(u, id).expect(400);
       expect(out.body.code).toBe('video_too_long');
       expect(storage.keysWithPrefix('post-media/')).toEqual([]);
+      expect(storage.keysWithPrefix('private-media/')).toEqual([]);
 
       processor.probe = { durationSeconds: 120, hasVideoStream: true }; // exactly the limit is fine
       const ok = await startAndPut(u, makeMp4('b'), 'video/mp4');
@@ -394,6 +403,7 @@ describe('Post media pipeline e2e', () => {
       processor.videoToolsAvailable = false;
       await confirm(u, id).expect(503);
       expect(storage.keysWithPrefix('post-media/')).toEqual([]);
+      expect(storage.keysWithPrefix('private-media/')).toEqual([]);
       const r = await row(id);
       expect(r).toMatchObject({ uploadState: 'awaiting_upload', publicKey: null, publicUrl: null, status: 'pending' });
       expect(storage.has(qKey(u, id))).toBe(true); // kept for the retry
@@ -419,7 +429,7 @@ describe('Post media pipeline e2e', () => {
       const [x, y] = await Promise.all([confirm(u, id), confirm(u, id)]);
       expect([x.status, y.status].every((s) => s === 200 || s === 409)).toBe(true);
       expect([x.status, y.status]).toContain(200);
-      expect(storage.keysWithPrefix('post-media/')).toHaveLength(1);
+      expect(storage.keysWithPrefix('private-media/')).toHaveLength(1);
       expect((await row(id)).uploadState).toBe('ready');
     });
 
@@ -539,12 +549,14 @@ describe('Post media pipeline e2e', () => {
       expect(big.length).toBeLessThan(10 * 1024 * 1024);
       const id = await startAndPut(u, big, 'image/png');
       await confirm(u, id).expect(200);
-      const storedBefore = storage.objects.get(`post-media/${u.id}/${id}.png`)!.buffer.length;
+      const storedBefore = storage.objects.get(`private-media/${u.id}/${id}.png`)!.buffer.length;
       expect(storedBefore).toBeGreaterThan(5 * 1024 * 1024);
 
       await runChecks();
       expect(moderation.calls[0].bytes).toBeLessThanOrEqual(5 * 1024 * 1024);
+      // approved -> published byte-for-byte to the public prefix, and the private original removed
       expect(storage.objects.get(`post-media/${u.id}/${id}.png`)!.buffer.length).toBe(storedBefore);
+      expect(storage.has(`private-media/${u.id}/${id}.png`)).toBe(false);
       expect((await row(id)).status).toBe('approved');
     });
   });
@@ -700,12 +712,13 @@ describe('Post media pipeline e2e', () => {
       await getPost(fan, postId).expect(200);
     });
 
-    it('a REJECTED file keeps its post hidden; removing that file makes the post (now without it) visible, and deletes the stored object', async () => {
+    it("a REJECTED file keeps its post hidden; removing that file makes the post (now without it) visible, and its PRIVATE object is KEPT (B-206 OPEN)", async () => {
       const author = await seedUser('author');
       const fan = await seedUser('fan');
       const mediaId = await uploadImage(author);
       const postId = (await createPost(author, { contentText: 'will be rejected', mediaIds: [mediaId] }).expect(201)).body.id as string;
-      const publicKey = `post-media/${author.id}/${mediaId}.jpg`;
+      const privateKey = `private-media/${author.id}/${mediaId}.jpg`;
+      expect(storage.has(privateKey)).toBe(true);
 
       await prisma().postMedia.update({
         where: { id: mediaId },
@@ -715,7 +728,7 @@ describe('Post media pipeline e2e', () => {
       await getPost(author, postId).expect(200);
 
       await request(http()).delete(`/media/uploads/${mediaId}`).set(author.auth).expect(204);
-      expect(storage.has(publicKey)).toBe(false);
+      expect(storage.has(privateKey)).toBe(true); // a rejected file is never deleted
       expect(await prisma().postMedia.count({ where: { id: mediaId } })).toBe(0);
       const after = await getPost(fan, postId).expect(200);
       expect(after.body.mediaUrls).toEqual([]);
@@ -836,6 +849,7 @@ describe('Post media pipeline e2e', () => {
 
       expect(await prisma().postMedia.count({ where: { uploaderId: a.id } })).toBe(0);
       expect(storage.keysWithPrefix(`post-media/${a.id}/`)).toEqual([]);
+      expect(storage.keysWithPrefix(`private-media/${a.id}/`)).toEqual([]); // none of them was rejected
       expect(storage.keysWithPrefix(`quarantine/${a.id}/`)).toEqual([]);
       const post = await prisma().post.findUniqueOrThrow({ where: { id: postId } });
       expect(post.mediaUrls).toEqual([]); // the post is kept; its files are not
@@ -872,7 +886,7 @@ describe('Post media pipeline e2e', () => {
       expect(await prisma().postMedia.count({ where: { id: fresh } })).toBe(1);
       expect(storage.has(qKey(a, fresh))).toBe(true);
       expect((await row(ready)).uploadState).toBe('ready');
-      expect(storage.keysWithPrefix('post-media/')).toHaveLength(1);
+      expect(storage.keysWithPrefix('private-media/')).toHaveLength(1);
     });
 
     it('a confirmed upload whose original could not be deleted loses only the original, after 24 h', async () => {
@@ -890,7 +904,7 @@ describe('Post media pipeline e2e', () => {
       const r = await row(id);
       expect(r.quarantineKey).toBeNull();
       expect(r.uploadState).toBe('ready');
-      expect(storage.has(`post-media/${a.id}/${id}.jpg`)).toBe(true); // the processed file stays
+      expect(storage.has(`private-media/${a.id}/${id}.jpg`)).toBe(true); // the processed file stays
     });
 
     it('a storage outage during the purge stops quietly and retries next time', async () => {
@@ -1051,6 +1065,189 @@ describe('Post media pipeline e2e', () => {
       const res = await request(http()).delete(`/media/uploads/${video}`).set(f.auth).expect(409);
       expect(res.body.code).toBe('media_in_contest_entry');
       expect(await prisma().postMedia.count({ where: { id: video } })).toBe(1);
+    });
+  });
+
+  // =================================================================================================
+  // backend/media-privacy-vetting-followups (B-257, B-259; Decision Log #430 items 2 and 4)
+  describe('private prefix, signed view links, the payload media field, HEIC, guards and the unattached purge', () => {
+    it('the uploader reads a pending file through a short-lived signed viewUrl to the PRIVATE object; url (the public location) is unchanged and not fetchable yet', async () => {
+      const u = await seedUser('a');
+      const other = await seedUser('b');
+      const id = await uploadImage(u);
+
+      const own = await getUpload(u, id).expect(200);
+      expect(own.body.viewUrl).toBe(`https://view.test/private-media/${u.id}/${id}.jpg?ttl=300`);
+      expect(new Date(own.body.viewUrlExpiresAt).getTime()).toBe(clockNow.getTime() + 300_000);
+      expect(own.body.url).toBe(`https://cdn.test/post-media/${u.id}/${id}.jpg`); // not removed or renamed
+      expect(storage.has(`post-media/${u.id}/${id}.jpg`)).toBe(false); // ... and nothing is there yet
+      await getUpload(other, id).expect(404); // nobody else gets a link
+    });
+
+    it('once the automatic check approves it, the file is public, the private original is gone, and viewUrl points at the public object', async () => {
+      const u = await seedUser('a');
+      const id = await approvedImage(u);
+      expect(storage.has(`post-media/${u.id}/${id}.jpg`)).toBe(true);
+      expect(storage.has(`private-media/${u.id}/${id}.jpg`)).toBe(false);
+      expect(storage.copies).toEqual([[`private-media/${u.id}/${id}.jpg`, `post-media/${u.id}/${id}.jpg`]]);
+      const own = await getUpload(u, id).expect(200);
+      expect(own.body.viewUrl).toContain(`/post-media/${u.id}/${id}.jpg`);
+      expect(await row(id)).toMatchObject({ privateKey: null, status: 'approved' });
+      expect((await row(id)).publishedAt).not.toBeNull();
+    });
+
+    it('a rejected file stays PRIVATE and its author can still view it; no public object ever exists', async () => {
+      const u = await seedUser('a');
+      const id = await uploadImage(u);
+      moderation.labelsFor = () => [{ name: 'Explicit', parentName: null, confidence: 99 }];
+      await runChecks();
+      expect((await row(id)).status).toBe('rejected');
+      expect(storage.has(`private-media/${u.id}/${id}.jpg`)).toBe(true);
+      expect(storage.keysWithPrefix('post-media/')).toEqual([]);
+      expect(storage.copies).toEqual([]);
+      const own = await getUpload(u, id).expect(200);
+      expect(own.body.viewUrl).toContain(`private-media/${u.id}/${id}.jpg`);
+    });
+
+    it('post payloads list media as [{ id, kind }]; the AUTHOR gets viewUrl only while a file is not public; nobody else can see the post until it is approved', async () => {
+      const author = await seedUser('author');
+      const fan = await seedUser('fan');
+      const mediaId = await uploadImage(author);
+      const postId = (await createPost(author, { contentText: 'a picture', mediaIds: [mediaId] }).expect(201)).body.id as string;
+
+      const created = await getPost(author, postId).expect(200);
+      expect(created.body.media).toEqual([{ id: mediaId, kind: 'image', viewUrl: `https://view.test/private-media/${author.id}/${mediaId}.jpg?ttl=300` }]);
+      await getPost(fan, postId).expect(404);
+      const feed = await request(http()).get('/posts/feed').set(author.auth).expect(200);
+      expect(feed.body.items.find((p: { id: string }) => p.id === postId).media).toEqual(created.body.media);
+
+      await runChecks(); // approves it (no labels)
+      const fanView = await getPost(fan, postId).expect(200);
+      expect(fanView.body.media).toEqual([{ id: mediaId, kind: 'image' }]); // exactly { id, kind }, no link
+      expect(JSON.stringify(fanView.body.media)).not.toMatch(/private-media|viewUrl/);
+      expect(fanView.body.mediaUrls).toEqual([`https://cdn.test/post-media/${author.id}/${mediaId}.jpg`]);
+      const authorView = await getPost(author, postId).expect(200);
+      expect(authorView.body.media).toEqual([{ id: mediaId, kind: 'image' }]); // public now: no private link either
+    });
+
+    it('a post with no files has an empty media list, and the creation response carries the attached files', async () => {
+      const u = await seedUser('a');
+      const plain = await createPost(u, { contentText: 'text only' }).expect(201);
+      expect(plain.body.media).toEqual([]);
+      const mediaId = await uploadImage(u);
+      const withFile = await createPost(u, { contentText: 'with a file', mediaIds: [mediaId] }).expect(201);
+      expect(withFile.body.media).toEqual([expect.objectContaining({ id: mediaId, kind: 'image' })]);
+    });
+
+    describe('HEIC / HEIF', () => {
+      it.each(['image/heic', 'image/heif'])('a declared %s is refused with its own code and plain message, and nothing is stored', async (contentType) => {
+        const u = await seedUser('a');
+        const res = await link(u, contentType, 100).expect(400);
+        expect(res.body.code).toBe('heic_not_supported');
+        expect(res.body.message).toMatch(/HEIC photos/);
+        expect(res.body.message).toMatch(/JPEG or PNG/);
+        expect(await prisma().postMedia.count()).toBe(0);
+        expect(storage.issuedLinks).toHaveLength(0);
+      });
+
+      it('a HEIC photo sent under image/jpeg is refused on confirm with the same code, and discarded', async () => {
+        const u = await seedUser('a');
+        const heic = Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftypheic'), Buffer.alloc(64)]);
+        const id = await startAndPut(u, heic, 'image/jpeg');
+        const res = await confirm(u, id).expect(400);
+        expect(res.body.code).toBe('heic_not_supported');
+        expect(storage.keysWithPrefix('private-media/')).toEqual([]);
+        expect(storage.keysWithPrefix('post-media/')).toEqual([]);
+        expect(storage.has(qKey(u, id))).toBe(false);
+        expect(await prisma().postMedia.count({ where: { id } })).toBe(0);
+      });
+    });
+
+    describe('upload routes carry the POST /posts guards', () => {
+      it('an unverified email is refused (403 email_verification_required) on both routes', async () => {
+        const u = await seedUser('a');
+        await prisma().user.update({ where: { id: u.id }, data: { verificationStatus: 'unverified' } });
+        const l = await link(u, 'image/jpeg', 100).expect(403);
+        expect(l.body.code).toBe('email_verification_required');
+        await confirm(u, 'whatever').expect(403);
+        expect(await prisma().postMedia.count()).toBe(0);
+      });
+
+      it('an incomplete profile (no username yet) is refused (403 profile_incomplete) on both routes', async () => {
+        const u = await seedUser('a');
+        await prisma().user.update({ where: { id: u.id }, data: { username: null } });
+        const l = await link(u, 'image/jpeg', 100).expect(403);
+        expect(l.body.code).toBe('profile_incomplete');
+        await confirm(u, 'whatever').expect(403);
+        expect(await prisma().postMedia.count()).toBe(0);
+      });
+
+      it('reading and deleting your own upload still need only authentication (an account restricted later can remove what it holds)', async () => {
+        const u = await seedUser('a');
+        const id = await uploadImage(u);
+        await prisma().user.update({ where: { id: u.id }, data: { verificationStatus: 'unverified', username: null } });
+        await getUpload(u, id).expect(200);
+        await request(http()).delete(`/media/uploads/${id}`).set(u.auth).expect(204);
+      });
+    });
+
+    describe('the 7-day purge of confirmed uploads that were never attached to a post', () => {
+      it('removes a stale unattached upload (objects first, then the row), keeps a fresh one and an attached one, and never touches a rejected one', async () => {
+        const u = await seedUser('a');
+        const stale = await uploadImage(u);
+        const rejected = await uploadImage(u);
+        const attached = await uploadImage(u);
+        await createPost(u, { contentText: 'attached', mediaIds: [attached] }).expect(201);
+        await prisma().postMedia.update({ where: { id: rejected }, data: { status: 'rejected', decisionSource: 'auto', decidedAt: new Date(), rejectionReason: 'x' } });
+
+        advance(6 * 24 * 3600 * 1000);
+        const fresh = await uploadImage(u);
+        advance(2 * 24 * 3600 * 1000); // stale ones are 8 days old, fresh 2 days
+
+        const out = await app.get(PostMediaService).purgeUnattached(new Date(clockNow));
+
+        expect(out).toEqual({ purged: 1, failed: 0 });
+        expect(await prisma().postMedia.count({ where: { id: stale } })).toBe(0);
+        expect(storage.has(`private-media/${u.id}/${stale}.jpg`)).toBe(false);
+        expect(await prisma().postMedia.count({ where: { id: fresh } })).toBe(1);
+        expect(await prisma().postMedia.count({ where: { id: attached } })).toBe(1);
+        expect(storage.has(`private-media/${u.id}/${attached}.jpg`)).toBe(true);
+        // the rejected file: row and private object both kept, however old
+        expect(await prisma().postMedia.count({ where: { id: rejected } })).toBe(1);
+        expect(storage.has(`private-media/${u.id}/${rejected}.jpg`)).toBe(true);
+      });
+
+      it('is exactly 7 days by default: nothing is purged at 6 days', async () => {
+        const u = await seedUser('a');
+        await uploadImage(u);
+        advance(6 * 24 * 3600 * 1000);
+        expect((await app.get(PostMediaService).purgeUnattached(new Date(clockNow))).purged).toBe(0);
+      });
+
+      it('a storage failure is logged, the row is kept, and the next run removes it', async () => {
+        const u = await seedUser('a');
+        const id = await uploadImage(u);
+        advance(8 * 24 * 3600 * 1000);
+        storage.failDeleteFor.add(`private-media/${u.id}/${id}.jpg`);
+        const first = await app.get(PostMediaService).purgeUnattached(new Date(clockNow));
+        expect(first).toEqual({ purged: 0, failed: 1 });
+        expect(await prisma().postMedia.count({ where: { id } })).toBe(1);
+
+        storage.failDeleteFor.clear();
+        expect((await app.get(PostMediaService).purgeUnattached(new Date(clockNow))).purged).toBe(1);
+        expect(await prisma().postMedia.count({ where: { id } })).toBe(0);
+      });
+
+      it('anonymising an account keeps the private object of a REJECTED file (B-206 OPEN) and removes the rest', async () => {
+        const a = await seedUser('a');
+        const rejected = await uploadImage(a);
+        const pending = await uploadImage(a);
+        await prisma().postMedia.update({ where: { id: rejected }, data: { status: 'rejected', decisionSource: 'auto', decidedAt: new Date(), rejectionReason: 'x' } });
+        await app.get(AccountDeletionSweepService).anonymizeUser(a.id, false);
+        expect(await prisma().postMedia.count({ where: { uploaderId: a.id } })).toBe(0);
+        expect(storage.has(`private-media/${a.id}/${rejected}.jpg`)).toBe(true);
+        expect(storage.has(`private-media/${a.id}/${pending}.jpg`)).toBe(false);
+      });
     });
   });
 });
