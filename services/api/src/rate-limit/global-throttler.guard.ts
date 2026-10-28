@@ -1,5 +1,6 @@
 import { ExecutionContext, Inject, Injectable, Logger } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import * as Sentry from '@sentry/nestjs';
 import {
   ThrottlerException,
   ThrottlerGuard,
@@ -59,7 +60,9 @@ export class GlobalThrottlerGuard extends ThrottlerGuard {
     throw new ThrottlerException(await this.getErrorMessage(context, detail));
   }
 
-  // At most one log line a minute: a limiter that is down would otherwise log on every request.
+  // At most one log line AND one Sentry report a minute: a limiter that is down would otherwise do both on
+  // every request. The Sentry event is tagged rate_limiter=global so it is easy to alert on; it is a no-op
+  // while SENTRY_DSN is a placeholder. Reporting must never break a request.
   private logFailOpen(err: unknown): void {
     const now = Date.now();
     if (now - this.lastFailOpenLogAt < 60_000) return;
@@ -67,5 +70,10 @@ export class GlobalThrottlerGuard extends ThrottlerGuard {
     this.logger.error(
       `Global rate limiter failed; letting the request through (fail open): ${err instanceof Error ? err.message : String(err)}`,
     );
+    try {
+      Sentry.captureException(err, { tags: { rate_limiter: 'global' } });
+    } catch {
+      // ignore
+    }
   }
 }

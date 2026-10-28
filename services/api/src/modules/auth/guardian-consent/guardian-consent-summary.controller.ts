@@ -6,6 +6,7 @@ import {
   GuardianConsentSummaryService,
   GuardianRequestSummary,
 } from './guardian-consent-summary.service';
+import { SkipGlobalWriteLimit } from '../../../rate-limit/global-rate-limit.decorators';
 
 // B-021 (Decision Log #372): GET /auth/guardian-consent/request-summary.
 //
@@ -26,6 +27,7 @@ import {
 export class GuardianConsentSummaryController {
   constructor(private readonly summaryService: GuardianConsentSummaryService) {}
 
+  @SkipGlobalWriteLimit()
   @AuthRateLimit()
   @Get('guardian-consent/request-summary')
   async requestSummary(

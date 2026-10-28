@@ -3,6 +3,7 @@ import { AuthLimit } from '../rate-limit/auth-limits/auth-limits.interceptor';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { FORGOT_PASSWORD_GENERIC_MESSAGE, PasswordResetService } from './password-reset.service';
+import { SkipGlobalWriteLimit } from '../../../rate-limit/global-rate-limit.decorators';
 
 // Build Plan Section 4.1 (Auth Service):
 //   POST /auth/forgot-password
@@ -18,6 +19,7 @@ export class PasswordResetController {
   // account-existence leak — defense in depth, not redundant.
   // security/auth-limits-shared-networks: 3 per hour per EMAIL (counted whether or not the account exists) plus
   // a per-IP ceiling; replaces the shared 5-per-60s-per-IP throttler.
+  @SkipGlobalWriteLimit()
   @AuthLimit('forgot-password')
   @Post('forgot-password')
   @HttpCode(200)

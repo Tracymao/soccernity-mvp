@@ -6,7 +6,8 @@ import {
   createIdentityResolver,
   GlobalRateLimitNumbers,
 } from './global-rate-limit.config';
-import { SkipGlobalRateLimit, UploadRateLimit } from './global-rate-limit.decorators';
+import * as Sentry from '@sentry/nestjs';
+import { RefreshRateLimit, SkipGlobalRateLimit, SkipGlobalWriteLimit, UploadRateLimit } from './global-rate-limit.decorators';
 import { GlobalThrottlerGuard } from './global-throttler.guard';
 
 // Small numbers so each class is reachable in a few calls.
@@ -19,6 +20,10 @@ const NUMBERS: GlobalRateLimitNumbers = {
   writeWindowMs: 60_000,
   uploadMax: 1,
   uploadWindowMs: 600_000,
+  refreshIpMax: 3,
+  refreshIpWindowMs: 60_000,
+  refreshTokenMax: 2,
+  refreshTokenWindowMs: 60_000,
 };
 
 class SampleController {
@@ -29,6 +34,11 @@ class SampleController {
   upload() {}
   @SkipGlobalRateLimit()
   skipped() {}
+  @SkipGlobalWriteLimit()
+  writeExempt() {}
+  @SkipGlobalWriteLimit()
+  @RefreshRateLimit()
+  refresh() {}
 }
 @SkipGlobalRateLimit()
 class SkippedController {
@@ -42,13 +52,19 @@ function ctx(opts: {
   method?: string;
   ip?: string;
   token?: string;
+  body?: Record<string, unknown>;
+  cookie?: string;
   klass?: Function;
   res?: { header: jest.Mock };
 }): ExecutionContext {
   const req = {
     ip: opts.ip ?? '203.0.113.1',
     method: opts.method ?? 'GET',
-    headers: opts.token ? { authorization: `Bearer ${opts.token}` } : {},
+    headers: {
+      ...(opts.token ? { authorization: `Bearer ${opts.token}` } : {}),
+      ...(opts.cookie ? { 'x-auth-mode': 'cookie', cookie: opts.cookie } : {}),
+    },
+    body: opts.body,
   };
   const res = opts.res ?? { header: jest.fn() };
   const handler = (SampleController.prototype as any)[opts.handler ?? 'read'];
@@ -263,5 +279,133 @@ describe('GlobalThrottlerGuard: fail open', () => {
     await hits(guard, NUMBERS.anonMax, () => ctx({ ip: '203.0.113.50' }));
     jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     await expect(guard.canActivate(ctx({ ip: '203.0.113.50' }))).rejects.toBeInstanceOf(ThrottlerException);
+  });
+});
+
+// A guard with a roomy anonymous/user class, so only the class under test can trip.
+async function buildRoomy(numbers: GlobalRateLimitNumbers = NUMBERS) {
+  const storage = new ThrottlerStorageService();
+  storages.push(storage);
+  const options = buildGlobalThrottlerOptions({ ...numbers, anonMax: 1000, userMax: 1000 }, createIdentityResolver(verify));
+  const guard = new GlobalThrottlerGuard(options, storage, new Reflector());
+  await guard.onModuleInit();
+  return { guard, storage };
+}
+
+describe('GlobalThrottlerGuard: @SkipGlobalWriteLimit()', () => {
+  it('lets 40 writes from one IP through a tagged handler, while an untagged write route still 429s past its limit', async () => {
+    const { guard } = await buildRoomy({ ...NUMBERS, writeMax: 30 });
+    await hits(guard, 40, () => ctx({ method: 'POST', handler: 'writeExempt', ip: '203.0.113.50' }));
+    // the tagged calls consumed none of the writes budget: all 30 untagged writes still pass, the 31st does not
+    await hits(guard, 30, () => ctx({ method: 'POST', handler: 'write', ip: '203.0.113.50' }));
+    await expect(guard.canActivate(ctx({ method: 'POST', handler: 'write', ip: '203.0.113.50' }))).rejects.toBeInstanceOf(
+      ThrottlerException,
+    );
+  });
+
+  it('is still counted by the anonymous class', async () => {
+    const guard = await build();
+    await hits(guard, NUMBERS.anonMax, () => ctx({ method: 'POST', handler: 'writeExempt', ip: '203.0.113.52' }));
+    await expect(
+      guard.canActivate(ctx({ method: 'POST', handler: 'writeExempt', ip: '203.0.113.52' })),
+    ).rejects.toBeInstanceOf(ThrottlerException);
+  });
+
+  it('is still counted by the signed-in user class', async () => {
+    const guard = await build();
+    await hits(guard, NUMBERS.userMax, () => ctx({ token: 'u5', method: 'POST', handler: 'writeExempt' }));
+    await expect(guard.canActivate(ctx({ token: 'u5', method: 'POST', handler: 'writeExempt' }))).rejects.toBeInstanceOf(
+      ThrottlerException,
+    );
+  });
+});
+
+describe('GlobalThrottlerGuard: refresh classes (@RefreshRateLimit())', () => {
+  const refreshCtx = (o: { ip?: string; body?: Record<string, unknown>; cookie?: string; res?: { header: jest.Mock } } = {}) =>
+    ctx({ method: 'POST', handler: 'refresh', ...o });
+
+  it('limits per client IP and answers 429 with Retry-After', async () => {
+    const { guard } = await buildRoomy();
+    // a different token each time, so only the IP class can trip
+    for (let i = 0; i < NUMBERS.refreshIpMax; i++) {
+      await expect(guard.canActivate(refreshCtx({ ip: '203.0.113.60', body: { refreshToken: 't' + i } }))).resolves.toBe(true);
+    }
+    const res = { header: jest.fn() };
+    await expect(
+      guard.canActivate(refreshCtx({ ip: '203.0.113.60', body: { refreshToken: 'fresh' }, res })),
+    ).rejects.toBeInstanceOf(ThrottlerException);
+    expect(res.header).toHaveBeenCalledWith('Retry-After', expect.stringMatching(/^[0-9]+$/));
+    // another IP is unaffected
+    await expect(guard.canActivate(refreshCtx({ ip: '203.0.113.61', body: { refreshToken: 'x' } }))).resolves.toBe(true);
+  });
+
+  it('limits per presented token while a different token from the same IP passes', async () => {
+    const { guard } = await buildRoomy({ ...NUMBERS, refreshIpMax: 100 });
+    await hits(guard, NUMBERS.refreshTokenMax, () => refreshCtx({ ip: '203.0.113.62', body: { refreshToken: 'same' } }));
+    await expect(guard.canActivate(refreshCtx({ ip: '203.0.113.62', body: { refreshToken: 'same' } }))).rejects.toBeInstanceOf(
+      ThrottlerException,
+    );
+    await expect(guard.canActivate(refreshCtx({ ip: '203.0.113.62', body: { refreshToken: 'other' } }))).resolves.toBe(true);
+  });
+
+  it('counts a cookie-mode token the same as a body token', async () => {
+    const { guard } = await buildRoomy();
+    await hits(guard, 1, () => refreshCtx({ ip: '203.0.113.63', body: { refreshToken: 'tok' } }));
+    await hits(guard, 1, () => refreshCtx({ ip: '203.0.113.64', cookie: 'sn_rt=tok' }));
+    await expect(guard.canActivate(refreshCtx({ ip: '203.0.113.65', cookie: 'sn_rt=tok' }))).rejects.toBeInstanceOf(
+      ThrottlerException,
+    );
+  });
+
+  it('a request presenting no token counts against the IP class only', async () => {
+    const { guard, storage } = await buildRoomy();
+    const spy = jest.spyOn(storage, 'increment');
+    await hits(guard, 2, () => refreshCtx({ ip: '203.0.113.66', body: {} }));
+    const names = spy.mock.calls.map((c) => c[4]);
+    expect(names).toContain('global-refresh-ip');
+    expect(names).not.toContain('global-refresh-token');
+  });
+
+  it('never puts the raw token in any storage key', async () => {
+    const { guard, storage } = await buildRoomy();
+    const spy = jest.spyOn(storage, 'increment');
+    await guard.canActivate(refreshCtx({ ip: '203.0.113.67', body: { refreshToken: 'SUPER-SECRET-RAW-TOKEN' } }));
+    await guard.canActivate(refreshCtx({ ip: '203.0.113.68', cookie: 'sn_rt=SUPER-SECRET-RAW-TOKEN' }));
+    const keys = spy.mock.calls.map((c) => String(c[0]));
+    expect(keys.length).toBeGreaterThan(0);
+    for (const k of keys) expect(k).not.toContain('SUPER-SECRET-RAW-TOKEN');
+    expect(keys.some((k) => k.startsWith('global-refresh-token:refresh-token:'))).toBe(true);
+  });
+
+  it('does not apply to a route without @RefreshRateLimit()', async () => {
+    const { guard } = await buildRoomy();
+    await hits(guard, 30, () => ctx({ method: 'GET', handler: 'read', ip: '203.0.113.69', body: { refreshToken: 'same' } }));
+  });
+});
+
+describe('GlobalThrottlerGuard: fail-open Sentry report', () => {
+  const brokenGuard = async () => {
+    const broken = { increment: jest.fn().mockRejectedValue(new Error('storage down')) } as unknown as ThrottlerStorageService;
+    const guard = new GlobalThrottlerGuard(buildGlobalThrottlerOptions(NUMBERS, createIdentityResolver(verify)), broken, new Reflector());
+    await guard.onModuleInit();
+    return guard;
+  };
+
+  it('reports once to Sentry, tagged rate_limiter=global, however many requests fail', async () => {
+    const capture = jest.spyOn(Sentry, 'captureException').mockReturnValue('id');
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const guard = await brokenGuard();
+    for (let i = 0; i < 5; i++) await expect(guard.canActivate(ctx({}))).resolves.toBe(true);
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(capture).toHaveBeenCalledWith(expect.any(Error), { tags: { rate_limiter: 'global' } });
+  });
+
+  it('never lets a failing Sentry call break the request', async () => {
+    jest.spyOn(Sentry, 'captureException').mockImplementation(() => {
+      throw new Error('sentry down');
+    });
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const guard = await brokenGuard();
+    await expect(guard.canActivate(ctx({}))).resolves.toBe(true);
   });
 });

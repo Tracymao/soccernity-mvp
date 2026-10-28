@@ -71,6 +71,10 @@ export function apiEnvironment(dbUrl: string, redisUrl: string, clock: ApiClock 
     GLOBAL_RATE_LIMIT_WRITE_WINDOW_MS: '60000',
     GLOBAL_RATE_LIMIT_UPLOAD_MAX: '1000000',
     GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS: '60000',
+    GLOBAL_RATE_LIMIT_REFRESH_IP_MAX: '1000000',
+    GLOBAL_RATE_LIMIT_REFRESH_IP_WINDOW_MS: '60000',
+    GLOBAL_RATE_LIMIT_REFRESH_TOKEN_MAX: '1000000',
+    GLOBAL_RATE_LIMIT_REFRESH_TOKEN_WINDOW_MS: '60000',
     // Auth limits for shared networks (B-256): a full QA run signs up, logs in and resets far more than 30 / 60 / 5 per
     // 10-15 minutes from one IP and one set of emails, and the Redis counters outlive a restart of the API. Forced out of
     // the way; the real numbers are proven by services/api's auth-limits specs (unit, HTTP and real-Redis e2e).

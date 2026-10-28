@@ -1,9 +1,13 @@
 import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ThrottlerOptions } from '@nestjs/throttler';
+import { createHash } from 'crypto';
+import { USER_SESSION_COOKIE, isCookieMode, readRefreshCookie } from '../session-cookie/session-cookie';
 import {
   GLOBAL_RATE_LIMIT_DEFAULTS as D,
   GLOBAL_THROTTLER,
+  REFRESH_RATE_LIMIT_KEY,
+  SKIP_GLOBAL_WRITE_LIMIT_KEY,
   UPLOAD_RATE_LIMIT_KEY,
   WRITE_METHODS,
 } from './global-rate-limit.constants';
@@ -21,6 +25,10 @@ export interface GlobalRateLimitNumbers {
   writeWindowMs: number;
   uploadMax: number;
   uploadWindowMs: number;
+  refreshIpMax: number;
+  refreshIpWindowMs: number;
+  refreshTokenMax: number;
+  refreshTokenWindowMs: number;
 }
 
 // A positive whole number, else the default. A blank, zero, negative or non-numeric value falls back
@@ -42,6 +50,13 @@ export function readGlobalRateLimitNumbers(config: ConfigReader): GlobalRateLimi
     writeWindowMs: positiveInt(config.get('GLOBAL_RATE_LIMIT_WRITE_WINDOW_MS'), D.writeWindowMs),
     uploadMax: positiveInt(config.get('GLOBAL_RATE_LIMIT_UPLOAD_MAX'), D.uploadMax),
     uploadWindowMs: positiveInt(config.get('GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS'), D.uploadWindowMs),
+    refreshIpMax: positiveInt(config.get('GLOBAL_RATE_LIMIT_REFRESH_IP_MAX'), D.refreshIpMax),
+    refreshIpWindowMs: positiveInt(config.get('GLOBAL_RATE_LIMIT_REFRESH_IP_WINDOW_MS'), D.refreshIpWindowMs),
+    refreshTokenMax: positiveInt(config.get('GLOBAL_RATE_LIMIT_REFRESH_TOKEN_MAX'), D.refreshTokenMax),
+    refreshTokenWindowMs: positiveInt(
+      config.get('GLOBAL_RATE_LIMIT_REFRESH_TOKEN_WINDOW_MS'),
+      D.refreshTokenWindowMs,
+    ),
   };
 }
 
@@ -79,7 +94,23 @@ export function createIdentityResolver(
   };
 }
 
-// Builds the four named throttlers. Each carries a skipIf that decides whether it applies to a given
+// The refresh token a POST /auth/refresh presents, as a tracker: the SHA-256 of the token, never the token.
+// Cookie mode (X-Auth-Mode: cookie) reads the sn_rt cookie and ignores the body, exactly as the route does;
+// otherwise body.refreshToken. Returns undefined when no token is presented (that request counts against
+// the IP class only). Must never throw.
+export function refreshTokenTracker(req: Record<string, any>): string | undefined {
+  try {
+    const raw = isCookieMode(req)
+      ? readRefreshCookie(req, USER_SESSION_COOKIE)
+      : (req.body as { refreshToken?: unknown } | undefined)?.refreshToken;
+    if (typeof raw !== 'string' || raw === '') return undefined;
+    return `refresh-token:${createHash('sha256').update(raw).digest('hex')}`;
+  } catch {
+    return undefined;
+  }
+}
+
+// Builds the named throttlers. Each carries a skipIf that decides whether it applies to a given
 // request, so a request is counted against exactly: ONE of {user, anon}, plus {writes} on a write
 // method, plus {uploads} on a tagged upload route.
 //
@@ -93,6 +124,9 @@ export function buildGlobalThrottlerOptions(
   const reqOf = (ctx: ExecutionContext) => ctx.switchToHttp().getRequest<Record<string, any>>();
   const isUploadRoute = (ctx: ExecutionContext) =>
     reflector.getAllAndOverride<boolean>(UPLOAD_RATE_LIMIT_KEY, [ctx.getHandler(), ctx.getClass()]) === true;
+  const hasMeta = (key: string, ctx: ExecutionContext) =>
+    reflector.getAllAndOverride<boolean>(key, [ctx.getHandler(), ctx.getClass()]) === true;
+  const isRefreshRoute = (ctx: ExecutionContext) => hasMeta(REFRESH_RATE_LIMIT_KEY, ctx);
   const common = {
     // Retry-After is set by GlobalThrottlerGuard; suffixed per-class headers would only add noise.
     setHeaders: false,
@@ -119,7 +153,9 @@ export function buildGlobalThrottlerOptions(
       name: GLOBAL_THROTTLER.writes,
       limit: numbers.writeMax,
       ttl: numbers.writeWindowMs,
-      skipIf: (ctx) => !WRITE_METHODS.has(String(reqOf(ctx).method ?? '').toUpperCase()),
+      // @SkipGlobalWriteLimit() exempts a handler from THIS class only; user/anon and uploads still apply.
+      skipIf: (ctx) =>
+        !WRITE_METHODS.has(String(reqOf(ctx).method ?? '').toUpperCase()) || hasMeta(SKIP_GLOBAL_WRITE_LIMIT_KEY, ctx),
     },
     {
       ...common,
@@ -127,6 +163,22 @@ export function buildGlobalThrottlerOptions(
       limit: numbers.uploadMax,
       ttl: numbers.uploadWindowMs,
       skipIf: (ctx) => !isUploadRoute(ctx),
+    },
+    {
+      ...common,
+      name: GLOBAL_THROTTLER.refreshIp,
+      limit: numbers.refreshIpMax,
+      ttl: numbers.refreshIpWindowMs,
+      skipIf: (ctx) => !isRefreshRoute(ctx),
+    },
+    {
+      ...common,
+      name: GLOBAL_THROTTLER.refreshToken,
+      limit: numbers.refreshTokenMax,
+      ttl: numbers.refreshTokenWindowMs,
+      // No presented token -> this class is skipped and the request counts against the IP class only.
+      getTracker: (req: Record<string, any>) => refreshTokenTracker(req) ?? 'refresh-token:none',
+      skipIf: (ctx) => !isRefreshRoute(ctx) || refreshTokenTracker(reqOf(ctx)) === undefined,
     },
   ];
 }

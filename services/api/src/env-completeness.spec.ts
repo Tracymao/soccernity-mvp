@@ -107,7 +107,7 @@ describe('environment completeness (B-018)', () => {
     expect([...prod].filter((k) => !staging.has(k))).toEqual([]);
   });
 
-  // Global API rate limit. The eight numbers must exist in code, in render.yaml for BOTH services and in
+  // Global API rate limit. The twelve numbers must exist in code, in render.yaml for BOTH services and in
   // .env.example, and render.yaml / .env.example must carry the same numbers as the code defaults (a deploy
   // that silently ran a different limit from the one the code documents is the drift this spec is for).
   describe('global rate limit variables', () => {
@@ -120,6 +120,10 @@ describe('environment completeness (B-018)', () => {
       'GLOBAL_RATE_LIMIT_WRITE_WINDOW_MS',
       'GLOBAL_RATE_LIMIT_UPLOAD_MAX',
       'GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS',
+      'GLOBAL_RATE_LIMIT_REFRESH_IP_MAX',
+      'GLOBAL_RATE_LIMIT_REFRESH_IP_WINDOW_MS',
+      'GLOBAL_RATE_LIMIT_REFRESH_TOKEN_MAX',
+      'GLOBAL_RATE_LIMIT_REFRESH_TOKEN_WINDOW_MS',
     ] as const;
     const D = GLOBAL_RATE_LIMIT_DEFAULTS;
     const DEFAULT_OF: Record<(typeof NAMES)[number], number> = {
@@ -131,6 +135,10 @@ describe('environment completeness (B-018)', () => {
       GLOBAL_RATE_LIMIT_WRITE_WINDOW_MS: D.writeWindowMs,
       GLOBAL_RATE_LIMIT_UPLOAD_MAX: D.uploadMax,
       GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS: D.uploadWindowMs,
+      GLOBAL_RATE_LIMIT_REFRESH_IP_MAX: D.refreshIpMax,
+      GLOBAL_RATE_LIMIT_REFRESH_IP_WINDOW_MS: D.refreshIpWindowMs,
+      GLOBAL_RATE_LIMIT_REFRESH_TOKEN_MAX: D.refreshTokenMax,
+      GLOBAL_RATE_LIMIT_REFRESH_TOKEN_WINDOW_MS: D.refreshTokenWindowMs,
     };
 
     it('are read by the code, declared in both render.yaml services and documented in .env.example', () => {

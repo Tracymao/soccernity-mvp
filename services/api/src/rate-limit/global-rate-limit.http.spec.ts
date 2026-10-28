@@ -1,4 +1,4 @@
-import { Controller, Get, INestApplication, Post } from '@nestjs/common';
+import { Body, Controller, Get, INestApplication, Post } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
@@ -9,7 +9,12 @@ import { AuthThrottlerGuard } from '../modules/auth/rate-limit/auth-throttler.gu
 import { AuthRateLimitModule } from '../modules/auth/rate-limit/rate-limit.module';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
-import { SkipGlobalRateLimit, UploadRateLimit } from './global-rate-limit.decorators';
+import {
+  RefreshRateLimit,
+  SkipGlobalRateLimit,
+  SkipGlobalWriteLimit,
+  UploadRateLimit,
+} from './global-rate-limit.decorators';
 import { GlobalRateLimitModule } from './global-rate-limit.module';
 
 // The REAL GlobalRateLimitModule (real ThrottlerModule, real GlobalThrottlerGuard as APP_GUARD, real
@@ -41,6 +46,21 @@ class RateLimitTestController {
   @Post('skipped')
   @SkipGlobalRateLimit()
   skipped() {
+    return { ok: true };
+  }
+
+  // Stands in for a sign-in route: exempt from the writes class only.
+  @Post('signin')
+  @SkipGlobalWriteLimit()
+  signin() {
+    return { ok: true };
+  }
+
+  // Stands in for POST /auth/refresh.
+  @Post('refresh')
+  @SkipGlobalWriteLimit()
+  @RefreshRateLimit()
+  refresh(@Body() _body: { refreshToken?: string }) {
     return { ok: true };
   }
 
@@ -213,5 +233,89 @@ describe('global rate limit (real module over HTTP): writes and uploads', () => 
   it('never limits a route tagged @SkipGlobalRateLimit()', async () => {
     const auth = { Authorization: `Bearer ${tokenFor(app, 'user-S')}` };
     for (let i = 0; i < 10; i++) await request(app.getHttpServer()).post('/rl-test/skipped').set(auth).expect(201);
+  });
+});
+
+describe('global rate limit (real module over HTTP): @SkipGlobalWriteLimit()', () => {
+  let app: INestApplication;
+  beforeAll(async () => {
+    app = await buildApp();
+  });
+  afterAll(async () => app.close());
+
+  it('40 POSTs from one IP within 60 s all pass a tagged route, while an untagged write route 429s on its 31st', async () => {
+    const server = app.getHttpServer();
+    for (let i = 0; i < 40; i++) await request(server).post('/rl-test/signin').send({}).expect(201);
+    for (let i = 0; i < 30; i++) await request(server).post('/rl-test/write').send({}).expect(201);
+    const limited = await request(server).post('/rl-test/write').send({}).expect(429);
+    expect(limited.headers['retry-after']).toMatch(/^[0-9]+$/);
+  });
+});
+
+describe('global rate limit (real module over HTTP): a tagged route is still counted by the anonymous class', () => {
+  let app: INestApplication;
+  beforeAll(async () => {
+    app = await buildApp({ GLOBAL_RATE_LIMIT_ANON_MAX: '5' });
+  });
+  afterAll(async () => app.close());
+
+  it('429s on the 6th request from one IP', async () => {
+    const server = app.getHttpServer();
+    for (let i = 0; i < 5; i++) await request(server).post('/rl-test/signin').send({}).expect(201);
+    await request(server).post('/rl-test/signin').send({}).expect(429);
+  });
+});
+
+describe('global rate limit (real module over HTTP): refresh classes', () => {
+  let app: INestApplication;
+  beforeAll(async () => {
+    // the production defaults for the refresh classes; roomy user/anonymous classes so only they can trip
+    app = await buildApp({ GLOBAL_RATE_LIMIT_ANON_MAX: '100000', GLOBAL_RATE_LIMIT_USER_MAX: '100000' });
+  });
+  afterAll(async () => app.close());
+
+  it('the 241st refresh from one IP is a 429 with Retry-After (each request presents a different token)', async () => {
+    const server = app.getHttpServer();
+    for (let i = 0; i < 240; i++) {
+      await request(server).post('/rl-test/refresh').send({ refreshToken: 'ip-' + i }).expect(201);
+    }
+    const limited = await request(server).post('/rl-test/refresh').send({ refreshToken: 'ip-241' }).expect(429);
+    expect(limited.headers['retry-after']).toMatch(/^[0-9]+$/);
+    expect(limited.body).toEqual({ statusCode: 429, message: 'ThrottlerException: Too Many Requests' });
+  });
+});
+
+describe('global rate limit (real module over HTTP): refresh per token', () => {
+  let app: INestApplication;
+  beforeAll(async () => {
+    app = await buildApp({ GLOBAL_RATE_LIMIT_ANON_MAX: '100000', GLOBAL_RATE_LIMIT_USER_MAX: '100000' });
+  });
+  afterAll(async () => app.close());
+
+  it('the 11th refresh with the same token is a 429, a different token from the same IP passes', async () => {
+    const server = app.getHttpServer();
+    for (let i = 0; i < 10; i++) await request(server).post('/rl-test/refresh').send({ refreshToken: 'same-token' }).expect(201);
+    const limited = await request(server).post('/rl-test/refresh').send({ refreshToken: 'same-token' }).expect(429);
+    expect(limited.headers['retry-after']).toMatch(/^[0-9]+$/);
+    await request(server).post('/rl-test/refresh').send({ refreshToken: 'another-token' }).expect(201);
+  });
+
+  it('counts a cookie-mode token the same as the same token in a body', async () => {
+    const server = app.getHttpServer();
+    for (let i = 0; i < 5; i++) await request(server).post('/rl-test/refresh').send({ refreshToken: 'mixed-token' }).expect(201);
+    for (let i = 0; i < 5; i++) {
+      await request(server)
+        .post('/rl-test/refresh')
+        .set('X-Auth-Mode', 'cookie')
+        .set('Cookie', 'sn_rt=mixed-token')
+        .send({})
+        .expect(201);
+    }
+    await request(server).post('/rl-test/refresh').send({ refreshToken: 'mixed-token' }).expect(429);
+  });
+
+  it('a request presenting no token is limited by the IP class only (no per-token bucket for "nothing")', async () => {
+    const server = app.getHttpServer();
+    for (let i = 0; i < 20; i++) await request(server).post('/rl-test/refresh').send({}).expect(201);
   });
 });
