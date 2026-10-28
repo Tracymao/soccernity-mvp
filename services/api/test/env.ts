@@ -87,6 +87,18 @@ export const E2E_INERT_EXTERNAL_ENV: Readonly<Record<string, string>> = {
   GLOBAL_RATE_LIMIT_WRITE_WINDOW_MS: '60000',
   GLOBAL_RATE_LIMIT_UPLOAD_MAX: '1000000',
   GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS: '60000',
+  // Auth limits for shared networks (modules/auth/rate-limit/auth-limits), B-256. Counters live in Redis, which is shared
+  // by every spec file and survives between runs, so the production numbers (30 sign-ups / 60 logins per 10 minutes per
+  // IP, 5 failed logins per 15 minutes per email) would trip across unrelated specs. Relaxed here; the dedicated specs
+  // (auth-limits.e2e-spec.ts, admin-login-rate-limit.e2e-spec.ts) set the real numbers themselves via useAuthLimits().
+  AUTH_SIGNUP_RATE_LIMIT_MAX: '1000000',
+  AUTH_SIGNUP_RATE_LIMIT_WINDOW_MS: '600000',
+  AUTH_LOGIN_FAILED_ATTEMPTS_MAX: '1000000',
+  AUTH_LOGIN_FAILED_ATTEMPTS_WINDOW_MS: '900000',
+  AUTH_IP_CEILING_MAX: '1000000',
+  AUTH_IP_CEILING_WINDOW_MS: '600000',
+  AUTH_FORGOT_PASSWORD_EMAIL_MAX: '1000000',
+  AUTH_FORGOT_PASSWORD_EMAIL_WINDOW_MS: '3600000',
 };
 
 export function isolateExternalServiceEnv(): void {

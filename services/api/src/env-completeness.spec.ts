@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { TEST_CLOCK_ENV_VARS } from './clock/clock';
 import { GLOBAL_RATE_LIMIT_DEFAULTS } from './rate-limit/global-rate-limit.constants';
+import { AUTH_LIMIT_DEFAULTS } from './modules/auth/rate-limit/auth-limits/auth-limits.constants';
 
 // B-018 regression guard. The build register found ~22 variables read in code
 // but absent from render.yaml, so a deploy silently ran with code defaults (or
@@ -152,6 +153,54 @@ describe('environment completeness (B-018)', () => {
         const inExample = exampleText.match(new RegExp(`^${name}=(\\d+)\\s*$`, 'm'));
         expect(inExample && Number(inExample[1])).toBe(DEFAULT_OF[name]);
       }
+    });
+  });
+
+  // Auth limits for shared school and club networks (B-256). Same drift guard as the global limits: the eight
+  // names must be read in code, declared in both render.yaml services and documented in .env.example, and the
+  // numbers in render.yaml / .env.example must equal the code defaults.
+  describe('auth limit variables (shared networks)', () => {
+    const A = AUTH_LIMIT_DEFAULTS;
+    const DEFAULT_OF: Record<string, number> = {
+      AUTH_SIGNUP_RATE_LIMIT_MAX: A.signupMax,
+      AUTH_SIGNUP_RATE_LIMIT_WINDOW_MS: A.signupWindowMs,
+      AUTH_LOGIN_FAILED_ATTEMPTS_MAX: A.loginFailedMax,
+      AUTH_LOGIN_FAILED_ATTEMPTS_WINDOW_MS: A.loginFailedWindowMs,
+      AUTH_IP_CEILING_MAX: A.ipCeilingMax,
+      AUTH_IP_CEILING_WINDOW_MS: A.ipCeilingWindowMs,
+      AUTH_FORGOT_PASSWORD_EMAIL_MAX: A.forgotEmailMax,
+      AUTH_FORGOT_PASSWORD_EMAIL_WINDOW_MS: A.forgotEmailWindowMs,
+    };
+    const NAMES = Object.keys(DEFAULT_OF);
+
+    it('are read by the code, declared in both render.yaml services and documented in .env.example', () => {
+      for (const name of NAMES) expect(read.has(name)).toBe(true);
+      for (const keys of services) for (const name of NAMES) expect(keys.has(name)).toBe(true);
+      for (const name of NAMES) expect(example.has(name)).toBe(true);
+    });
+
+    it('carry the same numbers in render.yaml (both services) and .env.example as the code defaults', () => {
+      const renderText = fs.readFileSync(path.join(REPO_ROOT, 'render.yaml'), 'utf8');
+      const exampleText = fs.readFileSync(path.join(REPO_ROOT, '.env.example'), 'utf8');
+      for (const name of NAMES) {
+        const inRender = [...renderText.matchAll(new RegExp(`-\\s+key:\\s+${name}\\s+value:\\s+"(\\d+)"`, 'g'))].map((m) => Number(m[1]));
+        expect(inRender).toEqual([DEFAULT_OF[name], DEFAULT_OF[name]]);
+        const inExample = exampleText.match(new RegExp(`^${name}=(\\d+)\\s*$`, 'm'));
+        expect(inExample && Number(inExample[1])).toBe(DEFAULT_OF[name]);
+      }
+    });
+
+    it('state the numbers the founder asked for', () => {
+      expect(A).toMatchObject({
+        signupMax: 30,
+        signupWindowMs: 10 * 60_000,
+        loginFailedMax: 5,
+        loginFailedWindowMs: 15 * 60_000,
+        ipCeilingMax: 60,
+        ipCeilingWindowMs: 10 * 60_000,
+        forgotEmailMax: 3,
+        forgotEmailWindowMs: 60 * 60_000,
+      });
     });
   });
 

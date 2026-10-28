@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { AdminAuthController } from '../src/modules/admin/admin-auth.controller';
 import { PasswordService } from '../src/modules/auth/password/password.service';
+import { applyRealAuthLimits, clearAuthLimitCounters } from './auth-limits';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
 
 // Decision Log #190 — POST /admin/auth/login has its own stricter limit
@@ -20,6 +21,15 @@ const ADMIN_LIMIT = 5;
 describe('Admin login rate limit (Decision Log #190)', () => {
   let app: INestApplication;
   let adminEmail: string;
+  let restoreAuthLimits: () => void;
+  let userLoginEmail: string;
+
+  // /auth/login is no longer behind the shared 5-per-60s throttler (B-256): its limit is a per-account failed-attempt
+  // budget kept in Redis, relaxed for the whole Jest layer in test/env.ts. This spec drives that user-facing route
+  // into its own 429, so it runs with the real numbers.
+  beforeAll(() => {
+    restoreAuthLimits = applyRealAuthLimits();
+  });
 
   beforeEach(async () => {
     await resetDatabase();
@@ -29,7 +39,10 @@ describe('Admin login rate limit (Decision Log #190)', () => {
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
     );
     await app.init();
+    await clearAuthLimitCounters(app);
 
+    // A fresh address per test: the failed-attempt counter lives in Redis and outlives the app instance.
+    userLoginEmail = `nobody-here-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
     adminEmail = `rate-limit-admin-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
     await getTestPrismaClient().adminUser.create({
       data: {
@@ -46,6 +59,7 @@ describe('Admin login rate limit (Decision Log #190)', () => {
   });
 
   afterAll(async () => {
+    restoreAuthLimits();
     await disconnectTestPrismaClient();
   });
 
@@ -58,7 +72,7 @@ describe('Admin login rate limit (Decision Log #190)', () => {
   function postUserLogin() {
     return request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email: 'nobody-here@example.com', password: WRONG_PASSWORD });
+      .send({ email: userLoginEmail, password: WRONG_PASSWORD });
   }
 
   it('locks the admin login route out on the 6th attempt within the window, even with the correct password', async () => {

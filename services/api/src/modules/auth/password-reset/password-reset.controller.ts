@@ -1,5 +1,5 @@
 import { Body, Controller, HttpCode, Post } from '@nestjs/common';
-import { AuthRateLimit } from '../rate-limit/auth-rate-limit.decorator';
+import { AuthLimit } from '../rate-limit/auth-limits/auth-limits.interceptor';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { FORGOT_PASSWORD_GENERIC_MESSAGE, PasswordResetService } from './password-reset.service';
@@ -16,7 +16,9 @@ export class PasswordResetController {
   // same class of risk (email-enumeration probing, spam-triggering abuse)
   // even with the generic response below already closing off the
   // account-existence leak — defense in depth, not redundant.
-  @AuthRateLimit()
+  // security/auth-limits-shared-networks: 3 per hour per EMAIL (counted whether or not the account exists) plus
+  // a per-IP ceiling; replaces the shared 5-per-60s-per-IP throttler.
+  @AuthLimit('forgot-password')
   @Post('forgot-password')
   @HttpCode(200)
   async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<{ message: string }> {

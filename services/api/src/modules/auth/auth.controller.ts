@@ -4,6 +4,7 @@ import { CurrentUser } from './guards/current-user.decorator';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AccessTokenPayload } from './token/token.types';
 import { AuthRateLimit } from './rate-limit/auth-rate-limit.decorator';
+import { AuthLimit } from './rate-limit/auth-limits/auth-limits.interceptor';
 import { AuthResponse, TokenPairResponse } from './auth-response.mapper';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeactivateAccountDto } from './dto/deactivate-account.dto';
@@ -28,7 +29,9 @@ function extractBearerToken(authorizationHeader: string | undefined): string | u
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @AuthRateLimit()
+  // security/auth-limits-shared-networks: per-account failed-attempt budget + per-IP ceiling (not the shared
+  // 5-per-60s-per-IP auth throttler, which locked out a classroom behind one address).
+  @AuthLimit('login')
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: LoginDto): Promise<AuthResponse> {
