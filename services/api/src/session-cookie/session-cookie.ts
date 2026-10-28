@@ -34,6 +34,9 @@ export const ADMIN_SESSION_COOKIE: SessionCookieConfig = { name: 'sn_admin_rt', 
 export interface HeaderReq {
   headers?: Record<string, string | string[] | undefined>;
 }
+// What the helpers read from the environment (process.env satisfies it).
+export type EnvLike = Record<string, string | undefined>;
+
 export interface AppendRes {
   append(name: string, value: string): unknown;
 }
@@ -55,7 +58,7 @@ function originHeader(req: HeaderReq): string | undefined {
 // `Secure` is required in production. Outside production it is dropped ONLY when
 // the browser is talking from an http://localhost-style origin (local dev); any
 // other case, including a request with no Origin, stays Secure.
-export function shouldBeSecure(req: HeaderReq, env: NodeJS.ProcessEnv = process.env): boolean {
+export function shouldBeSecure(req: HeaderReq, env: EnvLike = process.env): boolean {
   if (env.NODE_ENV === 'production') return true;
   const origin = originHeader(req);
   if (!origin) return true;
@@ -72,7 +75,7 @@ export function shouldBeSecure(req: HeaderReq, env: NodeJS.ProcessEnv = process.
 // that is on the same exact-origin allowlist CORS uses. Missing or foreign -> 403.
 export function assertAllowedCookieOrigin(
   req: HeaderReq,
-  env: NodeJS.ProcessEnv = process.env,
+  env: EnvLike = process.env,
 ): void {
   const origin = originHeader(req);
   if (!origin || !isOriginAllowed(origin, buildCorsConfig(env))) {
@@ -104,7 +107,7 @@ export function setRefreshCookie(
   res: AppendRes,
   cfg: SessionCookieConfig,
   input: RefreshCookieInput,
-  env: NodeJS.ProcessEnv = process.env,
+  env: EnvLike = process.env,
 ): void {
   const maxAgeSeconds = Math.max(0, Math.floor((input.expiresAt.getTime() - Date.now()) / 1000));
   appendSetCookie(
@@ -124,7 +127,7 @@ export function clearRefreshCookie(
   req: HeaderReq,
   res: AppendRes,
   cfg: SessionCookieConfig,
-  env: NodeJS.ProcessEnv = process.env,
+  env: EnvLike = process.env,
 ): void {
   appendSetCookie(
     res,
@@ -155,6 +158,7 @@ export function applyCookieSession<T extends { refreshToken: string; refreshToke
     expiresAt: new Date(body.refreshTokenExpiresAt),
     persistent,
   });
-  const { refreshToken: _omitted, ...rest } = body;
-  return rest;
+  const rest: Partial<T> = { ...body };
+  delete rest.refreshToken;
+  return rest as Omit<T, 'refreshToken'>;
 }
