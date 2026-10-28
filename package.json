@@ -24,6 +24,7 @@
     "node": ">=22.22.0"
   },
   "overrides": {
+    "multer": "2.5.0",
     "@soccernity/web": {
       "react-router": {
         "react": "^19.2.8",
