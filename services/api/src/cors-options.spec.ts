@@ -170,7 +170,8 @@ describe('CORS over real HTTP', () => {
     const res = await request(prodApp.getHttpServer()).get('/probe').set('Origin', WEB);
     expect(res.status).toBe(200);
     expect(res.headers['access-control-allow-origin']).toBe(WEB);
-    expect(res.headers['access-control-allow-credentials']).toBeUndefined();
+    // B-245: credentialed (cookie session mode) -- only ever alongside the EXACT origin above.
+    expect(res.headers['access-control-allow-credentials']).toBe('true');
     expect(res.headers['vary']).toContain('Origin');
   });
 
@@ -202,6 +203,35 @@ describe('CORS over real HTTP', () => {
     expect(res.headers['access-control-allow-origin']).toBe(WEB);
     expect(res.headers['access-control-allow-methods']).toContain('POST');
     expect(res.headers['access-control-allow-headers'].toLowerCase()).toContain('content-type');
+  });
+
+  it('B-245: a pre-flight asking for X-Auth-Mode (and credentials) is allowed for the web and admin origins', async () => {
+    for (const origin of [WEB, ADMIN]) {
+      const res = await request(prodApp.getHttpServer())
+        .options('/probe')
+        .set('Origin', origin)
+        .set('Access-Control-Request-Method', 'POST')
+        .set('Access-Control-Request-Headers', 'content-type,x-auth-mode');
+      expect(res.status).toBe(204);
+      expect(res.headers['access-control-allow-origin']).toBe(origin);
+      expect(res.headers['access-control-allow-credentials']).toBe('true');
+      expect(res.headers['access-control-allow-headers'].toLowerCase()).toContain('x-auth-mode');
+    }
+  });
+
+  it('B-245: credentials never come with a wildcard or a foreign origin as the allowed origin', async () => {
+    for (const o of ['https://evil.example.com', 'http://localhost:5173']) {
+      const res = await request(prodApp.getHttpServer())
+        .options('/probe')
+        .set('Origin', o)
+        .set('Access-Control-Request-Method', 'POST')
+        .set('Access-Control-Request-Headers', 'x-auth-mode');
+      // No Allow-Origin at all, so the browser refuses to expose the response even though the
+      // `cors` package still prints the credentials flag.
+      expect(res.headers['access-control-allow-origin']).toBeUndefined();
+    }
+    const ok = await request(prodApp.getHttpServer()).get('/probe').set('Origin', WEB);
+    expect(ok.headers['access-control-allow-origin']).not.toBe('*');
   });
 
   it('preflight from a foreign origin gets no allow-origin header', async () => {

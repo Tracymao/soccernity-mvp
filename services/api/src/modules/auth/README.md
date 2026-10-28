@@ -1536,3 +1536,68 @@ Full detail and the route table: `docs/backend-w3-gates-report.md`. Summary of w
     the cap). ONE 200 response for every outcome. Sends only for an `active`,
     unverified account. Earlier links are not revoked (the token store has no
     per-user index); the cap bounds how many are live.
+
+## Status update -- OPT-IN cookie session mode (`security/api-cookie-session-mode`, B-245, Decision Log "Token storage" / #422, #407 item 1)
+
+Build Plan 5.7 says the web refresh token lives in an httpOnly, Secure, SameSite cookie; until
+this PR the API only ever returned it in the response body. This adds the API half as an
+**opt-in** mode. `apps/web` and `apps/admin` are NOT changed here (B-246, B-247) and the body
+tokens are NOT removed for browsers (B-248 flips that default later).
+
+**How a caller opts in:** send the request header `X-Auth-Mode: cookie`. Without it every route
+behaves exactly as before (tokens in the body, no `Set-Cookie`), so apps/web, apps/admin until
+B-246/B-247, the native app and the e2e suites are unaffected.
+
+**With the header**, on every route that returns a token pair (`POST /auth/login`, `/auth/register`,
+`/auth/refresh`, `/auth/reactivate-account`, and `POST /admin/auth/login`, `/admin/auth/refresh`) and on logout:
+
+- the refresh token is set as a cookie: `HttpOnly; Secure; SameSite=Strict`, **host-only** (no
+  `Domain`). User API: name `sn_rt`, `Path=/auth`. Admin API: name `sn_admin_rt`, `Path=/admin/auth`.
+  `Secure` is always on in production; outside production it is dropped **only** when the request
+  `Origin` is `http://localhost` / `127.0.0.1` / `[::1]` (local development).
+- the refresh token is **omitted from the response body** (`refreshTokenExpiresAt` stays); the
+  access token is still returned in the body.
+- **"Stay signed in"**: new optional boolean `staySignedIn` on the login DTO (user and admin; declared
+  because `forbidNonWhitelisted` is on, and a non-boolean is a 400). `true` -> a persistent cookie with
+  `Max-Age` = the remaining refresh TTL; `false`/absent -> a session cookie (no `Max-Age`/`Expires`).
+  Register and reactivate-account have no such choice and always issue a session cookie. The choice is
+  stored on the refresh-token record (`persistent`, user and admin stores) so a **rotated** cookie keeps
+  its lifetime kind; `TokenPair.persistent` carries it to the controller and it never appears in a body.
+- `POST /auth/refresh` (and `/admin/auth/refresh`) read the cookie, **never the body** (a body
+  `refreshToken` is ignored), rotate, set the new cookie, and never return the token in the body. No
+  cookie -> 401. A 401 from the store (invalid or reuse detected) also clears the dead cookie.
+- `POST /auth/logout` (and `/admin/auth/logout`) clear the cookie (same attributes, `Max-Age=0`) and
+  revoke as before, including `allSessions` (needs a bearer access token, otherwise 401 -- the cookie is
+  still cleared). With no cookie the call still clears and returns 204.
+- **Origin check:** in cookie mode on refresh and logout a missing `Origin`, or one outside the CORS
+  allowlist (`WEB_APP_BASE_URL`, `ADMIN_APP_BASE_URL`, plus localhost outside production), is a **403**
+  before anything is read or revoked -- the browser attaches the cookie on its own, so this is the CSRF
+  control on top of `SameSite=Strict`. Login/register/reactivate carry no Origin requirement.
+- **Without the header** `refreshToken` is still required on refresh/logout (400 if missing); the DTO
+  field became optional only so cookie mode can omit it, and the controllers re-impose the old check.
+
+**CORS** (`src/cors-options.ts`): `credentials: true` with the same exact-origin allowlist (still no
+wildcard; a disallowed origin gets no `Access-Control-Allow-Origin`). `allowedHeaders` is left unset on
+purpose so the `cors` package reflects the pre-flight's requested headers: `X-Auth-Mode` (and
+`X-Consent-Token`, `Authorization`) work without a hand-kept list; `cors-options.spec.ts` pins it.
+
+**User and admin never cross:** different cookie names, different paths, different Redis key
+namespaces and signing secrets, and each controller reads only its own cookie. Proven in
+`test/cookie-session.e2e-spec.ts` (a user cookie/token is rejected by the admin endpoints under both
+cookie names, and the mirror image) alongside the pre-existing `admin-auth-isolation.e2e-spec.ts`.
+
+**Reuse detection is unchanged and still family-wide in cookie mode:** replaying a consumed cookie is a
+401, revokes the whole family (the legitimate successor dies too) and clears the cookie.
+
+**Dependency:** `cookie@^0.7.2` is now a direct dependency of `services/api` (it was already in the
+lockfile as an Express dependency, so the lockfile gains one line). No `cookie-parser`. It ships no
+types, so `src/session-cookie/cookie-lib.ts` types the two calls used.
+
+**Staging caveat (B-249):** `SameSite=Strict` host-only cookies need the web app and the API to be
+same-site. Staging on default `onrender.com` addresses is cross-site, so cookie mode cannot work there
+until same-site custom domains exist; the opt-in design is what keeps staging working in the meantime.
+
+Code: `src/session-cookie/` (helper + spec), the four controllers, `token.service.ts`/`admin-token.service.ts`
+and both refresh-token stores (`persistent`). Tests: `src/session-cookie/session-cookie.spec.ts`
+(attributes, Secure rule, Origin check, body omission), `src/cors-options.spec.ts`,
+`test/cookie-session.e2e-spec.ts` (real Postgres + Redis).

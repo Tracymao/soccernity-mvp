@@ -57,10 +57,11 @@ describe('API security headers (production)', () => {
     expect(res.headers['strict-transport-security']).toBeDefined();
   });
 
-  it('leaves CORS unchanged: allowed origin echoed, other origin gets no ACAO', async () => {
+  it('leaves the origin allowlist unchanged: allowed origin echoed, other origin gets no ACAO', async () => {
     const ok = await request(app.getHttpServer()).get('/health').set('Origin', WEB).expect(200);
     expect(ok.headers['access-control-allow-origin']).toBe(WEB);
-    expect(ok.headers['access-control-allow-credentials']).toBeUndefined();
+    // B-245: credentials are allowed (cookie session mode), but only alongside the exact origin above.
+    expect(ok.headers['access-control-allow-credentials']).toBe('true');
     expectBaseline(ok.headers);
     const bad = await request(app.getHttpServer()).get('/health').set('Origin', 'https://evil.example.org').expect(200);
     expect(bad.headers['access-control-allow-origin']).toBeUndefined();

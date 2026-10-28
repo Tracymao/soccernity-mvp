@@ -113,7 +113,7 @@ describe('AuthController (HTTP layer)', () => {
         .expect(200);
 
       expect(response.body).toEqual(authResponse);
-      expect(authService.login).toHaveBeenCalledWith('player@example.com', 'password123');
+      expect(authService.login).toHaveBeenCalledWith('player@example.com', 'password123', false);
     });
 
     it('rejects a body missing the password field with 400', async () => {

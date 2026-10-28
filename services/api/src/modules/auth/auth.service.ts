@@ -58,7 +58,9 @@ export class AuthService implements OnModuleInit {
     this.dummyPasswordHash = await this.passwordService.hash(randomBytes(32).toString('hex'));
   }
 
-  async login(email: string, password: string): Promise<AuthResponse> {
+  // `persistent` is the B-245 "Stay signed in" flag; it only decides the cookie lifetime in
+  // cookie mode and is stored on the refresh-token record so rotation keeps it.
+  async login(email: string, password: string, persistent = false): Promise<AuthResponse> {
     // Decision Log #16 (Build Plan Section 9): email is stored lowercase
     // on write (registration.service.ts's register()) so matching here
     // must normalize the same way, or a user who registered as
@@ -113,7 +115,7 @@ export class AuthService implements OnModuleInit {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const tokenPair = await this.tokenService.issueTokenPair(user.id, user.role);
+    const tokenPair = await this.tokenService.issueTokenPair(user.id, user.role, persistent);
     // `user` was already loaded above for password verification — this is
     // response-shaping only, not a new query. See auth-response.mapper.ts's
     // AuthResponse/toAuthUserSummary comments for why isMinor/
@@ -365,9 +367,15 @@ export class AuthService implements OnModuleInit {
   }
 
   async refresh(refreshToken: string): Promise<TokenPairResponse> {
+    return (await this.refreshSession(refreshToken)).response;
+  }
+
+  // Same as refresh(), plus the session's "Stay signed in" flag (B-245) for the
+  // cookie-mode controller. The flag is never part of the response body.
+  async refreshSession(refreshToken: string): Promise<{ response: TokenPairResponse; persistent: boolean }> {
     try {
       const tokenPair = await this.tokenService.rotateRefreshToken(refreshToken);
-      return toTokenPairResponse(tokenPair);
+      return { response: toTokenPairResponse(tokenPair), persistent: tokenPair.persistent };
     } catch (error) {
       if (error instanceof RefreshTokenReuseDetectedError) {
         // The store has already revoked the whole family by this point
@@ -390,8 +398,10 @@ export class AuthService implements OnModuleInit {
   // by reimplementing RefreshTokenStore's token-decoding logic here (the
   // README is explicit: callers should depend on TokenService, not
   // RefreshTokenStore, directly).
-  async logout(refreshToken: string, allSessions: boolean, accessToken?: string): Promise<void> {
-    await this.tokenService.revokeRefreshToken(refreshToken);
+  // `refreshToken` is optional only for cookie mode (B-245), where a logout with no
+  // cookie still has to clear it and, with allSessions, still revoke every session.
+  async logout(refreshToken: string | undefined, allSessions: boolean, accessToken?: string): Promise<void> {
+    if (refreshToken) await this.tokenService.revokeRefreshToken(refreshToken);
 
     if (!allSessions) {
       return;

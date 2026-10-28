@@ -32,14 +32,16 @@ export class TokenService {
 
   // Issues a brand-new session (e.g. on login/register) — starts a new
   // refresh-token family.
-  async issueTokenPair(userId: string, role: string): Promise<TokenPair> {
+  async issueTokenPair(userId: string, role: string, persistent = false): Promise<TokenPair> {
     const accessToken = this.signAccessToken(userId, role);
     const refreshToken = await this.refreshTokenStore.issue(
       userId,
       role,
       this.refreshTokenTtlSeconds,
+      undefined,
+      persistent,
     );
-    return { accessToken, refreshToken };
+    return { accessToken, refreshToken, persistent };
   }
 
   // Consumes a refresh token and issues a replacement pair in the same
@@ -55,8 +57,9 @@ export class TokenService {
       consumed.role,
       this.refreshTokenTtlSeconds,
       consumed.familyId,
+      consumed.persistent,
     );
-    return { accessToken, refreshToken };
+    return { accessToken, refreshToken, persistent: consumed.persistent };
   }
 
   // Verifies an access token's signature and expiry. Deliberately returns

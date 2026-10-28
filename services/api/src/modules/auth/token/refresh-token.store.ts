@@ -31,6 +31,9 @@ interface StoredRefreshToken {
   role: string;
   familyId: string;
   secretHash: string;
+  // B-245: "Stay signed in" -- carried across rotation so a rotated cookie keeps the
+  // same lifetime kind (persistent vs session). Absent on older records = false.
+  persistent?: boolean;
 }
 
 export interface IssuedRefreshToken {
@@ -43,6 +46,7 @@ export interface ConsumedRefreshToken {
   userId: string;
   role: string;
   familyId: string;
+  persistent: boolean;
 }
 
 const tokenKey = (id: string) => `auth:refresh:token:${id}`;
@@ -82,6 +86,7 @@ export class RefreshTokenStore {
     role: string,
     ttlSeconds: number,
     familyId?: string,
+    persistent = false,
   ): Promise<IssuedRefreshToken> {
     const id = randomUUID();
     const secret = randomBytes(32).toString('base64url');
@@ -91,6 +96,7 @@ export class RefreshTokenStore {
       role,
       familyId: resolvedFamilyId,
       secretHash: hashSecret(secret),
+      ...(persistent ? { persistent: true } : {}),
     };
     const ttlMs = ttlSeconds * 1000;
 
@@ -137,7 +143,12 @@ export class RefreshTokenStore {
     await this.redis.set(usedTombstoneKey(id), raw, 'PX', REFRESH_TOKEN_REUSE_DETECTION_WINDOW_MS);
     await this.redis.del(tokenKey(id));
 
-    return { userId: record.userId, role: record.role, familyId: record.familyId };
+    return {
+      userId: record.userId,
+      role: record.role,
+      familyId: record.familyId,
+      persistent: record.persistent === true,
+    };
   }
 
   // Single-session logout.

@@ -5,10 +5,12 @@ import {
   HttpStatus,
   Post,
   Req,
+  Res,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
+import { USER_SESSION_COOKIE, applyCookieSession } from '../../../session-cookie/session-cookie';
 import { toAuthUserSummary, toTokenPairResponse } from '../auth-response.mapper';
 import { AuthRateLimit } from '../rate-limit/auth-rate-limit.decorator';
 import { AuthLimit } from '../rate-limit/auth-limits/auth-limits.interceptor';
@@ -45,11 +47,17 @@ export class RegistrationController {
   @Post('register')
   @AuthLimit('signup')
   @HttpCode(HttpStatus.CREATED)
-  async register(@Body() dto: RegisterDto, @Req() req: Request) {
+  async register(
+    @Body() dto: RegisterDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ) {
     // req.ip is read here and passed on for one transient GeoLite2 lookup. It
     // is deliberately not stored or logged anywhere (B-024, Decision Log #368).
     const result = await this.registrationService.register(dto, req.ip);
-    return toRegisterResponse(result);
+    // B-245: in cookie mode the refresh token goes into the cookie (session cookie -- register has
+    // no "stay signed in" choice) and is omitted from the body; otherwise unchanged.
+    return applyCookieSession(USER_SESSION_COOKIE, req, res, toRegisterResponse(result), false);
   }
 
   // Decision Log #38: `guardianConsentStatus` is additive alongside the

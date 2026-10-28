@@ -34,4 +34,6 @@ export interface AdminRefreshTokenResult {
 export interface AdminTokenPair {
   accessToken: AdminAccessTokenResult;
   refreshToken: AdminRefreshTokenResult;
+  /** B-245 "Stay signed in"; only the cookie-mode controllers read it. Never in a response body. */
+  persistent: boolean;
 }

@@ -1,4 +1,25 @@
-import { Body, Controller, HttpCode, HttpStatus, Headers, Post, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Headers,
+  Post,
+  Req,
+  Res,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
+import type { Request, Response } from 'express';
+import {
+  USER_SESSION_COOKIE,
+  applyCookieSession,
+  assertAllowedCookieOrigin,
+  clearRefreshCookie,
+  isCookieMode,
+  readRefreshCookie,
+} from '../../session-cookie/session-cookie';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './guards/current-user.decorator';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -13,6 +34,10 @@ import { LoginDto } from './dto/login.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { ReactivateAccountDto } from './dto/reactivate-account.dto';
 import { RefreshDto } from './dto/refresh.dto';
+
+// Same messages class-validator produced for the old required `refreshToken`, so a body missing
+// the token outside cookie mode is the same 400 as before.
+const MISSING_REFRESH_TOKEN_MESSAGES = ['refreshToken should not be empty', 'refreshToken must be a string'];
 
 function extractBearerToken(authorizationHeader: string | undefined): string | undefined {
   if (!authorizationHeader) return undefined;
@@ -34,14 +59,40 @@ export class AuthController {
   @AuthLimit('login')
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() dto: LoginDto): Promise<AuthResponse> {
-    return this.authService.login(dto.email, dto.password);
+  async login(
+    @Body() dto: LoginDto,
+    @Req() req?: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<AuthResponse | Omit<AuthResponse, 'refreshToken'>> {
+    const staySignedIn = dto.staySignedIn === true;
+    const result = await this.authService.login(dto.email, dto.password, staySignedIn);
+    return applyCookieSession(USER_SESSION_COOKIE, req, res, result, staySignedIn);
   }
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  async refresh(@Body() dto: RefreshDto): Promise<TokenPairResponse> {
-    return this.authService.refresh(dto.refreshToken);
+  async refresh(
+    @Body() dto: RefreshDto,
+    @Req() req?: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<TokenPairResponse | Omit<TokenPairResponse, 'refreshToken'>> {
+    if (!req || !res || !isCookieMode(req)) {
+      if (!dto.refreshToken) throw new BadRequestException(MISSING_REFRESH_TOKEN_MESSAGES);
+      return this.authService.refresh(dto.refreshToken);
+    }
+    // Cookie mode: Origin check first (a forged cross-site POST carries the cookie on its own),
+    // then the cookie -- never the body. No cookie -> 401.
+    assertAllowedCookieOrigin(req);
+    const cookieToken = readRefreshCookie(req, USER_SESSION_COOKIE);
+    if (!cookieToken) throw new UnauthorizedException('No refresh cookie');
+    try {
+      const { response, persistent } = await this.authService.refreshSession(cookieToken);
+      return applyCookieSession(USER_SESSION_COOKIE, req, res, response, persistent);
+    } catch (error) {
+      // An invalid / reused / expired token: drop the dead cookie so the browser stops sending it.
+      if (error instanceof UnauthorizedException) clearRefreshCookie(req, res, USER_SESSION_COOKIE);
+      throw error;
+    }
   }
 
   @Post('logout')
@@ -49,9 +100,23 @@ export class AuthController {
   async logout(
     @Body() dto: LogoutDto,
     @Headers('authorization') authorizationHeader?: string,
+    @Req() req?: Request,
+    @Res({ passthrough: true }) res?: Response,
   ): Promise<void> {
     const accessToken = extractBearerToken(authorizationHeader);
-    await this.authService.logout(dto.refreshToken, dto.allSessions ?? false, accessToken);
+    if (!req || !res || !isCookieMode(req)) {
+      if (!dto.refreshToken) throw new BadRequestException(MISSING_REFRESH_TOKEN_MESSAGES);
+      await this.authService.logout(dto.refreshToken, dto.allSessions ?? false, accessToken);
+      return;
+    }
+    assertAllowedCookieOrigin(req);
+    // Always clear the cookie, even if the revoke below throws (e.g. allSessions without a token).
+    clearRefreshCookie(req, res, USER_SESSION_COOKIE);
+    await this.authService.logout(
+      readRefreshCookie(req, USER_SESSION_COOKIE),
+      dto.allSessions ?? false,
+      accessToken,
+    );
   }
 
   // Sprint 1 / sprint-1/f5-f6-missing-endpoints — POST /auth/change-password,
@@ -99,8 +164,14 @@ export class AuthController {
   @AuthRateLimit()
   @Post('reactivate-account')
   @HttpCode(HttpStatus.OK)
-  async reactivateAccount(@Body() dto: ReactivateAccountDto): Promise<AuthResponse> {
-    return this.authService.reactivateAccount(dto.email, dto.password);
+  async reactivateAccount(
+    @Body() dto: ReactivateAccountDto,
+    @Req() req?: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<AuthResponse | Omit<AuthResponse, 'refreshToken'>> {
+    const result = await this.authService.reactivateAccount(dto.email, dto.password);
+    // No "stay signed in" choice here -> a session cookie in cookie mode.
+    return applyCookieSession(USER_SESSION_COOKIE, req, res, result, false);
   }
 
   // POST /auth/delete-inactive-account (sprint-2/account-deactivation-backend).
