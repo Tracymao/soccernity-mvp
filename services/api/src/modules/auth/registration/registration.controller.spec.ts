@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, INestApplication, ValidationPip
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AuthThrottlerGuard } from '../rate-limit/auth-throttler.guard';
+import { AuthLimitsInterceptor } from '../rate-limit/auth-limits/auth-limits.interceptor';
 import { RegistrationController } from './registration.controller';
 import { RESEND_VERIFICATION_GENERIC_MESSAGE, ResendVerificationService } from './email-verification/resend-verification.service';
 import { RegistrationService } from './registration.service';
@@ -38,6 +39,8 @@ describe('RegistrationController (HTTP layer)', () => {
       // faking rate-limit behavior itself; that behavior is exercised
       // directly by rate-limit/auth-throttler.guard.spec.ts (PR B1) and by
       // this PR's live curl pass.
+      .overrideInterceptor(AuthLimitsInterceptor)
+      .useValue({ intercept: (_ctx: unknown, next: { handle(): unknown }) => next.handle() })
       .overrideGuard(AuthThrottlerGuard)
       .useValue({ canActivate: () => true })
       .compile();

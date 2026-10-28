@@ -2,6 +2,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AuthThrottlerGuard } from '../rate-limit/auth-throttler.guard';
+import { AuthLimitsInterceptor } from '../rate-limit/auth-limits/auth-limits.interceptor';
 import { FORGOT_PASSWORD_GENERIC_MESSAGE, PasswordResetService } from './password-reset.service';
 import { PasswordResetController } from './password-reset.controller';
 
@@ -23,6 +24,8 @@ describe('PasswordResetController (HTTP layer)', () => {
       controllers: [PasswordResetController],
       providers: [{ provide: PasswordResetService, useValue: passwordResetService }],
     })
+      .overrideInterceptor(AuthLimitsInterceptor)
+      .useValue({ intercept: (_ctx: unknown, next: { handle(): unknown }) => next.handle() })
       .overrideGuard(AuthThrottlerGuard)
       .useValue({ canActivate: () => true })
       .compile();

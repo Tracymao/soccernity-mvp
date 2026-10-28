@@ -71,6 +71,17 @@ export function apiEnvironment(dbUrl: string, redisUrl: string, clock: ApiClock 
     GLOBAL_RATE_LIMIT_WRITE_WINDOW_MS: '60000',
     GLOBAL_RATE_LIMIT_UPLOAD_MAX: '1000000',
     GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS: '60000',
+    // Auth limits for shared networks (B-256): a full QA run signs up, logs in and resets far more than 30 / 60 / 5 per
+    // 10-15 minutes from one IP and one set of emails, and the Redis counters outlive a restart of the API. Forced out of
+    // the way; the real numbers are proven by services/api's auth-limits specs (unit, HTTP and real-Redis e2e).
+    AUTH_SIGNUP_RATE_LIMIT_MAX: '1000000',
+    AUTH_SIGNUP_RATE_LIMIT_WINDOW_MS: '600000',
+    AUTH_LOGIN_FAILED_ATTEMPTS_MAX: '1000000',
+    AUTH_LOGIN_FAILED_ATTEMPTS_WINDOW_MS: '900000',
+    AUTH_IP_CEILING_MAX: '1000000',
+    AUTH_IP_CEILING_WINDOW_MS: '600000',
+    AUTH_FORGOT_PASSWORD_EMAIL_MAX: '1000000',
+    AUTH_FORGOT_PASSWORD_EMAIL_WINDOW_MS: '3600000',
     TRUST_PROXY_HOPS: '',
     // FC10 (B-240): the post media pipeline talks to the local stand-ins in support/fake-media-services.ts
     // (an S3-compatible store and Amazon Rekognition). The real code runs unchanged; only the vendors'

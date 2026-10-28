@@ -83,6 +83,25 @@ services:
         sync: false
       - key: AUTH_RATE_LIMIT_WINDOW_MS
         sync: false
+      # Auth limits that work on shared school and club networks (modules/auth/rate-limit/auth-limits): signup per IP;
+      # login per ACCOUNT (hashed email, failed attempts only) plus a per-IP ceiling; forgot-password per email plus the
+      # same ceiling. Stored in Redis. Replaces the shared AUTH_RATE_LIMIT_* on those three routes only.
+      - key: AUTH_SIGNUP_RATE_LIMIT_MAX
+        value: "30"
+      - key: AUTH_SIGNUP_RATE_LIMIT_WINDOW_MS
+        value: "600000"
+      - key: AUTH_LOGIN_FAILED_ATTEMPTS_MAX
+        value: "5"
+      - key: AUTH_LOGIN_FAILED_ATTEMPTS_WINDOW_MS
+        value: "900000"
+      - key: AUTH_IP_CEILING_MAX
+        value: "60"
+      - key: AUTH_IP_CEILING_WINDOW_MS
+        value: "600000"
+      - key: AUTH_FORGOT_PASSWORD_EMAIL_MAX
+        value: "3"
+      - key: AUTH_FORGOT_PASSWORD_EMAIL_WINDOW_MS
+        value: "3600000"
       # GUARDIAN_WITHDRAWAL_RATE_LIMIT_*: code defaults (guardian-withdrawal-throttle.ts), B-112
       - key: GUARDIAN_WITHDRAWAL_RATE_LIMIT_MAX
         value: "5"
@@ -325,6 +344,25 @@ services:
         sync: false
       - key: AUTH_RATE_LIMIT_WINDOW_MS
         sync: false
+      # Auth limits that work on shared school and club networks (modules/auth/rate-limit/auth-limits): signup per IP;
+      # login per ACCOUNT (hashed email, failed attempts only) plus a per-IP ceiling; forgot-password per email plus the
+      # same ceiling. Stored in Redis. Replaces the shared AUTH_RATE_LIMIT_* on those three routes only.
+      - key: AUTH_SIGNUP_RATE_LIMIT_MAX
+        value: "30"
+      - key: AUTH_SIGNUP_RATE_LIMIT_WINDOW_MS
+        value: "600000"
+      - key: AUTH_LOGIN_FAILED_ATTEMPTS_MAX
+        value: "5"
+      - key: AUTH_LOGIN_FAILED_ATTEMPTS_WINDOW_MS
+        value: "900000"
+      - key: AUTH_IP_CEILING_MAX
+        value: "60"
+      - key: AUTH_IP_CEILING_WINDOW_MS
+        value: "600000"
+      - key: AUTH_FORGOT_PASSWORD_EMAIL_MAX
+        value: "3"
+      - key: AUTH_FORGOT_PASSWORD_EMAIL_WINDOW_MS
+        value: "3600000"
       # GUARDIAN_WITHDRAWAL_RATE_LIMIT_*: code defaults (guardian-withdrawal-throttle.ts), B-112
       - key: GUARDIAN_WITHDRAWAL_RATE_LIMIT_MAX
         value: "5"

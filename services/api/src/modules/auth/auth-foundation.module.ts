@@ -9,6 +9,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from './guards/optional-jwt-auth.guard';
 import { PasswordService } from './password/password.service';
 import { AuthRateLimitModule } from './rate-limit/rate-limit.module';
+import { AuthLimitsModule } from './rate-limit/auth-limits/auth-limits.module';
 import { RefreshTokenStore } from './token/refresh-token.store';
 import { TokenService } from './token/token.service';
 
@@ -47,6 +48,7 @@ import { TokenService } from './token/token.service';
     ConfigModule,
     RedisModule,
     AuthRateLimitModule,
+    AuthLimitsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -59,6 +61,6 @@ import { TokenService } from './token/token.service';
     }),
   ],
   providers: [PasswordService, TokenService, RefreshTokenStore, JwtAuthGuard, OptionalJwtAuthGuard, PrismaService, GuardianConsentGuard, Under16RestrictionGuard],
-  exports: [PasswordService, TokenService, RefreshTokenStore, JwtAuthGuard, OptionalJwtAuthGuard, GuardianConsentGuard, Under16RestrictionGuard],
+  exports: [AuthLimitsModule, PasswordService, TokenService, RefreshTokenStore, JwtAuthGuard, OptionalJwtAuthGuard, GuardianConsentGuard, Under16RestrictionGuard],
 })
 export class AuthFoundationModule {}

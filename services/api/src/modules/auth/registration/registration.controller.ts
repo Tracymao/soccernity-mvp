@@ -11,6 +11,7 @@ import {
 import type { Request } from 'express';
 import { toAuthUserSummary, toTokenPairResponse } from '../auth-response.mapper';
 import { AuthRateLimit } from '../rate-limit/auth-rate-limit.decorator';
+import { AuthLimit } from '../rate-limit/auth-limits/auth-limits.interceptor';
 import { RegisterDto } from './dto/register.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
@@ -39,8 +40,10 @@ export class RegistrationController {
     private readonly resendVerificationService: ResendVerificationService,
   ) {}
 
+  // security/auth-limits-shared-networks: 30 per 10 minutes per IP (a class signing up together), replacing
+  // the shared 5-per-60s auth throttler on this route only; resend-verification-email below keeps it.
   @Post('register')
-  @AuthRateLimit()
+  @AuthLimit('signup')
   @HttpCode(HttpStatus.CREATED)
   async register(@Body() dto: RegisterDto, @Req() req: Request) {
     // req.ip is read here and passed on for one transient GeoLite2 lookup. It

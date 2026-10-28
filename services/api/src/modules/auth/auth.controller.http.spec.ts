@@ -5,6 +5,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthThrottlerGuard } from './rate-limit/auth-throttler.guard';
+import { AuthLimitsInterceptor } from './rate-limit/auth-limits/auth-limits.interceptor';
 
 // Exercises real HTTP request/response handling (routing, DTO
 // validation, status codes) with AuthService mocked out, mirroring
@@ -71,6 +72,8 @@ describe('AuthController (HTTP layer)', () => {
       // AuthThrottlerGuard's real DI graph without faking rate-limit
       // behavior itself (covered separately by
       // rate-limit/auth-throttler.guard.spec.ts).
+      .overrideInterceptor(AuthLimitsInterceptor)
+      .useValue({ intercept: (_ctx: unknown, next: { handle(): unknown }) => next.handle() })
       .overrideGuard(AuthThrottlerGuard)
       .useValue({ canActivate: () => true })
       // Same pattern users.controller.http.spec.ts already established:
