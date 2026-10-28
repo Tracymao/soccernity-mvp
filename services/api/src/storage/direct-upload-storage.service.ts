@@ -35,4 +35,19 @@ export abstract class DirectUploadStorageService extends StorageService {
    * review-queue, B-037). It expires after `expiresInSeconds`; it is never stored.
    */
   abstract createDownloadUrl(key: string, expiresInSeconds: number): Promise<string>;
+
+  /**
+   * backend/media-privacy-vetting-followups (B-257; Decision Log #430 item 2). A server-side copy of the
+   * object at `sourceKey` to `destKey` (the bytes never pass through the API), keeping `contentType`. Used
+   * to publish an approved file from the PRIVATE prefix to the PUBLIC one, and to move a rejected or held
+   * file back. The caller verifies the copy with head() before relying on it.
+   */
+  abstract copyObject(sourceKey: string, destKey: string, contentType: string): Promise<void>;
+
+  /**
+   * The public URL `key` WOULD have (the same base upload() returns). Pure: no network call, and it says
+   * nothing about whether an object exists there. Lets a post point at a file's future public location
+   * while the file is still private.
+   */
+  abstract publicUrlFor(key: string): string;
 }

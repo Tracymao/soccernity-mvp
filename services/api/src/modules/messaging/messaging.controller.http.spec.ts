@@ -168,11 +168,21 @@ describe('ConversationsController (HTTP layer)', () => {
         .expect(400);
     });
 
-    it('rejects a non-URL mediaUrl (400) and strips a smuggled senderId (400)', async () => {
+    // B-259 (Decision Log #430 item 4): a message carries NO free media URL until direct-message upload exists.
+    it('rejects ANY mediaUrl, even a well-formed one (400), and the service is never called', async () => {
+      messaging.sendMessage.mockClear();
+      await request(app.getHttpServer())
+        .post('/conversations/c-1/messages')
+        .send({ contentText: 'x', mediaUrl: 'https://example.com/a.jpg' })
+        .expect(400);
       await request(app.getHttpServer())
         .post('/conversations/c-1/messages')
         .send({ contentText: 'x', mediaUrl: 'not a url' })
         .expect(400);
+      expect(messaging.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('strips a smuggled senderId (400)', async () => {
       await request(app.getHttpServer())
         .post('/conversations/c-1/messages')
         .send({ contentText: 'x', senderId: 'someone-else' })

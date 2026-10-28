@@ -124,9 +124,15 @@ describe('AccountDeletionSweepService', () => {
   // backend/w14-post-media-pipeline (Decision Log #419 item 9): the user's uploaded post and contest files
   // go with the account, even though #341 keeps their posts.
   describe('anonymizeUser post media', () => {
+    // B-257 (Decision Log #430 item 2): an approved, published file has its PUBLIC object deleted; an unpublished
+    // file's private object is deleted too, EXCEPT a rejected file's, which is kept (B-206, evidence handling OPEN).
+    const published = new Date('2026-08-01T00:00:00Z');
     const rows = [
-      { id: 'm1', postId: 'post-1', publicUrl: 'https://cdn.test/post-media/user-1/m1.jpg', publicKey: 'post-media/user-1/m1.jpg', quarantineKey: null },
-      { id: 'm2', postId: null, publicUrl: null, publicKey: null, quarantineKey: 'quarantine/user-1/m2' },
+      {
+        id: 'm1', postId: 'post-1', publicUrl: 'https://cdn.test/post-media/user-1/m1.jpg', status: 'approved', publishedAt: published,
+        publicKey: 'post-media/user-1/m1.jpg', privateKey: null, quarantineKey: null,
+      },
+      { id: 'm2', postId: null, publicUrl: null, status: 'pending', publishedAt: null, publicKey: null, privateKey: null, quarantineKey: 'quarantine/user-1/m2' },
     ];
 
     it('deletes the rows, strips their URLs from surviving posts, and removes the objects after the commit', async () => {
@@ -144,6 +150,18 @@ describe('AccountDeletionSweepService', () => {
       expect(storage.delete).toHaveBeenCalledWith('quarantine/user-1/m2');
       const upd = (prisma.user.update as jest.Mock).mock.invocationCallOrder[0];
       expect(storage.delete.mock.invocationCallOrder[0]).toBeGreaterThan(upd);
+    });
+
+    it('never deletes the private object of a REJECTED file, but does delete a pending file private object', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.postMedia.findMany as jest.Mock).mockResolvedValue([
+        { id: 'r', postId: null, publicUrl: null, status: 'rejected', publishedAt: null, publicKey: 'post-media/user-1/r.jpg', privateKey: 'private-media/user-1/r.jpg', quarantineKey: null },
+        { id: 'p', postId: null, publicUrl: null, status: 'pending', publishedAt: null, publicKey: 'post-media/user-1/p.jpg', privateKey: 'private-media/user-1/p.jpg', quarantineKey: null },
+      ]);
+      const storage = { upload: jest.fn(), delete: jest.fn().mockResolvedValue(undefined) };
+      await new AccountDeletionSweepService(prisma, storage).anonymizeUser('user-1', false);
+      expect(storage.delete.mock.calls.map((c) => c[0])).toEqual(['private-media/user-1/p.jpg']);
+      expect(prisma.postMedia.deleteMany).toHaveBeenCalledWith({ where: { uploaderId: 'user-1' } });
     });
 
     it('a user with no uploaded media triggers no media deletion at all', async () => {

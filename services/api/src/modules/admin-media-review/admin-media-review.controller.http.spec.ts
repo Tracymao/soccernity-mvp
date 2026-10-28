@@ -54,7 +54,8 @@ describe('AdminMediaReviewController (HTTP layer)', () => {
   it('GET / validates and forwards the filters', async () => {
     service.list.mockResolvedValue({ items: [], nextCursor: null });
     await request(app.getHttpServer()).get('/admin/media-review?order=oldest&source=user_report&status=approved&limit=5&cursor=abc').expect(200);
-    expect(service.list).toHaveBeenCalledWith({ order: 'oldest', source: 'user_report', status: 'approved', limit: 5, cursor: 'abc' });
+    // The acting admin id travels with the filters (the vetting rule is applied per admin, B-258).
+    expect(service.list).toHaveBeenCalledWith({ order: 'oldest', source: 'user_report', status: 'approved', limit: 5, cursor: 'abc' }, 'mod-1');
     await request(app.getHttpServer()).get('/admin/media-review?order=sideways').expect(400);
     await request(app.getHttpServer()).get('/admin/media-review?source=nope').expect(400);
     await request(app.getHttpServer()).get('/admin/media-review?status=nope').expect(400);

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { TEST_CLOCK_ENV_VARS } from './clock/clock';
+import { POST_MEDIA_DEFAULTS } from './modules/post-media/post-media.config';
 import { GLOBAL_RATE_LIMIT_DEFAULTS } from './rate-limit/global-rate-limit.constants';
 import { AUTH_LIMIT_DEFAULTS } from './modules/auth/rate-limit/auth-limits/auth-limits.constants';
 
@@ -161,6 +162,38 @@ describe('environment completeness (B-018)', () => {
         const inExample = exampleText.match(new RegExp(`^${name}=(\\d+)\\s*$`, 'm'));
         expect(inExample && Number(inExample[1])).toBe(DEFAULT_OF[name]);
       }
+    });
+  });
+
+  // Media follow-ups (B-258, B-259; Decision Log #430). The two numbers the build PR introduced must exist in
+  // code, in render.yaml for BOTH services and in .env.example, with the same value as the code default.
+  describe('post media follow-up variables', () => {
+    const DEFAULT_OF: Record<string, number> = {
+      POST_MEDIA_REPORT_DAILY_LIMIT: POST_MEDIA_DEFAULTS.reportDailyLimit,
+      POST_MEDIA_UNATTACHED_MAX_AGE_DAYS: POST_MEDIA_DEFAULTS.unattachedMaxAgeDays,
+    };
+    const NAMES = Object.keys(DEFAULT_OF);
+
+    it('are read by the code, declared in both render.yaml services and documented in .env.example', () => {
+      for (const name of NAMES) expect(read.has(name)).toBe(true);
+      for (const keys of services) for (const name of NAMES) expect(keys.has(name)).toBe(true);
+      for (const name of NAMES) expect(example.has(name)).toBe(true);
+    });
+
+    it('carry the same numbers in render.yaml (both services) and .env.example as the code defaults', () => {
+      const renderText = fs.readFileSync(path.join(REPO_ROOT, 'render.yaml'), 'utf8');
+      const exampleText = fs.readFileSync(path.join(REPO_ROOT, '.env.example'), 'utf8');
+      for (const name of NAMES) {
+        const inRender = [...renderText.matchAll(new RegExp(`-\\s+key:\\s+${name}\\s+value:\\s+"(\\d+)"`, 'g'))].map((m) => Number(m[1]));
+        expect(inRender).toEqual([DEFAULT_OF[name], DEFAULT_OF[name]]);
+        const inExample = exampleText.match(new RegExp(`^${name}=(\\d+)\\s*$`, 'm'));
+        expect(inExample && Number(inExample[1])).toBe(DEFAULT_OF[name]);
+      }
+    });
+
+    it('state the founder-veto-able defaults: 20 reports per rolling 24 hours, purge unattached after 7 days', () => {
+      expect(POST_MEDIA_DEFAULTS.reportDailyLimit).toBe(20);
+      expect(POST_MEDIA_DEFAULTS.unattachedMaxAgeDays).toBe(7);
     });
   });
 

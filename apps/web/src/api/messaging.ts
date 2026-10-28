@@ -66,7 +66,6 @@ export interface Message {
   conversationId: string;
   senderId: string;
   contentText: string;
-  mediaUrl: string | null;
   sentAt: string;
   readAt: string | null;
 }
@@ -78,7 +77,6 @@ export interface MessagePage {
 
 export interface SendMessageRequest {
   contentText: string;
-  mediaUrl?: string;
 }
 
 export interface MarkReadResult {
