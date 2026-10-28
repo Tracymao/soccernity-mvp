@@ -30,6 +30,7 @@ import { AdminRefreshDto } from './dto/admin-refresh.dto';
 import { AdminJwtAuthGuard } from './guards/admin-jwt-auth.guard';
 import { CurrentAdmin } from './guards/current-admin.decorator';
 import { AdminAccessTokenPayload } from './token/admin-token.types';
+import { SkipGlobalWriteLimit } from '../../rate-limit/global-rate-limit.decorators';
 
 // Same messages class-validator produced for the old required `refreshToken`.
 const MISSING_REFRESH_TOKEN_MESSAGES = ['refreshToken should not be empty', 'refreshToken must be a string'];
@@ -58,6 +59,7 @@ export class AdminAuthController {
   // The override is applied per-handler, so this route's counter is
   // independent of AuthController.login's — admin traffic never exhausts
   // the User login bucket and vice versa.
+  @SkipGlobalWriteLimit()
   @AuthRateLimit({ limit: 5, windowMs: 15 * 60 * 1000 })
   @Post('login')
   @HttpCode(HttpStatus.OK)
