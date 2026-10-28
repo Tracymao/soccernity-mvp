@@ -28,4 +28,6 @@ export interface RefreshTokenResult {
 export interface TokenPair {
   accessToken: AccessTokenResult;
   refreshToken: RefreshTokenResult;
+  /** B-245 "Stay signed in"; only the cookie-mode controllers read it. Never in a response body. */
+  persistent: boolean;
 }

@@ -78,14 +78,16 @@ export class AdminTokenService {
 
   // Issues a brand-new session (e.g. on admin login) — starts a new
   // refresh-token family.
-  async issueTokenPair(adminId: string, role: string): Promise<AdminTokenPair> {
+  async issueTokenPair(adminId: string, role: string, persistent = false): Promise<AdminTokenPair> {
     const accessToken = this.signAccessToken(adminId, role);
     const refreshToken = await this.refreshTokenStore.issue(
       adminId,
       role,
       this.refreshTokenTtlSeconds,
+      undefined,
+      persistent,
     );
-    return { accessToken, refreshToken };
+    return { accessToken, refreshToken, persistent };
   }
 
   // Consumes a refresh token and issues a replacement pair in the same
@@ -98,8 +100,9 @@ export class AdminTokenService {
       consumed.role,
       this.refreshTokenTtlSeconds,
       consumed.familyId,
+      consumed.persistent,
     );
-    return { accessToken, refreshToken };
+    return { accessToken, refreshToken, persistent: consumed.persistent };
   }
 
   // Verifies an admin access token's signature, expiry, AND audience

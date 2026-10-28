@@ -104,11 +104,23 @@ export function isOriginAllowed(origin: string | undefined, config: CorsConfig):
 
 type OriginCallback = (err: Error | null, allow?: boolean) => void;
 
-// The options object handed to `app.enableCors()`. `credentials` is left unset
-// on purpose: nothing here uses cookies. `Retry-After` is exposed so a browser client can read it
-// off a global-rate-limit 429 (a cross-origin response hides every non-safelisted header otherwise).
+// The options object handed to `app.enableCors()`.
+//
+// `credentials: true` (B-245, cookie session mode) lets a browser on an allowed origin send and
+// receive the httpOnly refresh cookie. It is safe ONLY because the origin check below is an exact
+// allowlist: the `cors` package answers `Access-Control-Allow-Origin: <that exact origin>` (never `*`)
+// and a disallowed origin gets no Allow-Origin header, so no other site can read a credentialed
+// response. Never combine `credentials: true` with a wildcard or a reflected-any origin.
+//
+// `allowedHeaders` is deliberately left unset: with it unset the `cors` package reflects the
+// pre-flight's Access-Control-Request-Headers, so the opt-in `X-Auth-Mode: cookie` header (and the
+// existing Authorization / Content-Type / X-Consent-Token) are allowed without a hand-kept list that
+// would silently break the next custom header. cors-options.spec.ts pins that X-Auth-Mode is allowed.
+// `Retry-After` is exposed so a browser client can read it off a global-rate-limit 429 (a
+// cross-origin response hides every non-safelisted header otherwise).
 export function buildCorsOptions(config: CorsConfig) {
   return {
+    credentials: true,
     exposedHeaders: ['Retry-After'],
     origin: (origin: string | undefined, callback: OriginCallback) => {
       callback(null, isOriginAllowed(origin, config));

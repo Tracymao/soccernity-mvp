@@ -1,4 +1,25 @@
-import { Body, Controller, HttpCode, HttpStatus, Headers, Post, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Headers,
+  Post,
+  Req,
+  Res,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
+import type { Request, Response } from 'express';
+import {
+  ADMIN_SESSION_COOKIE,
+  applyCookieSession,
+  assertAllowedCookieOrigin,
+  clearRefreshCookie,
+  isCookieMode,
+  readRefreshCookie,
+} from '../../session-cookie/session-cookie';
 import { AuthRateLimit } from '../auth/rate-limit/auth-rate-limit.decorator';
 import { AdminAuthService } from './admin-auth.service';
 import { AdminAuthResponse, AdminTokenPairResponse } from './admin-response.mapper';
@@ -9,6 +30,9 @@ import { AdminRefreshDto } from './dto/admin-refresh.dto';
 import { AdminJwtAuthGuard } from './guards/admin-jwt-auth.guard';
 import { CurrentAdmin } from './guards/current-admin.decorator';
 import { AdminAccessTokenPayload } from './token/admin-token.types';
+
+// Same messages class-validator produced for the old required `refreshToken`.
+const MISSING_REFRESH_TOKEN_MESSAGES = ['refreshToken should not be empty', 'refreshToken must be a string'];
 
 function extractBearerToken(authorizationHeader: string | undefined): string | undefined {
   if (!authorizationHeader) return undefined;
@@ -37,14 +61,40 @@ export class AdminAuthController {
   @AuthRateLimit({ limit: 5, windowMs: 15 * 60 * 1000 })
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() dto: AdminLoginDto): Promise<AdminAuthResponse> {
-    return this.adminAuthService.login(dto.email, dto.password);
+  async login(
+    @Body() dto: AdminLoginDto,
+    @Req() req?: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<AdminAuthResponse | Omit<AdminAuthResponse, 'refreshToken'>> {
+    const staySignedIn = dto.staySignedIn === true;
+    const result = await this.adminAuthService.login(dto.email, dto.password, staySignedIn);
+    return applyCookieSession(ADMIN_SESSION_COOKIE, req, res, result, staySignedIn);
   }
 
+  // B-245 cookie mode: see AuthController.refresh. The admin cookie (sn_admin_rt, Path
+  // /admin/auth) is a different name and path from the user cookie, and only this controller
+  // reads it, so neither audience's cookie is ever accepted by the other's endpoints.
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  async refresh(@Body() dto: AdminRefreshDto): Promise<AdminTokenPairResponse> {
-    return this.adminAuthService.refresh(dto.refreshToken);
+  async refresh(
+    @Body() dto: AdminRefreshDto,
+    @Req() req?: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<AdminTokenPairResponse | Omit<AdminTokenPairResponse, 'refreshToken'>> {
+    if (!req || !res || !isCookieMode(req)) {
+      if (!dto.refreshToken) throw new BadRequestException(MISSING_REFRESH_TOKEN_MESSAGES);
+      return this.adminAuthService.refresh(dto.refreshToken);
+    }
+    assertAllowedCookieOrigin(req);
+    const cookieToken = readRefreshCookie(req, ADMIN_SESSION_COOKIE);
+    if (!cookieToken) throw new UnauthorizedException('No refresh cookie');
+    try {
+      const { response, persistent } = await this.adminAuthService.refreshSession(cookieToken);
+      return applyCookieSession(ADMIN_SESSION_COOKIE, req, res, response, persistent);
+    } catch (error) {
+      if (error instanceof UnauthorizedException) clearRefreshCookie(req, res, ADMIN_SESSION_COOKIE);
+      throw error;
+    }
   }
 
   @Post('logout')
@@ -52,9 +102,22 @@ export class AdminAuthController {
   async logout(
     @Body() dto: AdminLogoutDto,
     @Headers('authorization') authorizationHeader?: string,
+    @Req() req?: Request,
+    @Res({ passthrough: true }) res?: Response,
   ): Promise<void> {
     const accessToken = extractBearerToken(authorizationHeader);
-    await this.adminAuthService.logout(dto.refreshToken, dto.allSessions ?? false, accessToken);
+    if (!req || !res || !isCookieMode(req)) {
+      if (!dto.refreshToken) throw new BadRequestException(MISSING_REFRESH_TOKEN_MESSAGES);
+      await this.adminAuthService.logout(dto.refreshToken, dto.allSessions ?? false, accessToken);
+      return;
+    }
+    assertAllowedCookieOrigin(req);
+    clearRefreshCookie(req, res, ADMIN_SESSION_COOKIE);
+    await this.adminAuthService.logout(
+      readRefreshCookie(req, ADMIN_SESSION_COOKIE),
+      dto.allSessions ?? false,
+      accessToken,
+    );
   }
 
   @UseGuards(AdminJwtAuthGuard)

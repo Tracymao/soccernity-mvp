@@ -34,6 +34,8 @@ interface StoredAdminRefreshToken {
   role: string;
   familyId: string;
   secretHash: string;
+  // B-245: "Stay signed in", carried across rotation. Absent = false.
+  persistent?: boolean;
 }
 
 export interface IssuedAdminRefreshToken {
@@ -46,6 +48,7 @@ export interface ConsumedAdminRefreshToken {
   adminId: string;
   role: string;
   familyId: string;
+  persistent: boolean;
 }
 
 const adminTokenKey = (id: string) => `admin:refresh:token:${id}`;
@@ -85,6 +88,7 @@ export class AdminRefreshTokenStore {
     role: string,
     ttlSeconds: number,
     familyId?: string,
+    persistent = false,
   ): Promise<IssuedAdminRefreshToken> {
     const id = randomUUID();
     const secret = randomBytes(32).toString('base64url');
@@ -94,6 +98,7 @@ export class AdminRefreshTokenStore {
       role,
       familyId: resolvedFamilyId,
       secretHash: hashSecret(secret),
+      ...(persistent ? { persistent: true } : {}),
     };
     const ttlMs = ttlSeconds * 1000;
 
@@ -142,7 +147,12 @@ export class AdminRefreshTokenStore {
     );
     await this.redis.del(adminTokenKey(id));
 
-    return { adminId: record.adminId, role: record.role, familyId: record.familyId };
+    return {
+      adminId: record.adminId,
+      role: record.role,
+      familyId: record.familyId,
+      persistent: record.persistent === true,
+    };
   }
 
   // Single-session logout.

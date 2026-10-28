@@ -46,7 +46,7 @@ export class AdminAuthService implements OnModuleInit {
   // keep this PR's own verification scope to schema + auth-isolation +
   // CRUD, not because it's an intentional security choice to skip it
   // forever).
-  async login(email: string, password: string): Promise<AdminAuthResponse> {
+  async login(email: string, password: string, persistent = false): Promise<AdminAuthResponse> {
     // Same case-insensitive-email convention Decision Log #16 established
     // for User — email is expected to be stored lowercase (see
     // updateOwnProfile's normalization) so matching here must normalize
@@ -73,14 +73,21 @@ export class AdminAuthService implements OnModuleInit {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const tokenPair = await this.adminTokenService.issueTokenPair(admin.id, admin.role);
+    const tokenPair = await this.adminTokenService.issueTokenPair(admin.id, admin.role, persistent);
     return { ...toAdminTokenPairResponse(tokenPair), admin: toAdminSummary(admin) };
   }
 
   async refresh(refreshToken: string): Promise<AdminTokenPairResponse> {
+    return (await this.refreshSession(refreshToken)).response;
+  }
+
+  // B-245: refresh() plus the session's "Stay signed in" flag, for the cookie-mode controller.
+  async refreshSession(
+    refreshToken: string,
+  ): Promise<{ response: AdminTokenPairResponse; persistent: boolean }> {
     try {
       const tokenPair = await this.adminTokenService.rotateRefreshToken(refreshToken);
-      return toAdminTokenPairResponse(tokenPair);
+      return { response: toAdminTokenPairResponse(tokenPair), persistent: tokenPair.persistent };
     } catch (error) {
       if (error instanceof RefreshTokenReuseDetectedError) {
         throw new UnauthorizedException(
@@ -97,8 +104,8 @@ export class AdminAuthService implements OnModuleInit {
   // Single-session logout always happens. `allSessions` additionally
   // wipes every other active session for the acting admin — mirrors
   // AuthService.logout()'s exact shape.
-  async logout(refreshToken: string, allSessions: boolean, accessToken?: string): Promise<void> {
-    await this.adminTokenService.revokeRefreshToken(refreshToken);
+  async logout(refreshToken: string | undefined, allSessions: boolean, accessToken?: string): Promise<void> {
+    if (refreshToken) await this.adminTokenService.revokeRefreshToken(refreshToken);
 
     if (!allSessions) {
       return;
