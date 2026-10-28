@@ -569,17 +569,6 @@
   color: var(--sn-text-primary);
 }
 
-.composer__link-input {
-  width: 100%;
-  box-sizing: border-box;
-  height: 44px;
-  padding: 0 14px;
-  border-radius: 8px;
-  border: 1px solid var(--sn-icon-inactive);
-  background-color: var(--sn-background-surface);
-  color: var(--sn-text-primary);
-  font: 400 14px "Inter", sans-serif;
-}
 
 /* "Contest post" label on a post that is a Contest entry (backend/w7-contest). */
 .post__contest-label {

@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import * as net from 'net';
 import * as path from 'path';
-import { API_LOG, PORTS, REPO, RUN_DIR, URLS } from './stack';
+import { API_LOG, FAKE_MEDIA, PORTS, REPO, RUN_DIR, URLS } from './stack';
 
 // The real API process, started and (for the Contest phase scenes of spec 17) RESTARTED on a new
 // test-clock instant. The API clock is environment-only (TEST_CLOCK_ISO, services/api/src/clock),
@@ -19,6 +19,22 @@ export interface ApiClock {
   iso?: string;
   /** Let the clock run on from `iso` instead of freezing it. */
   advance?: boolean;
+  /** Start the API with NO object store configured (the S3_* placeholders), as a fresh deployment is. */
+  noObjectStore?: boolean;
+}
+
+// ffmpeg / ffprobe for the video half of the media pipeline: the static binaries from the harness's own
+// devDependencies, if installed (a video upload FAILS CLOSED without them, so the video tests skip).
+function videoTools(): { ffmpeg: string; ffprobe: string } {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ffmpeg = require('ffmpeg-static') as string | null;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ffprobe = (require('ffprobe-static') as { path?: string }).path;
+    return { ffmpeg: ffmpeg ?? '', ffprobe: ffprobe ?? '' };
+  } catch {
+    return { ffmpeg: '', ffprobe: '' };
+  }
 }
 
 /** Everything the API process needs. The three test-clock variables are always written (blank when unused). */
@@ -46,6 +62,21 @@ export function apiEnvironment(dbUrl: string, redisUrl: string, clock: ApiClock 
     // suite needs; the throttle itself is covered by services/api's own e2e.
     AUTH_RATE_LIMIT_MAX: '1000',
     TRUST_PROXY_HOPS: '',
+    // FC10 (B-240): the post media pipeline talks to the local stand-ins in support/fake-media-services.ts
+    // (an S3-compatible store and Amazon Rekognition). The real code runs unchanged; only the vendors'
+    // answers are fixed. The sweeps run every minute, so the media specs wait up to ~70 s for a decision.
+    S3_ENDPOINT: FAKE_MEDIA.storage,
+    S3_BUCKET: clock.noObjectStore ? 'replace-me' : FAKE_MEDIA.bucket,
+    S3_ACCESS_KEY: clock.noObjectStore ? 'replace-me' : 'qa-access-key',
+    S3_SECRET_KEY: clock.noObjectStore ? 'replace-me' : 'qa-secret-key',
+    S3_REGION: 'us-east-1',
+    S3_PUBLIC_BASE_URL: '',
+    REKOGNITION_ACCESS_KEY_ID: 'qa-rekognition-key',
+    REKOGNITION_SECRET_ACCESS_KEY: 'qa-rekognition-secret',
+    REKOGNITION_REGION: 'eu-west-1',
+    AWS_ENDPOINT_URL_REKOGNITION: FAKE_MEDIA.rekognition,
+    FFMPEG_PATH: videoTools().ffmpeg,
+    FFPROBE_PATH: videoTools().ffprobe,
     TEST_CLOCK_ISO: iso,
     E2E_TEST_CLOCK: iso ? '1' : '',
     TEST_CLOCK_ADVANCE: iso && clock.advance ? '1' : '',

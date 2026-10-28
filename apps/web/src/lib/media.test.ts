@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { firstVideoUrl, isVideoUrl } from "./media";
+import { firstVideoUrl, isVideoUrl, mediaIdFromUrl } from "./media";
 
 describe("isVideoUrl (v1 extension heuristic)", () => {
   it("recognises common video extensions, case-insensitively, ignoring query and fragment", () => {
@@ -19,5 +19,19 @@ describe("isVideoUrl (v1 extension heuristic)", () => {
     expect(firstVideoUrl(["https://x/a.jpg", "https://x/b.mp4", "https://x/c.webm"])).toBe("https://x/b.mp4");
     expect(firstVideoUrl(["https://x/a.jpg"])).toBeNull();
     expect(firstVideoUrl([])).toBeNull();
+  });
+});
+
+describe("mediaIdFromUrl", () => {
+  const ID = "3f6c1a52-8d3e-4c1f-9a77-0b1c2d3e4f50";
+  it("reads the upload id from the stored file's name, with or without a query string", () => {
+    expect(mediaIdFromUrl(`https://cdn.test/post-media/user-1/${ID}.jpg`)).toBe(ID);
+    expect(mediaIdFromUrl(`http://127.0.0.1:9/bucket/post-media/u/${ID.toUpperCase()}.mp4?x=1#y`)).toBe(ID);
+    expect(mediaIdFromUrl(`/post-media/u/${ID}.webp`)).toBe(ID);
+  });
+  it("gives null for anything that does not end in an upload id", () => {
+    expect(mediaIdFromUrl("https://elsewhere.test/photo.jpg")).toBeNull();
+    expect(mediaIdFromUrl("https://cdn.test/")).toBeNull();
+    expect(mediaIdFromUrl("")).toBeNull();
   });
 });

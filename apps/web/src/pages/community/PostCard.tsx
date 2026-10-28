@@ -33,6 +33,7 @@ import {
 } from "../../api/feed";
 import { followUser, unfollowUser, UsersApiError } from "../../api/users";
 import { isVideoUrl } from "../../lib/media";
+import PostMedia from "./PostMedia";
 import { useViewHeartbeat } from "../../lib/useViewHeartbeat";
 import OwnPostMenu from "./OwnPostMenu";
 import ReportAction from "./ReportAction";
@@ -301,19 +302,7 @@ export default function PostCard({
 
       <p className="post__body">{post.contentText}</p>
 
-      {post.mediaUrls.length > 0 && (
-        <div className="post__media">
-          {post.mediaUrls.map((url) =>
-            playVideo && isVideoUrl(url) ? (
-              <video key={url} className="post__video" src={url} controls preload="metadata" playsInline />
-            ) : (
-              <a key={url} href={url} target="_blank" rel="noreferrer noopener">
-                {url}
-              </a>
-            ),
-          )}
-        </div>
-      )}
+      <PostMedia urls={post.mediaUrls} accessToken={accessToken} isOwn={isOwnPost} playVideo={playVideo} />
 
       {post.clubPageId && <p className="post__context">Posted to a club page</p>}
       {post.banterRoomId && <p className="post__context">Posted in a Banter Room</p>}

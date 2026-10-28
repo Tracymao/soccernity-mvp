@@ -219,7 +219,13 @@ test.describe.serial('Final week: carousel, entry page, impressions, pinned entr
     expect(await response?.json()).toEqual({ counted: true });
 
     // The server stored exactly what it counted: one row per sent event, no other column about the viewer.
-    const rows = await db().contestImpression.findMany({ where: { viewerId: viewer.userId } });
+    // Only the events THIS test sent: the previous test (Back to the feed) reports impressions for the same
+    // viewer too, and under load some of them land after this test has started, so counting every row of the
+    // viewer was racy (found by the FC10 full run: 6 rows for 3 sent events).
+    const sentIds = sent.map((r) => r.postDataJSON().eventId as string);
+    const rows = (await db().contestImpression.findMany({ where: { viewerId: viewer.userId } })).filter((r: { eventId: string }) =>
+      sentIds.includes(r.eventId),
+    );
     expect(rows.length).toBe(sent.length);
     expect(Object.keys(rows[0]).sort()).toEqual(['dayKey', 'entryId', 'eventId', 'id', 'occurredAt', 'viewerId']);
 

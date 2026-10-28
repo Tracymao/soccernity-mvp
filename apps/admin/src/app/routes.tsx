@@ -56,6 +56,8 @@ import { AddRolePage, EditRolePage, DeleteRolePage } from "../pages/settings/Rol
 import ModerationQueuePage from "../pages/moderation/ModerationQueuePage";
 import ReportDetailPage from "../pages/moderation/ReportDetailPage";
 import AppealReviewPage from "../pages/moderation/AppealReviewPage";
+import MediaReviewQueuePage from "../pages/media-review/MediaReviewQueuePage";
+import MediaReviewItemPage from "../pages/media-review/MediaReviewItemPage";
 import AdminNotFound from "../pages/AdminNotFound";
 
 export const adminRoutes: RouteObject[] = [
@@ -99,6 +101,10 @@ export const adminRoutes: RouteObject[] = [
           { path: "moderation", element: <ModerationQueuePage /> },
           { path: "moderation/reports/:id", element: <ReportDetailPage /> },
           { path: "moderation/appeals/:id", element: <AppealReviewPage /> },
+          // Real screens (FC10, B-240) -- the media review queue (GET /admin/media-review*, B-037/W15):
+          // pictures and videos the automatic check was unsure about, and files users reported.
+          { path: "moderation/media", element: <MediaReviewQueuePage /> },
+          { path: "moderation/media/:id", element: <MediaReviewItemPage /> },
           // Real screens (sprint-5/admin-articles-categories-frontend) —
           // wired to GET/POST /admin/categories, PATCH
           // /admin/categories/:id (the Status column's own real

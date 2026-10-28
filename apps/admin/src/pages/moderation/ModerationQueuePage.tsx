@@ -129,6 +129,9 @@ export default function ModerationQueuePage() {
           >
             Appeals
           </button>
+          <Link className="mod-tab" to="/moderation/media">
+            Media review
+          </Link>
         </div>
 
         <p className="mod-note">

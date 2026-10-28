@@ -3,6 +3,7 @@ import * as path from 'path';
 import { test, expect, type Page } from '@playwright/test';
 import { api, db, loginViaUi } from '../support/helpers';
 import { restartApi } from '../support/api-process';
+import { makeMp4 } from '../support/media-fixtures';
 import {
   contestPhaseInstant,
   isContestPhase,
@@ -378,11 +379,25 @@ test.describe.serial('Contest month on the API test clock: every phase in real C
     await expect(page).toHaveURL(/\/community\?compose=contest/);
     await expect(page.getByText(/WEEK 4 FINAL/)).toBeVisible();
     await page.getByLabel('Add a caption for your final entry').fill('My final: a first-time volley from the halfway line');
-    await page.getByLabel('Video link').fill('https://videos.example.org/qa/browser-final.mp4');
+    // FC10 (B-240): the pasted link is gone. The finalist chooses a real video; the browser sends it straight
+    // to the (fake) object store, the API strips and checks it, and the entry carries the upload's id.
+    await expect(page.getByLabel('Video link')).toHaveCount(0);
+    const clip = makeMp4();
+    if (!clip) throw new Error('ffmpeg-static is not installed in e2e/: run `npm install` there (it is a devDependency).');
+    await page.locator('#final-entry-video').setInputFiles(clip);
+    await expect(page.getByText('Checking', { exact: true })).toBeVisible({ timeout: 60_000 });
     await page.getByRole('button', { name: 'Submit entry' }).click();
     await expect
       .poll(async () => db().contestEntry.count({ where: { roundId: nov.roundId(4), userId: finalist.userId } }))
       .toBe(1);
+    // A final entry whose video is not approved by the reveal is not shown, so wait for the (fake) automatic
+    // check -- the real sweep, every minute -- to approve it before the clock moves on.
+    await expect
+      .poll(async () => (await db().postMedia.findFirst({ where: { uploaderId: finalist.userId }, select: { status: true } }))?.status, {
+        timeout: 150_000,
+        intervals: [2_000],
+      })
+      .toBe('approved');
 
     const reveal = scheduleFor(NOV).final.revealAt;
     const post = await db().post.findFirst({

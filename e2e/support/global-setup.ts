@@ -15,6 +15,7 @@ import {
 } from './stack';
 import { apiEnvironment, spawnApi, stopApi, waitForApiHealth } from './api-process';
 import { contestPhaseInstant, isContestPhase, CONTEST_PHASES } from './contest-clock';
+import { startFakeMediaServices } from './fake-media-services';
 
 // Everything below is TEST HARNESS, not product code: it creates a scratch
 // database, migrates it with the repo's own migrations, seeds the one
@@ -128,6 +129,9 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     testClockIso = contestPhaseInstant(qaPhase, process.env.QA_CONTEST_MONTH).toISOString();
   }
   if (testClockIso) console.log(`[e2e global-setup] API test clock: ${testClockIso}${process.env.QA_TEST_CLOCK_ADVANCE === '1' ? ' (advancing)' : ' (frozen)'}`);
+  // FC10 (B-240): the object store and the Rekognition stand-ins the API's media pipeline talks to.
+  const fakeMedia = await startFakeMediaServices();
+  closers.push(() => fakeMedia.close());
   const api = spawnApi(
     apiEnvironment(dbUrl, redisUrl, { iso: testClockIso, advance: process.env.QA_TEST_CLOCK_ADVANCE === '1' }),
     true,

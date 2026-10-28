@@ -296,11 +296,12 @@ export async function submitContestEntry(accessToken: string, postId: string): P
 }
 
 // POST /contest/final-entry -- a finalist's week-4 entry. Unlike weekly entries this CREATES the post
-// itself (hidden from everyone but its owner until the reveal at 00:00 on day 25), and needs at least
-// one media URL: no upload endpoint exists for posts, so the composer asks for a link.
+// itself (hidden from everyone but its owner until the reveal at 00:00 on day 25). It takes the id of ONE
+// video the finalist uploaded through POST /media/uploads (api/postMedia.ts); the pasted link of the
+// earlier stand-in is gone (Decision Log #419 item 7).
 export interface SubmitFinalEntryInput {
   contentText: string;
-  mediaUrls: string[];
+  mediaId: string;
 }
 
 export async function submitFinalEntry(accessToken: string, input: SubmitFinalEntryInput): Promise<SubmittedContestEntry> {

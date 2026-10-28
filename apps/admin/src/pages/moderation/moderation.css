@@ -304,3 +304,7 @@
 .mod-checkbox input {
   margin-top: 3px;
 }
+
+a.mod-tab {
+  text-decoration: none;
+}

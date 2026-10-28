@@ -25,6 +25,17 @@ database), runs the repo's migrations on it, seeds the one admin account that ca
 logical DB 5, builds and starts the API on :3100, `apps/web` on :5273 and `apps/admin`
 on :5274. Logs: `e2e/.run/*.log`. Screenshots/traces of failures: `e2e/.run/artifacts`.
 
+## Post media upload with a fake check (spec 18, FC10)
+
+`tests/18-fc10-media-upload.spec.ts` drives the media upload pipeline in real Chrome against the real API process.
+Only the two vendors are stand-ins, started by `support/global-setup.ts` from `support/fake-media-services.ts`:
+an S3-compatible object store on :3191 (the browser PUTs to its one-time links) and an Amazon Rekognition answer on
+:3192 (`AWS_ENDPOINT_URL_REKOGNITION`). The API's own code, thresholds and decision rule run unchanged. The fake check
+decides from the picture's **width**: 64 px is cleared, 66 px is rejected, 68 px is left for a moderator
+(`support/media-fixtures.ts` builds the PNGs). The media sweep runs once a minute, so the spec waits up to ~70 s for
+a decision. ffmpeg / ffprobe come from the `ffmpeg-static` and `ffprobe-static` devDependencies (set as `FFMPEG_PATH`
+/ `FFPROBE_PATH` in `support/api-process.ts`); without them a video upload fails closed, as it does in production.
+
 ## The whole Contest month in one run (spec 17, FC9)
 
 `tests/17-contest-phases-test-clock.spec.ts` plays a full month in real Chrome with **no environment variable**. The API

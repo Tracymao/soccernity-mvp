@@ -188,7 +188,7 @@ describe("PostCard — locked final entry (engagementLocked)", () => {
 });
 
 describe("PostCard — standalone entry page options", () => {
-  it("plays a video inline when asked, and links to it otherwise", () => {
+  it("plays a video inline when asked, and still shows a player (not a bare link) otherwise", () => {
     const p = post({ mediaUrls: ["https://cdn.example.com/a.mp4"] });
     const { container, unmount } = render(
       <MemoryRouter>
@@ -202,8 +202,9 @@ describe("PostCard — standalone entry page options", () => {
         <PostCard post={p} accessToken="tok" currentUserId="user-1" />
       </MemoryRouter>,
     );
-    expect(plain.container.querySelector("video")).toBeNull();
-    expect(screen.getByRole("link", { name: "https://cdn.example.com/a.mp4" })).not.toBeNull();
+    // A video is always a real player (never a bare link to a URL); only how eagerly it loads differs.
+    expect(plain.container.querySelector("video")?.getAttribute("preload")).toBe("none");
+    expect(screen.queryByRole("link", { name: "https://cdn.example.com/a.mp4" })).toBeNull();
   });
 
   it("opens the comment thread straight away with initialCommentsOpen", async () => {
