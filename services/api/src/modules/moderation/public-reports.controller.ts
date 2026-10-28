@@ -2,6 +2,7 @@ import { Body, Controller, Post } from '@nestjs/common';
 import { AuthRateLimit } from '../auth/rate-limit/auth-rate-limit.decorator';
 import { CreatePublicReportDto } from './dto/create-public-report.dto';
 import { ModerationService } from './moderation.service';
+import { SkipGlobalWriteLimit } from '../../rate-limit/global-rate-limit.decorators';
 
 // POST /reports/public — a genuine spec-gap addition, same shape as
 // ReportsController's own two routes (see that controller's header
@@ -21,6 +22,7 @@ import { ModerationService } from './moderation.service';
 export class PublicReportsController {
   constructor(private readonly moderationService: ModerationService) {}
 
+  @SkipGlobalWriteLimit()
   @AuthRateLimit()
   @Post('public')
   async createPublic(@Body() dto: CreatePublicReportDto) {

@@ -125,6 +125,14 @@ services:
         value: "10"
       - key: GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS
         value: "600000"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_IP_MAX
+        value: "240"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_IP_WINDOW_MS
+        value: "60000"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_TOKEN_MAX
+        value: "10"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_TOKEN_WINDOW_MS
+        value: "60000"
       - key: RESET_TOKEN_TTL_MINUTES
         sync: false
       # ADMIN_JWT_ACCESS_TTL_SECONDS: code default (admin-token.constants.ts)
@@ -393,6 +401,14 @@ services:
         value: "10"
       - key: GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS
         value: "600000"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_IP_MAX
+        value: "240"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_IP_WINDOW_MS
+        value: "60000"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_TOKEN_MAX
+        value: "10"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_TOKEN_WINDOW_MS
+        value: "60000"
       - key: RESET_TOKEN_TTL_MINUTES
         sync: false
       # ADMIN_JWT_ACCESS_TTL_SECONDS: code default (admin-token.constants.ts)
