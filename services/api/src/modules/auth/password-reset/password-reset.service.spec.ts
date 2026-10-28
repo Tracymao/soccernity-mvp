@@ -36,6 +36,7 @@ function buildService(options: { existingUser?: ReturnType<typeof buildFakeUser>
   const resetTokenStore = new ResetTokenStore(new InMemoryResetRedisFake());
   const passwordService = new PasswordService();
   const tokenService = { revokeAllSessionsForUser: jest.fn(async () => undefined) };
+  const authLimits = { clearAccountCeiling: jest.fn(async () => undefined) };
   const emailService = { sendPasswordResetEmail: jest.fn(async () => undefined) };
   const configService = new ConfigService({});
 
@@ -46,9 +47,10 @@ function buildService(options: { existingUser?: ReturnType<typeof buildFakeUser>
     tokenService as never,
     emailService as never,
     configService,
+    authLimits as never,
   );
 
-  return { service, prisma, resetTokenStore, tokenService, emailService, existingUser };
+  return { service, prisma, resetTokenStore, tokenService, emailService, authLimits, existingUser };
 }
 
 describe('PasswordResetService', () => {
@@ -92,15 +94,25 @@ describe('PasswordResetService', () => {
     // service itself no longer re-checks length.
 
     it('rejects an invalid/unknown token', async () => {
-      const { service } = buildService();
+      const { service, authLimits } = buildService();
 
       await expect(
         service.resetPassword('not-a-real-id.not-a-real-secret', 'a-long-enough-password'),
       ).rejects.toBeInstanceOf(UnauthorizedException);
+      // A failed reset must not clear anyone's ceiling.
+      expect(authLimits.clearAccountCeiling).not.toHaveBeenCalled();
+    });
+
+    it('still succeeds when clearing the ceiling fails', async () => {
+      const { service, resetTokenStore, authLimits, existingUser } = buildService();
+      authLimits.clearAccountCeiling.mockRejectedValueOnce(new Error('redis down'));
+      const issued = await resetTokenStore.issue(existingUser!.id, 60);
+
+      await expect(service.resetPassword(issued.token, 'a-brand-new-password')).resolves.toBeUndefined();
     });
 
     it('updates the password hash, revokes all sessions, and consumes the token on success', async () => {
-      const { service, prisma, resetTokenStore, tokenService, existingUser } = buildService();
+      const { service, prisma, resetTokenStore, tokenService, authLimits, existingUser } = buildService();
       const issued = await resetTokenStore.issue(existingUser!.id, 60);
 
       await service.resetPassword(issued.token, 'a-brand-new-password');
@@ -108,8 +120,11 @@ describe('PasswordResetService', () => {
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: existingUser!.id },
         data: { passwordHash: expect.any(String) },
+        select: { email: true },
       });
       expect(tokenService.revokeAllSessionsForUser).toHaveBeenCalledWith(existingUser!.id);
+      // The account-wide failed-login ceiling is cleared for this address.
+      expect(authLimits.clearAccountCeiling).toHaveBeenCalledWith(existingUser!.email);
 
       // Single-use: the same token cannot be used again.
       await expect(service.resetPassword(issued.token, 'another-new-password')).rejects.toBeInstanceOf(

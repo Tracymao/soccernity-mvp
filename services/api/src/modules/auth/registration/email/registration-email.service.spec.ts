@@ -255,6 +255,51 @@ describe('RegistrationEmailService', () => {
       expect(sent.HtmlBody).not.toContain('<b>Obi</b>');
     });
 
+    describe('sendLoginLockoutNoticeEmail', () => {
+      const liveConfig = {
+        EMAIL_PROVIDER_API_KEY: 'a-real-key',
+        POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example',
+        WEB_APP_BASE_URL: 'https://app.soccernity.com',
+      };
+
+      it('sends a plain notice with a reset link and nothing about the guesser', async () => {
+        mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-lockout' });
+        const service = new RegistrationEmailService(buildConfig(liveConfig));
+
+        await expect(service.sendLoginLockoutNoticeEmail('owner@example.com')).resolves.toBe(true);
+
+        const sent = mockSendEmail.mock.calls[0][0] as { To: string; Subject: string; TextBody: string; HtmlBody: string };
+        expect(sent.To).toBe('owner@example.com');
+        expect(sent.Subject).toBe('Someone entered the wrong password on your Soccernity account');
+        for (const body of [sent.TextBody, sent.HtmlBody]) {
+          expect(body).toContain('https://app.soccernity.com/forgot-password');
+          expect(body).toContain('there is nothing to do');
+          // No IP address, no times, no counts, no token.
+          expect(body).not.toMatch(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/);
+          expect(body).not.toMatch(/\d+\s*(times|attempts|minutes)/i);
+          expect(body).not.toContain('token=');
+          expect(body).not.toContain('COPY PENDING LEGAL REVIEW');
+        }
+      });
+
+      it('sends NOTHING and returns false when WEB_APP_BASE_URL is unusable', async () => {
+        const error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+        const service = new RegistrationEmailService(buildConfig({ ...liveConfig, WEB_APP_BASE_URL: undefined }));
+
+        await expect(service.sendLoginLockoutNoticeEmail('owner@example.com')).resolves.toBe(false);
+
+        expect(mockSendEmail).not.toHaveBeenCalled();
+        expect(error).toHaveBeenCalledWith(expect.stringContaining('login-lockout-notice'));
+        error.mockRestore();
+      });
+
+      it('is wired but inactive without a Postmark key: resolves true, calls nothing, logs no content to Postmark', async () => {
+        const service = new RegistrationEmailService(buildConfig({ ...liveConfig, EMAIL_PROVIDER_API_KEY: undefined }));
+        await expect(service.sendLoginLockoutNoticeEmail('owner@example.com')).resolves.toBe(true);
+        expect(mockSendEmail).not.toHaveBeenCalled();
+      });
+    });
+
     it('does not send a username-revoked email while the provider is not configured (logs only)', async () => {
       const service = new RegistrationEmailService(buildConfig({ EMAIL_PROVIDER_API_KEY: 'replace-me' }));
       await expect(service.sendUsernameRevokedEmail('user@example.com', 'Ada')).resolves.toBeUndefined();
