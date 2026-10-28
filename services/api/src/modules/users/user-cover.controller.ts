@@ -7,6 +7,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
 import { PROFILE_IMAGE_MAX_FILE_SIZE_BYTES, UploadedProfileImage } from './profile-image.util';
 import { UserCoverService } from './user-cover.service';
+import { UploadRateLimit } from '../../rate-limit/global-rate-limit.decorators';
 
 // B-196 (Decision Log #411 item 4). The cover photo of the CALLER, mounted under
 // /users next to the avatar routes with the SAME self-only rule and the SAME
@@ -21,6 +22,7 @@ export class UserCoverController {
   constructor(private readonly covers: UserCoverService) {}
 
   @Post(':id/cover')
+  @UploadRateLimit()
   @UseGuards(GuardianConsentGuard, EmailVerifiedGuard)
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: PROFILE_IMAGE_MAX_FILE_SIZE_BYTES } }))
   async upload(

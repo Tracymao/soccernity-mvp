@@ -1,5 +1,6 @@
 import { Controller, Get, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { SkipGlobalRateLimit } from '../rate-limit/global-rate-limit.decorators';
 
 // Sprint 0 infra requirement (MVP Build Plan Section 5) — a real DB check,
 // not a hardcoded 200. Runs a trivial query against the live Postgres
@@ -8,7 +9,9 @@ import { PrismaService } from '../prisma/prisma.service';
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Exempt from the global rate limit: load balancers and uptime probes poll this constantly.
   @Get()
+  @SkipGlobalRateLimit()
   async check() {
     try {
       await this.prisma.$queryRaw`SELECT 1`;

@@ -8,6 +8,7 @@ import { AdminAccessTokenPayload } from '../admin/token/admin-token.types';
 import { ListMediaQueryDto } from './dto/list-media-query.dto';
 import { MEDIA_MAX_FILE_SIZE_BYTES } from './media.constants';
 import { MediaService, UploadedMediaFile } from './media.service';
+import { UploadRateLimit } from '../../rate-limit/global-rate-limit.decorators';
 
 // Build Plan Section 4.8 (Admin Service) — Media library.
 //
@@ -59,6 +60,7 @@ export class AdminMediaController {
   // global namespace merge, so referencing that global directly here
   // would need a project-wide eslint change to lint clean.
   @Post('upload')
+  @UploadRateLimit()
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MEDIA_MAX_FILE_SIZE_BYTES } }))
   async upload(@UploadedFile() file: UploadedMediaFile | undefined, @CurrentAdmin() admin: AdminAccessTokenPayload) {
     return this.mediaService.uploadMedia(admin.sub, file);

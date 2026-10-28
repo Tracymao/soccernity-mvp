@@ -61,6 +61,16 @@ export function apiEnvironment(dbUrl: string, redisUrl: string, clock: ApiClock 
     // The default 5/60s auth throttle is far below what a full onboarding
     // suite needs; the throttle itself is covered by services/api's own e2e.
     AUTH_RATE_LIMIT_MAX: '1000',
+    // Global API rate limit: a full QA run is hundreds of requests from one IP in minutes, so force the
+    // production limits (120 / 600 / 30 / 10) out of the way. The limiter has its own unit and HTTP specs.
+    GLOBAL_RATE_LIMIT_USER_MAX: '1000000',
+    GLOBAL_RATE_LIMIT_USER_WINDOW_MS: '60000',
+    GLOBAL_RATE_LIMIT_ANON_MAX: '1000000',
+    GLOBAL_RATE_LIMIT_ANON_WINDOW_MS: '60000',
+    GLOBAL_RATE_LIMIT_WRITE_MAX: '1000000',
+    GLOBAL_RATE_LIMIT_WRITE_WINDOW_MS: '60000',
+    GLOBAL_RATE_LIMIT_UPLOAD_MAX: '1000000',
+    GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS: '60000',
     TRUST_PROXY_HOPS: '',
     // FC10 (B-240): the post media pipeline talks to the local stand-ins in support/fake-media-services.ts
     // (an S3-compatible store and Amazon Rekognition). The real code runs unchanged; only the vendors'

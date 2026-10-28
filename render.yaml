@@ -88,6 +88,24 @@ services:
         value: "5"
       - key: GUARDIAN_WITHDRAWAL_RATE_LIMIT_WINDOW_MS
         value: "900000"
+      # Global API rate limit (rate-limit/global-rate-limit.config.ts): signed-in per user, anonymous per IP,
+      # writes (POST/PUT/PATCH/DELETE), and routes that pass file bytes through the API. In memory per instance.
+      - key: GLOBAL_RATE_LIMIT_USER_MAX
+        value: "120"
+      - key: GLOBAL_RATE_LIMIT_USER_WINDOW_MS
+        value: "60000"
+      - key: GLOBAL_RATE_LIMIT_ANON_MAX
+        value: "600"
+      - key: GLOBAL_RATE_LIMIT_ANON_WINDOW_MS
+        value: "60000"
+      - key: GLOBAL_RATE_LIMIT_WRITE_MAX
+        value: "30"
+      - key: GLOBAL_RATE_LIMIT_WRITE_WINDOW_MS
+        value: "60000"
+      - key: GLOBAL_RATE_LIMIT_UPLOAD_MAX
+        value: "10"
+      - key: GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS
+        value: "600000"
       - key: RESET_TOKEN_TTL_MINUTES
         sync: false
       # ADMIN_JWT_ACCESS_TTL_SECONDS: code default (admin-token.constants.ts)
@@ -312,6 +330,24 @@ services:
         value: "5"
       - key: GUARDIAN_WITHDRAWAL_RATE_LIMIT_WINDOW_MS
         value: "900000"
+      # Global API rate limit (rate-limit/global-rate-limit.config.ts): signed-in per user, anonymous per IP,
+      # writes (POST/PUT/PATCH/DELETE), and routes that pass file bytes through the API. In memory per instance.
+      - key: GLOBAL_RATE_LIMIT_USER_MAX
+        value: "120"
+      - key: GLOBAL_RATE_LIMIT_USER_WINDOW_MS
+        value: "60000"
+      - key: GLOBAL_RATE_LIMIT_ANON_MAX
+        value: "600"
+      - key: GLOBAL_RATE_LIMIT_ANON_WINDOW_MS
+        value: "60000"
+      - key: GLOBAL_RATE_LIMIT_WRITE_MAX
+        value: "30"
+      - key: GLOBAL_RATE_LIMIT_WRITE_WINDOW_MS
+        value: "60000"
+      - key: GLOBAL_RATE_LIMIT_UPLOAD_MAX
+        value: "10"
+      - key: GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS
+        value: "600000"
       - key: RESET_TOKEN_TTL_MINUTES
         sync: false
       # ADMIN_JWT_ACCESS_TTL_SECONDS: code default (admin-token.constants.ts)
