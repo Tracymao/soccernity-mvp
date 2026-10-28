@@ -12,7 +12,11 @@
 // No design frame exists for this step (Figma predates it) -- built plainly
 // with the existing consent-card styles, and flagged in the PR.
 import { useEffect, useState, type FormEvent } from "react";
-import { loadStripe, type Stripe } from "@stripe/stripe-js";
+// "/pure" does not load Stripe.js on import (the default entry injects js.stripe.com on EVERY page that
+// ships this bundle); loadStripe() below runs only when the guardian starts the card step. The type import
+// is erased at build time, so it does not bring the default entry's load-on-import back.
+import { loadStripe } from "@stripe/stripe-js/pure";
+import type { Stripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import {
   AuthApiError,

@@ -5,7 +5,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import CardVerificationPanel from "./CardVerificationPanel";
 
-vi.mock("@stripe/stripe-js", () => ({ loadStripe: vi.fn(() => Promise.resolve(null)) }));
+vi.mock("@stripe/stripe-js/pure", () => ({ loadStripe: vi.fn(() => Promise.resolve(null)) }));
 vi.mock("@stripe/react-stripe-js", () => ({
   Elements: ({ children }: { children: unknown }) => <div>{children as never}</div>,
   PaymentElement: () => <div data-testid="stripe-payment-element" />,
