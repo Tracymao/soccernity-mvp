@@ -32,6 +32,7 @@ function post(overrides: Partial<FeedPost> = {}): FeedPost {
     author: { id: "user-1", publicName: "Me", isFollowing: false },
     contentText: "My post",
     mediaUrls: [],
+    media: [],
     clubPageId: null,
     banterRoomId: null,
     likeCount: 0,

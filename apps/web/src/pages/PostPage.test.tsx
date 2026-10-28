@@ -22,6 +22,7 @@ function entry(over: Partial<FeedPost> = {}): FeedPost {
     author: { id: "sarah", publicName: "Sarah Bello", isFollowing: false },
     contentText: "My final-week entry: first-touch passing drill.",
     mediaUrls: ["https://cdn.example.com/final.mp4"],
+    media: [{ id: "media-1", kind: "video" }],
     clubPageId: null,
     banterRoomId: null,
     likeCount: 31,

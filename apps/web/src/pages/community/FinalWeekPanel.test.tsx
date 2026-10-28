@@ -106,6 +106,9 @@ describe("FinalWeekPanel", () => {
     expect(submit.disabled).toBe(false);
     expect(createUpload).toHaveBeenCalledWith("t", { contentType: "video/mp4", size: 5 });
     expect(putFile).toHaveBeenCalled();
+    // The entry can be changed only until you submit (Decision Log #430 item 5), not "until the window closes".
+    expect(screen.getByText("You can change your video until you submit.")).not.toBeNull();
+    expect(screen.queryByText(/until the upload window closes/i)).toBeNull();
   });
 
   it("submits the caption and the uploaded video's id, then shows the confirmation", async () => {
@@ -135,6 +138,7 @@ describe("FinalWeekPanel", () => {
     chooseVideo();
     await screen.findByText("This video wasn’t approved");
     expect(screen.getByText("It showed something unsafe.")).not.toBeNull();
+    expect(screen.getByText("Remove it and upload another before you submit.")).not.toBeNull();
     expect((screen.getByRole("button", { name: /submit entry/i }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     await waitFor(() => expect(deleteUpload).toHaveBeenCalledWith("t", "m1"));

@@ -1,8 +1,10 @@
-// FC10 (B-240, Decision Log #419): the pictures and videos of a post card -- the author's own status view
-// and the Report control everyone else gets. Network edge mocked; the components are the real ones.
+// FC10 (B-240, Decision Log #419; follow-ups B-260): the pictures and videos of a post card -- the author's own
+// status view and the Report control everyone else gets. Network edge mocked; the components are the real ones.
+// Ids and kinds come from the post payload's `media`, never from the URL.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import PostMedia from "./PostMedia";
+import type { FeedPostMedia } from "../../api/feed";
 
 vi.mock("../../api/postMedia", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../api/postMedia")>();
@@ -17,9 +19,15 @@ beforeEach(() => {
   vi.mocked(reportMedia).mockReset();
 });
 
-const ID = "3f6c1a52-8d3e-4c1f-9a77-0b1c2d3e4f50";
-const IMAGE = `https://cdn.test/post-media/u1/${ID}.jpg`;
-const VIDEO = `https://cdn.test/post-media/u1/${ID}.mp4`;
+// Deliberately NOT shaped like the stored-file layout: the id must come from `media`, not from the URL.
+const ID = "media-id-1";
+const IMAGE = "https://cdn.test/anything/photo.jpg";
+const VIDEO = "https://cdn.test/anything/clip.mp4";
+const SIGNED = "https://private.test/signed/photo.jpg?sig=abc";
+const SIGNED_REFRESHED = "https://private.test/signed/photo.jpg?sig=def";
+
+const IMAGE_MEDIA: FeedPostMedia[] = [{ id: ID, kind: "image" }];
+const VIDEO_MEDIA: FeedPostMedia[] = [{ id: ID, kind: "video" }];
 
 function view(over: Partial<PostMediaView> = {}): PostMediaView {
   return {
@@ -29,6 +37,7 @@ function view(over: Partial<PostMediaView> = {}): PostMediaView {
     status: "pending",
     rejectionReason: null,
     url: IMAGE,
+    viewUrl: SIGNED,
     contentType: "image/jpeg",
     byteSize: 10,
     durationSeconds: null,
@@ -39,9 +48,9 @@ function view(over: Partial<PostMediaView> = {}): PostMediaView {
 }
 
 describe("PostMedia — as the author", () => {
-  it("shows a picture under review with who can see it (tagged), read from the upload's own status", async () => {
+  it("shows a picture under review with who can see it (tagged), read from the media id in the payload", async () => {
     vi.mocked(getUpload).mockResolvedValue(view());
-    render(<PostMedia urls={[IMAGE]} accessToken="tok" isOwn />);
+    render(<PostMedia media={[{ id: ID, kind: "image", viewUrl: SIGNED }]} urls={[IMAGE]} accessToken="tok" isOwn />);
     await screen.findByText("Under review");
     expect(getUpload).toHaveBeenCalledWith("tok", ID);
     expect(
@@ -50,16 +59,57 @@ describe("PostMedia — as the author", () => {
     expect(screen.getByAltText("Picture attached to this post")).not.toBeNull();
   });
 
-  it("uses video wording for a video", async () => {
-    vi.mocked(getUpload).mockResolvedValue(view({ kind: "video", url: VIDEO }));
-    render(<PostMedia urls={[VIDEO]} accessToken="tok" isOwn />);
+  it("draws a file that is not approved ONLY through the signed link, never the public address", async () => {
+    vi.mocked(getUpload).mockResolvedValue(view());
+    render(<PostMedia media={[{ id: ID, kind: "image", viewUrl: SIGNED }]} urls={[IMAGE]} accessToken="tok" isOwn />);
+    // Before the status read arrives: the payload's signed link, not the public address.
+    expect(screen.getByAltText("Picture attached to this post").getAttribute("src")).toBe(SIGNED);
+    await screen.findByText("Under review");
+    expect(screen.getByAltText("Picture attached to this post").getAttribute("src")).toBe(SIGNED);
+    expect(document.querySelector(`[src="${IMAGE}"]`)).toBeNull();
+  });
+
+  it("draws nothing for a not-approved file when no signed link is available (never falls back to the public address)", async () => {
+    vi.mocked(getUpload).mockResolvedValue(view({ viewUrl: null }));
+    render(<PostMedia media={[{ id: ID, kind: "image" }]} urls={[IMAGE]} accessToken="tok" isOwn />);
+    await screen.findByText("Under review");
+    expect(screen.queryByAltText("Picture attached to this post")).toBeNull();
+    expect(document.querySelector(`[src="${IMAGE}"]`)).toBeNull();
+  });
+
+  it("asks for a fresh signed link when the browser cannot load the old one", async () => {
+    vi.mocked(getUpload)
+      .mockResolvedValueOnce(view())
+      .mockResolvedValue(view({ viewUrl: SIGNED_REFRESHED }));
+    render(<PostMedia media={[{ id: ID, kind: "image", viewUrl: SIGNED }]} urls={[IMAGE]} accessToken="tok" isOwn />);
+    await screen.findByText("Under review");
+    fireEvent.error(screen.getByAltText("Picture attached to this post"));
+    await waitFor(() =>
+      expect(screen.getByAltText("Picture attached to this post").getAttribute("src")).toBe(SIGNED_REFRESHED),
+    );
+    expect(getUpload).toHaveBeenCalledTimes(2);
+  });
+
+  it("draws an approved file through its public address", async () => {
+    vi.mocked(getUpload).mockResolvedValue(view({ status: "approved", viewUrl: undefined }));
+    render(<PostMedia media={IMAGE_MEDIA} urls={[IMAGE]} accessToken="tok" isOwn />);
+    await waitFor(() => expect(getUpload).toHaveBeenCalled());
+    expect(screen.getByAltText("Picture attached to this post").getAttribute("src")).toBe(IMAGE);
+  });
+
+  it("uses video wording and a video player for a video (kind comes from the payload, not the file name)", async () => {
+    vi.mocked(getUpload).mockResolvedValue(view({ kind: "video", url: VIDEO, viewUrl: "https://private.test/signed/blob" }));
+    const { container } = render(
+      <PostMedia media={[{ id: ID, kind: "video", viewUrl: "https://private.test/signed/blob" }]} urls={[VIDEO]} accessToken="tok" isOwn />,
+    );
     await screen.findByText(/its video has been checked/);
+    expect(container.querySelector("video")?.getAttribute("src")).toBe("https://private.test/signed/blob");
   });
 
   it("shows a rejected picture with its reason, and Remove picture deletes it and takes it off the card", async () => {
     vi.mocked(getUpload).mockResolvedValue(view({ status: "rejected", rejectionReason: "Not related to football." }));
     vi.mocked(deleteUpload).mockResolvedValue(undefined);
-    render(<PostMedia urls={[IMAGE]} accessToken="tok" isOwn />);
+    render(<PostMedia media={[{ id: ID, kind: "image", viewUrl: SIGNED }]} urls={[IMAGE]} accessToken="tok" isOwn />);
     await screen.findByText("This picture wasn’t approved");
     expect(screen.getByText("Not related to football.")).not.toBeNull();
     expect(
@@ -75,7 +125,7 @@ describe("PostMedia — as the author", () => {
 
   it("shows nothing extra for an approved file, and no Report control on your own post", async () => {
     vi.mocked(getUpload).mockResolvedValue(view({ status: "approved" }));
-    render(<PostMedia urls={[IMAGE]} accessToken="tok" isOwn />);
+    render(<PostMedia media={IMAGE_MEDIA} urls={[IMAGE]} accessToken="tok" isOwn />);
     await waitFor(() => expect(getUpload).toHaveBeenCalled());
     expect(screen.queryByText("Under review")).toBeNull();
     expect(screen.queryByRole("button", { name: /report/i })).toBeNull();
@@ -84,7 +134,7 @@ describe("PostMedia — as the author", () => {
   it("surfaces a failed removal and keeps the file", async () => {
     vi.mocked(getUpload).mockResolvedValue(view({ status: "rejected", rejectionReason: "No." }));
     vi.mocked(deleteUpload).mockRejectedValue(new PostMediaApiError("A contest entry's file can't be removed.", { status: 409 }));
-    render(<PostMedia urls={[IMAGE]} accessToken="tok" isOwn />);
+    render(<PostMedia media={[{ id: ID, kind: "image", viewUrl: SIGNED }]} urls={[IMAGE]} accessToken="tok" isOwn />);
     fireEvent.click(await screen.findByRole("button", { name: "Remove picture" }));
     await waitFor(() => expect(screen.getAllByRole("alert").some((a) => a.textContent?.includes("can't be removed"))).toBe(true));
     expect(screen.getByAltText("Picture attached to this post")).not.toBeNull();
@@ -94,16 +144,52 @@ describe("PostMedia — as the author", () => {
 describe("PostMedia — as another viewer", () => {
   it("renders the picture, offers Report, and the report goes to the media's id with a confirmation", async () => {
     vi.mocked(reportMedia).mockResolvedValue({ reported: true, alreadyReported: false });
-    render(<PostMedia urls={[IMAGE]} accessToken="tok" isOwn={false} />);
+    render(<PostMedia media={IMAGE_MEDIA} urls={[IMAGE]} accessToken="tok" isOwn={false} />);
     expect(getUpload).not.toHaveBeenCalled(); // only the author reads the upload status
     fireEvent.click(screen.getByRole("button", { name: "Report this picture" }));
     fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
     await screen.findByText("Reported — thanks, our team will review it.");
-    expect(reportMedia).toHaveBeenCalledWith("tok", ID);
+    // No reason typed: the third argument is the empty string, which the client sends as no body.
+    expect(reportMedia).toHaveBeenCalledWith("tok", ID, "");
+  });
+
+  it("sends the optional reason, and shows a counter that stops at 500 characters", async () => {
+    vi.mocked(reportMedia).mockResolvedValue({ reported: true, alreadyReported: false });
+    render(<PostMedia media={IMAGE_MEDIA} urls={[IMAGE]} accessToken="tok" isOwn={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Report this picture" }));
+    expect(screen.getByText("0 / 500")).not.toBeNull();
+    expect(
+      screen.getByText("Only our moderators see your reason, not the person who posted this. [COPY PENDING LEGAL REVIEW]"),
+    ).not.toBeNull();
+    const box = screen.getByLabelText(/Why are you reporting it/) as HTMLTextAreaElement;
+    expect(box.maxLength).toBe(500);
+    fireEvent.change(box, { target: { value: "This is not football" } });
+    expect(screen.getByText("20 / 500")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
+    await screen.findByText("Reported — thanks, our team will review it.");
+    expect(reportMedia).toHaveBeenCalledWith("tok", ID, "This is not football");
+  });
+
+  it("shows a clear daily-limit state (not a generic error) and no way to send again when the API refuses with media_report_daily_limit", async () => {
+    vi.mocked(reportMedia).mockRejectedValue(
+      new PostMediaApiError("You've sent a lot of reports today. Please try again tomorrow.", {
+        status: 429,
+        code: "media_report_daily_limit",
+      }),
+    );
+    render(<PostMedia media={IMAGE_MEDIA} urls={[IMAGE]} accessToken="tok" isOwn={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Report this picture" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
+    await screen.findByText("You’ve reached today’s report limit");
+    expect(screen.getByText("You've sent a lot of reports today. Please try again tomorrow.")).not.toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Submit report" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.getByRole("button", { name: "Report this picture" })).not.toBeNull();
   });
 
   it("names a video, and Cancel closes the panel without sending anything", () => {
-    render(<PostMedia urls={[VIDEO]} accessToken="tok" isOwn={false} />);
+    render(<PostMedia media={VIDEO_MEDIA} urls={[VIDEO]} accessToken="tok" isOwn={false} />);
     fireEvent.click(screen.getByRole("button", { name: "Report this video" }));
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(reportMedia).not.toHaveBeenCalled();
@@ -112,15 +198,14 @@ describe("PostMedia — as another viewer", () => {
 
   it("says so when the file is no longer available to report (404)", async () => {
     vi.mocked(reportMedia).mockRejectedValue(new PostMediaApiError("Media not found", { status: 404 }));
-    render(<PostMedia urls={[IMAGE]} accessToken="tok" isOwn={false} />);
+    render(<PostMedia media={IMAGE_MEDIA} urls={[IMAGE]} accessToken="tok" isOwn={false} />);
     fireEvent.click(screen.getByRole("button", { name: "Report this picture" }));
     fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
     expect((await screen.findByRole("alert")).textContent).toContain("isn’t available to report");
   });
 
-  it("offers no Report control for a URL that is not an uploaded file", () => {
-    render(<PostMedia urls={["https://elsewhere.test/photo.jpg"]} accessToken="tok" isOwn={false} />);
-    expect(screen.queryByRole("button", { name: /report/i })).toBeNull();
-    expect(screen.getByAltText("Picture attached to this post")).not.toBeNull();
+  it("renders nothing for a post with no media", () => {
+    const { container } = render(<PostMedia media={[]} urls={[]} accessToken="tok" isOwn={false} />);
+    expect(container.firstChild).toBeNull();
   });
 });

@@ -167,7 +167,7 @@ function TrayItem({
           {item.rejectionReason && <p className="media-item__reason">{item.rejectionReason}</p>}
           <p className="media-item__hint">
             {variant === "final"
-              ? "Remove it and upload another before the window closes at 23:59:59 on day 24."
+              ? "Remove it and upload another before you submit."
               : `Remove it to continue, or choose a different ${noun(item)}.`}
           </p>
         </div>

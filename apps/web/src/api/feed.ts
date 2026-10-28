@@ -33,12 +33,25 @@ export interface FeedPostAuthor {
   isFollowing: boolean;
 }
 
+// One file attached to a post (services/api feed.service.ts FeedPostMedia). `id` is the upload id the media
+// routes take; `kind` is the real media type (no guessing from the file name). `viewUrl` is present ONLY on
+// the post author's own read and ONLY for a file that is not public yet (under review, held or rejected): a
+// short-lived signed link, and the only address the author may use to see such a file. For every other file
+// the public address is the matching entry of `mediaUrls` (same order).
+export interface FeedPostMedia {
+  id: string;
+  kind: "image" | "video";
+  viewUrl?: string;
+}
+
 export interface FeedPost {
   id: string;
   authorId: string;
   author: FeedPostAuthor;
   contentText: string;
   mediaUrls: string[];
+  // The attached files, in the same order as `mediaUrls` (B-259).
+  media: FeedPostMedia[];
   clubPageId: string | null;
   banterRoomId: string | null;
   likeCount: number;
