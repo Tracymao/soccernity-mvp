@@ -7,6 +7,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { SentryGlobalFilter } from '@sentry/nestjs/setup';
 import { AppModule } from './app.module';
 import { buildCorsConfig, buildCorsOptions } from './cors-options';
+import { securityHeaders } from './security-headers';
 import { applyTrustProxy } from './trust-proxy';
 import { assertProductionEnv } from './validate-runtime-env';
 
@@ -19,6 +20,9 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   // B-024: see trust-proxy.ts. Unset TRUST_PROXY_HOPS = trust no proxy (fail-safe).
   applyTrustProxy(app, process.env.TRUST_PROXY_HOPS);
+  // B-243 / Decision Log #420: helmet BEFORE enableCors so every response
+  // (including CORS pre-flights and 404s) carries the headers.
+  app.use(securityHeaders(process.env));
   // QA D-01 / Decision Log #407 item 1: no wildcard. Only the two apps' origins
   // (plus localhost outside production) -- see cors-options.ts.
   const corsConfig = buildCorsConfig(process.env);
