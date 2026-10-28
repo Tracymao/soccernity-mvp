@@ -105,9 +105,11 @@ export function isOriginAllowed(origin: string | undefined, config: CorsConfig):
 type OriginCallback = (err: Error | null, allow?: boolean) => void;
 
 // The options object handed to `app.enableCors()`. `credentials` is left unset
-// on purpose: nothing here uses cookies.
+// on purpose: nothing here uses cookies. `Retry-After` is exposed so a browser client can read it
+// off a global-rate-limit 429 (a cross-origin response hides every non-safelisted header otherwise).
 export function buildCorsOptions(config: CorsConfig) {
   return {
+    exposedHeaders: ['Retry-After'],
     origin: (origin: string | undefined, callback: OriginCallback) => {
       callback(null, isOriginAllowed(origin, config));
     },

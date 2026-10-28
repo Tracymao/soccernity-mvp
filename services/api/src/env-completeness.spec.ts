@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { TEST_CLOCK_ENV_VARS } from './clock/clock';
+import { GLOBAL_RATE_LIMIT_DEFAULTS } from './rate-limit/global-rate-limit.constants';
 
 // B-018 regression guard. The build register found ~22 variables read in code
 // but absent from render.yaml, so a deploy silently ran with code defaults (or
@@ -103,6 +104,55 @@ describe('environment completeness (B-018)', () => {
     const [staging, prod] = services;
     expect([...staging].filter((k) => !prod.has(k))).toEqual([]);
     expect([...prod].filter((k) => !staging.has(k))).toEqual([]);
+  });
+
+  // Global API rate limit. The eight numbers must exist in code, in render.yaml for BOTH services and in
+  // .env.example, and render.yaml / .env.example must carry the same numbers as the code defaults (a deploy
+  // that silently ran a different limit from the one the code documents is the drift this spec is for).
+  describe('global rate limit variables', () => {
+    const NAMES = [
+      'GLOBAL_RATE_LIMIT_USER_MAX',
+      'GLOBAL_RATE_LIMIT_USER_WINDOW_MS',
+      'GLOBAL_RATE_LIMIT_ANON_MAX',
+      'GLOBAL_RATE_LIMIT_ANON_WINDOW_MS',
+      'GLOBAL_RATE_LIMIT_WRITE_MAX',
+      'GLOBAL_RATE_LIMIT_WRITE_WINDOW_MS',
+      'GLOBAL_RATE_LIMIT_UPLOAD_MAX',
+      'GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS',
+    ] as const;
+    const D = GLOBAL_RATE_LIMIT_DEFAULTS;
+    const DEFAULT_OF: Record<(typeof NAMES)[number], number> = {
+      GLOBAL_RATE_LIMIT_USER_MAX: D.userMax,
+      GLOBAL_RATE_LIMIT_USER_WINDOW_MS: D.userWindowMs,
+      GLOBAL_RATE_LIMIT_ANON_MAX: D.anonMax,
+      GLOBAL_RATE_LIMIT_ANON_WINDOW_MS: D.anonWindowMs,
+      GLOBAL_RATE_LIMIT_WRITE_MAX: D.writeMax,
+      GLOBAL_RATE_LIMIT_WRITE_WINDOW_MS: D.writeWindowMs,
+      GLOBAL_RATE_LIMIT_UPLOAD_MAX: D.uploadMax,
+      GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS: D.uploadWindowMs,
+    };
+
+    it('are read by the code, declared in both render.yaml services and documented in .env.example', () => {
+      for (const name of NAMES) expect(read.has(name)).toBe(true);
+      for (const keys of services) for (const name of NAMES) expect(keys.has(name)).toBe(true);
+      for (const name of NAMES) expect(example.has(name)).toBe(true);
+    });
+
+    it('do not reuse or collide with the existing POST_MEDIA_UPLOAD_RATE_LIMIT_* names', () => {
+      for (const name of NAMES) expect(name.startsWith('POST_MEDIA_')).toBe(false);
+      expect(read.has('POST_MEDIA_UPLOAD_RATE_LIMIT_MAX')).toBe(true);
+    });
+
+    it('carry the same numbers in render.yaml (both services) and .env.example as the code defaults', () => {
+      const renderText = fs.readFileSync(path.join(REPO_ROOT, 'render.yaml'), 'utf8');
+      const exampleText = fs.readFileSync(path.join(REPO_ROOT, '.env.example'), 'utf8');
+      for (const name of NAMES) {
+        const inRender = [...renderText.matchAll(new RegExp(`-\\s+key:\\s+${name}\\s+value:\\s+"(\\d+)"`, 'g'))].map((m) => Number(m[1]));
+        expect(inRender).toEqual([DEFAULT_OF[name], DEFAULT_OF[name]]);
+        const inExample = exampleText.match(new RegExp(`^${name}=(\\d+)\\s*$`, 'm'));
+        expect(inExample && Number(inExample[1])).toBe(DEFAULT_OF[name]);
+      }
+    });
   });
 
   it('declares the B-024 / B-018 additions', () => {

@@ -3,6 +3,7 @@ import { CurrentUser } from '../auth/guards/current-user.decorator';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
+import { SkipGlobalRateLimit } from '../../rate-limit/global-rate-limit.decorators';
 import { CreateUploadDto } from './dto/create-upload.dto';
 import { PostMediaService } from './post-media.service';
 
@@ -18,7 +19,11 @@ import { PostMediaService } from './post-media.service';
 export class PostMediaController {
   constructor(private readonly postMedia: PostMediaService) {}
 
+  // Exempt from the global rate limit: it has its own per-user limit (POST_MEDIA_UPLOAD_RATE_LIMIT_*).
+  // The sibling routes (confirm, delete, report) get the ordinary writes limit. The bytes themselves
+  // go from the browser straight to the bucket and never reach the API.
   @Post()
+  @SkipGlobalRateLimit()
   @UseGuards(GuardianConsentGuard)
   async create(@CurrentUser() user: AccessTokenPayload, @Body() dto: CreateUploadDto) {
     return this.postMedia.createUpload(user.sub, dto);

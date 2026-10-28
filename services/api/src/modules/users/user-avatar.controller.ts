@@ -6,6 +6,7 @@ import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
 import { AVATAR_MAX_FILE_SIZE_BYTES, UploadedAvatarFile, UserAvatarService } from './user-avatar.service';
+import { UploadRateLimit } from '../../rate-limit/global-rate-limit.decorators';
 
 // backend/w5-profile-block (B-035). The profile picture of the CALLER. Mounted
 // under /users next to PATCH /users/:id, with the same self-only rule: :id must be
@@ -27,6 +28,7 @@ export class UserAvatarController {
   constructor(private readonly avatars: UserAvatarService) {}
 
   @Post(':id/avatar')
+  @UploadRateLimit()
   @UseGuards(GuardianConsentGuard, EmailVerifiedGuard)
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: AVATAR_MAX_FILE_SIZE_BYTES } }))
   async upload(

@@ -76,6 +76,17 @@ export const E2E_INERT_EXTERNAL_ENV: Readonly<Record<string, string>> = {
   GEOLITE2_DB_PATH: '/nonexistent/e2e-geolite2-disabled.mmdb',
   // The link base the email-link assertions expect.
   WEB_APP_BASE_URL: 'http://localhost:5173',
+  // Global API rate limit (rate-limit/): the suites fire hundreds of requests from one IP and a few users in
+  // seconds, far past the production defaults (120 / 600 / 30 / 10). Forced very high so no existing suite is
+  // throttled; the limiter itself is proven by src/rate-limit/*.spec.ts, which sets its own numbers.
+  GLOBAL_RATE_LIMIT_USER_MAX: '1000000',
+  GLOBAL_RATE_LIMIT_USER_WINDOW_MS: '60000',
+  GLOBAL_RATE_LIMIT_ANON_MAX: '1000000',
+  GLOBAL_RATE_LIMIT_ANON_WINDOW_MS: '60000',
+  GLOBAL_RATE_LIMIT_WRITE_MAX: '1000000',
+  GLOBAL_RATE_LIMIT_WRITE_WINDOW_MS: '60000',
+  GLOBAL_RATE_LIMIT_UPLOAD_MAX: '1000000',
+  GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS: '60000',
 };
 
 export function isolateExternalServiceEnv(): void {
