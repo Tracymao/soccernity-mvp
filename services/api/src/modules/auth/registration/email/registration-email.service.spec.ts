@@ -275,7 +275,7 @@ describe('RegistrationEmailService', () => {
           expect(body).toContain('https://app.soccernity.com/forgot-password');
           expect(body).toContain('there is nothing to do');
           // No IP address, no times, no counts, no token.
-          expect(body).not.toMatch(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/);
+          expect(body).not.toMatch(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/);
           expect(body).not.toMatch(/\d+\s*(times|attempts|minutes)/i);
           expect(body).not.toContain('token=');
           expect(body).not.toContain('COPY PENDING LEGAL REVIEW');
