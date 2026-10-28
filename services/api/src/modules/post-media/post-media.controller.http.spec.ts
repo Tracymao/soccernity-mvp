@@ -1,8 +1,10 @@
 import { ExecutionContext, INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
+import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ProfileCompleteGuard } from '../auth/guards/profile-complete.guard';
 import { PostMediaController } from './post-media.controller';
 import { PostMediaService } from './post-media.service';
 
@@ -18,6 +20,10 @@ describe('PostMediaController (HTTP layer, B-041)', () => {
     })
       // Guard behaviour: write-route-guards.spec.ts pins which guards sit on each route.
       .overrideGuard(GuardianConsentGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(EmailVerifiedGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(ProfileCompleteGuard)
       .useValue({ canActivate: () => true })
       .overrideGuard(JwtAuthGuard)
       .useValue({
@@ -39,6 +45,14 @@ describe('PostMediaController (HTTP layer, B-041)', () => {
     const res = await request(app.getHttpServer()).post('/media/uploads').send({ contentType: 'video/mp4', size: 5000 }).expect(201);
     expect(res.body).toEqual({ id: 'u1' });
     expect(media.createUpload).toHaveBeenCalledWith('me', { contentType: 'video/mp4', size: 5000 });
+  });
+
+  // B-259: a HEIC/HEIF type is let through VALIDATION so the service can refuse it with its own plain message
+  // (post-media.service.spec.ts); a GIF or anything else is still a generic validation 400.
+  it.each(['image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence'])('POST /media/uploads lets %s reach the service for its own refusal', async (contentType) => {
+    media.createUpload.mockResolvedValue({ id: 'u1' });
+    await request(app.getHttpServer()).post('/media/uploads').send({ contentType, size: 100 }).expect(201);
+    expect(media.createUpload).toHaveBeenCalledWith('me', { contentType, size: 100 });
   });
 
   it.each([

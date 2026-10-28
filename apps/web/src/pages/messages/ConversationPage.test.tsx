@@ -35,7 +35,6 @@ function message(overrides: Partial<Message> = {}): Message {
     conversationId: "convo-1",
     senderId: "user-2",
     contentText: "Hey!",
-    mediaUrl: null,
     sentAt: "2026-09-13T10:00:00.000Z",
     readAt: null,
     ...overrides,

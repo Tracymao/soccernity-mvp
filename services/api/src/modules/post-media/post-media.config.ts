@@ -35,8 +35,13 @@ export const POST_MEDIA_DEFAULTS = {
   // When the automatic check is not configured at all, a confirmed upload waits this long and is then
   // sent to the moderator queue (otherwise it would sit unseen forever: nothing is ever approved by default).
   uncheckedToReviewAfterMinutes: 30,
-  // How long a moderator's view link for a file stays valid.
+  // How long a moderator's view link for a file stays valid. Also the author's own view link (B-257).
   reviewViewUrlTtlSeconds: 300,
+  // backend/media-privacy-vetting-followups (B-258, B-259; Decision Log #430 items 3 and 4). ADOPTED DEFAULTS,
+  // founder-veto-able. Reports one account may file in any rolling 24 hours.
+  reportDailyLimit: 20,
+  // A confirmed upload that was never attached to a post is purged after this many days (never a rejected one).
+  unattachedMaxAgeDays: 7,
 } as const;
 
 export interface PostMediaLimits {
@@ -153,6 +158,21 @@ export class PostMediaConfig {
 
   get reviewViewUrlTtlSeconds(): number {
     return POST_MEDIA_DEFAULTS.reviewViewUrlTtlSeconds;
+  }
+
+  /** The uploader's own short-lived view link (B-257): the same lifetime as a moderator's. */
+  get viewUrlTtlSeconds(): number {
+    return POST_MEDIA_DEFAULTS.reviewViewUrlTtlSeconds;
+  }
+
+  /** B-258: reports one account may file per rolling 24 hours. */
+  get reportDailyLimit(): number {
+    return this.num('POST_MEDIA_REPORT_DAILY_LIMIT', POST_MEDIA_DEFAULTS.reportDailyLimit, 1, 10000);
+  }
+
+  /** B-259: days after which a confirmed, never-attached upload is purged. */
+  get unattachedMaxAgeDays(): number {
+    return this.num('POST_MEDIA_UNATTACHED_MAX_AGE_DAYS', POST_MEDIA_DEFAULTS.unattachedMaxAgeDays, 1, 365);
   }
 
   get checkBatchSize(): number {

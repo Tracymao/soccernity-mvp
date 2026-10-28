@@ -89,7 +89,7 @@ export class ConversationsController {
     return this.messaging.getMessages(id, user.sub, query);
   }
 
-  // POST /conversations/:id/messages { contentText, mediaUrl? } —
+  // POST /conversations/:id/messages { contentText } —
   // JwtAuthGuard + GuardianConsentGuard + participant check. Nest's
   // default 201 (this really does create a Message).
   @Post(':id/messages')

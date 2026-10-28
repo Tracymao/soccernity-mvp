@@ -1,4 +1,12 @@
-import { POST_MEDIA_CONTENT_TYPES, POST_MEDIA_EXT_BY_TYPE, POST_MEDIA_KIND_BY_TYPE, detectPostMedia, isPostMediaContentType } from './media-signature.util';
+import {
+  POST_MEDIA_CONTENT_TYPES,
+  POST_MEDIA_EXT_BY_TYPE,
+  POST_MEDIA_KIND_BY_TYPE,
+  detectPostMedia,
+  isHeicContentType,
+  isPostMediaContentType,
+  looksLikeHeic,
+} from './media-signature.util';
 
 const pad = (b: number[], len = 64) => Buffer.concat([Buffer.from(b), Buffer.alloc(Math.max(0, len - b.length))]);
 const ascii = (s: string, at = 0, len = 64) => {
@@ -29,6 +37,25 @@ describe('detectPostMedia (magic bytes)', () => {
       const buf = Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftyp'), Buffer.from(brand), Buffer.alloc(40)]);
       expect(detectPostMedia(buf)).toBeNull();
     }
+  });
+
+  // B-259 (Decision Log #430 item 4): HEIC/HEIF gets its own plain refusal, so it must be recognisable.
+  it('looksLikeHeic recognises a HEIC/HEIF still by its ftyp brand, whatever type was declared, and nothing else', () => {
+    for (const brand of ['heic', 'heix', 'heim', 'heis', 'hevc', 'hevx', 'mif1', 'msf1']) {
+      const buf = Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftyp'), Buffer.from(brand), Buffer.alloc(40)]);
+      expect(looksLikeHeic(buf)).toBe(true);
+    }
+    const mp4 = Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftypmp42'), Buffer.alloc(40)]);
+    expect(looksLikeHeic(mp4)).toBe(false);
+    expect(looksLikeHeic(Buffer.from([0xff, 0xd8, 0xff]))).toBe(false);
+    expect(looksLikeHeic(Buffer.alloc(0))).toBe(false);
+  });
+
+  it('isHeicContentType matches the four declared HEIC/HEIF types, case-insensitively, and not jpeg', () => {
+    for (const t of ['image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence', 'Image/HEIC', ' image/heif ']) {
+      expect(isHeicContentType(t)).toBe(true);
+    }
+    for (const t of ['image/jpeg', 'image/avif', 'video/mp4', '']) expect(isHeicContentType(t)).toBe(false);
   });
 
   it('refuses a plain Matroska file (EBML header without the webm doctype)', () => {

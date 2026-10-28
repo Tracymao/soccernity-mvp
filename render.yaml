@@ -271,6 +271,13 @@ services:
         value: "3"
       - key: MEDIA_REVIEW_UNCHECKED_AFTER_MINUTES
         value: "30"
+      # Media follow-ups (B-258, B-259; Decision Log #430): reports one account may file in any rolling 24 hours
+      # (a founder-veto-able default), and the age in days after which a confirmed upload that was never attached
+      # to a post is purged (a rejected file is never purged).
+      - key: POST_MEDIA_REPORT_DAILY_LIMIT
+        value: "20"
+      - key: POST_MEDIA_UNATTACHED_MAX_AGE_DAYS
+        value: "7"
       # --- Guardian card verification (Stripe; use TEST keys until a real account exists) ---
       - key: STRIPE_SECRET_KEY
         sync: false
@@ -532,6 +539,13 @@ services:
         value: "3"
       - key: MEDIA_REVIEW_UNCHECKED_AFTER_MINUTES
         value: "30"
+      # Media follow-ups (B-258, B-259; Decision Log #430): reports one account may file in any rolling 24 hours
+      # (a founder-veto-able default), and the age in days after which a confirmed upload that was never attached
+      # to a post is purged (a rejected file is never purged).
+      - key: POST_MEDIA_REPORT_DAILY_LIMIT
+        value: "20"
+      - key: POST_MEDIA_UNATTACHED_MAX_AGE_DAYS
+        value: "7"
       # --- Guardian card verification (Stripe; use TEST keys until a real account exists) ---
       - key: STRIPE_SECRET_KEY
         sync: false
