@@ -37,6 +37,7 @@ function post(overrides: Partial<FeedPost> = {}): FeedPost {
     author: { id: "user-2", publicName: "Emeka John", isFollowing: false },
     contentText: "First goal of the season",
     mediaUrls: [],
+    media: [],
     clubPageId: null,
     banterRoomId: null,
     likeCount: 3,
@@ -148,6 +149,7 @@ describe("PostCard — locked final entry (engagementLocked)", () => {
       authorId: "user-1",
       author: { id: "user-1", publicName: "Sarah Bello", isFollowing: false },
       mediaUrls: ["https://cdn.example.com/final.mp4"],
+      media: [{ id: "media-1", kind: "video" }],
       contest: { entryId: "e1", kind: "final", weekNumber: 4, pinned: true, label: "Contest post" },
       ...over,
     });
@@ -189,7 +191,7 @@ describe("PostCard — locked final entry (engagementLocked)", () => {
 
 describe("PostCard — standalone entry page options", () => {
   it("plays a video inline when asked, and still shows a player (not a bare link) otherwise", () => {
-    const p = post({ mediaUrls: ["https://cdn.example.com/a.mp4"] });
+    const p = post({ mediaUrls: ["https://cdn.example.com/a.mp4"], media: [{ id: "media-1", kind: "video" }] });
     const { container, unmount } = render(
       <MemoryRouter>
         <PostCard post={p} accessToken="tok" currentUserId="user-1" playVideo />

@@ -48,6 +48,7 @@ function post(overrides: Partial<FeedPost> = {}): FeedPost {
     author: { id: "author-1", publicName: "Marcus Obi", isFollowing: false },
     contentText: "Massive win at the weekend — 3–1 and up to 2nd in the league.",
     mediaUrls: [],
+    media: [],
     clubPageId: "club-s",
     banterRoomId: null,
     likeCount: 124,

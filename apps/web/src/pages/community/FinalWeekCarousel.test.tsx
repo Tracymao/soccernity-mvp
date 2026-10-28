@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
-import FinalWeekCarousel from "./FinalWeekCarousel";
+import FinalWeekCarousel, { FINAL_WEEK_PAGE_SIZE } from "./FinalWeekCarousel";
 import { ContestApiError, type FinalWeekCarouselItem } from "../../api/contest";
 
 vi.mock("../../api/contest", async () => {
@@ -194,6 +194,14 @@ describe("FinalWeekCarousel: impressions", () => {
     vi.mocked(getFinalWeekCarousel).mockResolvedValue({ live: true, items: items(count) });
     renderCarousel();
     await screen.findByText("Final week");
+    // findByText resolves as soon as the heading is in the DOM, which is NOT the same moment React has
+    // run the tiles' passive effects (that is where each tile registers its IntersectionObserver). Flush
+    // them inside act(), then wait for the exact number of live observers (one per tile on page 1) so
+    // showTile() can never run before its tile is observed. This was the source of the intermittent
+    // "expected 0 to be greater than 0" failure.
+    await act(async () => {});
+    const visibleTiles = Math.min(count, FINAL_WEEK_PAGE_SIZE);
+    await waitFor(() => expect(FakeObserver.instances.filter((i) => !i.obs.disconnected)).toHaveLength(visibleTiles));
     // From here on the one second is driven by fake timers.
     vi.useFakeTimers();
   }

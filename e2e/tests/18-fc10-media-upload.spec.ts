@@ -148,6 +148,16 @@ test.describe.serial('FC10: media upload, the whole path with the fake check', (
     const unsureCard = page.locator('article.post', { hasText: TEXT.unsure });
     await expect(unsureCard.getByText('Under review')).toBeVisible();
     await expect(unsureCard.getByText('Only you can see this post until its pictures have been checked. [COPY PENDING LEGAL REVIEW]')).toBeVisible();
+    // B-260: the file under review is drawn through the signed link from the post's `media`, never through its
+    // public address (the private object only exists in the private prefix until it is approved).
+    const pendingSrc = await unsureCard.getByAltText('Picture attached to this post').getAttribute('src');
+    expect(pendingSrc, 'a pending file is drawn through its signed link').toContain('private-media');
+    expect(pendingSrc).not.toContain('/post-media/');
+    const ownRead = await api('GET', `/posts/${posts.unsure}`, { token: uploader.token });
+    const ownMedia = (ownRead.body as { media: Array<{ id: string; kind: string; viewUrl?: string }> }).media;
+    expect(ownMedia).toHaveLength(1);
+    expect(ownMedia[0].kind).toBe('image');
+    expect(ownMedia[0].viewUrl).toBeTruthy();
 
     const rejectCard = page.locator('article.post', { hasText: TEXT.reject });
     await expect(rejectCard.getByText('This picture wasn’t approved')).toBeVisible();
@@ -169,9 +179,15 @@ test.describe.serial('FC10: media upload, the whole path with the fake check', (
     await page.goto(`/posts/${posts.clear}`);
     await expect(page.getByAltText('Picture attached to this post')).toBeVisible();
     await page.getByRole('button', { name: 'Report this picture' }).click();
+    // B-260: the optional reason (up to 500 characters, with a counter) is sent and stored for moderators.
+    await expect(page.getByText('0 / 500')).toBeVisible();
+    await page.getByLabel(/Why are you reporting it/).fill('Not about football');
+    await expect(page.getByText('18 / 500')).toBeVisible();
     await page.getByRole('button', { name: 'Submit report' }).click();
     await expect(page.getByText('Reported — thanks, our team will review it.')).toBeVisible();
     expect(await db().postMediaReport.count({ where: { reporterId: viewer.userId } })).toBe(1);
+    const stored = await db().postMediaReport.findFirst({ where: { reporterId: viewer.userId }, select: { reason: true } });
+    expect(stored.reason).toBe('Not about football');
 
     if (posts.video) {
       await page.goto(`/posts/${posts.video}`);
@@ -182,6 +198,28 @@ test.describe.serial('FC10: media upload, the whole path with the fake check', (
     await signIn(page, uploader.email);
     await page.goto(`/posts/${posts.clear}`);
     await expect(page.getByRole('button', { name: /Report this/ })).toHaveCount(0);
+  });
+
+  test('4b. a reporter who has hit the daily report limit sees the limit state, not a generic error', async ({ page }) => {
+    const reporter = await member('mediacap');
+    // 20 reports in the last 24 hours (POST_MEDIA_REPORT_DAILY_LIMIT default). Stub files owned by the reporter
+    // themselves: they sit in no post and no queue, so no other test sees them.
+    for (let i = 0; i < 20; i += 1) {
+      const stub = await db().postMedia.create({
+        data: { uploaderId: reporter.userId, kind: 'image', declaredContentType: 'image/png', declaredSize: 1 },
+        select: { id: true },
+      });
+      await db().postMediaReport.create({ data: { mediaId: stub.id, reporterId: reporter.userId } });
+    }
+    await signIn(page, reporter.email);
+    await page.goto(`/posts/${posts.clear}`);
+    await page.getByRole('button', { name: 'Report this picture' }).click();
+    await page.getByRole('button', { name: 'Submit report' }).click();
+    await expect(page.getByText('You’ve reached today’s report limit')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Submit report' })).toHaveCount(0);
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    // Nothing was added by the refused attempt.
+    expect(await db().postMediaReport.count({ where: { reporterId: reporter.userId } })).toBe(20);
   });
 
   test('5. the moderator queue: statistics, the unsure and the reported item; approve one, reject one with a reason', async ({ browser }) => {

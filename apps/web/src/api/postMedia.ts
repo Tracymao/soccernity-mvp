@@ -25,7 +25,12 @@ export const POST_MEDIA_CODES = {
   uploadsUnavailable: "uploads_unavailable",
   mediaInContestEntry: "media_in_contest_entry",
   cannotReportOwn: "cannot_report_own_media",
+  // POST /media/:id/report: the per-account daily limit (429). Stable code from the API (B-258).
+  reportDailyLimit: "media_report_daily_limit",
 } as const;
+
+/** The longest report reason the API accepts (ReportMediaDto, MEDIA_REPORT_REASON_MAX_LENGTH). */
+export const MEDIA_REPORT_REASON_MAX_LENGTH = 500;
 
 export class PostMediaApiError extends Error {
   readonly status?: number;
@@ -48,7 +53,15 @@ export interface PostMediaView {
   /** 'pending' | 'approved' | 'rejected'. 'pending' once ready means "under review". */
   status: "pending" | "approved" | "rejected";
   rejectionReason: string | null;
+  /** The file's PUBLIC address: it only works once the file is approved. Never show it for an unapproved file. */
   url: string | null;
+  /**
+   * A short-lived (5 minutes) signed link to the file's CURRENT object, private while it is under review or
+   * rejected. The only address the uploader may use to see a file that is not approved. Absent when no
+   * object can be signed.
+   */
+  viewUrl?: string | null;
+  viewUrlExpiresAt?: string | null;
   contentType: string | null;
   byteSize: number | null;
   durationSeconds: number | null;
@@ -125,10 +138,17 @@ export async function deleteUpload(accessToken: string, id: string): Promise<voi
   if (!response.ok) throw await failure(response, `Couldn't remove that file (${response.status}).`);
 }
 
-// POST /media/:id/report. JwtAuthGuard + GuardianConsentGuard. The body is empty: this route takes no
-// reason (the report goes to the media review queue as it is). 200 { alreadyReported: true } for a repeat.
-export async function reportMedia(accessToken: string, id: string): Promise<MediaReportResult> {
-  const response = await authedFetch(`/media/${id}/report`, accessToken, { method: "POST" });
+// POST /media/:id/report. JwtAuthGuard + GuardianConsentGuard. The body is optional: `reason` is free text,
+// trimmed, at most MEDIA_REPORT_REASON_MAX_LENGTH characters, shown to moderators only (never to the
+// uploader). A blank reason is sent as no body. 200 { alreadyReported: true } for a repeat. Over the
+// per-account daily limit the API answers 429 with code `media_report_daily_limit`.
+export async function reportMedia(accessToken: string, id: string, reason?: string): Promise<MediaReportResult> {
+  const trimmed = reason?.trim() ?? "";
+  const response = await authedFetch(
+    `/media/${id}/report`,
+    accessToken,
+    trimmed ? { method: "POST", body: JSON.stringify({ reason: trimmed }) } : { method: "POST" },
+  );
   if (!response.ok) throw await failure(response, `Couldn't send that report (${response.status}).`);
   return (await response.json()) as MediaReportResult;
 }
