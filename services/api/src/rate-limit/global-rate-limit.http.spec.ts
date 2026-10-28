@@ -63,8 +63,10 @@ async function buildApp(overrides: Record<string, string> = {}): Promise<INestAp
         ignoreEnvFile: true,
         load: [() => ({ JWT_SECRET: SECRET, ...overrides })],
       }),
-      AuthRateLimitModule,
+      // Same order as AppModule (global first). ThrottlerModule is @Global(), so a second registration
+      // here once overwrote the auth options; this order + the huge-limits test below pins that.
       GlobalRateLimitModule,
+      AuthRateLimitModule,
     ],
     controllers: [RateLimitTestController, HealthController],
     providers: [PrismaService, AuthThrottlerGuard],
@@ -102,6 +104,25 @@ describe('global rate limit (real module over HTTP) with the production defaults
 
   it('does not limit GET /health however often it is polled', async () => {
     for (let i = 0; i < 40; i++) await request(app.getHttpServer()).get('/health').expect(200);
+  });
+});
+
+// The e2e suites set every global limit to 1,000,000. The auth routes must STILL be limited at their own 5 per 60 s.
+describe('global rate limit (real module over HTTP) with huge global limits (the e2e configuration)', () => {
+  let app: INestApplication;
+  beforeAll(async () => {
+    app = await buildApp({
+      GLOBAL_RATE_LIMIT_USER_MAX: '1000000',
+      GLOBAL_RATE_LIMIT_ANON_MAX: '1000000',
+      GLOBAL_RATE_LIMIT_WRITE_MAX: '1000000',
+      GLOBAL_RATE_LIMIT_UPLOAD_MAX: '1000000',
+    });
+  });
+  afterAll(async () => app.close());
+
+  it('an @AuthRateLimit() route is still limited at the auth limit, not the global one', async () => {
+    for (let i = 0; i < 5; i++) await request(app.getHttpServer()).get('/rl-test/auth-limited').expect(200);
+    await request(app.getHttpServer()).get('/rl-test/auth-limited').expect(429);
   });
 });
 

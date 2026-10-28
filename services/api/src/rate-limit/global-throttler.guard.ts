@@ -1,10 +1,17 @@
-import { ExecutionContext, Injectable, Logger } from '@nestjs/common';
-import { ThrottlerException, ThrottlerGuard, ThrottlerLimitDetail } from '@nestjs/throttler';
+import { ExecutionContext, Inject, Injectable, Logger } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import {
+  ThrottlerException,
+  ThrottlerGuard,
+  ThrottlerLimitDetail,
+  ThrottlerModuleOptions,
+  ThrottlerStorage,
+} from '@nestjs/throttler';
 import { SKIP_GLOBAL_RATE_LIMIT_KEY } from './global-rate-limit.constants';
 
-// Registered once as APP_GUARD (global-rate-limit.module.ts). Its options come ONLY from that
-// module's own ThrottlerModule, so the named 'auth' throttler (5 per 60 s) of AuthRateLimitModule
-// is never in its option list and never applies here.
+// Registered once as APP_GUARD (global-rate-limit.module.ts). Its options and storage are injected
+// under PRIVATE tokens (not the @Global ThrottlerModule's), so the named 'auth' throttler (5 per 60 s)
+// of AuthRateLimitModule is never in its option list and never applies here.
 //
 // Differences from the stock ThrottlerGuard:
 //   - FAILS OPEN: any error that is not the 429 itself (storage, tracker, token handling) is logged
@@ -12,8 +19,19 @@ import { SKIP_GLOBAL_RATE_LIMIT_KEY } from './global-rate-limit.constants';
 //   - 429 carries a plain `Retry-After` header (seconds). The stock guard would send
 //     `Retry-After-<throttler name>` because several named throttlers are configured.
 //   - Honours @SkipGlobalRateLimit() on a handler or controller.
+export const GLOBAL_THROTTLER_OPTIONS = Symbol('GLOBAL_THROTTLER_OPTIONS');
+export const GLOBAL_THROTTLER_STORAGE = Symbol('GLOBAL_THROTTLER_STORAGE');
+
 @Injectable()
 export class GlobalThrottlerGuard extends ThrottlerGuard {
+  constructor(
+    @Inject(GLOBAL_THROTTLER_OPTIONS) options: ThrottlerModuleOptions,
+    @Inject(GLOBAL_THROTTLER_STORAGE) storageService: ThrottlerStorage,
+    reflector: Reflector,
+  ) {
+    super(options, storageService, reflector);
+  }
+
   private readonly logger = new Logger(GlobalThrottlerGuard.name);
   private lastFailOpenLogAt = 0;
 
