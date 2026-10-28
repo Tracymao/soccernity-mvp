@@ -84,6 +84,9 @@ async function buildApp(redis: FakeRedis, env: Record<string, string> = {}): Pro
   // Take the client address from X-Forwarded-For so one test process can play many IPs.
   (app.getHttpAdapter().getInstance() as { set(k: string, v: unknown): void }).set('trust proxy', true);
   await app.init();
+  // Listen once up front. supertest binds a not-yet-listening server per request, so a burst of concurrent
+  // requests (the parallel-guess test) would race to listen() on the same server and get ECONNRESET.
+  await app.listen(0);
   return app;
 }
 
