@@ -7,16 +7,19 @@
 // the entry is in and hidden from everyone but them until the reveal at 00:00 on day 25.
 //
 // The submit is POST /contest/final-entry, which CREATES the post itself (hidden until the reveal,
-// out of the Community feed), so unlike a weekly entry this does not go through POST /posts. It needs
-// at least one media URL, and there is NO upload endpoint for posts anywhere, so the frame's "Upload
-// file" control is a "Video link" field: paste the web address of the video. This is a stand-in for
-// a real upload (not built), named plainly on screen.
+// out of the Community feed), so unlike a weekly entry this does not go through POST /posts. It takes the
+// id of ONE video the finalist uploaded straight to storage (api/postMedia.ts, useMediaUploads.ts; Figma
+// pass Q frames 6850:*, Decision Log #419 item 7). The pasted "Video link" of the earlier stand-in is gone.
+// A video that is still being checked still attaches (it is hidden from everyone but its owner until the
+// reveal anyway); one that is rejected must be removed and replaced before the window closes.
 //
 // The upload window's own copy comes from the frame. Nothing here shows the minimum tally (admin
 // only, #400 E8) or any engagement count (all engagement on a final entry is locked until the reveal).
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { Link } from "react-router";
 import { ContestApiError, submitFinalEntry, type CurrentContestResponse } from "../../api/contest";
+import MediaUploadTray from "./MediaUploadTray";
+import { useMediaUploads } from "./useMediaUploads";
 
 interface Props {
   accessToken: string;
@@ -29,7 +32,8 @@ const MAX_CAPTION = 3000;
 
 export default function FinalWeekPanel({ accessToken, authorName, contest, onSubmitted }: Props) {
   const [text, setText] = useState("");
-  const [link, setLink] = useState("");
+  const uploads = useMediaUploads({ accessToken, only: "video" });
+  const videoInput = useRef<HTMLInputElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -61,10 +65,15 @@ export default function FinalWeekPanel({ accessToken, authorName, contest, onSub
     );
   }
 
-  const url = link.trim();
   const caption = text.trim();
-  const validLink = /^https?:\/\/\S+$/i.test(url);
-  const canSubmit = caption.length > 0 && caption.length <= MAX_CAPTION && validLink && !submitting;
+  const hasVideo = uploads.mediaIds.length === 1;
+  const canSubmit = caption.length > 0 && caption.length <= MAX_CAPTION && hasVideo && uploads.canPublish && !submitting;
+
+  function onPicked(event: ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (picked.length > 0) uploads.addFiles(picked);
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -72,10 +81,10 @@ export default function FinalWeekPanel({ accessToken, authorName, contest, onSub
     setSubmitting(true);
     setError(null);
     try {
-      await submitFinalEntry(accessToken, { contentText: caption, mediaUrls: [url] });
+      await submitFinalEntry(accessToken, { contentText: caption, mediaId: uploads.mediaIds[0] });
       setDone(true);
       setText("");
-      setLink("");
+      uploads.clear();
       onSubmitted?.();
     } catch (err) {
       setError(err instanceof ContestApiError ? err.message : "Couldn't submit your final entry.");
@@ -113,23 +122,48 @@ export default function FinalWeekPanel({ accessToken, authorName, contest, onSub
               maxLength={MAX_CAPTION}
               onChange={(event) => setText(event.target.value)}
             />
-            <label className="composer__link-label" htmlFor="final-entry-video">
-              Video link
-            </label>
-            <input
-              id="final-entry-video"
-              className="composer__link-input"
-              type="url"
-              inputMode="url"
-              placeholder="https://…"
-              value={link}
-              onChange={(event) => setLink(event.target.value)}
-              autoComplete="off"
+            <p className="composer__link-label">Choose your final video</p>
+            <MediaUploadTray
+              variant="final"
+              items={uploads.items}
+              notice={uploads.notice}
+              onCancel={uploads.cancel}
+              onRemove={uploads.remove}
+              onRetry={uploads.retry}
             />
-            <p className="composer__note">
-              File uploads aren&rsquo;t available yet, so paste the web address of your video. It needs to start with
-              https://.
-            </p>
+            {uploads.uploadsUnavailable ? (
+              <p className="media-unavailable" role="status">
+                <strong>Uploads aren&rsquo;t available right now.</strong> Try again later; the window is open until
+                23:59:59 on day 24.
+              </p>
+            ) : uploads.items.length === 0 ? (
+              <>
+                <input
+                  ref={videoInput}
+                  id="final-entry-video"
+                  className="media-attach__input"
+                  type="file"
+                  accept="video/mp4,video/webm,video/quicktime"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  data-testid="final-video-input"
+                  onChange={onPicked}
+                />
+                <button type="button" className="media-attach__btn" onClick={() => videoInput.current?.click()}>
+                  &#127909; Choose a video
+                </button>
+                <p className="composer__note">
+                  MP4, WebM or MOV, up to 100 MB and 120 seconds. Upload on days 22&ndash;24; the deadline is 23:59:59 on
+                  day 24.
+                </p>
+                <p className="composer__note">
+                  Everything you upload is checked before it can be shown, and your video stays hidden from everyone but
+                  you until the reveal. [COPY PENDING LEGAL REVIEW]
+                </p>
+              </>
+            ) : (
+              <p className="composer__note">You can replace it until the upload window closes.</p>
+            )}
             <div className="composer__foot">
               <span />
               <button type="submit" className="composer__submit" disabled={!canSubmit}>

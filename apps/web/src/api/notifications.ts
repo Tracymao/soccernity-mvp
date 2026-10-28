@@ -100,7 +100,11 @@ export type NotificationData =
   // profile_image_rejected (B-214, W8): which image was not approved. The moderator's
   // reason is NOT here; it is on the owner's own GET /users/:id (avatar/cover
   // `rejectionReason`), which is where the row sends them.
-  | { image: "avatar" | "cover" };
+  | { image: "avatar" | "cover" }
+  // post_media_approved / post_media_rejected (B-037, W15; FC10): which file was decided, by media id and
+  // kind. The moderator's reason is NOT here; it is on the uploader's own GET /media/uploads/:id, which is
+  // where the rejected row sends them (the author's post card shows it).
+  | { media: { id: string; kind: "image" | "video" | string } };
 
 export interface Notification {
   id: string;

@@ -122,6 +122,9 @@ function linkFor(n: Notification): string | null {
   // The image-decision row (B-217): the reason lives on the owner's own record, shown in Edit Profile,
   // so the row opens the profile with the edit form already open.
   if (n.type === "profile_image_rejected" && "image" in n.data) return "/profile?edit=1";
+  // The file-decision rows (FC10, B-240): the author's post is on their Community feed, where the post card
+  // shows the file's status and, for a rejected file, the reason.
+  if ((n.type === "post_media_approved" || n.type === "post_media_rejected") && "media" in n.data) return "/community";
   if (n.type === "match_kickoff" && "match" in n.data) return `/sports-hub/matches/${n.data.match.externalRef}`;
   return null;
 }
@@ -196,6 +199,13 @@ function bodyFor(n: Notification): { subject: string; rest: string } {
       const noun = data && "image" in data && data.image === "cover" ? "cover photo" : "picture";
       return { subject: `Your ${noun}`, rest: " wasn’t approved — see why in Edit Profile" };
     }
+    case "post_media_approved":
+    case "post_media_rejected": {
+      const noun = data && "media" in data && data.media.kind === "video" ? "video" : "picture";
+      return n.type === "post_media_approved"
+        ? { subject: `Your ${noun}`, rest: " was approved" }
+        : { subject: `Your ${noun}`, rest: " wasn’t approved — see why on your post" };
+    }
     case "age_milestone":
       // Plain, non-alarming, no age threshold in the copy (PR #277's
       // under-16 UI tone). Any milestone key gets the same message: the
@@ -219,6 +229,8 @@ const KNOWN_TYPES = new Set([
   "match_kickoff",
   "age_milestone",
   "profile_image_rejected",
+  "post_media_approved",
+  "post_media_rejected",
 ]);
 
 function isKnownType(type: string): boolean {
@@ -234,7 +246,9 @@ function RowAvatar({ notification }: { notification: Notification }) {
     type === "contest_win" ||
     isContestEventType(type) ||
     type === "age_milestone" ||
-    type === "profile_image_rejected";
+    type === "profile_image_rejected" ||
+    type === "post_media_approved" ||
+    type === "post_media_rejected";
   const className = usesIconDisc
     ? "notif-row__avatar notif-row__avatar--icon"
     : `notif-row__avatar ${read ? "notif-row__avatar--read" : "notif-row__avatar--unread"}`;
@@ -274,7 +288,7 @@ function RowAvatar({ notification }: { notification: Notification }) {
       </span>
     );
   }
-  if (type === "profile_image_rejected") {
+  if (type === "profile_image_rejected" || type === "post_media_approved" || type === "post_media_rejected") {
     return (
       <span className={className}>
         <img src={notifImageAdd} alt="" width={24} height={24} />

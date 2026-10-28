@@ -9,12 +9,54 @@ vi.mock("../../api/contest", async () => {
   const actual = await vi.importActual<typeof import("../../api/contest")>("../../api/contest");
   return { ...actual, submitFinalEntry: vi.fn() };
 });
+vi.mock("../../api/postMedia", async () => {
+  const actual = await vi.importActual<typeof import("../../api/postMedia")>("../../api/postMedia");
+  return { ...actual, createUpload: vi.fn(), putFile: vi.fn(), confirmUpload: vi.fn(), getUpload: vi.fn(), deleteUpload: vi.fn() };
+});
 import { submitFinalEntry } from "../../api/contest";
+import { confirmUpload, createUpload, deleteUpload, getUpload, putFile, type PostMediaView } from "../../api/postMedia";
 
 afterEach(cleanup);
 beforeEach(() => {
   vi.mocked(submitFinalEntry).mockReset();
+  vi.mocked(createUpload).mockReset();
+  vi.mocked(putFile).mockReset();
+  vi.mocked(confirmUpload).mockReset();
+  vi.mocked(getUpload).mockReset();
+  vi.mocked(deleteUpload).mockReset();
+  vi.mocked(createUpload).mockResolvedValue({
+    id: "m1",
+    uploadUrl: "https://storage.test/put",
+    uploadMethod: "PUT",
+    uploadHeaders: { "Content-Type": "video/mp4" },
+    expiresAt: "2026-09-23T10:15:00.000Z",
+    maxBytes: 100 * 1024 * 1024,
+  });
+  vi.mocked(putFile).mockResolvedValue(undefined);
+  vi.mocked(deleteUpload).mockResolvedValue(undefined);
 });
+
+function view(over: Partial<PostMediaView> = {}): PostMediaView {
+  return {
+    id: "m1",
+    kind: "video",
+    uploadState: "ready",
+    status: "pending",
+    rejectionReason: null,
+    url: "https://cdn.test/post-media/u/m1.mp4",
+    contentType: "video/mp4",
+    byteSize: 1234,
+    durationSeconds: 30,
+    postId: null,
+    createdAt: "2026-09-23T10:00:00.000Z",
+    ...over,
+  };
+}
+
+function chooseVideo() {
+  const file = new File(["video"], "final.mp4", { type: "video/mp4" });
+  fireEvent.change(document.getElementById("final-entry-video") as HTMLInputElement, { target: { files: [file] } });
+}
 
 const UPLOAD = { kind: "final_upload", opensAt: "2026-09-22T07:00:00.000Z", revealsAt: "2026-09-24T23:00:00.000Z" } as const;
 
@@ -46,19 +88,28 @@ describe("FinalWeekPanel", () => {
     expect(screen.queryByRole("button", { name: /submit entry/i })).toBeNull();
   });
 
-  it("Submit stays disabled until there is a caption and a valid https link (no upload endpoint exists)", () => {
+  it("has no free link field: the only way to attach a video is to choose a file", () => {
     renderPanel();
-    const submit = screen.getByRole("button", { name: /submit entry/i }) as HTMLButtonElement;
-    expect(submit.disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText(/caption for your final entry/i), { target: { value: "my final" } });
-    expect(submit.disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText("Video link"), { target: { value: "not a link" } });
-    expect(submit.disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText("Video link"), { target: { value: "https://cdn.example.com/final.mp4" } });
-    expect(submit.disabled).toBe(false);
+    expect(screen.queryByLabelText("Video link")).toBeNull();
+    expect(screen.getByRole("button", { name: /choose a video/i })).not.toBeNull();
+    expect(screen.getByText(/stays hidden from everyone but you until the reveal\. \[COPY PENDING LEGAL REVIEW\]/)).not.toBeNull();
   });
 
-  it("submits the caption and link, then shows the confirmation", async () => {
+  it("Submit stays disabled until there is a caption AND an uploaded video", async () => {
+    vi.mocked(confirmUpload).mockResolvedValue(view());
+    renderPanel();
+    const submit = screen.getByRole("button", { name: /submit entry/i }) as HTMLButtonElement;
+    fireEvent.change(screen.getByLabelText(/caption for your final entry/i), { target: { value: "my final" } });
+    expect(submit.disabled).toBe(true); // a caption alone is not enough
+    chooseVideo();
+    await screen.findByText("Checking");
+    expect(submit.disabled).toBe(false);
+    expect(createUpload).toHaveBeenCalledWith("t", { contentType: "video/mp4", size: 5 });
+    expect(putFile).toHaveBeenCalled();
+  });
+
+  it("submits the caption and the uploaded video's id, then shows the confirmation", async () => {
+    vi.mocked(confirmUpload).mockResolvedValue(view());
     vi.mocked(submitFinalEntry).mockResolvedValue({
       id: "f1",
       cycleId: "c",
@@ -69,25 +120,36 @@ describe("FinalWeekPanel", () => {
     });
     const onSubmitted = renderPanel();
     fireEvent.change(screen.getByLabelText(/caption for your final entry/i), { target: { value: "my final" } });
-    fireEvent.change(screen.getByLabelText("Video link"), { target: { value: "https://cdn.example.com/final.mp4" } });
+    chooseVideo();
+    await screen.findByText("Checking");
     fireEvent.click(screen.getByRole("button", { name: /submit entry/i }));
-    await waitFor(() =>
-      expect(submitFinalEntry).toHaveBeenCalledWith("t", {
-        contentText: "my final",
-        mediaUrls: ["https://cdn.example.com/final.mp4"],
-      }),
-    );
+    await waitFor(() => expect(submitFinalEntry).toHaveBeenCalledWith("t", { contentText: "my final", mediaId: "m1" }));
     await screen.findByText(/your final entry is in/i);
     expect(onSubmitted).toHaveBeenCalled();
   });
 
+  it("shows a rejected video with its reason and blocks the submit until it is removed", async () => {
+    vi.mocked(confirmUpload).mockResolvedValue(view({ status: "rejected", rejectionReason: "It showed something unsafe." }));
+    renderPanel();
+    fireEvent.change(screen.getByLabelText(/caption for your final entry/i), { target: { value: "my final" } });
+    chooseVideo();
+    await screen.findByText("This video wasn’t approved");
+    expect(screen.getByText("It showed something unsafe.")).not.toBeNull();
+    expect((screen.getByRole("button", { name: /submit entry/i }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(deleteUpload).toHaveBeenCalledWith("t", "m1"));
+    await screen.findByRole("button", { name: /choose a video/i });
+  });
+
   it("shows the server's message when the upload window has closed", async () => {
+    vi.mocked(confirmUpload).mockResolvedValue(view());
     vi.mocked(submitFinalEntry).mockRejectedValue(
       new ContestApiError("The upload window is closed.", { status: 403, code: "contest_final_closed" }),
     );
     renderPanel();
     fireEvent.change(screen.getByLabelText(/caption for your final entry/i), { target: { value: "late" } });
-    fireEvent.change(screen.getByLabelText("Video link"), { target: { value: "https://cdn.example.com/x.mp4" } });
+    chooseVideo();
+    await screen.findByText("Checking");
     fireEvent.click(screen.getByRole("button", { name: /submit entry/i }));
     expect((await screen.findByRole("alert")).textContent).toBe("The upload window is closed.");
   });

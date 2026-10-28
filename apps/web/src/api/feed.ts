@@ -100,16 +100,13 @@ export interface SaveState {
   saved: boolean;
 }
 
-// CreatePostDto's real, confirmed allowlist (create-post.dto.ts):
-// contentText (1-3000 chars, required), mediaUrls (optional, max 10, each
-// a valid URL), clubPageId / banterRoomId (optional, mutually exclusive).
-// The web composer only sends contentText today -- there is no media
-// upload endpoint anywhere in Section 4 yet, so mediaUrls is typed here
-// for completeness but not populated by the current UI (see
-// CommunityPage's composer and this PR's report).
+// CreatePostDto's real allowlist (create-post.dto.ts): contentText (1-3000 chars, required), mediaIds
+// (optional, at most 10: the ids of files the caller uploaded through POST /media/uploads, api/postMedia.ts),
+// clubPageId / banterRoomId (optional, mutually exclusive). A post no longer takes a URL: `mediaUrls` is
+// not a field of the DTO and the API answers a request carrying it with a 400 (Decision Log #419).
 export interface CreatePostRequest {
   contentText: string;
-  mediaUrls?: string[];
+  mediaIds?: string[];
   clubPageId?: string;
   banterRoomId?: string;
 }

@@ -232,7 +232,8 @@ export async function leaveRoom(accessToken: string, roomId: string): Promise<Jo
 // just created" case, same as api/feed.ts's createPost/CreatedPost).
 export interface CreateBanterPostRequest {
   contentText: string;
-  mediaUrls?: string[];
+  /** Ids of files uploaded through POST /media/uploads (api/postMedia.ts); never a URL. */
+  mediaIds?: string[];
 }
 
 export async function postToRoom(

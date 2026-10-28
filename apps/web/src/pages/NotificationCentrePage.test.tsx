@@ -482,6 +482,50 @@ describe("NotificationCentrePage", () => {
     });
   });
 
+  describe("file-decision rows (post_media_approved / post_media_rejected, FC10 B-240)", () => {
+    function mediaRow(type: "post_media_approved" | "post_media_rejected", kind: "image" | "video", over: Partial<Notification> = {}): Notification {
+      return {
+        id: `n-${type}-${kind}`,
+        type,
+        read: false,
+        createdAt: "2026-10-28T09:00:00.000Z",
+        payloadRefId: "media-1",
+        data: { media: { id: "media-1", kind } },
+        ...over,
+      };
+    }
+
+    it("an approved picture says so and opens the Community feed", async () => {
+      window.sessionStorage.setItem("sn_access_token", "test-token");
+      vi.mocked(listNotifications).mockResolvedValueOnce({ items: [mediaRow("post_media_approved", "image")], nextCursor: null, unreadCount: 1 });
+      renderPage();
+      const row = (await screen.findByText(/was approved/)).closest("a");
+      expect(row?.textContent).toMatch(/^Your picture was approved/);
+      expect(row?.getAttribute("href")).toBe("/community");
+    });
+
+    it("a rejected video names the video and points at the post, without ever carrying the reason", async () => {
+      window.sessionStorage.setItem("sn_access_token", "test-token");
+      vi.mocked(listNotifications).mockResolvedValueOnce({ items: [mediaRow("post_media_rejected", "video")], nextCursor: null, unreadCount: 1 });
+      renderPage();
+      const row = (await screen.findByText(/wasn’t approved — see why on your post/)).closest("a");
+      expect(row?.textContent).toMatch(/^Your video wasn’t approved/);
+      expect(row?.textContent).not.toMatch(/COPY PENDING/);
+      expect(row?.getAttribute("href")).toBe("/community");
+    });
+
+    it("a file that has since been deleted (data is null) is the 'no longer available' row", async () => {
+      window.sessionStorage.setItem("sn_access_token", "test-token");
+      vi.mocked(listNotifications).mockResolvedValueOnce({
+        items: [mediaRow("post_media_rejected", "image", { data: null })],
+        nextCursor: null,
+        unreadCount: 1,
+      });
+      renderPage();
+      expect(await screen.findByText("This notification is no longer available.")).not.toBeNull();
+    });
+  });
+
   it("a type this page does not know shows a generic row (not a blank or broken one), with or without data", async () => {
     window.sessionStorage.setItem("sn_access_token", "test-token");
     vi.mocked(listNotifications).mockResolvedValueOnce({
