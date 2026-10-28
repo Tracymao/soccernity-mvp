@@ -160,18 +160,32 @@ No two may be the same.
      open. Leave blank until the bucket has a public address.
    - **Post and contest-entry media** (backend/w14-post-media-pipeline,
      Decision Log #419). Users upload photos and videos straight to the same R2
-     bucket through a one-time link. Four things are a human job and are not
+     bucket through a one-time link. Five things are a human job and are not
      in `render.yaml`: (1) a **CORS rule on the R2 bucket** that allows `PUT`
      from your web app's address (without it every browser upload is blocked);
-     (2) **ffmpeg and ffprobe on the API host**: Render's native Node runtime
+     (2) **keep the private prefix private** (Decision Log #436, row B-265;
+     `services/api/src/modules/post-media/README.md`, "Deployment caveat").
+     The API keeps every file that is waiting for a decision, held by reports
+     or rejected under the **private prefix** `private-media/` (the name
+     deliberately does not start with `post-media`), and copies a file to the
+     public prefix `post-media/` only when it is approved. That only works if
+     nothing public serves `private-media/`. With Cloudflare R2 the bucket's
+     `r2.dev` address or a custom domain serves the *whole bucket* unless a
+     rule limits it. So `S3_PUBLIC_BASE_URL` must map **only** `post-media/`
+     (a path rule or a Worker), **or** the private files must live in a
+     separate bucket. Then prove it: request a `private-media/` object through
+     the public address and check you are refused (not served). This has not
+     been verified against a real bucket; until it is done, a pending or
+     rejected file is fetchable by anyone who holds its URL;
+     (3) **ffmpeg and ffprobe on the API host**: Render's native Node runtime
      does not include them, so until they are installed (for example by moving
      the API to a Docker image that has them) every video upload is refused
-     with a 503 and stores nothing; photos are unaffected; (3) an **AWS
+     with a 503 and stores nothing; photos are unaffected; (4) an **AWS
      account and an IAM user** allowed `rekognition:DetectModerationLabels`,
      whose keys go in `REKOGNITION_ACCESS_KEY_ID` and
      `REKOGNITION_SECRET_ACCESS_KEY` (region `eu-west-1`); until then no
      automatic check runs and every upload waits for a moderator (nothing is
-     ever approved automatically); (4) optionally a bucket lifecycle rule that
+     ever approved automatically); (5) optionally a bucket lifecycle rule that
      expires the `quarantine/` prefix after 1 day, as a backstop to the API's
      own hourly cleanup. The size, length and moderation limits
      (`POST_MEDIA_*`, `MEDIA_CHECK_*`) already carry their defaults in
