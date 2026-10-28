@@ -5,6 +5,7 @@ import { DirectUploadStorageService } from '../../storage/direct-upload-storage.
 import { MediaModerationClient } from './media-moderation-client';
 import { MediaProcessor } from './media-processor';
 import { MediaCheckService, PostMediaSweepService } from './media-check.service';
+import { PostMediaObjectsService } from './post-media-objects.service';
 import { PostMediaConfig } from './post-media.config';
 import { PostMediaService } from './post-media.service';
 
@@ -31,22 +32,31 @@ function build(opts: { configured?: boolean; env?: Record<string, string> } = {}
     isConfigured: opts.configured ?? true,
     detectModerationLabels: jest.fn().mockResolvedValue([]),
   };
+  const objects = {
+    copyToPublic: jest.fn().mockResolvedValue(undefined),
+    discardUnrecordedCopy: jest.fn().mockResolvedValue(undefined),
+    finishPublish: jest.fn().mockResolvedValue(undefined),
+  };
   const service = new MediaCheckService(
     prisma as unknown as PrismaService,
     storage as unknown as DirectUploadStorageService,
     processor as unknown as MediaProcessor,
     moderation as unknown as MediaModerationClient,
     new PostMediaConfig(new ConfigService(opts.env ?? {})),
+    objects as unknown as PostMediaObjectsService,
     { now: () => NOW },
   );
-  return { service, prisma, storage, processor, moderation };
+  return { service, prisma, storage, processor, moderation, objects };
 }
 
 const imageRow = (over: Record<string, unknown> = {}) => ({
   id: 'm1',
   uploaderId: 'u1',
   kind: 'image',
+  contentType: 'image/jpeg',
+  privateKey: 'private-media/u1/m1.jpg',
   publicKey: 'post-media/u1/m1.jpg',
+  publishedAt: null,
   durationSeconds: null,
   checkAttempts: 0,
   uploader: { isMinor: false },
@@ -138,12 +148,80 @@ describe('MediaCheckService.checkOne', () => {
     expect(await service.checkOne('m1', NOW)).toBe('approved');
     const write = prisma.postMedia.updateMany.mock.calls[1][0];
     expect(write.where).toEqual({ id: 'm1', status: 'pending', decisionSource: null });
-    expect(write.data).toMatchObject({ status: 'approved', decisionSource: 'auto', decidedAt: NOW, checkState: 'done', checkLabels: [] });
+    expect(write.data).toMatchObject({ status: 'approved', decisionSource: 'auto', decidedAt: NOW, publishedAt: NOW, checkState: 'done', checkLabels: [] });
     // The uploader is told in the same transaction (B-037): the "approved" variant, naming the file.
     expect(prisma.notification.create).toHaveBeenCalledWith({
       data: { userId: 'u1', type: 'post_media_approved', payloadRefId: 'm1' },
       select: { id: true },
     });
+  });
+
+  // ---- B-257 (Decision Log #430 item 2): the private prefix -------------------------------------------
+
+  it('reads the file from the PRIVATE prefix, never the public one', async () => {
+    const { service, prisma, storage } = build();
+    prisma.postMedia.findUnique.mockResolvedValue(imageRow());
+    await service.checkOne('m1', NOW);
+    expect(storage.downloadToFile).toHaveBeenCalledWith('private-media/u1/m1.jpg', expect.any(String));
+    expect(storage.downloadToFile).not.toHaveBeenCalledWith('post-media/u1/m1.jpg', expect.any(String));
+  });
+
+  it('an automatic APPROVAL publishes the file first (copy + verify), writes the decision, and then removes the private original', async () => {
+    const order: string[] = [];
+    const { service, prisma, objects } = build();
+    prisma.postMedia.findUnique.mockResolvedValue(imageRow());
+    objects.copyToPublic.mockImplementation(async () => void order.push('copy'));
+    prisma.postMedia.updateMany.mockImplementation(async () => {
+      order.push('write');
+      return { count: 1 };
+    });
+    objects.finishPublish.mockImplementation(async () => void order.push('finish'));
+    expect(await service.checkOne('m1', NOW)).toBe('approved');
+    expect(order).toEqual(['write', 'copy', 'write', 'finish']); // the first write is the claim
+    expect(objects.copyToPublic).toHaveBeenCalledWith(expect.objectContaining({ privateKey: 'private-media/u1/m1.jpg', publicKey: 'post-media/u1/m1.jpg' }));
+  });
+
+  it('FAILS CLOSED: if publishing fails the approval is NOT written, no notification is sent, and the check is retried', async () => {
+    const { service, prisma, objects } = build();
+    prisma.postMedia.findUnique.mockResolvedValue(imageRow());
+    objects.copyToPublic.mockRejectedValue(new Error('storage down'));
+    expect(await service.checkOne('m1', NOW)).toBe('retry');
+    // updateMany calls: [0] the claim, [1] the failure bookkeeping -- and neither is an approval.
+    const writes = prisma.postMedia.updateMany.mock.calls.map((c) => c[0].data);
+    expect(writes.some((d) => d.status === 'approved' || d.publishedAt)).toBe(false);
+    expect(prisma.notification.create).not.toHaveBeenCalled();
+    expect(objects.finishPublish).not.toHaveBeenCalled();
+  });
+
+  it('after the last attempt a persistent publish failure goes to a moderator, still not approved', async () => {
+    const { service, prisma, objects } = build();
+    prisma.postMedia.findUnique.mockResolvedValue(imageRow({ checkAttempts: 4 }));
+    objects.copyToPublic.mockRejectedValue(new Error('storage down'));
+    expect(await service.checkOne('m1', NOW)).toBe('gave_up');
+    expect(prisma.postMedia.updateMany.mock.calls[1][0].data.status).toBeUndefined();
+  });
+
+  it('an automatic rejection and an uncertain result copy NOTHING: the file stays private', async () => {
+    const rejected = build();
+    rejected.prisma.postMedia.findUnique.mockResolvedValue(imageRow());
+    rejected.moderation.detectModerationLabels.mockResolvedValue([{ name: 'Explicit', parentName: '', confidence: 99 }]);
+    await rejected.service.checkOne('m1', NOW);
+    expect(rejected.objects.copyToPublic).not.toHaveBeenCalled();
+
+    const unsure = build();
+    unsure.prisma.postMedia.findUnique.mockResolvedValue(imageRow());
+    unsure.moderation.detectModerationLabels.mockResolvedValue([{ name: 'Suggestive', parentName: '', confidence: 60 }]);
+    await unsure.service.checkOne('m1', NOW);
+    expect(unsure.objects.copyToPublic).not.toHaveBeenCalled();
+  });
+
+  it('an automatic approval that loses the race to a moderator cleans up its unrecorded public copy (and does not finish)', async () => {
+    const { service, prisma, objects } = build();
+    prisma.postMedia.findUnique.mockResolvedValue(imageRow());
+    prisma.postMedia.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
+    expect(await service.checkOne('m1', NOW)).toBe('skipped');
+    expect(objects.discardUnrecordedCopy).toHaveBeenCalledWith('m1', 'post-media/u1/m1.jpg');
+    expect(objects.finishPublish).not.toHaveBeenCalled();
   });
 
   it('an automatic rejection writes the generic reason and the "rejected" notification, never the labels', async () => {
@@ -179,7 +257,7 @@ describe('MediaCheckService.checkOne', () => {
 
   it('a video is sampled at the configured interval and every frame goes to Rekognition', async () => {
     const { service, prisma, processor, moderation } = build({ env: { MEDIA_CHECK_VIDEO_FRAME_INTERVAL_SECONDS: '10', MEDIA_CHECK_VIDEO_MAX_FRAMES: '30' } });
-    prisma.postMedia.findUnique.mockResolvedValue(imageRow({ kind: 'video', durationSeconds: 25, publicKey: 'post-media/u1/m1.mp4' }));
+    prisma.postMedia.findUnique.mockResolvedValue(imageRow({ kind: 'video', durationSeconds: 25, privateKey: 'private-media/u1/m1.mp4', publicKey: 'post-media/u1/m1.mp4' }));
     await service.checkOne('m1', NOW);
     expect(processor.extractFrames).toHaveBeenCalledWith(expect.any(String), [4.167, 12.5, 20.833]);
     expect(moderation.detectModerationLabels).toHaveBeenCalledTimes(2); // the fake returns 2 frames
@@ -222,19 +300,31 @@ describe('MediaCheckService.checkOne', () => {
 
   it('a missing stored file is a failure (retried), never an approval', async () => {
     const { service, prisma } = build();
-    prisma.postMedia.findUnique.mockResolvedValue(imageRow({ publicKey: null }));
+    prisma.postMedia.findUnique.mockResolvedValue(imageRow({ privateKey: null }));
     expect(await service.checkOne('m1', NOW)).toBe('retry');
   });
 });
 
 describe('PostMediaSweepService', () => {
-  it('runs the checks and the purge, and never throws out of a cron tick', async () => {
+  it('runs the checks, the reconciler and both purges, and never throws out of a cron tick', async () => {
     const checks = { runDueChecks: jest.fn().mockRejectedValue(new Error('db down')) };
-    const media = { purgeQuarantine: jest.fn().mockRejectedValue(new Error('s3 down')) };
-    const sweep = new PostMediaSweepService(checks as unknown as MediaCheckService, media as unknown as PostMediaService);
+    const media = {
+      purgeQuarantine: jest.fn().mockRejectedValue(new Error('s3 down')),
+      purgeUnattached: jest.fn().mockRejectedValue(new Error('s3 down')),
+    };
+    const objects = { reconcile: jest.fn().mockRejectedValue(new Error('db down')) };
+    const sweep = new PostMediaSweepService(
+      checks as unknown as MediaCheckService,
+      media as unknown as PostMediaService,
+      objects as unknown as PostMediaObjectsService,
+    );
     await expect(sweep.runChecks()).resolves.toBeUndefined();
     await expect(sweep.purgeQuarantine()).resolves.toBeUndefined();
+    await expect(sweep.purgeUnattached()).resolves.toBeUndefined();
+    await expect(sweep.reconcileObjects()).resolves.toBeUndefined();
     expect(checks.runDueChecks).toHaveBeenCalledTimes(1);
     expect(media.purgeQuarantine).toHaveBeenCalledTimes(1);
+    expect(media.purgeUnattached).toHaveBeenCalledTimes(1);
+    expect(objects.reconcile).toHaveBeenCalledTimes(1);
   });
 });

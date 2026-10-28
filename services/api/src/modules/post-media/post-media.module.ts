@@ -10,6 +10,7 @@ import { MediaCheckService, PostMediaSweepService } from './media-check.service'
 import { PostMediaConfig } from './post-media.config';
 import { PostMediaController } from './post-media.controller';
 import { PostMediaDecisionService } from './post-media-decision.service';
+import { PostMediaObjectsService } from './post-media-objects.service';
 import { PostMediaReportController } from './post-media-report.controller';
 import { PostMediaReportService } from './post-media-report.service';
 import { PostMediaService } from './post-media.service';
@@ -36,8 +37,9 @@ import { PostMediaService } from './post-media.service';
     PostMediaSweepService,
     PostMediaReportService,
     PostMediaDecisionService,
+    PostMediaObjectsService,
   ],
   // PostMediaDecisionService + DirectUploadStorageService reach AdminMediaReviewModule (B-037).
-  exports: [PostMediaConfig, PostMediaDecisionService],
+  exports: [PostMediaConfig, PostMediaDecisionService, PostMediaObjectsService],
 })
 export class PostMediaModule {}

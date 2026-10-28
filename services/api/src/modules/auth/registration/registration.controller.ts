@@ -22,6 +22,7 @@ import {
   ResendVerificationService,
 } from './email-verification/resend-verification.service';
 import { RegisterResult, RegistrationService } from './registration.service';
+import { SkipGlobalWriteLimit } from '../../../rate-limit/global-rate-limit.decorators';
 
 // Build Plan Section 4.1 (Auth Service): POST /auth/register and
 // POST /auth/verify-email. POST /auth/guardian-consent (also listed in
@@ -45,6 +46,7 @@ export class RegistrationController {
   // security/auth-limits-shared-networks: 30 per 10 minutes per IP (a class signing up together), replacing
   // the shared 5-per-60s auth throttler on this route only; resend-verification-email below keeps it.
   @Post('register')
+  @SkipGlobalWriteLimit()
   @AuthLimit('signup')
   @HttpCode(HttpStatus.CREATED)
   async register(
@@ -80,6 +82,7 @@ export class RegistrationController {
   // such account, already verified, closed account, over the cap), so the route
   // cannot be used to find out which addresses are registered.
   @Post('resend-verification-email')
+  @SkipGlobalWriteLimit()
   @AuthRateLimit()
   @HttpCode(HttpStatus.OK)
   async resendVerificationEmail(@Body() dto: ResendVerificationDto): Promise<{ message: string }> {

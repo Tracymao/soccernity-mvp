@@ -84,7 +84,7 @@ services:
       - key: AUTH_RATE_LIMIT_WINDOW_MS
         sync: false
       # Auth limits that work on shared school and club networks (modules/auth/rate-limit/auth-limits): signup per IP;
-      # login per ACCOUNT (hashed email, failed attempts only) plus a per-IP ceiling; forgot-password per email plus the
+      # login per ACCOUNT AND IP PAIR (hashed together, failed attempts only) plus a higher per-ACCOUNT ceiling across all IPs and a per-IP ceiling; forgot-password per email plus the
       # same ceiling. Stored in Redis. Replaces the shared AUTH_RATE_LIMIT_* on those three routes only.
       - key: AUTH_SIGNUP_RATE_LIMIT_MAX
         value: "30"
@@ -94,6 +94,10 @@ services:
         value: "5"
       - key: AUTH_LOGIN_FAILED_ATTEMPTS_WINDOW_MS
         value: "900000"
+      - key: AUTH_LOGIN_ACCOUNT_CEILING_MAX
+        value: "20"
+      - key: AUTH_LOGIN_ACCOUNT_CEILING_WINDOW_MS
+        value: "86400000"
       - key: AUTH_IP_CEILING_MAX
         value: "60"
       - key: AUTH_IP_CEILING_WINDOW_MS
@@ -125,6 +129,14 @@ services:
         value: "10"
       - key: GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS
         value: "600000"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_IP_MAX
+        value: "240"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_IP_WINDOW_MS
+        value: "60000"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_TOKEN_MAX
+        value: "10"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_TOKEN_WINDOW_MS
+        value: "60000"
       - key: RESET_TOKEN_TTL_MINUTES
         sync: false
       # ADMIN_JWT_ACCESS_TTL_SECONDS: code default (admin-token.constants.ts)
@@ -271,6 +283,13 @@ services:
         value: "3"
       - key: MEDIA_REVIEW_UNCHECKED_AFTER_MINUTES
         value: "30"
+      # Media follow-ups (B-258, B-259; Decision Log #430): reports one account may file in any rolling 24 hours
+      # (a founder-veto-able default), and the age in days after which a confirmed upload that was never attached
+      # to a post is purged (a rejected file is never purged).
+      - key: POST_MEDIA_REPORT_DAILY_LIMIT
+        value: "20"
+      - key: POST_MEDIA_UNATTACHED_MAX_AGE_DAYS
+        value: "7"
       # --- Guardian card verification (Stripe; use TEST keys until a real account exists) ---
       - key: STRIPE_SECRET_KEY
         sync: false
@@ -345,7 +364,7 @@ services:
       - key: AUTH_RATE_LIMIT_WINDOW_MS
         sync: false
       # Auth limits that work on shared school and club networks (modules/auth/rate-limit/auth-limits): signup per IP;
-      # login per ACCOUNT (hashed email, failed attempts only) plus a per-IP ceiling; forgot-password per email plus the
+      # login per ACCOUNT AND IP PAIR (hashed together, failed attempts only) plus a higher per-ACCOUNT ceiling across all IPs and a per-IP ceiling; forgot-password per email plus the
       # same ceiling. Stored in Redis. Replaces the shared AUTH_RATE_LIMIT_* on those three routes only.
       - key: AUTH_SIGNUP_RATE_LIMIT_MAX
         value: "30"
@@ -355,6 +374,10 @@ services:
         value: "5"
       - key: AUTH_LOGIN_FAILED_ATTEMPTS_WINDOW_MS
         value: "900000"
+      - key: AUTH_LOGIN_ACCOUNT_CEILING_MAX
+        value: "20"
+      - key: AUTH_LOGIN_ACCOUNT_CEILING_WINDOW_MS
+        value: "86400000"
       - key: AUTH_IP_CEILING_MAX
         value: "60"
       - key: AUTH_IP_CEILING_WINDOW_MS
@@ -386,6 +409,14 @@ services:
         value: "10"
       - key: GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS
         value: "600000"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_IP_MAX
+        value: "240"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_IP_WINDOW_MS
+        value: "60000"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_TOKEN_MAX
+        value: "10"
+      - key: GLOBAL_RATE_LIMIT_REFRESH_TOKEN_WINDOW_MS
+        value: "60000"
       - key: RESET_TOKEN_TTL_MINUTES
         sync: false
       # ADMIN_JWT_ACCESS_TTL_SECONDS: code default (admin-token.constants.ts)
@@ -532,6 +563,13 @@ services:
         value: "3"
       - key: MEDIA_REVIEW_UNCHECKED_AFTER_MINUTES
         value: "30"
+      # Media follow-ups (B-258, B-259; Decision Log #430): reports one account may file in any rolling 24 hours
+      # (a founder-veto-able default), and the age in days after which a confirmed upload that was never attached
+      # to a post is purged (a rejected file is never purged).
+      - key: POST_MEDIA_REPORT_DAILY_LIMIT
+        value: "20"
+      - key: POST_MEDIA_UNATTACHED_MAX_AGE_DAYS
+        value: "7"
       # --- Guardian card verification (Stripe; use TEST keys until a real account exists) ---
       - key: STRIPE_SECRET_KEY
         sync: false

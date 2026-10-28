@@ -87,6 +87,29 @@ export class InMemoryStorage extends DirectUploadStorageService {
     this.objects.set(key, { buffer: await readFile(filePath), contentType });
     return `https://cdn.test/${key}`;
   }
+
+  // backend/media-privacy-vetting-followups (B-257): a server-side copy between prefixes, and the URL a key
+  // WOULD have publicly (no object needed).
+  readonly copies: Array<[string, string]> = [];
+  failCopy = false;
+  /** When set, a copy to this key stores a corrupted (different-size) object, so verification must fail. */
+  corruptCopyTo: string | null = null;
+
+  async copyObject(sourceKey: string, destKey: string, contentType: string): Promise<void> {
+    this.ensure();
+    if (this.failCopy) throw new Error('copy failed');
+    const o = this.objects.get(sourceKey);
+    if (!o) throw new Error(`no such source ${sourceKey}`);
+    this.copies.push([sourceKey, destKey]);
+    this.objects.set(destKey, {
+      buffer: destKey === this.corruptCopyTo ? Buffer.concat([o.buffer, Buffer.from('x')]) : Buffer.from(o.buffer),
+      contentType,
+    });
+  }
+
+  publicUrlFor(key: string): string {
+    return `https://cdn.test/${key}`;
+  }
 }
 
 /** Real sharp for images; a controllable stand-in for the ffmpeg-based video operations. */

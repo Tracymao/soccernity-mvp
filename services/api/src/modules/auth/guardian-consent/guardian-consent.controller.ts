@@ -16,6 +16,7 @@ import { WithdrawGuardianConsentDto } from './dto/withdraw-guardian-consent.dto'
 import { GuardianConsentService, GuardianConsentStatusResponse } from './guardian-consent.service';
 import { GuardianEmailChangeLimiter } from './guardian-email-change.limiter';
 import { GuardianWithdrawalRateLimit } from './guardian-withdrawal-throttle';
+import { SkipGlobalWriteLimit } from '../../../rate-limit/global-rate-limit.decorators';
 
 // Build Plan Section 4.1 (Auth Service): POST /auth/guardian-consent.
 // No JwtAuthGuard here (unlike /users/* — see users/README.md) — the
@@ -61,6 +62,7 @@ export class GuardianConsentController {
   // sprint-1/coppa-card-verification -- three token-credentialed routes
   // (same trust model as confirm()) for the under-13 US card step. None
   // accept card data: the browser talks to Stripe directly.
+  @SkipGlobalWriteLimit()
   @AuthRateLimit()
   @Post('guardian-consent/verification')
   @HttpCode(HttpStatus.OK)
@@ -68,6 +70,7 @@ export class GuardianConsentController {
     return this.cardVerification.getRequirements(dto.consentToken);
   }
 
+  @SkipGlobalWriteLimit()
   @AuthRateLimit()
   @Post('guardian-consent/card/intent')
   @HttpCode(HttpStatus.OK)
@@ -75,6 +78,7 @@ export class GuardianConsentController {
     return this.cardVerification.createIntent(dto.consentToken);
   }
 
+  @SkipGlobalWriteLimit()
   @AuthRateLimit()
   @Post('guardian-consent/card/complete')
   @HttpCode(HttpStatus.OK)
@@ -90,6 +94,7 @@ export class GuardianConsentController {
   // whether the email matched a real, pending-consent minor account —
   // see resendConsent()'s own comment for the full non-enumeration
   // reasoning.
+  @SkipGlobalWriteLimit()
   @AuthRateLimit()
   @Post('guardian-consent/resend')
   @HttpCode(HttpStatus.OK)
@@ -108,6 +113,7 @@ export class GuardianConsentController {
   // throttle is backed by a per-MINOR cap (GuardianEmailChangeLimiter) on how
   // many changes may succeed per 24h, since an IP is a poor proxy for "one
   // account".
+  @SkipGlobalWriteLimit()
   @AuthRateLimit()
   @UseGuards(JwtAuthGuard)
   @Post('guardian-consent/change-guardian-email')
@@ -135,6 +141,7 @@ export class GuardianConsentController {
   // every other destructive/credential-adjacent auth route in this
   // codebase carries. A real guardian clicking a link once is nowhere
   // near the limit.
+  @SkipGlobalWriteLimit()
   @AuthRateLimit()
   @Post('guardian-consent/decline')
   @HttpCode(HttpStatus.OK)
@@ -147,6 +154,7 @@ export class GuardianConsentController {
   // trust model as confirm()/decline(): the consent token is the credential.
   // Rate-limited because it writes a flag that holds the minor's approval, so
   // it must not be spammable by someone who only guessed at tokens.
+  @SkipGlobalWriteLimit()
   @AuthRateLimit()
   @Post('guardian-consent/report-incorrect-details')
   @HttpCode(HttpStatus.OK)
@@ -168,6 +176,7 @@ export class GuardianConsentController {
   // request, a confirmed one -- and a throttled caller gets the equally fixed
   // 'Too many attempts'. Throttle: 5 per 15 minutes, held in configuration
   // (guardian-withdrawal-throttle.ts); it replaces the shared @AuthRateLimit().
+  @SkipGlobalWriteLimit()
   @GuardianWithdrawalRateLimit()
   @Post('guardian-consent/withdraw/request')
   @HttpCode(HttpStatus.OK)
@@ -184,6 +193,7 @@ export class GuardianConsentController {
   // closes the account. Same destructive-consequence reasoning as
   // decline() for the rate limit. B-112: same dedicated 5-per-15-minutes throttle
   // as the request route above (counted separately per route).
+  @SkipGlobalWriteLimit()
   @GuardianWithdrawalRateLimit()
   @Post('guardian-consent/withdraw')
   @HttpCode(HttpStatus.OK)

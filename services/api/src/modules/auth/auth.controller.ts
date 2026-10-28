@@ -34,6 +34,7 @@ import { LoginDto } from './dto/login.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { ReactivateAccountDto } from './dto/reactivate-account.dto';
 import { RefreshDto } from './dto/refresh.dto';
+import { RefreshRateLimit, SkipGlobalWriteLimit } from '../../rate-limit/global-rate-limit.decorators';
 
 // Same messages class-validator produced for the old required `refreshToken`, so a body missing
 // the token outside cookie mode is the same 400 as before.
@@ -56,6 +57,7 @@ export class AuthController {
 
   // security/auth-limits-shared-networks: per-account failed-attempt budget + per-IP ceiling (not the shared
   // 5-per-60s-per-IP auth throttler, which locked out a classroom behind one address).
+  @SkipGlobalWriteLimit()
   @AuthLimit('login')
   @Post('login')
   @HttpCode(HttpStatus.OK)
@@ -69,6 +71,11 @@ export class AuthController {
     return applyCookieSession(USER_SESSION_COOKIE, req, res, result, staySignedIn);
   }
 
+  // Not in the global write class (the two refresh classes below replace it): a classroom whose access
+  // tokens expire together would otherwise burn the same 30-per-minute per-IP budget as sign-in. Admin
+  // refresh is unchanged. 240/min per IP and 10/min per token are founder-veto-able defaults.
+  @SkipGlobalWriteLimit()
+  @RefreshRateLimit()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refresh(
@@ -161,6 +168,7 @@ export class AuthController {
   // to gate this behind. Same rate-limiting posture as login/register:
   // an unrated credential-verification endpoint is a brute-force
   // surface.
+  @SkipGlobalWriteLimit()
   @AuthRateLimit()
   @Post('reactivate-account')
   @HttpCode(HttpStatus.OK)
@@ -183,6 +191,7 @@ export class AuthController {
   // Only a genuinely "deactivated" account is accepted; every other case
   // (active, pending_deletion, unknown email, wrong password) gets the
   // generic "Invalid credentials" — see auth.service.ts.
+  @SkipGlobalWriteLimit()
   @AuthRateLimit()
   @Post('delete-inactive-account')
   @HttpCode(HttpStatus.NO_CONTENT)

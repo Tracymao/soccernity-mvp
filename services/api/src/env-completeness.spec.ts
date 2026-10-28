@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { TEST_CLOCK_ENV_VARS } from './clock/clock';
+import { POST_MEDIA_DEFAULTS } from './modules/post-media/post-media.config';
 import { GLOBAL_RATE_LIMIT_DEFAULTS } from './rate-limit/global-rate-limit.constants';
 import { AUTH_LIMIT_DEFAULTS } from './modules/auth/rate-limit/auth-limits/auth-limits.constants';
 
@@ -107,7 +108,7 @@ describe('environment completeness (B-018)', () => {
     expect([...prod].filter((k) => !staging.has(k))).toEqual([]);
   });
 
-  // Global API rate limit. The eight numbers must exist in code, in render.yaml for BOTH services and in
+  // Global API rate limit. The twelve numbers must exist in code, in render.yaml for BOTH services and in
   // .env.example, and render.yaml / .env.example must carry the same numbers as the code defaults (a deploy
   // that silently ran a different limit from the one the code documents is the drift this spec is for).
   describe('global rate limit variables', () => {
@@ -120,6 +121,10 @@ describe('environment completeness (B-018)', () => {
       'GLOBAL_RATE_LIMIT_WRITE_WINDOW_MS',
       'GLOBAL_RATE_LIMIT_UPLOAD_MAX',
       'GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS',
+      'GLOBAL_RATE_LIMIT_REFRESH_IP_MAX',
+      'GLOBAL_RATE_LIMIT_REFRESH_IP_WINDOW_MS',
+      'GLOBAL_RATE_LIMIT_REFRESH_TOKEN_MAX',
+      'GLOBAL_RATE_LIMIT_REFRESH_TOKEN_WINDOW_MS',
     ] as const;
     const D = GLOBAL_RATE_LIMIT_DEFAULTS;
     const DEFAULT_OF: Record<(typeof NAMES)[number], number> = {
@@ -131,6 +136,10 @@ describe('environment completeness (B-018)', () => {
       GLOBAL_RATE_LIMIT_WRITE_WINDOW_MS: D.writeWindowMs,
       GLOBAL_RATE_LIMIT_UPLOAD_MAX: D.uploadMax,
       GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS: D.uploadWindowMs,
+      GLOBAL_RATE_LIMIT_REFRESH_IP_MAX: D.refreshIpMax,
+      GLOBAL_RATE_LIMIT_REFRESH_IP_WINDOW_MS: D.refreshIpWindowMs,
+      GLOBAL_RATE_LIMIT_REFRESH_TOKEN_MAX: D.refreshTokenMax,
+      GLOBAL_RATE_LIMIT_REFRESH_TOKEN_WINDOW_MS: D.refreshTokenWindowMs,
     };
 
     it('are read by the code, declared in both render.yaml services and documented in .env.example', () => {
@@ -156,7 +165,39 @@ describe('environment completeness (B-018)', () => {
     });
   });
 
-  // Auth limits for shared school and club networks (B-256). Same drift guard as the global limits: the eight
+  // Media follow-ups (B-258, B-259; Decision Log #430). The two numbers the build PR introduced must exist in
+  // code, in render.yaml for BOTH services and in .env.example, with the same value as the code default.
+  describe('post media follow-up variables', () => {
+    const DEFAULT_OF: Record<string, number> = {
+      POST_MEDIA_REPORT_DAILY_LIMIT: POST_MEDIA_DEFAULTS.reportDailyLimit,
+      POST_MEDIA_UNATTACHED_MAX_AGE_DAYS: POST_MEDIA_DEFAULTS.unattachedMaxAgeDays,
+    };
+    const NAMES = Object.keys(DEFAULT_OF);
+
+    it('are read by the code, declared in both render.yaml services and documented in .env.example', () => {
+      for (const name of NAMES) expect(read.has(name)).toBe(true);
+      for (const keys of services) for (const name of NAMES) expect(keys.has(name)).toBe(true);
+      for (const name of NAMES) expect(example.has(name)).toBe(true);
+    });
+
+    it('carry the same numbers in render.yaml (both services) and .env.example as the code defaults', () => {
+      const renderText = fs.readFileSync(path.join(REPO_ROOT, 'render.yaml'), 'utf8');
+      const exampleText = fs.readFileSync(path.join(REPO_ROOT, '.env.example'), 'utf8');
+      for (const name of NAMES) {
+        const inRender = [...renderText.matchAll(new RegExp(`-\\s+key:\\s+${name}\\s+value:\\s+"(\\d+)"`, 'g'))].map((m) => Number(m[1]));
+        expect(inRender).toEqual([DEFAULT_OF[name], DEFAULT_OF[name]]);
+        const inExample = exampleText.match(new RegExp(`^${name}=(\\d+)\\s*$`, 'm'));
+        expect(inExample && Number(inExample[1])).toBe(DEFAULT_OF[name]);
+      }
+    });
+
+    it('state the founder-veto-able defaults: 20 reports per rolling 24 hours, purge unattached after 7 days', () => {
+      expect(POST_MEDIA_DEFAULTS.reportDailyLimit).toBe(20);
+      expect(POST_MEDIA_DEFAULTS.unattachedMaxAgeDays).toBe(7);
+    });
+  });
+
+  // Auth limits for shared school and club networks (B-256). Same drift guard as the global limits: the ten
   // names must be read in code, declared in both render.yaml services and documented in .env.example, and the
   // numbers in render.yaml / .env.example must equal the code defaults.
   describe('auth limit variables (shared networks)', () => {
@@ -166,6 +207,8 @@ describe('environment completeness (B-018)', () => {
       AUTH_SIGNUP_RATE_LIMIT_WINDOW_MS: A.signupWindowMs,
       AUTH_LOGIN_FAILED_ATTEMPTS_MAX: A.loginFailedMax,
       AUTH_LOGIN_FAILED_ATTEMPTS_WINDOW_MS: A.loginFailedWindowMs,
+      AUTH_LOGIN_ACCOUNT_CEILING_MAX: A.accountCeilingMax,
+      AUTH_LOGIN_ACCOUNT_CEILING_WINDOW_MS: A.accountCeilingWindowMs,
       AUTH_IP_CEILING_MAX: A.ipCeilingMax,
       AUTH_IP_CEILING_WINDOW_MS: A.ipCeilingWindowMs,
       AUTH_FORGOT_PASSWORD_EMAIL_MAX: A.forgotEmailMax,
@@ -196,6 +239,8 @@ describe('environment completeness (B-018)', () => {
         signupWindowMs: 10 * 60_000,
         loginFailedMax: 5,
         loginFailedWindowMs: 15 * 60_000,
+        accountCeilingMax: 20,
+        accountCeilingWindowMs: 24 * 60 * 60_000,
         ipCeilingMax: 60,
         ipCeilingWindowMs: 10 * 60_000,
         forgotEmailMax: 3,

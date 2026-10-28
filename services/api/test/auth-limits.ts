@@ -11,6 +11,8 @@ const REAL: Record<string, string> = {
   AUTH_SIGNUP_RATE_LIMIT_WINDOW_MS: String(D.signupWindowMs),
   AUTH_LOGIN_FAILED_ATTEMPTS_MAX: String(D.loginFailedMax),
   AUTH_LOGIN_FAILED_ATTEMPTS_WINDOW_MS: String(D.loginFailedWindowMs),
+  AUTH_LOGIN_ACCOUNT_CEILING_MAX: String(D.accountCeilingMax),
+  AUTH_LOGIN_ACCOUNT_CEILING_WINDOW_MS: String(D.accountCeilingWindowMs),
   AUTH_IP_CEILING_MAX: String(D.ipCeilingMax),
   AUTH_IP_CEILING_WINDOW_MS: String(D.ipCeilingWindowMs),
   AUTH_FORGOT_PASSWORD_EMAIL_MAX: String(D.forgotEmailMax),

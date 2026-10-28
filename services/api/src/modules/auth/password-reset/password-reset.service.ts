@@ -2,6 +2,7 @@ import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PasswordService } from '../password/password.service';
+import { AuthLimitsService } from '../rate-limit/auth-limits/auth-limits.service';
 import { TokenService } from '../token/token.service';
 import { PasswordResetEmailService } from './email/password-reset-email.service';
 import { DEFAULT_RESET_TOKEN_TTL_MINUTES } from './reset-token.constants';
@@ -27,6 +28,7 @@ export class PasswordResetService {
     private readonly tokenService: TokenService,
     private readonly emailService: PasswordResetEmailService,
     configService: ConfigService,
+    private readonly authLimits: AuthLimitsService,
   ) {
     this.resetTokenTtlMinutes =
       Number(configService.get('RESET_TOKEN_TTL_MINUTES')) || DEFAULT_RESET_TOKEN_TTL_MINUTES;
@@ -74,9 +76,10 @@ export class PasswordResetService {
     }
 
     const passwordHash = await this.passwordService.hash(newPassword);
-    await this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id: consumed.userId },
       data: { passwordHash },
+      select: { email: true },
     });
 
     // Sensible-security-practice per the task spec: a password reset means
@@ -86,5 +89,14 @@ export class PasswordResetService {
     // -> RefreshTokenStore.revokeAllForUser), so this reuses it rather
     // than building a parallel mechanism.
     await this.tokenService.revokeAllSessionsForUser(consumed.userId);
+
+    // Clear the account-wide failed-login ceiling for this address so an owner who has just proved control
+    // of their mailbox is not left behind failed guesses made by someone else (the per-IP-and-account
+    // counters expire on their own). Best-effort: the reset has already succeeded.
+    try {
+      if (updated?.email) await this.authLimits.clearAccountCeiling(updated.email);
+    } catch (err) {
+      this.logger.warn(`Could not clear the login ceiling after a password reset: ${(err as Error).message}`);
+    }
   }
 }

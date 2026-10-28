@@ -1,18 +1,26 @@
 // The pictures and videos of a post, in a feed card (FC10, B-240; Decision Log #419; Figma pass Q frames
 // "Author post card" 6849:29675-29813 and "Report on media" 6849:29863-30169).
 //
+//  - Ids and kinds come from the post payload's `media: [{ id, kind, viewUrl? }]` (B-259), in the order of
+//    `mediaUrls`. Nothing is read out of a URL and the kind is never guessed from a file name.
 //  - For everyone: an <img> or a <video controls>, never a bare URL.
-//  - For the AUTHOR of the post: each file's own status, read from GET /media/uploads/:id (the post payload
-//    carries only URLs, so the upload id is read from the URL, lib/media.ts mediaIdFromUrl). A file under
+//  - For the AUTHOR of the post: each file's own status, read from GET /media/uploads/:id. A file under
 //    review shows "Under review" and who can see it; a rejected file shows its reason and a Remove button.
-//    Removing the file is DELETE /media/uploads/:id, which also takes it out of the post, so the author can
-//    then choose another picture. The status polls while a file is still being checked.
-//  - For anyone else: a Report control on each file (POST /media/:id/report).
+//    A file that is not approved is drawn ONLY through the short-lived signed `viewUrl` (from the payload,
+//    refreshed by the status read), never through its public address; if no signed link is available the
+//    file is not drawn. Removing the file is DELETE /media/uploads/:id, which also takes it out of the post,
+//    so the author can then choose another picture. The status polls while a file is still being checked.
+//  - For anyone else: a Report control on each file (POST /media/:id/report) with an optional reason (up to
+//    500 characters, shown to moderators only) and a clear state for the per-account daily report limit.
 //
-// Strings that say who can see a file are tagged [COPY PENDING LEGAL REVIEW] (Decision Log #412 item 5) and
+// The reason field and the daily-limit state have no Figma frame yet (Figma prompt D adds them); they are
+// built to the style of the existing report-confirmation frame (6849:29863-30169).
+//
+// Strings that say who can see a file, or who sees a reporter's reason, are tagged [COPY PENDING LEGAL REVIEW] (Decision Log #412 item 5) and
 // have rows in docs/pending-copy-manifest.md.
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  MEDIA_REPORT_REASON_MAX_LENGTH,
   POST_MEDIA_CODES,
   PostMediaApiError,
   deleteUpload,
@@ -20,46 +28,62 @@ import {
   reportMedia,
   type PostMediaView,
 } from "../../api/postMedia";
-import { isVideoUrl, mediaIdFromUrl } from "../../lib/media";
+import type { FeedPostMedia } from "../../api/feed";
 import "./MediaUpload.css";
 
 const POLL_MS = 5000;
+// How many times a file's signed link is re-fetched after the browser fails to load it (it lasts 5 minutes).
+const MAX_LINK_REFRESHES = 2;
 
-function Media({ url, playVideo }: { url: string; playVideo?: boolean }) {
-  if (isVideoUrl(url)) {
+function Media({
+  kind,
+  src,
+  playVideo,
+  onLoadError,
+}: {
+  kind: FeedPostMedia["kind"];
+  src: string;
+  playVideo?: boolean;
+  onLoadError?: () => void;
+}) {
+  if (kind === "video") {
     return (
       <video
         className="post__media-video"
-        src={url}
+        src={src}
         controls
         preload={playVideo ? "metadata" : "none"}
         playsInline
         aria-label="Video attached to this post"
+        onError={onLoadError}
       />
     );
   }
-  return <img className="post__media-img" src={url} alt="Picture attached to this post" loading="lazy" />;
+  return <img className="post__media-img" src={src} alt="Picture attached to this post" loading="lazy" onError={onLoadError} />;
 }
 
-type ReportStage = "closed" | "confirm" | "done";
+type ReportStage = "closed" | "confirm" | "done" | "limit";
 
-function MediaReport({ accessToken, url }: { accessToken: string; url: string }) {
-  const id = mediaIdFromUrl(url);
+function MediaReport({ accessToken, item }: { accessToken: string; item: FeedPostMedia }) {
   const [stage, setStage] = useState<ReportStage>("closed");
+  const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (!id) return null;
-  const noun = isVideoUrl(url) ? "video" : "picture";
+  const [limitMessage, setLimitMessage] = useState<string | null>(null);
+  const noun = item.kind === "video" ? "video" : "picture";
 
   async function submit() {
-    if (submitting || !id) return;
+    if (submitting) return;
     setSubmitting(true);
     setError(null);
     try {
-      await reportMedia(accessToken, id);
+      await reportMedia(accessToken, item.id, reason);
       setStage("done");
     } catch (err) {
-      if (err instanceof PostMediaApiError && err.status === 404) {
+      if (err instanceof PostMediaApiError && err.code === POST_MEDIA_CODES.reportDailyLimit) {
+        setLimitMessage(err.message);
+        setStage("limit");
+      } else if (err instanceof PostMediaApiError && err.status === 404) {
         setError("That file isn’t available to report any more.");
       } else {
         setError(err instanceof PostMediaApiError ? err.message : "Couldn’t send that report.");
@@ -70,6 +94,21 @@ function MediaReport({ accessToken, url }: { accessToken: string; url: string })
   }
 
   if (stage === "done") return <span className="media-report__done">Reported — thanks, our team will review it.</span>;
+  if (stage === "limit") {
+    return (
+      <div className="media-report">
+        <div className="media-report__panel" role="status" aria-label="Report limit reached">
+          <p className="media-report__limit-title">You’ve reached today’s report limit</p>
+          {limitMessage && <p>{limitMessage}</p>}
+          <div className="media-report__buttons">
+            <button type="button" className="media-item__action" onClick={() => setStage("closed")}>
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (stage === "closed") {
     return (
       <div className="media-report">
@@ -79,10 +118,29 @@ function MediaReport({ accessToken, url }: { accessToken: string; url: string })
       </div>
     );
   }
+  const reasonId = `media-report-reason-${item.id}`;
   return (
     <div className="media-report">
       <div className="media-report__panel" role="group" aria-label={`Report this ${noun}`}>
         <p>Report this {noun}? Our team will review it.</p>
+        <label htmlFor={reasonId} className="media-report__label">
+          Why are you reporting it? (optional)
+        </label>
+        <textarea
+          id={reasonId}
+          className="media-report__reason"
+          value={reason}
+          maxLength={MEDIA_REPORT_REASON_MAX_LENGTH}
+          rows={3}
+          onChange={(event) => setReason(event.target.value)}
+          disabled={submitting}
+        />
+        <p className="media-report__hint">
+          Only our moderators see your reason, not the person who posted this. [COPY PENDING LEGAL REVIEW]
+        </p>
+        <p className="media-report__counter" aria-live="polite">
+          {reason.length} / {MEDIA_REPORT_REASON_MAX_LENGTH}
+        </p>
         {error && (
           <p role="alert" className="media-item__error">
             {error}
@@ -103,21 +161,23 @@ function MediaReport({ accessToken, url }: { accessToken: string; url: string })
 
 function OwnMedia({
   accessToken,
-  url,
+  item,
+  publicUrl,
   onRemoved,
 }: {
   accessToken: string;
-  url: string;
-  onRemoved: (url: string) => void;
+  item: FeedPostMedia;
+  publicUrl: string | null;
+  onRemoved: (id: string) => void;
 }) {
-  const id = mediaIdFromUrl(url);
+  const id = item.id;
   const [view, setView] = useState<PostMediaView | null>(null);
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const alive = useRef(true);
+  const refreshes = useRef(0);
 
   const load = useCallback(async () => {
-    if (!id) return;
     try {
       const next = await getUpload(accessToken, id);
       if (alive.current) setView(next);
@@ -141,32 +201,43 @@ function OwnMedia({
     return () => clearInterval(timer);
   }, [pending, load]);
 
+  // The signed link lasts 5 minutes. If the browser cannot load the file (the link ran out), ask for a fresh
+  // one, a couple of times at most.
+  function refreshLink() {
+    if (refreshes.current >= MAX_LINK_REFRESHES) return;
+    refreshes.current += 1;
+    void load();
+  }
+
   async function remove() {
-    if (!id || removing) return;
+    if (removing) return;
     setRemoving(true);
     setError(null);
     try {
       await deleteUpload(accessToken, id);
-      onRemoved(url);
+      onRemoved(id);
     } catch (err) {
-      setError(
-        err instanceof PostMediaApiError && err.code === POST_MEDIA_CODES.mediaInContestEntry
-          ? err.message
-          : err instanceof PostMediaApiError
-            ? err.message
-            : "Couldn’t remove that file.",
-      );
+      setError(err instanceof PostMediaApiError ? err.message : "Couldn’t remove that file.");
       setRemoving(false);
     }
   }
 
-  const noun = isVideoUrl(url) ? "video" : "picture";
-  const rejected = view?.status === "rejected";
+  const noun = item.kind === "video" ? "video" : "picture";
+  const status = view?.status ?? null;
+  const pendingNow = status === "pending";
+  const rejected = status === "rejected";
+
+  // Which address to draw. An approved file is public: its public address. Anything not approved is drawn
+  // ONLY through a signed link (the status read's, else the payload's). Before the status read arrives, the
+  // payload decides: a file with a signed link is not public yet; a file without one is.
+  const signed = view?.viewUrl ?? item.viewUrl ?? null;
+  const notPublicYet = status ? status !== "approved" : Boolean(item.viewUrl);
+  const src = notPublicYet ? signed : (view?.url ?? publicUrl);
 
   return (
-    <div className="post__media-item" data-media-status={view?.status ?? "unknown"}>
-      <Media url={url} />
-      {pending && (
+    <div className="post__media-item" data-media-status={status ?? "unknown"}>
+      {src && <Media kind={item.kind} src={src} onLoadError={notPublicYet ? refreshLink : undefined} />}
+      {pendingNow && (
         <div className="post-media-author__row">
           <div className="media-item__body">
             <p className="media-item__name">
@@ -211,6 +282,9 @@ function OwnMedia({
 }
 
 interface Props {
+  /** The post's `media` (ids, kinds, the author's signed links). */
+  media: FeedPostMedia[];
+  /** The post's `mediaUrls`: the public address of each file, in the same order as `media`. */
   urls: string[];
   accessToken: string;
   isOwn: boolean;
@@ -218,19 +292,27 @@ interface Props {
   playVideo?: boolean;
 }
 
-export default function PostMedia({ urls, accessToken, isOwn, playVideo }: Props) {
+export default function PostMedia({ media, urls, accessToken, isOwn, playVideo }: Props) {
   const [removed, setRemoved] = useState<string[]>([]);
-  const shown = urls.filter((u) => !removed.includes(u));
+  const shown = media
+    .map((item, index) => ({ item, publicUrl: urls[index] ?? null }))
+    .filter((m) => !removed.includes(m.item.id));
   if (shown.length === 0) return null;
   return (
     <div className="post__media post-media-author">
-      {shown.map((url) =>
+      {shown.map(({ item, publicUrl }) =>
         isOwn ? (
-          <OwnMedia key={url} accessToken={accessToken} url={url} onRemoved={(u) => setRemoved((r) => [...r, u])} />
+          <OwnMedia
+            key={item.id}
+            accessToken={accessToken}
+            item={item}
+            publicUrl={publicUrl}
+            onRemoved={(id) => setRemoved((r) => [...r, id])}
+          />
         ) : (
-          <div key={url} className="post__media-item">
-            <Media url={url} playVideo={playVideo} />
-            <MediaReport accessToken={accessToken} url={url} />
+          <div key={item.id} className="post__media-item">
+            {publicUrl && <Media kind={item.kind} src={publicUrl} playVideo={playVideo} />}
+            <MediaReport accessToken={accessToken} item={item} />
           </div>
         ),
       )}

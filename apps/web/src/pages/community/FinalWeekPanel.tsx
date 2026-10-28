@@ -11,7 +11,9 @@
 // id of ONE video the finalist uploaded straight to storage (api/postMedia.ts, useMediaUploads.ts; Figma
 // pass Q frames 6850:*, Decision Log #419 item 7). The pasted "Video link" of the earlier stand-in is gone.
 // A video that is still being checked still attaches (it is hidden from everyone but its owner until the
-// reveal anyway); one that is rejected must be removed and replaced before the window closes.
+// reveal anyway); one that is rejected must be removed and replaced before you submit. The entry can be
+// changed only until you submit (Decision Log #430 item 5): once the entry exists the API refuses to remove
+// its file (409 media_in_contest_entry) and a second submit (409 contest_already_entered).
 //
 // The upload window's own copy comes from the frame. Nothing here shows the minimum tally (admin
 // only, #400 E8) or any engagement count (all engagement on a final entry is locked until the reveal).
@@ -162,7 +164,7 @@ export default function FinalWeekPanel({ accessToken, authorName, contest, onSub
                 </p>
               </>
             ) : (
-              <p className="composer__note">You can replace it until the upload window closes.</p>
+              <p className="composer__note">You can change your video until you submit.</p>
             )}
             <div className="composer__foot">
               <span />

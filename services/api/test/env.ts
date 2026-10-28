@@ -87,6 +87,10 @@ export const E2E_INERT_EXTERNAL_ENV: Readonly<Record<string, string>> = {
   GLOBAL_RATE_LIMIT_WRITE_WINDOW_MS: '60000',
   GLOBAL_RATE_LIMIT_UPLOAD_MAX: '1000000',
   GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS: '60000',
+  GLOBAL_RATE_LIMIT_REFRESH_IP_MAX: '1000000',
+  GLOBAL_RATE_LIMIT_REFRESH_IP_WINDOW_MS: '60000',
+  GLOBAL_RATE_LIMIT_REFRESH_TOKEN_MAX: '1000000',
+  GLOBAL_RATE_LIMIT_REFRESH_TOKEN_WINDOW_MS: '60000',
   // Auth limits for shared networks (modules/auth/rate-limit/auth-limits), B-256. Counters live in Redis, which is shared
   // by every spec file and survives between runs, so the production numbers (30 sign-ups / 60 logins per 10 minutes per
   // IP, 5 failed logins per 15 minutes per email) would trip across unrelated specs. Relaxed here; the dedicated specs
@@ -95,6 +99,8 @@ export const E2E_INERT_EXTERNAL_ENV: Readonly<Record<string, string>> = {
   AUTH_SIGNUP_RATE_LIMIT_WINDOW_MS: '600000',
   AUTH_LOGIN_FAILED_ATTEMPTS_MAX: '1000000',
   AUTH_LOGIN_FAILED_ATTEMPTS_WINDOW_MS: '900000',
+  AUTH_LOGIN_ACCOUNT_CEILING_MAX: '1000000',
+  AUTH_LOGIN_ACCOUNT_CEILING_WINDOW_MS: '86400000',
   AUTH_IP_CEILING_MAX: '1000000',
   AUTH_IP_CEILING_WINDOW_MS: '600000',
   AUTH_FORGOT_PASSWORD_EMAIL_MAX: '1000000',

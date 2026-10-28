@@ -69,6 +69,7 @@ function post(overrides: Partial<FeedPost> = {}): FeedPost {
     author: { id: "user-2", publicName: "Emeka John", isFollowing: false },
     contentText: "First goal of the season, what a feeling",
     mediaUrls: [],
+    media: [],
     clubPageId: null,
     banterRoomId: null,
     likeCount: 3,

@@ -52,6 +52,7 @@ function feedPost(): FeedPost {
     author: { id: "user-1", publicName: "Ada Player", isFollowing: false },
     contentText: "Nutmeg challenge — week 2",
     mediaUrls: [],
+    media: [],
     clubPageId: null,
     banterRoomId: null,
     likeCount: 0,

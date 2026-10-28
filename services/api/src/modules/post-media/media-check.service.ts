@@ -12,6 +12,7 @@ import { MODERATION_MAX_IMAGE_BYTES, MediaModerationClient } from './media-moder
 import { AUTO_REJECTION_REASON, ModerationLabel, decideModeration, sampleFrameTimes } from './media-moderation-decision.util';
 import { POST_MEDIA_DEFAULTS, PostMediaConfig } from './post-media.config';
 import { writeDecisionNotification } from './post-media-decision.service';
+import { PostMediaObjectsService } from './post-media-objects.service';
 import { PostMediaService } from './post-media.service';
 
 // backend/w14-post-media-pipeline (B-036; Decision Log #419 item 4). The automatic check, run in the
@@ -30,6 +31,12 @@ import { PostMediaService } from './post-media.service';
 // check at all and the rows stay queued (pending); if a check throws, the row is retried with back-off
 // and, after the configured attempts, is left pending ('gave_up') for a moderator. A decision is only
 // written if nobody (a moderator) decided first.
+//
+// backend/media-privacy-vetting-followups (B-257; Decision Log #430 item 2). The check reads the file from the
+// PRIVATE prefix. An automatic APPROVAL first copies the file to the public prefix and verifies the copy
+// (post-media-objects.service.ts); if that fails the approval is NOT written, the failure is recorded like
+// any other check failure (retried with back-off, then handed to a moderator), and nothing is public. An
+// automatic rejection moves nothing: the file is already private and stays there.
 
 export type CheckOutcome = 'approved' | 'rejected' | 'pending' | 'retry' | 'gave_up' | 'skipped';
 
@@ -46,6 +53,7 @@ export class MediaCheckService {
     private readonly processor: MediaProcessor,
     private readonly moderation: MediaModerationClient,
     private readonly config: PostMediaConfig,
+    private readonly objects: PostMediaObjectsService,
     @Optional() @Inject(APP_CLOCK) private readonly clock: Clock = systemClock,
   ) {}
 
@@ -123,7 +131,10 @@ export class MediaCheckService {
         id: true,
         uploaderId: true,
         kind: true,
+        contentType: true,
+        privateKey: true,
         publicKey: true,
+        publishedAt: true,
         durationSeconds: true,
         checkAttempts: true,
         uploader: { select: { isMinor: true } },
@@ -135,7 +146,7 @@ export class MediaCheckService {
 
     try {
       const decision = await this.evaluate(row);
-      return await this.apply(id, row.uploaderId, decision, now);
+      return await this.apply(row, decision, now);
     } catch (err) {
       return this.recordFailure(id, row.checkAttempts, err, now);
     }
@@ -143,11 +154,11 @@ export class MediaCheckService {
 
   private async evaluate(row: {
     kind: string;
-    publicKey: string | null;
+    privateKey: string | null;
     durationSeconds: number | null;
     uploader: { isMinor: boolean };
   }): Promise<{ outcome: 'approved' | 'rejected' | 'pending'; categories: string[] }> {
-    if (!row.publicKey) throw new Error('The stored file is missing');
+    if (!row.privateKey) throw new Error('The stored file is missing');
     const thresholds = this.config.thresholdsFor(row.uploader.isMinor);
     // Ask Rekognition for labels down to the LOWER of the two thresholds, or a label that should have
     // kept the file out of auto-approval would never be returned.
@@ -156,7 +167,7 @@ export class MediaCheckService {
     const dir = await mkdtemp(path.join(tmpdir(), 'media-check-'));
     try {
       const source = path.join(dir, 'source');
-      await this.storage.downloadToFile(row.publicKey, source);
+      await this.storage.downloadToFile(row.privateKey, source);
 
       let images: Buffer[];
       if (row.kind === 'image') {
@@ -185,28 +196,48 @@ export class MediaCheckService {
    * the moderator queue.
    */
   private async apply(
-    id: string,
-    uploaderId: string,
+    row: {
+      id: string;
+      uploaderId: string;
+      contentType: string | null;
+      privateKey: string | null;
+      publicKey: string | null;
+      publishedAt: Date | null;
+    },
     decision: { outcome: 'approved' | 'rejected' | 'pending'; categories: string[] },
     now: Date,
   ): Promise<CheckOutcome> {
+    const { id, uploaderId } = row;
     const labels = decision.categories as unknown as Prisma.InputJsonValue;
     const guard = { id, status: 'pending', decisionSource: null } as const;
     const done = { checkState: 'done', checkedAt: now, checkLeaseUntil: null, checkError: null, checkLabels: labels };
 
     if (decision.outcome === 'approved' || decision.outcome === 'rejected') {
       const outcome = decision.outcome;
-      const written = await this.prisma.$transaction(async (tx) => {
-        const r = await tx.postMedia.updateMany({
-          where: guard,
-          data:
-            outcome === 'approved'
-              ? { ...done, status: 'approved', decisionSource: 'auto', decidedAt: now }
-              : { ...done, status: 'rejected', decisionSource: 'auto', decidedAt: now, rejectionReason: AUTO_REJECTION_REASON },
+      // FAIL CLOSED: an approval publishes the file first. If the copy fails this throws, checkOne records
+      // it as a check failure, and the item stays pending and private.
+      if (outcome === 'approved') await this.objects.copyToPublic(row);
+      let written: boolean;
+      try {
+        written = await this.prisma.$transaction(async (tx) => {
+          const r = await tx.postMedia.updateMany({
+            where: guard,
+            data:
+              outcome === 'approved'
+                ? { ...done, status: 'approved', decisionSource: 'auto', decidedAt: now, publishedAt: now }
+                : { ...done, status: 'rejected', decisionSource: 'auto', decidedAt: now, rejectionReason: AUTO_REJECTION_REASON },
+          });
+          if (r.count === 1) await writeDecisionNotification(tx, uploaderId, id, outcome);
+          return r.count === 1;
         });
-        if (r.count === 1) await writeDecisionNotification(tx, uploaderId, id, outcome);
-        return r.count === 1;
-      });
+      } catch (err) {
+        if (outcome === 'approved' && row.publicKey && !row.publishedAt) await this.objects.discardUnrecordedCopy(id, row.publicKey);
+        throw err;
+      }
+      if (outcome === 'approved') {
+        if (written) await this.objects.finishPublish(id);
+        else if (row.publicKey && !row.publishedAt) await this.objects.discardUnrecordedCopy(id, row.publicKey);
+      }
       return written ? outcome : 'skipped';
     }
     // Between the thresholds: stays pending and enters the moderator queue.
@@ -263,6 +294,7 @@ export class PostMediaSweepService {
   constructor(
     private readonly checks: MediaCheckService,
     private readonly media: PostMediaService,
+    private readonly objects: PostMediaObjectsService,
   ) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
@@ -272,6 +304,31 @@ export class PostMediaSweepService {
       if (r.checked > 0) this.logger.log(`Media check pass: ${JSON.stringify(r.outcomes)}`);
     } catch (err) {
       this.logger.error(`Media check pass failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  /**
+   * Restores "a public object exists iff the item is approved and not held" after any failed move, and
+   * deletes the private original of an approved item. Never touches a rejected item's private object.
+   */
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async reconcileObjects(): Promise<void> {
+    try {
+      const r = await this.objects.reconcile();
+      if (r.withdrawn + r.published + r.cleaned > 0) this.logger.log(`Media object reconcile: ${JSON.stringify(r)}`);
+    } catch (err) {
+      this.logger.error(`Media object reconcile failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  /** Confirmed uploads never attached to a post are removed after POST_MEDIA_UNATTACHED_MAX_AGE_DAYS (7). */
+  @Cron(CronExpression.EVERY_HOUR)
+  async purgeUnattached(): Promise<void> {
+    try {
+      const r = await this.media.purgeUnattached();
+      if (r.purged > 0 || r.failed > 0) this.logger.log(`Unattached upload purge: removed ${r.purged}, failed ${r.failed}.`);
+    } catch (err) {
+      this.logger.error(`Unattached upload purge failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

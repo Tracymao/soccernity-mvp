@@ -71,6 +71,10 @@ export function apiEnvironment(dbUrl: string, redisUrl: string, clock: ApiClock 
     GLOBAL_RATE_LIMIT_WRITE_WINDOW_MS: '60000',
     GLOBAL_RATE_LIMIT_UPLOAD_MAX: '1000000',
     GLOBAL_RATE_LIMIT_UPLOAD_WINDOW_MS: '60000',
+    GLOBAL_RATE_LIMIT_REFRESH_IP_MAX: '1000000',
+    GLOBAL_RATE_LIMIT_REFRESH_IP_WINDOW_MS: '60000',
+    GLOBAL_RATE_LIMIT_REFRESH_TOKEN_MAX: '1000000',
+    GLOBAL_RATE_LIMIT_REFRESH_TOKEN_WINDOW_MS: '60000',
     // Auth limits for shared networks (B-256): a full QA run signs up, logs in and resets far more than 30 / 60 / 5 per
     // 10-15 minutes from one IP and one set of emails, and the Redis counters outlive a restart of the API. Forced out of
     // the way; the real numbers are proven by services/api's auth-limits specs (unit, HTTP and real-Redis e2e).
@@ -78,6 +82,8 @@ export function apiEnvironment(dbUrl: string, redisUrl: string, clock: ApiClock 
     AUTH_SIGNUP_RATE_LIMIT_WINDOW_MS: '600000',
     AUTH_LOGIN_FAILED_ATTEMPTS_MAX: '1000000',
     AUTH_LOGIN_FAILED_ATTEMPTS_WINDOW_MS: '900000',
+    AUTH_LOGIN_ACCOUNT_CEILING_MAX: '1000000',
+    AUTH_LOGIN_ACCOUNT_CEILING_WINDOW_MS: '86400000',
     AUTH_IP_CEILING_MAX: '1000000',
     AUTH_IP_CEILING_WINDOW_MS: '600000',
     AUTH_FORGOT_PASSWORD_EMAIL_MAX: '1000000',
