@@ -21,12 +21,24 @@ notifications). This module adds the listing, the view link, the stats and the a
 ## Privacy
 
 A moderator gets the uploader's **public name and id** only. Never an email, never the real name, never who reported an
-item (only how many). The view link is a signed GET valid for 5 minutes, created per request and never stored.
+item (only how many, and what they wrote). The view link is a signed GET valid for 5 minutes, created per request and never stored.
 `GET /admin/media-review/:id` returns only items that have been through the queue, so it is not a general browser of
 everyone's uploads.
 
-## Not decided
+## Reviewers of minors' media (B-258; Decision Log #430 item 3)
 
-Whether reviewers of **minors'** media must be child-safety vetted (as for reports that concern a minor,
-`ModerationService.assertChildSafetyVetted`). Decision Log #419 lists it as found and undecided, so no such gate exists here;
-see the report.
+Where the uploader is a minor, the list, the item, approve and reject require a **child-safety-vetted** admin
+(`isAdminChildSafetyVetted`, `moderation/child-safety-vetting.util.ts`, the same rule `ModerationService` uses; fresh read, any
+role). A non-vetted admin does not see a minor's items in the list and gets the **same 404** as a missing id by id or on a decision,
+so nothing leaks. `GET /stats` is unchanged: counts only, accurate for everyone.
+
+## View links and reporter reasons (B-257, B-259)
+
+`viewUrl` is a 5-minute signed link to the file's **current** object: the private prefix while the item awaits a decision, is held
+or is rejected; the public prefix once approved. There is no public URL for a pending or rejected file. `reportReasons` lists what
+reporters wrote (newest first, at most 20, text only, never who); the uploader and other users never receive it.
+
+## Approve fails closed
+
+Approving publishes the file first (private -> public copy, verified); if that fails nothing changes and the moderator gets a
+retryable `503 media_publish_failed`. See `post-media/README.md`, "Private and public prefixes".

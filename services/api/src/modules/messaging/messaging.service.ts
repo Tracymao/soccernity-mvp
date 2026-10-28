@@ -46,7 +46,6 @@ const MESSAGE_SELECT = {
   conversationId: true,
   senderId: true,
   contentText: true,
-  mediaUrl: true,
   sentAt: true,
   readAt: true,
 } as const;
@@ -400,7 +399,6 @@ export class MessagingService {
           conversationId,
           senderId,
           contentText: dto.contentText,
-          mediaUrl: dto.mediaUrl,
         },
         select: MESSAGE_SELECT,
       });

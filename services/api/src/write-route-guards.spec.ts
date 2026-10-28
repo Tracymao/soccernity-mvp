@@ -126,10 +126,11 @@ const EXPECTED: Record<string, Flags> = {
   // and is not a social write, so C only (a restricted account is not the audience, spec 10b); NOT E
   // (an unverified viewer is still a viewer) and NOT P.
   'POST /contest/entries/:entryId/impression': 'C',
-  // post media (backend/w14-post-media-pipeline, Decision Log #419 item 8): a restricted-pending account
-  // cannot upload. C only: the upload itself publishes nothing (the post that carries it takes E and P).
-  'POST /media/uploads': 'C',
-  'POST /media/uploads/:id/confirm': 'C',
+  // post media (Decision Log #419 item 8): a restricted-pending account cannot upload. B-259 (Decision Log
+  // #430 item 4) gave both upload routes the SAME guards as POST /posts (consent, verified email, profile
+  // complete): the file exists to be posted, and an account that may not post may not fill the bucket.
+  'POST /media/uploads': 'CEP',
+  'POST /media/uploads/:id/confirm': 'CEP',
   // backend/w15-media-review-queue (B-037): reporting a file is a write that touches another user's content.
   'POST /media/:id/report': 'C',
   // grassroots

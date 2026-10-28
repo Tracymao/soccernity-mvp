@@ -2451,6 +2451,16 @@ model PostMedia {
   // Set while the unprocessed original exists; cleared once it is deleted. A row whose quarantineKey is
   // still set 24 h after createdAt is purged.
   quarantineKey       String?   @unique
+  // backend/media-privacy-vetting-followups (B-257; Decision Log #430 item 2). A processed file is written
+  // to a PRIVATE prefix (privateKey) that no public base URL maps to, and is copied to the PUBLIC prefix
+  // (publicKey) only when it is approved. publicKey / publicUrl are the DETERMINISTIC public location,
+  // computed at confirm time so Post.mediaUrls can point at it; the object only exists there while
+  // publishedAt is set. Invariant the reconciler enforces: a public object exists iff status 'approved' and
+  // not hiddenPendingReview. A rejected file keeps its privateKey object (evidence handling is OPEN under
+  // counsel, B-206): no purge or cleanup path deletes it.
+  privateKey          String?   @unique
+  // Set while the object is in the public prefix; NULL otherwise.
+  publishedAt         DateTime?
   publicKey           String?   @unique
   publicUrl           String?
   // The PROCESSED file's size and type (after stripping), and a video's duration.
@@ -2502,6 +2512,7 @@ model PostMedia {
   @@index([createdAt])
   @@index([reviewEnteredAt])
   @@index([reportCount])
+  @@index([publishedAt])
 }
 
 // backend/w15-media-review-queue (B-037). One user's report of one approved item. Unique per
@@ -2515,6 +2526,10 @@ model PostMediaReport {
   reporter   User      @relation(fields: [reporterId], references: [id])
   createdAt  DateTime  @default(now())
   resolvedAt DateTime?
+  // backend/media-privacy-vetting-followups (B-259; Decision Log #430 item 4). Optional free text from the
+  // reporter, trimmed, at most 500 characters. Shown to moderators in the review queue ONLY: never to the
+  // uploader or any other user.
+  reason     String?
 
   @@unique([mediaId, reporterId])
   @@index([createdAt])

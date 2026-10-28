@@ -22,6 +22,9 @@ const dbRow = (over: Record<string, unknown> = {}) => ({
   decidedAt: null,
   rejectionReason: null,
   checkLabels: ['Suggestive'],
+  // B-257: a pending item lives in the PRIVATE prefix and is not published.
+  privateKey: 'private-media/u1/m1.jpg',
+  publishedAt: null,
   publicKey: 'post-media/u1/m1.jpg',
   postId: 'p1',
   confirmedAt: new Date('2026-11-05T09:00:00Z'),
@@ -32,12 +35,14 @@ const dbRow = (over: Record<string, unknown> = {}) => ({
   hiddenPendingReview: false,
   uploader: { id: 'u1', username: 'ada_l', displayName: 'Ada Lovelace', email: 'must-not-leak@example.com' },
   _count: { reports: 0 },
+  reports: [] as { reason: string | null }[],
   ...over,
 });
 
-function build() {
+function build(opts: { vetted?: boolean } = {}) {
   const prisma = {
     postMedia: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn(), count: jest.fn().mockResolvedValue(0) },
+    adminUser: { findUnique: jest.fn().mockResolvedValue({ childSafetyVetted: opts.vetted ?? true }) },
     postMediaReport: { groupBy: jest.fn().mockResolvedValue([]) },
     adminActionLog: { count: jest.fn().mockResolvedValue(0) },
   };
@@ -58,7 +63,7 @@ function build() {
 describe('AdminMediaReviewService.list', () => {
   it('defaults to the "waiting for a decision" queue, newest first, 20 per page', async () => {
     const { service, prisma } = build();
-    await service.list({});
+    await service.list({}, 'a1');
     const args = prisma.postMedia.findMany.mock.calls[0][0];
     expect(args.take).toBe(21);
     expect(args.orderBy).toEqual({ sequence: 'desc' });
@@ -70,7 +75,7 @@ describe('AdminMediaReviewService.list', () => {
 
   it('applies source, status, order and cursor filters', async () => {
     const { service, prisma } = build();
-    await service.list({ order: 'oldest', source: 'user_report', status: 'rejected', cursor: encodeMediaReviewCursor(7), limit: 5 });
+    await service.list({ order: 'oldest', source: 'user_report', status: 'rejected', cursor: encodeMediaReviewCursor(7), limit: 5 }, 'a1');
     const args = prisma.postMedia.findMany.mock.calls[0][0];
     expect(args.orderBy).toEqual({ sequence: 'asc' });
     expect(args.take).toBe(6);
@@ -80,30 +85,33 @@ describe('AdminMediaReviewService.list', () => {
       { OR: [{ reviewEntrySource: 'user_report' }, { reports: { some: {} } }] },
       { sequence: { gt: 7 } },
     ]);
-    await service.list({ source: 'auto_check', cursor: encodeMediaReviewCursor(7) });
+    await service.list({ source: 'auto_check', cursor: encodeMediaReviewCursor(7) }, 'a1');
     const second = prisma.postMedia.findMany.mock.calls[1][0].where.AND;
     expect(second).toContainEqual({ reviewEntrySource: 'auto_check' });
     expect(second).toContainEqual({ sequence: { lt: 7 } });
   });
 
   it('rejects a malformed cursor with 400', async () => {
-    await expect(build().service.list({ cursor: 'not-a-cursor' })).rejects.toMatchObject({ status: 400 });
+    await expect(build().service.list({ cursor: 'not-a-cursor' }, 'a1')).rejects.toMatchObject({ status: 400 });
   });
 
   it('pages: returns a cursor only when there is more, built from the last returned row', async () => {
     const { service, prisma } = build();
     prisma.postMedia.findMany.mockResolvedValue([dbRow({ sequence: 9 }), dbRow({ id: 'm2', sequence: 8 }), dbRow({ id: 'm3', sequence: 7 })]);
-    const page = await service.list({ limit: 2 });
+    const page = await service.list({ limit: 2 }, 'a1');
     expect(page.items.map((i) => i.id)).toEqual(['m1', 'm2']);
     expect(page.nextCursor).toBe(encodeMediaReviewCursor(8));
     prisma.postMedia.findMany.mockResolvedValue([dbRow()]);
-    expect((await service.list({ limit: 2 })).nextCursor).toBeNull();
+    expect((await service.list({ limit: 2 }, 'a1')).nextCursor).toBeNull();
   });
 
   it('shapes an item: public name and id only (no email, no real name), labels, age, sources, and a short-lived view link', async () => {
     const { service, prisma, storage } = build();
-    prisma.postMedia.findMany.mockResolvedValue([dbRow({ reportCount: 2, status: 'approved', _count: { reports: 2 } })]);
-    const [item] = (await service.list({})).items;
+    // An approved, PUBLISHED item that users reported: its current object is the public one.
+    prisma.postMedia.findMany.mockResolvedValue([
+      dbRow({ reportCount: 2, status: 'approved', publishedAt: new Date('2026-11-05T09:30:00Z'), privateKey: null, _count: { reports: 2 } }),
+    ]);
+    const [item] = (await service.list({}, 'a1')).items;
     expect(item).toMatchObject({
       id: 'm1',
       kind: 'image',
@@ -129,7 +137,7 @@ describe('AdminMediaReviewService.list', () => {
     const { service, prisma, storage } = build();
     storage.createDownloadUrl.mockRejectedValue(new ServiceUnavailableException('no store'));
     prisma.postMedia.findMany.mockResolvedValue([dbRow()]);
-    const [item] = (await service.list({})).items;
+    const [item] = (await service.list({}, 'a1')).items;
     expect(item.viewUrl).toBeNull();
     expect(item.viewUrlExpiresAt).toBeNull();
   });
@@ -137,7 +145,7 @@ describe('AdminMediaReviewService.list', () => {
   it('an item the check never labelled has an empty label list', async () => {
     const { service, prisma } = build();
     prisma.postMedia.findMany.mockResolvedValue([dbRow({ checkLabels: null })]);
-    expect((await service.list({})).items[0].checkLabels).toEqual([]);
+    expect((await service.list({}, 'a1')).items[0].checkLabels).toEqual([]);
   });
 });
 
@@ -145,14 +153,142 @@ describe('AdminMediaReviewService.get', () => {
   it('returns an item that has been in the queue, and 404s anything else', async () => {
     const { service, prisma } = build();
     prisma.postMedia.findFirst.mockResolvedValue(dbRow());
-    expect((await service.get('m1')).id).toBe('m1');
+    expect((await service.get('m1', 'a1')).id).toBe('m1');
     expect(prisma.postMedia.findFirst.mock.calls[0][0].where).toEqual({
-      id: 'm1',
-      uploadState: 'ready',
-      OR: [{ reviewEnteredAt: { not: null } }, { reportCount: { gt: 0 } }],
+      AND: [
+        { id: 'm1', uploadState: 'ready' },
+        { OR: [{ reviewEnteredAt: { not: null } }, { reportCount: { gt: 0 } }] },
+      ],
     });
     prisma.postMedia.findFirst.mockResolvedValue(null);
-    await expect(service.get('nope')).rejects.toMatchObject({ status: 404 });
+    await expect(service.get('nope', 'a1')).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+// ---- B-257 (Decision Log #430 item 2): signed links to the CURRENT object ---------------------------------
+
+describe('AdminMediaReviewService view links (private prefix)', () => {
+  it('a PENDING item gets a short-lived signed link to its PRIVATE object, never the public key', async () => {
+    const { service, prisma, storage } = build();
+    prisma.postMedia.findMany.mockResolvedValue([dbRow()]);
+    const [item] = (await service.list({}, 'a1')).items;
+    expect(storage.createDownloadUrl).toHaveBeenCalledWith('private-media/u1/m1.jpg', 300);
+    expect(storage.createDownloadUrl).not.toHaveBeenCalledWith('post-media/u1/m1.jpg', expect.anything());
+    expect(item.viewUrl).toBe('https://view.test/private-media/u1/m1.jpg?ttl=300');
+  });
+
+  it('a REJECTED item stays private: the link is to its private object', async () => {
+    const { service, prisma, storage } = build();
+    prisma.postMedia.findMany.mockResolvedValue([dbRow({ status: 'rejected' })]);
+    await service.list({ status: 'rejected' }, 'a1');
+    expect(storage.createDownloadUrl).toHaveBeenCalledWith('private-media/u1/m1.jpg', 300);
+  });
+
+  it('a held (reported) item that was moved private is viewed from the private prefix', async () => {
+    const { service, prisma, storage } = build();
+    prisma.postMedia.findMany.mockResolvedValue([dbRow({ status: 'approved', reportCount: 3, hiddenPendingReview: true, publishedAt: null })]);
+    await service.list({}, 'a1');
+    expect(storage.createDownloadUrl).toHaveBeenCalledWith('private-media/u1/m1.jpg', 300);
+  });
+
+  it('an item with no object at all (a legacy row) has no link rather than a made-up one', async () => {
+    const { service, prisma, storage } = build();
+    prisma.postMedia.findMany.mockResolvedValue([dbRow({ privateKey: null })]);
+    const [item] = (await service.list({}, 'a1')).items;
+    expect(item.viewUrl).toBeNull();
+    expect(storage.createDownloadUrl).not.toHaveBeenCalled();
+  });
+});
+
+// ---- B-258 (Decision Log #430 item 3): child-safety vetting for a minor's items ----------------------------
+
+describe('AdminMediaReviewService vetting (a minor\'s items need a child-safety-vetted admin)', () => {
+  const MINOR_CLAUSE = { uploader: { is: { isMinor: false } } };
+
+  it('reads the vetting state FRESH from the database for the acting admin on every list', async () => {
+    const { service, prisma } = build();
+    await service.list({}, 'a1');
+    expect(prisma.adminUser.findUnique).toHaveBeenCalledWith({ where: { id: 'a1' }, select: { childSafetyVetted: true } });
+  });
+
+  it('a VETTED admin sees every item: no minor filter on the list', async () => {
+    const { service, prisma } = build({ vetted: true });
+    await service.list({}, 'a1');
+    expect(prisma.postMedia.findMany.mock.calls[0][0].where.AND).not.toContainEqual(MINOR_CLAUSE);
+  });
+
+  it('a NON-vetted admin does not see a minor\'s items: the list is filtered to adult uploaders', async () => {
+    const { service, prisma } = build({ vetted: false });
+    await service.list({}, 'a1');
+    expect(prisma.postMedia.findMany.mock.calls[0][0].where.AND).toContainEqual(MINOR_CLAUSE);
+  });
+
+  it('a non-vetted admin opening a minor\'s item by id gets the SAME 404 as a missing id (not a 403)', async () => {
+    const { service, prisma } = build({ vetted: false });
+    prisma.postMedia.findFirst.mockResolvedValue(null); // the query itself excludes the minor's item
+    await expect(service.get('minor-item', 'a1')).rejects.toMatchObject({ status: 404, response: { code: 'media_not_found', message: 'Media not found' } });
+    expect(prisma.postMedia.findFirst.mock.calls[0][0].where.AND).toContainEqual(MINOR_CLAUSE);
+  });
+
+  it('a vetted admin can open a minor\'s item by id', async () => {
+    const { service, prisma } = build({ vetted: true });
+    prisma.postMedia.findFirst.mockResolvedValue(dbRow());
+    await expect(service.get('minor-item', 'a1')).resolves.toMatchObject({ id: 'm1' });
+    expect(prisma.postMedia.findFirst.mock.calls[0][0].where.AND).not.toContainEqual(MINOR_CLAUSE);
+  });
+
+  it('a non-vetted admin cannot APPROVE or REJECT a minor\'s item: a 404 and the decision service is never called', async () => {
+    const { service, prisma, decisions, actionLog } = build({ vetted: false });
+    prisma.postMedia.findFirst.mockResolvedValue({ id: 'minor-item' }); // the item exists and its uploader is a minor
+    await expect(service.approve('minor-item', 'a1')).rejects.toMatchObject({ status: 404, response: { code: 'media_not_found' } });
+    await expect(service.reject('minor-item', 'a1', 'why')).rejects.toMatchObject({ status: 404, response: { code: 'media_not_found' } });
+    expect(prisma.postMedia.findFirst.mock.calls[0][0]).toEqual({ where: { id: 'minor-item', uploader: { is: { isMinor: true } } }, select: { id: true } });
+    expect(decisions.approve).not.toHaveBeenCalled();
+    expect(decisions.reject).not.toHaveBeenCalled();
+    expect(actionLog.record).not.toHaveBeenCalled();
+  });
+
+  it('a non-vetted admin CAN decide an adult\'s item', async () => {
+    const { service, prisma, decisions } = build({ vetted: false });
+    prisma.postMedia.findFirst.mockResolvedValue(null); // not a minor's item
+    decisions.approve.mockResolvedValue({ id: 'm1', outcome: 'approved', status: 'approved' });
+    await expect(service.approve('m1', 'a1')).resolves.toMatchObject({ outcome: 'approved' });
+    expect(decisions.approve).toHaveBeenCalledWith('m1', 'a1');
+  });
+
+  it('a vetted admin pays no extra minor lookup before deciding', async () => {
+    const { service, prisma, decisions } = build({ vetted: true });
+    decisions.approve.mockResolvedValue({ id: 'm1', outcome: 'approved', status: 'approved' });
+    await service.approve('m1', 'a1');
+    expect(prisma.postMedia.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('the statistics stay accurate for everyone: counts only, no vetting filter', async () => {
+    const { service, prisma } = build({ vetted: false });
+    prisma.postMedia.count.mockResolvedValue(9);
+    const stats = await service.stats();
+    expect(stats.autoApproved).toBe(9);
+    for (const call of prisma.postMedia.count.mock.calls) expect(JSON.stringify(call[0])).not.toContain('isMinor');
+    expect(prisma.adminUser.findUnique).not.toHaveBeenCalled();
+  });
+});
+
+// ---- B-259 (Decision Log #430 item 4): reporters' reasons are for reviewers only ---------------------------
+
+describe('AdminMediaReviewService report reasons', () => {
+  it('shows reviewers what reporters wrote (text only, never who wrote it)', async () => {
+    const { service, prisma } = build();
+    prisma.postMedia.findMany.mockResolvedValue([dbRow({ reports: [{ reason: 'shows a street name' }, { reason: null }, { reason: 'looks wrong' }] })]);
+    const [item] = (await service.list({}, 'a1')).items;
+    expect(item.reportReasons).toEqual(['shows a street name', 'looks wrong']);
+    expect(JSON.stringify(item)).not.toContain('reporterId');
+  });
+
+  it('asks only for reasons, newest first, at most 20, and never selects the reporter', async () => {
+    const { service, prisma } = build();
+    await service.list({}, 'a1');
+    const select = prisma.postMedia.findMany.mock.calls[0][0].select;
+    expect(select.reports).toEqual({ where: { reason: { not: null } }, select: { reason: true }, orderBy: { createdAt: 'desc' }, take: 20 });
   });
 });
 

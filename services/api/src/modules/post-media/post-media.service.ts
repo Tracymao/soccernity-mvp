@@ -14,18 +14,22 @@ import {
   PostMediaContentType,
   PostMediaKind,
   detectPostMedia,
+  isHeicContentType,
   isPostMediaContentType,
+  looksLikeHeic,
 } from './media-signature.util';
 import { PostMediaConfig } from './post-media.config';
-import { deleteStoredObjects } from './post-media-cleanup.util';
-import { POST_MEDIA_CODES, UPLOADS_UNAVAILABLE_MESSAGE, postMediaError } from './post-media.errors';
+import { deletableKeys, deleteStoredObjects } from './post-media-cleanup.util';
+import { PRIVATE_PREFIX, PUBLIC_PREFIX, privateKeyFor, publicKeyFor } from './post-media-objects.service';
+import { HEIC_NOT_SUPPORTED_MESSAGE, POST_MEDIA_CODES, UPLOADS_UNAVAILABLE_MESSAGE, postMediaError } from './post-media.errors';
 
 // backend/w14-post-media-pipeline (B-041; Decision Log #419). The upload half of the pipeline:
 //
 //   POST   /media/uploads             a one-time link into the QUARANTINE prefix (limits from configuration)
 //   POST   /media/uploads/:id/confirm the server reads the object, checks magic bytes, size and (video)
-//                                     duration, STRIPS metadata, writes to the PUBLIC prefix, deletes the
-//                                     quarantined original, and queues the automatic check
+//                                     duration, STRIPS metadata, writes to the PRIVATE prefix, deletes the
+//                                     quarantined original, and queues the automatic check (the file reaches
+//                                     the PUBLIC prefix only when it is approved: post-media-objects.service.ts)
 //   GET    /media/uploads/:id         the uploader's own view of one upload (status, reason, url)
 //   DELETE /media/uploads/:id         remove an upload (and its files) the uploader no longer wants
 //
@@ -33,7 +37,7 @@ import { POST_MEDIA_CODES, UPLOADS_UNAVAILABLE_MESSAGE, postMediaError } from '.
 // approves anything (media-check.service.ts and, later, a moderator do).
 
 export const QUARANTINE_PREFIX = 'quarantine';
-export const PUBLIC_PREFIX = 'post-media';
+export { PRIVATE_PREFIX, PUBLIC_PREFIX };
 const PROCESSING_LEASE_MS = 10 * 60 * 1000;
 const SIGNATURE_BYTES = 64;
 
@@ -46,8 +50,19 @@ export interface PostMediaView {
   /** 'pending' | 'approved' | 'rejected'. 'pending' once ready means "under review". */
   status: string;
   rejectionReason: string | null;
-  /** The stored file's URL once ready, else null. Only ever returned to the uploader. */
+  /**
+   * The file's PUBLIC URL once ready, else null. Only ever returned to the uploader. It points at the
+   * public prefix, where the file exists only after approval, so it is not fetchable while the file is under
+   * review or rejected: use viewUrl to see the file now.
+   */
   url: string | null;
+  /**
+   * A SHORT-LIVED signed link to the file's current location (private while under review or rejected,
+   * public once approved) so the uploader can see their own file. Never stored, never returned to anyone
+   * else; null when storage is unavailable or the file is not ready.
+   */
+  viewUrl: string | null;
+  viewUrlExpiresAt: Date | null;
   contentType: string | null;
   byteSize: number | null;
   durationSeconds: number | null;
@@ -71,6 +86,9 @@ const VIEW_SELECT = {
   status: true,
   rejectionReason: true,
   publicUrl: true,
+  publicKey: true,
+  privateKey: true,
+  publishedAt: true,
   contentType: true,
   byteSize: true,
   durationSeconds: true,
@@ -78,19 +96,29 @@ const VIEW_SELECT = {
   createdAt: true,
 } as const;
 
-function toView(row: {
+interface ViewRow {
   id: string;
   kind: string;
   uploadState: string;
   status: string;
   rejectionReason: string | null;
   publicUrl: string | null;
+  publicKey: string | null;
+  privateKey: string | null;
+  publishedAt: Date | null;
   contentType: string | null;
   byteSize: number | null;
   durationSeconds: number | null;
   postId: string | null;
   createdAt: Date;
-}): PostMediaView {
+}
+
+/** Where the file is right now: the public object once published, else the private one. */
+export function currentObjectKey(row: { publishedAt: Date | null; publicKey: string | null; privateKey: string | null }): string | null {
+  return row.publishedAt && row.publicKey ? row.publicKey : row.privateKey;
+}
+
+function toView(row: ViewRow, viewUrl: string | null, viewUrlExpiresAt: Date | null): PostMediaView {
   return {
     id: row.id,
     kind: row.kind as PostMediaKind,
@@ -98,6 +126,8 @@ function toView(row: {
     status: row.status,
     rejectionReason: row.rejectionReason,
     url: row.uploadState === 'ready' ? row.publicUrl : null,
+    viewUrl,
+    viewUrlExpiresAt,
     contentType: row.contentType,
     byteSize: row.byteSize,
     durationSeconds: row.durationSeconds,
@@ -121,6 +151,9 @@ export class PostMediaService {
   // ---- POST /media/uploads ----------------------------------------------------------------------
 
   async createUpload(userId: string, dto: CreateUploadDto): Promise<UploadLink> {
+    if (isHeicContentType(dto.contentType)) {
+      throw postMediaError(400, POST_MEDIA_CODES.heicNotSupported, HEIC_NOT_SUPPORTED_MESSAGE);
+    }
     if (!isPostMediaContentType(dto.contentType)) {
       throw postMediaError(400, POST_MEDIA_CODES.unsupportedFile, 'Please choose a JPEG, PNG or WebP picture, or an MP4, WebM or MOV video.');
     }
@@ -177,6 +210,25 @@ export class PostMediaService {
     };
   }
 
+  /** A short-lived signed link to the file's current object, or null (not ready, or storage unavailable). */
+  private async signedView(row: ViewRow): Promise<{ viewUrl: string | null; viewUrlExpiresAt: Date | null }> {
+    const key = row.uploadState === 'ready' ? currentObjectKey(row) : null;
+    if (!key) return { viewUrl: null, viewUrlExpiresAt: null };
+    const ttl = this.config.viewUrlTtlSeconds;
+    try {
+      const viewUrl = await this.storage.createDownloadUrl(key, ttl);
+      return { viewUrl, viewUrlExpiresAt: new Date(this.clock.now().getTime() + ttl * 1000) };
+    } catch (err) {
+      if (err instanceof ServiceUnavailableException) return { viewUrl: null, viewUrlExpiresAt: null };
+      throw err;
+    }
+  }
+
+  private async view(row: ViewRow): Promise<PostMediaView> {
+    const { viewUrl, viewUrlExpiresAt } = await this.signedView(row);
+    return toView(row, viewUrl, viewUrlExpiresAt);
+  }
+
   /** Per-user throttle: at most N upload links in the window (configuration). */
   private async enforceUploadRateLimit(userId: string, now: Date): Promise<void> {
     const { max, windowSeconds } = this.config.uploadRateLimit;
@@ -192,7 +244,7 @@ export class PostMediaService {
   async confirmUpload(userId: string, id: string): Promise<PostMediaView> {
     const row = await this.prisma.postMedia.findFirst({ where: { id, uploaderId: userId } });
     if (!row) throw new NotFoundException('Upload not found');
-    if (row.uploadState === 'ready') return toView(row);
+    if (row.uploadState === 'ready') return this.view(row);
     if (!row.quarantineKey) throw postMediaError(409, POST_MEDIA_CODES.uploadNotReceived, 'That upload is no longer available. Please start again.');
 
     const now = this.clock.now();
@@ -205,7 +257,7 @@ export class PostMediaService {
     });
     if (claim.count === 0) {
       const again = await this.prisma.postMedia.findFirst({ where: { id, uploaderId: userId } });
-      if (again?.uploadState === 'ready') return toView(again);
+      if (again?.uploadState === 'ready') return this.view(again);
       throw postMediaError(409, POST_MEDIA_CODES.uploadInProgress, 'That upload is already being processed.');
     }
 
@@ -249,13 +301,22 @@ export class PostMediaService {
 
     const source = path.join(dir, 'source');
     await this.storage.downloadToFile(quarantineKey, source);
-    const detected = detectPostMedia(await readHead(source));
+    const head64 = await readHead(source);
+    const detected = detectPostMedia(head64);
+    if (!detected && looksLikeHeic(head64)) {
+      // A HEIC still sent under another declared type: the same plain message, and the file is discarded.
+      throw await this.discard(row.id, quarantineKey, postMediaError(400, POST_MEDIA_CODES.heicNotSupported, HEIC_NOT_SUPPORTED_MESSAGE));
+    }
     if (!detected || detected.contentType !== row.declaredContentType || detected.kind !== kind) {
       throw await this.discard(row.id, quarantineKey, postMediaError(400, POST_MEDIA_CODES.unsupportedFile, "That file isn't a supported picture or video."));
     }
 
-    const publicKey = `${PUBLIC_PREFIX}/${row.uploaderId}/${row.id}.${POST_MEDIA_EXT_BY_TYPE[detected.contentType]}`;
-    let publicUrl: string;
+    // The processed file goes to the PRIVATE prefix. The public key and URL are only the file's future
+    // public location (so a post can point at it): nothing exists there until the file is approved.
+    const ext = POST_MEDIA_EXT_BY_TYPE[detected.contentType];
+    const privateKey = privateKeyFor(row.uploaderId, row.id, ext);
+    const publicKey = publicKeyFor(row.uploaderId, row.id, ext);
+    const publicUrl = this.storage.publicUrlFor(publicKey);
     let byteSize: number;
     let durationSeconds: number | null = null;
     const contentType: PostMediaContentType = detected.contentType;
@@ -264,7 +325,7 @@ export class PostMediaService {
       if (kind === 'image') {
         const clean = await this.processor.sanitizeImage(source, contentType);
         byteSize = clean.buffer.length;
-        publicUrl = await this.storage.upload(clean.buffer, publicKey, contentType);
+        await this.storage.upload(clean.buffer, privateKey, contentType);
       } else {
         // Fail closed (503, nothing stored) when ffmpeg/ffprobe are missing.
         await this.processor.assertVideoToolsAvailable();
@@ -283,7 +344,7 @@ export class PostMediaService {
         const stripped = path.join(dir, 'stripped');
         await this.processor.stripVideo(source, stripped, contentType);
         byteSize = (await stat(stripped)).size;
-        publicUrl = await this.storage.uploadFile(stripped, publicKey, contentType);
+        await this.storage.uploadFile(stripped, privateKey, contentType);
       }
     } catch (err) {
       if (err instanceof UnprocessableMediaError) {
@@ -304,6 +365,7 @@ export class PostMediaService {
         contentType,
         durationSeconds,
         confirmedAt: now,
+        privateKey,
         // Queue the automatic check. Nothing is approved here.
         checkState: 'queued',
         checkNextAt: now,
@@ -311,7 +373,7 @@ export class PostMediaService {
     });
     if (done.count === 0) {
       // Deleted (or finished by another confirm) while we worked: drop the object we just wrote.
-      await deleteStoredObjects(this.storage, this.logger, [publicKey], `Confirm of ${row.id}`);
+      await deleteStoredObjects(this.storage, this.logger, [privateKey], `Confirm of ${row.id}`);
       throw postMediaError(409, POST_MEDIA_CODES.uploadInProgress, 'That upload changed while it was being processed.');
     }
 
@@ -325,7 +387,7 @@ export class PostMediaService {
     }
 
     const fresh = await this.prisma.postMedia.findUniqueOrThrow({ where: { id: row.id }, select: VIEW_SELECT });
-    return toView(fresh);
+    return this.view(fresh);
   }
 
   /** A permanently invalid upload: the original and the row are removed. Returns the error to throw. */
@@ -340,13 +402,23 @@ export class PostMediaService {
   async getOwnUpload(userId: string, id: string): Promise<PostMediaView> {
     const row = await this.prisma.postMedia.findFirst({ where: { id, uploaderId: userId }, select: VIEW_SELECT });
     if (!row) throw new NotFoundException('Upload not found');
-    return toView(row);
+    return this.view(row);
   }
 
   async deleteOwnUpload(userId: string, id: string): Promise<void> {
     const row = await this.prisma.postMedia.findFirst({
       where: { id, uploaderId: userId },
-      select: { id: true, uploadState: true, postId: true, publicUrl: true, publicKey: true, quarantineKey: true },
+      select: {
+        id: true,
+        uploadState: true,
+        postId: true,
+        publicUrl: true,
+        status: true,
+        publishedAt: true,
+        publicKey: true,
+        privateKey: true,
+        quarantineKey: true,
+      },
     });
     if (!row) throw new NotFoundException('Upload not found');
     if (row.uploadState === 'processing') {
@@ -364,12 +436,8 @@ export class PostMediaService {
       }
       await tx.postMedia.delete({ where: { id: row.id } });
     });
-    await deleteStoredObjects(
-      this.storage,
-      this.logger,
-      [row.publicKey, row.quarantineKey].filter((k): k is string => Boolean(k)),
-      `Delete of upload ${row.id}`,
-    );
+    // deletableKeys never includes a rejected file's private object (B-206, evidence handling OPEN).
+    await deleteStoredObjects(this.storage, this.logger, deletableKeys(row), `Delete of upload ${row.id}`);
   }
 
   // ---- housekeeping ------------------------------------------------------------------------------
@@ -408,6 +476,50 @@ export class PostMediaService {
       if (batch.length < 200) break;
     }
     return { purged };
+  }
+
+  /**
+   * backend/media-privacy-vetting-followups (B-259; Decision Log #430 item 4). Removes confirmed uploads that
+   * were never attached to a post once they are older than POST_MEDIA_UNATTACHED_MAX_AGE_DAYS (default 7):
+   * the objects first, then the row. A deletion failure is logged and the row is left for the next run.
+   *
+   * NEVER removes a rejected item (a rejected file is kept, private, until counsel decides evidence
+   * handling, B-206): the query excludes status 'rejected', and deletableKeys would not list its private
+   * object anyway.
+   */
+  async purgeUnattached(now: Date = this.clock.now()): Promise<{ purged: number; failed: number }> {
+    const cutoff = new Date(now.getTime() - this.config.unattachedMaxAgeDays * 24 * 3600 * 1000);
+    const failedIds: string[] = [];
+    let purged = 0;
+    for (;;) {
+      const batch = await this.prisma.postMedia.findMany({
+        where: {
+          uploadState: 'ready',
+          postId: null,
+          status: { not: 'rejected' },
+          confirmedAt: { lt: cutoff },
+          id: { notIn: failedIds },
+        },
+        select: { id: true, status: true, publishedAt: true, publicKey: true, privateKey: true, quarantineKey: true },
+        take: 200,
+        orderBy: { confirmedAt: 'asc' },
+      });
+      if (batch.length === 0) break;
+      for (const r of batch) {
+        try {
+          for (const key of deletableKeys(r)) await this.storage.delete(key);
+        } catch (err) {
+          this.logger.warn(`Unattached purge: media ${r.id} not removed (${err instanceof Error ? err.message : String(err)}); will retry.`);
+          failedIds.push(r.id);
+          continue;
+        }
+        // Still unattached and not rejected at the moment of the delete (a post may have claimed it).
+        const gone = await this.prisma.postMedia.deleteMany({ where: { id: r.id, postId: null, status: { not: 'rejected' } } });
+        purged += gone.count;
+      }
+      if (batch.length < 200) break;
+    }
+    return { purged, failed: failedIds.length };
   }
 }
 

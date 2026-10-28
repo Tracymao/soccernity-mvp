@@ -1,6 +1,6 @@
 import { ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { CopyObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import * as path from 'path';
@@ -99,6 +99,47 @@ describe('S3StorageService direct upload', () => {
       const url = await new S3StorageService(cfg({ ...base, S3_PUBLIC_BASE_URL: 'https://media.example.com' })).uploadFile(file, 'post-media/u1/x.mp4', 'video/mp4');
       expect(url).toBe('https://media.example.com/post-media/u1/x.mp4');
       expect(sent[0].input).toMatchObject({ Bucket: 'b', Key: 'post-media/u1/x.mp4', ContentType: 'video/mp4', ContentLength: 10 });
+    });
+  });
+
+  // backend/media-privacy-vetting-followups (B-257; Decision Log #430 item 2).
+  describe('copyObject and publicUrlFor', () => {
+    it('copies server-side within the bucket (the bytes never pass through the API) and keeps the content type', async () => {
+      const sent: CopyObjectCommand[] = [];
+      jest.spyOn(S3Client.prototype, 'send').mockImplementation((async (cmd: CopyObjectCommand) => {
+        sent.push(cmd);
+        return {};
+      }) as never);
+      await new S3StorageService(cfg(base)).copyObject('private-media/u1/a b.jpg', 'post-media/u1/a b.jpg', 'image/jpeg');
+      expect(sent[0]).toBeInstanceOf(CopyObjectCommand);
+      expect(sent[0].input).toMatchObject({
+        Bucket: 'b',
+        // the source is "<bucket>/<key>", URL-encoded per path segment (the space becomes %20, the slashes stay)
+        CopySource: 'b/private-media/u1/a%20b.jpg',
+        Key: 'post-media/u1/a b.jpg',
+        ContentType: 'image/jpeg',
+        MetadataDirective: 'REPLACE',
+      });
+    });
+
+    it('propagates a failed copy (the caller treats it as "do not publish")', async () => {
+      jest.spyOn(S3Client.prototype, 'send').mockRejectedValue(new Error('AccessDenied') as never);
+      await expect(new S3StorageService(cfg(base)).copyObject('a', 'b', 'image/png')).rejects.toThrow('AccessDenied');
+    });
+
+    it('is a 503 when no store is configured', async () => {
+      const service = new S3StorageService(cfg({ S3_BUCKET: 'replace-me', S3_ACCESS_KEY: 'replace-me', S3_SECRET_KEY: 'replace-me' }));
+      await expect(service.copyObject('a', 'b', 'image/png')).rejects.toBeInstanceOf(ServiceUnavailableException);
+      expect(() => service.publicUrlFor('k')).toThrow(ServiceUnavailableException);
+    });
+
+    it('publicUrlFor builds the same URL upload() returns, from the public base when set, with NO network call', () => {
+      const send = jest.spyOn(S3Client.prototype, 'send');
+      expect(new S3StorageService(cfg({ ...base, S3_PUBLIC_BASE_URL: 'https://media.example.com/' })).publicUrlFor('post-media/u1/x.jpg')).toBe(
+        'https://media.example.com/post-media/u1/x.jpg',
+      );
+      expect(new S3StorageService(cfg(base)).publicUrlFor('post-media/u1/x.jpg')).toBe('https://acct.r2.cloudflarestorage.com/b/post-media/u1/x.jpg');
+      expect(send).not.toHaveBeenCalled();
     });
   });
 });

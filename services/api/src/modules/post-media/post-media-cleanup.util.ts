@@ -7,16 +7,44 @@ import { StorageService } from '../../storage/storage.service';
 // application. The database commits first; the object deletes are best effort afterwards, so a storage
 // outage never blocks a deletion the user asked for. A failed delete leaves an orphaned object whose only
 // pointer is gone; it is logged with its key so it can be removed by hand (OPEN: no bucket reconciliation).
+//
+// backend/media-privacy-vetting-followups (B-257; Decision Log #430 item 2): a REJECTED file's private object
+// is NOT deleted by any cleanup path, this one included (evidence handling is OPEN under counsel, B-206). Its
+// database row goes with the post or the account as before, so what stays in the bucket is an object under
+// private-media/<uploaderId>/<mediaId>.<ext> with no row pointing at it; the key identifies the uploader and
+// the file. This knowingly leaves #419 item 9 (delete the media of a deleted post or anonymised account)
+// unmet for rejected files until counsel decides; it is flagged in README.md and the PR.
 
 type Db = Pick<Prisma.TransactionClient, 'postMedia'>;
+
+export interface MediaObjectRow {
+  status: string;
+  publishedAt: Date | null;
+  publicKey: string | null;
+  privateKey: string | null;
+  quarantineKey: string | null;
+}
+
+/**
+ * The storage keys a cleanup path MAY delete for one media row: the public object while it is published, the
+ * private object UNLESS the file was rejected, and any leftover quarantined original. A rejected file's
+ * private object is never in this list.
+ */
+export function deletableKeys(row: MediaObjectRow): string[] {
+  const keys: string[] = [];
+  if (row.publishedAt && row.publicKey) keys.push(row.publicKey);
+  if (row.privateKey && row.status !== 'rejected') keys.push(row.privateKey);
+  if (row.quarantineKey) keys.push(row.quarantineKey);
+  return keys;
+}
 
 /** The storage keys of every file attached to a post (read BEFORE the post, and so its rows, is deleted). */
 export async function collectPostMediaKeys(db: Db, postId: string): Promise<string[]> {
   const rows = await db.postMedia.findMany({
     where: { postId },
-    select: { publicKey: true, quarantineKey: true },
+    select: { status: true, publishedAt: true, publicKey: true, privateKey: true, quarantineKey: true },
   });
-  return rows.flatMap((r) => [r.publicKey, r.quarantineKey]).filter((k): k is string => Boolean(k));
+  return rows.flatMap(deletableKeys);
 }
 
 /**
@@ -28,7 +56,16 @@ export async function collectPostMediaKeys(db: Db, postId: string): Promise<stri
 export async function deleteUserPostMedia(tx: Prisma.TransactionClient, userId: string): Promise<string[]> {
   const rows = await tx.postMedia.findMany({
     where: { uploaderId: userId },
-    select: { id: true, postId: true, publicUrl: true, publicKey: true, quarantineKey: true },
+    select: {
+      id: true,
+      postId: true,
+      publicUrl: true,
+      status: true,
+      publishedAt: true,
+      publicKey: true,
+      privateKey: true,
+      quarantineKey: true,
+    },
   });
   for (const r of rows) {
     if (r.postId && r.publicUrl) {
@@ -38,7 +75,7 @@ export async function deleteUserPostMedia(tx: Prisma.TransactionClient, userId: 
   if (rows.length > 0) {
     await tx.postMedia.deleteMany({ where: { uploaderId: userId } });
   }
-  return rows.flatMap((r) => [r.publicKey, r.quarantineKey]).filter((k): k is string => Boolean(k));
+  return rows.flatMap(deletableKeys);
 }
 
 /** Best-effort object deletion after a commit. Never throws. */

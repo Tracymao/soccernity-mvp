@@ -414,8 +414,8 @@ describe('MessagingService', () => {
     it('returns messages newest-first with a nextCursor when there is another page', async () => {
       p().conversation.findUnique.mockResolvedValue(conversationRow());
       p().message.findMany.mockResolvedValue([
-        { id: 'm-3', conversationId: 'convo-1', senderId: CALLER, contentText: 'c', mediaUrl: null, sentAt: new Date('2026-09-09T12:02:00Z'), readAt: null },
-        { id: 'm-2', conversationId: 'convo-1', senderId: RECIPIENT, contentText: 'b', mediaUrl: null, sentAt: new Date('2026-09-09T12:01:00Z'), readAt: null },
+        { id: 'm-3', conversationId: 'convo-1', senderId: CALLER, contentText: 'c', sentAt: new Date('2026-09-09T12:02:00Z'), readAt: null },
+        { id: 'm-2', conversationId: 'convo-1', senderId: RECIPIENT, contentText: 'b', sentAt: new Date('2026-09-09T12:01:00Z'), readAt: null },
       ]);
 
       const page = await service.getMessages('convo-1', CALLER, { limit: 1 });
@@ -452,7 +452,6 @@ describe('MessagingService', () => {
         conversationId: 'convo-1',
         senderId: CALLER,
         contentText: 'hi',
-        mediaUrl: null,
         sentAt,
         readAt: null,
       });
@@ -463,7 +462,7 @@ describe('MessagingService', () => {
       expect(p().$transaction).toHaveBeenCalled();
       expect(p().message.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: { conversationId: 'convo-1', senderId: CALLER, contentText: 'hi', mediaUrl: undefined },
+          data: { conversationId: 'convo-1', senderId: CALLER, contentText: 'hi' },
         }),
       );
       expect(p().conversation.update).toHaveBeenCalledWith({

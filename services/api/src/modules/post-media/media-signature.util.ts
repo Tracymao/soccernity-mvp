@@ -2,7 +2,7 @@
 // formats a post may carry. The client's declared content type is never trusted on its own: the server
 // reads the first bytes of the object it received and the two must agree.
 //
-// Images: JPEG, PNG, WebP (no GIF, no HEIC -- OPEN in the report). Video: MP4, WebM, QuickTime (MOV).
+// Images: JPEG, PNG, WebP (no GIF; HEIC/HEIF is refused with its own plain message, no conversion: B-259). Video: MP4, WebM, QuickTime (MOV).
 export const POST_MEDIA_CONTENT_TYPES = [
   'image/jpeg',
   'image/png',
@@ -45,6 +45,20 @@ export function isPostMediaContentType(value: string): value is PostMediaContent
 // ISO base media brands that live in an MP4/MOV-style container but are NOT video we accept (HEIC and
 // AVIF stills share the 'ftyp' box). A file with one of these is refused as an unsupported type.
 const NON_VIDEO_FTYP_BRANDS = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'mif1', 'msf1', 'avif', 'avis']);
+
+export const HEIC_CONTENT_TYPES = ['image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence'] as const;
+const HEIC_FTYP_BRANDS = new Set(['heic', 'heix', 'heim', 'heis', 'hevc', 'hevx', 'mif1', 'msf1']);
+
+/** True for a declared HEIC/HEIF content type (the default photo format on many iPhones). */
+export function isHeicContentType(value: string): boolean {
+  return (HEIC_CONTENT_TYPES as readonly string[]).includes(value.trim().toLowerCase());
+}
+
+/** True when the first bytes are a HEIC/HEIF still, whatever type the client declared. */
+export function looksLikeHeic(head: Buffer): boolean {
+  if (head.length < 12 || head.subarray(4, 8).toString('ascii') !== 'ftyp') return false;
+  return HEIC_FTYP_BRANDS.has(head.subarray(8, 12).toString('ascii').trim().toLowerCase());
+}
 
 /** Detects the real format from the first bytes of a file (pass at least 64 bytes), or null. */
 export function detectPostMedia(head: Buffer): DetectedMedia | null {

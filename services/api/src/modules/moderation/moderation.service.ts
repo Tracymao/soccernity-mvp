@@ -9,6 +9,7 @@ import {
 import { Prisma, Report } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminActionLogService } from '../admin-action-log/admin-action-log.service';
+import { isAdminChildSafetyVetted } from './child-safety-vetting.util';
 import { ADMIN_ACTION_LOG_ACTIONS, ADMIN_ACTION_LOG_TARGET_TYPES } from '../admin-action-log/admin-action-log.constants';
 import { BanterService } from '../banter/banter.service';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
@@ -331,11 +332,8 @@ export class ModerationService {
   // isn't; vetting is an orthogonal axis to role.
   // -------------------------------------------------------------------
   private async isChildSafetyVetted(adminId: string): Promise<boolean> {
-    const admin = await this.prisma.adminUser.findUnique({
-      where: { id: adminId },
-      select: { childSafetyVetted: true },
-    });
-    return admin?.childSafetyVetted ?? false;
+    // The rule lives in child-safety-vetting.util.ts so the media review queue applies the same one.
+    return isAdminChildSafetyVetted(this.prisma, adminId);
   }
 
   private async assertChildSafetyVetted(adminId: string): Promise<void> {
