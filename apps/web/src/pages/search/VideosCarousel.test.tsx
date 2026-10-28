@@ -24,6 +24,7 @@ function post(id: string, mediaUrls: string[], viewCount: number, name = "Ada"):
     author: { id: `a-${id}`, publicName: name, isFollowing: false },
     contentText: `caption ${id}`,
     mediaUrls,
+    media: mediaUrls.map((url, i) => ({ id: `media-${id}-${i}`, kind: /\.(mp4|webm|mov)$/.test(url) ? "video" : "image" })),
     clubPageId: null,
     banterRoomId: null,
     likeCount: 0,

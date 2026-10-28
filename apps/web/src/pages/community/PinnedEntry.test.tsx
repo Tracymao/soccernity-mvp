@@ -25,6 +25,7 @@ function finalPost(over: Partial<FeedPost> = {}): FeedPost {
     author: { id: "me", publicName: "Adeniyi Christiana", isFollowing: false },
     contentText: "My final-week entry: the one-touch dribble drill.",
     mediaUrls: ["https://cdn.example.com/final.mp4"],
+    media: [{ id: "media-1", kind: "video" }],
     clubPageId: null,
     banterRoomId: null,
     likeCount: 8,

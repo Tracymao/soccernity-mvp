@@ -36,6 +36,27 @@ describe("post media API client", () => {
     expect(init.headers.Authorization).toBe("Bearer tok");
   });
 
+  it("sends the trimmed reason as JSON, and sends no body for a blank one", async () => {
+    // A fresh Response per call: a body can be read only once.
+    const fetchMock = vi.fn().mockImplementation(async () => jsonResponse(200, { reported: true, alreadyReported: false }));
+    vi.stubGlobal("fetch", fetchMock);
+    await reportMedia("tok", "media-1", "  not football  ");
+    expect(fetchMock.mock.calls[0][1].body).toBe(JSON.stringify({ reason: "not football" }));
+    expect(fetchMock.mock.calls[0][1].headers["Content-Type"]).toBe("application/json");
+    await reportMedia("tok", "media-1", "   ");
+    expect(fetchMock.mock.calls[1][1].body).toBeUndefined();
+  });
+
+  it("carries the daily-limit code through on a 429", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(429, { statusCode: 429, code: "media_report_daily_limit", message: "Please try again tomorrow." }),
+      ),
+    );
+    await expect(reportMedia("tok", "m")).rejects.toMatchObject({ status: 429, code: "media_report_daily_limit" });
+  });
+
   it("says it could not reach the server when the network is down", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
     await expect(reportMedia("tok", "m")).rejects.toBeInstanceOf(PostMediaApiError);

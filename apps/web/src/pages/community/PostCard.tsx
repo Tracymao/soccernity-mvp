@@ -32,7 +32,6 @@ import {
   type FeedPost,
 } from "../../api/feed";
 import { followUser, unfollowUser, UsersApiError } from "../../api/users";
-import { isVideoUrl } from "../../lib/media";
 import PostMedia from "./PostMedia";
 import { useViewHeartbeat } from "../../lib/useViewHeartbeat";
 import OwnPostMenu from "./OwnPostMenu";
@@ -233,7 +232,7 @@ export default function PostCard({
   // locked final entry; and only a real player counts for a video (see lib/useViewHeartbeat).
   useViewHeartbeat(articleRef, {
     enabled: !deleted && !isOwnPost && !engagementLocked,
-    hasVideo: post.mediaUrls.some(isVideoUrl),
+    hasVideo: post.media.some((m) => m.kind === "video"),
     send: (beat) => recordViewHeartbeat(accessToken, post.id, beat),
   });
 
@@ -302,7 +301,7 @@ export default function PostCard({
 
       <p className="post__body">{post.contentText}</p>
 
-      <PostMedia urls={post.mediaUrls} accessToken={accessToken} isOwn={isOwnPost} playVideo={playVideo} />
+      <PostMedia media={post.media} urls={post.mediaUrls} accessToken={accessToken} isOwn={isOwnPost} playVideo={playVideo} />
 
       {post.clubPageId && <p className="post__context">Posted to a club page</p>}
       {post.banterRoomId && <p className="post__context">Posted in a Banter Room</p>}

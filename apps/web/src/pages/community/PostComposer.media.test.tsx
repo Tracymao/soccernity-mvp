@@ -48,6 +48,7 @@ beforeEach(() => {
     author: { id: "u1", publicName: "Ada" },
     contentText: "x",
     mediaUrls: [],
+    media: [],
     clubPageId: null,
     banterRoomId: null,
     likeCount: 0,
