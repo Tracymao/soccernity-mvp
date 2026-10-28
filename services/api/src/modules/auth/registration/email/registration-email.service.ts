@@ -29,7 +29,8 @@ export type RegistrationEmailTemplate =
   | 'public-report-acknowledgement'
   | 'report-actioned'
   | 'appeal-decision'
-  | 'username-revoked';
+  | 'username-revoked'
+  | 'login-lockout-notice';
 
 export interface OutboundRegistrationEmail {
   to: string;
@@ -395,6 +396,32 @@ export class RegistrationEmailService {
     });
   }
 
+  // To the account's own address, the first time repeated wrong passwords spent the sign-in budget for it
+  // (LoginLockoutNotifier). Plain security notice: it says only that someone entered the wrong password several
+  // times, that nothing needs doing if it was the owner, and where to reset the password if it was not. It
+  // carries nothing about the guesser (no IP, no times, no count) and makes no legal or safety promise, so it
+  // is not tagged [COPY PENDING LEGAL REVIEW]. Returns false (sending nothing) when WEB_APP_BASE_URL is
+  // unusable, because the reset link is the point of the email; a send failure inside dispatch() is logged and
+  // swallowed like every other template here.
+  async sendLoginLockoutNoticeEmail(to: string): Promise<boolean> {
+    const link = buildWebAppLink(this.config.get<string>('WEB_APP_BASE_URL'), '/forgot-password', {});
+    if (!link) {
+      this.logger.error(
+        `[email] WEB_APP_BASE_URL is missing, a placeholder, or not https -- NOT sending ` +
+          `"login-lockout-notice" because it would contain no usable link. ` +
+          `Set WEB_APP_BASE_URL (docs/deployment.md).`,
+      );
+      return false;
+    }
+    await this.dispatch({
+      to,
+      subject: 'Someone entered the wrong password on your Soccernity account',
+      template: 'login-lockout-notice',
+      data: { link },
+    });
+    return true;
+  }
+
   // B-016. Builds the apps/web link for a token email, or refuses. When
   // WEB_APP_BASE_URL is unset/placeholder the email's only call to action would
   // be a dead link, so NOTHING is sent and an error is logged (without the
@@ -455,6 +482,19 @@ export class RegistrationEmailService {
 // deliverable.
 function renderTextBody(template: RegistrationEmailTemplate, data: Record<string, string>): string {
   switch (template) {
+    case 'login-lockout-notice':
+      return (
+        `Hi,
+
+` +
+        `Someone entered the wrong password for your Soccernity account several times, so we have temporarily paused further sign-in attempts.
+
+` +
+        `If this was you, there is nothing to do.
+
+` +
+        `If it was not you, reset your password: ${data.link}`
+      );
     case 'username-revoked':
       return (
         `Hi ${data.displayName},
@@ -655,6 +695,14 @@ ${data.link}
 
 function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string, string>): string {
   switch (template) {
+    case 'login-lockout-notice':
+      return (
+        `<p>Hi,</p>` +
+        `<p>Someone entered the wrong password for your Soccernity account several times, so we have temporarily paused further sign-in attempts.</p>` +
+        `<p>If this was you, there is nothing to do.</p>` +
+        `<p>If it was not you, <a href="${escapeHtml(data.link)}">reset your password</a>.</p>` +
+        `<p>If the link does not work, copy this into your browser: ${escapeHtml(data.link)}</p>`
+      );
     case 'username-revoked':
       return (
         `<p>Hi ${escapeHtml(data.displayName)},</p>` +

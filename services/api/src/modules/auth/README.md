@@ -1601,3 +1601,58 @@ Code: `src/session-cookie/` (helper + spec), the four controllers, `token.servic
 and both refresh-token stores (`persistent`). Tests: `src/session-cookie/session-cookie.spec.ts`
 (attributes, Secure rule, Origin check, body omission), `src/cors-options.spec.ts`,
 `test/cookie-session.e2e-spec.ts` (real Postgres + Redis).
+
+## Status update -- login lockout per account AND IP, lockout notice, Redis outage fallback (`security/login-lockout-redesign`, Decision Log #429, B-256, B-263)
+
+Reworks the login limit built by `security/auth-limits-shared-networks` (B-256). Signup, forgot-password,
+the admin login (5 per 15 minutes per IP), the other `@AuthRateLimit()` routes and `TRUST_PROXY_HOPS`
+handling are unchanged. Code: `rate-limit/auth-limits/`.
+
+**The problem.** The failed-login budget (5 per 15 minutes) was counted per ACCOUNT alone, so anyone could
+lock a victim out by guessing from any address.
+
+**Now, three counters on `POST /auth/login`** (all keyed by SHA-256 digests, never a raw email or IP;
+successes are not counted; the slots are reserved up front and given back unless the attempt really was a
+failed credential check, so 20 parallel guesses yield exactly 5 attempts per pair):
+
+| Counter | Key | Default | Env |
+|---|---|---|---|
+| per-IP ceiling (every attempt) | IP | 60 / 10 min | `AUTH_IP_CEILING_*` |
+| failed attempts per pair | normalised email + IP | 5 / 15 min | `AUTH_LOGIN_FAILED_ATTEMPTS_*` |
+| failed attempts per account, all IPs | normalised email | 20 / 24 h | `AUTH_LOGIN_ACCOUNT_CEILING_*` |
+
+A guesser therefore blocks only their own address; the owner on another address still signs in. When the
+account ceiling is spent, every address is refused (429 with `Retry-After` from the key's TTL) until it
+expires or the owner completes a password reset. The pair is checked before the account ceiling, so an
+attempt already refused for its own address never spends the account ceiling; a refused attempt gives back
+the slot it took. A real and an unknown address get the same statuses, bodies and counters (every key derives
+from the request alone). `PasswordResetService.resetPassword` calls `AuthLimitsService.clearAccountCeiling`
+(best effort, after the reset succeeded); the per-pair counters expire on their own.
+
+**Lockout notice email** (`login-lockout.notifier.ts`, template `login-lockout-notice` on
+`RegistrationEmailService`). The failed attempt that spends a pair's budget (the 5th) sends the account's
+registered address one plain notice: someone entered the wrong password several times; nothing to do if it
+was you; otherwise reset your password (link to `/forgot-password` via `buildWebAppLink`). Rules: only if an
+account exists (unknown addresses create no claim and send nothing); fire-and-forget in the background, so
+the response and its timing never depend on it; at most ONE per account per 24 hours, an atomic Redis
+`SET NX EX` (`AuthLimitsStore.claim`), given back if nothing could be sent (unusable `WEB_APP_BASE_URL`); it
+carries no IP, times or counts. **No string is tagged `[COPY PENDING LEGAL REVIEW]`**: it makes no legal or
+safety promise (Decision Log #412 item 5). **Open question for the founder:** for a minor's account the
+notice goes to the account's own email only; guardian notification is NOT built.
+
+**Redis outage fallback** (`auth-limits.store.ts`, `auth-limits.fallback.ts`). Previously every method failed
+open when Redis was unreachable (all limits vanished). Now each method falls back to a per-process in-memory
+counter with the same semantics (hit, release, ttl, retry-after, the `SET NX` claim, clear) so the brute-force
+limits still hold PER API INSTANCE during an outage; counters restart empty when Redis returns. The map is
+bounded (10,000 entries; expired entries go first, then the oldest). The outage is logged and reported to
+Sentry (tagged `rate_limiter=auth`) at most once a minute. If the fallback itself throws, the method fails
+open as before. **This is still not fail-closed and not shared:** with N instances the effective limit is up
+to N times looser until Redis is back, and a flood of distinct keys during an outage can evict an old counter.
+
+**Tests.** `auth-limits.http.spec.ts` (HTTP, in-memory Redis stand-in, fake Prisma and email),
+`auth-limits.store.spec.ts` (fallback semantics, bounded map, single report, fail-open),
+`test/auth-limits.e2e-spec.ts` (real Postgres and Redis, real production numbers),
+`password-reset.service.spec.ts`, `registration-email.service.spec.ts`, `env-completeness.spec.ts` (the two
+new variables: read in code, declared in both `render.yaml` services, documented, numbers equal the code
+defaults). Both e2e layers relax the new variables like the other `AUTH_*` limits (`test/env.ts`,
+`e2e/support/api-process.ts`).

@@ -10,9 +10,16 @@ export const AUTH_LIMIT_DEFAULTS = {
   // POST /auth/register: per client IP, every attempt counts.
   signupMax: 30,
   signupWindowMs: 10 * 60_000,
-  // POST /auth/login: per ACCOUNT (normalised email, hashed). Only FAILED attempts consume this budget.
+  // POST /auth/login: per ACCOUNT AND IP PAIR (normalised email + client IP, hashed together). Only FAILED
+  // attempts consume this budget. A guesser therefore locks only their own address out of an account, never
+  // the real owner on another address.
   loginFailedMax: 5,
   loginFailedWindowMs: 15 * 60_000,
+  // POST /auth/login: a second, higher ceiling per ACCOUNT across all IPs (normalised email, hashed). Only
+  // FAILED attempts count. When spent, every address is refused for that account until it expires or the
+  // owner completes a password reset. This is the backstop against a distributed guess.
+  accountCeilingMax: 20,
+  accountCeilingWindowMs: 24 * 60 * 60_000,
   // Per-IP ceiling, a backstop against one address spraying many accounts. Applies to login and (as a
   // separate counter) to forgot-password.
   ipCeilingMax: 60,
@@ -26,3 +33,6 @@ export type AuthLimitKind = 'signup' | 'login' | 'forgot-password';
 export const AUTH_LIMIT_KEY = 'authLimits:kind';
 
 export const AUTH_LIMIT_KEY_PREFIX = 'auth-limit:';
+
+// At most one lockout-notice email per account per this window (enforced with an atomic Redis SET NX).
+export const LOCKOUT_NOTICE_WINDOW_SECONDS = 24 * 60 * 60;

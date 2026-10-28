@@ -84,7 +84,7 @@ services:
       - key: AUTH_RATE_LIMIT_WINDOW_MS
         sync: false
       # Auth limits that work on shared school and club networks (modules/auth/rate-limit/auth-limits): signup per IP;
-      # login per ACCOUNT (hashed email, failed attempts only) plus a per-IP ceiling; forgot-password per email plus the
+      # login per ACCOUNT AND IP PAIR (hashed together, failed attempts only) plus a higher per-ACCOUNT ceiling across all IPs and a per-IP ceiling; forgot-password per email plus the
       # same ceiling. Stored in Redis. Replaces the shared AUTH_RATE_LIMIT_* on those three routes only.
       - key: AUTH_SIGNUP_RATE_LIMIT_MAX
         value: "30"
@@ -94,6 +94,10 @@ services:
         value: "5"
       - key: AUTH_LOGIN_FAILED_ATTEMPTS_WINDOW_MS
         value: "900000"
+      - key: AUTH_LOGIN_ACCOUNT_CEILING_MAX
+        value: "20"
+      - key: AUTH_LOGIN_ACCOUNT_CEILING_WINDOW_MS
+        value: "86400000"
       - key: AUTH_IP_CEILING_MAX
         value: "60"
       - key: AUTH_IP_CEILING_WINDOW_MS
@@ -360,7 +364,7 @@ services:
       - key: AUTH_RATE_LIMIT_WINDOW_MS
         sync: false
       # Auth limits that work on shared school and club networks (modules/auth/rate-limit/auth-limits): signup per IP;
-      # login per ACCOUNT (hashed email, failed attempts only) plus a per-IP ceiling; forgot-password per email plus the
+      # login per ACCOUNT AND IP PAIR (hashed together, failed attempts only) plus a higher per-ACCOUNT ceiling across all IPs and a per-IP ceiling; forgot-password per email plus the
       # same ceiling. Stored in Redis. Replaces the shared AUTH_RATE_LIMIT_* on those three routes only.
       - key: AUTH_SIGNUP_RATE_LIMIT_MAX
         value: "30"
@@ -370,6 +374,10 @@ services:
         value: "5"
       - key: AUTH_LOGIN_FAILED_ATTEMPTS_WINDOW_MS
         value: "900000"
+      - key: AUTH_LOGIN_ACCOUNT_CEILING_MAX
+        value: "20"
+      - key: AUTH_LOGIN_ACCOUNT_CEILING_WINDOW_MS
+        value: "86400000"
       - key: AUTH_IP_CEILING_MAX
         value: "60"
       - key: AUTH_IP_CEILING_WINDOW_MS

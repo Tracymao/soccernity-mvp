@@ -197,7 +197,7 @@ describe('environment completeness (B-018)', () => {
     });
   });
 
-  // Auth limits for shared school and club networks (B-256). Same drift guard as the global limits: the eight
+  // Auth limits for shared school and club networks (B-256). Same drift guard as the global limits: the ten
   // names must be read in code, declared in both render.yaml services and documented in .env.example, and the
   // numbers in render.yaml / .env.example must equal the code defaults.
   describe('auth limit variables (shared networks)', () => {
@@ -207,6 +207,8 @@ describe('environment completeness (B-018)', () => {
       AUTH_SIGNUP_RATE_LIMIT_WINDOW_MS: A.signupWindowMs,
       AUTH_LOGIN_FAILED_ATTEMPTS_MAX: A.loginFailedMax,
       AUTH_LOGIN_FAILED_ATTEMPTS_WINDOW_MS: A.loginFailedWindowMs,
+      AUTH_LOGIN_ACCOUNT_CEILING_MAX: A.accountCeilingMax,
+      AUTH_LOGIN_ACCOUNT_CEILING_WINDOW_MS: A.accountCeilingWindowMs,
       AUTH_IP_CEILING_MAX: A.ipCeilingMax,
       AUTH_IP_CEILING_WINDOW_MS: A.ipCeilingWindowMs,
       AUTH_FORGOT_PASSWORD_EMAIL_MAX: A.forgotEmailMax,
@@ -237,6 +239,8 @@ describe('environment completeness (B-018)', () => {
         signupWindowMs: 10 * 60_000,
         loginFailedMax: 5,
         loginFailedWindowMs: 15 * 60_000,
+        accountCeilingMax: 20,
+        accountCeilingWindowMs: 24 * 60 * 60_000,
         ipCeilingMax: 60,
         ipCeilingWindowMs: 10 * 60_000,
         forgotEmailMax: 3,
