@@ -33,7 +33,7 @@ export class GlobalThrottlerGuard extends ThrottlerGuard {
     super(options, storageService, reflector);
   }
 
-  private readonly logger = new Logger(GlobalThrottlerGuard.name);
+  private readonly failOpenLogger = new Logger(GlobalThrottlerGuard.name);
   private lastFailOpenLogAt = 0;
 
   protected async shouldSkip(context: ExecutionContext): Promise<boolean> {
@@ -67,7 +67,7 @@ export class GlobalThrottlerGuard extends ThrottlerGuard {
     const now = Date.now();
     if (now - this.lastFailOpenLogAt < 60_000) return;
     this.lastFailOpenLogAt = now;
-    this.logger.error(
+    this.failOpenLogger.error(
       `Global rate limiter failed; letting the request through (fail open): ${err instanceof Error ? err.message : String(err)}`,
     );
     try {
