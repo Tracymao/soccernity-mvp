@@ -225,7 +225,9 @@ test.describe.serial('FC10: media upload, the whole path with the fake check', (
     // urgent, and the new button (focused first) opens that existing flow.
     const sheet = page.getByRole('status', { name: 'Report limit reached' });
     await expect(sheet.getByText('If this is urgent or involves a child, report the post or the person instead.')).toBeVisible();
-    expect(await sheet.textContent()).not.toMatch(/\d/);
+    await expect(sheet.getByText('Each person can send a limited number of reports in 24 hours. You can report again later.')).toBeVisible();
+    // "24 hours" is the window in the server message, not a count of reports.
+    expect((await sheet.textContent())!.replace('24 hours', '')).not.toMatch(/\d/);
     const urgent = page.getByRole('button', { name: 'Report the post or person' });
     await expect(urgent).toBeFocused();
     await urgent.click();
