@@ -48,7 +48,10 @@ import ModerationQueuePage from "./ModerationQueuePage";
 import ReportDetailPage from "./ReportDetailPage";
 import AppealReviewPage from "./AppealReviewPage";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 beforeEach(() => {
   vi.mocked(listReports).mockReset();
   vi.mocked(getReportById).mockReset();
@@ -57,7 +60,6 @@ beforeEach(() => {
   vi.mocked(placeLegalHold).mockReset();
   vi.mocked(listHeldInvestigations).mockReset();
   vi.mocked(getAdminProfile).mockReset();
-  window.localStorage.clear();
 });
 
 const TAG = "[COPY PENDING LEGAL REVIEW]";
@@ -345,9 +347,20 @@ describe("the way into Held investigations", () => {
     );
   });
 
-  it("is a real route behind the admin sign-in (token seeded as the other admin tests do)", async () => {
-    window.localStorage.setItem("sn_admin_access_token", "acc-1");
-    window.localStorage.setItem("sn_admin_refresh_token", "ref-1");
+  it("is a real route behind the admin sign-in (session restored by the start-up cookie refresh, as routes.test.tsx does)", async () => {
+    // B-247: the session lives in memory and is restored by POST /admin/auth/refresh; nothing is read from storage.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/admin/auth/refresh")) {
+          return new Response(JSON.stringify({ accessToken: "acc-1" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        throw new TypeError("Failed to fetch");
+      }),
+    );
     vi.mocked(getAdminProfile).mockResolvedValue({
       id: "admin-1",
       email: "ada@soccernity.com",
