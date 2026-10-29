@@ -64,6 +64,10 @@ export const DEFAULT_REPORT_SEVERITY: ReportSeverity = 'medium';
 // already established in guardian-consent.guard.ts.
 export const CHILD_SAFETY_VETTING_REQUIRED_CODE = 'child_safety_vetting_required';
 
+// The 403 code thrown by POST /reports/:id/appeal once the appeal window (REPORT_APPEAL_WINDOW_DAYS, see
+// account-hold.config.ts) has lapsed (backend/w6-hold-rule-extension, B-044, Decision Log #376).
+export const APPEAL_WINDOW_CLOSED_CODE = 'appeal_window_closed';
+
 // Section 5.5: every list endpoint is paginated. Same default 20 / max 50
 // every other list endpoint in this codebase uses.
 export const MODERATION_DEFAULT_PAGE_SIZE = 20;

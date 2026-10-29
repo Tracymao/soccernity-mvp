@@ -1,9 +1,12 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
 import { deleteStoredObjects, deleteUserPostMedia } from '../post-media/post-media-cleanup.util';
 import { DELETED_USER_PUBLIC_NAME } from '../users/public-name.util';
+import { addDays, resolveHoldRuleConfig } from '../account-hold/account-hold.config';
+import { HoldType, resolveAccountHold } from '../account-hold/account-hold.rules';
 
 // Build Plan Section 9, Decision Log #42 (30-day grace period + consent-
 // record retention) as RECONSIDERED by Decision Log #341
@@ -44,20 +47,24 @@ import { DELETED_USER_PUBLIC_NAME } from '../users/public-name.util';
 // pointing at the now-anonymized row, which is the whole point. Report
 // rows are NEVER touched -- the moderation audit trail stays intact.
 //
-// INVESTIGATION HOLD: before anonymizing a due account the sweep checks
-// for a non-terminal Report involving them (as reporter, as the reported
-// user, or as author of the reported post/comment). If one exists the
-// account is SKIPPED this cycle -- still fully identifiable, still
-// blocked from login via 'pending_deletion' -- and retried on every
-// later run. No "held" flag: it is just a query predicate.
+// HOLDS (Decision Log #341 / #345, extended by #376, B-044): before anonymizing a due account the sweep
+// asks resolveAccountHold (account-hold.rules.ts) whether it is held. Two kinds:
+//   * an ADMIN hold (an active AccountHold row: legal_hold, or the six-month bad_faith hold on a reporter)
+//     holds the account IN FULL -- skipped, nothing cleared;
+//   * a REPORT hold (derived from Report: open report, appeal window, six months after closure, for the
+//     reported person and authors of reported content; open report / appeal only, for the reporter) pauses
+//     erasure but MINIMISES the account at the end of its grace period (minimiseHeldUser): the evidence is
+//     kept, the non-evidence data is cleared.
+// Either way the account stays login-blocked via 'pending_deletion' and is retried on every later run;
+// when the last hold ends the next run anonymises it normally. No "held" flag: a hold is a predicate.
 //
 // All FKs into User that #44 had flipped to CASCADE are RESTRICT again,
 // so an accidental real DELETE FROM "User" fails loudly instead of
 // silently cascading.
 //
 // AdminUsersService.updateUserStatus('deleted') also calls anonymizeUser
-// directly (skipping the grace period, and the hold -- the admin has
-// explicitly chosen it). The scheduled sweep only ever acts on
+// directly (skipping the grace period, and a REPORT hold -- the admin has explicitly chosen it; but it
+// REFUSES while an active legal_hold or bad_faith hold exists, B-044). The scheduled sweep only ever acts on
 // 30-days-past-due "pending_deletion" rows.
 //
 // GRACE_PERIOD_DAYS is exported so guardian-consent emails can quote the
@@ -87,6 +94,8 @@ export interface StalledHold {
   email: string;
   heldSince: Date;
   daysHeld: number;
+  // B-044: WHY it is held (the strongest reason if several apply). Additive; every field above is unchanged.
+  holdType: HoldType;
 }
 
 export interface SweepPendingDeletionsResult {
@@ -95,6 +104,9 @@ export interface SweepPendingDeletionsResult {
   // involves them (see hasOpenInvestigation). Left untouched in
   // pending_deletion and retried on the next run.
   heldUserIds: string[];
+  // B-044: the subset of heldUserIds held ONLY by a report rule, whose non-evidence data was cleared this
+  // run (minimiseHeldUser). An account under a legal / bad-faith hold is in heldUserIds but never here.
+  minimisedUserIds: string[];
 }
 
 export interface PurgeConsentAuditRecordsResult {
@@ -156,57 +168,38 @@ export class AccountDeletionSweepService {
 
     const anonymizedUserIds: string[] = [];
     const heldUserIds: string[] = [];
+    const minimisedUserIds: string[] = [];
+    const cfg = resolveHoldRuleConfig();
 
     for (const user of dueUsers) {
-      if (await this.hasOpenInvestigation(user.id)) {
-        this.logger.log(`Account deletion sweep: user ${user.id} held -- open moderation report involves them.`);
+      const hold = await resolveAccountHold(this.prisma, user.id, now, cfg);
+      if (hold) {
+        this.logger.log(`Account deletion sweep: user ${user.id} held (${hold.type}).`);
         heldUserIds.push(user.id);
+        // An admin hold (legal / bad faith) holds the account IN FULL: nothing is cleared. A report hold
+        // minimises it instead of leaving it untouched.
+        if (hold.kind === 'report') {
+          await this.minimiseHeldUser(user.id);
+          minimisedUserIds.push(user.id);
+        }
         continue;
       }
       await this.anonymizeUser(user.id, user.isMinor, now);
       anonymizedUserIds.push(user.id);
     }
 
-    return { anonymizedUserIds, heldUserIds };
+    return { anonymizedUserIds, heldUserIds, minimisedUserIds };
   }
 
-  // True iff a NON-TERMINAL Report involves this user: status 'open', or
-  // 'actioned' with an appeal still 'pending' (an overturned appeal
-  // flips the report back to 'open', so it is covered by the first
-  // case). "Involves" = they are the reporter; or the report targets
-  // them directly (targetType 'user'); or it targets a post/comment THEY
-  // authored (Report.targetId is a bare string, so the post/comment
-  // cases join through Post/Comment.authorId -- Decision Log #341).
-  // Raw SQL because Prisma's query builder cannot express the
-  // per-targetType correlated EXISTS cleanly.
-  async hasOpenInvestigation(userId: string): Promise<boolean> {
-    const rows = await this.prisma.$queryRaw<{ found: number }[]>`
-      SELECT 1 AS found
-      FROM "Report" r
-      WHERE (r."status" = 'open' OR (r."status" = 'actioned' AND r."appealStatus" = 'pending'))
-        AND (
-          r."reporterId" = ${userId}
-          OR (r."targetType" = 'user' AND r."targetId" = ${userId})
-          OR (r."targetType" = 'post' AND EXISTS (
-                SELECT 1 FROM "Post" p WHERE p."id" = r."targetId" AND p."authorId" = ${userId}))
-          OR (r."targetType" = 'comment' AND EXISTS (
-                SELECT 1 FROM "Comment" c WHERE c."id" = r."targetId" AND c."authorId" = ${userId}))
-        )
-      LIMIT 1
-    `;
-    return rows.length > 0;
-  }
-
-  // Accounts currently held by an open investigation for longer than
-  // `thresholdDays`. A hold has no maximum duration BY DESIGN (auto-
-  // expiring it would undermine evidence integrity), so this is the
-  // visibility half: a stalled investigation becomes an admin's problem
-  // to chase. Read-only -- never acts on the account. "Held since" is the
-  // moment the account first became due for anonymization
-  // (pendingDeletionAt + GRACE_PERIOD_DAYS); an account is listed once
-  // that moment is more than thresholdDays ago AND it still has an open
-  // investigation. Bounded by nature (only accounts with an open report
-  // past their grace period), so unpaginated.
+  // Accounts currently held for longer than `thresholdDays`, with WHY (holdType). A hold has no maximum
+  // duration BY DESIGN (auto-expiring it would undermine evidence integrity), so this is the visibility half:
+  // a stalled hold becomes an admin's problem to chase. Read-only -- never acts on the account. "Held since"
+  // is the moment the account first became due for anonymization (pendingDeletionAt + GRACE_PERIOD_DAYS); an
+  // account is listed once that moment is more than thresholdDays ago AND it is still held. Bounded by
+  // nature (only accounts held past their grace period), so unpaginated. holdType is the STRONGEST reason
+  // (legal_hold, bad_faith, open_report, appeal_window, post_closure -- account-hold.rules.ts). Note a
+  // post_closure hold lasts months by design, so it can appear here without anything being wrong; the type
+  // is there so a reader can tell it from an open report.
   async listStalledHolds(
     thresholdDays: number = resolveHeldInvestigationAlertDays(),
     now: Date = new Date(),
@@ -218,19 +211,144 @@ export class AccountDeletionSweepService {
       select: { id: true, displayName: true, email: true, pendingDeletionAt: true },
       orderBy: { pendingDeletionAt: 'asc' },
     });
+    const cfg = resolveHoldRuleConfig();
     const stalled: StalledHold[] = [];
     for (const c of candidates) {
-      if (!(await this.hasOpenInvestigation(c.id)) || !c.pendingDeletionAt) continue;
-      const heldSince = new Date(c.pendingDeletionAt.getTime() + GRACE_PERIOD_DAYS * dayMs);
+      if (!c.pendingDeletionAt) continue;
+      const hold = await resolveAccountHold(this.prisma, c.id, now, cfg);
+      if (!hold) continue;
+      const heldSince = addDays(c.pendingDeletionAt, GRACE_PERIOD_DAYS);
       stalled.push({
         userId: c.id,
         displayName: c.displayName,
         email: c.email,
         heldSince,
         daysHeld: Math.floor((now.getTime() - heldSince.getTime()) / dayMs),
+        holdType: hold.type,
       });
     }
     return stalled;
+  }
+
+  // The rows that describe a user's behaviour and relationships rather than what they authored: Likes (with
+  // Post.likeCount kept honest), saves, follows, blocks (both directions), notifications, carousel
+  // impressions, kickoff subscriptions and Banter / Community Group / Club memberships (each memberCount
+  // kept honest). Shared by anonymizeUser and minimiseHeldUser so the two cannot drift. Runs inside the
+  // caller's transaction.
+  private async deleteBehaviouralRows(tx: Prisma.TransactionClient, userId: string): Promise<void> {
+    // Removing this user's Likes must keep Post.likeCount honest (it is
+    // a denormalized cache, see schema.prisma). Like has
+    // @@unique([userId, postId]) so each liked post loses exactly 1.
+    await tx.$executeRaw`
+      UPDATE "Post" SET "likeCount" = GREATEST("likeCount" - 1, 0)
+      WHERE "id" IN (SELECT "postId" FROM "Like" WHERE "userId" = ${userId})
+    `;
+    await tx.like.deleteMany({ where: { userId } });
+    await tx.savedPost.deleteMany({ where: { userId } });
+    await tx.follow.deleteMany({ where: { OR: [{ followerId: userId }, { followeeId: userId }] } });
+    // B-039: a Block is a personal-relationship record in BOTH directions (the
+    // ones this user made, and the ones made against them); like Follow it is
+    // not content other users depend on, and its FKs are RESTRICT.
+    await tx.block.deleteMany({ where: { OR: [{ blockerId: userId }, { blockedId: userId }] } });
+    await tx.notification.deleteMany({ where: { userId } });
+    // B-092: per-viewer Final-week carousel impressions are behavioural data about this viewer and
+    // serve no purpose once they are gone (the entry's folded total is an aggregate, not theirs).
+    await tx.contestImpression.deleteMany({ where: { viewerId: userId } });
+    await tx.matchSubscription.deleteMany({ where: { userId } });
+
+    // Membership rows (Banter Rooms, Community Groups, Club pages) are
+    // ephemeral participation signal, the same category as Follow/Like,
+    // not authored content other users depend on. Deleting them here,
+    // at the source, keeps each denormalized memberCount honest: every
+    // affected room/group/club loses exactly 1 (each join table is
+    // unique per user+target). Same GREATEST(..., 0) floor as likeCount.
+    // ClubPage membership is an implicit m2m: "A" = ClubPage.id,
+    // "B" = User.id (see ClubsService.joinClub).
+    await tx.$executeRaw`
+      UPDATE "BanterRoom" SET "memberCount" = GREATEST("memberCount" - 1, 0)
+      WHERE "id" IN (SELECT "banterRoomId" FROM "BanterRoomMember" WHERE "userId" = ${userId})
+    `;
+    await tx.banterRoomMember.deleteMany({ where: { userId } });
+    await tx.$executeRaw`
+      UPDATE "CommunityGroup" SET "memberCount" = GREATEST("memberCount" - 1, 0)
+      WHERE "id" IN (SELECT "communityGroupId" FROM "CommunityGroupMember" WHERE "userId" = ${userId})
+    `;
+    await tx.communityGroupMember.deleteMany({ where: { userId } });
+    await tx.$executeRaw`
+      UPDATE "ClubPage" SET "memberCount" = GREATEST("memberCount" - 1, 0)
+      WHERE "id" IN (SELECT "A" FROM "_ClubMembership" WHERE "B" = ${userId})
+    `;
+    await tx.$executeRaw`DELETE FROM "_ClubMembership" WHERE "B" = ${userId}`;
+  }
+
+  // B-044 (Decision Log #376): what a REPORT-held account gets at the end of its grace period instead of
+  // being left untouched. One transaction, idempotent (re-running rewrites the same values and finds the
+  // behavioural rows already gone). Clears NON-EVIDENCE data; keeps what the report may need.
+  //   CLEARED: passwordHash (to the unusable value -- the account cannot sign in), phone, bio, preferredClub,
+  //     profileCountry, avatar and cover (columns and, after the commit, the stored objects),
+  //     clubAffiliationId, representedClubId, and the behavioural rows deleteBehaviouralRows removes.
+  //   KEPT: id, email, displayName, username, dateOfBirth, isMinor, declared/derived country (safeguarding),
+  //     the Guardian row and consent data (a minor's consent proof), Post, Comment, Message, Result, Report,
+  //     PostMedia, GrassrootsTeam ownership, points and leaderboard rows, and every audit row.
+  // accountStatus stays 'pending_deletion'. Public so the sweep and tests reach it; the scheduled sweep is
+  // its only caller.
+  async minimiseHeldUser(userId: string): Promise<void> {
+    const stored: { avatarKey: string | null; coverKey: string | null } = { avatarKey: null, coverKey: null };
+    await this.prisma.$transaction(async (tx) => {
+      const before = await tx.user.findUnique({ where: { id: userId }, select: { avatarKey: true, coverKey: true } });
+      stored.avatarKey = before?.avatarKey ?? null;
+      stored.coverKey = before?.coverKey ?? null;
+
+      await this.deleteBehaviouralRows(tx, userId);
+
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          passwordHash: UNUSABLE_PASSWORD_HASH,
+          phone: null,
+          bio: null,
+          preferredClub: null,
+          profileCountry: null,
+          clubAffiliationId: null,
+          representedClubId: null,
+          // avatar / cover: all columns of each together (the CHECK constraints need it)
+          avatarUrl: null,
+          avatarKey: null,
+          avatarStatus: null,
+          avatarRejectionReason: null,
+          coverUrl: null,
+          coverKey: null,
+          coverStatus: null,
+          coverRejectionReason: null,
+        },
+      });
+    });
+
+    await this.removeProfileImageObjects(userId, stored, 'Minimisation');
+  }
+
+  // Best effort, AFTER a commit: the row no longer points at the object, so a storage outage (or no store)
+  // must not undo the change. A failure leaves an orphaned object, logged with its key.
+  private async removeProfileImageObjects(
+    userId: string,
+    stored: { avatarKey: string | null; coverKey: string | null },
+    what: string,
+  ): Promise<void> {
+    for (const [label, key] of [
+      ['avatar', stored.avatarKey],
+      ['cover', stored.coverKey],
+    ] as const) {
+      if (!key || !this.storage) continue;
+      try {
+        await this.storage.delete(key);
+      } catch (err) {
+        this.logger.warn(
+          `${what} of ${userId}: ${label} object ${key} was NOT removed from storage (${
+            err instanceof Error ? err.message : String(err)
+          }).`,
+        );
+      }
+    }
   }
 
   // One transaction -- the whole anonymization happens or none of it
@@ -288,53 +406,12 @@ export class AccountDeletionSweepService {
         }
       }
 
-      // Removing this user's Likes must keep Post.likeCount honest (it is
-      // a denormalized cache, see schema.prisma). Like has
-      // @@unique([userId, postId]) so each liked post loses exactly 1.
-      await tx.$executeRaw`
-        UPDATE "Post" SET "likeCount" = GREATEST("likeCount" - 1, 0)
-        WHERE "id" IN (SELECT "postId" FROM "Like" WHERE "userId" = ${userId})
-      `;
-      await tx.like.deleteMany({ where: { userId } });
-      await tx.savedPost.deleteMany({ where: { userId } });
-      await tx.follow.deleteMany({ where: { OR: [{ followerId: userId }, { followeeId: userId }] } });
-      // B-039: a Block is a personal-relationship record in BOTH directions (the
-      // ones this user made, and the ones made against them); like Follow it is
-      // not content other users depend on, and its FKs are RESTRICT.
-      await tx.block.deleteMany({ where: { OR: [{ blockerId: userId }, { blockedId: userId }] } });
-      await tx.notification.deleteMany({ where: { userId } });
+      await this.deleteBehaviouralRows(tx, userId);
       // backend/w14-post-media-pipeline (Decision Log #419 item 9): the files this user uploaded for posts
       // and contest entries go with the account. The rows are deleted here, their URLs are removed from
       // the (surviving, #341) posts, and the stored objects are removed after the commit below.
+      // (A minimised report-held account KEEPS its PostMedia: it may be the reported content, B-044.)
       postMediaKeys = await deleteUserPostMedia(tx, userId);
-      // B-092: per-viewer Final-week carousel impressions are behavioural data about this viewer and
-      // serve no purpose once they are gone (the entry's folded total is an aggregate, not theirs).
-      await tx.contestImpression.deleteMany({ where: { viewerId: userId } });
-      await tx.matchSubscription.deleteMany({ where: { userId } });
-
-      // Membership rows (Banter Rooms, Community Groups, Club pages) are
-      // ephemeral participation signal, the same category as Follow/Like,
-      // not authored content other users depend on. Deleting them here,
-      // at the source, keeps each denormalized memberCount honest: every
-      // affected room/group/club loses exactly 1 (each join table is
-      // unique per user+target). Same GREATEST(..., 0) floor as likeCount.
-      // ClubPage membership is an implicit m2m: "A" = ClubPage.id,
-      // "B" = User.id (see ClubsService.joinClub).
-      await tx.$executeRaw`
-        UPDATE "BanterRoom" SET "memberCount" = GREATEST("memberCount" - 1, 0)
-        WHERE "id" IN (SELECT "banterRoomId" FROM "BanterRoomMember" WHERE "userId" = ${userId})
-      `;
-      await tx.banterRoomMember.deleteMany({ where: { userId } });
-      await tx.$executeRaw`
-        UPDATE "CommunityGroup" SET "memberCount" = GREATEST("memberCount" - 1, 0)
-        WHERE "id" IN (SELECT "communityGroupId" FROM "CommunityGroupMember" WHERE "userId" = ${userId})
-      `;
-      await tx.communityGroupMember.deleteMany({ where: { userId } });
-      await tx.$executeRaw`
-        UPDATE "ClubPage" SET "memberCount" = GREATEST("memberCount" - 1, 0)
-        WHERE "id" IN (SELECT "A" FROM "_ClubMembership" WHERE "B" = ${userId})
-      `;
-      await tx.$executeRaw`DELETE FROM "_ClubMembership" WHERE "B" = ${userId}`;
 
       // Teams they organised go dormant: no organiser, so every
       // createdById-based authorization check fails closed (403).
@@ -388,21 +465,7 @@ export class AccountDeletionSweepService {
     // A failure leaves an orphaned object whose only pointer is gone; it is
     // logged with the key so it can be cleaned up by hand.
     await deleteStoredObjects(this.storage, this.logger, postMediaKeys, `Anonymization of ${userId}: post media`);
-    for (const [label, key] of [
-      ['avatar', stored.avatarKey],
-      ['cover', stored.coverKey],
-    ] as const) {
-      if (!key || !this.storage) continue;
-      try {
-        await this.storage.delete(key);
-      } catch (err) {
-        this.logger.warn(
-          `Anonymization of ${userId}: ${label} object ${key} was NOT removed from storage (${
-            err instanceof Error ? err.message : String(err)
-          }).`,
-        );
-      }
-    }
+    await this.removeProfileImageObjects(userId, stored, 'Anonymization');
   }
 
   // (b) — purges ConsentAuditRecord rows past their OWN 6-month mark,

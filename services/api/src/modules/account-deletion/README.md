@@ -139,6 +139,21 @@
 > separate follow-up; the notification rows other users hold *about* the
 > leaver now resolve to "[deleted user]".
 >
+> **[B-044, `backend/w6-hold-rule-extension`, Decision Log #376: the hold rule
+> is extended — see `modules/account-hold/README.md`.]** `hasOpenInvestigation`
+> is gone: the sweep, `listStalledHolds` and the admin immediate delete go through
+> `resolveAccountHold`. A hold now lasts through the appeal window and for
+> `ACCOUNT_HOLD_POST_CLOSURE_MONTHS` after the report closes (reported person and
+> authors of reported content; the reporter only while the report is open or in
+> appeal), and an admin can place a `legal_hold` or a `bad_faith` hold
+> (`AccountHold`, `HoldService`). An **admin hold** skips the account in full; a
+> **report hold** makes the sweep call `minimiseHeldUser` (clear non-evidence
+> data, keep the evidence) instead of leaving it untouched. The sweep result gains
+> `minimisedUserIds`; each `listStalledHolds` item gains `holdType`. The admin
+> immediate delete still skips a report hold but is refused (`409
+> account_hold_active`) while a legal or bad-faith hold is active. The three
+> numbers are configuration and **not counsel-sourced** (see that README).
+>
 > ---
 > ### Historical (superseded by Decision Log #341)
 >

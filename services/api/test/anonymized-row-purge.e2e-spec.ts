@@ -204,7 +204,16 @@ describe('AnonymizedRowPurgeService e2e: 30-day purge of anonymised User rows, a
         data: { email: `reporter-${randomUUID()}@example.com`, passwordHash: 'x', displayName: 'Reporter', dateOfBirth: seedDob('1990-01-01') },
       });
       await prisma.report.create({
-        data: { reporterId: reporter.id, targetType: 'post', targetId: post.id, reason: 'abuse', status: 'actioned' },
+        // B-044: an actioned report is closed only once its window and post-closure months have run out; an
+        // actioned report with no reviewedAt would FAIL SAFE (held), so give it a decision long before T0.
+        data: {
+          reporterId: reporter.id,
+          targetType: 'post',
+          targetId: post.id,
+          reason: 'abuse',
+          status: 'actioned',
+          reviewedAt: new Date(T0.getTime() - 400 * DAY),
+        },
       });
       await sweep.sweepPendingDeletions(T0);
       await prisma.post.delete({ where: { id: post.id } });

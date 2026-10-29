@@ -31,6 +31,12 @@ export const ADMIN_ACTION_LOG_ACTIONS = {
   // change. targetType 'user'. Notes carry the revoked handle, the 30-day hold
   // end and the REASON.
   USER_USERNAME_REVOKED: 'user.username_revoked',
+  // HoldService (backend/w6-hold-rule-extension, B-044, Decision Log #376 / #398 D1 / #403 item 8). targetType
+  // 'user' (the HELD account); one row per hold, written in the SAME transaction as the AccountHold change. Notes
+  // carry the hold id, the report id and the REASON. The held user is never told.
+  ACCOUNT_HOLD_BAD_FAITH_PLACED: 'account_hold.bad_faith_placed',
+  ACCOUNT_HOLD_LEGAL_PLACED: 'account_hold.legal_hold_placed',
+  ACCOUNT_HOLD_LIFTED: 'account_hold.lifted',
   // Reserved, NOT yet wired to a real call site — no AdminUser
   // role-change endpoint exists anywhere in this codebase yet
   // (grep-confirmed; no branch/PR for one either, at the time this

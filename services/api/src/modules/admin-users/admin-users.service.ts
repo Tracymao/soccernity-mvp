@@ -2,6 +2,7 @@ import { ConflictException, Injectable, Logger, NotFoundException } from '@nestj
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccountDeletionSweepService, resolveHeldInvestigationAlertDays } from '../account-deletion/account-deletion-sweep.service';
+import { findActiveAccountHold } from '../account-hold/account-hold.rules';
 import { AdminActionLogService } from '../admin-action-log/admin-action-log.service';
 import {
   ADMIN_ACTION_LOG_ACTIONS,
@@ -9,7 +10,7 @@ import {
 } from '../admin-action-log/admin-action-log.constants';
 import { TokenService } from '../auth/token/token.service';
 import { revokeEngagementPointsForAccount } from '../points/engagement-points.util';
-import { ADMIN_USERS_DEFAULT_PAGE_SIZE, ADMIN_USERS_MAX_PAGE_SIZE } from './admin-users.constants';
+import { ACCOUNT_HOLD_ACTIVE_CODE, ADMIN_USERS_DEFAULT_PAGE_SIZE, ADMIN_USERS_MAX_PAGE_SIZE } from './admin-users.constants';
 import { decodeAdminUsersCursor, encodeAdminUsersCursor } from './cursor.util';
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
@@ -212,9 +213,22 @@ export class AdminUsersService {
     }
 
     if (dto.status === 'deleted') {
+      // B-044 (Decision Log #376; veto-able default): an ACTIVE legal hold or bad-faith hold protects the
+      // account from this too -- lift the hold first. Report-based holds are still skipped by this route
+      // (explicit admin choice, as before). Checked before anything is revoked or changed.
+      const adminHold = await findActiveAccountHold(this.prisma, userId, new Date());
+      if (adminHold) {
+        throw new ConflictException({
+          statusCode: 409,
+          code: ACCOUNT_HOLD_ACTIVE_CODE,
+          holdType: adminHold.type,
+          message: `This account is under an active ${adminHold.type === 'legal_hold' ? 'legal hold' : 'bad-faith hold'} and cannot be deleted until the hold is lifted.`,
+        });
+      }
+
       // Immediate, admin-triggered anonymization -- deliberately skipping
-      // the self-service 30-day grace period (Decision Log #42) and the
-      // investigation hold (the admin has explicitly chosen this): a
+      // the self-service 30-day grace period (Decision Log #42) and a
+      // report-based hold (the admin has explicitly chosen this): a
       // moderation action, not a self-service request. Since Decision
       // Log #341 this is an in-place anonymization, NOT a row DELETE --
       // reuses AccountDeletionSweepService.anonymizeUser, the same

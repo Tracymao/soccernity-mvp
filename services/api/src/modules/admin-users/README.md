@@ -27,7 +27,7 @@ comment update on an already-`String` column, **no migration**. See
 | Method & path | Guards | Purpose |
 |---|---|---|
 | `GET /admin/users` | `AdminJwtAuthGuard` + `AdminRolesGuard('moderator', 'superadmin')` | The platform-user list, keyset-paginated, optional `?status=` filter (any of the four real `accountStatus` values). |
-| `PATCH /admin/users/:id` | same | Exactly one action per call: `active`, `suspended`, or `deleted`. |
+| `PATCH /admin/users/:id` | same | Exactly one action per call: `active`, `suspended`, or `deleted`. **`deleted` is refused with `409 account_hold_active` (body carries `holdType`) while the user has an active `legal_hold` or `bad_faith` hold (B-044, Decision Log #376; veto-able default). A report-based hold does not block it.** |
 
 Both routes are **not** literal Section 4.8 lines — the section names
 `GET`/`PATCH /admin/users` only in passing, with no defined query/body

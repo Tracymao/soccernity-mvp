@@ -6,6 +6,16 @@ import {
   deletedUserEmail,
 } from './account-deletion-sweep.service';
 
+// A report row involving the user as its subject, still open: held by the report rule (B-044).
+const OPEN_SUBJECT_REPORT = {
+  status: 'open',
+  appealStatus: null,
+  reviewedAt: null,
+  appealReviewedAt: null,
+  isReporter: false,
+  isSubject: true,
+};
+
 function buildPrismaMock(opts: { held?: boolean } = {}) {
   const prisma = {
     // findUnique: anonymizeUser reads the avatar storage key before clearing it (B-035).
@@ -27,7 +37,9 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
     communityGroupMember: { deleteMany: jest.fn() },
     grassrootsTeam: { updateMany: jest.fn() },
     $executeRaw: jest.fn().mockResolvedValue(0),
-    $queryRaw: jest.fn().mockResolvedValue(opts.held ? [{ found: 1 }] : []),
+    // B-044: admin holds (none by default) and the reports involving the user (findInvolvedReports).
+    accountHold: { findMany: jest.fn().mockResolvedValue([]) },
+    $queryRaw: jest.fn().mockResolvedValue(opts.held ? [OPEN_SUBJECT_REPORT] : []),
   } as unknown as PrismaService;
   (prisma as unknown as { $transaction: jest.Mock }).$transaction = jest.fn((fn: (tx: unknown) => unknown) =>
     fn(prisma),
@@ -216,6 +228,115 @@ describe('AccountDeletionSweepService', () => {
     });
   });
 
+  // B-044 (Decision Log #376): what a REPORT-held account keeps and loses.
+  describe('minimiseHeldUser', () => {
+    const CLEARED_FIELDS = {
+      passwordHash: UNUSABLE_PASSWORD_HASH,
+      phone: null,
+      bio: null,
+      preferredClub: null,
+      profileCountry: null,
+      clubAffiliationId: null,
+      representedClubId: null,
+      avatarUrl: null,
+      avatarKey: null,
+      avatarStatus: null,
+      avatarRejectionReason: null,
+      coverUrl: null,
+      coverKey: null,
+      coverStatus: null,
+      coverRejectionReason: null,
+    };
+    // Evidence and safeguarding data: none of these may appear in the update at all.
+    const KEPT_FIELDS = [
+      'id',
+      'email',
+      'displayName',
+      'username',
+      'dateOfBirth',
+      'isMinor',
+      'isUnder16',
+      'declaredCountry',
+      'derivedCountry',
+      'countryDerivationMethod',
+      'countryDerivedAt',
+      'accountStatus',
+      'pendingDeletionAt',
+      'anonymizedAt',
+    ];
+
+    it('clears every non-evidence field by name, in ONE user.update, and touches nothing it must keep', async () => {
+      const prisma = buildPrismaMock();
+      await new AccountDeletionSweepService(prisma).minimiseHeldUser('user-1');
+
+      expect(prisma.user.update).toHaveBeenCalledTimes(1);
+      const call = (prisma.user.update as jest.Mock).mock.calls[0][0];
+      expect(call.where).toEqual({ id: 'user-1' });
+      expect(call.data).toEqual(CLEARED_FIELDS);
+      for (const kept of KEPT_FIELDS) expect(call.data).not.toHaveProperty(kept);
+    });
+
+    it('runs in one transaction and deletes the behavioural rows (with the counters kept honest)', async () => {
+      const prisma = buildPrismaMock();
+      await new AccountDeletionSweepService(prisma).minimiseHeldUser('user-1');
+
+      expect((prisma as unknown as { $transaction: jest.Mock }).$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.like.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.savedPost.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.follow.deleteMany).toHaveBeenCalledWith({
+        where: { OR: [{ followerId: 'user-1' }, { followeeId: 'user-1' }] },
+      });
+      expect(prisma.block.deleteMany).toHaveBeenCalledWith({
+        where: { OR: [{ blockerId: 'user-1' }, { blockedId: 'user-1' }] },
+      });
+      expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.contestImpression.deleteMany).toHaveBeenCalledWith({ where: { viewerId: 'user-1' } });
+      expect(prisma.matchSubscription.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.banterRoomMember.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.communityGroupMember.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      const sql = (prisma.$executeRaw as unknown as jest.Mock).mock.calls.map((c) => (c[0] as string[]).join('?'));
+      for (const needle of ['UPDATE "Post"', 'UPDATE "BanterRoom"', 'UPDATE "CommunityGroup"', 'UPDATE "ClubPage"', 'DELETE FROM "_ClubMembership"']) {
+        expect(sql.some((q) => q.includes(needle))).toBe(true);
+      }
+    });
+
+    it('KEEPS the evidence tables and the consent proof: no Guardian, ConsentAuditRecord, PostMedia or team writes', async () => {
+      const prisma = buildPrismaMock();
+      await new AccountDeletionSweepService(prisma).minimiseHeldUser('user-1');
+
+      expect(prisma.guardian.findUnique).not.toHaveBeenCalled();
+      expect(prisma.guardian.delete).not.toHaveBeenCalled();
+      expect(prisma.consentAuditRecord.create).not.toHaveBeenCalled();
+      expect(prisma.postMedia.findMany).not.toHaveBeenCalled();
+      expect(prisma.postMedia.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.grassrootsTeam.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('is idempotent: a second run writes the same values and fails on nothing', async () => {
+      const prisma = buildPrismaMock();
+      const service = new AccountDeletionSweepService(prisma);
+
+      await service.minimiseHeldUser('user-1');
+      await service.minimiseHeldUser('user-1');
+
+      const calls = (prisma.user.update as jest.Mock).mock.calls;
+      expect(calls).toHaveLength(2);
+      expect(calls[1][0].data).toEqual(calls[0][0].data);
+    });
+
+    it('removes the avatar and cover objects from storage after the commit, and a storage failure does not fail it', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ avatarKey: 'avatars/u1.png', coverKey: 'covers/u1.png' });
+      const storage = { upload: jest.fn(), delete: jest.fn().mockRejectedValueOnce(new Error('503')).mockResolvedValue(undefined) };
+
+      await expect(new AccountDeletionSweepService(prisma, storage).minimiseHeldUser('user-1')).resolves.toBeUndefined();
+
+      expect(storage.delete).toHaveBeenCalledWith('avatars/u1.png');
+      expect(storage.delete).toHaveBeenCalledWith('covers/u1.png');
+      expect(prisma.user.update).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('listStalledHolds', () => {
     const now = new Date('2026-12-01T00:00:00.000Z');
 
@@ -236,7 +357,7 @@ describe('AccountDeletionSweepService', () => {
       );
       expect(out).toHaveLength(1);
       // heldSince = 2026-06-01 + 30d = 2026-07-01; 153 days before 2026-12-01
-      expect(out[0]).toMatchObject({ userId: 'u1', daysHeld: 153 });
+      expect(out[0]).toMatchObject({ userId: 'u1', daysHeld: 153, holdType: 'open_report' });
       expect(out[0].heldSince).toEqual(new Date('2026-07-01T00:00:00.000Z'));
     });
 
@@ -249,6 +370,43 @@ describe('AccountDeletionSweepService', () => {
 
       expect(await service.listStalledHolds(90, now)).toEqual([]);
       expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('reports WHY each account is held (holdType), strongest first, keeping every existing field', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([
+        { id: 'legal', displayName: 'L', email: 'l@x.com', pendingDeletionAt: new Date('2026-01-01T00:00:00.000Z') },
+        { id: 'bad', displayName: 'B', email: 'b@x.com', pendingDeletionAt: new Date('2026-01-01T00:00:00.000Z') },
+        { id: 'post', displayName: 'P', email: 'p@x.com', pendingDeletionAt: new Date('2026-01-01T00:00:00.000Z') },
+        { id: 'win', displayName: 'W', email: 'w@x.com', pendingDeletionAt: new Date('2026-01-01T00:00:00.000Z') },
+        { id: 'free', displayName: 'F', email: 'f@x.com', pendingDeletionAt: new Date('2026-01-01T00:00:00.000Z') },
+      ]);
+      (prisma.accountHold.findMany as jest.Mock).mockImplementation(async ({ where }: { where: { userId: string } }) => {
+        if (where.userId === 'legal') return [{ id: 'h1', type: 'legal_hold', reportId: 'r', expiresAt: null }];
+        if (where.userId === 'bad') return [{ id: 'h2', type: 'bad_faith', reportId: 'r', expiresAt: new Date('2027-06-01T00:00:00.000Z') }];
+        return [];
+      });
+      // dismissed 2026-11-01: closure 2026-11-01, post-closure until 2027-05-01 -> still held on 2026-12-01
+      const closed = { status: 'reviewed', appealStatus: null, reviewedAt: new Date('2026-11-01T00:00:00.000Z'), appealReviewedAt: null, isReporter: false, isSubject: true };
+      // actioned 2026-11-20, no appeal: window (30d) runs to 2026-12-20 -> appeal_window on 2026-12-01
+      const windowOpen = { status: 'actioned', appealStatus: null, reviewedAt: new Date('2026-11-20T00:00:00.000Z'), appealReviewedAt: null, isReporter: false, isSubject: true };
+      (prisma.$queryRaw as unknown as jest.Mock).mockImplementation(async (_s: unknown, userId: string) => {
+        if (userId === 'post') return [closed];
+        if (userId === 'win') return [windowOpen];
+        return [];
+      });
+
+      const out = await new AccountDeletionSweepService(prisma).listStalledHolds(90, now);
+
+      expect(out.map((o) => [o.userId, o.holdType])).toEqual([
+        ['legal', 'legal_hold'],
+        ['bad', 'bad_faith'],
+        ['post', 'post_closure'],
+        ['win', 'appeal_window'],
+      ]);
+      expect(out[0]).toEqual(
+        expect.objectContaining({ userId: 'legal', displayName: 'L', email: 'l@x.com', heldSince: expect.any(Date), daysHeld: expect.any(Number) }),
+      );
     });
   });
 
@@ -314,7 +472,7 @@ describe('AccountDeletionSweepService', () => {
       // Decision Log #349: the guardian lookup is no longer gated on isMinor
       // (a user who turned 18 may still hold a Guardian row).
       expect(prisma.guardian.findUnique).toHaveBeenCalled();
-      expect(result).toEqual({ anonymizedUserIds: ['user-1'], heldUserIds: [] });
+      expect(result).toEqual({ anonymizedUserIds: ['user-1'], heldUserIds: [], minimisedUserIds: [] });
     });
 
     it('deletes the ephemeral rows (likes, saves, follows both directions, notifications), nulls team organiser, and never touches content tables', async () => {
@@ -420,17 +578,73 @@ describe('AccountDeletionSweepService', () => {
       expect(result.anonymizedUserIds).toEqual(['minor-1']);
     });
 
-    it('INVESTIGATION HOLD: a due user with an open involving report is skipped entirely -- no transaction, no writes', async () => {
+    it('REPORT HOLD: a due user with an open involving report is not anonymised -- it is MINIMISED instead (B-044)', async () => {
       const prisma = buildPrismaMock({ held: true });
       (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'held-1', isMinor: true }]);
       const service = new AccountDeletionSweepService(prisma);
 
       const result = await service.sweepPendingDeletions();
 
-      expect(result).toEqual({ anonymizedUserIds: [], heldUserIds: ['held-1'] });
+      expect(result).toEqual({ anonymizedUserIds: [], heldUserIds: ['held-1'], minimisedUserIds: ['held-1'] });
+      // exactly one update, and it is the minimisation: no accountStatus change, no anonymisation
+      expect(prisma.user.update).toHaveBeenCalledTimes(1);
+      const data = (prisma.user.update as jest.Mock).mock.calls[0][0].data;
+      expect(data).not.toHaveProperty('accountStatus');
+      expect(data).not.toHaveProperty('anonymizedAt');
+      expect(prisma.guardian.delete).not.toHaveBeenCalled();
+      expect(prisma.consentAuditRecord.create).not.toHaveBeenCalled();
+    });
+
+    it('ADMIN HOLD (legal_hold): skipped in FULL -- no transaction, no writes, not minimised', async () => {
+      const prisma = buildPrismaMock({ held: true });
+      (prisma.accountHold.findMany as jest.Mock).mockResolvedValue([
+        { id: 'h1', type: 'legal_hold', reportId: 'r1', expiresAt: null },
+      ]);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'held-1', isMinor: true }]);
+      const service = new AccountDeletionSweepService(prisma);
+
+      const result = await service.sweepPendingDeletions();
+
+      expect(result).toEqual({ anonymizedUserIds: [], heldUserIds: ['held-1'], minimisedUserIds: [] });
       expect((prisma as unknown as { $transaction: jest.Mock }).$transaction).not.toHaveBeenCalled();
       expect(prisma.user.update).not.toHaveBeenCalled();
-      expect(prisma.guardian.delete).not.toHaveBeenCalled();
+      expect(prisma.like.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('ADMIN HOLD (bad_faith): skipped in full too, and an admin hold wins over a report hold', async () => {
+      const prisma = buildPrismaMock({ held: true });
+      (prisma.accountHold.findMany as jest.Mock).mockResolvedValue([
+        { id: 'h2', type: 'bad_faith', reportId: 'r1', expiresAt: new Date('2027-01-01T00:00:00.000Z') },
+      ]);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'reporter-1', isMinor: false }]);
+
+      const result = await new AccountDeletionSweepService(prisma).sweepPendingDeletions(new Date('2026-12-01T00:00:00.000Z'));
+
+      expect(result.minimisedUserIds).toEqual([]);
+      expect(result.heldUserIds).toEqual(['reporter-1']);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('asks for admin holds that are not lifted and not expired AS OF the sweep time', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'u1', isMinor: false }]);
+      const now = new Date('2026-12-01T00:00:00.000Z');
+
+      await new AccountDeletionSweepService(prisma).sweepPendingDeletions(now);
+
+      expect(prisma.accountHold.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { userId: 'u1', liftedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] } }),
+      );
+    });
+
+    it('when the last hold has ended the account is anonymised normally on the next run', async () => {
+      const prisma = buildPrismaMock(); // no admin hold rows, no involved reports
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'u1', isMinor: false }]);
+
+      const result = await new AccountDeletionSweepService(prisma).sweepPendingDeletions();
+
+      expect(result).toEqual({ anonymizedUserIds: ['u1'], heldUserIds: [], minimisedUserIds: [] });
+      expect((prisma.user.update as jest.Mock).mock.calls[0][0].data).toMatchObject({ accountStatus: 'deleted' });
     });
 
     it('a rejecting anonymization propagates (transaction rolled back) rather than being swallowed', async () => {
@@ -448,7 +662,7 @@ describe('AccountDeletionSweepService', () => {
       (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
       const service = new AccountDeletionSweepService(prisma);
 
-      expect(await service.sweepPendingDeletions()).toEqual({ anonymizedUserIds: [], heldUserIds: [] });
+      expect(await service.sweepPendingDeletions()).toEqual({ anonymizedUserIds: [], heldUserIds: [], minimisedUserIds: [] });
     });
   });
 

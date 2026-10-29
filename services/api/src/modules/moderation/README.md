@@ -331,7 +331,8 @@ deliberate choice, not an oversight, per the task brief's own framing:
 that resolution logic."
 
 `ModerationService.resolveReportedUserId(targetType, targetId)` is that
-one shared private method, used by BOTH:
+one shared private method (since B-044 a thin wrapper over `report-target.util.ts`, which
+`HoldService` also uses to find the second party of a legal hold), used by BOTH:
 - `appealReport`'s eligibility check (only the reported user may
   appeal), and
 - `actionReport`/`decideAppeal`'s notification steps (Section 8.4: both
@@ -668,3 +669,12 @@ dto/list-reports-query.dto.ts
 ../admin-staff-vetting/                  — PATCH /admin/users/:id/child-safety-vetting (own module, own README)
 ../admin-action-log/                     — AdminActionLogService.record(...) (own module, own README)
 ```
+
+## Appeal window (B-044, Decision Log #376)
+
+`POST /reports/:id/appeal` is refused with a coded **403** (`code: appeal_window_closed`) once
+`reviewedAt + REPORT_APPEAL_WINDOW_DAYS` has been reached (the deadline instant itself is lapsed). Checked
+after eligibility, so a non-party gets the ordinary 403, not this code. A report re-actioned after an overturned
+appeal starts a new window from its new `reviewedAt`. The window length is **configuration, not a counsel-sourced
+figure** (default 30 days, a placeholder), and the message states no duration. The same closure rule drives how long a
+reported account stays held — see `../account-hold/README.md`.

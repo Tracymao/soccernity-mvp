@@ -318,6 +318,13 @@ services:
       # HELD_INVESTIGATION_ALERT_DAYS: code default (account-deletion-sweep.service.ts)
       - key: HELD_INVESTIGATION_ALERT_DAYS
         value: "90"
+      # B-044 account-hold rules (account-hold.config.ts). PLACEHOLDERS, not counsel-sourced.
+      - key: REPORT_APPEAL_WINDOW_DAYS
+        value: "30"
+      - key: ACCOUNT_HOLD_POST_CLOSURE_MONTHS
+        value: "6"
+      - key: BAD_FAITH_HOLD_MONTHS
+        value: "6"
       # --- Error monitoring ---
       - key: SENTRY_DSN
         sync: false
@@ -598,6 +605,13 @@ services:
       # HELD_INVESTIGATION_ALERT_DAYS: code default (account-deletion-sweep.service.ts)
       - key: HELD_INVESTIGATION_ALERT_DAYS
         value: "90"
+      # B-044 account-hold rules (account-hold.config.ts). PLACEHOLDERS, not counsel-sourced.
+      - key: REPORT_APPEAL_WINDOW_DAYS
+        value: "30"
+      - key: ACCOUNT_HOLD_POST_CLOSURE_MONTHS
+        value: "6"
+      - key: BAD_FAITH_HOLD_MONTHS
+        value: "6"
       # --- Error monitoring ---
       - key: SENTRY_DSN
         sync: false

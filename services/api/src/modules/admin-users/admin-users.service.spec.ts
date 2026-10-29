@@ -28,6 +28,8 @@ function buildDeps() {
     },
     // backend/w12-points: a suspension revokes the account's baseline points.
     pointsLedgerEntry: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    // B-044: the immediate delete asks for an active legal / bad-faith hold first (none by default).
+    accountHold: { findMany: jest.fn().mockResolvedValue([]) },
   } as unknown as PrismaService;
 
   const tokenService = {
@@ -276,6 +278,50 @@ describe('AdminUsersService', () => {
       // owns the whole write.
       expect(prisma.user.update).not.toHaveBeenCalled();
       expect(result).toEqual({ deleted: true, id: 'user-1' });
+    });
+
+    // B-044 (Decision Log #376; veto-able default): an active admin hold protects the account from this route.
+    it.each([
+      ['legal_hold', 'legal hold'],
+      ['bad_faith', 'bad-faith hold'],
+    ])('REFUSES with a coded 409 naming the hold type while a %s is active, before revoking or changing anything', async (type, wording) => {
+      const { prisma, tokenService, accountDeletionSweepService, adminActionLogService } = buildDeps();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(user());
+      (prisma.accountHold.findMany as jest.Mock).mockResolvedValue([
+        { id: 'h1', type, reportId: 'r1', expiresAt: type === 'legal_hold' ? null : new Date('2999-01-01T00:00:00.000Z') },
+      ]);
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService, adminActionLogService);
+
+      const promise = service.updateUserStatus('user-1', 'admin-1', { status: 'deleted' });
+
+      await expect(promise).rejects.toBeInstanceOf(ConflictException);
+      await expect(promise).rejects.toMatchObject({
+        response: expect.objectContaining({ statusCode: 409, code: 'account_hold_active', holdType: type }),
+      });
+      await expect(promise).rejects.toMatchObject({ response: expect.objectContaining({ message: expect.stringContaining(wording) }) });
+      expect(tokenService.revokeAllSessionsForUser).not.toHaveBeenCalled();
+      expect(accountDeletionSweepService.anonymizeUser).not.toHaveBeenCalled();
+      expect(adminActionLogService.record).not.toHaveBeenCalled();
+    });
+
+    it('a REPORT-based hold (no AccountHold row) does NOT block it: the explicit admin choice stands, as before', async () => {
+      const { prisma, tokenService, accountDeletionSweepService, adminActionLogService } = buildDeps();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(user());
+      // no AccountHold rows; an open report is not even consulted by this route
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService, adminActionLogService);
+
+      await expect(service.updateUserStatus('user-1', 'admin-1', { status: 'deleted' })).resolves.toEqual({ deleted: true, id: 'user-1' });
+      expect(accountDeletionSweepService.anonymizeUser).toHaveBeenCalled();
+    });
+
+    it('only the delete is refused: suspend and activate are unaffected by an admin hold', async () => {
+      const { prisma, tokenService, accountDeletionSweepService, adminActionLogService } = buildDeps();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(user());
+      (prisma.user.update as jest.Mock).mockResolvedValue(user({ accountStatus: 'suspended' }));
+      (prisma.accountHold.findMany as jest.Mock).mockResolvedValue([{ id: 'h1', type: 'legal_hold', reportId: 'r1', expiresAt: null }]);
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService, adminActionLogService);
+
+      await expect(service.updateUserStatus('user-1', 'admin-1', { status: 'suspended' })).resolves.toMatchObject({ deleted: false });
     });
 
     it('rejects any status change on an already-deleted (anonymized) user with 409 -- it cannot be resurrected', async () => {

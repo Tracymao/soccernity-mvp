@@ -197,9 +197,9 @@ model User {
   // not built), so an avatar is visible to its owner only until that check
   // exists. 'rejected' is reserved for B-036/B-037. url, key and status are all
   // NULL or all set (CHECK constraint in the migration).
-  avatarUrl    String?
-  avatarKey    String?
-  avatarStatus String?
+  avatarUrl             String?
+  avatarKey             String?
+  avatarStatus          String?
   // B-214 (Decision Log #412 item 2, #398 D2): why a moderator rejected the avatar.
   // Set ONLY together with avatarStatus 'rejected' (UserImageReviewService, one
   // transaction that also writes the Notification), cleared by the next upload,
@@ -213,9 +213,9 @@ model User {
   // 'approved' cover is served to other users, a new upload is 'pending', and
   // nothing sets 'approved' until B-036/B-037 exist. url, key and status are all
   // NULL or all set (CHECK constraint in the migration).
-  coverUrl    String?
-  coverKey    String?
-  coverStatus String?
+  coverUrl             String?
+  coverKey             String?
+  coverStatus          String?
   // B-214: the cover's rejection reason, same rules as avatarRejectionReason.
   coverRejectionReason String?
 
@@ -267,48 +267,50 @@ model User {
   createdCommunityGroups    CommunityGroup[]
   communityGroupMemberships CommunityGroupMember[]
 
-  posts            Post[]
-  comments         Comment[]
-  savedPosts       SavedPost[]
-  likes            Like[]
+  posts              Post[]
+  comments           Comment[]
+  savedPosts         SavedPost[]
+  likes              Like[]
   // sprint-4/post-view-tracking -- the reverse side of PostView.viewer
   // (see that model). Nullable on PostView's own side (an anonymous
   // view has no viewer), so this array is simply every view a LOGGED-IN
   // account is on record for; no business data of its own.
-  postViews        PostView[]
+  postViews          PostView[]
   // backend/w14-post-media-pipeline (B-041, B-036; Decision Log #419): every file this user has
   // uploaded for a post or a contest entry. RESTRICT like the other user-owned tables; the
   // anonymiser deletes the rows (and the stored objects) first.
-  postMedia        PostMedia[]
-  postMediaReports PostMediaReport[]
-  followedBy       Follow[]           @relation("followee")
-  following        Follow[]           @relation("follower")
+  postMedia          PostMedia[]
+  postMediaReports   PostMediaReport[]
+  followedBy         Follow[]            @relation("followee")
+  following          Follow[]            @relation("follower")
   // backend/w5-profile-block (B-039, Decision Log #396): the two sides of Block.
   // blocksMade = rows where THIS user is the blocker; blockedBy = rows where
   // this user is the one blocked. Mechanical relation fields, no business data.
-  blocksMade       Block[]            @relation("blocker")
-  blockedBy        Block[]            @relation("blocked")
-  notifications    Notification[]
+  blocksMade         Block[]             @relation("blocker")
+  blockedBy          Block[]             @relation("blocked")
+  // backend/w6-hold-rule-extension (B-044): admin-placed legal / bad-faith holds on this account.
+  accountHolds       AccountHold[]
+  notifications      Notification[]
   matchSubscriptions MatchSubscription[]
-  reportsFiled     Report[]           @relation("reporter")
-  messagesSent     Message[]
-  createdTeams     GrassrootsTeam[]
-  resultsEntered   Result[]
-  leaderboardEntry LeaderboardEntry[]
+  reportsFiled       Report[]            @relation("reporter")
+  messagesSent       Message[]
+  createdTeams       GrassrootsTeam[]
+  resultsEntered     Result[]
+  leaderboardEntry   LeaderboardEntry[]
 
   // sprint-2/contest-data-model-backend (Decision Log #218/#219). All four
   // are onDelete: Cascade on their own FK side (below) -- matching
   // Decision Log #44 (cascade), so AccountDeletionSweepService's single
   // tx.user.delete() keeps working with no per-table handling added.
-  contestEntries   ContestEntry[]
-  contestRoundWins ContestRoundWinner[]
-  contestVotes     ContestVote[]
-  contestStandings ContestStanding[]
+  contestEntries     ContestEntry[]
+  contestRoundWins   ContestRoundWinner[]
+  contestVotes       ContestVote[]
+  contestStandings   ContestStanding[]
   // backend/w7-contest (B-091): the engagement this account GAVE to contest entries.
   contestEngagements ContestEngagement[]
   // backend/w11-exposure (B-092): the Final-week carousel impressions this account generated as a VIEWER.
   contestImpressions ContestImpression[]
-  pointsLedger     PointsLedgerEntry[]
+  pointsLedger       PointsLedgerEntry[]
 
   // sprint-2/account-deletion-sweep -- backs AccountDeletionSweepService's
   // own query (accountStatus = 'pending_deletion' AND pendingDeletionAt
@@ -785,7 +787,7 @@ model Result {
 }
 
 model Post {
-  id           String        @id @default(uuid())
+  id                String        @id @default(uuid())
   // Keyset-pagination tiebreaker for feed.service.ts's
   // paginatePostsWithViewerState (GET /posts/feed, GET /clubs/:id/feed,
   // GET /banter-rooms/:id/posts) -- `id` is a random UUID with zero
@@ -799,8 +801,8 @@ model Post {
   // payload (see POST_SELECT in feed.service.ts) -- purely an internal
   // pagination-ordering detail, not a field clients should see or rely
   // on.
-  sequence     Int           @unique @default(autoincrement())
-  authorId     String
+  sequence          Int           @unique @default(autoincrement())
+  authorId          String
   // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
   // CORRECTION (feat/post-delete-and-comment-settings): this comment
   // previously claimed Comment.post/SavedPost.post/Like.post already
@@ -810,13 +812,13 @@ model Post {
   // and PostView all cascade from Post (ContestEntry already did), so
   // DELETE /posts/:id removes every trace of the post including other
   // users' engagement on it (founder decision, Decision Log #360).
-  author       User          @relation(fields: [authorId], references: [id])
-  contentText  String
-  mediaUrls    String[]
-  clubPageId   String?
-  clubPage     ClubPage?     @relation(fields: [clubPageId], references: [id])
-  banterRoomId String?
-  banterRoom   BanterRoom?   @relation(fields: [banterRoomId], references: [id])
+  author            User          @relation(fields: [authorId], references: [id])
+  contentText       String
+  mediaUrls         String[]
+  clubPageId        String?
+  clubPage          ClubPage?     @relation(fields: [clubPageId], references: [id])
+  banterRoomId      String?
+  banterRoom        BanterRoom?   @relation(fields: [banterRoomId], references: [id])
   // Denormalized cache for feed-rendering performance (avoids a COUNT()
   // per post on every feed load). Must be incremented/decremented
   // transactionally alongside Like row creation/deletion by whichever
@@ -828,13 +830,13 @@ model Post {
   // Contest entry (the "Create a Post — For Contest" flow). At most one
   // entry per Post (ContestEntry.postId is @unique). onDelete: Cascade on
   // that side, so deleting a Post takes its entry with it.
-  contestEntry ContestEntry?
+  contestEntry      ContestEntry?
   // backend/w14-post-media-pipeline (B-041, B-036; Decision Log #419): the uploaded media attached to
   // this post. A post with ANY attached media that is not 'approved' is visible to its author only
   // (post-visibility.util.ts). Deleting the post deletes these rows (Cascade); the stored objects are
   // removed by the application, not the database.
-  media        PostMedia[]
-  likeCount    Int           @default(0)
+  media             PostMedia[]
+  likeCount         Int           @default(0)
   // Same denormalized-cache obligation as likeCount immediately above:
   // must be incremented transactionally alongside Comment row creation
   // by whichever code path implements POST /posts/:id/comments (Build
@@ -849,12 +851,12 @@ model Post {
   // Comment row's deletion, using the same updateMany-with-a-floor-guard
   // (commentCount: { gt: 0 }) pattern unlikePost() already established
   // for likeCount — see feed.service.ts.
-  commentCount Int           @default(0)
+  commentCount      Int           @default(0)
   // backend/w7-contest (B-091, Decision Log #386/#400/#405). A FINAL (week 4) contest entry is
   // hidden from everyone but its author until the reveal at 00:00 on day 25: while
   // visibleFrom > now() the post is invisible to every other viewer and engagement on it is
   // refused. NULL on every ordinary post. Cleared by the pin-removal step.
-  visibleFrom  DateTime?
+  visibleFrom       DateTime?
   // A final entry is "not also a normal Community-feed post" during the contest month (#404 item
   // 15): GET /posts/feed omits it until this instant (00:00 Europe/London on the 1st of the next
   // month = the pin removal, #406 item 5), after which it is an ordinary post. NULL on every
@@ -864,7 +866,7 @@ model Post {
   // the post's author) | off. The author can always comment. Bare String with
   // a service-enforced allow-list (BanterRoom.scopeType/status convention).
   // Never retroactively removes existing comments.
-  commentPermission String    @default("everyone")
+  commentPermission String        @default("everyone")
   // sprint-4/post-view-tracking (Build Plan Section 4.3, POST
   // /posts/:id/view) -- same denormalized-cache convention as
   // likeCount/commentCount above: incremented transactionally alongside
@@ -879,15 +881,15 @@ model Post {
   // comment and FeedService.recordView) -- so this counts view EVENTS,
   // not unique viewers, and can legitimately run ahead of the number of
   // distinct real people who viewed the post.
-  viewCount    Int           @default(0)
-  createdAt    DateTime      @default(now())
-  comments     Comment[]
-  savedBy      SavedPost[]
-  likes        Like[]
-  views        PostView[]
+  viewCount         Int           @default(0)
+  createdAt         DateTime      @default(now())
+  comments          Comment[]
+  savedBy           SavedPost[]
+  likes             Like[]
+  views             PostView[]
   // sprint-4/trending-topics-backend (Build Plan Section 4.7, GET
   // /trending) -- see PostHashtag below.
-  hashtags     PostHashtag[]
+  hashtags          PostHashtag[]
 }
 
 model Comment {
@@ -1023,7 +1025,7 @@ model BanterRoom {
 // stable topical identity vs. a rolling popularity signal over post
 // text) — kept as two separate models.
 model Topic {
-  id String @id @default(uuid())
+  id   String @id @default(uuid())
   name String
 
   // name.trim().toLowerCase(), @unique — the SAME anti-duplicate pattern
@@ -1039,7 +1041,7 @@ model Topic {
   // bug, not just a theoretical risk.
   nameNormalized String @unique
 
-  createdAt DateTime @default(now())
+  createdAt DateTime          @default(now())
   rooms     BanterRoomTopic[]
 }
 
@@ -1633,15 +1635,54 @@ model Report {
   appealReviewedByAdminId String?
   appealReviewedByAdmin   AdminUser? @relation("reportAppealReviewedBy", fields: [appealReviewedByAdminId], references: [id])
   appealReviewedAt        DateTime?
+
+  // backend/w6-hold-rule-extension (B-044) -- reverse relation for AccountHold.report.
+  accountHolds AccountHold[]
+}
+
+// backend/w6-hold-rule-extension (B-044; Decision Log #376, which extends #341 / #345, with #398 D1 and
+// #403 item 8) -- a genuine NEW model, flagged as a Decision Log candidate per CLAUDE.md's "the data model
+// is a fixed spec" rule. The two ADMIN-placed holds that keep an account out of anonymisation:
+//   legal_hold  holds an account in full until an admin lifts it (expiresAt NULL). One row per party that
+//               has an account (reporter and reported user), all pointing at the same report.
+//   bad_faith   placed on the REPORTER when a report is found to have been made in bad faith. Holds the
+//               account in full for BAD_FAITH_HOLD_MONTHS (expiresAt = placedAt + that), or until lifted.
+// A hold is ACTIVE while liftedAt IS NULL and (expiresAt IS NULL or expiresAt > now). Lifting works for both
+// types, needs a reason, and the held user is NOT told (#403 item 8). The report-based rules (open report,
+// appeal window, 6 months after closure) are NOT rows here: they are derived from Report, see
+// modules/account-hold/account-hold.rules.ts. userId is a real FK (RESTRICT, like every other reference to
+// User, #341): an anonymised user's row survives, so this record does too -- it is audit evidence.
+// reportId is nullable only for a legal hold placed with no report (the service has no such path yet).
+// CHECK constraints in the migration keep type, the lifted-together columns and the type/expiry/report
+// combinations coherent.
+model AccountHold {
+  id              String     @id @default(uuid())
+  userId          String
+  user            User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  type            String // legal_hold | bad_faith
+  reportId        String?
+  report          Report?    @relation(fields: [reportId], references: [id], onDelete: Restrict)
+  placedByAdminId String
+  placedByAdmin   AdminUser  @relation("accountHoldPlacedBy", fields: [placedByAdminId], references: [id], onDelete: Restrict)
+  placeReason     String
+  placedAt        DateTime   @default(now())
+  expiresAt       DateTime?
+  liftedAt        DateTime?
+  liftedByAdminId String?
+  liftedByAdmin   AdminUser? @relation("accountHoldLiftedBy", fields: [liftedByAdminId], references: [id], onDelete: Restrict)
+  liftReason      String?
+
+  @@index([userId, liftedAt])
+  @@index([reportId])
 }
 
 model MediaAsset {
-  id         String   @id @default(uuid())
-  uploaderId String
-  url        String
-  type       String // image | video
-  size       Int
-  createdAt  DateTime @default(now())
+  id               String    @id @default(uuid())
+  uploaderId       String
+  url              String
+  type             String // image | video
+  size             Int
+  createdAt        DateTime  @default(now())
   // sprint-5/admin-media-storage-backend addition, flagged per CLAUDE.md's
   // "the data model is a fixed spec" rule — Section 3's original
   // MediaAsset had `url` but no separate object-storage key. `url` is
@@ -1656,7 +1697,7 @@ model MediaAsset {
   // "What this PR does NOT do") but stored now so a future delete
   // endpoint doesn't need a backfill migration or a fragile
   // parse-the-key-back-out-of-the-URL workaround.
-  key        String
+  key              String
   // feat/article-cover-image addition, resolving Decision Log #334 — the
   // reverse side of Article.coverImage (see that model's own comment).
   // Plural/array because one MediaAsset could in principle be reused as
@@ -1668,14 +1709,14 @@ model MediaAsset {
 // ---------- Admin & Operations Console (Log Book Section 6.6) ----------
 
 model Article {
-  id            String    @id @default(uuid())
+  id            String      @id @default(uuid())
   title         String
   body          String
   categoryId    String
-  category      Category  @relation(fields: [categoryId], references: [id])
+  category      Category    @relation(fields: [categoryId], references: [id])
   authorAdminId String
-  authorAdmin   AdminUser @relation(fields: [authorAdminId], references: [id])
-  status        String    @default("draft") // draft | published
+  authorAdmin   AdminUser   @relation(fields: [authorAdminId], references: [id])
+  status        String      @default("draft") // draft | published
   publishedAt   DateTime?
   // feat/article-excerpt-field addition, resolving Decision Log #333 —
   // a nullable, admin-editable curated excerpt. Nullable (not every
@@ -1694,7 +1735,7 @@ model Article {
   // modules/admin-content/README.md) needs a real column to
   // keyset-paginate by, the same gap Follow.createdAt / Like.likedAt /
   // BanterRoomMember.joinedAt each closed for their own models.
-  createdAt     DateTime  @default(now())
+  createdAt     DateTime    @default(now())
   // feat/article-cover-image addition, resolving Decision Log #334 — a
   // genuine schema addition beyond Section 3's original Article field
   // list, flagged per CLAUDE.md's "the data model is a fixed spec" rule
@@ -1808,14 +1849,17 @@ model AdminUser {
   // is a distinct act from reviewing or escalating a report. No
   // application code reads or writes any of these three fields yet --
   // no vetting endpoint, no gate on Report review keyed to this flag.
-  childSafetyVetted Boolean          @default(false)
-  vettedAt          DateTime?
-  vettedByAdminId   String?
-  vettedByAdmin     AdminUser?       @relation("adminVettedBy", fields: [vettedByAdminId], references: [id])
-  vettedAdmins      AdminUser[]      @relation("adminVettedBy")
+  childSafetyVetted  Boolean          @default(false)
+  vettedAt           DateTime?
+  vettedByAdminId    String?
+  vettedByAdmin      AdminUser?       @relation("adminVettedBy", fields: [vettedByAdminId], references: [id])
+  vettedAdmins       AdminUser[]      @relation("adminVettedBy")
   // Reverse relation for AdminActionLog.admin (see that model's own
   // comment). No application code writes AdminActionLog rows yet.
-  actionLogs        AdminActionLog[]
+  actionLogs         AdminActionLog[]
+  // backend/w6-hold-rule-extension (B-044) -- reverse relations for AccountHold's two AdminUser FKs.
+  placedAccountHolds AccountHold[]    @relation("accountHoldPlacedBy")
+  liftedAccountHolds AccountHold[]    @relation("accountHoldLiftedBy")
 }
 
 // schema/report-severity-escalation-admin-vetting -- a genuine new model,
@@ -1988,20 +2032,20 @@ model MatchSubscription {
 // sprint-2/contest-data-model-backend, which builds only the ledger this
 // table would be computed from. Left exactly as Section 3 specified it.
 model LeaderboardEntry {
-  id     String @id @default(uuid())
-  userId String
+  id            String @id @default(uuid())
+  userId        String
   // Decision Log #341 (anonymize-in-place, supersedes #44 cascade) -- RESTRICT is a deliberate safety net: the User row is never hard-deleted, see account-deletion/README.md.
-  user   User   @relation(fields: [userId], references: [id])
+  user          User   @relation(fields: [userId], references: [id])
   // backend/w12-points (B-093, Decision Log #383): QUARTER-POINT units (1 point = 4 units). Ranking
   // uses this exact value; the API shows it rounded to the nearest whole point (half rounds up).
-  quarterPoints Int @default(0)
-  rank   Int?
-  period String // e.g. "2026-W33"
+  quarterPoints Int    @default(0)
+  rank          Int?
+  period        String // e.g. "2026-W33"
   // Decision Log #128 -- which board this row belongs to: '' = the Overall
   // (global) board, otherwise a ClubPage id for that club's board. An empty
   // string rather than NULL so the unique key below stays enforceable
   // (Postgres treats NULLs as distinct in a UNIQUE index).
-  clubId String @default("")
+  clubId        String @default("")
 
   @@unique([userId, period, clubId])
 }
@@ -2055,30 +2099,30 @@ model ContestCycle {
 
   // ---- backend/w7-contest (B-091) ----
   // "YYYY-MM", the London calendar month this contest runs in. NULL = a legacy admin-judged cycle.
-  monthKey      String?   @unique
-  description   String?
+  monthKey                 String?   @unique
+  description              String?
   // x: the points a finalist needs to be considered for the final top 3 (section 4, 10). ADMIN-ONLY:
   // never returned by a user-facing endpoint. Required (>= 1) for every new-model cycle.
-  minimumTally  Int?
+  minimumTally             Int?
   // Placement points (section 9d), set per contest; defaults are the spec's. Awarded to the ledger
   // when the week is decided (weekly) or the month is crowned (monthly).
-  weeklyPoints1  Int @default(500)
-  weeklyPoints2  Int @default(300)
-  weeklyPoints3  Int @default(150)
-  monthlyPoints1 Int @default(2000)
-  monthlyPoints2 Int @default(1200)
-  monthlyPoints3 Int @default(600)
+  weeklyPoints1            Int       @default(500)
+  weeklyPoints2            Int       @default(300)
+  weeklyPoints3            Int       @default(150)
+  monthlyPoints1           Int       @default(2000)
+  monthlyPoints2           Int       @default(1200)
+  monthlyPoints3           Int       @default(600)
   // Week 4 only (Decision Log #399 E2, #402). Lock when week 4 starts.
-  followersExcludedWeek4   Boolean @default(false)
-  exposureTolerancePercent Int     @default(10)
-  exposureViewerDailyCap   Int     @default(3)
+  followersExcludedWeek4   Boolean   @default(false)
+  exposureTolerancePercent Int       @default(10)
+  exposureViewerDailyCap   Int       @default(3)
   // Lifecycle stamps. All set once, by the lifecycle service, from the calendar.
-  finalistsSelectedAt DateTime?
-  revealedAt          DateTime?
-  pinsRemovedAt       DateTime?
+  finalistsSelectedAt      DateTime?
+  revealedAt               DateTime?
+  pinsRemovedAt            DateTime?
   // true when the month ended with no final (no finalist) or with no finalist reaching the minimum
   // tally: the leaderboard shows "No winner this month" / no final.
-  noWinner            Boolean   @default(false)
+  noWinner                 Boolean   @default(false)
 
   rounds    ContestRound[]
   entries   ContestEntry[]
@@ -2146,19 +2190,19 @@ model ContestEntry {
 
   // ---- backend/w7-contest (B-091) ----
   // Phase 1 result, written once at the end of Phase 1 (weeks 1-3 only).
-  phase1Tally Int?
-  phase1Rank  Int?
+  phase1Tally     Int?
+  phase1Rank      Int?
   // true for the top 10 (or all, if fewer): only these can be voted on.
-  qualified   Boolean @default(false)
+  qualified       Boolean   @default(false)
   // Final (week 4) result, written once at the crown.
-  finalTally  Int?
-  finalRank   Int?
+  finalTally      Int?
+  finalRank       Int?
   // The pin (section 6, #404 item 9): the entry is pinned on its author's profile from submission
   // until the contest ends (00:00 London on the 1st). pinnedUntil is that instant, fixed at
   // submission; pinRemovedAt is stamped by the lifecycle service when it removes the pin. The label
   // stays "Contest post" after the pin is gone.
-  pinnedUntil  DateTime?
-  pinRemovedAt DateTime?
+  pinnedUntil     DateTime?
+  pinRemovedAt    DateTime?
   // backend/w11-exposure (B-092): the Final-week carousel impressions this entry received, as ONE
   // total per entry. Written once, at the crown, from the per-viewer ContestImpression rows (which
   // are deleted in the same transaction). NULL until then, and always NULL for weekly entries.
@@ -2323,21 +2367,21 @@ model ContestStanding {
 // engagement points are awarded once per distinct event and never
 // revoked — see points.constants.ts.
 model PointsLedgerEntry {
-  id         String   @id @default(uuid())
-  userId     String
+  id            String    @id @default(uuid())
+  userId        String
   // Cascade per DL #44 — the sweep's tx.user.delete() must keep working.
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   // Baseline engagement (Decision Log #382/#383), one source per side per kind:
   //   engagement_view_given | engagement_like_given | engagement_comment_given     (the giver, 1 point)
   //   engagement_view_received | engagement_like_received | engagement_comment_received  (the creator, 0.25)
   // Contest placement: contest_weekly_win | contest_monthly_crown
   // ('competition_result' reserved for DL #73's unbuilt Competition system.)
-  source     String
+  source        String
   // The domain row this award is for. Given rows: the Post id. Received rows: "<postId>:<giverId>"
   // (one quarter point per unique account per post). Placement rows: a ContestRound id (weekly) or
   // ContestCycle id (crown). A plain string, NOT a foreign key: the ledger is an audit trail that must
   // outlive whatever it references, the same reasoning as ConsentAuditRecord.minorUserId.
-  refId      String
+  refId         String
   // backend/w12-points (B-093): QUARTER-POINT units (1 point = 4 units; a received view/like/comment is
   // 1 unit). Stored exactly, displayed rounded (half up), ranked on the exact value.
   quarterPoints Int
@@ -2357,8 +2401,8 @@ model PointsLedgerEntry {
   // NULL = unattributed: either the user represented no club when the
   // point was earned, or the point predates this column (no backfill —
   // see leaderboard/README.md).
-  clubId     String?
-  occurredAt DateTime @default(now())
+  clubId        String?
+  occurredAt    DateTime  @default(now())
 
   // Idempotency backstop: one award per (source, refId, user). A repeat
   // like on the same post, or re-running round judging, cannot double-pay.
@@ -2434,7 +2478,6 @@ model PageView {
   @@index([route])
   @@index([occurredAt])
 }
-
 
 // backend/w14-post-media-pipeline (B-041, B-036; Decision Log #419). One file a user uploaded for a post
 // or a contest entry. The file goes browser -> object store through a one-time link into a QUARANTINE
@@ -2515,10 +2558,10 @@ model PostMedia {
   reviewEnteredAt     DateTime?
   reviewEntrySource   String?
   // OPEN (undecided) user reports on an approved item; reset to 0 by a moderator decision.
-  reportCount         Int       @default(0)
+  reportCount         Int               @default(0)
   // Set when reportCount reaches the configured threshold: the item (and so its post) is hidden from
   // everyone but its author until a moderator decides. Cleared by the decision.
-  hiddenPendingReview Boolean   @default(false)
+  hiddenPendingReview Boolean           @default(false)
   reports             PostMediaReport[]
 
   @@index([postId])

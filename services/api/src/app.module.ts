@@ -13,6 +13,7 @@ import { BlockModule } from './modules/block/block.module';
 import { FeedModule } from './modules/feed/feed.module';
 import { ClubsModule } from './modules/clubs/clubs.module';
 import { AccountDeletionModule } from './modules/account-deletion/account-deletion.module';
+import { AccountHoldModule } from './modules/account-hold/account-hold.module';
 import { AgeReclassificationModule } from './modules/age-reclassification/age-reclassification.module';
 import { ContestNotificationsModule } from './modules/contest-notifications/contest-notifications.module';
 import { AdminModule } from './modules/admin/admin.module';
@@ -119,6 +120,8 @@ import { GlobalRateLimitModule } from './rate-limit/global-rate-limit.module';
     // Log #42. No route: registers AccountDeletionSweepService's daily
     // @Cron() job only. See modules/account-deletion/README.md.
     AccountDeletionModule,
+    // B-044: HoldService (place / lift of legal and bad-faith holds). No controller until B-045.
+    AccountHoldModule,
     AgeReclassificationModule,
     // backend/w3c-contest-notifications (B-122, Decision Log #404 item 16). No route: registers the
     // @Cron(EVERY_5_MINUTES) fan-out of the Contest in-app notification events. See
