@@ -109,6 +109,19 @@ model User {
   // state, and deactivation stays self-service-reversible).
   pendingDeletionAt DateTime?
 
+  // backend/w6-purge-anonymised-rows (B-043; Decision Log #375, supersedes #344)
+  // -- a genuine addition beyond Section 3's literal User field list, flagged as
+  // a Decision Log candidate. The moment the account was anonymised in place
+  // (AccountDeletionSweepService.anonymizeUser, written in the SAME transaction as
+  // accountStatus -> 'deleted'; covers the daily sweep and the admin immediate
+  // delete). pendingDeletionAt is cleared by the anonymiser and nothing else
+  // recorded WHEN a row became 'deleted', so the 30-day purge clock in #375 had
+  // nothing to count from. NULL on every row that was never anonymised AND on any
+  // row anonymised before this column existed (no backfill, the platform is not
+  // live): such a row is never selected by AnonymizedRowPurgeService. Kept at its
+  // first value if anonymizeUser is re-run on an already-anonymised row.
+  anonymizedAt DateTime?
+
   // backend/team-organiser-flag — a genuine addition beyond Section 3's
   // literal User field list, flagged as a Decision Log candidate (see
   // grassroots/README.md for the full writeup). Deliberately SEPARATE
@@ -301,6 +314,8 @@ model User {
   // own query (accountStatus = 'pending_deletion' AND pendingDeletionAt
   // <= cutoff), so the daily sweep isn't a full table scan.
   @@index([accountStatus, pendingDeletionAt])
+  // backend/w6-purge-anonymised-rows -- backs AnonymizedRowPurgeService's selection.
+  @@index([accountStatus, anonymizedAt])
 }
 
 // Guardian consent record — implements the six-screen flow in

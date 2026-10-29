@@ -25,6 +25,11 @@ import { DELETED_USER_PUBLIC_NAME } from '../users/public-name.util';
 // instead of a multi-table cascading delete -- the class of operation
 // that produced the Fixture/Result RESTRICT bug.
 //
+// B-043 (Decision Log #375, which supersedes #344): this service still never DELETEs the User row. The
+// ONLY place a User row is deleted is AnonymizedRowPurgeService, 30 days after anonymizeUser stamps
+// User.anonymizedAt, and only for a row nothing refers to any more (see that service and
+// anonymized-row-purge.references.ts).
+//
 // What anonymizeUser does, in one transaction: overwrite the User row's
 // identifying fields; null GrassrootsTeam.createdById on teams they
 // organised (the team goes dormant/read-only -- the existing
@@ -158,7 +163,7 @@ export class AccountDeletionSweepService {
         heldUserIds.push(user.id);
         continue;
       }
-      await this.anonymizeUser(user.id, user.isMinor);
+      await this.anonymizeUser(user.id, user.isMinor, now);
       anonymizedUserIds.push(user.id);
     }
 
@@ -233,14 +238,17 @@ export class AccountDeletionSweepService {
   // admin-triggered immediate delete; that caller owns its own
   // authorization/confirmation gate. Idempotent: re-running on an
   // already-anonymized row rewrites the same values.
-  async anonymizeUser(userId: string, isMinor: boolean): Promise<void> {
+  async anonymizeUser(userId: string, isMinor: boolean, now: Date = new Date()): Promise<void> {
     const stored: { avatarKey: string | null; coverKey: string | null } = { avatarKey: null, coverKey: null };
     let postMediaKeys: string[] = [];
     await this.prisma.$transaction(async (tx) => {
       // B-035: remember where the avatar object lives, so it can be removed from
       // storage once the row no longer points at it.
       // B-196: the cover photo object is removed the same way.
-      const before = await tx.user.findUnique({ where: { id: userId }, select: { avatarKey: true, coverKey: true } });
+      const before = await tx.user.findUnique({
+        where: { id: userId },
+        select: { avatarKey: true, coverKey: true, anonymizedAt: true },
+      });
       stored.avatarKey = before?.avatarKey ?? null;
       stored.coverKey = before?.coverKey ?? null;
 
@@ -368,6 +376,9 @@ export class AccountDeletionSweepService {
           coverRejectionReason: null,
           accountStatus: 'deleted',
           pendingDeletionAt: null,
+          // B-043 (#375): when this row became 'deleted' -- the 30-day purge clock starts here. The FIRST
+          // value wins: re-running on an already-anonymised row must not restart the clock.
+          anonymizedAt: before?.anonymizedAt ?? now,
         },
       });
     });
