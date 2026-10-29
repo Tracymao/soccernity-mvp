@@ -308,3 +308,294 @@
 a.mod-tab {
   text-decoration: none;
 }
+
+/* B-045 case-level holds (Figma Report Detail Bad Faith Confirm 6672:27278,
+ * Legal Hold Confirm 6672:27349, Legal Hold Active 6672:28898, Held
+ * Investigations 6647:23351). Tokens only. The alert colour is the accent of the
+ * error and alert callouts (bar, border) and nothing else: error text and buttons
+ * stay navy because white on the alert red is below AA. */
+
+.mod-pill--plain {
+  text-transform: none;
+}
+
+.mod-pill--outline {
+  background-color: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  color: var(--sn-text-secondary);
+}
+
+.mod-btn--neutral {
+  background-color: var(--sn-background-surface);
+  border-color: var(--sn-icon-inactive);
+  color: var(--sn-text-primary);
+}
+
+.mod-callout--alert .mod-callout__bar {
+  background-color: var(--sn-semantic-alert);
+}
+
+.mod-callout-error {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--sn-brand-navy);
+  border-left: 6px solid var(--sn-semantic-alert);
+  border-radius: 6px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mod-hold-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mod-hold-status__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+}
+
+.mod-hold-status__since {
+  font-size: 13px;
+  color: var(--sn-text-secondary);
+}
+
+/* dialog */
+
+.mod-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background-color: var(--sn-overlay-scrim);
+}
+
+.mod-dialog {
+  width: min(560px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  border-radius: 16px;
+  background-color: var(--sn-background-surface);
+  box-shadow:
+    0 24px 56px var(--sn-shadow-key),
+    0 8px 24px var(--sn-shadow-elevated),
+    0 2px 6px var(--sn-shadow-ambient);
+}
+
+.mod-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 28px 20px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+}
+
+.mod-dialog__head h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.mod-dialog__close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--sn-icon-inactive);
+  background: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.mod-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px 28px;
+  font-size: 13px;
+  color: var(--sn-text-primary);
+}
+
+.mod-dialog__text {
+  margin: 0;
+  font-weight: 500;
+}
+
+.mod-dialog__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+}
+
+.mod-dialog__input {
+  min-height: 96px;
+  background-color: var(--sn-green-tint-12);
+  border-color: transparent;
+}
+
+.mod-dialog__input[aria-invalid="true"] {
+  border: 2px solid var(--sn-semantic-alert);
+}
+
+.mod-dialog__field-error {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--sn-text-primary);
+  font-weight: 600;
+}
+
+.mod-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 0 28px 24px;
+}
+
+/* held investigations */
+
+.hi-page-title {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.hi-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.hi-filter__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.hi-field {
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hi-field__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+}
+
+.hi-field__box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 14px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-color: var(--sn-green-tint-12);
+}
+
+.hi-field__box[data-invalid="true"] {
+  border-color: var(--sn-semantic-alert);
+}
+
+.hi-field__box input {
+  flex: 1;
+  min-width: 0;
+  padding: 13px 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  color: var(--sn-text-primary);
+}
+
+.hi-field__box:focus-within {
+  border-color: var(--sn-brand-navy);
+}
+
+.hi-field__unit {
+  font-size: 13px;
+  color: var(--sn-text-secondary);
+}
+
+.hi-field__help {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.hi-field__error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.hi-field__error::before {
+  content: "";
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background-color: var(--sn-semantic-alert);
+}
+
+.hi-table__row {
+  display: grid;
+  grid-template-columns: 150px 200px 150px 100px 70px 1fr;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 20px;
+  font-size: 13px;
+}
+
+.hi-table__row.mod-table__row--head {
+  background-color: var(--sn-green-tint-12);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+.hi-name {
+  font-family: inherit;
+}
+
+.hi-table__row {
+  min-width: 0;
+}
+
+.hi-table__row + .hi-table__row:not(.mod-table__row--head) {
+  border-top: 1px solid var(--sn-icon-inactive);
+}
+
+.hi-empty {
+  padding: 40px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.hi-empty__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}

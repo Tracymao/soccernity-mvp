@@ -55,6 +55,7 @@ import { AddRolePage, EditRolePage, DeleteRolePage } from "../pages/settings/Rol
 import ModerationQueuePage from "../pages/moderation/ModerationQueuePage";
 import ReportDetailPage from "../pages/moderation/ReportDetailPage";
 import AppealReviewPage from "../pages/moderation/AppealReviewPage";
+import HeldInvestigationsPage from "../pages/moderation/HeldInvestigationsPage";
 import MediaReviewQueuePage from "../pages/media-review/MediaReviewQueuePage";
 import MediaReviewItemPage from "../pages/media-review/MediaReviewItemPage";
 import AdminNotFound from "../pages/AdminNotFound";
@@ -100,6 +101,8 @@ export const adminRoutes: RouteObject[] = [
           { path: "moderation", element: <ModerationQueuePage /> },
           { path: "moderation/reports/:id", element: <ReportDetailPage /> },
           { path: "moderation/appeals/:id", element: <AppealReviewPage /> },
+          // B-045: accounts held by a report or an admin hold (GET /admin/users/held-investigations).
+          { path: "moderation/held-investigations", element: <HeldInvestigationsPage /> },
           // Real screens (FC10, B-240) -- the media review queue (GET /admin/media-review*, B-037/W15):
           // pictures and videos the automatic check was unsure about, and files users reported.
           { path: "moderation/media", element: <MediaReviewQueuePage /> },

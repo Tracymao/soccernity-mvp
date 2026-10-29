@@ -23,6 +23,17 @@ export function formatDateTime(iso: string | null | undefined): string {
   );
 }
 
+// "14 Oct 2026", built by hand like pages/users/usersShared.tsx's formatDate
+// (newer ICU data renders September as "Sept" in en-GB).
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+export function formatShortDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return `${String(d.getDate()).padStart(2, "0")} ${MONTH_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+}
+
 export function targetLabel(targetType: string): string {
   if (targetType === "post") return "Post";
   if (targetType === "comment") return "Comment";

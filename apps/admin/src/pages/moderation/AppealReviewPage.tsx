@@ -33,9 +33,11 @@ import {
   isChildSafetyVettingRequiredError,
   REPORT_ACTION_LABELS,
   type AppealDecision,
+  type HoldView,
   type Report,
   type ReportAction,
 } from "../../api/moderation";
+import { CaseLevelHoldButtons, CaseLevelHoldCallout, HoldStatus, mergeHolds } from "./holdActions";
 import {
   EscalateReportCard,
   formatDateTime,
@@ -59,16 +61,24 @@ export default function AppealReviewPage() {
   const [submitting, setSubmitting] = useState<AppealDecision | null>(null);
 
   useEffect(() => {
-    if (report) return;
+    // B-045: the active holds come only from the single-report read, and the row the
+    // queue hands over has none, so a handed-over report is read once more only to add
+    // its holds (same as ReportDetailPage.tsx); a failure there changes nothing.
+    const handedOver = report !== null;
+    if (handedOver && report.holds !== undefined) return;
     let cancelled = false;
     getReportById(id)
       .then((found) => {
         if (cancelled) return;
+        if (handedOver) {
+          setReport((prev) => (prev ? { ...prev, holds: found.holds ?? [] } : found));
+          return;
+        }
         setReport(found);
         setLoadState("loaded");
       })
       .catch((err: unknown) => {
-        if (cancelled) return;
+        if (cancelled || handedOver) return;
         if (isChildSafetyVettingRequiredError(err)) {
           setLoadState("restricted");
         } else if (err instanceof AdminApiError && err.status === 404) {
@@ -108,6 +118,10 @@ export default function AppealReviewPage() {
       }
       setSubmitting(null);
     }
+  }
+
+  function handleHoldsPlaced(holds: HoldView[]) {
+    setReport((prev) => (prev ? { ...prev, holds: mergeHolds(prev.holds, holds) } : prev));
   }
 
   if (loadState === "loading") {
@@ -164,6 +178,7 @@ export default function AppealReviewPage() {
         <AdminPageHeader title={`Appeal — Report #${report.id.slice(0, 8)}`} hideSearch />
         <div className="mod-page">
           {backLink}
+          <HoldStatus holds={report.holds} />
           <div className="mod-card">
             <h2 className="mod-card__title">No pending appeal</h2>
             <p className="mod-note">
@@ -195,6 +210,8 @@ export default function AppealReviewPage() {
       <AdminPageHeader title={`Appeal — Report #${report.id.slice(0, 8)}`} hideSearch />
       <div className="mod-page">
         {backLink}
+
+        <HoldStatus holds={report.holds} />
 
         <p className="mod-note">
           You are reviewing this appeal because a <strong>different</strong> admin or moderator
@@ -291,6 +308,20 @@ export default function AppealReviewPage() {
               Overturning reopens the report in the Moderation Queue with the original action
               cleared, ready to be actioned again.
             </p>
+          </div>
+        )}
+
+        {actionRestricted ? null : (
+          <div className="mod-card">
+            <h2 className="mod-card__title">Case-level actions</h2>
+            <div className="mod-action-row">
+              <CaseLevelHoldButtons
+                report={report}
+                onPlaced={handleHoldsPlaced}
+                onRestricted={() => setActionRestricted(true)}
+              />
+            </div>
+            <CaseLevelHoldCallout />
           </div>
         )}
 
