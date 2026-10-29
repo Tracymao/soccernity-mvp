@@ -9,11 +9,11 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider, type RouteObject } from "react-router";
 import { routes } from "./router";
 import FooterLayout from "../layout/FooterLayout";
+import { seedSession, clearSession } from "../test/session";
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
 });
 
 async function renderAt(path: string) {
@@ -136,7 +136,7 @@ describe("router — match-centre carries the shared navbar (Decision Log #311)"
   });
 
   it("logged in: icon nav + account menu (header 4)", async () => {
-    window.sessionStorage.setItem("sn_access_token", "x.eyJzdWIiOiJ1MSJ9.y");
+    seedSession("x.eyJzdWIiOiJ1MSJ9.y");
     await renderAt("/sports-hub/matches/abc");
     expect(screen.getByRole("navigation", { name: "Primary" })).not.toBeNull();
     expect(screen.queryByRole("link", { name: "Login" })).toBeNull();

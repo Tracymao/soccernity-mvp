@@ -7,7 +7,7 @@
 // Header.tsx / navigation.ts had NO test file before this (Phase 2 of the
 // navbar correction, Decision Log #161).
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router";
 import Header from "./Header";
 import { primaryNavItems, drawerNavItems, accountMenuItems, loggedOutDrawerNavItems } from "./navigation";
@@ -30,8 +30,7 @@ vi.mock("../api/auth", async () => {
 import { getUser } from "../api/users";
 import { logoutSession } from "../api/auth";
 import { getUnreadCount } from "../api/notifications";
-
-const TOKEN_KEY = "sn_access_token";
+import { seedSession, clearSession, heldAccessToken } from "../test/session";
 
 // A real, decodable { sub, role } access token (base64url), matching
 // ProfilePage.test.tsx's helper. The other tests deliberately use a
@@ -88,7 +87,7 @@ function setViewport(width: number) {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
+  clearSession();
   window.localStorage.clear();
   setViewport(1200);
   vi.mocked(getUser).mockReset();
@@ -214,7 +213,7 @@ describe("Header -- logged out", () => {
 
 describe("Header -- logged in (desktop)", () => {
   beforeEach(() => {
-    window.sessionStorage.setItem(TOKEN_KEY, "header.payload.sig");
+    seedSession("header.payload.sig");
   });
 
   it("renders the avatar and no Login button", () => {
@@ -284,21 +283,32 @@ describe("Header -- logged in (desktop)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Log out" }));
 
-    expect(window.sessionStorage.getItem(TOKEN_KEY)).toBeNull();
+    expect(heldAccessToken()).toBeNull();
     expect(screen.getByTestId("pathname").textContent).toBe("/");
     expect(screen.getByRole("link", { name: "Login" })).not.toBeNull();
   });
 
-  // B-017: logout also revokes the refresh token server-side.
-  it("logs out: revokes the refresh token via POST /auth/logout, then clears both tokens", () => {
-    window.sessionStorage.setItem("sn_refresh_token", "refresh-abc");
+  // B-017 / B-246: logout revokes the refresh COOKIE server-side (POST /auth/logout;
+  // script never holds the refresh token, so nothing is passed) and clears the
+  // in-memory access token.
+  it("logs out: calls POST /auth/logout (cookie) with no token from script, then clears the in-memory token", () => {
+    vi.mocked(logoutSession).mockClear();
     renderHeader();
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Log out" }));
 
-    expect(logoutSession).toHaveBeenCalledWith("refresh-abc");
-    expect(window.sessionStorage.getItem("sn_refresh_token")).toBeNull();
-    expect(window.sessionStorage.getItem(TOKEN_KEY)).toBeNull();
+    expect(logoutSession).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(logoutSession).mock.calls[0]).toEqual([]);
+    expect(heldAccessToken()).toBeNull();
+  });
+
+  it("signs the header out when ANOTHER tab signs out (the session store changes, no navigation)", () => {
+    renderHeader();
+    expect(screen.queryByRole("link", { name: "Login" })).toBeNull();
+
+    act(() => clearSession());
+
+    expect(screen.getByRole("link", { name: "Login" })).not.toBeNull();
   });
 
   it("a mousedown inside the open menu does not close it before the item's own click fires", () => {
@@ -326,7 +336,7 @@ describe("Header -- logged in (desktop)", () => {
 
 describe("Header -- logged in (mobile)", () => {
   beforeEach(() => {
-    window.sessionStorage.setItem(TOKEN_KEY, "header.payload.sig");
+    seedSession("header.payload.sig");
     setViewport(500);
   });
 
@@ -383,7 +393,7 @@ describe("Header -- logged in (mobile)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
     fireEvent.click(screen.getByRole("button", { name: "Log out" }));
 
-    expect(window.sessionStorage.getItem(TOKEN_KEY)).toBeNull();
+    expect(heldAccessToken()).toBeNull();
     expect(screen.getByTestId("pathname").textContent).toBe("/");
   });
 });
@@ -392,7 +402,7 @@ describe("Header -- logged in (mobile)", () => {
 // getUser(accessToken, sub) fetch owned by Header.
 describe("Header -- drawer identity block (Decision Log #168)", () => {
   beforeEach(() => {
-    window.sessionStorage.setItem(TOKEN_KEY, decodableToken("user-1"));
+    seedSession(decodableToken("user-1"));
     setViewport(500);
   });
 
@@ -446,7 +456,7 @@ describe("Header -- drawer identity block (Decision Log #168)", () => {
     expect(within(drawer).queryByText("Adeniyi Christiana")).toBeNull();
 
     fireEvent.click(within(drawer).getByRole("button", { name: "Log out" }));
-    expect(window.sessionStorage.getItem(TOKEN_KEY)).toBeNull();
+    expect(heldAccessToken()).toBeNull();
     expect(screen.getByTestId("pathname").textContent).toBe("/");
   });
 
@@ -496,7 +506,7 @@ describe("Header -- mobile (FC4, B-178)", () => {
   beforeEach(() => setViewport(390));
 
   it("signed in: no nine-icon row and no search box, a search icon, messages and the avatar", () => {
-    window.sessionStorage.setItem(TOKEN_KEY, "not-a-real-jwt");
+    seedSession("not-a-real-jwt");
     renderHeader();
     expect(screen.queryByRole("navigation", { name: "Primary" })).toBeNull();
     for (const item of primaryNavItems) expect(screen.queryByRole("link", { name: item.label })).toBeNull();
@@ -509,7 +519,7 @@ describe("Header -- mobile (FC4, B-178)", () => {
   });
 
   it("signed in: the avatar opens the existing Navigation Drawer (with Log out)", () => {
-    window.sessionStorage.setItem(TOKEN_KEY, "not-a-real-jwt");
+    seedSession("not-a-real-jwt");
     renderHeader();
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
     const drawer = screen.getByRole("dialog", { name: "Navigation" });

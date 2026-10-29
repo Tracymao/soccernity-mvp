@@ -1,5 +1,5 @@
 // Plain DOM assertions, mocks src/api/messaging.ts, session seeded into
-// sessionStorage. GET /conversations is a real merged endpoint
+// the in-memory session store. GET /conversations is a real merged endpoint
 // (sprint-3/messaging-direct-messaging) -- exercising it live is
 // services/api's e2e layer's job.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -14,6 +14,7 @@ vi.mock("../api/messaging", async () => {
 });
 
 import { listConversations } from "../api/messaging";
+import { seedSession, clearSession } from "../test/session";
 
 function base64UrlEncode(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -36,8 +37,7 @@ function conversation(overrides: Partial<Conversation> = {}): Conversation {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(listConversations).mockReset();
 });
 
@@ -57,7 +57,7 @@ describe("MessagesPage", () => {
   });
 
   it("renders the real inbox, including the other participant's name, preview and an unread badge", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listConversations).mockResolvedValueOnce({
       items: [conversation({ unreadCount: 3 })],
       nextCursor: null,
@@ -71,7 +71,7 @@ describe("MessagesPage", () => {
   });
 
   it("shows a plain, threshold-free message when the account is under-16 restricted", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listConversations).mockRejectedValueOnce(
       new MessagingApiError("This isn't available for your account yet.", { status: 403, code: "under_16_restricted" }),
     );
@@ -81,7 +81,7 @@ describe("MessagesPage", () => {
   });
 
   it("renders the empty-inbox state with a Start a conversation link", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listConversations).mockResolvedValueOnce({ items: [], nextCursor: null });
 
     renderPage();
@@ -91,7 +91,7 @@ describe("MessagesPage", () => {
   });
 
   it("renders 'Deleted user' for a conversation whose other participant was hard-deleted (Decision Log #44)", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listConversations).mockResolvedValueOnce({
       items: [conversation({ otherParticipant: { id: "user-2", publicName: null }, lastMessage: null })],
       nextCursor: null,
@@ -104,7 +104,7 @@ describe("MessagesPage", () => {
   });
 
   it("carries the conversation's otherParticipant as router state on the row link", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listConversations).mockResolvedValueOnce({ items: [conversation()], nextCursor: null });
 
     renderPage();
@@ -114,7 +114,7 @@ describe("MessagesPage", () => {
   });
 
   it("fetches the next page with the returned cursor when Load more is clicked", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listConversations)
       .mockResolvedValueOnce({ items: [conversation()], nextCursor: "cursor-1" })
       .mockResolvedValueOnce({

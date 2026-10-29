@@ -17,6 +17,7 @@ vi.mock("../api/blog", async () => {
 });
 
 import { listArticles, listCategories } from "../api/blog";
+import { clearSession } from "../test/session";
 
 const PREMIER_LEAGUE: Category = { id: "cat-pl", name: "Premier League", slug: "premier-league" };
 const LA_LIGA: Category = { id: "cat-ll", name: "La Liga", slug: "la-liga" };
@@ -60,8 +61,7 @@ describe("BlogPage", () => {
     vi.mocked(listCategories).mockResolvedValueOnce({ items: [PREMIER_LEAGUE], nextCursor: null });
     vi.mocked(listArticles).mockResolvedValueOnce({ items: [ZAHA], nextCursor: null });
 
-    window.sessionStorage.clear();
-    window.localStorage.clear();
+    clearSession();
     renderPage();
 
     expect(screen.getByText(/Feel The Passion/i)).not.toBeNull();

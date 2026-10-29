@@ -1,5 +1,5 @@
 // Plain DOM assertions, mocks src/api/messaging.ts, session seeded into
-// sessionStorage. GET/POST /conversations/:id/messages and
+// the in-memory session store. GET/POST /conversations/:id/messages and
 // PATCH /conversations/:id/read are real merged endpoints
 // (sprint-3/messaging-direct-messaging + sprint-3/banter-messaging-to-
 // code's markConversationRead fix) -- exercising them live is services/
@@ -21,6 +21,7 @@ vi.mock("../../api/messaging", async () => {
 });
 
 import { getMessages, sendMessage, markConversationRead } from "../../api/messaging";
+import { seedSession, clearSession } from "../../test/session";
 
 function base64UrlEncode(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -43,8 +44,7 @@ function message(overrides: Partial<Message> = {}): Message {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(getMessages).mockReset();
   vi.mocked(sendMessage).mockReset();
   vi.mocked(markConversationRead).mockReset().mockResolvedValue({ conversationId: "convo-1", markedRead: 0 });
@@ -68,7 +68,7 @@ describe("ConversationPage", () => {
   });
 
   it("renders the header name from router state, and messages oldest-first even though the API returns newest-first", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     // GET /conversations/:id/messages returns newest-first (sentAt desc).
     vi.mocked(getMessages).mockResolvedValueOnce({
       items: [
@@ -87,7 +87,7 @@ describe("ConversationPage", () => {
   });
 
   it("falls back to a generic 'Conversation' header with no router state (a direct visit)", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getMessages).mockResolvedValueOnce({ items: [], nextCursor: null });
 
     renderPage();
@@ -96,7 +96,7 @@ describe("ConversationPage", () => {
   });
 
   it("renders an honest 'Conversation not found' state on a 404", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getMessages).mockRejectedValueOnce(new MessagingApiError("not found", { status: 404 }));
 
     renderPage();
@@ -105,7 +105,7 @@ describe("ConversationPage", () => {
   });
 
   it("marks the conversation read exactly once after the thread loads (closing the collapsed-notification gap)", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getMessages).mockResolvedValueOnce({ items: [message()], nextCursor: null });
 
     renderPage({ otherParticipant: { id: "user-2", publicName: "Ada Obi" } });
@@ -116,7 +116,7 @@ describe("ConversationPage", () => {
   });
 
   it("sends a message via the real POST endpoint and appends it to the thread", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getMessages).mockResolvedValueOnce({ items: [], nextCursor: null });
     vi.mocked(sendMessage).mockResolvedValueOnce(
       message({ id: "m-3", senderId: "user-1", contentText: "On my way" }),
@@ -135,7 +135,7 @@ describe("ConversationPage", () => {
   });
 
   it("surfaces a guardian-consent 403 with a link to /guardian-consent, not a generic failure", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getMessages).mockResolvedValueOnce({ items: [], nextCursor: null });
     vi.mocked(sendMessage).mockRejectedValueOnce(
       new MessagingApiError("Your account is awaiting guardian consent", { status: 403 }),
@@ -152,7 +152,7 @@ describe("ConversationPage", () => {
   });
 
   it("loads earlier messages and prepends them, keeping ascending order", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getMessages)
       .mockResolvedValueOnce({
         items: [message({ id: "m-2", contentText: "Recent", sentAt: "2026-09-13T10:05:00.000Z" })],

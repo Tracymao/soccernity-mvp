@@ -3,15 +3,17 @@ import * as path from 'path';
 import { test, expect, type Page, type Request } from '@playwright/test';
 import {
   api,
+  heldAccessToken,
   loginViaUi,
   me,
+  plantAccessToken,
+  refreshWithCookie,
   registerViaApi,
   uniqueUsername,
-  userLogin,
   verifyEmailViaApi,
   type Account,
 } from '../support/helpers';
-import { URLS } from '../support/stack';
+import { URLS, USER_PASSWORD } from '../support/stack';
 
 // FC4 (build register B-164, B-178; Decision Log #408 items 2 and 8).
 //   1. Two tabs sharing a "Stay signed in" session must never both rotate the same refresh token.
@@ -36,63 +38,119 @@ const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
 const expiredToken = (sub: string) =>
   `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ sub, role: 'user', iat: 1, exp: 2 })}.x`;
 
-test.describe('cross-tab refresh-token rotation (B-164)', () => {
-  test('two tabs that 401 at the same moment rotate the refresh token ONCE and both stay signed in', async ({ browser }) => {
+test.describe('cross-tab refresh-cookie rotation (B-164, B-246)', () => {
+  // B-246: the refresh token is the httpOnly `sn_rt` cookie, shared by every tab of the browser context, and it
+  // ROTATES: the server treats a second use of an old cookie as reuse and revokes the family. Two tabs whose
+  // access tokens expire together must therefore never send the SAME cookie at once (the cross-tab lock), and the
+  // winner hands the new access token to the other tab over a BroadcastChannel. The access token itself is in
+  // each tab's memory, so "expired in both tabs" is set up through the app's own session module.
+  test('two tabs that 401 at the same moment never reuse the cookie, both stay signed in, and the cookie rotated', async ({ browser }) => {
     const a = await verifiedAccount('xtab');
-    const login = await userLogin(a.email);
-    expect(login.status).toBeLessThan(300);
-    const refreshToken: string = login.body.refreshToken;
 
-    // One browser context = one origin storage shared by both pages, like two real tabs.
+    // One browser context = one cookie jar shared by both pages, like two real tabs.
     const context = await browser.newContext();
     const tabA = await context.newPage();
     const tabB = await context.newPage();
-    const refreshCalls: string[] = [];
+
+    // Sign in on tab A with "Stay signed in"; tab B then loads the app and restores the SAME session
+    // from the shared cookie (its own start-up refresh).
+    await tabA.goto('/login');
+    await tabA.getByLabel('Email').fill(a.email);
+    await tabA.getByLabel('Password', { exact: true }).fill(USER_PASSWORD);
+    await tabA.getByLabel('Stay signed in.').check();
+    await tabA.getByRole('button', { name: 'Log in' }).click();
+    await expect(tabA).toHaveURL(/\/community$/);
+    await tabB.goto('/community');
+    await expect(tabB.getByRole('button', { name: 'Account menu' })).toBeVisible();
+
+    // All cookies, by name: the cookie's Path is /auth, so a URL-scoped lookup of the API root would not match it.
+    const cookieJar = async () => (await context.cookies()).find((c) => c.name === 'sn_rt')!;
+    const cookieBefore = (await cookieJar()).value;
+
+    // Record every refresh request either tab makes, and how the server answered.
+    const refreshAnswers: Promise<number>[] = [];
+    const bodies: (string | null)[] = [];
     const watch = (req: Request) => {
-      if (req.url() === `${URLS.api}/auth/refresh`) refreshCalls.push(req.postData() ?? '');
+      if (req.url() === `${URLS.api}/auth/refresh`) {
+        bodies.push(req.postData());
+        refreshAnswers.push(req.response().then((r) => (r ? r.status() : 0)));
+      }
     };
     tabA.on('request', watch);
     tabB.on('request', watch);
 
-    // Both tabs load the app; then a "Stay signed in" session (localStorage) with an EXPIRED access
-    // token and a live refresh token is planted for the shared origin.
-    await tabA.goto('/login');
-    await tabB.goto('/login');
-    await tabA.evaluate(
-      ([expired, refresh]) => {
-        window.localStorage.setItem('sn_access_token', expired);
-        window.localStorage.setItem('sn_refresh_token', refresh);
-      },
-      [expiredToken(a.userId), refreshToken],
-    );
+    // Both tabs now hold an EXPIRED access token in memory...
+    await plantAccessToken(tabA, expiredToken(a.userId));
+    await plantAccessToken(tabB, expiredToken(a.userId));
 
-    // Each tab fires an authenticated request at the same moment through the app's own fetch
+    // ...and each fires an authenticated request at the same moment through the app's own fetch
     // (the silent-refresh wrapper installed by main.tsx).
     const call = (page: Page) =>
-      page.evaluate(async (apiBase) => {
-        const token = window.localStorage.getItem('sn_access_token');
-        const res = await window.fetch(`${apiBase}/posts/feed`, { headers: { Authorization: `Bearer ${token}` } });
-        return res.status;
-      }, URLS.api);
+      page.evaluate(
+        async ([apiBase, token]) => {
+          const res = await window.fetch(`${apiBase}/posts/feed`, { headers: { Authorization: `Bearer ${token}` } });
+          return res.status;
+        },
+        [URLS.api, expiredToken(a.userId)],
+      );
     const [statusA, statusB] = await Promise.all([call(tabA), call(tabB)]);
 
     expect([statusA, statusB]).toEqual([200, 200]);
-    expect(refreshCalls, 'the refresh endpoint was called more than once').toHaveLength(1);
-    expect(JSON.parse(refreshCalls[0]).refreshToken).toBe(refreshToken);
+    const answers = await Promise.all(refreshAnswers);
+    // The lock serialises the tabs: one refresh, or at most two when the second tab's broadcast arrived after it
+    // took the lock (then it used the ALREADY ROTATED cookie, which is legitimate). Never a 401 (a reuse).
+    expect(answers.length, 'refresh requests').toBeGreaterThanOrEqual(1);
+    expect(answers.length, 'refresh requests').toBeLessThanOrEqual(2);
+    expect(answers.every((status) => status === 200), `refresh answers ${answers.join(',')}`).toBe(true);
+    // No refresh token travels from script: the request has no body.
+    expect(bodies.every((b) => b === null)).toBe(true);
 
-    // Rotated exactly once, the session is intact, and a later request still works.
-    const stored = await tabA.evaluate(() => ({
-      access: window.localStorage.getItem('sn_access_token'),
-      refresh: window.localStorage.getItem('sn_refresh_token'),
-    }));
-    expect(stored.refresh).toBeTruthy();
-    expect(stored.refresh).not.toBe(refreshToken);
-    expect(stored.access).not.toBe(expiredToken(a.userId));
-    expect(await call(tabB)).toBe(200);
-    expect(refreshCalls).toHaveLength(1);
-    // The OLD refresh token is dead server-side (it was used once, by the winner).
-    const reuse = await api('POST', '/auth/refresh', { body: { refreshToken } });
-    expect(reuse.status).toBe(401);
+    // The session is intact in both tabs, the cookie rotated, and a later request needs no refresh.
+    const cookieAfter = (await cookieJar()).value;
+    expect(cookieAfter).not.toBe(cookieBefore);
+    expect(await heldAccessToken(tabA)).toBeTruthy();
+    expect(await heldAccessToken(tabB)).toBeTruthy();
+    expect(await heldAccessToken(tabA)).not.toBe(expiredToken(a.userId));
+    expect(await heldAccessToken(tabB)).not.toBe(expiredToken(a.userId));
+    const laterCall = (page: Page) =>
+      page.evaluate(
+        async ([apiBase, mod]) => {
+          const session = await import(/* @vite-ignore */ mod);
+          const res = await window.fetch(`${apiBase}/posts/feed`, {
+            headers: { Authorization: `Bearer ${session.getStoredAccessToken()}` },
+          });
+          return res.status;
+        },
+        [URLS.api, '/src/lib/session.ts'],
+      );
+    const refreshesBefore = answers.length;
+    expect(await laterCall(tabA)).toBe(200);
+    expect(await laterCall(tabB)).toBe(200);
+    expect((await Promise.all(refreshAnswers)).length).toBe(refreshesBefore);
+    // The OLD cookie is dead server-side (it was used once, by the winner).
+    expect((await refreshWithCookie(cookieBefore)).status).toBe(401);
+    await context.close();
+  });
+
+  test('signing out in one tab signs out the other (BroadcastChannel)', async ({ browser }) => {
+    const a = await verifiedAccount('xout');
+    const context = await browser.newContext();
+    const tabA = await context.newPage();
+    const tabB = await context.newPage();
+    await tabA.goto('/login');
+    await tabA.getByLabel('Email').fill(a.email);
+    await tabA.getByLabel('Password', { exact: true }).fill(USER_PASSWORD);
+    await tabA.getByRole('button', { name: 'Log in' }).click();
+    await expect(tabA).toHaveURL(/\/community$/);
+    await tabB.goto('/community');
+    await expect(tabB.getByRole('button', { name: 'Account menu' })).toBeVisible();
+
+    await tabA.getByRole('button', { name: 'Account menu' }).click();
+    await tabA.getByRole('menuitem', { name: 'Log out' }).click();
+
+    // Tab B notices without any navigation: its header falls back to the signed-out chrome.
+    await expect(tabB.getByRole('link', { name: 'Login' })).toBeVisible();
+    expect(await heldAccessToken(tabB)).toBeNull();
     await context.close();
   });
 });

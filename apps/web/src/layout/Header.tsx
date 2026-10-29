@@ -56,8 +56,8 @@ import searchMobileIcon from "../assets/icons/search-mobile.svg";
 import menuIcon from "../assets/icons/menu-hamburger.svg";
 import { getUser, type UserProfile } from "../api/users";
 import { getUnreadCount } from "../api/notifications";
-import { clearStoredSession, decodeAccessToken, getStoredAccessToken, getStoredRefreshToken } from "../lib/session";
-import { logoutSession } from "../api/auth";
+import { decodeAccessToken } from "../lib/session";
+import { useAuth } from "../lib/AuthContext";
 import { primaryNavItems } from "./navigation";
 import { useIsMobile } from "./useIsMobile";
 import AccountDropdown from "./AccountDropdown";
@@ -69,10 +69,10 @@ export default function Header() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
-  // Re-derived on every navigation -- login writes the token then
-  // navigate()s, logout clears it then navigate()s, and either way this
-  // recomputes because location.key changed.
-  const accessToken = getStoredAccessToken();
+  // B-246: the in-memory session. useAuth() subscribes to the store, so this
+  // re-renders on sign-in, on a token rotation and when ANOTHER tab signs out
+  // (BroadcastChannel) -- not only on navigation.
+  const { accessToken, signOut } = useAuth();
   const hasSession = Boolean(accessToken);
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -152,11 +152,10 @@ export default function Header() {
   }, [accessToken, location.key]);
 
   function handleLogout() {
-    // B-017: revoke the refresh token server-side (best-effort, not awaited)
-    // before the local copy is cleared; the UI never waits on the network.
-    const refreshToken = getStoredRefreshToken();
-    if (refreshToken) void logoutSession(refreshToken);
-    clearStoredSession();
+    // B-017 / B-246: POST /auth/logout revokes the refresh cookie server-side
+    // (best-effort, not awaited) and the in-memory token is cleared in this and
+    // every other tab; the UI never waits on the network.
+    signOut();
     setMenuOpen(false);
     navigate("/");
   }

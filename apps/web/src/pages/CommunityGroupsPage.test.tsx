@@ -1,6 +1,6 @@
 // CommunityGroupsPage (Community Groups -- Browse). Same conventions as
 // ClubsPage.test.tsx / GrassrootsPage.test.tsx: plain DOM assertions,
-// mocks src/api/community-groups.ts, session seeded into sessionStorage.
+// mocks src/api/community-groups.ts, session seeded into the in-memory session store.
 // GET /community-groups is a real merged endpoint -- exercising it live is
 // services/api's e2e layer's job (test/community-groups.e2e-spec.ts).
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -15,6 +15,7 @@ vi.mock("../api/community-groups", async () => {
 });
 
 import { listCommunityGroups } from "../api/community-groups";
+import { seedSession, clearSession } from "../test/session";
 
 const BALLERS: CommunityGroup = {
   id: "group-1",
@@ -42,8 +43,7 @@ const STRIKERS: CommunityGroup = {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(listCommunityGroups).mockReset();
 });
 
@@ -63,7 +63,7 @@ describe("CommunityGroupsPage", () => {
   });
 
   it("renders a loaded page of groups with dimension badges, member counts, and a Create a group link -- no Join button on cards", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listCommunityGroups).mockResolvedValueOnce({ items: [BALLERS, STRIKERS], nextCursor: null });
 
     renderPage();
@@ -84,7 +84,7 @@ describe("CommunityGroupsPage", () => {
   });
 
   it("shows 'No groups yet.' when the unfiltered catalogue is empty", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listCommunityGroups).mockResolvedValueOnce({ items: [], nextCursor: null });
 
     renderPage();
@@ -93,7 +93,7 @@ describe("CommunityGroupsPage", () => {
   });
 
   it("re-queries the server (debounced) when exactly one dimension filter is set, showing the single-dimension empty state with a Create the first group CTA", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listCommunityGroups)
       .mockResolvedValueOnce({ items: [BALLERS, STRIKERS], nextCursor: null }) // initial
       .mockResolvedValueOnce({ items: [], nextCursor: null }); // after city filter
@@ -111,7 +111,7 @@ describe("CommunityGroupsPage", () => {
   });
 
   it("shows the multi-filter empty state and a Reset filters button when two dimensions are active and nothing matches", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listCommunityGroups)
       .mockResolvedValueOnce({ items: [BALLERS], nextCursor: null }) // initial
       .mockResolvedValueOnce({ items: [], nextCursor: null }) // after city
@@ -146,7 +146,7 @@ describe("CommunityGroupsPage", () => {
   });
 
   it("filters the loaded list client-side by name (no extra server round trip)", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listCommunityGroups).mockResolvedValueOnce({ items: [BALLERS, STRIKERS], nextCursor: null });
 
     renderPage();
@@ -160,7 +160,7 @@ describe("CommunityGroupsPage", () => {
   });
 
   it("fetches the next page with the returned cursor when Load more is clicked", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listCommunityGroups)
       .mockResolvedValueOnce({ items: [BALLERS], nextCursor: "cursor-1" })
       .mockResolvedValueOnce({ items: [STRIKERS], nextCursor: null });
@@ -177,7 +177,7 @@ describe("CommunityGroupsPage", () => {
   });
 
   it("shows a load error without crashing", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listCommunityGroups).mockRejectedValueOnce(new CommunityGroupsApiError("Couldn't load groups (500)."));
 
     renderPage();

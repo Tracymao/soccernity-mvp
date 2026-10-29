@@ -208,6 +208,63 @@ export async function clearBrowserSession(page: Page): Promise<void> {
   });
 }
 
+// ---------------------------------------------------------------------------
+// The web session (B-246, Decision Log #422). The access token lives in the
+// app's MEMORY only and the refresh token is the httpOnly `sn_rt` cookie, so a
+// test can no longer plant or read either in browser storage. These helpers
+// reach the app's own in-memory store: the QA stack serves apps/web from the
+// Vite dev server, where `import('/src/lib/session.ts')` resolves to the SAME
+// module instance the running app uses.
+// ---------------------------------------------------------------------------
+const SESSION_MODULE = '/src/lib/session.ts';
+
+/** The access token the page is holding in memory right now (null = signed out). */
+export async function heldAccessToken(page: Page): Promise<string | null> {
+  return page.evaluate(async (mod) => {
+    const session = await import(/* @vite-ignore */ mod);
+    return session.getStoredAccessToken() as string | null;
+  }, SESSION_MODULE);
+}
+
+/** Puts `token` into the page's in-memory session (no cross-tab broadcast), e.g. an EXPIRED one. */
+export async function plantAccessToken(page: Page, token: string): Promise<void> {
+  await page.evaluate(
+    async ([mod, t]) => {
+      const session = await import(/* @vite-ignore */ mod);
+      session.storeSession({ accessToken: t });
+    },
+    [SESSION_MODULE, token],
+  );
+}
+
+/** Every key and value in both browser storages, plus document.cookie, as one string. */
+export async function everythingScriptCanRead(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const parts: string[] = [document.cookie, window.location.href];
+    for (const store of [window.sessionStorage, window.localStorage]) {
+      for (let i = 0; i < store.length; i += 1) {
+        const key = store.key(i) as string;
+        parts.push(key, store.getItem(key) ?? '');
+      }
+    }
+    return parts.join('\n');
+  });
+}
+
+/** The refresh cookie the API set for the browser context, if any. */
+export async function refreshCookie(page: Page) {
+  // All cookies, filtered by name: the cookie's Path is /auth, so a URL-scoped lookup of the API root would not match it.
+  const cookies = await page.context().cookies();
+  return cookies.find((c) => c.name === 'sn_rt');
+}
+
+/** POST /auth/refresh exactly as a browser on the web origin would, with the given cookie value. */
+export async function refreshWithCookie(value: string): Promise<{ status: number; body: any }> {
+  return api('POST', '/auth/refresh', {
+    headers: { 'X-Auth-Mode': 'cookie', Origin: URLS.web, Cookie: `sn_rt=${value}` },
+  });
+}
+
 export const GUARDIAN = (label = 'guardian') => ({
   name: 'Pat Guardian',
   email: uniqueEmail(label),

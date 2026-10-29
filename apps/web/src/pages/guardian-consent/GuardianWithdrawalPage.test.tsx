@@ -11,6 +11,7 @@ vi.mock("../../api/auth", async () => {
   return { ...actual, requestGuardianWithdrawal: vi.fn(), withdrawGuardianConsent: vi.fn() };
 });
 import { requestGuardianWithdrawal, withdrawGuardianConsent } from "../../api/auth";
+import { clearSession } from "../../test/session";
 
 beforeEach(() => {
   vi.mocked(requestGuardianWithdrawal).mockReset();
@@ -236,7 +237,7 @@ describe("GuardianWithdrawalPage", () => {
   });
 
   it("makes no authenticated call and needs no session (the guardian has no account)", () => {
-    window.sessionStorage.clear();
+    clearSession();
     renderPage("/guardian-consent/withdraw?token=abc");
     expect(step()).toBe("confirm");
   });

@@ -1,5 +1,5 @@
 // Same conventions as ClubFanPage.test.tsx: plain DOM assertions, mocks
-// src/api/banter.ts, session seeded into sessionStorage. GET
+// src/api/banter.ts, session seeded into the in-memory session store. GET
 // /banter-rooms/:id, GET /banter-rooms/:id/posts and POST
 // /banter-rooms/:id/posts are all real merged endpoints
 // (sprint-3/banter-rooms-backend) -- exercising them live is services/
@@ -24,6 +24,7 @@ vi.mock("../api/banter", async () => {
 });
 
 import { getRoomById, getRoomFeed, postToRoom, joinRoom } from "../api/banter";
+import { seedSession, clearSession } from "../test/session";
 
 function base64UrlEncode(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -68,8 +69,7 @@ function post(overrides: Partial<FeedPost> = {}): FeedPost {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(getRoomById).mockReset();
   vi.mocked(getRoomFeed).mockReset();
   vi.mocked(postToRoom).mockReset();
@@ -94,7 +94,7 @@ describe("BanterRoomPage", () => {
   });
 
   it("renders the real room header and feed", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getRoomById).mockResolvedValueOnce(room());
     vi.mocked(getRoomFeed).mockResolvedValueOnce({ items: [post()], nextCursor: null });
 
@@ -106,7 +106,7 @@ describe("BanterRoomPage", () => {
   });
 
   it("renders an honest 'Room not found' state on a 404", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getRoomById).mockRejectedValueOnce(new BanterApiError("not found", { status: 404 }));
 
     renderPage();
@@ -115,7 +115,7 @@ describe("BanterRoomPage", () => {
   });
 
   it("shows a 'join to post' prompt instead of a composer when the caller isn't a member", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getRoomById).mockResolvedValueOnce(room({ joined: false }));
     vi.mocked(getRoomFeed).mockResolvedValueOnce({ items: [], nextCursor: null });
 
@@ -126,7 +126,7 @@ describe("BanterRoomPage", () => {
   });
 
   it("posts via the real POST /banter-rooms/:id/posts when the caller is a member, and prepends it to the feed", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getRoomById).mockResolvedValueOnce(room({ joined: true }));
     vi.mocked(getRoomFeed).mockResolvedValueOnce({ items: [], nextCursor: null });
     vi.mocked(postToRoom).mockResolvedValueOnce({
@@ -157,7 +157,7 @@ describe("BanterRoomPage", () => {
   });
 
   it("joins the room via BanterJoinButton, which reveals the composer without a reload", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getRoomById).mockResolvedValueOnce(room({ joined: false, memberCount: 5 }));
     vi.mocked(getRoomFeed).mockResolvedValueOnce({ items: [], nextCursor: null });
     vi.mocked(joinRoom).mockResolvedValueOnce({ roomId: "room-1", joined: true, memberCount: 6 });
