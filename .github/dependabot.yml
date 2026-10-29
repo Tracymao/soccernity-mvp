@@ -1,0 +1,71 @@
+# Dependabot version updates. Decision Log #423, build-register B-250.
+#
+# Defaults here are founder-adopted and veto-able:
+#   - npm: weekly, one config entry per package.json (root + each workspace).
+#   - github-actions: monthly.
+#   - minor and patch updates are grouped into one PR per ecosystem entry.
+#   - at most 5 open PRs per entry.
+#   - major-version bumps are ignored for the packages this project upgrades
+#     deliberately (React, React Router, NestJS, Vite, Prisma, Expo, React
+#     Native). Those moves have their own PRs and decisions (Decision Log
+#     #24, #25, #27, #28; B-255), so a bot PR must not start one.
+#
+# Why one entry per workspace: Dependabot's npm updater does not fan out
+# across npm workspaces from a single root entry. GitHub's documented
+# options are a `directories` list (or a glob) in one entry, or one entry
+# per directory; `directories` is used below so the shared settings are
+# written once (the ignore list and grouping therefore apply to every
+# directory). Not verified here: how Dependabot resolves the single root
+# package-lock.json for workspace directories; check the first PRs it opens.
+
+version: 2
+
+updates:
+  - package-ecosystem: "npm"
+    directories:
+      - "/"
+      - "/apps/web"
+      - "/apps/admin"
+      - "/apps/mobile"
+      - "/services/api"
+      - "/packages/shared"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-router"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-router-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@nestjs/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vite"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "prisma"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@prisma/client"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "expo"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-native"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 5
+    groups:
+      actions-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"

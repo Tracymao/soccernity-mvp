@@ -98,3 +98,52 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  # Dependency audit. Decision Log #423, build-register B-250.
+  #
+  # Gate: fail on High or Critical advisories in PRODUCTION dependencies of the
+  # deployed workspaces only. apps/mobile is deliberately not gated: it has no
+  # application code and its react-native tooling advisories (shell-quote,
+  # image-size via metro) are deferred by Decision Log #20 tier 3.
+  #
+  # Report-only: the same audit including dev dependencies, plus apps/mobile
+  # in full. These steps never fail the job (continue-on-error) so the findings
+  # are visible in the log without blocking a merge.
+  #
+  # `npm audit` reads package-lock.json; no install is needed.
+  dependency-audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+
+      - name: Audit production dependencies (gate, High and above)
+        run: |
+          status=0
+          for ws in services/api apps/web apps/admin packages/shared; do
+            echo "::group::npm audit --omit=dev --workspace=$ws"
+            if ! npm audit --omit=dev --workspace="$ws" --audit-level=high; then
+              echo "::error::High or Critical production advisory in $ws"
+              status=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $status
+
+      - name: Audit including dev dependencies (report only)
+        continue-on-error: true
+        run: |
+          for ws in services/api apps/web apps/admin packages/shared; do
+            echo "::group::npm audit --workspace=$ws (all dependencies)"
+            npm audit --workspace="$ws" --audit-level=high || true
+            echo "::endgroup::"
+          done
+
+      - name: Audit apps/mobile (report only, Decision Log #20 tier 3)
+        continue-on-error: true
+        run: npm audit --workspace=apps/mobile --audit-level=high
