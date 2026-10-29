@@ -10,9 +10,12 @@ import { Prisma, Report } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminActionLogService } from '../admin-action-log/admin-action-log.service';
 import { isAdminChildSafetyVetted } from './child-safety-vetting.util';
+import { appealWindowLapsed } from '../account-hold/account-hold.rules';
+import { resolveReportAppealWindowDays } from '../account-hold/account-hold.config';
 import { ADMIN_ACTION_LOG_ACTIONS, ADMIN_ACTION_LOG_TARGET_TYPES } from '../admin-action-log/admin-action-log.constants';
 import { BanterService } from '../banter/banter.service';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
+import { resolveReportedUserId } from './report-target.util';
 import { decodeModerationCursor, encodeModerationCursor } from './cursor.util';
 import { ActionReportDto } from './dto/action-report.dto';
 import { AppealDecisionDto } from './dto/appeal-decision.dto';
@@ -22,6 +25,7 @@ import { CreateReportDto } from './dto/create-report.dto';
 import { EscalateReportDto } from './dto/escalate-report.dto';
 import { ListReportsQueryDto } from './dto/list-reports-query.dto';
 import {
+  APPEAL_WINDOW_CLOSED_CODE,
   CHILD_SAFETY_VETTING_REQUIRED_CODE,
   DEFAULT_REPORT_SEVERITY,
   MODERATION_DEFAULT_PAGE_SIZE,
@@ -162,86 +166,10 @@ export class ModerationService {
     }
   }
 
-  // Shared "who is the reported user" resolution — used by both
-  // appealReport's eligibility check (only the reported user may appeal)
-  // and the admin-side notification steps below (Section 8.4: both the
-  // reporter and the reported user are notified of the outcome). Report
-  // has no denormalized reportedUserId column (a deliberate choice, not
-  // an oversight — see README.md), so this always resolves dynamically:
-  //   - targetType 'user'   -> targetId IS the reported user, if they
-  //                            still exist.
-  //   - targetType 'post'   -> the post's own authorId, if the post
-  //                            still exists.
-  //   - targetType 'comment'-> the comment's own authorId, if the
-  //                            comment still exists.
-  //   - targetType 'grassroots_team' / 'fixture' -> the team's / teamA's
-  //                            organiser, if the team still has one.
-  // Returns null if the target has since been deleted (e.g. the reported
-  // post/comment was removed, or — Decision Log #44's cascade — the
-  // reported user's own account was hard-deleted) or targetType is
-  // somehow unrecognised. Every caller treats null as "cannot determine
-  // the reported user," never as an error to surface to a report's own
-  // reporter/admin actions.
-  private async resolveReportedUserId(targetType: string, targetId: string): Promise<string | null> {
-    switch (targetType) {
-      case 'user': {
-        const user = await this.prisma.user.findUnique({ where: { id: targetId }, select: { id: true } });
-        return user?.id ?? null;
-      }
-      case 'post': {
-        const post = await this.prisma.post.findUnique({
-          where: { id: targetId },
-          select: { authorId: true },
-        });
-        return post?.authorId ?? null;
-      }
-      case 'comment': {
-        const comment = await this.prisma.comment.findUnique({
-          where: { id: targetId },
-          select: { authorId: true },
-        });
-        return comment?.authorId ?? null;
-      }
-      case 'banter_room': {
-        // BanterRoom.createdBy is a bare String, not a User relation
-        // (Decision Log #44 / #341 — deliberately not an FK). So the room
-        // can outlive its creator: a hard-deleted account leaves a
-        // dangling id. Check the User row still exists before returning
-        // it, so a notification never targets a gone account (the
-        // notification FK would otherwise fail the whole transaction).
-        const room = await this.prisma.banterRoom.findUnique({
-          where: { id: targetId },
-          select: { createdBy: true },
-        });
-        if (!room) return null;
-        const creator = await this.prisma.user.findUnique({
-          where: { id: room.createdBy },
-          select: { id: true },
-        });
-        return creator?.id ?? null;
-      }
-      case 'grassroots_team': {
-        // GrassrootsTeam.createdById is nullable (a dormant team after its
-        // organiser's anonymisation, Decision Log #341) -> null = nobody to
-        // notify / no one who can appeal.
-        const team = await this.prisma.grassrootsTeam.findUnique({
-          where: { id: targetId },
-          select: { createdById: true },
-        });
-        return team?.createdById ?? null;
-      }
-      case 'fixture': {
-        // The fixture's author is the organiser of teamA (only teamA's
-        // organiser may create a fixture, Decision Log #255).
-        const fixture = await this.prisma.fixture.findUnique({
-          where: { id: targetId },
-          select: { teamA: { select: { createdById: true } } },
-        });
-        return fixture?.teamA.createdById ?? null;
-      }
-      default:
-        return null;
-    }
+  // Shared "who is the reported user" resolution (see report-target.util.ts for the per-targetType rules).
+  // Used by appealReport's eligibility check and the notification steps below.
+  private resolveReportedUserId(targetType: string, targetId: string): Promise<string | null> {
+    return resolveReportedUserId(this.prisma, targetType, targetId);
   }
 
   private async assertReportExists(id: string): Promise<Report> {
@@ -369,6 +297,20 @@ export class ModerationService {
     const reportedUserId = await this.resolveReportedUserId(report.targetType, report.targetId);
     if (!reportedUserId || reportedUserId !== callerId) {
       throw new ForbiddenException('You may only appeal a report made against you');
+    }
+
+    // backend/w6-hold-rule-extension (B-044, Decision Log #376): an appeal must be filed within the appeal
+    // window, counted from the decision. The window length is configuration (REPORT_APPEAL_WINDOW_DAYS), not a
+    // counsel-sourced figure, and is deliberately NOT stated in the message (a duration is a legal promise).
+    // reviewedAt is always set on an actioned report (it is written together with the action), so the null case
+    // is only a data-integrity guard and lets the appeal through.
+    if (report.reviewedAt && appealWindowLapsed(report.reviewedAt, resolveReportAppealWindowDays(), new Date())) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: 'Forbidden',
+        code: APPEAL_WINDOW_CLOSED_CODE,
+        message: 'The time allowed for appealing this report has passed.',
+      });
     }
 
     return this.prisma.report.update({

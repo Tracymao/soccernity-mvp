@@ -427,6 +427,9 @@ describe('AccountDeletionSweepService e2e: 30-day anonymize-in-place + investiga
       targetId: string;
       status?: string;
       appealStatus?: string | null;
+      // B-044: a closed report needs its decision timestamps (a closed state with none FAILS SAFE: held).
+      reviewedAt?: Date | null;
+      appealReviewedAt?: Date | null;
     }) {
       return getTestPrismaClient().report.create({
         data: {
@@ -436,6 +439,8 @@ describe('AccountDeletionSweepService e2e: 30-day anonymize-in-place + investiga
           reason: 'e2e hold test',
           status: over.status ?? 'open',
           appealStatus: over.appealStatus ?? null,
+          reviewedAt: over.reviewedAt ?? null,
+          appealReviewedAt: over.appealReviewedAt ?? null,
         },
       });
     }
@@ -464,8 +469,9 @@ describe('AccountDeletionSweepService e2e: 30-day anonymize-in-place + investiga
       expect(second.heldUserIds).toEqual([subject.id]);
       await expectHeld(subject.id, subject);
 
-      // Resolve the report -> terminal -> next run anonymizes.
-      await prisma.report.update({ where: { id: report.id }, data: { status: 'actioned' } });
+      // Resolve the report -> terminal -> next run anonymizes. (B-044: closed long enough ago that both the
+      // appeal window and the post-closure months have run out.)
+      await prisma.report.update({ where: { id: report.id }, data: { status: 'actioned', reviewedAt: daysAgo(400) } });
       const third = await sweepService.sweepPendingDeletions();
       expect(third.heldUserIds).toEqual([]);
       expect(third.anonymizedUserIds).toContain(subject.id);
@@ -527,27 +533,30 @@ describe('AccountDeletionSweepService e2e: 30-day anonymize-in-place + investiga
         targetId: subject.id,
         status: 'actioned',
         appealStatus: 'pending',
+        reviewedAt: daysAgo(500),
       });
 
       expect((await sweepService.sweepPendingDeletions()).heldUserIds).toEqual([subject.id]);
       await expectHeld(subject.id, subject);
 
-      await prisma.report.update({ where: { id: report.id }, data: { appealStatus: 'upheld' } });
+      await prisma.report.update({ where: { id: report.id }, data: { appealStatus: 'upheld', appealReviewedAt: daysAgo(400) } });
       const after = await sweepService.sweepPendingDeletions();
       expect(after.anonymizedUserIds).toContain(subject.id);
     });
 
-    it('terminal reports do NOT hold: dismissed (reviewed), actioned with no appeal, and actioned with a decided appeal', async () => {
+    it('long-closed reports do NOT hold: dismissed (reviewed), actioned with no appeal, and actioned with a decided appeal', async () => {
       const subject = await seedPendingDeletionUser('not-held', { pendingDeletionAt: daysAgo(45) });
       const reporter = await createActiveUser('terminal-reporter');
-      await seedReport({ reporterId: reporter.id, targetType: 'user', targetId: subject.id, status: 'reviewed' });
-      await seedReport({ reporterId: reporter.id, targetType: 'user', targetId: subject.id, status: 'actioned' });
+      await seedReport({ reporterId: reporter.id, targetType: 'user', targetId: subject.id, status: 'reviewed', reviewedAt: daysAgo(400) });
+      await seedReport({ reporterId: reporter.id, targetType: 'user', targetId: subject.id, status: 'actioned', reviewedAt: daysAgo(400) });
       await seedReport({
         reporterId: reporter.id,
         targetType: 'user',
         targetId: subject.id,
         status: 'actioned',
         appealStatus: 'upheld',
+        reviewedAt: daysAgo(500),
+        appealReviewedAt: daysAgo(400),
       });
 
       const result = await sweepService.sweepPendingDeletions();
@@ -746,6 +755,7 @@ describe('AccountDeletionSweepService e2e: 30-day anonymize-in-place + investiga
       const out = await sweepService.listStalledHolds(90);
 
       expect(out.map((h) => h.userId)).toEqual([stale.id]);
+      expect(out[0].holdType).toBe('open_report');
       expect(out[0].daysHeld).toBeGreaterThanOrEqual(129);
       // read-only: still pending_deletion, untouched
       expect((await prisma.user.findUnique({ where: { id: stale.id } }))!.accountStatus).toBe('pending_deletion');

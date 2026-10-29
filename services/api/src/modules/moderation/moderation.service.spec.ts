@@ -365,6 +365,80 @@ describe('ModerationService', () => {
       expect(result.appealStatus).toBe('pending');
     });
 
+    // backend/w6-hold-rule-extension (B-044, Decision Log #376): the appeal window. 30 days by default
+    // (REPORT_APPEAL_WINDOW_DAYS, a placeholder), counted from reviewedAt.
+    describe('appeal window', () => {
+      const reviewedAt = new Date('2026-11-01T10:00:00.000Z');
+      const original = process.env.REPORT_APPEAL_WINDOW_DAYS;
+      afterEach(() => {
+        jest.useRealTimers();
+        if (original === undefined) delete process.env.REPORT_APPEAL_WINDOW_DAYS;
+        else process.env.REPORT_APPEAL_WINDOW_DAYS = original;
+      });
+
+      async function appealAt(now: string) {
+        jest.useFakeTimers({ now: new Date(now) });
+        const prisma = buildPrismaMock();
+        (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'actioned', reviewedAt }));
+        (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+        (prisma.report.update as jest.Mock).mockResolvedValue(report({ appealStatus: 'pending' }));
+        const promise = buildService(prisma).appealReport('report-1', 'post-author', { reason: 'unfair' });
+        return { prisma, promise };
+      }
+
+      it('is accepted one millisecond before the window closes', async () => {
+        const { prisma, promise } = await appealAt('2026-12-01T09:59:59.999Z');
+        await expect(promise).resolves.toBeDefined();
+        expect(prisma.report.update).toHaveBeenCalled();
+      });
+
+      it('is refused AT the deadline instant with the coded 403, and nothing is written', async () => {
+        const { prisma, promise } = await appealAt('2026-12-01T10:00:00.000Z');
+        await expect(promise).rejects.toBeInstanceOf(ForbiddenException);
+        await expect(promise).rejects.toMatchObject({
+          response: expect.objectContaining({ statusCode: 403, code: 'appeal_window_closed' }),
+        });
+        expect(prisma.report.update).not.toHaveBeenCalled();
+      });
+
+      it('is refused long after, and the message states no duration', async () => {
+        const { promise } = await appealAt('2027-03-01T00:00:00.000Z');
+        const err = (await promise.catch((e: unknown) => e)) as { response: { message: string } };
+        expect(err.response.message).toBe('The time allowed for appealing this report has passed.');
+        expect(err.response.message).not.toMatch(/\d/);
+      });
+
+      it('uses the configured window (7 days here)', async () => {
+        process.env.REPORT_APPEAL_WINDOW_DAYS = '7';
+        const { promise: tooLate } = await appealAt('2026-11-08T10:00:00.000Z');
+        await expect(tooLate).rejects.toMatchObject({ response: expect.objectContaining({ code: 'appeal_window_closed' }) });
+        const { promise: inTime } = await appealAt('2026-11-08T09:59:59.999Z');
+        await expect(inTime).resolves.toBeDefined();
+      });
+
+      it('the check comes AFTER eligibility: a stranger gets the plain 403, not the window code', async () => {
+        jest.useFakeTimers({ now: new Date('2027-03-01T00:00:00.000Z') });
+        const prisma = buildPrismaMock();
+        (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ status: 'actioned', reviewedAt }));
+        (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+        const err = (await buildService(prisma)
+          .appealReport('report-1', 'stranger', { reason: 'x' })
+          .catch((e: unknown) => e)) as { response: unknown };
+        expect(JSON.stringify(err.response)).not.toContain('appeal_window_closed');
+      });
+
+      it('a report re-actioned after an overturned appeal starts a NEW window from its new reviewedAt', async () => {
+        jest.useFakeTimers({ now: new Date('2027-01-10T00:00:00.000Z') });
+        const prisma = buildPrismaMock();
+        (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+          report({ status: 'actioned', reviewedAt: new Date('2027-01-05T00:00:00.000Z'), appealStatus: null }),
+        );
+        (prisma.post.findUnique as jest.Mock).mockResolvedValue({ authorId: 'post-author' });
+        (prisma.report.update as jest.Mock).mockResolvedValue(report({ appealStatus: 'pending' }));
+        await expect(buildService(prisma).appealReport('report-1', 'post-author', { reason: 'again' })).resolves.toBeDefined();
+      });
+    });
+
     it('the reported user (a directly-reported user, targetType user) successfully appeals', async () => {
       const prisma = buildPrismaMock();
       (prisma.report.findUnique as jest.Mock).mockResolvedValue(

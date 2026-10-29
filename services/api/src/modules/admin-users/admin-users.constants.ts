@@ -43,3 +43,7 @@ export type AdminUserFilterStatus = (typeof ADMIN_USER_FILTER_STATUSES)[number];
 // every other list endpoint in this codebase uses.
 export const ADMIN_USERS_DEFAULT_PAGE_SIZE = 20;
 export const ADMIN_USERS_MAX_PAGE_SIZE = 50;
+
+// B-044 (Decision Log #376): the 409 code PATCH /admin/users/:id { status: 'deleted' } returns while the user has
+// an active legal_hold or bad_faith AccountHold. The response also carries `holdType`.
+export const ACCOUNT_HOLD_ACTIVE_CODE = 'account_hold_active';
