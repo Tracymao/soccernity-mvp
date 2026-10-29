@@ -2,17 +2,29 @@ import { ForbiddenException } from '@nestjs/common';
 import { buildCorsConfig, isOriginAllowed } from '../cors-options';
 import { parse, serialize } from './cookie-lib';
 
-// B-245 / Decision Log "Token storage" (Build Plan 5.7 stands; supersedes the
-// interim body-token implementation). OPT-IN cookie session mode for the API.
+// B-245 / B-248 / Decision Log "Token storage" (Build Plan 5.7 stands; supersedes the
+// interim body-token implementation). COOKIE SESSION MODE is the DEFAULT FOR BROWSERS.
 //
-// A request carrying `X-Auth-Mode: cookie` gets its refresh token as an httpOnly,
-// Secure, SameSite=Strict, HOST-ONLY cookie (no Domain) instead of in the
-// response body; the access token stays in the body. WITHOUT that header every
-// route behaves exactly as before -- tokens in the body -- so apps/web, apps/admin
-// (until B-246 / B-247), the native app and the e2e suites keep working, and
-// the body tokens are NOT removed for browsers here (B-248 flips the default
-// later). Staging on default onrender.com addresses cannot use cookie mode until
-// same-site custom domains exist (B-249): the opt-in is what keeps staging working.
+// A request is in cookie mode when EITHER
+//   (a) it carries `X-Auth-Mode: cookie`, or
+//   (b) it carries an `Origin` header that is on the exact-origin allowlist the CORS layer uses
+//       (WEB_APP_BASE_URL, ADMIN_APP_BASE_URL, plus localhost outside production).
+// In cookie mode the refresh token is an httpOnly, Secure, SameSite=Strict, HOST-ONLY cookie (no
+// Domain) and is OMITTED from the response body; the access token stays in the body. So a browser
+// on an allowed origin is never handed a refresh token in a body, whether or not its code
+// remembers to send the header (B-248).
+//
+// A request with NO Origin, or an Origin that is not on the allowlist, and without the header stays
+// in body mode: that is the contract for native clients (apps/mobile, scripts, API-level test
+// helpers) -- they send no Origin and receive body tokens as before. A foreign browser origin
+// cannot read the response anyway (CORS), and gets body mode, never a cookie.
+//
+// apps/web and apps/admin STILL send the header on the five session routes: with it, an Origin
+// missing from WEB_APP_BASE_URL / ADMIN_APP_BASE_URL (a deployment mistake) fails loudly with a 403
+// on refresh/logout instead of silently falling back to body tokens.
+//
+// Staging on default onrender.com addresses cannot use cookie mode until same-site custom domains
+// exist (B-249; Decision Log #437).
 
 export const COOKIE_MODE_HEADER = 'x-auth-mode';
 export const COOKIE_MODE_VALUE = 'cookie';
@@ -43,16 +55,23 @@ export interface AppendRes {
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
-export function isCookieMode(req: HeaderReq | undefined): boolean {
-  const raw = req?.headers?.[COOKIE_MODE_HEADER];
-  const value = Array.isArray(raw) ? raw[0] : raw;
-  return typeof value === 'string' && value.trim().toLowerCase() === COOKIE_MODE_VALUE;
-}
-
 function originHeader(req: HeaderReq): string | undefined {
   const raw = req.headers?.origin;
   const value = Array.isArray(raw) ? raw[0] : raw;
   return typeof value === 'string' && value.trim() !== '' ? value : undefined;
+}
+
+// The single switch every cookie-aware caller uses (auth, registration, admin auth, the global
+// rate-limit refresh tracker, applyCookieSession). See the header comment for the rule.
+// `isOriginAllowed(undefined, ...)` is true (a non-CORS request), so an absent Origin is handled
+// explicitly here: no Origin never means cookie mode on its own.
+export function isCookieMode(req: HeaderReq | undefined, env: EnvLike = process.env): boolean {
+  const raw = req?.headers?.[COOKIE_MODE_HEADER];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof value === 'string' && value.trim().toLowerCase() === COOKIE_MODE_VALUE) return true;
+  if (!req) return false;
+  const origin = originHeader(req);
+  return origin !== undefined && isOriginAllowed(origin, buildCorsConfig(env));
 }
 
 // `Secure` is required in production. Outside production it is dropped ONLY when
@@ -142,7 +161,7 @@ export function clearRefreshCookie(
   );
 }
 
-// Shapes a token-bearing response for the caller's mode. Not in cookie mode:
+// Shapes a token-bearing response for the caller's mode. Not in cookie mode (native client):
 // returned untouched (the identical object). In cookie mode: the refresh token
 // goes into the cookie and is OMITTED from the body; everything else stays.
 export function applyCookieSession<T extends { refreshToken: string; refreshTokenExpiresAt: string }>(
@@ -151,13 +170,14 @@ export function applyCookieSession<T extends { refreshToken: string; refreshToke
   res: AppendRes | undefined,
   body: T,
   persistent: boolean,
+  env: EnvLike = process.env,
 ): T | Omit<T, 'refreshToken'> {
-  if (!req || !res || !isCookieMode(req)) return body;
+  if (!req || !res || !isCookieMode(req, env)) return body;
   setRefreshCookie(req, res, cfg, {
     token: body.refreshToken,
     expiresAt: new Date(body.refreshTokenExpiresAt),
     persistent,
-  });
+  }, env);
   const rest: Partial<T> = { ...body };
   delete rest.refreshToken;
   return rest as Omit<T, 'refreshToken'>;

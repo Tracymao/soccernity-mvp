@@ -25,11 +25,6 @@
 // the others (they would otherwise each have to rotate again) and so a sign-out in
 // one tab signs out the rest.
 
-// The pre-B-247 build kept both tokens in localStorage. The platform is not live, so
-// there is no migration: the leftover session is deleted at start-up and the
-// operator signs in again.
-const LEGACY_ACCESS_TOKEN_KEY = "sn_admin_access_token";
-const LEGACY_REFRESH_TOKEN_KEY = "sn_admin_refresh_token";
 let channelName = "sn-admin-session";
 
 let accessToken: string | null = null;
@@ -142,28 +137,6 @@ export function setAdminSessionRestoring(value: boolean): void {
 
 export function getAdminSessionVersion(): number {
   return tokenVersion;
-}
-
-// Removes the tokens the pre-B-247 build left in localStorage. (The cross-tab lease
-// key sn_admin_refresh_lock is not a token and is left alone.)
-export function purgeLegacyAdminTokenStorage(): void {
-  for (const store of [safeStorage("localStorage"), safeStorage("sessionStorage")]) {
-    if (!store) continue;
-    try {
-      store.removeItem(LEGACY_ACCESS_TOKEN_KEY);
-      store.removeItem(LEGACY_REFRESH_TOKEN_KEY);
-    } catch {
-      /* storage blocked: nothing to purge */
-    }
-  }
-}
-
-function safeStorage(name: "sessionStorage" | "localStorage"): Storage | null {
-  try {
-    return typeof window !== "undefined" ? window[name] : null;
-  } catch {
-    return null;
-  }
 }
 
 // Test-only: BroadcastChannel delivers between worker threads of the same process,

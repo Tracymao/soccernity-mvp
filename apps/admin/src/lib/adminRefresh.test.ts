@@ -91,20 +91,6 @@ describe("start-up restore (B-247)", () => {
     expect(getAdminAccessToken()).toBe("once");
   });
 
-  it("removes tokens the old build left in localStorage, without migrating them into a session", async () => {
-    window.localStorage.setItem("sn_admin_access_token", "old-a");
-    window.localStorage.setItem("sn_admin_refresh_token", "old-r");
-    backend.mockResolvedValue(json(401));
-
-    await restoreAdminSession();
-
-    expect(window.localStorage.getItem("sn_admin_access_token")).toBeNull();
-    expect(window.localStorage.getItem("sn_admin_refresh_token")).toBeNull();
-    expect(getAdminAccessToken()).toBeNull();
-    // Nothing was sent to the API from the leftovers.
-    for (const [, init] of refreshCalls()) expect(init.body).toBeUndefined();
-  });
-
   it("does not refresh when a session is already held", async () => {
     seedAdminSession("already-signed-in");
     await expect(restoreAdminSession()).resolves.toBe("skipped");

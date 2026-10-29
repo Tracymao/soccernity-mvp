@@ -5,7 +5,6 @@ import {
   dropSessionLocally,
   getStoredAccessToken,
   initSessionChannel,
-  purgeLegacyTokenStorage,
   replaceAccessToken,
   setSessionRestoring,
   storeSession,
@@ -80,26 +79,6 @@ describe("the in-memory session (B-246)", () => {
     subscribeSession(listener);
     storeSession({ accessToken: "same" });
     expect(listener).not.toHaveBeenCalled();
-  });
-});
-
-describe("leftover tokens from the old build (no migration)", () => {
-  it("purgeLegacyTokenStorage removes sn_access_token and sn_refresh_token from BOTH storages and nothing else", () => {
-    window.sessionStorage.setItem("sn_access_token", "old-a");
-    window.sessionStorage.setItem("sn_refresh_token", "old-r");
-    window.localStorage.setItem("sn_access_token", "old-a2");
-    window.localStorage.setItem("sn_refresh_token", "old-r2");
-    window.localStorage.setItem("unrelated", "keep");
-
-    purgeLegacyTokenStorage();
-
-    expect(window.sessionStorage.getItem("sn_access_token")).toBeNull();
-    expect(window.sessionStorage.getItem("sn_refresh_token")).toBeNull();
-    expect(window.localStorage.getItem("sn_access_token")).toBeNull();
-    expect(window.localStorage.getItem("sn_refresh_token")).toBeNull();
-    expect(window.localStorage.getItem("unrelated")).toBe("keep");
-    // The purge does not turn a leftover token into a session.
-    expect(getStoredAccessToken()).toBeNull();
   });
 });
 
