@@ -1,7 +1,7 @@
 # Dependabot version updates. Decision Log #423, build-register B-250.
 #
 # Defaults here are founder-adopted and veto-able:
-#   - npm: weekly, one config entry per package.json (root + each workspace).
+#   - npm: weekly, one entry for the repo root (it covers every workspace).
 #   - github-actions: monthly.
 #   - minor and patch updates are grouped into one PR per ecosystem entry.
 #   - at most 5 open PRs per entry.
@@ -10,25 +10,37 @@
 #     Native). Those moves have their own PRs and decisions (Decision Log
 #     #24, #25, #27, #28; B-255), so a bot PR must not start one.
 #
-# Why one entry per workspace: Dependabot's npm updater does not fan out
-# across npm workspaces from a single root entry. GitHub's documented
-# options are a `directories` list (or a glob) in one entry, or one entry
-# per directory; `directories` is used below so the shared settings are
-# written once (the ignore list and grouping therefore apply to every
-# directory). Not verified here: how Dependabot resolves the single root
-# package-lock.json for workspace directories; check the first PRs it opens.
+# One entry, "/" only. The first run showed Dependabot already walks every
+# npm workspace from the root (PR #505 edited apps/web, apps/admin,
+# apps/mobile and services/api in one go), so also listing each workspace
+# opened every bump two or three times (#506/#514, #507/#513, #508/#510/
+# #511, #509/#512). Use "/" alone.
+#
+# Packages ignored on purpose after the first run (2026-10-29):
+#   - react, react-dom (ALL updates): apps/mobile is pinned to React 18 by
+#     React Native, apps/web and apps/admin to React 19 by Decision Log
+#     #27/#255. A root-level run tries to give every workspace one version;
+#     PR #505 moved web and admin from react ^19.2.8 down to ^18.3.1, which
+#     fails npm install with ERESOLVE. React moves only by hand.
+#   - react-native (minor and major): 0.x, so 0.74 -> 0.88 is a "minor" to
+#     Dependabot but is a breaking upgrade (#505 tried it).
+#   - class-validator (minor and major): 0.x, 0.14 -> 0.15 is breaking.
+#   - @vitejs/plugin-react (major): v6 needs vite ^8 and is ESM-only;
+#     this repo is on vite 5 (PRs #508/#510/#511 failed CI on it).
+#   - @stripe/stripe-js (major): @stripe/react-stripe-js 6.11 peers
+#     stripe-js <10, and the react-stripe-js release that allows 10 needs
+#     >=10. Move the two together, by hand.
+#   - stripe (major): a major of the Stripe Node SDK changes the pinned
+#     Stripe API version (the code sets no apiVersion), and the card
+#     verification flow has never run against live Stripe.
+#   - @sentry/* (major): founder decision, 2026-10-29. Sentry majors are
+#     reviewed and taken by hand, not by bot PR (#506/#514 proposed 10 -> 11).
 
 version: 2
 
 updates:
   - package-ecosystem: "npm"
-    directories:
-      - "/"
-      - "/apps/web"
-      - "/apps/admin"
-      - "/apps/mobile"
-      - "/services/api"
-      - "/packages/shared"
+    directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -38,10 +50,6 @@ updates:
           - "minor"
           - "patch"
     ignore:
-      - dependency-name: "react"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "react-dom"
-        update-types: ["version-update:semver-major"]
       - dependency-name: "react-router"
         update-types: ["version-update:semver-major"]
       - dependency-name: "react-router-dom"
@@ -56,7 +64,19 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "expo"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
       - dependency-name: "react-native"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "class-validator"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "@vitejs/plugin-react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@stripe/stripe-js"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "stripe"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@sentry/*"
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
