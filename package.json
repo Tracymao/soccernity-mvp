@@ -33,6 +33,10 @@
       "@testing-library/react": {
         "react": "^19.2.8",
         "react-dom": "^19.2.8"
+      },
+      "@stripe/react-stripe-js": {
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8"
       }
     },
     "@soccernity/admin": {
