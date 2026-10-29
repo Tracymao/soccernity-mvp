@@ -85,10 +85,10 @@ evidence and **blocks the B-043 purge** of the user row (`AccountHold.user` is c
 
 ## Not built / open
 
-* HTTP endpoints, the notification and the "held" marker on the admin screen: **B-045**.
+* HTTP endpoints: built by `backend/w6-hold-admin-endpoints` (see `../moderation/README.md`, "Admin hold routes"). The notification is deliberately not built (#403 item 8); the `apps/admin` screens are the next PR.
 * Report subjects of type `banter_room`, `grassroots_team`, `fixture` do not create a report hold on their creator
   (unchanged from the old `hasOpenInvestigation`); `placeLegalHold` does resolve them.
 * Counsel's 6–7 year retention reconciliation (OPEN), B-139.
 * A post_closure hold lasts months by design, so it can appear in `GET /admin/users/held-investigations` without
-  anything being wrong; `holdType` is how a reader tells it from an open report. The marker is B-045.
+  anything being wrong; `holdType` is how a reader tells it from an open report. `isAdminHold` (B-045) marks the admin-placed ones.
 * `User.representedClubId` is cleared by minimisation but not by `anonymizeUser` (pre-existing gap, not changed here).

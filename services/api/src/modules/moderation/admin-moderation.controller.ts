@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
 import { AdminRoles } from '../admin/guards/admin-roles.decorator';
 import { AdminRolesGuard } from '../admin/guards/admin-roles.guard';
@@ -7,7 +7,9 @@ import { AdminAccessTokenPayload } from '../admin/token/admin-token.types';
 import { ActionReportDto } from './dto/action-report.dto';
 import { AppealDecisionDto } from './dto/appeal-decision.dto';
 import { EscalateReportDto } from './dto/escalate-report.dto';
+import { HoldReasonDto } from './dto/hold-reason.dto';
 import { ListReportsQueryDto } from './dto/list-reports-query.dto';
+import { ModerationHoldsService } from './moderation-holds.service';
 import { ModerationService } from './moderation.service';
 
 // Admin-facing half of Build Plan Section 4.8 (Admin Service) / Section
@@ -26,7 +28,10 @@ import { ModerationService } from './moderation.service';
 @UseGuards(AdminJwtAuthGuard, AdminRolesGuard)
 @AdminRoles('moderator', 'superadmin')
 export class AdminModerationController {
-  constructor(private readonly moderationService: ModerationService) {}
+  constructor(
+    private readonly moderationService: ModerationService,
+    private readonly holdsService: ModerationHoldsService,
+  ) {}
 
   @Get('reports')
   async list(@Query() query: ListReportsQueryDto, @CurrentAdmin() admin: AdminAccessTokenPayload) {
@@ -40,7 +45,12 @@ export class AdminModerationController {
   // PATCH reports/:id below).
   @Get('reports/:id')
   async getOne(@Param('id') id: string, @CurrentAdmin() admin: AdminAccessTokenPayload) {
-    return this.moderationService.getReportById(id, admin.sub);
+    const report = await this.moderationService.getReportById(id, admin.sub);
+    // B-045: every existing field is kept; `holds` is the report's ACTIVE admin holds (legal_hold, bad_faith)
+    // so the screen can show a hold-active state and a Lift control. The 404 and the child-safety-vetting gate
+    // were already settled by getReportById above.
+    const holds = await this.holdsService.listActiveHoldsForReport(report.id);
+    return { ...report, holds };
   }
 
   @Patch('reports/:id')
@@ -73,5 +83,38 @@ export class AdminModerationController {
     @Body() dto: EscalateReportDto,
   ) {
     return this.moderationService.escalateReport(id, admin.sub, dto);
+  }
+
+  // backend/w6-hold-admin-endpoints (B-045; Decision Log #376, #398 D1, #403 item 8). The two admin actions and
+  // the lift control of B-044's HoldService. Each needs a reason of 10 to 500 characters, notifies nobody
+  // (no Notification row, no email) and writes an AdminActionLog row. They take a REPORT id whatever its
+  // appeal state, so Appeal Review uses the same routes as Report Detail. A report that concerns a minor is
+  // behind the same child-safety-vetting gate as PATCH reports/:id (403, code
+  // child_safety_vetting_required); a hold id is gated through the report it belongs to.
+  @Post('reports/:id/holds/bad-faith')
+  async placeBadFaith(
+    @Param('id') id: string,
+    @CurrentAdmin() admin: AdminAccessTokenPayload,
+    @Body() dto: HoldReasonDto,
+  ) {
+    return this.holdsService.placeBadFaith(id, admin.sub, dto.reason);
+  }
+
+  @Post('reports/:id/holds/legal')
+  async placeLegal(
+    @Param('id') id: string,
+    @CurrentAdmin() admin: AdminAccessTokenPayload,
+    @Body() dto: HoldReasonDto,
+  ) {
+    return this.holdsService.placeLegal(id, admin.sub, dto.reason);
+  }
+
+  @Patch('holds/:holdId/lift')
+  async liftHold(
+    @Param('holdId') holdId: string,
+    @CurrentAdmin() admin: AdminAccessTokenPayload,
+    @Body() dto: HoldReasonDto,
+  ) {
+    return this.holdsService.lift(holdId, admin.sub, dto.reason);
   }
 }

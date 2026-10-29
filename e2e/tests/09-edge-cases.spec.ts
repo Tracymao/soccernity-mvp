@@ -1,6 +1,7 @@
 import { test, expect, type Browser, type Page } from '@playwright/test';
 import {
   GUARDIAN,
+  clearBrowserSession,
   api,
   db,
   dobForAge,
@@ -255,7 +256,7 @@ test.describe('390px mobile: no horizontal scroll on onboarding pages', () => {
     expect(await measure()).toBeLessThanOrEqual(1);
 
     const m = await registerViaApi({ age: 15, label: 'mobm' });
-    await page.evaluate(() => window.sessionStorage.clear());
+    await clearBrowserSession(page);
     await loginViaUi(page, m.email);
     await expect(page).toHaveURL(/\/guardian-consent$/);
     await page.waitForLoadState('networkidle');

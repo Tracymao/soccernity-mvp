@@ -30,6 +30,7 @@ export const HOLD_ERROR_CODES = {
   NO_PARTY_TO_HOLD: 'no_party_to_hold',
   HOLD_ALREADY_LIFTED: 'hold_already_lifted',
   HOLD_EXPIRED: 'hold_expired',
+  HOLD_NOT_FOUND: 'hold_not_found',
 } as const;
 
 function coded(code: string, message: string): { statusCode: number; code: string; message: string } {
@@ -184,7 +185,7 @@ export class HoldService {
 
     const lifted = await this.prisma.$transaction(async (tx) => {
       const hold = await tx.accountHold.findUnique({ where: { id: holdId } });
-      if (!hold) throw new NotFoundException('Hold not found');
+      if (!hold) throw new NotFoundException({ statusCode: 404, code: HOLD_ERROR_CODES.HOLD_NOT_FOUND, message: 'Hold not found' });
       if (hold.liftedAt) {
         throw new ConflictException(coded(HOLD_ERROR_CODES.HOLD_ALREADY_LIFTED, 'This hold has already been lifted.'));
       }
