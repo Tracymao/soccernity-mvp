@@ -1,10 +1,10 @@
-import * as fs from 'fs';
 import { test, expect, type Browser, type Page } from '@playwright/test';
 import {
   api,
   db,
   dobForAge,
   emailsFor,
+  everythingScriptCanRead,
   getAdminToken,
   guardianConfirmViaApi,
   guardianDeclineViaApi,
@@ -19,8 +19,8 @@ import {
   waitForEmail,
   type Account,
 } from '../support/helpers';
-import { ADMIN_CREDENTIALS, ADMIN_STORAGE_STATE, URLS } from '../support/stack';
-import { adminPage, ensureAdminState } from '../support/admin-ui';
+import { ADMIN_CREDENTIALS, URLS } from '../support/stack';
+import { adminPage } from '../support/admin-ui';
 
 async function correctDobViaUi(
   page: Page,
@@ -45,7 +45,13 @@ async function correctDobViaUi(
 }
 
 test.describe.serial('admin console sign-in', () => {
-  test('wrong password is refused with a generic message; the right one opens the console', async ({ page }) => {
+  // B-247 (Decision Log #422): the REAL admin cookie session, end to end, with no stub. This is the only
+  // place the suite signs in through the admin UI (the login is throttled to 5 per 15 minutes, #190), and
+  // it is what proves the session mechanics that adminPage() (support/admin-ui.ts) deliberately skips.
+  test('wrong password is refused with a generic message; the right one opens the console (cookie session, nothing in storage)', async ({
+    page,
+    context,
+  }) => {
     await page.goto(`${URLS.admin}/login`);
     await page.getByLabel('Email').fill(ADMIN_CREDENTIALS.email);
     await page.getByLabel('Password').fill('definitely-wrong');
@@ -55,8 +61,47 @@ test.describe.serial('admin console sign-in', () => {
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page).not.toHaveURL(/\/login$/);
     await expect(page.getByText(ADMIN_CREDENTIALS.fullName).first()).toBeVisible();
-    await page.context().storageState({ path: ADMIN_STORAGE_STATE });
-    expect(fs.existsSync(ADMIN_STORAGE_STATE)).toBe(true);
+
+    // Nothing a script can read holds a token: no sn_admin_* key, no JWT, no cookie in document.cookie.
+    const readable = await everythingScriptCanRead(page);
+    expect(readable).not.toContain('sn_admin_');
+    expect(readable).not.toMatch(/eyJ[\w-]{8,}\.[\w-]{8,}\./);
+    expect(readable).not.toContain('sn_admin_rt');
+    const idbCount = await page.evaluate(async () => (await indexedDB.databases()).length);
+    expect(idbCount).toBe(0);
+
+    // The refresh token is the API's httpOnly, SameSite=Strict cookie on the admin path only.
+    const cookie = (await context.cookies()).find((c) => c.name === 'sn_admin_rt');
+    expect(cookie, 'the sn_admin_rt cookie was set').toBeTruthy();
+    expect(cookie!.httpOnly).toBe(true);
+    expect(cookie!.sameSite).toBe('Strict');
+    expect(cookie!.path).toBe('/admin/auth');
+    // Staying signed in = a persistent cookie (today's behaviour is preserved).
+    expect(cookie!.expires).toBeGreaterThan(Date.now() / 1000 + 86_400);
+
+    // A reload restores the session through the cookie: no login screen.
+    await page.reload();
+    await expect(page.getByText(ADMIN_CREDENTIALS.fullName).first()).toBeVisible();
+    await expect(page).not.toHaveURL(/\/login$/);
+    expect(await everythingScriptCanRead(page)).not.toContain('sn_admin_');
+
+    // Two tabs: a second page in the same browser context restores the session from the same cookie
+    // (the cross-tab lock keeps the two from presenting the same value), and signing out in one tab
+    // signs the other out without a reload.
+    const second = await context.newPage();
+    await second.goto(`${URLS.admin}/users`);
+    await expect(second.getByText(ADMIN_CREDENTIALS.fullName).first()).toBeVisible();
+    await expect(second).not.toHaveURL(/\/login$/);
+
+    await page.getByRole('button', { name: 'Log Out' }).click();
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(second).toHaveURL(/\/login$/);
+    await second.close();
+
+    // Sign-out cleared the cookie, and a reload shows the login screen.
+    await expect.poll(async () => (await context.cookies()).find((c) => c.name === 'sn_admin_rt')).toBeUndefined();
+    await page.reload();
+    await expect(page).toHaveURL(/\/login$/);
   });
 
   test('routes are protected: no session -> /login', async ({ page }) => {
