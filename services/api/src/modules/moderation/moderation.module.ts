@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AccountHoldModule } from '../account-hold/account-hold.module';
 import { AdminActionLogModule } from '../admin-action-log/admin-action-log.module';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
@@ -8,6 +9,7 @@ import { RegistrationEmailService } from '../auth/registration/email/registratio
 import { AuthRateLimitModule } from '../auth/rate-limit/rate-limit.module';
 import { BanterModule } from '../banter/banter.module';
 import { AdminModerationController } from './admin-moderation.controller';
+import { ModerationHoldsService } from './moderation-holds.service';
 import { ModerationService } from './moderation.service';
 import { PublicReportsController } from './public-reports.controller';
 import { ReportsController } from './reports.controller';
@@ -61,8 +63,10 @@ import { ReportsController } from './reports.controller';
     AdminActionLogModule,
     // Decision Log #357 — BanterService.setRoomStatus for room_deactivated.
     BanterModule,
+    // B-045 (Decision Log #376) -- HoldService for the admin hold routes.
+    AccountHoldModule,
   ],
   controllers: [ReportsController, PublicReportsController, AdminModerationController],
-  providers: [ModerationService, PrismaService, RegistrationEmailService],
+  providers: [ModerationService, ModerationHoldsService, PrismaService, RegistrationEmailService],
 })
 export class ModerationModule {}
