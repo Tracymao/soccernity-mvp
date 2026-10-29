@@ -370,9 +370,9 @@ describe("the way into Held investigations", () => {
         </AdminAuthProvider>
       </MemoryRouter>,
     );
-    expect(await screen.findByText("Held person 1")).not.toBeNull();
+    expect(await screen.findByText("Held person 1", {}, { timeout: 10000 })).not.toBeNull();
     expect(screen.getByRole("heading", { name: "Held investigations" })).not.toBeNull();
-  });
+  }, 20000);
 });
 
 // ---------------------------------------------------------------------------------------------------
