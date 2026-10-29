@@ -14,10 +14,11 @@
 // `nextStep` (restricted_pending / verify_email / create_profile / none); it
 // no longer renders the Club Picker inline (see handleSubmit).
 //
-// B-017: a successful registration persists the session (access + refresh
-// token, sessionStorage like an un-ticked "Stay signed in" login) so the
-// Club Picker, the shell Header and every later request are authenticated,
-// and the silent refresh (lib/silentRefresh.ts) keeps it alive.
+// B-017 / B-246: a successful registration starts the session (the access token
+// goes into memory; the API sets the refresh token as an httpOnly session cookie,
+// like an un-ticked "Stay signed in" login) so the shell Header and every later
+// request are authenticated, and the silent refresh (lib/silentRefresh.ts) keeps
+// it alive.
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
@@ -95,7 +96,7 @@ export default function RegisterStep({ dob, country, isMinor, guardianDetails }:
     setSubmitting(true);
     try {
       const result = await registerUser(payload);
-      storeSession(result, false);
+      storeSession(result);
       // B-125 (Decision Log #367, #394 A6): the server decides what comes
       // next. A minor goes to the Restricted Pending page (it names the
       // guardian email the request went to); an adult goes to the

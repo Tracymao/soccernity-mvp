@@ -13,6 +13,7 @@ vi.mock("../api/sports", async () => {
 });
 
 import { listLiveScores, listFixtures } from "../api/sports";
+import { clearSession } from "../test/session";
 
 function team(id: string, name: string) {
   return { id, name, logo: null };
@@ -56,8 +57,7 @@ function renderPage() {
 
 describe("SportsHubPage", () => {
   it("renders with no session at all -- no login gate on this page", async () => {
-    window.sessionStorage.clear();
-    window.localStorage.clear();
+    clearSession();
     vi.mocked(listLiveScores).mockResolvedValueOnce(page([match()]));
 
     renderPage();

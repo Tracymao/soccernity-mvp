@@ -2,7 +2,7 @@
 // AgeGateStep.test.tsx/ClubPickerStep.test.tsx's established pattern
 // (plain DOM assertions, no @testing-library/jest-dom, mock the api
 // modules) and GuardianConsentConfirmPage.test.tsx's precedent for
-// asserting real sessionStorage/localStorage state directly rather than
+// asserting the real in-memory session store directly rather than
 // trusting the component's own internal state.
 //
 // Real timers throughout, deliberately -- POST_ACTION_REDIRECT_DELAY_MS
@@ -36,6 +36,7 @@ vi.mock("../../api/users", async () => {
 
 import { deactivateAccount, deleteAccount } from "../../api/auth";
 import { updateUser, UsersApiError } from "../../api/users";
+import { seedSession, clearSession, heldAccessToken } from "../../test/session";
 
 const USER: UserProfile = {
   id: "user-1",
@@ -68,8 +69,7 @@ beforeEach(() => {
   vi.mocked(deactivateAccount).mockReset();
   vi.mocked(deleteAccount).mockReset();
   vi.mocked(updateUser).mockReset();
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
 });
 
 function renderModal() {
@@ -84,8 +84,7 @@ describe("EditProfileModal -- Bug 2 fix: stale session after deactivation/deleti
   it(
     "clears the stored session immediately and redirects to /login after a successful deactivation",
     async () => {
-      window.sessionStorage.setItem("sn_access_token", "stale-token");
-      window.localStorage.setItem("sn_refresh_token", "stale-refresh");
+      seedSession("stale-token");
       vi.mocked(deactivateAccount).mockResolvedValueOnce(undefined);
 
       renderModal();
@@ -98,8 +97,7 @@ describe("EditProfileModal -- Bug 2 fix: stale session after deactivation/deleti
       // Session is cleared as soon as the success message appears -- i.e.
       // immediately, not held onto for the redirect delay.
       expect(await screen.findByText(/your account has been deactivated/i)).not.toBeNull();
-      expect(window.sessionStorage.getItem("sn_access_token")).toBeNull();
-      expect(window.localStorage.getItem("sn_refresh_token")).toBeNull();
+      expect(heldAccessToken()).toBeNull();
       expect(navigateMock).not.toHaveBeenCalled();
 
       await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/login"), { timeout: 4000 });
@@ -108,7 +106,7 @@ describe("EditProfileModal -- Bug 2 fix: stale session after deactivation/deleti
   );
 
   it("does not clear the session or redirect when deactivation fails", async () => {
-    window.sessionStorage.setItem("sn_access_token", "stale-token");
+    seedSession("stale-token");
     vi.mocked(deactivateAccount).mockRejectedValueOnce(new AuthApiError("Incorrect password"));
 
     renderModal();
@@ -119,14 +117,14 @@ describe("EditProfileModal -- Bug 2 fix: stale session after deactivation/deleti
     fireEvent.click(screen.getByRole("button", { name: "Confirm deactivation" }));
 
     expect(await screen.findByRole("alert")).not.toBeNull();
-    expect(window.sessionStorage.getItem("sn_access_token")).toBe("stale-token");
+    expect(heldAccessToken()).toBe("stale-token");
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
   it(
     "applies the identical fix to delete-account: clears the session immediately and redirects to /login",
     async () => {
-      window.sessionStorage.setItem("sn_access_token", "stale-token");
+      seedSession("stale-token");
       vi.mocked(deleteAccount).mockResolvedValueOnce(undefined);
 
       renderModal();
@@ -137,7 +135,7 @@ describe("EditProfileModal -- Bug 2 fix: stale session after deactivation/deleti
       fireEvent.click(screen.getByRole("button", { name: "Confirm account deletion request" }));
 
       expect(await screen.findByText(/your request has been received/i)).not.toBeNull();
-      expect(window.sessionStorage.getItem("sn_access_token")).toBeNull();
+      expect(heldAccessToken()).toBeNull();
       expect(navigateMock).not.toHaveBeenCalled();
 
       await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/login"), { timeout: 4000 });
@@ -146,7 +144,7 @@ describe("EditProfileModal -- Bug 2 fix: stale session after deactivation/deleti
   );
 
   it("does not clear the session or redirect when account deletion fails", async () => {
-    window.sessionStorage.setItem("sn_access_token", "stale-token");
+    seedSession("stale-token");
     vi.mocked(deleteAccount).mockRejectedValueOnce(new AuthApiError("Incorrect password"));
 
     renderModal();
@@ -157,7 +155,7 @@ describe("EditProfileModal -- Bug 2 fix: stale session after deactivation/deleti
     fireEvent.click(screen.getByRole("button", { name: "Confirm account deletion request" }));
 
     expect(await screen.findByRole("alert")).not.toBeNull();
-    expect(window.sessionStorage.getItem("sn_access_token")).toBe("stale-token");
+    expect(heldAccessToken()).toBe("stale-token");
     expect(navigateMock).not.toHaveBeenCalled();
   });
 });

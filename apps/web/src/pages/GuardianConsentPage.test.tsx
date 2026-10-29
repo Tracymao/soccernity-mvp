@@ -1,7 +1,7 @@
 // Following AgeGateStep.test.tsx/ClubPickerStep.test.tsx's established
 // pattern -- plain DOM assertions only, no @testing-library/jest-dom.
 // Mocks src/api/auth.ts rather than hitting a real network call. Session
-// is seeded directly into sessionStorage (the real mechanism
+// is seeded directly into the in-memory session store (the real mechanism
 // src/lib/session.ts reads, same one LoginPage.tsx writes) with a real,
 // well-formed (if unsigned) JWT-shaped token, rather than mocking
 // lib/session.ts itself -- exercises the real decode path too.
@@ -27,6 +27,7 @@ vi.mock("../api/users", async () => {
   return { ...actual, getUser: vi.fn() };
 });
 import { getUser } from "../api/users";
+import { seedSession, clearSession } from "../test/session";
 
 function base64UrlEncode(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -40,8 +41,7 @@ function fakeAccessToken(sub = "minor-user-1"): string {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(getGuardianConsentStatus).mockReset();
   vi.mocked(resendGuardianConsentRequest).mockReset();
   // The signed-in minor's own profile: its email is what the resend route needs
@@ -70,7 +70,7 @@ describe("GuardianConsentPage", () => {
   });
 
   it("renders the restricted-pending state (screen 5) with only Section 8.3 step 5's three restrictions, and calls resend when eligible", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({
       consentStatus: "pending",
       guardianEmail: "guardian@example.com",
@@ -99,7 +99,7 @@ describe("GuardianConsentPage", () => {
   });
 
   it("shows the registration status line on the pending view only (B-199, Decision Log #367)", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({
       consentStatus: "pending",
       guardianEmail: "guardian@example.com",
@@ -114,7 +114,7 @@ describe("GuardianConsentPage", () => {
   });
 
   it("does not show the registration status line once consent is confirmed", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({
       consentStatus: "confirmed",
       guardianEmail: "guardian@example.com",
@@ -127,7 +127,7 @@ describe("GuardianConsentPage", () => {
   });
 
   it("offers Change guardian email as a link to the real screen in the pending state (not a disabled button)", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({
       consentStatus: "pending",
       guardianEmail: "guardian@example.com",
@@ -142,7 +142,7 @@ describe("GuardianConsentPage", () => {
   });
 
   it("disables resend when canResend is false", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({
       consentStatus: "pending",
       guardianEmail: "guardian@example.com",
@@ -167,7 +167,7 @@ describe("GuardianConsentPage", () => {
   // button's disabled state) shapes, since the old dead code was
   // specifically conditioned on canResend:false.
   it("never renders a resend-cooldown footnote, regardless of canResend", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({
       consentStatus: "pending",
       guardianEmail: "guardian@example.com",
@@ -182,7 +182,7 @@ describe("GuardianConsentPage", () => {
   });
 
   it("renders the approved state when consentStatus is confirmed, and Continue registration goes to /continue", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({
       consentStatus: "confirmed",
       guardianEmail: "guardian@example.com",
@@ -211,7 +211,7 @@ describe("GuardianConsentPage", () => {
   // this is the page the minor sees.
   describe("declined (after guardian decline 1 or 2)", () => {
     function seedDeclined(canResend = true) {
-      window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+      seedSession(fakeAccessToken());
       vi.mocked(getGuardianConsentStatus).mockResolvedValue({
         consentStatus: "declined",
         guardianEmail: "guardian@example.com",
@@ -268,7 +268,7 @@ describe("GuardianConsentPage", () => {
     });
 
     it("names the guardian and the decision date when the status carries them (B-131, frame 5491:8241)", async () => {
-      window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+      seedSession(fakeAccessToken());
       vi.mocked(getGuardianConsentStatus).mockResolvedValue({
         consentStatus: "declined",
         guardianEmail: "guardian@example.com",
@@ -302,7 +302,7 @@ describe("GuardianConsentPage", () => {
   });
 
   it("shows a not-a-minor message on a 404 from the status endpoint", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getGuardianConsentStatus).mockRejectedValueOnce(
       new AuthApiError("Couldn't load your guardian consent status (404).", { status: 404 }),
     );
@@ -313,7 +313,7 @@ describe("GuardianConsentPage", () => {
   });
 
   it("shows a generic error state on an unexpected failure", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getGuardianConsentStatus).mockRejectedValueOnce(new AuthApiError("Server error", { status: 500 }));
 
     renderPage();

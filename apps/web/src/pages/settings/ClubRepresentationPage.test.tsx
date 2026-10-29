@@ -17,6 +17,7 @@ vi.mock("../../api/users", async () => {
 
 import { listClubs } from "../../api/clubs";
 import { getUser, setRepresentedClub, UsersApiError } from "../../api/users";
+import { seedSession, clearSession } from "../../test/session";
 
 function base64UrlEncode(obj: unknown): string {
   return btoa(JSON.stringify(obj)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -86,8 +87,7 @@ function profile(represented: { id: string; name: string } | null): UserProfile 
 afterEach(cleanup);
 
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(listClubs).mockReset();
   vi.mocked(getUser).mockReset();
   vi.mocked(setRepresentedClub).mockReset();
@@ -111,7 +111,7 @@ describe("ClubRepresentationPage", () => {
   });
 
   it("lists only joined clubs and pre-selects the real represented club", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI, NOT_JOINED, SURULERE], nextCursor: null });
     vi.mocked(getUser).mockResolvedValueOnce(profile({ id: SURULERE.id, name: SURULERE.name }));
 
@@ -126,7 +126,7 @@ describe("ClubRepresentationPage", () => {
   });
 
   it("walks every cursor page so a club beyond the first page is still offered", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs)
       .mockResolvedValueOnce({ items: [IKOYI], nextCursor: "page-2" })
       .mockResolvedValueOnce({ items: [SURULERE], nextCursor: null });
@@ -139,7 +139,7 @@ describe("ClubRepresentationPage", () => {
   });
 
   it("with no represented club and no change made, the save button stays disabled", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI], nextCursor: null });
     vi.mocked(getUser).mockResolvedValueOnce(profile(null));
 
@@ -150,7 +150,7 @@ describe("ClubRepresentationPage", () => {
   });
 
   it("choosing a club and saving calls PATCH with that id and confirms the new value", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI, SURULERE], nextCursor: null });
     vi.mocked(getUser).mockResolvedValueOnce(profile({ id: IKOYI.id, name: IKOYI.name }));
     vi.mocked(setRepresentedClub).mockResolvedValueOnce({ representedClub: { id: SURULERE.id, name: SURULERE.name } });
@@ -166,7 +166,7 @@ describe("ClubRepresentationPage", () => {
   });
 
   it("a rejected save shows the server's message and keeps the choice selected for retry", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI, SURULERE], nextCursor: null });
     vi.mocked(getUser).mockResolvedValueOnce(profile(null));
     vi.mocked(setRepresentedClub).mockRejectedValueOnce(
@@ -184,7 +184,7 @@ describe("ClubRepresentationPage", () => {
   });
 
   it("with zero joined clubs shows an honest empty state with a route to browse, and no save control", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [NOT_JOINED], nextCursor: null });
     vi.mocked(getUser).mockResolvedValueOnce(profile(null));
 
@@ -196,7 +196,7 @@ describe("ClubRepresentationPage", () => {
   });
 
   it("a failed load shows an error with a retry, rather than a blank page", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockRejectedValueOnce(new Error("network down"));
     vi.mocked(getUser).mockResolvedValueOnce(profile(null));
 

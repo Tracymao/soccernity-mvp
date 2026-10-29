@@ -1,6 +1,6 @@
 // NotificationCentrePage. Same conventions as GrassrootsPage.test.tsx /
 // ClubsPage.test.tsx: plain DOM assertions, mocks src/api/notifications.ts,
-// session seeded into sessionStorage.
+// session seeded into the in-memory session store.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
@@ -18,6 +18,7 @@ vi.mock("../api/notifications", async () => {
 });
 
 import { listNotifications, markNotificationRead, markAllNotificationsRead } from "../api/notifications";
+import { seedSession, clearSession } from "../test/session";
 
 const FOLLOW: Notification = {
   id: "n-follow",
@@ -84,8 +85,7 @@ const ORPHANED: Notification = {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(listNotifications).mockReset();
   vi.mocked(markNotificationRead).mockReset();
   vi.mocked(markAllNotificationsRead).mockReset();
@@ -107,7 +107,7 @@ describe("NotificationCentrePage", () => {
   });
 
   it("renders the empty state with the coming-soon copy when there are no notifications", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listNotifications).mockResolvedValueOnce({ items: [], nextCursor: null, unreadCount: 0 });
 
     renderPage();
@@ -120,7 +120,7 @@ describe("NotificationCentrePage", () => {
   });
 
   it("renders a real follow notification with the actor's name", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listNotifications).mockResolvedValueOnce({ items: [FOLLOW], nextCursor: null, unreadCount: 1 });
 
     renderPage();
@@ -130,7 +130,7 @@ describe("NotificationCentrePage", () => {
   });
 
   it("renders a like notification with NO actor name — 'Someone' (the disclosed backend gap, Decision Log #290)", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listNotifications).mockResolvedValueOnce({
       items: [LIKE_NO_ACTOR],
       nextCursor: null,
@@ -144,7 +144,7 @@ describe("NotificationCentrePage", () => {
   });
 
   it("renders a message notification with the real other participant's name and links to the conversation", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listNotifications).mockResolvedValueOnce({
       items: [MESSAGE],
       nextCursor: null,
@@ -159,7 +159,7 @@ describe("NotificationCentrePage", () => {
   });
 
   it("renders a contest_win notification with only the cycle title — no fabricated week/position (Decision Log #290)", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listNotifications).mockResolvedValueOnce({
       items: [CONTEST_WIN],
       nextCursor: null,
@@ -172,7 +172,7 @@ describe("NotificationCentrePage", () => {
   });
 
   it("renders an age_milestone notification with its real message, not the generic fallback", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listNotifications).mockResolvedValueOnce({
       items: [
         {
@@ -196,7 +196,7 @@ describe("NotificationCentrePage", () => {
   });
 
   it("renders a match_kickoff notification with the real fixture and links to its match-centre page", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listNotifications).mockResolvedValueOnce({
       items: [MATCH_KICKOFF],
       nextCursor: null,
@@ -211,7 +211,7 @@ describe("NotificationCentrePage", () => {
   });
 
   it("falls back to the known side's name when a match_kickoff team is still TBD", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listNotifications).mockResolvedValueOnce({
       items: [
         {
@@ -284,7 +284,7 @@ describe("NotificationCentrePage", () => {
     ];
 
     it.each(cases)("%s: real wording and the Figma-drawn destination (never a profile)", async (_name, notification, text, href) => {
-      window.sessionStorage.setItem("sn_access_token", "test-token");
+      seedSession("test-token");
       vi.mocked(listNotifications).mockResolvedValueOnce({ items: [notification], nextCursor: null, unreadCount: 1 });
       renderPage();
       await screen.findByRole("link", { name: text });
@@ -295,7 +295,7 @@ describe("NotificationCentrePage", () => {
   });
 
   it("renders exactly the rows the server returns: like/comment rows between a blocked pair are hidden server-side (B-213) and the client neither filters nor re-adds them", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listNotifications).mockResolvedValueOnce({ items: [FOLLOW], nextCursor: null, unreadCount: 1 });
     renderPage();
     await screen.findByText(/started following you/i);
@@ -305,7 +305,7 @@ describe("NotificationCentrePage", () => {
   });
 
   it("renders a generic message for a notification whose referenced entity is gone (data: null)", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listNotifications).mockResolvedValueOnce({
       items: [ORPHANED],
       nextCursor: null,
@@ -318,7 +318,7 @@ describe("NotificationCentrePage", () => {
   });
 
   it("groups unread items under NEW and read items under EARLIER on the All tab", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listNotifications).mockResolvedValueOnce({
       items: [FOLLOW, MESSAGE],
       nextCursor: null,
@@ -333,7 +333,7 @@ describe("NotificationCentrePage", () => {
   });
 
   it("the Unread tab shows only unread items, no group labels", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listNotifications).mockResolvedValueOnce({
       items: [FOLLOW, MESSAGE],
       nextCursor: null,
@@ -352,7 +352,7 @@ describe("NotificationCentrePage", () => {
   });
 
   it("shows the real unread count as a badge on the Unread tab", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listNotifications).mockResolvedValueOnce({
       items: [FOLLOW],
       nextCursor: null,
@@ -365,7 +365,7 @@ describe("NotificationCentrePage", () => {
   });
 
   it("clicking an unread row (with no navigation target) marks it read and moves it to EARLIER", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listNotifications).mockResolvedValueOnce({
       items: [FOLLOW],
       nextCursor: null,
@@ -383,7 +383,7 @@ describe("NotificationCentrePage", () => {
   });
 
   it("'Mark all as read' calls the endpoint and clears every unread row", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listNotifications).mockResolvedValueOnce({
       items: [FOLLOW, LIKE_NO_ACTOR],
       nextCursor: null,
@@ -401,7 +401,7 @@ describe("NotificationCentrePage", () => {
   });
 
   it("'Mark all as read' is disabled when there is nothing unread", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listNotifications).mockResolvedValueOnce({
       items: [MESSAGE],
       nextCursor: null,
@@ -415,7 +415,7 @@ describe("NotificationCentrePage", () => {
   });
 
   it("loads more notifications and appends them to the list", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listNotifications)
       .mockResolvedValueOnce({ items: [FOLLOW], nextCursor: "cursor-1", unreadCount: 1 })
       .mockResolvedValueOnce({ items: [MESSAGE], nextCursor: null, unreadCount: 1 });
@@ -442,7 +442,7 @@ describe("NotificationCentrePage", () => {
     }
 
     it("one row serves the picture: 'Your picture wasn't approved - see why in Edit Profile'", async () => {
-      window.sessionStorage.setItem("sn_access_token", "test-token");
+      seedSession("test-token");
       vi.mocked(listNotifications).mockResolvedValueOnce({ items: [imageRow("avatar")], nextCursor: null, unreadCount: 1 });
       renderPage();
       const row = (await screen.findByText(/wasn’t approved — see why in Edit Profile/)).closest("a");
@@ -451,7 +451,7 @@ describe("NotificationCentrePage", () => {
     });
 
     it("the same row serves the cover photo, naming it", async () => {
-      window.sessionStorage.setItem("sn_access_token", "test-token");
+      seedSession("test-token");
       vi.mocked(listNotifications).mockResolvedValueOnce({ items: [imageRow("cover")], nextCursor: null, unreadCount: 1 });
       renderPage();
       const row = (await screen.findByText(/wasn’t approved — see why in Edit Profile/)).closest("a");
@@ -460,7 +460,7 @@ describe("NotificationCentrePage", () => {
     });
 
     it("never shows the reason or any COPY PENDING tag, and marks the row read on open", async () => {
-      window.sessionStorage.setItem("sn_access_token", "test-token");
+      seedSession("test-token");
       vi.mocked(listNotifications).mockResolvedValueOnce({ items: [imageRow("avatar")], nextCursor: null, unreadCount: 1 });
       vi.mocked(markNotificationRead).mockResolvedValue(undefined as never);
       renderPage();
@@ -471,7 +471,7 @@ describe("NotificationCentrePage", () => {
     });
 
     it("an image row whose data is gone (payloadRefId neither avatar nor cover) is the 'no longer available' row", async () => {
-      window.sessionStorage.setItem("sn_access_token", "test-token");
+      seedSession("test-token");
       vi.mocked(listNotifications).mockResolvedValueOnce({
         items: [imageRow("avatar", { payloadRefId: "banner", data: null })],
         nextCursor: null,
@@ -496,7 +496,7 @@ describe("NotificationCentrePage", () => {
     }
 
     it("an approved picture says so and opens the Community feed", async () => {
-      window.sessionStorage.setItem("sn_access_token", "test-token");
+      seedSession("test-token");
       vi.mocked(listNotifications).mockResolvedValueOnce({ items: [mediaRow("post_media_approved", "image")], nextCursor: null, unreadCount: 1 });
       renderPage();
       const row = (await screen.findByText(/was approved/)).closest("a");
@@ -505,7 +505,7 @@ describe("NotificationCentrePage", () => {
     });
 
     it("a rejected video names the video and points at the post, without ever carrying the reason", async () => {
-      window.sessionStorage.setItem("sn_access_token", "test-token");
+      seedSession("test-token");
       vi.mocked(listNotifications).mockResolvedValueOnce({ items: [mediaRow("post_media_rejected", "video")], nextCursor: null, unreadCount: 1 });
       renderPage();
       const row = (await screen.findByText(/wasn’t approved — see why on your post/)).closest("a");
@@ -515,7 +515,7 @@ describe("NotificationCentrePage", () => {
     });
 
     it("a file that has since been deleted (data is null) is the 'no longer available' row", async () => {
-      window.sessionStorage.setItem("sn_access_token", "test-token");
+      seedSession("test-token");
       vi.mocked(listNotifications).mockResolvedValueOnce({
         items: [mediaRow("post_media_rejected", "image", { data: null })],
         nextCursor: null,
@@ -527,7 +527,7 @@ describe("NotificationCentrePage", () => {
   });
 
   it("a type this page does not know shows a generic row (not a blank or broken one), with or without data", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listNotifications).mockResolvedValueOnce({
       items: [
         { id: "n-new-1", type: "brand_new_type", read: false, createdAt: "2026-10-25T09:00:00.000Z", payloadRefId: "x", data: null },

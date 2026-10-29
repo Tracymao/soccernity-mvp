@@ -15,5 +15,7 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: "jsdom",
+    // B-246: resets the in-memory session between tests.
+    setupFiles: ["./src/test/setup.ts"],
   },
 });

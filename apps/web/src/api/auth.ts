@@ -12,6 +12,7 @@
 // reconciliation" note -- read those, not this comment, if either shape
 // changes again.
 import type { GuardianRelationship } from "../pages/signup/types";
+import { COOKIE_MODE_HEADERS } from "../lib/cookieMode";
 
 // No VITE_ env convention existed anywhere in apps/web before these PRs.
 // Falls back to services/api's default local port (services/api/src/main.ts).
@@ -20,6 +21,9 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?
 export interface LoginRequest {
   email: string;
   password: string;
+  // "Stay signed in": true -> the API issues a persistent refresh cookie, otherwise a
+  // session cookie (gone when the browser closes). The access token is in memory either way.
+  staySignedIn?: boolean;
 }
 
 // Section 5.7: access token is short-lived (15 min) and carries only
@@ -35,7 +39,8 @@ export interface LoginRequest {
 export interface LoginResponse {
   accessToken: string;
   accessTokenExpiresIn: number;
-  refreshToken: string;
+  // B-246: no refreshToken here. Requests carry `X-Auth-Mode: cookie`, so the API
+  // puts the refresh token in an httpOnly cookie and leaves it out of the body.
   refreshTokenExpiresAt: string;
   user: AuthUserSummary;
 }
@@ -100,7 +105,7 @@ export interface RegisterRequest {
 export interface RegisterResponse {
   accessToken: string;
   accessTokenExpiresIn: number;
-  refreshToken: string;
+  // B-246: no refreshToken in the body (it is in the httpOnly cookie).
   refreshTokenExpiresAt: string;
   user: AuthUserSummary;
   guardian: {
@@ -144,7 +149,8 @@ export async function login(payload: LoginRequest): Promise<LoginResponse> {
   try {
     response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...COOKIE_MODE_HEADERS },
+      credentials: "include",
       body: JSON.stringify(payload),
     });
   } catch (networkError) {
@@ -658,7 +664,8 @@ export async function reactivateAccount(email: string, password: string): Promis
   try {
     response = await fetch(`${API_BASE_URL}/auth/reactivate-account`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...COOKIE_MODE_HEADERS },
+      credentials: "include",
       body: JSON.stringify({ email, password }),
     });
   } catch (networkError) {
@@ -715,12 +722,14 @@ export async function registerUser(payload: RegisterRequest): Promise<RegisterRe
   try {
     response = await fetch(`${API_BASE_URL}/auth/register`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      // No `credentials: "include"` (QA D-01, Decision Log #407 item 1): the API sets
-      // no cookie -- the refresh token comes back in the response body -- so the
-      // option did nothing, and browsers refuse it against a CORS answer that is
-      // not credentialed, which made sign-up fail whenever web and API are on
-      // different origins.
+      headers: { "Content-Type": "application/json", ...COOKIE_MODE_HEADERS },
+      // B-246: in cookie mode the API sets the refresh cookie, and a browser stores a
+      // cross-origin Set-Cookie only if the request used `credentials: "include"`.
+      // (QA D-01 / Decision Log #407 item 1 removed this option while the API set no
+      // cookie, because the CORS answer was not credentialed. B-245 made the CORS
+      // answer credentialed -- exact-origin allow-list, never a wildcard -- so
+      // sending it is correct again.)
+      credentials: "include",
       body: JSON.stringify(payload),
     });
   } catch (networkError) {
@@ -744,18 +753,18 @@ export async function registerUser(payload: RegisterRequest): Promise<RegisterRe
   return body as RegisterResponse;
 }
 
-// B-017 -- server-side logout (POST /auth/logout, 204). Revokes the session's
-// refresh token so a copied token cannot be replayed after the user logs out.
-// Deliberately sends NO Authorization header: single-session logout only
-// needs the refresh token, and the header would only matter for
-// `allSessions`. Best-effort -- the caller clears local state regardless of
-// the outcome, so this never throws.
-export async function logoutSession(refreshToken: string): Promise<void> {
+// B-017 / B-246 -- server-side logout (POST /auth/logout, 204). In cookie mode the
+// refresh token is read from the httpOnly cookie, revoked server-side, and the
+// cookie is cleared by this response, so the caller passes nothing. No body, no
+// Authorization header (that would only matter for `allSessions`). The API
+// requires an allow-listed Origin on this route. Best-effort -- the caller clears
+// local state regardless of the outcome, so this never throws.
+export async function logoutSession(): Promise<void> {
   try {
     await fetch(`${API_BASE_URL}/auth/logout`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
+      headers: COOKIE_MODE_HEADERS,
+      credentials: "include",
     });
   } catch {
     // Network failure: the local session is cleared by the caller anyway.

@@ -32,11 +32,11 @@ vi.mock("../../api/auth", async () => {
 });
 
 import { login, reactivateAccount, deactivateAccount, deleteInactiveAccount } from "../../api/auth";
+import { seedSession, clearSession, heldAccessToken } from "../../test/session";
 
 const TOKENS: LoginResponse = {
   accessToken: "reactivated-access",
   accessTokenExpiresIn: 900,
-  refreshToken: "reactivated-refresh",
   refreshTokenExpiresAt: "2026-09-07T00:00:00.000Z",
   user: {
     id: "u1",
@@ -70,8 +70,7 @@ function HomeStub() {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(login).mockReset();
   vi.mocked(reactivateAccount).mockReset();
   vi.mocked(deactivateAccount).mockReset();
@@ -108,7 +107,7 @@ describe("account deactivation lifecycle (UI walk)", () => {
   // Three sequential ~2.5s auto-redirects to /login -> well past the 5s
   // default per-test timeout.
   it("deactivate → reactivate → deactivate → delete-from-inactive → locked out", async () => {
-    window.sessionStorage.setItem("sn_access_token", "original-token");
+    seedSession("original-token");
     vi.mocked(deactivateAccount).mockResolvedValue(undefined);
     vi.mocked(deleteInactiveAccount).mockResolvedValueOnce(undefined);
     vi.mocked(reactivateAccount).mockResolvedValueOnce(TOKENS);
@@ -118,7 +117,7 @@ describe("account deactivation lifecycle (UI walk)", () => {
     // 1) Deactivate from Settings.
     await deactivateFromSettings("hunter2");
     await waitFor(() => expect(deactivateAccount).toHaveBeenCalledWith("original-token", "hunter2"));
-    expect(window.sessionStorage.getItem("sn_access_token")).toBeNull();
+    expect(heldAccessToken()).toBeNull();
     // The success message, then the auto-redirect to /login.
     await screen.findByRole("status");
     await waitFor(() => expect(screen.getByText("Welcome Back")).not.toBeNull(), { timeout: 3500 });
@@ -135,7 +134,7 @@ describe("account deactivation lifecycle (UI walk)", () => {
     await waitFor(() =>
       expect(reactivateAccount).toHaveBeenCalledWith("sam@example.com", "hunter2"),
     );
-    expect(window.sessionStorage.getItem("sn_access_token")).toBe("reactivated-access");
+    expect(heldAccessToken()).toBe("reactivated-access");
     expect(await screen.findByText("home feed")).not.toBeNull();
 
     // 4) Deactivate again from Settings.

@@ -1,6 +1,6 @@
 // CreateCommunityGroupPage (Create a Community Group). Same conventions
 // as GrassrootsRegisterTeamPage.test.tsx: plain DOM assertions, mocks
-// src/api/community-groups.ts, session seeded into sessionStorage.
+// src/api/community-groups.ts, session seeded into the in-memory session store.
 // POST /community-groups is a real merged endpoint -- exercising it live
 // is services/api's e2e layer's job (test/community-groups.e2e-spec.ts).
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -15,6 +15,7 @@ vi.mock("../api/community-groups", async () => {
 });
 
 import { createCommunityGroup } from "../api/community-groups";
+import { seedSession, clearSession } from "../test/session";
 
 const CREATED: CommunityGroup = {
   id: "group-new",
@@ -30,8 +31,7 @@ const CREATED: CommunityGroup = {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(createCommunityGroup).mockReset();
 });
 
@@ -54,7 +54,7 @@ describe("CreateCommunityGroupPage", () => {
   });
 
   it("defaults to the City dimension, disables submit until name + value are filled, and does NOT render a description field", () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     renderPage();
 
     expect(screen.getByRole("radio", { name: "City", checked: true })).not.toBeNull();
@@ -66,7 +66,7 @@ describe("CreateCommunityGroupPage", () => {
   });
 
   it("submits exactly one dimension (the selected one) and navigates to the new group's page", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(createCommunityGroup).mockResolvedValueOnce(CREATED);
 
     renderPage();
@@ -85,7 +85,7 @@ describe("CreateCommunityGroupPage", () => {
   });
 
   it("swaps the value field when a different Group type is chosen, and submits that dimension instead", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(createCommunityGroup).mockResolvedValueOnce({
       ...CREATED,
       city: null,
@@ -110,7 +110,7 @@ describe("CreateCommunityGroupPage", () => {
   });
 
   it("shows a guardian-consent message and a link to /guardian-consent on a 403 from GuardianConsentGuard", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(createCommunityGroup).mockRejectedValueOnce(
       new CommunityGroupsApiError(
         "This account is awaiting guardian consent and cannot access this feature yet.",
@@ -130,7 +130,7 @@ describe("CreateCommunityGroupPage", () => {
   });
 
   it("shows a plain, threshold-free message on an under-16 restricted 403", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(createCommunityGroup).mockRejectedValueOnce(
       new CommunityGroupsApiError("This isn't available for your account yet.", {
         status: 403,
@@ -148,7 +148,7 @@ describe("CreateCommunityGroupPage", () => {
   });
 
   it("surfaces the server's own duplicate-name 409 message inline", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(createCommunityGroup).mockRejectedValueOnce(
       new CommunityGroupsApiError("A Community Group with this name already exists", { status: 409 }),
     );

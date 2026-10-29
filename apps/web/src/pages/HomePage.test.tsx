@@ -1,15 +1,15 @@
 // Following AgeGateStep.test.tsx / ProfilePage.test.tsx's established
 // pattern -- plain DOM assertions, no @testing-library/jest-dom. Session
-// seeded directly into sessionStorage.
+// seeded directly into the in-memory session store.
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router";
 import HomePage from "./HomePage";
+import { seedSession, clearSession } from "../test/session";
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
 });
 
 function renderAt(path: string) {
@@ -69,7 +69,7 @@ describe("HomePage", () => {
   });
 
   it("redirects a signed-in visitor to /community instead of rendering the marketing page (Decision Log #152)", () => {
-    window.sessionStorage.setItem("sn_access_token", "header.payload.sig");
+    seedSession("header.payload.sig");
     renderAt("/");
     expect(screen.getByText("COMMUNITY FEED")).not.toBeNull();
     expect(screen.queryByText(/deserves a record/i)).toBeNull();

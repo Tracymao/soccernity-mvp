@@ -11,10 +11,10 @@ vi.mock("../../api/auth", async () => {
   return { ...actual, registerUser: vi.fn() };
 });
 import { AuthApiError, registerUser } from "../../api/auth";
+import { clearSession, heldAccessToken } from "../../test/session";
 
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(registerUser).mockReset();
 });
 afterEach(cleanup);
@@ -32,7 +32,6 @@ function fillAndSubmit() {
 function registered(nextStep: "restricted_pending" | "verify_email" | "create_profile" | "none") {
   return {
     accessToken: "acc",
-    refreshToken: "ref",
     user: { nextStep },
   } as unknown as Awaited<ReturnType<typeof registerUser>>;
 }
@@ -68,8 +67,7 @@ describe("RegisterStep", () => {
     const payload = vi.mocked(registerUser).mock.calls[0][0];
     expect(payload).toMatchObject({ dateOfBirth: "1990-01-01", countryCode: "NG" });
     expect(payload.guardian).toBeUndefined();
-    await waitFor(() => expect(window.sessionStorage.getItem("sn_access_token")).toBe("acc"));
-    expect(window.sessionStorage.getItem("sn_refresh_token")).toBe("ref");
+    await waitFor(() => expect(heldAccessToken()).toBe("acc"));
   });
 
   it("sends the single guardian name and the country for a minor", async () => {
@@ -94,7 +92,7 @@ describe("RegisterStep", () => {
     fillAndSubmit();
 
     await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/already in use/i));
-    expect(window.sessionStorage.getItem("sn_access_token")).toBeNull();
+    expect(heldAccessToken()).toBeNull();
   });
 
   // B-125 (Decision Log #367, #394 A6): where a fresh registration goes is the
