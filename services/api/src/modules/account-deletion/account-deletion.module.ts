@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageModule } from '../../storage/storage.module';
 import { AccountDeletionSweepService } from './account-deletion-sweep.service';
+import { AnonymizedRowPurgeService } from './anonymized-row-purge.service';
 
 // sprint-2/account-deletion-sweep — Build Plan Section 9, Decision Log
 // #42. No controller: this module exists purely to register the
@@ -13,7 +14,7 @@ import { AccountDeletionSweepService } from './account-deletion-sweep.service';
 @Module({
   // StorageModule: lets anonymizeUser remove the user's avatar object (B-035).
   imports: [StorageModule],
-  providers: [AccountDeletionSweepService, PrismaService],
-  exports: [AccountDeletionSweepService],
+  providers: [AccountDeletionSweepService, AnonymizedRowPurgeService, PrismaService],
+  exports: [AccountDeletionSweepService, AnonymizedRowPurgeService],
 })
 export class AccountDeletionModule {}

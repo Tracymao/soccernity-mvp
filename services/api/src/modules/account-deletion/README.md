@@ -1,5 +1,64 @@
 # account-deletion module
 
+> ## Purge of anonymised rows — Decision Log #375 (`backend/w6-purge-anonymised-rows`, B-043)
+>
+> **The only place a `User` row is ever deleted.** `AccountDeletionSweepService` still never runs a
+> `DELETE` on it (#341, below). `AnonymizedRowPurgeService` (daily `@Cron` at 03:30, after the 03:00
+> sweep; **not** exposed over HTTP, irreversible like the sweep) hard-deletes an anonymised row **30 days
+> after anonymisation**, and only if nothing refers to it any more. This **supersedes #344's "no purge
+> timer, by design"** (a dated note, not a rewrite — #344's reasoning about RESTRICT/cascade is exactly why
+> the check below is explicit).
+>
+> - **The clock.** `User.anonymizedAt` (new, nullable, migration `20261101090000_add_user_anonymized_at`),
+>   written in the *same* transaction as `accountStatus -> 'deleted'` by `anonymizeUser` — so the daily
+>   sweep **and** the admin immediate delete both stamp it. The first value wins if the anonymiser is
+>   re-run. **No backfill** (the platform is not live): a row anonymised before this column existed keeps
+>   `NULL` and is **never** purged by the timer.
+> - **Selection.** `accountStatus = 'deleted' AND anonymizedAt <= now − 30 days`, oldest first, at most
+>   **200 per run** (`ANONYMIZED_PURGE_MAX_PER_RUN`; a backlog drains over several runs and the run logs
+>   that it was capped). `purgeAnonymizedRows(now?)` takes an explicit `now` for tests.
+> - **One transaction per row, re-checked inside it.** The selection is only a work list. Each row runs in
+>   its own **Serializable** transaction that re-reads the row, runs the reference check, and deletes with a
+>   `deleteMany` guarded on the same conditions. A `Report` filed between the list and the delete makes one
+>   of the two abort (the row is reported as errored and retried next run), never slip through. One row
+>   failing never stops the others.
+> - **Eligibility (#375).** (a) a never-approved minor — `isMinor` and no `ConsentAuditRecord` with
+>   `consentStatus = 'confirmed'`; or (b) any account with no content. **A row meeting (a) that still has
+>   anything pointing at it is not purged and not forced.** Because every reference blocks, a row with none
+>   satisfies (b) by construction, so (a) cannot currently widen eligibility; it is computed so the log says
+>   *why* a row went (`never_approved_minor` / `no_content`).
+> - **What counts as "still referenced" — the 'no content' test #375 left open.** Checked explicitly (one
+>   lookup each), **never by trying the DELETE**: five FKs into `User` CASCADE (`ContestEntry`,
+>   `ContestRoundWinner`, `ContestStanding`, `PointsLedgerEntry`, `CommunityGroup.createdById`), so a
+>   DELETE would have silently destroyed them, and several references have no FK at all.
+>   - *Every relation FROM a model TO `User`* — **derived from `Prisma.dmmf`** at run time
+>     (`anonymized-row-purge.references.ts`), so a model added later is checked automatically. Two
+>     classification lists make a human decide each one: **content** (Post, Comment, Message, Result,
+>     Report.reporter, PostView, PostMediaReport, LeaderboardEntry, ContestEntry/Vote/Engagement/
+>     RoundWinner/Standing, PointsLedgerEntry, CommunityGroup.createdBy) and **anonymiser deletes these
+>     first** (Guardian, GrassrootsTeam.createdBy, Banter/Community-Group membership, Notification,
+>     SavedPost, Like, Follow, Block, MatchSubscription, ContestImpression, PostMedia, and the
+>     `_ClubMembership` join table). **Both lists block**; a row left in the second is logged as an
+>     *anomaly* (something wrote to an anonymised account). A spec fails the build if a derived relation is
+>     in neither list.
+>   - *No-FK references*: a `Report` filed against the user, or against a post/comment they authored (any
+>     status); `RevokedUsername.userId`; `AdminActionLog` rows with `targetType = 'user'`. **Veto-able
+>     defaults, added beyond the three #375 names:** `ContestVoteEvent.voterId`,
+>     `AgeReclassificationLog.userId`, `BanterRoom.createdBy`, `Conversation.participantIds` also block.
+>     `ConsentAuditRecord.minorUserId` is *excluded* (it survives on its own 6-month clock) and another
+>     user's `Notification.actorId` is *tolerated* (an opaque id on someone else's row).
+> - **Consequence worth knowing.** Several `RESTRICT` tables the anonymiser does **not** empty (`PostView`,
+>   `LeaderboardEntry`, `ContestVote`, `ContestEngagement`, `PointsLedgerEntry`) mean most accounts that
+>   did anything are kept; the purge mainly removes accounts that left nothing behind. Having the anonymiser
+>   delete those ephemeral rows is a separate decision, not made here.
+> - **Storage is not touched.** A *rejected* post-media file's private object stays in the bucket (B-206,
+>   OPEN under counsel). Once the row is purged that object has **no database pointer at all** — only its
+>   key, `private-media/<uploaderId>/<mediaId>.<ext>`, which names the uploader's user id. Not decided here.
+> - **Untouched:** `ConsentAuditRecord` (its own 6-month clock), the investigation hold (B-044), admin
+>   screens (B-045), revoked-username retention (B-139, OPEN).
+>
+> ---
+
 > **CURRENT BEHAVIOUR — Decision Log #341 (`sprint-2/account-anonymization-reconsideration`)
 > supersedes Decision Log #44's cascade resolution, and #42's "hard-delete the
 > `User` row" step. Everything below the "Historical" divider describes the
@@ -10,7 +69,7 @@
 > guardian refusal/expiry) gets the same 30-day grace period. At the end of it
 > `AccountDeletionSweepService.anonymizeUser` **anonymizes the `User` row in
 > place** — one atomic transaction, `accountStatus -> 'deleted'` — and **never
-> runs a `DELETE` on it**.
+> runs a `DELETE` on it** (the only `DELETE` of a `User` row is the 30-day purge above, #375).
 >
 > **Why.** The cascade model deleted *other users'* `Comment`/`Like`/`SavedPost`
 > rows on a departing user's `Post`: a bigger erasure than "this user's own
@@ -49,7 +108,8 @@
 > Cascades added by *later* PRs under #44's banner (`BanterRoomMember`,
 > `CommunityGroupMember`, `ContestEntry`/`ContestRoundWinner`/
 > `ContestStanding`/`PointsLedgerEntry`, `CommunityGroup.createdBy`) are left
-> as they were: inert now that no `User` row is ever deleted.
+> as they were: inert for the anonymiser (#341), and **live again for the purge (#375)**, which
+> checks them explicitly before deleting so they cannot cascade silently.
 >
 > **Investigation hold.** Before anonymizing a due account the sweep runs
 > `hasOpenInvestigation`. If a non-terminal `Report` involves the user —
@@ -72,6 +132,8 @@
 > (default 90 days, tunable) surfaces stalled holds to admins. No retention
 > timer on the anonymized row, **by design** (#344): a later hard-delete would
 > fail on RESTRICT FKs or cascade away other users' content.
+> **[#375, 2026-10: superseded — a purge timer now exists, with the explicit
+> reference check described at the top of this file.]**
 >
 > **Still flagged, not built:** Grassroots dormant-team reassignment is a
 > separate follow-up; the notification rows other users hold *about* the

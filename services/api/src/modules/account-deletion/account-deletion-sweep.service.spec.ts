@@ -57,6 +57,41 @@ describe('AccountDeletionSweepService', () => {
     });
   });
 
+  // B-043 (Decision Log #375): anonymizedAt is what the 30-day purge counts from.
+  describe('anonymizeUser anonymizedAt', () => {
+    const updateData = (prisma: PrismaService) => (prisma.user.update as jest.Mock).mock.calls[0][0].data;
+
+    it('stamps anonymizedAt with the supplied now, in the same user.update that sets accountStatus', async () => {
+      const prisma = buildPrismaMock();
+      const when = new Date('2026-10-01T10:00:00.000Z');
+
+      await new AccountDeletionSweepService(prisma).anonymizeUser('user-1', false, when);
+
+      expect(prisma.user.update).toHaveBeenCalledTimes(1);
+      expect(updateData(prisma)).toMatchObject({ accountStatus: 'deleted', anonymizedAt: when });
+    });
+
+    it('keeps the FIRST anonymizedAt when re-run on an already-anonymised row (the clock does not restart)', async () => {
+      const prisma = buildPrismaMock();
+      const first = new Date('2026-09-01T00:00:00.000Z');
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ avatarKey: null, coverKey: null, anonymizedAt: first });
+
+      await new AccountDeletionSweepService(prisma).anonymizeUser('user-1', false, new Date('2026-10-01T00:00:00.000Z'));
+
+      expect(updateData(prisma).anonymizedAt).toEqual(first);
+    });
+
+    it('the daily sweep passes its own now through, so anonymizedAt is the sweep time', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'user-1', isMinor: false }]);
+      const now = new Date('2026-10-05T03:00:00.000Z');
+
+      await new AccountDeletionSweepService(prisma).sweepPendingDeletions(now);
+
+      expect(updateData(prisma).anonymizedAt).toEqual(now);
+    });
+  });
+
   // B-035: the avatar OBJECT is removed from storage after the commit, best effort.
   describe('anonymizeUser avatar object', () => {
     it('removes the stored avatar object by key after the transaction commits', async () => {
@@ -271,6 +306,8 @@ describe('AccountDeletionSweepService', () => {
           coverRejectionReason: null,
           accountStatus: 'deleted',
           pendingDeletionAt: null,
+          // B-043 (#375): the purge clock starts here.
+          anonymizedAt: expect.any(Date),
         },
       });
       expect((prisma.user as unknown as { delete?: unknown }).delete).toBeUndefined();
