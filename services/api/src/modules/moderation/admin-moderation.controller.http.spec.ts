@@ -10,6 +10,7 @@ import * as request from 'supertest';
 import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
 import { AdminRolesGuard } from '../admin/guards/admin-roles.guard';
 import { AdminModerationController } from './admin-moderation.controller';
+import { ModerationHoldsService } from './moderation-holds.service';
 import { ModerationService } from './moderation.service';
 
 // Exercises the real HTTP layer: routing, DTO validation, AND — unlike a
@@ -30,12 +31,24 @@ describe('AdminModerationController (HTTP layer)', () => {
     escalateReport: jest.fn(),
   };
 
+  // B-045: the Report detail response now carries the report's active holds.
+  const holdsService = {
+    listActiveHoldsForReport: jest.fn(),
+    placeBadFaith: jest.fn(),
+    placeLegal: jest.fn(),
+    lift: jest.fn(),
+  };
+
   let currentAdmin: { sub: string; role: string; aud: string };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [AdminModerationController],
-      providers: [{ provide: ModerationService, useValue: moderationService }, AdminRolesGuard],
+      providers: [
+        { provide: ModerationService, useValue: moderationService },
+        { provide: ModerationHoldsService, useValue: holdsService },
+        AdminRolesGuard,
+      ],
     })
       .overrideGuard(AdminJwtAuthGuard)
       .useValue({
@@ -144,6 +157,43 @@ describe('AdminModerationController (HTTP layer)', () => {
   describe('GET /admin/moderation/reports/:id', () => {
     beforeEach(() => {
       currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
+      holdsService.listActiveHoldsForReport.mockResolvedValue([]);
+    });
+
+    it('keeps every existing report field and adds the active holds', async () => {
+      const hold = {
+        id: 'hold-1',
+        userId: 'u1',
+        type: 'legal_hold',
+        reportId: 'report-1',
+        placedBy: 'admin-9',
+        placedAt: '2030-01-01T00:00:00.000Z',
+        expiresAt: null,
+        liftedAt: null,
+      };
+      moderationService.getReportById.mockResolvedValue({ id: 'report-1', status: 'open', concernsMinor: false, reason: 'r' });
+      holdsService.listActiveHoldsForReport.mockResolvedValue([hold]);
+
+      const res = await request(app.getHttpServer()).get('/admin/moderation/reports/report-1').expect(200);
+
+      expect(res.body).toEqual({ id: 'report-1', status: 'open', concernsMinor: false, reason: 'r', holds: [hold] });
+      expect(holdsService.listActiveHoldsForReport).toHaveBeenCalledWith('report-1');
+    });
+
+    it('returns an empty holds array when nothing is held', async () => {
+      moderationService.getReportById.mockResolvedValue({ id: 'report-1' });
+
+      const res = await request(app.getHttpServer()).get('/admin/moderation/reports/report-1').expect(200);
+
+      expect(res.body.holds).toEqual([]);
+    });
+
+    it('does not look up holds when the report is refused (404)', async () => {
+      moderationService.getReportById.mockRejectedValue(new NotFoundException('Report not found'));
+
+      await request(app.getHttpServer()).get('/admin/moderation/reports/missing').expect(404);
+
+      expect(holdsService.listActiveHoldsForReport).not.toHaveBeenCalled();
     });
 
     it('forwards the report id and the calling admin id, and returns the report', async () => {
