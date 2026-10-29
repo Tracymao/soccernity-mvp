@@ -89,7 +89,7 @@ export class PostMediaReportService {
       throw postMediaError(
         429,
         MEDIA_REVIEW_CODES.reportDailyLimit,
-        "You've sent a lot of reports today. Please try again tomorrow, or use the general report option for anything urgent.",
+        'Each person can send a limited number of reports in 24 hours. You can report again later.',
       );
     }
 

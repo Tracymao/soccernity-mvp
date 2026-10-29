@@ -26,6 +26,7 @@ beforeEach(() => {
 });
 
 // Deliberately NOT shaped like the stored-file layout: the id must come from `media`, not from the URL.
+const LIMIT_MESSAGE = "Each person can send a limited number of reports in 24 hours. You can report again later.";
 const ID = "media-id-1";
 const IMAGE = "https://cdn.test/anything/photo.jpg";
 const VIDEO = "https://cdn.test/anything/clip.mp4";
@@ -178,7 +179,7 @@ describe("PostMedia — as another viewer", () => {
 
   it("shows a clear daily-limit state (not a generic error) and no way to send again when the API refuses with media_report_daily_limit", async () => {
     vi.mocked(reportMedia).mockRejectedValue(
-      new PostMediaApiError("You've sent a lot of reports today. Please try again tomorrow.", {
+      new PostMediaApiError(LIMIT_MESSAGE, {
         status: 429,
         code: "media_report_daily_limit",
       }),
@@ -187,7 +188,7 @@ describe("PostMedia — as another viewer", () => {
     fireEvent.click(screen.getByRole("button", { name: "Report this picture" }));
     fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
     await screen.findByText("You’ve reached today’s report limit");
-    expect(screen.getByText("You've sent a lot of reports today. Please try again tomorrow.")).not.toBeNull();
+    expect(screen.getByText(LIMIT_MESSAGE)).not.toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByRole("button", { name: "Submit report" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -196,7 +197,7 @@ describe("PostMedia — as another viewer", () => {
 
   async function reachLimit() {
     vi.mocked(reportMedia).mockRejectedValue(
-      new PostMediaApiError("You've sent a lot of reports today. Please try again tomorrow.", {
+      new PostMediaApiError(LIMIT_MESSAGE, {
         status: 429,
         code: "media_report_daily_limit",
       }),
@@ -216,7 +217,8 @@ describe("PostMedia — as another viewer", () => {
     const names = screen.getAllByRole("button").map((b) => b.textContent);
     expect(names.indexOf("Close")).toBeLessThan(names.indexOf("Report the post or person"));
     const sheet = screen.getByRole("status", { name: "Report limit reached" });
-    expect(sheet.textContent ?? "").not.toMatch(/\d/);
+    // "24 hours" is the window named in the server message, not a count of reports.
+    expect((sheet.textContent ?? "").replace("24 hours", "")).not.toMatch(/\d/);
     // The "[COPY PENDING LEGAL REVIEW]" tag is not on the new line (it makes no promise).
     expect(sheet.textContent ?? "").not.toContain("COPY PENDING");
   });

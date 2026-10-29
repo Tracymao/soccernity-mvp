@@ -153,7 +153,12 @@ describe('PostMediaReportService.report', () => {
       const { service, prisma, objects } = build({ filedToday: 20 });
       await expect(service.report('me', 'm1')).rejects.toMatchObject({
         status: 429,
-        response: { statusCode: 429, error: 'Too Many Requests', code: 'media_report_daily_limit' },
+        response: {
+          statusCode: 429,
+          error: 'Too Many Requests',
+          code: 'media_report_daily_limit',
+          message: 'Each person can send a limited number of reports in 24 hours. You can report again later.',
+        },
       });
       expect(prisma.postMediaReport.create).not.toHaveBeenCalled();
       expect(prisma.postMedia.update).not.toHaveBeenCalled();
