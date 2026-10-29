@@ -2,7 +2,7 @@
 //
 // STUB: no competitions backend (Decision Log #72/#73). This success
 // state is unreachable from a real flow — rendered for design fidelity.
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import AdminStubScreen from "../../components/stub/AdminStub";
 
 export default function CompetitionCreatedPage() {

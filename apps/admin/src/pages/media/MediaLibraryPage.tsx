@@ -4,7 +4,7 @@
 // sprint-5/admin-media-storage-backend). AdminRolesGuard('editor',
 // 'superadmin') on the whole endpoint — a moderator gets a real 403, so
 // this screen is only reachable by an editor/superadmin token.
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { useState } from "react";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { listMedia, type MediaAsset, type MediaType } from "../../api/adminMedia";

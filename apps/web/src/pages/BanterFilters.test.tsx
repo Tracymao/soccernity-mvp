@@ -34,6 +34,7 @@ vi.mock("../api/users", async () => {
 import { listRooms, getMyRooms } from "../api/banter";
 import { getUser } from "../api/users";
 import { listJoinedClubs } from "../api/clubs";
+import { seedSession, clearSession } from "../test/session";
 
 function base64UrlEncode(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -84,13 +85,12 @@ function setViewport(width: number) {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(getUser).mockReset().mockResolvedValue(profile());
   vi.mocked(listRooms).mockReset().mockResolvedValue(page([room()]));
   vi.mocked(getMyRooms).mockReset();
   vi.mocked(listJoinedClubs).mockReset().mockResolvedValue([]);
-  window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+  seedSession(fakeAccessToken());
 });
 
 function renderPage() {

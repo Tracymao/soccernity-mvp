@@ -1,7 +1,7 @@
 // Following AgeGateStep.test.tsx/ClubPickerStep.test.tsx's established
 // pattern -- plain DOM assertions only, no @testing-library/jest-dom.
 // Mocks src/api/users.ts and src/api/auth.ts rather than hitting a real
-// network call. Session seeded directly into sessionStorage, same
+// network call. Session seeded directly into the in-memory session store, same
 // approach as GuardianConsentPage.test.tsx.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -39,6 +39,7 @@ vi.mock("./community/PinnedEntry", () => ({
 }));
 
 import { getUser, updateUser, getFollowers, getFollowing } from "../api/users";
+import { seedSession, clearSession } from "../test/session";
 
 function base64UrlEncode(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -77,8 +78,7 @@ const BASE_PROFILE: UserProfile = {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(getUser).mockReset();
   vi.mocked(updateUser).mockReset();
   vi.mocked(getFollowers).mockReset();
@@ -102,7 +102,7 @@ describe("ProfilePage", () => {
   });
 
   it("loads and renders the caller's own profile via GET /users/:id, using the id from the decoded access token", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getUser).mockResolvedValueOnce(BASE_PROFILE);
 
     renderProfilePage();
@@ -113,7 +113,7 @@ describe("ProfilePage", () => {
   });
 
   it("shows the pinned contest entry for the owner on the Posts tab, and not on the Media tab", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getUser).mockResolvedValueOnce(BASE_PROFILE);
 
     renderProfilePage();
@@ -126,7 +126,7 @@ describe("ProfilePage", () => {
   });
 
   it("/profile?edit=1 opens the edit form straight away (the image-decision notification row lands here)", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getUser).mockResolvedValueOnce({
       ...BASE_PROFILE,
       avatar: { url: "u", status: "rejected", rejectionReason: "Not a clear photo of you" },
@@ -140,7 +140,7 @@ describe("ProfilePage", () => {
   });
 
   it("without ?edit=1 the edit form stays closed", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getUser).mockResolvedValueOnce(BASE_PROFILE);
 
     renderProfilePage();
@@ -150,7 +150,7 @@ describe("ProfilePage", () => {
   });
 
   it("shows a guardian consent status link when the profile is a minor", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getUser).mockResolvedValueOnce({ ...BASE_PROFILE, isMinor: true });
 
     renderProfilePage();
@@ -160,7 +160,7 @@ describe("ProfilePage", () => {
   });
 
   it("loads followers via GET /users/:id/followers when the Followers stat is clicked, and supports Load more", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getUser).mockResolvedValueOnce(BASE_PROFILE);
     vi.mocked(getFollowers).mockResolvedValueOnce({
       items: [{ id: "f1", publicName: "Emeka John" }],
@@ -184,7 +184,7 @@ describe("ProfilePage", () => {
   });
 
   it("opens Edit Profile with Bio, Country and Preferred Club editable and Date of Birth read-only, and saves only what changed via PATCH /users/:id", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getUser).mockResolvedValueOnce(BASE_PROFILE);
     vi.mocked(updateUser).mockResolvedValueOnce({ ...BASE_PROFILE, publicName: "Adeniyi Okafor" });
 
@@ -209,7 +209,7 @@ describe("ProfilePage", () => {
   });
 
   it("shows an error message when saving fails, without closing the modal", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getUser).mockResolvedValueOnce(BASE_PROFILE);
     vi.mocked(updateUser).mockRejectedValueOnce(new UsersApiError("Couldn't save those changes (500)."));
 

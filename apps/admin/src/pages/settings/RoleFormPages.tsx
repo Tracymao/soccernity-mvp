@@ -22,7 +22,7 @@
 // really "create an admin/moderator account". Delete Role is navy, not
 // red — no destructive token (CLAUDE.md non-negotiable #3).
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { StubBanner, StubButton, StubField } from "../../components/stub/AdminStub";
 import { AdminApiError } from "../../api/adminClient";

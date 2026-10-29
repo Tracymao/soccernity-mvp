@@ -22,7 +22,7 @@
 // shows them read-only and says so once locked (pass O 6838:29547). The Figma frames draw an inline
 // "Save settings" form instead; the Edit link replaces it so the validation and the field locking
 // live in one place.
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import {
   getContestExposure,

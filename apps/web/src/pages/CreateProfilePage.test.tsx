@@ -10,6 +10,7 @@ vi.mock("../api/users", async () => {
   return { ...actual, getUser: vi.fn(), updateUser: vi.fn() };
 });
 import { getUser, updateUser } from "../api/users";
+import { seedSession, clearSession } from "../test/session";
 
 function b64(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -20,8 +21,7 @@ function fakeToken(sub = "user-1"): string {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(getUser).mockReset();
   vi.mocked(updateUser).mockReset();
 });
@@ -64,7 +64,7 @@ describe("CreateProfilePage", () => {
   }
 
   it("renders every field: picture, cover, name, username, read-only date of birth, blank optional country, bio and club", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeToken("user-1"));
+    seedSession(fakeToken("user-1"));
     vi.mocked(getUser).mockResolvedValue(PROFILE);
     renderPage();
 
@@ -84,7 +84,7 @@ describe("CreateProfilePage", () => {
   });
 
   it("D-18: a slow profile read never wipes what was typed, but still fills untouched fields", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeToken("user-1"));
+    seedSession(fakeToken("user-1"));
     let resolveUser: (value: typeof PROFILE) => void = () => undefined;
     vi.mocked(getUser).mockReturnValue(new Promise((resolve) => (resolveUser = resolve)));
     renderPage();
@@ -105,7 +105,7 @@ describe("CreateProfilePage", () => {
   });
 
   it("saves the profile (username required), then goes to the Club Picker", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeToken("user-1"));
+    seedSession(fakeToken("user-1"));
     vi.mocked(getUser).mockResolvedValue(PROFILE);
     vi.mocked(updateUser).mockResolvedValue({} as Awaited<ReturnType<typeof updateUser>>);
     renderPage();
@@ -132,7 +132,7 @@ describe("CreateProfilePage", () => {
   });
 
   it("rejects a malformed username locally and never calls the API", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeToken());
+    seedSession(fakeToken());
     vi.mocked(getUser).mockResolvedValue(PROFILE);
     renderPage();
 
@@ -144,7 +144,7 @@ describe("CreateProfilePage", () => {
   });
 
   it("shows the server's own message when the username is refused", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeToken());
+    seedSession(fakeToken());
     vi.mocked(getUser).mockResolvedValue(PROFILE);
     vi.mocked(updateUser).mockRejectedValue(new UsersApiError("That username isn't available.", { status: 409 }));
     renderPage();
@@ -157,7 +157,7 @@ describe("CreateProfilePage", () => {
   });
 
   it("a flagged bio shows 'Please rephrase', keeps the typed text and has no override", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeToken());
+    seedSession(fakeToken());
     vi.mocked(getUser).mockResolvedValue(PROFILE);
     vi.mocked(updateUser).mockRejectedValue(
       new UsersApiError("Please rephrase.", {
@@ -183,21 +183,21 @@ describe("CreateProfilePage", () => {
   });
 
   it("sends a restricted-pending account back to /guardian-consent instead of showing the form", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeToken());
+    seedSession(fakeToken());
     vi.mocked(getUser).mockResolvedValue({ nextStep: "restricted_pending" } as Awaited<ReturnType<typeof getUser>>);
     renderPage();
     expect(await screen.findByText("restricted pending page")).not.toBeNull();
   });
 
   it("sends an unverified account back to the verify prompt", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeToken());
+    seedSession(fakeToken());
     vi.mocked(getUser).mockResolvedValue({ nextStep: "verify_email" } as Awaited<ReturnType<typeof getUser>>);
     renderPage();
     expect(await screen.findByText("verify prompt page")).not.toBeNull();
   });
 
   it("moves an account whose profile is already complete on to the Club Picker", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeToken());
+    seedSession(fakeToken());
     vi.mocked(getUser).mockResolvedValue({ nextStep: "none" } as Awaited<ReturnType<typeof getUser>>);
     renderPage();
     expect(await screen.findByText("club picker page")).not.toBeNull();

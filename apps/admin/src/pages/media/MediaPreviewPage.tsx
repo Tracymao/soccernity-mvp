@@ -10,7 +10,7 @@
 // (`findMediaById`) workaround. The Figma screen has no primary action —
 // it's the library list with a preview pane.
 import { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { AdminApiError } from "../../api/adminClient";
 import { getMediaById, type MediaAsset } from "../../api/adminMedia";

@@ -11,6 +11,7 @@ vi.mock("../api/contest", async () => {
   return { ...actual, getCurrentContest: vi.fn(), getRoundEntries: vi.fn(), castVote: vi.fn(), retractVote: vi.fn() };
 });
 import { getCurrentContest, getRoundEntries, castVote, retractVote } from "../api/contest";
+import { seedSession, clearSession } from "../test/session";
 
 function b64(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -44,9 +45,8 @@ const VOTING = { kind: "week_voting", weekNumber: 2, locksAt: "2026-09-14T19:00:
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
-  window.sessionStorage.setItem("sn_access_token", TOKEN);
+  clearSession();
+  seedSession(TOKEN);
   vi.mocked(getCurrentContest).mockReset().mockResolvedValue(openContest({ calendarState: VOTING }));
   vi.mocked(getRoundEntries).mockReset().mockResolvedValue(entriesPage([entry("e1", "Chuks"), entry("e2", "Ada")]));
   vi.mocked(castVote).mockReset();
@@ -63,7 +63,7 @@ function renderPage() {
 
 describe("ContestVotingPage", () => {
   it("prompts to log in and calls nothing with no session", () => {
-    window.sessionStorage.clear();
+    clearSession();
     renderPage();
     expect(screen.getByText(/log in to vote/i)).not.toBeNull();
     expect(getCurrentContest).not.toHaveBeenCalled();

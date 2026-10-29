@@ -1,7 +1,7 @@
 // CommunityGroupPage (Community Group Page). Same conventions as
 // ClubFanPage.test.tsx: plain DOM assertions, mocks
 // src/api/community-groups.ts + src/api/users.ts, session seeded into
-// sessionStorage. GET /community-groups/:id, GET
+// the in-memory session store. GET /community-groups/:id, GET
 // /community-groups/:id/members, POST/DELETE /community-groups/:id/join
 // and POST/DELETE /users/:id/follow are all real merged endpoints --
 // exercising them live is services/api's e2e layer's job
@@ -35,6 +35,7 @@ import {
   leaveCommunityGroup,
 } from "../api/community-groups";
 import { followUser, unfollowUser } from "../api/users";
+import { seedSession, clearSession } from "../test/session";
 
 const BALLERS: CommunityGroup = {
   id: "group-1",
@@ -54,8 +55,7 @@ const EMPTY_MEMBER_PAGE = { items: [], nextCursor: null };
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(getCommunityGroupById).mockReset();
   vi.mocked(getCommunityGroupMembers).mockReset().mockResolvedValue(EMPTY_MEMBER_PAGE);
   vi.mocked(joinCommunityGroup).mockReset();
@@ -83,7 +83,7 @@ describe("CommunityGroupPage", () => {
   });
 
   it("renders a group's real header data, its dimension badge, and no feed section", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getCommunityGroupById).mockResolvedValueOnce(BALLERS);
 
     renderPage();
@@ -100,7 +100,7 @@ describe("CommunityGroupPage", () => {
   });
 
   it("renders a Join button (not joined) and no Joined pill when the group is not joined", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getCommunityGroupById).mockResolvedValueOnce(BALLERS);
 
     renderPage();
@@ -111,7 +111,7 @@ describe("CommunityGroupPage", () => {
   });
 
   it("joins a group via POST /community-groups/:id/join and flips to Leave + a Joined pill", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getCommunityGroupById).mockResolvedValueOnce(BALLERS);
     vi.mocked(joinCommunityGroup).mockResolvedValueOnce({ groupId: "group-1", joined: true, memberCount: 1285 });
 
@@ -126,7 +126,7 @@ describe("CommunityGroupPage", () => {
   });
 
   it("shows a guardian-consent message and a link to /guardian-consent on a 403 from GuardianConsentGuard", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getCommunityGroupById).mockResolvedValueOnce(BALLERS);
     vi.mocked(joinCommunityGroup).mockRejectedValueOnce(
       new CommunityGroupsApiError(
@@ -149,7 +149,7 @@ describe("CommunityGroupPage", () => {
   });
 
   it("renders the roster with a Follow button per member (no per-caller isFollowing field)", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getCommunityGroupById).mockResolvedValueOnce(BALLERS);
     vi.mocked(getCommunityGroupMembers).mockReset().mockResolvedValueOnce({ items: [MEMBER], nextCursor: null });
 
@@ -160,7 +160,7 @@ describe("CommunityGroupPage", () => {
   });
 
   it("follows a member via POST /users/:id/follow and flips the button to Following", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getCommunityGroupById).mockResolvedValueOnce(BALLERS);
     vi.mocked(getCommunityGroupMembers).mockReset().mockResolvedValueOnce({ items: [MEMBER], nextCursor: null });
     vi.mocked(followUser).mockResolvedValueOnce({ following: true });
@@ -175,7 +175,7 @@ describe("CommunityGroupPage", () => {
   });
 
   it("fetches more members with the returned cursor when Load more members is clicked", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getCommunityGroupById).mockResolvedValueOnce(BALLERS);
     vi.mocked(getCommunityGroupMembers)
       .mockReset()
@@ -194,7 +194,7 @@ describe("CommunityGroupPage", () => {
   });
 
   it("shows an honest 'Group not found' state on a real 404, with a link back to /groups", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getCommunityGroupById).mockRejectedValueOnce(
       new CommunityGroupsApiError("Couldn't load that group (404).", { status: 404 }),
     );
@@ -206,7 +206,7 @@ describe("CommunityGroupPage", () => {
   });
 
   it("shows a generic load error (not 'not found') on a non-404 failure", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getCommunityGroupById).mockRejectedValueOnce(
       new CommunityGroupsApiError("Couldn't load that group (500).", { status: 500 }),
     );

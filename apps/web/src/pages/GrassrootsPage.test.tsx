@@ -1,6 +1,6 @@
 // GrassrootsPage (Grassroots — Browse Teams). Same conventions as
 // ClubsPage.test.tsx: plain DOM assertions, mocks src/api/grassroots.ts,
-// session seeded into sessionStorage. GET /teams?city= is a real merged
+// session seeded into the in-memory session store. GET /teams?city= is a real merged
 // endpoint — exercising it live is services/api's e2e layer's job
 // (test/grassroots.e2e-spec.ts).
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -15,6 +15,7 @@ vi.mock("../api/grassroots", async () => {
 });
 
 import { listTeams } from "../api/grassroots";
+import { seedSession, clearSession } from "../test/session";
 
 const SURULERE: GrassrootsTeam = {
   id: "team-s",
@@ -36,8 +37,7 @@ const MARINA: GrassrootsTeam = {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(listTeams).mockReset();
 });
 
@@ -57,7 +57,7 @@ describe("GrassrootsPage", () => {
   });
 
   it("renders a loaded page of teams with verified / unverified badges and card links", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listTeams).mockResolvedValueOnce({ items: [SURULERE, MARINA], nextCursor: null });
 
     renderPage();
@@ -78,7 +78,7 @@ describe("GrassrootsPage", () => {
   });
 
   it("shows 'No teams registered yet' when the unfiltered list is empty", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listTeams).mockResolvedValueOnce({ items: [], nextCursor: null });
 
     renderPage();
@@ -87,7 +87,7 @@ describe("GrassrootsPage", () => {
   });
 
   it("re-queries the server (debounced) when a city is typed, and shows the city-specific empty state", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listTeams)
       .mockResolvedValueOnce({ items: [SURULERE, MARINA], nextCursor: null }) // initial
       .mockResolvedValueOnce({ items: [], nextCursor: null }); // after city filter
@@ -104,7 +104,7 @@ describe("GrassrootsPage", () => {
   });
 
   it("fetches the next page with the returned cursor when Load more is clicked", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listTeams)
       .mockResolvedValueOnce({ items: [SURULERE], nextCursor: "cursor-1" })
       .mockResolvedValueOnce({ items: [MARINA], nextCursor: null });
@@ -120,7 +120,7 @@ describe("GrassrootsPage", () => {
   });
 
   it("shows a load error without crashing", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listTeams).mockRejectedValueOnce(new GrassrootsApiError("Couldn't load teams (500)."));
 
     renderPage();

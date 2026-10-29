@@ -76,9 +76,9 @@ export default function InactiveAccountPage() {
     setBusy(true);
     try {
       const result = await reactivateAccount(email, loginPassword);
-      // Same minimal session handling LoginPage.tsx uses on its own
-      // unchecked-"stay signed in" path (sessionStorage, not persistent).
-      storeSession(result, false);
+      // Same as a login with "Stay signed in" unticked: in-memory access token,
+      // session refresh cookie (B-246).
+      storeSession(result);
       // B-125: route on the server's onboarding state, like a login.
       navigate(routeForNextStep(result.user.nextStep));
     } catch (err) {

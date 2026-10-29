@@ -1,6 +1,6 @@
 // ClubsPage (Clubs — Browse). Follows CommunityPage.test.tsx /
 // ClubPickerStep.test.tsx: plain DOM assertions, mocks src/api/clubs.ts,
-// session seeded directly into sessionStorage. GET /clubs, POST/DELETE
+// session seeded directly into the in-memory session store. GET /clubs, POST/DELETE
 // /clubs/:id/join are real merged endpoints — exercising them live is
 // services/api's e2e layer's job (test/clubs.e2e-spec.ts).
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -20,6 +20,7 @@ vi.mock("../api/clubs", async () => {
 });
 
 import { listClubs, joinClub, leaveClub } from "../api/clubs";
+import { seedSession, clearSession } from "../test/session";
 
 const RIVERSIDE: ClubSummary = {
   id: "club-a",
@@ -43,8 +44,7 @@ const HARBOUR: ClubSummary = {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(listClubs).mockReset();
   vi.mocked(joinClub).mockReset();
   vi.mocked(leaveClub).mockReset();
@@ -66,7 +66,7 @@ describe("ClubsPage", () => {
   });
 
   it("renders a loaded page of clubs with Join / Leave button states from real `joined` values", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [RIVERSIDE, HARBOUR], nextCursor: null });
 
     renderPage();
@@ -85,7 +85,7 @@ describe("ClubsPage", () => {
   });
 
   it("joins a club via POST /clubs/:id/join and flips the button to Leave", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [RIVERSIDE], nextCursor: null });
     vi.mocked(joinClub).mockResolvedValueOnce({ clubId: RIVERSIDE.id, joined: true, memberCount: 13 });
 
@@ -100,7 +100,7 @@ describe("ClubsPage", () => {
   });
 
   it("leaves a club via DELETE /clubs/:id/join and flips the button to Join", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [HARBOUR], nextCursor: null });
     vi.mocked(leaveClub).mockResolvedValueOnce({ clubId: HARBOUR.id, joined: false, memberCount: 0 });
 
@@ -115,7 +115,7 @@ describe("ClubsPage", () => {
   });
 
   it("filters the loaded list client-side by name", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [RIVERSIDE, HARBOUR], nextCursor: null });
 
     renderPage();
@@ -130,7 +130,7 @@ describe("ClubsPage", () => {
   });
 
   it("shows 'No clubs match that filter.' when the filter excludes everything", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [RIVERSIDE], nextCursor: null });
 
     renderPage();
@@ -141,7 +141,7 @@ describe("ClubsPage", () => {
   });
 
   it("fetches the next page with the returned cursor when Load more is clicked", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [RIVERSIDE], nextCursor: "cursor-1" });
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [HARBOUR], nextCursor: null });
 
@@ -156,7 +156,7 @@ describe("ClubsPage", () => {
   });
 
   it("shows a load error without crashing", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(listClubs).mockRejectedValueOnce(new ClubsApiError("Couldn't load clubs (500)."));
 
     renderPage();

@@ -1,25 +1,43 @@
-// B-017 -- silent token refresh for every apps/web API client.
+// B-246 -- session restore and silent token refresh for every apps/web API
+// client, on the cookie session of B-245 (Decision Log #422).
 //
-// Access tokens live 15 minutes (Build Plan Section 5.7) and apps/web has
-// ~20 separate fetch clients (src/api/*.ts), each of which reads the access
-// token itself. Rather than touching every call site, this wraps
-// window.fetch once (installed from main.tsx): when a request to the API
-// carrying the CURRENT stored access token comes back 401, it rotates the
-// session through POST /auth/refresh (single-flight, so parallel 401s share
-// one rotation -- the refresh token is rotating and reuse revokes the whole
-// family) and replays the request once with the new token. If the refresh
-// itself is rejected the stored session is cleared; the original 401 is
-// returned, so each page's existing "signed out" handling still applies.
+// The access token lives 15 minutes (Build Plan Section 5.7) and is held in
+// memory only (lib/session.ts). The refresh token is an httpOnly cookie that
+// JavaScript never sees, so every call here is
+//     POST /auth/refresh   X-Auth-Mode: cookie   credentials: include   (no body)
+// and the API rotates the cookie and returns only the new access token.
 //
-// B-164 -- cross-tab. The single-flight above only protects ONE tab. The
-// refresh token rotates and the server treats a second use of an old token as
-// reuse (revoking the family), so two tabs sharing a "Stay signed in"
-// (localStorage) session that 401 together used to be able to log the person
-// out. The rotation therefore runs under a cross-tab lock (the Web Locks API;
-// a localStorage lease where it is unavailable). The tab that takes the lock
-// re-reads the stored tokens FIRST: if another tab already rotated them it
-// uses the new pair and does not call the server at all.
-import { clearStoredSession, getStoredAccessToken, getStoredRefreshToken, replaceStoredTokens } from "./session";
+// Two jobs:
+//   1. restoreSession() -- the start-up restore. A page load begins with no
+//      token; this does ONE refresh before protected routes render
+//      (AuthContext.tsx gates the app on it). A 401 / 403 means "no usable
+//      cookie" = signed out, which is a normal state, not an error.
+//   2. installSilentRefresh() -- wraps window.fetch once (main.tsx). When a
+//      request to the API carrying the CURRENT access token comes back 401, it
+//      refreshes and replays the request ONCE with the new token. If the
+//      refresh itself is rejected the in-memory session is dropped and the
+//      original 401 is returned, so each page's "signed out" handling applies.
+//
+// Limits (B-244/B-262): 10 refreshes per token and 240 per IP per 60 s. One
+// refresh is in flight per tab at a time, and a request is replayed at most
+// once, so a burst of 401s costs one refresh.
+//
+// B-164 -- cross-tab. The cookie is shared by every tab and ROTATES: the server
+// treats a second use of an old cookie as reuse and revokes the whole family.
+// Two tabs refreshing at the same instant would each send the same cookie, so
+// the call runs under a cross-tab lock (the Web Locks API; a localStorage lease
+// where it is unavailable -- the lease holds no token). The tab that takes the
+// lock checks FIRST whether another tab already rotated: the winner broadcasts
+// the new access token on a BroadcastChannel (lib/session.ts) and the waiting
+// tab adopts it without calling the server at all.
+import { COOKIE_MODE_HEADERS } from "./cookieMode";
+import {
+  clearStoredSession,
+  getStoredAccessToken,
+  purgeLegacyTokenStorage,
+  replaceAccessToken,
+  setSessionRestoring,
+} from "./session";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
 
@@ -39,10 +57,25 @@ const NO_REFRESH_PATHS = [
 type FetchInput = Parameters<typeof fetch>[0];
 type FetchInit = NonNullable<Parameters<typeof fetch>[1]>;
 
-let inFlight: Promise<boolean> | null = null;
+// The unwrapped fetch, captured by installSilentRefresh() so the refresh call
+// itself never goes back through the 401 handler. Where the wrapper is not
+// installed (unit tests), window.fetch is used as it is at call time.
+let rawFetch: typeof fetch | null = null;
+function callFetch(input: FetchInput, init?: FetchInit): Promise<Response> {
+  return (rawFetch ?? window.fetch.bind(window))(input, init);
+}
+
+export type RefreshOutcome =
+  | "ok" // a new access token is in memory
+  | "signed-out" // 401: no cookie, or it is expired / revoked / reused
+  | "forbidden" // 403: the API refused the Origin (a deployment mistake, not a sign-out)
+  | "failed"; // network error or 5xx: the session is left alone
+
+let inFlight: Promise<RefreshOutcome> | null = null;
 
 const LOCK_NAME = "sn-refresh-token-rotation";
 // Fallback lease (no Web Locks): key in localStorage holding { owner, until }.
+// It holds no token -- only who is rotating.
 const LEASE_KEY = "sn_refresh_lock";
 // Longer than a slow refresh round trip, short enough that a tab that died
 // holding the lease does not block the others for long.
@@ -118,45 +151,71 @@ function bearerFrom(headers: FetchInit["headers"]): string | null {
   return value && value.startsWith("Bearer ") ? value.slice("Bearer ".length) : null;
 }
 
-async function rotateSession(originalFetch: typeof fetch, usedToken: string): Promise<boolean> {
-  return withCrossTabLock(async () => {
-    // Another tab may have rotated while this one waited for the lock: if the
-    // stored access token is no longer the one that just 401'd, use the new
-    // pair and do not call the server (that would be a second use of the old
-    // refresh token).
-    const current = getStoredAccessToken();
-    if (current && current !== usedToken) return true;
-    return callRefresh(originalFetch);
-  });
+async function callRefresh(): Promise<RefreshOutcome> {
+  try {
+    const response = await callFetch(`${API_BASE_URL}/auth/refresh`, {
+      method: "POST",
+      headers: COOKIE_MODE_HEADERS,
+      credentials: "include",
+    });
+    if (response.ok) {
+      const body = (await response.json()) as { accessToken?: string };
+      if (typeof body.accessToken !== "string") return "failed";
+      replaceAccessToken(body.accessToken);
+      return "ok";
+    }
+    if (response.status === 401) return "signed-out";
+    if (response.status === 403) return "forbidden";
+    return "failed";
+  } catch {
+    return "failed";
+  }
 }
 
-async function callRefresh(originalFetch: typeof fetch): Promise<boolean> {
-  const refreshToken = getStoredRefreshToken();
-  if (!refreshToken) return false;
-  try {
-    const response = await originalFetch(`${API_BASE_URL}/auth/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
-    });
-    if (!response.ok) {
-      // 401 = expired / revoked / reuse detected: the session is over.
-      // Any other status (5xx) leaves the session alone so a transient
-      // server error does not log the user out.
-      if (response.status === 401) clearStoredSession();
-      return false;
+// One refresh at a time in this tab (parallel 401s and the start-up restore
+// share it), under the cross-tab lock. `usedToken` is the access token that was
+// rejected (null at start-up): if the token held now differs, another request or
+// another tab already refreshed while this one waited, and the server is not
+// called again (that would be a second use of the rotated cookie).
+function refreshOnce(usedToken: string | null): Promise<RefreshOutcome> {
+  inFlight ??= withCrossTabLock(async (): Promise<RefreshOutcome> => {
+    const current = getStoredAccessToken();
+    if (current && current !== usedToken) return "ok";
+    return callRefresh();
+  }).finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
+}
+
+// The start-up restore. Cached at module level on purpose: React StrictMode runs
+// effects twice in development, and a second refresh with the same cookie would
+// be a reuse the server answers by revoking the session.
+let bootPromise: Promise<void> | null = null;
+
+export function restoreSession(): Promise<void> {
+  bootPromise ??= (async () => {
+    // Tokens the pre-B-246 build left in browser storage are not migrated.
+    purgeLegacyTokenStorage();
+    // Already holding a token (a test that seeded one, hot reload): nothing to restore.
+    if (getStoredAccessToken()) return;
+    setSessionRestoring(true);
+    try {
+      await refreshOnce(null);
+    } finally {
+      setSessionRestoring(false);
     }
-    const body = (await response.json()) as { accessToken?: string; refreshToken?: string };
-    if (typeof body.accessToken !== "string" || typeof body.refreshToken !== "string") return false;
-    replaceStoredTokens({ accessToken: body.accessToken, refreshToken: body.refreshToken });
-    return true;
-  } catch {
-    return false;
-  }
+  })();
+  return bootPromise;
+}
+
+export function hasRestoredSession(): boolean {
+  return bootPromise !== null;
 }
 
 export function installSilentRefresh(): void {
   const originalFetch = window.fetch.bind(window);
+  rawFetch = originalFetch;
 
   window.fetch = async (input: FetchInput, init?: FetchInit): Promise<Response> => {
     const response = await originalFetch(input, init);
@@ -170,14 +229,16 @@ export function installSilentRefresh(): void {
     const usedToken = bearerFrom(init?.headers);
     if (!usedToken) return response;
 
-    // Another request may already have rotated the session while this one
-    // was in flight: replay with the stored token instead of rotating again.
+    // Another request may already have refreshed while this one was in
+    // flight: replay with the held token instead of refreshing again.
     let currentToken = getStoredAccessToken();
     if (currentToken === usedToken) {
-      inFlight ??= rotateSession(originalFetch, usedToken).finally(() => {
-        inFlight = null;
-      });
-      if (!(await inFlight)) return response;
+      const outcome = await refreshOnce(usedToken);
+      // 401 = expired / revoked / reuse detected: the session is over. A 403 or
+      // a 5xx leaves it alone so a transient or configuration error does not
+      // log the user out.
+      if (outcome === "signed-out") clearStoredSession();
+      if (outcome !== "ok") return response;
       currentToken = getStoredAccessToken();
     }
     if (!currentToken || currentToken === usedToken) return response;
@@ -186,4 +247,11 @@ export function installSilentRefresh(): void {
     headers.set("Authorization", `Bearer ${currentToken}`);
     return originalFetch(input, { ...init, headers });
   };
+}
+
+// Test-only: forget the cached restore and any in-flight refresh.
+export function __resetSilentRefreshForTests(): void {
+  bootPromise = null;
+  inFlight = null;
+  rawFetch = null;
 }

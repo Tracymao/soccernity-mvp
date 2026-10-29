@@ -1,7 +1,7 @@
 // PrivacySettingsPage (Settings — Privacy). Follows
 // ProfilePage.test.tsx / ClubsPage.test.tsx: plain DOM assertions, mocks
 // src/api/users.ts + src/api/auth.ts, session seeded directly into
-// sessionStorage. GET /users/:id and GET /auth/guardian-consent/status
+// the in-memory session store. GET /users/:id and GET /auth/guardian-consent/status
 // are real merged endpoints — exercising them live is services/api's job.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -22,6 +22,7 @@ vi.mock("../api/auth", async () => {
 
 import { getUser } from "../api/users";
 import { getGuardianConsentStatus } from "../api/auth";
+import { seedSession, clearSession } from "../test/session";
 
 function base64UrlEncode(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -60,8 +61,7 @@ const MINOR: UserProfile = { ...ADULT, id: "user-2", email: "minor@example.com",
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(getUser).mockReset();
   vi.mocked(getGuardianConsentStatus).mockReset();
 });
@@ -83,7 +83,7 @@ describe("PrivacySettingsPage", () => {
   });
 
   it("renders the core rows for a signed-in adult, with the guardian row hidden", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getUser).mockResolvedValueOnce(ADULT);
 
     renderPage();
@@ -101,7 +101,7 @@ describe("PrivacySettingsPage", () => {
   });
 
   it("links Account status actions to the deactivate / delete routes", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getUser).mockResolvedValueOnce(ADULT);
 
     renderPage();
@@ -113,7 +113,7 @@ describe("PrivacySettingsPage", () => {
   });
 
   it("has a real Blocked users row linking to the list (B-108)", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getUser).mockResolvedValueOnce(ADULT);
     renderPage();
     await screen.findByText("Blocked users");
@@ -123,7 +123,7 @@ describe("PrivacySettingsPage", () => {
   });
 
   it("does not render any live control: the toggles are not real inputs", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getUser).mockResolvedValueOnce(ADULT);
 
     renderPage();
@@ -137,7 +137,7 @@ describe("PrivacySettingsPage", () => {
   });
 
   it("shows the guardian approval row with an 'Approved' pill for a minor with confirmed consent", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-2"));
+    seedSession(fakeAccessToken("user-2"));
     vi.mocked(getUser).mockResolvedValueOnce(MINOR);
     vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({
       consentStatus: "confirmed",
@@ -156,7 +156,7 @@ describe("PrivacySettingsPage", () => {
   });
 
   it("shows a 'Pending' guardian pill and the guardian email while consent is pending", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-2"));
+    seedSession(fakeAccessToken("user-2"));
     vi.mocked(getUser).mockResolvedValueOnce(MINOR);
     vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({
       consentStatus: "pending",
@@ -172,7 +172,7 @@ describe("PrivacySettingsPage", () => {
   });
 
   it("hides the guardian row when the status endpoint 404s (not actually a minor)", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-2"));
+    seedSession(fakeAccessToken("user-2"));
     vi.mocked(getUser).mockResolvedValueOnce(MINOR);
     vi.mocked(getGuardianConsentStatus).mockRejectedValueOnce(
       new AuthApiError("not found", { status: 404 }),
@@ -185,7 +185,7 @@ describe("PrivacySettingsPage", () => {
   });
 
   it("shows a soft error in the guardian row when the status endpoint fails non-404", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-2"));
+    seedSession(fakeAccessToken("user-2"));
     vi.mocked(getUser).mockResolvedValueOnce(MINOR);
     vi.mocked(getGuardianConsentStatus).mockRejectedValueOnce(
       new AuthApiError("server error", { status: 500 }),
@@ -198,7 +198,7 @@ describe("PrivacySettingsPage", () => {
   });
 
   it("shows an error state without crashing when GET /users/:id fails", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getUser).mockRejectedValueOnce(new Error("boom"));
 
     renderPage();

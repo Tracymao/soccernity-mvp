@@ -23,11 +23,10 @@
 // so a test can mount the real tree via createMemoryRouter — the same
 // split apps/web/src/app/router.tsx uses.
 //
-// react-router-dom is pinned to ^6.22.0 (v6 data-router API:
-// createBrowserRouter + RouterProvider). apps/admin deliberately stays on
-// React 18 / react-router-dom 6 — it was left off apps/web's React 19 /
-// React Router 8 upgrades (CLAUDE.md).
-import { createBrowserRouter, Navigate, type RouteObject } from "react-router-dom";
+// React Router 8 (createBrowserRouter + RouterProvider), imported from the
+// unified `react-router` package like apps/web (Decision Log #25, #27, #28);
+// apps/admin runs React 19 alongside it (B-255, Decision Log #423).
+import { createBrowserRouter, Navigate, type RouteObject } from "react-router";
 import AdminShell from "../layout/AdminShell";
 import RequireAdminAuth from "../auth/RequireAdminAuth";
 import AdminLoginPage from "../pages/AdminLoginPage";

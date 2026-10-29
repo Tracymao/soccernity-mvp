@@ -6,7 +6,7 @@
 // interactive toggle — PATCH /admin/categories/:id — retiring a category
 // (rather than deleting it) is the real underlying need Section 4.8's
 // literal spec leaves no route for; see admin-content/README.md.
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { useState } from "react";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { AdminApiError } from "../../api/adminClient";

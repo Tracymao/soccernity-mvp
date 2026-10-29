@@ -8,7 +8,7 @@ import react from "@vitejs/plugin-react";
 // with the `test` field merged in) so this one file carries both Vite's
 // and Vitest's config. jsdom is the DOM environment Vitest needs to
 // render React components; @testing-library/react is the render harness
-// (v14 — the last major supporting React 18, which apps/admin stays on).
+// (v16 — React 19 support, matching apps/web).
 export default defineConfig({
   plugins: [react()],
   test: {

@@ -6,7 +6,7 @@
 // never goes blank after a month ends. There is nothing to judge, open or crown: the month runs itself.
 // The only actions are create a contest, edit the contest (within the locking rules), cycle history and
 // the finalist impressions view.
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { getCurrentContest } from "../../api/contest";
 import CycleOverview from "./CycleOverview";

@@ -1,6 +1,6 @@
 // Following ProfilePage.test.tsx's pattern -- plain DOM assertions, mocks
 // src/api/feed.ts and src/api/users.ts rather than hitting the network,
-// session seeded directly into sessionStorage.
+// session seeded directly into the in-memory session store.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
@@ -52,6 +52,7 @@ import {
   type CurrentContestResponse,
 } from "../api/contest";
 import { noContest, openContest as baseOpenContest } from "./contest/contestFixtures";
+import { seedSession, clearSession } from "../test/session";
 
 const openContest = (overrides: Partial<CurrentContestResponse> = {}) => baseOpenContest(overrides);
 
@@ -84,8 +85,7 @@ function post(overrides: Partial<FeedPost> = {}): FeedPost {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(getFeed).mockReset();
   vi.mocked(createPost).mockReset();
   vi.mocked(likePost).mockReset();
@@ -113,7 +113,7 @@ describe("CommunityPage", () => {
   });
 
   it("loads and renders the feed via GET /posts/feed", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getFeed).mockResolvedValueOnce({ items: [post()], nextCursor: null });
     vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
 
@@ -124,7 +124,7 @@ describe("CommunityPage", () => {
   });
 
   it("shows the Final week carousel above the feed during a live final week, and nothing otherwise", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getFeed).mockResolvedValue({ items: [post()], nextCursor: null });
     vi.mocked(getUser).mockResolvedValue({ publicName: "Ada Player" } as never);
     vi.mocked(getFinalWeekCarousel).mockResolvedValue({
@@ -149,7 +149,7 @@ describe("CommunityPage", () => {
   });
 
   it("renders no carousel when the final week is not live", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getFeed).mockResolvedValue({ items: [post()], nextCursor: null });
     vi.mocked(getUser).mockResolvedValue({ publicName: "Ada Player" } as never);
     renderPage();
@@ -159,7 +159,7 @@ describe("CommunityPage", () => {
   });
 
   it("publishes a post via POST /posts and prepends it to the feed", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getFeed).mockResolvedValueOnce({ items: [], nextCursor: null });
     vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
     vi.mocked(createPost).mockResolvedValueOnce(
@@ -182,7 +182,7 @@ describe("CommunityPage", () => {
   });
 
   it("likes a post via POST /posts/:id/like and reflects the server's fresh count", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getFeed).mockResolvedValueOnce({ items: [post({ likeCount: 3 })], nextCursor: null });
     vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
     vi.mocked(likePost).mockResolvedValueOnce({ postId: "post-1", liked: true, likeCount: 4 });
@@ -196,7 +196,7 @@ describe("CommunityPage", () => {
   });
 
   it("does not render a Follow button on the caller's own post", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getFeed).mockResolvedValueOnce({
       items: [post({ authorId: "user-1", author: { id: "user-1", publicName: "Ada Player", isFollowing: false } })],
       nextCursor: null,
@@ -209,7 +209,7 @@ describe("CommunityPage", () => {
   });
 
   it("shows no Contest tab in the composer when no contest is accepting entries", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getFeed).mockResolvedValueOnce({ items: [], nextCursor: null });
     vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
     vi.mocked(getCurrentContest).mockResolvedValue(noContest());
@@ -221,7 +221,7 @@ describe("CommunityPage", () => {
   });
 
   it("submits a contest entry: POST /posts then POST /contest/entries with the new post's id", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getFeed).mockResolvedValueOnce({ items: [], nextCursor: null });
     vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
     vi.mocked(getCurrentContest).mockResolvedValue(openContest());
@@ -257,7 +257,7 @@ describe("CommunityPage", () => {
   });
 
   it("shows an 'already entered' state in contest mode when callerEntry is set", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getFeed).mockResolvedValueOnce({ items: [], nextCursor: null });
     vi.mocked(getUser).mockResolvedValueOnce({ publicName: "Ada Player" } as never);
     vi.mocked(getCurrentContest).mockResolvedValue(
@@ -273,7 +273,7 @@ describe("CommunityPage", () => {
   });
 
   it("renders like / save / follow in their already-acted state on initial load from the API's per-caller fields (Decision Log #153)", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken("user-1"));
+    seedSession(fakeAccessToken("user-1"));
     vi.mocked(getFeed).mockResolvedValueOnce({
       items: [
         post({
