@@ -61,7 +61,6 @@ const closers: Array<() => Promise<void>> = [];
 export default async function globalSetup(): Promise<() => Promise<void>> {
   fs.mkdirSync(RUN_DIR, { recursive: true });
   fs.rmSync(path.join(RUN_DIR, 'admin-token.json'), { force: true }); // a stale token belongs to a dropped database
-  fs.rmSync(path.join(RUN_DIR, 'admin-storage-state.json'), { force: true });
   const rootEnv = readRootEnv();
   const baseDb = process.env.QA_BASE_DATABASE_URL ?? rootEnv.DATABASE_URL;
   if (!baseDb) throw new Error('No DATABASE_URL in the root .env (or QA_BASE_DATABASE_URL) to take credentials from.');

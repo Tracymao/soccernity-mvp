@@ -13,5 +13,7 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: "jsdom",
+    // B-247: resets the in-memory admin session between tests.
+    setupFiles: ["./src/test/setup.ts"],
   },
 });
