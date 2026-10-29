@@ -11,6 +11,7 @@ vi.mock("../../api/feed", async () => {
 });
 
 import { getFeed, recordPostView } from "../../api/feed";
+import { seedSession, clearSession } from "../../test/session";
 
 function b64(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -37,9 +38,8 @@ function post(id: string, mediaUrls: string[], viewCount: number, name = "Ada"):
 }
 
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
-  window.sessionStorage.setItem("sn_access_token", TOKEN);
+  clearSession();
+  seedSession(TOKEN);
   vi.mocked(getFeed).mockReset();
   vi.mocked(recordPostView).mockReset();
   // jsdom does not implement HTMLMediaElement.play/load.
@@ -143,7 +143,7 @@ describe("VideosCarousel", () => {
   });
 
   it("makes no API calls without a session", async () => {
-    window.sessionStorage.clear();
+    clearSession();
     render(<VideosCarousel />);
     expect(await screen.findByText("No videos in your feed yet.")).not.toBeNull();
     expect(getFeed).not.toHaveBeenCalled();

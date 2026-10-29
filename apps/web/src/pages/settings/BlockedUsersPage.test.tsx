@@ -9,6 +9,7 @@ vi.mock("../../api/users", async () => {
   return { ...actual, getBlockedUsers: vi.fn(), unblockUser: vi.fn() };
 });
 import { getBlockedUsers, unblockUser } from "../../api/users";
+import { seedSession, clearSession } from "../../test/session";
 
 function b64(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -17,9 +18,8 @@ const TOKEN = `${b64({ alg: "none" })}.${b64({ sub: "me", role: "fan" })}.sig`;
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
-  window.sessionStorage.setItem("sn_access_token", TOKEN);
+  clearSession();
+  seedSession(TOKEN);
   vi.mocked(getBlockedUsers).mockReset();
   vi.mocked(unblockUser).mockReset();
 });
@@ -34,7 +34,7 @@ function renderPage() {
 
 describe("BlockedUsersPage", () => {
   it("prompts to log in and calls nothing with no session", () => {
-    window.sessionStorage.clear();
+    clearSession();
     renderPage();
     expect(screen.getByText(/log in to manage blocked users/i)).not.toBeNull();
     expect(getBlockedUsers).not.toHaveBeenCalled();

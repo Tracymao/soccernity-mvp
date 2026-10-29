@@ -25,6 +25,7 @@ import {
   reportIncorrectGuardianDetails,
 } from "../api/auth";
 import type { GuardianRequestSummary } from "../api/auth";
+import { clearSession, heldAccessToken } from "../test/session";
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -62,10 +63,9 @@ describe("GuardianConsentConfirmPage", () => {
     // accident: clear every session mechanism this app has (see
     // src/lib/session.ts) before rendering, and confirm the page still
     // renders and can still call the confirm endpoint.
-    window.sessionStorage.clear();
-    window.localStorage.clear();
-    expect(window.sessionStorage.getItem("sn_access_token")).toBeNull();
-    expect(window.localStorage.getItem("sn_access_token")).toBeNull();
+    clearSession();
+    expect(heldAccessToken()).toBeNull();
+    expect(heldAccessToken()).toBeNull();
 
     vi.mocked(confirmGuardianConsent).mockResolvedValueOnce({ message: "Guardian consent confirmed." });
 

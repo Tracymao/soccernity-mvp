@@ -2,7 +2,7 @@
   "name": "@soccernity/admin",
   "private": true,
   "version": "0.1.0",
-  "description": "Soccernity Admin & Operations Console (React) — Log Book Section 6.6. This pillar is already fully designed in Figma; work here is conversion, not design. Stays on React 18 / react-router-dom 6 deliberately (see CLAUDE.md — apps/admin was left off the React 19 / Router 8 upgrades).",
+  "description": "Soccernity Admin & Operations Console (React) — Log Book Section 6.6. This pillar is already fully designed in Figma; work here is conversion, not design. On React 19 / React Router 8, matching apps/web (Decision Log #25, #27, #28; B-255, #423).",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -11,22 +11,23 @@
   },
   "dependencies": {
     "@fontsource/montserrat": "^5.3.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.22.0",
-    "@soccernity/shared": "*"
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "@soccernity/shared": "*",
+    "react-router": "^8.3.0"
   },
   "devDependencies": {
     "vite": "^5.0.0",
     "@vitejs/plugin-react": "^4.0.0",
     "typescript": "^5.4.0",
     "vitest": "^1.0.0",
-    "@testing-library/react": "^14.2.0",
+    "@testing-library/react": "^16.3.2",
     "jsdom": "^24.0.0",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "eslint-plugin-react": "^7.34.0",
     "@typescript-eslint/parser": "^7.0.0",
-    "@typescript-eslint/eslint-plugin": "^7.0.0"
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@testing-library/dom": "^10.4.1"
   }
 }

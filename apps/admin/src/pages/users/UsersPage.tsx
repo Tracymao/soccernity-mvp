@@ -12,7 +12,7 @@
 // displayName, plus the optional @username when the user has set one
 // (User.username, profile/username-column-and-display-convention).
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { AdminApiError } from "../../api/adminClient";
 import {

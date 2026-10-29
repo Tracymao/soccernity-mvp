@@ -2,7 +2,7 @@
 // page components with the admin API module mocked at its edge.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router";
 import { AdminApiError } from "../../api/adminClient";
 
 vi.mock("../../api/mediaReview", async (importOriginal) => {

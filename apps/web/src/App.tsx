@@ -7,7 +7,15 @@
 // src/pages/PlaceholderPage.tsx).
 import { RouterProvider } from "react-router";
 import { router } from "./app/router";
+import { AuthProvider } from "./lib/AuthContext";
 
+// B-246: AuthProvider restores the session (one POST /auth/refresh through the
+// httpOnly cookie) before the router renders, so a signed-in person never sees
+// the signed-out chrome or a login prompt flash up on a reload.
 export default function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
+  );
 }

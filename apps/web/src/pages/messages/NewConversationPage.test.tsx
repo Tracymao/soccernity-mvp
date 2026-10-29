@@ -1,5 +1,5 @@
 // Plain DOM assertions, mocks src/api/search.ts + src/api/messaging.ts,
-// session seeded into sessionStorage. GET /search?scope=users and
+// session seeded into the in-memory session store. GET /search?scope=users and
 // POST /conversations are real merged endpoints -- exercising them live
 // is services/api's e2e layer's job.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -21,6 +21,7 @@ vi.mock("../../api/search", async () => {
 
 import { startConversation } from "../../api/messaging";
 import { searchUsers } from "../../api/search";
+import { seedSession, clearSession } from "../../test/session";
 
 function base64UrlEncode(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -35,8 +36,7 @@ function person(overrides: Partial<SearchUserResult> = {}): SearchUserResult {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(startConversation).mockReset();
   vi.mocked(searchUsers).mockReset();
 });
@@ -60,7 +60,7 @@ describe("NewConversationPage", () => {
   });
 
   it("shows a search prompt and calls nothing before a query is typed", () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     renderPage();
 
     expect(screen.getByText(/search for someone to message/i)).not.toBeNull();
@@ -68,7 +68,7 @@ describe("NewConversationPage", () => {
   });
 
   it("does not call GET /search for a query under 2 trimmed characters", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     renderPage();
 
     fireEvent.change(screen.getByLabelText(/search people/i), { target: { value: " a " } });
@@ -78,7 +78,7 @@ describe("NewConversationPage", () => {
   });
 
   it("debounces (300ms) then calls the real GET /search?scope=users and renders the results", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(searchUsers).mockResolvedValueOnce({ items: [person()], nextCursor: null });
 
     renderPage();
@@ -89,7 +89,7 @@ describe("NewConversationPage", () => {
   });
 
   it("shows a 'no one matches' message when the search returns nothing", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(searchUsers).mockResolvedValueOnce({ items: [], nextCursor: null });
 
     renderPage();
@@ -99,7 +99,7 @@ describe("NewConversationPage", () => {
   });
 
   it("fetches the next page with the returned cursor when Load more is clicked", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(searchUsers).mockResolvedValueOnce({ items: [person()], nextCursor: "cursor-1" });
     vi.mocked(searchUsers).mockResolvedValueOnce({ items: [person({ id: "user-3", publicName: "Bola Ade" })], nextCursor: null });
 
@@ -114,7 +114,7 @@ describe("NewConversationPage", () => {
   });
 
   it("starts a conversation via the real POST /conversations and navigates to the thread", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(searchUsers).mockResolvedValueOnce({ items: [person()], nextCursor: null });
     vi.mocked(startConversation).mockResolvedValueOnce({
       created: true,
@@ -139,7 +139,7 @@ describe("NewConversationPage", () => {
   });
 
   it("shows the server's own error message (e.g. a restricted-pending 404) rather than a generic failure", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(searchUsers).mockResolvedValueOnce({ items: [person()], nextCursor: null });
     vi.mocked(startConversation).mockRejectedValueOnce(new MessagingApiError("User not found", { status: 404 }));
 
@@ -153,7 +153,7 @@ describe("NewConversationPage", () => {
   });
 
   it("shows the server's own search error message rather than a generic failure", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(searchUsers).mockRejectedValueOnce(new SearchApiError("q must be at least 2 characters", { status: 400 }));
 
     renderPage();

@@ -11,7 +11,7 @@
 // endpoint — see media/README.md's own "Key naming, MIME-type
 // validation, and the '5 files' copy" section.
 import { useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { AdminApiError } from "../../api/adminClient";
 import { uploadMedia } from "../../api/adminMedia";

@@ -1,6 +1,6 @@
 // Follows ClubsPage.test.tsx's pattern -- plain DOM assertions, mocks
 // src/api/banter.ts + src/api/users.ts, session seeded directly into
-// sessionStorage. GET /banter-rooms, GET /banter-rooms/mine, POST
+// the in-memory session store. GET /banter-rooms, GET /banter-rooms/mine, POST
 // /banter-rooms and POST/DELETE /banter-rooms/:id/join are all real
 // merged endpoints (sprint-3/banter-rooms-backend) -- exercising them
 // live is services/api's e2e layer's job. TRENDS/FIXTURES/SUGGESTED
@@ -40,6 +40,7 @@ import { listRooms, getMyRooms, createRoom, joinRoom, leaveRoom } from "../api/b
 import { getUser } from "../api/users";
 import { listJoinedClubs } from "../api/clubs";
 import type { ClubSummary } from "../api/clubs";
+import { seedSession, clearSession } from "../test/session";
 
 function base64UrlEncode(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -109,8 +110,7 @@ function page(items: BanterRoom[], nextCursor: string | null = null): BanterRoom
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(getUser).mockReset();
   vi.mocked(listRooms).mockReset();
   vi.mocked(getMyRooms).mockReset();
@@ -138,7 +138,7 @@ describe("BanterPage", () => {
   });
 
   it("shows each room's status dot (Decision Log #357) and a Report affordance on every room row", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getUser).mockResolvedValueOnce(profile());
     vi.mocked(listRooms).mockResolvedValueOnce(
       page([room({ id: "room-a", name: "Open Room", status: "active" }), room({ id: "room-b", name: "Shut Room", status: "inactive" })]),
@@ -152,7 +152,7 @@ describe("BanterPage", () => {
   });
 
   it("renders the caller's real display name in the profile card, and real rooms from GET /banter-rooms", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getUser).mockResolvedValueOnce(profile());
     vi.mocked(listRooms).mockResolvedValueOnce(page([room()]));
 
@@ -165,7 +165,7 @@ describe("BanterPage", () => {
   });
 
   it("falls back to a generic label if the profile fetch fails, but the real room list still renders", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getUser).mockRejectedValueOnce(new Error("network down"));
     vi.mocked(listRooms).mockResolvedValueOnce(page([room()]));
 
@@ -176,7 +176,7 @@ describe("BanterPage", () => {
   });
 
   it("re-queries GET /banter-rooms?q= server-side (debounced) when searching 'All'", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getUser).mockResolvedValue(profile());
     vi.mocked(listRooms)
       .mockResolvedValueOnce(page([room()]))
@@ -194,7 +194,7 @@ describe("BanterPage", () => {
   });
 
   it("'My Bants' calls GET /banter-rooms/mine and filters the result client-side", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getUser).mockResolvedValue(profile());
     vi.mocked(listRooms).mockResolvedValueOnce(page([room()]));
     vi.mocked(getMyRooms).mockResolvedValueOnce(
@@ -218,7 +218,7 @@ describe("BanterPage", () => {
   });
 
   it("joins a room via the real POST /banter-rooms/:id/join and updates member count", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getUser).mockResolvedValue(profile());
     vi.mocked(listRooms).mockResolvedValueOnce(page([room({ memberCount: 10, joined: false })]));
     vi.mocked(joinRoom).mockResolvedValueOnce({ roomId: "room-1", joined: true, memberCount: 11 });
@@ -233,7 +233,7 @@ describe("BanterPage", () => {
   });
 
   it("creates a real room via POST /banter-rooms and navigates to it", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getUser).mockResolvedValue(profile());
     vi.mocked(listRooms).mockResolvedValueOnce(page([]));
     vi.mocked(createRoom).mockResolvedValueOnce(room({ id: "new-room", name: "Sunday League Talk", joined: true }));
@@ -251,7 +251,7 @@ describe("BanterPage", () => {
   });
 
   it("shows the real GET /banter-rooms error state on a load failure", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getUser).mockResolvedValue(profile());
     vi.mocked(listRooms).mockRejectedValueOnce(new Error("boom"));
 
@@ -261,7 +261,7 @@ describe("BanterPage", () => {
   });
 
   it("shows a plain, threshold-free message when the account is under-16 restricted", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getUser).mockResolvedValueOnce(profile());
     vi.mocked(listRooms).mockRejectedValueOnce(
       new BanterApiError("This isn't available for your account yet.", { status: 403, code: "under_16_restricted" }),
@@ -284,7 +284,7 @@ describe("BanterPage", () => {
     }
 
     beforeEach(() => {
-      window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+      seedSession(fakeAccessToken());
       vi.mocked(getUser).mockResolvedValue(profile());
       vi.mocked(listRooms).mockResolvedValue(page([]));
     });

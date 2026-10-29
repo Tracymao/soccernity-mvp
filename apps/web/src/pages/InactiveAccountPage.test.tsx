@@ -21,11 +21,11 @@ vi.mock("../api/auth", async () => {
 });
 
 import { reactivateAccount, deleteInactiveAccount } from "../api/auth";
+import { clearSession, heldAccessToken } from "../test/session";
 
 const TOKENS: LoginResponse = {
   accessToken: "new-access",
   accessTokenExpiresIn: 900,
-  refreshToken: "new-refresh",
   refreshTokenExpiresAt: "2026-09-07T00:00:00.000Z",
   user: {
     id: "u1",
@@ -47,8 +47,7 @@ const TOKENS: LoginResponse = {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   navigateMock.mockReset();
   vi.mocked(reactivateAccount).mockReset();
   vi.mocked(deleteInactiveAccount).mockReset();
@@ -89,8 +88,7 @@ describe("InactiveAccountPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Activate account" }));
 
     await waitFor(() => expect(reactivateAccount).toHaveBeenCalledWith("sam@example.com", "hunter2"));
-    expect(window.sessionStorage.getItem("sn_access_token")).toBe("new-access");
-    expect(window.sessionStorage.getItem("sn_refresh_token")).toBe("new-refresh");
+    expect(heldAccessToken()).toBe("new-access");
     expect(navigateMock).toHaveBeenCalledWith("/community");
   });
 
@@ -103,7 +101,7 @@ describe("InactiveAccountPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Activate account" }));
 
     expect(await screen.findByRole("alert")).not.toBeNull();
-    expect(window.sessionStorage.getItem("sn_access_token")).toBeNull();
+    expect(heldAccessToken()).toBeNull();
     expect(navigateMock).not.toHaveBeenCalledWith("/community");
   });
 

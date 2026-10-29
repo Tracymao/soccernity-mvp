@@ -12,11 +12,11 @@ vi.mock("../api/auth", async () => {
   return { ...actual, login: vi.fn() };
 });
 import { login, AuthApiError } from "../api/auth";
+import { clearSession, heldAccessToken } from "../test/session";
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(login).mockReset();
 });
 
@@ -24,7 +24,6 @@ function loggedIn(nextStep: string, guardianConsentStatus = "not_applicable") {
   return {
     accessToken: "acc",
     accessTokenExpiresIn: 900,
-    refreshToken: "ref",
     refreshTokenExpiresAt: "2026-12-01T00:00:00.000Z",
     user: { id: "u1", nextStep, guardianConsentStatus },
   } as unknown as Awaited<ReturnType<typeof login>>;
@@ -85,7 +84,28 @@ describe("LoginPage routing on nextStep", () => {
     renderLogin();
     submit();
     expect(await screen.findByText("community page")).not.toBeNull();
-    await waitFor(() => expect(window.sessionStorage.getItem("sn_access_token")).toBe("acc"));
+    await waitFor(() => expect(heldAccessToken()).toBe("acc"));
+    // B-246: in memory only. Neither storage holds a token (or the value of one).
+    for (const store of [window.sessionStorage, window.localStorage]) {
+      expect(store.length).toBe(0);
+    }
+    expect(document.cookie).toBe("");
+  });
+
+  it("sends 'Stay signed in' to the API (true -> a persistent refresh cookie, otherwise a session cookie)", async () => {
+    vi.mocked(login).mockResolvedValue(loggedIn("none"));
+    renderLogin();
+    submit();
+    await screen.findByText("community page");
+    expect(vi.mocked(login).mock.calls[0][0]).toMatchObject({ staySignedIn: false });
+
+    cleanup();
+    vi.mocked(login).mockClear();
+    renderLogin();
+    fireEvent.click(screen.getByLabelText(/stay signed in/i));
+    submit();
+    await waitFor(() => expect(login).toHaveBeenCalled());
+    expect(vi.mocked(login).mock.calls[0][0]).toMatchObject({ staySignedIn: true });
   });
 
   it("stays on the form with an error when login fails", async () => {

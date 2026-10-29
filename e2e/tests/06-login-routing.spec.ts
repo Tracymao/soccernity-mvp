@@ -2,6 +2,11 @@ import { test, expect } from '@playwright/test';
 import {
   api,
   clearBrowserSession,
+  everythingScriptCanRead,
+  heldAccessToken,
+  plantAccessToken,
+  refreshCookie,
+  refreshWithCookie,
   guardianConfirmViaApi,
   guardianDeclineViaApi,
   loginViaUi,
@@ -13,7 +18,7 @@ import {
   me,
   type Account,
 } from '../support/helpers';
-import { USER_PASSWORD } from '../support/stack';
+import { URLS, USER_PASSWORD } from '../support/stack';
 
 // The server decides where an account goes (`nextStep`); the web app only
 // follows it. This spec walks every onboarding state through the real login
@@ -178,12 +183,27 @@ test.describe('login form and session', () => {
     await expect(page.getByRole('alert')).toHaveText('Enter both your email and password.');
   });
 
-  test('without "Stay signed in" the session lives in sessionStorage only; with it, in localStorage', async ({ page }) => {
+  // B-246 (Decision Log #422): the access token is in MEMORY only; the refresh token is an httpOnly
+  // cookie script cannot read. "Stay signed in" decides whether that cookie outlives the browser.
+  test('the session is in memory + an httpOnly cookie: no token in either storage; "Stay signed in" makes the cookie persistent', async ({ page }) => {
     const a = await registerViaApi({ age: 30, label: 'stay' });
     await loginViaUi(page, a.email);
     await expect(page).toHaveURL(/\/verify-email\/prompt$/);
-    expect(await page.evaluate(() => window.sessionStorage.getItem('sn_access_token'))).toBeTruthy();
-    expect(await page.evaluate(() => window.localStorage.getItem('sn_access_token'))).toBeNull();
+
+    const held = await heldAccessToken(page);
+    expect(held).toBeTruthy();
+    // Nothing script can read holds the access token or a token-named key.
+    const readable = await everythingScriptCanRead(page);
+    expect(readable).not.toContain(held as string);
+    expect(readable).not.toMatch(/sn_access_token|sn_refresh_token|sn_rt/);
+
+    // Without "Stay signed in": a SESSION cookie (no expiry), httpOnly, SameSite=Strict, host-only, path /auth.
+    const sessionCookie = await refreshCookie(page);
+    expect(sessionCookie, 'the API set the sn_rt refresh cookie').toBeDefined();
+    expect(sessionCookie!.httpOnly).toBe(true);
+    expect(sessionCookie!.sameSite).toBe('Strict');
+    expect(sessionCookie!.path).toBe('/auth');
+    expect(sessionCookie!.expires).toBe(-1);
     await clearBrowserSession(page);
 
     await page.goto('/login');
@@ -192,53 +212,111 @@ test.describe('login form and session', () => {
     await page.getByLabel('Stay signed in.').check();
     await page.getByRole('button', { name: 'Log in' }).click();
     await expect(page).toHaveURL(/\/verify-email\/prompt$/);
-    expect(await page.evaluate(() => window.localStorage.getItem('sn_refresh_token'))).toBeTruthy();
+    // With it: a PERSISTENT cookie (the 30-day refresh lifetime), still httpOnly + Strict.
+    const persistent = await refreshCookie(page);
+    expect(persistent).toBeDefined();
+    expect(persistent!.httpOnly).toBe(true);
+    expect(persistent!.sameSite).toBe('Strict');
+    expect(persistent!.expires).toBeGreaterThan(Date.now() / 1000 + 20 * 24 * 3600);
+    expect(await everythingScriptCanRead(page)).not.toMatch(/sn_access_token|sn_refresh_token|sn_rt/);
   });
 
-  test('an expired access token is silently refreshed (and the refresh token rotates)', async ({ page }) => {
+  test('a reload restores the session from the cookie before anything renders (no login flash)', async ({ page }) => {
+    const a = await registerViaApi({ age: 30, label: 'restore' });
+    await verifyEmailViaApi(a);
+    await setUsername(a, uniqueUsername('rest'));
+    await loginViaUi(page, a.email);
+    await expect(page).toHaveURL(/\/community$/);
+    const before = (await refreshCookie(page))!.value;
+
+    // Watch every DOM mutation: a signed-out prompt must never be painted on the way.
+    let flashed = false;
+    await page.exposeFunction('__sawLoginPrompt', () => {
+      flashed = true;
+    });
+    await page.addInitScript(() => {
+      new MutationObserver(() => {
+        if (document.body?.innerText.includes('Log in to see your feed')) (window as any).__sawLoginPrompt();
+      }).observe(document, { childList: true, subtree: true, characterData: true });
+    });
+
+    await page.reload();
+    await expect(page).toHaveURL(/\/community$/);
+    await expect(page.getByRole('button', { name: 'Account menu' })).toBeVisible();
+    expect(flashed, 'the signed-out feed prompt flashed up during the restore').toBe(false);
+    // The restore refreshed through the cookie, which rotated.
+    expect((await refreshCookie(page))!.value).not.toBe(before);
+    expect(await heldAccessToken(page)).toBeTruthy();
+    expect(await everythingScriptCanRead(page)).not.toMatch(/sn_access_token|sn_refresh_token|sn_rt/);
+  });
+
+  test('a signed-out cold load restores nothing and shows no error banner or app console error', async ({ page }) => {
+    // Every console error with the URL it came from, and every non-OK response.
+    const consoleErrors: { text: string; url: string }[] = [];
+    const notOk: string[] = [];
+    page.on('console', (m) => {
+      if (m.type() === 'error') consoleErrors.push({ text: m.text(), url: m.location().url });
+    });
+    page.on('pageerror', (e) => consoleErrors.push({ text: String(e), url: '' }));
+    page.on('response', (r) => {
+      if (r.status() >= 400) notOk.push(`${r.status()} ${r.request().method()} ${r.url()}`);
+    });
+    await page.goto('/login');
+    await expect(page.getByRole('button', { name: 'Log in' })).toBeVisible();
+    expect(await heldAccessToken(page)).toBeNull();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    // The ONLY failed request is the start-up refresh answering 401 (no cookie): by design, not an error banner.
+    expect(notOk.filter((line) => !line.includes('/favicon'))).toEqual([`401 POST ${URLS.api}/auth/refresh`]);
+    // Console: nothing from the app. The browser itself logs a one-line note for any 4xx response; allow only
+    // the note for that refresh (and a missing favicon).
+    const appErrors = consoleErrors.filter((e) => !e.url.endsWith('/auth/refresh') && !e.url.includes('/favicon'));
+    expect(appErrors).toEqual([]);
+  });
+
+  test('an expired access token is silently refreshed through the cookie (and the cookie rotates)', async ({ page }) => {
     const a = await registerViaApi({ age: 30, label: 'refresh' });
     await verifyEmailViaApi(a);
     await setUsername(a, uniqueUsername('refr'));
     await loginViaUi(page, a.email);
     await expect(page).toHaveURL(/\/community$/);
-    const before = await page.evaluate(() => window.sessionStorage.getItem('sn_refresh_token'));
+    const before = (await refreshCookie(page))!.value;
     // Same shape the app decodes (sub, role) but expired and badly signed: the server answers 401.
     const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
     const expired = `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ sub: a.userId, role: 'user', iat: 1, exp: 2 })}.x`;
-    // Leave the live /community page BEFORE planting the bad token. The refresh
-    // token rotates and reuse revokes the family, so if the old page is still
-    // alive its own in-flight requests can 401 on the planted token and rotate at
-    // the same moment as the new page: the second use of the same refresh token is
-    // then (correctly) treated as reuse and the session is cleared. That is a
-    // multi-tab race (cross-tab lock added in FC4/B-164, which covers two TABS; this workaround is kept because removing it still failed 3 of 8 repeats, see docs/fc4-report.md), not what this test checks, and it made the test fail intermittently once the harness proxy
-    // (extra latency) was gone.
-    await page.goto('about:blank');
-    await page.addInitScript((t) => {
-      if (!window.sessionStorage.getItem('e2e_expired_seeded')) {
-        window.sessionStorage.setItem('sn_access_token', t);
-        window.sessionStorage.setItem('e2e_expired_seeded', '1');
-      }
-    }, expired);
+    await plantAccessToken(page, expired);
+
+    // An authenticated call through the app's own fetch (the silent-refresh wrapper): it 401s on the
+    // expired token, refreshes through the cookie (no body), and is replayed once with the new token.
+    const status = await page.evaluate(
+      async ([apiBase, id, token]) => {
+        const res = await window.fetch(`${apiBase}/users/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+        return res.status;
+      },
+      [URLS.api, a.userId, expired],
+    );
+    expect(status).toBe(200);
+    const after = await heldAccessToken(page);
+    expect(after).toBeTruthy();
+    expect(after).not.toBe(expired);
+    expect((await refreshCookie(page))!.value).not.toBe(before);
     await page.goto('/profile');
     await expect(page.getByText('Log in to view your profile.')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Edit Profile' })).toBeVisible();
-    const after = await page.evaluate(() => window.sessionStorage.getItem('sn_access_token'));
-    expect(after).not.toBe(expired);
-    expect(await page.evaluate(() => window.sessionStorage.getItem('sn_refresh_token'))).not.toBe(before);
   });
 
-  test('log out calls the server, clears the session, and the old refresh token is dead', async ({ page }) => {
+  test('log out calls the server, clears the session and the cookie, and the old refresh cookie is dead', async ({ page }) => {
     const a = await registerViaApi({ age: 30, label: 'logout' });
     await verifyEmailViaApi(a);
     await setUsername(a, uniqueUsername('lo'));
     await loginViaUi(page, a.email);
     await expect(page).toHaveURL(/\/community$/);
-    const refresh = await page.evaluate(() => window.sessionStorage.getItem('sn_refresh_token'));
+    const oldCookie = (await refreshCookie(page))!.value;
     await page.getByRole('button', { name: 'Account menu' }).click();
     await page.getByRole('menuitem', { name: 'Log out' }).click();
     await expect(page).toHaveURL(/\/$/);
-    expect(await page.evaluate(() => window.sessionStorage.getItem('sn_access_token'))).toBeNull();
-    const reuse = await api('POST', '/auth/refresh', { body: { refreshToken: refresh } });
+    expect(await heldAccessToken(page)).toBeNull();
+    await expect.poll(async () => await refreshCookie(page), { message: 'POST /auth/logout cleared sn_rt' }).toBeUndefined();
+    const reuse = await refreshWithCookie(oldCookie);
     expect(reuse.status).toBe(401);
   });
 

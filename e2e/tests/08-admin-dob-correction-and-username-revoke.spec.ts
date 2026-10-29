@@ -8,6 +8,7 @@ import {
   getAdminToken,
   guardianConfirmViaApi,
   guardianDeclineViaApi,
+  heldAccessToken,
   loginViaUi,
   me,
   registerViaApi,
@@ -64,9 +65,12 @@ test.describe.serial('admin console sign-in', () => {
   });
 
   test('the user app session is not an admin session (separate auth domains)', async ({ page }) => {
+    // B-246: a real signed-in user session (in-memory access token + the httpOnly sn_rt cookie, both
+    // for the user app) does not open the admin console, which has its own auth domain and storage.
     const a = await registerViaApi({ age: 30, label: 'iso' });
-    await page.goto(`${URLS.admin}/login`);
-    await page.evaluate((t) => window.localStorage.setItem('sn_access_token', t), a.accessToken);
+    await loginViaUi(page, a.email);
+    await expect(page).toHaveURL(/\/verify-email\/prompt$/);
+    expect(await heldAccessToken(page)).toBeTruthy();
     await page.goto(`${URLS.admin}/users`);
     await expect(page).toHaveURL(/\/login$/);
   });

@@ -1,6 +1,6 @@
 // GrassrootsRegisterTeamPage. Same conventions as ClubsPage.test.tsx:
 // plain DOM assertions, mocks src/api/grassroots.ts, session seeded into
-// sessionStorage. POST /teams is a real merged endpoint — exercising it
+// the in-memory session store. POST /teams is a real merged endpoint — exercising it
 // live is services/api's e2e layer's job (test/grassroots.e2e-spec.ts).
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -14,6 +14,7 @@ vi.mock("../api/grassroots", async () => {
 });
 
 import { createTeam } from "../api/grassroots";
+import { seedSession, clearSession } from "../test/session";
 
 const CREATED: GrassrootsTeam = {
   id: "team-new",
@@ -26,8 +27,7 @@ const CREATED: GrassrootsTeam = {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(createTeam).mockReset();
 });
 
@@ -53,7 +53,7 @@ describe("GrassrootsRegisterTeamPage", () => {
   });
 
   it("submits POST /teams and shows the confirmation with schedule / view links", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(createTeam).mockResolvedValueOnce({ ...CREATED, reclaimed: false });
 
     renderPage();
@@ -78,7 +78,7 @@ describe("GrassrootsRegisterTeamPage", () => {
   });
 
   it("shows the backend's takeover message instead of 'Team registered' when reclaimed", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(createTeam).mockResolvedValueOnce({
       ...CREATED,
       reclaimed: true,
@@ -98,7 +98,7 @@ describe("GrassrootsRegisterTeamPage", () => {
   });
 
   it("keeps the Register button disabled until name and city are filled", () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     renderPage();
     expect((screen.getByRole("button", { name: "Register team" }) as HTMLButtonElement).disabled).toBe(true);
     fillForm();
@@ -106,7 +106,7 @@ describe("GrassrootsRegisterTeamPage", () => {
   });
 
   it("surfaces a guardian-consent 403 with a link to /guardian-consent", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(createTeam).mockRejectedValueOnce(
       new GrassrootsApiError("This account is awaiting guardian consent and cannot access this feature yet.", {
         status: 403,
@@ -122,7 +122,7 @@ describe("GrassrootsRegisterTeamPage", () => {
   });
 
   it("shows a generic error message on other failures", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(createTeam).mockRejectedValueOnce(new GrassrootsApiError("Couldn't register that team (500)."));
 
     renderPage();
@@ -144,7 +144,7 @@ describe("GrassrootsRegisterTeamPage", () => {
   }
 
   it("a 422 from the screen shows the confirm-or-edit step instead of an error, and nothing is confirmed yet", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(createTeam).mockRejectedValueOnce(flaggedError("name", ["health"]));
 
     renderPage();
@@ -159,7 +159,7 @@ describe("GrassrootsRegisterTeamPage", () => {
   });
 
   it("'Share anyway' resends with confirmSensitive: true and shows the confirmation", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(createTeam)
       .mockRejectedValueOnce(flaggedError("name", ["health"]))
       .mockResolvedValueOnce({ ...CREATED, reclaimed: false });
@@ -175,7 +175,7 @@ describe("GrassrootsRegisterTeamPage", () => {
   });
 
   it("'Edit what I wrote' returns to the form without confirming, and editing a field withdraws the warning", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(createTeam).mockRejectedValue(flaggedError("name", ["health"]));
 
     renderPage();

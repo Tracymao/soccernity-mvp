@@ -4,13 +4,13 @@
 // wire together and nothing throws on a real navigation.
 //
 // useRoutes (not createMemoryRouter) is used deliberately — the routes
-// here are plain element routes with no loaders/actions, and the RR6
-// data-router's internal AbortController machinery trips a jsdom/undici
+// here are plain element routes with no loaders/actions, and the React Router
+// data router (still the case on v8) trips a jsdom/undici
 // AbortSignal-realm mismatch in this Node version. useRoutes has none of
 // that and renders the identical tree.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, useRoutes } from "react-router-dom";
+import { MemoryRouter, useRoutes } from "react-router";
 import { adminRoutes } from "./routes";
 import { AdminAuthProvider } from "../auth/AdminAuthContext";
 

@@ -25,7 +25,7 @@
 // not rendered.
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router";
 import { AdminApiError } from "../../api/adminClient";
 import { getUserSummary, revokeUsername, type AdminUserSummary } from "../../api/adminUsers";
 import { formatDate, useAsyncData } from "./usersShared";

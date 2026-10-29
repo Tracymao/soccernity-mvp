@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach, type Mock } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router";
 import RequireAdminAuth from "./RequireAdminAuth";
 
 vi.mock("./AdminAuthContext", () => ({ useAdminAuth: vi.fn() }));

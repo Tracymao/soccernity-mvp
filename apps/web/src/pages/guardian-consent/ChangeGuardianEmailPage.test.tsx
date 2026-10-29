@@ -1,5 +1,5 @@
 // Same conventions as GuardianConsentPage.test.tsx: mock src/api/auth.ts,
-// seed a real, well-formed (unsigned) JWT into sessionStorage, plain DOM
+// seed a real, well-formed (unsigned) JWT into the in-memory session store, plain DOM
 // assertions.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -13,6 +13,7 @@ vi.mock("../../api/auth", async () => {
 });
 
 import { changeGuardianEmail, getGuardianConsentStatus } from "../../api/auth";
+import { seedSession, clearSession } from "../../test/session";
 
 function b64(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -28,8 +29,7 @@ const PENDING = {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(getGuardianConsentStatus).mockReset();
   vi.mocked(changeGuardianEmail).mockReset();
 });
@@ -61,7 +61,7 @@ describe("ChangeGuardianEmailPage", () => {
   });
 
   it("shows the current guardian email and the restarts-from-scratch notice before submitting", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeToken());
+    seedSession(fakeToken());
     vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce(PENDING);
     renderPage();
 
@@ -72,7 +72,7 @@ describe("ChangeGuardianEmailPage", () => {
   });
 
   it("submits name, email and relationship with the caller's token, then lands on the status page", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeToken());
+    seedSession(fakeToken());
     vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce(PENDING);
     vi.mocked(changeGuardianEmail).mockResolvedValueOnce({ message: "ok" });
     renderPage();
@@ -90,7 +90,7 @@ describe("ChangeGuardianEmailPage", () => {
   });
 
   it("validates client-side and calls nothing for a missing name, bad email, or missing relationship", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeToken());
+    seedSession(fakeToken());
     vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce(PENDING);
     renderPage();
     await waitFor(() => screen.getByTestId("change-guardian-email"));
@@ -112,7 +112,7 @@ describe("ChangeGuardianEmailPage", () => {
   });
 
   it("shows the server's message verbatim (e.g. own email, too many changes) and stays on the form", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeToken());
+    seedSession(fakeToken());
     vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce(PENDING);
     vi.mocked(changeGuardianEmail).mockRejectedValueOnce(
       new AuthApiError("The guardian email can't be your own email address.", { status: 400 }),
@@ -129,7 +129,7 @@ describe("ChangeGuardianEmailPage", () => {
   });
 
   it("offers the form for a declined request (declines 1 and 2) and restarts it (QA D-04)", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeToken());
+    seedSession(fakeToken());
     vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({ ...PENDING, consentStatus: "declined" });
     vi.mocked(changeGuardianEmail).mockResolvedValueOnce({ message: "ok" });
     renderPage();
@@ -144,7 +144,7 @@ describe("ChangeGuardianEmailPage", () => {
   });
 
   it("does not offer the form once consent is already confirmed", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeToken());
+    seedSession(fakeToken());
     vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({ ...PENDING, consentStatus: "confirmed" });
     renderPage();
 
@@ -154,7 +154,7 @@ describe("ChangeGuardianEmailPage", () => {
   });
 
   it("explains itself for a non-minor (404)", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeToken());
+    seedSession(fakeToken());
     vi.mocked(getGuardianConsentStatus).mockRejectedValueOnce(new AuthApiError("nope", { status: 404 }));
     renderPage();
 

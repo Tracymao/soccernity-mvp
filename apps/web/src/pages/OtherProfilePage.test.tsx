@@ -27,6 +27,7 @@ vi.mock("./community/PinnedEntry", () => ({
   ),
 }));
 import { getPublicProfile, followUser, unfollowUser, blockUser, unblockUser } from "../api/users";
+import { seedSession, clearSession } from "../test/session";
 
 function b64(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -50,9 +51,8 @@ function profile(over: Partial<PublicProfile> = {}): PublicProfile {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
-  window.sessionStorage.setItem("sn_access_token", TOKEN);
+  clearSession();
+  seedSession(TOKEN);
   vi.mocked(getPublicProfile).mockReset();
   vi.mocked(followUser).mockReset();
   vi.mocked(unfollowUser).mockReset();

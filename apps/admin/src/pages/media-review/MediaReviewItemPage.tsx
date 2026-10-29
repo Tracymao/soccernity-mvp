@@ -12,7 +12,7 @@
 // user-report callout is not shown (reports carry no reason and never identify the reporter, only a count);
 // category labels are the check's names only, without percentages.
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { AdminApiError } from "../../api/adminClient";
 import {

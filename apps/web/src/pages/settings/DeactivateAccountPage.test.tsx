@@ -1,6 +1,6 @@
 // DeactivateAccountPage (/settings/deactivate). Follows
 // PrivacySettingsPage.test.tsx / EditProfileModal.test.tsx: plain DOM
-// assertions, mocks src/api/auth.ts, session seeded into sessionStorage,
+// assertions, mocks src/api/auth.ts, session seeded into the in-memory session store,
 // useNavigate mocked. POST /auth/deactivate-account is a real merged
 // endpoint — exercising it live is services/api's job.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -21,11 +21,11 @@ vi.mock("../../api/auth", async () => {
 });
 
 import { deactivateAccount } from "../../api/auth";
+import { seedSession, clearSession, heldAccessToken } from "../../test/session";
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   navigateMock.mockReset();
   vi.mocked(deactivateAccount).mockReset();
 });
@@ -38,10 +38,6 @@ function renderPage() {
   );
 }
 
-function seedSession() {
-  window.sessionStorage.setItem("sn_access_token", "token-abc");
-}
-
 describe("DeactivateAccountPage", () => {
   it("shows a log-in prompt and never calls the API with no session", () => {
     renderPage();
@@ -50,7 +46,7 @@ describe("DeactivateAccountPage", () => {
   });
 
   it("advances intro → confirm on Continue and states deactivation has no time limit", () => {
-    seedSession();
+    seedSession("token-abc");
     renderPage();
 
     expect(screen.getByRole("heading", { name: "Deactivate Account" })).not.toBeNull();
@@ -63,7 +59,7 @@ describe("DeactivateAccountPage", () => {
   });
 
   it("blocks confirm with an empty password and does not call the API", () => {
-    seedSession();
+    seedSession("token-abc");
     renderPage();
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Deactivate account" }));
@@ -73,8 +69,7 @@ describe("DeactivateAccountPage", () => {
   });
 
   it("deactivates, clears the session, and redirects to /login on success", async () => {
-    seedSession();
-    window.localStorage.setItem("sn_refresh_token", "refresh-abc");
+    seedSession("token-abc");
     vi.mocked(deactivateAccount).mockResolvedValueOnce(undefined);
     renderPage();
 
@@ -83,15 +78,14 @@ describe("DeactivateAccountPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Deactivate account" }));
 
     await waitFor(() => expect(deactivateAccount).toHaveBeenCalledWith("token-abc", "hunter2"));
-    // Session cleared immediately on success (both storages, both keys).
-    expect(window.sessionStorage.getItem("sn_access_token")).toBeNull();
-    expect(window.localStorage.getItem("sn_refresh_token")).toBeNull();
+    // Session cleared immediately on success.
+    expect(heldAccessToken()).toBeNull();
     expect(await screen.findByRole("status")).not.toBeNull();
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/login"), { timeout: 3500 });
   });
 
   it("shows an error and keeps the session when the password is wrong", async () => {
-    seedSession();
+    seedSession("token-abc");
     vi.mocked(deactivateAccount).mockRejectedValueOnce(new AuthApiError("That password is incorrect.", { status: 401 }));
     renderPage();
 
@@ -101,12 +95,12 @@ describe("DeactivateAccountPage", () => {
 
     expect(await screen.findByRole("alert")).not.toBeNull();
     expect(screen.getByRole("alert").textContent).toMatch(/password is incorrect/i);
-    expect(window.sessionStorage.getItem("sn_access_token")).toBe("token-abc");
+    expect(heldAccessToken()).toBe("token-abc");
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
   it("Cancel on the confirm step links back to /settings/account", () => {
-    seedSession();
+    seedSession("token-abc");
     renderPage();
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(screen.getByRole("link", { name: "Cancel" }).getAttribute("href")).toBe("/settings/account");
