@@ -35,6 +35,9 @@
 #     verification flow has never run against live Stripe.
 #   - @sentry/* (major): founder decision, 2026-10-29. Sentry majors are
 #     reviewed and taken by hand, not by bot PR (#506/#514 proposed 10 -> 11).
+#   - eslint, vitest (major): founder decision, 2026-10-29. Both are dev
+#     tooling whose majors change config and test behaviour across the repo;
+#     taken by hand.
 
 version: 2
 
@@ -77,6 +80,10 @@ updates:
       - dependency-name: "stripe"
         update-types: ["version-update:semver-major"]
       - dependency-name: "@sentry/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vitest"
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
