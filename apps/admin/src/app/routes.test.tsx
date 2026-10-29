@@ -47,14 +47,35 @@ function renderAt(path: string) {
   );
 }
 
+// The start-up cookie refresh (B-247) is the only network call the shell makes before
+// the section screen: 200 = a restored session, 401 = signed out. Everything else
+// fails like an unreachable API (as it did before the session moved into memory).
+function stubApi(refresh: Response) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      if (url.endsWith("/admin/auth/refresh")) return refresh;
+      throw new TypeError("Failed to fetch");
+    }),
+  );
+}
+
+function jsonResponse(status: number, body: unknown = {}): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+}
+
 describe("adminRoutes (integration)", () => {
   beforeEach(() => {
     window.localStorage.clear();
     vi.mocked(getAdminProfile).mockReset();
   });
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
 
   it("sends an unauthenticated visitor from a deep link to /login", async () => {
+    stubApi(jsonResponse(401, { message: "No refresh cookie" }));
     renderAt("/moderation");
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: "Admin Console" })).not.toBeNull(),
@@ -62,8 +83,7 @@ describe("adminRoutes (integration)", () => {
   });
 
   it("renders the shell + a section screen for an authenticated admin", async () => {
-    window.localStorage.setItem("sn_admin_access_token", "acc-1");
-    window.localStorage.setItem("sn_admin_refresh_token", "ref-1");
+    stubApi(jsonResponse(200, { accessToken: "acc-1" }));
     vi.mocked(getAdminProfile).mockResolvedValue(PROFILE);
 
     renderAt("/settings");
@@ -76,8 +96,7 @@ describe("adminRoutes (integration)", () => {
   });
 
   it("shows a not-found state for an unknown authenticated path", async () => {
-    window.localStorage.setItem("sn_admin_access_token", "acc-1");
-    window.localStorage.setItem("sn_admin_refresh_token", "ref-1");
+    stubApi(jsonResponse(200, { accessToken: "acc-1" }));
     vi.mocked(getAdminProfile).mockResolvedValue(PROFILE);
 
     renderAt("/does-not-exist");

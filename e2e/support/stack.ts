@@ -19,7 +19,6 @@ export const URLS = {
 } as const;
 
 export const API_LOG = path.join(RUN_DIR, 'api.log');
-export const ADMIN_STORAGE_STATE = path.join(RUN_DIR, 'admin-storage-state.json');
 
 // A dedicated database + Redis logical DB so a QA run never touches the
 // developer's own `soccernity` data.

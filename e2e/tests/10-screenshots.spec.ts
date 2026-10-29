@@ -3,6 +3,7 @@ import * as path from 'path';
 import { test, type Browser, type Page } from '@playwright/test';
 import {
   GUARDIAN,
+  clearBrowserSession,
   fillAgeGate,
   dobForAge,
   guardianConfirmViaApi,
@@ -118,7 +119,7 @@ test.describe('capture: 390px', () => {
     await gp.context().close();
 
     const a = await registerViaApi({ age: 30, label: 'mshot2' });
-    await page.evaluate(() => window.sessionStorage.clear());
+    await clearBrowserSession(page);
     await loginViaUi(page, a.email);
     await page.waitForURL(/verify-email\/prompt/);
     await shot(page, 'm07-verify-email-prompt');
