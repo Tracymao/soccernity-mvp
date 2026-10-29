@@ -1,6 +1,6 @@
 // ClubFanPage (Club — Fan Page). Same conventions as ClubsPage.test.tsx:
 // plain DOM assertions, mocks src/api/clubs.ts + src/api/users.ts,
-// session seeded into sessionStorage. GET /clubs/:id, GET /clubs/:id/feed,
+// session seeded into the in-memory session store. GET /clubs/:id, GET /clubs/:id/feed,
 // GET /clubs/:id/members and POST/DELETE /users/:id/follow are all real
 // merged endpoints — exercising them live is services/api's e2e layer's
 // job (test/clubs.e2e-spec.ts).
@@ -30,6 +30,7 @@ vi.mock("../api/users", async () => {
 
 import { getClubById, getClubFeed, getClubMembers, joinClub, leaveClub } from "../api/clubs";
 import { followUser, unfollowUser } from "../api/users";
+import { seedSession, clearSession } from "../test/session";
 
 const SURULERE: ClubSummary = {
   id: "club-s",
@@ -65,8 +66,7 @@ const EMPTY_PAGE = { items: [], nextCursor: null };
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(getClubById).mockReset();
   vi.mocked(getClubFeed).mockReset().mockResolvedValue(EMPTY_PAGE);
   vi.mocked(getClubMembers).mockReset().mockResolvedValue(EMPTY_PAGE);
@@ -96,7 +96,7 @@ describe("ClubFanPage", () => {
   });
 
   it("renders a club's real header data and no longer shows the old scope note", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getClubById).mockResolvedValueOnce(SURULERE);
 
     renderPage();
@@ -112,7 +112,7 @@ describe("ClubFanPage", () => {
   });
 
   it("renders the club feed from GET /clubs/:id/feed", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getClubById).mockResolvedValueOnce(SURULERE);
     vi.mocked(getClubFeed).mockReset().mockResolvedValueOnce({
       items: [
@@ -134,7 +134,7 @@ describe("ClubFanPage", () => {
   });
 
   it("shows an empty-feed message when the club has no posts", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getClubById).mockResolvedValueOnce(SURULERE);
 
     renderPage();
@@ -143,7 +143,7 @@ describe("ClubFanPage", () => {
   });
 
   it("keeps the page working when the feed fails to load (club header still renders)", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getClubById).mockResolvedValueOnce(SURULERE);
     vi.mocked(getClubFeed).mockReset().mockRejectedValueOnce(new ClubsApiError("boom", { status: 500 }));
 
@@ -154,7 +154,7 @@ describe("ClubFanPage", () => {
   });
 
   it("renders the member roster and paginates it with 'Load more members'", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getClubById).mockResolvedValueOnce(SURULERE);
     vi.mocked(getClubMembers)
       .mockReset()
@@ -178,7 +178,7 @@ describe("ClubFanPage", () => {
   });
 
   it("follows a member via POST /users/:id/follow and flips the button to Following", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getClubById).mockResolvedValueOnce(SURULERE);
     vi.mocked(getClubMembers).mockReset().mockResolvedValueOnce({
       items: [{ id: "m1", publicName: "Marcus Obi", isFollowing: false }],
@@ -196,7 +196,7 @@ describe("ClubFanPage", () => {
   });
 
   it("renders a roster member the caller already follows as Following on first paint, with no click", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getClubById).mockResolvedValueOnce(SURULERE);
     vi.mocked(getClubMembers).mockReset().mockResolvedValueOnce({
       items: [{ id: "m1", publicName: "Marcus Obi", isFollowing: true }],
@@ -211,7 +211,7 @@ describe("ClubFanPage", () => {
   });
 
   it("toggles the club Join button to Leave (header action unchanged)", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getClubById).mockResolvedValueOnce(SURULERE);
     vi.mocked(joinClub).mockResolvedValueOnce({ clubId: SURULERE.id, joined: true, memberCount: 2107 });
 
@@ -226,7 +226,7 @@ describe("ClubFanPage", () => {
   });
 
   it("renders an honest 'Club not found' state on a 404, with a link back to /clubs", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getClubById).mockRejectedValueOnce(new ClubsApiError("Couldn't load that club (404).", { status: 404 }));
 
     renderPage("does-not-exist");
@@ -240,7 +240,7 @@ describe("ClubFanPage", () => {
   });
 
   it("shows a generic error (not 'not found') on a non-404 club failure", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getClubById).mockRejectedValueOnce(new ClubsApiError("Couldn't load that club (500).", { status: 500 }));
 
     renderPage();

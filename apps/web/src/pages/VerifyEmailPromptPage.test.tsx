@@ -15,6 +15,7 @@ vi.mock("../api/users", async () => {
   return { ...actual, getUser: vi.fn() };
 });
 import { getUser } from "../api/users";
+import { seedSession, clearSession } from "../test/session";
 
 function b64(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -25,8 +26,7 @@ function fakeToken(sub = "user-1"): string {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(getUser).mockReset();
   vi.mocked(resendVerificationEmail).mockReset();
 });
@@ -48,7 +48,7 @@ function renderAt(path: string) {
 
 describe("VerifyEmailPromptPage", () => {
   function seedUnverified() {
-    window.sessionStorage.setItem("sn_access_token", fakeToken());
+    seedSession(fakeToken());
     vi.mocked(getUser).mockResolvedValue({
       email: "tobi@example.com",
       verificationStatus: "unverified",
@@ -96,7 +96,7 @@ describe("VerifyEmailPromptPage", () => {
   });
 
   it("moves on through /continue once the account is verified", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeToken());
+    seedSession(fakeToken());
     vi.mocked(getUser).mockResolvedValue({
       email: "tobi@example.com",
       verificationStatus: "verified",
@@ -119,7 +119,7 @@ describe("ContinuePage", () => {
     ["create_profile", "create profile page"],
     ["none", "community page"],
   ])("routes nextStep %s from a fresh server read", async (nextStep, page) => {
-    window.sessionStorage.setItem("sn_access_token", fakeToken());
+    seedSession(fakeToken());
     vi.mocked(getUser).mockResolvedValue({ nextStep } as Awaited<ReturnType<typeof getUser>>);
     renderAt("/continue");
     expect(await screen.findByText(page)).not.toBeNull();

@@ -6,6 +6,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { createMemoryRouter, MemoryRouter, RouterProvider, useLocation, useRoutes } from "react-router";
 import { routes } from "../../app/router";
+import { seedSession, clearSession } from "../../test/session";
 
 vi.mock("../../api/users", async () => {
   const actual = await vi.importActual<typeof import("../../api/users")>("../../api/users");
@@ -68,9 +69,8 @@ const SECTION_LABELS = [
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
-  window.sessionStorage.setItem("sn_access_token", TOKEN);
+  clearSession();
+  seedSession(TOKEN);
   setWidth(1280);
 });
 
@@ -129,7 +129,7 @@ describe("Settings landing", () => {
   });
 
   it("no session → log-in prompt, no fetch", async () => {
-    window.sessionStorage.clear();
+    clearSession();
     await renderAt("/settings");
     expect(screen.getByText(/log in to manage your settings/i)).not.toBeNull();
   });
@@ -229,11 +229,11 @@ describe("Security & Account Settings section", () => {
   });
 
   it("no session → log-in prompt on both the hub and the leaf, no crash", async () => {
-    window.sessionStorage.clear();
+    clearSession();
     await renderAt("/settings/security");
     expect(screen.getByText(/log in to manage your account security/i)).not.toBeNull();
     cleanup();
-    window.sessionStorage.clear();
+    clearSession();
     await renderAt("/settings/security/two-factor");
     expect(screen.getByText(/log in to manage two-factor authentication/i)).not.toBeNull();
   });
@@ -321,7 +321,7 @@ describe("Notification Preferences section", () => {
   });
 
   it("no session → log-in prompt on the hub and every leaf, no crash", async () => {
-    window.sessionStorage.clear();
+    clearSession();
     for (const [path, message] of [
       ["/settings/notifications", /log in to manage your notification preferences/i],
       ["/settings/notifications/filters", /log in to manage your notification filters/i],
@@ -329,7 +329,7 @@ describe("Notification Preferences section", () => {
       ["/settings/notifications/email", /log in to manage email notifications/i],
       ["/settings/notifications/muted-accounts", /log in to manage muted accounts/i],
     ] as [string, RegExp][]) {
-      window.sessionStorage.clear();
+      clearSession();
       await renderAt(path);
       expect(screen.getByText(message)).not.toBeNull();
       cleanup();
@@ -416,7 +416,7 @@ describe("Display, Language & Region section", () => {
   });
 
   it("no session → log-in prompt on the hub and every leaf, no crash", async () => {
-    window.sessionStorage.clear();
+    clearSession();
     for (const [path, message] of [
       ["/settings/display", /log in to manage your display, language, and region settings/i],
       ["/settings/display/accessibility", /log in to manage accessibility settings/i],
@@ -424,7 +424,7 @@ describe("Display, Language & Region section", () => {
       ["/settings/display/language", /log in to manage your language settings/i],
       ["/settings/display/data-usage", /log in to manage data usage settings/i],
     ] as [string, RegExp][]) {
-      window.sessionStorage.clear();
+      clearSession();
       await renderAt(path);
       expect(screen.getByText(message)).not.toBeNull();
       cleanup();

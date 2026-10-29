@@ -1,6 +1,6 @@
 // GrassrootsFixturePage — the status-driven manage / log-result screen
 // (frames 6/7/8). Mocks src/api/grassroots.ts; session seeded into
-// sessionStorage. GET /fixtures/:id, PATCH /fixtures/:id/status and
+// the in-memory session store. GET /fixtures/:id, PATCH /fixtures/:id/status and
 // POST /fixtures/:id/result are real merged endpoints — the status
 // machine and the "first write is final" race are exercised live by
 // services/api's e2e layer (test/grassroots.e2e-spec.ts).
@@ -31,6 +31,7 @@ vi.mock("../api/users", () => ({ getUser: vi.fn() }));
 
 import { getFixtureById, updateFixtureStatus, logResult } from "../api/grassroots";
 import { getUser } from "../api/users";
+import { seedSession, clearSession } from "../test/session";
 
 // A decodable fake JWT so fetchIsTeamOrganiser has a `sub` to call
 // GET /users/:id with — a plain, non-JWT-shaped string is not decodable,
@@ -92,8 +93,7 @@ function fixture(overrides: Partial<Fixture> = {}): Fixture {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(getFixtureById).mockReset();
   vi.mocked(updateFixtureStatus).mockReset();
   vi.mocked(logResult).mockReset();
@@ -118,7 +118,7 @@ describe("GrassrootsFixturePage", () => {
   });
 
   it("scheduled: starts the match via PATCH status -> live", async () => {
-    window.sessionStorage.setItem("sn_access_token", TOKEN);
+    seedSession(TOKEN);
     vi.mocked(getFixtureById).mockResolvedValueOnce(fixture({ status: "scheduled" }));
     vi.mocked(updateFixtureStatus).mockResolvedValueOnce(fixture({ status: "live" }));
 
@@ -132,7 +132,7 @@ describe("GrassrootsFixturePage", () => {
   });
 
   it("surfaces an illegal-transition 409 verbatim (not a silently-disabled button)", async () => {
-    window.sessionStorage.setItem("sn_access_token", TOKEN);
+    seedSession(TOKEN);
     vi.mocked(getFixtureById)
       .mockResolvedValueOnce(fixture({ status: "scheduled" }))
       .mockResolvedValueOnce(fixture({ status: "full_time" })); // refetch after 409
@@ -151,7 +151,7 @@ describe("GrassrootsFixturePage", () => {
   });
 
   it("live: logs the result via POST /fixtures/:id/result and shows 'Result saved'", async () => {
-    window.sessionStorage.setItem("sn_access_token", TOKEN);
+    seedSession(TOKEN);
     vi.mocked(getFixtureById).mockResolvedValueOnce(fixture({ status: "live" }));
     vi.mocked(logResult).mockResolvedValueOnce(
       fixture({
@@ -179,7 +179,7 @@ describe("GrassrootsFixturePage", () => {
   });
 
   it("treats a 'first write is final' 409 on save as an expected outcome, not a generic error", async () => {
-    window.sessionStorage.setItem("sn_access_token", TOKEN);
+    seedSession(TOKEN);
     vi.mocked(getFixtureById)
       .mockResolvedValueOnce(fixture({ status: "live" }))
       .mockResolvedValueOnce(
@@ -207,7 +207,7 @@ describe("GrassrootsFixturePage", () => {
   });
 
   it("full_time: renders the read-only result with no success framing on a plain revisit", async () => {
-    window.sessionStorage.setItem("sn_access_token", TOKEN);
+    seedSession(TOKEN);
     vi.mocked(getFixtureById).mockResolvedValueOnce(
       fixture({
         status: "full_time",
@@ -226,7 +226,7 @@ describe("GrassrootsFixturePage", () => {
   });
 
   it("renders a 'Fixture not found' state on a 404", async () => {
-    window.sessionStorage.setItem("sn_access_token", TOKEN);
+    seedSession(TOKEN);
     vi.mocked(getFixtureById).mockRejectedValueOnce(
       new GrassrootsApiError("Couldn't load that fixture (404).", { status: 404 }),
     );
@@ -241,7 +241,7 @@ describe("GrassrootsFixturePage", () => {
   // buttons anywhere, just a plain note. Server enforcement is unaffected
   // either way; this is UI visibility only.
   it("hides the manage buttons and shows a read-only note for a non-organiser (scheduled)", async () => {
-    window.sessionStorage.setItem("sn_access_token", TOKEN);
+    seedSession(TOKEN);
     vi.mocked(getFixtureById).mockResolvedValueOnce(fixture({ status: "scheduled" }));
     vi.mocked(getUser).mockResolvedValueOnce(organiserProfile({ isTeamOrganiser: false }));
 
@@ -256,7 +256,7 @@ describe("GrassrootsFixturePage", () => {
   });
 
   it("hides the manage buttons for a non-organiser (live)", async () => {
-    window.sessionStorage.setItem("sn_access_token", TOKEN);
+    seedSession(TOKEN);
     vi.mocked(getFixtureById).mockResolvedValueOnce(fixture({ status: "live" }));
     vi.mocked(getUser).mockResolvedValueOnce(organiserProfile({ isTeamOrganiser: false }));
 
@@ -270,7 +270,7 @@ describe("GrassrootsFixturePage", () => {
   });
 
   it("degrades to hidden manage buttons (never blocks the fixture view) when the profile fetch fails", async () => {
-    window.sessionStorage.setItem("sn_access_token", TOKEN);
+    seedSession(TOKEN);
     vi.mocked(getFixtureById).mockResolvedValueOnce(fixture({ status: "scheduled" }));
     vi.mocked(getUser).mockRejectedValueOnce(new Error("boom"));
 

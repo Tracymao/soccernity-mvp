@@ -1,5 +1,5 @@
 // Follows LeaderboardPage.test.tsx / CommunityPage.test.tsx -- plain DOM
-// assertions, mocks src/api/contest.ts, session seeded into sessionStorage.
+// assertions, mocks src/api/contest.ts, session seeded into the in-memory session store.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
@@ -13,6 +13,7 @@ vi.mock("../api/contest", async () => {
 });
 
 import { getCurrentContest } from "../api/contest";
+import { seedSession, clearSession } from "../test/session";
 
 function base64UrlEncode(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -30,8 +31,7 @@ function response(overrides: Partial<CurrentContestResponse> = {}): CurrentConte
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(getCurrentContest).mockReset();
 });
 
@@ -51,7 +51,7 @@ describe("ContestPage", () => {
   });
 
   it("renders the current cycle, the week's task and an 'enter' CTA while entries are open", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getCurrentContest).mockResolvedValueOnce(response());
 
     renderPage();
@@ -66,7 +66,7 @@ describe("ContestPage", () => {
   });
 
   it("shows the caller's own entry status instead of the CTA once they've entered", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getCurrentContest).mockResolvedValueOnce(
       response({ callerEntry: { roundId: "round-2", weekNumber: 2, postId: "p9" } }),
     );
@@ -78,7 +78,7 @@ describe("ContestPage", () => {
   });
 
   it("shows the monthly winners when the cycle is crowned", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(getCurrentContest).mockResolvedValueOnce(
       response({
         phase: "crowned",
@@ -102,7 +102,7 @@ describe("ContestPage", () => {
 
   describe("calendar states", () => {
     async function loaded(over: Partial<CurrentContestResponse>) {
-      window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+      seedSession(fakeAccessToken());
       vi.mocked(getCurrentContest).mockResolvedValueOnce(response(over));
       renderPage();
       await screen.findByText("September Contest");
@@ -178,7 +178,7 @@ describe("ContestPage", () => {
 
   describe("Contest rules modal (Decision Log #227)", () => {
     async function renderLoaded() {
-      window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+      seedSession(fakeAccessToken());
       vi.mocked(getCurrentContest).mockResolvedValueOnce(response());
       renderPage();
       await screen.findByText("September Contest");

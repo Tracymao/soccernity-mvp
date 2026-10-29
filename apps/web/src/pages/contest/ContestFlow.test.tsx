@@ -37,6 +37,7 @@ import { getFeed, createPost } from "../../api/feed";
 import { getUser } from "../../api/users";
 import { getCurrentContest, submitContestEntry } from "../../api/contest";
 import { listClubs } from "../../api/clubs";
+import { seedSession, clearSession } from "../../test/session";
 
 function b64(v: object): string {
   return btoa(JSON.stringify(v)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -66,9 +67,8 @@ function feedPost(): FeedPost {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
-  window.sessionStorage.setItem("sn_access_token", TOKEN);
+  clearSession();
+  seedSession(TOKEN);
   vi.mocked(getFeed).mockReset().mockResolvedValue({ items: [], nextCursor: null });
   vi.mocked(getUser).mockReset().mockResolvedValue({ publicName: "Ada Player" } as never);
   vi.mocked(listClubs).mockReset().mockResolvedValue({ items: [], nextCursor: null });

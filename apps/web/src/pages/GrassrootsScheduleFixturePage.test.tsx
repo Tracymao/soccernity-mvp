@@ -1,5 +1,5 @@
 // GrassrootsScheduleFixturePage. Mocks src/api/grassroots.ts; session
-// seeded into sessionStorage as a decodable fake JWT so the organiser
+// seeded into the in-memory session store as a decodable fake JWT so the organiser
 // guard (team.createdById === token `sub`) can run. GET /teams/:id,
 // GET /teams?city= and POST /fixtures are real merged endpoints —
 // exercised live by services/api's e2e layer.
@@ -23,6 +23,7 @@ vi.mock("../api/users", () => ({ getUser: vi.fn() }));
 
 import { getTeamById, listTeams, createFixture } from "../api/grassroots";
 import { getUser } from "../api/users";
+import { seedSession, clearSession } from "../test/session";
 
 function organiserProfile(overrides: Partial<UserProfile> = {}): UserProfile {
   return {
@@ -87,8 +88,7 @@ function scheduledFixture(overrides: Partial<Fixture> = {}): Fixture {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(getTeamById).mockReset().mockResolvedValue(MY_TEAM);
   vi.mocked(listTeams).mockReset().mockResolvedValue({ items: [], nextCursor: null });
   vi.mocked(createFixture).mockReset();
@@ -113,7 +113,7 @@ describe("GrassrootsScheduleFixturePage", () => {
   });
 
   it("blocks a non-organiser with a clear message", async () => {
-    window.sessionStorage.setItem("sn_access_token", tokenFor("someone-else"));
+    seedSession(tokenFor("someone-else"));
     renderPage();
     expect(await screen.findByText(/only schedule fixtures for a team you registered/i)).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Schedule fixture" })).toBeNull();
@@ -125,7 +125,7 @@ describe("GrassrootsScheduleFixturePage", () => {
   // team creation does), so this exercises the defensive AND, not a real
   // reachable-in-production gap.
   it("blocks the team's own createdById when isTeamOrganiser is false", async () => {
-    window.sessionStorage.setItem("sn_access_token", tokenFor("me")); // === MY_TEAM.createdById
+    seedSession(tokenFor("me")); // === MY_TEAM.createdById
     vi.mocked(getUser).mockResolvedValueOnce(organiserProfile({ isTeamOrganiser: false }));
     renderPage();
     expect(await screen.findByText(/only schedule fixtures for a team you registered/i)).not.toBeNull();
@@ -133,7 +133,7 @@ describe("GrassrootsScheduleFixturePage", () => {
   });
 
   it("schedules a free-text opponent and shows the confirmation", async () => {
-    window.sessionStorage.setItem("sn_access_token", tokenFor("me"));
+    seedSession(tokenFor("me"));
     vi.mocked(createFixture).mockResolvedValueOnce(scheduledFixture());
 
     renderPage();
@@ -159,7 +159,7 @@ describe("GrassrootsScheduleFixturePage", () => {
   });
 
   it("schedules a 'decide later' fixture (neither teamBId nor opponentName)", async () => {
-    window.sessionStorage.setItem("sn_access_token", tokenFor("me"));
+    seedSession(tokenFor("me"));
     vi.mocked(createFixture).mockResolvedValueOnce(scheduledFixture({ opponentName: null }));
 
     renderPage();
@@ -177,7 +177,7 @@ describe("GrassrootsScheduleFixturePage", () => {
   });
 
   it("keeps Schedule disabled until date and time are set", async () => {
-    window.sessionStorage.setItem("sn_access_token", tokenFor("me"));
+    seedSession(tokenFor("me"));
     renderPage();
     await screen.findByRole("heading", { name: "Schedule a fixture" });
 
@@ -190,7 +190,7 @@ describe("GrassrootsScheduleFixturePage", () => {
   });
 
   it("surfaces a guardian-consent 403 with a link to /guardian-consent", async () => {
-    window.sessionStorage.setItem("sn_access_token", tokenFor("me"));
+    seedSession(tokenFor("me"));
     vi.mocked(createFixture).mockRejectedValueOnce(
       new GrassrootsApiError("This account is awaiting guardian consent and cannot access this feature yet.", {
         status: 403,
@@ -211,7 +211,7 @@ describe("GrassrootsScheduleFixturePage", () => {
   // ---- Pre-publication sensitive-content screen ----
 
   async function fillOtherOpponentForm() {
-    window.sessionStorage.setItem("sn_access_token", tokenFor("me"));
+    seedSession(tokenFor("me"));
     renderPage();
     await screen.findByRole("heading", { name: "Schedule a fixture" });
     fireEvent.click(screen.getByRole("radio", { name: "Other team" }));

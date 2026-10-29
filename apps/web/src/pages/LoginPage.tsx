@@ -62,14 +62,13 @@ export default function LoginPage() {
       // NOT WIRED TO A LIVE ENDPOINT YET -- see src/api/auth.ts. This call
       // is real, but `POST /auth/login` (PR B3) has not merged as of this
       // PR, so it is expected to fail until that lands.
-      const result = await login({ email: email.trim(), password });
+      const result = await login({ email: email.trim(), password, staySignedIn });
 
-      // Minimal session handling only -- no AuthContext/route-guarding
-      // exists yet in apps/web as of this PR. `staySignedIn` isn't part
-      // of the Section 4.1 contract; storage choice (session vs.
-      // persistent) is the closest honest approximation of its intent
-      // and should be revisited once real session management lands.
-      storeSession(result, staySignedIn);
+      // B-246: the access token goes into memory; the refresh token is the
+      // httpOnly cookie the API just set. `staySignedIn` was sent with the
+      // request -- true makes that cookie persistent, otherwise it is a
+      // session cookie.
+      storeSession(result);
 
       // B-125 (Decision Log #367, #394 A6): route on the server's onboarding
       // state instead of a blanket "/". A restricted-pending minor lands on

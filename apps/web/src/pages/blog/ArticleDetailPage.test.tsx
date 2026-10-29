@@ -16,6 +16,7 @@ vi.mock("../../api/blog", async () => {
 });
 
 import { getArticleById, listArticles } from "../../api/blog";
+import { clearSession } from "../../test/session";
 
 const ZAHA: Article = {
   id: "zaha-double-crystal-palace",
@@ -40,8 +41,7 @@ const KANE: ArticleSummary = {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(getArticleById).mockReset();
   vi.mocked(listArticles).mockReset();
 });

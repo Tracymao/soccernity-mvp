@@ -11,9 +11,10 @@ vi.mock("../../api/auth", async () => {
 });
 vi.mock("./ClubPickerStep", () => ({ default: () => <div>club picker</div> }));
 import { registerUser } from "../../api/auth";
+import { clearSession } from "../../test/session";
 
 beforeEach(() => {
-  window.sessionStorage.clear();
+  clearSession();
   vi.mocked(registerUser).mockReset();
 });
 afterEach(cleanup);
@@ -57,7 +58,6 @@ describe("SignupFlow", () => {
   it("minor path: the Age Gate country reaches Register; Guardian Details has no country", async () => {
     vi.mocked(registerUser).mockResolvedValue({
       accessToken: "acc",
-      refreshToken: "ref",
     } as Awaited<ReturnType<typeof registerUser>>);
     renderFlow();
     fillAgeGate(12, "US");

@@ -1,7 +1,7 @@
 // SearchTrendingPage (Community — Search & Trending). Same conventions as
 // GrassrootsPage.test.tsx / NewConversationPage.test.tsx: plain DOM
 // assertions, mocks src/api/search.ts, session seeded into
-// sessionStorage. GET /search is a real merged endpoint — exercising it
+// the in-memory session store. GET /search is a real merged endpoint — exercising it
 // live is services/api's own e2e layer's job.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -48,6 +48,7 @@ vi.mock("../api/search", async () => {
 });
 
 import { searchAll, searchUsers, searchClubs, searchPosts } from "../api/search";
+import { seedSession, clearSession } from "../test/session";
 
 function base64UrlEncode(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -70,8 +71,7 @@ function emptyResults(): SearchAllResult {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   setViewport(1200);
   vi.mocked(searchAll).mockReset();
   vi.mocked(searchUsers).mockReset();
@@ -105,7 +105,7 @@ describe("SearchTrendingPage", () => {
   });
 
   it("shows the desktop filter chip set (For you/Trending/News/Sport)", () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     setViewport(1200);
     renderPage();
 
@@ -116,7 +116,7 @@ describe("SearchTrendingPage", () => {
   });
 
   it("shows the mobile filter chip set (For you/Trending/News, no Sport) — genuinely different, not reconciled", () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     setViewport(400);
     renderPage();
 
@@ -127,7 +127,7 @@ describe("SearchTrendingPage", () => {
   });
 
   it("clicking a filter chip only changes which one is highlighted — no network call (visual-only in this PR)", () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     renderPage();
 
     const trendingTab = screen.getByRole("tab", { name: "Trending" });
@@ -140,7 +140,7 @@ describe("SearchTrendingPage", () => {
   });
 
   it("renders all desktop side cards and the videos carousel as real components — no placeholder regions remain", () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     setViewport(1200);
     renderPage();
 
@@ -153,7 +153,7 @@ describe("SearchTrendingPage", () => {
   });
 
   it("does not render the placeholder sidebars/carousel on mobile — they aren't in that Figma frame", () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     setViewport(400);
     renderPage();
 
@@ -173,7 +173,7 @@ describe("SearchTrendingPage", () => {
   });
 
   it("does not call GET /search for a query under 2 trimmed characters", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     renderPage();
 
     fireEvent.change(screen.getByLabelText(/search players, clubs, posts/i), { target: { value: " a " } });
@@ -184,7 +184,7 @@ describe("SearchTrendingPage", () => {
   });
 
   it("debounces (300ms) then calls the real GET /search and renders grouped results", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(searchAll).mockResolvedValueOnce({
       users: { items: [{ id: "u1", publicName: "Ada Obi" }], nextCursor: null },
       clubs: {
@@ -219,7 +219,7 @@ describe("SearchTrendingPage", () => {
   });
 
   it("shows an empty-group message for a group with no matches, alongside another group's real results", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(searchAll).mockResolvedValueOnce({
       ...emptyResults(),
       users: { items: [{ id: "u1", publicName: "Ada Obi" }], nextCursor: null },
@@ -234,7 +234,7 @@ describe("SearchTrendingPage", () => {
   });
 
   it("shows a single 'no results' message when all three groups are empty", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(searchAll).mockResolvedValueOnce(emptyResults());
 
     renderPage();
@@ -244,7 +244,7 @@ describe("SearchTrendingPage", () => {
   });
 
   it("fetches the next page for a single group when its own Load more is clicked", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(searchAll).mockResolvedValueOnce({
       ...emptyResults(),
       users: { items: [{ id: "u1", publicName: "Ada Obi" }], nextCursor: "cursor-1" },
@@ -263,7 +263,7 @@ describe("SearchTrendingPage", () => {
   });
 
   it("shows the server's own error message rather than a generic failure", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(searchAll).mockRejectedValueOnce(new SearchApiError("q must be at least 2 characters", { status: 400 }));
 
     renderPage();

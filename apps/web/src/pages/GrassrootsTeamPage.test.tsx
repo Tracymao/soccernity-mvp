@@ -1,6 +1,6 @@
 // GrassrootsTeamPage (Grassroots — Public Team Page). Same conventions as
 // ClubFanPage.test.tsx: plain DOM assertions, mocks src/api/grassroots.ts,
-// session seeded into sessionStorage. GET /teams/:id and
+// session seeded into the in-memory session store. GET /teams/:id and
 // GET /teams/:id/fixtures are real merged endpoints — exercising them
 // live is services/api's e2e layer's job (test/grassroots.e2e-spec.ts).
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -24,6 +24,7 @@ vi.mock("../api/users", () => ({ getUser: vi.fn() }));
 
 import { getTeamById, getTeamFixtures } from "../api/grassroots";
 import { getUser } from "../api/users";
+import { seedSession, clearSession } from "../test/session";
 
 function organiserProfile(overrides: Partial<UserProfile> = {}): UserProfile {
   return {
@@ -97,8 +98,7 @@ const EMPTY_PAGE = { items: [], nextCursor: null };
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(getTeamById).mockReset();
   vi.mocked(getTeamFixtures).mockReset().mockResolvedValue(EMPTY_PAGE);
   vi.mocked(getUser).mockReset().mockResolvedValue(organiserProfile());
@@ -123,7 +123,7 @@ describe("GrassrootsTeamPage", () => {
   });
 
   it("renders the team header — name, city • type, verified badge", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getTeamById).mockResolvedValueOnce(SURULERE);
 
     renderPage();
@@ -136,7 +136,7 @@ describe("GrassrootsTeamPage", () => {
   });
 
   it("shows the unverified badge for a non-verified team", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getTeamById).mockResolvedValueOnce(team({ verified: false }));
 
     renderPage();
@@ -146,7 +146,7 @@ describe("GrassrootsTeamPage", () => {
   });
 
   it("splits fixtures into Upcoming and Results, with the score from this team's perspective", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getTeamById).mockResolvedValueOnce(SURULERE);
     vi.mocked(getTeamFixtures).mockReset().mockResolvedValueOnce({
       items: [
@@ -180,7 +180,7 @@ describe("GrassrootsTeamPage", () => {
   });
 
   it("renders 'Opponent TBC' when a fixture has neither a registered teamB nor an opponentName", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getTeamById).mockResolvedValueOnce(SURULERE);
     vi.mocked(getTeamFixtures).mockReset().mockResolvedValueOnce({
       items: [fixture({ id: "u2", teamBId: null, teamB: null, opponentName: null })],
@@ -193,7 +193,7 @@ describe("GrassrootsTeamPage", () => {
   });
 
   it("renders the free-text opponentName when there is no registered teamB", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getTeamById).mockResolvedValueOnce(SURULERE);
     vi.mocked(getTeamFixtures).mockReset().mockResolvedValueOnce({
       items: [fixture({ id: "u3", teamBId: null, teamB: null, opponentName: "Riverside FC" })],
@@ -206,7 +206,7 @@ describe("GrassrootsTeamPage", () => {
   });
 
   it("shows the 'No fixtures yet' empty state", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getTeamById).mockResolvedValueOnce(SURULERE);
 
     renderPage();
@@ -215,7 +215,7 @@ describe("GrassrootsTeamPage", () => {
   });
 
   it("keeps the page working when fixtures fail to load (header still renders)", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getTeamById).mockResolvedValueOnce(SURULERE);
     vi.mocked(getTeamFixtures).mockReset().mockRejectedValueOnce(new GrassrootsApiError("boom", { status: 500 }));
 
@@ -226,7 +226,7 @@ describe("GrassrootsTeamPage", () => {
   });
 
   it("renders an honest 'Team not found' state on a 404, with a link back to /grassroots", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getTeamById).mockRejectedValueOnce(
       new GrassrootsApiError("Couldn't load that team (404).", { status: 404 }),
     );
@@ -239,7 +239,7 @@ describe("GrassrootsTeamPage", () => {
   });
 
   it("shows a generic error (not 'not found') on a non-404 team failure", async () => {
-    window.sessionStorage.setItem("sn_access_token", "test-token");
+    seedSession("test-token");
     vi.mocked(getTeamById).mockRejectedValueOnce(
       new GrassrootsApiError("Couldn't load that team (500).", { status: 500 }),
     );
@@ -251,7 +251,7 @@ describe("GrassrootsTeamPage", () => {
   });
 
   it("shows the organiser a 'Schedule a fixture' link and per-fixture 'Manage' links", async () => {
-    window.sessionStorage.setItem("sn_access_token", tokenFor("org-1")); // === createdById
+    seedSession(tokenFor("org-1")); // === createdById
     vi.mocked(getTeamById).mockResolvedValueOnce(SURULERE);
     vi.mocked(getTeamFixtures).mockReset().mockResolvedValueOnce({
       items: [fixture({ id: "u1" })],
@@ -274,7 +274,7 @@ describe("GrassrootsTeamPage", () => {
   });
 
   it("does NOT show organiser affordances when isTeamOrganiser is false, even for the team's own createdById", async () => {
-    window.sessionStorage.setItem("sn_access_token", tokenFor("org-1")); // === createdById
+    seedSession(tokenFor("org-1")); // === createdById
     vi.mocked(getTeamById).mockResolvedValueOnce(SURULERE);
     vi.mocked(getTeamFixtures).mockReset().mockResolvedValueOnce({
       items: [fixture({ id: "u1" })],
@@ -293,7 +293,7 @@ describe("GrassrootsTeamPage", () => {
   });
 
   it("does NOT show organiser affordances to a non-organiser viewer", async () => {
-    window.sessionStorage.setItem("sn_access_token", tokenFor("someone-else"));
+    seedSession(tokenFor("someone-else"));
     vi.mocked(getTeamById).mockResolvedValueOnce(SURULERE);
     vi.mocked(getTeamFixtures).mockReset().mockResolvedValueOnce({
       items: [fixture({ id: "u1" })],

@@ -9,6 +9,7 @@ vi.mock("../api/feed", async () => {
   return { ...actual, getPostById: vi.fn(), getComments: vi.fn() };
 });
 import { getComments, getPostById } from "../api/feed";
+import { seedSession, clearSession } from "../test/session";
 
 function b64(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -50,9 +51,8 @@ function renderAt(path = "/posts/post-7") {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
-  window.sessionStorage.setItem("sn_access_token", TOKEN);
+  clearSession();
+  seedSession(TOKEN);
   vi.mocked(getPostById).mockReset();
   vi.mocked(getComments).mockReset();
   vi.mocked(getComments).mockResolvedValue({
@@ -107,7 +107,7 @@ describe("PostPage (where a Final week tile opens)", () => {
   });
 
   it("asks a signed-out visitor to log in and never calls the API", () => {
-    window.sessionStorage.clear();
+    clearSession();
     renderAt();
     expect(screen.getByText(/Log in to see this post/)).not.toBeNull();
     expect(getPostById).not.toHaveBeenCalled();

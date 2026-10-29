@@ -1,6 +1,6 @@
 // Follows ClubsPage.test.tsx / CommunityPage.test.tsx's pattern -- plain
 // DOM assertions, mocks src/api/clubs.ts rather than hitting the network,
-// session seeded directly into sessionStorage. The Overall board is real
+// session seeded directly into the in-memory session store. The Overall board is real
 // (api/leaderboard.ts, mocked here); the Competition board is still local
 // illustrative content (leaderboardData.ts).
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -77,6 +77,7 @@ import { getLeaderboard } from "../api/leaderboard";
 import type { LeaderboardPage as LeaderboardPageData } from "../api/leaderboard";
 import type { CurrentContestResponse } from "../api/contest";
 import { openContest } from "./contest/contestFixtures";
+import { seedSession, clearSession } from "../test/session";
 
 function contestResponse(overrides: Partial<CurrentContestResponse> = {}): CurrentContestResponse {
   return openContest({
@@ -136,8 +137,7 @@ const NOT_JOINED: ClubSummary = {
 
 afterEach(cleanup);
 beforeEach(() => {
-  window.sessionStorage.clear();
-  window.localStorage.clear();
+  clearSession();
   vi.mocked(listClubs).mockReset();
   vi.mocked(getCurrentContest).mockReset();
   vi.mocked(getCurrentContest).mockResolvedValue(contestResponse());
@@ -163,7 +163,7 @@ describe("LeaderboardPage", () => {
   });
 
   it("shows points as whole numbers, equal for two ranks that differ on the exact total, with the note that says so (#383)", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
     vi.mocked(getLeaderboard).mockResolvedValue({
       items: [
@@ -191,7 +191,7 @@ describe("LeaderboardPage", () => {
   });
 
   it("renders the Overall board from GET /leaderboard once a session exists", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI, PORT_HARCOURT, NOT_JOINED], nextCursor: null });
 
     renderPage();
@@ -208,7 +208,7 @@ describe("LeaderboardPage", () => {
   });
 
   it("shows an empty state when the current week has no ranked players", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
     vi.mocked(getLeaderboard).mockResolvedValue({ items: [], nextCursor: null });
 
@@ -218,7 +218,7 @@ describe("LeaderboardPage", () => {
   });
 
   it("degrades to an inline message (page still renders) if GET /leaderboard fails", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
     vi.mocked(getLeaderboard).mockRejectedValue(new Error("boom"));
 
@@ -231,7 +231,7 @@ describe("LeaderboardPage", () => {
   });
 
   it("appends the next page on Load more, using the cursor", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
     vi.mocked(getLeaderboard)
       .mockResolvedValueOnce({ items: LB_PAGE.items, nextCursor: "cur-2" })
@@ -250,7 +250,7 @@ describe("LeaderboardPage", () => {
   });
 
   it("disables By club on the Overall board, with a reason, when the caller represents no club", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI], nextCursor: null });
     vi.mocked(getUser).mockResolvedValueOnce(profileWithRepresented(null));
 
@@ -268,7 +268,7 @@ describe("LeaderboardPage", () => {
   });
 
   it("enables By club on the Overall board for the represented club and requests that club's board", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI], nextCursor: null });
     vi.mocked(getUser).mockResolvedValueOnce(profileWithRepresented({ id: IKOYI.id, name: IKOYI.name }));
 
@@ -285,7 +285,7 @@ describe("LeaderboardPage", () => {
   });
 
   it("switches to the Contest tab and shows the real weekly winners from GET /contest/current", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
 
     renderPage();
@@ -301,7 +301,7 @@ describe("LeaderboardPage", () => {
   });
 
   it("deep-links straight to the Contest tab with ?tab=contest", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
 
     renderPage("/leaderboard?tab=contest");
@@ -311,7 +311,7 @@ describe("LeaderboardPage", () => {
   });
 
   it("shows the crowned monthly standings when the contest is completed", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
     vi.mocked(getCurrentContest).mockResolvedValue(
       contestResponse({
@@ -333,7 +333,7 @@ describe("LeaderboardPage", () => {
   });
 
   it("shows a vacant state when a contest is running but no round has been judged yet", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
     vi.mocked(getCurrentContest).mockResolvedValue(
       contestResponse({ phase: "vacant", weeklyWinners: [], rounds: [] }),
@@ -345,7 +345,7 @@ describe("LeaderboardPage", () => {
   });
 
   it("switches to the Competition tab and toggles between Prediction and Commentary", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
 
     renderPage();
@@ -364,7 +364,7 @@ describe("LeaderboardPage", () => {
   });
 
   it("populates the CLUB filter from real GET /clubs joined memberships (usable on the Contest tab)", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI, PORT_HARCOURT, NOT_JOINED], nextCursor: null });
 
     renderPage("/leaderboard?tab=contest");
@@ -383,7 +383,7 @@ describe("LeaderboardPage", () => {
   });
 
   it("pre-selects the caller's real represented club from GET /users/:id, not the first joined club", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI, PORT_HARCOURT], nextCursor: null });
     vi.mocked(getUser).mockResolvedValueOnce(profileWithRepresented({ id: PORT_HARCOURT.id, name: PORT_HARCOURT.name }));
 
@@ -396,7 +396,7 @@ describe("LeaderboardPage", () => {
   });
 
   it("shows a 'No represented club' placeholder when the caller has none, rather than silently selecting a joined club", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [IKOYI, PORT_HARCOURT], nextCursor: null });
     vi.mocked(getUser).mockResolvedValueOnce(profileWithRepresented(null));
 
@@ -409,7 +409,7 @@ describe("LeaderboardPage", () => {
   });
 
   it("shows a 'no clubs joined' message when By club is selected with zero real memberships (Contest tab)", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [NOT_JOINED], nextCursor: null });
 
     renderPage("/leaderboard?tab=contest");
@@ -423,7 +423,7 @@ describe("LeaderboardPage", () => {
   });
 
   it("still renders the board (Global scope) if GET /clubs fails", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockRejectedValueOnce(new Error("network down"));
 
     renderPage();
@@ -432,7 +432,7 @@ describe("LeaderboardPage", () => {
   });
 
   it("switches time period without crashing (Contest tab, where it is enabled)", async () => {
-    window.sessionStorage.setItem("sn_access_token", fakeAccessToken());
+    seedSession(fakeAccessToken());
     vi.mocked(listClubs).mockResolvedValueOnce({ items: [], nextCursor: null });
 
     renderPage("/leaderboard?tab=contest");
