@@ -13,8 +13,12 @@
 //  - For anyone else: a Report control on each file (POST /media/:id/report) with an optional reason (up to
 //    500 characters, shown to moderators only) and a clear state for the per-account daily report limit.
 //
-// The reason field and the daily-limit state have no Figma frame yet (Figma prompt D adds them); they are
-// built to the style of the existing report-confirmation frame (6849:29863-30169).
+// The daily-limit sheet follows the Figma pass S frames 6858:30671 (desktop) and 6858:30747 (mobile): the
+// server's own message and NO number, then the line "If this is urgent or involves a child, report the post or
+// the person instead." and a secondary button "Report the post or person" (Decision Log #436, B-266). The button
+// opens the EXISTING general report flow (ReportAction, POST /reports, the post and its author as targets, as
+// the post card offers it); POST /reports has no per-account daily cap and stays open to a restricted-pending
+// account, so it is the way out for someone at the media-report limit. It makes no request of its own.
 //
 // Strings that say who can see a file, or who sees a reporter's reason, are tagged [COPY PENDING LEGAL REVIEW] (Decision Log #412 item 5) and
 // have rows in docs/pending-copy-manifest.md.
@@ -29,6 +33,7 @@ import {
   type PostMediaView,
 } from "../../api/postMedia";
 import type { FeedPostMedia } from "../../api/feed";
+import ReportAction from "./ReportAction";
 import "./MediaUpload.css";
 
 const POLL_MS = 5000;
@@ -62,15 +67,31 @@ function Media({
   return <img className="post__media-img" src={src} alt="Picture attached to this post" loading="lazy" onError={onLoadError} />;
 }
 
-type ReportStage = "closed" | "confirm" | "done" | "limit";
+type ReportStage = "closed" | "confirm" | "done" | "limit" | "urgent";
 
-function MediaReport({ accessToken, item }: { accessToken: string; item: FeedPostMedia }) {
+function MediaReport({
+  accessToken,
+  item,
+  postId,
+  authorId,
+}: {
+  accessToken: string;
+  item: FeedPostMedia;
+  postId: string;
+  authorId: string;
+}) {
   const [stage, setStage] = useState<ReportStage>("closed");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [limitMessage, setLimitMessage] = useState<string | null>(null);
   const noun = item.kind === "video" ? "video" : "picture";
+  const urgentButton = useRef<HTMLButtonElement>(null);
+
+  // "Report the post or person" is the first action of the limit sheet, so it takes focus when the sheet appears.
+  useEffect(() => {
+    if (stage === "limit") urgentButton.current?.focus();
+  }, [stage]);
 
   async function submit() {
     if (submitting) return;
@@ -100,12 +121,31 @@ function MediaReport({ accessToken, item }: { accessToken: string; item: FeedPos
         <div className="media-report__panel" role="status" aria-label="Report limit reached">
           <p className="media-report__limit-title">You’ve reached today’s report limit</p>
           {limitMessage && <p>{limitMessage}</p>}
+          <p>If this is urgent or involves a child, report the post or the person instead.</p>
           <div className="media-report__buttons">
             <button type="button" className="media-item__action" onClick={() => setStage("closed")}>
               Close
             </button>
+            <button ref={urgentButton} type="button" className="media-item__action" onClick={() => setStage("urgent")}>
+              Report the post or person
+            </button>
           </div>
         </div>
+      </div>
+    );
+  }
+  if (stage === "urgent") {
+    return (
+      <div className="media-report">
+        <ReportAction
+          accessToken={accessToken}
+          startOpen
+          onCancel={() => setStage("limit")}
+          targets={[
+            { label: "Report post", targetType: "post", targetId: postId },
+            { label: "Report user", targetType: "user", targetId: authorId },
+          ]}
+        />
       </div>
     );
   }
@@ -287,12 +327,15 @@ interface Props {
   /** The post's `mediaUrls`: the public address of each file, in the same order as `media`. */
   urls: string[];
   accessToken: string;
+  /** The post the files belong to and its author: the targets of the general report offered at the daily limit. */
+  postId: string;
+  authorId: string;
   isOwn: boolean;
   /** The standalone entry page shows the video player straight away. */
   playVideo?: boolean;
 }
 
-export default function PostMedia({ media, urls, accessToken, isOwn, playVideo }: Props) {
+export default function PostMedia({ media, urls, accessToken, postId, authorId, isOwn, playVideo }: Props) {
   const [removed, setRemoved] = useState<string[]>([]);
   const shown = media
     .map((item, index) => ({ item, publicUrl: urls[index] ?? null }))
@@ -312,7 +355,7 @@ export default function PostMedia({ media, urls, accessToken, isOwn, playVideo }
         ) : (
           <div key={item.id} className="post__media-item">
             {publicUrl && <Media kind={item.kind} src={publicUrl} playVideo={playVideo} />}
-            <MediaReport accessToken={accessToken} item={item} />
+            <MediaReport accessToken={accessToken} item={item} postId={postId} authorId={authorId} />
           </div>
         ),
       )}

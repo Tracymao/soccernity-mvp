@@ -32,13 +32,30 @@ interface ReportActionProps {
   targets: ReportTarget[];
   /** Collapsed trigger label. Default: "Report". */
   triggerLabel?: string;
+  /** Open straight away (no trigger click), with focus on the first choice or the reason field. Used where
+   *  another control has already asked to report, e.g. the media report daily-limit sheet (B-266). */
+  startOpen?: boolean;
+  /** Called when the person cancels, and with `startOpen` the caller takes over instead of a "Report"
+   *  trigger being shown. */
+  onCancel?: () => void;
 }
 
 type Stage = "closed" | "menu" | "reason" | "done";
 
-export default function ReportAction({ accessToken, targets, triggerLabel = "Report" }: ReportActionProps) {
-  const [stage, setStage] = useState<Stage>("closed");
-  const [selected, setSelected] = useState<ReportTarget | null>(null);
+export default function ReportAction({
+  accessToken,
+  targets,
+  triggerLabel = "Report",
+  startOpen = false,
+  onCancel,
+}: ReportActionProps) {
+  const [stage, setStage] = useState<Stage>(() => {
+    if (!startOpen || targets.length === 0) return "closed";
+    return targets.length === 1 ? "reason" : "menu";
+  });
+  const [selected, setSelected] = useState<ReportTarget | null>(() =>
+    startOpen && targets.length === 1 ? targets[0] : null,
+  );
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +81,7 @@ export default function ReportAction({ accessToken, targets, triggerLabel = "Rep
     setSelected(null);
     setReason("");
     setError(null);
+    onCancel?.();
   }
 
   async function submit() {
@@ -86,6 +104,8 @@ export default function ReportAction({ accessToken, targets, triggerLabel = "Rep
   }
 
   if (stage === "closed") {
+    // Opened by another control and then cancelled: the caller takes over, no stray trigger here.
+    if (startOpen && onCancel) return null;
     return (
       <button type="button" className="report-action__trigger" onClick={open}>
         {triggerLabel}
@@ -96,8 +116,14 @@ export default function ReportAction({ accessToken, targets, triggerLabel = "Rep
   if (stage === "menu") {
     return (
       <div className="report-action report-action__menu" role="menu">
-        {targets.map((t) => (
-          <button key={t.targetType + t.targetId} type="button" className="report-action__menu-item" onClick={() => pick(t)}>
+        {targets.map((t, index) => (
+          <button
+            key={t.targetType + t.targetId}
+            type="button"
+            className="report-action__menu-item"
+            autoFocus={startOpen && index === 0}
+            onClick={() => pick(t)}
+          >
             {t.label}
           </button>
         ))}
@@ -120,6 +146,7 @@ export default function ReportAction({ accessToken, targets, triggerLabel = "Rep
         className="report-action__textarea"
         placeholder="Why are you reporting this?"
         aria-label="Reason for report"
+        autoFocus={startOpen}
         value={reason}
         maxLength={500}
         onChange={(e) => setReason(e.target.value)}
