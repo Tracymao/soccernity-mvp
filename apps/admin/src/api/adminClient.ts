@@ -1,16 +1,23 @@
 // Fetch wrapper for the Admin Console API (services/api `/admin/*`
-// routes). Mirrors apps/web/src/api/*'s conventions — a thin typed
+// routes). Mirrors apps/web/src/api/*'s conventions -- a thin typed
 // wrapper, an explicit error class, VITE_API_BASE_URL with the same
-// localhost fallback — but adds the one thing the admin side needs that
-// apps/web never built: transparent access-token refresh on 401 against
-// the isolated admin auth path (POST /admin/auth/refresh, Decision Log
-// #54).
+// localhost fallback -- but adds the one thing the admin side needs that
+// apps/web's per-page clients do not carry themselves: transparent
+// access-token refresh on 401 against the isolated admin auth path
+// (POST /admin/auth/refresh, Decision Log #54).
 //
-// AdminAuthContext installs a bridge (installAdminAuthBridge) so this
-// module can read the current tokens, persist rotated ones, and signal a
-// terminal auth failure (refresh itself 401s → session is dead → route
-// back to /login). Nothing here touches localStorage directly; the
-// bridge owns that.
+// B-247: the access token is read from the in-memory session
+// (lib/adminSession.ts) and the refresh runs through the httpOnly admin cookie
+// (lib/adminRefresh.ts) -- there is no refresh token in JavaScript any more, so
+// nothing here touches browser storage. Only the three admin auth routes
+// (login, refresh, logout) send `credentials: "include"`; every other call
+// authenticates with the Bearer header alone.
+//
+// AdminAuthContext installs a bridge (installAdminAuthBridge) so this module can
+// signal a terminal auth failure (the refresh was rejected -> the session is
+// dead -> route back to /login).
+import { clearAdminSession, getAdminAccessToken } from "../lib/adminSession";
+import { refreshAdminToken } from "../lib/adminRefresh";
 
 const API_BASE_URL =
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
@@ -27,11 +34,7 @@ export class AdminApiError extends Error {
 }
 
 export interface AdminAuthBridge {
-  getAccessToken(): string | null;
-  getRefreshToken(): string | null;
-  /** A refresh rotated the token pair — persist and adopt the new tokens. */
-  onTokensRotated(tokens: { accessToken: string; refreshToken: string }): void;
-  /** Refresh failed / no refresh token — the session is over. */
+  /** The refresh was rejected (401) -- the session is over. */
   onAuthLost(): void;
 }
 
@@ -92,51 +95,25 @@ async function rawRequest(path: string, options: RequestOptions, accessToken: st
   });
 }
 
-// Shared in-flight refresh so a burst of concurrent 401s triggers exactly
-// one POST /admin/auth/refresh.
-let refreshInFlight: Promise<boolean> | null = null;
-
-async function attemptRefresh(): Promise<boolean> {
-  if (!bridge) return false;
-  const refreshToken = bridge.getRefreshToken();
-  if (!refreshToken) {
-    bridge.onAuthLost();
-    return false;
-  }
-  if (!refreshInFlight) {
-    refreshInFlight = (async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/admin/auth/refresh`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refreshToken }),
-        });
-        if (!res.ok) {
-          bridge?.onAuthLost();
-          return false;
-        }
-        const data = (await res.json()) as { accessToken: string; refreshToken: string };
-        bridge?.onTokensRotated({ accessToken: data.accessToken, refreshToken: data.refreshToken });
-        return true;
-      } catch {
-        bridge?.onAuthLost();
-        return false;
-      } finally {
-        refreshInFlight = null;
-      }
-    })();
-  }
-  return refreshInFlight;
-}
-
 export async function adminFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const token = bridge?.getAccessToken() ?? null;
+  const token = getAdminAccessToken();
   let res = await rawRequest(path, options, token);
 
-  if (res.status === 401 && options.auth !== false && bridge) {
-    const refreshed = await attemptRefresh();
-    if (refreshed) {
-      res = await rawRequest(path, options, bridge.getAccessToken());
+  if (res.status === 401 && options.auth !== false) {
+    // At most ONE refresh per rejected token (shared by parallel 401s and across
+    // tabs, see lib/adminRefresh.ts) and the request is replayed at most once.
+    const outcome = await refreshAdminToken(token);
+    if (outcome === "signed-out") {
+      // The cookie is gone, expired, revoked or reused: the session is over in
+      // every tab. A 403 (Origin refused) or a network / 5xx failure leaves it
+      // alone -- a configuration or transient error must not sign the operator out.
+      clearAdminSession();
+      bridge?.onAuthLost();
+    } else if (outcome === "ok") {
+      const refreshed = getAdminAccessToken();
+      if (refreshed && refreshed !== token) {
+        res = await rawRequest(path, options, refreshed);
+      }
     }
   }
 

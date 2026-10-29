@@ -1,10 +1,22 @@
 # Dependabot version updates. Decision Log #423, build-register B-250.
 #
-# Defaults here are founder-adopted and veto-able:
+# PAUSED until the launch gate has passed (founder decision, 2026-10-29): both
+# entries below have open-pull-requests-limit: 0, which GitHub documents as the
+# way to temporarily disable version updates for a package manager. To
+# re-enable, set both limits back to 5. Everything else in this file is kept as
+# it was so that re-enabling is a one-line change per entry.
+#
+# This pause affects Dependabot VERSION updates only. It does not change
+# GitHub's Dependabot alerts or Dependabot security updates (separate
+# repository settings, with their own fixed limit), the dependency-audit gate
+# in ci.yml, or the CodeQL workflow.
+#
+# Defaults here are founder-adopted and veto-able (see the 2026-10-29
+# dependency policy entry):
 #   - npm: weekly, one entry for the repo root (it covers every workspace).
 #   - github-actions: monthly.
 #   - minor and patch updates are grouped into one PR per ecosystem entry.
-#   - at most 5 open PRs per entry.
+#   - at most 5 open PRs per entry once re-enabled (currently 0, see above).
 #   - major-version bumps are ignored for the packages this project upgrades
 #     deliberately (React, React Router, NestJS, Vite, Prisma, Expo, React
 #     Native). Those moves have their own PRs and decisions (Decision Log
@@ -17,9 +29,10 @@
 # #511, #509/#512). Use "/" alone.
 #
 # Packages ignored on purpose after the first run (2026-10-29):
-#   - react, react-dom (ALL updates): apps/mobile is pinned to React 18 by
-#     React Native, apps/web and apps/admin to React 19 by Decision Log
-#     #27/#255. A root-level run tries to give every workspace one version;
+#   - react, react-dom (ALL updates): apps/mobile stays on React 18 because of
+#     React Native; apps/web is on React 19 (Decision Log #27) and apps/admin
+#     moved to React 19.2.8 and React Router 8 in B-255. A root-level run
+#     tries to give every workspace one version;
 #     PR #505 moved web and admin from react ^19.2.8 down to ^18.3.1, which
 #     fails npm install with ERESOLVE. React moves only by hand.
 #   - react-native (minor and major): 0.x, so 0.74 -> 0.88 is a "minor" to
@@ -46,7 +59,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     groups:
       npm-minor-and-patch:
         update-types:
@@ -90,7 +103,7 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     groups:
       actions-minor-and-patch:
         update-types:

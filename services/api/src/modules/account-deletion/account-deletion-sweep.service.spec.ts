@@ -404,6 +404,13 @@ describe('AccountDeletionSweepService', () => {
         ['post', 'post_closure'],
         ['win', 'appeal_window'],
       ]);
+      // B-045: the marker is true only for an admin-placed hold (the ones a Lift control can end).
+      expect(out.map((o) => [o.userId, o.isAdminHold])).toEqual([
+        ['legal', true],
+        ['bad', true],
+        ['post', false],
+        ['win', false],
+      ]);
       expect(out[0]).toEqual(
         expect.objectContaining({ userId: 'legal', displayName: 'L', email: 'l@x.com', heldSince: expect.any(Date), daysHeld: expect.any(Number) }),
       );
