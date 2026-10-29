@@ -678,3 +678,36 @@ after eligibility, so a non-party gets the ordinary 403, not this code. A report
 appeal starts a new window from its new `reviewedAt`. The window length is **configuration, not a counsel-sourced
 figure** (default 30 days, a placeholder), and the message states no duration. The same closure rule drives how long a
 reported account stays held — see `../account-hold/README.md`.
+
+## Admin hold routes (B-045, Decision Log #376, #398 D1, #403 item 8)
+
+The HTTP side of `account-hold`'s `HoldService` (B-044). **No rule is added here**: the reason bounds, the
+audit rows and "nobody is notified" live in `HoldService`; `ModerationHoldsService` only adds the module's access
+shape. All three sit on `AdminModerationController`, so they are behind `AdminJwtAuthGuard` +
+`AdminRolesGuard('moderator', 'superadmin')` (401 with no token, 403 for an editor).
+
+| Route | Does | Success |
+|---|---|---|
+| `POST /admin/moderation/reports/:id/holds/bad-faith` `{ reason }` | holds the REPORTER's account for the bad-faith period | `201 { holds: [HoldView] }` |
+| `POST /admin/moderation/reports/:id/holds/legal` `{ reason }` | holds every party of the report that has an account | `201 { holds: [HoldView…] }` |
+| `PATCH /admin/moderation/holds/:holdId/lift` `{ reason }` | lifts either type of hold | `200 { hold: HoldView }` |
+
+* `reason` is REQUIRED, 10 to 500 characters (DTO `400`; a reason that is only spaces is the coded `400
+  hold_reason_invalid`). Unknown body fields are a `400`.
+* They take a **report id whatever the report's appeal state**, so Appeal Review uses the same routes as Report
+  Detail (#398 D1). There is no separate route.
+* `HoldView` = `{ id, userId, type, reportId, placedBy (admin id), placedAt, expiresAt, liftedAt }`. Reasons and the
+  lifting admin are not returned.
+* Order of checks: report (or hold) `404` → child-safety-vetting gate → the hold rules. A report that concerns a
+  minor needs a vetted admin (`403`, `code: child_safety_vetting_required`, the same as `PATCH reports/:id`, regardless
+  of role); a hold id is gated through the report it belongs to; a report that does not concern a minor never reads
+  `AdminUser`. A hold with no report has no gate.
+* Coded errors: `404 hold_not_found`; `409` `hold_already_active`, `reporter_has_no_account`,
+  `account_already_deleted`, `no_party_to_hold`, `hold_already_lifted`, `hold_expired`.
+* **Nobody is notified:** no `Notification` row and no email for either party. Each call writes one
+  `AdminActionLog` row per hold, in the hold's transaction.
+* `GET /admin/moderation/reports/:id` keeps every existing field and adds `holds`: the report's ACTIVE holds (not
+  lifted, not past `expiresAt`), oldest first, as `HoldView`, so the screen can show a hold-active state and a Lift
+  control.
+* `GET /admin/users/held-investigations` items gain `isAdminHold` (true for `legal_hold` / `bad_faith`, false for a
+  report-derived hold) next to `holdType`.

@@ -96,6 +96,10 @@ export interface StalledHold {
   daysHeld: number;
   // B-044: WHY it is held (the strongest reason if several apply). Additive; every field above is unchanged.
   holdType: HoldType;
+  // backend/w6-hold-admin-endpoints (B-045): true when the strongest hold is one an ADMIN placed (legal_hold or
+  // bad_faith), false when it is derived from a report. The screen's "marker" for a hold that can be lifted
+  // from the Report detail. Additive.
+  isAdminHold: boolean;
 }
 
 export interface SweepPendingDeletionsResult {
@@ -225,6 +229,7 @@ export class AccountDeletionSweepService {
         heldSince,
         daysHeld: Math.floor((now.getTime() - heldSince.getTime()) / dayMs),
         holdType: hold.type,
+        isAdminHold: hold.kind === 'admin',
       });
     }
     return stalled;
