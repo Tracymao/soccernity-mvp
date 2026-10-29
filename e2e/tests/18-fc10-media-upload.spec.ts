@@ -220,6 +220,25 @@ test.describe.serial('FC10: media upload, the whole path with the fake check', (
     await expect(page.getByRole('alert')).toHaveCount(0);
     // Nothing was added by the refused attempt.
     expect(await db().postMediaReport.count({ where: { reporterId: reporter.userId } })).toBe(20);
+
+    // B-266 / Decision Log #436: the limit sheet shows no number, points to the general report for anything
+    // urgent, and the new button (focused first) opens that existing flow.
+    const sheet = page.getByRole('status', { name: 'Report limit reached' });
+    await expect(sheet.getByText('If this is urgent or involves a child, report the post or the person instead.')).toBeVisible();
+    expect(await sheet.textContent()).not.toMatch(/\d/);
+    const urgent = page.getByRole('button', { name: 'Report the post or person' });
+    await expect(urgent).toBeFocused();
+    await urgent.click();
+    await expect(page.getByRole('button', { name: 'Report post' })).toBeFocused();
+    await page.getByRole('button', { name: 'Report user' }).click();
+    await page.getByLabel('Reason for report').fill('Urgent: something involving a child');
+    await page.getByRole('button', { name: 'Submit report' }).click();
+    await expect(page.getByText('Reported — thanks, our team will review it.')).toBeVisible();
+    // The general report is a Report row about the post's author (no per-account daily cap on POST /reports); the
+    // media-report count did not move.
+    const general = await db().report.findMany({ where: { reporterId: reporter.userId }, select: { targetType: true, targetId: true, reason: true } });
+    expect(general).toEqual([{ targetType: 'user', targetId: uploader.userId, reason: 'Urgent: something involving a child' }]);
+    expect(await db().postMediaReport.count({ where: { reporterId: reporter.userId } })).toBe(20);
   });
 
   test('5. the moderator queue: statistics, the unsure and the reported item; approve one, reject one with a reason', async ({ browser }) => {

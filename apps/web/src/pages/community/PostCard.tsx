@@ -301,7 +301,15 @@ export default function PostCard({
 
       <p className="post__body">{post.contentText}</p>
 
-      <PostMedia media={post.media} urls={post.mediaUrls} accessToken={accessToken} isOwn={isOwnPost} playVideo={playVideo} />
+      <PostMedia
+        media={post.media}
+        urls={post.mediaUrls}
+        accessToken={accessToken}
+        postId={post.id}
+        authorId={post.authorId}
+        isOwn={isOwnPost}
+        playVideo={playVideo}
+      />
 
       {post.clubPageId && <p className="post__context">Posted to a club page</p>}
       {post.banterRoomId && <p className="post__context">Posted in a Banter Room</p>}
