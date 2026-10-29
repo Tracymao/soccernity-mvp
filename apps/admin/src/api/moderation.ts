@@ -138,6 +138,25 @@ export interface Report {
   escalatedByAdminId: string | null;
   escalationNotes: string | null;
   escalatedToAuthority: boolean;
+
+  // B-045 (Decision Log #398 D1, #403 item 8): the report's ACTIVE case-level
+  // holds. Present ONLY on the single-report read (GET .../reports/:id); the
+  // list rows and a PATCH response do not carry it, so a screen reached from
+  // the queue fetches the report once to learn whether a hold is active.
+  holds?: HoldView[];
+}
+
+// One account hold as the hold routes return it (services/api
+// moderation-holds.service.ts HoldView). No reason is ever returned.
+export interface HoldView {
+  id: string;
+  userId: string;
+  type: string; // "legal_hold" | "bad_faith"
+  reportId: string | null;
+  placedBy: string;
+  placedAt: string;
+  expiresAt: string | null;
+  liftedAt: string | null;
 }
 
 export interface ReportListPage {
@@ -224,4 +243,31 @@ export function escalateReport(id: string, input: EscalateReportInput): Promise<
 // of listReports' own queue-level filtering, not a replacement for it.
 export function getReportById(id: string): Promise<Report> {
   return adminFetch<Report>(`/admin/moderation/reports/${id}`);
+}
+
+// The reason bound the hold routes enforce (services/api HoldReasonDto): 10 to
+// 500 characters, trimmed server-side.
+export const HOLD_REASON_MIN_LENGTH = 10;
+export const HOLD_REASON_MAX_LENGTH = 500;
+
+// POST /admin/moderation/reports/:id/holds/bad-faith -- holds the REPORTER's
+// account in full for the bad-faith period. Moderator / superadmin; a report
+// that concerns a minor also needs a child-safety-vetted admin (the same 403
+// code actionReport gives). Notifies nobody. Coded 409s (reporter_has_no_account,
+// account_already_deleted, hold_already_active) come back as AdminApiError with
+// the server's own message.
+export function placeBadFaithHold(reportId: string, reason: string): Promise<{ holds: HoldView[] }> {
+  return adminFetch<{ holds: HoldView[] }>(`/admin/moderation/reports/${reportId}/holds/bad-faith`, {
+    method: "POST",
+    body: { reason },
+  });
+}
+
+// POST /admin/moderation/reports/:id/holds/legal -- holds every party of the
+// report that has an account (reporter and reported). Same guards as above.
+export function placeLegalHold(reportId: string, reason: string): Promise<{ holds: HoldView[] }> {
+  return adminFetch<{ holds: HoldView[] }>(`/admin/moderation/reports/${reportId}/holds/legal`, {
+    method: "POST",
+    body: { reason },
+  });
 }

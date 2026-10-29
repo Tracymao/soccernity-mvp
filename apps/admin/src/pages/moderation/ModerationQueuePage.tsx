@@ -132,6 +132,9 @@ export default function ModerationQueuePage() {
           <Link className="mod-tab" to="/moderation/media">
             Media review
           </Link>
+          <Link className="mod-tab" to="/moderation/held-investigations">
+            Held investigations
+          </Link>
         </div>
 
         <p className="mod-note">

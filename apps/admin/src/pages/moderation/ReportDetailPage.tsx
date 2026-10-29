@@ -34,9 +34,11 @@ import {
   isChildSafetyVettingRequiredError,
   REPORT_ACTIONS,
   REPORT_ACTION_LABELS,
+  type HoldView,
   type Report,
   type ReportAction,
 } from "../../api/moderation";
+import { CaseLevelHoldButtons, CaseLevelHoldCallout, HoldStatus, mergeHolds } from "./holdActions";
 import {
   EscalateReportCard,
   formatDateTime,
@@ -62,16 +64,24 @@ export default function ReportDetailPage() {
   const [submitting, setSubmitting] = useState<ReportAction | null>(null);
 
   useEffect(() => {
-    if (report) return;
+    // B-045: the active holds come only from the single-report read, and the row the
+    // queue hands over has none. So a handed-over report is read once more, only to
+    // add its holds; a failure there changes nothing on screen.
+    const handedOver = report !== null;
+    if (handedOver && report.holds !== undefined) return;
     let cancelled = false;
     getReportById(id)
       .then((found) => {
         if (cancelled) return;
+        if (handedOver) {
+          setReport((prev) => (prev ? { ...prev, holds: found.holds ?? [] } : found));
+          return;
+        }
         setReport(found);
         setLoadState("loaded");
       })
       .catch((err: unknown) => {
-        if (cancelled) return;
+        if (cancelled || handedOver) return;
         if (isChildSafetyVettingRequiredError(err)) {
           setLoadState("restricted");
         } else if (err instanceof AdminApiError && err.status === 404) {
@@ -110,6 +120,10 @@ export default function ReportDetailPage() {
       }
       setSubmitting(null);
     }
+  }
+
+  function handleHoldsPlaced(holds: HoldView[]) {
+    setReport((prev) => (prev ? { ...prev, holds: mergeHolds(prev.holds, holds) } : prev));
   }
 
   if (loadState === "loading") {
@@ -167,6 +181,8 @@ export default function ReportDetailPage() {
       <AdminPageHeader title={`Report #${report.id.slice(0, 8)}`} hideSearch />
       <div className="mod-page">
         {backLink}
+
+        <HoldStatus holds={report.holds} />
 
         <div className="mod-card">
           <h2 className="mod-card__title">Reported content</h2>
@@ -230,7 +246,25 @@ export default function ReportDetailPage() {
               </div>
             ) : null}
           </div>
-        ) : actionRestricted ? (
+        ) : null}
+
+        {alreadyReviewed && !actionRestricted ? (
+          <div className="mod-card">
+            <h2 className="mod-card__title">Case-level actions</h2>
+            <div className="mod-action-row">
+              <CaseLevelHoldButtons
+                report={report}
+                onPlaced={handleHoldsPlaced}
+                onRestricted={() => setActionRestricted(true)}
+              />
+            </div>
+            <CaseLevelHoldCallout />
+          </div>
+        ) : null}
+
+        {alreadyReviewed && actionRestricted ? <VettingRestrictedNotice /> : null}
+
+        {alreadyReviewed ? null : actionRestricted ? (
           <VettingRestrictedNotice />
         ) : (
           <div className="mod-card">
@@ -258,11 +292,17 @@ export default function ReportDetailPage() {
                   {submitting === action ? "Saving…" : REPORT_ACTION_LABELS[action]}
                 </button>
               ))}
+              <CaseLevelHoldButtons
+                report={report}
+                onPlaced={handleHoldsPlaced}
+                onRestricted={() => setActionRestricted(true)}
+              />
             </div>
             <p className="mod-note">
               Once actioned, both the reporter and the reported user are notified of the outcome.
               Recording an action does not by itself remove content or suspend an account.
             </p>
+            <CaseLevelHoldCallout />
           </div>
         )}
 

@@ -33,6 +33,9 @@ afterEach(cleanup);
 beforeEach(() => {
   vi.mocked(listReports).mockReset();
   vi.mocked(getReportById).mockReset();
+  // A report handed over from the queue is read once more in the background, only to learn its
+  // holds (B-045). By default that read fails and the screen carries on with what it was given.
+  vi.mocked(getReportById).mockRejectedValue(new AdminApiError(500, "unavailable"));
   vi.mocked(actionReport).mockReset();
   vi.mocked(decideAppeal).mockReset();
   vi.mocked(escalateReport).mockReset();
@@ -257,7 +260,8 @@ describe("ReportDetailPage", () => {
       const btn = screen.getByRole("button", { name: label });
       expect(btn.hasAttribute("disabled")).toBe(false);
     }
-    expect(getReportById).not.toHaveBeenCalled();
+    // The handed-over row carries no holds, so the report is read once more for them (B-045).
+    await waitFor(() => expect(getReportById).toHaveBeenCalledWith(report.id));
   });
 
   it("actions the report and navigates back to the queue on success", async () => {

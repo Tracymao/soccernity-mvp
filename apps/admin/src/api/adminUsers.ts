@@ -235,3 +235,39 @@ export interface DobCorrectionResult {
 export function correctDateOfBirth(id: string, payload: CorrectDobRequest): Promise<DobCorrectionResult> {
   return adminFetch<DobCorrectionResult>(`/admin/users/${id}/dob-correction`, { method: "POST", body: payload });
 }
+
+// GET /admin/users/held-investigations (moderator / superadmin) -- accounts whose
+// deletion is held, listed once the hold has lasted more than `olderThanDays`
+// (server default 90, 0 to 3650). Visibility only: nothing here acts on an
+// account. The item carries no hold id and no report id, so a row cannot be
+// lifted from this list (services/api account-deletion-sweep.service.ts
+// StalledHold).
+export const HELD_INVESTIGATION_HOLD_TYPES = [
+  "open_report",
+  "appeal_window",
+  "post_closure",
+  "legal_hold",
+  "bad_faith",
+] as const;
+export type HeldInvestigationHoldType = (typeof HELD_INVESTIGATION_HOLD_TYPES)[number];
+
+export interface HeldInvestigation {
+  userId: string;
+  displayName: string;
+  email: string;
+  heldSince: string;
+  daysHeld: number;
+  holdType: HeldInvestigationHoldType;
+  // true when the strongest hold is one an admin placed (legal_hold, bad_faith).
+  isAdminHold: boolean;
+}
+
+export interface HeldInvestigationsResult {
+  thresholdDays: number;
+  items: HeldInvestigation[];
+}
+
+export function listHeldInvestigations(olderThanDays?: number): Promise<HeldInvestigationsResult> {
+  const qs = olderThanDays === undefined ? "" : `?olderThanDays=${olderThanDays}`;
+  return adminFetch<HeldInvestigationsResult>(`/admin/users/held-investigations${qs}`);
+}
