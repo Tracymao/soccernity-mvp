@@ -6,7 +6,7 @@
 // #72/#73. `sprint-2/contest-data-model-backend` built the CONTEST half
 // only; `PointsLedgerEntry.source` reserves `competition_result` for
 // this. The whole form is reproduced and disabled.
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import AdminStubScreen, { StubButton, StubField, StubSection } from "../../components/stub/AdminStub";
 
 export default function CreateCompetitionPage() {

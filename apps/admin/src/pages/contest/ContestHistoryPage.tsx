@@ -2,7 +2,7 @@
 // month). Figma: Cycle History 6645:22444, Empty 6645:22705, Load Error 6645:22922 (pass C, B-095).
 // Each row shows the month, status, where it is now, entries per week and the outcome; every row opens
 // its read-only detail.
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { listContestCycles, type AdminContestCycleListItem } from "../../api/contest";
 import { StatusPill, calendarLabel, monthLabel, useAsyncData } from "./contestShared";

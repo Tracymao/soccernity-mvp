@@ -12,7 +12,7 @@
 //   - Status and source filters are not drawn; they are plain selects because the API takes them and a
 //     moderator needs the Approved / Rejected views ("decided" is drawn only on the item screen).
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import {
   getMediaReviewStats,

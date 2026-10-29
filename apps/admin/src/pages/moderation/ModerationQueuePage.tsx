@@ -23,7 +23,7 @@
 // filters those out (moderation.service.ts) -- so no frontend gate is
 // needed on this screen; see ReportDetailPage.tsx/AppealReviewPage.tsx
 // for the "somehow linked directly" restricted state this can't cover.
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { useState } from "react";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { listReports, type Report } from "../../api/moderation";

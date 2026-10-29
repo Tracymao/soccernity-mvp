@@ -4,7 +4,7 @@
 //  - "unauthenticated"→ redirect to /login, remembering where we were
 //    headed so login can send the operator back
 //  - "authenticated"  → render the protected tree
-import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router";
 import { useAdminAuth } from "./AdminAuthContext";
 
 export default function RequireAdminAuth() {

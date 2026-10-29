@@ -22,7 +22,7 @@
 // from the Users list, added because the screen would otherwise be reachable
 // by URL only.
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { AdminApiError } from "../../api/adminClient";
 import {
   listIncorrectDetailsReports,

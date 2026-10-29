@@ -23,7 +23,7 @@
 // weeks that have not started stay editable. A PATCH sends only what changed, so a locked field is never
 // sent.
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { AdminApiError } from "../../api/adminClient";
 import {
