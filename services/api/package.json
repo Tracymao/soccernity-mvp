@@ -38,7 +38,7 @@
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.0",
     "sharp": "^0.35.5",
-    "stripe": "^22.6.2"
+    "stripe": "^23.0.1"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
