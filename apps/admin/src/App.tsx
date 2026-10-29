@@ -7,7 +7,7 @@
 //
 // Do not hand-build a section screen here — add it as a route element in
 // src/app/routes.tsx.
-import { RouterProvider } from "react-router-dom";
+import { RouterProvider } from "react-router";
 import { AdminAuthProvider } from "./auth/AdminAuthContext";
 import { router } from "./app/routes";
 

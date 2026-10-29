@@ -4,7 +4,7 @@
 // sprint-5/admin-articles-categories-backend). The slug is derived
 // server-side from the name — never sent from here.
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { AdminApiError } from "../../api/adminClient";
 import { createCategory } from "../../api/adminContent";

@@ -12,7 +12,7 @@
 // action as Categories' own Activate/Deactivate toggle, not Users'
 // irreversible Delete), and the server's own response is applied inline
 // via an overrides map rather than a full list reload.
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { useState } from "react";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { AdminApiError } from "../../api/adminClient";

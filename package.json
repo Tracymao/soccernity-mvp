@@ -34,6 +34,16 @@
         "react": "^19.2.8",
         "react-dom": "^19.2.8"
       }
+    },
+    "@soccernity/admin": {
+      "react-router": {
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8"
+      },
+      "@testing-library/react": {
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8"
+      }
     }
   },
   "allowScripts": {

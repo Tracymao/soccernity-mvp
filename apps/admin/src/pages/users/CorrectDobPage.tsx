@@ -34,7 +34,7 @@
 // message is shown under the reason field.
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router";
 import { AdminApiError } from "../../api/adminClient";
 import {
   correctDateOfBirth,

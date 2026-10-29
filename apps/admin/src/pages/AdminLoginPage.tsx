@@ -11,7 +11,7 @@
 // Decision Log #54) via AdminAuthContext.login — never apps/web's
 // user-facing token/session code.
 import { useEffect, useState, type FormEvent } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router";
 import { useAdminAuth } from "../auth/AdminAuthContext";
 import { AdminAuthError } from "../api/adminAuth";
 import logoMark from "../assets/icons/logo-mark.svg";

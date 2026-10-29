@@ -13,7 +13,7 @@
 // chrome (Dashboard has no action; "Articles" has "Create Article";
 // etc.) — screens render <AdminPageHeader> for that. The shell itself
 // stays minimal.
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router";
 import { useAdminAuth } from "../auth/AdminAuthContext";
 import { ADMIN_NAV_PRIMARY, ADMIN_NAV_SETTINGS, COMPETITIONS_KEY, type AdminNavItem } from "./adminNav";
 import logoMark from "../assets/icons/logo-mark.svg";

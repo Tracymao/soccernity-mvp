@@ -1,6 +1,6 @@
 // Read-only detail for a past (or any) contest month: the "View" target from Cycle History
 // (GET /admin/contest/cycles/:id). A 404 renders an honest not-found state, never a crash.
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { getContestCycle } from "../../api/contest";
 import CycleOverview from "./CycleOverview";

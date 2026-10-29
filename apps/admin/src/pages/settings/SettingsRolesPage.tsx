@@ -18,7 +18,7 @@
 // accountStatus straight off the same AdminStaffListItem this page's
 // GET /admin/staff already fetches — no second request. Reassigning it
 // happens on EditRolePage, not inline here.
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { useState } from "react";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { StubButton } from "../../components/stub/AdminStub";

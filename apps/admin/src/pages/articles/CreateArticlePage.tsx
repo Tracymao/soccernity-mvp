@@ -29,7 +29,7 @@
 // Change Password panel, PR #245's ReportAction component). Both call
 // the same createArticle(), differing only in the `status` sent.
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { AdminApiError } from "../../api/adminClient";
 import { createArticle, listCategories, type ArticleStatus, type Category } from "../../api/adminContent";
