@@ -541,13 +541,21 @@ describe('Media review queue e2e (B-037)', () => {
       expect(res.body.code).toBe('guardian_consent_pending');
     });
 
-    it('concurrent reports by different users all count: the count and the hold end up exact', async () => {
+    it('concurrent reports by different users: every accepted one counts exactly once and the hold is set', async () => {
       const { media } = await visibleApprovedItem();
       const reporters = await Promise.all(['a', 'b', 'c', 'd'].map((l) => seedUser(l)));
       const results = await Promise.all(reporters.map((r) => request(http()).post(`/media/${media}/report`).set(r.auth)));
-      expect(results.map((r) => r.status)).toEqual([200, 200, 200, 200]);
-      expect(await row(media)).toMatchObject({ reportCount: 4, hiddenPendingReview: true });
-      expect(await prisma().postMediaReport.count({ where: { mediaId: media } })).toBe(4);
+      // The hold threshold is 3. Once the third report commits the item is hidden, and a reporter whose
+      // visibility check runs after that gets the same 404 as for any hidden item (documented in
+      // post-media-report.service.ts). So which request is the late one depends on timing: at most ONE of
+      // the four can be late (a 404 needs three commits first), and the other three always succeed.
+      const statuses = results.map((r) => r.status);
+      const accepted = statuses.filter((s) => s === 200).length;
+      expect(accepted).toBeGreaterThanOrEqual(3);
+      expect(statuses.filter((s) => s !== 200)).toEqual(Array(4 - accepted).fill(404));
+      // The invariant under concurrency: every accepted report is counted exactly once, and the hold is set.
+      expect(await row(media)).toMatchObject({ reportCount: accepted, hiddenPendingReview: true });
+      expect(await prisma().postMediaReport.count({ where: { mediaId: media } })).toBe(accepted);
     });
   });
 
