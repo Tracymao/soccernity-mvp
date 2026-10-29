@@ -35,6 +35,11 @@ describe('Contest e2e: the self-running month', () => {
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     await app.init();
+    // supertest >= 7.3 starts and closes its own server per request when the app is not
+    // already listening, and overlapping requests in this long journey race that
+    // lifecycle ("Cannot read properties of null (reading 'address')"). A server that is
+    // already listening is used as-is, so give it one.
+    await app.listen(0, '127.0.0.1');
     // Only the explicit tick() calls may advance the lifecycle.
     for (const job of app.get(SchedulerRegistry).getCronJobs().values()) job.stop();
   });
