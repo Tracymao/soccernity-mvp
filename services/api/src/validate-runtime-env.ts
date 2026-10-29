@@ -1,5 +1,6 @@
 import { testClockVarsSet } from './clock/clock';
 import { originFromBaseUrl } from './cors-options';
+import { DOB_KEY_BYTES, parseDobKey } from './crypto/dob-crypto';
 
 // B-018. Refuse to start a PRODUCTION process with signing secrets that are
 // missing or still the .env.example placeholder.
@@ -49,6 +50,20 @@ export function findInvalidProductionOrigins(env: Record<string, string | undefi
   return REQUIRED_PRODUCTION_ORIGINS.filter((name) => originFromBaseUrl(env[name], true) === null);
 }
 
+// B-252 (Decision Log #425). DobEncryptionService parses DOB_ENCRYPTION_KEY lazily, on the first date of
+// birth it touches, so a bad key used to boot fine and then fail the first sign-up or login. The 32-byte
+// rule lives in parseDobKey and is reused here, not copied. Returns false for unset, blank, the
+// `replace-me` placeholder, or anything that does not base64-decode to exactly 32 bytes. The key value is
+// never read into a message.
+export function isValidDobEncryptionKey(env: Record<string, string | undefined>): boolean {
+  try {
+    parseDobKey(env.DOB_ENCRYPTION_KEY);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function assertProductionEnv(env: Record<string, string | undefined> = process.env): void {
   if (env.NODE_ENV !== 'production') return;
   const bad = findInvalidProductionSecrets(env);
@@ -72,6 +87,13 @@ export function assertProductionEnv(env: Record<string, string | undefined> = pr
     throw new Error(
       `Refusing to start: these app URLs are missing or not a real https URL (unset, not a URL, a placeholder host, http, or localhost): ${badOrigins.join(', ')}. ` +
         'Set the deployed https origins in the Render dashboard (see docs/deployment.md).',
+    );
+  }
+  // B-252: the same key also protects the two-factor secrets once B-086 is built.
+  if (!isValidDobEncryptionKey(env)) {
+    throw new Error(
+      `Refusing to start: DOB_ENCRYPTION_KEY is missing, blank, still the placeholder, or not valid base64 for exactly ${DOB_KEY_BYTES} bytes. ` +
+        'Generate one with `openssl rand -base64 32` and set it in the Render dashboard (see docs/deployment.md).',
     );
   }
 }

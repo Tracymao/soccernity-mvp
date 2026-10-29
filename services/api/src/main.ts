@@ -53,4 +53,11 @@ async function bootstrap() {
   await app.listen(port);
   console.log(`Soccernity API running on port ${port}`);
 }
-bootstrap();
+// A refused production boot (assertProductionEnv: B-018, B-163, B-252) is a thrown error inside
+// bootstrap(). Left as an unhandled rejection it printed nothing and the process stayed alive
+// (observed with Sentry inactive), so a bad deploy looked like a hang with no explanation. Print the
+// message and exit non-zero instead; the message never contains a secret value.
+bootstrap().catch((err: unknown) => {
+  console.error(err instanceof Error ? err.message : err);
+  process.exit(1);
+});
