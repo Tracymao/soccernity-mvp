@@ -2,7 +2,8 @@ import { assertProductionEnv, findInvalidProductionOrigins, findInvalidProductio
 
 const GOOD_SECRETS = { JWT_SECRET: 'a'.repeat(44), ADMIN_JWT_SECRET: 'b'.repeat(44) };
 const GOOD_URLS = { WEB_APP_BASE_URL: 'https://soccernity.com', ADMIN_APP_BASE_URL: 'https://admin.soccernity.com' };
-const GOOD = { ...GOOD_SECRETS, ...GOOD_URLS };
+const GOOD_DOB_KEY = Buffer.alloc(32, 7).toString('base64');
+const GOOD = { ...GOOD_SECRETS, ...GOOD_URLS, DOB_ENCRYPTION_KEY: GOOD_DOB_KEY };
 
 describe('assertProductionEnv (B-018)', () => {
   it('does nothing outside production, whatever is missing', () => {
@@ -139,3 +140,52 @@ describe('assertProductionEnv: the QA test clock (backend/test-clock-qa)', () =>
   });
 });
 
+
+describe('assertProductionEnv: DOB_ENCRYPTION_KEY (B-252, Decision Log #425)', () => {
+  const production = (key: string | undefined) => {
+    const env: Record<string, string | undefined> = { NODE_ENV: 'production', ...GOOD };
+    if (key === undefined) delete env.DOB_ENCRYPTION_KEY;
+    else env.DOB_ENCRYPTION_KEY = key;
+    return env;
+  };
+  const b64 = (bytes: number) => Buffer.alloc(bytes, 9).toString('base64');
+
+  it('passes with one valid 32-byte base64 key', () => {
+    expect(() => assertProductionEnv(production(b64(32)))).not.toThrow();
+  });
+
+  it.each([
+    ['unset', undefined],
+    ['blank', ''],
+    ['whitespace', '   '],
+    ['the placeholder', 'replace-me'],
+    ['31 bytes', b64(31)],
+    ['33 bytes', b64(33)],
+    ['non-base64 text', 'this is not a key!!'],
+  ])('refuses to start in production when the key is %s', (_label, value) => {
+    expect(() => assertProductionEnv(production(value))).toThrow(/DOB_ENCRYPTION_KEY.*32 bytes/);
+  });
+
+  it('points to docs/deployment.md', () => {
+    expect(() => assertProductionEnv(production(undefined))).toThrow(/docs\/deployment\.md/);
+  });
+
+  it('ignores a bad key outside production', () => {
+    expect(() => assertProductionEnv({ NODE_ENV: 'development', DOB_ENCRYPTION_KEY: 'replace-me' })).not.toThrow();
+    expect(() => assertProductionEnv({ NODE_ENV: 'test', DOB_ENCRYPTION_KEY: b64(31) })).not.toThrow();
+    expect(() => assertProductionEnv({})).not.toThrow();
+  });
+
+  it('never puts the key value in the error', () => {
+    for (const bad of [b64(31), b64(33), 'this is not a key!!', 'replace-me']) {
+      let message = '';
+      try {
+        assertProductionEnv(production(bad));
+      } catch (e) {
+        message = (e as Error).message;
+      }
+      expect(message).toContain('DOB_ENCRYPTION_KEY');
+      expect(message).not.toContain(bad);
+    }
+  });
+});

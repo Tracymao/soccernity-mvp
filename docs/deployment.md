@@ -85,7 +85,14 @@ No two may be the same.
   production. Each deploy runs a one-off script that encrypts any dates of
   birth still stored in plain form; that script refuses to run without a valid
   key, so a missing or malformed key makes the deploy fail *before* the new
-  version goes live (intentional, and safe — nothing is changed).
+  version goes live (intentional, and safe — nothing is changed). The running
+  app also checks the key at start-up: in production (`NODE_ENV=production`) it
+  **refuses to boot** if `DOB_ENCRYPTION_KEY` is unset, blank, still
+  `replace-me`, or does not decode to exactly 32 bytes, and logs a message that
+  names the variable (never its value). Before this, a bad key booted and only
+  failed on the first sign-up or login that touched a date of birth. The same
+  key will also protect the two-factor secrets once two-factor sign-in (B-086)
+  is built, so it must not be rotated casually.
 - None of these three has a code default. In production (`NODE_ENV=production`,
   which Render sets) the app now **refuses to start** if `JWT_SECRET` or
   `ADMIN_JWT_SECRET` is unset, still a placeholder such as `replace-me`, or if
