@@ -138,7 +138,11 @@ export type PlainReferenceClass = 'content' | 'excluded' | 'tolerated';
  */
 export const PLAIN_USER_REFERENCES: Readonly<Record<string, PlainReferenceClass>> = {
   'Report.targetId': 'content', // targetType 'user', or a post/comment the user authored
-  'RevokedUsername.userId': 'content', // veto-able default (B-139 retention is OPEN)
+  // B-139 (founder decision 2026-10-30): blocks only while a hold is RUNNING. The record is deleted once its
+  // user is anonymised and holdUntil has passed (AccountDeletionSweepService.anonymizeUser at anonymisation,
+  // AnonymizedRowPurgeService.cleanupRevokedUsernames afterwards, and purgeOne for this row just before it
+  // looks), so any record this check still finds is a running hold: it blocks this run, retried next run.
+  'RevokedUsername.userId': 'content',
   'AdminActionLog.targetId': 'content', // targetType 'user'; veto-able default
   'ContestVoteEvent.voterId': 'content', // append-only audit of this user's votes
   'AgeReclassificationLog.userId': 'content', // append-only audit; veto-able default

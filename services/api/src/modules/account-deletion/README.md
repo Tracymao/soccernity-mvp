@@ -55,7 +55,32 @@
 >   OPEN under counsel). Once the row is purged that object has **no database pointer at all** — only its
 >   key, `private-media/<uploaderId>/<mediaId>.<ext>`, which names the uploader's user id. Not decided here.
 > - **Untouched:** `ConsentAuditRecord` (its own 6-month clock), the investigation hold (B-044), admin
->   screens (B-045), revoked-username retention (B-139, OPEN).
+>   screens (B-045).
+>
+> ### Revoked-username retention — B-139 (founder decision 2026-10-30; `backend/b139-revoked-username-retention`)
+>
+> *Dated note, 2026-10-30: this replaces the earlier "`RevokedUsername.userId` always blocks the purge,
+> retention OPEN" default; the history above is kept.* **Rule: a `RevokedUsername` record is kept while its
+> user's account exists, and deleted when the account has been anonymised (`accountStatus = 'deleted'`,
+> `anonymizedAt` set) AND `holdUntil` has passed.**
+>
+> 1. **At anonymisation.** `anonymizeUser` deletes, in its existing transaction, that user's records whose
+>    `holdUntil <= now`. A hold still running stays (so the handle stays unavailable to everyone else until
+>    `holdUntil`, as before).
+> 2. **Daily cleanup.** `AnonymizedRowPurgeService.cleanupRevokedUsernames(now?)` (called first in the 03:30
+>    job) deletes the records whose user is anonymised and whose hold has since passed. SQL join (the table
+>    has no foreign key), oldest hold first, at most **200 per run** (logged when capped), one delete per
+>    record so a failure is isolated and retried; a cleanup error is logged and the purge still runs.
+> 3. **In the purge.** `RevokedUsername.userId` is no longer an unconditional blocker. `purgeOne` first
+>    deletes the examined row's expired-hold records (so a capped or failed cleanup cannot strand a record
+>    pointing at a purged row), then the existing lookup finds only **running** holds: such a row is kept this
+>    run and retried the next.
+> 4. **Unchanged while the account exists:** the handle is unavailable to others until `holdUntil`, and the
+>    revoked user can never take it back (`UsernamePolicyService.assertAssignable`). A user anonymised before
+>    `holdUntil` keeps the record until `holdUntil`, then it is deleted. **Records of accounts that are not
+>    anonymised are never touched** (including `deleted` rows with a NULL `anonymizedAt`).
+> 5. **No reinstate action.** No route or service reinstates a revoked username (checked by reading
+>    `admin-user-username-revoke.service.ts` and the username policy); it needs a design and is a later item.
 >
 > ---
 
