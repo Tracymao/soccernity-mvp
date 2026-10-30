@@ -99,6 +99,7 @@ import LanguagePage from "../pages/settings/LanguagePage";
 import DataUsagePage from "../pages/settings/DataUsagePage";
 import InactiveAccountPage from "../pages/InactiveAccountPage";
 import ReportPage from "../pages/ReportPage";
+import ContactPage from "../pages/ContactPage";
 import NotFoundPage from "../pages/NotFoundPage";
 import { TermsPage, PrivacyPage } from "../pages/legal/LegalPage";
 
@@ -187,6 +188,12 @@ export const routes: RouteObject[] = [
           // shared Header already renders the correct chrome either way.
           { path: "scouting", element: <ComingSoonPage featureName="Scouting" /> },
           { path: "academy", element: <ComingSoonPage featureName="Academy" /> },
+
+          // Contact Us (B-046 / B-047, Decision Log #445). Public: no login gate (a guest, a signed-in
+          // user and a restricted-pending account can all write to support). Under FooterLayout because
+          // every Contact Us Figma frame (6113:14053, 6113:14199, 6115:14611, 6115:14684) carries the
+          // canonical site footer. The footer's own "Contact Us" link points here.
+          { path: "contact", element: <ContactPage /> },
 
           // 404. A genuinely unmatched path under "/" falls through to
           // this splat (React Router ranks by specificity across the whole
