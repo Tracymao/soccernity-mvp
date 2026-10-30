@@ -8,8 +8,8 @@ import { URLS, USER_PASSWORD } from '../support/stack';
 // B-045 (Decision Log #398 D1, #403 item 8): the Held investigations screen and the two case-level hold actions,
 // in real Chrome against the real API, Postgres and Redis. Scoped to this screen only.
 //
-// NOT covered, and why: lifting a hold. The Lift hold dialog frame draws no reason field although a lift needs one,
-// and the held list returns no hold id, so there is no Lift control to drive (see the PR).
+// Lifting a hold is covered too: from Report Detail (the one drawn row lifts both accounts of a legal hold) and from
+// the held list (one account's hold), each with the required reason, the audit trail and nobody notified.
 //
 // Set-up: a report whose reported user has deleted their account and is past the 30-day grace period (the state in
 // which a hold is what keeps the row), and a second report whose REPORTER is in that state.
@@ -44,8 +44,8 @@ async function openReport(page: Page, reportId: string): Promise<void> {
 }
 
 async function placeHold(page: Page, opener: string, confirm: string, reason: string): Promise<void> {
-  await page.getByRole('button', { name: opener }).click();
-  const dialog = page.getByRole('dialog', { name: opener });
+  await page.getByRole('button', { name: opener, exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: opener, exact: true });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('Reason (required)').fill(reason);
   await dialog.getByRole('button', { name: confirm }).click();
@@ -81,8 +81,8 @@ test.describe.serial('held investigations and case-level holds', () => {
     await expect(page.getByLabel('Active holds')).toHaveCount(0);
 
     // The two actions sit with the report actions; the dialog needs a real reason.
-    await expect(page.getByRole('button', { name: 'Reporter acted in bad faith' })).toBeVisible();
-    await page.getByRole('button', { name: 'Legal hold' }).click();
+    await expect(page.getByRole('button', { name: 'Reporter acted in bad faith', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Legal hold', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Legal hold' });
     await expect(dialog).toContainText('This holds both accounts in full until an admin lifts it. [COPY PENDING LEGAL REVIEW]');
     await shot(page, '01-legal-hold-dialog');
@@ -100,7 +100,7 @@ test.describe.serial('held investigations and case-level holds', () => {
     const status = page.getByLabel('Active holds');
     await expect(status.getByText('Legal hold')).toBeVisible();
     await expect(status).toContainText('Active since');
-    await expect(page.getByRole('button', { name: /lift hold/i })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Lift hold: Legal hold' })).toBeVisible();
     await shot(page, '02-legal-hold-active');
 
     // The real rows: one per party that has an account (both), the reason in the audit log, nobody notified.
@@ -110,7 +110,7 @@ test.describe.serial('held investigations and case-level holds', () => {
     expect(await db().notification.count({ where: { userId: { in: [reporterA.userId, reportedA.userId] }, type: 'moderation_decision' } })).toBe(0);
 
     // A second attempt is refused by the server and its own message is shown in the dialog.
-    await page.getByRole('button', { name: 'Legal hold' }).click();
+    await page.getByRole('button', { name: 'Legal hold', exact: true }).click();
     const again = page.getByRole('dialog', { name: 'Legal hold' });
     await again.getByLabel('Reason (required)').fill('Trying to place it a second time.');
     await again.getByRole('button', { name: 'Place legal hold' }).click();
@@ -126,7 +126,7 @@ test.describe.serial('held investigations and case-level holds', () => {
     const page = await adminPage(browser);
     await openReport(page, badFaithReportId);
 
-    const opener = page.getByRole('button', { name: 'Reporter acted in bad faith' });
+    const opener = page.getByRole('button', { name: 'Reporter acted in bad faith', exact: true });
     await opener.focus();
     await opener.click();
     const dialog = page.getByRole('dialog', { name: 'Reporter acted in bad faith' });
@@ -168,7 +168,7 @@ test.describe.serial('held investigations and case-level holds', () => {
 
     const table = page.getByRole('table', { name: 'Held investigations' });
     const headers = await table.getByRole('columnheader').allTextContents();
-    expect(headers).toEqual(['User', 'Email', 'User ID', 'Held since', 'Days held', 'Hold type']);
+    expect(headers).toEqual(['User', 'Email', 'User ID', 'Held since', 'Days held', 'Hold type', 'Action']);
 
     // reportedA: legal hold. reporterB: the bad-faith hold.
     const legalRow = table.getByRole('row').filter({ hasText: reportedA.email.toLowerCase() });
@@ -177,8 +177,9 @@ test.describe.serial('held investigations and case-level holds', () => {
     const badFaithRow = table.getByRole('row').filter({ hasText: reporterB.email.toLowerCase() });
     await expect(badFaithRow).toContainText('Reporter acted in bad faith');
 
-    // Visibility only: no Lift hold control, and nothing says anyone is notified.
-    await expect(page.getByText(/lift hold/i)).toHaveCount(0);
+    // Both are admin holds, so both rows can be lifted; nothing says anyone is notified.
+    await expect(legalRow.getByRole('button', { name: /^Lift hold for/ })).toBeVisible();
+    await expect(badFaithRow.getByRole('button', { name: /^Lift hold for/ })).toBeVisible();
     await expect(page.getByText(/Visibility only/)).toBeVisible();
     await shot(page, '03-held-investigations');
     await page.context().close();
@@ -212,6 +213,93 @@ test.describe.serial('held investigations and case-level holds', () => {
     await field.fill('0');
     await page.getByRole('button', { name: 'Apply filter' }).click();
     await expect(table.getByRole('row').filter({ hasText: reportedA.email.toLowerCase() })).toBeVisible();
+    await page.context().close();
+  });
+
+  test('a hold is lifted from the held list: reason required, that account only, the row falls back to the open report, nobody notified', async ({
+    browser,
+  }) => {
+    const page = await adminPage(browser);
+    await page.goto(`${URLS.admin}/moderation/held-investigations`);
+    const table = page.getByRole('table', { name: 'Held investigations' });
+    const badFaithRow = table.getByRole('row').filter({ hasText: reporterB.email.toLowerCase() });
+    await expect(badFaithRow).toBeVisible();
+
+    const opener = badFaithRow.getByRole('button', { name: /^Lift hold for/ });
+    await opener.focus();
+    await opener.click();
+    const dialog = page.getByRole('dialog', { name: 'Lift hold' });
+    await expect(dialog).toContainText('Reporter acted in bad faith.');
+    await expect(dialog.getByLabel('Reason (required)')).toBeFocused();
+    await shot(page, '04-lift-hold-dialog-from-list');
+
+    // A reason that is too short is refused on the page, nothing is lifted.
+    await dialog.getByLabel('Reason (required)').fill('short');
+    await dialog.getByRole('button', { name: 'Lift hold' }).click();
+    await expect(dialog.getByRole('alert')).toHaveText('Give a reason of at least 10 characters.');
+    expect(await db().accountHold.count({ where: { reportId: badFaithReportId, liftedAt: null } })).toBe(1);
+
+    // Escape gives focus back to the control that opened the dialog.
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(opener).toBeFocused();
+
+    await opener.click();
+    await dialog.getByLabel('Reason (required)').fill('  The claim was checked and the reporter acted honestly.  ');
+    await dialog.getByRole('button', { name: 'Lift hold' }).click();
+    await expect(dialog).toBeHidden();
+    // The list is read again. The report is still open and the reporter is a party to it, so the account is
+    // still held, but by the report rule: the row now says so and has nothing left to lift.
+    const afterRow = table.getByRole('row').filter({ hasText: reporterB.email.toLowerCase() });
+    await expect(afterRow).toContainText('Open report');
+    await expect(afterRow).not.toContainText('Reporter acted in bad faith');
+    await expect(afterRow.getByRole('button')).toHaveCount(0);
+    await expect(table.getByRole('row').filter({ hasText: reportedA.email.toLowerCase() })).toBeVisible();
+    await shot(page, '04b-held-list-after-lift');
+
+    const holds = await db().accountHold.findMany({ where: { reportId: badFaithReportId } });
+    expect(holds).toHaveLength(1);
+    expect(holds[0].liftedAt).not.toBeNull();
+    expect(holds[0].liftReason).toBe('The claim was checked and the reporter acted honestly.');
+    expect(holds[0].liftedByAdminId).not.toBeNull();
+    expect(
+      await db().adminActionLog.count({ where: { targetId: reporterB.userId, action: 'account_hold.lifted' } }),
+    ).toBeGreaterThan(0);
+    expect(await db().notification.count({ where: { userId: reporterB.userId, type: 'moderation_decision' } })).toBe(0);
+    await page.context().close();
+  });
+
+  test('a legal hold is lifted from Report Detail: both accounts released with one reason, the row goes', async ({
+    browser,
+  }) => {
+    const page = await adminPage(browser);
+    await openReport(page, legalReportId);
+    const status = page.getByLabel('Active holds');
+    await expect(status.getByText('Legal hold')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Lift hold: Legal hold' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Lift hold' });
+    // Two accounts are held, so the drawn sentence is shown.
+    await expect(dialog).toContainText('Lifting the hold releases both accounts. [COPY PENDING LEGAL REVIEW]');
+    await shot(page, '05-lift-hold-dialog-from-report');
+    await dialog.getByLabel('Reason (required)').fill('Police confirmed the preservation request is withdrawn.');
+    await dialog.getByRole('button', { name: 'Lift hold' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByLabel('Active holds')).toHaveCount(0);
+    await shot(page, '06-lift-hold-done');
+
+    const holds = await db().accountHold.findMany({ where: { reportId: legalReportId } });
+    expect(holds).toHaveLength(2);
+    for (const h of holds as any[]) {
+      expect(h.liftedAt).not.toBeNull();
+      expect(h.liftReason).toBe('Police confirmed the preservation request is withdrawn.');
+    }
+    expect(await db().notification.count({ where: { userId: { in: [reporterA.userId, reportedA.userId] }, type: 'moderation_decision' } })).toBe(0);
+
+    // A reload shows no hold-active row: the server agrees.
+    await page.reload();
+    await expect(page.getByRole('heading', { name: /^Report #/ })).toBeVisible();
+    await expect(page.getByLabel('Active holds')).toHaveCount(0);
     await page.context().close();
   });
 });

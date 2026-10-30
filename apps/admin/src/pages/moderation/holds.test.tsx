@@ -17,6 +17,7 @@ vi.mock("../../api/moderation", async (importOriginal) => {
     escalateReport: vi.fn(),
     placeBadFaithHold: vi.fn(),
     placeLegalHold: vi.fn(),
+    liftHold: vi.fn(),
   };
 });
 vi.mock("../../api/adminUsers", async (importOriginal) => {
@@ -33,6 +34,7 @@ vi.mock("../../api/adminAuth", () => ({
 import {
   CHILD_SAFETY_VETTING_REQUIRED_CODE,
   getReportById,
+  liftHold,
   listReports,
   placeBadFaithHold,
   placeLegalHold,
@@ -58,11 +60,17 @@ beforeEach(() => {
   vi.mocked(getReportById).mockRejectedValue(new AdminApiError(500, "unavailable"));
   vi.mocked(placeBadFaithHold).mockReset();
   vi.mocked(placeLegalHold).mockReset();
+  vi.mocked(liftHold).mockReset();
+  vi.mocked(liftHold).mockImplementation(async (id) => ({
+    hold: { ...hold({ id }), liftedAt: "2026-10-30T10:00:00.000Z" },
+  }));
   vi.mocked(listHeldInvestigations).mockReset();
   vi.mocked(getAdminProfile).mockReset();
 });
 
 const TAG = "[COPY PENDING LEGAL REVIEW]";
+const REPORT_ID = "1a2b3c4d-0000-4000-8000-000000001042";
+const GOOD_REASON = "Counsel confirmed the hold is no longer needed.";
 
 function vettingRequiredError(): AdminApiError {
   return new AdminApiError(403, "This action requires a child-safety-vetted admin.", {
@@ -87,6 +95,13 @@ function renderAt(ui: ReactNode, routePath: string, initialEntry: string | { pat
       </Routes>
     </MemoryRouter>,
   );
+}
+
+async function confirmLift(reason = GOOD_REASON) {
+  const dialog = await screen.findByRole("dialog", { name: "Lift hold" });
+  fireEvent.change(within(dialog).getByLabelText("Reason (required)"), { target: { value: reason } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Lift hold" }));
+  return dialog;
 }
 
 function baseReport(overrides: Partial<Report> = {}): Report {
@@ -154,6 +169,8 @@ function held(n: number, overrides: Partial<HeldInvestigation> = {}): HeldInvest
     daysHeld: 120 + n,
     holdType: "open_report",
     isAdminHold: false,
+    holdId: null,
+    reportId: null,
     ...overrides,
   };
 }
@@ -176,8 +193,8 @@ describe("HeldInvestigationsPage", () => {
       thresholdDays: 90,
       items: [
         held(1, { holdType: "open_report" }),
-        held(2, { holdType: "legal_hold", isAdminHold: true }),
-        held(3, { holdType: "bad_faith", isAdminHold: true }),
+        held(2, { holdType: "legal_hold", isAdminHold: true, holdId: "hold-2", reportId: REPORT_ID }),
+        held(3, { holdType: "bad_faith", isAdminHold: true, holdId: "hold-3", reportId: REPORT_ID }),
       ],
     });
     renderPage();
@@ -194,6 +211,7 @@ describe("HeldInvestigationsPage", () => {
       "Held since",
       "Days held",
       "Hold type",
+      "Action",
     ]);
     expect(within(table).getByText("held1@example.com")).not.toBeNull();
     expect(within(table).getByText("6b1f5f2e…1a8d4e01")).not.toBeNull();
@@ -204,12 +222,192 @@ describe("HeldInvestigationsPage", () => {
     expect(within(table).getByText("Reporter acted in bad faith")).not.toBeNull();
   });
 
-  it("offers no Lift hold control, because the list returns nothing to lift by", async () => {
-    vi.mocked(listHeldInvestigations).mockResolvedValue({ thresholdDays: 90, items: [held(1)] });
+  it("draws Lift hold on the rows that carry a hold id and a dash on the others", async () => {
+    vi.mocked(listHeldInvestigations).mockResolvedValue({
+      thresholdDays: 90,
+      items: [
+        held(1),
+        held(2, { holdType: "legal_hold", isAdminHold: true, holdId: "hold-2", reportId: REPORT_ID }),
+        held(3, { holdType: "bad_faith", isAdminHold: true, holdId: "hold-3", reportId: null }),
+      ],
+    });
     renderPage();
     await screen.findByText("Held person 1");
-    expect(screen.queryByText(/lift hold/i)).toBeNull();
-    expect(screen.queryByRole("columnheader", { name: /action/i })).toBeNull();
+    const table = screen.getByRole("table", { name: "Held investigations" });
+    expect(within(table).getAllByRole("button", { name: /^Lift hold for/ }).map((b) => b.textContent)).toEqual([
+      "Lift hold",
+      "Lift hold",
+    ]);
+    expect(within(table).queryByRole("button", { name: "Lift hold for Held person 1" })).toBeNull();
+    // The report-derived row has a dash in its Action cell, not a control.
+    const rows = within(table).getAllByRole("row");
+    expect(within(rows[1]).queryByRole("button")).toBeNull();
+    expect(within(rows[1]).getAllByRole("cell").at(-1)?.textContent).toBe("—");
+  });
+
+  function renderLiftable(overrides: Partial<HeldInvestigation> = {}) {
+    vi.mocked(listHeldInvestigations).mockResolvedValue({
+      thresholdDays: 90,
+      items: [held(2, { holdType: "legal_hold", isAdminHold: true, holdId: "hold-2", reportId: REPORT_ID, ...overrides })],
+    });
+    return renderPage();
+  }
+
+  it("opens the Lift hold confirmation with a required reason, the report number and the tagged help line", async () => {
+    renderLiftable();
+    fireEvent.click(await screen.findByRole("button", { name: "Lift hold for Held person 2" }));
+    const dialog = await screen.findByRole("dialog", { name: "Lift hold" });
+    // One account's hold: the drawn "releases both accounts" sentence is not shown here.
+    expect(within(dialog).getByText("Report #1a2b3c4d. Legal hold.")).not.toBeNull();
+    expect(within(dialog).queryByText(/both accounts/)).toBeNull();
+    expect(within(dialog).getByLabelText("Reason (required)")).not.toBeNull();
+    expect(within(dialog).getByText(`The reason is saved to the audit record. ${TAG}`)).not.toBeNull();
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).not.toBeNull();
+    expect(within(dialog).getByRole("button", { name: "Lift hold" })).not.toBeNull();
+  });
+
+  it("names a bad-faith hold, and leaves the report number out when the hold has no report", async () => {
+    renderLiftable({ holdType: "bad_faith", reportId: null });
+    fireEvent.click(await screen.findByRole("button", { name: "Lift hold for Held person 2" }));
+    const dialog = await screen.findByRole("dialog", { name: "Lift hold" });
+    expect(within(dialog).getByText("Reporter acted in bad faith.")).not.toBeNull();
+  });
+
+  it("will not send a reason that is too short, and shows the message", async () => {
+    renderLiftable();
+    fireEvent.click(await screen.findByRole("button", { name: "Lift hold for Held person 2" }));
+    await confirmLift("too short");
+    expect(await screen.findByText("Give a reason of at least 10 characters.")).not.toBeNull();
+    expect(liftHold).not.toHaveBeenCalled();
+  });
+
+  it("limits the reason to 500 characters and sends exactly 500", async () => {
+    renderLiftable();
+    fireEvent.click(await screen.findByRole("button", { name: "Lift hold for Held person 2" }));
+    const dialog = await screen.findByRole("dialog", { name: "Lift hold" });
+    expect(within(dialog).getByLabelText("Reason (required)").getAttribute("maxlength")).toBe("500");
+    await confirmLift("x".repeat(500));
+    await waitFor(() => expect(liftHold).toHaveBeenCalledWith("hold-2", "x".repeat(500)));
+  });
+
+  it("sends exactly 10 characters", async () => {
+    renderLiftable();
+    fireEvent.click(await screen.findByRole("button", { name: "Lift hold for Held person 2" }));
+    await confirmLift("1234567890");
+    await waitFor(() => expect(liftHold).toHaveBeenCalledWith("hold-2", "1234567890"));
+  });
+
+  it("lifts that account's hold with the trimmed reason, closes the dialog and reads the list again", async () => {
+    renderLiftable();
+    fireEvent.click(await screen.findByRole("button", { name: "Lift hold for Held person 2" }));
+    await confirmLift(`   ${GOOD_REASON}   `);
+    await waitFor(() => expect(liftHold).toHaveBeenCalledWith("hold-2", GOOD_REASON));
+    expect(liftHold).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(listHeldInvestigations).toHaveBeenCalledTimes(2));
+  });
+
+  it("drops the lifted row once the list comes back without it", async () => {
+    vi.mocked(listHeldInvestigations)
+      .mockResolvedValueOnce({
+        thresholdDays: 90,
+        items: [held(2, { holdType: "legal_hold", isAdminHold: true, holdId: "hold-2", reportId: REPORT_ID })],
+      })
+      .mockResolvedValueOnce({ thresholdDays: 90, items: [] });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Lift hold for Held person 2" }));
+    await confirmLift();
+    expect(await screen.findByText("No held investigations")).not.toBeNull();
+    expect(screen.queryByText("Held person 2")).toBeNull();
+  });
+
+  it("keeps the dialog open with the server's message and the typed reason when the server refuses", async () => {
+    const message = "This hold has already been lifted.";
+    vi.mocked(liftHold).mockRejectedValueOnce(
+      new AdminApiError(409, message, { statusCode: 409, code: "hold_already_lifted", message }),
+    );
+    renderLiftable();
+    fireEvent.click(await screen.findByRole("button", { name: "Lift hold for Held person 2" }));
+    const dialog = await confirmLift();
+    expect((await within(dialog).findByRole("alert")).textContent).toBe(message);
+    expect((within(dialog).getByLabelText("Reason (required)") as HTMLTextAreaElement).value).toBe(GOOD_REASON);
+    expect(listHeldInvestigations).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the fallback line when the failure is not one of the server's own messages", async () => {
+    vi.mocked(liftHold).mockRejectedValueOnce(new AdminApiError(500, "Internal"));
+    renderLiftable();
+    fireEvent.click(await screen.findByRole("button", { name: "Lift hold for Held person 2" }));
+    const dialog = await confirmLift();
+    expect((await within(dialog).findByRole("alert")).textContent).toBe("Couldn’t record that action. Please try again.");
+  });
+
+  it("shows the restricted notice, not a generic error, when the server says vetting is required", async () => {
+    vi.mocked(liftHold).mockRejectedValueOnce(vettingRequiredError());
+    renderLiftable();
+    fireEvent.click(await screen.findByRole("button", { name: "Lift hold for Held person 2" }));
+    await confirmLift();
+    expect(await screen.findByText("Restricted — child-safety vetting required")).not.toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("disables the dialog while the request is in flight and ignores a second submit and Escape", async () => {
+    let resolve: (v: { hold: HoldView }) => void = () => {};
+    vi.mocked(liftHold).mockReturnValueOnce(new Promise((r) => (resolve = r)));
+    renderLiftable();
+    fireEvent.click(await screen.findByRole("button", { name: "Lift hold for Held person 2" }));
+    const dialog = await confirmLift();
+    const saving = await within(dialog).findByRole("button", { name: "Saving…" });
+    expect(saving.hasAttribute("disabled")).toBe(true);
+    expect(within(dialog).getByRole("button", { name: "Cancel" }).hasAttribute("disabled")).toBe(true);
+    fireEvent.submit(dialog);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(liftHold).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).not.toBeNull();
+    await act(async () => resolve({ hold: hold({ id: "hold-2" }) }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("says nothing in the dialog about telling the held user", async () => {
+    renderLiftable();
+    fireEvent.click(await screen.findByRole("button", { name: "Lift hold for Held person 2" }));
+    const dialog = await screen.findByRole("dialog", { name: "Lift hold" });
+    expect(dialog.textContent).not.toMatch(/notif|tell|told|email/i);
+  });
+
+  describe("keyboard and focus", () => {
+    it("moves focus to the reason field, keeps Tab inside, and Escape closes and returns focus to the opener", async () => {
+      renderLiftable();
+      const opener = await screen.findByRole("button", { name: "Lift hold for Held person 2" });
+      opener.focus();
+      fireEvent.click(opener);
+      const dialog = await screen.findByRole("dialog", { name: "Lift hold" });
+      expect(document.activeElement).toBe(within(dialog).getByLabelText("Reason (required)"));
+
+      // Tab from the last control wraps to the first, and Shift+Tab back.
+      const confirm = within(dialog).getByRole("button", { name: "Lift hold" });
+      confirm.focus();
+      fireEvent.keyDown(document, { key: "Tab" });
+      expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "Close" }));
+      fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+      expect(document.activeElement).toBe(confirm);
+
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(document.activeElement).toBe(opener);
+      expect(liftHold).not.toHaveBeenCalled();
+    });
+
+    it("Cancel gives focus back to the opener without calling the server", async () => {
+      renderLiftable();
+      const opener = await screen.findByRole("button", { name: "Lift hold for Held person 2" });
+      opener.focus();
+      fireEvent.click(opener);
+      fireEvent.click(within(await screen.findByRole("dialog", { name: "Lift hold" })).getByRole("button", { name: "Cancel" }));
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(document.activeElement).toBe(opener);
+      expect(liftHold).not.toHaveBeenCalled();
+    });
   });
 
   it("explains that it is visibility only and never mentions notifying anyone", async () => {
@@ -561,12 +759,168 @@ describe("ReportDetailPage case-level holds", () => {
     expect(screen.queryByLabelText("Active holds")).toBeNull();
   });
 
-  it("does not offer a Lift hold control next to an active hold", async () => {
-    const report = baseReport();
-    vi.mocked(getReportById).mockResolvedValue({ ...report, holds: [hold()] });
-    renderReportDetail(report);
-    await screen.findByLabelText("Active holds");
-    expect(screen.queryByText(/lift hold/i)).toBeNull();
+  describe("Lift hold", () => {
+    const TWO_LEGAL = [
+      hold({ id: "hold-reporter", userId: "reporter" }),
+      hold({ id: "hold-reported", userId: "reported", placedAt: "2026-10-14T09:00:01.000Z" }),
+    ];
+
+    async function renderWithHolds(holds: HoldView[], report = baseReport()) {
+      vi.mocked(getReportById).mockResolvedValue({ ...report, holds });
+      renderReportDetail(report);
+      await screen.findByLabelText("Active holds");
+    }
+
+    it("draws Lift hold on the hold-active row, one per hold type, and none without a hold", async () => {
+      await renderWithHolds([...TWO_LEGAL, hold({ id: "hold-bf", type: "bad_faith" })]);
+      expect(screen.getAllByRole("button", { name: /^Lift hold: / }).map((b) => b.getAttribute("aria-label"))).toEqual([
+        "Lift hold: Legal hold",
+        "Lift hold: Reporter acted in bad faith",
+      ]);
+    });
+
+    it("offers no Lift hold when no hold is active", async () => {
+      const report = baseReport();
+      vi.mocked(getReportById).mockResolvedValue({ ...report, holds: [] });
+      renderReportDetail(report);
+      await waitFor(() => expect(getReportById).toHaveBeenCalled());
+      expect(screen.queryByRole("button", { name: /^Lift hold/ })).toBeNull();
+    });
+
+    it("shows the drawn sentence in the dialog when a legal hold covers two accounts", async () => {
+      await renderWithHolds(TWO_LEGAL);
+      fireEvent.click(screen.getByRole("button", { name: "Lift hold: Legal hold" }));
+      const dialog = await screen.findByRole("dialog", { name: "Lift hold" });
+      expect(
+        within(dialog).getByText(`Report #1a2b3c4d. Legal hold. Lifting the hold releases both accounts. ${TAG}`),
+      ).not.toBeNull();
+      expect(within(dialog).getByText(`The reason is saved to the audit record. ${TAG}`)).not.toBeNull();
+    });
+
+    it("does not claim two accounts when only one is held", async () => {
+      await renderWithHolds([hold()]);
+      fireEvent.click(screen.getByRole("button", { name: "Lift hold: Legal hold" }));
+      const dialog = await screen.findByRole("dialog", { name: "Lift hold" });
+      expect(within(dialog).getByText("Report #1a2b3c4d. Legal hold.")).not.toBeNull();
+    });
+
+    it("lifts every active hold of that type with the trimmed reason, one after another, and removes the row", async () => {
+      await renderWithHolds(TWO_LEGAL);
+      fireEvent.click(screen.getByRole("button", { name: "Lift hold: Legal hold" }));
+      await confirmLift(`  ${GOOD_REASON}  `);
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(vi.mocked(liftHold).mock.calls).toEqual([
+        ["hold-reporter", GOOD_REASON],
+        ["hold-reported", GOOD_REASON],
+      ]);
+      expect(screen.queryByLabelText("Active holds")).toBeNull();
+      // Stays on the report.
+      expect(screen.getByRole("button", { name: "Legal hold" })).not.toBeNull();
+    });
+
+    it("lifts only the type clicked and keeps the other hold-active row", async () => {
+      await renderWithHolds([hold(), hold({ id: "hold-bf", type: "bad_faith" })]);
+      fireEvent.click(screen.getByRole("button", { name: "Lift hold: Reporter acted in bad faith" }));
+      const dialog = await screen.findByRole("dialog", { name: "Lift hold" });
+      expect(within(dialog).getByText("Report #1a2b3c4d. Reporter acted in bad faith.")).not.toBeNull();
+      await confirmLift();
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(vi.mocked(liftHold).mock.calls).toEqual([["hold-bf", GOOD_REASON]]);
+      const status = screen.getByLabelText("Active holds");
+      expect(within(status).getByText("Legal hold")).not.toBeNull();
+      expect(within(status).queryByText("Reporter acted in bad faith")).toBeNull();
+    });
+
+    it("shows the end date of a bad-faith hold, and none for a legal hold", async () => {
+      await renderWithHolds([
+        hold({ id: "hold-bf", type: "bad_faith", expiresAt: "2027-04-14T09:00:00.000Z" }),
+        hold({ id: "hold-l", type: "legal_hold", expiresAt: null }),
+      ]);
+      const status = screen.getByLabelText("Active holds");
+      expect(within(status).getAllByText(/^Ends /).map((n) => n.textContent)).toEqual(["Ends 14 Apr 2027"]);
+      expect(within(status).getAllByText("Active since 14 Oct 2026").length).toBe(2);
+    });
+
+    it("will not send a reason that is too short", async () => {
+      await renderWithHolds([hold()]);
+      fireEvent.click(screen.getByRole("button", { name: "Lift hold: Legal hold" }));
+      await confirmLift("short");
+      expect(await screen.findByText("Give a reason of at least 10 characters.")).not.toBeNull();
+      expect(liftHold).not.toHaveBeenCalled();
+    });
+
+    it("keeps the dialog open with the server's message and the typed reason when the server refuses", async () => {
+      const message = "This hold has already run its course.";
+      vi.mocked(liftHold).mockRejectedValueOnce(
+        new AdminApiError(409, message, { statusCode: 409, code: "hold_expired", message }),
+      );
+      await renderWithHolds([hold({ id: "hold-bf", type: "bad_faith" })]);
+      fireEvent.click(screen.getByRole("button", { name: "Lift hold: Reporter acted in bad faith" }));
+      const dialog = await confirmLift();
+      expect((await within(dialog).findByRole("alert")).textContent).toBe(message);
+      expect((within(dialog).getByLabelText("Reason (required)") as HTMLTextAreaElement).value).toBe(GOOD_REASON);
+      expect(screen.getByLabelText("Active holds")).not.toBeNull();
+    });
+
+    it("when the second of two holds fails, the first leaves the row, the dialog stays, and a retry asks only for the rest", async () => {
+      const message = "This hold has already been lifted.";
+      // First attempt: first hold is lifted, second fails.
+      vi.mocked(liftHold).mockReset();
+      vi.mocked(liftHold)
+        .mockResolvedValueOnce({ hold: hold({ id: "hold-reporter" }) })
+        .mockRejectedValueOnce(new AdminApiError(409, message, { statusCode: 409, code: "hold_already_lifted", message }))
+        .mockResolvedValueOnce({ hold: hold({ id: "hold-reported" }) });
+      await renderWithHolds(TWO_LEGAL);
+      fireEvent.click(screen.getByRole("button", { name: "Lift hold: Legal hold" }));
+      const dialog = await confirmLift();
+      expect((await within(dialog).findByRole("alert")).textContent).toBe(message);
+      // The row is still there (one account still held) and the dialog now speaks of one.
+      expect(screen.getByLabelText("Active holds")).not.toBeNull();
+      expect(liftHold).toHaveBeenCalledTimes(2);
+
+      fireEvent.click(within(dialog).getByRole("button", { name: "Lift hold" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(vi.mocked(liftHold).mock.calls.map((c) => c[0])).toEqual(["hold-reporter", "hold-reported", "hold-reported"]);
+      expect(screen.queryByLabelText("Active holds")).toBeNull();
+    });
+
+    it("shows the restricted notice, not a generic error, when the server says vetting is required", async () => {
+      vi.mocked(liftHold).mockRejectedValueOnce(vettingRequiredError());
+      await renderWithHolds([hold()], baseReport({ concernsMinor: true }));
+      fireEvent.click(screen.getByRole("button", { name: "Lift hold: Legal hold" }));
+      await confirmLift();
+      expect(await screen.findByText("Restricted — child-safety vetting required")).not.toBeNull();
+      expect(screen.queryByRole("dialog")).toBeNull();
+      // The hold is still active: nothing was changed.
+      expect(screen.getByLabelText("Active holds")).not.toBeNull();
+    });
+
+    it("disables the dialog while the request is in flight", async () => {
+      let resolve: (v: { hold: HoldView }) => void = () => {};
+      vi.mocked(liftHold).mockReturnValueOnce(new Promise((r) => (resolve = r)));
+      await renderWithHolds([hold()]);
+      fireEvent.click(screen.getByRole("button", { name: "Lift hold: Legal hold" }));
+      const dialog = await confirmLift();
+      const saving = await within(dialog).findByRole("button", { name: "Saving…" });
+      expect(saving.hasAttribute("disabled")).toBe(true);
+      expect(within(dialog).getByRole("button", { name: "Cancel" }).hasAttribute("disabled")).toBe(true);
+      fireEvent.submit(dialog);
+      expect(liftHold).toHaveBeenCalledTimes(1);
+      await act(async () => resolve({ hold: hold() }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    });
+
+    it("moves focus to the reason field and Escape gives focus back to the Lift hold control", async () => {
+      await renderWithHolds([hold()]);
+      const opener = screen.getByRole("button", { name: "Lift hold: Legal hold" });
+      opener.focus();
+      fireEvent.click(opener);
+      const dialog = await screen.findByRole("dialog", { name: "Lift hold" });
+      expect(document.activeElement).toBe(within(dialog).getByLabelText("Reason (required)"));
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(document.activeElement).toBe(opener);
+      expect(liftHold).not.toHaveBeenCalled();
+    });
   });
 
   it("keeps the dialog open with the server's message and the typed reason when the server refuses (409)", async () => {
@@ -784,7 +1138,49 @@ describe("AppealReviewPage case-level holds", () => {
     renderAppeal(report);
     const status = await screen.findByLabelText("Active holds");
     expect(within(status).getByText("Active since 14 Oct 2026")).not.toBeNull();
-    expect(screen.queryByText(/lift hold/i)).toBeNull();
+    expect(screen.getByRole("button", { name: "Lift hold: Legal hold" })).not.toBeNull();
+  });
+
+  it("lifts the hold from here with the same dialog and removes the hold-active row", async () => {
+    const report = appealReport();
+    vi.mocked(getReportById).mockResolvedValue({
+      ...report,
+      holds: [hold({ type: "bad_faith", id: "hold-bf", expiresAt: "2027-04-14T09:00:00.000Z" })],
+    });
+    renderAppeal(report);
+    const status = await screen.findByLabelText("Active holds");
+    expect(within(status).getByText("Ends 14 Apr 2027")).not.toBeNull();
+    fireEvent.click(within(status).getByRole("button", { name: "Lift hold: Reporter acted in bad faith" }));
+    await confirmLift();
+    await waitFor(() => expect(liftHold).toHaveBeenCalledWith("hold-bf", GOOD_REASON));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.queryByLabelText("Active holds")).toBeNull();
+    // Stays on the appeal screen.
+    expect(screen.getByRole("button", { name: "Overturn Decision" })).not.toBeNull();
+  });
+
+  it("shows the server's message inside the Lift hold dialog", async () => {
+    const message = "This hold has already been lifted.";
+    vi.mocked(liftHold).mockRejectedValueOnce(
+      new AdminApiError(409, message, { statusCode: 409, code: "hold_already_lifted", message }),
+    );
+    const report = appealReport();
+    vi.mocked(getReportById).mockResolvedValue({ ...report, holds: [hold()] });
+    renderAppeal(report);
+    fireEvent.click(await screen.findByRole("button", { name: "Lift hold: Legal hold" }));
+    const dialog = await confirmLift();
+    expect((await within(dialog).findByRole("alert")).textContent).toBe(message);
+  });
+
+  it("shows the restricted notice when the server says vetting is required", async () => {
+    vi.mocked(liftHold).mockRejectedValueOnce(vettingRequiredError());
+    const report = appealReport({ concernsMinor: true });
+    vi.mocked(getReportById).mockResolvedValue({ ...report, holds: [hold()] });
+    renderAppeal(report);
+    fireEvent.click(await screen.findByRole("button", { name: "Lift hold: Legal hold" }));
+    await confirmLift();
+    expect(await screen.findByText("Restricted — child-safety vetting required")).not.toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("places a bad-faith hold from here too, and shows the server's refusal inside the dialog", async () => {
@@ -816,6 +1212,8 @@ describe("AppealReviewPage case-level holds", () => {
     renderAppeal(report);
     const status = await screen.findByLabelText("Active holds");
     expect(within(status).getByText("Reporter acted in bad faith")).not.toBeNull();
+    // Lift hold is on this view too.
+    expect(within(status).getByRole("button", { name: "Lift hold: Reporter acted in bad faith" })).not.toBeNull();
   });
 
   it("moves focus into the dialog and back to the opener, like the Report Detail dialog", async () => {

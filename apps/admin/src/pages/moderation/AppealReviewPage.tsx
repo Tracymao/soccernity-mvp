@@ -124,6 +124,12 @@ export default function AppealReviewPage() {
     setReport((prev) => (prev ? { ...prev, holds: mergeHolds(prev.holds, holds) } : prev));
   }
 
+  // A lifted hold is no longer active, so it leaves the hold-active row.
+  function handleHoldsLifted(lifted: HoldView[]) {
+    const gone = new Set(lifted.map((h) => h.id));
+    setReport((prev) => (prev ? { ...prev, holds: (prev.holds ?? []).filter((h) => !gone.has(h.id)) } : prev));
+  }
+
   if (loadState === "loading") {
     return (
       <>
@@ -178,7 +184,7 @@ export default function AppealReviewPage() {
         <AdminPageHeader title={`Appeal — Report #${report.id.slice(0, 8)}`} hideSearch />
         <div className="mod-page">
           {backLink}
-          <HoldStatus holds={report.holds} />
+          <HoldStatus holds={report.holds} onLifted={handleHoldsLifted} />
           <div className="mod-card">
             <h2 className="mod-card__title">No pending appeal</h2>
             <p className="mod-note">
@@ -211,7 +217,7 @@ export default function AppealReviewPage() {
       <div className="mod-page">
         {backLink}
 
-        <HoldStatus holds={report.holds} />
+        <HoldStatus holds={report.holds} onLifted={handleHoldsLifted} />
 
         <p className="mod-note">
           You are reviewing this appeal because a <strong>different</strong> admin or moderator
