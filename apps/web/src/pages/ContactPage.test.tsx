@@ -5,7 +5,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import ContactPage from "./ContactPage";
-import { ContactApiError } from "../api/contact";
+import { CONTACT_MESSAGE_MAX_LENGTH, ContactApiError } from "../api/contact";
 import type { UserProfile } from "../api/users";
 
 vi.mock("../api/contact", async () => {
@@ -150,7 +150,25 @@ describe("ContactPage — the form as drawn", () => {
     expect(nameField().maxLength).toBe(200);
     expect(emailField().maxLength).toBe(254);
     expect(subjectField().maxLength).toBe(200);
-    expect(messageField().maxLength).toBe(500);
+    expect(messageField().maxLength).toBe(3000);
+  });
+
+  // The page has no JS length error: the textarea's maxLength is what stops a 3001st character in a browser (jsdom
+  // does not enforce it on a programmatic change), and the endpoint 400s on 3001. So the boundary here is the
+  // attribute at 3000 and a message of exactly 3000 characters going out whole.
+  it("sends a message of exactly 3000 characters, line breaks kept, unchanged", async () => {
+    vi.mocked(submitContactEnquiry).mockResolvedValueOnce(undefined as never);
+    renderPage();
+    fillValid();
+    const message = `${"a".repeat(1499)}
+${"b".repeat(1500)}`;
+    expect(message).toHaveLength(3000);
+    expect(CONTACT_MESSAGE_MAX_LENGTH).toBe(3000);
+    expect(messageField().maxLength).toBe(message.length);
+    fireEvent.change(messageField(), { target: { value: message } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+    await screen.findByText("Message sent");
+    expect(vi.mocked(submitContactEnquiry).mock.calls[0][0].message).toBe(message);
   });
 });
 

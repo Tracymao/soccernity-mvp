@@ -106,10 +106,26 @@ describe('ContactController (HTTP layer)', () => {
     await post({ ...valid, email: 'not-an-email' }).expect(400);
   });
 
-  describe('length limits (name 200, email 254, subject 200, message 500)', () => {
+  describe('length limits (name 200, email 254, subject 200, message 3000)', () => {
     it('accepts a message of exactly the limit and refuses one character more', async () => {
       await post({ ...valid, message: 'a'.repeat(CONTACT_MESSAGE_MAX_LENGTH) }).expect(201);
       await post({ ...valid, message: 'a'.repeat(CONTACT_MESSAGE_MAX_LENGTH + 1) }).expect(400);
+    });
+    // Literals, not the constant: a slip in the constant itself must fail this test (founder decision 2026-10-30).
+    it('the message limit is 3000 characters: 3000 passes, 3001 is a 400', async () => {
+      expect(CONTACT_MESSAGE_MAX_LENGTH).toBe(3000);
+      await post({ ...valid, message: 'a'.repeat(3000) }).expect(201);
+      await post({ ...valid, message: 'a'.repeat(3001) }).expect(400);
+    });
+    it('a 3000-character message with line breaks is accepted whole, not trimmed or truncated', async () => {
+      const message = `${'a'.repeat(1499)}
+${'b'.repeat(1500)}`;
+      await post({ ...valid, message }).expect(201);
+      expect(contact.submit.mock.calls.at(-1)?.[0].message).toBe(message);
+    });
+    it('the subject limit stays 200', async () => {
+      await post({ ...valid, subject: 'a'.repeat(200) }).expect(201);
+      await post({ ...valid, subject: 'a'.repeat(201) }).expect(400);
     });
     it('name', async () => {
       await post({ ...valid, name: 'a'.repeat(CONTACT_NAME_MAX_LENGTH) }).expect(201);

@@ -13,10 +13,11 @@ import {
 } from './contact.constants';
 import { CreateContactEnquiryDto } from './dto/create-contact-enquiry.dto';
 
-// Where the admin inbox will live in apps/admin (the API routes of part B exist; the screens do not). A proposed
-// path, veto-able; the email
-// only links to it when ADMIN_APP_BASE_URL is usable.
-export const ADMIN_CONTACT_INBOX_PATH = '/contact-enquiries';
+// Where the admin inbox lives in apps/admin: the route `moderation/contact-enquiries` in
+// apps/admin/src/app/routes.tsx (a child of the admin shell's `/` route, so the full path is
+// /moderation/contact-enquiries). It was '/contact-enquiries', a path no admin route matches. The email only links
+// to it when ADMIN_APP_BASE_URL is usable.
+export const ADMIN_CONTACT_INBOX_PATH = '/moderation/contact-enquiries';
 
 export interface ContactSubmissionResult {
   received: true;

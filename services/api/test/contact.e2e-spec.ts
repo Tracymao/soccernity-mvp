@@ -141,8 +141,18 @@ describe('Contact Us e2e: POST /contact, retention and account deletion, against
     it('refuses an unknown category, a control character and an over-long message, storing nothing', async () => {
       await submit(body({ category: 'billing' })).expect(400);
       await submit(body({ name: 'bad\u0000name' })).expect(400);
-      await submit(body({ message: 'a'.repeat(501) })).expect(400);
+      await submit(body({ message: 'a'.repeat(3001) })).expect(400);
       expect(await prisma().contactEnquiry.count()).toBe(0);
+    });
+
+    it('stores a message of exactly 3000 characters whole, line breaks kept (the column has no length limit)', async () => {
+      const message = `${'a'.repeat(1499)}
+${'b'.repeat(1500)}`;
+      const email = `limit-${Date.now()}@example.com`;
+      await submit(body({ email, message })).expect(201);
+      const row = await prisma().contactEnquiry.findFirstOrThrow({ where: { email } });
+      expect(row.message).toBe(message);
+      expect(row.message).toHaveLength(3000);
     });
 
     it('the database itself refuses an unknown category, an unknown status and a half-handled enquiry (CHECKs)', async () => {
