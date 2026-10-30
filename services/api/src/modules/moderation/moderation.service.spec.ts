@@ -473,6 +473,22 @@ describe('ModerationService', () => {
       expect(result.nextCursor).toBeNull();
     });
 
+    it("adds source: 'contact_enquiry' to an enquiry report and leaves every other row exactly as it was", async () => {
+      const prisma = buildPrismaMock();
+      const plain = report({ id: 'plain' });
+      (prisma.report.findMany as jest.Mock).mockResolvedValue([
+        report({ id: 'enq', reporterId: null, targetType: 'enquiry', targetId: 'e1' }),
+        plain,
+      ]);
+      const service = buildService(prisma);
+
+      const { items } = await service.listReports({}, 'admin-1');
+
+      expect(items[0]).toMatchObject({ id: 'enq', source: 'contact_enquiry' });
+      expect(items[1]).toBe(plain);
+      expect(items[1]).not.toHaveProperty('source');
+    });
+
     it('ANDs an explicit status filter into the where clause', async () => {
       const prisma = buildPrismaMock();
       (prisma.report.findMany as jest.Mock).mockResolvedValue([]);
@@ -596,6 +612,32 @@ describe('ModerationService', () => {
     it('403s a NON-vetted admin fetching a report where concernsMinor is true — a direct-access backstop, not just a queue-list filter', async () => {
       const prisma = buildPrismaMock();
       (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ concernsMinor: true }));
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: false });
+      const service = buildService(prisma);
+
+      await expect(service.getReportById('report-1', 'unvetted-admin')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('loads an enquiry report with the source hint and the enquiry it came from, and looks up no user', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ reporterId: null, targetType: 'enquiry', targetId: 'e1', concernsMinor: false }),
+      );
+      const enquiry = { id: 'e1', name: 'Sam', email: 'sam@example.com', category: 'data', subject: 'S', message: 'M', status: 'new', createdAt: new Date(), userId: null };
+      (prisma as unknown as { contactEnquiry: { findUnique: jest.Mock } }).contactEnquiry = { findUnique: jest.fn().mockResolvedValue(enquiry) };
+      const service = buildService(prisma);
+
+      const result = await service.getReportById('report-1', 'admin-1');
+
+      expect(result).toMatchObject({ source: 'contact_enquiry', contactEnquiry: enquiry });
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('applies the child-safety gate to an enquiry report that concerns a minor (403 for a non-vetted admin)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ reporterId: null, targetType: 'enquiry', targetId: 'e1', concernsMinor: true }),
+      );
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ childSafetyVetted: false });
       const service = buildService(prisma);
 
@@ -796,6 +838,27 @@ describe('ModerationService', () => {
       await expect(service.actionReport('missing', 'admin-1', { action: 'dismissed' })).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    it('closes an enquiry report normally (reviewed, then actioned) and creates NO notification: it has no reporter account and no reported user', async () => {
+      for (const action of ['dismissed', 'warning_issued'] as const) {
+        const prisma = buildPrismaMock();
+        (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+          report({ status: 'open', reporterId: null, targetType: 'enquiry', targetId: 'e1', reporterContactEmail: 'sam@example.com' }),
+        );
+        (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'reviewed' }));
+        const service = buildService(prisma);
+
+        await service.actionReport('report-1', 'admin-1', { action });
+
+        expect(prisma.report.update).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ status: action === 'dismissed' ? 'reviewed' : 'actioned', actionTaken: action }) }),
+        );
+        expect(prisma.notification.create).not.toHaveBeenCalled();
+        // The reported-user lookup is the explicit null case: none of the target tables is read.
+        expect(prisma.post.findUnique).not.toHaveBeenCalled();
+        expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      }
     });
 
     it("409s when the report is not 'open' (already reviewed once)", async () => {

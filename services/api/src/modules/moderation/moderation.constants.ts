@@ -16,6 +16,16 @@
 export const REPORT_TARGET_TYPES = ['post', 'user', 'comment', 'banter_room', 'grassroots_team', 'fixture'] as const;
 export type ReportTargetType = (typeof REPORT_TARGET_TYPES)[number];
 
+// backend/w7-contact-enquiry-admin-escalate (B-046 part B; Decision Log #444, #445). A Report whose target is a
+// Contact Us enquiry an admin escalated. DELIBERATELY NOT in REPORT_TARGET_TYPES above: that list is what the
+// public (POST /reports/public) and user (POST /reports) DTOs accept, and an 'enquiry' report may only be created
+// by ContactEnquiryAdminService.escalate. It has no reported user (resolveReportedUserId returns null for it), so
+// it can never produce a report-based account hold, a legal hold or a bad-faith hold (HoldService refuses both
+// place routes with hold_not_applicable).
+export const ENQUIRY_REPORT_TARGET_TYPE = 'enquiry';
+// The `source` hint the admin queue and report detail carry for such a report (the key is ABSENT otherwise).
+export const REPORT_SOURCE_CONTACT_ENQUIRY = 'contact_enquiry';
+
 // The outcome an admin/moderator may record via
 // PATCH /admin/moderation/reports/:id. Maps onto Report's own pre-existing
 // three-value `status` enum (see moderation.service.ts's actionReport):

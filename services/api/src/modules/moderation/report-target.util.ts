@@ -9,6 +9,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 //   - 'banter_room'     -> the room's creator, if that account still exists (BanterRoom.createdBy is a bare
 //                          String, not an FK, so it can dangle).
 //   - 'grassroots_team' / 'fixture' -> the team's / teamA's organiser, if the team still has one.
+//   - 'enquiry'         -> always null: a report made from a Contact Us enquiry (B-046 part B) has no reported
+//                          user, so it can never create a hold or a notification for anyone but its (absent)
+//                          reporter. Stated as an explicit case so the intent is not an accident of `default`.
 // Returns null if the target has since been deleted or targetType is unrecognised. Every caller treats null
 // as "cannot determine the reported user", never as an error to surface.
 export async function resolveReportedUserId(
@@ -48,6 +51,8 @@ export async function resolveReportedUserId(
       });
       return fixture?.teamA.createdById ?? null;
     }
+    case 'enquiry':
+      return null;
     default:
       return null;
   }

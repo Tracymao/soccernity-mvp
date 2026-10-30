@@ -13,7 +13,8 @@ import {
 } from './contact.constants';
 import { CreateContactEnquiryDto } from './dto/create-contact-enquiry.dto';
 
-// Where the admin inbox will live (part B of B-046, not built yet). A proposed path, veto-able; the email
+// Where the admin inbox will live in apps/admin (the API routes of part B exist; the screens do not). A proposed
+// path, veto-able; the email
 // only links to it when ADMIN_APP_BASE_URL is usable.
 export const ADMIN_CONTACT_INBOX_PATH = '/contact-enquiries';
 

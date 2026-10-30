@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, Logger, NotFoundExc
 import { AccountHold } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ADMIN_ACTION_LOG_ACTIONS, ADMIN_ACTION_LOG_TARGET_TYPES } from '../admin-action-log/admin-action-log.constants';
+import { ENQUIRY_REPORT_TARGET_TYPE } from '../moderation/moderation.constants';
 import { resolveReportedUserId } from '../moderation/report-target.util';
 import { addUtcMonths, resolveBadFaithHoldMonths } from './account-hold.config';
 
@@ -31,6 +32,8 @@ export const HOLD_ERROR_CODES = {
   HOLD_ALREADY_LIFTED: 'hold_already_lifted',
   HOLD_EXPIRED: 'hold_expired',
   HOLD_NOT_FOUND: 'hold_not_found',
+  // B-046 part B: a report made from a Contact Us enquiry has no reported user and no reporter account.
+  HOLD_NOT_APPLICABLE: 'hold_not_applicable',
 } as const;
 
 function coded(code: string, message: string): { statusCode: number; code: string; message: string } {
@@ -55,6 +58,16 @@ export class HoldService {
     return trimmed;
   }
 
+  // An 'enquiry' report (an escalated Contact Us message) has no party an account hold could attach to. Refused
+  // explicitly, with its own code, rather than falling out as reporter_has_no_account / no_party_to_hold.
+  private assertHoldApplicable(targetType: string): void {
+    if (targetType === ENQUIRY_REPORT_TARGET_TYPE) {
+      throw new ConflictException(
+        coded(HOLD_ERROR_CODES.HOLD_NOT_APPLICABLE, 'Account holds do not apply to a report made from a contact enquiry.'),
+      );
+    }
+  }
+
   private async loadReport(reportId: string) {
     const report = await this.prisma.report.findUnique({
       where: { id: reportId },
@@ -73,6 +86,7 @@ export class HoldService {
   async placeBadFaith(reportId: string, adminId: string, reason: string, now: Date = new Date()): Promise<AccountHold> {
     const cleanReason = this.normaliseReason(reason);
     const report = await this.loadReport(reportId);
+    this.assertHoldApplicable(report.targetType);
     if (!report.reporterId) {
       throw new ConflictException(
         coded(HOLD_ERROR_CODES.REPORTER_HAS_NO_ACCOUNT, 'This report was not made by a signed-in account, so there is no account to hold.'),
@@ -129,6 +143,7 @@ export class HoldService {
   async placeLegalHold(reportId: string, adminId: string, reason: string, now: Date = new Date()): Promise<AccountHold[]> {
     const cleanReason = this.normaliseReason(reason);
     const report = await this.loadReport(reportId);
+    this.assertHoldApplicable(report.targetType);
 
     const reportedUserId = await resolveReportedUserId(this.prisma, report.targetType, report.targetId);
     const partyIds = [...new Set([report.reporterId, reportedUserId].filter((id): id is string => !!id))];

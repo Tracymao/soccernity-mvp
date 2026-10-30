@@ -711,3 +711,12 @@ shape. All three sit on `AdminModerationController`, so they are behind `AdminJw
   control.
 * `GET /admin/users/held-investigations` items gain `isAdminHold` (true for `legal_hold` / `bad_faith`, false for a
   report-derived hold) next to `holdType`.
+
+## Reports made from a Contact Us enquiry (`backend/w7-contact-enquiry-admin-escalate`, B-046 part B)
+
+A report with `targetType: 'enquiry'` is created only by `POST /admin/contact-enquiries/:id/escalate` (see
+`contact/README.md`); it is not in `REPORT_TARGET_TYPES`, so the public and user routes refuse it (400). In this
+module: the queue list and the detail add `source: 'contact_enquiry'` (absent on other reports), the detail adds
+`contactEnquiry`, `resolveReportedUserId` returns null for it (no notification on closing, no second party), and
+`HoldService` refuses `holds/bad-faith` and `holds/legal` for it with `409 hold_not_applicable`. The
+child-safety-vetting gate applies as for any report with `concernsMinor: true`.

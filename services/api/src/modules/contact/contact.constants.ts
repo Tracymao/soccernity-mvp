@@ -51,3 +51,13 @@ export const CONTACT_EMAIL_RATE_LIMITED_CODE = 'contact_email_rate_limited';
 // Same plain register as the media-report limit message: no number, no hint about who or why.
 export const CONTACT_EMAIL_RATE_LIMITED_MESSAGE =
   'Each email address can send a limited number of messages in an hour. You can send another later.';
+
+// ---- Admin inbox (part B; Decision Log #444, #445) ----
+// Section 5.5 defaults, as every other list endpoint.
+export const CONTACT_ENQUIRY_ADMIN_DEFAULT_PAGE_SIZE = 20;
+export const CONTACT_ENQUIRY_ADMIN_MAX_PAGE_SIZE = 50;
+// The escalated Report's reason holds category, subject and message in one text, capped at the bound the
+// other report routes use (CreateReportDto.reason: 500). The full message stays on the linked enquiry.
+export const CONTACT_ENQUIRY_REPORT_REASON_MAX_LENGTH = 500;
+export const CONTACT_ENQUIRY_ESCALATED_CODE = 'contact_enquiry_already_escalated';
+export const CONTACT_ENQUIRY_ESCALATION_REASON_INVALID_CODE = 'escalation_reason_invalid';
