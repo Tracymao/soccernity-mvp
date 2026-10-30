@@ -290,6 +290,8 @@ model User {
   blockedBy          Block[]             @relation("blocked")
   // backend/w6-hold-rule-extension (B-044): admin-placed legal / bad-faith holds on this account.
   accountHolds       AccountHold[]
+  // backend/w7-contact-us-enquiry (B-046): Contact Us enquiries sent while signed in.
+  contactEnquiries   ContactEnquiry[]
   notifications      Notification[]
   matchSubscriptions MatchSubscription[]
   reportsFiled       Report[]            @relation("reporter")
@@ -1637,7 +1639,9 @@ model Report {
   appealReviewedAt        DateTime?
 
   // backend/w6-hold-rule-extension (B-044) -- reverse relation for AccountHold.report.
-  accountHolds AccountHold[]
+  accountHolds     AccountHold[]
+  // backend/w7-contact-us-enquiry (B-046) -- reverse relation for ContactEnquiry.escalatedReport.
+  contactEnquiries ContactEnquiry[]
 }
 
 // backend/w6-hold-rule-extension (B-044; Decision Log #376, which extends #341 / #345, with #398 D1 and
@@ -1674,6 +1678,48 @@ model AccountHold {
 
   @@index([userId, liftedAt])
   @@index([reportId])
+}
+
+// backend/w7-contact-us-enquiry (B-046; Decision Log #440, #444, founder decisions 2026-10-30). A message sent
+// through the public Contact Us form. A genuine addition beyond Section 3's entity list -- flagged as a
+// Decision Log candidate, not added silently.
+//
+// userId is set only when the sender was signed in (OptionalJwtAuthGuard); a guest's enquiry carries just the
+// name and email they typed. name and email are what the sender typed, NOT a copy of the account's.
+//
+// Retention (#440): deleted 12 months after lastMessageAt (the LAST message in the enquiry; today an
+// enquiry has one message, so it equals createdAt) by ContactEnquiryRetentionService, UNLESS
+// escalatedReportId is set (#444: an admin turned it into a report, and that record's retention applies
+// instead). escalatedReportId and handledByAdminId are written by the admin inbox (part B, not built yet).
+//
+// All three foreign keys are RESTRICT, stated explicitly (userId and escalatedReportId are optional, and
+// Prisma's default for an optional relation is SetNull): an escalated enquiry must never be silently
+// un-escalated, and a User row is never deleted from under an enquiry (account deletion removes the user's
+// non-escalated enquiries first; an escalated one blocks the purge, like a report).
+model ContactEnquiry {
+  id                String     @id @default(uuid())
+  name              String
+  email             String
+  // technical_issues | editorial_complaints | data | livescores_issues | suggestions | enquiries_feedback
+  // (the six options of the Figma Contact Category Dropdown). CHECK-constrained in the migration.
+  category          String
+  subject           String
+  message           String
+  userId            String?
+  user              User?      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  // new | handled. CHECK-constrained in the migration.
+  status            String     @default("new")
+  createdAt         DateTime   @default(now())
+  lastMessageAt     DateTime   @default(now())
+  handledAt         DateTime?
+  handledByAdminId  String?
+  handledByAdmin    AdminUser? @relation("contactEnquiryHandledBy", fields: [handledByAdminId], references: [id], onDelete: Restrict)
+  escalatedReportId String?
+  escalatedReport   Report?    @relation(fields: [escalatedReportId], references: [id], onDelete: Restrict)
+
+  @@index([lastMessageAt])
+  @@index([userId])
+  @@index([status, createdAt])
 }
 
 model MediaAsset {
@@ -1849,17 +1895,19 @@ model AdminUser {
   // is a distinct act from reviewing or escalating a report. No
   // application code reads or writes any of these three fields yet --
   // no vetting endpoint, no gate on Report review keyed to this flag.
-  childSafetyVetted  Boolean          @default(false)
-  vettedAt           DateTime?
-  vettedByAdminId    String?
-  vettedByAdmin      AdminUser?       @relation("adminVettedBy", fields: [vettedByAdminId], references: [id])
-  vettedAdmins       AdminUser[]      @relation("adminVettedBy")
+  childSafetyVetted       Boolean          @default(false)
+  vettedAt                DateTime?
+  vettedByAdminId         String?
+  vettedByAdmin           AdminUser?       @relation("adminVettedBy", fields: [vettedByAdminId], references: [id])
+  vettedAdmins            AdminUser[]      @relation("adminVettedBy")
   // Reverse relation for AdminActionLog.admin (see that model's own
   // comment). No application code writes AdminActionLog rows yet.
-  actionLogs         AdminActionLog[]
+  actionLogs              AdminActionLog[]
   // backend/w6-hold-rule-extension (B-044) -- reverse relations for AccountHold's two AdminUser FKs.
-  placedAccountHolds AccountHold[]    @relation("accountHoldPlacedBy")
-  liftedAccountHolds AccountHold[]    @relation("accountHoldLiftedBy")
+  placedAccountHolds      AccountHold[]    @relation("accountHoldPlacedBy")
+  liftedAccountHolds      AccountHold[]    @relation("accountHoldLiftedBy")
+  // backend/w7-contact-us-enquiry (B-046) -- reverse relation for ContactEnquiry.handledByAdmin.
+  handledContactEnquiries ContactEnquiry[] @relation("contactEnquiryHandledBy")
 }
 
 // schema/report-severity-escalation-admin-vetting -- a genuine new model,

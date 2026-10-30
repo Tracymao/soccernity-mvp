@@ -255,6 +255,53 @@ describe('RegistrationEmailService', () => {
       expect(sent.HtmlBody).not.toContain('<b>Obi</b>');
     });
 
+    describe('sendContactEnquiryNotificationEmail', () => {
+      const liveConfig = {
+        EMAIL_PROVIDER_API_KEY: 'a-real-key',
+        POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example',
+      };
+
+      it('tells support a new enquiry arrived: category and admin link only', async () => {
+        mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-contact' });
+        const service = new RegistrationEmailService(buildConfig(liveConfig));
+
+        await service.sendContactEnquiryNotificationEmail('support@soccernity.com', 'Technical issues', 'https://admin.soccernity.com/contact-enquiries');
+
+        const sent = mockSendEmail.mock.calls[0][0] as { To: string; Subject: string; TextBody: string; HtmlBody: string };
+        expect(sent.To).toBe('support@soccernity.com');
+        expect(sent.Subject).toBe('New Contact Us enquiry: Technical issues');
+        for (const body of [sent.TextBody, sent.HtmlBody]) {
+          expect(body).toContain('Technical issues');
+          expect(body).toContain('https://admin.soccernity.com/contact-enquiries');
+          expect(body).not.toContain('COPY PENDING LEGAL REVIEW');
+        }
+      });
+
+      it('still sends, without a link, when none is available', async () => {
+        mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-contact-2' });
+        const service = new RegistrationEmailService(buildConfig(liveConfig));
+        await service.sendContactEnquiryNotificationEmail('support@soccernity.com', 'Data', null);
+        const sent = mockSendEmail.mock.calls[0][0] as { TextBody: string; HtmlBody: string };
+        expect(sent.TextBody).toContain('Read it in the admin inbox.');
+        expect(sent.TextBody).not.toContain('http');
+        expect(sent.HtmlBody).not.toContain('href');
+      });
+
+      it('escapes the category label in HTML', async () => {
+        mockSendEmail.mockResolvedValueOnce({ MessageID: 'x' });
+        const service = new RegistrationEmailService(buildConfig(liveConfig));
+        await service.sendContactEnquiryNotificationEmail('s@soccernity.com', '<b>x</b>', null);
+        const sent = mockSendEmail.mock.calls[0][0] as { HtmlBody: string };
+        expect(sent.HtmlBody).not.toContain('<b>x</b>');
+      });
+
+      it('is wired but inactive without a Postmark key', async () => {
+        const service = new RegistrationEmailService(buildConfig({ ...liveConfig, EMAIL_PROVIDER_API_KEY: undefined }));
+        await expect(service.sendContactEnquiryNotificationEmail('s@soccernity.com', 'Data', null)).resolves.toBeUndefined();
+        expect(mockSendEmail).not.toHaveBeenCalled();
+      });
+    });
+
     describe('sendLoginLockoutNoticeEmail', () => {
       const liveConfig = {
         EMAIL_PROVIDER_API_KEY: 'a-real-key',

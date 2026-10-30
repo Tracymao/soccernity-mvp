@@ -38,6 +38,8 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
     grassrootsTeam: { updateMany: jest.fn() },
     // B-139: anonymizeUser deletes the user's RevokedUsername records whose hold is already over.
     revokedUsername: { deleteMany: jest.fn() },
+    // B-046: anonymizeUser deletes the user's non-escalated Contact Us enquiries.
+    contactEnquiry: { deleteMany: jest.fn() },
     $executeRaw: jest.fn().mockResolvedValue(0),
     // B-044: admin holds (none by default) and the reports involving the user (findInvolvedReports).
     accountHold: { findMany: jest.fn().mockResolvedValue([]) },
@@ -68,6 +70,25 @@ describe('AccountDeletionSweepService', () => {
       const clubUpdate = sql.findIndex((q) => q.includes('UPDATE "ClubPage"'));
       const clubDelete = sql.findIndex((q) => q.includes('DELETE FROM "_ClubMembership"'));
       expect(clubUpdate).toBeLessThan(clubDelete);
+    });
+  });
+
+  // B-046 (Decision Log #440, #444).
+  describe('anonymizeUser Contact Us enquiries', () => {
+    it("deletes the user's enquiries that were NOT escalated, inside the anonymising transaction", async () => {
+      const prisma = buildPrismaMock();
+      await new AccountDeletionSweepService(prisma).anonymizeUser('user-1', false);
+
+      expect(prisma.contactEnquiry.deleteMany).toHaveBeenCalledTimes(1);
+      // an escalated enquiry (escalatedReportId set) is never matched, so it survives and blocks the purge
+      expect(prisma.contactEnquiry.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1', escalatedReportId: null } });
+      expect((prisma as unknown as { $transaction: jest.Mock }).$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not touch enquiries of a held (minimised) account', async () => {
+      const prisma = buildPrismaMock();
+      await new AccountDeletionSweepService(prisma).minimiseHeldUser('user-1');
+      expect(prisma.contactEnquiry.deleteMany).not.toHaveBeenCalled();
     });
   });
 

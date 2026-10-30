@@ -30,7 +30,8 @@ export type RegistrationEmailTemplate =
   | 'report-actioned'
   | 'appeal-decision'
   | 'username-revoked'
-  | 'login-lockout-notice';
+  | 'login-lockout-notice'
+  | 'contact-enquiry-notification';
 
 export interface OutboundRegistrationEmail {
   to: string;
@@ -422,6 +423,22 @@ export class RegistrationEmailService {
     return true;
   }
 
+  // backend/w7-contact-us-enquiry (B-046). To the SUPPORT mailbox (not the sender), once per new Contact Us
+  // enquiry. It says only that an enquiry arrived, its category, and where to read it: NEVER the sender's
+  // name, email, subject or message (the message is read in the admin inbox, behind admin sign-in), so the
+  // text never travels through the email provider or sits in a shared mailbox. `link` is null when
+  // ADMIN_APP_BASE_URL is unusable; the email is still sent, because "there is a new enquiry" is the point.
+  // No acknowledgement goes to the enquirer. Not tagged [COPY PENDING LEGAL REVIEW]: internal, staff-facing,
+  // makes no promise to a user.
+  async sendContactEnquiryNotificationEmail(to: string, categoryLabel: string, link: string | null): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: `New Contact Us enquiry: ${categoryLabel}`,
+      template: 'contact-enquiry-notification',
+      data: { categoryLabel, link: link ?? '' },
+    });
+  }
+
   // B-016. Builds the apps/web link for a token email, or refuses. When
   // WEB_APP_BASE_URL is unset/placeholder the email's only call to action would
   // be a dead link, so NOTHING is sent and an error is logged (without the
@@ -482,6 +499,16 @@ export class RegistrationEmailService {
 // deliverable.
 function renderTextBody(template: RegistrationEmailTemplate, data: Record<string, string>): string {
   switch (template) {
+    case 'contact-enquiry-notification':
+      return (
+        `A new enquiry arrived through the Soccernity Contact Us form.
+
+` +
+        `Category: ${data.categoryLabel}
+
+` +
+        (data.link ? `Read it in the admin inbox: ${data.link}` : `Read it in the admin inbox.`)
+      );
     case 'login-lockout-notice':
       return (
         `Hi,
@@ -695,6 +722,14 @@ ${data.link}
 
 function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string, string>): string {
   switch (template) {
+    case 'contact-enquiry-notification':
+      return (
+        `<p>A new enquiry arrived through the Soccernity Contact Us form.</p>` +
+        `<p>Category: ${escapeHtml(data.categoryLabel)}</p>` +
+        (data.link
+          ? `<p><a href="${escapeHtml(data.link)}">Read it in the admin inbox</a>.</p>`
+          : `<p>Read it in the admin inbox.</p>`)
+      );
     case 'login-lockout-notice':
       return (
         `<p>Hi,</p>` +

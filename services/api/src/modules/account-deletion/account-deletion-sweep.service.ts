@@ -420,6 +420,13 @@ export class AccountDeletionSweepService {
       }
 
       await this.deleteBehaviouralRows(tx, userId);
+      // B-046 (Decision Log #440, #444): the Contact Us enquiries this user sent while signed in go with the
+      // account -- EXCEPT an escalated one (escalatedReportId set), which became (or sits beside) a report or
+      // case record and follows that record's retention instead. The escalated ones are what is left, and
+      // 'ContactEnquiry.user' is classed as content in anonymized-row-purge.references.ts, so one blocks the
+      // purge of this row exactly like a report does. Deliberately NOT in deleteBehaviouralRows: a
+      // report-held account is minimised, not erased, and keeps what a case may need.
+      await tx.contactEnquiry.deleteMany({ where: { userId, escalatedReportId: null } });
       // backend/w14-post-media-pipeline (Decision Log #419 item 9): the files this user uploaded for posts
       // and contest entries go with the account. The rows are deleted here, their URLs are removed from
       // the (surviving, #341) posts, and the stored objects are removed after the commit below.
