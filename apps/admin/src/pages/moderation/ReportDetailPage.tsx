@@ -126,6 +126,12 @@ export default function ReportDetailPage() {
     setReport((prev) => (prev ? { ...prev, holds: mergeHolds(prev.holds, holds) } : prev));
   }
 
+  // A lifted hold is no longer active, so it leaves the hold-active row.
+  function handleHoldsLifted(lifted: HoldView[]) {
+    const gone = new Set(lifted.map((h) => h.id));
+    setReport((prev) => (prev ? { ...prev, holds: (prev.holds ?? []).filter((h) => !gone.has(h.id)) } : prev));
+  }
+
   if (loadState === "loading") {
     return (
       <>
@@ -182,7 +188,7 @@ export default function ReportDetailPage() {
       <div className="mod-page">
         {backLink}
 
-        <HoldStatus holds={report.holds} />
+        <HoldStatus holds={report.holds} onLifted={handleHoldsLifted} />
 
         <div className="mod-card">
           <h2 className="mod-card__title">Reported content</h2>
