@@ -227,13 +227,18 @@ describe('reads', () => {
 
   it('resolveAccountHold: an admin hold wins and the reports are never read', async () => {
     const handle = db({ holds: [{ id: 'l', type: 'legal_hold', reportId: null, expiresAt: null }], reports: [report({})] });
-    expect(await resolveAccountHold(handle, 'u1', now, CFG)).toEqual({ type: 'legal_hold', kind: 'admin' });
+    expect(await resolveAccountHold(handle, 'u1', now, CFG)).toEqual({ type: 'legal_hold', kind: 'admin', holdId: 'l', reportId: null });
     expect((handle as never as { $queryRaw: jest.Mock }).$queryRaw).not.toHaveBeenCalled();
   });
 
   it('resolveAccountHold: with no admin hold it falls back to the report rule, and says kind=report', async () => {
     const rows = [{ status: 'open', appealStatus: null, reviewedAt: null, appealReviewedAt: null, isReporter: false, isSubject: true }];
-    expect(await resolveAccountHold(db({ reports: rows }), 'u1', now, CFG)).toEqual({ type: 'open_report', kind: 'report' });
+    expect(await resolveAccountHold(db({ reports: rows }), 'u1', now, CFG)).toEqual({
+      type: 'open_report',
+      kind: 'report',
+      holdId: null,
+      reportId: null,
+    });
   });
 
   it('resolveAccountHold: nothing holds it -> null', async () => {

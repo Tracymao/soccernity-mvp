@@ -194,6 +194,10 @@ export interface ResolvedHold {
   type: HoldType;
   /** 'admin' = an AccountHold row (held in full); 'report' = derived from Report (minimised). */
   kind: 'admin' | 'report';
+  /** backend/b045-held-list-hold-ids: the AccountHold id when kind is 'admin' (the one `type` comes from), else null. */
+  holdId: string | null;
+  /** That AccountHold's reportId when kind is 'admin' (may itself be null), else null. */
+  reportId: string | null;
 }
 
 /**
@@ -203,8 +207,8 @@ export interface ResolvedHold {
  */
 export async function resolveAccountHold(db: Db, userId: string, now: Date, cfg: HoldRuleConfig): Promise<ResolvedHold | null> {
   const admin = await findActiveAccountHold(db, userId, now);
-  if (admin) return { type: admin.type, kind: 'admin' };
+  if (admin) return { type: admin.type, kind: 'admin', holdId: admin.id, reportId: admin.reportId };
   const reports = await findInvolvedReports(db, userId);
   const type = strongestReportHold(reports, now, cfg);
-  return type ? { type, kind: 'report' } : null;
+  return type ? { type, kind: 'report', holdId: null, reportId: null } : null;
 }

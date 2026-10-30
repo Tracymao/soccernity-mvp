@@ -36,6 +36,8 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
     banterRoomMember: { deleteMany: jest.fn() },
     communityGroupMember: { deleteMany: jest.fn() },
     grassrootsTeam: { updateMany: jest.fn() },
+    // B-139: anonymizeUser deletes the user's RevokedUsername records whose hold is already over.
+    revokedUsername: { deleteMany: jest.fn() },
     $executeRaw: jest.fn().mockResolvedValue(0),
     // B-044: admin holds (none by default) and the reports involving the user (findInvolvedReports).
     accountHold: { findMany: jest.fn().mockResolvedValue([]) },
@@ -70,6 +72,27 @@ describe('AccountDeletionSweepService', () => {
   });
 
   // B-043 (Decision Log #375): anonymizedAt is what the 30-day purge counts from.
+  describe('anonymizeUser revoked-username records (B-139)', () => {
+    it('deletes the user\'s records whose hold has passed, inside the anonymising transaction, and leaves a running hold', async () => {
+      const prisma = buildPrismaMock();
+      const now = new Date('2026-11-01T00:00:00.000Z');
+
+      await new AccountDeletionSweepService(prisma).anonymizeUser('user-1', false, now);
+
+      // `lte now`: a record whose holdUntil is in the future is NOT matched, so it stays.
+      expect(prisma.revokedUsername.deleteMany).toHaveBeenCalledTimes(1);
+      expect(prisma.revokedUsername.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1', holdUntil: { lte: now } } });
+      const tx = (prisma as unknown as { $transaction: jest.Mock }).$transaction;
+      expect(tx).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not touch the records of a held (minimised) account: minimiseHeldUser does not anonymise', async () => {
+      const prisma = buildPrismaMock();
+      await new AccountDeletionSweepService(prisma).minimiseHeldUser('user-1');
+      expect(prisma.revokedUsername.deleteMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('anonymizeUser anonymizedAt', () => {
     const updateData = (prisma: PrismaService) => (prisma.user.update as jest.Mock).mock.calls[0][0].data;
 
@@ -414,6 +437,93 @@ describe('AccountDeletionSweepService', () => {
       expect(out[0]).toEqual(
         expect.objectContaining({ userId: 'legal', displayName: 'L', email: 'l@x.com', heldSince: expect.any(Date), daysHeld: expect.any(Number) }),
       );
+      // backend/b045-held-list-hold-ids: ids to lift an admin hold; both null for a report-derived hold.
+      expect(out.map((o) => [o.userId, o.holdId, o.reportId])).toEqual([
+        ['legal', 'h1', 'r'],
+        ['bad', 'h2', 'r'],
+        ['post', null, null],
+        ['win', null, null],
+      ]);
+    });
+
+    describe('hold ids (backend/b045-held-list-hold-ids)', () => {
+      const pendingAt = new Date('2026-01-01T00:00:00.000Z');
+      const row = (id: string) => ({ id, displayName: id, email: `${id}@x.com`, pendingDeletionAt: pendingAt });
+
+      it('a legal hold: holdId and reportId of that hold', async () => {
+        const prisma = buildPrismaMock();
+        (prisma.user.findMany as jest.Mock).mockResolvedValue([row('u')]);
+        (prisma.accountHold.findMany as jest.Mock).mockResolvedValue([
+          { id: 'legal-1', type: 'legal_hold', reportId: 'rep-1', expiresAt: null },
+        ]);
+        const [item] = await new AccountDeletionSweepService(prisma).listStalledHolds(90, now);
+        expect(item).toMatchObject({ holdType: 'legal_hold', isAdminHold: true, holdId: 'legal-1', reportId: 'rep-1' });
+      });
+
+      it('a bad-faith hold: holdId and reportId of that hold', async () => {
+        const prisma = buildPrismaMock();
+        (prisma.user.findMany as jest.Mock).mockResolvedValue([row('u')]);
+        (prisma.accountHold.findMany as jest.Mock).mockResolvedValue([
+          { id: 'bad-1', type: 'bad_faith', reportId: 'rep-2', expiresAt: new Date('2027-06-01T00:00:00.000Z') },
+        ]);
+        const [item] = await new AccountDeletionSweepService(prisma).listStalledHolds(90, now);
+        expect(item).toMatchObject({ holdType: 'bad_faith', isAdminHold: true, holdId: 'bad-1', reportId: 'rep-2' });
+      });
+
+      it('an admin hold with no report keeps reportId null but still has a holdId', async () => {
+        const prisma = buildPrismaMock();
+        (prisma.user.findMany as jest.Mock).mockResolvedValue([row('u')]);
+        (prisma.accountHold.findMany as jest.Mock).mockResolvedValue([
+          { id: 'legal-2', type: 'legal_hold', reportId: null, expiresAt: null },
+        ]);
+        const [item] = await new AccountDeletionSweepService(prisma).listStalledHolds(90, now);
+        expect(item).toMatchObject({ isAdminHold: true, holdId: 'legal-2', reportId: null });
+      });
+
+      it('a report-derived hold: both ids null, even when the user once had a lifted admin hold', async () => {
+        const prisma = buildPrismaMock({ held: true });
+        (prisma.user.findMany as jest.Mock).mockResolvedValue([row('u')]);
+        // the active-hold query filters lifted/expired in SQL, so a lifted hold never comes back
+        (prisma.accountHold.findMany as jest.Mock).mockResolvedValue([]);
+        const [item] = await new AccountDeletionSweepService(prisma).listStalledHolds(90, now);
+        expect(item).toMatchObject({ holdType: 'open_report', isAdminHold: false, holdId: null, reportId: null });
+      });
+
+      it('several admin holds: the ids come from the strongest one (legal before bad faith), the same one holdType comes from', async () => {
+        const prisma = buildPrismaMock();
+        (prisma.user.findMany as jest.Mock).mockResolvedValue([row('u')]);
+        (prisma.accountHold.findMany as jest.Mock).mockResolvedValue([
+          { id: 'bad-9', type: 'bad_faith', reportId: 'rep-bad', expiresAt: new Date('2027-06-01T00:00:00.000Z') },
+          { id: 'legal-9', type: 'legal_hold', reportId: 'rep-legal', expiresAt: null },
+        ]);
+        const [item] = await new AccountDeletionSweepService(prisma).listStalledHolds(90, now);
+        expect(item).toMatchObject({ holdType: 'legal_hold', holdId: 'legal-9', reportId: 'rep-legal' });
+      });
+
+      it('an admin hold beats an open report on the same account, and its ids are returned', async () => {
+        const prisma = buildPrismaMock({ held: true });
+        (prisma.user.findMany as jest.Mock).mockResolvedValue([row('u')]);
+        (prisma.accountHold.findMany as jest.Mock).mockResolvedValue([
+          { id: 'bad-3', type: 'bad_faith', reportId: 'rep-3', expiresAt: new Date('2027-06-01T00:00:00.000Z') },
+        ]);
+        const [item] = await new AccountDeletionSweepService(prisma).listStalledHolds(90, now);
+        expect(item).toMatchObject({ holdType: 'bad_faith', isAdminHold: true, holdId: 'bad-3', reportId: 'rep-3' });
+      });
+
+      it('changes nothing else about an item: same keys plus the two ids, same order', async () => {
+        const prisma = buildPrismaMock();
+        (prisma.user.findMany as jest.Mock).mockResolvedValue([row('b'), row('a')]);
+        (prisma.accountHold.findMany as jest.Mock).mockResolvedValue([
+          { id: 'h', type: 'legal_hold', reportId: 'r', expiresAt: null },
+        ]);
+        const out = await new AccountDeletionSweepService(prisma).listStalledHolds(90, now);
+        expect(out.map((o) => o.userId)).toEqual(['b', 'a']);
+        expect(Object.keys(out[0]).sort()).toEqual(
+          ['daysHeld', 'displayName', 'email', 'heldSince', 'holdId', 'holdType', 'isAdminHold', 'reportId', 'userId'].sort(),
+        );
+        expect(out[0].heldSince).toEqual(new Date('2026-01-31T00:00:00.000Z'));
+        expect(out[0].daysHeld).toBe(304);
+      });
     });
   });
 
