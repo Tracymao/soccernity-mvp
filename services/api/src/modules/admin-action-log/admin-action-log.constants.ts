@@ -37,6 +37,13 @@ export const ADMIN_ACTION_LOG_ACTIONS = {
   ACCOUNT_HOLD_BAD_FAITH_PLACED: 'account_hold.bad_faith_placed',
   ACCOUNT_HOLD_LEGAL_PLACED: 'account_hold.legal_hold_placed',
   ACCOUNT_HOLD_LIFTED: 'account_hold.lifted',
+  // /admin/contact-enquiries (backend/w7-contact-enquiry-admin-escalate, B-046 part B, Decision Log #444 / #445).
+  // targetType 'contact_enquiry'. Handled / reopened are written when the status actually changes; escalated is
+  // written in the SAME transaction as the Report it creates, and its notes carry the report id, the severity,
+  // the minor flag and the admin's REASON (never the enquirer's text).
+  CONTACT_ENQUIRY_HANDLED: 'contact_enquiry.handled',
+  CONTACT_ENQUIRY_REOPENED: 'contact_enquiry.reopened',
+  CONTACT_ENQUIRY_ESCALATED: 'contact_enquiry.escalated',
   // Reserved, NOT yet wired to a real call site — no AdminUser
   // role-change endpoint exists anywhere in this codebase yet
   // (grep-confirmed; no branch/PR for one either, at the time this
@@ -79,6 +86,7 @@ export const ADMIN_ACTION_LOG_TARGET_TYPES = {
   USER: 'user',
   CONTEST_CYCLE: 'contest_cycle',
   POST_MEDIA: 'post_media',
+  CONTACT_ENQUIRY: 'contact_enquiry',
 } as const;
 
 export type AdminActionLogTargetType =

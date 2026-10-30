@@ -28,15 +28,42 @@ import {
   APPEAL_WINDOW_CLOSED_CODE,
   CHILD_SAFETY_VETTING_REQUIRED_CODE,
   DEFAULT_REPORT_SEVERITY,
+  ENQUIRY_REPORT_TARGET_TYPE,
   MODERATION_DEFAULT_PAGE_SIZE,
   MODERATION_MAX_PAGE_SIZE,
+  REPORT_SOURCE_CONTACT_ENQUIRY,
   ROOM_DEACTIVATED_ACTION,
   ReportAction,
 } from './moderation.constants';
 
+// B-046 part B: a report made from a Contact Us enquiry carries `source: 'contact_enquiry'` (the key is ABSENT on
+// every other report, so existing response shapes are unchanged).
+export type ReportWithSource = Report & { source?: typeof REPORT_SOURCE_CONTACT_ENQUIRY };
+
 export interface ReportListPage {
-  items: Report[];
+  items: ReportWithSource[];
   nextCursor: string | null;
+}
+
+// The enquiry behind an 'enquiry' report, for the report detail. Name and email are what the sender typed.
+export interface ReportContactEnquiryView {
+  id: string;
+  name: string;
+  email: string;
+  category: string;
+  subject: string;
+  message: string;
+  status: string;
+  createdAt: Date;
+  userId: string | null;
+}
+
+export type ReportDetail = ReportWithSource & { contactEnquiry?: ReportContactEnquiryView | null };
+
+function withSourceHint(report: Report): ReportWithSource {
+  return report.targetType === ENQUIRY_REPORT_TARGET_TYPE
+    ? { ...report, source: REPORT_SOURCE_CONTACT_ENQUIRY }
+    : report;
 }
 
 // Build Plan Section 4.8 (Admin Service) + Section 8.4 (Moderation &
@@ -361,8 +388,9 @@ export class ModerationService {
     });
 
     const hasMore = rows.length > limit;
-    const items = hasMore ? rows.slice(0, limit) : rows;
-    const last = items[items.length - 1];
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const last = page[page.length - 1];
+    const items = page.map(withSourceHint);
     const nextCursor = hasMore && last ? encodeModerationCursor({ createdAt: last.createdAt, id: last.id }) : null;
 
     return { items, nextCursor };
@@ -390,11 +418,32 @@ export class ModerationService {
   // "direct access" backstop, matching actionReport/decideAppeal's own
   // reasoning.
   // -------------------------------------------------------------------
-  async getReportById(reportId: string, adminId: string): Promise<Report> {
+  async getReportById(reportId: string, adminId: string): Promise<ReportDetail> {
     const report = await this.assertReportExists(reportId);
 
     if (report.concernsMinor) {
       await this.assertChildSafetyVetted(adminId);
+    }
+
+    // B-046 part B: an 'enquiry' report loads with a source hint and the enquiry it came from (null if that
+    // enquiry has since been deleted, which RESTRICT should prevent). No reported user exists for it, so no
+    // reported-user data is attached.
+    if (report.targetType === ENQUIRY_REPORT_TARGET_TYPE) {
+      const contactEnquiry = await this.prisma.contactEnquiry.findUnique({
+        where: { id: report.targetId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          category: true,
+          subject: true,
+          message: true,
+          status: true,
+          createdAt: true,
+          userId: true,
+        },
+      });
+      return { ...withSourceHint(report), contactEnquiry };
     }
 
     return report;

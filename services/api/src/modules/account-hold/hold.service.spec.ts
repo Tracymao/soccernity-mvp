@@ -275,3 +275,29 @@ describe('HoldService.liftHold', () => {
     expect(prisma.adminActionLog.create).not.toHaveBeenCalled();
   });
 });
+
+// backend/w7-contact-enquiry-admin-escalate (B-046 part B): a report made from a Contact Us enquiry has no
+// reported user and no reporter account, so neither place route may create a hold for it.
+describe('HoldService - enquiry reports (hold_not_applicable)', () => {
+  const enquiryReport = { id: 'r1', reporterId: null, targetType: 'enquiry', targetId: 'e1' };
+
+  it('refuses a bad-faith hold with the coded 409 and writes nothing', async () => {
+    const prisma = buildPrisma();
+    prisma.report.findUnique.mockResolvedValue(enquiryReport);
+    await expect(new HoldService(asPrisma(prisma)).placeBadFaith('r1', 'admin-1', REASON, NOW)).rejects.toMatchObject({
+      response: { code: HOLD_ERROR_CODES.HOLD_NOT_APPLICABLE },
+    });
+    expect(prisma.accountHold.create).not.toHaveBeenCalled();
+    expect(prisma.adminActionLog.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses a legal hold with the coded 409 and writes nothing - even if a (never expected) reporterId were set', async () => {
+    const prisma = buildPrisma();
+    prisma.report.findUnique.mockResolvedValue({ ...enquiryReport, reporterId: 'rep-1' });
+    prisma.user.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => ({ id: where.id, accountStatus: 'active' }));
+    await expect(new HoldService(asPrisma(prisma)).placeLegalHold('r1', 'admin-1', REASON, NOW)).rejects.toMatchObject({
+      response: { code: HOLD_ERROR_CODES.HOLD_NOT_APPLICABLE },
+    });
+    expect(prisma.accountHold.create).not.toHaveBeenCalled();
+  });
+});

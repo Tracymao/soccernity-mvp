@@ -1,10 +1,10 @@
-# contact (B-046, part A)
+# contact (B-046, parts A and B)
 
 The public **Contact Us** form: `POST /contact`, its storage, rate limits, the support notification and the
 retention job. Decision Log #440 (retention, the founder's own decision) and #444 (the escalate action), and
-the founder decisions of 2026-10-30. **Part B is not built here:** the admin inbox (list, mark handled,
-escalate an enquiry into a report). The columns it will write (`status`, `handledAt`, `handledByAdminId`,
-`escalatedReportId`) already exist so part B needs no second migration.
+the founder decisions of 2026-10-30. **Part B (the admin inbox: list, open, mark handled, escalate an enquiry into
+a report) is the last section of this file** (`backend/w7-contact-enquiry-admin-escalate`). The columns it writes
+(`status`, `handledAt`, `handledByAdminId`, `escalatedReportId`) already existed, so it needed no migration.
 
 ## The model
 
@@ -104,7 +104,72 @@ a narrow, commented exemption there (`CONTACT_NOT_YET_IN_RENDER`). Follow-up: ad
 
 ## Not built / follow-ups
 
-- Part B: the admin inbox, "mark handled", and the escalate action (needs a design; no Figma frames exist).
-- The `/contact-enquiries` admin path is a proposal.
+- The `/contact-enquiries` admin path in the support email is a proposal (the `apps/admin` screens do not exist).
 - The privacy-policy wording is a separate drafting PR (Part C row 42).
 - No `apps/web` page is wired to this endpoint yet.
+
+## Part B: the admin inbox (`backend/w7-contact-enquiry-admin-escalate`)
+
+Decision Log #444 (escalate) and #445 (build defaults), founder decisions 2026-10-30. No `apps/admin` screens yet
+(the frames are `docs/figma-admin-contact-enquiries-report.md`). All four routes sit on
+`ContactEnquiryAdminController`: `AdminJwtAuthGuard` + `AdminRolesGuard('moderator', 'superadmin')` (401 with no
+token or a User token, 403 for an editor).
+
+| Route | Does |
+|---|---|
+| `GET /admin/contact-enquiries?status=&category=&cursor=&limit=` | newest first, keyset cursor, default 20 / max 50; `status` is `new` or `handled`, `category` one of the six; anything else is a 400. Items: `id, name, email, category, subject, status, createdAt, lastMessageAt, handledAt, handledByAdminId, submitter ('signed_in' or 'guest'), hasEscalation`. **No message text in the list.** |
+| `GET /admin/contact-enquiries/:id` | the list fields plus `message`, `userId`, `escalatedReportId`. 404 if unknown. |
+| `PATCH /admin/contact-enquiries/:id/handled` `{ handled }` | `true` = `status` handled, `handledAt` now, `handledByAdminId` the admin; `false` = reopen, all three cleared together (the CHECK needs that). **Idempotent**: setting the state it is already in writes and audits nothing. |
+| `POST /admin/contact-enquiries/:id/escalate` `{ severity, concernsMinor, reason }` | `201 { enquiry, report }`. See below. |
+
+Audit (`AdminActionLog`, targetType `contact_enquiry`): `contact_enquiry.handled`, `.reopened` (only when the
+status really changes, in the same transaction) and `.escalated` (in the same transaction as the Report; notes =
+report id, severity, minor flag and the admin's reason, never the enquirer's text).
+
+### Escalate
+
+One transaction. `severity` (low / medium / high / critical) and `concernsMinor` are the admin's own judgment and
+required; `reason` is 10 to 500 characters (the existing hold-reason DTO pattern, trimmed; spaces only is a coded
+400 `escalation_reason_invalid`) and goes to the audit row, not to the Report.
+
+It creates a **`Report`** with `targetType: 'enquiry'`, `targetId` = the enquiry id, `reporterId: null`,
+`reporterContactName` / `reporterContactEmail` copied from the enquiry, `status: 'open'`, the admin's `severity`
+and `concernsMinor`, and `reason` = "Contact enquiry (<category label>) - <subject>: <message>" capped at 500
+characters with an ellipsis (the full message stays on the enquiry). It sets `escalatedReportId` with a guarded
+`updateMany` (`escalatedReportId IS NULL`), so two simultaneous escalations produce one Report (one 201, one 409
+`contact_enquiry_already_escalated`) and the loser's Report is rolled back. A second escalation of the same
+enquiry is the same 409.
+
+**It does not touch `Report.escalatedAt` / `escalatedByAdminId` / `escalationNotes` / `escalatedToAuthority`:**
+those mean escalation to a child-safety lead or an authority, a different act.
+
+Order of refusals (the moderation module's): reason 400, enquiry 404, then, **only when `concernsMinor` is true**,
+the child-safety-vetting gate (coded 403 `child_safety_vetting_required`, any role), then the 409.
+
+`'enquiry'` can be created ONLY here: it is deliberately not in `REPORT_TARGET_TYPES`, so `POST /reports` and
+`POST /reports/public` answer 400 for it.
+
+### The report in the moderation queue
+
+* `GET /admin/moderation/reports` items and `GET /admin/moderation/reports/:id` carry `source: 'contact_enquiry'`
+  for such a report (the key is absent on every other report). The detail also carries `contactEnquiry` (id, name,
+  email, category, subject, message, status, createdAt, userId).
+* It has **no reported user**: `resolveReportedUserId` returns null for it, so closing it (dismiss or any action)
+  creates no `Notification` row. The existing concerns-a-minor gate applies to it like any report (hidden from a
+  non-vetted admin's queue, 403 on direct access).
+* **It can never create a hold.** `findInvolvedReports` matches on `reporterId`, a `user` target or a post / comment
+  author, none of which an enquiry report has, so no report-based hold arises (open, appeal window or post
+  closure). `HoldService` refuses both admin place routes for it with a coded 409 `hold_not_applicable`. Proven
+  in `test/contact-enquiry-admin.e2e-spec.ts` even for a signed-in enquirer who is a `pending_deletion` account
+  sharing the contact email.
+* An escalated enquiry is never deleted by the 12-month job and blocks the purge of its submitter's row (part A).
+
+### Flagged, not decided
+
+* **The existing outcome email (#143) reaches `reporterContactEmail`.** Closing an enquiry report with an action
+  other than "dismissed" sends the public-reporter outcome email to the address the enquirer typed, which #445
+  notes may not be theirs. Not changed here.
+* A non-vetted admin still sees an enquiry that was escalated with `concernsMinor: true` in this inbox (the
+  gate is on the Report, not on the enquiry). Whether it should be hidden is the open question the Figma pass
+  also records.
+* The actions that make sense on an enquiry report (only "dismissed" is drawn) are not restricted server-side.
