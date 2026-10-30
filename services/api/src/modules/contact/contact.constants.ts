@@ -26,14 +26,15 @@ export const CONTACT_ENQUIRY_STATUSES = ['new', 'handled'] as const;
 
 // Field limits. NOT invented: the Contact Us frames draw no character counter (read from the live Figma frame
 // 6113:14053 -- Name, Email, "Choose a category", Email Subject and the message box, no counter anywhere).
-//   message  500  = CreatePublicReportDto.reason (the public route this one is modelled on)
+//   message  3000 = MESSAGE_TEXT_MAX_LENGTH (direct messages), the largest free-text user-message limit in the repo
+//                   (founder decision 2026-10-30; it was 500, taken from CreatePublicReportDto.reason)
 //   name     200  = ChangeGuardianEmailDto's guardian name, the one free-text name field with a stated limit
 //   email    254  = the same DTO's email limit (the RFC 5321 maximum)
 //   subject  200  = no precedent for a subject line exists; the name limit was reused. Veto-able.
 export const CONTACT_NAME_MAX_LENGTH = 200;
 export const CONTACT_EMAIL_MAX_LENGTH = 254;
 export const CONTACT_SUBJECT_MAX_LENGTH = 200;
-export const CONTACT_MESSAGE_MAX_LENGTH = 500;
+export const CONTACT_MESSAGE_MAX_LENGTH = 3000;
 
 // Defaults for the configuration below; each is read through ConfigService, falling back here.
 export const DEFAULT_SUPPORT_INBOX_EMAIL = 'support@soccernity.com';

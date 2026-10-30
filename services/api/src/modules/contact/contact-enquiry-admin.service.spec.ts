@@ -316,8 +316,8 @@ describe('buildEnquiryReportReason', () => {
     expect(buildEnquiryReportReason('data', 'S', 'M')).toBe('Contact enquiry (Data) - S: M');
   });
 
-  it('is capped at 500 characters with an ellipsis, never longer', () => {
-    const text = buildEnquiryReportReason('data', 'S'.repeat(200), 'M'.repeat(500));
+  it('is capped at 500 characters with an ellipsis, never longer, even for a 3000-character message', () => {
+    const text = buildEnquiryReportReason('data', 'S'.repeat(200), 'M'.repeat(3000));
     expect(text).toHaveLength(500);
     expect(text.endsWith('…')).toBe(true);
   });
