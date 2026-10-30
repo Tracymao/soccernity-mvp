@@ -1700,8 +1700,8 @@ model ContactEnquiry {
   id                String     @id @default(uuid())
   name              String
   email             String
-  // technical_issues | editorial_complaints | data | livescores_issues | suggestions | enquiries_feedback
-  // (the six options of the Figma Contact Category Dropdown). CHECK-constrained in the migration.
+  // technical_issues | editorial_complaints | data | suggestions | enquiries | feedback
+  // (the six Contact Us categories, founder decision 2026-10-30). CHECK-constrained in the migration.
   category          String
   subject           String
   message           String

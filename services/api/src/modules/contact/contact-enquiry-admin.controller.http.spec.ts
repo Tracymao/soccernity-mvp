@@ -89,7 +89,7 @@ describe('Contact enquiry admin routes (HTTP layer)', () => {
       expect(service.list).toHaveBeenCalledWith(expect.objectContaining({ status: 'new', category: 'data', limit: 5, cursor: 'abc' }));
     });
 
-    it.each(['status=archived', 'category=nope', 'limit=0', 'limit=51', 'limit=abc', 'extra=1'])('400s on %s', async (qs) => {
+    it.each(['status=archived', 'category=nope', 'category=livescores_issues', 'category=enquiries_feedback', 'limit=0', 'limit=51', 'limit=abc', 'extra=1'])('400s on %s', async (qs) => {
       as('moderator');
       await request(app.getHttpServer()).get(`/admin/contact-enquiries?${qs}`).expect(400);
     });

@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -130,7 +132,7 @@ describe('Contact Us e2e: POST /contact, retention and account deletion, against
       expect(rows.map((r) => r.userId)).toEqual([active.id, null, null]);
     });
 
-    it.each(['technical_issues', 'editorial_complaints', 'data', 'livescores_issues', 'suggestions', 'enquiries_feedback'])(
+    it.each(['technical_issues', 'editorial_complaints', 'data', 'suggestions', 'enquiries', 'feedback'])(
       'accepts the category %s, and refuses anything else with nothing stored',
       async (category) => {
         await submit(body({ category })).expect(201);
@@ -140,14 +142,55 @@ describe('Contact Us e2e: POST /contact, retention and account deletion, against
 
     it('refuses an unknown category, a control character and an over-long message, storing nothing', async () => {
       await submit(body({ category: 'billing' })).expect(400);
+      await submit(body({ category: 'livescores_issues' })).expect(400);
+      await submit(body({ category: 'enquiries_feedback' })).expect(400);
       await submit(body({ name: 'bad\u0000name' })).expect(400);
       await submit(body({ message: 'a'.repeat(501) })).expect(400);
       expect(await prisma().contactEnquiry.count()).toBe(0);
     });
 
+    it('migration 20261104090000 remaps the retired keys before it replaces the CHECK (rolled back afterwards)', async () => {
+      const sql = fs
+        .readFileSync(path.join(__dirname, '../prisma/migrations/20261104090000_contact_enquiry_categories/migration.sql'), 'utf8')
+        .split(String.fromCharCode(10))
+        .filter((l) => !l.trim().startsWith('--'))
+        .join(' ');
+      const statements = sql.split(';').map((x) => x.trim()).filter(Boolean);
+      const rollback = new Error('rollback');
+      const seen: Record<string, string> = {};
+      await prisma()
+        .$transaction(async (tx) => {
+          // put the schema back to the pre-migration state inside this transaction, then seed old keys
+          await tx.$executeRawUnsafe('ALTER TABLE "ContactEnquiry" DROP CONSTRAINT "ContactEnquiry_category_check"');
+          await tx.$executeRawUnsafe(
+            `ALTER TABLE "ContactEnquiry" ADD CONSTRAINT "ContactEnquiry_category_check" CHECK ("category" IN ('technical_issues', 'editorial_complaints', 'data', 'livescores_issues', 'suggestions', 'enquiries_feedback'))`,
+          );
+          for (const [id, category] of [
+            ['mig-1', 'livescores_issues'],
+            ['mig-2', 'enquiries_feedback'],
+            ['mig-3', 'technical_issues'],
+          ]) {
+            await tx.$executeRawUnsafe(
+              `INSERT INTO "ContactEnquiry" ("id","name","email","category","subject","message") VALUES ('${id}','n','e@example.com','${category}','s','m')`,
+            );
+          }
+          for (const statement of statements) await tx.$executeRawUnsafe(statement);
+          const rows = await tx.contactEnquiry.findMany({ where: { id: { in: ['mig-1', 'mig-2', 'mig-3'] } } });
+          for (const r of rows) seen[r.id] = r.category;
+          throw rollback;
+        })
+        .catch((e) => {
+          if (e !== rollback) throw e;
+        });
+      expect(seen).toEqual({ 'mig-1': 'data', 'mig-2': 'enquiries', 'mig-3': 'technical_issues' });
+    });
+
     it('the database itself refuses an unknown category, an unknown status and a half-handled enquiry (CHECKs)', async () => {
       const base = { name: 'n', email: 'e@example.com', category: 'data', subject: 's', message: 'm' };
       await expect(prisma().contactEnquiry.create({ data: { ...base, category: 'billing' } })).rejects.toThrow(/category_check/);
+      // the two retired keys are refused by the CHECK as well
+      await expect(prisma().contactEnquiry.create({ data: { ...base, category: 'livescores_issues' } })).rejects.toThrow(/category_check/);
+      await expect(prisma().contactEnquiry.create({ data: { ...base, category: 'enquiries_feedback' } })).rejects.toThrow(/category_check/);
       await expect(prisma().contactEnquiry.create({ data: { ...base, status: 'closed' } })).rejects.toThrow(/status_check/);
       await expect(prisma().contactEnquiry.create({ data: { ...base, handledAt: new Date() } })).rejects.toThrow(/handled_together_check/);
     });
@@ -206,13 +249,13 @@ describe('Contact Us e2e: POST /contact, retention and account deletion, against
 
   describe('support notification', () => {
     it('sends ONE email per enquiry, to support@soccernity.com, with the category label and NEVER the sender\'s text', async () => {
-      const b = body({ category: 'livescores_issues', subject: 'E2E-SECRET-SUBJECT' });
+      const b = body({ category: 'editorial_complaints', subject: 'E2E-SECRET-SUBJECT' });
       await submit(b).expect(201);
 
       expect(notify).toHaveBeenCalledTimes(1);
       const [to, label, link] = notify.mock.calls[0];
       expect(to).toBe('support@soccernity.com');
-      expect(label).toBe('Livescores issues');
+      expect(label).toBe('Editorial Complaints');
       const serialised = JSON.stringify([to, label, link]);
       for (const secret of [b.name as string, b.email as string, 'E2E-SECRET-SUBJECT', 'E2E-SECRET-MESSAGE']) {
         expect(serialised).not.toContain(secret);

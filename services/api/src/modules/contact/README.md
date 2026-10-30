@@ -17,8 +17,13 @@ be silently un-escalated, and a `User` row is never deleted from under an enquir
 `name` and `email` are what the sender **typed**, not a copy of the account's. `userId` is set only when the
 sender was signed in (see below).
 
-Categories (the six options of the Figma `Contact Category Dropdown`, `6130:14653`): `technical_issues`,
-`editorial_complaints`, `data`, `livescores_issues`, `suggestions`, `enquiries_feedback`.
+Categories (founder decision 2026-10-30, superseding the six-option list of Decision Log #445 (g) as first built
+in PR #552), in the order the form draws them: `technical_issues`, `editorial_complaints`, `data`, `suggestions`,
+`enquiries`, `feedback` (labels: Technical issues, Editorial Complaints, Data, Suggestions, Enquiries, Feedback).
+`livescores_issues` was removed (users cannot report on live scores: that data comes from a third-party service)
+and `enquiries_feedback` was split into `enquiries` and `feedback`. Migration
+`20261104090000_contact_enquiry_categories` maps old rows (`livescores_issues` -> `data`, `enquiries_feedback` ->
+`enquiries`) before it replaces the CHECK.
 
 ## `POST /contact`
 
@@ -39,13 +44,15 @@ The Contact Us frames draw **no character counter** (checked on the live frame `
 
 | field | max | taken from |
 |---|---|---|
-| message | 500 | `CreatePublicReportDto.reason` (the public route this one is modelled on) |
+| message | 3000 | `MESSAGE_TEXT_MAX_LENGTH`, the direct-message limit and the largest free-text user-message limit in the repo (founder decision 2026-10-30; it was 500) |
 | name | 200 | `ChangeGuardianEmailDto`'s name |
 | email | 254 | the same DTO's email limit |
 | subject | 200 | no precedent for a subject line; the name limit was reused. **Veto-able.** |
 
-500 characters is short for a free-form message; it is the only existing precedent, and raising it is a
-one-constant change (`CONTACT_MESSAGE_MAX_LENGTH`).
+The `message` column is plain `TEXT` (migration `20261103090000_add_contact_enquiry`): no length limit and no
+CHECK on it, so the 3000 limit lives only in the DTO (`CONTACT_MESSAGE_MAX_LENGTH`) and no migration was
+needed. The escalated Report's `reason` stays capped at 500 (`CONTACT_ENQUIRY_REPORT_REASON_MAX_LENGTH`), so a
+long message is truncated there; the full message stays on the linked enquiry, which the admin report view shows.
 
 ### Rate limits
 
@@ -63,8 +70,8 @@ one-constant change (`CONTACT_MESSAGE_MAX_LENGTH`).
 
 On each stored enquiry ONE email goes to `SUPPORT_INBOX_EMAIL` (default `support@soccernity.com`): the
 **category label and a link to the admin inbox, never the name, email, subject or message**. No
-acknowledgement goes to the enquirer. The link is `ADMIN_APP_BASE_URL` + `/contact-enquiries` (a **proposed**
-path, part B owns it); when `ADMIN_APP_BASE_URL` is unusable the email is still sent without a link. A send
+acknowledgement goes to the enquirer. The link is `ADMIN_APP_BASE_URL` + `/moderation/contact-enquiries` (the
+route in `apps/admin/src/app/routes.tsx`); when `ADMIN_APP_BASE_URL` is unusable the email is still sent without a link. A send
 failure never fails the submission (fire-and-forget, one warning with no personal data). Nothing in this
 module ever logs the message body.
 
@@ -104,7 +111,6 @@ a narrow, commented exemption there (`CONTACT_NOT_YET_IN_RENDER`). Follow-up: ad
 
 ## Not built / follow-ups
 
-- The `/contact-enquiries` admin path in the support email is a proposal (the `apps/admin` screens do not exist).
 - The privacy-policy wording is a separate drafting PR (Part C row 42).
 - No `apps/web` page is wired to this endpoint yet.
 

@@ -71,7 +71,7 @@ describe('Contact enquiry admin e2e (real Postgres)', () => {
       data: {
         name: `Sender ${n}`,
         email: `e2e-ce-sender-${n}-${tag()}@example.com`,
-        category: 'enquiries_feedback',
+        category: 'enquiries',
         subject: `Subject ${n}`,
         message: `Message ${n}`,
         createdAt,
@@ -146,6 +146,9 @@ describe('Contact enquiry admin e2e (real Postgres)', () => {
       expect(await ids('category=data&status=new')).toEqual([a.id]);
       await request(server()).get('/admin/contact-enquiries?status=archived').set(auth(mod.token)).expect(400);
       await request(server()).get('/admin/contact-enquiries?category=nope').set(auth(mod.token)).expect(400);
+      // the two retired keys are no longer accepted as filters
+      await request(server()).get('/admin/contact-enquiries?category=livescores_issues').set(auth(mod.token)).expect(400);
+      await request(server()).get('/admin/contact-enquiries?category=enquiries_feedback').set(auth(mod.token)).expect(400);
     });
 
     it('list items carry hasEscalation and the submitter kind but not the message; the detail carries the message', async () => {
@@ -214,7 +217,7 @@ describe('Contact enquiry admin e2e (real Postgres)', () => {
         reporterContactEmail: enquiry.email,
         targetType: 'enquiry',
         targetId: enquiry.id,
-        reason: 'Contact enquiry (Editorial complaints) - A subject: The full message.',
+        reason: 'Contact enquiry (Editorial Complaints) - A subject: The full message.',
         severity: 'critical',
         concernsMinor: false,
         status: 'open',
@@ -248,12 +251,16 @@ describe('Contact enquiry admin e2e (real Postgres)', () => {
       expect(await prisma().adminActionLog.count({ where: { action: ADMIN_ACTION_LOG_ACTIONS.CONTACT_ENQUIRY_ESCALATED } })).toBe(1);
     });
 
-    it('caps the Report reason at 500 characters for a long enquiry', async () => {
+    it('caps the Report reason at 500 characters for a long (3000-character) enquiry; the full message stays on the enquiry', async () => {
       const mod = await createAdmin('mod', 'moderator');
-      const enquiry = await seedEnquiry({ subject: 'S'.repeat(200), message: 'M'.repeat(500) });
+      const enquiry = await seedEnquiry({ subject: 'S'.repeat(200), message: 'M'.repeat(3000) });
       const res = await request(server()).post(`/admin/contact-enquiries/${enquiry.id}/escalate`).set(auth(mod.token)).send(escalateBody()).expect(201);
       const report = await prisma().report.findUniqueOrThrow({ where: { id: res.body.report.id } });
       expect(report.reason).toHaveLength(500);
+      const stored = await prisma().contactEnquiry.findUniqueOrThrow({ where: { id: enquiry.id } });
+      expect(stored.message).toHaveLength(3000);
+      const detail = await request(server()).get(`/admin/contact-enquiries/${enquiry.id}`).set(auth(mod.token)).expect(200);
+      expect(detail.body.message).toHaveLength(3000);
     });
 
     it('400s on invalid input and creates nothing; 404s for an unknown enquiry', async () => {
