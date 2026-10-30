@@ -248,12 +248,14 @@ describe('Contact enquiry admin e2e (real Postgres)', () => {
       expect(await prisma().adminActionLog.count({ where: { action: ADMIN_ACTION_LOG_ACTIONS.CONTACT_ENQUIRY_ESCALATED } })).toBe(1);
     });
 
-    it('caps the Report reason at 500 characters for a long enquiry', async () => {
+    it('caps the Report reason at 500 characters for a long enquiry (the full 3000-character message stays on the enquiry)', async () => {
       const mod = await createAdmin('mod', 'moderator');
-      const enquiry = await seedEnquiry({ subject: 'S'.repeat(200), message: 'M'.repeat(500) });
+      const enquiry = await seedEnquiry({ subject: 'S'.repeat(200), message: 'M'.repeat(3000) });
       const res = await request(server()).post(`/admin/contact-enquiries/${enquiry.id}/escalate`).set(auth(mod.token)).send(escalateBody()).expect(201);
       const report = await prisma().report.findUniqueOrThrow({ where: { id: res.body.report.id } });
       expect(report.reason).toHaveLength(500);
+      const stored = await prisma().contactEnquiry.findUniqueOrThrow({ where: { id: enquiry.id } });
+      expect(stored.message).toHaveLength(3000);
     });
 
     it('400s on invalid input and creates nothing; 404s for an unknown enquiry', async () => {
