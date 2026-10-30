@@ -50,6 +50,15 @@ export interface PurgeAnonymizedRowsResult {
   capped: boolean;
 }
 
+export interface CleanupRevokedUsernamesResult {
+  /** RevokedUsername ids deleted (their user is anonymised and their hold has passed). */
+  deletedIds: string[];
+  /** The delete failed for this record; retried on the next run. */
+  erroredIds: string[];
+  /** More due records existed than ANONYMIZED_PURGE_MAX_PER_RUN. */
+  capped: boolean;
+}
+
 type RowOutcome =
   | { outcome: 'purged'; reason: PurgeReason }
   | { outcome: 'kept'; blocker: string; kind: 'content' | 'anomaly' }
@@ -66,6 +75,19 @@ export class AnonymizedRowPurgeService {
   // that matters. 6-field cron (seconds first), the format @nestjs/schedule uses.
   @Cron('0 30 3 * * *')
   async runDailyPurge(): Promise<void> {
+    // B-139: the revoked-username cleanup runs FIRST so a record whose hold has ended is not what keeps an
+    // anonymised row alive. Its failure is isolated: it is logged and the purge still runs (the purge also
+    // deletes an expired record of the row it is examining, so the two cannot strand each other).
+    try {
+      const c = await this.cleanupRevokedUsernames();
+      this.logger.log(
+        `Revoked-username cleanup complete: deleted=${c.deletedIds.length} errored=${c.erroredIds.length} capped=${c.capped}`,
+      );
+    } catch (err) {
+      this.logger.error(
+        `Revoked-username cleanup failed (${err instanceof Error ? err.message : String(err)}); the purge still runs.`,
+      );
+    }
     const r = await this.purgeAnonymizedRows();
     const keptByBlocker = new Map<string, number>();
     for (const k of r.keptUserIds) keptByBlocker.set(k.blocker, (keptByBlocker.get(k.blocker) ?? 0) + 1);
@@ -77,6 +99,48 @@ export class AnonymizedRowPurgeService {
     for (const k of r.keptUserIds.filter((x) => x.kind === 'anomaly')) {
       this.logger.warn(`Anonymized-row purge: ${k.userId} is blocked by ${k.blocker}, a row the anonymiser should have removed.`);
     }
+  }
+
+  // B-139 (founder decision 2026-10-30). A RevokedUsername record is kept while its user's account exists
+  // and is deleted when the account has been anonymised (accountStatus 'deleted', anonymizedAt set) AND
+  // holdUntil has passed. anonymizeUser deletes the records whose hold is already over at anonymisation
+  // time; this deletes the ones whose hold was still running then, the first run after holdUntil. A record
+  // of an account that is NOT anonymised is never touched (the revoked user keeps being barred from the
+  // handle, UsernamePolicyService.assertAssignable). RevokedUsername has no foreign key, so the join to
+  // User is done in SQL. Oldest hold first, at most ANONYMIZED_PURGE_MAX_PER_RUN per run, each delete on
+  // its own so one failure does not stop the rest. Public so tests reach it; the cron is its only caller.
+  async cleanupRevokedUsernames(now: Date = new Date()): Promise<CleanupRevokedUsernamesResult> {
+    const due = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT r."id"
+      FROM "RevokedUsername" r
+      JOIN "User" u ON u."id" = r."userId"
+      WHERE u."accountStatus" = 'deleted'
+        AND u."anonymizedAt" IS NOT NULL
+        AND r."holdUntil" <= ${now}
+      ORDER BY r."holdUntil" ASC, r."id" ASC
+      LIMIT ${Prisma.raw(String(ANONYMIZED_PURGE_MAX_PER_RUN + 1))}
+    `;
+    const capped = due.length > ANONYMIZED_PURGE_MAX_PER_RUN;
+    const result: CleanupRevokedUsernamesResult = { deletedIds: [], erroredIds: [], capped };
+    if (capped) {
+      this.logger.log(
+        `Revoked-username cleanup: more than ${ANONYMIZED_PURGE_MAX_PER_RUN} records are due; processing the oldest ${ANONYMIZED_PURGE_MAX_PER_RUN}, the rest wait for the next run.`,
+      );
+    }
+    for (const { id } of due.slice(0, ANONYMIZED_PURGE_MAX_PER_RUN)) {
+      try {
+        // The hold condition is repeated in the DELETE so a record whose holdUntil was somehow moved later
+        // after the selection is not removed.
+        const r = await this.prisma.revokedUsername.deleteMany({ where: { id, holdUntil: { lte: now } } });
+        if (r.count === 1) result.deletedIds.push(id);
+      } catch (err) {
+        result.erroredIds.push(id);
+        this.logger.error(
+          `Revoked-username cleanup: record ${id} was NOT deleted (${err instanceof Error ? err.message : String(err)}); it will be retried.`,
+        );
+      }
+    }
+    return result;
   }
 
   async purgeAnonymizedRows(now: Date = new Date()): Promise<PurgeAnonymizedRowsResult> {
@@ -107,7 +171,7 @@ export class AnonymizedRowPurgeService {
     };
     for (const { id } of batch) {
       try {
-        const outcome = await this.purgeOne(id, cutoff);
+        const outcome = await this.purgeOne(id, cutoff, now);
         if (outcome.outcome === 'purged') {
           result.purgedUserIds.push(id);
           result.purgedReasons[id] = outcome.reason;
@@ -130,7 +194,7 @@ export class AnonymizedRowPurgeService {
   // reference) written between the check and the DELETE makes one of the two abort rather than slip
   // through. The DELETE is a deleteMany guarded on the same conditions, so it cannot remove a row that
   // stopped being eligible.
-  private async purgeOne(userId: string, cutoff: Date): Promise<RowOutcome> {
+  private async purgeOne(userId: string, cutoff: Date, now: Date): Promise<RowOutcome> {
     return this.prisma.$transaction(
       async (tx): Promise<RowOutcome> => {
         const user = await tx.user.findUnique({
@@ -140,6 +204,12 @@ export class AnonymizedRowPurgeService {
         if (!user || user.accountStatus !== 'deleted' || !user.anonymizedAt || user.anonymizedAt > cutoff) {
           return { outcome: 'skipped' };
         }
+
+        // B-139: this row is anonymised, so a RevokedUsername record of it whose hold is over is due for
+        // deletion whether or not today's cleanup reached it (it can have been capped). Deleting it here
+        // means the check below sees only records whose hold is STILL RUNNING, which block this run and are
+        // retried on the next one -- and a record is never left behind pointing at a purged row.
+        await tx.revokedUsername.deleteMany({ where: { userId, holdUntil: { lte: now } } });
 
         const blocker = await findFirstBlocker(tx, userId);
         if (blocker) return { outcome: 'kept', blocker: blocker.label, kind: blocker.kind };

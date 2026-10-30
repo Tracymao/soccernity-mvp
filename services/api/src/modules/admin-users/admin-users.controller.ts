@@ -41,6 +41,9 @@ export class AdminUsersController {
   }
 
   // Registered before ':id' routes; GET only, so no clash regardless.
+  // Each item carries holdType, isAdminHold and (backend/b045-held-list-hold-ids) holdId + reportId: the ids of
+  // the strongest admin hold, which PATCH /admin/moderation/holds/:holdId/lift needs; both null for a hold
+  // derived from a report (nothing to lift).
   @Get('held-investigations')
   async heldInvestigations(@Query() query: HeldInvestigationsQueryDto) {
     return this.adminUsersService.listStalledHolds(query.olderThanDays);

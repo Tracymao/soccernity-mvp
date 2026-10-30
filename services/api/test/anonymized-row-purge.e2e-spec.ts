@@ -1,9 +1,10 @@
 import { randomUUID } from 'crypto';
-import { INestApplication } from '@nestjs/common';
+import { ConflictException, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AppModule } from '../src/app.module';
 import { AccountDeletionSweepService } from '../src/modules/account-deletion/account-deletion-sweep.service';
 import { AnonymizedRowPurgeService } from '../src/modules/account-deletion/anonymized-row-purge.service';
+import { UsernamePolicyService } from '../src/modules/users/username-policy.service';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
 import { seedDob } from './dob-seed';
 
@@ -243,6 +244,147 @@ describe('AnonymizedRowPurgeService e2e: 30-day purge of anonymised User rows, a
       });
       const r = await purge.purgeAnonymizedRows(daysAfter(31));
       expect(r.keptUserIds).toEqual([{ userId: u.id, blocker: 'AdminActionLog.targetId', kind: 'content' }]);
+    });
+  });
+
+  // B-139 (founder decision 2026-10-30): a RevokedUsername record is kept while its user's account exists
+  // and deleted when the account is anonymised AND holdUntil has passed. Real Postgres, real sweep: the
+  // record has no foreign key to User, so only a database shows what survives which step.
+  describe('B-139: revoked-username records', () => {
+    const rev = (userId: string) =>
+      getTestPrismaClient().revokedUsername.findMany({ where: { userId }, orderBy: { username: 'asc' } });
+    const seedRevocation = (userId: string, username: string, holdUntil: Date) =>
+      getTestPrismaClient().revokedUsername.create({
+        data: { username, userId, revokedAt: new Date(holdUntil.getTime() - 30 * DAY), holdUntil },
+      });
+
+    it('anonymising with the hold already over deletes the record; a hold still running is kept', async () => {
+      const u = await seedPendingDeletion('rev-anon');
+      await seedRevocation(u.id, 'over_hold', new Date(T0.getTime() - DAY));
+      await seedRevocation(u.id, 'running_hold', daysAfter(10));
+
+      const r = await sweep.sweepPendingDeletions(T0);
+      expect(r.anonymizedUserIds).toContain(u.id);
+
+      expect((await rev(u.id)).map((x) => x.username)).toEqual(['running_hold']);
+    });
+
+    it('anonymising when the hold is over exactly now deletes it (the boundary is inclusive)', async () => {
+      const u = await seedPendingDeletion('rev-boundary');
+      await seedRevocation(u.id, 'boundary_hold', T0);
+      await sweep.sweepPendingDeletions(T0);
+      expect(await rev(u.id)).toEqual([]);
+    });
+
+    it('the cleanup keeps a running hold until holdUntil, then deletes it; running it again is a no-op', async () => {
+      const u = await anonymised('rev-cleanup');
+      const rec = await seedRevocation(u.id, 'held_name', daysAfter(10));
+
+      const early = await purge.cleanupRevokedUsernames(daysAfter(10, -1000));
+      expect(early.deletedIds).toEqual([]);
+      expect(await rev(u.id)).toHaveLength(1);
+
+      const due = await purge.cleanupRevokedUsernames(daysAfter(10));
+      expect(due.deletedIds).toEqual([rec.id]);
+      expect(await rev(u.id)).toEqual([]);
+
+      const again = await purge.cleanupRevokedUsernames(daysAfter(11));
+      expect(again).toEqual({ deletedIds: [], erroredIds: [], capped: false });
+    });
+
+    it("the cleanup leaves the records of accounts that are NOT anonymised alone, however old the hold is", async () => {
+      const prisma = getTestPrismaClient();
+      const active = await prisma.user.create({
+        data: { email: `e2e-rev-active-${randomUUID()}@example.com`, passwordHash: 'x', displayName: 'Active', accountStatus: 'active' },
+      });
+      const pending = await seedPendingDeletion('rev-pending');
+      const deactivated = await prisma.user.create({
+        data: { email: `e2e-rev-deact-${randomUUID()}@example.com`, passwordHash: 'x', displayName: 'Deact', accountStatus: 'deactivated' },
+      });
+      // 'deleted' but never stamped (anonymised before the column existed): also left alone.
+      const legacy = await prisma.user.create({
+        data: { email: `deleted-${randomUUID()}@deleted.soccernity.internal`, passwordHash: '!anonymized', displayName: '[deleted user]', accountStatus: 'deleted', anonymizedAt: null },
+      });
+      const longAgo = new Date(T0.getTime() - 400 * DAY);
+      for (const [n, id] of [['a', active.id], ['p', pending.id], ['d', deactivated.id], ['l', legacy.id]] as const) {
+        await seedRevocation(id, `old_hold_${n}`, longAgo);
+      }
+
+      const r = await purge.cleanupRevokedUsernames(daysAfter(3650));
+
+      expect(r.deletedIds).toEqual([]);
+      expect(await prisma.revokedUsername.count()).toBe(4);
+    });
+
+    it('the purge is blocked while a hold runs (kept, retried) and unblocked once it is over', async () => {
+      const u = await anonymised('rev-purge');
+      await seedRevocation(u.id, 'long_hold', daysAfter(60));
+
+      const blocked = await purge.purgeAnonymizedRows(daysAfter(31));
+      expect(blocked.keptUserIds).toEqual([{ userId: u.id, blocker: 'RevokedUsername.userId', kind: 'content' }]);
+      expect(await exists(u.id)).toBe(true);
+      expect(await rev(u.id)).toHaveLength(1);
+
+      // The daily order: cleanup first, then the purge. Nothing from RevokedUsername blocks any more.
+      await purge.cleanupRevokedUsernames(daysAfter(60));
+      const free = await purge.purgeAnonymizedRows(daysAfter(61));
+      expect(free.purgedUserIds).toEqual([u.id]);
+      expect(await exists(u.id)).toBe(false);
+      expect(await getTestPrismaClient().revokedUsername.count()).toBe(0);
+    });
+
+    it('the purge deletes an expired record itself when the cleanup has not reached it (no record is left pointing at a purged row)', async () => {
+      const u = await anonymised('rev-purge-alone');
+      await seedRevocation(u.id, 'expired_name', daysAfter(5));
+
+      const r = await purge.purgeAnonymizedRows(daysAfter(31)); // no cleanup run first
+
+      expect(r.purgedUserIds).toEqual([u.id]);
+      expect(await getTestPrismaClient().revokedUsername.count()).toBe(0);
+    });
+
+    it('the handle looks taken to another user while the hold runs, and is assignable once the record is deleted', async () => {
+      const policy = app.get(UsernamePolicyService, { strict: false });
+      const prisma = getTestPrismaClient();
+      const other = await prisma.user.create({
+        data: { email: `e2e-rev-other-${randomUUID()}@example.com`, passwordHash: 'x', displayName: 'Other', accountStatus: 'active' },
+      });
+      const u = await anonymised('rev-handle');
+      await seedRevocation(u.id, 'club_handle9', daysAfter(10));
+      const assign = (now: Date) =>
+        policy.assertAssignable(
+          { userId: other.id, candidate: 'club_handle9', current: null, usernameChangedAt: null, owner: {} },
+          now,
+        );
+
+      await expect(assign(daysAfter(5))).rejects.toBeInstanceOf(ConflictException);
+
+      await purge.cleanupRevokedUsernames(daysAfter(10));
+      expect(await rev(u.id)).toEqual([]);
+      await expect(assign(daysAfter(10))).resolves.toBeUndefined();
+    });
+
+    it('caps a cleanup run at 200 records, reports it, and the next run finishes the rest', async () => {
+      const prisma = getTestPrismaClient();
+      const u = await anonymised('rev-cap');
+      await prisma.revokedUsername.createMany({
+        data: Array.from({ length: 201 }, (_, i) => ({
+          username: `capped_${String(i).padStart(3, '0')}`,
+          userId: u.id,
+          revokedAt: T0,
+          holdUntil: daysAfter(10),
+        })),
+      });
+
+      const first = await purge.cleanupRevokedUsernames(daysAfter(11));
+      expect(first.capped).toBe(true);
+      expect(first.deletedIds).toHaveLength(200);
+      expect(await prisma.revokedUsername.count({ where: { userId: u.id } })).toBe(1);
+
+      const second = await purge.cleanupRevokedUsernames(daysAfter(11));
+      expect(second).toMatchObject({ capped: false });
+      expect(second.deletedIds).toHaveLength(1);
+      expect(await prisma.revokedUsername.count({ where: { userId: u.id } })).toBe(0);
     });
   });
 
