@@ -1,6 +1,6 @@
 # Soccernity — Draft Legal Copy: Terms of Service & Privacy Policy
 
-## DRAFT (v0.10) — NOT APPROVED AS LIVE COPY, NOT LEGAL ADVICE
+## DRAFT (v0.11) — NOT APPROVED AS LIVE COPY, NOT LEGAL ADVICE
 
 **Status: draft output of the `safeguarding-drafter` workflow (`CLAUDE.md` non-negotiable #2). It is
 not approved, not in force, and not ready to publish.**
@@ -33,11 +33,15 @@ Do not fill either from this file. The sign-off block at the end of this documen
 - **Grounded in:** Build Plan Sections 3, 8 and 9; Log Book Section 10; the DPIA draft
   (`docs/sprint-1-dpia-outline-draft.md`); and the merged code on `main` as of 2026-10-05 (checked
   against `services/api`, not recalled from earlier drafts).
-- **Version:** 0.10 (draft — still NOT APPROVED). Earlier versions: v0.1 drafted 2026-09-05; v0.2 applied counsel's
+- **Version:** 0.11 (draft — still NOT APPROVED). Earlier versions: v0.1 drafted 2026-09-05; v0.2 applied counsel's
   09/09/2026 review; v0.3–v0.6 (2026-09-20 to 2026-09-22) added the under-16 tier, adult-to-minor
   messaging block, consent audit evidence, age reclassification and card verification; v0.7 applied the
-  counsel-reviewed decisions; v0.8 (2026-10-12) added the audit-driven changes; v0.9 (2026-10-30) wrote the Contact Us retention wording. Their
+  counsel-reviewed decisions; v0.8 (2026-10-12) added the audit-driven changes; v0.9 (2026-10-30) wrote the Contact Us retention wording; v0.10 (2026-10-30) added the Contact Us form notice. Their
   per-version changelogs are superseded by this one and live in git history.
+
+### v0.11 changelog (2026-10-30)
+
+One wording change, founder decision 2026-10-30: in the Contact Us form notice (Part C, "Screen copy -- Contact Us form notice", and Part C row 45) the first sentence now reads **"Our support team reads the messages sent through this form."** It replaces "Soccernity staff read the messages sent through this form." Nothing else in the notice changed, and its `[COPY PENDING LEGAL REVIEW]` tags are where they were. The row-45 remark that counsel had not seen the "staff" wording and note (4) of the notes under the notice (which left the wording open) are removed, because the founder has decided the phrase. No other text changed.
 
 ### v0.10 changelog (2026-10-30)
 
@@ -1129,15 +1133,15 @@ mistaken for settled by the time this reaches counsel or gets converted into Fig
 | 42 | **New in v0.8 — Contact Us form retention.** Name, email, category, message are collected; retention is **12 months from the last message in the enquiry, then automatic deletion**, with a moderator able to turn a safeguarding concern or complaint into a report or case record that follows that record's retention instead (Decision Log #440, **the founder's decision, not counsel's**; v0.9 wording, tagged `[COPY PENDING LEGAL REVIEW]`). Counsel has not reviewed the 12-month figure or the escalation wording. Neither the form nor the escalation action is built. Counsel status: **pending** | PP §1.9, §9 | Temi + counsel |
 | 43 | **New in v0.8 — avatar, cover photo, bio and country visible to other users including minors.** Includes minors seeing other minors' profiles. Not built. Counsel status: **pending** | ToS §9.1; PP §1.3, §7 | Founder + counsel |
 | 44 | **New in v0.8 — other new processing:** authenticator-app two-factor authentication (what is stored), email to the minor on guardian approval, mandatory email verification for every user, and the guardian consent page's request summary (returns the minor's name and DOB to an unauthenticated token holder). Not built. Counsel status: **pending** | PP §1.9, §4.2 | Counsel |
-| 45 | **New in v0.10 -- Contact Us form notice (screen copy).** The short notice under the form says who reads the message (Soccernity staff), that it is kept 12 months after the last message in the enquiry and then deleted, that a safeguarding concern or complaint may be kept longer as part of a report or case record, and links to the Privacy Policy. Wording is in the block below the table. Same 12-month figure and escalation wording as row 42, so the same counsel questions apply; it also states that staff read the message, which counsel has not seen. No reply or reply time is promised because none is decided. The form is not built. Counsel status: **pending** | Contact Us form (screen copy); PP §1.9, §9 | Temi + counsel |
+| 45 | **New in v0.10 -- Contact Us form notice (screen copy).** The short notice under the form says who reads the message (our support team), that it is kept 12 months after the last message in the enquiry and then deleted, that a safeguarding concern or complaint may be kept longer as part of a report or case record, and links to the Privacy Policy. Wording is in the block below the table. Same 12-month figure and escalation wording as row 42, so the same counsel questions apply. No reply or reply time is promised because none is decided. The form is not built. Counsel status: **pending** | Contact Us form (screen copy); PP §1.9, §9 | Temi + counsel |
 
 ### Screen copy -- Contact Us form notice **[PROPOSAL, not yet built]**
 
 In-app wording for the notice that appears directly under the Contact Us form. It is not part of the Terms or the Privacy Policy and is not rendered on `/terms` or `/privacy`. Link target: the Privacy Policy page (`/privacy`).
 
-> Soccernity staff read the messages sent through this form. **[COPY PENDING LEGAL REVIEW]** We keep your message for 12 months after the last message in the enquiry and then delete it automatically; if it raises a safeguarding concern or a complaint, it may be kept for longer as part of a report or case record. See our [Privacy Policy](/privacy). **[COPY PENDING LEGAL REVIEW]**
+> Our support team reads the messages sent through this form. **[COPY PENDING LEGAL REVIEW]** We keep your message for 12 months after the last message in the enquiry and then delete it automatically; if it raises a safeguarding concern or a complaint, it may be kept for longer as part of a report or case record. See our [Privacy Policy](/privacy). **[COPY PENDING LEGAL REVIEW]**
 
-Notes for counsel: (1) 12 months is the only figure, and it is the founder's decision (Decision Log #440), not counsel's. (2) The notice does not say a reply will be sent or when; no response commitment is decided. (3) The "may be kept for longer" sentence relies on the escalation action, which is not built (row 42). (4) "Soccernity staff" is the founder's wording of who reads the message; whether it should name a role or a team is open.
+Notes for counsel: (1) 12 months is the only figure, and it is the founder's decision (Decision Log #440), not counsel's. (2) The notice does not say a reply will be sent or when; no response commitment is decided. (3) The "may be kept for longer" sentence relies on the escalation action, which is not built (row 42).
 
 ---
 
