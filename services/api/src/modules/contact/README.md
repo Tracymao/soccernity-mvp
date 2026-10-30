@@ -173,9 +173,11 @@ the child-safety-vetting gate (coded 403 `child_safety_vetting_required`, any ro
 
 ### Flagged, not decided
 
-* **The existing outcome email (#143) reaches `reporterContactEmail`.** Closing an enquiry report with an action
-  other than "dismissed" sends the public-reporter outcome email to the address the enquirer typed, which #445
-  notes may not be theirs. Not changed here.
+* **RESOLVED (`backend/w7-enquiry-report-no-outcome-email`, #445 build note 1): the outcome email (#143) is NOT
+  sent for an enquiry report.** `ModerationService.notifyReporterOfOutcome` returns without sending when the
+  report's `targetType` is `'enquiry'`, for every action. The enquirer made no report and the address they typed
+  may not be theirs. The acknowledgement and appeal emails cannot reach an enquiry report either (see the
+  moderation README).
 * A non-vetted admin still sees an enquiry that was escalated with `concernsMinor: true` in this inbox (the
   gate is on the Report, not on the enquiry). Whether it should be hidden is the open question the Figma pass
   also records.

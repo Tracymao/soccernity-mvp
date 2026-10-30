@@ -373,6 +373,21 @@ describe('Contact enquiry admin e2e (real Postgres)', () => {
       expect(await prisma().notification.count()).toBe(0);
       expect(await prisma().accountHold.count()).toBe(0);
     });
+
+    it('sends NO outcome email to the enquirer, for any action (Decision Log #445, build note 1)', async () => {
+      const mod = await createAdmin('mod', 'moderator');
+      const a = await seedEnquiry();
+      const b = await seedEnquiry();
+      const ra = (await request(server()).post(`/admin/contact-enquiries/${a.id}/escalate`).set(auth(mod.token)).send(escalateBody()).expect(201)).body.report.id;
+      const rb = (await request(server()).post(`/admin/contact-enquiries/${b.id}/escalate`).set(auth(mod.token)).send(escalateBody()).expect(201)).body.report.id;
+
+      await request(server()).patch(`/admin/moderation/reports/${ra}`).set(auth(mod.token)).send({ action: 'dismissed' }).expect(200);
+      await request(server()).patch(`/admin/moderation/reports/${rb}`).set(auth(mod.token)).send({ action: 'warning_issued' }).expect(200);
+      // The outcome notification is fire-and-forget after the response; give it time to (not) run.
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      expect(RegistrationEmailService.prototype.sendReportActionedEmail).not.toHaveBeenCalled();
+    });
   });
 
   describe('an enquiry report never creates an account hold', () => {

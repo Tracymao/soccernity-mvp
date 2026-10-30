@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { encodeModerationCursor } from './cursor.util';
+import { REPORT_ACTIONS } from './moderation.constants';
 import { ModerationService } from './moderation.service';
 
 // Mocked-Prisma unit tests, following grassroots.service.spec.ts /
@@ -739,6 +740,48 @@ describe('ModerationService', () => {
       const service = buildService(prisma, emailService);
 
       await service.actionReport('report-1', 'admin-1', { action: 'dismissed' });
+      await flushPromises();
+
+      expect(emailService.sendReportActionedEmail).not.toHaveBeenCalled();
+    });
+
+    it('sends NO outcome email for a report made from a Contact Us enquiry, whatever the action (Decision Log #445)', async () => {
+      // room_deactivated is refused (400) on any non-Banter-room report before a send could happen; covered below.
+      for (const action of REPORT_ACTIONS.filter((a) => a !== 'room_deactivated')) {
+        const prisma = buildPrismaMock();
+        (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+          report({
+            status: 'open',
+            reporterId: null,
+            reporterContactEmail: 'sam@example.com',
+            reporterContactName: 'Sam',
+            targetType: 'enquiry',
+            targetId: 'e1',
+          }),
+        );
+        (prisma.report.update as jest.Mock).mockResolvedValue(report({ status: 'reviewed' }));
+        const emailService = buildEmailServiceMock();
+        const service = buildService(prisma, emailService);
+
+        await service.actionReport('report-1', 'admin-1', { action });
+        await flushPromises();
+
+        expect(prisma.report.update).toHaveBeenCalledTimes(1);
+        expect(emailService.sendReportActionedEmail).not.toHaveBeenCalled();
+        expect(emailService.sendAppealDecisionEmail).not.toHaveBeenCalled();
+        expect(emailService.sendPublicReportAcknowledgementEmail).not.toHaveBeenCalled();
+      }
+    });
+
+    it('room_deactivated on an enquiry report is refused with 400 and sends nothing', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(
+        report({ status: 'open', reporterId: null, reporterContactEmail: 'sam@example.com', targetType: 'enquiry', targetId: 'e1' }),
+      );
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      await expect(service.actionReport('report-1', 'admin-1', { action: 'room_deactivated' })).rejects.toThrow(BadRequestException);
       await flushPromises();
 
       expect(emailService.sendReportActionedEmail).not.toHaveBeenCalled();
