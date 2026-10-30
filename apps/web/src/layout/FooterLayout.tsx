@@ -2,7 +2,7 @@
 // shared <Footer /> once, wrapping it. Its children are exactly the routes
 // whose canonical Figma frame carries the standardized site footer --
 // Home, Sports Hub, Blog, Article Detail (Decision Log #209/#210/#213),
-// Scouting/Academy's shared Coming Soon page (Decision Log #285) -- plus
+// Scouting/Academy's shared Coming Soon page (Decision Log #285), Contact Us (B-046) -- plus
 // the 404 page, which gets the footer for its recovery links (Decision
 // Log #228).
 //

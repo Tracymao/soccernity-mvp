@@ -85,6 +85,7 @@
   padding-left: 14px;
   font: 600 15px "Montserrat", "Inter", sans-serif;
   color: #fff;
+  text-decoration: none;
 }
 
 .sn-footer__link::before {
