@@ -430,6 +430,13 @@ export class AccountDeletionSweepService {
       // createdById-based authorization check fails closed (403).
       await tx.grassrootsTeam.updateMany({ where: { createdById: userId }, data: { createdById: null } });
 
+      // B-139 (founder decision 2026-10-30): a RevokedUsername record lives while its user's account exists
+      // and is deleted once the account is anonymised AND its hold has passed. So: delete this user's
+      // records whose hold is already over; a hold still running stays and is deleted by
+      // AnonymizedRowPurgeService.cleanupRevokedUsernames the first run after holdUntil. Same transaction
+      // as the anonymisation, so a record is never left behind for an account that is already gone.
+      await tx.revokedUsername.deleteMany({ where: { userId, holdUntil: { lte: now } } });
+
       await tx.user.update({
         where: { id: userId },
         data: {

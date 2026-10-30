@@ -36,6 +36,8 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
     banterRoomMember: { deleteMany: jest.fn() },
     communityGroupMember: { deleteMany: jest.fn() },
     grassrootsTeam: { updateMany: jest.fn() },
+    // B-139: anonymizeUser deletes the user's RevokedUsername records whose hold is already over.
+    revokedUsername: { deleteMany: jest.fn() },
     $executeRaw: jest.fn().mockResolvedValue(0),
     // B-044: admin holds (none by default) and the reports involving the user (findInvolvedReports).
     accountHold: { findMany: jest.fn().mockResolvedValue([]) },
@@ -70,6 +72,27 @@ describe('AccountDeletionSweepService', () => {
   });
 
   // B-043 (Decision Log #375): anonymizedAt is what the 30-day purge counts from.
+  describe('anonymizeUser revoked-username records (B-139)', () => {
+    it('deletes the user\'s records whose hold has passed, inside the anonymising transaction, and leaves a running hold', async () => {
+      const prisma = buildPrismaMock();
+      const now = new Date('2026-11-01T00:00:00.000Z');
+
+      await new AccountDeletionSweepService(prisma).anonymizeUser('user-1', false, now);
+
+      // `lte now`: a record whose holdUntil is in the future is NOT matched, so it stays.
+      expect(prisma.revokedUsername.deleteMany).toHaveBeenCalledTimes(1);
+      expect(prisma.revokedUsername.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1', holdUntil: { lte: now } } });
+      const tx = (prisma as unknown as { $transaction: jest.Mock }).$transaction;
+      expect(tx).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not touch the records of a held (minimised) account: minimiseHeldUser does not anonymise', async () => {
+      const prisma = buildPrismaMock();
+      await new AccountDeletionSweepService(prisma).minimiseHeldUser('user-1');
+      expect(prisma.revokedUsername.deleteMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('anonymizeUser anonymizedAt', () => {
     const updateData = (prisma: PrismaService) => (prisma.user.update as jest.Mock).mock.calls[0][0].data;
 

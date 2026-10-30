@@ -37,12 +37,16 @@ function buildPrisma(opts: TxOpts = {}) {
     if (!tx[d]) tx[d] = {};
     tx[d].findFirst = jest.fn().mockResolvedValue(null);
   }
+  tx.revokedUsername.deleteMany = jest.fn().mockResolvedValue({ count: 0 });
   tx.consentAuditRecord.findFirst = jest.fn().mockResolvedValue(opts.confirmedConsent ? { id: 'c1' } : null);
   tx.consentAuditRecord.create = jest.fn();
   tx.consentAuditRecord.deleteMany = jest.fn();
 
   const prisma = {
     user: { findMany: jest.fn().mockResolvedValue([{ id: 'u1' }]) },
+    // B-139 cleanup: the SQL join selects due record ids; each is then deleted on its own.
+    $queryRaw: jest.fn().mockResolvedValue([]),
+    revokedUsername: { deleteMany: jest.fn().mockResolvedValue({ count: 1 }) },
     $transaction: jest.fn((fn: (t: unknown) => unknown, _o?: unknown) => fn(tx)),
   };
   return { prisma: prisma as unknown as PrismaService, mock: prisma, tx };
@@ -200,6 +204,96 @@ describe('AnonymizedRowPurgeService', () => {
       const r = await new AnonymizedRowPurgeService(prisma).purgeAnonymizedRows(NOW);
       expect(r.keptUserIds).toEqual([{ userId: 'u1', blocker: '_ClubMembership', kind: 'anomaly' }]);
       expect(tx.user.deleteMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('revoked-username records (B-139)', () => {
+    it("purge: deletes the row's expired-hold records inside the transaction BEFORE it looks for blockers", async () => {
+      const { prisma, tx } = buildPrisma();
+      const order: string[] = [];
+      tx.revokedUsername.deleteMany.mockImplementation(async () => (order.push('deleteExpired'), { count: 1 }));
+      tx.revokedUsername.findFirst.mockImplementation(async () => (order.push('lookup'), null));
+
+      const r = await new AnonymizedRowPurgeService(prisma).purgeAnonymizedRows(NOW);
+
+      expect(tx.revokedUsername.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u1', holdUntil: { lte: NOW } } });
+      expect(order).toEqual(['deleteExpired', 'lookup']);
+      expect(r.purgedUserIds).toEqual(['u1']);
+    });
+
+    it('purge: a record whose hold is STILL RUNNING blocks this run (the row is kept, retried next run)', async () => {
+      const { prisma, tx } = buildPrisma();
+      // The expired-hold delete matches nothing; the running hold is still there for the lookup.
+      tx.revokedUsername.findFirst.mockResolvedValue({ id: 'r1' });
+
+      const r = await new AnonymizedRowPurgeService(prisma).purgeAnonymizedRows(NOW);
+
+      expect(r.purgedUserIds).toEqual([]);
+      expect(r.keptUserIds).toEqual([{ userId: 'u1', blocker: 'RevokedUsername.userId', kind: 'content' }]);
+      expect(tx.user.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('cleanup: selects only records of ANONYMISED users whose hold has passed, oldest first, and deletes each', async () => {
+      const { prisma, mock } = buildPrisma();
+      mock.$queryRaw.mockResolvedValue([{ id: 'r1' }, { id: 'r2' }]);
+
+      const r = await new AnonymizedRowPurgeService(prisma).cleanupRevokedUsernames(NOW);
+
+      const sql = (mock.$queryRaw.mock.calls[0][0] as string[]).join('?');
+      expect(sql).toContain(`u."accountStatus" = 'deleted'`);
+      expect(sql).toContain('u."anonymizedAt" IS NOT NULL');
+      expect(sql).toContain('r."holdUntil" <=');
+      expect(sql).toContain('ORDER BY r."holdUntil" ASC');
+      expect(mock.revokedUsername.deleteMany).toHaveBeenCalledWith({ where: { id: 'r1', holdUntil: { lte: NOW } } });
+      expect(mock.revokedUsername.deleteMany).toHaveBeenCalledWith({ where: { id: 'r2', holdUntil: { lte: NOW } } });
+      expect(r).toEqual({ deletedIds: ['r1', 'r2'], erroredIds: [], capped: false });
+    });
+
+    it('cleanup: never touches a record when nothing is due (non-anonymised users are filtered out in the SQL)', async () => {
+      const { prisma, mock } = buildPrisma();
+      const r = await new AnonymizedRowPurgeService(prisma).cleanupRevokedUsernames(NOW);
+      expect(mock.revokedUsername.deleteMany).not.toHaveBeenCalled();
+      expect(r).toEqual({ deletedIds: [], erroredIds: [], capped: false });
+    });
+
+    it('cleanup: caps a run at the maximum, reports it, and leaves the rest for the next run', async () => {
+      const { prisma, mock } = buildPrisma();
+      mock.$queryRaw.mockResolvedValue(
+        Array.from({ length: ANONYMIZED_PURGE_MAX_PER_RUN + 1 }, (_, i) => ({ id: `r${i}` })),
+      );
+      const r = await new AnonymizedRowPurgeService(prisma).cleanupRevokedUsernames(NOW);
+      expect(r.capped).toBe(true);
+      expect(r.deletedIds).toHaveLength(ANONYMIZED_PURGE_MAX_PER_RUN);
+      expect(r.deletedIds).not.toContain(`r${ANONYMIZED_PURGE_MAX_PER_RUN}`);
+      expect(mock.revokedUsername.deleteMany).toHaveBeenCalledTimes(ANONYMIZED_PURGE_MAX_PER_RUN);
+    });
+
+    it('cleanup: one failing delete is reported and does not stop the others; a re-run is idempotent (count 0 is not reported)', async () => {
+      const { prisma, mock } = buildPrisma();
+      mock.$queryRaw.mockResolvedValue([{ id: 'r1' }, { id: 'r2' }, { id: 'r3' }]);
+      mock.revokedUsername.deleteMany
+        .mockRejectedValueOnce(new Error('connection reset'))
+        .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 0 }); // already gone (a concurrent run)
+
+      const r = await new AnonymizedRowPurgeService(prisma).cleanupRevokedUsernames(NOW);
+
+      expect(r.erroredIds).toEqual(['r1']);
+      expect(r.deletedIds).toEqual(['r2']);
+    });
+
+    it('the daily job runs the cleanup BEFORE the purge, and a cleanup failure does not stop the purge', async () => {
+      const { prisma, mock } = buildPrisma();
+      const order: string[] = [];
+      mock.$queryRaw.mockImplementation(async () => {
+        order.push('cleanup');
+        throw new Error('db down');
+      });
+      mock.user.findMany.mockImplementation(async () => (order.push('purge'), []));
+
+      await expect(new AnonymizedRowPurgeService(prisma).runDailyPurge()).resolves.toBeUndefined();
+
+      expect(order).toEqual(['cleanup', 'purge']);
     });
   });
 
