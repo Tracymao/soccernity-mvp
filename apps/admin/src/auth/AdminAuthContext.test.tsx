@@ -119,18 +119,6 @@ describe("AdminAuthContext", () => {
     expect(window.sessionStorage.length).toBe(0);
   });
 
-  it("removes the old build's sn_admin_* keys from localStorage at start-up and does not use them", async () => {
-    window.localStorage.setItem("sn_admin_access_token", "old-access");
-    window.localStorage.setItem("sn_admin_refresh_token", "old-refresh");
-
-    renderProbe();
-
-    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("unauthenticated"));
-    expect(window.localStorage.getItem("sn_admin_access_token")).toBeNull();
-    expect(window.localStorage.getItem("sn_admin_refresh_token")).toBeNull();
-    expect(getAdminProfile).not.toHaveBeenCalled();
-  });
-
   it("StrictMode's double effect makes exactly ONE refresh call (a second use of the cookie is reuse)", async () => {
     backend.mockResolvedValue(json(200, { accessToken: "acc-1" }));
     vi.mocked(getAdminProfile).mockResolvedValue(PROFILE);

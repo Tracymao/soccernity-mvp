@@ -11,7 +11,7 @@ export class LoginDto {
   @IsNotEmpty()
   password!: string;
 
-  // B-245 "Stay signed in": only affects cookie mode (X-Auth-Mode: cookie). true -> a
+  // B-245 "Stay signed in": only affects cookie mode (X-Auth-Mode: cookie or an allowlisted Origin, B-248). true -> a
   // persistent refresh cookie (Max-Age = the refresh TTL); false/absent -> a session cookie.
   // Declared here because forbidNonWhitelisted rejects any undeclared body field.
   @IsOptional()

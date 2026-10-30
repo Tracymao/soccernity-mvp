@@ -9,12 +9,14 @@ import { seedDob } from './dob-seed';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
 
 // ---------------------------------------------------------------------
-// B-245 / Decision Log "Token storage" (Build Plan 5.7) -- OPT-IN cookie session mode, API side.
+// B-245 / B-248 / Decision Log "Token storage" (Build Plan 5.7) -- cookie session mode, API side.
 // Real Postgres + real Redis + the real AppModule: the refresh-token store, its reuse detection and
 // the two audiences' cookies are exercised end to end, not mocked.
 //
-// A request with `X-Auth-Mode: cookie` gets the refresh token as an httpOnly, Secure, SameSite=Strict,
-// host-only cookie and NOT in the body. Without the header every route is unchanged.
+// A request in cookie mode -- `X-Auth-Mode: cookie`, OR (B-248, the browser default) an Origin on the
+// allowlist with no header at all -- gets the refresh token as an httpOnly, Secure, SameSite=Strict,
+// host-only cookie and NOT in the body. A request with no Origin (a native client) and no header gets
+// body tokens, as before.
 //
 // The allowed web/admin origins are set to https:// addresses for this file (the cookie code reads the
 // environment per request), so the `Secure` attribute is exercised on the path real browsers take;
@@ -50,7 +52,7 @@ function maxAgeOf(setCookie: string): number | undefined {
   return a ? Number(a.split('=')[1]) : undefined;
 }
 
-describe('Cookie session mode e2e (B-245): user audience', () => {
+describe('Cookie session mode e2e (B-245, B-248): user audience', () => {
   let app: INestApplication;
   let savedWeb: string | undefined;
   let savedAdmin: string | undefined;
@@ -355,6 +357,79 @@ describe('Cookie session mode e2e (B-245): user audience', () => {
     expect(setCookies(res)).toHaveLength(0);
   });
 
+  it('B-248: an allowlisted Origin and NO X-Auth-Mode header is cookie mode -- Set-Cookie, no refreshToken in the body', async () => {
+    const { email } = await seedUser();
+    const res = await request(app.getHttpServer())
+      .post('/auth/login')
+      .set('Origin', WEB) // no X-Auth-Mode header
+      .send({ email, password })
+      .expect(200);
+    expect(res.body.accessToken).toEqual(expect.any(String));
+    expect(res.body).not.toHaveProperty('refreshToken');
+    const cookie = cookieNamed(res, 'sn_rt');
+    expect(cookie).toBeDefined();
+    expect(attrsOf(cookie!)).toEqual(expect.arrayContaining(['HttpOnly', 'Secure', 'SameSite=Strict', 'Path=/auth']));
+    expect(JSON.stringify(res.body)).not.toContain(valueOf(cookie!));
+  });
+
+  it('B-248: no Origin and NO header (a native client) still gets the refresh token in the body and no Set-Cookie', async () => {
+    const { email } = await seedUser();
+    const res = await request(app.getHttpServer()).post('/auth/login').send({ email, password }).expect(200);
+    expect(res.body.refreshToken).toEqual(expect.any(String));
+    expect(setCookies(res)).toHaveLength(0);
+  });
+
+  it('B-248: a foreign Origin and no header gets body tokens, never a cookie', async () => {
+    const { email } = await seedUser();
+    const res = await request(app.getHttpServer())
+      .post('/auth/login')
+      .set('Origin', 'https://evil.example.com')
+      .send({ email, password })
+      .expect(200);
+    expect(res.body.refreshToken).toEqual(expect.any(String));
+    expect(setCookies(res)).toHaveLength(0);
+  });
+
+  it('B-248: refresh with an allowlisted Origin, no header and a valid cookie rotates it; a body token is ignored; logout clears', async () => {
+    const { email } = await seedUser();
+    const login = await request(app.getHttpServer()).post('/auth/login').set('Origin', WEB).send({ email, password }).expect(200);
+    const first = valueOf(cookieNamed(login, 'sn_rt')!);
+
+    // Header-less, allowlisted Origin, cookie present, garbage body token -> 200 from the cookie.
+    const rotated = await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .set('Origin', WEB)
+      .set('Cookie', `sn_rt=${first}`)
+      .send({ refreshToken: 'not-a-real.token' })
+      .expect(200);
+    expect(rotated.body).not.toHaveProperty('refreshToken');
+    const second = valueOf(cookieNamed(rotated, 'sn_rt')!);
+    expect(second).not.toBe(first);
+
+    // A VALID body token with an allowlisted Origin and no cookie: the body is ignored in cookie mode -> 401.
+    const pair = await request(app.getHttpServer()).post('/auth/login').send({ email, password }).expect(200);
+    await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .set('Origin', WEB)
+      .send({ refreshToken: pair.body.refreshToken })
+      .expect(401);
+
+    // Logout (header-less, allowlisted Origin) clears the cookie and revokes it.
+    const out = await request(app.getHttpServer())
+      .post('/auth/logout')
+      .set('Origin', WEB)
+      .set('Cookie', `sn_rt=${second}`)
+      .send({})
+      .expect(204);
+    expect(cookieNamed(out, 'sn_rt')).toContain('Max-Age=0');
+    await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .set('Origin', WEB)
+      .set('Cookie', `sn_rt=${second}`)
+      .send({})
+      .expect(401);
+  });
+
   it('register in cookie mode returns the cookie (session) and omits the refresh token from the body', async () => {
     const res = await request(app.getHttpServer())
       .post('/auth/register')
@@ -506,6 +581,47 @@ describe('Cookie session mode e2e (B-245): admin audience and cross-audience iso
       .expect(204);
     expect(cookieNamed(out, 'sn_admin_rt')).toContain('Max-Age=0');
     await rotate(token2).expect(401);
+  });
+
+  it('B-248 admin: an allowlisted Origin and NO header is cookie mode; no Origin and no header gets body tokens', async () => {
+    const { email } = await seedAdmin();
+    const browser = await request(app.getHttpServer())
+      .post('/admin/auth/login')
+      .set('Origin', ADMIN) // no X-Auth-Mode header
+      .send({ email, password })
+      .expect(200);
+    expect(browser.body.accessToken).toEqual(expect.any(String));
+    expect(browser.body).not.toHaveProperty('refreshToken');
+    const cookie = cookieNamed(browser, 'sn_admin_rt');
+    expect(cookie).toBeDefined();
+    expect(attrsOf(cookie!)).toEqual(
+      expect.arrayContaining(['HttpOnly', 'Secure', 'SameSite=Strict', 'Path=/admin/auth']),
+    );
+
+    // Header-less refresh with an allowlisted Origin reads the cookie (a garbage body token is ignored) and rotates.
+    const rotated = await request(app.getHttpServer())
+      .post('/admin/auth/refresh')
+      .set('Origin', ADMIN)
+      .set('Cookie', `sn_admin_rt=${valueOf(cookie!)}`)
+      .send({ refreshToken: 'not-a-real.token' })
+      .expect(200);
+    expect(rotated.body).not.toHaveProperty('refreshToken');
+    const next = cookieNamed(rotated, 'sn_admin_rt')!;
+    expect(valueOf(next)).not.toBe(valueOf(cookie!));
+
+    // Header-less logout with an allowlisted Origin clears the cookie.
+    const out = await request(app.getHttpServer())
+      .post('/admin/auth/logout')
+      .set('Origin', ADMIN)
+      .set('Cookie', `sn_admin_rt=${valueOf(next)}`)
+      .send({})
+      .expect(204);
+    expect(cookieNamed(out, 'sn_admin_rt')).toContain('Max-Age=0');
+
+    // Native client: no Origin, no header -> body token, no Set-Cookie.
+    const native = await request(app.getHttpServer()).post('/admin/auth/login').send({ email, password }).expect(200);
+    expect(native.body.refreshToken).toEqual(expect.any(String));
+    expect(setCookies(native)).toHaveLength(0);
   });
 
   it('a USER cookie / token is never accepted by the ADMIN endpoints, and vice versa (cookie mode)', async () => {

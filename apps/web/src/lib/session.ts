@@ -19,8 +19,6 @@
 // others (they would otherwise each have to rotate again) and so a log-out in
 // one tab signs out the rest.
 
-const LEGACY_ACCESS_TOKEN_KEY = "sn_access_token";
-const LEGACY_REFRESH_TOKEN_KEY = "sn_refresh_token";
 let channelName = "sn-session";
 
 let accessToken: string | null = null;
@@ -137,30 +135,6 @@ export function setSessionRestoring(value: boolean): void {
 
 export function getSessionVersion(): number {
   return tokenVersion;
-}
-
-// Removes the tokens the pre-B-246 build left in browser storage. The platform
-// is not live, so there is no migration: the leftover session is simply gone
-// and the person signs in again. (The cross-tab lease key sn_refresh_lock is
-// not a token and is left alone.)
-export function purgeLegacyTokenStorage(): void {
-  for (const store of [safeStorage("sessionStorage"), safeStorage("localStorage")]) {
-    if (!store) continue;
-    try {
-      store.removeItem(LEGACY_ACCESS_TOKEN_KEY);
-      store.removeItem(LEGACY_REFRESH_TOKEN_KEY);
-    } catch {
-      /* storage blocked: nothing to purge */
-    }
-  }
-}
-
-function safeStorage(name: "sessionStorage" | "localStorage"): Storage | null {
-  try {
-    return typeof window !== "undefined" ? window[name] : null;
-  } catch {
-    return null;
-  }
 }
 
 // Test-only: BroadcastChannel delivers between worker threads of the same

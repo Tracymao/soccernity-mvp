@@ -113,8 +113,9 @@ type OriginCallback = (err: Error | null, allow?: boolean) => void;
 // response. Never combine `credentials: true` with a wildcard or a reflected-any origin.
 //
 // `allowedHeaders` is deliberately left unset: with it unset the `cors` package reflects the
-// pre-flight's Access-Control-Request-Headers, so the opt-in `X-Auth-Mode: cookie` header (and the
-// existing Authorization / Content-Type / X-Consent-Token) are allowed without a hand-kept list that
+// pre-flight's Access-Control-Request-Headers, so the `X-Auth-Mode: cookie` header (apps/web and
+// apps/admin send it on the session routes; B-248 makes an allowlisted Origin enough on its own) and the
+// existing Authorization / Content-Type / X-Consent-Token are allowed without a hand-kept list that
 // would silently break the next custom header. cors-options.spec.ts pins that X-Auth-Mode is allowed.
 // `Retry-After` is exposed so a browser client can read it off a global-rate-limit 429 (a
 // cross-origin response hides every non-safelisted header otherwise).

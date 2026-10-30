@@ -76,8 +76,9 @@ test.describe.serial('admin console sign-in', () => {
     expect(cookie!.httpOnly).toBe(true);
     expect(cookie!.sameSite).toBe('Strict');
     expect(cookie!.path).toBe('/admin/auth');
-    // Staying signed in = a persistent cookie (today's behaviour is preserved).
-    expect(cookie!.expires).toBeGreaterThan(Date.now() / 1000 + 86_400);
+    // Founder decision 2026-10-29: the admin session ends when the browser closes, so this is a
+    // SESSION cookie (no Max-Age / Expires; Playwright reports expires === -1).
+    expect(cookie!.expires).toBe(-1);
 
     // A reload restores the session through the cookie: no login screen.
     await page.reload();
