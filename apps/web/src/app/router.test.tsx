@@ -42,9 +42,9 @@ function footerLayoutRoutePaths(tree: RouteObject[]): string[] {
 }
 
 describe("router — FooterLayout membership (Decision Log #227/#228)", () => {
-  it("FooterLayout wraps exactly Home, Sports Hub, Blog, Article Detail, Scouting, Academy, and 404", () => {
+  it("FooterLayout wraps exactly Home, Sports Hub, Blog, Article Detail, Scouting, Academy, Contact Us, and 404", () => {
     expect(footerLayoutRoutePaths(routes).sort()).toEqual(
-      ["(index)", "*", "blog", "blog/:articleId", "sports-hub", "scouting", "academy"].sort(),
+      ["(index)", "*", "blog", "blog/:articleId", "sports-hub", "scouting", "academy", "contact"].sort(),
     );
   });
 
@@ -93,6 +93,12 @@ describe("router — rendered footer presence", () => {
   it("/academy renders the shared Coming Soon page with the site footer", async () => {
     await renderAt("/academy");
     expect(screen.getByRole("heading", { name: "Academy" })).not.toBeNull();
+    expect(screen.getByRole("contentinfo")).not.toBeNull();
+  });
+
+  it("/contact renders the Contact Us page with the site footer (B-047)", async () => {
+    await renderAt("/contact");
+    expect(screen.getByRole("heading", { name: "Contact Us" })).not.toBeNull();
     expect(screen.getByRole("contentinfo")).not.toBeNull();
   });
 

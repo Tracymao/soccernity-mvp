@@ -35,14 +35,18 @@ describe("Footer", () => {
     expect(within(footer).getByText(/Copyright . 2026 Soccernity\. All rights reserved/i)).toBeTruthy();
   });
 
-  it("renders the legal links as non-navigating spans (no /terms, /privacy, /contact routes exist yet)", () => {
+  it("renders the three legal links as real links to /terms, /privacy and /contact (B-047)", () => {
     renderFooter();
     const footer = screen.getByRole("contentinfo");
-    // "Report a concern" IS a real, navigating link -- see the next test.
-    // The three legal links stay non-interactive spans.
-    const links = within(footer).queryAllByRole("link");
-    expect(links).toHaveLength(1);
-    expect(links[0].textContent).toBe("Report a concern");
+    for (const [label, href] of [
+      ["Terms of Service", "/terms"],
+      ["Privacy Policy", "/privacy"],
+      ["Contact Us", "/contact"],
+    ]) {
+      expect(within(footer).getByRole("link", { name: label }).getAttribute("href")).toBe(href);
+    }
+    // Three legal links plus "Report a concern"; the social icons stay non-interactive.
+    expect(within(footer).getAllByRole("link")).toHaveLength(4);
   });
 
   it("links 'Report a concern' to the real /report page", () => {

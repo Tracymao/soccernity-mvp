@@ -4,7 +4,7 @@
 //
 // Rendered once by FooterLayout (src/layout/FooterLayout.tsx), which wraps
 // exactly the routes whose canonical Figma frame carries a footer -- Home,
-// Sports Hub, Leaderboard, Blog, Article Detail. Community / Clubs /
+// Sports Hub, Blog, Article Detail, Contact Us (see FooterLayout.tsx). Community / Clubs /
 // ClubFanPage / Banter have NO footer in their Figma frames (confirmed
 // live) and are deliberately left as direct AppShell children. See
 // src/app/router.tsx and Decision Log #213.
@@ -14,13 +14,11 @@
 // (no logo mark, no social bar, no bullet separators, no rule). See
 // Decision Log #213 and docs/sprint-2-shared-footer-layout-report.md.
 //
-// The legal links and social icons are non-interactive: there are no
-// /terms, /privacy or /contact routes yet (legal pages are unconverted,
-// blocked on Decision Log #203), and Soccernity has no published social
-// accounts to link to -- rendering them as real links would 404 or
-// fabricate a destination. They become real links when those targets
-// exist. The social icon SVGs carry their brand-green fill baked in, the
-// same convention nav-blog.svg etc. already use.
+// The three legal links are real links: /terms and /privacy render the draft legal copy
+// (pages/legal/LegalPage.tsx) and /contact is the Contact Us form (pages/ContactPage.tsx, B-047).
+// The social icons stay non-interactive: Soccernity has no published social accounts to link to, and
+// rendering them as links would fabricate a destination. The social icon SVGs carry their brand-green fill
+// baked in, the same convention nav-blog.svg etc. already use.
 //
 // "Report a concern" (added alongside ReportPage.tsx) IS a real,
 // navigating link -- unlike the legal-links row above, /report exists
@@ -51,7 +49,11 @@ const SOCIALS: { label: string; icon: string }[] = [
 // in Decision Log #222 (founder: "remove, don't relink") -- dropped here
 // too, in sprint-2/privacy-settings-to-code, to keep the code footer in
 // step. Result everywhere: Terms of Service · Privacy Policy · Contact Us.
-const LEGAL_LINKS = ["Terms of Service", "Privacy Policy", "Contact Us"];
+const LEGAL_LINKS: { label: string; to: string }[] = [
+  { label: "Terms of Service", to: "/terms" },
+  { label: "Privacy Policy", to: "/privacy" },
+  { label: "Contact Us", to: "/contact" },
+];
 
 export default function Footer() {
   return (
@@ -72,9 +74,9 @@ export default function Footer() {
 
       <nav className="sn-footer__links" aria-label="Footer">
         {LEGAL_LINKS.map((l) => (
-          <span key={l} className="sn-footer__link">
-            {l}
-          </span>
+          <Link key={l.to} to={l.to} className="sn-footer__link">
+            {l.label}
+          </Link>
         ))}
       </nav>
 
