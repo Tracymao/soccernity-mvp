@@ -46,22 +46,21 @@ export class AdminAuthError extends Error {
   }
 }
 
-// POST /admin/auth/login — { email, password, staySignedIn } → 200 AdminAuthResponse.
+// POST /admin/auth/login — { email, password } → 200 AdminAuthResponse.
 // Same non-enumerating posture as POST /auth/login: a wrong email and a
 // wrong password both return the same generic 401. This client surfaces
 // that as a single "Invalid email or password" message regardless.
 //
-// B-247: cookie mode. `staySignedIn: true` asks for a PERSISTENT refresh cookie,
-// which deliberately preserves what the console did before (the session
-// outlives the browser; the plain login screen has no "stay signed in" choice and
-// none is added here). A non-persistent session cookie (sign out when the browser
-// closes) is the alternative -- an open question for the founder.
+// B-247: cookie mode. The admin session cookie is NON-PERSISTENT by founder
+// decision 2026-10-29: `staySignedIn` is deliberately omitted, so the API issues
+// a session cookie (no Max-Age / Expires) and the session ends when the browser
+// quits. The login screen has no "stay signed in" choice and none is to be added.
 export async function adminLogin(email: string, password: string): Promise<AdminAuthResult> {
   const res = await fetch(`${API_BASE_URL}/admin/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...ADMIN_COOKIE_MODE_HEADERS },
     credentials: "include",
-    body: JSON.stringify({ email, password, staySignedIn: true }),
+    body: JSON.stringify({ email, password }),
   });
   if (res.status === 401) {
     throw new AdminAuthError(401, "Invalid email or password.");
