@@ -239,9 +239,10 @@ export function correctDateOfBirth(id: string, payload: CorrectDobRequest): Prom
 // GET /admin/users/held-investigations (moderator / superadmin) -- accounts whose
 // deletion is held, listed once the hold has lasted more than `olderThanDays`
 // (server default 90, 0 to 3650). Visibility only: nothing here acts on an
-// account. The item carries no hold id and no report id, so a row cannot be
-// lifted from this list (services/api account-deletion-sweep.service.ts
-// StalledHold).
+// account. When the strongest hold is one an admin placed (legal hold, bad faith) the
+// item carries `holdId` and `reportId`, which is what the Lift hold control needs
+// (PATCH /admin/moderation/holds/:holdId/lift); a hold derived from a report carries
+// neither (services/api account-deletion-sweep.service.ts StalledHold).
 export const HELD_INVESTIGATION_HOLD_TYPES = [
   "open_report",
   "appeal_window",
@@ -260,6 +261,11 @@ export interface HeldInvestigation {
   holdType: HeldInvestigationHoldType;
   // true when the strongest hold is one an admin placed (legal_hold, bad_faith).
   isAdminHold: boolean;
+  // The AccountHold to lift. Set only when isAdminHold is true, null for a hold derived
+  // from a report (nothing to lift).
+  holdId: string | null;
+  // The report the admin hold was placed against; can be null even for an admin hold.
+  reportId: string | null;
 }
 
 export interface HeldInvestigationsResult {
