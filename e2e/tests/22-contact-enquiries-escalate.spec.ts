@@ -72,7 +72,7 @@ test.describe.serial('contact enquiries: the tab, the detail page and escalating
 
     const table = page.getByRole('table', { name: 'Contact enquiries' });
     await expect(table).toBeVisible();
-    const row = table.getByRole('row', { name: new RegExp(main.subject.replace(/[()]/g, '\\$&')) });
+    const row = table.getByRole('row').filter({ hasText: main.subject });
     await expect(row).toBeVisible();
     await expect(row).toContainText(main.name);
     await expect(row).toContainText(main.email);
@@ -93,7 +93,7 @@ test.describe.serial('contact enquiries: the tab, the detail page and escalating
     await page.getByLabel('Status').selectOption('');
     await page.getByLabel('Category').selectOption('technical_issues');
     await page.getByRole('button', { name: 'Apply filter' }).click();
-    await expect(page.getByRole('table', { name: 'Contact enquiries' }).getByRole('row', { name: new RegExp(main.name) })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Contact enquiries' }).getByRole('row').filter({ hasText: main.name })).toBeVisible();
 
     // Open it: the detail shows the message and the actions.
     await page.getByRole('link', { name: `Open enquiry from ${main.name}: ${main.subject}` }).click();
