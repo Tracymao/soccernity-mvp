@@ -599,3 +599,157 @@ a.mod-tab {
   font-weight: 600;
   color: var(--sn-text-primary);
 }
+
+/* B-046 part B: Contact enquiries (Figma Admin Contact Enquiries Tab 6876:30850, Enquiry Detail 6878:31198,
+ * Escalate Dialog 6879:31526, Report Detail From Contact Enquiry 6878:31683). Tokens only; the alert colour
+ * stays an accent (callout bar), never text or a button fill. */
+
+.hi-field__box select {
+  flex: 1;
+  min-width: 0;
+  padding: 13px 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  color: var(--sn-text-primary);
+}
+
+.ce-table__row {
+  display: grid;
+  grid-template-columns: 96px 130px minmax(0, 1.3fr) 130px minmax(0, 1.1fr) 80px 80px 90px 70px;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 20px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.ce-table__row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-table__row.mod-table__row--head {
+  background-color: var(--sn-green-tint-12);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+.ce-table__row + .ce-table__row:not(.mod-table__row--head) {
+  border-top: 1px solid var(--sn-icon-inactive);
+}
+
+.ce-cell--name {
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.ce-banner__title {
+  font-weight: 600;
+}
+
+.ce-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .ce-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.ce-kv {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 12px;
+  font-size: 13px;
+}
+
+.ce-kv--stacked {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+
+.ce-kv__label {
+  color: var(--sn-text-secondary);
+}
+
+.ce-kv__value {
+  color: var(--sn-text-primary);
+  word-break: break-word;
+}
+
+.ce-message {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ce-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Escalate dialog: the severity select and the boxed "This concerns a minor" option. */
+
+.mod-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--sn-icon-inactive);
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.mod-select:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 1px;
+}
+
+.mod-checkbox--boxed {
+  padding: 12px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 6px;
+}
+
+.mod-checkbox--boxed > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mod-checkbox__title {
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.mod-checkbox__help {
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.ce-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}

@@ -41,6 +41,7 @@ export function targetLabel(targetType: string): string {
   if (targetType === "banter_room") return "Bants room";
   if (targetType === "grassroots_team") return "Grassroots team";
   if (targetType === "fixture") return "Grassroots fixture";
+  if (targetType === "enquiry") return "Contact enquiry";
   return targetType;
 }
 
@@ -123,13 +124,17 @@ export function MinorFlagBadge() {
 // helpers are the one place that decides how to display that -- every
 // screen that shows "who reported this" goes through them rather than
 // re-deriving the same null-check three times.
-export function reporterCellLabel(report: Pick<Report, "reporterId">): string {
+export function reporterCellLabel(report: Pick<Report, "reporterId" | "source">): string {
+  if (report.source === "contact_enquiry") return "Contact Us";
   return report.reporterId ? `${report.reporterId.slice(0, 8)}…` : "Public report";
 }
 
 export function reporterFullLabel(
-  report: Pick<Report, "reporterId" | "reporterContactEmail">,
+  report: Pick<Report, "reporterId" | "reporterContactEmail" | "source">,
 ): string {
+  if (report.source === "contact_enquiry") {
+    return report.reporterContactEmail ? `Contact Us — ${report.reporterContactEmail}` : "Contact Us";
+  }
   if (report.reporterId) return report.reporterId;
   return report.reporterContactEmail
     ? `Public report — ${report.reporterContactEmail}`

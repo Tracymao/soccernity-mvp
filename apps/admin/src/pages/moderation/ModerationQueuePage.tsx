@@ -23,7 +23,7 @@
 // filters those out (moderation.service.ts) -- so no frontend gate is
 // needed on this screen; see ReportDetailPage.tsx/AppealReviewPage.tsx
 // for the "somehow linked directly" restricted state this can't cover.
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { useState } from "react";
 import AdminPageHeader from "../../layout/AdminPageHeader";
 import { listReports, type Report } from "../../api/moderation";
@@ -72,7 +72,9 @@ function ReportRow({ report, tab }: { report: Report; tab: Tab }) {
 }
 
 export default function ModerationQueuePage() {
-  const [tab, setTab] = useState<Tab>("open");
+  // The Contact enquiries tab links back here with ?tab=appeals for the Appeals tab.
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(searchParams.get("tab") === "appeals" ? "appeals" : "open");
   const backendStatus = tab === "open" ? "open" : "actioned";
   const { data, loading, error, reload } = useAsyncData(
     () => listReports({ status: backendStatus, limit: 50 }),
@@ -131,6 +133,9 @@ export default function ModerationQueuePage() {
           </button>
           <Link className="mod-tab" to="/moderation/media">
             Media review
+          </Link>
+          <Link className="mod-tab" to="/moderation/contact-enquiries">
+            Contact enquiries
           </Link>
           <Link className="mod-tab" to="/moderation/held-investigations">
             Held investigations

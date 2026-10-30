@@ -38,6 +38,7 @@ import {
   type Report,
   type ReportAction,
 } from "../../api/moderation";
+import EnquiryReportView from "./EnquiryReportView";
 import { CaseLevelHoldButtons, CaseLevelHoldCallout, HoldStatus, mergeHolds } from "./holdActions";
 import {
   EscalateReportCard,
@@ -74,14 +75,25 @@ export default function ReportDetailPage() {
       .then((found) => {
         if (cancelled) return;
         if (handedOver) {
-          setReport((prev) => (prev ? { ...prev, holds: found.holds ?? [] } : found));
+          // B-046: a report made from a Contact Us enquiry also needs the enquiry it came from, which only
+          // the single-report read carries.
+          setReport((prev) =>
+            prev
+              ? { ...prev, holds: found.holds ?? [], source: found.source ?? prev.source, contactEnquiry: found.contactEnquiry }
+              : found,
+          );
           return;
         }
         setReport(found);
         setLoadState("loaded");
       })
       .catch((err: unknown) => {
-        if (cancelled || handedOver) return;
+        if (cancelled) return;
+        if (handedOver) {
+          // The enquiry could not be read: say so rather than loading for ever.
+          setReport((prev) => (prev && prev.source === "contact_enquiry" ? { ...prev, contactEnquiry: null } : prev));
+          return;
+        }
         if (isChildSafetyVettingRequiredError(err)) {
           setLoadState("restricted");
         } else if (err instanceof AdminApiError && err.status === 404) {
@@ -179,6 +191,9 @@ export default function ReportDetailPage() {
       </>
     );
   }
+
+  // B-046: a report made by escalating a Contact Us enquiry has no reported user, so it has its own view.
+  if (report.source === "contact_enquiry") return <EnquiryReportView report={report} />;
 
   const alreadyReviewed = report.status !== "open";
 

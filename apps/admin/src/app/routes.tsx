@@ -56,6 +56,8 @@ import ModerationQueuePage from "../pages/moderation/ModerationQueuePage";
 import ReportDetailPage from "../pages/moderation/ReportDetailPage";
 import AppealReviewPage from "../pages/moderation/AppealReviewPage";
 import HeldInvestigationsPage from "../pages/moderation/HeldInvestigationsPage";
+import ContactEnquiriesPage from "../pages/moderation/ContactEnquiriesPage";
+import ContactEnquiryDetailPage from "../pages/moderation/ContactEnquiryDetailPage";
 import MediaReviewQueuePage from "../pages/media-review/MediaReviewQueuePage";
 import MediaReviewItemPage from "../pages/media-review/MediaReviewItemPage";
 import AdminNotFound from "../pages/AdminNotFound";
@@ -103,6 +105,10 @@ export const adminRoutes: RouteObject[] = [
           { path: "moderation/appeals/:id", element: <AppealReviewPage /> },
           // B-045: accounts held by a report or an admin hold (GET /admin/users/held-investigations).
           { path: "moderation/held-investigations", element: <HeldInvestigationsPage /> },
+          // B-046 part B: the Contact Us enquiry inbox (GET /admin/contact-enquiries*), the third tab of the
+          // Moderation Queue, and one enquiry (mark handled, escalate to a report).
+          { path: "moderation/contact-enquiries", element: <ContactEnquiriesPage /> },
+          { path: "moderation/contact-enquiries/:id", element: <ContactEnquiryDetailPage /> },
           // Real screens (FC10, B-240) -- the media review queue (GET /admin/media-review*, B-037/W15):
           // pictures and videos the automatic check was unsure about, and files users reported.
           { path: "moderation/media", element: <MediaReviewQueuePage /> },
