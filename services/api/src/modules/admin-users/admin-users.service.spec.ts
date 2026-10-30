@@ -143,6 +143,21 @@ describe('AdminUsersService', () => {
       expect(out).toEqual({ thresholdDays: 90, items: [] });
       expect(prisma.user.update).not.toHaveBeenCalled();
     });
+
+    // backend/b045-held-list-hold-ids: the items (incl. holdId / reportId) pass through untouched.
+    it('passes the sweep items through unchanged, including holdId and reportId', async () => {
+      const { prisma, tokenService, accountDeletionSweepService, adminActionLogService } = buildDeps();
+      const items = [
+        { userId: 'u1', holdType: 'legal_hold', isAdminHold: true, holdId: 'h1', reportId: 'r1' },
+        { userId: 'u2', holdType: 'open_report', isAdminHold: false, holdId: null, reportId: null },
+      ];
+      (accountDeletionSweepService.listStalledHolds as jest.Mock).mockResolvedValueOnce(items);
+      const service = new AdminUsersService(prisma, tokenService, accountDeletionSweepService, adminActionLogService);
+
+      const out = await service.listStalledHolds(45);
+
+      expect(out).toEqual({ thresholdDays: 45, items });
+    });
   });
 
   describe('listUsers', () => {

@@ -110,6 +110,33 @@ describe('AdminUsersController (HTTP layer)', () => {
       currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
       await request(app.getHttpServer()).get('/admin/users/held-investigations?olderThanDays=-1').expect(400);
     });
+
+    // backend/b045-held-list-hold-ids: holdId / reportId for an admin hold, null for a report-derived one.
+    it('returns holdId and reportId on each item: set for an admin hold, null for a report-derived one', async () => {
+      currentAdmin = { sub: 'admin-1', role: 'moderator', aud: 'admin-console' };
+      const base = { displayName: 'A', email: 'a@x.com', heldSince: '2026-07-01T00:00:00.000Z', daysHeld: 153 };
+      adminUsersService.listStalledHolds.mockResolvedValue({
+        thresholdDays: 90,
+        items: [
+          { ...base, userId: 'u1', holdType: 'legal_hold', isAdminHold: true, holdId: 'hold-1', reportId: 'rep-1' },
+          { ...base, userId: 'u2', holdType: 'bad_faith', isAdminHold: true, holdId: 'hold-2', reportId: 'rep-2' },
+          { ...base, userId: 'u3', holdType: 'open_report', isAdminHold: false, holdId: null, reportId: null },
+        ],
+      });
+
+      const res = await request(app.getHttpServer()).get('/admin/users/held-investigations').expect(200);
+
+      expect(res.body.thresholdDays).toBe(90);
+      expect(
+        res.body.items.map((i: { userId: string; holdId: string | null; reportId: string | null }) => [i.userId, i.holdId, i.reportId]),
+      ).toEqual([
+        ['u1', 'hold-1', 'rep-1'],
+        ['u2', 'hold-2', 'rep-2'],
+        ['u3', null, null],
+      ]);
+      // every existing field is still there, unchanged
+      expect(res.body.items[0]).toMatchObject({ ...base, holdType: 'legal_hold', isAdminHold: true });
+    });
   });
 
   // B-129 (Decision Log #406 item 4): User Detail without the date of birth.
