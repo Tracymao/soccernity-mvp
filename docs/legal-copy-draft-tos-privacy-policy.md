@@ -1,6 +1,6 @@
 # Soccernity — Draft Legal Copy: Terms of Service & Privacy Policy
 
-## DRAFT (v0.8) — NOT APPROVED AS LIVE COPY, NOT LEGAL ADVICE
+## DRAFT (v0.9) — NOT APPROVED AS LIVE COPY, NOT LEGAL ADVICE
 
 **Status: draft output of the `safeguarding-drafter` workflow (`CLAUDE.md` non-negotiable #2). It is
 not approved, not in force, and not ready to publish.**
@@ -33,10 +33,23 @@ Do not fill either from this file. The sign-off block at the end of this documen
 - **Grounded in:** Build Plan Sections 3, 8 and 9; Log Book Section 10; the DPIA draft
   (`docs/sprint-1-dpia-outline-draft.md`); and the merged code on `main` as of 2026-10-05 (checked
   against `services/api`, not recalled from earlier drafts).
-- **Version:** 0.8 (draft — still NOT APPROVED). Earlier versions: v0.1 drafted 2026-09-05; v0.2 applied counsel's
+- **Version:** 0.9 (draft — still NOT APPROVED). Earlier versions: v0.1 drafted 2026-09-05; v0.2 applied counsel's
   09/09/2026 review; v0.3–v0.6 (2026-09-20 to 2026-09-22) added the under-16 tier, adult-to-minor
-  messaging block, consent audit evidence, age reclassification and card verification. Their
+  messaging block, consent audit evidence, age reclassification and card verification; v0.7 applied the
+  counsel-reviewed decisions; v0.8 (2026-10-12) added the audit-driven changes. Their
   per-version changelogs are superseded by this one and live in git history.
+
+### v0.9 changelog (2026-10-30)
+
+A one-topic edit: **Contact Us form retention** (Part C row 42). No other text changed. Founder decision of
+2026-10-30 (Decision Log #440, the founder's own decision and not counsel's): Contact Us submissions are kept for
+**12 months from the last message in the enquiry** and then deleted automatically; and an admin can escalate an
+enquiry that is really a safeguarding concern or a complaint into a report or case record, from which point that
+record's retention applies and the 12-month deletion no longer does. Replaces the "none decided" placeholders in
+PP §1.9 and the §9 retention table. **Every new sentence is tagged `[COPY PENDING LEGAL REVIEW]`; counsel has not
+seen any of it.** Neither the form nor the escalation action is built, so both stay `[PROPOSAL, not yet built]`.
+The only figure added is 12 months; the retention for report and case records is referred to, not restated
+(§9, "Moderation reports and actions").
 
 ### v0.8 changelog (2026-10-12)
 
@@ -645,8 +658,10 @@ different country, and we do not claim to detect that.
 #### 1.9 Contact form, sign-in providers and two-factor authentication
 
 **[PROPOSAL, not yet built]** *Contact Us form:* if you use it we collect your name, email address, the
-category you choose and your message, to answer you. **[OPEN: retention period — Temi/counsel to set;
-none has been decided.]** *Google and Facebook sign-in:* we receive your name and email address from
+category you choose and your message, to answer you. We keep the enquiry for 12 months after the last message in it and then delete it automatically.
+**[COPY PENDING LEGAL REVIEW]** If a message is a safeguarding concern or a complaint, a moderator may turn it into a
+report or case record; it is then kept for as long as that record is kept (Section 9), which can be longer than 12
+months. **[COPY PENDING LEGAL REVIEW]** *Google and Facebook sign-in:* we receive your name and email address from
 the provider you choose. We do **not** receive or use a date of birth from them; you still give your
 date of birth and country at the Age Gate. *Two-factor authentication:* uses an authenticator app;
 we will hold the secret needed to check the codes it generates, protected at rest **[OPEN: details to
@@ -946,7 +961,7 @@ made a concrete decision (Decision Log #42, #341, #344).**
 | **Grassroots teams you organised** | The team survives: dormant, visible read-only, and reassignable to a new user who registers the same team name and city | Reclaim by a new registration of the same name and city |
 | **Investigation hold** **[PROPOSAL, not yet built — Decision Log #376; counsel review pending]** | If you are the reporter, the reported party, or the author of reported content in a moderation report, erasure is paused while the report is open, then until any appeal period has ended or the appeal is decided, then for **6 months** after the matter is closed, whatever the outcome. During the hold we keep the report, the reported content and messages, and identifiers (user ID, name, email, date of birth) and clear data that is not evidence (such as the password hash). A reported person, and the author of reported content, is then deleted in the ordinary way. A reporter whose report was upheld, or where neither party was found at fault, follows the ordinary deletion path and only the report record is kept for the 6 months; a reporter found to have acted in bad faith is held in full for the 6 months. A moderator may also place a **legal hold** on both accounts, which lasts until it is lifted | Closure of the report or appeal, plus 6 months, or lifting of a legal hold. While a report is open no maximum duration is set **[OPEN]** |
 | **A reporter's data held in full** **[PROPOSAL, not yet built — counsel review pending]** | Held in full only so that records exist if the reported person takes legal action against the reporter. It is not used for any other purpose | As above |
-| **Contact Us form submissions** **[PROPOSAL, not yet built]** | Name, email address, category and message, kept to answer the enquiry. **[OPEN: retention period — Temi/counsel to set; none decided.]** | To be set |
+| **Contact Us form submissions** **[PROPOSAL, not yet built]** | Name, email address, category and message, kept to answer the enquiry. Deleted automatically 12 months after the last message in the enquiry **[COPY PENDING LEGAL REVIEW]**. A message that is a safeguarding concern or a complaint may be turned into a report or case record by a moderator; it is then kept with the retention that applies to those records (see "Moderation reports and actions" below), and the 12-month deletion no longer applies to it **[COPY PENDING LEGAL REVIEW]** | 12 months after the last message in the enquiry, automatic; or the retention of the report or case record it became part of |
 | **Country information** **[PROPOSAL, not yet built — Decision Log #368]** | Declared country code, derived country code, method and time are kept with the account. The IP address used for the lookup is never stored. **[OPEN: retention period.]** | To be set |
 | **Guardian-consent records — separate exception** | Not deleted with the rest of your account. Separately snapshotted (the consent status, when consent was confirmed, how it was captured, and — where captured — the consent-screen version and coarse device type; not the full guardian record — the guardian's name, email and relationship to the minor are **not** retained past anonymisation — and never the raw browser string) and kept a further **6 months** after the 30-day grace period ends (**~7 months total**), so Soccernity can demonstrate valid guardian consent if challenged | Automatic, on its own separate timer |
 | **Age-reclassification log** (Decision Log #349) | One row per change to your under-18 / under-16 classification: account ID, which classification, before/after, your age at that moment (no date of birth). While the account is a minor account it follows the same retention as the rest of a minor's account data; once the account is promoted to adult, the ordinary adult retention rules apply | Promotion to adult |
@@ -1107,7 +1122,7 @@ mistaken for settled by the time this reaches counsel or gets converted into Fig
 | 39 | **New in v0.8 — a reporter's data held in full** (only where bad faith is found, or under a legal hold) so records exist if the reported person takes legal action. Narrow-purpose wording is exactly as the founder specified; whether it is lawful and proportionate is for counsel. Not built. Counsel status: **pending** | ToS §8.4; PP §9 | Counsel |
 | 40 | **New in v0.8 — purge rule and anonymised-row retention.** Purge of anonymised rows of never-approved minors and no-content accounts after 30 days; content-bearing anonymised accounts stay until counsel reviews them (supersedes the "no purge timer" decision, Decision Log #344). Also: the 6-month post-closure hold and the appeal window length are not counsel-sourced; tension with the 6–7 year moderation-case retention. Not built. Counsel status: **pending** | ToS §8.3; PP §9 | Counsel |
 | 41 | **New in v0.8 — social sign-in.** Google and Facebook sign-in (name and email from the provider; no DOB; Facebook accounts without an email need a fallback); each provider's role and transfer position. Apple removed from scope. Not built. Counsel status: **pending** | ToS §4.3; PP §1.9, §5 | Counsel |
-| 42 | **New in v0.8 — Contact Us form retention.** Name, email, category, message are collected; **no retention period has been set** and none is invented here. Not built. Counsel status: **pending** | PP §1.9, §9 | Temi + counsel |
+| 42 | **New in v0.8 — Contact Us form retention.** Name, email, category, message are collected; retention is **12 months from the last message in the enquiry, then automatic deletion**, with a moderator able to turn a safeguarding concern or complaint into a report or case record that follows that record's retention instead (Decision Log #440, **the founder's decision, not counsel's**; v0.9 wording, tagged `[COPY PENDING LEGAL REVIEW]`). Counsel has not reviewed the 12-month figure or the escalation wording. Neither the form nor the escalation action is built. Counsel status: **pending** | PP §1.9, §9 | Temi + counsel |
 | 43 | **New in v0.8 — avatar, cover photo, bio and country visible to other users including minors.** Includes minors seeing other minors' profiles. Not built. Counsel status: **pending** | ToS §9.1; PP §1.3, §7 | Founder + counsel |
 | 44 | **New in v0.8 — other new processing:** authenticator-app two-factor authentication (what is stored), email to the minor on guardian approval, mandatory email verification for every user, and the guardian consent page's request summary (returns the minor's name and DOB to an unauthenticated token holder). Not built. Counsel status: **pending** | PP §1.9, §4.2 | Counsel |
 
