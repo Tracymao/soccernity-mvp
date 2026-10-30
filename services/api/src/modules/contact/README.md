@@ -44,15 +44,15 @@ The Contact Us frames draw **no character counter** (checked on the live frame `
 
 | field | max | taken from |
 |---|---|---|
-| message | 3000 | `MESSAGE_TEXT_MAX_LENGTH`, the direct-message limit and the largest free-text user-message limit in the repo (founder decision 2026-10-30; it was 500) |
+| message | 3000 | `MESSAGE_TEXT_MAX_LENGTH` (direct messages), the largest free-text user-message limit in the repo (founder decision 2026-10-30; it was 500, from `CreatePublicReportDto.reason`) |
 | name | 200 | `ChangeGuardianEmailDto`'s name |
 | email | 254 | the same DTO's email limit |
 | subject | 200 | no precedent for a subject line; the name limit was reused. **Veto-able.** |
 
-The `message` column is plain `TEXT` (migration `20261103090000_add_contact_enquiry`): no length limit and no
-CHECK on it, so the 3000 limit lives only in the DTO (`CONTACT_MESSAGE_MAX_LENGTH`) and no migration was
-needed. The escalated Report's `reason` stays capped at 500 (`CONTACT_ENQUIRY_REPORT_REASON_MAX_LENGTH`), so a
-long message is truncated there; the full message stays on the linked enquiry, which the admin report view shows.
+The `message` column is plain `TEXT NOT NULL` with no length CHECK (migration `20261103090000_add_contact_enquiry`),
+so the limit lives only in the DTO and, for the typing cap, in `apps/web`'s own copy of the constant. The escalated
+Report's `reason` stays capped at 500 (`CONTACT_ENQUIRY_REPORT_REASON_MAX_LENGTH`, the report routes' bound); the full
+message stays on the linked enquiry, which the admin report view shows.
 
 ### Rate limits
 
@@ -71,7 +71,8 @@ long message is truncated there; the full message stays on the linked enquiry, w
 On each stored enquiry ONE email goes to `SUPPORT_INBOX_EMAIL` (default `support@soccernity.com`): the
 **category label and a link to the admin inbox, never the name, email, subject or message**. No
 acknowledgement goes to the enquirer. The link is `ADMIN_APP_BASE_URL` + `/moderation/contact-enquiries` (the
-route in `apps/admin/src/app/routes.tsx`); when `ADMIN_APP_BASE_URL` is unusable the email is still sent without a link. A send
+`apps/admin` route; it was first built as `/contact-enquiries`, a path no admin route matches, fixed in
+`backend/w7-contact-followups`); when `ADMIN_APP_BASE_URL` is unusable the email is still sent without a link. A send
 failure never fails the submission (fire-and-forget, one warning with no personal data). Nothing in this
 module ever logs the message body.
 
@@ -111,6 +112,11 @@ a narrow, commented exemption there (`CONTACT_NOT_YET_IN_RENDER`). Follow-up: ad
 
 ## Not built / follow-ups
 
+- The support email links to the inbox list (`/moderation/contact-enquiries`), not to the one enquiry; the email
+  carries no enquiry id by design (it must not carry personal data).
+- A deep link like `/moderation/contact-enquiries` only works once the admin host rewrites unknown paths to
+  `index.html`. `render.yaml` defines no admin static site yet (B-179, launch gate), so that rewrite is still to be
+  configured when the site is created.
 - The privacy-policy wording is a separate drafting PR (Part C row 42).
 - No `apps/web` page is wired to this endpoint yet.
 
@@ -172,9 +178,11 @@ the child-safety-vetting gate (coded 403 `child_safety_vetting_required`, any ro
 
 ### Flagged, not decided
 
-* **The existing outcome email (#143) reaches `reporterContactEmail`.** Closing an enquiry report with an action
-  other than "dismissed" sends the public-reporter outcome email to the address the enquirer typed, which #445
-  notes may not be theirs. Not changed here.
+* **RESOLVED (`backend/w7-enquiry-report-no-outcome-email`, #445 build note 1): the outcome email (#143) is NOT
+  sent for an enquiry report.** `ModerationService.notifyReporterOfOutcome` returns without sending when the
+  report's `targetType` is `'enquiry'`, for every action. The enquirer made no report and the address they typed
+  may not be theirs. The acknowledgement and appeal emails cannot reach an enquiry report either (see the
+  moderation README).
 * A non-vetted admin still sees an enquiry that was escalated with `concernsMinor: true` in this inbox (the
   gate is on the Report, not on the enquiry). Whether it should be hidden is the open question the Figma pass
   also records.

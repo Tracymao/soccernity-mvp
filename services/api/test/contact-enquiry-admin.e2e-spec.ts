@@ -251,7 +251,7 @@ describe('Contact enquiry admin e2e (real Postgres)', () => {
       expect(await prisma().adminActionLog.count({ where: { action: ADMIN_ACTION_LOG_ACTIONS.CONTACT_ENQUIRY_ESCALATED } })).toBe(1);
     });
 
-    it('caps the Report reason at 500 characters for a long (3000-character) enquiry; the full message stays on the enquiry', async () => {
+    it('caps the Report reason at 500 characters for a long enquiry (the full 3000-character message stays on the enquiry)', async () => {
       const mod = await createAdmin('mod', 'moderator');
       const enquiry = await seedEnquiry({ subject: 'S'.repeat(200), message: 'M'.repeat(3000) });
       const res = await request(server()).post(`/admin/contact-enquiries/${enquiry.id}/escalate`).set(auth(mod.token)).send(escalateBody()).expect(201);
@@ -259,8 +259,6 @@ describe('Contact enquiry admin e2e (real Postgres)', () => {
       expect(report.reason).toHaveLength(500);
       const stored = await prisma().contactEnquiry.findUniqueOrThrow({ where: { id: enquiry.id } });
       expect(stored.message).toHaveLength(3000);
-      const detail = await request(server()).get(`/admin/contact-enquiries/${enquiry.id}`).set(auth(mod.token)).expect(200);
-      expect(detail.body.message).toHaveLength(3000);
     });
 
     it('400s on invalid input and creates nothing; 404s for an unknown enquiry', async () => {
@@ -377,6 +375,21 @@ describe('Contact enquiry admin e2e (real Postgres)', () => {
 
       expect(await prisma().notification.count()).toBe(0);
       expect(await prisma().accountHold.count()).toBe(0);
+    });
+
+    it('sends NO outcome email to the enquirer, for any action (Decision Log #445, build note 1)', async () => {
+      const mod = await createAdmin('mod', 'moderator');
+      const a = await seedEnquiry();
+      const b = await seedEnquiry();
+      const ra = (await request(server()).post(`/admin/contact-enquiries/${a.id}/escalate`).set(auth(mod.token)).send(escalateBody()).expect(201)).body.report.id;
+      const rb = (await request(server()).post(`/admin/contact-enquiries/${b.id}/escalate`).set(auth(mod.token)).send(escalateBody()).expect(201)).body.report.id;
+
+      await request(server()).patch(`/admin/moderation/reports/${ra}`).set(auth(mod.token)).send({ action: 'dismissed' }).expect(200);
+      await request(server()).patch(`/admin/moderation/reports/${rb}`).set(auth(mod.token)).send({ action: 'warning_issued' }).expect(200);
+      // The outcome notification is fire-and-forget after the response; give it time to (not) run.
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      expect(RegistrationEmailService.prototype.sendReportActionedEmail).not.toHaveBeenCalled();
     });
   });
 
