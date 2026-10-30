@@ -10,6 +10,7 @@ import {
   Res,
   UnauthorizedException,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import {
@@ -35,6 +36,10 @@ import { LogoutDto } from './dto/logout.dto';
 import { ReactivateAccountDto } from './dto/reactivate-account.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { RefreshRateLimit, SkipGlobalWriteLimit } from '../../rate-limit/global-rate-limit.decorators';
+import { TwoFactorLoginDto } from '../two-factor/dto/two-factor-login.dto';
+import { TwoFactorLockInterceptor } from '../two-factor/two-factor-lock.interceptor';
+import { USER_CODE_IP_LIMIT } from '../two-factor/two-factor.constants';
+import { TwoFactorChallenge } from '../two-factor/two-factor.service';
 
 // Same messages class-validator produced for the old required `refreshToken`, so a body missing
 // the token outside cookie mode is the same 400 as before.
@@ -65,10 +70,32 @@ export class AuthController {
     @Body() dto: LoginDto,
     @Req() req?: Request,
     @Res({ passthrough: true }) res?: Response,
-  ): Promise<AuthResponse | Omit<AuthResponse, 'refreshToken'>> {
+  ): Promise<AuthResponse | Omit<AuthResponse, 'refreshToken'> | TwoFactorChallenge> {
     const staySignedIn = dto.staySignedIn === true;
     const result = await this.authService.login(dto.email, dto.password, staySignedIn);
+    // B-086: an account with two-factor on gets a challenge, never a session and never a cookie.
+    if ('twoFactorRequired' in result) return result;
     return applyCookieSession(USER_SESSION_COOKIE, req, res, result, staySignedIn);
+  }
+
+  // B-086 (Decision Log #446): the second step of sign-in for an account with two-factor on. The body is the opaque
+  // challenge from the password step plus a 6-digit authenticator code OR a backup code. On success it issues the
+  // session exactly as login() does (cookie mode included), keeping the "Stay signed in" choice made at the
+  // password step. A wrong code and an already-used code give the same 401; a locked account a 429 with Retry-After.
+  // Not an @AuthLimit('login') route: wrong codes are bounded by the per-account lock in TwoFactorService, plus this
+  // per-IP limit (30 per 15 minutes; a school can share an address).
+  @SkipGlobalWriteLimit()
+  @AuthRateLimit(USER_CODE_IP_LIMIT)
+  @UseInterceptors(TwoFactorLockInterceptor)
+  @Post('login/two-factor')
+  @HttpCode(HttpStatus.OK)
+  async loginTwoFactor(
+    @Body() dto: TwoFactorLoginDto,
+    @Req() req?: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<AuthResponse | Omit<AuthResponse, 'refreshToken'>> {
+    const { response, persistent } = await this.authService.completeTwoFactorLogin(dto.challengeToken, dto.code);
+    return applyCookieSession(USER_SESSION_COOKIE, req, res, response, persistent);
   }
 
   // Not in the global write class (the two refresh classes below replace it): a classroom whose access
@@ -176,8 +203,10 @@ export class AuthController {
     @Body() dto: ReactivateAccountDto,
     @Req() req?: Request,
     @Res({ passthrough: true }) res?: Response,
-  ): Promise<AuthResponse | Omit<AuthResponse, 'refreshToken'>> {
+  ): Promise<AuthResponse | Omit<AuthResponse, 'refreshToken'> | TwoFactorChallenge> {
     const result = await this.authService.reactivateAccount(dto.email, dto.password);
+    // B-086: with two-factor on this is a challenge, finished by POST /auth/login/two-factor.
+    if ('twoFactorRequired' in result) return result;
     // No "stay signed in" choice here -> a session cookie in cookie mode.
     return applyCookieSession(USER_SESSION_COOKIE, req, res, result, false);
   }

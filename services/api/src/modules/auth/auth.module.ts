@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TwoFactorModule } from '../two-factor/two-factor.module';
 import { AuthFoundationModule } from './auth-foundation.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -17,7 +18,7 @@ import { AuthService } from './auth.service';
 // introduces a global PrismaModule, this provider should be dropped in
 // favour of importing that instead.
 @Module({
-  imports: [AuthFoundationModule],
+  imports: [AuthFoundationModule, TwoFactorModule],
   controllers: [AuthController],
   providers: [AuthService, PrismaService],
   // sprint-1/guardian-consent-decline-withdraw-expiry -- AuthService is

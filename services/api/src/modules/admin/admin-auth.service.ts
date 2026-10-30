@@ -1,6 +1,8 @@
 import { Injectable, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { AdminUser } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AdminEnrolmentRequired, TwoFactorChallenge, TwoFactorService } from '../two-factor/two-factor.service';
 import { PasswordService } from '../auth/password/password.service';
 import { InvalidRefreshTokenError, RefreshTokenReuseDetectedError } from '../auth/token/token.errors';
 import {
@@ -31,6 +33,8 @@ export class AdminAuthService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly passwordService: PasswordService,
     private readonly adminTokenService: AdminTokenService,
+    // backend/b086-two-factor (B-086, B-270): the second step of admin sign-in, and the enrolment gate.
+    private readonly twoFactor: TwoFactorService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -46,7 +50,22 @@ export class AdminAuthService implements OnModuleInit {
   // keep this PR's own verification scope to schema + auth-isolation +
   // CRUD, not because it's an intentional security choice to skip it
   // forever).
-  async login(email: string, password: string, persistent = false): Promise<AdminAuthResponse> {
+  //
+  // backend/b086-two-factor (B-086, B-270; Decision Log #446). After the password and the account status, one of three
+  // things happens, and only the third issues a session:
+  //   1. the admin HAS two-factor on        -> 200 { twoFactorRequired, challengeToken, ... }, finished by
+  //                                            POST /admin/auth/login/two-factor
+  //   2. no two-factor and ADMIN_2FA_ENFORCED is "true" -> 200 { twoFactorEnrolmentRequired, enrolmentToken, ... },
+  //                                            finished by POST /admin/auth/login/two-factor/enrol/{start,confirm}.
+  //                                            No grace period: there is no way to a session without enrolling.
+  //   3. no two-factor and enforcement off  -> the session, as before (the default until the admin screens exist).
+  // Sessions that already exist when ADMIN_2FA_ENFORCED is switched on keep working until they end ("at the next
+  // sign-in", as decided); a peer reset ends the target's sessions, so a reset admin does face the gate.
+  async login(
+    email: string,
+    password: string,
+    persistent = false,
+  ): Promise<AdminAuthResponse | TwoFactorChallenge | AdminEnrolmentRequired> {
     // Same case-insensitive-email convention Decision Log #16 established
     // for User — email is expected to be stored lowercase (see
     // updateOwnProfile's normalization) so matching here must normalize
@@ -73,6 +92,45 @@ export class AdminAuthService implements OnModuleInit {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (admin.totpEnabledAt) {
+      return this.twoFactor.issueChallenge('admin', admin.id, persistent);
+    }
+    if (this.twoFactor.isAdminEnforced()) {
+      return this.twoFactor.issueAdminEnrolmentToken(admin.id, persistent);
+    }
+
+    return this.buildAuthResponse(admin, persistent);
+  }
+
+  // POST /admin/auth/login/two-factor -- an admin with two-factor on finishes sign-in with an authenticator code or a
+  // backup code. The challenge is an ADMIN one: a user challenge (a different Redis namespace) is not found here.
+  async completeTwoFactorLogin(
+    challengeToken: string,
+    code: string,
+  ): Promise<{ response: AdminAuthResponse; persistent: boolean }> {
+    const done = await this.twoFactor.completeChallenge('admin', challengeToken, code);
+    const admin = await this.prisma.adminUser.findUnique({ where: { id: done.subjectId } });
+    if (!admin || admin.accountStatus !== 'active') throw new UnauthorizedException('Invalid credentials');
+    return { response: await this.buildAuthResponse(admin, done.persistent), persistent: done.persistent };
+  }
+
+  // POST /admin/auth/login/two-factor/enrol/confirm -- the first valid code enrols the admin AND finishes sign-in; the
+  // 10 backup codes come back once, alongside the session.
+  async completeEnrolmentLogin(
+    enrolmentToken: string,
+    code: string,
+  ): Promise<{ response: AdminAuthResponse; persistent: boolean; backupCodes: string[] }> {
+    const done = await this.twoFactor.confirmAdminEnrolmentWithToken(enrolmentToken, code);
+    const admin = await this.prisma.adminUser.findUnique({ where: { id: done.adminId } });
+    if (!admin || admin.accountStatus !== 'active') throw new UnauthorizedException('Invalid credentials');
+    return {
+      response: await this.buildAuthResponse(admin, done.persistent),
+      persistent: done.persistent,
+      backupCodes: done.backupCodes,
+    };
+  }
+
+  private async buildAuthResponse(admin: AdminUser, persistent: boolean): Promise<AdminAuthResponse> {
     const tokenPair = await this.adminTokenService.issueTokenPair(admin.id, admin.role, persistent);
     return { ...toAdminTokenPairResponse(tokenPair), admin: toAdminSummary(admin) };
   }

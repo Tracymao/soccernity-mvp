@@ -258,6 +258,9 @@ export class AccountDeletionSweepService {
     `;
     await tx.like.deleteMany({ where: { userId } });
     await tx.savedPost.deleteMany({ where: { userId } });
+    // B-086: the hashes of the user's two-factor backup codes (the secret itself is cleared on the User row by
+    // both callers). Credential material: it goes whenever the account can no longer sign in.
+    await tx.userBackupCode.deleteMany({ where: { userId } });
     await tx.follow.deleteMany({ where: { OR: [{ followerId: userId }, { followeeId: userId }] } });
     // B-039: a Block is a personal-relationship record in BOTH directions (the
     // ones this user made, and the ones made against them); like Follow it is
@@ -297,7 +300,8 @@ export class AccountDeletionSweepService {
   // B-044 (Decision Log #376): what a REPORT-held account gets at the end of its grace period instead of
   // being left untouched. One transaction, idempotent (re-running rewrites the same values and finds the
   // behavioural rows already gone). Clears NON-EVIDENCE data; keeps what the report may need.
-  //   CLEARED: passwordHash (to the unusable value -- the account cannot sign in), phone, bio, preferredClub,
+  //   CLEARED: passwordHash (to the unusable value -- the account cannot sign in), the two-factor secret fields
+  //     and backup codes (B-086), phone, bio, preferredClub,
   //     profileCountry, avatar and cover (columns and, after the commit, the stored objects),
   //     clubAffiliationId, representedClubId, and the behavioural rows deleteBehaviouralRows removes.
   //   KEPT: id, email, displayName, username, dateOfBirth, isMinor, declared/derived country (safeguarding),
@@ -318,6 +322,11 @@ export class AccountDeletionSweepService {
         where: { id: userId },
         data: {
           passwordHash: UNUSABLE_PASSWORD_HASH,
+          // B-086: authenticator-app two-factor is credential material. The encrypted secret goes with the
+          // account's ability to sign in; the backup-code hashes are deleted in deleteBehaviouralRows.
+          totpSecretEncrypted: null,
+          totpEnabledAt: null,
+          totpLastUsedStep: null,
           phone: null,
           bio: null,
           preferredClub: null,
@@ -454,6 +463,11 @@ export class AccountDeletionSweepService {
           // (it is personal data, and would otherwise stay reserved forever).
           username: null,
           passwordHash: UNUSABLE_PASSWORD_HASH,
+          // B-086: authenticator-app two-factor is credential material. The encrypted secret goes with the
+          // account's ability to sign in; the backup-code hashes are deleted in deleteBehaviouralRows.
+          totpSecretEncrypted: null,
+          totpEnabledAt: null,
+          totpLastUsedStep: null,
           dateOfBirth: null,
           // B-023: country is personal data too; the coherence CHECK on User
           // allows the all-NULL state, so clearing all four together is valid.

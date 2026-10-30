@@ -35,6 +35,15 @@ class StubAuthController {
     return { ok: true };
   }
 
+  // B-086: a correct password for an account with two-factor ON ends in a 200 CHALLENGE, not a session.
+  @Post('login-2fa')
+  @AuthLimit('login')
+  @HttpCode(200)
+  loginWithChallenge(@Body() body: { email?: string; password?: string }) {
+    if (body.password !== 'right') throw new UnauthorizedException('Invalid credentials');
+    return { twoFactorRequired: true, challengeToken: 'id.secret', challengeExpiresInSeconds: 300 };
+  }
+
   @Post('forgot')
   @AuthLimit('forgot-password')
   @HttpCode(200)
@@ -233,6 +242,17 @@ describe('auth limits for shared networks (B-256) and per-account-and-IP lockout
       // IPs reach 20, the 21st is refused.
       for (let i = 10; i < 25; i++) await post(app, 'login', `10.4.1.${i}`, { email: 'a@x.com', password: 'wrong' }).expect(401);
       await post(app, 'login', '10.4.1.99', { email: 'a@x.com', password: 'wrong' }).expect(429);
+    });
+
+    it('treats a two-factor CHALLENGE answer as a normal, non-failed outcome: it never consumes the failed-attempt budget', async () => {
+      // 20 correct passwords that each end in a challenge, from the same pair, then the full budget of five wrong
+      // ones is still available (the sixth wrong one is the lock) -- exactly as after 20 ordinary successes.
+      for (let i = 0; i < 20; i++) await post(app, 'login-2fa', '10.9.0.1', { email: 'a@x.com', password: 'right' }).expect(200);
+      for (let i = 0; i < 5; i++) await post(app, 'login-2fa', '10.9.0.1', { email: 'a@x.com', password: 'wrong' }).expect(401);
+      await post(app, 'login-2fa', '10.9.0.1', { email: 'a@x.com', password: 'wrong' }).expect(429);
+      // and the account-wide ceiling saw only those five failures, none of the 20 challenges
+      for (let i = 10; i < 25; i++) await post(app, 'login', `10.9.1.${i}`, { email: 'a@x.com', password: 'wrong' }).expect(401);
+      await post(app, 'login', '10.9.1.99', { email: 'a@x.com', password: 'wrong' }).expect(429);
     });
 
     it('does not let 20 parallel guesses at one account from one IP slip under the limit', async () => {

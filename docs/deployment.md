@@ -91,8 +91,20 @@ No two may be the same.
   `replace-me`, or does not decode to exactly 32 bytes, and logs a message that
   names the variable (never its value). Before this, a bad key booted and only
   failed on the first sign-up or login that touched a date of birth. The same
-  key will also protect the two-factor secrets once two-factor sign-in (B-086)
-  is built, so it must not be rotated casually.
+  key also encrypts the two-factor secrets (authenticator-app sign-in, B-086), so
+  it must not be rotated casually: if it is lost or changed, every stored
+  two-factor secret becomes unreadable too, and every enrolled account (users
+  and admins) has to be reset and re-enrol. `docs/dob-encryption-rollback.md`
+  explains this.
+- **`ADMIN_2FA_ENFORCED` makes two-factor mandatory for admins.** Set it by
+  hand in Render's dashboard, separately for staging and production. Only the
+  exact text `true` turns it on (`TRUE`, `1` or leaving it empty all leave it
+  off, and the API logs a warning at start-up while it is not `true`). It is
+  off by default because turning it on before the Admin Console has its
+  enrolment screens would lock every admin out; **it must be `true` in
+  production at launch** (launch-gate check B-267). If the last superadmin
+  ever loses their device and their backup codes, follow
+  `docs/admin-two-factor-recovery.md`.
 - None of these three has a code default. In production (`NODE_ENV=production`,
   which Render sets) the app now **refuses to start** if `JWT_SECRET` or
   `ADMIN_JWT_SECRET` is unset, still a placeholder such as `replace-me`, or if

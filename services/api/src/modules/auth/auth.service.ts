@@ -1,7 +1,9 @@
 import { Injectable, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { User } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DobEncryptionService } from '../../crypto/dob-encryption.service';
+import { TwoFactorChallenge, TwoFactorService } from '../two-factor/two-factor.service';
 import { AuthResponse, toAuthUserSummary, toTokenPairResponse, TokenPairResponse } from './auth-response.mapper';
 import { PasswordService } from './password/password.service';
 import { InvalidRefreshTokenError, RefreshTokenReuseDetectedError } from './token/token.errors';
@@ -39,6 +41,8 @@ export class AuthService implements OnModuleInit {
     private readonly passwordService: PasswordService,
     private readonly tokenService: TokenService,
     private readonly dobEncryption: DobEncryptionService,
+    // backend/b086-two-factor (B-086): the second step of sign-in for an account that has turned two-factor on.
+    private readonly twoFactor: TwoFactorService,
   ) {}
 
   // B-030: the minor's current Guardian.consentStatus, read fresh, for the
@@ -60,7 +64,11 @@ export class AuthService implements OnModuleInit {
 
   // `persistent` is the B-245 "Stay signed in" flag; it only decides the cookie lifetime in
   // cookie mode and is stored on the refresh-token record so rotation keeps it.
-  async login(email: string, password: string, persistent = false): Promise<AuthResponse> {
+  //
+  // backend/b086-two-factor (B-086): an account with two-factor ON gets NO session here -- the password step ends in a
+  // 200 { twoFactorRequired, challengeToken, challengeExpiresInSeconds } and POST /auth/login/two-factor finishes the
+  // sign-in. The deactivated / not-active checks above run first, so a closed account never reaches a challenge.
+  async login(email: string, password: string, persistent = false): Promise<AuthResponse | TwoFactorChallenge> {
     // Decision Log #16 (Build Plan Section 9): email is stored lowercase
     // on write (registration.service.ts's register()) so matching here
     // must normalize the same way, or a user who registered as
@@ -115,12 +123,38 @@ export class AuthService implements OnModuleInit {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (user.totpEnabledAt) {
+      return this.twoFactor.issueChallenge('user', user.id, persistent);
+    }
+
+    return this.buildAuthResponse(user, persistent);
+  }
+
+  // POST /auth/login/two-factor -- the second step of sign-in. The challenge carries the "Stay signed in" choice made
+  // at the password step. Returns the same AuthResponse login() does, plus the flag the cookie layer needs.
+  async completeTwoFactorLogin(
+    challengeToken: string,
+    code: string,
+  ): Promise<{ response: AuthResponse; persistent: boolean }> {
+    const done = await this.twoFactor.completeChallenge('user', challengeToken, code);
+    let user = await this.prisma.user.findUnique({ where: { id: done.subjectId } });
+    // Re-checked a second time on the full row (completeChallenge already checked the status it needs): the account
+    // may have changed in the milliseconds since.
+    if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (done.purpose === 'reactivate' && user.accountStatus === 'deactivated') {
+      // The reactivation the password step deferred until the second factor was proven.
+      user = await this.prisma.user.update({ where: { id: user.id }, data: { accountStatus: 'active' } });
+    }
+    if (user.accountStatus !== 'active') throw new UnauthorizedException('Invalid credentials');
+    return { response: await this.buildAuthResponse(user, done.persistent), persistent: done.persistent };
+  }
+
+  // The session + `user` snapshot login() and the two-factor completion both return. `user` was already loaded by
+  // the caller -- this is response-shaping plus the token pair, not a new lookup of the account. See
+  // auth-response.mapper.ts's AuthResponse/toAuthUserSummary comments for why isMinor/verificationStatus are safe to
+  // include here even though they must never appear inside the access token itself.
+  private async buildAuthResponse(user: User, persistent: boolean): Promise<AuthResponse> {
     const tokenPair = await this.tokenService.issueTokenPair(user.id, user.role, persistent);
-    // `user` was already loaded above for password verification — this is
-    // response-shaping only, not a new query. See auth-response.mapper.ts's
-    // AuthResponse/toAuthUserSummary comments for why isMinor/
-    // verificationStatus are safe to include here even though they must
-    // never appear inside the access token itself.
     return {
       ...toTokenPairResponse(tokenPair),
       user: toAuthUserSummary(user, this.dobEncryption.decryptNullable(user.dateOfBirth), await this.guardianConsentStatusOf(user)),
@@ -323,7 +357,12 @@ export class AuthService implements OnModuleInit {
   // admin-imposed suspension through this self-service endpoint. Found
   // by tracing every accountStatus branch in this method against the
   // new value, not assumed safe by default.
-  async reactivateAccount(email: string, password: string): Promise<AuthResponse> {
+  //
+  // backend/b086-two-factor (B-086): this endpoint issues a session on a password alone, so for an account with
+  // two-factor ON it would be a way round the second factor. It therefore ends in the same challenge as login(); the
+  // reactivation itself (deactivated -> active) is deferred until POST /auth/login/two-factor proves the second
+  // factor. An already-active account with two-factor takes the same path and is simply signed in.
+  async reactivateAccount(email: string, password: string): Promise<AuthResponse | TwoFactorChallenge> {
     const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     const hashToCheck = user?.passwordHash ?? this.dummyPasswordHash;
     const passwordValid = await this.passwordService.verify(hashToCheck, password);
@@ -337,16 +376,16 @@ export class AuthService implements OnModuleInit {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (user.totpEnabledAt) {
+      return this.twoFactor.issueChallenge('user', user.id, false, 'reactivate');
+    }
+
     const activeUser =
       user.accountStatus === 'deactivated'
         ? await this.prisma.user.update({ where: { id: user.id }, data: { accountStatus: 'active' } })
         : user;
 
-    const tokenPair = await this.tokenService.issueTokenPair(activeUser.id, activeUser.role);
-    return {
-      ...toTokenPairResponse(tokenPair),
-      user: toAuthUserSummary(activeUser, this.dobEncryption.decryptNullable(activeUser.dateOfBirth), await this.guardianConsentStatusOf(activeUser)),
-    };
+    return this.buildAuthResponse(activeUser, false);
   }
 
   // Shared re-auth step for deactivateAccount/deleteAccount: both require

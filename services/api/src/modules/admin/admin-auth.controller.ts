@@ -10,6 +10,7 @@ import {
   Res,
   UnauthorizedException,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import {
@@ -31,6 +32,16 @@ import { AdminJwtAuthGuard } from './guards/admin-jwt-auth.guard';
 import { CurrentAdmin } from './guards/current-admin.decorator';
 import { AdminAccessTokenPayload } from './token/admin-token.types';
 import { SkipGlobalWriteLimit } from '../../rate-limit/global-rate-limit.decorators';
+import { AdminEnrolmentConfirmDto, AdminEnrolmentTokenDto } from '../two-factor/dto/admin-enrolment-token.dto';
+import { TwoFactorLoginDto } from '../two-factor/dto/two-factor-login.dto';
+import { TwoFactorLockInterceptor } from '../two-factor/two-factor-lock.interceptor';
+import { ADMIN_CODE_IP_LIMIT } from '../two-factor/two-factor.constants';
+import {
+  AdminEnrolmentRequired,
+  EnrolmentStart,
+  TwoFactorChallenge,
+  TwoFactorService,
+} from '../two-factor/two-factor.service';
 
 // Same messages class-validator produced for the old required `refreshToken`.
 const MISSING_REFRESH_TOKEN_MESSAGES = ['refreshToken should not be empty', 'refreshToken must be a string'];
@@ -52,7 +63,10 @@ function extractBearerToken(authorizationHeader: string | undefined): string | u
 // candidate in admin/README.md, not silently left unbuilt.
 @Controller('admin/auth')
 export class AdminAuthController {
-  constructor(private readonly adminAuthService: AdminAuthService) {}
+  constructor(
+    private readonly adminAuthService: AdminAuthService,
+    private readonly twoFactor: TwoFactorService,
+  ) {}
 
   // Decision Log #190: a stricter, fixed limit than the shared User-facing
   // 'auth' config (admin accounts are a smaller, higher-value target set).
@@ -67,10 +81,60 @@ export class AdminAuthController {
     @Body() dto: AdminLoginDto,
     @Req() req?: Request,
     @Res({ passthrough: true }) res?: Response,
-  ): Promise<AdminAuthResponse | Omit<AdminAuthResponse, 'refreshToken'>> {
+  ): Promise<
+    AdminAuthResponse | Omit<AdminAuthResponse, 'refreshToken'> | TwoFactorChallenge | AdminEnrolmentRequired
+  > {
     const staySignedIn = dto.staySignedIn === true;
     const result = await this.adminAuthService.login(dto.email, dto.password, staySignedIn);
+    // B-086 / B-270: a challenge or an enrolment token is NOT a session -- no tokens, no cookie.
+    if ('twoFactorRequired' in result || 'twoFactorEnrolmentRequired' in result) return result;
     return applyCookieSession(ADMIN_SESSION_COOKIE, req, res, result, staySignedIn);
+  }
+
+  // B-086 / B-270 (Decision Log #446): the second step of admin sign-in, for an admin with two-factor on. Code
+  // checks are bounded per account (5 wrong in 15 minutes lock it for 15) and, here, per IP: 10 per 15 minutes,
+  // tighter than the user-facing 30 because admin accounts are a smaller, higher-value target (as #190 did for login).
+  @SkipGlobalWriteLimit()
+  @AuthRateLimit(ADMIN_CODE_IP_LIMIT)
+  @UseInterceptors(TwoFactorLockInterceptor)
+  @Post('login/two-factor')
+  @HttpCode(HttpStatus.OK)
+  async loginTwoFactor(
+    @Body() dto: TwoFactorLoginDto,
+    @Req() req?: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<AdminAuthResponse | Omit<AdminAuthResponse, 'refreshToken'>> {
+    const { response, persistent } = await this.adminAuthService.completeTwoFactorLogin(dto.challengeToken, dto.code);
+    return applyCookieSession(ADMIN_SESSION_COOKIE, req, res, response, persistent);
+  }
+
+  // The enrolment gate (ADMIN_2FA_ENFORCED = "true", admin has no two-factor yet). The token comes from the password
+  // step; a login CHALLENGE token does not work here, and an enrolment token does not work on /login/two-factor
+  // (disjoint Redis namespaces). start returns the secret to show; confirm checks the first code, turns two-factor
+  // on, and returns the session plus the 10 backup codes, once.
+  @SkipGlobalWriteLimit()
+  @AuthRateLimit(ADMIN_CODE_IP_LIMIT)
+  @Post('login/two-factor/enrol/start')
+  @HttpCode(HttpStatus.OK)
+  startEnrolment(@Body() dto: AdminEnrolmentTokenDto): Promise<EnrolmentStart> {
+    return this.twoFactor.startAdminEnrolmentWithToken(dto.enrolmentToken);
+  }
+
+  @SkipGlobalWriteLimit()
+  @AuthRateLimit(ADMIN_CODE_IP_LIMIT)
+  @UseInterceptors(TwoFactorLockInterceptor)
+  @Post('login/two-factor/enrol/confirm')
+  @HttpCode(HttpStatus.OK)
+  async confirmEnrolment(
+    @Body() dto: AdminEnrolmentConfirmDto,
+    @Req() req?: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<(AdminAuthResponse | Omit<AdminAuthResponse, 'refreshToken'>) & { backupCodes: string[] }> {
+    const { response, persistent, backupCodes } = await this.adminAuthService.completeEnrolmentLogin(
+      dto.enrolmentToken,
+      dto.code,
+    );
+    return { ...applyCookieSession(ADMIN_SESSION_COOKIE, req, res, response, persistent), backupCodes };
   }
 
   // B-245 cookie mode: see AuthController.refresh. The admin cookie (sn_admin_rt, Path

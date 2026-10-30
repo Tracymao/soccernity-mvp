@@ -4,6 +4,7 @@ import { UnauthorizedException } from '@nestjs/common';
 import { InMemoryRedisFake } from '../auth/token/test-support/in-memory-redis.fake';
 import { PasswordService } from '../auth/password/password.service';
 import { AdminAuthService } from './admin-auth.service';
+import { AdminAuthResponse } from './admin-response.mapper';
 import { AdminRefreshTokenStore } from './token/admin-refresh-token.store';
 import { AdminTokenService } from './token/admin-token.service';
 
@@ -70,6 +71,20 @@ class FakePrismaAdmins {
   }
 }
 
+// B-086 / B-270: login() may now answer with a two-factor challenge or an enrolment token. Every admin seeded in
+// this file has two-factor OFF and enforcement is off, so either would be a bug here; this subclass narrows the
+// declared return type back to the session. The two-factor paths are covered by two-factor/*.spec.ts and
+// test/two-factor.e2e-spec.ts.
+class SessionAdminAuthService extends AdminAuthService {
+  override async login(...args: Parameters<AdminAuthService['login']>): Promise<AdminAuthResponse> {
+    const result = await super.login(...args);
+    if ('twoFactorRequired' in result || 'twoFactorEnrolmentRequired' in result) {
+      throw new Error('unexpected two-factor step');
+    }
+    return result;
+  }
+}
+
 async function buildHarness() {
   const passwordService = new PasswordService();
   const jwtService = new JwtService({ secret: 'unit-test-admin-secret-do-not-use-in-real-env' });
@@ -78,7 +93,18 @@ async function buildHarness() {
   const adminTokenService = new AdminTokenService(jwtService, refreshTokenStore, configService);
   const prisma = new FakePrismaAdmins();
 
-  const adminAuthService = new AdminAuthService(prisma as never, passwordService, adminTokenService);
+  // Two-factor has its own specs; admins seeded here have it off and enforcement is off, so it is never reached.
+  const twoFactorStub = {
+    isAdminEnforced: () => false,
+    issueChallenge: jest.fn(),
+    issueAdminEnrolmentToken: jest.fn(),
+  };
+  const adminAuthService = new SessionAdminAuthService(
+    prisma as never,
+    passwordService,
+    adminTokenService,
+    twoFactorStub as never,
+  );
   await adminAuthService.onModuleInit();
 
   return { adminAuthService, prisma, passwordService, adminTokenService };

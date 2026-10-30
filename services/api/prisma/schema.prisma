@@ -97,6 +97,21 @@ model User {
   // reasoning.
   accountStatus String @default("active")
 
+  // backend/b086-two-factor (B-086; Decision Log #446, #405 item 8, #404 item 7) -- genuine additions beyond Section
+  // 3's User field list, flagged per CLAUDE.md's "fixed spec" rule (Decision Log candidates; see
+  // modules/two-factor/README.md). Authenticator-app two-factor (TOTP), OPTIONAL for a user.
+  //   totpSecretEncrypted  the TOTP secret, AES-256-GCM ciphertext ("v1:<iv>:<tag>:<ct>") under DOB_ENCRYPTION_KEY
+  //                        (the SAME key and code as dateOfBirth, #405). NEVER plaintext. Null = two-factor is off.
+  //                        A secret that is not yet confirmed lives only in Redis (10 min), never here.
+  //   totpEnabledAt        when the first valid code confirmed enrolment. Null = off. This, not the secret column, is
+  //                        what "two-factor is on" means.
+  //   totpLastUsedStep     the 30-second time step of the last accepted code; a code for a step at or below it is
+  //                        refused (replay protection), updated with an atomic compare.
+  totpSecretEncrypted String?
+  totpEnabledAt       DateTime?
+  totpLastUsedStep    Int?
+  twoFactorBackupCodes UserBackupCode[]
+
   // sprint-2/account-deletion-sweep — a genuine addition beyond Section
   // 3's literal User field list, flagged per CLAUDE.md's "the data model
   // is a fixed spec" rule. Set the moment accountStatus flips to
@@ -1900,6 +1915,14 @@ model AdminUser {
   vettedByAdminId         String?
   vettedByAdmin           AdminUser?       @relation("adminVettedBy", fields: [vettedByAdminId], references: [id])
   vettedAdmins            AdminUser[]      @relation("adminVettedBy")
+  // backend/b086-two-factor (B-086, B-270; Decision Log #446) -- same three fields as User (see the comment there):
+  // authenticator-app two-factor for an admin, MANDATORY before launch (enforced at sign-in by ADMIN_2FA_ENFORCED),
+  // secret encrypted with DOB_ENCRYPTION_KEY, replay protection by totpLastUsedStep. A peer superadmin can reset it
+  // (never one's own); clearing these fields and deleting the AdminBackupCode rows is what a reset is.
+  totpSecretEncrypted     String?
+  totpEnabledAt           DateTime?
+  totpLastUsedStep        Int?
+  twoFactorBackupCodes    AdminBackupCode[]
   // Reverse relation for AdminActionLog.admin (see that model's own
   // comment). No application code writes AdminActionLog rows yet.
   actionLogs              AdminActionLog[]
@@ -2639,4 +2662,32 @@ model PostMediaReport {
 
   @@unique([mediaId, reporterId])
   @@index([createdAt])
+}
+
+// backend/b086-two-factor (B-086; Decision Log #404 item 7, #405 item 8, #446). A genuine new model, flagged per
+// CLAUDE.md's "fixed spec" rule. One of a user's 10 single-use recovery codes. codeHash is argon2id (PasswordService) of
+// the normalised 10-character code -- the plaintext is shown to the user once and never stored. usedAt is the single-use
+// marker, spent with an updateMany guarded on usedAt IS NULL. All of a user's codes are deleted when two-factor is turned
+// off or regenerated. Cascade: gone with the account row.
+model UserBackupCode {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// The admin equivalent of UserBackupCode (B-270): a separate table so the two auth domains share no rows.
+model AdminBackupCode {
+  id        String    @id @default(uuid())
+  adminId   String
+  admin     AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([adminId])
 }

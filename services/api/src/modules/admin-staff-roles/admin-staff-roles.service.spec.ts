@@ -11,6 +11,8 @@ const passwordServiceMock = { hash: jest.fn().mockResolvedValue('hashed-pw') };
 // ever calls this; every pre-existing call site above passes it through
 // unused, matching passwordServiceMock's own "harmless if unused" shape.
 const adminTokenServiceMock = { revokeAllSessionsForAdmin: jest.fn().mockResolvedValue(undefined) };
+// backend/b086-two-factor (B-270): only resetTwoFactor ever calls this (see the resetTwoFactor block below).
+const twoFactorMock = { resetAdmin: jest.fn() };
 
 function buildPrismaMock() {
   const prisma = {
@@ -55,7 +57,7 @@ describe('AdminStaffRolesService', () => {
       const prisma = buildPrismaMock();
       const adminActionLogService = buildAdminActionLogServiceMock();
       (prisma.adminUser.findMany as jest.Mock).mockResolvedValue([]);
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       await service.listStaff({ role: 'moderator', limit: 10 });
 
@@ -74,7 +76,7 @@ describe('AdminStaffRolesService', () => {
         admin({ id: `admin-${i}`, createdAt: new Date(2026, 8, i + 1) }),
       );
       (prisma.adminUser.findMany as jest.Mock).mockResolvedValue(rows);
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       const page = await service.listStaff({ limit: 2 });
 
@@ -89,7 +91,7 @@ describe('AdminStaffRolesService', () => {
         admin({ id: `admin-${i}`, createdAt: new Date(2026, 8, i + 1) }),
       );
       (prisma.adminUser.findMany as jest.Mock).mockResolvedValue(rows);
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       const page = await service.listStaff({ limit: 2 });
 
@@ -100,7 +102,7 @@ describe('AdminStaffRolesService', () => {
     it('decodes a supplied cursor into an (createdAt, id) OR condition', async () => {
       const prisma = buildPrismaMock();
       const adminActionLogService = buildAdminActionLogServiceMock();
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
       const cursor = encodeAdminStaffRolesCursor({ createdAt: new Date('2026-09-01T00:00:00.000Z'), id: 'admin-9' });
 
       await service.listStaff({ cursor });
@@ -124,7 +126,7 @@ describe('AdminStaffRolesService', () => {
     it('never leaks passwordHash — the select clause is an explicit allowlist', async () => {
       const prisma = buildPrismaMock();
       const adminActionLogService = buildAdminActionLogServiceMock();
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       await service.listStaff({});
 
@@ -151,7 +153,7 @@ describe('AdminStaffRolesService', () => {
       (prisma.adminUser.findMany as jest.Mock).mockResolvedValue([
         admin({ childSafetyVetted: true, vettedAt: new Date('2026-09-20T00:00:00.000Z'), vettedByAdminId: 'superadmin-1' }),
       ]);
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       const page = await service.listStaff({});
 
@@ -167,7 +169,7 @@ describe('AdminStaffRolesService', () => {
       const prisma = buildPrismaMock();
       const adminActionLogService = buildAdminActionLogServiceMock();
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       await expect(
         service.updateAdminRole('missing', 'superadmin-1', { role: 'moderator' }),
@@ -181,7 +183,7 @@ describe('AdminStaffRolesService', () => {
       const adminActionLogService = buildAdminActionLogServiceMock();
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ id: 'admin-1', role: 'editor' });
       (prisma.adminUser.update as jest.Mock).mockResolvedValue(admin({ role: 'moderator' }));
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       const result = await service.updateAdminRole('admin-1', 'superadmin-1', { role: 'moderator' });
 
@@ -214,7 +216,7 @@ describe('AdminStaffRolesService', () => {
       const adminActionLogService = buildAdminActionLogServiceMock();
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ id: 'admin-1', role: 'moderator' });
       (prisma.adminUser.update as jest.Mock).mockResolvedValue(admin({ role: 'superadmin' }));
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       const result = await service.updateAdminRole('admin-1', 'superadmin-1', { role: 'superadmin' });
 
@@ -228,7 +230,7 @@ describe('AdminStaffRolesService', () => {
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ id: 'admin-1', role: 'superadmin' });
       (prisma.adminUser.count as jest.Mock).mockResolvedValue(1);
       (prisma.adminUser.update as jest.Mock).mockResolvedValue(admin({ role: 'editor' }));
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       const result = await service.updateAdminRole('admin-1', 'superadmin-1', { role: 'editor' });
 
@@ -244,7 +246,7 @@ describe('AdminStaffRolesService', () => {
       const adminActionLogService = buildAdminActionLogServiceMock();
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ id: 'admin-1', role: 'superadmin' });
       (prisma.adminUser.count as jest.Mock).mockResolvedValue(0);
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       await expect(
         service.updateAdminRole('admin-1', 'admin-1', { role: 'editor' }),
@@ -258,7 +260,7 @@ describe('AdminStaffRolesService', () => {
       const adminActionLogService = buildAdminActionLogServiceMock();
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ id: 'superadmin-1', role: 'superadmin' });
       (prisma.adminUser.update as jest.Mock).mockResolvedValue(admin({ id: 'superadmin-1', role: 'superadmin' }));
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       await service.updateAdminRole('superadmin-1', 'superadmin-1', { role: 'superadmin' });
 
@@ -270,7 +272,7 @@ describe('AdminStaffRolesService', () => {
       const adminActionLogService = buildAdminActionLogServiceMock();
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ id: 'superadmin-1', role: 'superadmin' });
       (prisma.adminUser.count as jest.Mock).mockResolvedValue(0);
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       await expect(
         service.updateAdminRole('superadmin-1', 'superadmin-1', { role: 'moderator' }),
@@ -284,7 +286,7 @@ describe('AdminStaffRolesService', () => {
       const adminActionLogService = buildAdminActionLogServiceMock();
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ id: 'admin-1', role: 'editor' });
       (prisma.adminUser.update as jest.Mock).mockResolvedValue(admin({ role: 'moderator' }));
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       await service.updateAdminRole('admin-1', 'superadmin-1', { role: 'moderator' });
 
@@ -303,7 +305,7 @@ describe('AdminStaffRolesService', () => {
       const adminActionLogService = buildAdminActionLogServiceMock();
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ id: 'admin-1', role: 'superadmin' });
       (prisma.adminUser.count as jest.Mock).mockResolvedValue(0);
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       await expect(
         service.updateAdminRole('admin-1', 'superadmin-1', { role: 'editor' }),
@@ -315,7 +317,7 @@ describe('AdminStaffRolesService', () => {
       const prisma = buildPrismaMock();
       const adminActionLogService = buildAdminActionLogServiceMock();
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       await expect(
         service.updateAdminRole('missing', 'superadmin-1', { role: 'editor' }),
@@ -331,7 +333,7 @@ describe('AdminStaffRolesService', () => {
       const prisma = buildPrismaMock();
       const adminActionLogService = buildAdminActionLogServiceMock();
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       await expect(
         service.updateAdminStatus('missing', 'superadmin-1', { status: 'deactivated' }),
@@ -346,7 +348,7 @@ describe('AdminStaffRolesService', () => {
       const adminActionLogService = buildAdminActionLogServiceMock();
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ id: 'admin-1', role: 'editor', accountStatus: 'active' });
       (prisma.adminUser.update as jest.Mock).mockResolvedValue(admin({ accountStatus: 'deactivated' }));
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       const result = await service.updateAdminStatus('admin-1', 'superadmin-1', { status: 'deactivated' });
 
@@ -377,7 +379,7 @@ describe('AdminStaffRolesService', () => {
       const adminActionLogService = buildAdminActionLogServiceMock();
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ id: 'admin-1', role: 'editor', accountStatus: 'deactivated' });
       (prisma.adminUser.update as jest.Mock).mockResolvedValue(admin({ accountStatus: 'active' }));
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       const result = await service.updateAdminStatus('admin-1', 'superadmin-1', { status: 'active' });
 
@@ -392,7 +394,7 @@ describe('AdminStaffRolesService', () => {
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ id: 'admin-1', role: 'superadmin', accountStatus: 'active' });
       (prisma.adminUser.count as jest.Mock).mockResolvedValue(1);
       (prisma.adminUser.update as jest.Mock).mockResolvedValue(admin({ role: 'superadmin', accountStatus: 'deactivated' }));
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       const result = await service.updateAdminStatus('admin-1', 'superadmin-1', { status: 'deactivated' });
 
@@ -408,7 +410,7 @@ describe('AdminStaffRolesService', () => {
       const adminActionLogService = buildAdminActionLogServiceMock();
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ id: 'admin-1', role: 'superadmin', accountStatus: 'active' });
       (prisma.adminUser.count as jest.Mock).mockResolvedValue(0);
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       await expect(
         service.updateAdminStatus('admin-1', 'admin-1', { status: 'deactivated' }),
@@ -423,7 +425,7 @@ describe('AdminStaffRolesService', () => {
       const adminActionLogService = buildAdminActionLogServiceMock();
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ id: 'admin-1', role: 'superadmin', accountStatus: 'deactivated' });
       (prisma.adminUser.update as jest.Mock).mockResolvedValue(admin({ role: 'superadmin', accountStatus: 'deactivated' }));
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       // Re-sending the same deactivated status is a harmless no-op write
       // — the guard only ever fires when the target is currently active.
@@ -437,7 +439,7 @@ describe('AdminStaffRolesService', () => {
       const adminActionLogService = buildAdminActionLogServiceMock();
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ id: 'superadmin-1', role: 'superadmin', accountStatus: 'active' });
       (prisma.adminUser.update as jest.Mock).mockResolvedValue(admin({ id: 'superadmin-1', role: 'superadmin', accountStatus: 'active' }));
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       await service.updateAdminStatus('superadmin-1', 'superadmin-1', { status: 'active' });
 
@@ -449,7 +451,7 @@ describe('AdminStaffRolesService', () => {
       const adminActionLogService = buildAdminActionLogServiceMock();
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ id: 'superadmin-1', role: 'superadmin', accountStatus: 'active' });
       (prisma.adminUser.count as jest.Mock).mockResolvedValue(0);
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       await expect(
         service.updateAdminStatus('superadmin-1', 'superadmin-1', { status: 'deactivated' }),
@@ -463,7 +465,7 @@ describe('AdminStaffRolesService', () => {
       const adminActionLogService = buildAdminActionLogServiceMock();
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ id: 'admin-1', role: 'editor', accountStatus: 'active' });
       (prisma.adminUser.update as jest.Mock).mockResolvedValue(admin({ accountStatus: 'deactivated' }));
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       await service.updateAdminStatus('admin-1', 'superadmin-1', { status: 'deactivated' });
 
@@ -482,7 +484,7 @@ describe('AdminStaffRolesService', () => {
       const adminActionLogService = buildAdminActionLogServiceMock();
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ id: 'admin-1', role: 'superadmin', accountStatus: 'active' });
       (prisma.adminUser.count as jest.Mock).mockResolvedValue(0);
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       await expect(
         service.updateAdminStatus('admin-1', 'superadmin-1', { status: 'deactivated' }),
@@ -494,7 +496,7 @@ describe('AdminStaffRolesService', () => {
       const prisma = buildPrismaMock();
       const adminActionLogService = buildAdminActionLogServiceMock();
       (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue(null);
-      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, adminActionLogService as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
 
       await expect(
         service.updateAdminStatus('missing', 'superadmin-1', { status: 'deactivated' }),
@@ -511,7 +513,7 @@ describe('AdminStaffRolesService', () => {
       (prisma.adminUser.create as jest.Mock).mockImplementation(async ({ data }) =>
         admin({ id: 'new-admin', email: data.email, fullName: data.fullName, role: data.role }),
       );
-      const service = new AdminStaffRolesService(prisma, log as never, passwordServiceMock as never, adminTokenServiceMock as never);
+      const service = new AdminStaffRolesService(prisma, log as never, passwordServiceMock as never, adminTokenServiceMock as never, twoFactorMock as never);
       return { prisma, log, service };
     }
 
@@ -573,5 +575,82 @@ describe('AdminStaffRolesService', () => {
       ).rejects.toBeInstanceOf(ConflictException);
       expect(log.record).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('AdminStaffRolesService.resetTwoFactor (B-270, Decision Log #446)', () => {
+  function setup() {
+    const prisma = buildPrismaMock();
+    const log = buildAdminActionLogServiceMock();
+    const twoFactor = { resetAdmin: jest.fn() };
+    const tokens = { revokeAllSessionsForAdmin: jest.fn().mockResolvedValue(undefined) };
+    (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue({ id: 'target-1', role: 'moderator', accountStatus: 'active' });
+    const service = new AdminStaffRolesService(prisma, log as never, passwordServiceMock as never, tokens as never, twoFactor as never);
+    return { prisma, log, twoFactor, tokens, service };
+  }
+
+  it('NOBODY can reset their own: 403 with a code, and nothing is read, cleared or revoked', async () => {
+    const { prisma, twoFactor, tokens, service } = setup();
+    await expect(service.resetTwoFactor('super-1', 'super-1')).rejects.toMatchObject({
+      status: 403,
+      response: { code: 'cannot_reset_own_two_factor' },
+    });
+    expect(prisma.adminUser.findUnique).not.toHaveBeenCalled();
+    expect(twoFactor.resetAdmin).not.toHaveBeenCalled();
+    expect(tokens.revokeAllSessionsForAdmin).not.toHaveBeenCalled();
+  });
+
+  it('is a 404 for an admin that does not exist (nothing cleared)', async () => {
+    const { prisma, twoFactor, service } = setup();
+    (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue(null);
+    await expect(service.resetTwoFactor('ghost', 'super-1')).rejects.toBeInstanceOf(NotFoundException);
+    expect(twoFactor.resetAdmin).not.toHaveBeenCalled();
+  });
+
+  it('a peer superadmin clears the target, writes the audit row INSIDE the same transaction, then ends every session', async () => {
+    const { twoFactor, tokens, service } = setup();
+    const txCreate = jest.fn().mockResolvedValue(undefined);
+    twoFactor.resetAdmin.mockImplementation(async (_id: string, extra: (tx: unknown) => Promise<void>) => {
+      await extra({ adminActionLog: { create: txCreate } });
+      return true;
+    });
+
+    const result = await service.resetTwoFactor('target-1', 'super-1');
+
+    expect(result).toEqual({ id: 'target-1', twoFactorEnabled: false });
+    expect(twoFactor.resetAdmin).toHaveBeenCalledWith('target-1', expect.any(Function));
+    expect(txCreate).toHaveBeenCalledWith({
+      data: {
+        adminId: 'super-1', // the CALLER, not the target
+        action: 'admin_user.two_factor_reset',
+        targetType: 'admin_user',
+        targetId: 'target-1',
+        notes: 'sessions_ended',
+      },
+    });
+    expect(tokens.revokeAllSessionsForAdmin).toHaveBeenCalledWith('target-1');
+  });
+
+  it('the audit notes carry no secret, code, hash or password', async () => {
+    const { twoFactor, service } = setup();
+    const txCreate = jest.fn().mockResolvedValue(undefined);
+    twoFactor.resetAdmin.mockImplementation(async (_id: string, extra: (tx: unknown) => Promise<void>) => {
+      await extra({ adminActionLog: { create: txCreate } });
+      return true;
+    });
+    await service.resetTwoFactor('target-1', 'super-1');
+    const notes = String(txCreate.mock.calls[0][0].data.notes);
+    expect(notes).not.toMatch(/secret|code|hash|password|totp/i);
+  });
+
+  it('is a 409 when the target has no two-factor to reset: no audit row, no sessions ended', async () => {
+    const { log, twoFactor, tokens, service } = setup();
+    twoFactor.resetAdmin.mockResolvedValue(false);
+    await expect(service.resetTwoFactor('target-1', 'super-1')).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'two_factor_not_enabled' },
+    });
+    expect(tokens.revokeAllSessionsForAdmin).not.toHaveBeenCalled();
+    expect(log.record).not.toHaveBeenCalled();
   });
 });

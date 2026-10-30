@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { AdminJwtAuthGuard } from '../admin/guards/admin-jwt-auth.guard';
 import { AdminRoles } from '../admin/guards/admin-roles.decorator';
 import { AdminRolesGuard } from '../admin/guards/admin-roles.guard';
@@ -58,6 +58,15 @@ export class AdminStaffRolesController {
   // accountStatus (Decision Log #193). See
   // AdminStaffRolesService.updateAdminStatus's own comment for the full
   // guard/revocation reasoning.
+  // POST /admin/staff/:id/two-factor/reset (backend/b086-two-factor, B-270; Decision Log #446). A peer superadmin
+  // clears the TARGET's authenticator-app two-factor and ends their sessions; nobody can reset their OWN (403).
+  // Superadmin-only like the rest of this controller. See AdminStaffRolesService.resetTwoFactor.
+  @Post(':id/two-factor/reset')
+  @HttpCode(HttpStatus.OK)
+  async resetTwoFactor(@Param('id') id: string, @CurrentAdmin() admin: AdminAccessTokenPayload) {
+    return this.adminStaffRolesService.resetTwoFactor(id, admin.sub);
+  }
+
   @Patch(':id/status')
   async updateStatus(
     @Param('id') id: string,

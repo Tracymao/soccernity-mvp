@@ -145,6 +145,12 @@ services:
       # ADMIN_JWT_REFRESH_TTL_DAYS: code default (admin-token.constants.ts)
       - key: ADMIN_JWT_REFRESH_TTL_DAYS
         value: "7"
+      # ADMIN_2FA_ENFORCED (B-086 / B-270): only the literal "true" makes authenticator-app two-factor mandatory
+      # for admins at sign-in. Set by hand in the dashboard (sync: false) so a Blueprint re-sync can never silently
+      # switch it back off. Unset = off, with a warning logged at start; it MUST be "true" in production at launch
+      # (docs/deployment.md, launch-gate check B-267).
+      - key: ADMIN_2FA_ENFORCED
+        sync: false
       - key: GUARDIAN_CONSENT_TOKEN_TTL_HOURS
         sync: false
       # GUARDIAN_CONSENT_WITHDRAWAL_TOKEN_TTL_HOURS: code default (consent-token.constants.ts)
@@ -432,6 +438,12 @@ services:
       # ADMIN_JWT_REFRESH_TTL_DAYS: code default (admin-token.constants.ts)
       - key: ADMIN_JWT_REFRESH_TTL_DAYS
         value: "7"
+      # ADMIN_2FA_ENFORCED (B-086 / B-270): only the literal "true" makes authenticator-app two-factor mandatory
+      # for admins at sign-in. Set by hand in the dashboard (sync: false) so a Blueprint re-sync can never silently
+      # switch it back off. Unset = off, with a warning logged at start; it MUST be "true" in production at launch
+      # (docs/deployment.md, launch-gate check B-267).
+      - key: ADMIN_2FA_ENFORCED
+        sync: false
       - key: GUARDIAN_CONSENT_TOKEN_TTL_HOURS
         sync: false
       # GUARDIAN_CONSENT_WITHDRAWAL_TOKEN_TTL_HOURS: code default (consent-token.constants.ts)

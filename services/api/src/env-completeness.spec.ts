@@ -100,6 +100,19 @@ describe('environment completeness (B-018)', () => {
     expect(read.has('WEB_APP_BASE_URL')).toBe(true);
   });
 
+  // B-086 / B-270: the admin two-factor switch must be seen by the scanner (read with a literal name), declared in
+  // both services and documented -- the three generic tests below then keep it that way.
+  it('knows about ADMIN_2FA_ENFORCED, declared by hand (sync: false) in both render.yaml services and in .env.example', () => {
+    expect(read.has('ADMIN_2FA_ENFORCED')).toBe(true);
+    expect(services.every((keys) => keys.has('ADMIN_2FA_ENFORCED'))).toBe(true);
+    expect(example.has('ADMIN_2FA_ENFORCED')).toBe(true);
+    const yaml = fs.readFileSync(path.join(REPO_ROOT, 'render.yaml'), 'utf8');
+    const declarations = [...yaml.matchAll(/-\s+key:\s+ADMIN_2FA_ENFORCED\s*\r?\n\s+(sync: false|value:[^\r\n]*)/g)];
+    expect(declarations).toHaveLength(2);
+    // sync: false, so a Blueprint re-sync can never silently switch enforcement back off.
+    for (const d of declarations) expect(d[1]).toBe('sync: false');
+  });
+
   it('every variable the code reads is declared in render.yaml for BOTH services', () => {
     const missing: string[] = [];
     services.forEach((keys, i) => {

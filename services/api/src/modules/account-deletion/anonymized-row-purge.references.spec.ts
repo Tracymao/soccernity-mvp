@@ -48,7 +48,8 @@ describe('purge reference classification', () => {
       const field = models.find((m) => m.name === r.model)?.fields.find((f) => f.name === r.field);
       return field?.relationOnDelete === 'Cascade';
     });
-    // The five the register named, plus the two membership tables the anonymiser empties itself.
+    // The five the register named, plus the two membership tables the anonymiser empties itself, plus the
+    // two-factor backup codes it deletes (B-086).
     expect(cascading.map((r) => r.key).sort()).toEqual(
       [
         'BanterRoomMember.user',
@@ -58,6 +59,7 @@ describe('purge reference classification', () => {
         'ContestRoundWinner.user',
         'ContestStanding.user',
         'PointsLedgerEntry.user',
+        'UserBackupCode.user',
       ].sort(),
     );
     expect(unclassifiedRelationKeys(cascading)).toEqual([]);

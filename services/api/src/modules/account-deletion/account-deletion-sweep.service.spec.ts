@@ -24,6 +24,8 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
     consentAuditRecord: { create: jest.fn(), deleteMany: jest.fn() },
     like: { deleteMany: jest.fn() },
     savedPost: { deleteMany: jest.fn() },
+    // B-086: the hashes of the user's two-factor backup codes go with the account's ability to sign in.
+    userBackupCode: { deleteMany: jest.fn() },
     follow: { deleteMany: jest.fn() },
     // B-039: Block rows (both directions) are removed with the user's other relationship rows.
     block: { deleteMany: jest.fn() },
@@ -276,6 +278,10 @@ describe('AccountDeletionSweepService', () => {
   describe('minimiseHeldUser', () => {
     const CLEARED_FIELDS = {
       passwordHash: UNUSABLE_PASSWORD_HASH,
+      // B-086: the encrypted authenticator secret is credential material
+      totpSecretEncrypted: null,
+      totpEnabledAt: null,
+      totpLastUsedStep: null,
       phone: null,
       bio: null,
       preferredClub: null,
@@ -327,6 +333,7 @@ describe('AccountDeletionSweepService', () => {
       expect((prisma as unknown as { $transaction: jest.Mock }).$transaction).toHaveBeenCalledTimes(1);
       expect(prisma.like.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.savedPost.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.userBackupCode.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.follow.deleteMany).toHaveBeenCalledWith({
         where: { OR: [{ followerId: 'user-1' }, { followeeId: 'user-1' }] },
       });
@@ -580,6 +587,10 @@ describe('AccountDeletionSweepService', () => {
           displayName: DELETED_USER_DISPLAY_NAME,
           username: null,
           passwordHash: UNUSABLE_PASSWORD_HASH,
+          // B-086: the encrypted authenticator secret goes with the account's ability to sign in.
+          totpSecretEncrypted: null,
+          totpEnabledAt: null,
+          totpLastUsedStep: null,
           dateOfBirth: null,
           clubAffiliationId: null,
           // B-023: the four country fields are personal data and are cleared too.
@@ -622,6 +633,7 @@ describe('AccountDeletionSweepService', () => {
 
       expect(prisma.like.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.savedPost.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.userBackupCode.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.follow.deleteMany).toHaveBeenCalledWith({
         where: { OR: [{ followerId: 'user-1' }, { followeeId: 'user-1' }] },
       });

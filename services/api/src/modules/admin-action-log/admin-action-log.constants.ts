@@ -59,6 +59,10 @@ export const ADMIN_ACTION_LOG_ACTIONS = {
   // (active/deactivated). Mirrors USER_STATUS_UPDATED's naming for the
   // User-side equivalent.
   ADMIN_ACCOUNT_STATUS_UPDATED: 'admin_user.status_updated',
+  // POST /admin/staff/:id/two-factor/reset (backend/b086-two-factor, B-270, Decision Log #446) -- a superadmin cleared
+  // ANOTHER admin's authenticator-app two-factor (secret and backup codes) and ended their sessions. Written in the SAME
+  // transaction as the reset. targetType 'admin_user'. Notes carry no secret, code or hash.
+  ADMIN_TWO_FACTOR_RESET: 'admin_user.two_factor_reset',
   // POST /admin/contest/cycles (backend/w7-contest, B-091) -- an admin created a month's Contest.
   // targetType 'contest_cycle'. Notes carry the month and the title, never the minimum tally.
   CONTEST_CYCLE_CREATED: 'contest_cycle.created',
