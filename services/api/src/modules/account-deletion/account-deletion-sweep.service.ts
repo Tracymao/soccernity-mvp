@@ -100,6 +100,12 @@ export interface StalledHold {
   // bad_faith), false when it is derived from a report. The screen's "marker" for a hold that can be lifted
   // from the Report detail. Additive.
   isAdminHold: boolean;
+  // backend/b045-held-list-hold-ids (B-045 follow-up): the ids needed to lift an admin hold
+  // (PATCH /admin/moderation/holds/:holdId/lift). Set ONLY when isAdminHold is true, and then they are the
+  // AccountHold the holdType comes from; null for a report-derived hold (nothing to lift). reportId can be
+  // null even for an admin hold if that hold was not placed against a report. Additive.
+  holdId: string | null;
+  reportId: string | null;
 }
 
 export interface SweepPendingDeletionsResult {
@@ -230,6 +236,8 @@ export class AccountDeletionSweepService {
         daysHeld: Math.floor((now.getTime() - heldSince.getTime()) / dayMs),
         holdType: hold.type,
         isAdminHold: hold.kind === 'admin',
+        holdId: hold.holdId,
+        reportId: hold.reportId,
       });
     }
     return stalled;

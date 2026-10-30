@@ -27,6 +27,7 @@ comment update on an already-`String` column, **no migration**. See
 | Method & path | Guards | Purpose |
 |---|---|---|
 | `GET /admin/users` | `AdminJwtAuthGuard` + `AdminRolesGuard('moderator', 'superadmin')` | The platform-user list, keyset-paginated, optional `?status=` filter (any of the four real `accountStatus` values). |
+| `GET /admin/users/held-investigations` | same | Accounts held past their grace period for more than `?olderThanDays=` (default 90). Each item: `userId`, `displayName`, `email`, `heldSince`, `daysHeld`, `holdType` (strongest reason), `isAdminHold`, and (backend/b045-held-list-hold-ids) **`holdId` + `reportId`** -- the ids of the admin hold `holdType` comes from (legal before bad faith if there are several), which `PATCH /admin/moderation/holds/:holdId/lift` needs. Both are `null` when the strongest hold is derived from a report (`isAdminHold: false`; nothing to lift); `reportId` can also be `null` for an admin hold not placed against a report. Additive: no other field, order or behaviour changed. |
 | `PATCH /admin/users/:id` | same | Exactly one action per call: `active`, `suspended`, or `deleted`. **`deleted` is refused with `409 account_hold_active` (body carries `holdType`) while the user has an active `legal_hold` or `bad_faith` hold (B-044, Decision Log #376; veto-able default). A report-based hold does not block it.** |
 
 Both routes are **not** literal Section 4.8 lines — the section names
