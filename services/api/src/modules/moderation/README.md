@@ -639,6 +639,17 @@ deleted account (`accountStatus: 'deleted'`, Decision Log #341) is never emailed
 since its address is an anonymised placeholder. A missing contact address, or a
 reported user who no longer resolves, sends nothing and is not an error.
 
+**No outcome email for an enquiry report (Decision Log #445, founder decision 2026-10-30,
+`backend/w7-enquiry-report-no-outcome-email`).** A report with `targetType: 'enquiry'`
+(made by escalating a Contact Us message) sends NO `report-actioned` email, for every
+action. The enquirer never made a report, "your report has been actioned" is the wrong
+message, and the address is whatever they typed and may not be theirs. The guard is the
+first line of `notifyReporterOfOutcome`. The other two sends cannot reach an enquiry
+report: `public-report-acknowledgement` is sent only by `createPublicReport` (and
+`'enquiry'` is not an accepted `targetType` there), and `appeal-decision` needs a
+reported user, which an enquiry report never has (`resolveReportedUserId` is always null,
+so `appealReport` refuses it).
+
 **Not built, flagged:** the copy is functional placeholder wording, not
 counsel-reviewed. The reported user is not emailed a report outcome, only the
 appeal decision; Section 8.4's notify-both-parties rule is otherwise still covered
