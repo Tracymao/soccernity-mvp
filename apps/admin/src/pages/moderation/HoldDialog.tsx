@@ -16,7 +16,7 @@ const FALLBACK_ERROR = "Couldn’t record that action. Please try again.";
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-function useDialogFocus(containerRef: RefObject<HTMLElement | null>, onEscape: () => void) {
+export function useDialogFocus(containerRef: RefObject<HTMLElement | null>, onEscape: () => void) {
   // The latest onEscape, so the key listener below is attached once.
   const escapeRef = useRef(onEscape);
   escapeRef.current = onEscape;
@@ -24,8 +24,13 @@ function useDialogFocus(containerRef: RefObject<HTMLElement | null>, onEscape: (
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const container = containerRef.current;
-    // The reason field first (it is what the admin has to fill in), else the first control.
-    const first = container?.querySelector<HTMLElement>("textarea") ?? container?.querySelector<HTMLElement>(FOCUSABLE);
+    // A control marked data-autofocus first (a dialog with fields above the reason, like Escalate
+    // to a report, names its first field), else the reason field (it is what the admin has to
+    // fill in), else the first control.
+    const first =
+      container?.querySelector<HTMLElement>("[data-autofocus]") ??
+      container?.querySelector<HTMLElement>("textarea") ??
+      container?.querySelector<HTMLElement>(FOCUSABLE);
     first?.focus();
 
     function onKeyDown(event: KeyboardEvent) {
@@ -60,6 +65,8 @@ export interface HoldDialogProps {
   title: string;
   /** The line under the title (carries the report number). */
   intro: ReactNode;
+  /** Fields that sit between the intro and the reason (Escalate to a report: severity, minor flag). */
+  extraFields?: ReactNode;
   /** The small line under the reason field. */
   reasonHelp: ReactNode;
   confirmLabel: string;
@@ -74,6 +81,7 @@ export interface HoldDialogProps {
 export default function HoldDialog({
   title,
   intro,
+  extraFields,
   reasonHelp,
   confirmLabel,
   submittingLabel,
@@ -147,6 +155,7 @@ export default function HoldDialog({
             </p>
           ) : null}
           <p className="mod-dialog__text">{intro}</p>
+          {extraFields}
           <div className="mod-field">
             <label className="mod-dialog__label" htmlFor={`${titleId}-reason`}>
               Reason (required)

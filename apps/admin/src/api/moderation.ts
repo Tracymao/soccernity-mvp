@@ -144,6 +144,27 @@ export interface Report {
   // list rows and a PATCH response do not carry it, so a screen reached from
   // the queue fetches the report once to learn whether a hold is active.
   holds?: HoldView[];
+
+  // B-046 part B: a report made by escalating a Contact Us enquiry carries `source:
+  // "contact_enquiry"` (the key is absent on every other report). Its single-report read also
+  // carries the enquiry it came from (null if that enquiry has gone). Such a report has no reported
+  // user, so no hold can exist on it.
+  source?: "contact_enquiry";
+  contactEnquiry?: ReportContactEnquiry | null;
+}
+
+// The enquiry behind an "enquiry" report (services/api ReportContactEnquiryView). Name and email are
+// what the sender typed.
+export interface ReportContactEnquiry {
+  id: string;
+  name: string;
+  email: string;
+  category: string;
+  subject: string;
+  message: string;
+  status: string;
+  createdAt: string;
+  userId: string | null;
 }
 
 // One account hold as the hold routes return it (services/api
