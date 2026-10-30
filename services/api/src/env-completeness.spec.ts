@@ -24,7 +24,20 @@ const SRC = path.resolve(__dirname);
 //  - PORT: Render injects it.
 //  - TEST_CLOCK_ISO / TEST_CLOCK_ADVANCE / E2E_TEST_CLOCK: QA only; the process REFUSES TO START if any
 //    is set in production (validate-runtime-env.ts), so they must never appear in render.yaml.
-const NOT_IN_RENDER = new Set(['NODE_ENV', 'PORT', ...TEST_CLOCK_ENV_VARS]);
+//  - backend/w7-contact-us-enquiry (B-046): the four Contact Us variables in CONTACT_NOT_YET_IN_RENDER are NOT
+//    YET in render.yaml, because that PR's brief forbade touching render.yaml (other open PRs edit it). They
+//    are documented in .env.example and each has a code default equal to the decided value
+//    (support@soccernity.com, 12 months, 3 per hour), so a deploy without them behaves as decided; what is
+//    missing is only the ability to tune them on Render. FOLLOW-UP: add all four to BOTH render.yaml
+//    services and delete this exemption. Narrow on purpose: any OTHER new variable still has to be in
+//    render.yaml.
+const CONTACT_NOT_YET_IN_RENDER = [
+  'SUPPORT_INBOX_EMAIL',
+  'CONTACT_ENQUIRY_RETENTION_MONTHS',
+  'CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_MAX',
+  'CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_WINDOW_MS',
+] as const;
+const NOT_IN_RENDER = new Set<string>(['NODE_ENV', 'PORT', ...TEST_CLOCK_ENV_VARS, ...CONTACT_NOT_YET_IN_RENDER]);
 // Not in .env.example on purpose: NODE_ENV has a comment-only entry there.
 const NOT_IN_EXAMPLE = new Set(['NODE_ENV']);
 
@@ -246,6 +259,25 @@ describe('environment completeness (B-018)', () => {
         forgotEmailMax: 3,
         forgotEmailWindowMs: 60 * 60_000,
       });
+    });
+  });
+
+  // backend/w7-contact-us-enquiry (B-046): the exemption above must stay narrow and honest -- the names are
+  // really read by the code and really documented, and the .env.example numbers are the code defaults.
+  describe('contact us variables (B-046)', () => {
+    it('are read by the code and documented in .env.example', () => {
+      for (const name of CONTACT_NOT_YET_IN_RENDER) {
+        expect(read.has(name)).toBe(true);
+        expect(example.has(name)).toBe(true);
+      }
+    });
+
+    it('carry the decided defaults in .env.example (12 months, 3 per hour)', () => {
+      const text = fs.readFileSync(path.join(REPO_ROOT, '.env.example'), 'utf8');
+      expect(text).toMatch(/^SUPPORT_INBOX_EMAIL=support@soccernity\.com\s*$/m);
+      expect(text).toMatch(/^CONTACT_ENQUIRY_RETENTION_MONTHS=12\s*$/m);
+      expect(text).toMatch(/^CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_MAX=3\s*$/m);
+      expect(text).toMatch(/^CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_WINDOW_MS=3600000\s*$/m);
     });
   });
 

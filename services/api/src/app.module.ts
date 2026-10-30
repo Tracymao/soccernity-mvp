@@ -25,6 +25,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { CommunityGroupsModule } from './modules/community-groups/community-groups.module';
 import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
 import { ViewQualificationModule } from './modules/view-qualification/view-qualification.module';
+import { ContactModule } from './modules/contact/contact.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
 import { AdminContentModule } from './modules/admin-content/admin-content.module';
 import { AdminUsersModule } from './modules/admin-users/admin-users.module';
@@ -146,6 +147,8 @@ import { GlobalRateLimitModule } from './rate-limit/global-rate-limit.module';
     // addition beyond Section 3's original six-field list — see
     // modules/moderation/README.md.
     ModerationModule,
+    // backend/w7-contact-us-enquiry (B-046): public Contact Us submit, retention job.
+    ContactModule,
     // sprint-5/admin-articles-categories-backend — Section 4.8 (Admin
     // Service), the Article/Category management half. GET/POST
     // /admin/articles, PATCH /admin/articles/:id, GET/POST

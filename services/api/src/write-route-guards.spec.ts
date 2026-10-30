@@ -14,6 +14,7 @@ import { ContestController } from './modules/contest/contest.controller';
 import { FeedController } from './modules/feed/feed.controller';
 import { GrassrootsFixturesController } from './modules/grassroots/grassroots-fixtures.controller';
 import { GrassrootsTeamsController } from './modules/grassroots/grassroots-teams.controller';
+import { ContactController } from './modules/contact/contact.controller';
 import { ConversationsController } from './modules/messaging/conversations.controller';
 import { PublicReportsController } from './modules/moderation/public-reports.controller';
 import { ReportsController } from './modules/moderation/reports.controller';
@@ -54,6 +55,9 @@ const OPEN_ROUTES: Record<string, string> = {
   'POST /reports': 'report/appeal stay open to a restricted-pending user (#370)',
   'POST /reports/:id/appeal': 'report/appeal stay open to a restricted-pending user (#370)',
   'POST /reports/public': 'unauthenticated public report',
+  // backend/w7-contact-us-enquiry (B-046): everyone must be able to write to support, a restricted-pending or
+  // unverified account included; OptionalJwtAuthGuard only links the enquiry to the account when signed in.
+  'POST /contact': 'public Contact Us form; open to every caller by design',
   'PATCH /notifications/read-all': 'own inbox read-state; not a social or profile write',
   'PATCH /notifications/:id/read': 'own inbox read-state; not a social or profile write',
   'PATCH /conversations/:id/read': 'own read-state; touches no one else',
@@ -159,6 +163,7 @@ const CONTROLLERS = [
   GrassrootsFixturesController,
   ReportsController,
   PublicReportsController,
+  ContactController,
   NotificationsController,
   SportsMatchesController,
   ViewQualificationController,

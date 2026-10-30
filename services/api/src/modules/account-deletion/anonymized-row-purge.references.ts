@@ -96,6 +96,9 @@ export const CONTENT_RELATIONS: readonly RelationKey[] = [
   // B-044: an admin legal / bad-faith hold is audit evidence of who held whom and why. It survives the
   // account, so it blocks the purge (veto-able default).
   'AccountHold.user',
+  // B-046 (#444): anonymizeUser deletes the user's enquiries EXCEPT an escalated one, which follows the linked
+  // report's retention; so what is left is escalated by design and blocks the purge, like a report.
+  'ContactEnquiry.user',
 ];
 
 export const ANONYMISER_DELETES_RELATIONS: readonly RelationKey[] = [
