@@ -17,8 +17,13 @@ be silently un-escalated, and a `User` row is never deleted from under an enquir
 `name` and `email` are what the sender **typed**, not a copy of the account's. `userId` is set only when the
 sender was signed in (see below).
 
-Categories (the six options of the Figma `Contact Category Dropdown`, `6130:14653`): `technical_issues`,
-`editorial_complaints`, `data`, `livescores_issues`, `suggestions`, `enquiries_feedback`.
+Categories (founder decision 2026-10-30, superseding the six-option list of Decision Log #445 (g) as first built
+in PR #552), in the order the form draws them: `technical_issues`, `editorial_complaints`, `data`, `suggestions`,
+`enquiries`, `feedback` (labels: Technical issues, Editorial Complaints, Data, Suggestions, Enquiries, Feedback).
+`livescores_issues` was removed (users cannot report on live scores: that data comes from a third-party service)
+and `enquiries_feedback` was split into `enquiries` and `feedback`. Migration
+`20261104090000_contact_enquiry_categories` maps old rows (`livescores_issues` -> `data`, `enquiries_feedback` ->
+`enquiries`) before it replaces the CHECK.
 
 ## `POST /contact`
 

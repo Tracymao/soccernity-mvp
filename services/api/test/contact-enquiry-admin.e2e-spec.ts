@@ -71,7 +71,7 @@ describe('Contact enquiry admin e2e (real Postgres)', () => {
       data: {
         name: `Sender ${n}`,
         email: `e2e-ce-sender-${n}-${tag()}@example.com`,
-        category: 'enquiries_feedback',
+        category: 'enquiries',
         subject: `Subject ${n}`,
         message: `Message ${n}`,
         createdAt,
@@ -146,6 +146,9 @@ describe('Contact enquiry admin e2e (real Postgres)', () => {
       expect(await ids('category=data&status=new')).toEqual([a.id]);
       await request(server()).get('/admin/contact-enquiries?status=archived').set(auth(mod.token)).expect(400);
       await request(server()).get('/admin/contact-enquiries?category=nope').set(auth(mod.token)).expect(400);
+      // the two retired keys are no longer accepted as filters
+      await request(server()).get('/admin/contact-enquiries?category=livescores_issues').set(auth(mod.token)).expect(400);
+      await request(server()).get('/admin/contact-enquiries?category=enquiries_feedback').set(auth(mod.token)).expect(400);
     });
 
     it('list items carry hasEscalation and the submitter kind but not the message; the detail carries the message', async () => {
@@ -214,7 +217,7 @@ describe('Contact enquiry admin e2e (real Postgres)', () => {
         reporterContactEmail: enquiry.email,
         targetType: 'enquiry',
         targetId: enquiry.id,
-        reason: 'Contact enquiry (Editorial complaints) - A subject: The full message.',
+        reason: 'Contact enquiry (Editorial Complaints) - A subject: The full message.',
         severity: 'critical',
         concernsMinor: false,
         status: 'open',

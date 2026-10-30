@@ -72,15 +72,17 @@ describe('ContactController (HTTP layer)', () => {
     expect(contact.submit).toHaveBeenCalledWith(valid, 'user-1');
   });
 
-  it.each(['technical_issues', 'editorial_complaints', 'data', 'livescores_issues', 'suggestions', 'enquiries_feedback'])(
+  it.each(['technical_issues', 'editorial_complaints', 'data', 'suggestions', 'enquiries', 'feedback'])(
     'accepts category %s',
     async (category) => {
       await post({ ...valid, category }).expect(201);
     },
   );
 
-  it('rejects a category outside the six, and a missing one', async () => {
+  it('rejects a category outside the six, the two retired keys, and a missing one', async () => {
     await post({ ...valid, category: 'billing' }).expect(400);
+    await post({ ...valid, category: 'livescores_issues' }).expect(400);
+    await post({ ...valid, category: 'enquiries_feedback' }).expect(400);
     const { category: _omit, ...rest } = valid;
     void _omit;
     await post(rest).expect(400);
