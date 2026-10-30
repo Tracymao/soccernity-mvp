@@ -8,9 +8,8 @@
 // Where the frames and the server differ (the server wins; listed in the PR):
 //  * The frame's tab reads "Contact enquiries (3)". The server returns no total and no count endpoint exists, and
 //    the two existing tabs ("Open Reports", "Appeals") carry no count either, so no count is drawn.
-//  * The frame's category labels are the five of the Contact Us dropdown, with "Data / Livescores Issues" as one
-//    label. The server has six categories, so that label is split ("Data", "Livescores Issues") and the Category
-//    filter offers all six.
+//  * The Category filter offers the six Contact Us categories (Technical issues, Editorial Complaints, Data,
+//    Suggestions, Enquiries, Feedback). The frame draws the field with no option list.
 //  * Open Reports and Appeals are state tabs on the queue page, not routes; here they are links back to it.
 import { type FormEvent, useState } from "react";
 import { Link } from "react-router";

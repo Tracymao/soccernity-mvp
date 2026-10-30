@@ -28,13 +28,13 @@ function watchErrors(page: Page): string[] {
   return problems;
 }
 
-async function fillForm(page: Page, email: string, subject = 'Live score not updating') {
+async function fillForm(page: Page, email: string, subject = 'Fixture time looks wrong') {
   await page.getByLabel('Name', { exact: true }).fill('Adeniyi Christiana');
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByRole('combobox', { name: 'Category' }).click();
-  await page.getByRole('option', { name: 'Livescores Issues' }).click();
+  await page.getByRole('option', { name: 'Data' }).click();
   await page.getByLabel('Subject', { exact: true }).fill(subject);
-  await page.getByLabel('Message', { exact: true }).fill('The live score for the Chelsea match stopped updating in the second half.');
+  await page.getByLabel('Message', { exact: true }).fill('The kick-off time shown for the Chelsea match is an hour out.');
 }
 
 test('a guest sends a message: success state, and the row is in Postgres', async ({ page }) => {
@@ -56,8 +56,8 @@ test('a guest sends a message: success state, and the row is in Postgres', async
   const row = await db().contactEnquiry.findFirst({ where: { email } });
   expect(row).toBeTruthy();
   expect(row.name).toBe('Adeniyi Christiana');
-  expect(row.category).toBe('livescores_issues');
-  expect(row.subject).toBe('Live score not updating');
+  expect(row.category).toBe('data');
+  expect(row.subject).toBe('Fixture time looks wrong');
   expect(row.status).toBe('new');
   expect(row.userId).toBeNull(); // a guest
 

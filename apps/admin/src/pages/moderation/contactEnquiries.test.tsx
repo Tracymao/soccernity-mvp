@@ -149,7 +149,7 @@ describe("ContactEnquiriesPage", () => {
         listItem(),
         listItem({ id: "e2", name: "Daniel Okafor", category: "editorial_complaints", subject: "Article correction", submitter: "guest" }),
         listItem({ id: "e3", name: "Seun Ajayi", status: "handled", hasEscalation: true, category: "data", subject: "Wrong fixture time" }),
-        listItem({ id: "e4", name: "Amara Nwosu", category: "livescores_issues", subject: "Late scores" }),
+        listItem({ id: "e4", name: "Amara Nwosu", category: "enquiries", subject: "Partnership question" }),
       ],
       nextCursor: null,
     });
@@ -168,12 +168,12 @@ describe("ContactEnquiriesPage", () => {
       "Flags",
       "Action",
     ]);
-    // Dates and wording as the frame draws them; the data/livescores label is split in two.
+    // Dates and wording as the frame draws them (the six Contact Us categories).
     expect(within(table).getAllByText("29 Oct 2026")).toHaveLength(4);
     expect(within(table).getByText("Technical issues")).not.toBeNull();
     expect(within(table).getByText("Editorial Complaints")).not.toBeNull();
     expect(within(table).getByText("Data")).not.toBeNull();
-    expect(within(table).getByText("Livescores Issues")).not.toBeNull();
+    expect(within(table).getByText("Enquiries")).not.toBeNull();
     expect(within(table).getAllByText("New")).toHaveLength(3);
     expect(within(table).getByText("Handled")).not.toBeNull();
     expect(within(table).getByText("Guest")).not.toBeNull();
@@ -209,11 +209,11 @@ describe("ContactEnquiriesPage", () => {
 
     // Choosing a value alone does nothing; Apply filter sends it.
     fireEvent.change(screen.getByLabelText("Status"), { target: { value: "handled" } });
-    fireEvent.change(screen.getByLabelText("Category"), { target: { value: "livescores_issues" } });
+    fireEvent.change(screen.getByLabelText("Category"), { target: { value: "feedback" } });
     expect(listContactEnquiries).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "Apply filter" }));
     await waitFor(() =>
-      expect(listContactEnquiries).toHaveBeenLastCalledWith({ status: "handled", category: "livescores_issues", limit: 50 }),
+      expect(listContactEnquiries).toHaveBeenLastCalledWith({ status: "handled", category: "feedback", limit: 50 }),
     );
 
     // Back to All drops the filters.
@@ -233,9 +233,9 @@ describe("ContactEnquiriesPage", () => {
       "Technical issues",
       "Editorial Complaints",
       "Data",
-      "Livescores Issues",
       "Suggestions",
-      "Enquiries/Feedback",
+      "Enquiries",
+      "Feedback",
     ]);
     expect(within(screen.getByLabelText("Status")).getAllByRole("option").map((o) => o.textContent)).toEqual(["All", "New", "Handled"]);
     expect(screen.getByText("New, handled or all.")).not.toBeNull();

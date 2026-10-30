@@ -13,9 +13,9 @@ export const CONTACT_CATEGORIES = [
   "technical_issues",
   "editorial_complaints",
   "data",
-  "livescores_issues",
   "suggestions",
-  "enquiries_feedback",
+  "enquiries",
+  "feedback",
 ] as const;
 export type ContactCategory = (typeof CONTACT_CATEGORIES)[number];
 
