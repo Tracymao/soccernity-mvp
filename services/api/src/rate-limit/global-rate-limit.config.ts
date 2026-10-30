@@ -95,7 +95,8 @@ export function createIdentityResolver(
 }
 
 // The refresh token a POST /auth/refresh presents, as a tracker: the SHA-256 of the token, never the token.
-// Cookie mode (X-Auth-Mode: cookie) reads the sn_rt cookie and ignores the body, exactly as the route does;
+// Cookie mode (X-Auth-Mode: cookie, or an allowlisted Origin -- the same isCookieMode the route uses, B-248)
+// reads the sn_rt cookie and ignores the body, exactly as the route does;
 // otherwise body.refreshToken. Returns undefined when no token is presented (that request counts against
 // the IP class only). Must never throw.
 export function refreshTokenTracker(req: Record<string, any>): string | undefined {

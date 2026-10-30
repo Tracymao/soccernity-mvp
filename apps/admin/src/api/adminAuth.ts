@@ -24,7 +24,7 @@ export interface AdminSummary {
   updatedAt: string;
 }
 
-// B-247: in cookie mode (X-Auth-Mode: cookie) the API sets the refresh token as an
+// B-247 / B-248: in cookie mode (the X-Auth-Mode: cookie header, or an allowlisted Origin) the API sets the refresh token as an
 // httpOnly cookie and leaves it OUT of the response body, so there is no
 // `refreshToken` here for JavaScript to hold. `refreshTokenExpiresAt` is still sent.
 export interface AdminTokenPair {

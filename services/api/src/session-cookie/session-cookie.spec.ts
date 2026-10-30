@@ -11,7 +11,7 @@ import {
   shouldBeSecure,
 } from './session-cookie';
 
-// B-245: attribute-level checks on the Set-Cookie strings, no HTTP needed.
+// B-245 / B-248: attribute-level checks on the Set-Cookie strings, no HTTP needed.
 
 const WEB = 'https://app.soccernity.com';
 const PROD = { NODE_ENV: 'production', WEB_APP_BASE_URL: WEB, ADMIN_APP_BASE_URL: 'https://admin.soccernity.com' };
@@ -29,12 +29,51 @@ function attrs(setCookie: string): string[] {
 }
 
 describe('isCookieMode', () => {
-  it('is on only for X-Auth-Mode: cookie (case-insensitive)', () => {
-    expect(isCookieMode(req({ 'x-auth-mode': 'cookie' }))).toBe(true);
-    expect(isCookieMode(req({ 'x-auth-mode': ' Cookie ' }))).toBe(true);
-    expect(isCookieMode(req({ 'x-auth-mode': 'body' }))).toBe(false);
-    expect(isCookieMode(req({}))).toBe(false);
-    expect(isCookieMode(undefined)).toBe(false);
+  const ADMIN = 'https://admin.soccernity.com';
+
+  it('is on for X-Auth-Mode: cookie (case and whitespace as before), with no Origin at all', () => {
+    expect(isCookieMode(req({ 'x-auth-mode': 'cookie' }), PROD)).toBe(true);
+    expect(isCookieMode(req({ 'x-auth-mode': ' Cookie ' }), PROD)).toBe(true);
+    expect(isCookieMode(req({ 'x-auth-mode': 'COOKIE' }), PROD)).toBe(true);
+  });
+
+  it('B-248: an allowlisted Origin alone is cookie mode (web and admin origins)', () => {
+    expect(isCookieMode(req({ origin: WEB }), PROD)).toBe(true);
+    expect(isCookieMode(req({ origin: ADMIN }), PROD)).toBe(true);
+  });
+
+  it('an allowlisted Origin together with the header is cookie mode', () => {
+    expect(isCookieMode(req({ origin: WEB, 'x-auth-mode': 'cookie' }), PROD)).toBe(true);
+  });
+
+  it('B-248: a foreign Origin without the header stays in body mode', () => {
+    expect(isCookieMode(req({ origin: 'https://evil.example.com' }), PROD)).toBe(false);
+    expect(isCookieMode(req({ origin: 'null' }), PROD)).toBe(false);
+    // localhost is only allowed outside production
+    expect(isCookieMode(req({ origin: 'http://localhost:5273' }), PROD)).toBe(false);
+  });
+
+  it('B-248: no Origin and no header stays in body mode (native clients, scripts)', () => {
+    expect(isCookieMode(req({}), PROD)).toBe(false);
+    expect(isCookieMode(req({ origin: '' }), PROD)).toBe(false);
+    expect(isCookieMode(undefined, PROD)).toBe(false);
+  });
+
+  it('a header value other than cookie does not turn it on', () => {
+    expect(isCookieMode(req({ 'x-auth-mode': 'body' }), PROD)).toBe(false);
+    expect(isCookieMode(req({ 'x-auth-mode': 'body', origin: 'https://evil.example.com' }), PROD)).toBe(false);
+  });
+
+  it('localhost origins count as allowlisted outside production only', () => {
+    const dev = { NODE_ENV: 'development', WEB_APP_BASE_URL: 'http://localhost:5273' };
+    expect(isCookieMode(req({ origin: 'http://localhost:5273' }), dev)).toBe(true);
+    expect(isCookieMode(req({ origin: 'http://127.0.0.1:9999' }), dev)).toBe(true);
+  });
+
+  it('with no configured origins nothing but the header turns it on (fails closed to body mode)', () => {
+    const none = { NODE_ENV: 'production' };
+    expect(isCookieMode(req({ origin: WEB }), none)).toBe(false);
+    expect(isCookieMode(req({ 'x-auth-mode': 'cookie' }), none)).toBe(true);
   });
 });
 
@@ -130,13 +169,27 @@ describe('applyCookieSession', () => {
 
   it('outside cookie mode returns the SAME object untouched and sets no cookie', () => {
     const res = fakeRes();
-    expect(applyCookieSession(USER_SESSION_COOKIE, req({}), res, body, true)).toBe(body);
+    expect(applyCookieSession(USER_SESSION_COOKIE, req({}), res, body, true, PROD)).toBe(body);
+    expect(res.set).toHaveLength(0);
+  });
+
+  it('B-248: an allowlisted Origin with NO header omits refreshToken and sets the cookie', () => {
+    const res = fakeRes();
+    const out = applyCookieSession(USER_SESSION_COOKIE, req({ origin: WEB }), res, body, true, PROD) as Record<string, unknown>;
+    expect(out).not.toHaveProperty('refreshToken');
+    expect(res.set).toHaveLength(1);
+    expect(res.set[0]).toContain('sn_rt=id.secret');
+  });
+
+  it('B-248: a foreign Origin with no header returns the body untouched and sets no cookie', () => {
+    const res = fakeRes();
+    expect(applyCookieSession(USER_SESSION_COOKIE, req({ origin: 'https://evil.example.com' }), res, body, true, PROD)).toBe(body);
     expect(res.set).toHaveLength(0);
   });
 
   it('in cookie mode omits refreshToken from the body, keeps the rest, and sets the cookie', () => {
     const res = fakeRes();
-    const out = applyCookieSession(USER_SESSION_COOKIE, req({ 'x-auth-mode': 'cookie', origin: WEB }), res, body, false) as Record<string, unknown>;
+    const out = applyCookieSession(USER_SESSION_COOKIE, req({ 'x-auth-mode': 'cookie', origin: WEB }), res, body, false, PROD) as Record<string, unknown>;
     expect(out).not.toHaveProperty('refreshToken');
     expect(out.accessToken).toBe('jwt');
     expect(out.user).toEqual({ id: 'u' });

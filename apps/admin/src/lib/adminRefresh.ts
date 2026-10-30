@@ -28,7 +28,6 @@
 // BroadcastChannel (adminSession.ts) so the waiting tab adopts it.
 import {
   getAdminAccessToken,
-  purgeLegacyAdminTokenStorage,
   replaceAdminAccessToken,
   setAdminSessionRestoring,
 } from "./adminSession";
@@ -36,8 +35,12 @@ import {
 const API_BASE_URL =
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
 
-// The opt-in header that puts the API's admin session in cookie mode (services/api
-// src/session-cookie/session-cookie.ts, COOKIE_MODE_HEADER).
+// The header that makes the API's admin cookie session explicit (services/api
+// src/session-cookie/session-cookie.ts, COOKIE_MODE_HEADER). Since B-248 cookie mode
+// is the API's DEFAULT for a request from an allowlisted browser Origin, so this
+// header is no longer what switches it on. It stays on purpose: with it, an Origin
+// missing from the API's ADMIN_APP_BASE_URL (a deployment mistake) fails LOUDLY with
+// a 403 on refresh/logout instead of silently falling back to body tokens.
 export const ADMIN_COOKIE_MODE_HEADERS = { "X-Auth-Mode": "cookie" } as const;
 
 export type AdminRefreshOutcome =
@@ -163,8 +166,6 @@ let bootPromise: Promise<AdminRefreshOutcome | "skipped"> | null = null;
 
 export function restoreAdminSession(): Promise<AdminRefreshOutcome | "skipped"> {
   bootPromise ??= (async () => {
-    // Tokens the pre-B-247 build left in localStorage are not migrated.
-    purgeLegacyAdminTokenStorage();
     // Already holding a token (hot reload): nothing to restore.
     if (getAdminAccessToken()) return "skipped";
     setAdminSessionRestoring(true);

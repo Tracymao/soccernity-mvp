@@ -6,7 +6,6 @@ import {
   getAdminAccessToken,
   getAdminSessionChannelName,
   initAdminSessionChannel,
-  purgeLegacyAdminTokenStorage,
   replaceAdminAccessToken,
   setAdminSessionRestoring,
   storeAdminSession,
@@ -89,26 +88,6 @@ describe("the in-memory admin session (B-247)", () => {
     subscribeAdminSession(listener);
     storeAdminSession({ accessToken: "same" });
     expect(listener).not.toHaveBeenCalled();
-  });
-});
-
-describe("leftover tokens from the old build (no migration)", () => {
-  it("purgeLegacyAdminTokenStorage removes sn_admin_access_token and sn_admin_refresh_token from BOTH storages and nothing else", () => {
-    window.localStorage.setItem("sn_admin_access_token", "old-a");
-    window.localStorage.setItem("sn_admin_refresh_token", "old-r");
-    window.sessionStorage.setItem("sn_admin_access_token", "old-a2");
-    window.sessionStorage.setItem("sn_admin_refresh_token", "old-r2");
-    window.localStorage.setItem("unrelated", "keep");
-
-    purgeLegacyAdminTokenStorage();
-
-    expect(window.localStorage.getItem("sn_admin_access_token")).toBeNull();
-    expect(window.localStorage.getItem("sn_admin_refresh_token")).toBeNull();
-    expect(window.sessionStorage.getItem("sn_admin_access_token")).toBeNull();
-    expect(window.sessionStorage.getItem("sn_admin_refresh_token")).toBeNull();
-    expect(window.localStorage.getItem("unrelated")).toBe("keep");
-    // The purge does not turn a leftover token into a session.
-    expect(getAdminAccessToken()).toBeNull();
   });
 });
 

@@ -221,6 +221,37 @@ test.describe('login form and session', () => {
     expect(await everythingScriptCanRead(page)).not.toMatch(/sn_access_token|sn_refresh_token|sn_rt/);
   });
 
+  // B-248 (Decision Log #422 item 3): cookie mode is the API's DEFAULT for a request from an allowlisted
+  // browser Origin. A browser call that forgets the X-Auth-Mode header must STILL get no refresh token in the
+  // body and the httpOnly cookie instead. (The admin side is covered by the API jest e2e: admin login is
+  // throttled to 5 per 15 minutes, Decision Log #190.)
+  test('B-248: a header-less browser POST /auth/login gets the sn_rt cookie and no refreshToken in the body', async ({ page }) => {
+    const a = await registerViaApi({ age: 30, label: 'hdrless' });
+    await page.goto('/login'); // any page on the web origin; the browser adds the Origin header itself
+    const outcome = await page.evaluate(
+      async ({ api, email, password }) => {
+        // Deliberately NO X-Auth-Mode header.
+        const res = await fetch(`${api}/auth/login`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        return { status: res.status, body: await res.json() };
+      },
+      { api: URLS.api, email: a.email, password: USER_PASSWORD },
+    );
+    expect(outcome.status).toBe(200);
+    expect(typeof outcome.body.accessToken).toBe('string');
+    expect(outcome.body).not.toHaveProperty('refreshToken');
+
+    const cookie = await refreshCookie(page);
+    expect(cookie, 'the API set the sn_rt refresh cookie without the header').toBeDefined();
+    expect(cookie!.httpOnly).toBe(true);
+    expect(cookie!.sameSite).toBe('Strict');
+    expect(cookie!.path).toBe('/auth');
+  });
+
   test('a reload restores the session from the cookie before anything renders (no login flash)', async ({ page }) => {
     const a = await registerViaApi({ age: 30, label: 'restore' });
     await verifyEmailViaApi(a);

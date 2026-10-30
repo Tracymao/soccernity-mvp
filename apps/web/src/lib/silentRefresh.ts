@@ -34,7 +34,6 @@ import { COOKIE_MODE_HEADERS } from "./cookieMode";
 import {
   clearStoredSession,
   getStoredAccessToken,
-  purgeLegacyTokenStorage,
   replaceAccessToken,
   setSessionRestoring,
 } from "./session";
@@ -195,8 +194,6 @@ let bootPromise: Promise<void> | null = null;
 
 export function restoreSession(): Promise<void> {
   bootPromise ??= (async () => {
-    // Tokens the pre-B-246 build left in browser storage are not migrated.
-    purgeLegacyTokenStorage();
     // Already holding a token (a test that seeded one, hot reload): nothing to restore.
     if (getStoredAccessToken()) return;
     setSessionRestoring(true);

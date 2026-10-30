@@ -99,20 +99,6 @@ describe("start-up restore (B-246)", () => {
     expect(getStoredAccessToken()).toBe("once");
   });
 
-  it("removes tokens the old build left in browser storage, without migrating them into a session", async () => {
-    window.sessionStorage.setItem("sn_access_token", "old-a");
-    window.localStorage.setItem("sn_refresh_token", "old-r");
-    backend.mockResolvedValue(json(401));
-
-    await restoreSession();
-
-    expect(window.sessionStorage.getItem("sn_access_token")).toBeNull();
-    expect(window.localStorage.getItem("sn_refresh_token")).toBeNull();
-    expect(getStoredAccessToken()).toBeNull();
-    // Nothing was sent to the API from the leftovers.
-    for (const [, init] of refreshCalls()) expect(init.body).toBeUndefined();
-  });
-
   it("does not refresh when a session is already held", async () => {
     seedSession("already-signed-in");
     await restoreSession();

@@ -1537,16 +1537,16 @@ Full detail and the route table: `docs/backend-w3-gates-report.md`. Summary of w
     unverified account. Earlier links are not revoked (the token store has no
     per-user index); the cap bounds how many are live.
 
-## Status update -- OPT-IN cookie session mode (`security/api-cookie-session-mode`, B-245, Decision Log "Token storage" / #422, #407 item 1)
+## Status update -- cookie session mode (`security/api-cookie-session-mode`, B-245, Decision Log "Token storage" / #422, #407 item 1) -- opt-in when built; the browser DEFAULT since B-248 (see the next status update)
 
 Build Plan 5.7 says the web refresh token lives in an httpOnly, Secure, SameSite cookie; until
 this PR the API only ever returned it in the response body. This adds the API half as an
-**opt-in** mode. `apps/web` and `apps/admin` are NOT changed here (B-246, B-247) and the body
-tokens are NOT removed for browsers (B-248 flips that default later).
+**opt-in** mode. `apps/web` and `apps/admin` were NOT changed there (B-246, B-247) and the body
+tokens were NOT removed for browsers. *[Dated note 2026-10-29: B-248 (`security/browser-default-cookie-session`)
+flipped the default; "opt-in" below is the history of this PR. The current rule is the next status update.]*
 
-**How a caller opts in:** send the request header `X-Auth-Mode: cookie`. Without it every route
-behaves exactly as before (tokens in the body, no `Set-Cookie`), so apps/web, apps/admin until
-B-246/B-247, the native app and the e2e suites are unaffected.
+**How a caller opted in (B-245 as built):** send the request header `X-Auth-Mode: cookie`. Without it every route
+behaved exactly as before (tokens in the body, no `Set-Cookie`).
 
 **With the header**, on every route that returns a token pair (`POST /auth/login`, `/auth/register`,
 `/auth/refresh`, `/auth/reactivate-account`, and `POST /admin/auth/login`, `/admin/auth/refresh`) and on logout:
@@ -1601,6 +1601,46 @@ Code: `src/session-cookie/` (helper + spec), the four controllers, `token.servic
 and both refresh-token stores (`persistent`). Tests: `src/session-cookie/session-cookie.spec.ts`
 (attributes, Secure rule, Origin check, body omission), `src/cors-options.spec.ts`,
 `test/cookie-session.e2e-spec.ts` (real Postgres + Redis).
+
+## Status update -- cookie session mode is the browser DEFAULT (`security/browser-default-cookie-session`, B-248, Decision Log #422 item 3; order amended by #435 and #437)
+
+B-245 made the cookie session an opt-in (header `X-Auth-Mode: cookie`). apps/web (B-246) and apps/admin
+(B-247) now send the header and hold no token in browser storage. B-248 flips the DEFAULT so that a browser
+is never handed a refresh token in a response body, even if its code forgets the header. No dual-mode
+switch (Decision Log #435); cookie names, paths, lifetimes, the Origin allowlist, CORS, rate limits and
+the user/admin separation are unchanged. The platform is not live, so no session in browser storage is
+migrated: a forced re-login is the decided behaviour.
+
+**The rule (one function, `isCookieMode(req, env?)` in `src/session-cookie/session-cookie.ts`)** -- a request
+is in cookie mode when EITHER (a) it carries `X-Auth-Mode: cookie`, OR (b) it carries an `Origin` header
+that is on the exact-origin allowlist CORS uses (`isOriginAllowed(origin, buildCorsConfig(env))`:
+`WEB_APP_BASE_URL`, `ADMIN_APP_BASE_URL`, plus localhost outside production). An absent Origin is never
+cookie mode on its own (`isOriginAllowed(undefined)` is true -- a non-CORS request -- so the check is
+explicit). `auth.controller`, the registration/reactivate paths (through `applyCookieSession`),
+`admin-auth.controller` and `rate-limit/global-rate-limit.config.ts` (the refresh-token tracker reads the
+cookie or the body by the same test) all call it, so one edit moved all of them.
+
+**Contract for native clients (apps/mobile, scripts, API-level e2e helpers):** send **no `Origin` header**
+(or one that is not an allowed web/admin origin) and you receive body tokens exactly as before --
+`refreshToken` in the body, no `Set-Cookie`, and `refreshToken` in the body is what refresh/logout read.
+React Native's `fetch` and server-side HTTP clients do not set `Origin`. A foreign browser origin gets body
+mode, never a cookie (and cannot read the response anyway: CORS).
+
+**Why the web and admin apps still send the header:** with it, an Origin that is missing from
+`WEB_APP_BASE_URL` / `ADMIN_APP_BASE_URL` (a deployment mistake) makes refresh/logout fail loudly with a
+403 (`assertAllowedCookieOrigin`) instead of silently falling back to body tokens.
+
+**Consequences worth knowing:** (1) cookie-mode refresh/logout need an allowed Origin and read the cookie,
+never the body -- so a browser-origin request that presents a body `refreshToken` and no cookie now gets
+401 (before: it worked); (2) login/register/reactivate still carry no Origin requirement (a request with
+the header but no Origin is cookie mode and gets a cookie it may not be able to store -- unchanged from
+B-245); (3) the legacy `sn_access_token` / `sn_refresh_token` (web) and `sn_admin_*` (admin) storage purges
+in the apps were deleted in the same PR.
+
+Tests: `src/session-cookie/session-cookie.spec.ts` (every Origin/header combination),
+`test/cookie-session.e2e-spec.ts` (real Postgres + Redis, user AND admin audiences: allowlisted Origin and
+no header -> cookie, no Origin -> body, refresh with an allowlisted Origin ignores a body token, logout
+clears), Playwright spec 06 (header-less browser login).
 
 ## Status update -- login lockout per account AND IP, lockout notice, Redis outage fallback (`security/login-lockout-redesign`, Decision Log #429, B-256, B-263)
 
