@@ -9,10 +9,7 @@
 // Wiring: POST /contact (api/contact.ts). A signed-in sender gets Name and Email prefilled from
 // GET /users/:id; both stay editable, and a person who has already typed is never overwritten.
 //
-// Wording is as drawn, with two disclosed points:
-//   * The dropdown frame draws FIVE options ("Data / Livescores Issues" is one entry); the server has six
-//     (data and livescores_issues). Founder decision 2026-10-30: six, with the drawn label split into
-//     "Data" and "Livescores Issues". The split wording is not in Figma (Figma follow-up).
+// Wording is as drawn, with one disclosed point:
 //   * The rate-limited line is the frame's ("Each person ..."); the API's own 429 body for the per-email
 //     limit says "Each email address ...". Both mean the same; this page always shows the frame's wording.
 //
@@ -49,15 +46,15 @@ import { useIsMobile } from "../layout/useIsMobile";
 import chevronDown from "../assets/contact/contact-chevron-down.svg";
 import "./ContactPage.css";
 
-// Labels from the Figma "Contact Category Dropdown" (6130:14653), with the one drawn entry
-// "Data / Livescores Issues" split in two (see the header comment).
+// The six categories and labels of the Figma "Contact Category Dropdown" (6130:14653 desktop /
+// 6130:14664 mobile), as drawn (founder decision 2026-10-30, recorded in the Decision Log).
 const CATEGORY_LABELS: Record<ContactCategory, string> = {
   technical_issues: "Technical issues",
   editorial_complaints: "Editorial Complaints",
   data: "Data",
-  livescores_issues: "Livescores Issues",
   suggestions: "Suggestions",
-  enquiries_feedback: "Enquiries/Feedback",
+  enquiries: "Enquiries",
+  feedback: "Feedback",
 };
 
 const ERROR_NAME = "Enter your name.";
@@ -320,7 +317,7 @@ export default function ContactPage() {
             <div className="contact-page__notice">
               <span className="contact-page__tag">[COPY PENDING LEGAL REVIEW]</span>
               <p className="contact-page__notice-text">
-                Soccernity staff read the messages sent through this form. We keep your message for 12 months after
+                Our support team reads the messages sent through this form. We keep your message for 12 months after
                 the last message in the enquiry and then delete it automatically; if it raises a safeguarding concern
                 or a complaint, it may be kept for longer as part of a report or case record. See our{" "}
                 <Link to="/privacy">Privacy Policy</Link>.

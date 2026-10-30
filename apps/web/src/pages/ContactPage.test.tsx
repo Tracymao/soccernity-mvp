@@ -108,9 +108,9 @@ describe("ContactPage — the form as drawn", () => {
       "Technical issues",
       "Editorial Complaints",
       "Data",
-      "Livescores Issues",
       "Suggestions",
-      "Enquiries/Feedback",
+      "Enquiries",
+      "Feedback",
     ]);
   });
 
@@ -139,7 +139,7 @@ describe("ContactPage — the form as drawn", () => {
   it("shows the tagged notice under the form with a real link to /privacy", () => {
     renderPage();
     expect(screen.getByText("[COPY PENDING LEGAL REVIEW]")).toBeTruthy();
-    expect(screen.getByText(/Soccernity staff read the messages sent through this form/)).toBeTruthy();
+    expect(screen.getByText(/^Our support team reads the messages sent through this form\./)).toBeTruthy();
     expect(screen.getByText(/12 months after the last message in the enquiry/)).toBeTruthy();
     const link = screen.getByRole("link", { name: "Privacy Policy" });
     expect(link.getAttribute("href")).toBe("/privacy");
@@ -243,9 +243,9 @@ describe("ContactPage — submitting", () => {
       ["Technical issues", "technical_issues"],
       ["Editorial Complaints", "editorial_complaints"],
       ["Data", "data"],
-      ["Livescores Issues", "livescores_issues"],
       ["Suggestions", "suggestions"],
-      ["Enquiries/Feedback", "enquiries_feedback"],
+      ["Enquiries", "enquiries"],
+      ["Feedback", "feedback"],
     ];
     for (const [label, value] of expected) {
       vi.mocked(submitContactEnquiry).mockReset();

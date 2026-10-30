@@ -14,21 +14,20 @@ export const CONTACT_CATEGORIES = [
   "technical_issues",
   "editorial_complaints",
   "data",
-  "livescores_issues",
   "suggestions",
-  "enquiries_feedback",
+  "enquiries",
+  "feedback",
 ] as const;
 export type ContactCategory = (typeof CONTACT_CATEGORIES)[number];
 
-// The wording the Contact Us dropdown and the admin frames draw. The frames draw ONE label for two categories
-// ("Data / Livescores Issues"); the server has two, so the label is split at the slash.
+// The wording the Contact Us dropdown and the admin frames draw (the six of the Contact Category Dropdown).
 export const CONTACT_CATEGORY_LABELS: Record<ContactCategory, string> = {
   technical_issues: "Technical issues",
   editorial_complaints: "Editorial Complaints",
   data: "Data",
-  livescores_issues: "Livescores Issues",
   suggestions: "Suggestions",
-  enquiries_feedback: "Enquiries/Feedback",
+  enquiries: "Enquiries",
+  feedback: "Feedback",
 };
 
 export function contactCategoryLabel(category: string): string {
