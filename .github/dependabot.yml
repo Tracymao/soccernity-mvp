@@ -28,6 +28,18 @@
 # opened every bump two or three times (#506/#514, #507/#513, #508/#510/
 # #511, #509/#512). Use "/" alone.
 #
+# Security updates (founder decision, 2026-10-30): Dependabot SECURITY updates
+# are wanted (the repository setting is switched on); only version updates are
+# paused. Every ignore entry below therefore uses update-types, never a bare
+# dependency-name entry. GitHub's docs: "update-types only affects version
+# updates, not security updates. Security updates will always be created
+# regardless of the update-types setting" (controlling-dependencies-updated),
+# and the 2021-05-21 changelog says update-type ignores only apply to version
+# updates. A vulnerability whose fix exists only in a major version that is on
+# the hold list below therefore still gets a security PR (it may be a major bump
+# or, for react and react-dom, fail npm install like PR #505 did). Review it by
+# hand; nothing is merged automatically.
+#
 # Packages ignored on purpose after the first run (2026-10-29):
 #   - react, react-dom (ALL updates): apps/mobile stays on React 18 because of
 #     React Native; apps/web is on React 19 (Decision Log #27) and apps/admin
@@ -80,8 +92,17 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "expo"
         update-types: ["version-update:semver-major"]
+      # react and react-dom: every update type is listed on purpose instead of
+      # a bare entry. For version updates this is identical (all three types
+      # ignored). A bare dependency-name entry is documented as also applying
+      # to security updates ("ignore those dependencies when it opens pull
+      # requests for version updates and security updates"), whereas GitHub says
+      # update-types do not stop security updates. See the 2026-10-30 note
+      # above the ignore list in the header comment.
       - dependency-name: "react"
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
       - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
       - dependency-name: "react-native"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
       - dependency-name: "class-validator"
