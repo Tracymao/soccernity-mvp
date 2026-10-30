@@ -11,10 +11,13 @@
 // Visibility only: nothing on this page acts on an account, and the held user is
 // never told anything.
 //
+// Lift hold: the ACTION column (Figma 6647:23351) carries "Lift hold" on a row whose
+// item has a holdId (an admin hold: legal hold or bad faith), and "—" on the rest (a
+// hold derived from a report has nothing to lift). It opens the shared Lift hold
+// confirmation (holdActions.tsx, Figma 6672:27420) with a required reason and lifts
+// that ACCOUNT's hold; the list is read again afterwards.
+//
 // NOT BUILT (the frames and the server disagree; listed in the PR):
-//  * The ACTION column with "Lift hold": the list returns no hold id and no
-//    report id, so a row cannot be lifted from here, and the Lift hold dialog
-//    frame has no reason field although a lift needs one (#403 item 8).
 //  * Loading and load-error states: no frame draws them, so they reuse the queue's
 //    own loading line and error line.
 //  * Two hold types the server can return, appeal_window and post_closure, have no
@@ -24,7 +27,8 @@ import { type FormEvent, useState } from "react";
 import { Link } from "react-router";
 import { listHeldInvestigations, type HeldInvestigation } from "../../api/adminUsers";
 import AdminPageHeader from "../../layout/AdminPageHeader";
-import { formatShortDate, useAsyncData } from "./moderationShared";
+import { LiftHoldDialog } from "./holdActions";
+import { formatShortDate, useAsyncData, VettingRestrictedNotice } from "./moderationShared";
 import "./moderation.css";
 
 const DAYS_MIN = 0;
@@ -51,7 +55,7 @@ function HoldTypeMarker({ holdType }: { holdType: string }) {
   return <span className="mod-pill mod-pill--plain mod-pill--outline">{spellOut(holdType)}</span>;
 }
 
-function HeldRow({ item }: { item: HeldInvestigation }) {
+function HeldRow({ item, onLift }: { item: HeldInvestigation; onLift: (item: HeldInvestigation) => void }) {
   return (
     <div className="hi-table__row" role="row">
       <span className="mod-cell--primary hi-name" role="cell" title={item.displayName}>
@@ -68,6 +72,20 @@ function HeldRow({ item }: { item: HeldInvestigation }) {
       <span role="cell">
         <HoldTypeMarker holdType={item.holdType} />
       </span>
+      <span role="cell">
+        {item.holdId ? (
+          <button
+            type="button"
+            className="mod-btn mod-btn--outline mod-btn--sm"
+            aria-label={`Lift hold for ${item.displayName}`}
+            onClick={() => onLift(item)}
+          >
+            Lift hold
+          </button>
+        ) : (
+          <span className="mod-cell--primary">—</span>
+        )}
+      </span>
     </div>
   );
 }
@@ -79,6 +97,8 @@ export default function HeldInvestigationsPage() {
   const [typed, setTyped] = useState<string | null>(null);
   const [inputError, setInputError] = useState<string | null>(null);
   const { data, loading, error, reload } = useAsyncData(() => listHeldInvestigations(applied), [applied]);
+  const [lifting, setLifting] = useState<HeldInvestigation | null>(null);
+  const [restricted, setRestricted] = useState(false);
 
   const input = typed ?? (data ? String(data.thresholdDays) : "");
 
@@ -146,6 +166,8 @@ export default function HeldInvestigationsPage() {
           </p>
         </form>
 
+        {restricted ? <VettingRestrictedNotice /> : null}
+
         {loading && !data ? <p className="mod-loading">Loading the held investigations…</p> : null}
         {error ? (
           <p className="mod-error" role="alert">
@@ -174,11 +196,33 @@ export default function HeldInvestigationsPage() {
               <span role="columnheader">Held since</span>
               <span role="columnheader">Days held</span>
               <span role="columnheader">Hold type</span>
+              <span role="columnheader">Action</span>
             </div>
             {items.map((item) => (
-              <HeldRow key={item.userId} item={item} />
+              <HeldRow
+                key={item.userId}
+                item={item}
+                onLift={(row) => {
+                  setRestricted(false);
+                  setLifting(row);
+                }}
+              />
             ))}
           </div>
+        ) : null}
+
+        {lifting && lifting.holdId ? (
+          <LiftHoldDialog
+            type={lifting.holdType}
+            reportId={lifting.reportId}
+            holdIds={[lifting.holdId]}
+            onLifted={() => reload()}
+            onClose={() => setLifting(null)}
+            onRestricted={() => {
+              setLifting(null);
+              setRestricted(true);
+            }}
+          />
         ) : null}
       </div>
     </>

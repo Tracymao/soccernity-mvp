@@ -271,3 +271,15 @@ export function placeLegalHold(reportId: string, reason: string): Promise<{ hold
     body: { reason },
   });
 }
+
+// PATCH /admin/moderation/holds/:holdId/lift -- lifts ONE hold (one account's), either
+// type. Needs a reason of 10 to 500 characters (Decision Log #403 item 8). Moderator /
+// superadmin; a hold on a report that concerns a minor also needs a child-safety-vetted
+// admin (the same 403 code as above). Notifies nobody. Coded 404 hold_not_found and 409
+// hold_already_lifted / hold_expired come back as AdminApiError with the server's message.
+export function liftHold(holdId: string, reason: string): Promise<{ hold: HoldView }> {
+  return adminFetch<{ hold: HoldView }>(`/admin/moderation/holds/${holdId}/lift`, {
+    method: "PATCH",
+    body: { reason },
+  });
+}
