@@ -17,7 +17,7 @@ function row(over: Record<string, unknown> = {}) {
     id: 'e1',
     name: 'Sam Sender',
     email: 'sam@example.com',
-    category: 'enquiries_feedback',
+    category: 'feedback',
     subject: 'Hello',
     message: 'A message.',
     status: 'new',
@@ -207,7 +207,7 @@ describe('ContactEnquiryAdminService.escalate', () => {
         reporterContactEmail: 'sam@example.com',
         targetType: 'enquiry',
         targetId: 'e1',
-        reason: 'Contact enquiry (Enquiries / feedback) - Hello: A message.',
+        reason: 'Contact enquiry (Feedback) - Hello: A message.',
         severity: 'high',
         concernsMinor: false,
         status: 'open',
@@ -316,8 +316,8 @@ describe('buildEnquiryReportReason', () => {
     expect(buildEnquiryReportReason('data', 'S', 'M')).toBe('Contact enquiry (Data) - S: M');
   });
 
-  it('is capped at 500 characters with an ellipsis, never longer', () => {
-    const text = buildEnquiryReportReason('data', 'S'.repeat(200), 'M'.repeat(500));
+  it('is capped at 500 characters with an ellipsis, never longer, even for a 3000-character message', () => {
+    const text = buildEnquiryReportReason('data', 'S'.repeat(200), 'M'.repeat(3000));
     expect(text).toHaveLength(500);
     expect(text.endsWith('…')).toBe(true);
   });

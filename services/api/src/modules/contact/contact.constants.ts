@@ -1,39 +1,43 @@
 // backend/w7-contact-us-enquiry (B-046; Decision Log #440, #444, founder decisions 2026-10-30).
 
-// The six options of the Figma "Contact Category Dropdown" (6130:14653 desktop / 6130:14664 mobile), in the
-// order the dropdown draws them. The stored value is the key; the label is what the support email shows.
+// The six Contact Us categories, in the order the form draws them (founder decision 2026-10-30, superseding the
+// list of Decision Log #445 (g) as first built in PR #552). The stored value is the key; the label is what the
+// support email, the escalated Report's reason and the admin screens show.
+//   - livescores_issues is REMOVED: users cannot report on live scores, that data comes from a third-party service.
+//   - enquiries_feedback is SPLIT into enquiries and feedback.
 export const CONTACT_CATEGORIES = [
   'technical_issues',
   'editorial_complaints',
   'data',
-  'livescores_issues',
   'suggestions',
-  'enquiries_feedback',
+  'enquiries',
+  'feedback',
 ] as const;
 
 export type ContactCategory = (typeof CONTACT_CATEGORIES)[number];
 
 export const CONTACT_CATEGORY_LABELS: Record<ContactCategory, string> = {
   technical_issues: 'Technical issues',
-  editorial_complaints: 'Editorial complaints',
+  editorial_complaints: 'Editorial Complaints',
   data: 'Data',
-  livescores_issues: 'Livescores issues',
   suggestions: 'Suggestions',
-  enquiries_feedback: 'Enquiries / feedback',
+  enquiries: 'Enquiries',
+  feedback: 'Feedback',
 };
 
 export const CONTACT_ENQUIRY_STATUSES = ['new', 'handled'] as const;
 
 // Field limits. NOT invented: the Contact Us frames draw no character counter (read from the live Figma frame
 // 6113:14053 -- Name, Email, "Choose a category", Email Subject and the message box, no counter anywhere).
-//   message  500  = CreatePublicReportDto.reason (the public route this one is modelled on)
+//   message  3000 = MESSAGE_TEXT_MAX_LENGTH (direct messages), the largest free-text user-message limit in the repo
+//                   (founder decision 2026-10-30; it was 500, taken from CreatePublicReportDto.reason)
 //   name     200  = ChangeGuardianEmailDto's guardian name, the one free-text name field with a stated limit
 //   email    254  = the same DTO's email limit (the RFC 5321 maximum)
 //   subject  200  = no precedent for a subject line exists; the name limit was reused. Veto-able.
 export const CONTACT_NAME_MAX_LENGTH = 200;
 export const CONTACT_EMAIL_MAX_LENGTH = 254;
 export const CONTACT_SUBJECT_MAX_LENGTH = 200;
-export const CONTACT_MESSAGE_MAX_LENGTH = 500;
+export const CONTACT_MESSAGE_MAX_LENGTH = 3000;
 
 // Defaults for the configuration below; each is read through ConfigService, falling back here.
 export const DEFAULT_SUPPORT_INBOX_EMAIL = 'support@soccernity.com';
@@ -57,7 +61,8 @@ export const CONTACT_EMAIL_RATE_LIMITED_MESSAGE =
 export const CONTACT_ENQUIRY_ADMIN_DEFAULT_PAGE_SIZE = 20;
 export const CONTACT_ENQUIRY_ADMIN_MAX_PAGE_SIZE = 50;
 // The escalated Report's reason holds category, subject and message in one text, capped at the bound the
-// other report routes use (CreateReportDto.reason: 500). The full message stays on the linked enquiry.
+// other report routes use (CreateReportDto.reason: 500), so a 3000-character message is truncated in the
+// Report's reason. The full message stays on the linked enquiry, which the admin report view shows.
 export const CONTACT_ENQUIRY_REPORT_REASON_MAX_LENGTH = 500;
 export const CONTACT_ENQUIRY_ESCALATED_CODE = 'contact_enquiry_already_escalated';
 export const CONTACT_ENQUIRY_ESCALATION_REASON_INVALID_CODE = 'escalation_reason_invalid';

@@ -234,7 +234,14 @@ export class ModerationService {
   // To the REPORTER, once their report has been actioned. A logged-in
   // reporter's address comes from their User row; a public reporter's
   // comes from Report.reporterContactEmail (reporterId is null for them).
+  //
+  // NEVER for a report made from a Contact Us enquiry (Decision Log #445, founder decision 2026-10-30): the
+  // enquirer made no report, "your report has been actioned" is the wrong message, and the address is whatever
+  // they typed and may not be theirs. Every action, not only dismiss.
   private async notifyReporterOfOutcome(report: Report, action: ReportAction): Promise<void> {
+    if (report.targetType === ENQUIRY_REPORT_TARGET_TYPE) {
+      return;
+    }
     try {
       const to = report.reporterId
         ? await this.deliverableEmailForUser(report.reporterId)
