@@ -620,6 +620,125 @@ describe('Two-factor e2e (B-086, B-270)', () => {
     });
   });
 
+  // backend/b086-two-factor-followups (founder decision 2026-10-31: block at next refresh). Sessions are seeded through
+  // the real AdminTokenService and Prisma, and refreshed over real HTTP, so this spends none of the 5-per-15-minutes
+  // admin login budget (#190).
+  describe('admin: the refresh gate (ADMIN_2FA_ENFORCED = "true")', () => {
+    const COOKIE_REFRESH = { 'X-Auth-Mode': 'cookie', Origin: ADMIN_ORIGIN };
+    const adminRefreshKeys = () => redis.keys('admin:refresh:token:*');
+    const tokenId = (raw: string) => `admin:refresh:token:${raw.split('.')[0]}`;
+    const issue = (adminId: string, role = 'editor') => app.get(AdminTokenService).issueTokenPair(adminId, role);
+    // Enrolled through the service, not over HTTP: the admin enrol/confirm route is limited to 10 per IP for the life of
+    // this app (ADMIN_CODE_IP_LIMIT), a budget the rest of this file already uses.
+    const enrolDirectly = async (role: 'editor' | 'moderator') => {
+      const admin = await seedAdmin(role);
+      const { secret } = await twoFactor.startEnrolment('admin', admin.id);
+      await twoFactor.confirmEnrolment('admin', admin.id, totp(secret));
+      return admin;
+    };
+
+    it('an UNENROLLED admin with an existing session is refused at its next refresh (body mode): coded 401, every session of that admin dead, nothing usable left behind', async () => {
+      const gated = await seedAdmin('editor'); // no two-factor
+      const bystander = await enrolDirectly('moderator'); // another admin, enrolled
+      const sessionA = await issue(gated.id);
+      const sessionB = await issue(gated.id);
+      const bystanderSession = await issue(bystander.id, 'moderator');
+      process.env.ADMIN_2FA_ENFORCED = 'true';
+
+      const keysBefore = new Set(await adminRefreshKeys());
+      expect(keysBefore.has(tokenId(sessionA.refreshToken.token))).toBe(true);
+
+      const res = await http().post('/admin/auth/refresh').send({ refreshToken: sessionA.refreshToken.token }).expect(401);
+      expect(res.body).toMatchObject({
+        statusCode: 401,
+        code: 'admin_two_factor_enrolment_required',
+        message: 'Two-factor enrolment is required.',
+      });
+      expect(res.body).not.toHaveProperty('accessToken');
+      expect(res.body).not.toHaveProperty('refreshToken');
+
+      // Both of the admin's sessions are gone from Redis, and the replacement the rotation issued is not left over.
+      const keysAfter = new Set(await adminRefreshKeys());
+      expect(keysAfter.has(tokenId(sessionA.refreshToken.token))).toBe(false);
+      expect(keysAfter.has(tokenId(sessionB.refreshToken.token))).toBe(false);
+      for (const key of keysAfter) expect(keysBefore.has(key)).toBe(true); // nothing NEW remains
+      expect(await redis.smembers(`admin:refresh:admin:${gated.id}`)).toEqual([]);
+
+      // The second session cannot be refreshed either (an ordinary 401, no pair).
+      const second = await http().post('/admin/auth/refresh').send({ refreshToken: sessionB.refreshToken.token }).expect(401);
+      expect(second.body).not.toHaveProperty('accessToken');
+
+      // The bystander is untouched.
+      expect(keysAfter.has(tokenId(bystanderSession.refreshToken.token))).toBe(true);
+      await http().post('/admin/auth/refresh').send({ refreshToken: bystanderSession.refreshToken.token }).expect(200);
+    });
+
+    it('cookie mode: the same coded 401, and the sn_admin_rt cookie is cleared', async () => {
+      const gated = await seedAdmin('editor');
+      const session = await issue(gated.id);
+      process.env.ADMIN_2FA_ENFORCED = 'true';
+
+      const res = await http()
+        .post('/admin/auth/refresh')
+        .set({ ...COOKIE_REFRESH, Cookie: `sn_admin_rt=${session.refreshToken.token}` })
+        .send({})
+        .expect(401);
+      expect(res.body).toMatchObject({ code: 'admin_two_factor_enrolment_required' });
+      expect(res.body).not.toHaveProperty('accessToken');
+      const cookie = String(res.headers['set-cookie']);
+      expect(cookie).toContain('sn_admin_rt=;');
+      expect(cookie).toContain('Path=/admin/auth');
+      expect(cookie).toMatch(/Expires=Thu, 01 Jan 1970|Max-Age=0/);
+      expect(await redis.smembers(`admin:refresh:admin:${gated.id}`)).toEqual([]);
+    });
+
+    it('an ENROLLED admin refreshes normally under enforcement, in both modes, and the rotated token keeps working', async () => {
+      const admin = await enrolDirectly('moderator');
+      process.env.ADMIN_2FA_ENFORCED = 'true';
+
+      const first = await issue(admin.id, 'moderator');
+      const body = await http().post('/admin/auth/refresh').send({ refreshToken: first.refreshToken.token }).expect(200);
+      expect(body.body.accessToken).toEqual(expect.any(String));
+      expect(body.body.refreshToken).toEqual(expect.any(String));
+
+      const cookieRes = await http()
+        .post('/admin/auth/refresh')
+        .set({ ...COOKIE_REFRESH, Cookie: `sn_admin_rt=${body.body.refreshToken}` })
+        .send({})
+        .expect(200);
+      expect(cookieRes.body.accessToken).toEqual(expect.any(String));
+      expect(cookieRes.body).not.toHaveProperty('refreshToken'); // cookie mode
+      expect(String(cookieRes.headers['set-cookie'])).toMatch(/^sn_admin_rt=.+HttpOnly/i);
+    });
+
+    it('enforcement OFF (unset): an unenrolled admin refreshes as before; so does one when the value is anything but the literal "true"', async () => {
+      const admin = await seedAdmin('editor');
+      for (const value of [undefined, 'TRUE', '1', 'false', '']) {
+        if (value === undefined) delete process.env.ADMIN_2FA_ENFORCED;
+        else process.env.ADMIN_2FA_ENFORCED = value;
+        const session = await issue(admin.id);
+        const res = await http().post('/admin/auth/refresh').send({ refreshToken: session.refreshToken.token }).expect(200);
+        expect(res.body.accessToken).toEqual(expect.any(String));
+      }
+    });
+
+    it('USERS are unaffected: a user with no two-factor still refreshes with enforcement on (theirs is optional)', async () => {
+      process.env.ADMIN_2FA_ENFORCED = 'true';
+      const user = await seedUser();
+      const pair = await app.get(TokenService).issueTokenPair(user.id, 'user');
+      const res = await http().post('/auth/refresh').send({ refreshToken: pair.refreshToken.token }).expect(200);
+      expect(res.body.accessToken).toEqual(expect.any(String));
+    });
+
+    it('access tokens already issued stay valid until they expire (no per-request check): an unenrolled admin access token still works after the refresh was refused', async () => {
+      const gated = await seedAdmin('editor');
+      const session = await issue(gated.id);
+      process.env.ADMIN_2FA_ENFORCED = 'true';
+      await http().post('/admin/auth/refresh').send({ refreshToken: session.refreshToken.token }).expect(401);
+      await http().get('/admin/auth/two-factor/status').set(bearer(session.accessToken.token)).expect(200);
+    });
+  });
+
   describe('admin: peer reset (POST /admin/staff/:id/two-factor/reset)', () => {
     it('a peer superadmin clears the target, writes the audit row, and kills the target\'s old session; the target must enrol again', async () => {
       const peer = await seedAdmin('superadmin');

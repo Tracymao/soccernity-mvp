@@ -2,6 +2,7 @@ import { Injectable, OnModuleInit, UnauthorizedException } from '@nestjs/common'
 import { randomBytes } from 'crypto';
 import { AdminUser } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ADMIN_TWO_FACTOR_ENROLMENT_REQUIRED_CODE } from '../two-factor/two-factor.constants';
 import { AdminEnrolmentRequired, TwoFactorChallenge, TwoFactorService } from '../two-factor/two-factor.service';
 import { PasswordService } from '../auth/password/password.service';
 import { InvalidRefreshTokenError, RefreshTokenReuseDetectedError } from '../auth/token/token.errors';
@@ -59,8 +60,8 @@ export class AdminAuthService implements OnModuleInit {
   //                                            finished by POST /admin/auth/login/two-factor/enrol/{start,confirm}.
   //                                            No grace period: there is no way to a session without enrolling.
   //   3. no two-factor and enforcement off  -> the session, as before (the default until the admin screens exist).
-  // Sessions that already exist when ADMIN_2FA_ENFORCED is switched on keep working until they end ("at the next
-  // sign-in", as decided); a peer reset ends the target's sessions, so a reset admin does face the gate.
+  // Sessions that already exist when ADMIN_2FA_ENFORCED is switched on are ended at their next REFRESH (see
+  // refreshSession); a peer reset ends the target's sessions, so a reset admin faces the gate at the next sign-in.
   async login(
     email: string,
     password: string,
@@ -145,6 +146,7 @@ export class AdminAuthService implements OnModuleInit {
   ): Promise<{ response: AdminTokenPairResponse; persistent: boolean }> {
     try {
       const tokenPair = await this.adminTokenService.rotateRefreshToken(refreshToken);
+      await this.assertEnrolledWhenEnforced(tokenPair.accessToken.token);
       return { response: toAdminTokenPairResponse(tokenPair), persistent: tokenPair.persistent };
     } catch (error) {
       if (error instanceof RefreshTokenReuseDetectedError) {
@@ -157,6 +159,29 @@ export class AdminAuthService implements OnModuleInit {
       }
       throw error;
     }
+  }
+
+  // backend/b086-two-factor-followups (founder decision 2026-10-31: block at next refresh). With ADMIN_2FA_ENFORCED
+  // "true", an admin whose session predates the switch and who has no two-factor cannot keep refreshing it: the
+  // refresh is a coded 401 and ALL of that admin's sessions end. It runs AFTER rotation on purpose: the refresh token
+  // is validated and consumed first (a bad or replayed token is the ordinary 401 and touches no account), the admin's
+  // identity comes from the token that was actually consumed, and revoking the whole family then also removes the
+  // replacement just issued -- it was never returned, so no usable refresh token is left behind. Off (anything but
+  // the literal "true") costs no query. Access tokens already issued stay valid until they expire (15 minutes by
+  // default); there is deliberately no per-request database check.
+  private async assertEnrolledWhenEnforced(newAccessToken: string): Promise<void> {
+    if (!this.twoFactor.isAdminEnforced()) return;
+    const { sub: adminId } = this.adminTokenService.verifyAccessToken(newAccessToken);
+    const admin = await this.prisma.adminUser.findUnique({ where: { id: adminId }, select: { totpEnabledAt: true } });
+    // No row: the account was removed; nothing to gate (unchanged behaviour).
+    if (!admin || admin.totpEnabledAt) return;
+    await this.adminTokenService.revokeAllSessionsForAdmin(adminId);
+    throw new UnauthorizedException({
+      statusCode: 401,
+      error: 'Unauthorized',
+      code: ADMIN_TWO_FACTOR_ENROLMENT_REQUIRED_CODE,
+      message: 'Two-factor enrolment is required.',
+    });
   }
 
   // Single-session logout always happens. `allSessions` additionally

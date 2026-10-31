@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AuthThrottlerGuard } from '../auth/rate-limit/auth-throttler.guard';
 import { CodeEntryLockedException } from '../two-factor/two-factor-attempt.limiter';
+import { ADMIN_TWO_FACTOR_ENROLMENT_REQUIRED_CODE } from '../two-factor/two-factor.constants';
 import { TwoFactorService } from '../two-factor/two-factor.service';
 import { AdminAuthController } from './admin-auth.controller';
 import { AdminAuthService } from './admin-auth.service';
@@ -24,7 +25,13 @@ const COOKIE_MODE = { 'X-Auth-Mode': 'cookie', Origin: 'http://localhost:5174' }
 
 describe('AdminAuthController two-factor sign-in (HTTP layer)', () => {
   let app: INestApplication;
-  const adminAuthService = { login: jest.fn(), completeTwoFactorLogin: jest.fn(), completeEnrolmentLogin: jest.fn() };
+  const adminAuthService = {
+    login: jest.fn(),
+    completeTwoFactorLogin: jest.fn(),
+    completeEnrolmentLogin: jest.fn(),
+    refresh: jest.fn(),
+    refreshSession: jest.fn(),
+  };
   const twoFactor = { startAdminEnrolmentWithToken: jest.fn() };
 
   beforeAll(async () => {
@@ -157,6 +164,44 @@ describe('AdminAuthController two-factor sign-in (HTTP layer)', () => {
         .set(COOKIE_MODE)
         .send({ enrolmentToken: 'x.y', code: '123456' })
         .expect(401);
+      expect(res.headers['set-cookie']).toBeUndefined();
+    });
+  });
+  // backend/b086-two-factor-followups: the refresh gate, as it reaches the client. The service throws the coded 401
+  // (admin-auth.service.refresh-gate.spec.ts); these prove how each mode carries it.
+  describe('POST /admin/auth/refresh with the enrolment gate', () => {
+    const gate = () =>
+      new UnauthorizedException({
+        statusCode: 401,
+        error: 'Unauthorized',
+        code: ADMIN_TWO_FACTOR_ENROLMENT_REQUIRED_CODE,
+        message: 'Two-factor enrolment is required.',
+      });
+
+    it('cookie mode: 401 with the code, and the sn_admin_rt cookie is CLEARED', async () => {
+      adminAuthService.refreshSession.mockRejectedValue(gate());
+      const res = await request(app.getHttpServer())
+        .post('/admin/auth/refresh')
+        .set({ ...COOKIE_MODE, Cookie: 'sn_admin_rt=admin-refresh.secret' })
+        .send({})
+        .expect(401);
+      expect(res.body).toMatchObject({ code: ADMIN_TWO_FACTOR_ENROLMENT_REQUIRED_CODE, message: 'Two-factor enrolment is required.' });
+      expect(res.body).not.toHaveProperty('accessToken');
+      const cookie = String(res.headers['set-cookie']);
+      expect(cookie).toContain('sn_admin_rt=;');
+      expect(cookie).toMatch(/Expires=Thu, 01 Jan 1970|Max-Age=0/);
+      expect(cookie).toContain('Path=/admin/auth');
+    });
+
+    it('body mode: 401 with the code, no cookie is touched, no tokens in the body', async () => {
+      adminAuthService.refresh.mockRejectedValue(gate());
+      const res = await request(app.getHttpServer())
+        .post('/admin/auth/refresh')
+        .send({ refreshToken: 'admin-refresh.secret' })
+        .expect(401);
+      expect(res.body).toMatchObject({ code: ADMIN_TWO_FACTOR_ENROLMENT_REQUIRED_CODE });
+      expect(res.body).not.toHaveProperty('accessToken');
+      expect(res.body).not.toHaveProperty('refreshToken');
       expect(res.headers['set-cookie']).toBeUndefined();
     });
   });
