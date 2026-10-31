@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { decryptDob, encryptDob, parseDobKey } from './dob-crypto';
+import { decryptDob, decryptDobString, encryptDob, encryptDobString, parseDobKey } from './dob-crypto';
 
 // Why a service called explicitly (not a Prisma middleware/$extends):
 // the column is now TEXT, so the generated Prisma type is `string | null`.
@@ -33,5 +33,17 @@ export class DobEncryptionService {
 
   decryptNullable(value: string | null): Date | null {
     return value === null ? null : this.decrypt(value);
+  }
+
+  // backend/b086-two-factor (Decision Log #405 item 8): the TOTP secrets are encrypted with THIS key, by THIS code
+  // (AES-256-GCM, "v1:<iv>:<tag>:<ct>"), so one DOB_ENCRYPTION_KEY protects both. Generic string variants over the
+  // existing exported functions; the date-of-birth methods above and their stored format are unchanged. Losing or
+  // rotating the key makes the stored secrets unrecoverable too (docs/dob-encryption-rollback.md).
+  encryptString(plaintext: string): string {
+    return encryptDobString(plaintext, this.getKey());
+  }
+
+  decryptString(value: string): string {
+    return decryptDobString(value, this.getKey());
   }
 }

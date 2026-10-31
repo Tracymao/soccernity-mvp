@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminActionLogModule } from '../admin-action-log/admin-action-log.module';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
+import { TwoFactorModule } from '../two-factor/two-factor.module';
 import { AdminStaffRolesController } from './admin-staff-roles.controller';
 import { AdminStaffRolesService } from './admin-staff-roles.service';
 
@@ -28,7 +29,7 @@ import { AdminStaffRolesService } from './admin-staff-roles.service';
 // so updateAdminRole/updateAdminStatus can record an audit-log row after
 // each write (modules/admin-action-log/README.md).
 @Module({
-  imports: [AdminAuthFoundationModule, AdminActionLogModule],
+  imports: [AdminAuthFoundationModule, AdminActionLogModule, TwoFactorModule],
   controllers: [AdminStaffRolesController],
   providers: [AdminStaffRolesService, PrismaService],
 })

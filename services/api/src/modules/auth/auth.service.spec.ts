@@ -7,6 +7,7 @@ import { RefreshTokenStore } from './token/refresh-token.store';
 import { TokenService } from './token/token.service';
 import { PasswordService } from './password/password.service';
 import { ACCOUNT_DEACTIVATED_CODE, AuthService } from './auth.service';
+import { AuthResponse } from './auth-response.mapper';
 
 // Minimal fake standing in for PrismaService — only the methods AuthService
 // actually calls. Keeps this a fast unit test while still exercising
@@ -110,6 +111,24 @@ class FakePrismaUsers {
   }
 }
 
+// B-086: login() and reactivateAccount() may now answer with a two-factor challenge. Every account seeded in this
+// file has two-factor OFF, so a challenge here would be a bug; this subclass narrows the declared return type back
+// to the session so the (many) assertions below keep reading tokens off the result. Two-factor sign-in itself is
+// covered by two-factor/*.spec.ts and test/two-factor.e2e-spec.ts.
+class SessionAuthService extends AuthService {
+  override async login(...args: Parameters<AuthService['login']>): Promise<AuthResponse> {
+    const result = await super.login(...args);
+    if ('twoFactorRequired' in result) throw new Error('unexpected two-factor challenge');
+    return result;
+  }
+
+  override async reactivateAccount(...args: Parameters<AuthService['reactivateAccount']>): Promise<AuthResponse> {
+    const result = await super.reactivateAccount(...args);
+    if ('twoFactorRequired' in result) throw new Error('unexpected two-factor challenge');
+    return result;
+  }
+}
+
 async function buildHarness() {
   const passwordService = new PasswordService();
   const jwtService = new JwtService({ secret: 'unit-test-secret-do-not-use-in-real-env' });
@@ -118,7 +137,15 @@ async function buildHarness() {
   const tokenService = new TokenService(jwtService, refreshTokenStore, configService);
   const prisma = new FakePrismaUsers();
 
-  const authService = new AuthService(prisma as never, passwordService, tokenService, buildTestDobEncryption());
+  // Two-factor has its own specs; accounts seeded here have it off, so the service is never reached.
+  const twoFactorStub = { issueChallenge: jest.fn(), completeChallenge: jest.fn() };
+  const authService = new SessionAuthService(
+    prisma as never,
+    passwordService,
+    tokenService,
+    buildTestDobEncryption(),
+    twoFactorStub as never,
+  );
   await authService.onModuleInit();
 
   return { authService, prisma, passwordService, tokenService };

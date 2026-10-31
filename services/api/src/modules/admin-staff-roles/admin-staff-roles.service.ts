@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -9,6 +9,8 @@ import {
   ADMIN_ACTION_LOG_TARGET_TYPES,
 } from '../admin-action-log/admin-action-log.constants';
 import { AdminTokenService } from '../admin/token/admin-token.service';
+import { TWO_FACTOR_NOT_ENABLED_CODE } from '../two-factor/two-factor.constants';
+import { TwoFactorService } from '../two-factor/two-factor.service';
 import {
   ADMIN_STAFF_ROLES_DEFAULT_PAGE_SIZE,
   ADMIN_STAFF_ROLES_MAX_PAGE_SIZE,
@@ -101,6 +103,8 @@ export class AdminStaffRolesService {
     // exported by AdminAuthFoundationModule (this module's own import),
     // so no new module wiring is needed for this.
     private readonly adminTokenService: AdminTokenService,
+    // backend/b086-two-factor (B-270): resetAdmin() clears the target's secret fields and backup codes.
+    private readonly twoFactor: TwoFactorService,
   ) {}
 
   // -------------------------------------------------------------------
@@ -324,6 +328,57 @@ export class AdminStaffRolesService {
     );
 
     return updated;
+  }
+
+  // -------------------------------------------------------------------
+  // POST /admin/staff/:id/two-factor/reset (backend/b086-two-factor, B-270; Decision Log #446). Another superadmin
+  // clears the TARGET admin's authenticator-app two-factor: the encrypted secret, the enrolment time, the replay
+  // step and every backup code, in ONE transaction together with the audit-log row; then every session of the
+  // target is ended. With ADMIN_2FA_ENFORCED = "true" the target must enrol again at their next sign-in.
+  //
+  // Nobody can reset their OWN: refused with 403 BEFORE anything is read. (A signed-in admin who has lost their
+  // device uses a backup code, or asks a peer; the last remaining superadmin uses the documented database step,
+  // docs/admin-two-factor-recovery.md.) Resetting an admin who has no two-factor is a 409, not a silent success: it
+  // would write an audit row for an action that changed nothing. No email is sent (adopted default, veto-able).
+  // -------------------------------------------------------------------
+  async resetTwoFactor(
+    targetAdminId: string,
+    callerAdminId: string,
+  ): Promise<{ id: string; twoFactorEnabled: false }> {
+    if (targetAdminId === callerAdminId) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: 'Forbidden',
+        code: 'cannot_reset_own_two_factor',
+        message: 'You cannot reset your own two-factor authentication. Another superadmin must do it.',
+      });
+    }
+    await this.assertAdminExists(targetAdminId);
+
+    const wasReset = await this.twoFactor.resetAdmin(targetAdminId, async (tx) => {
+      await tx.adminActionLog.create({
+        data: {
+          adminId: callerAdminId,
+          action: ADMIN_ACTION_LOG_ACTIONS.ADMIN_TWO_FACTOR_RESET,
+          targetType: ADMIN_ACTION_LOG_TARGET_TYPES.ADMIN_USER,
+          targetId: targetAdminId,
+          notes: 'sessions_ended',
+        },
+      });
+    });
+    if (!wasReset) {
+      throw new ConflictException({
+        statusCode: 409,
+        error: 'Conflict',
+        code: TWO_FACTOR_NOT_ENABLED_CODE,
+        message: 'This admin does not have two-factor authentication turned on.',
+      });
+    }
+
+    // Ends every session of the target: a reset that left a signed-in session alive would not be a reset.
+    await this.adminTokenService.revokeAllSessionsForAdmin(targetAdminId);
+    this.logger.log(`Admin ${callerAdminId} reset admin ${targetAdminId}'s two-factor authentication.`);
+    return { id: targetAdminId, twoFactorEnabled: false };
   }
 
   // Shared by updateAdminRole (demoting) and updateAdminStatus

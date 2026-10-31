@@ -176,6 +176,10 @@ const CONTROLLERS = [
 const NOT_INSPECTED_DIRS = [
   'admin', // every admin-* module: AdminJwtAuthGuard domain
   'auth', // the open set by design
+  // backend/b086-two-factor (B-086): the signed-in user's two-factor SETTINGS (enrol, backup codes, turn off). An
+  // authentication setting, not a social or profile write, and JwtAuthGuard only by decision (#446): a restricted-
+  // pending minor may protect their own account. The same open set as /auth/*.
+  'two-factor',
   'blog', // read-only
   'leaderboard', // read-only
   'search', // read-only

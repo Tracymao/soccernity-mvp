@@ -2,6 +2,7 @@ import { ExecutionContext, INestApplication, UnauthorizedException, ValidationPi
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AuthThrottlerGuard } from '../auth/rate-limit/auth-throttler.guard';
+import { TwoFactorService } from '../two-factor/two-factor.service';
 import { AdminAuthController } from './admin-auth.controller';
 import { AdminAuthService } from './admin-auth.service';
 import { AdminJwtAuthGuard } from './guards/admin-jwt-auth.guard';
@@ -52,7 +53,11 @@ describe('AdminAuthController (HTTP layer)', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [AdminAuthController],
-      providers: [{ provide: AdminAuthService, useValue: adminAuthService }],
+      providers: [
+        { provide: AdminAuthService, useValue: adminAuthService },
+        // The controller also injects TwoFactorService (admin enrolment start); covered by the two-factor specs.
+        { provide: TwoFactorService, useValue: {} },
+      ],
     })
       .overrideGuard(AuthThrottlerGuard)
       .useValue({ canActivate: () => true })

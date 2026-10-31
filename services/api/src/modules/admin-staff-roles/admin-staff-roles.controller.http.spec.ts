@@ -18,6 +18,7 @@ describe('AdminStaffRolesController (HTTP layer)', () => {
     updateAdminRole: jest.fn(),
     updateAdminStatus: jest.fn(),
     createStaff: jest.fn(),
+    resetTwoFactor: jest.fn(),
   };
 
   let currentAdmin: { sub: string; role: string; aud: string };
@@ -334,6 +335,34 @@ describe('AdminStaffRolesController (HTTP layer)', () => {
       currentAdmin = { sub: 'superadmin-1', role: 'superadmin', aud: 'admin-console' };
       await request(app.getHttpServer()).post('/admin/staff').send(payload).expect(400);
       expect(adminStaffRolesService.createStaff).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /admin/staff/:id/two-factor/reset (B-270, Decision Log #446)', () => {
+    it('is superadmin ONLY: an editor and a moderator are 403 and nothing is reset', async () => {
+      for (const role of ['editor', 'moderator']) {
+        currentAdmin = { sub: 'admin-1', role, aud: 'admin-console' };
+        await request(app.getHttpServer()).post('/admin/staff/target-1/two-factor/reset').expect(403);
+      }
+      expect(adminStaffRolesService.resetTwoFactor).not.toHaveBeenCalled();
+    });
+
+    it('passes the TARGET from the URL and the CALLER from the token (never from the body)', async () => {
+      currentAdmin = { sub: 'super-1', role: 'superadmin', aud: 'admin-console' };
+      adminStaffRolesService.resetTwoFactor.mockResolvedValue({ id: 'target-1', twoFactorEnabled: false });
+      const res = await request(app.getHttpServer()).post('/admin/staff/target-1/two-factor/reset').expect(200);
+      expect(res.body).toEqual({ id: 'target-1', twoFactorEnabled: false });
+      expect(adminStaffRolesService.resetTwoFactor).toHaveBeenCalledWith('target-1', 'super-1');
+    });
+
+    it('propagates the refusal of a self-reset as 403', async () => {
+      currentAdmin = { sub: 'super-1', role: 'superadmin', aud: 'admin-console' };
+      const { ForbiddenException } = jest.requireActual('@nestjs/common');
+      adminStaffRolesService.resetTwoFactor.mockRejectedValue(
+        new ForbiddenException({ statusCode: 403, code: 'cannot_reset_own_two_factor', message: 'no' }),
+      );
+      const res = await request(app.getHttpServer()).post('/admin/staff/super-1/two-factor/reset').expect(403);
+      expect(res.body.code).toBe('cannot_reset_own_two_factor');
     });
   });
 });
