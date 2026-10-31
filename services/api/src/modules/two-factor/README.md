@@ -28,7 +28,7 @@ listed in `write-route-guards.spec.ts`'s skipped set, with the reason.
 - **Library:** `otpauth` 9.5.2 (RFC 6238; its only dependency is `@noble/hashes`). `npm audit --omit=dev --workspace=services/api --audit-level=high` (the CI gate) passes.
 - **TOTP:** SHA-1, 6 digits, 30 s, one step either side. **Replay:** after a valid code `totpLastUsedStep` is advanced with an atomic compare (`updateMany` where it is null or lower), so a step already used is refused. The enrolling code's step is recorded too.
 - **Secret:** 20 random bytes, base32. Stored **only as ciphertext**: `DobEncryptionService.encryptString` (AES-256-GCM, `v<N>:<iv>:<tag>:<ct>` where N is the key version, `DOB_ENCRYPTION_KEY`, the same key and code as dates of birth). An unconfirmed secret lives only in Redis (encrypted, 10 min) until the first valid code.
-- **Backup codes:** 10 × 10 characters, upper-case letters and digits without `0 O 1 I` (a 32-character alphabet, uniform byte mask). Stored as **argon2id hashes** (`PasswordService`). A code is compared against **every** unused hash (no early exit), spent with an `updateMany … usedAt IS NULL` guard (so two simultaneous requests cannot both spend it). Typed lower-case, with spaces or a hyphen, is accepted. Regenerate and turn-off delete all codes.
+- **Backup codes:** 10 × 10 characters, upper-case letters and digits without `0 O 1 I` (a 32-character alphabet, uniform byte mask). Stored as **argon2id hashes** (`PasswordService`). A code is compared against **every** unused hash (no early exit) and the work is padded with dummy verifications up to exactly 10 (`BACKUP_CODE_COUNT`) against a dummy hash created once at start-up (`TwoFactorService.onModuleInit`, the way `AdminAuthService` creates `dummyPasswordHash`), so an account with no unused codes is refused in the same time as one with ten; the dummy results are dropped unread, so a dummy can never be what accepts a code. Spent with an `updateMany … usedAt IS NULL` guard (so two simultaneous requests cannot both spend it). Typed lower-case, with spaces or a hyphen, is accepted. Regenerate and turn-off delete all codes.
 - **One message for wrong and used:** a wrong TOTP, a replayed TOTP, a wrong backup code and a spent one all answer the same 401 body.
 - **Per-account lock:** 5 wrong codes in 15 minutes lock code entry for that account for 15 minutes (`429` with `Retry-After`, no count in the body). The slot is reserved *before* the check (INCR), so 20 parallel guesses see five attempts; the 5th wrong one restarts the 15-minute clock.
 - **Tokens:** opaque `<uuid>.<secret>` (hash stored, Redis TTL) in three disjoint namespaces: `user-login`, `admin-login`, `admin-enrol`. A token of one kind is never found by another kind's endpoint. A challenge is consumed on **success** only; a typo does not force a new sign-in. The account is re-read at the code step: deactivated, suspended, pending deletion, or reset in between gives the generic 401.
@@ -41,7 +41,13 @@ listed in `write-route-guards.spec.ts`'s skipped set, with the reason.
 
 Only the literal string **`"true"`** turns enforcement on (`TRUE`, `1`, empty and unset leave it off). **Default off**: the admin screens for enrolment do not exist yet and turning it on would lock every admin out. While it is not `"true"` the API logs a warning at start. It must be `"true"` in production at launch (launch-gate check B-267). In `render.yaml` it is `sync: false` in both services so a Blueprint re-sync cannot switch it back off; `.env.example` and `docs/deployment.md` document it, and `env-completeness.spec.ts` pins all of that.
 
-Enforcement applies **at sign-in**: sessions that exist when the switch is turned on continue until they end ("at the next sign-in"). A peer reset ends the target's sessions, so a reset admin does face the gate. Refresh is not gated (adopted: no extra read per refresh; flagged below).
+Enforcement applies **at sign-in and at the next refresh** (founder decision 2026-10-31: block at next refresh; `backend/b086-two-factor-followups`). A peer reset ends the target's sessions, so a reset admin faces the gate at the next sign-in.
+
+**The refresh gate** (`AdminAuthService.refreshSession`, so both body and cookie mode). With enforcement `"true"` and no two-factor on the admin (`totpEnabledAt` null), `POST /admin/auth/refresh` answers **401** with `{ code: "admin_two_factor_enrolment_required", message: "Two-factor enrolment is required." }` and ends **all** of that admin's sessions (`revokeAllSessionsForAdmin`). No token pair is returned, and in cookie mode the existing catch clears the `sn_admin_rt` cookie. An enrolled admin, enforcement off (unset or anything but the literal `"true"`, which costs no query), and users (their two-factor is optional) are unaffected; an admin row that no longer exists is not gated (unchanged behaviour).
+
+*Where the check sits: after rotation, not before.* The refresh token is validated and consumed first, so a bad or replayed token is the ordinary 401 and touches no account (reuse detection is unchanged), and the admin's identity comes from the token that was actually consumed (read from the access token just signed for it, so no lookup API on the token store was needed). Revoking the whole family then removes the replacement the rotation issued too: it was never returned to the caller, so no usable refresh token is left behind. If the revoke itself failed (Redis down) the request is a 500 and the replacement, never returned, is unreachable.
+
+*Accepted:* **access tokens already issued stay valid until they expire (15 minutes by default, `ADMIN_JWT_ACCESS_TTL_SECONDS`).** There is deliberately no per-request database check, so an unenrolled admin's last access token runs out within that time, not at once. Proven by an e2e test.
 
 ## Defaults I chose (founder can veto — each is flagged in the PR)
 
@@ -64,11 +70,10 @@ SHA-1 / 6 digits / 30 s / ±1 step · replay of a used step refused · challenge
 ## Not built / open
 
 - No frontend, QR image, email notice, SMS, WebAuthn; no admin screens (B-271); no guardian involvement for a minor's two-factor.
-- **Refresh is not gated by enforcement**: an admin with a session from before the switch keeps it until it expires (up to the 7-day refresh TTL). Add a check in `AdminAuthService.refreshSession` if "no grace period" should also cover live sessions.
+- **Refresh is gated; access tokens already issued run out within 15 minutes** (see "The refresh gate"). No per-request check, by decision.
 - No in-memory fallback for the code lock; no per-IP limit on `POST /auth/two-factor/regenerate|disable` (they need an access token *and* the password; the global write limit still applies).
 - Anyone who has a user's password can lock that user's *code entry* for 15 minutes by failing five codes (the same shared-lockout trade-off Decision Log #432 records for the password lock). The password is already needed to obtain a challenge.
 - A key rotation has no procedure (`docs/dob-encryption-rollback.md`).
-- Backup-code timing: an account with **no unused codes left** skips the hashing work, so that one state is slightly faster to refuse.
 - Counsel: wording of any user-facing text (none is added here; messages are functional and untagged), the DPIA mention of authenticator data, and Part C row 44 are open.
 
 ## Tests

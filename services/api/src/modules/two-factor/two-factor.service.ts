@@ -9,6 +9,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { randomBytes } from 'crypto';
 import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { DobDecryptError } from '../../crypto/dob-crypto';
 import { DobEncryptionService } from '../../crypto/dob-encryption.service';
@@ -19,6 +20,7 @@ import { TwoFactorPendingStore } from './two-factor-pending.store';
 import { PeekedToken, TwoFactorTokenKind, TwoFactorTokenPurpose, TwoFactorTokenStore } from './two-factor-token.store';
 import {
   ADMIN_2FA_ENFORCED_ENV,
+  BACKUP_CODE_COUNT,
   ENROLMENT_TTL_SECONDS,
   INVALID_CHALLENGE_MESSAGE,
   INVALID_CODE_MESSAGE,
@@ -76,6 +78,9 @@ const challengeKind = (aud: TwoFactorAudience): TwoFactorTokenKind => (aud === '
 @Injectable()
 export class TwoFactorService implements OnModuleInit {
   private readonly logger = new Logger(TwoFactorService.name);
+  // Padding for the backup-code check (see checkCode). Hashed once at start-up, like AdminAuthService's
+  // dummyPasswordHash; its result is never used.
+  private dummyBackupCodeHash: string | null = null;
 
   constructor(
     private readonly users: UserTwoFactorRepository,
@@ -91,13 +96,15 @@ export class TwoFactorService implements OnModuleInit {
     @Optional() @Inject(APP_CLOCK) private readonly clock: Clock = systemClock,
   ) {}
 
-  onModuleInit(): void {
+  async onModuleInit(): Promise<void> {
+    // The warning is logged before the (async) hash so it is emitted synchronously on the call.
     if (!this.isAdminEnforced()) {
       this.logger.warn(
         `${ADMIN_2FA_ENFORCED_ENV} is not "true": admins can sign in with a password alone. ` +
           'It must be "true" in production (launch-gate check, B-267).',
       );
     }
+    this.dummyBackupCodeHash = await this.passwordService.hash(randomBytes(32).toString('hex'));
   }
 
   // Only the literal string "true" turns it on (a typo such as "TRUE" or "1" leaves it off, and the boot warning
@@ -316,9 +323,20 @@ export class TwoFactorService implements OnModuleInit {
 
     if (looksLikeBackupCode(normalised)) {
       const unused = await repo.unusedBackupCodes(subject.id);
-      // Compared against EVERY unused code, no early exit, so how long this takes does not say which code (if any)
-      // matched.
-      const results = await Promise.all(unused.map((c) => this.passwordService.verify(c.codeHash, normalised)));
+      // Compared against EVERY unused code, no early exit, and padded with dummy verifications up to
+      // BACKUP_CODE_COUNT, so the work is the same whether the account has ten unused codes or none: how long this
+      // takes says neither which code matched nor how many are left. The dummy results are dropped without being
+      // read, so a dummy can never be what accepts a code.
+      const padding = Math.max(0, BACKUP_CODE_COUNT - unused.length);
+      const dummy = this.dummyBackupCodeHash;
+      const [results] = await Promise.all([
+        Promise.all(unused.map((c) => this.passwordService.verify(c.codeHash, normalised))),
+        Promise.all(
+          Array.from({ length: padding }, () =>
+            dummy === null ? Promise.resolve(false) : this.passwordService.verify(dummy, normalised),
+          ),
+        ),
+      ]);
       const index = results.indexOf(true);
       if (index === -1) return false;
       // updateMany guarded on usedAt IS NULL: a code cannot be spent twice by two simultaneous requests.
