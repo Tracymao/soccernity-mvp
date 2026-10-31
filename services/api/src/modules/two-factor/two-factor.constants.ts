@@ -46,6 +46,8 @@ export const TWO_FACTOR_NOT_ENABLED_CODE = 'two_factor_not_enabled';
 export const TWO_FACTOR_NO_PENDING_ENROLMENT_CODE = 'two_factor_no_pending_enrolment';
 export const TWO_FACTOR_CODE_LOCKED_CODE = 'two_factor_code_locked';
 export const ADMIN_TWO_FACTOR_REQUIRED_CODE = 'admin_two_factor_required';
+// 401 body code on POST /admin/auth/refresh when ADMIN_2FA_ENFORCED is "true" and the admin has no two-factor.
+export const ADMIN_TWO_FACTOR_ENROLMENT_REQUIRED_CODE = 'admin_two_factor_enrolment_required';
 
 // The environment switch (DEFAULT: off, because the admin screens do not exist yet and turning it on would lock
 // every admin out). Only the literal string "true" turns it on.

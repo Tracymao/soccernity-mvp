@@ -270,6 +270,67 @@ describe('TwoFactorService: sign-in challenge', () => {
     expect(h.passwords.verifyCalls).toHaveLength(10);
   });
 
+  describe('backup-code check does constant work (padded with dummy verifications)', () => {
+    // How many of the 10 codes are still unused: 0 (all spent), 1, 10.
+    async function accountWithUnused(unusedCount: number) {
+      const h = build();
+      const { codes } = await enrol(h, 'user', 'u1');
+      await h.svc.onModuleInit(); // the dummy hash is created at start-up
+      const rows = await h.users.unusedBackupCodes('u1');
+      for (const row of rows.slice(0, rows.length - unusedCount)) await h.users.spendBackupCode(row.id);
+      return { h, codes, remaining: rows.slice(rows.length - unusedCount) };
+    }
+
+    it.each([0, 1, 10])('with %i unused code(s) a backup-code attempt runs exactly 10 verifications', async (unusedCount) => {
+      const { h } = await accountWithUnused(unusedCount);
+      h.passwords.verifyCalls.length = 0;
+      const c = await h.svc.issueChallenge('user', 'u1', false);
+      await expect(h.svc.completeChallenge('user', c.challengeToken, 'ZZZZZZZZZZ')).rejects.toMatchObject({ message: INVALID_CODE_MESSAGE });
+      expect(h.passwords.verifyCalls).toHaveLength(10);
+    });
+
+    it('a matching code still costs 10 verifications and is accepted once; the dummy never decides', async () => {
+      const { h, codes } = await accountWithUnused(1);
+      // The one unused code is the LAST of the ten that were issued.
+      h.passwords.verifyCalls.length = 0;
+      const c = await h.svc.issueChallenge('user', 'u1', false);
+      await expect(h.svc.completeChallenge('user', c.challengeToken, codes[9])).resolves.toBeDefined();
+      expect(h.passwords.verifyCalls).toHaveLength(10);
+      const again = await h.svc.issueChallenge('user', 'u1', false);
+      await expect(h.svc.completeChallenge('user', again.challengeToken, codes[9])).rejects.toMatchObject({ message: INVALID_CODE_MESSAGE });
+    });
+
+    it('a dummy-hash match can NEVER be accepted: with no real code left and a verifier that says "match" to the dummy, the code is refused', async () => {
+      const { h } = await accountWithUnused(0);
+      const spend = jest.spyOn(h.users, 'spendBackupCode');
+      // Worst case: the verifier accepts every hash that is not one of the account's real hashes, i.e. the dummy.
+      h.passwords.verify = async () => true;
+      const c = await h.svc.issueChallenge('user', 'u1', false);
+      await expect(h.svc.completeChallenge('user', c.challengeToken, 'ZZZZZZZZZZ')).rejects.toMatchObject({ message: INVALID_CODE_MESSAGE });
+      expect(spend).not.toHaveBeenCalled();
+    });
+
+    it('the dummy is hashed once, at start-up, not per attempt', async () => {
+      const { h } = await accountWithUnused(0);
+      const hash = jest.spyOn(h.passwords, 'hash');
+      for (let i = 0; i < 3; i++) {
+        const c = await h.svc.issueChallenge('user', 'u1', false);
+        await h.svc.completeChallenge('user', c.challengeToken, 'ZZZZZZZZZZ').catch(() => undefined);
+      }
+      expect(hash).not.toHaveBeenCalled();
+    });
+
+    it('a wrong, a replayed and a spent code still answer the identical message', async () => {
+      const { h, codes } = await accountWithUnused(10);
+      const first = await h.svc.issueChallenge('user', 'u1', false);
+      await h.svc.completeChallenge('user', first.challengeToken, codes[0]);
+      const c = await h.svc.issueChallenge('user', 'u1', false);
+      const replayed = await h.svc.completeChallenge('user', c.challengeToken, codes[0]).catch((e) => e);
+      const wrong = await h.svc.completeChallenge('user', c.challengeToken, 'ZZZZZZZZZZ').catch((e) => e);
+      expect(replayed.getResponse()).toEqual(wrong.getResponse());
+    });
+  });
+
   it('refuses anything that is neither six digits nor a well-formed backup code, without hashing anything', async () => {
     const h = build();
     await enrol(h, 'user', 'u1');
