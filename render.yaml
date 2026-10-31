@@ -74,6 +74,14 @@ services:
       # DOB_ENCRYPTION_KEY: must base64-decode to exactly 32 bytes (openssl rand -base64 32); losing it makes stored dates of birth unreadable; the pre-deploy script needs it
       - key: DOB_ENCRYPTION_KEY
         sync: false
+      # Key rotation only (docs/dob-encryption-rollback.md). Leave BOTH unset until a rotation: unset means one key,
+      # version 1. During a rotation: DOB_ENCRYPTION_KEY = new key, DOB_ENCRYPTION_KEY_VERSION = 2 (then 3 ...),
+      # DOB_ENCRYPTION_KEY_PREVIOUS = the old key; delete DOB_ENCRYPTION_KEY_PREVIOUS once the re-encrypt script
+      # has verified every value. Never put a key value in this file.
+      - key: DOB_ENCRYPTION_KEY_VERSION
+        sync: false
+      - key: DOB_ENCRYPTION_KEY_PREVIOUS
+        sync: false
       # --- Auth tuning (code defaults apply when unset/blank) ---
       - key: JWT_ACCESS_TTL_SECONDS
         sync: false
@@ -366,6 +374,14 @@ services:
         sync: false
       # DOB_ENCRYPTION_KEY: must base64-decode to exactly 32 bytes (openssl rand -base64 32); losing it makes stored dates of birth unreadable; the pre-deploy script needs it
       - key: DOB_ENCRYPTION_KEY
+        sync: false
+      # Key rotation only (docs/dob-encryption-rollback.md). Leave BOTH unset until a rotation: unset means one key,
+      # version 1. During a rotation: DOB_ENCRYPTION_KEY = new key, DOB_ENCRYPTION_KEY_VERSION = 2 (then 3 ...),
+      # DOB_ENCRYPTION_KEY_PREVIOUS = the old key; delete DOB_ENCRYPTION_KEY_PREVIOUS once the re-encrypt script
+      # has verified every value. Never put a key value in this file.
+      - key: DOB_ENCRYPTION_KEY_VERSION
+        sync: false
+      - key: DOB_ENCRYPTION_KEY_PREVIOUS
         sync: false
       # --- Auth tuning (code defaults apply when unset/blank) ---
       - key: JWT_ACCESS_TTL_SECONDS

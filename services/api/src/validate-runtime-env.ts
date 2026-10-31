@@ -1,6 +1,6 @@
 import { testClockVarsSet } from './clock/clock';
 import { originFromBaseUrl } from './cors-options';
-import { DOB_KEY_BYTES, parseDobKey } from './crypto/dob-crypto';
+import { DOB_KEY_BYTES, parseDobKey, parseDobKeyRing } from './crypto/dob-crypto';
 
 // B-018. Refuse to start a PRODUCTION process with signing secrets that are
 // missing or still the .env.example placeholder.
@@ -64,6 +64,25 @@ export function isValidDobEncryptionKey(env: Record<string, string | undefined>)
   }
 }
 
+// Key rotation (docs/dob-encryption-rollback.md). The three variables are checked as the SET the app will actually
+// build its key ring from (the same parseDobKeyRing the app and both scripts use): a malformed
+// DOB_ENCRYPTION_KEY_VERSION, a malformed DOB_ENCRYPTION_KEY_PREVIOUS, a previous key equal to the current one, or a
+// previous key set while the version is still 1. Returns the problem as a message, or null. The message never
+// contains a key value (parseDobKey reports lengths only). What is NOT checkable at boot, so not attempted: whether
+// the database still holds values from a version this process has no key for.
+export function dobKeyRingProblem(env: Record<string, string | undefined>): string | null {
+  try {
+    parseDobKeyRing({
+      DOB_ENCRYPTION_KEY: env.DOB_ENCRYPTION_KEY,
+      DOB_ENCRYPTION_KEY_VERSION: env.DOB_ENCRYPTION_KEY_VERSION,
+      DOB_ENCRYPTION_KEY_PREVIOUS: env.DOB_ENCRYPTION_KEY_PREVIOUS,
+    });
+    return null;
+  } catch (err) {
+    return (err as Error).message;
+  }
+}
+
 export function assertProductionEnv(env: Record<string, string | undefined> = process.env): void {
   if (env.NODE_ENV !== 'production') return;
   const bad = findInvalidProductionSecrets(env);
@@ -94,6 +113,13 @@ export function assertProductionEnv(env: Record<string, string | undefined> = pr
     throw new Error(
       `Refusing to start: DOB_ENCRYPTION_KEY is missing, blank, still the placeholder, or not valid base64 for exactly ${DOB_KEY_BYTES} bytes. ` +
         'Generate one with `openssl rand -base64 32` and set it in the Render dashboard (see docs/deployment.md).',
+    );
+  }
+  const keyRingProblem = dobKeyRingProblem(env);
+  if (keyRingProblem) {
+    throw new Error(
+      `Refusing to start: the date-of-birth key settings are invalid. ${keyRingProblem} ` +
+        'See the rotation procedure in docs/dob-encryption-rollback.md.',
     );
   }
 }

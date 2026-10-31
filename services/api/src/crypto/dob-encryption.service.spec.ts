@@ -1,6 +1,4 @@
-import { ConfigService } from '@nestjs/config';
-import { buildTestDobEncryption } from './test-dob-encryption';
-import { DobEncryptionService } from './dob-encryption.service';
+import { buildDobEncryptionWith, buildTestDobEncryption } from './test-dob-encryption';
 
 // backend/b086-two-factor (Decision Log #405 item 8): the TOTP secrets are encrypted with the SAME key and code as the
 // date of birth. The new string methods are thin wrappers over the existing exported functions; the date-of-birth
@@ -31,7 +29,7 @@ describe('DobEncryptionService', () => {
       expect(() => service.decryptString('JBSWY3DPEHPK3PXP')).toThrow();
 
       const otherKey = Buffer.from('another-test-only-key-32-bytes!!').toString('base64');
-      const other = new DobEncryptionService({ get: () => otherKey } as unknown as ConfigService);
+      const other = buildDobEncryptionWith({ DOB_ENCRYPTION_KEY: otherKey });
       expect(() => other.decryptString(stored)).toThrow();
     });
   });
