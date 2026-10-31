@@ -189,3 +189,74 @@ describe('assertProductionEnv: DOB_ENCRYPTION_KEY (B-252, Decision Log #425)', (
     }
   });
 });
+
+describe('assertProductionEnv: key rotation settings (DOB_ENCRYPTION_KEY_VERSION / _PREVIOUS)', () => {
+  const b64 = (fill: number, bytes = 32) => Buffer.alloc(bytes, fill).toString('base64');
+  const production = (over: Record<string, string | undefined>) => ({ NODE_ENV: 'production', ...GOOD, ...over });
+
+  it('unset version and previous (every deployment before a rotation) boots exactly as before', () => {
+    expect(() => assertProductionEnv(production({}))).not.toThrow();
+  });
+
+  it('a valid rotation (version 2 + a different previous key) boots', () => {
+    expect(() =>
+      assertProductionEnv(production({ DOB_ENCRYPTION_KEY: b64(9), DOB_ENCRYPTION_KEY_VERSION: '2', DOB_ENCRYPTION_KEY_PREVIOUS: b64(7) })),
+    ).not.toThrow();
+  });
+
+  it('after the rotation (version 2, previous removed) boots', () => {
+    expect(() => assertProductionEnv(production({ DOB_ENCRYPTION_KEY_VERSION: '2' }))).not.toThrow();
+  });
+
+  it('a blank previous key (how Render stores an emptied value) boots', () => {
+    expect(() => assertProductionEnv(production({ DOB_ENCRYPTION_KEY_VERSION: '2', DOB_ENCRYPTION_KEY_PREVIOUS: '' }))).not.toThrow();
+  });
+
+  it.each(['0', '-2', '1.5', 'two', '1e1', '02'])('refuses to start with the version %j', (version) => {
+    expect(() => assertProductionEnv(production({ DOB_ENCRYPTION_KEY_VERSION: version }))).toThrow(/DOB_ENCRYPTION_KEY_VERSION/);
+  });
+
+  it.each([
+    ['31 bytes', b64(3, 31)],
+    ['33 bytes', b64(3, 33)],
+    ['non-base64 text', 'this is not a key!!'],
+    ['the placeholder', 'replace-me'],
+  ])('refuses to start when the previous key is %s', (_label, previous) => {
+    expect(() =>
+      assertProductionEnv(production({ DOB_ENCRYPTION_KEY: b64(9), DOB_ENCRYPTION_KEY_VERSION: '2', DOB_ENCRYPTION_KEY_PREVIOUS: previous })),
+    ).toThrow(/DOB_ENCRYPTION_KEY_PREVIOUS/);
+  });
+
+  it('refuses to start when the previous key equals the current one', () => {
+    expect(() => assertProductionEnv(production({ DOB_ENCRYPTION_KEY_VERSION: '2', DOB_ENCRYPTION_KEY_PREVIOUS: GOOD_DOB_KEY }))).toThrow(
+      /must differ/,
+    );
+  });
+
+  it('refuses to start when a previous key is set but the version was left at 1 or unset (the forgotten-bump mistake)', () => {
+    const previous = b64(5);
+    expect(() => assertProductionEnv(production({ DOB_ENCRYPTION_KEY: b64(9), DOB_ENCRYPTION_KEY_PREVIOUS: previous }))).toThrow(/VERSION is 1/);
+    expect(() =>
+      assertProductionEnv(production({ DOB_ENCRYPTION_KEY: b64(9), DOB_ENCRYPTION_KEY_VERSION: '1', DOB_ENCRYPTION_KEY_PREVIOUS: previous })),
+    ).toThrow(/VERSION is 1/);
+  });
+
+  it('ignores bad rotation settings outside production', () => {
+    expect(() => assertProductionEnv({ NODE_ENV: 'development', DOB_ENCRYPTION_KEY_VERSION: 'nope' })).not.toThrow();
+  });
+
+  it('never puts a key value in the error', () => {
+    const current = b64(9);
+    for (const previous of [b64(3, 31), current, 'this is not a key!!', b64(5)]) {
+      let message = '';
+      try {
+        assertProductionEnv(production({ DOB_ENCRYPTION_KEY: current, DOB_ENCRYPTION_KEY_PREVIOUS: previous }));
+      } catch (e) {
+        message = (e as Error).message;
+      }
+      expect(message).not.toBe('');
+      expect(message).not.toContain(current);
+      expect(message).not.toContain(previous);
+    }
+  });
+});

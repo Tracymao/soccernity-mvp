@@ -96,6 +96,12 @@ No two may be the same.
   two-factor secret becomes unreadable too, and every enrolled account (users
   and admins) has to be reset and re-enrol. `docs/dob-encryption-rollback.md`
   explains this.
+  **Rotating it has a written procedure** (`docs/dob-encryption-rollback.md`,
+  "Rotating the key"): two optional settings, `DOB_ENCRYPTION_KEY_VERSION`
+  (default 1) and `DOB_ENCRYPTION_KEY_PREVIOUS` (only during a rotation), plus a
+  re-encrypt script. Leave both unset until a rotation, and once a rotation has
+  happened never lower or remove the version number. Both are in `render.yaml`
+  for both services as hand-set (`sync: false`) values.
 - **`ADMIN_2FA_ENFORCED` makes two-factor mandatory for admins.** Set it by
   hand in Render's dashboard, separately for staging and production. Only the
   exact text `true` turns it on (`TRUE`, `1` or leaving it empty all leave it

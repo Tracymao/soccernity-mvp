@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
+import { DobDecryptError } from '../../crypto/dob-crypto';
 import { DobEncryptionService } from '../../crypto/dob-encryption.service';
 import { PasswordService } from '../auth/password/password.service';
 import { generateBackupCodes, looksLikeBackupCode, normaliseBackupCode } from './backup-code.util';
@@ -136,7 +137,21 @@ export class TwoFactorService implements OnModuleInit {
     if (subject.totpEnabledAt) throw this.alreadyEnabled();
 
     const pendingCiphertext = await this.pending.get(aud, id);
-    if (!pendingCiphertext) {
+    // Key rotation (docs/dob-encryption-rollback.md): a pending secret (10-minute TTL, never re-encrypted by the
+    // rotation script) written under a key this process no longer holds cannot be read. That is an enrolment that
+    // did not survive, exactly like an expired one: the person starts enrolment again. It must not be a 500, and it
+    // is checked BEFORE the attempt limiter reserves a slot, so it costs no failed attempt.
+    let pendingSecret: string | null = null;
+    if (pendingCiphertext) {
+      try {
+        pendingSecret = this.dob.decryptString(pendingCiphertext);
+      } catch (err) {
+        if (!(err instanceof DobDecryptError)) throw err;
+        await this.pending.clear(aud, id);
+        this.logger.warn('A pending two-factor enrolment could not be decrypted (key changed?); treated as expired.');
+      }
+    }
+    if (pendingSecret === null || !pendingCiphertext) {
       throw new BadRequestException({
         statusCode: 400,
         error: 'Bad Request',
@@ -146,11 +161,7 @@ export class TwoFactorService implements OnModuleInit {
     }
 
     const reserved = await this.limiter.reserve(aud, id);
-    const step = verifyTotp(
-      this.dob.decryptString(pendingCiphertext),
-      normaliseBackupCode(String(code ?? '')),
-      this.clock.now().getTime(),
-    );
+    const step = verifyTotp(pendingSecret, normaliseBackupCode(String(code ?? '')), this.clock.now().getTime());
     if (step === null) {
       await this.limiter.recordFailure(aud, id, reserved);
       throw new UnauthorizedException(INVALID_CODE_MESSAGE);
