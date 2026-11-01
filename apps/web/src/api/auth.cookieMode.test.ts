@@ -16,7 +16,8 @@ function ok(body: unknown): Response {
 }
 
 function lastCall(path: string) {
-  const call = backend.mock.calls.filter(([u]) => u === `${API}${path}`).at(-1);
+  const calls = backend.mock.calls.filter(([u]) => u === `${API}${path}`);
+  const call = calls[calls.length - 1];
   expect(call, `a request to ${path}`).toBeDefined();
   const [, init] = call as [string, NonNullable<Parameters<typeof fetch>[1]>];
   return { init, headers: new Headers(init.headers) };
