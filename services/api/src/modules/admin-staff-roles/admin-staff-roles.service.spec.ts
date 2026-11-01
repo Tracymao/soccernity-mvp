@@ -142,6 +142,7 @@ describe('AdminStaffRolesService', () => {
             childSafetyVetted: true,
             vettedAt: true,
             vettedByAdminId: true,
+            totpEnabledAt: true,
           },
         }),
       );
@@ -200,6 +201,7 @@ describe('AdminStaffRolesService', () => {
           childSafetyVetted: true,
           vettedAt: true,
           vettedByAdminId: true,
+          totpEnabledAt: true,
         },
       });
       // Not a superadmin -> superadmin change, so the last-superadmin
@@ -365,6 +367,7 @@ describe('AdminStaffRolesService', () => {
           childSafetyVetted: true,
           vettedAt: true,
           vettedByAdminId: true,
+          totpEnabledAt: true,
         },
       });
       // Not a superadmin, so the last-active-superadmin guard's COUNT
@@ -652,5 +655,77 @@ describe('AdminStaffRolesService.resetTwoFactor (B-270, Decision Log #446)', () 
     });
     expect(tokens.revokeAllSessionsForAdmin).not.toHaveBeenCalled();
     expect(log.record).not.toHaveBeenCalled();
+  });
+});
+
+describe('AdminStaffRolesService: twoFactorEnabled (backend/two-factor-api-codes)', () => {
+  const build = () => {
+    const prisma = buildPrismaMock();
+    const service = new AdminStaffRolesService(
+      prisma,
+      buildAdminActionLogServiceMock() as never,
+      passwordServiceMock as never,
+      adminTokenServiceMock as never,
+      twoFactorMock as never,
+    );
+    return { prisma, service };
+  };
+
+  it('listStaff returns twoFactorEnabled per row, derived from totpEnabledAt, and never leaks totpEnabledAt', async () => {
+    const { prisma, service } = build();
+    (prisma.adminUser.findMany as jest.Mock).mockResolvedValue([
+      admin({ id: 'a-on', totpEnabledAt: new Date('2026-10-01T00:00:00.000Z') }),
+      admin({ id: 'a-off', totpEnabledAt: null }),
+      admin({ id: 'a-absent' }),
+    ]);
+
+    const page = await service.listStaff({ limit: 10 });
+
+    expect(page.items.map((i) => [i.id, i.twoFactorEnabled])).toEqual([
+      ['a-on', true],
+      ['a-off', false],
+      ['a-absent', false],
+    ]);
+    for (const item of page.items) {
+      expect(item).not.toHaveProperty('totpEnabledAt');
+      expect(item).not.toHaveProperty('totpSecretEncrypted');
+      expect(item).not.toHaveProperty('passwordHash');
+    }
+  });
+
+  it('is one findMany for the whole page: no per-row query and no secret read', async () => {
+    const { prisma, service } = build();
+    (prisma.adminUser.findMany as jest.Mock).mockResolvedValue([admin({ id: 'a1' }), admin({ id: 'a2' })]);
+
+    await service.listStaff({ limit: 10 });
+
+    expect(prisma.adminUser.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.adminUser.findUnique).not.toHaveBeenCalled();
+    const { select } = (prisma.adminUser.findMany as jest.Mock).mock.calls[0][0];
+    expect(select.totpEnabledAt).toBe(true);
+    expect(select).not.toHaveProperty('totpSecretEncrypted');
+    expect(select).not.toHaveProperty('passwordHash');
+  });
+
+  it('the create, role and status responses carry the same field', async () => {
+    const { prisma, service } = build();
+    (prisma.adminUser.findUnique as jest.Mock).mockResolvedValueOnce(null);
+    (prisma.adminUser.create as jest.Mock).mockResolvedValue(admin({ totpEnabledAt: null }));
+    const created = await service.createStaff('super-1', { email: 'n@example.com', fullName: 'New', role: 'editor' } as never);
+    expect(created.twoFactorEnabled).toBe(false);
+    expect(created).not.toHaveProperty('totpEnabledAt');
+
+    (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue(admin({ role: 'editor' }));
+    (prisma.adminUser.update as jest.Mock).mockResolvedValue(admin({ role: 'moderator', totpEnabledAt: new Date() }));
+    const roled = await service.updateAdminRole('admin-1', 'super-1', { role: 'moderator' });
+    expect(roled.twoFactorEnabled).toBe(true);
+    expect(roled).not.toHaveProperty('totpEnabledAt');
+
+    (prisma.adminUser.update as jest.Mock).mockResolvedValue(
+      admin({ accountStatus: 'deactivated', totpEnabledAt: new Date() }),
+    );
+    const statused = await service.updateAdminStatus('admin-1', 'super-1', { status: 'deactivated' });
+    expect(statused.twoFactorEnabled).toBe(true);
+    expect(statused).not.toHaveProperty('totpEnabledAt');
   });
 });

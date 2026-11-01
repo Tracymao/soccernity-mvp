@@ -107,4 +107,18 @@ describe('AdminTwoFactorController (HTTP layer)', () => {
     const res = await request(app.getHttpServer()).post('/admin/auth/two-factor/enrol/confirm').send({ code: '123456' }).expect(429);
     expect(res.headers['retry-after']).toBe('900');
   });
+
+  it('status adds enforced: false when ADMIN_2FA_ENFORCED is not "true"', async () => {
+    twoFactor.getStatus.mockResolvedValue({ enabled: true, backupCodesRemaining: 7 });
+    const res = await request(app.getHttpServer()).get('/admin/auth/two-factor/status').expect(200);
+    expect(res.body).toEqual({ enabled: true, backupCodesRemaining: 7, enforced: false });
+  });
+
+  it('status adds enforced: true when enforcement is on', async () => {
+    enforced = true;
+    twoFactor.getStatus.mockResolvedValue({ enabled: false, backupCodesRemaining: 0 });
+    const res = await request(app.getHttpServer()).get('/admin/auth/two-factor/status').expect(200);
+    expect(res.body).toEqual({ enabled: false, backupCodesRemaining: 0, enforced: true });
+    expect(twoFactor.getStatus).toHaveBeenCalledWith('admin', 'admin-1');
+  });
 });

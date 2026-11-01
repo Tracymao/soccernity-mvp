@@ -26,7 +26,7 @@ existed (a plain Postgres `String`, not a Prisma/Postgres enum).
 
 | Method & path | Guards | Purpose |
 |---|---|---|
-| `GET /admin/staff` | `AdminJwtAuthGuard` + `AdminRolesGuard('superadmin')` | List every `AdminUser` (id, email, fullName, role, accountStatus, createdAt). Keyset-paginated, optional exact-match `role` filter. |
+| `GET /admin/staff` | `AdminJwtAuthGuard` + `AdminRolesGuard('superadmin')` | List every `AdminUser` (id, email, fullName, role, accountStatus, createdAt, vetting fields, **`twoFactorEnabled`**). Keyset-paginated, optional exact-match `role` filter. `twoFactorEnabled` is derived from `totpEnabledAt` in the same single `findMany` (no per-row query, no secret or backup-code read) and is on every item this controller returns (list, create, role, status). Like the rest of this controller it is superadmin-only. |
 | `PATCH /admin/staff/:id/role` | `AdminJwtAuthGuard` + `AdminRolesGuard('superadmin')` | Reassign the TARGET `AdminUser`'s `role` to one of `editor`/`moderator`/`superadmin`. |
 | `PATCH /admin/staff/:id/status` | `AdminJwtAuthGuard` + `AdminRolesGuard('superadmin')` | Set the TARGET `AdminUser`'s `accountStatus` to `active`/`deactivated` (Decision Log #193). |
 
