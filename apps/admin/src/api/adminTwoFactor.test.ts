@@ -56,8 +56,12 @@ describe("pre-session calls", () => {
 
 describe("classifyCodeFailure", () => {
   it.each([
-    [new AdminTwoFactorError(401, INVALID_CODE_MESSAGE), "wrong"],
-    [new AdminTwoFactorError(401, "This sign-in step has expired. Sign in again."), "expired"],
+    [new AdminTwoFactorError(401, INVALID_CODE_MESSAGE, "two_factor_invalid_code"), "wrong"],
+    [new AdminTwoFactorError(401, "Anything the server says", "two_factor_invalid_code"), "wrong"],
+    [new AdminTwoFactorError(401, "This sign-in step has expired. Sign in again.", "two_factor_invalid_challenge"), "expired"],
+    // decided by code, not message: the "did not work" TEXT without the code is not a wrong code
+    [new AdminTwoFactorError(401, INVALID_CODE_MESSAGE), "expired"],
+    [new AdminTwoFactorError(401, "No code at all"), "expired"],
     [new AdminTwoFactorError(400, "Start enrolment first, or it has expired.", "two_factor_no_pending_enrolment"), "expired"],
     [new AdminTwoFactorError(400, "code must be shorter"), "wrong"],
     [new AdminTwoFactorError(429, "Too many attempts. Try again later.", "two_factor_code_locked"), "locked"],
@@ -77,5 +81,18 @@ describe("login answer guards", () => {
     expect([isTwoFactorChallenge(challenge), isEnrolmentRequired(challenge)]).toEqual([true, false]);
     expect([isTwoFactorChallenge(enrol), isEnrolmentRequired(enrol)]).toEqual([false, true]);
     expect([isTwoFactorChallenge(session), isEnrolmentRequired(session)]).toEqual([false, false]);
+  });
+});
+
+describe("errorCode", () => {
+  it("reads the code from either client's error, and null when there is none", async () => {
+    const { AdminApiError } = await import("./adminClient");
+    const { errorCode } = await import("./adminTwoFactor");
+    expect(errorCode(new AdminTwoFactorError(401, "x", "two_factor_invalid_code"))).toBe("two_factor_invalid_code");
+    expect(errorCode(new AdminApiError(401, "x", { code: "two_factor_incorrect_password" }))).toBe("two_factor_incorrect_password");
+    expect(errorCode(new AdminApiError(401, "x", { message: "no code" }))).toBeNull();
+    expect(errorCode(new AdminApiError(401, "x"))).toBeNull();
+    expect(errorCode(new AdminTwoFactorError(401, "x"))).toBeNull();
+    expect(errorCode(new Error("x"))).toBeNull();
   });
 });

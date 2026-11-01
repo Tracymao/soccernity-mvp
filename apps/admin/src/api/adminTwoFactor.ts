@@ -10,7 +10,7 @@
 // that finish a sign-in (login/two-factor, enrol/confirm) set the httpOnly admin refresh
 // cookie, so every pre-session call sends credentials: "include" and the cookie-mode header,
 // like adminLogin does.
-import { adminFetch } from "./adminClient";
+import { AdminApiError, adminFetch } from "./adminClient";
 import type {
   AdminAuthResult,
   AdminEnrolmentRequired,
@@ -23,11 +23,18 @@ const API_BASE_URL =
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
 
 // services/api two-factor.constants.ts, copied here (apps/admin cannot import from services/api).
+// Every screen decides on these machine-readable `code`s, never on message text (backend/two-factor-api-codes).
+export const TWO_FACTOR_INVALID_CODE_CODE = "two_factor_invalid_code";
+export const TWO_FACTOR_INVALID_CHALLENGE_CODE = "two_factor_invalid_challenge";
+export const TWO_FACTOR_INCORRECT_PASSWORD_CODE = "two_factor_incorrect_password";
 export const TWO_FACTOR_CODE_LOCKED_CODE = "two_factor_code_locked";
+// 403 on POST /admin/auth/two-factor/disable while ADMIN_2FA_ENFORCED is on.
+export const ADMIN_TWO_FACTOR_REQUIRED_CODE = "admin_two_factor_required";
 export const TWO_FACTOR_NO_PENDING_ENROLMENT_CODE = "two_factor_no_pending_enrolment";
 export const TWO_FACTOR_NOT_ENABLED_CODE = "two_factor_not_enabled";
 export const CANNOT_RESET_OWN_TWO_FACTOR_CODE = "cannot_reset_own_two_factor";
-// The API's one message for a wrong, replayed or already-used code (INVALID_CODE_MESSAGE).
+// The API's message for a wrong, replayed or already-used code. DISPLAY ONLY: the screens show this wording
+// whatever the server text is, and never compare an error's message with it (use the code above).
 export const INVALID_CODE_MESSAGE = "That code did not work. Check it and try again.";
 
 export class AdminTwoFactorError extends Error {
@@ -51,16 +58,33 @@ export function isEnrolmentRequired(result: AdminLoginResult): result is AdminEn
   return "twoFactorEnrolmentRequired" in result && result.twoFactorEnrolmentRequired === true;
 }
 
-// What a failed code step means to the screen. 401 with the API's "did not work" message is a
-// wrong or used code; any other 401 (or the "start enrolment first" 400) means the challenge or
-// enrolment token is gone and the only way out is to sign in again; any 429 (the per-account
-// lock carries code two_factor_code_locked, the per-IP limit carries none) is the locked wording.
+// The machine-readable `code` an error carries, whichever client produced it: AdminTwoFactorError (pre-session
+// calls) keeps it on `.code`, AdminApiError (adminFetch) keeps the response body.
+export function errorCode(err: unknown): string | null {
+  if (err instanceof AdminTwoFactorError) return err.code;
+  if (err instanceof AdminApiError) {
+    const body = err.body;
+    if (body && typeof body === "object" && "code" in body) {
+      const code = (body as { code: unknown }).code;
+      return typeof code === "string" ? code : null;
+    }
+  }
+  return null;
+}
+
+// What a failed code step means to the screen, by code:
+//   401 two_factor_invalid_code      -> a wrong, replayed or already-used code ("wrong")
+//   401 two_factor_invalid_challenge -> the challenge or enrolment token is gone; the only way out is to
+//                                       sign in again ("expired"). Any other 401 (no code) is treated the
+//                                       same, as before.
+//   400 two_factor_no_pending_enrolment -> the setup expired ("expired"); any other 400 is "wrong"
+//   429 (the per-account lock carries two_factor_code_locked, the per-IP limit carries none) -> "locked"
 export type CodeFailure = "wrong" | "locked" | "expired" | "other";
 
 export function classifyCodeFailure(err: unknown): CodeFailure {
   if (!(err instanceof AdminTwoFactorError)) return "other";
   if (err.status === 429) return "locked";
-  if (err.status === 401) return err.message === INVALID_CODE_MESSAGE ? "wrong" : "expired";
+  if (err.status === 401) return err.code === TWO_FACTOR_INVALID_CODE_CODE ? "wrong" : "expired";
   if (err.status === 400) return err.code === TWO_FACTOR_NO_PENDING_ENROLMENT_CODE ? "expired" : "wrong";
   return "other";
 }
@@ -135,6 +159,12 @@ export function confirmEnrolmentAtSignIn(enrolmentToken: string, code: string): 
 export interface AdminTwoFactorStatus {
   enabled: boolean;
   backupCodesRemaining: number;
+  /**
+   * Whether ADMIN_2FA_ENFORCED is on (backend/two-factor-api-codes). While true the API refuses
+   * POST /admin/auth/two-factor/disable (403 admin_two_factor_required), so the card offers no Turn off.
+   * A missing field is read as enforced: the card never offers an action it may not be allowed to do.
+   */
+  enforced: boolean;
 }
 
 // GET /admin/auth/two-factor/status.
@@ -143,13 +173,19 @@ export function getAdminTwoFactorStatus(): Promise<AdminTwoFactorStatus> {
 }
 
 // POST /admin/auth/two-factor/backup-codes/regenerate { password } -> 10 new codes; the current
-// ones stop working. A wrong password is a 401 ("Incorrect password"), surfaced by adminFetch as
-// an AdminApiError.
+// ones stop working. A wrong password is a 401 with code two_factor_incorrect_password, surfaced by
+// adminFetch as an AdminApiError.
 export function regenerateAdminBackupCodes(password: string): Promise<{ backupCodes: string[] }> {
   return adminFetch<{ backupCodes: string[] }>("/admin/auth/two-factor/backup-codes/regenerate", {
     method: "POST",
     body: { password },
   });
+}
+
+// POST /admin/auth/two-factor/disable { password } -> 204 (only while enforcement is off; the API deletes the
+// authenticator secret and every backup code). A wrong password is a 401 two_factor_incorrect_password.
+export function disableAdminTwoFactor(password: string): Promise<void> {
+  return adminFetch<void>("/admin/auth/two-factor/disable", { method: "POST", body: { password } });
 }
 
 // POST /admin/staff/:id/two-factor/reset (superadmin only; never your own account).

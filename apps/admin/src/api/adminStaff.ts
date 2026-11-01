@@ -37,6 +37,9 @@ export interface AdminStaffListItem {
   childSafetyVetted: boolean;
   vettedAt: string | null;
   vettedByAdminId: string | null;
+  // backend/two-factor-api-codes: whether this admin has an authenticator app set up. Derived server-side from
+  // totpEnabledAt; no secret, no backup-code count. Present on every item the staff routes return.
+  twoFactorEnabled: boolean;
 }
 
 export interface AdminStaffListPage {

@@ -8,19 +8,32 @@ import { REPO, URLS } from '../support/stack';
 // B-271: the Admin Console two-factor screens, in real Chrome against the real API, Postgres and Redis.
 //  - sign in with an authenticator code (wrong code first, then the right one) and with a backup code
 //  - regenerate backup codes from the profile card
-//  - a superadmin resets another admin's two-factor (and cannot reset their own)
+//  - a superadmin resets another admin's two-factor (and cannot reset their own); afterwards the Edit admin card reads
+//    Off and Reset is disabled (twoFactorEnabled on the staff item), also on a direct visit
+//  - the Roles list shows a Two-factor column with the word On or Off
+//  - with enforcement OFF (the default stack) the profile card offers Turn off: it needs the password, and a turned-off
+//    admin has no secret and no backup codes left. With enforcement ON the card has no Turn off and says why.
 //  - enrolment AT SIGN-IN: only meaningful with ADMIN_2FA_ENFORCED=true in the API's environment, so that test skips
-//    otherwise. Run it with:   ADMIN_2FA_ENFORCED=true npx playwright test 23     (the stack inherits the variable)
+//    otherwise. Run it with:   ADMIN_2FA_ENFORCED=true npx playwright test 24     (the stack inherits the variable)
 //
 // The admin login is throttled to 5 per 15 minutes per IP (Decision Log #190) and the API is restarted by global
-// setup on every run, so this spec spends its budget deliberately: S1 API login, T API login, S1 UI sign-in (code),
-// S1 UI sign-in (backup code), E UI sign-in (enrolment, enforced run only) = 5.
+// setup on every run, so this spec spends its budget deliberately.
+//   Default stack (enforcement off): S1 API login, T API login, X API login (the Turn off admin), S1 UI sign-in (code),
+//   S1 UI sign-in (backup code) = 5.
+//   ADMIN_2FA_ENFORCED=true: S1 API login, T API login, S1 UI sign-in (code), S1 UI sign-in (backup code),
+//   E UI sign-in (enrolment) = 5 (the Turn off test is skipped, so X is never created).
+// The Turn off test does NOT sign in through the UI: it puts X's API access token into the console the way
+// support/admin-ui.ts does (the console's one start-up refresh is answered in the browser), so it costs no UI login.
 //
 // The TOTP helper (RFC 6238, SHA-1, 6 digits, 30 s) lives in this spec on purpose; nothing else in the suite needs it.
 const requireFromApi = createRequire(path.join(REPO, 'services', 'api', 'package.json'));
 const ENFORCED = process.env.ADMIN_2FA_ENFORCED === 'true';
 const PASSWORD = 'Two-factor#2026-pass';
 const INVALID_CODE = 'That code did not work. Check it and try again.';
+// Short control labels and the wrong-password message carry the pending-legal-review tag (B-271 follow-ups, B-124).
+const TAG = '[COPY PENDING LEGAL REVIEW]';
+const REGENERATE_CONFIRM = /^Regenerate \[COPY PENDING LEGAL REVIEW\]$/;
+const INCORRECT_PASSWORD = `Incorrect password ${TAG}`;
 
 function base32Decode(input: string): Buffer {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -48,6 +61,8 @@ interface Admin {
   name: string;
   secret: string;
   backupCodes: string[];
+  /** The access token the password step answered with (only when enforcement is off: otherwise it answers an enrolment step). */
+  accessToken?: string;
 }
 
 function uniqueAdminEmail(label: string): string {
@@ -70,6 +85,7 @@ async function enrolViaApi(label: string, name: string): Promise<Admin> {
   expect(login.status).toBe(200);
   let secret: string;
   let backupCodes: string[];
+  let accessToken: string | undefined;
   if (login.body.twoFactorEnrolmentRequired) {
     // ADMIN_2FA_ENFORCED=true: the password step answers an enrolment token, not a session.
     const token = login.body.enrolmentToken as string;
@@ -82,7 +98,7 @@ async function enrolViaApi(label: string, name: string): Promise<Admin> {
     expect(confirm.status).toBe(200);
     backupCodes = confirm.body.backupCodes;
   } else {
-    const accessToken = login.body.accessToken as string;
+    accessToken = login.body.accessToken as string;
     const start = await api('POST', '/admin/auth/two-factor/enrol/start', { token: accessToken });
     expect(start.status).toBe(200);
     secret = start.body.secret;
@@ -94,7 +110,7 @@ async function enrolViaApi(label: string, name: string): Promise<Admin> {
     backupCodes = confirm.body.backupCodes;
   }
   expect(backupCodes).toHaveLength(10);
-  return { id, email, name, secret, backupCodes };
+  return { id, email, name, secret, backupCodes, accessToken };
 }
 
 function collectErrors(page: Page): string[] {
@@ -112,6 +128,39 @@ async function storageHoldsNoToken(page: Page): Promise<boolean> {
 
 async function newAdminPage(browser: Browser): Promise<{ ctx: BrowserContext; page: Page; errors: string[] }> {
   const ctx = await browser.newContext({ baseURL: URLS.admin, viewport: { width: 1440, height: 1184 } });
+  const page = await ctx.newPage();
+  return { ctx, page, errors: collectErrors(page) };
+}
+
+/**
+ * A console page signed in as `token`'s admin, without a UI sign-in (which would spend the admin login budget): the
+ * console's start-up POST /admin/auth/refresh is answered in the browser with the token, as support/admin-ui.ts does for
+ * the QA admin. Everything after that is the app's own code against the real API.
+ */
+async function pageWithToken(browser: Browser, accessToken: string): Promise<{ ctx: BrowserContext; page: Page; errors: string[] }> {
+  const ctx = await browser.newContext({ baseURL: URLS.admin, viewport: { width: 1440, height: 1184 } });
+  const cors = {
+    'access-control-allow-origin': URLS.admin,
+    'access-control-allow-credentials': 'true',
+    'access-control-allow-headers': 'content-type, authorization, x-auth-mode',
+    'access-control-allow-methods': 'POST, OPTIONS',
+    vary: 'Origin',
+  };
+  await ctx.route(`${URLS.api}/admin/auth/refresh`, async (route) => {
+    if (route.request().method() === 'OPTIONS') {
+      await route.fulfill({ status: 204, headers: cors });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      headers: { ...cors, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        accessToken,
+        accessTokenExpiresIn: 900,
+        refreshTokenExpiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+      }),
+    });
+  });
   const page = await ctx.newPage();
   return { ctx, page, errors: collectErrors(page) };
 }
@@ -164,10 +213,18 @@ test.describe.serial('admin two-factor screens (B-271)', () => {
     const { page, errors } = sessionA;
     await page.goto(`${URLS.admin}/profile`);
     const card = page.getByRole('region', { name: 'Two-factor authentication' });
-    await expect(card.getByText('On', { exact: true })).toBeVisible();
+    await expect(card.getByText(/^On\b/)).toBeVisible();
     await expect(card.getByText('10 of 10')).toBeVisible();
-    // Required for admin accounts, so there is no Turn off.
-    await expect(card.getByRole('button', { name: /turn off|disable/i })).toHaveCount(0);
+    if (ENFORCED) {
+      // Required for admin accounts, so there is no Turn off, and the card says why.
+      await expect(card.getByRole('button', { name: /turn off|disable/i })).toHaveCount(0);
+      await expect(card.getByText(/required for admin accounts, so it can.t be turned off/)).toBeVisible();
+    } else {
+      // Enforcement is off (the status answer says so): Turn off sits beside Regenerate and there is no "required" note.
+      await expect(card.getByRole('button', { name: /^Turn off two-factor/ })).toBeVisible();
+      await expect(card.getByRole('button', { name: 'Regenerate backup codes' })).toBeVisible();
+      await expect(card.getByText(/can.t be turned off/)).toHaveCount(0);
+    }
 
     const before = await db().adminBackupCode.findMany({ where: { adminId: s1.id, usedAt: null } });
     expect(before).toHaveLength(10);
@@ -175,17 +232,17 @@ test.describe.serial('admin two-factor screens (B-271)', () => {
     await card.getByRole('button', { name: 'Regenerate backup codes' }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('Password').fill('wrong-password-123');
-    await dialog.getByRole('button', { name: 'Regenerate', exact: true }).click();
-    await expect(dialog.getByRole('alert')).toHaveText('Incorrect password');
+    await dialog.getByRole('button', { name: REGENERATE_CONFIRM }).click();
+    await expect(dialog.getByRole('alert')).toHaveText(INCORRECT_PASSWORD);
 
     await dialog.getByLabel('Password').fill(PASSWORD);
-    await dialog.getByRole('button', { name: 'Regenerate', exact: true }).click();
+    await dialog.getByRole('button', { name: REGENERATE_CONFIRM }).click();
     await expect(dialog.getByRole('listitem')).toHaveCount(10);
     freshCodes = (await dialog.getByRole('listitem').allInnerTexts()).map((t) => t.replace('-', ''));
     expect(freshCodes.every((c) => /^[A-HJ-NP-Z2-9]{10}$/.test(c))).toBe(true);
 
     // Shown once: Done stays disabled until the operator says they saved them, and Escape does not close it.
-    const done = dialog.getByRole('button', { name: 'Done' });
+    const done = dialog.getByRole('button', { name: /^Done\b/ });
     await expect(done).toBeDisabled();
     await page.keyboard.press('Escape');
     await expect(dialog).toBeVisible();
@@ -225,16 +282,77 @@ test.describe.serial('admin two-factor screens (B-271)', () => {
     const audit = await db().adminActionLog.findFirst({ where: { targetId: target.id, action: 'admin_user.two_factor_reset' } });
     expect(audit).not.toBeNull();
 
-    // Reset again: nothing to reset (409), shown as a plain banner, not an error page.
-    await card.getByRole('button', { name: 'Reset two-factor' }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Reset two-factor' }).click();
-    await expect(page.getByText('There is nothing to reset for this admin.', { exact: false })).toBeVisible();
+    // The card now reads Off, and Reset is DISABLED with the reason (twoFactorEnabled flipped on the page), so there is
+    // no second reset to attempt from here.
+    await expect(card.getByText(/^Off\b/)).toBeVisible();
+    await expect(page.getByText('This admin has not set up two-factor authentication.', { exact: false })).toBeVisible();
+    await expect(page.getByText('Reset is not available: this admin has no authenticator app', { exact: false })).toBeVisible();
+    await expect(card.getByRole('button', { name: 'Reset two-factor' })).toBeDisabled();
+
+    // A direct visit (no router state, so the page fetches the staff list itself) shows the same, from the real API.
+    await page.goto(`${URLS.admin}/settings/roles/edit/${target.id}`);
+    const again = page.getByRole('region', { name: 'Two-factor authentication' });
+    await expect(again.getByText(/^Off\b/)).toBeVisible();
+    await expect(again.getByRole('button', { name: 'Reset two-factor' })).toBeDisabled();
 
     // Your own record: the button is disabled and says another superadmin must do it.
     await page.goto(`${URLS.admin}/settings/roles/edit/${s1.id}`);
     await expect(page.getByRole('region', { name: 'Two-factor authentication' }).getByRole('button', { name: 'Reset two-factor' })).toBeDisabled();
     await expect(page.getByText('You cannot reset your own two-factor authentication.', { exact: false })).toBeVisible();
     expect(errors).toEqual([]);
+  });
+
+  test('the Roles list has a Two-factor column that says On or Off in words', async () => {
+    const { page, errors } = sessionA;
+    await page.goto(`${URLS.admin}/settings`);
+    await expect(page.getByText('Two-factor', { exact: true })).toBeVisible(); // the column header
+    const rowFor = (name: string) => page.locator('.rl-table__row').filter({ hasText: name });
+    await expect(rowFor('Ada Superadmin').getByText('On', { exact: true })).toBeVisible();
+    // The previous test reset Amara's two-factor.
+    await expect(rowFor('Amara Okafor').getByText('Off', { exact: true })).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
+  test('enforcement off: Turn off needs the password and leaves the admin with no secret and no backup codes', async ({ browser }) => {
+    test.skip(ENFORCED, 'The API refuses Turn off while ADMIN_2FA_ENFORCED=true: this test runs on the default stack');
+    const x = await enrolViaApi('turnoff', 'Tomi Turnoff');
+    const { ctx, page, errors } = await pageWithToken(browser, x.accessToken!);
+    await page.goto(`${URLS.admin}/profile`);
+    const card = page.getByRole('region', { name: 'Two-factor authentication' });
+    await expect(card.getByText(/^On\b/)).toBeVisible();
+    await expect(card.getByText('10 of 10')).toBeVisible();
+
+    await card.getByRole('button', { name: /^Turn off two-factor/ }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: /Turn off two-factor authentication\?/ })).toBeVisible();
+    await expect(dialog.getByText('Turning this off makes your account less secure.', { exact: false })).toBeVisible();
+    const turnOff = dialog.getByRole('button', { name: /^Turn off \[COPY PENDING LEGAL REVIEW\]$/ });
+    await expect(turnOff).toBeDisabled(); // no password yet
+
+    // A wrong password is refused (by error code), nothing changes.
+    await dialog.getByLabel('Password').fill('wrong-password-123');
+    await turnOff.click();
+    await expect(dialog.getByRole('alert')).toHaveText(INCORRECT_PASSWORD);
+    expect(await db().adminUser.findUnique({ where: { id: x.id }, select: { totpEnabledAt: true } })).toMatchObject({
+      totpEnabledAt: expect.any(Date),
+    });
+
+    await dialog.getByLabel('Password').fill(PASSWORD);
+    await turnOff.click();
+    await expect(page.getByText(/^Two-factor authentication turned off/)).toBeVisible();
+    await expect(page.getByText('Your account now signs in with your password only. Your backup codes no longer work.', { exact: false })).toBeVisible();
+    await expect(dialog).toHaveCount(0);
+    await expect(card.getByText(/^Off\b/)).toBeVisible();
+    await expect(card.getByRole('button', { name: /^Turn off two-factor/ })).toHaveCount(0);
+    await expect(card.getByRole('button', { name: 'Regenerate backup codes' })).toHaveCount(0);
+
+    // The server really removed the secret and every backup code (this is why "your backup codes no longer work" is true).
+    const row = await db().adminUser.findUnique({ where: { id: x.id }, select: { totpEnabledAt: true, totpSecretEncrypted: true } });
+    expect(row.totpEnabledAt).toBeNull();
+    expect(row.totpSecretEncrypted).toBeNull();
+    expect(await db().adminBackupCode.count({ where: { adminId: x.id } })).toBe(0);
+    expect(errors).toEqual([]);
+    await ctx.close();
   });
 
   test('a backup code signs in once the authenticator code is not used', async ({ browser }) => {
@@ -259,7 +377,7 @@ test.describe.serial('admin two-factor screens (B-271)', () => {
   });
 
   test('enrolment at sign-in (ADMIN_2FA_ENFORCED=true): scan or type the key, confirm, then save the backup codes before entering the Console', async ({ browser }) => {
-    test.skip(!ENFORCED, 'Needs ADMIN_2FA_ENFORCED=true in the API environment: run with ADMIN_2FA_ENFORCED=true npx playwright test 23');
+    test.skip(!ENFORCED, 'Needs ADMIN_2FA_ENFORCED=true in the API environment: run with ADMIN_2FA_ENFORCED=true npx playwright test 24');
     const e = await createAdmin('enrol', 'Eve Enrol');
     const { ctx, page, errors } = await newAdminPage(browser);
     await passwordStep(page, e.email);
@@ -273,11 +391,11 @@ test.describe.serial('admin two-factor screens (B-271)', () => {
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
     await page.getByLabel('Authentication code').fill('000000');
-    await page.getByRole('button', { name: 'Confirm', exact: true }).click();
+    await page.getByRole('button', { name: /^Confirm\b/ }).click();
     await expect(page.getByRole('alert')).toHaveText(INVALID_CODE);
 
     await page.getByLabel('Authentication code').fill(totp(key));
-    await page.getByRole('button', { name: 'Confirm', exact: true }).click();
+    await page.getByRole('button', { name: /^Confirm\b/ }).click();
     await expect(page.getByRole('heading', { name: /Save your backup codes/ })).toBeVisible();
     await expect(page.getByRole('listitem')).toHaveCount(10);
 
