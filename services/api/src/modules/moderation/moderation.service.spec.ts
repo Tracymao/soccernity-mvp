@@ -102,12 +102,14 @@ function buildService(
   emailService = buildEmailServiceMock(),
   adminActionLogService = buildAdminActionLogServiceMock(),
   banterService = buildBanterServiceMock(),
+  guardianNotices: { notifyInBackground: jest.Mock } = { notifyInBackground: jest.fn() },
 ): ModerationService {
   return new ModerationService(
     prisma,
     emailService as never,
     adminActionLogService as never,
     banterService as never,
+    guardianNotices as never,
   );
 }
 

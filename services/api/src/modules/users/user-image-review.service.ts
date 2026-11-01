@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
 
 // B-214 (Decision Log #412 item 2, #398 D2, #371): the storage half of "tell the
 // uploader why their profile picture or cover was not approved".
@@ -37,7 +38,12 @@ export interface ProfileImageRejection {
 
 @Injectable()
 export class UserImageReviewService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // B-279 (Decision Log #456 A): rejecting a minor's profile picture or cover is a platform action, so the
+    // minor's guardian is told the kind of action (never the reason).
+    private readonly guardianNotices: GuardianSecurityNoticeService,
+  ) {}
 
   async rejectProfileImage(userId: string, kind: ProfileImageKind, reason: unknown): Promise<ProfileImageRejection> {
     const cleaned = this.cleanReason(reason);
@@ -72,6 +78,8 @@ export class UserImageReviewService {
         select: { id: true },
       });
     });
+
+    this.guardianNotices.notifyInBackground(userId, 'profile_image_not_approved');
 
     return { userId, kind, status: 'rejected' };
   }

@@ -5,6 +5,7 @@ import {
   ADMIN_ACTION_LOG_TARGET_TYPES,
 } from '../admin-action-log/admin-action-log.constants';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
+import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
 import { USERNAME_REVOKE_HOLD_DAYS } from '../users/username-rules.constants';
 import { RevokeUsernameDto } from './dto/revoke-username.dto';
 
@@ -47,6 +48,8 @@ export class AdminUserUsernameRevokeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: RegistrationEmailService,
+    // B-279: the guardian of a MINOR is told the username was removed (kind of action only, never the reason).
+    private readonly guardianNotices: GuardianSecurityNoticeService,
   ) {}
 
   async revokeUsername(userId: string, adminId: string, dto: RevokeUsernameDto): Promise<UsernameRevokeResult> {
@@ -113,6 +116,7 @@ export class AdminUserUsernameRevokeService {
       this.logger.warn(`Username-revoked email for user ${userId} failed: ${(err as Error).message}`);
     }
     this.logger.log(`Admin ${adminId} revoked the username of user ${userId}.`);
+    this.guardianNotices.notifyInBackground(userId, 'username_removed');
 
     return { userId, revokedUsername: outcome.handle, heldUntil };
   }

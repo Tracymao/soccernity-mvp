@@ -612,4 +612,91 @@ describe('RegistrationEmailService', () => {
       errorSpy.mockRestore();
     });
   });
+
+  // backend/b279-guardian-safety-notices (B-279; Decision Log #456 A and C).
+  describe('guardian-safety-notice', () => {
+    const live = (extra: Record<string, string | undefined> = {}) =>
+      new RegistrationEmailService(
+        buildConfig({
+          EMAIL_PROVIDER_API_KEY: 'a-real-key',
+          POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example',
+          WEB_APP_BASE_URL: 'https://app.soccernity.com',
+          ...extra,
+        }),
+      );
+
+    it('sends the subject, the one-sentence summary, the time, and a pointer to the Contact Us page, and nothing else', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-safety' });
+
+      await live().sendGuardianSafetyNoticeEmail(
+        'guardian@example.com',
+        "An update on Sam's Soccernity account",
+        "Soccernity removed content that was posted from Sam's account.",
+        '1 November 2026, 14:32 UTC',
+      );
+
+      expect(mockSendEmail).toHaveBeenCalledTimes(1);
+      const sent = mockSendEmail.mock.calls[0][0];
+      expect(sent).toEqual(
+        expect.objectContaining({ To: 'guardian@example.com', Subject: "An update on Sam's Soccernity account" }),
+      );
+      expect(sent.TextBody).toContain("Soccernity removed content that was posted from Sam's account.");
+      expect(sent.TextBody).toContain('When: 1 November 2026, 14:32 UTC');
+      expect(sent.TextBody).toContain('Contact Us page on Soccernity: https://app.soccernity.com/contact');
+      expect(sent.HtmlBody).toContain('<a href="https://app.soccernity.com/contact">Contact Us page</a>');
+      // The only link is the Contact Us page: no token, no account link, nothing about the action itself.
+      for (const body of [sent.TextBody, sent.HtmlBody]) {
+        const urls = body.match(/https?:\/\/[^\s"<]+/g) ?? [];
+        expect(urls).toEqual(['https://app.soccernity.com/contact']);
+        expect(body.toLowerCase()).not.toMatch(
+          /report|reporter|moderator|reason|guideline|breach|violat|ip address|device|location|browser/,
+        );
+      }
+    });
+
+    it('is still sent, without a link, when WEB_APP_BASE_URL is unusable (the notice matters more than its pointer)', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-safety' });
+
+      await live({ WEB_APP_BASE_URL: 'replace-me' }).sendGuardianSafetyNoticeEmail(
+        'guardian@example.com',
+        'subject',
+        'The summary.',
+        '1 November 2026, 14:32 UTC',
+      );
+
+      expect(mockSendEmail).toHaveBeenCalledTimes(1);
+      const sent = mockSendEmail.mock.calls[0][0];
+      expect(sent.TextBody).toContain('contact support through the Contact Us page on Soccernity.');
+      expect(sent.TextBody).not.toMatch(/https?:\/\//);
+      expect(sent.HtmlBody).not.toMatch(/href=/);
+    });
+
+    it('escapes a display name containing markup in the HTML body only', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-safety' });
+
+      await live().sendGuardianSafetyNoticeEmail(
+        'guardian@example.com',
+        'subject',
+        "Soccernity removed content that was posted from <b>Sam</b>'s account.",
+        '1 November 2026, 14:32 UTC',
+      );
+
+      const sent = mockSendEmail.mock.calls[0][0];
+      expect(sent.HtmlBody).toContain('&lt;b&gt;Sam&lt;/b&gt;');
+      expect(sent.HtmlBody).not.toContain('<b>Sam</b>');
+    });
+
+    it('is "wired but inactive" while Postmark is not live: resolves, calls nothing', async () => {
+      const service = new RegistrationEmailService(buildConfig({ EMAIL_PROVIDER_API_KEY: 'replace-me' }));
+      await expect(service.sendGuardianSafetyNoticeEmail('g@example.com', 's', 'summary', 'when')).resolves.toBeUndefined();
+      expect(mockSendEmail).not.toHaveBeenCalled();
+    });
+
+    it('swallows a provider failure like every other template', async () => {
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      mockSendEmail.mockRejectedValueOnce(new Error('postmark down'));
+      await expect(live().sendGuardianSafetyNoticeEmail('g@example.com', 's', 'summary', 'when')).resolves.toBeUndefined();
+      errorSpy.mockRestore();
+    });
+  });
 });
