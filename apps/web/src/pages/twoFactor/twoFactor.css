@@ -1,0 +1,370 @@
+/* User two-factor screens (B-087 / B-111): the Settings flow
+ * (pages/settings/TwoFactorAuthPage.tsx) and the sign-in code prompt
+ * (TwoFactorCodePrompt.tsx, shared by LoginPage and InactiveAccountPage).
+ *
+ * Figma, "Soccernity-MVP" (weZWWqggy9j13eX8bhFgs6): authenticator-app set 6655:2 .. 6655:173,
+ * pass H states 6711:26922 / 6711:27117 / 6711:27333 / 6711:27530 / 6711:27590 / 6711:27617.
+ *
+ * Colours reference the app-wide --sn-* properties (src/theme/applyTheme.ts), light theme only;
+ * no hex here except the disclosed white-on-navy (no --sn-text-on-navy token, same exception as
+ * account/accountActions.css). */
+
+/* --- the "Copy Tag" chip every frame carries --------------------- */
+
+.tf-copy-tag {
+  align-self: flex-start;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font: 600 11px "Montserrat", "Inter", sans-serif;
+}
+
+/* --- shared blocks -------------------------------------------------- */
+
+.tf-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
+  max-width: 533px;
+  width: 100%;
+}
+
+.tf-step {
+  margin: 0;
+  font: 500 13px "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.tf-subheading {
+  margin: 0;
+  font: 600 18px/24px "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.tf-lead {
+  margin: 0;
+  font: 400 14px/21px "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.tf-meta {
+  margin: 0;
+  font: 400 13px/1.5 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.tf-note {
+  margin: 0;
+  font: 500 14px/1.5 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.tf-error {
+  margin: 0;
+  font: 500 14px/1.5 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+}
+
+.tf-callout {
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--sn-green-tint-12);
+  font: 400 14px/21px "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+/* --- the Authenticator app row (Figma 6655:173) ------------------ */
+
+.tf-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  width: 100%;
+}
+
+.tf-row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tf-row__title {
+  margin: 0;
+  font: 600 16px/1.3 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.tf-row__desc {
+  margin: 0;
+  font: 400 14px/1.5 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.tf-toggle {
+  flex-shrink: 0;
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--sn-icon-inactive);
+}
+
+.tf-toggle__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--sn-brand-navy);
+}
+
+.tf-toggle--on {
+  background: var(--sn-brand-green);
+}
+
+.tf-toggle--on .tf-toggle__knob {
+  left: 22px;
+}
+
+/* --- QR code and setup key ------------------------------------------ */
+
+.tf-qr {
+  width: 200px;
+  height: 200px;
+  box-sizing: border-box;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 12px;
+  /* A QR code needs a plain light ground to be scannable. */
+  background: var(--sn-background-surface);
+}
+
+.tf-key {
+  margin: 0;
+  padding: 14px 16px;
+  box-sizing: border-box;
+  max-width: 100%;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+  background: var(--sn-green-tint-12);
+  font: 600 18px/1.4 ui-monospace, "SFMono-Regular", Menlo, monospace;
+  letter-spacing: 0.08em;
+  color: var(--sn-text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* --- six boxed digits (Figma 6655:73) ----------------------------- */
+
+.tf-code {
+  display: flex;
+  gap: 10px;
+}
+
+.tf-code__digit {
+  width: 52px;
+  height: 60px;
+  box-sizing: border-box;
+  padding: 0;
+  text-align: center;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+  background: var(--sn-background-surface);
+  font: 600 24px "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.tf-code__digit:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 1px;
+}
+
+.tf-code__digit--invalid {
+  border-color: var(--sn-brand-navy);
+}
+
+/* --- ten backup codes (Figma 6711:27117) --------------------------- */
+
+.tf-codes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+
+.tf-codes__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+  background: var(--sn-background-surface);
+}
+
+.tf-codes__n {
+  flex-shrink: 0;
+  width: 18px;
+  font: 500 12px "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.tf-codes__code {
+  font: 600 15px ui-monospace, "SFMono-Regular", Menlo, monospace;
+  letter-spacing: 0.06em;
+  color: var(--sn-text-primary);
+}
+
+/* --- fields, buttons, links ------------------------------------------ */
+
+.tf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.tf-label {
+  font: 500 13px "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.tf-input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+  background: var(--sn-background-surface);
+  font: 500 14px "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.tf-input:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 1px;
+}
+
+.tf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.tf-btn {
+  padding: 10px 22px;
+  border-radius: 6px;
+  border: 1.5px solid var(--sn-brand-navy);
+  font: 500 16px "Montserrat", "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.tf-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.tf-btn--primary {
+  background: var(--sn-brand-navy);
+  color: #fff; /* no --sn-text-on-navy token -- disclosed exception, as in account/accountActions.css */
+}
+
+.tf-btn--ghost {
+  background: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+}
+
+.tf-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: 500 14px "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  text-decoration: underline;
+}
+
+/* Figma draws "Can't scan? >" in brand green. Green text on the light ground measures 2.19:1
+   (fails AA, Decision Log #96), so it is navy and underlined like the other links. */
+.tf-link--green {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.tf-link:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.tf-btn:focus-visible,
+.tf-link:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 2px;
+}
+
+/* --- sign-in prompt (Figma 6711:27530): centred under the Top Bar ---- */
+
+.tf-prompt {
+  /* AuthChrome keeps a 32px content padding; break out of it so the prompt sits centred
+     in the viewport under the 90px Top Bar, like LoginPage / InactiveAccountPage. */
+  margin: -32px;
+  min-height: calc(100vh - 90px - 64px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 56px 24px;
+  background: var(--sn-background-page);
+}
+
+.tf-prompt__inner {
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.tf-heading {
+  margin: 0;
+  font: 700 24px/1.3 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+@media (max-width: 560px) {
+  .tf-code {
+    gap: 6px;
+  }
+
+  .tf-code__digit {
+    width: 44px;
+    height: 54px;
+  }
+
+  .tf-codes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tf-actions {
+    width: 100%;
+  }
+
+  .tf-btn {
+    flex: 1 1 auto;
+  }
+}

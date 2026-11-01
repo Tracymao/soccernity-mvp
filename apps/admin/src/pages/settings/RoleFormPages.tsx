@@ -36,6 +36,7 @@ import {
   type AdminStaffRole,
 } from "../../api/adminStaff";
 import { setChildSafetyVetting } from "../../api/adminStaffVetting";
+import ResetTwoFactorCard from "../two-factor/ResetTwoFactorCard";
 import { formatDateTime } from "./settingsShared";
 import "./settings.css";
 
@@ -296,6 +297,10 @@ export function EditRolePage() {
             </button>
           </div>
         </div>
+
+        {/* B-271: no Figma frame draws the Role / Account status / Child safety vetting cards, so the
+            two-factor reset card sits right after Account status, with the other account-security action. */}
+        <ResetTwoFactorCard adminId={id} adminName={admin.fullName} />
 
         <div className="rl-card">
           <h2 className="rl-card__title">Child safety vetting</h2>

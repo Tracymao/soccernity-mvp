@@ -34,9 +34,16 @@
 // redirects to /login.
 import { useEffect, useState, type FormEvent } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router";
-import { AuthApiError, deleteInactiveAccount, reactivateAccount } from "../api/auth";
+import {
+  AuthApiError,
+  deleteInactiveAccount,
+  isTwoFactorChallenge,
+  reactivateAccount,
+  type LoginResponse,
+} from "../api/auth";
 import { storeSession } from "../lib/session";
 import { routeForNextStep } from "../lib/onboarding";
+import TwoFactorCodePrompt from "./twoFactor/TwoFactorCodePrompt";
 import "./account/accountActions.css";
 
 const REDIRECT_DELAY_MS = 2500; // see settings/DeactivateAccountPage.tsx
@@ -59,6 +66,9 @@ export default function InactiveAccountPage() {
   const [deletePassword, setDeletePassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // B-111: with two-factor on, "Activate account" is answered with a challenge, and the
+  // account is only reactivated once POST /auth/login/two-factor accepts a code.
+  const [challengeToken, setChallengeToken] = useState<string | null>(null);
 
   useEffect(() => {
     if (step !== "deleted") return;
@@ -71,16 +81,24 @@ export default function InactiveAccountPage() {
     return <Navigate to="/login" replace />;
   }
 
+  function finishActivation(result: LoginResponse) {
+    // Same as a login with "Stay signed in" unticked: in-memory access token,
+    // session refresh cookie (B-246).
+    storeSession(result);
+    // B-125: route on the server's onboarding state, like a login.
+    navigate(routeForNextStep(result.user.nextStep));
+  }
+
   async function handleActivate() {
     setError(null);
     setBusy(true);
     try {
       const result = await reactivateAccount(email, loginPassword);
-      // Same as a login with "Stay signed in" unticked: in-memory access token,
-      // session refresh cookie (B-246).
-      storeSession(result);
-      // B-125: route on the server's onboarding state, like a login.
-      navigate(routeForNextStep(result.user.nextStep));
+      if (isTwoFactorChallenge(result)) {
+        setChallengeToken(result.challengeToken);
+        return;
+      }
+      finishActivation(result);
     } catch (err) {
       setError(
         err instanceof AuthApiError ? err.message : "Couldn't reactivate your account. Please try again.",
@@ -107,6 +125,19 @@ export default function InactiveAccountPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (challengeToken) {
+    return (
+      <TwoFactorCodePrompt
+        challengeToken={challengeToken}
+        onSignedIn={finishActivation}
+        onExpired={() => {
+          setChallengeToken(null);
+          setError("This step has expired. Select Activate account to try again.");
+        }}
+      />
+    );
   }
 
   return (
