@@ -2,7 +2,7 @@
 
 Figma file `weZWWqggy9j13eX8bhFgs6`, page `0:1`. Date: 2026-11-01. Figma and this report only: no application code, schema, legal text, DPIA, `docs/build-register.md`, `docs/pending-copy-manifest.md` or Build Plan docx was changed. Nothing existing on the canvas was edited, archived or deleted.
 
-Written for the figma-to-code agent that builds these in `apps/web`, and for the founder to review. The behaviour was decided by the founder (Decision Log #455 and #456, being recorded by a docs PR in the same batch); this report takes it from the brief, not from the Decision Log, and records anything the brief left undefined as open (section 6).
+Written for the figma-to-code agent that builds these in `apps/web`, and for the founder to review. The behaviour was decided by the founder (Decision Log #455 and #456). The frames were drawn from the brief; after the docs PR `docs/decisions-2fa-recovery-guardian-notices-2026-11-01` reached `main`, they were checked against #455 (build-register row B-277). They match, with two differences recorded in section 6 item 12. The report records anything the brief left undefined as open (section 6).
 
 ## 1. What was built
 
@@ -124,6 +124,7 @@ Not taken: a per-top-level-node `findAll` count before the first write, so the p
 8. **Guardian summary fields.** The handle and request time are samples; the real list of fields the page may show is undecided. No real name of the young person is shown by default. No confirmation step after Approve is drawn. Whether the young person is emailed after approval or decline is not drawn. "I didn't expect this" is drawn as the decline; whether it should offer a way to report is open.
 9. **Not drawn at all:** the notice email, the guardian email, a loading state, an offline state, the lock-after-attempts state of the 6-digit code, the "sign-in cancelled the request" confirmation after a successful code, and the admin side. The 24-hour wait's "what happens at the end" screen (two-factor removed) is not drawn (the next sign-in is a normal one).
 10. **Backup-code path.** The "Use a backup code instead" link on 1.1 and 2.8 reuses the wording of the admin prompt; its destination is the existing backup-code frames (`6711:27590`, `6711:27617`), not redrawn.
+12. **Differences from Decision Log #455 found after it merged.** (a) #455 says the minor is told to change their password when the guardian answers "I didn't expect this"; frame 3.3 tells the guardian to ask them to (the minor's own notice is an email, not drawn). (b) #455 sends a completion email when an adult's wait ends and tells the minor's own email about a request; neither email is drawn. (c) #455 says the email is sent only when the password is right and a wrong password counts toward the normal sign-in lock; 1.2b and 1.3 are consistent with that, but 1.2b's wording does not mention the lock.
 11. **Decision Log candidates.** The two frame families (sign-in style and email-page style) for one flow; the guardian page reusing the withdrawal page pattern; the "24h" glyph on the waiting icon; whether a guardian with several children needs the account named more clearly than a handle.
 
 ## 7. Not done
