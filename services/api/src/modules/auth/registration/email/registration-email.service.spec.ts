@@ -547,4 +547,69 @@ describe('RegistrationEmailService', () => {
       logSpy.mockRestore();
     });
   });
+
+  // backend/b275-guardian-security-notices (B-275; Decision Log #456).
+  describe('guardian-security-notice', () => {
+    const live = () =>
+      new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example' }),
+      );
+
+    it('sends the subject, the one-sentence summary and the time, and nothing else', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-sec' });
+
+      await live().sendGuardianSecurityNoticeEmail(
+        'guardian@example.com',
+        "Security change on Sam's Soccernity account",
+        "The password on Sam's Soccernity account was changed.",
+        '1 November 2026, 14:32 UTC',
+      );
+
+      expect(mockSendEmail).toHaveBeenCalledTimes(1);
+      const sent = mockSendEmail.mock.calls[0][0];
+      expect(sent).toEqual(
+        expect.objectContaining({ To: 'guardian@example.com', Subject: "Security change on Sam's Soccernity account" }),
+      );
+      expect(sent.TextBody).toContain("The password on Sam's Soccernity account was changed.");
+      expect(sent.TextBody).toContain('When: 1 November 2026, 14:32 UTC');
+      expect(sent.HtmlBody).toContain('1 November 2026, 14:32 UTC');
+      // No link, no token, nothing about the sign-in itself.
+      for (const body of [sent.TextBody, sent.HtmlBody]) {
+        expect(body).not.toMatch(/https?:\/\//);
+        expect(body.toLowerCase()).not.toMatch(/ip address|device|location|browser/);
+      }
+    });
+
+    it('escapes a display name containing markup in the HTML body only', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-sec' });
+
+      await live().sendGuardianSecurityNoticeEmail(
+        'guardian@example.com',
+        'Security change',
+        "The password on <b>Sam</b>'s Soccernity account was changed.",
+        '1 November 2026, 14:32 UTC',
+      );
+
+      const sent = mockSendEmail.mock.calls[0][0];
+      expect(sent.HtmlBody).toContain('&lt;b&gt;Sam&lt;/b&gt;');
+      expect(sent.HtmlBody).not.toContain('<b>Sam</b>');
+    });
+
+    it('is "wired but inactive" while Postmark is not live: resolves, calls nothing', async () => {
+      const service = new RegistrationEmailService(buildConfig({ EMAIL_PROVIDER_API_KEY: 'replace-me' }));
+      await expect(
+        service.sendGuardianSecurityNoticeEmail('g@example.com', 's', 'summary', 'when'),
+      ).resolves.toBeUndefined();
+      expect(mockSendEmail).not.toHaveBeenCalled();
+    });
+
+    it('swallows a provider failure like every other template', async () => {
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      mockSendEmail.mockRejectedValueOnce(new Error('postmark down'));
+      await expect(
+        live().sendGuardianSecurityNoticeEmail('g@example.com', 's', 'summary', 'when'),
+      ).resolves.toBeUndefined();
+      errorSpy.mockRestore();
+    });
+  });
 });

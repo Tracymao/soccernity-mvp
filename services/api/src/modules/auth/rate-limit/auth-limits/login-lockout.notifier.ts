@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../../prisma/prisma.service';
+import { GuardianSecurityNoticeService } from '../../../guardian-security-notice/guardian-security-notice.service';
 import { RegistrationEmailService } from '../../registration/email/registration-email.service';
 import { LOCKOUT_NOTICE_WINDOW_SECONDS } from './auth-limits.constants';
 import { AuthLimitsStore, limitKey } from './auth-limits.store';
@@ -25,6 +26,7 @@ export class LoginLockoutNotifier {
     private readonly prisma: PrismaService,
     private readonly store: AuthLimitsStore,
     private readonly email: RegistrationEmailService,
+    private readonly guardianNotices: GuardianSecurityNoticeService,
   ) {}
 
   // `normalisedEmail` must already be trimmed and lower-cased (the login lookup key).
@@ -37,10 +39,15 @@ export class LoginLockoutNotifier {
   async notify(normalisedEmail: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { email: normalisedEmail },
-      select: { email: true, accountStatus: true },
+      select: { id: true, email: true, accountStatus: true },
     });
     // No account, or an anonymised one whose address is a placeholder nobody can read.
     if (!user || user.accountStatus === 'deleted') return;
+
+    // B-275 (Decision Log #456): a minor's CONFIRMED guardian is told too, independently of the account's own
+    // notice below (own throttle: one per account per 24 hours, skipped if Redis is down). Runs in the background and
+    // never throws, so it can neither delay nor block the account's own notice.
+    this.guardianNotices.notifyInBackground(user.id, 'login_locked');
 
     const claimKey = limitKey('login-lockout-notice', normalisedEmail);
     const claimed = await this.store.claim(claimKey, LOCKOUT_NOTICE_WINDOW_SECONDS);

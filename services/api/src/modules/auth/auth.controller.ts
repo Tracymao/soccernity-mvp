@@ -36,6 +36,7 @@ import { LogoutDto } from './dto/logout.dto';
 import { ReactivateAccountDto } from './dto/reactivate-account.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { RefreshRateLimit, SkipGlobalWriteLimit } from '../../rate-limit/global-rate-limit.decorators';
+import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
 import { TwoFactorLoginDto } from '../two-factor/dto/two-factor-login.dto';
 import { TwoFactorLockInterceptor } from '../two-factor/two-factor-lock.interceptor';
 import { USER_CODE_IP_LIMIT } from '../two-factor/two-factor.constants';
@@ -58,7 +59,10 @@ function extractBearerToken(authorizationHeader: string | undefined): string | u
 // Section 4 addition candidate, not a silent deviation).
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly guardianNotices: GuardianSecurityNoticeService,
+  ) {}
 
   // security/auth-limits-shared-networks: per-account failed-attempt budget + per-IP ceiling (not the shared
   // 5-per-60s-per-IP auth throttler, which locked out a classroom behind one address).
@@ -168,6 +172,8 @@ export class AuthController {
     @Body() dto: ChangePasswordDto,
   ): Promise<void> {
     await this.authService.changePassword(user.sub, dto.currentPassword, dto.newPassword);
+    // B-275: after the change has committed; never delays or fails the response (a minor's guardian is emailed).
+    this.guardianNotices.notifyInBackground(user.sub, 'password_changed');
   }
 
   @UseGuards(JwtAuthGuard)

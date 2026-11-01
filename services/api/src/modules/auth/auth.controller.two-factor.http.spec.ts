@@ -1,5 +1,6 @@
 import { INestApplication, UnauthorizedException, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
 import * as request from 'supertest';
 import { CodeEntryLockedException } from '../two-factor/two-factor-attempt.limiter';
 import { AuthController } from './auth.controller';
@@ -23,6 +24,7 @@ const COOKIE_MODE = { 'X-Auth-Mode': 'cookie', Origin: 'http://localhost:5173' }
 
 describe('AuthController two-factor sign-in (HTTP layer)', () => {
   let app: INestApplication;
+  const guardianNotices = { notifyInBackground: jest.fn(), notify: jest.fn() };
   const authService = {
     login: jest.fn(),
     reactivateAccount: jest.fn(),
@@ -32,7 +34,10 @@ describe('AuthController two-factor sign-in (HTTP layer)', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [AuthController],
-      providers: [{ provide: AuthService, useValue: authService }],
+      providers: [
+        { provide: AuthService, useValue: authService },
+        { provide: GuardianSecurityNoticeService, useValue: guardianNotices },
+      ],
     })
       .overrideInterceptor(AuthLimitsInterceptor)
       .useValue({ intercept: (_ctx: unknown, next: { handle(): unknown }) => next.handle() })
