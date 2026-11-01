@@ -38,7 +38,7 @@ const webReact = resolveFrom(webDir, "react");
 const webReactDom = resolveFrom(webDir, "react-dom");
 
 describe("apps/web resolves a single copy of React", () => {
-  it.each(["react-router", "@testing-library/react", "@stripe/react-stripe-js"])(
+  it.each(["react-router", "@testing-library/react", "@stripe/react-stripe-js", "qrcode.react"])(
     "%s resolves the same react as apps/web",
     (pkg) => {
       expect(resolveFrom(installDirOf(pkg), "react")).toBe(webReact);

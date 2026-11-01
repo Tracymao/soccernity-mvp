@@ -357,3 +357,66 @@ describe("silent refresh (B-017, on the cookie session)", () => {
     });
   });
 });
+
+// B-087 / B-111: a 401 that means "wrong code" or "wrong password" on the three authenticated
+// two-factor routes must NOT be refreshed and replayed -- the replay would be a second wrong
+// attempt against the five-tries lock. An ordinary expired-access-token 401 still refreshes.
+describe("two-factor wrong-credential 401s are not replayed", () => {
+  const CASES: Array<[string, string]> = [
+    ["/auth/two-factor/enrol/confirm", "That code did not work. Check it and try again."],
+    ["/auth/two-factor/disable", "Incorrect password"],
+    ["/auth/two-factor/backup-codes/regenerate", "Incorrect password"],
+  ];
+
+  it.each(CASES)("%s: the wrong-credential 401 is returned as it is, with no refresh and no replay", async (path, message) => {
+    seedSession("old");
+    backend.mockResolvedValue(json(401, { message }));
+
+    const response = await window.fetch(`${API}${path}`, {
+      method: "POST",
+      headers: { Authorization: "Bearer old" },
+      body: "{}",
+    });
+
+    expect(response.status).toBe(401);
+    expect(refreshCalls()).toHaveLength(0);
+    expect(backend).toHaveBeenCalledTimes(1);
+    expect(getStoredAccessToken()).toBe("old");
+    // The body can still be read by the caller (the wrapper only looked at a clone).
+    expect(((await response.json()) as { message: string }).message).toBe(message);
+  });
+
+  it.each(CASES)("%s: a generic 401 (an expired access token) still refreshes and replays once", async (path) => {
+    seedSession("old");
+    backend.mockImplementation(async (url: string, init?: FetchInit) => {
+      if (url === `${API}/auth/refresh`) return json(200, { accessToken: "new" });
+      return auth(init) === "Bearer new" ? json(200, { ok: true }) : json(401, { message: "Unauthorized" });
+    });
+
+    const response = await window.fetch(`${API}${path}`, {
+      method: "POST",
+      headers: { Authorization: "Bearer old" },
+      body: "{}",
+    });
+
+    expect(response.status).toBe(200);
+    expect(refreshCalls()).toHaveLength(1);
+    expect(getStoredAccessToken()).toBe("new");
+  });
+
+  it("other routes with the same message are unaffected (only the three paths are special-cased)", async () => {
+    seedSession("old");
+    backend.mockImplementation(async (url: string, init?: FetchInit) => {
+      if (url === `${API}/auth/refresh`) return json(200, { accessToken: "new" });
+      return auth(init) === "Bearer new" ? json(200) : json(401, { message: "Incorrect password" });
+    });
+
+    const response = await window.fetch(`${API}/auth/change-password`, {
+      method: "POST",
+      headers: { Authorization: "Bearer old" },
+    });
+
+    expect(response.status).toBe(200);
+    expect(refreshCalls()).toHaveLength(1);
+  });
+});
