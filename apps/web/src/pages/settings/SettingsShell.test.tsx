@@ -1,7 +1,8 @@
 // Settings shell + landing + Account overview + placeholders + route
 // redirects. Mounts the REAL route tree (createMemoryRouter(routes)) so
 // nesting, redirects and active-state derivation are exercised for real.
-// Only api/users is mocked (landing identity row).
+// Only api/users (landing identity row) and api/twoFactor (the Two-Factor Auth leaf's
+// status read) are mocked.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { createMemoryRouter, MemoryRouter, RouterProvider, useLocation, useRoutes } from "react-router";
@@ -20,6 +21,14 @@ vi.mock("../../api/users", async () => {
       publicName: "Ada Lovelace",
       isMinor: false,
     }),
+  };
+});
+
+vi.mock("../../api/twoFactor", async () => {
+  const actual = await vi.importActual<typeof import("../../api/twoFactor")>("../../api/twoFactor");
+  return {
+    ...actual,
+    getTwoFactorStatus: vi.fn().mockResolvedValue({ enabled: false, backupCodesRemaining: 0 }),
   };
 });
 
@@ -213,19 +222,17 @@ describe("Security & Account Settings section", () => {
     expect(current[0].textContent).toContain("Security & Account Settings");
   });
 
-  it("the Two-Factor Auth (SMS) leaf renders both rows, permanently disabled with a note", async () => {
+  // B-087 / B-111: the leaf is the real authenticator-app flow now (it was a stub with two
+  // permanently disabled "Text message" / "Authentication app" rows). The full flow is
+  // covered in TwoFactorAuthPage.test.tsx; this keeps the shell-level check that the route
+  // mounts the page under the rail with the Authenticator app row and no SMS row.
+  it("the Two-Factor Auth leaf renders the Authenticator app row (no SMS) under the rail", async () => {
     await renderAt("/settings/security/two-factor");
     expect(screen.getByRole("heading", { name: "Two-factor authentication" })).not.toBeNull();
-
-    for (const label of ["Text message", "Authentication app"]) {
-      expect(screen.getByText(label)).not.toBeNull();
-    }
-
-    const toggles = screen.getAllByRole("img", { name: /off \(not adjustable yet\)/i });
-    expect(toggles).toHaveLength(2);
-
-    const notes = screen.getAllByText(/two-factor authentication isn.t available yet/i);
-    expect(notes).toHaveLength(2);
+    await waitFor(() => expect(screen.getByText("Authenticator app")).not.toBeNull());
+    expect(screen.queryByText("Text message")).toBeNull();
+    expect(screen.getByRole("img", { name: /authenticator app: off/i })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Turn on" })).not.toBeNull();
   });
 
   it("no session → log-in prompt on both the hub and the leaf, no crash", async () => {

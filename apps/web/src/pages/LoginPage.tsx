@@ -34,9 +34,10 @@
 // not repeat the Top Bar's wordmark.
 import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { AuthApiError, login } from "../api/auth";
+import { AuthApiError, isTwoFactorChallenge, login, type LoginResponse } from "../api/auth";
 import { storeSession } from "../lib/session";
 import { routeForNextStep } from "../lib/onboarding";
+import TwoFactorCodePrompt from "./twoFactor/TwoFactorCodePrompt";
 import loginHero from "../assets/illustrations/login-hero.svg";
 import "./LoginPage.css";
 
@@ -47,6 +48,24 @@ export default function LoginPage() {
   const [staySignedIn, setStaySignedIn] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // B-087: an account with two-factor on is answered with a challenge instead of tokens.
+  // It lives in component state only and is dropped the moment the code step ends.
+  const [challengeToken, setChallengeToken] = useState<string | null>(null);
+
+  function finishSignIn(result: LoginResponse) {
+    // B-246: the access token goes into memory; the refresh token is the
+    // httpOnly cookie the API just set. `staySignedIn` was sent with the
+    // request -- true makes that cookie persistent, otherwise it is a
+    // session cookie.
+    storeSession(result);
+
+    // B-125 (Decision Log #367, #394 A6, #404 item 12): route on the server's onboarding
+    // state instead of a blanket "/". A restricted-pending minor lands on
+    // the Restricted Pending page on EVERY login (never /community), an
+    // unverified account on the verify prompt, an incomplete profile on
+    // Create Profile.
+    navigate(routeForNextStep(result.user.nextStep));
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -64,18 +83,14 @@ export default function LoginPage() {
       // PR, so it is expected to fail until that lands.
       const result = await login({ email: email.trim(), password, staySignedIn });
 
-      // B-246: the access token goes into memory; the refresh token is the
-      // httpOnly cookie the API just set. `staySignedIn` was sent with the
-      // request -- true makes that cookie persistent, otherwise it is a
-      // session cookie.
-      storeSession(result);
-
-      // B-125 (Decision Log #367, #394 A6): route on the server's onboarding
-      // state instead of a blanket "/". A restricted-pending minor lands on
-      // the Restricted Pending page on EVERY login (never /community), an
-      // unverified account on the verify prompt, an incomplete profile on
-      // Create Profile.
-      navigate(routeForNextStep(result.user.nextStep));
+      if (isTwoFactorChallenge(result)) {
+        // No session yet. Forget the password -- the code step does not need it -- and ask
+        // for the code. (The email stays, so a person sent back here does not retype it.)
+        setPassword("");
+        setChallengeToken(result.challengeToken);
+        return;
+      }
+      finishSignIn(result);
     } catch (error) {
       // A deactivated account (credentials were correct -- see
       // src/api/auth.ts's login()). Hand the known-good email + password
@@ -94,6 +109,19 @@ export default function LoginPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (challengeToken) {
+    return (
+      <TwoFactorCodePrompt
+        challengeToken={challengeToken}
+        onSignedIn={finishSignIn}
+        onExpired={() => {
+          setChallengeToken(null);
+          setFormError("Your sign-in expired. Please log in again.");
+        }}
+      />
+    );
   }
 
   return (
