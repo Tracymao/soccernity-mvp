@@ -46,6 +46,14 @@ function StaffRow({ admin }: { admin: AdminStaffListItem }) {
         </span>
       </span>
       <span>
+        {/* twoFactorEnabled (backend/two-factor-api-codes): the word is always shown, not only the colour. */}
+        <span
+          className={`rl-pill rl-pill--keep-case ${admin.twoFactorEnabled ? "rl-pill--soft" : "rl-pill--neutral"}`}
+        >
+          {admin.twoFactorEnabled ? "On" : "Off"}
+        </span>
+      </span>
+      <span>
         <Link to={`/settings/roles/edit/${admin.id}`} state={{ admin }} className="rl-link">
           Edit
         </Link>
@@ -122,6 +130,7 @@ export default function SettingsRolesPage() {
               <span>Name</span>
               <span>Role</span>
               <span>Status</span>
+              <span>Two-factor</span>
               <span>Actions</span>
             </div>
             {items.map((a) => (

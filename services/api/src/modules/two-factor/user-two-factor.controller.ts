@@ -4,6 +4,7 @@ import { CurrentUser } from '../auth/guards/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthRateLimit } from '../auth/rate-limit/auth-rate-limit.decorator';
 import { AccessTokenPayload } from '../auth/token/token.types';
+import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
 import { TwoFactorCodeDto } from './dto/two-factor-code.dto';
 import { TwoFactorPasswordDto } from './dto/two-factor-password.dto';
 import { TwoFactorLockInterceptor } from './two-factor-lock.interceptor';
@@ -26,7 +27,10 @@ import { EnrolmentStart, TwoFactorService, TwoFactorStatus } from './two-factor.
 @UseGuards(JwtAuthGuard)
 @UseInterceptors(TwoFactorLockInterceptor)
 export class UserTwoFactorController {
-  constructor(private readonly twoFactor: TwoFactorService) {}
+  constructor(
+    private readonly twoFactor: TwoFactorService,
+    private readonly guardianNotices: GuardianSecurityNoticeService,
+  ) {}
 
   @Get('status')
   status(@CurrentUser() user: AccessTokenPayload): Promise<TwoFactorStatus> {
@@ -45,7 +49,10 @@ export class UserTwoFactorController {
   @Post('enrol/confirm')
   @HttpCode(HttpStatus.OK)
   async confirm(@CurrentUser() user: AccessTokenPayload, @Body() dto: TwoFactorCodeDto): Promise<{ backupCodes: string[] }> {
-    return { backupCodes: await this.twoFactor.confirmEnrolment('user', user.sub, dto.code) };
+    const backupCodes = await this.twoFactor.confirmEnrolment('user', user.sub, dto.code);
+    // B-275: after the change has committed; never delays or fails the response (a minor's guardian is emailed).
+    this.guardianNotices.notifyInBackground(user.sub, 'two_factor_enabled');
+    return { backupCodes };
   }
 
   @Post('backup-codes/regenerate')
@@ -54,12 +61,15 @@ export class UserTwoFactorController {
     @CurrentUser() user: AccessTokenPayload,
     @Body() dto: TwoFactorPasswordDto,
   ): Promise<{ backupCodes: string[] }> {
-    return { backupCodes: await this.twoFactor.regenerateBackupCodes('user', user.sub, dto.password) };
+    const backupCodes = await this.twoFactor.regenerateBackupCodes('user', user.sub, dto.password);
+    this.guardianNotices.notifyInBackground(user.sub, 'backup_codes_regenerated');
+    return { backupCodes };
   }
 
   @Post('disable')
   @HttpCode(HttpStatus.NO_CONTENT)
   async disable(@CurrentUser() user: AccessTokenPayload, @Body() dto: TwoFactorPasswordDto): Promise<void> {
     await this.twoFactor.disable('user', user.sub, dto.password);
+    this.guardianNotices.notifyInBackground(user.sub, 'two_factor_disabled');
   }
 }

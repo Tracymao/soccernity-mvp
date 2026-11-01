@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { RedisModule } from '../../../redis/redis.module';
+import { GuardianSecurityNoticeModule } from '../../guardian-security-notice/guardian-security-notice.module';
 import { AuthFoundationModule } from '../auth-foundation.module';
 import { PasswordResetEmailService } from './email/password-reset-email.service';
 import { PasswordResetController } from './password-reset.controller';
@@ -21,7 +22,7 @@ import { ResetTokenStore } from './reset-token.store';
 // Imports AuthFoundationModule (B1) for PasswordService and TokenService
 // via DI rather than constructing them itself.
 @Module({
-  imports: [ConfigModule, RedisModule, AuthFoundationModule],
+  imports: [ConfigModule, RedisModule, AuthFoundationModule, GuardianSecurityNoticeModule],
   controllers: [PasswordResetController],
   providers: [PasswordResetService, ResetTokenStore, PasswordResetEmailService, PrismaService],
 })

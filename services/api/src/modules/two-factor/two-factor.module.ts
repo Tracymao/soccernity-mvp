@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisModule } from '../../redis/redis.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
+import { GuardianSecurityNoticeModule } from '../guardian-security-notice/guardian-security-notice.module';
 import { TwoFactorAttemptLimiter } from './two-factor-attempt.limiter';
 import { TwoFactorLockInterceptor } from './two-factor-lock.interceptor';
 import { TwoFactorPendingStore } from './two-factor-pending.store';
@@ -20,7 +21,7 @@ import { UserTwoFactorController } from './user-two-factor.controller';
 // AuthFoundationModule (JwtAuthGuard, PasswordService, AuthRateLimitModule) and nothing that imports it back.
 // CryptoModule (DobEncryptionService) is global.
 @Module({
-  imports: [ConfigModule, RedisModule, AuthFoundationModule],
+  imports: [ConfigModule, RedisModule, AuthFoundationModule, GuardianSecurityNoticeModule],
   controllers: [UserTwoFactorController],
   providers: [
     PrismaService,

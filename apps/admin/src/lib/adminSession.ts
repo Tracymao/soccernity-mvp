@@ -37,7 +37,21 @@ let restoring = false;
 // Bumped every time the token is set from outside a sign-in (refresh or broadcast).
 let tokenVersion = 0;
 
-type ChannelMessage = { type: "token"; accessToken: string } | { type: "signout" };
+// Why a session ended, when the login screen should say so. Only the two-factor refresh gate has a reason; an
+// ordinary sign-out has none.
+export type AdminAuthLostReason = "two-factor-enrolment-required";
+
+function isAuthLostReason(value: unknown): value is AdminAuthLostReason {
+  return value === "two-factor-enrolment-required";
+}
+
+type ChannelMessage =
+  | { type: "token"; accessToken: string }
+  | { type: "signout"; reason?: AdminAuthLostReason };
+
+// The reason the LAST sign-out carried (this tab's own, or one heard from another tab). Set before the token
+// is cleared so a subscriber that fires on the clear can read it; reset by the next sign-in.
+let signOutReason: AdminAuthLostReason | null = null;
 
 let channel: BroadcastChannel | null | undefined;
 
@@ -53,6 +67,7 @@ function getChannel(): BroadcastChannel | null {
       const message = event.data as Partial<ChannelMessage> | null;
       if (!message || typeof message !== "object") return;
       if (message.type === "signout") {
+        signOutReason = isAuthLostReason(message.reason) ? message.reason : null;
         setToken(null);
       } else if (message.type === "token" && typeof message.accessToken === "string") {
         // Only a tab that has (or is restoring) a session adopts it.
@@ -106,6 +121,7 @@ export interface AdminSessionTokens {
 // The one writer for a fresh sign-in. The refresh token never reaches JavaScript:
 // the API put it in the cookie.
 export function storeAdminSession(tokens: AdminSessionTokens): void {
+  signOutReason = null;
   setToken(tokens.accessToken);
 }
 
@@ -119,10 +135,17 @@ export function replaceAdminAccessToken(next: string): void {
 
 // Ends the session in this tab and tells the others. The cookie itself is cleared
 // by the API (POST /admin/auth/logout) or is already dead server-side (a rejected
-// refresh).
-export function clearAdminSession(): void {
+// refresh). `reason` travels with the broadcast, so a tab signed out by the two-factor
+// refresh gate shows the same notice in every tab; no reason = an ordinary sign-out.
+export function clearAdminSession(reason?: AdminAuthLostReason): void {
+  signOutReason = reason ?? null;
   setToken(null);
-  post({ type: "signout" });
+  post(reason ? { type: "signout", reason } : { type: "signout" });
+}
+
+// The reason the last sign-out carried, or null (see signOutReason).
+export function getAdminSignOutReason(): AdminAuthLostReason | null {
+  return signOutReason;
 }
 
 // Clears this tab without telling the others -- for a failed start-up restore,
@@ -153,6 +176,7 @@ export function getAdminSessionChannelName(): string {
 // Test-only: forget everything this module holds. Never called by app code.
 export function __resetAdminSessionForTests(): void {
   accessToken = null;
+  signOutReason = null;
   restoring = false;
   tokenVersion = 0;
   if (channel) {

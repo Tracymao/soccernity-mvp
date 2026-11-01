@@ -8,7 +8,8 @@ import { AuthService } from './auth.service';
 // directly bypasses the pipe entirely. This file covers only the
 // bearer-token-extraction logic that lives in the controller itself.
 function buildController(authService: Partial<AuthService>) {
-  return new AuthController(authService as AuthService);
+  // B-275: the guardian security notice service is a no-op stub here (its own behaviour is in its spec).
+  return new AuthController(authService as AuthService, { notifyInBackground: jest.fn() } as never);
 }
 
 describe('AuthController', () => {

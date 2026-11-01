@@ -5,6 +5,7 @@ import * as Sentry from '@sentry/nestjs';
 import * as request from 'supertest';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { RedisService } from '../../../../redis/redis.service';
+import { GuardianSecurityNoticeService } from '../../../guardian-security-notice/guardian-security-notice.service';
 import { RegistrationEmailService } from '../../registration/email/registration-email.service';
 import { AuthLimit } from './auth-limits.interceptor';
 import { AuthLimitsModule } from './auth-limits.module';
@@ -101,12 +102,14 @@ function makeFakes() {
   const prisma = {
     user: {
       findUnique: jest.fn(async ({ where }: { where: { email: string } }) =>
-        REAL_ACCOUNTS.has(where.email) ? { email: where.email, accountStatus: 'active' } : null,
+        REAL_ACCOUNTS.has(where.email) ? { id: `id-of-${where.email}`, email: where.email, accountStatus: 'active' } : null,
       ),
     },
   };
   const email = { sendLoginLockoutNoticeEmail: jest.fn(async (_to: string) => true) };
-  return { prisma, email };
+  // B-275: the guardian security notice service is faked here; its own behaviour is in its spec.
+  const guardianNotices = { notify: jest.fn(async () => 'sent'), notifyInBackground: jest.fn() };
+  return { prisma, email, guardianNotices };
 }
 
 async function buildApp(
@@ -124,6 +127,8 @@ async function buildApp(
     .useValue(fakes.prisma)
     .overrideProvider(RegistrationEmailService)
     .useValue(fakes.email)
+    .overrideProvider(GuardianSecurityNoticeService)
+    .useValue(fakes.guardianNotices)
     .compile();
   const app = moduleRef.createNestApplication();
   // Take the client address from X-Forwarded-For so one test process can play many IPs.
@@ -295,6 +300,29 @@ describe('auth limits for shared networks (B-256) and per-account-and-IP lockout
       expect(fakes.email.sendLoginLockoutNoticeEmail).toHaveBeenCalledTimes(1);
       // The address the account is registered under, normalised; nothing else is passed (no IP, no times).
       expect(fakes.email.sendLoginLockoutNoticeEmail).toHaveBeenCalledWith('victim@x.com');
+    });
+
+    // B-275 (Decision Log #456): the same lock also asks for a notice to a minor's confirmed guardian. The notifier
+    // only hands over the user id and the event key; who is actually emailed (and the once-per-24-hours throttle for
+    // it) is decided in GuardianSecurityNoticeService, tested in its own spec.
+    it('asks for a guardian "login_locked" notice once, for the account, when the pair budget is first spent', async () => {
+      for (let i = 0; i < 4; i++) await post(app, 'login', '10.47.0.1', { email: 'victim@x.com', password: 'wrong' }).expect(401);
+      await flush();
+      expect(fakes.guardianNotices.notifyInBackground).not.toHaveBeenCalled();
+      await post(app, 'login', '10.47.0.1', { email: 'victim@x.com', password: 'wrong' }).expect(401);
+      // The refused 6th attempt must not ask again.
+      await post(app, 'login', '10.47.0.1', { email: 'victim@x.com', password: 'wrong' }).expect(429);
+      await flush();
+      expect(fakes.guardianNotices.notifyInBackground).toHaveBeenCalledTimes(1);
+      expect(fakes.guardianNotices.notifyInBackground).toHaveBeenCalledWith('id-of-victim@x.com', 'login_locked');
+    });
+
+    it('asks for no guardian notice for an address with no account, and never changes the login response', async () => {
+      const statuses: number[] = [];
+      for (let i = 0; i < 6; i++) statuses.push((await post(app, 'login', '10.48.0.1', { email: 'ghost@x.com', password: 'wrong' })).status);
+      await flush();
+      expect(statuses).toEqual([401, 401, 401, 401, 401, 429]);
+      expect(fakes.guardianNotices.notifyInBackground).not.toHaveBeenCalled();
     });
 
     it('does not send before the budget is spent, nor for refused attempts, nor on a success', async () => {

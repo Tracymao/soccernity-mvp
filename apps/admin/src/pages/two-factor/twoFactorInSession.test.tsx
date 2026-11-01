@@ -38,7 +38,7 @@ afterEach(cleanup);
 
 describe("Admin Profile two-factor card", () => {
   it("shows On, the remaining backup codes and no Turn off control", async () => {
-    vi.mocked(getAdminTwoFactorStatus).mockResolvedValue({ enabled: true, backupCodesRemaining: 8 });
+    vi.mocked(getAdminTwoFactorStatus).mockResolvedValue({ enabled: true, backupCodesRemaining: 8, enforced: true });
     render(<TwoFactorCard />);
     expect(screen.getByText(copy.LOADING_STATUS)).not.toBeNull();
     expect(await screen.findByText(copy.STATUS_ON)).not.toBeNull();
@@ -52,7 +52,7 @@ describe("Admin Profile two-factor card", () => {
 
   it("a status that cannot be loaded shows the error with Try again, which loads it again", async () => {
     vi.mocked(getAdminTwoFactorStatus).mockRejectedValueOnce(new Error("offline"));
-    vi.mocked(getAdminTwoFactorStatus).mockResolvedValueOnce({ enabled: true, backupCodesRemaining: 10 });
+    vi.mocked(getAdminTwoFactorStatus).mockResolvedValueOnce({ enabled: true, backupCodesRemaining: 10, enforced: true });
     render(<TwoFactorCard />);
     expect((await screen.findByRole("alert")).textContent).toBe(copy.STATUS_LOAD_ERROR);
     expect(screen.queryByRole("button", { name: copy.REGENERATE_BUTTON })).toBeNull();
@@ -62,14 +62,14 @@ describe("Admin Profile two-factor card", () => {
   });
 
   it("an admin without two-factor sees a plain Off state and no Regenerate button", async () => {
-    vi.mocked(getAdminTwoFactorStatus).mockResolvedValue({ enabled: false, backupCodesRemaining: 0 });
+    vi.mocked(getAdminTwoFactorStatus).mockResolvedValue({ enabled: false, backupCodesRemaining: 0, enforced: true });
     render(<TwoFactorCard />);
     expect(await screen.findByText(copy.CARD_OFF_BODY)).not.toBeNull();
     expect(screen.queryByRole("button", { name: copy.REGENERATE_BUTTON })).toBeNull();
   });
 
   async function openRegenerate() {
-    vi.mocked(getAdminTwoFactorStatus).mockResolvedValue({ enabled: true, backupCodesRemaining: 8 });
+    vi.mocked(getAdminTwoFactorStatus).mockResolvedValue({ enabled: true, backupCodesRemaining: 8, enforced: true });
     render(<TwoFactorCard />);
     fireEvent.click(await screen.findByRole("button", { name: copy.REGENERATE_BUTTON }));
     return screen.getByRole("dialog");
@@ -90,12 +90,12 @@ describe("Admin Profile two-factor card", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("an incorrect password shows the API message and keeps the dialog", async () => {
-    vi.mocked(regenerateAdminBackupCodes).mockRejectedValue(new AdminApiError(401, "Incorrect password"));
+  it("an incorrect password (two_factor_incorrect_password) shows the wording and keeps the dialog", async () => {
+    vi.mocked(regenerateAdminBackupCodes).mockRejectedValue(new AdminApiError(401, "Incorrect password", { code: "two_factor_incorrect_password" }));
     const dialog = await openRegenerate();
     fireEvent.change(within(dialog).getByLabelText("Password"), { target: { value: "wrong-password" } });
     fireEvent.click(within(dialog).getByRole("button", { name: copy.REGENERATE_CONFIRM }));
-    expect((await within(dialog).findByRole("alert")).textContent).toBe("Incorrect password");
+    expect((await within(dialog).findByRole("alert")).textContent).toBe(copy.INCORRECT_PASSWORD);
     expect(screen.getByRole("dialog")).not.toBeNull();
   });
 
@@ -122,7 +122,7 @@ describe("Admin Profile two-factor card", () => {
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     expect(screen.getByRole("dialog")).not.toBeNull();
 
-    vi.mocked(getAdminTwoFactorStatus).mockResolvedValue({ enabled: true, backupCodesRemaining: 10 });
+    vi.mocked(getAdminTwoFactorStatus).mockResolvedValue({ enabled: true, backupCodesRemaining: 10, enforced: true });
     fireEvent.click(screen.getByLabelText(copy.SAVED_CODES_LABEL));
     fireEvent.click(done);
     expect(screen.queryByRole("dialog")).toBeNull();
