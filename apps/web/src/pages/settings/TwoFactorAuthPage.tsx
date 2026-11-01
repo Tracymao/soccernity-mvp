@@ -42,6 +42,13 @@ import {
   type EnrolmentStart,
   type TwoFactorStatus,
 } from "../../api/twoFactor";
+import {
+  TWO_FACTOR_ALREADY_ENABLED,
+  TWO_FACTOR_CODE_LOCKED,
+  TWO_FACTOR_INCORRECT_PASSWORD,
+  TWO_FACTOR_INVALID_CODE,
+  TWO_FACTOR_NO_PENDING_ENROLMENT,
+} from "../../api/twoFactorCodes";
 import { getStoredAccessToken } from "../../lib/session";
 import CopyTag from "../twoFactor/CopyTag";
 import TwoFactorCodeInput from "../twoFactor/TwoFactorCodeInput";
@@ -104,7 +111,7 @@ function AppRow({ on }: { on: boolean }) {
 }
 
 function passwordError(err: unknown): string {
-  if (err instanceof AuthApiError && err.code === "two_factor_wrong_password") return WRONG_PASSWORD;
+  if (err instanceof AuthApiError && err.code === TWO_FACTOR_INCORRECT_PASSWORD) return WRONG_PASSWORD;
   return err instanceof AuthApiError ? err.message : GENERIC;
 }
 
@@ -186,7 +193,7 @@ export default function TwoFactorAuthPage() {
       setCode("");
       setView({ kind: "scan" });
     } catch (err) {
-      if (err instanceof AuthApiError && err.code === "two_factor_already_enabled") {
+      if (err instanceof AuthApiError && err.code === TWO_FACTOR_ALREADY_ENABLED) {
         void loadStatus();
       } else {
         setError(err instanceof AuthApiError ? err.message : GENERIC);
@@ -209,14 +216,14 @@ export default function TwoFactorAuthPage() {
       setView({ kind: "backup-codes", after: "success" });
     } catch (err) {
       setCode("");
-      if (err instanceof AuthApiError && err.code === "two_factor_invalid_code") {
+      if (err instanceof AuthApiError && err.code === TWO_FACTOR_INVALID_CODE) {
         setError(WRONG_CODE);
-      } else if (err instanceof AuthApiError && err.code === "two_factor_locked") {
+      } else if (err instanceof AuthApiError && err.code === TWO_FACTOR_CODE_LOCKED) {
         setError(LOCKED);
-      } else if (err instanceof AuthApiError && err.code === "two_factor_no_pending") {
+      } else if (err instanceof AuthApiError && err.code === TWO_FACTOR_NO_PENDING_ENROLMENT) {
         clearSecrets();
         setView({ kind: "status", status: { enabled: false, backupCodesRemaining: 0 }, notice: SETUP_EXPIRED });
-      } else if (err instanceof AuthApiError && err.code === "two_factor_already_enabled") {
+      } else if (err instanceof AuthApiError && err.code === TWO_FACTOR_ALREADY_ENABLED) {
         clearSecrets();
         void loadStatus();
       } else {

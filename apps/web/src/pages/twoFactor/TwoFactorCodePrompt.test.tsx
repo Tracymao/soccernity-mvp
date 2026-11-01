@@ -115,7 +115,7 @@ describe("code mode (Figma 6711:27530)", () => {
   });
 
   it("a locked account shows the locked message with no countdown", async () => {
-    vi.mocked(completeTwoFactorLogin).mockRejectedValue(err("two_factor_locked", 429));
+    vi.mocked(completeTwoFactorLogin).mockRejectedValue(err("two_factor_code_locked", 429));
     open();
     typeCode("111111");
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
@@ -125,7 +125,7 @@ describe("code mode (Figma 6711:27530)", () => {
   });
 
   it("an expired challenge calls onExpired (back to sign-in), not an error line", async () => {
-    vi.mocked(completeTwoFactorLogin).mockRejectedValue(err("two_factor_challenge_expired", 401));
+    vi.mocked(completeTwoFactorLogin).mockRejectedValue(err("two_factor_invalid_challenge", 401));
     open();
     typeCode("111111");
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
@@ -191,7 +191,7 @@ describe("backup-code mode (Figma 6711:27590 / 6711:27617)", () => {
   });
 
   it("an expired challenge calls onExpired from this mode too", async () => {
-    vi.mocked(completeTwoFactorLogin).mockRejectedValue(err("two_factor_challenge_expired", 401));
+    vi.mocked(completeTwoFactorLogin).mockRejectedValue(err("two_factor_invalid_challenge", 401));
     toBackup();
     fireEvent.change(screen.getByLabelText("Backup code"), { target: { value: "ABCDE12345" } });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));

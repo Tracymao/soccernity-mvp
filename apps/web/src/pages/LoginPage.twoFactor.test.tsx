@@ -96,7 +96,7 @@ describe("LoginPage, two-factor on", () => {
   it("an expired challenge returns to sign-in with a note, the email kept and the password gone", async () => {
     vi.mocked(login).mockResolvedValue(CHALLENGE);
     vi.mocked(completeTwoFactorLogin).mockRejectedValue(
-      new AuthApiError("expired", { status: 401, code: "two_factor_challenge_expired" }),
+      new AuthApiError("expired", { status: 401, code: "two_factor_invalid_challenge" }),
     );
     renderLogin();
     submitPassword();

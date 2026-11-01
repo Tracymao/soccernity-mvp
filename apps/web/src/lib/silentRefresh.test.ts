@@ -358,19 +358,22 @@ describe("silent refresh (B-017, on the cookie session)", () => {
   });
 });
 
-// B-087 / B-111: a 401 that means "wrong code" or "wrong password" on the three authenticated
-// two-factor routes must NOT be refreshed and replayed -- the replay would be a second wrong
-// attempt against the five-tries lock. An ordinary expired-access-token 401 still refreshes.
+// B-087 / B-111: a 401 that means "wrong code" or "wrong password" (the API's stable `code`
+// two_factor_invalid_code / two_factor_incorrect_password, PR #582) must NOT be refreshed
+// and replayed -- the replay would be a second wrong attempt against the five-tries lock. The
+// decision reads the body `code`, never the message. An ordinary expired-access-token 401 (no
+// such code) still refreshes.
 describe("two-factor wrong-credential 401s are not replayed", () => {
   const CASES: Array<[string, string]> = [
-    ["/auth/two-factor/enrol/confirm", "That code did not work. Check it and try again."],
-    ["/auth/two-factor/disable", "Incorrect password"],
-    ["/auth/two-factor/backup-codes/regenerate", "Incorrect password"],
+    ["/auth/two-factor/enrol/confirm", "two_factor_invalid_code"],
+    ["/auth/two-factor/disable", "two_factor_incorrect_password"],
+    ["/auth/two-factor/backup-codes/regenerate", "two_factor_incorrect_password"],
   ];
 
-  it.each(CASES)("%s: the wrong-credential 401 is returned as it is, with no refresh and no replay", async (path, message) => {
+  it.each(CASES)("%s: the wrong-credential 401 is returned as it is, with no refresh and no replay", async (path, code) => {
     seedSession("old");
-    backend.mockResolvedValue(json(401, { message }));
+    // The message is deliberately NOT the server's text: only the code decides.
+    backend.mockResolvedValue(json(401, { code, message: "any wording at all" }));
 
     const response = await window.fetch(`${API}${path}`, {
       method: "POST",
@@ -383,7 +386,7 @@ describe("two-factor wrong-credential 401s are not replayed", () => {
     expect(backend).toHaveBeenCalledTimes(1);
     expect(getStoredAccessToken()).toBe("old");
     // The body can still be read by the caller (the wrapper only looked at a clone).
-    expect(((await response.json()) as { message: string }).message).toBe(message);
+    expect(((await response.json()) as { code: string }).code).toBe(code);
   });
 
   it.each(CASES)("%s: a generic 401 (an expired access token) still refreshes and replays once", async (path) => {
@@ -404,7 +407,26 @@ describe("two-factor wrong-credential 401s are not replayed", () => {
     expect(getStoredAccessToken()).toBe("new");
   });
 
-  it("other routes with the same message are unaffected (only the three paths are special-cased)", async () => {
+  it.each(CASES)("%s: the server's old message text WITHOUT the code is not enough -- it refreshes and replays", async (path) => {
+    seedSession("old");
+    backend.mockImplementation(async (url: string, init?: FetchInit) => {
+      if (url === `${API}/auth/refresh`) return json(200, { accessToken: "new" });
+      return auth(init) === "Bearer new"
+        ? json(200)
+        : json(401, { message: "That code did not work. Check it and try again." });
+    });
+
+    const response = await window.fetch(`${API}${path}`, {
+      method: "POST",
+      headers: { Authorization: "Bearer old" },
+      body: "{}",
+    });
+
+    expect(response.status).toBe(200);
+    expect(refreshCalls()).toHaveLength(1);
+  });
+
+  it("an unrelated 401 with the same wording but no code (change-password) refreshes and replays", async () => {
     seedSession("old");
     backend.mockImplementation(async (url: string, init?: FetchInit) => {
       if (url === `${API}/auth/refresh`) return json(200, { accessToken: "new" });
@@ -418,5 +440,19 @@ describe("two-factor wrong-credential 401s are not replayed", () => {
 
     expect(response.status).toBe(200);
     expect(refreshCalls()).toHaveLength(1);
+  });
+
+  it("a wrong-credential code is honoured on any path, not only the three listed ones", async () => {
+    seedSession("old");
+    backend.mockResolvedValue(json(401, { code: "two_factor_invalid_code", message: "x" }));
+
+    const response = await window.fetch(`${API}/auth/two-factor/something-new`, {
+      method: "POST",
+      headers: { Authorization: "Bearer old" },
+    });
+
+    expect(response.status).toBe(401);
+    expect(refreshCalls()).toHaveLength(0);
+    expect(backend).toHaveBeenCalledTimes(1);
   });
 });
