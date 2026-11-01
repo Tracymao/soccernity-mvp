@@ -7,7 +7,6 @@ import {
   isTwoFactorChallenge,
   login,
   reactivateAccount,
-  TWO_FACTOR_CHALLENGE_EXPIRED_MESSAGE,
 } from "./auth";
 import {
   confirmTwoFactorEnrolment,
@@ -68,12 +67,12 @@ describe("settings endpoints", () => {
   });
 
   it("enrol/confirm: 401 is a wrong code, 429 is locked, 400 is an expired setup", async () => {
-    fetchMock.mockResolvedValueOnce(json(401, { message: "That code did not work. Check it and try again." }));
+    fetchMock.mockResolvedValueOnce(json(401, { code: "two_factor_invalid_code", message: "x" }));
     await expect(confirmTwoFactorEnrolment("tok", "1")).rejects.toMatchObject({ code: "two_factor_invalid_code" });
     fetchMock.mockResolvedValueOnce(json(429, { message: "x" }));
-    await expect(confirmTwoFactorEnrolment("tok", "1")).rejects.toMatchObject({ code: "two_factor_locked", status: 429 });
+    await expect(confirmTwoFactorEnrolment("tok", "1")).rejects.toMatchObject({ code: "two_factor_code_locked", status: 429 });
     fetchMock.mockResolvedValueOnce(json(400, { code: "two_factor_no_pending_enrolment", message: "x" }));
-    await expect(confirmTwoFactorEnrolment("tok", "1")).rejects.toMatchObject({ code: "two_factor_no_pending" });
+    await expect(confirmTwoFactorEnrolment("tok", "1")).rejects.toMatchObject({ code: "two_factor_no_pending_enrolment" });
   });
 
   it("regenerate sends { password } and returns the codes; a 401 is a wrong password", async () => {
@@ -81,16 +80,16 @@ describe("settings endpoints", () => {
     await expect(regenerateBackupCodes("tok", "pw")).resolves.toEqual(["Z"]);
     expect(lastCall().url).toBe(`${API}/auth/two-factor/backup-codes/regenerate`);
     expect(JSON.parse(lastCall().init.body as string)).toEqual({ password: "pw" });
-    fetchMock.mockResolvedValueOnce(json(401, { message: "Incorrect password" }));
-    await expect(regenerateBackupCodes("tok", "bad")).rejects.toMatchObject({ code: "two_factor_wrong_password" });
+    fetchMock.mockResolvedValueOnce(json(401, { code: "two_factor_incorrect_password", message: "x" }));
+    await expect(regenerateBackupCodes("tok", "bad")).rejects.toMatchObject({ code: "two_factor_incorrect_password" });
   });
 
   it("disable resolves on 204; a 401 is a wrong password; a 409 not-enabled is coded", async () => {
     fetchMock.mockResolvedValueOnce(empty(204));
     await expect(disableTwoFactor("tok", "pw")).resolves.toBeUndefined();
     expect(lastCall().url).toBe(`${API}/auth/two-factor/disable`);
-    fetchMock.mockResolvedValueOnce(json(401, { message: "Incorrect password" }));
-    await expect(disableTwoFactor("tok", "bad")).rejects.toMatchObject({ code: "two_factor_wrong_password" });
+    fetchMock.mockResolvedValueOnce(json(401, { code: "two_factor_incorrect_password", message: "x" }));
+    await expect(disableTwoFactor("tok", "bad")).rejects.toMatchObject({ code: "two_factor_incorrect_password" });
     fetchMock.mockResolvedValueOnce(json(409, { code: "two_factor_not_enabled", message: "x" }));
     await expect(disableTwoFactor("tok", "pw")).rejects.toMatchObject({ code: "two_factor_not_enabled" });
   });
@@ -137,16 +136,24 @@ describe("sign-in second step", () => {
     expect(JSON.parse(init.body as string)).toEqual({ challengeToken: "chal", code: "482017" });
   });
 
-  it("a 401 with the server's expired-step message is the expired code; any other 401 is a wrong code", async () => {
-    fetchMock.mockResolvedValueOnce(json(401, { message: TWO_FACTOR_CHALLENGE_EXPIRED_MESSAGE }));
-    await expect(completeTwoFactorLogin("c", "1")).rejects.toMatchObject({ code: "two_factor_challenge_expired" });
-    fetchMock.mockResolvedValueOnce(json(401, { message: "That code did not work. Check it and try again." }));
+  it("a 401 coded invalid_challenge is the expired code; any other 401 is a wrong code; 429 is locked", async () => {
+    fetchMock.mockResolvedValueOnce(json(401, { code: "two_factor_invalid_challenge", message: "x" }));
+    await expect(completeTwoFactorLogin("c", "1")).rejects.toMatchObject({ code: "two_factor_invalid_challenge" });
+    fetchMock.mockResolvedValueOnce(json(401, { code: "two_factor_invalid_code", message: "x" }));
     await expect(completeTwoFactorLogin("c", "1")).rejects.toMatchObject({ code: "two_factor_invalid_code" });
     fetchMock.mockResolvedValueOnce(json(429, {}));
-    await expect(completeTwoFactorLogin("c", "1")).rejects.toMatchObject({ code: "two_factor_locked" });
+    await expect(completeTwoFactorLogin("c", "1")).rejects.toMatchObject({ code: "two_factor_code_locked" });
   });
 
-  it("the expired-step message matches the server constant", () => {
-    expect(TWO_FACTOR_CHALLENGE_EXPIRED_MESSAGE).toBe("This sign-in step has expired. Sign in again.");
+  it("the message text is not consulted: the old expired-step wording WITHOUT the code is an ordinary wrong code", async () => {
+    fetchMock.mockResolvedValueOnce(json(401, { message: "This sign-in step has expired. Sign in again." }));
+    await expect(completeTwoFactorLogin("c", "1")).rejects.toMatchObject({ code: "two_factor_invalid_code" });
+  });
+
+  it("a 401 on regenerate / disable takes its code from the body, not from the endpoint or the message", async () => {
+    fetchMock.mockResolvedValueOnce(json(401, { code: "two_factor_invalid_code", message: "Incorrect password" }));
+    await expect(regenerateBackupCodes("tok", "x")).rejects.toMatchObject({ code: "two_factor_invalid_code" });
+    fetchMock.mockResolvedValueOnce(json(401, { message: "Incorrect password" }));
+    await expect(disableTwoFactor("tok", "x")).rejects.toMatchObject({ code: "two_factor_incorrect_password" }); // no body code: endpoint default
   });
 });

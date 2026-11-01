@@ -16,6 +16,11 @@
 // email-recovery route and its details are undecided, so there is no link to them.
 import { useState, type FormEvent } from "react";
 import { AuthApiError, completeTwoFactorLogin, type LoginResponse } from "../../api/auth";
+import {
+  TWO_FACTOR_CODE_LOCKED,
+  TWO_FACTOR_INVALID_CHALLENGE,
+  TWO_FACTOR_INVALID_CODE,
+} from "../../api/twoFactorCodes";
 import CopyTag from "./CopyTag";
 import TwoFactorCodeInput from "./TwoFactorCodeInput";
 import "./twoFactor.css";
@@ -54,15 +59,15 @@ export default function TwoFactorCodePrompt({ challengeToken, onSignedIn, onExpi
       setBackup("");
       onSignedIn(result);
     } catch (err) {
-      if (err instanceof AuthApiError && err.code === "two_factor_challenge_expired") {
+      if (err instanceof AuthApiError && err.code === TWO_FACTOR_INVALID_CHALLENGE) {
         setCode("");
         setBackup("");
         onExpired();
         return;
       }
-      if (err instanceof AuthApiError && err.code === "two_factor_invalid_code") {
+      if (err instanceof AuthApiError && err.code === TWO_FACTOR_INVALID_CODE) {
         setError(mode === "code" ? WRONG_APP_CODE : WRONG_BACKUP_CODE);
-      } else if (err instanceof AuthApiError && err.code === "two_factor_locked") {
+      } else if (err instanceof AuthApiError && err.code === TWO_FACTOR_CODE_LOCKED) {
         setError(LOCKED);
       } else {
         setError(err instanceof AuthApiError ? err.message : "Something went wrong signing you in.");

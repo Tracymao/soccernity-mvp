@@ -13,6 +13,12 @@
 // changes again.
 import type { GuardianRelationship } from "../pages/signup/types";
 import { COOKIE_MODE_HEADERS } from "../lib/cookieMode";
+import {
+  TWO_FACTOR_CODE_LOCKED,
+  TWO_FACTOR_INVALID_CHALLENGE,
+  TWO_FACTOR_INVALID_CODE,
+  errorBodyCode,
+} from "./twoFactorCodes";
 
 // No VITE_ env convention existed anywhere in apps/web before these PRs.
 // Falls back to services/api's default local port (services/api/src/main.ts).
@@ -717,15 +723,14 @@ export async function reactivateAccount(
 // On success it issues the session exactly like login (httpOnly refresh cookie, access
 // token in the body).
 //
-// Errors carry a `code` the caller branches on:
-//   two_factor_challenge_expired -- 401 with the server's "This sign-in step has expired"
-//     message (also what a deactivated / suspended account gets mid-flow): go back to sign-in.
+// Errors carry the API's own `code` (api/twoFactorCodes.ts), which is what the caller
+// branches on -- never the message text:
+//   two_factor_invalid_challenge -- 401: the sign-in step expired or is no longer valid (also
+//     what a deactivated / suspended account gets mid-flow): go back to sign-in.
 //   two_factor_invalid_code      -- any other 401. By design the server gives ONE answer
 //     for a wrong code, a replayed code and a spent backup code; this client does not
 //     try to tell them apart.
-//   two_factor_locked            -- 429: five wrong codes lock code entry for that account.
-export const TWO_FACTOR_CHALLENGE_EXPIRED_MESSAGE = "This sign-in step has expired. Sign in again.";
-
+//   two_factor_code_locked       -- 429: five wrong codes lock code entry for that account.
 export async function completeTwoFactorLogin(challengeToken: string, code: string): Promise<LoginResponse> {
   let response: Response;
   try {
@@ -743,17 +748,16 @@ export async function completeTwoFactorLogin(challengeToken: string, code: strin
 
   if (!response.ok) {
     if (response.status === 401) {
-      const body = (await response.json().catch(() => null)) as { message?: unknown } | null;
-      if (body?.message === TWO_FACTOR_CHALLENGE_EXPIRED_MESSAGE) {
+      if ((await errorBodyCode(response)) === TWO_FACTOR_INVALID_CHALLENGE) {
         throw new AuthApiError("This sign-in step has expired.", {
           status: 401,
-          code: "two_factor_challenge_expired",
+          code: TWO_FACTOR_INVALID_CHALLENGE,
         });
       }
-      throw new AuthApiError("That code didn’t work.", { status: 401, code: "two_factor_invalid_code" });
+      throw new AuthApiError("That code didn’t work.", { status: 401, code: TWO_FACTOR_INVALID_CODE });
     }
     if (response.status === 429) {
-      throw new AuthApiError("Too many incorrect codes.", { status: 429, code: "two_factor_locked" });
+      throw new AuthApiError("Too many incorrect codes.", { status: 429, code: TWO_FACTOR_CODE_LOCKED });
     }
     throw new AuthApiError("Something went wrong signing you in.", { status: response.status });
   }

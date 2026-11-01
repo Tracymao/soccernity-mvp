@@ -217,7 +217,7 @@ describe("turning on", () => {
   });
 
   it("a locked account (429) shows the locked message, with no countdown", async () => {
-    vi.mocked(confirmTwoFactorEnrolment).mockRejectedValue(err("two_factor_locked", 429));
+    vi.mocked(confirmTwoFactorEnrolment).mockRejectedValue(err("two_factor_code_locked", 429));
     await toCode();
     typeCode("111111");
     fireEvent.click(screen.getByRole("button", { name: "Turn on two-factor authentication" }));
@@ -227,7 +227,7 @@ describe("turning on", () => {
   });
 
   it("an expired setup (400) goes back to the status with a plain 'start again' note", async () => {
-    vi.mocked(confirmTwoFactorEnrolment).mockRejectedValue(err("two_factor_no_pending", 400));
+    vi.mocked(confirmTwoFactorEnrolment).mockRejectedValue(err("two_factor_no_pending_enrolment", 400));
     await toCode();
     typeCode("111111");
     fireEvent.click(screen.getByRole("button", { name: "Turn on two-factor authentication" }));
@@ -280,7 +280,7 @@ describe("regenerating backup codes", () => {
   }
 
   it("asks for the password; a wrong one shows 'That password is incorrect.' and clears the field", async () => {
-    vi.mocked(regenerateBackupCodes).mockRejectedValue(err("two_factor_wrong_password", 401));
+    vi.mocked(regenerateBackupCodes).mockRejectedValue(err("two_factor_incorrect_password", 401));
     await toRegenerate();
     const field = screen.getByLabelText("Password") as HTMLInputElement;
     fireEvent.change(field, { target: { value: "wrong" } });
@@ -330,7 +330,7 @@ describe("turning off", () => {
   });
 
   it("a wrong password shows 'That password is incorrect.' and leaves two-factor on", async () => {
-    vi.mocked(disableTwoFactor).mockRejectedValue(err("two_factor_wrong_password", 401));
+    vi.mocked(disableTwoFactor).mockRejectedValue(err("two_factor_incorrect_password", 401));
     await toTurnOff();
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "nope" } });
     fireEvent.click(screen.getByRole("button", { name: "Turn off two-factor authentication" }));

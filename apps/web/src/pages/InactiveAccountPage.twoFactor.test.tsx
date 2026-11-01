@@ -87,7 +87,7 @@ describe("Inactive Account, two-factor on", () => {
   it("an expired challenge goes back to the choices with a plain note", async () => {
     vi.mocked(reactivateAccount).mockResolvedValue(CHALLENGE);
     vi.mocked(completeTwoFactorLogin).mockRejectedValue(
-      new AuthApiError("expired", { status: 401, code: "two_factor_challenge_expired" }),
+      new AuthApiError("expired", { status: 401, code: "two_factor_invalid_challenge" }),
     );
     renderPage();
     fireEvent.click(screen.getByRole("button", { name: "Activate account" }));
