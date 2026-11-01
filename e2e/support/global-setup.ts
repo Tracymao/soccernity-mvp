@@ -36,6 +36,20 @@ function readRootEnv(): Record<string, string> {
   return out;
 }
 
+// Each app runs the vite it depends on, resolved from its own directory. Since B-269 (vite 8) vite is
+// installed under apps/web and apps/admin, not at the repo root, and npm may lay node_modules out either
+// way, so nothing here may assume a root copy. 'vite/bin/vite.js' is not in vite's package exports but
+// 'vite/package.json' is, so resolve that and follow its bin entry.
+function resolveAppVite(app: 'web' | 'admin'): string {
+  const appDir = path.join(REPO, 'apps', app);
+  const requireFromApp = createRequire(path.join(appDir, 'package.json'));
+  const pkgPath = requireFromApp.resolve('vite/package.json');
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) as { bin?: string | Record<string, string> };
+  const bin = typeof pkg.bin === 'string' ? pkg.bin : pkg.bin?.vite;
+  if (!bin) throw new Error(`vite (resolved for apps/${app} at ${pkgPath}) declares no bin entry`);
+  return path.join(path.dirname(pkgPath), bin);
+}
+
 function waitForPort(port: number, label: string, timeoutMs = 120_000): Promise<void> {
   const start = Date.now();
   return new Promise((resolve, reject) => {
@@ -139,11 +153,11 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   await waitForApiHealth();
 
   // --- 5. Real frontends ---------------------------------------------------
-  const vite = path.join(REPO, 'node_modules', 'vite', 'bin', 'vite.js');
   for (const [app, port] of [
     ['web', PORTS.web],
     ['admin', PORTS.admin],
   ] as const) {
+    const vite = resolveAppVite(app);
     const log = fs.openSync(path.join(RUN_DIR, `${app}.log`), 'w');
     const child = spawn('node', [vite, '--port', String(port), '--strictPort', '--host', '127.0.0.1'], {
       cwd: path.join(REPO, 'apps', app),
