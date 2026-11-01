@@ -1,0 +1,631 @@
+# Soccernity — incident-response and breach-notification plan (DRAFT v0.1)
+
+> **DRAFT FOR COUNSEL REVIEW — NOT APPROVED, NOT LEGAL ADVICE.**
+> Produced under build-register row **B-253** (Decision Log **#426**, with **#438** and **#432** / **#433** / **#439** as context),
+> as a first-pass draft by the `safeguarding-drafter` role. Per `CLAUDE.md` non-negotiable #2 it is never approved by being
+> written. Nothing here is a legal conclusion, a decision of the founder, or a statement that counsel agrees to anything.
+> **Every section below repeats this marking on purpose**, so a section copied out on its own still carries it.
+> Platform status when written (2026-10-31): **not live**. No Render, Neon, Upstash, Postmark, Sentry or R2 account exists
+> yet (`docs/deployment.md`, B-267), so every "tool" below is a tool *in the code or a document*, not one that has been
+> run against a live system.
+
+**Marker used in this file.** `[PLACEHOLDER: …]` = a name, number or address the founder must fill in. `[UNVERIFIED — for counsel]`
+= a legal statement I could not confirm from a primary source. `[OPEN]` = a question this draft deliberately does not answer.
+
+---
+
+## 0. How this draft was made, and what it is not
+
+*Draft for counsel review — not approved, not legal advice.*
+
+**Read first** (as the brief required): register rows B-253, B-263, B-267; Decision Log #426 and #438; the legal draft's
+Part C row 11 and Privacy Policy §11; the DPIA draft (R10, R11, R12 and §4 rows); `docs/dob-encryption-rollback.md`;
+`docs/admin-two-factor-recovery.md`; `services/api/src/validate-runtime-env.ts`; plus the schema, the token stores, the
+rate-limiters, `instrument.ts` and `docs/deployment.md` to check what the platform really has.
+
+**What the existing documents already say about this topic** (so counsel sees the starting point, not a blank page):
+
+- Privacy Policy §11 (legal draft) says only: *"[PROPOSAL — technical standard TBD] We commit to encryption at rest, and to a
+  breach notification procedure that separately notifies a minor's guardian as well as the affected user."* Part C row 11 and
+  row 21 record this as open with counsel.
+- DPIA R10 ("Breach impact concentrated on children") records that a breach of `User` exposes email, phone, display name and
+  `isMinor` — a flag that **marks which records are children** — and asks counsel whether guardians must be told, not only users.
+  DPIA §4 lists "a breach-response plan naming who notifies guardians" as a **[PROPOSAL]** with built-today = **No**.
+- Decision Log #426 says the plan is "required before any real minor's data is processed" — a **recommendation, not a decision**.
+- Decision Log #438 / #432 (B-263): whether a guardian is told when a minor's sign-in is locked is **OPEN under counsel** and is
+  decided together with this plan. See §12.
+
+**Method for the legal timelines (§6).** Timelines were checked with web search on 2026-10-31 and, where possible, read from the
+primary text. What was and was not verified is stated per row. The ICO's own website returned server errors (HTTP 503 and
+timeouts) on every attempt to read its guide pages directly, so UK statements rest on the statutory text on legislation.gov.uk
+as reported by search and on search-result summaries of the ICO guide, not on a read of the ICO page itself. Nigerian
+statements rest on a **read of the official NDPC GAID 2025 PDF**, which quotes Section 40 of the Act; the Act's own text could
+not be opened. Counsel should treat every row as a pointer to check, not as confirmed law.
+
+**Not covered.** The US and the EU are listed as questions only (§6.3, §6.4), as instructed. No jurisdiction's law is resolved
+for a service whose reach is not yet fixed (Decision Log #4 is the scope question; the legal draft's current baseline is UK GDPR
+plus Nigeria's NDPA 2023, with the US and EU as live questions).
+
+---
+
+## 1. What the platform holds (so severity can be tied to it)
+
+*Draft for counsel review — not approved, not legal advice.*
+
+Read from `services/api/prisma/schema.prisma` and the code on 2026-10-31. "At rest" below means what the **application** does;
+whether Neon / Upstash / R2 also encrypt storage is a provider matter that is **not verified** (no account exists).
+
+| Data | Where | Protection in the code | What a leak of it alone means |
+|---|---|---|---|
+| Date of birth | Postgres `User.dateOfBirth` | AES-256-GCM ciphertext (`v<N>:<iv>:<tag>:<ct>`) under `DOB_ENCRYPTION_KEY` (Render env var) | Ciphertext without the key is unreadable. **DB + key together = every date of birth.** |
+| Authenticator-app (TOTP) secrets, users and admins | Postgres `User.totpSecretEncrypted`, `AdminUser.totpSecretEncrypted` | Same cipher, **same key** as date of birth | Same as above; with the key, an attacker can generate valid second-factor codes. Backup codes are separate argon2id hashes. |
+| Email, phone, display name, username, `isMinor`, `isUnder16`, `accountStatus`, country fields, bio, preferred club | Postgres `User` | **Plain columns** (no application-level encryption) | Identifies accounts; **`isMinor` / `isUnder16` make child accounts filterable** (DPIA R10). |
+| Password | Postgres `User.passwordHash`, `AdminUser.passwordHash` | argon2id | Offline guessing only; strength depends on the password. |
+| Guardian name, email, relationship; consent status, declined/withdrawn/expired state; consent-screen version; device type; declared country | Postgres `Guardian`, later `ConsentAuditRecord` | Plain columns | Names an adult tied to a child's account — a third party's data, held for a child's sake. |
+| Guardian consent token and withdrawal token | Postgres `Guardian.consentToken`, `withdrawalToken` | **Stored as issued** (a random UUID / token), not hashed (hashing not seen in the code) | A DB read yields **live links** that can approve or withdraw a minor's consent until they expire or are used (default 72 hours for the consent link). |
+| Direct messages | Postgres `Message.contentText` | **Plain text** (no application-level encryption); under-16s are excluded from DMs, adults cannot start a thread with a minor | Private conversations, including those between minors. |
+| Posts, comments, Bants posts, reports, Contact Us enquiries (name, email, message) | Postgres | Plain columns | Content; reports and enquiries may contain safeguarding disclosures. |
+| Photos and videos | Cloudflare R2: `private-media/` (waiting, held, rejected) and `post-media/` (approved) | Private prefix is private **only if** the public address serves `post-media/` alone — **not verified against a real bucket (B-265)** | Images of children; rejected files are kept private and never deleted (B-206, open under counsel). |
+| Refresh tokens, password-reset tokens | Redis | Stored as SHA-256 hashes | Not directly replayable from a Redis dump. Email-verification tokens: hashing **not confirmed**. |
+| Two-factor enrolment in progress | Redis, 10 minutes | Encrypted with the same key | Short-lived. |
+| Rate-limit counters | Redis (and per-instance memory) | Email and IP are **hashed** in the keys | No raw email or IP. |
+| IP addresses | **Not stored** (read in memory for country derivation and rate-limit keys, then dropped) | n/a | Nothing to leak, except what a provider's own logs hold (not verified). |
+| Card data | **Never reaches the server** (Stripe Elements → Stripe); only a PaymentIntent reference id is stored | n/a | No card numbers. |
+| Admin audit trail | Postgres `AdminActionLog` | Plain | Evidence, and itself sensitive: it records that an admin looked at a date of birth. |
+
+Facts a responder needs, all read from the repo: there is **no endpoint to read `AdminActionLog`** (the module has "no
+controller, no read endpoint"), so audit review today means a database query; **no bulk-email or broadcast tool exists** (email
+goes out per event through `RegistrationEmailService` templates); Sentry is **inactive** until a real `SENTRY_DSN` is set, and
+today only two code paths report to it (the global and auth rate limiters failing open).
+
+---
+
+## 2. What counts as an incident
+
+*Draft for counsel review — not approved, not legal advice.*
+
+**Incident** = any event that puts the confidentiality, integrity or availability of Soccernity data or systems at risk, or that
+harms or could harm a child through the platform. **Personal data breach** (the legal term, UK GDPR Art. 4(12) and the NDPA
+equivalent — `[UNVERIFIED — for counsel]` that the two definitions match) = an incident that leads to accidental or unlawful
+destruction, loss, alteration, unauthorised disclosure of, or access to, personal data. Every personal data breach is an
+incident; not every incident is a breach (an outage, a content-moderation emergency).
+
+**Proposed severity classes.** These are proposals for the founder and counsel to adjust; the classes decide *speed and who is
+woken*, not whether a legal duty exists (that is a separate assessment, §5 step 4).
+
+| Class | Meaning | Examples tied to this platform |
+|---|---|---|
+| **S1 — Critical** | Confirmed or credible exposure of data that identifies children, or loss of control of a secret that protects it; or a child is in immediate danger. | A Postgres dump or backup leaves our control; **`DOB_ENCRYPTION_KEY` leaks** (alone it exposes nothing, but with any DB copy it exposes every date of birth and every two-factor secret); `JWT_SECRET` or `ADMIN_JWT_SECRET` leaks (tokens can be forged — admin forgery would reach the moderation queue and the date-of-birth read); an attacker holds a **superadmin** session; the private media prefix is publicly readable and holds images of children; guardian consent or withdrawal links exposed in bulk; messages exposed. |
+| **S2 — High** | Exposure or misuse limited to a small set of accounts, or a control failed in a way that *could* have exposed S1 data. | One admin account compromised; a suspended/closed account still reachable; an admin looked at a date of birth without a reason (audit anomaly); Redis exposed (refresh tokens are hashed, but enrolment secrets and verification tokens may be at risk); a processor tells us of its own breach; a rate limiter fails open during an attack. |
+| **S3 — Moderate** | Contained, low-sensitivity, or no personal data exposed; availability loss. | A single user's account taken over by a guessed password; a misdirected email (one guardian link sent to the wrong address); an outage of Neon / Redis / Render that blocks sign-in (Redis outage blocks sign-in, refresh, reset and verification — Decision Log #439 — and is *not* a breach). |
+| **S4 — Low / near miss** | No exposure; logged for learning. | A failed attack stopped by a limiter; a dependency advisory with no reachable path; a misconfiguration caught before deploy (the production boot checks refusing a placeholder secret are the model). |
+
+**Child-safety incidents that are not data breaches** (a concern about a child's welfare disclosed through a report, a contact
+enquiry or a message) are **outside this plan** and belong in the safeguarding / moderation process (Build Plan Section 8.4,
+the escalation trail on `Report`). They are listed so a responder who finds one mid-incident knows to hand it over, not to fold it
+into the breach clock. `[OPEN]` — counsel: is a separate safeguarding-incident plan needed (§12, Q14)?
+
+**Reporting channels into the plan (what exists today):** the Sentry alerts on the `rate_limiter` tag (inactive until the DSN is
+real; launch-gate check B-267 (c)); a processor's own breach notice; a user, guardian or researcher writing to
+`support@soccernity.com`; a moderator or admin noticing an anomaly; a failed boot with a refusal message in the Render log.
+There is no security.txt or monitored vulnerability-disclosure address today `[OPEN — founder]`.
+
+---
+
+## 3. Who decides and who is told
+
+*Draft for counsel review — not approved, not legal advice.*
+
+Roles are **proposals**. The platform has one founder and no named staff in the repository; the roles below may all be one
+person at launch, which is itself a risk (§12, Q12).
+
+| Role | Proposed duty | Named person |
+|---|---|---|
+| **Incident lead** | Declares the incident, owns the timeline and the log, decides S-class and containment. | `[PLACEHOLDER: founder name, phone, backup contact]` |
+| **Data-protection contact** (a DPO if one is appointed; otherwise this role) | Decides, with counsel, whether the breach is notifiable and to whom; signs the regulator filings. | `[PLACEHOLDER]` — `[OPEN]` whether a DPO is required (Q13) |
+| **Safeguarding lead** | Decides how and when guardians and young people are told; owns the wording for minors; receives any child-welfare disclosure found during the incident. | `[PLACEHOLDER]` |
+| **Engineering responder** | Runs containment (§4); preserves evidence (§8). | `[PLACEHOLDER]` |
+| **Legal counsel** | Advises on notification duties and wording; privileged channel for the assessment. | `[PLACEHOLDER: firm, named solicitor, 24h number]` |
+| **Communications** | Sends approved notices only; no free-form statements. | `[PLACEHOLDER]` (may be the incident lead) |
+
+**Who must be told, in outline** (detail in §6 and §7): the regulator(s); affected users; the guardians of affected minors;
+processors whose systems are involved; insurers / law enforcement `[OPEN — Q11]`.
+
+**Decision rule proposal:** the incident lead may *contain* alone and at once; *notify externally* only after the data-protection
+contact has recorded the assessment (§5 step 4) — but if that cannot be done inside the clock, the lead files an initial
+notification with what is known (§6 allows phased reports — UK; Nigeria `[UNVERIFIED]`) rather than letting the clock run out.
+
+---
+
+## 4. Containment tools the platform really has today
+
+*Draft for counsel review — not approved, not legal advice.* Read from the code and docs; **none has been run against a live
+system.** Where a tool does not exist, §4.9 says so.
+
+### 4.1 End one user's sessions
+- `TokenService.revokeAllSessionsForUser(userId)` — deletes the user's refresh tokens from Redis. It runs on: password change,
+  password reset, deactivate, delete, an **admin suspend or delete** of the account (`PATCH /admin/users/:id`, moderator or
+  superadmin), and `POST /auth/logout` with `allSessions`.
+- **Limit:** an already-issued access token stays valid until it expires (15 minutes by default). Ending a session is therefore
+  "within about 15 minutes", not instant. There is no per-request database check for ordinary users.
+
+### 4.2 End one admin's sessions
+- `AdminTokenService.revokeAllSessionsForAdmin`. Runs on: admin password change, **deactivating the admin**
+  (`PATCH /admin/staff/:id/status`, superadmin; refused for the last active superadmin), and the two-factor peer reset.
+- With `ADMIN_2FA_ENFORCED = "true"`, an admin without two-factor is refused at their next **refresh** and all their sessions end
+  (PR #565). Access tokens already issued last up to their lifetime (15 minutes default; `ADMIN_JWT_*_TTL_*` env vars).
+
+### 4.3 Reset an admin's two-factor
+- `POST /admin/staff/:id/two-factor/reset` (superadmin, never your own; ends the target's sessions; audit row
+  `admin_user.two_factor_reset` in the same transaction; 409 if nothing to reset).
+- **Last superadmin:** the database recovery in `docs/admin-two-factor-recovery.md` (Neon SQL editor; the SQL block is
+  test-proven but never run on a real Neon database). It does **not** end Redis sessions — its Step 3 does that by hand
+  (`SMEMBERS admin:refresh:admin:<id>`, then `DEL`).
+- Users: they turn two-factor off with their password; there is no admin reset for a *user's* two-factor except clearing the
+  three `totp*` columns and the `UserBackupCode` rows by hand (`docs/dob-encryption-rollback.md`).
+
+### 4.4 Rotate the signing secrets (kill every session at once)
+- Changing `JWT_SECRET` invalidates every **user** access token and changing `ADMIN_JWT_SECRET` every **admin** access token on the
+  next deploy (they sign the tokens; verified from `validate-runtime-env.ts` and the token services — the two must differ, and
+  the app refuses to boot otherwise). Refresh tokens are **opaque and held in Redis**, so they are *not* affected by a JWT secret
+  change; to end all refresh sessions the responder must delete the `auth:refresh:*` / `admin:refresh:*` keys in Upstash.
+  `[UNVERIFIED]` — there is no written runbook or tested script for a global sign-out; this is inferred from the code.
+- Effect on users: everyone is signed out; guardians' links are unaffected (separate tokens).
+
+### 4.5 Rotate `DOB_ENCRYPTION_KEY`
+- Procedure and re-encrypt script: `docs/dob-encryption-rollback.md` ("Rotating the key"). Two live keys during rotation
+  (`DOB_ENCRYPTION_KEY`, `DOB_ENCRYPTION_KEY_VERSION`, `DOB_ENCRYPTION_KEY_PREVIOUS`); a dry run, a real run and a verification
+  pass; rotates dates of birth **and** both two-factor secret columns together; no automatic undo.
+- **Honest limits:** never run against a real Render or Neon account (B-267 (k) asks for a rehearsal); a rotation does **not**
+  help if an attacker already copied both the database and the old key (they hold the data in the clear); it helps only against
+  *future* copies and against a key that leaked *without* a database copy. If the key leaked and a DB copy may exist, treat as
+  S1 and notify (§6) — rotation is containment, not a cure.
+- The boot check (B-252) refuses to start in production on an invalid key set; it cannot tell a wrong key from a right one.
+
+### 4.6 Throttles and alerts
+- Global limiter (user 120/min, anonymous 600/min per IP, writes 30/min, uploads 10/10 min), sign-in limits (5 failed attempts
+  per 15 minutes per account-and-IP pair; 20 per 24 hours per account; per-IP ceiling), admin login 5 per 15 minutes per IP,
+  guardian-withdrawal 5 per 15 minutes. All numbers are environment variables in `render.yaml` and can be tightened by redeploy.
+- **Fail-open with Sentry report** when Redis is down (`rate_limiter=global` / `rate_limiter=auth`). **No alert reaches anyone
+  until `SENTRY_DSN` is real and an alert rule exists (B-267 (c)).** The admin login is *not* fail-closed (Decision Log #433).
+- Accounts: a moderator can suspend (`suspended` — not reversible by the user) or delete a user (`PATCH /admin/users/:id`);
+  a held account is handled by `AccountHold`.
+
+### 4.7 Switch off a feature
+- Uploads: with no object store configured, upload routes answer 503 and nothing else breaks; video uploads answer 503 when
+  ffmpeg is absent. Removing the `S3_*` / `REKOGNITION_*` values and redeploying is the existing off switch for media.
+- Email: an unusable `WEB_APP_BASE_URL` stops verification, guardian-consent and withdrawal emails from being sent at all.
+- There is **no maintenance mode, no read-only mode and no per-feature kill switch** in the code. Taking the API down means
+  suspending the Render service `[PLACEHOLDER: who holds the Render login]`.
+
+### 4.8 Processor contact routes (to be filled on account creation)
+Contact routes below are **placeholders** — no account exists, so nothing here was tested, and the vendors' current security /
+breach contacts were not looked up. Record the account owner, the support tier and the security-contact route when each account is
+opened.
+
+| Processor | Holds | Contact route |
+|---|---|---|
+| Render (API host, Frankfurt) | Runtime, env vars (all secrets), logs | `[PLACEHOLDER: dashboard support / security contact; plan]` |
+| Neon (Postgres, EU) | The whole database, backups, branches | `[PLACEHOLDER: support route; point-in-time restore window]` |
+| Upstash (Redis, EU, free plan) | Refresh tokens (hashed), reset / verification tokens, counters | `[PLACEHOLDER]` — free plan has no SLA (Decision Log #439) |
+| Postmark (email) | Recipient addresses and message bodies in transit / activity logs | `[PLACEHOLDER]` |
+| Sentry | Error events (today: none) | `[PLACEHOLDER]` — DSN not real; scrubbing of request bodies is a DPIA R11 proposal, not done |
+| Cloudflare R2 (media; also edge if added, Decision Log #424) | Images and videos of children | `[PLACEHOLDER]` |
+| Amazon Web Services (Rekognition image check) | Frames / images sent for classification | `[PLACEHOLDER]` — opt-out of AI-services data use is a founder launch step |
+| Stripe (card verification) | Card data and the PaymentIntent for under-13 US guardians | `[PLACEHOLDER]` |
+| MaxMind (GeoLite2 download only) | No user data (local database) | n/a |
+| GitHub | Source code, CI; the repository is public (Decision Log #441 (e)) | `[PLACEHOLDER]` — a secret ever committed is treated as exposed and must be rotated |
+
+### 4.9 What the platform does NOT have (gaps a responder must know on day one)
+- No tool to **notify all guardians**, all users or a subset (no bulk-send; guardian emails exist only as per-event templates).
+- No **read endpoint for the audit log**; no **log of who read what** beyond `user.dob_viewed` and the admin actions listed in
+  `admin-action-log.constants.ts`. Request logs are whatever Render keeps `[UNVERIFIED]`.
+- No **per-user data-access log**, so "which accounts' data did the attacker read" may be unanswerable from our own records.
+- No **global sign-out command**, no **maintenance mode**, no **IP block list**.
+- No **secret-scanning in production** beyond GitHub's repository settings (founder-reported as on; Decision Log #441 (d)).
+- No **status page** or user-facing incident channel.
+- **Sentry, Postmark, Upstash alerting, Render, Neon: none live.** This plan cannot be exercised until they are.
+
+---
+
+## 5. The response process
+
+*Draft for counsel review — not approved, not legal advice.* Steps are in order; steps 1–3 run in the first hour. **The legal
+clock (§6) starts when we become "aware" — see §6.1 for the open question of what that means.** Record the exact time of
+awareness in step 1.
+
+1. **Detect and record.** Open the incident log (§9.1). Write down: who found it, how, the exact date and time (UTC and London)
+   of awareness, and the first facts. Do not delete anything.
+2. **Triage.** Incident lead assigns a class (§2) and wakes the roles in §3 (S1: all roles at once; S2: lead, safeguarding lead,
+   engineer, counsel; S3/S4: lead and engineer).
+3. **Contain.** Use §4 in this order, stopping when the exposure stops: end the affected sessions; deactivate the affected admin;
+   rotate the exposed secret; tighten the limiter; turn the feature off. **Preserve evidence first** (§8) wherever a
+   containment step would destroy it (a restart clears logs; a Neon restore replaces data).
+4. **Assess.** Data-protection contact with counsel records, in writing: what data, whose, how many, including how many are
+   **minors** and **under-16**; what the cause was; whether the data was protected (the encrypted date of birth is a mitigating
+   fact **only if the key was not also exposed**); likelihood and severity of harm; whether notification to a regulator is
+   required; whether to individuals and guardians (§7). **If the facts are incomplete at hour 48, prepare the initial notice
+   anyway** (§6.1: phased reporting).
+5. **Notify** per §6 and §7, using the templates in §10, only after step 4 is recorded or the clock forces an initial notice.
+6. **Eradicate and recover.** Fix the cause; rotate every secret the attacker could have seen (not only the one found);
+   redeploy; confirm via the checks in the relevant document (`docs/dob-encryption-rollback.md`,
+   `docs/admin-two-factor-recovery.md`); watch for return.
+7. **Review** (§9.2) within 14 days `[PROPOSAL — counsel and founder to set the period]`.
+
+Keep an **internal record of every breach** whether or not it is reported (the UK requires one — Art. 33(5)
+`[UNVERIFIED — not read in full]`; Nigeria `[UNVERIFIED]`).
+
+---
+
+## 6. Notification timelines and sources
+
+*Draft for counsel review — not approved, not legal advice.* Checked 2026-10-31. **A timeline is only as good as its source;
+each row states what was and was not read.**
+
+### 6.1 United Kingdom — Information Commissioner (UK GDPR Arts. 33 and 34, Data Protection Act 2018)
+
+| Item | Statement | Source and what was verified |
+|---|---|---|
+| **To the regulator — clock** | "Without undue delay and, where feasible, not later than **72 hours** after having become aware of it." | UK GDPR Art. 33(1): <https://www.legislation.gov.uk/eur/2016/679/article/33>. **Verified by search-result summary of the statute text; the full page was not read by me.** The ICO's guide <https://ico.org.uk/for-organisations/report-a-breach/personal-data-breach/personal-data-breaches-a-guide/> states the same (per search summary); **the ICO page itself could not be opened (HTTP 503 / timeout, six attempts).** |
+| **Trigger** | Notification is **not** required if the breach is "unlikely to result in a risk to the rights and freedoms of natural persons". | Art. 33(1), same source and caveat. |
+| **Late filing** | If later than 72 hours, it "shall be accompanied by reasons for the delay". | Art. 33(1), same. |
+| **Phased reporting** | Information may be provided "in phases without undue further delay" when it cannot all be given at once. | Art. 33(4), per search summary. |
+| **Minimum contents** | Nature of the breach, including (where possible) categories and approximate numbers of data subjects and records; name and contact details of the data-protection contact; likely consequences; measures taken or proposed. | Art. 33(3), per search summary. `[UNVERIFIED — exact wording and any ICO form fields; for counsel]` |
+| **Processor → controller** | A processor notifies the controller "without undue delay" after becoming aware. | Art. 33(2), per search summary. |
+| **Internal record** | Controller documents every breach, its effects and the remedial action. | Art. 33(5). `[UNVERIFIED — not seen in the search results; this is from general knowledge and is the one row to check first]`. |
+| **To individuals — trigger and timing** | Where the breach "is likely to result in a **high risk** to the rights and freedoms of natural persons", communicate it to the data subject "**without undue delay**". | UK GDPR Art. 34(1): <https://www.legislation.gov.uk/eur/2016/679/article/34>. Per search summary of the statute. |
+| **To individuals — contents** | "In clear and plain language" the nature of the breach, plus at least the contact point, likely consequences and measures (the Art. 33(3)(b)–(d) items). | Art. 34(2), per search summary. |
+| **Exceptions to telling individuals** | (a) the data was protected, e.g. encrypted so as to be unintelligible; (b) later measures mean the high risk is no longer likely; (c) disproportionate effort, in which case a public communication. The regulator may require notification or decide an exception applies. | Art. 34(3)–(4), per search summary. **Note for counsel:** exception (a) is why *which key was exposed* (§4.5) decides whether a leaked database copy is "unintelligible". |
+| **How to report** | ICO online reporting form; ICO helpline for urgent matters. | `[UNVERIFIED — ICO page unreadable; the current form address and any out-of-hours number to be confirmed by counsel]` |
+| **Regulator's name** | The search result shows the current statute text naming "the Commission" where older text names "the Commissioner" (following the Data (Use and Access) Act 2025). | `[UNVERIFIED — for counsel]`: confirm the regulator's current legal name, whether the ICO is still the filing route, and any change to the breach rules from that Act. The Act is reported to have changed the **PECR** (electronic communications) window from 24 to 72 hours; that is not the UK GDPR rule above and applies to communications providers (<https://www.legislation.gov.uk/ukpga/2025/18/part/5/chapter/2/enacted>). |
+
+**What "aware" means** is not stated in the statute text I saw. The ICO guide (per search summaries) explains that a controller is
+"aware" when it has a reasonable degree of certainty that a security incident has compromised personal data; **I could not read
+that wording, so it is unverified** `[UNVERIFIED — for counsel]`. This matters: the proposed rule in §5 is to *log the time of
+first credible report* and let counsel decide when the clock started.
+
+### 6.2 Nigeria — Nigeria Data Protection Commission (NDPA 2023, s. 40; GAID 2025)
+
+| Item | Statement | Source and what was verified |
+|---|---|---|
+| **To the Commission — clock** | A controller "shall, within **72 hours** of becoming aware of a breach which is likely to result in a risk to the rights and freedoms of individuals, notify the Commission of the breach and, where feasible, describe the nature of the personal data breach including the categories and approximate numbers of data subjects and personal data records concerned." | **Read in the official NDPC document**: Nigeria Data Protection Act General Application and Implementation Directive (GAID) 2025 (reference NDPC/NDP ACT-GAID/01/2025, dated 19 December 2024 in the text, hosted at <https://ndpc.gov.ng/wp-content/uploads/2025/07/NDP-ACT-GAID-2025-MARCH-20TH.pdf>), Article 33(1), which **quotes NDPA s. 40(2)**. Confirmed again in the controller-duties list (items "p" and "q"). **The Act's own text was not opened**; the GAID's quotation is the evidence. |
+| **When a breach is "high risk"** | GAID Art. 33(2): where, given the nature of the breach, the data and "the probability of accessing other personal data of the data subject", the person "may become a victim of fraud, identity theft or exposure of sensitive personal data". | GAID Art. 33(2), read. |
+| **To individuals — timing** | GAID Art. 33(3): a controller "shall notify affected data subjects **immediately** after becoming aware of the breach in order to ensure that data subjects are not unlawfully targeted as a result of the breach". The controller-duties list says: notify a data subject immediately after becoming aware of a personal data breach "that may pose high risk to his or her privacy". | GAID Art. 33(3) and the duties list, read. **The two formulations differ in threshold** (Art. 33(3) reads as all affected data subjects; the duties list says high risk) — `[OPEN for counsel]`. |
+| **Duty of care to authorities** | Notwithstanding the 72 hours, a controller or processor should give **immediate** information to all relevant authorities, including the Commission, "if such immediate information may help in containing imminent data breaches on a national scale" or where containment may be needed "at national, sectoral or at an individual level or where it may affect members of the general public". | GAID Art. 33(4), read. |
+| **Contents of the notice to the Commission** | At least: (a) circumstances of the loss or unauthorised access / disclosure; (b) date or period; (c) the personal information involved; (d) an assessment of the risk of harm; (e) an estimate of individuals at real risk of significant harm; (f) steps taken to reduce harm; (g) steps taken to notify individuals; (h) name and contact details of a person who can answer the Commission's questions. | GAID Art. 33(5), read. |
+| **Processor → controller** | A third-party summary says a processor must act on becoming aware, and that the 72-hour rule is for controllers. | `[UNVERIFIED — third-party summaries (Mondaq, Afriwise) only; s. 40(1) not read]`. |
+| **How to report** | The NDPC runs an online "Report a Breach" portal. | <https://services.ndpc.gov.ng/breach/> — the page opened but showed a heading only; **no form, timeline or required fields were visible**. `[UNVERIFIED — for counsel]` |
+| **Children** | The GAID requires consent for processing a child's data and lists "Child Online Protection" and a "Breach of Child's Privacy" item; **no children-specific breach-notification rule was found** in the text searched. | GAID, read in part. `[UNVERIFIED]` — counsel to check. |
+| **Regulator publicity** | A summary says the Commission may make a public communication where it considers a controller's notice to individuals inadequate (s. 40(5)). | `[UNVERIFIED — KPMG review summary; Act not read]`. |
+
+**Note:** the 72-hour clock exists in **both** regimes, but the *threshold* differs in wording ("risk" for the regulator in both;
+"high risk" for individuals in the UK, "immediately" in Nigeria's Art. 33(3)). A breach affecting both UK and Nigerian users could
+require two filings on the same clock, with different content lists. `[OPEN]` — Q1, Q2.
+
+### 6.3 United States — questions for counsel (not resolved here)
+
+The platform's reach in the US is through under-13 card verification (Stripe, US guardians) and any US user. **Do not treat any
+statement here as an answer.**
+
+- **Q-US1.** Which state data-breach notification laws apply to a service with US users, and do any apply to a **date of birth
+  + email + name** combination? (State laws differ on what counts as "personal information", the trigger, the deadline, whether
+  a regulator or Attorney General is told, and whether a child's data is treated differently.)
+- **Q-US2.** Is Soccernity a "website or online service directed to children" or does it have "actual knowledge" of under-13 US
+  users for **COPPA** (the card-charge verification exists because of this question — Decision Log #4 stays open)? If so,
+  does COPPA itself impose any breach-related obligation, and does the FTC expect a notice?
+- **Q-US3.** Does any federal sector law apply (none identified)? Does the FTC's **Health Breach Notification Rule** or the
+  **FTC Act** unfair-practices theory matter for a data incident, and is a notice to the FTC expected?
+- **Q-US4.** What is the position on **card data**: only a Stripe reference is held. Confirm there is no PCI-DSS incident duty
+  beyond Stripe's own (Soccernity's PCI-DSS SAQ A status is itself a launch follow-up for the founder).
+
+### 6.4 European Union — questions for counsel (not resolved here)
+
+The legal draft says there is **no EU representative** and EU users are "incidental" (DPIA R15, Decision Log #4). **Do not treat
+any statement here as an answer.**
+
+- **Q-EU1.** If EU users are targeted or monitored, **EU GDPR Art. 27** (representative) and Art. 33 apply in parallel. Which
+  EU supervisory authority is the one to notify when there is **no EU establishment** (no one-stop-shop)? Possibly each
+  authority where affected users live — counsel to confirm.
+- **Q-EU2.** The platform hosts in the **EU (Frankfurt)** with EU-region processors (Decision Log #391). Does hosting alone
+  create any EU notification duty for UK/Nigerian users' data? Do the processors' own EU obligations (a processor's duty to tell
+  the controller "without undue delay") change what we learn and when?
+- **Q-EU3.** Are the 72-hour and "high-risk-to-individuals" tests the same in the EU as in UK GDPR for a **child's** data, and
+  is there any rule on **age-of-digital-consent** that changes whom we tell (child vs. holder of parental responsibility)?
+- **Q-EU4.** Do EU member states add anything (for example, additional notice to a parent) that would matter if an EU child is
+  affected?
+
+---
+
+## 7. Telling guardians, and telling young people
+
+*Draft for counsel review — not approved, not legal advice.* **Everything in this section is a proposal for counsel.** The law
+does not (so far as verified) say *who* is told when the data subject is a child — see Q5.
+
+### 7.1 Principles proposed
+- **A guardian is told as well as the young person**, because the Privacy Policy draft §11 already promises it ("separately
+  notifies a minor's guardian as well as the affected user"), and DPIA R10 asks counsel to confirm the duty. If counsel decides
+  this promise should be narrowed or dropped, that edit belongs to the legal-copy track, not this plan.
+- **Whom the platform can reach:** the *minor's own email* (the account email, possibly a child's own address or a
+  guardian's) and the *guardian's email* on the `Guardian` row. A minor in `restricted_pending` has a guardian row with an email
+  but has not necessarily been approved. An account that turned 18 keeps a `Guardian` row (consent history) but the guardian is
+  no longer the right person — `isMinor` must be read **at the time of the incident**, not from an old flag (the age sweep runs
+  daily, so the flag can lag by about 24 hours).
+- **Never include in the message:** passwords, links that sign someone in, the child's date of birth, anything that would let a
+  recipient act on the account. Use fixed, plain wording (§10). Do not link to a page that asks for a password.
+- **Do not use the message to ask the child for anything.** Direct them to the guardian or to `support@soccernity.com`.
+- **Plain language, short, age-appropriate.** For under-13s `[OPEN — Q6]` whether the child is told directly at all.
+
+### 7.2 Proposed timing
+| Audience | Proposed timing | Why / trigger | Source |
+|---|---|---|---|
+| Guardian of an affected minor | **Same day as, and not later than, the notice to the minor**, and without waiting for the regulator's filing to finish; at the latest the same moment the individual notice goes out. | The duty to tell individuals is "without undue delay" (UK) / "immediately" (Nigeria); the guardian is the person who can protect a child. | §6.1, §6.2 (individual timing, verified in part). Guardian as a separate recipient: **not stated in the sources read** — `[OPEN — Q5]`. |
+| Affected young person (16–17) | Same time as an adult user, in plain language. | UK: individual notice for high risk; Nigeria: immediately. | §6. |
+| Affected young person (under 16) | `[OPEN — Q6]` Guardian first or together; the under-16 tier has no DMs, no Bants, restricted Groups. | Tier defined in Decision Log #346. | n/a |
+| Affected adult | As soon as the high-risk decision is recorded (UK) / immediately on awareness (Nigeria). | §6. | §6. |
+| Public communication | Only if individuals cannot be reached individually (UK Art. 34(3)(c) exception) or the regulator requires it (Nigeria s. 40(5), unverified). | | §6. |
+
+### 7.3 Channel and limits (what the platform can actually do)
+- **Email only today.** No bulk tool exists (§4.9): a notice to many guardians means a **new send path**, built under the
+  incident, or a manual export of `Guardian.email` run by a person with database access (itself a privileged read to be logged,
+  §8). `[OPEN — Q9]`: should a standby "send this fixed notice to this list" tool be built *before* launch (this draft
+  recommends yes, as a founder decision, and does not decide it).
+- **In-app notice** can be added through the existing `Notification` mechanism only for users who sign in; it cannot reach a
+  guardian who has no account.
+- **Wrong or stale guardian address:** `Guardian.email` is self-declared and may be wrong; an email to it may reach a stranger.
+  The notice must therefore carry **no detail beyond what a stranger may know** (the platform name, that an incident
+  happened, a contact route).
+- **Sending itself is processing:** Postmark sees the recipient list. `[OPEN]` DPIA treatment.
+
+### 7.4 Special case — a minor's sign-in is locked (Decision Log #438)
+Not an incident class here. See §12, Q10 for the options; this plan does not pick one.
+
+---
+
+## 8. Evidence handling
+
+*Draft for counsel review — not approved, not legal advice.*
+
+### 8.1 Principles
+- **Preserve before you fix**, wherever a fix would overwrite evidence (a restart clears the process; a restore overwrites the
+  database; a secret rotation removes the thing that was exposed).
+- **Least privilege and a written record of every privileged read.** Reading production data to investigate is itself access to
+  children's data. Use the minimum, log who, when, why. The platform's own pattern: every admin DOB read writes `user.dob_viewed`
+  and fails closed if the audit write fails; mirror that discipline for responders.
+- **Counsel-led where possible.** Route the assessment through counsel so privilege can be considered `[UNVERIFIED — for
+  counsel: privilege rules differ by jurisdiction]`.
+- **Do not alter** the original: take copies, hash them, work on the copy.
+
+### 8.2 What to capture, and where it lives (all to be confirmed against real accounts)
+| Evidence | Source | How to preserve |
+|---|---|---|
+| The incident log (§9.1) | A document kept off the platform (not in the repo, not in the app) | Append-only; timestamps in UTC and London. |
+| Application logs | Render log stream | Download before any redeploy; retention is the plan's setting `[UNVERIFIED]`. |
+| Database state | Neon | Take a **branch / snapshot** at once (Neon branches and point-in-time restore exist per `docs/deployment.md` and the rotation procedure's step 0); do not restore over production. |
+| Admin audit trail | `AdminActionLog` | SQL export (no read endpoint); includes `user.dob_viewed`, `admin_user.two_factor_reset`, hold, revoke and report actions. |
+| Redis state | Upstash | Note key names only (`auth:refresh:*`, `admin:refresh:*`, `auth-limit:*`); values are hashes or counters. Do **not** dump values into a ticket. |
+| Media | R2 `private-media/` and `post-media/` | Object list and access logs if enabled `[UNVERIFIED]`. |
+| Repository history | GitHub | Commit hashes; a secret ever committed is treated as exposed. |
+| Sentry events | Sentry | Inactive until the DSN is real. |
+| Email activity | Postmark | Message activity, bounces. |
+| Screenshots / chat | Responders | Name files with date and time; do not store children's data in chat tools. |
+
+### 8.3 Handling rules
+- **Chain of custody:** who took each copy, when, from where, hash. Keep in the incident log.
+- **Storage:** an encrypted location with named access; **never** an email attachment or a shared drive link.
+- **Retention:** `[OPEN — Q8]` how long incident records and copies are kept, and how that squares with the retention schedule in
+  the legal draft (PP §9). The incident log itself will contain personal data.
+- **Law enforcement requests:** route to counsel; do not hand over data on a phone call. A report to the police `[OPEN — Q11]`
+  is separate from a regulator filing.
+- **Rejected media and CSAM:** rejected files are kept private and **never deleted** (B-206); the handling of material that may
+  be illegal is **undecided and open under counsel**. A responder who finds possible CSAM must not copy, forward or view it
+  further and goes to counsel at once.
+
+---
+
+## 9. Records and post-incident review
+
+*Draft for counsel review — not approved, not legal advice.*
+
+### 9.1 The incident log (one per incident)
+Fields: id; date and time of first report; **date and time of awareness** (the legal clock); who reported; class; systems and
+data involved; whether minors / under-16s are among those affected (and how many); containment steps with times; decisions
+(who, when, why, on whose advice); notifications sent (to whom, what, when, copy); open actions; closed-on date. Also keep a
+**breach register** across incidents including the ones judged not notifiable and the reason (UK Art. 33(5) — `[UNVERIFIED]`).
+
+### 9.2 Review within `[PROPOSAL: 14]` days
+- What happened, in plain language, without blame.
+- Timeline against the clock (§6): were the 72 hours met; if not, why.
+- Did containment work; what did we not have (§4.9) that we needed.
+- Which secrets, accounts and data were exposed; what has been rotated or reset.
+- Was the notification to guardians and young people clear; any replies or complaints.
+- Which documents change: this plan, `docs/dob-encryption-rollback.md`, `docs/admin-two-factor-recovery.md`, the DPIA (R10–R12),
+  the legal draft Part C rows 11 and 21.
+- **Does the DPIA need re-signing?** (DPIA R12 treats it as a standing control.)
+- Training / rehearsal: one tabletop per quarter `[PROPOSAL]` and one full rehearsal on staging before launch (aligns with
+  B-267 (k)).
+
+### 9.3 Sign-off
+The review is signed by the incident lead and the data-protection contact `[PLACEHOLDER]` and filed with counsel. **This
+section is a proposal; the DPIA's own sign-off block is deliberately empty and this file does not fill it.**
+
+---
+
+## 10. Contact templates
+
+*Draft for counsel review — not approved, not legal advice.* Wording is **functional placeholder text for counsel to rewrite**;
+none is approved; none is tagged for the manifest because none is in the product. Square brackets are placeholders. No template
+contains a link that signs anyone in, a password, a date of birth, or a code.
+
+### 10.1 Regulator — initial notification (UK; adapt for Nigeria)
+```
+To: [PLACEHOLDER: regulator reporting route]
+Subject: Personal data breach notification — [Soccernity / legal entity name] — initial report
+
+This is an initial notification under [UK GDPR Art. 33 / NDPA s. 40], made [within / after] 72 hours of becoming aware.
+Reason for any delay: [PLACEHOLDER].
+
+1. Organisation: [legal entity, registration number, address — PLACEHOLDER: not yet registered]
+2. Contact for the regulator: [name, role, phone, email]
+3. What happened: [PLACEHOLDER — circumstances]
+4. Date and time of the breach, and of our becoming aware: [UTC and London times]
+5. Data involved (categories): [PLACEHOLDER — e.g. email addresses, display names, ... ] 
+6. Approximate number of people and records: [number; of whom children: number; under 16: number]
+7. Likely consequences and our assessment of risk to individuals: [PLACEHOLDER]
+8. Measures taken or proposed to contain and reduce harm: [PLACEHOLDER]
+9. Whether and when individuals and guardians are being told: [PLACEHOLDER]
+10. Information not yet available, and when we will update you: [PLACEHOLDER]
+```
+(Nigeria: the GAID Art. 33(5) list — circumstances; date/period; information involved; risk assessment; number at real
+risk of significant harm; steps to reduce harm; steps to notify individuals; a named contact — maps onto items 3–10.)
+
+### 10.2 Guardian (email)
+```
+Subject: An important message about [child's first name]'s Soccernity account
+
+Hello [guardian first name],
+
+We are writing because [child's first name] has a Soccernity account and you are listed as their guardian.
+
+We have found that [PLACEHOLDER: one plain sentence — e.g. "someone who should not have had access was able to see some account details"] on [date].
+
+What this may include: [PLACEHOLDER: categories in plain words — never the details themselves].
+What we have done: [PLACEHOLDER].
+What you may want to do: [PLACEHOLDER — e.g. be careful with unexpected messages that mention Soccernity; we will never ask for a password by email].
+
+We are very sorry. If you have questions, reply to this email or write to [PLACEHOLDER contact]. [Name], [role], Soccernity
+```
+Note: carries no link to sign in and nothing a stranger could use if it reached the wrong address (§7.3).
+
+### 10.3 Affected young person (16–17; adapt for younger — Q6)
+```
+Subject: Something we need to tell you about your Soccernity account
+
+Hi [first name],
+
+We found a problem that may have affected your Soccernity account on [date]. In simple terms: [PLACEHOLDER].
+
+What was affected: [PLACEHOLDER].
+What we've done: [PLACEHOLDER].
+What you can do: choose a new password for any account that used the same one, and tell a parent or guardian.
+
+If you want to talk to us, write to [PLACEHOLDER]. We're sorry this happened.
+```
+
+### 10.4 Affected adult user
+Same as 10.3 in adult wording; add the regulator contact and the user's rights if counsel requires them.
+
+### 10.5 Processor — incident notice to us / from us
+```
+To: [processor security contact]
+Subject: Security incident affecting [service / account id] — request for information and action
+
+We are the customer of record for [account]. At [time, timezone] we became aware of [PLACEHOLDER — one line].
+Please: (1) preserve logs for [period]; (2) tell us whether [resource] was accessed from [PLACEHOLDER]; (3) rotate or revoke
+[credential]; (4) confirm in writing what you hold that relates to our users. Our contact: [name, phone, email].
+```
+(A processor telling us: the processor's own obligation to tell its controller promptly is UK Art. 33(2) — `[UNVERIFIED]` for
+the processor's contract terms; DPA/Art. 28 terms are a counsel item.)
+
+### 10.6 Internal alert (to the roles in §3)
+```
+INCIDENT [id] — class [S1–S4] — declared [time]. Lead: [name]. Facts: [3 lines]. Do not discuss outside this channel.
+Next check-in: [time]. Evidence: preserve before changing anything (see §8).
+```
+
+---
+
+## 11. Preconditions that sit outside this plan
+
+*Draft for counsel review — not approved, not legal advice.* The plan can be *read* today but cannot be *run* until these exist.
+They are listed so the founder and counsel see what the plan depends on; each is a separate register item.
+
+- Real accounts and contacts for each processor (§4.8) and a written owner for each login.
+- A real `SENTRY_DSN` and alert rules on `rate_limiter` (B-267 (c)); an on-call route that rings a human.
+- `TRUST_PROXY_HOPS` verified so IP-based limits and country derivation see real client IPs (B-267 (b)).
+- Upstash plan decision (Decision Log #439): a Redis outage stops sign-in, refresh, reset and verification, and is not a breach.
+- The R2 public-address rule that keeps `private-media/` private, proven by a refused request (B-265).
+- `ADMIN_2FA_ENFORCED = "true"` in production (B-267 (j)); a rehearsal of the DOB key rotation on staging (B-267 (k)).
+- Production wiring itself is deferred to the launch gate (B-090).
+
+---
+
+## 12. Open questions for counsel
+
+*Draft for counsel review — not approved, not legal advice.* **Nothing in this list is decided. Options are set out with their
+trade-offs; the draft deliberately does not pick one.**
+
+| # | Question |
+|---|---|
+| **Q1** | Which regimes apply on day one (UK GDPR, NDPA 2023, a US state or federal regime, EU GDPR)? Decision Log #4 is open. |
+| **Q2** | When two regimes apply to one breach, is a single filing with merged contents acceptable, or two separate filings on separate clocks? |
+| **Q3** | What exactly makes Soccernity "aware" for the 72-hour clock in each regime? The wording could not be read from the ICO page. Does a credible but unconfirmed report start it? |
+| **Q4** | Is a **leaked database copy without the encryption key** a notifiable breach, and would the Art. 34(3)(a) "unintelligible" exception apply to the date of birth (encrypted) but not to email, name, `isMinor` and messages (not encrypted)? What if the key may also have leaked? |
+| **Q5** | **Must a guardian be told** when a minor's data is breached, as a separate recipient (DPIA R10; PP §11 already promises it)? Who is the right person when the guardian's address is wrong, or when the child has turned 18 since consent? |
+| **Q6** | For under-13s and under-16s: is the child told directly, only the guardian, or both? Content and reading-age standard for a notice to a child? |
+| **Q7** | Does the **absence of any breach-notification text** in the live legal copy (PP §11 says only "[PROPOSAL — technical standard TBD]") create a representation risk before launch? |
+| **Q8** | Retention of incident records, evidence copies and the breach register, versus the retention table in the legal draft. |
+| **Q9** | Should a standby, tested "send this fixed notice to this list" tool for guardians and users be built before launch? (Today none exists; §4.9.) Who authorises its use? |
+| **Q10** | **Decision Log #438 (B-263): is a guardian told when a minor's sign-in is locked?** See the options below. |
+| **Q11** | Who else is told: police, insurers, the platform's processors' own regulators? Obligations to report suspected child-safety crimes? |
+| **Q12** | Is one-person incident leadership acceptable at launch, or must a second named responder exist? Does counsel require a **data-protection officer** (UK GDPR Art. 37; NDPA's DPO duty for controllers of major importance, GAID Art. 11) — thresholds not verified here. |
+| **Q13** | Nigeria: does the NDPA require Soccernity to register as a controller "of major importance"? That decides some reporting duties (GAID Arts. 8–9). Not assessed. |
+| **Q14** | Is a **separate safeguarding-incident plan** (a child at risk, not a data breach) needed, and who owns the hand-off? |
+| **Q15** | What may we say publicly, and when, if individuals cannot be reached? Who may speak for the company? |
+| **Q16** | Privilege: how to route the assessment so that it is privileged in each jurisdiction? |
+| **Q17** | Processor contracts: do the Art. 28 (UK/EU) and NDPA data-processing terms with Render, Neon, Upstash, Postmark, Sentry, R2 and AWS give us the notice speed this plan assumes (a processor must tell the controller "without undue delay")? Cross-border transfer assessments (DPIA R11). |
+
+### Q10 in full — a guardian notice when a minor's sign-in is locked (Decision Log #438, B-263)
+
+**What exists today (built, PR #491):** the account's **own** email address receives one lockout notice per account per 24 hours
+when the failed-attempt budget for an account-and-IP pair is spent. For a minor's account, **nobody else is told.** The founder
+decided (2026-10-29) not to build a guardian notice now. The platform is not live. The options, **not ranked and not
+recommended**:
+
+| Option | What it is | For | Against / cost |
+|---|---|---|---|
+| **A. Do nothing (current)** | Only the account email is told. | No new use of the guardian's email; no noise; nothing to build or review; waiting costs nothing while not live. | A guardian never learns that a child's account is being attacked; a child may not tell anyone. If the child's email is itself the attacker's (a compromised mailbox), the notice goes to the wrong person. |
+| **B. Notify the guardian on every lockout** | Each time a pair budget is spent, also email the `Guardian` address. | Maximum visibility for the guardian. | A **new purpose** for the guardian's email (counsel on wording, the privacy notice, the DPIA); **noisy** (a child mistyping a password would email an adult); a **stranger can trigger it** by guessing a child's password from anywhere, so an attacker can spam a guardian; reveals to a possibly wrong/stale guardian address that the account exists. |
+| **C. Notify the guardian only when the account-wide ceiling trips** (the narrower alternative recorded for counsel) | When 20 failed attempts across addresses in 24 hours is reached, email the guardian at most once a day. | Targets the sign of a *distributed* attack on a child's account rather than a mistyped password; far less noise; a defined cap. | Still a new use of the guardian's email; still triggerable by a stranger (20 guesses from many addresses); the same wrong-address risk; a distributed attacker may stay just under 20; the ceiling is shared with the real owner, so the owner can be locked out while the guardian is told. |
+| **D. Tell the guardian at the next consent-related touch point** (an in-app notice to a guardian is not possible; they have no account) or **add the lockout to a periodic guardian summary** | A different channel or batching. | Lower noise. | Needs a new feature that does not exist (no guardian account, no summary email); delays the signal. |
+| **E. Notify only under-13 or under-16 accounts' guardians** | Narrow by tier. | Matches the under-16 tier already in the product (Decision Log #346); fewer sends. | Still B or C within that group; creates two classes of child; the under-16 line rests on self-declared date of birth. |
+
+**Trade-offs counsel must weigh:** purpose limitation and the privacy notice for a guardian's email; whether a lockout is a
+"security incident affecting a child" that warrants telling a guardian at all; proportionality (a lockout is not a breach — no
+data was accessed); the risk that the notice itself becomes an attack vector (spam, social engineering, confirming that an account
+exists); the wrong-address problem; and the relationship to this plan's breach notices (§7), which already contemplate emailing
+guardians for genuine breaches. **The draft takes no position.**
+
+---
+
+## 13. Sources and what was not verified
+
+*Draft for counsel review — not approved, not legal advice.*
+
+**Repository sources read:** `docs/build-register.md` (B-253, B-263, B-267, Sections 51/53/55/61); Decision Log #426 and #438 in
+`docs/Soccernity_MVP_Build_Plan_v1.7.docx`; `docs/legal-copy-draft-tos-privacy-policy.md` (Part C row 11 / 21; PP §11);
+`docs/sprint-1-dpia-outline-draft.md` (R10–R12 and §4 rows); `docs/dob-encryption-rollback.md`;
+`docs/admin-two-factor-recovery.md`; `docs/deployment.md`; `services/api/src/validate-runtime-env.ts`;
+`services/api/src/instrument.ts`; `services/api/prisma/schema.prisma`; the token stores and revocation call sites;
+`services/api/src/modules/admin-action-log`.
+
+**External sources:**
+- UK GDPR Art. 33 — <https://www.legislation.gov.uk/eur/2016/679/article/33> (via search summary; not read in full)
+- UK GDPR Art. 34 — <https://www.legislation.gov.uk/eur/2016/679/article/34> (via search summary; not read in full)
+- ICO, Personal data breaches: a guide — <https://ico.org.uk/for-organisations/report-a-breach/personal-data-breach/personal-data-breaches-a-guide/> (**could not be opened**: HTTP 503 and timeouts on every attempt)
+- ICO, "72 hours — how to respond" — <https://ico.org.uk/for-organisations/sme-web-hub/72-hours-how-to-respond-to-a-personal-data-breach> (**could not be opened**)
+- Data (Use and Access) Act 2025, Part 5 Ch. 2 — <https://www.legislation.gov.uk/ukpga/2025/18/part/5/chapter/2/enacted> (search-result mention only: PECR window 24 → 72 hours)
+- NDPC, GAID 2025 (reference NDPC/NDP ACT-GAID/01/2025) — <https://ndpc.gov.ng/wp-content/uploads/2025/07/NDP-ACT-GAID-2025-MARCH-20TH.pdf> (**read**, Arts. 33, controller-duties list; quotes NDPA s. 40(2))
+- NDPC breach portal — <https://services.ndpc.gov.ng/breach/> (opened; heading only)
+- Third-party NDPA summaries (used only to point at items to verify): Mondaq, Afriwise, KPMG review of the NDPA.
+
+**Not verified, for counsel (consolidated):** the meaning of "aware" in each regime; the ICO's current filing route and whether
+it is still the regulator's name; the ICO's list of report fields; the internal-record duty (Art. 33(5)) and the processor duty
+(Art. 33(2)) in the primary text; NDPA s. 40 text itself (including s. 40(1) processor duty and s. 40(5) public communication);
+the conflict between the GAID's "all affected" and "high risk" wording for notifying individuals; any children-specific
+breach rule in Nigeria; the NDPC portal's form and any out-of-hours route; whether the Nigerian regime treats the platform as a
+controller of major importance; everything for the US and EU.
+
+---
+
+*End of draft v0.1. DRAFT FOR COUNSEL REVIEW — NOT APPROVED, NOT LEGAL ADVICE. The DPIA sign-off block, the legal draft, the
+Log Book, the register and the Build Plan were not edited by this draft.*
