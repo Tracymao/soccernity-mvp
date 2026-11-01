@@ -1,6 +1,7 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { GuardianSecurityNoticeService } from '../../guardian-security-notice/guardian-security-notice.service';
 import { PasswordService } from '../password/password.service';
 import { AuthLimitsService } from '../rate-limit/auth-limits/auth-limits.service';
 import { TokenService } from '../token/token.service';
@@ -29,6 +30,7 @@ export class PasswordResetService {
     private readonly emailService: PasswordResetEmailService,
     configService: ConfigService,
     private readonly authLimits: AuthLimitsService,
+    private readonly guardianNotices: GuardianSecurityNoticeService,
   ) {
     this.resetTokenTtlMinutes =
       Number(configService.get('RESET_TOKEN_TTL_MINUTES')) || DEFAULT_RESET_TOKEN_TTL_MINUTES;
@@ -98,5 +100,8 @@ export class PasswordResetService {
     } catch (err) {
       this.logger.warn(`Could not clear the login ceiling after a password reset: ${(err as Error).message}`);
     }
+
+    // B-275: the reset has committed; a minor's confirmed guardian is told, in the background (never fails the reset).
+    this.guardianNotices.notifyInBackground(consumed.userId, 'password_reset');
   }
 }

@@ -38,6 +38,7 @@ function buildService(options: { existingUser?: ReturnType<typeof buildFakeUser>
   const tokenService = { revokeAllSessionsForUser: jest.fn(async () => undefined) };
   const authLimits = { clearAccountCeiling: jest.fn(async () => undefined) };
   const emailService = { sendPasswordResetEmail: jest.fn(async () => undefined) };
+  const guardianNotices = { notifyInBackground: jest.fn() };
   const configService = new ConfigService({});
 
   const service = new PasswordResetService(
@@ -48,9 +49,10 @@ function buildService(options: { existingUser?: ReturnType<typeof buildFakeUser>
     emailService as never,
     configService,
     authLimits as never,
+    guardianNotices as never,
   );
 
-  return { service, prisma, resetTokenStore, tokenService, emailService, authLimits, existingUser };
+  return { service, prisma, resetTokenStore, tokenService, emailService, authLimits, guardianNotices, existingUser };
 }
 
 describe('PasswordResetService', () => {
@@ -101,6 +103,31 @@ describe('PasswordResetService', () => {
       ).rejects.toBeInstanceOf(UnauthorizedException);
       // A failed reset must not clear anyone's ceiling.
       expect(authLimits.clearAccountCeiling).not.toHaveBeenCalled();
+    });
+
+    // B-275 (Decision Log #456): after the reset has committed, a minor's confirmed guardian is told (the notice
+    // service decides who is actually emailed). Once per reset, for the token's owner, never on a failed reset.
+    it('asks for a guardian "password_reset" notice exactly once, for the account the token belonged to', async () => {
+      const { service, resetTokenStore, guardianNotices, existingUser } = buildService();
+      const issued = await resetTokenStore.issue(existingUser!.id, 60);
+
+      await service.resetPassword(issued.token, 'a-brand-new-password');
+
+      expect(guardianNotices.notifyInBackground).toHaveBeenCalledTimes(1);
+      expect(guardianNotices.notifyInBackground).toHaveBeenCalledWith(existingUser!.id, 'password_reset');
+    });
+
+    it('sends no guardian notice for an invalid token, and none when a token is reused', async () => {
+      const { service, resetTokenStore, guardianNotices, existingUser } = buildService();
+      await expect(service.resetPassword('not-a-real-id.not-a-real-secret', 'a-long-enough-password')).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+      const issued = await resetTokenStore.issue(existingUser!.id, 60);
+      await service.resetPassword(issued.token, 'a-brand-new-password');
+      guardianNotices.notifyInBackground.mockClear();
+
+      await expect(service.resetPassword(issued.token, 'another-password-123')).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(guardianNotices.notifyInBackground).not.toHaveBeenCalled();
     });
 
     it('still succeeds when clearing the ceiling fails', async () => {

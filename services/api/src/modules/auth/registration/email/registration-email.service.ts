@@ -26,6 +26,7 @@ export type RegistrationEmailTemplate =
   | 'guardian-consent-expired'
   | 'guardian-minor-turned-18'
   | 'guardian-email-replaced'
+  | 'guardian-security-notice'
   | 'public-report-acknowledgement'
   | 'report-actioned'
   | 'appeal-decision'
@@ -304,6 +305,22 @@ export class RegistrationEmailService {
       subject: `The Soccernity approval request for ${minorDisplayName} was withdrawn`,
       template: 'guardian-email-replaced',
       data: { minorDisplayName },
+    });
+  }
+
+  // backend/b275-guardian-security-notices (B-275; Decision Log #456). To the CONFIRMED guardian of a minor, when a
+  // security-related action happened on the minor's account (two-factor on/off, backup codes regenerated, password
+  // changed or reset, sign-in locked). ONE template for every event: the caller (GuardianSecurityNoticeService)
+  // passes the subject, the one-sentence summary and the time, all taken from the registry in
+  // guardian-security-notice.constants.ts, so a new event needs no change here. The email says what happened and
+  // when and NOTHING else: no IP address, device, location or other account data, no link. [COPY PENDING LEGAL
+  // REVIEW]: functional wording only, not counsel-reviewed (docs/pending-copy-manifest.md).
+  async sendGuardianSecurityNoticeEmail(to: string, subject: string, summary: string, when: string): Promise<void> {
+    await this.dispatch({
+      to,
+      subject,
+      template: 'guardian-security-notice',
+      data: { summary, when },
     });
   }
 
@@ -674,6 +691,12 @@ ${data.link}
         `The guardian email on that account has since been changed, so the approval link we sent you no longer works and nothing further is needed from you.\n\n` +
         `If you are ${data.minorDisplayName}'s guardian and did not expect this, please contact support@soccernity.com.`
       );
+    case 'guardian-security-notice':
+      return (
+        `${data.summary}\n\n` +
+        `When: ${data.when}\n\n` +
+        `You are receiving this because you are the guardian on this account. If this was not expected, please contact support@soccernity.com.`
+      );
     case 'public-report-acknowledgement':
       return (
         `Thank you for letting us know.\n\n` +
@@ -827,6 +850,12 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
         `<p>You were asked to approve a Soccernity account for ${data.minorDisplayName}.</p>` +
         `<p>The guardian email on that account has since been changed, so the approval link we sent you no longer works and nothing further is needed from you.</p>` +
         `<p>If you are ${data.minorDisplayName}'s guardian and did not expect this, please contact support@soccernity.com.</p>`
+      );
+    case 'guardian-security-notice':
+      return (
+        `<p>${escapeHtml(data.summary)}</p>` +
+        `<p><strong>When:</strong> ${escapeHtml(data.when)}</p>` +
+        `<p>You are receiving this because you are the guardian on this account. If this was not expected, please contact support@soccernity.com.</p>`
       );
     case 'public-report-acknowledgement':
       return (
