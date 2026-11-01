@@ -37,6 +37,23 @@ export interface AdminAuthResult extends AdminTokenPair {
   admin: AdminSummary;
 }
 
+// B-270 / B-271: with two-factor on, the password step does NOT return a session. The
+// login answer is a union (services/api two-factor.service.ts TwoFactorChallenge /
+// AdminEnrolmentRequired); callers tell the three apart by the discriminating key.
+export interface AdminTwoFactorChallenge {
+  twoFactorRequired: true;
+  challengeToken: string;
+  challengeExpiresInSeconds: number;
+}
+
+export interface AdminEnrolmentRequired {
+  twoFactorEnrolmentRequired: true;
+  enrolmentToken: string;
+  expiresInSeconds: number;
+}
+
+export type AdminLoginResult = AdminAuthResult | AdminTwoFactorChallenge | AdminEnrolmentRequired;
+
 export class AdminAuthError extends Error {
   readonly status: number;
   constructor(status: number, message: string) {
@@ -55,7 +72,7 @@ export class AdminAuthError extends Error {
 // decision 2026-10-29: `staySignedIn` is deliberately omitted, so the API issues
 // a session cookie (no Max-Age / Expires) and the session ends when the browser
 // quits. The login screen has no "stay signed in" choice and none is to be added.
-export async function adminLogin(email: string, password: string): Promise<AdminAuthResult> {
+export async function adminLogin(email: string, password: string): Promise<AdminLoginResult> {
   const res = await fetch(`${API_BASE_URL}/admin/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...ADMIN_COOKIE_MODE_HEADERS },
@@ -71,7 +88,7 @@ export async function adminLogin(email: string, password: string): Promise<Admin
   if (!res.ok) {
     throw new AdminAuthError(res.status, `Sign in failed (${res.status}). Please try again.`);
   }
-  return (await res.json()) as AdminAuthResult;
+  return (await res.json()) as AdminLoginResult;
 }
 
 // POST /admin/auth/logout — best-effort. The API clears the admin refresh

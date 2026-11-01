@@ -33,9 +33,15 @@ export class AdminApiError extends Error {
   }
 }
 
+/** Why the session ended, when the login screen should say so (B-271). */
+export type AdminAuthLostReason = "two-factor-enrolment-required";
+
 export interface AdminAuthBridge {
-  /** The refresh was rejected (401) -- the session is over. */
-  onAuthLost(): void;
+  /**
+   * The refresh was rejected (401) -- the session is over. `reason` is passed ONLY for the
+   * two-factor refresh gate (a coded 401), so an ordinary sign-out is still `onAuthLost()`.
+   */
+  onAuthLost(reason?: AdminAuthLostReason): void;
 }
 
 let bridge: AdminAuthBridge | null = null;
@@ -103,7 +109,12 @@ export async function adminFetch<T>(path: string, options: RequestOptions = {}):
     // At most ONE refresh per rejected token (shared by parallel 401s and across
     // tabs, see lib/adminRefresh.ts) and the request is replayed at most once.
     const outcome = await refreshAdminToken(token);
-    if (outcome === "signed-out") {
+    if (outcome === "enrolment-required") {
+      // The two-factor refresh gate: the server ended every session of this admin. Same as a sign-out, plus the
+      // reason, so /login can explain it.
+      clearAdminSession();
+      bridge?.onAuthLost("two-factor-enrolment-required");
+    } else if (outcome === "signed-out") {
       // The cookie is gone, expired, revoked or reused: the session is over in
       // every tab. A 403 (Origin refused) or a network / 5xx failure leaves it
       // alone -- a configuration or transient error must not sign the operator out.

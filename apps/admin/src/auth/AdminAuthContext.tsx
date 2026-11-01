@@ -31,9 +31,11 @@ import {
   adminLogin,
   adminLogout,
   getAdminProfile,
+  type AdminAuthResult,
   type AdminSummary,
 } from "../api/adminAuth";
-import { AdminApiError, installAdminAuthBridge } from "../api/adminClient";
+import { isEnrolmentRequired, isTwoFactorChallenge } from "../api/adminTwoFactor";
+import { AdminApiError, installAdminAuthBridge, type AdminAuthLostReason } from "../api/adminClient";
 import { restoreAdminSession } from "../lib/adminRefresh";
 import {
   clearAdminSession,
@@ -45,10 +47,28 @@ import {
 
 export type AdminAuthStatus = "loading" | "authenticated" | "unauthenticated";
 
+/**
+ * What the password step answered (B-271). `signed-in` = no second factor was needed and the
+ * session is already in place; the other two carry the in-memory token for the next step. Neither
+ * of those is a session: the Console stays closed until the second factor finishes the sign-in.
+ */
+export type AdminLoginOutcome =
+  | { kind: "signed-in" }
+  | { kind: "challenge"; challengeToken: string; challengeExpiresInSeconds: number }
+  | { kind: "enrolment"; enrolmentToken: string; expiresInSeconds: number };
+
 interface AdminAuthContextValue {
   status: AdminAuthStatus;
   admin: AdminSummary | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<AdminLoginOutcome | void>;
+  /**
+   * Make a finished sign-in the live session: the result of POST /admin/auth/login/two-factor, or of
+   * enrol/confirm once the operator has saved their backup codes. Access token only; the refresh
+   * token is already in the httpOnly cookie.
+   */
+  adoptSession: (result: AdminAuthResult) => void;
+  /** Set when the last session was ended by the two-factor refresh gate; /login shows the notice. */
+  signedOutReason?: AdminAuthLostReason | null;
   logout: () => Promise<void>;
   /** Adopt a fresh AdminSummary (e.g. after PATCH /admin/profile) so the
    *  shell's identity block reflects it without a refetch. */
@@ -60,6 +80,7 @@ const AdminAuthContext = createContext<AdminAuthContextValue | null>(null);
 export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AdminAuthStatus>("loading");
   const [admin, setAdmin] = useState<AdminSummary | null>(null);
+  const [signedOutReason, setSignedOutReason] = useState<AdminAuthLostReason | null>(null);
 
   const endSession = useCallback(() => {
     setAdmin(null);
@@ -67,7 +88,12 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    installAdminAuthBridge({ onAuthLost: () => endSession() });
+    installAdminAuthBridge({
+      onAuthLost: (reason) => {
+        setSignedOutReason(reason ?? null);
+        endSession();
+      },
+    });
     return () => installAdminAuthBridge(null);
   }, [endSession]);
 
@@ -87,9 +113,11 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     async function boot() {
       // One cookie refresh (cached at module level, so StrictMode shares it).
-      await restoreAdminSession();
+      const restored = await restoreAdminSession();
       if (cancelled) return;
       if (!getAdminAccessToken()) {
+        // The refresh gate answers the same coded 401 at start-up (a reload with a still-valid cookie).
+        if (restored === "enrolment-required") setSignedOutReason("two-factor-enrolment-required");
         setStatus("unauthenticated");
         return;
       }
@@ -119,13 +147,38 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     };
   }, [endSession]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const result = await adminLogin(email, password);
+  const adoptSession = useCallback((result: AdminAuthResult) => {
     // Access token only: the refresh token is in the httpOnly cookie.
     storeAdminSession({ accessToken: result.accessToken });
     setAdmin(result.admin);
+    setSignedOutReason(null);
     setStatus("authenticated");
   }, []);
+
+  const login = useCallback(
+    async (email: string, password: string): Promise<AdminLoginOutcome> => {
+      const result = await adminLogin(email, password);
+      // B-270: with two-factor on, or required and not yet set up, the password step is NOT a session.
+      // The tokens that answer carries stay with the caller (React state), never in storage.
+      if (isTwoFactorChallenge(result)) {
+        return {
+          kind: "challenge",
+          challengeToken: result.challengeToken,
+          challengeExpiresInSeconds: result.challengeExpiresInSeconds,
+        };
+      }
+      if (isEnrolmentRequired(result)) {
+        return {
+          kind: "enrolment",
+          enrolmentToken: result.enrolmentToken,
+          expiresInSeconds: result.expiresInSeconds,
+        };
+      }
+      adoptSession(result);
+      return { kind: "signed-in" };
+    },
+    [adoptSession],
+  );
 
   const logout = useCallback(async () => {
     // Best-effort and cookie-authenticated; the in-memory session is cleared (and
@@ -141,8 +194,8 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AdminAuthContextValue>(
-    () => ({ status, admin, login, logout, applyProfile }),
-    [status, admin, login, logout, applyProfile],
+    () => ({ status, admin, login, adoptSession, signedOutReason, logout, applyProfile }),
+    [status, admin, login, adoptSession, signedOutReason, logout, applyProfile],
   );
 
   return <AdminAuthContext.Provider value={value}>{children}</AdminAuthContext.Provider>;

@@ -1,0 +1,387 @@
+/* Admin two-factor screens (B-271; Figma 6896:32445 to 6902:33820). Light mode only; every colour is a
+ * --sn-* token. Error callouts use the alert colour for the accent bar only, never for text or button
+ * fills (Decision Log #408 item 4); text stays navy. Sign-in screens reuse AdminLoginPage.css's card. */
+
+.tf-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.tf-card {
+  gap: 12px;
+}
+
+.tf-card .admin-login__brand {
+  margin-bottom: 4px;
+}
+
+.tf-step {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.tf-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--sn-text-secondary);
+}
+
+/* ---- buttons ---- */
+
+.tf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 42px;
+  padding: 0 20px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tf-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.tf-btn--primary {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.tf-btn--outline {
+  background-color: var(--sn-background-surface);
+  border-color: var(--sn-brand-navy);
+  color: var(--sn-text-primary);
+}
+
+.tf-link {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sn-brand-navy);
+  cursor: pointer;
+}
+
+.tf-link:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.tf-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+/* ---- fields ---- */
+
+.tf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.tf-field input {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--sn-text-primary);
+  background-color: var(--sn-background-surface);
+}
+
+.tf-field input:focus {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 1px;
+}
+
+.tf-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* six-box code entry: the real input is transparent and covers the cells */
+
+.tf-code {
+  position: relative;
+  align-self: flex-start;
+}
+
+.tf-code__cells {
+  display: flex;
+  gap: 8px;
+}
+
+.tf-code__cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 52px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+  background-color: var(--sn-background-surface);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.tf-code__cell--active {
+  border-color: var(--sn-brand-navy);
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: -1px;
+}
+
+.tf-code__cell--disabled {
+  background-color: var(--sn-green-tint-12);
+}
+
+.tf-code__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: text;
+  font-size: 16px; /* no iOS zoom on focus */
+}
+
+/* ---- QR, setup key, backup codes ---- */
+
+.tf-qr {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  width: 216px;
+  height: 216px;
+  padding: 8px;
+  border: 1px dashed var(--sn-icon-inactive);
+  border-radius: 12px;
+  background-color: var(--sn-background-surface);
+}
+
+.tf-qr[aria-busy="true"] {
+  background-color: var(--sn-green-tint-12);
+  text-align: center;
+}
+
+.tf-key {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background-color: var(--sn-green-tint-12);
+}
+
+.tf-key code {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--sn-text-primary);
+  word-break: break-all;
+}
+
+.tf-codes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+  padding: 14px 16px;
+  list-style: none;
+  border-radius: 8px;
+  background-color: var(--sn-green-tint-12);
+}
+
+.tf-codes__item {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--sn-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.tf-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--sn-text-primary);
+}
+
+.tf-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--sn-brand-navy);
+}
+
+/* ---- banners ---- */
+
+.tf-banner {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+  background-color: var(--sn-background-surface);
+}
+
+.tf-banner--info {
+  border-color: transparent;
+  background-color: var(--sn-green-tint-12);
+}
+
+.tf-banner__bar {
+  flex: 0 0 3px;
+  align-self: stretch;
+  border-radius: 2px;
+  background-color: var(--sn-brand-navy);
+}
+
+.tf-banner--alert .tf-banner__bar {
+  background-color: var(--sn-semantic-alert);
+}
+
+.tf-banner__title {
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.tf-banner__body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--sn-text-primary);
+}
+
+.tf-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--sn-semantic-alert);
+  border-radius: 4px;
+  background-color: var(--sn-green-tint-12);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+/* ---- in-session cards (profile, staff) ---- */
+
+.tf-profile-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 20px;
+  max-width: 560px;
+  border-radius: 10px;
+  background-color: var(--sn-background-surface);
+}
+
+.tf-profile-card__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tf-profile-card__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.tf-profile-card .tf-banner {
+  align-self: stretch;
+}
+
+.tf-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background-color: var(--sn-green-tint-12);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.tf-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tf-stat__label {
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.tf-stat__value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+/* ---- dialog ---- */
+
+.tf-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background-color: var(--sn-overlay-scrim);
+}
+
+.tf-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 460px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 24px;
+  border-radius: 10px;
+  background-color: var(--sn-background-surface);
+  box-shadow: 0 4px 16px var(--sn-shadow-elevated);
+}
+
+.tf-dialog:focus {
+  outline: none;
+}
+
+.tf-dialog__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
