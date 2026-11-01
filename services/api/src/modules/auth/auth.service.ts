@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto';
 import { User } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DobEncryptionService } from '../../crypto/dob-encryption.service';
+import { TwoFactorRecoveryService } from '../two-factor/recovery/two-factor-recovery.service';
 import { TwoFactorChallenge, TwoFactorService } from '../two-factor/two-factor.service';
 import { AuthResponse, toAuthUserSummary, toTokenPairResponse, TokenPairResponse } from './auth-response.mapper';
 import { PasswordService } from './password/password.service';
@@ -43,6 +44,9 @@ export class AuthService implements OnModuleInit {
     private readonly dobEncryption: DobEncryptionService,
     // backend/b086-two-factor (B-086): the second step of sign-in for an account that has turned two-factor on.
     private readonly twoFactor: TwoFactorService,
+    // backend/b276-two-factor-recovery (B-276): a waiting recovery request is reported on the sign-in challenge and
+    // cancelled by a successful two-factor sign-in.
+    private readonly recovery: TwoFactorRecoveryService,
   ) {}
 
   // B-030: the minor's current Guardian.consentStatus, read fresh, for the
@@ -124,10 +128,28 @@ export class AuthService implements OnModuleInit {
     }
 
     if (user.totpEnabledAt) {
-      return this.twoFactor.issueChallenge('user', user.id, persistent);
+      return this.challengeWithRecoveryState(user.id, persistent, 'login');
     }
 
     return this.buildAuthResponse(user, persistent);
+  }
+
+  // The sign-in challenge, plus (B-276) whether a two-factor recovery request is waiting for this user and when it will
+  // run. Called only AFTER the password step succeeded, so the field is never shown to someone who has not proved the
+  // password. `recoveryPending` is always present on a user challenge; `recoveryExecuteAt` only when it is true.
+  private async challengeWithRecoveryState(
+    userId: string,
+    persistent: boolean,
+    purpose: 'login' | 'reactivate',
+  ): Promise<TwoFactorChallenge> {
+    const challenge =
+      purpose === 'reactivate'
+        ? await this.twoFactor.issueChallenge('user', userId, persistent, 'reactivate')
+        : await this.twoFactor.issueChallenge('user', userId, persistent);
+    const waiting = await this.recovery.findWaiting(userId);
+    return waiting
+      ? { ...challenge, recoveryPending: true, recoveryExecuteAt: waiting.executeAt.toISOString() }
+      : { ...challenge, recoveryPending: false };
   }
 
   // POST /auth/login/two-factor -- the second step of sign-in. The challenge carries the "Stay signed in" choice made
@@ -137,6 +159,9 @@ export class AuthService implements OnModuleInit {
     code: string,
   ): Promise<{ response: AuthResponse; persistent: boolean }> {
     const done = await this.twoFactor.completeChallenge('user', challengeToken, code);
+    // B-276: a correct device code or backup code proves the person still has a factor, so a recovery request that is
+    // waiting out its 24 hours is cancelled. Never throws.
+    await this.recovery.cancelWaitingOnSignIn(done.subjectId);
     let user = await this.prisma.user.findUnique({ where: { id: done.subjectId } });
     // Re-checked a second time on the full row (completeChallenge already checked the status it needs): the account
     // may have changed in the milliseconds since.
@@ -377,7 +402,7 @@ export class AuthService implements OnModuleInit {
     }
 
     if (user.totpEnabledAt) {
-      return this.twoFactor.issueChallenge('user', user.id, false, 'reactivate');
+      return this.challengeWithRecoveryState(user.id, false, 'reactivate');
     }
 
     const activeUser =

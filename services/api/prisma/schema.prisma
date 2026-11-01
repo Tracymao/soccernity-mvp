@@ -111,6 +111,7 @@ model User {
   totpEnabledAt       DateTime?
   totpLastUsedStep    Int?
   twoFactorBackupCodes UserBackupCode[]
+  twoFactorRecoveryRequests TwoFactorRecoveryRequest[]
 
   // sprint-2/account-deletion-sweep — a genuine addition beyond Section
   // 3's literal User field list, flagged per CLAUDE.md's "the data model
@@ -2690,4 +2691,45 @@ model AdminBackupCode {
   createdAt DateTime  @default(now())
 
   @@index([adminId])
+}
+
+// backend/b276-two-factor-recovery (B-276; Decision Log #455, #456). A request by a USER who has lost BOTH their
+// authenticator device AND their backup codes to have two-factor removed. Users only: admins keep the peer-superadmin
+// reset. Adult or minor is decided when the request is made (User.isMinor) and stored in `kind`.
+//
+//   kind   'adult'    a link goes to the account's own email; confirming starts a 24-hour wait (executeAt); an hourly
+//                     sweep removes two-factor when it passes unless the request was cancelled first
+//          'guardian' (a minor with a confirmed guardian) a link goes to the GUARDIAN's email, valid 72 hours; the
+//                     guardian approves (two-factor removed at once) or declines
+//   state  pending     link sent, not yet used (and, while expiresAt is in the future, usable)
+//          waiting     adult confirmed; waiting for executeAt
+//          done        two-factor was removed
+//          cancelled   adult cancelled it, or a successful two-factor sign-in cancelled it
+//          declined    guardian answered "I didn't expect this"
+//          superseded  replaced by a newer request, or the account changed in between
+//   (CHECK constraint in the migration.) At most ONE request per account is active (pending or waiting): a partial
+//   unique index in the migration, which Prisma cannot express here.
+//
+// The two tokens (the link in the email, the adult's separate cancel link) are 256-bit random secrets stored ONLY as
+// SHA-256 hashes; the emailed token is "<id>.<secret>" so the row is found by id and the hash compared in constant
+// time. doneAt is when the request reached its end (done, cancelled, declined or superseded); a daily-style sweep
+// deletes ended rows 30 days after doneAt and never-used rows 30 days after expiresAt. Cascade: gone with the account
+// row (the anonymiser also deletes them, they hold nothing worth keeping).
+model TwoFactorRecoveryRequest {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind            String
+  state           String    @default("pending")
+  linkTokenHash   String
+  cancelTokenHash String?
+  createdAt       DateTime  @default(now())
+  expiresAt       DateTime
+  confirmedAt     DateTime?
+  executeAt       DateTime?
+  doneAt          DateTime?
+
+  @@index([userId])
+  @@index([state, executeAt])
+  @@index([state, doneAt])
 }

@@ -26,6 +26,7 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
     savedPost: { deleteMany: jest.fn() },
     // B-086: the hashes of the user's two-factor backup codes go with the account's ability to sign in.
     userBackupCode: { deleteMany: jest.fn() },
+    twoFactorRecoveryRequest: { deleteMany: jest.fn() },
     follow: { deleteMany: jest.fn() },
     // B-039: Block rows (both directions) are removed with the user's other relationship rows.
     block: { deleteMany: jest.fn() },

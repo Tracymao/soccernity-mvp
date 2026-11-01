@@ -261,6 +261,9 @@ export class AccountDeletionSweepService {
     // B-086: the hashes of the user's two-factor backup codes (the secret itself is cleared on the User row by
     // both callers). Credential material: it goes whenever the account can no longer sign in.
     await tx.userBackupCode.deleteMany({ where: { userId } });
+    // B-276: open two-factor recovery requests (link/cancel token hashes). Ephemeral and security-sensitive; nothing
+    // to keep once the account can no longer sign in.
+    await tx.twoFactorRecoveryRequest.deleteMany({ where: { userId } });
     await tx.follow.deleteMany({ where: { OR: [{ followerId: userId }, { followeeId: userId }] } });
     // B-039: a Block is a personal-relationship record in BOTH directions (the
     // ones this user made, and the ones made against them); like Follow it is
