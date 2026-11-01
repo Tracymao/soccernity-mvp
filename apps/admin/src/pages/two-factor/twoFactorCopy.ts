@@ -4,11 +4,12 @@
 // approves the exact wording (Decision Log #405, B-124). Each tagged string has a row in
 // docs/pending-copy-manifest.md; when counsel approves one, remove the tag here and delete its row.
 //
-// Short controls (button labels, field labels, the "On" pill, "Step 1 of 2") and the API's own messages
-// (INVALID_CODE_MESSAGE, "Incorrect password") are not tagged: they promise nothing. The report tags them at
-// frame level; tagging "Confirm" or "Back" would only clutter the screen.
+// B-271 follow-ups: the short control labels PR #577 left untagged (Confirm, Back, Copy codes, Regenerate, Done and
+// the On / Off pills) now carry the tag too, as the frames do at frame level. Still untagged: field labels, "Step 1 of 2",
+// "Cancel", "Continue", "Try again", "Copy key" and the other plain navigation labels, which the frames do not tag.
 //
-// The wrong-code wording is the API message verbatim (INVALID_CODE_MESSAGE in api/adminTwoFactor.ts).
+// The wrong-code wording is the API message verbatim (INVALID_CODE_MESSAGE in api/adminTwoFactor.ts); it is shown
+// whatever the server text is, and which message to show is decided by the error CODE, never by comparing text.
 // The 5-minute sign-in and 10-minute setup lifetimes are deliberately NOT printed (veto-able defaults).
 
 // ---- Sign-in notice (refresh gate) ----
@@ -33,9 +34,9 @@ export const CODE_TITLE = "Enter the 6-digit code [COPY PENDING LEGAL REVIEW]";
 export const CODE_HELP =
   "Enter the code your authenticator app shows for Soccernity. [COPY PENDING LEGAL REVIEW]";
 export const CONTINUE = "Continue";
-export const CONFIRM = "Confirm";
+export const CONFIRM = "Confirm [COPY PENDING LEGAL REVIEW]";
 export const CHECKING = "Checking…";
-export const BACK = "Back";
+export const BACK = "Back [COPY PENDING LEGAL REVIEW]";
 export const BACK_TO_SIGN_IN = "Back to sign in";
 export const LOCKED_TITLE = "Too many wrong codes [COPY PENDING LEGAL REVIEW]";
 export const LOCKED_BODY =
@@ -48,7 +49,7 @@ export const ENROL_EXPIRED_BODY =
 export const BACKUP_TITLE = "Save your backup codes [COPY PENDING LEGAL REVIEW]";
 export const BACKUP_BODY =
   "These 10 codes are shown once. Each code can be used one time if you cannot use your authenticator app. Store them somewhere safe. [COPY PENDING LEGAL REVIEW]";
-export const COPY_CODES = "Copy codes";
+export const COPY_CODES = "Copy codes [COPY PENDING LEGAL REVIEW]";
 export const SAVED_CODES_LABEL = "I have saved these codes";
 export const CONTINUE_TO_CONSOLE = "Continue to the Admin Console";
 
@@ -68,7 +69,8 @@ export const SIGN_IN = "Sign in";
 
 // ---- Profile card ----
 export const CARD_TITLE = "Two-factor authentication";
-export const STATUS_ON = "On";
+export const STATUS_ON = "On [COPY PENDING LEGAL REVIEW]";
+export const STATUS_OFF = "Off [COPY PENDING LEGAL REVIEW]";
 export const CARD_ON_BODY =
   "Signing in needs a code from your authenticator app as well as your password. [COPY PENDING LEGAL REVIEW]";
 export const CARD_OFF_BODY = "Two-factor authentication is not turned on. [COPY PENDING LEGAL REVIEW]";
@@ -81,13 +83,36 @@ export const STATUS_LOAD_ERROR =
 export const TRY_AGAIN = "Try again";
 export const REGENERATE_BODY =
   "Enter your password to create 10 new backup codes. Your current codes stop working. [COPY PENDING LEGAL REVIEW]";
-export const REGENERATE_CONFIRM = "Regenerate";
+export const REGENERATE_CONFIRM = "Regenerate [COPY PENDING LEGAL REVIEW]";
 export const NEW_CODES_TITLE = "Your new backup codes [COPY PENDING LEGAL REVIEW]";
 export const NEW_CODES_BODY =
   "These 10 codes are shown once. Each code can be used one time if you cannot use your authenticator app. Your old codes no longer work. [COPY PENDING LEGAL REVIEW]";
-export const DONE = "Done";
+export const DONE = "Done [COPY PENDING LEGAL REVIEW]";
+
+// ---- Profile card with enforcement OFF: Turn off (Figma 6906:33681 to 6906:34113) ----
+export const TURN_OFF_BUTTON = "Turn off two-factor [COPY PENDING LEGAL REVIEW]";
+export const TURN_OFF_TITLE = "Turn off two-factor authentication? [COPY PENDING LEGAL REVIEW]";
+export const TURN_OFF_BODY = "Enter your password to confirm. [COPY PENDING LEGAL REVIEW]";
+export const TURN_OFF_WARNING = "Turning this off makes your account less secure. [COPY PENDING LEGAL REVIEW]";
+export const TURN_OFF_CONFIRM = "Turn off [COPY PENDING LEGAL REVIEW]";
+// The API's own message for a wrong password; shown as this wording whatever the server text is.
+export const INCORRECT_PASSWORD = "Incorrect password [COPY PENDING LEGAL REVIEW]";
+export const TURNED_OFF_TITLE = "Two-factor authentication turned off [COPY PENDING LEGAL REVIEW]";
+// "Your backup codes no longer work" is accurate: POST /admin/auth/two-factor/disable deletes the secret and every
+// backup code in one transaction (services/api two-factor.repository.ts AdminTwoFactorRepository.disable).
+export const TURNED_OFF_BODY =
+  "Your account now signs in with your password only. Your backup codes no longer work. [COPY PENDING LEGAL REVIEW]";
+export const CARD_TURNED_OFF_BODY =
+  "Two-factor authentication is off. Signing in needs only your password. [COPY PENDING LEGAL REVIEW]";
+export const TURN_OFF_FAILED = "Couldn’t turn off two-factor. Please try again.";
 
 // ---- Staff: reset two-factor for another admin ----
+// Edit admin shows the state of the admin being edited (twoFactorEnabled on the staff item): Figma 6907:34127 (on)
+// and 6908:34249 (off, Reset disabled with a reason).
+export const RESET_ON_BODY = "This admin has two-factor authentication turned on. [COPY PENDING LEGAL REVIEW]";
+export const RESET_OFF_BODY = "This admin has not set up two-factor authentication. [COPY PENDING LEGAL REVIEW]";
+export const RESET_UNAVAILABLE =
+  "Reset is not available: this admin has no authenticator app or backup codes to remove. [COPY PENDING LEGAL REVIEW]";
 export const RESET_CARD_BODY =
   "Resetting removes this admin’s authenticator app and backup codes, and signs them out of every session. If two-factor is required for admin accounts, they must set it up again the next time they sign in. Resetting is recorded in the audit log. [COPY PENDING LEGAL REVIEW]";
 export const RESET_BUTTON = "Reset two-factor";

@@ -23,7 +23,7 @@ beforeEach(() => {
     logout: vi.fn(),
     applyProfile: vi.fn(),
   });
-  vi.mocked(getAdminTwoFactorStatus).mockResolvedValue({ enabled: true, backupCodesRemaining: 7 });
+  vi.mocked(getAdminTwoFactorStatus).mockResolvedValue({ enabled: true, backupCodesRemaining: 7, enforced: true });
 });
 afterEach(cleanup);
 

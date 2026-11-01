@@ -92,9 +92,10 @@
 
 .rl-table__row {
   display: grid;
-  /* Name | Role | Status | Actions — the Status column was added by
-     feat/admin-staff-status alongside PATCH /admin/staff/:id/status. */
-  grid-template-columns: 1.2fr 110px 110px 150px;
+  /* Name | Role | Status | Two-factor | Actions — the Status column was added by
+     feat/admin-staff-status alongside PATCH /admin/staff/:id/status; the Two-factor
+     column by B-271 (twoFactorEnabled on each staff item, Figma 6909:34859). */
+  grid-template-columns: 1.2fr 110px 110px 110px 150px;
   gap: 16px;
   align-items: center;
   padding: 14px 20px;
@@ -144,6 +145,16 @@
 
 .rl-pill--soft {
   background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+}
+
+/* The two-factor On / Off pills keep their capital letter (Figma 6909:34859); "Off" is the neutral tone. */
+.rl-pill--keep-case {
+  text-transform: none;
+}
+
+.rl-pill--neutral {
+  background-color: var(--sn-icon-inactive);
   color: var(--sn-text-primary);
 }
 

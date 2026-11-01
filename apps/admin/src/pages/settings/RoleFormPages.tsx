@@ -298,9 +298,15 @@ export function EditRolePage() {
           </div>
         </div>
 
-        {/* B-271: no Figma frame draws the Role / Account status / Child safety vetting cards, so the
-            two-factor reset card sits right after Account status, with the other account-security action. */}
-        <ResetTwoFactorCard adminId={id} adminName={admin.fullName} />
+        {/* B-271: the card order follows the follow-up frames (Figma 6907:34127): Account, Account status,
+            Two-factor, Child safety vetting. twoFactorEnabled comes from the staff item (router state from the
+            Roles list, or the fallback list fetch); after a reset the page flips it to false so the card shows Off. */}
+        <ResetTwoFactorCard
+          adminId={id}
+          adminName={admin.fullName}
+          twoFactorEnabled={admin.twoFactorEnabled}
+          onTwoFactorOff={() => setAdmin((prev) => (prev ? { ...prev, twoFactorEnabled: false } : prev))}
+        />
 
         <div className="rl-card">
           <h2 className="rl-card__title">Child safety vetting</h2>

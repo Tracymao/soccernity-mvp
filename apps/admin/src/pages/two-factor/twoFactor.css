@@ -90,6 +90,11 @@
   justify-content: flex-end;
 }
 
+/* The profile card puts its buttons side by side from the left (Figma 6906:33681). */
+.tf-actions--start {
+  justify-content: flex-start;
+}
+
 /* ---- fields ---- */
 
 .tf-field {
@@ -329,6 +334,11 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--sn-text-primary);
+}
+
+/* "Off" pill: neutral, not the green-tint "On" (Figma 6906:34113). */
+.tf-pill--off {
+  background-color: var(--sn-icon-inactive);
 }
 
 .tf-stat {

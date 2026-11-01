@@ -74,6 +74,7 @@ function admin(overrides: Partial<AdminStaffListItem> = {}): AdminStaffListItem 
     childSafetyVetted: false,
     vettedAt: null,
     vettedByAdminId: null,
+    twoFactorEnabled: true,
     ...overrides,
   };
 }

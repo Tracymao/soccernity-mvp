@@ -24,6 +24,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -41,6 +42,7 @@ import {
   clearAdminSession,
   dropAdminSessionLocally,
   getAdminAccessToken,
+  getAdminSignOutReason,
   storeAdminSession,
   subscribeAdminSession,
 } from "../lib/adminSession";
@@ -81,6 +83,9 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AdminAuthStatus>("loading");
   const [admin, setAdmin] = useState<AdminSummary | null>(null);
   const [signedOutReason, setSignedOutReason] = useState<AdminAuthLostReason | null>(null);
+  // Read inside the session subscription below, which must not re-subscribe on every status change.
+  const statusRef = useRef<AdminAuthStatus>("loading");
+  statusRef.current = status;
 
   const endSession = useCallback(() => {
     setAdmin(null);
@@ -98,11 +103,13 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   }, [endSession]);
 
   // The session was ended from outside this component: another tab signed out
-  // (BroadcastChannel) or a rejected refresh dropped the token.
+  // (BroadcastChannel) or a rejected refresh dropped the token. A sign-out that carries a reason (the
+  // two-factor refresh gate) brings the same notice to this tab; only a tab that HAD a session shows it.
   useEffect(
     () =>
       subscribeAdminSession(() => {
         if (getAdminAccessToken() !== null) return;
+        if (statusRef.current === "authenticated") setSignedOutReason(getAdminSignOutReason());
         setAdmin(null);
         setStatus((current) => (current === "authenticated" ? "unauthenticated" : current));
       }),

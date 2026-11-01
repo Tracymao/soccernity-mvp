@@ -84,7 +84,7 @@ describe("sign-in code prompt (login answered twoFactorRequired)", () => {
   });
 
   it("a wrong or used code shows the API message, clears the field and keeps the screen", async () => {
-    vi.mocked(completeTwoFactorLogin).mockRejectedValue(new AdminTwoFactorError(401, INVALID_CODE_MESSAGE));
+    vi.mocked(completeTwoFactorLogin).mockRejectedValue(new AdminTwoFactorError(401, INVALID_CODE_MESSAGE, "two_factor_invalid_code"));
     renderPrompt();
     type("Authentication code", "123456");
     fireEvent.click(screen.getByRole("button", { name: copy.SIGN_IN }));
@@ -109,7 +109,7 @@ describe("sign-in code prompt (login answered twoFactorRequired)", () => {
 
   it("an expired sign-in step offers only Back to sign in", async () => {
     vi.mocked(completeTwoFactorLogin).mockRejectedValue(
-      new AdminTwoFactorError(401, "This sign-in step has expired. Sign in again."),
+      new AdminTwoFactorError(401, "This sign-in step has expired. Sign in again.", "two_factor_invalid_challenge"),
     );
     renderPrompt();
     type("Authentication code", "123456");
@@ -146,7 +146,7 @@ describe("sign-in code prompt (login answered twoFactorRequired)", () => {
   });
 
   it("a backup code that does not work shows the same message; Use an authenticator code returns", async () => {
-    vi.mocked(completeTwoFactorLogin).mockRejectedValue(new AdminTwoFactorError(401, INVALID_CODE_MESSAGE));
+    vi.mocked(completeTwoFactorLogin).mockRejectedValue(new AdminTwoFactorError(401, INVALID_CODE_MESSAGE, "two_factor_invalid_code"));
     renderPrompt();
     fireEvent.click(screen.getByRole("button", { name: copy.USE_BACKUP_CODE }));
     type(copy.BACKUP_CODE_LABEL, "ABCDE23456");
@@ -262,7 +262,7 @@ describe("enrolment at sign-in (login answered twoFactorEnrolmentRequired)", () 
   });
 
   it("a wrong first code shows the API message and clears the field", async () => {
-    vi.mocked(confirmEnrolmentAtSignIn).mockRejectedValue(new AdminTwoFactorError(401, INVALID_CODE_MESSAGE));
+    vi.mocked(confirmEnrolmentAtSignIn).mockRejectedValue(new AdminTwoFactorError(401, INVALID_CODE_MESSAGE, "two_factor_invalid_code"));
     await toCodeStep();
     type("Authentication code", "000000");
     fireEvent.click(screen.getByRole("button", { name: copy.CONFIRM }));
@@ -284,7 +284,7 @@ describe("enrolment at sign-in (login answered twoFactorEnrolmentRequired)", () 
 
   it("an expired enrolment token at confirm shows Setup expired with only Back to sign in", async () => {
     vi.mocked(confirmEnrolmentAtSignIn).mockRejectedValue(
-      new AdminTwoFactorError(401, "This sign-in step has expired. Sign in again."),
+      new AdminTwoFactorError(401, "This sign-in step has expired. Sign in again.", "two_factor_invalid_challenge"),
     );
     await toCodeStep();
     type("Authentication code", "000000");
@@ -307,7 +307,7 @@ describe("enrolment at sign-in (login answered twoFactorEnrolmentRequired)", () 
 
   it("an expired token when starting shows Setup expired", async () => {
     vi.mocked(startEnrolmentAtSignIn).mockRejectedValue(
-      new AdminTwoFactorError(401, "This sign-in step has expired. Sign in again."),
+      new AdminTwoFactorError(401, "This sign-in step has expired. Sign in again.", "two_factor_invalid_challenge"),
     );
     renderEnrol();
     expect(await screen.findByRole("heading", { name: copy.ENROL_EXPIRED_TITLE })).not.toBeNull();

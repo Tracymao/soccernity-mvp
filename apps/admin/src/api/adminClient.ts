@@ -16,7 +16,7 @@
 // AdminAuthContext installs a bridge (installAdminAuthBridge) so this module can
 // signal a terminal auth failure (the refresh was rejected -> the session is
 // dead -> route back to /login).
-import { clearAdminSession, getAdminAccessToken } from "../lib/adminSession";
+import { clearAdminSession, getAdminAccessToken, type AdminAuthLostReason } from "../lib/adminSession";
 import { refreshAdminToken } from "../lib/adminRefresh";
 
 const API_BASE_URL =
@@ -33,8 +33,8 @@ export class AdminApiError extends Error {
   }
 }
 
-/** Why the session ended, when the login screen should say so (B-271). */
-export type AdminAuthLostReason = "two-factor-enrolment-required";
+/** Why the session ended, when the login screen should say so (B-271). Defined in lib/adminSession.ts (it travels on the cross-tab broadcast). */
+export type { AdminAuthLostReason };
 
 export interface AdminAuthBridge {
   /**
@@ -112,7 +112,7 @@ export async function adminFetch<T>(path: string, options: RequestOptions = {}):
     if (outcome === "enrolment-required") {
       // The two-factor refresh gate: the server ended every session of this admin. Same as a sign-out, plus the
       // reason, so /login can explain it.
-      clearAdminSession();
+      clearAdminSession("two-factor-enrolment-required");
       bridge?.onAuthLost("two-factor-enrolment-required");
     } else if (outcome === "signed-out") {
       // The cookie is gone, expired, revoked or reused: the session is over in
