@@ -22,10 +22,14 @@ import {
   ADMIN_2FA_ENFORCED_ENV,
   BACKUP_CODE_COUNT,
   ENROLMENT_TTL_SECONDS,
+  INCORRECT_PASSWORD_MESSAGE,
   INVALID_CHALLENGE_MESSAGE,
   INVALID_CODE_MESSAGE,
   LOGIN_CHALLENGE_TTL_SECONDS,
   TWO_FACTOR_ALREADY_ENABLED_CODE,
+  TWO_FACTOR_INCORRECT_PASSWORD_CODE,
+  TWO_FACTOR_INVALID_CHALLENGE_CODE,
+  TWO_FACTOR_INVALID_CODE_CODE,
   TWO_FACTOR_NOT_ENABLED_CODE,
   TWO_FACTOR_NO_PENDING_ENROLMENT_CODE,
   TwoFactorAudience,
@@ -171,7 +175,7 @@ export class TwoFactorService implements OnModuleInit {
     const step = verifyTotp(pendingSecret, normaliseBackupCode(String(code ?? '')), this.clock.now().getTime());
     if (step === null) {
       await this.limiter.recordFailure(aud, id, reserved);
-      throw new UnauthorizedException(INVALID_CODE_MESSAGE);
+      throw this.invalidCode();
     }
 
     const codes = generateBackupCodes();
@@ -240,7 +244,7 @@ export class TwoFactorService implements OnModuleInit {
   async completeChallenge(aud: TwoFactorAudience, rawToken: unknown, code: string): Promise<CompletedChallenge> {
     const kind = challengeKind(aud);
     const peeked = await this.tokens.peek(kind, rawToken);
-    if (!peeked) throw new UnauthorizedException(INVALID_CHALLENGE_MESSAGE);
+    if (!peeked) throw this.invalidChallenge();
 
     const subject = await this.repo(aud).find(peeked.subjectId);
     // A reactivation challenge is for a deactivated account (it is flipped back to active by the caller after this
@@ -248,12 +252,12 @@ export class TwoFactorService implements OnModuleInit {
     // because the account may have changed since the password step.
     const allowed = peeked.purpose === 'reactivate' ? ['active', 'deactivated'] : ['active'];
     if (!subject || !subject.totpEnabledAt || !allowed.includes(subject.accountStatus)) {
-      throw new UnauthorizedException(INVALID_CHALLENGE_MESSAGE);
+      throw this.invalidChallenge();
     }
 
     await this.assertCodeAccepted(aud, subject, code);
 
-    if (!(await this.tokens.consume(kind, peeked.id))) throw new UnauthorizedException(INVALID_CHALLENGE_MESSAGE);
+    if (!(await this.tokens.consume(kind, peeked.id))) throw this.invalidChallenge();
     return { subjectId: subject.id, persistent: peeked.persistent, purpose: peeked.purpose };
   }
 
@@ -285,9 +289,9 @@ export class TwoFactorService implements OnModuleInit {
 
   private async resolveEnrolmentToken(rawToken: unknown): Promise<{ peeked: PeekedToken; subject: TwoFactorSubject }> {
     const peeked = await this.tokens.peek('admin-enrol', rawToken);
-    if (!peeked) throw new UnauthorizedException(INVALID_CHALLENGE_MESSAGE);
+    if (!peeked) throw this.invalidChallenge();
     const subject = await this.admins.find(peeked.subjectId);
-    if (!subject || subject.accountStatus !== 'active') throw new UnauthorizedException(INVALID_CHALLENGE_MESSAGE);
+    if (!subject || subject.accountStatus !== 'active') throw this.invalidChallenge();
     if (subject.totpEnabledAt) throw this.alreadyEnabled();
     return { peeked, subject };
   }
@@ -303,7 +307,7 @@ export class TwoFactorService implements OnModuleInit {
     const accepted = await this.checkCode(aud, subject, typeof code === 'string' ? code : '');
     if (!accepted) {
       await this.limiter.recordFailure(aud, subject.id, reserved);
-      throw new UnauthorizedException(INVALID_CODE_MESSAGE);
+      throw this.invalidCode();
     }
     await this.limiter.clear(aud, subject.id);
   }
@@ -372,8 +376,36 @@ export class TwoFactorService implements OnModuleInit {
 
   private async assertPassword(subject: TwoFactorSubject, password: string): Promise<void> {
     if (!(await this.passwordService.verify(subject.passwordHash, password))) {
-      throw new UnauthorizedException('Incorrect password');
+      throw this.incorrectPassword();
     }
+  }
+
+  // The three coded 401s (constants.ts). Status and message are exactly what they were before the codes existed.
+  private invalidCode(): UnauthorizedException {
+    return new UnauthorizedException({
+      statusCode: 401,
+      error: 'Unauthorized',
+      code: TWO_FACTOR_INVALID_CODE_CODE,
+      message: INVALID_CODE_MESSAGE,
+    });
+  }
+
+  private invalidChallenge(): UnauthorizedException {
+    return new UnauthorizedException({
+      statusCode: 401,
+      error: 'Unauthorized',
+      code: TWO_FACTOR_INVALID_CHALLENGE_CODE,
+      message: INVALID_CHALLENGE_MESSAGE,
+    });
+  }
+
+  private incorrectPassword(): UnauthorizedException {
+    return new UnauthorizedException({
+      statusCode: 401,
+      error: 'Unauthorized',
+      code: TWO_FACTOR_INCORRECT_PASSWORD_CODE,
+      message: INCORRECT_PASSWORD_MESSAGE,
+    });
   }
 
   private alreadyEnabled(): ConflictException {

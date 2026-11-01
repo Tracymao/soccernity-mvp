@@ -55,9 +55,21 @@ const ADMIN_STAFF_SELECT = {
   childSafetyVetted: true,
   vettedAt: true,
   vettedByAdminId: true,
+  // backend/two-factor-api-codes: read only to derive `twoFactorEnabled`; never returned. The secret and backup-code
+  // columns are not selected at all, so nothing is decrypted and there is no per-row query.
+  totpEnabledAt: true,
 } as const;
 
-export type AdminStaffListItem = Prisma.AdminUserGetPayload<{ select: typeof ADMIN_STAFF_SELECT }>;
+type AdminStaffRow = Prisma.AdminUserGetPayload<{ select: typeof ADMIN_STAFF_SELECT }>;
+
+// Every response of this controller is superadmin-only (class-level AdminRolesGuard), so `twoFactorEnabled` is
+// returned to superadmins only by construction.
+export type AdminStaffListItem = Omit<AdminStaffRow, 'totpEnabledAt'> & { twoFactorEnabled: boolean };
+
+function toStaffItem(row: AdminStaffRow): AdminStaffListItem {
+  const { totpEnabledAt, ...rest } = row;
+  return { ...rest, twoFactorEnabled: Boolean(totpEnabledAt) };
+}
 
 export interface AdminStaffListPage {
   items: AdminStaffListItem[];
@@ -142,10 +154,10 @@ export class AdminStaffRolesService {
 
     let created: AdminStaffListItem;
     try {
-      created = await this.prisma.adminUser.create({
+      created = toStaffItem(await this.prisma.adminUser.create({
         data: { email, fullName: dto.fullName.trim(), role: dto.role, passwordHash },
         select: ADMIN_STAFF_SELECT,
-      });
+      }));
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         throw new ConflictException('An admin account with this email already exists.');
@@ -194,7 +206,7 @@ export class AdminStaffRolesService {
     });
 
     const hasMore = rows.length > limit;
-    const items = hasMore ? rows.slice(0, limit) : rows;
+    const items = (hasMore ? rows.slice(0, limit) : rows).map(toStaffItem);
     const last = items[items.length - 1];
     const nextCursor = hasMore && last ? encodeAdminStaffRolesCursor({ createdAt: last.createdAt, id: last.id }) : null;
 
@@ -238,11 +250,13 @@ export class AdminStaffRolesService {
       );
     }
 
-    const updated = await this.prisma.adminUser.update({
-      where: { id: targetAdminId },
-      data: { role: dto.role },
-      select: ADMIN_STAFF_SELECT,
-    });
+    const updated = toStaffItem(
+      await this.prisma.adminUser.update({
+        where: { id: targetAdminId },
+        data: { role: dto.role },
+        select: ADMIN_STAFF_SELECT,
+      }),
+    );
 
     this.logger.log(`Admin ${callerAdminId} set admin ${targetAdminId}'s role to '${dto.role}'.`);
     await this.adminActionLogService.record(
@@ -304,11 +318,13 @@ export class AdminStaffRolesService {
       );
     }
 
-    const updated = await this.prisma.adminUser.update({
-      where: { id: targetAdminId },
-      data: { accountStatus: dto.status },
-      select: ADMIN_STAFF_SELECT,
-    });
+    const updated = toStaffItem(
+      await this.prisma.adminUser.update({
+        where: { id: targetAdminId },
+        data: { accountStatus: dto.status },
+        select: ADMIN_STAFF_SELECT,
+      }),
+    );
 
     if (dto.status === 'deactivated') {
       // Blocking future logins is meaningless if the target's current,
