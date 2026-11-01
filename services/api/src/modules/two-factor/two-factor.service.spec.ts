@@ -7,7 +7,15 @@ import { FakeTwoFactorRedis, FakeTwoFactorRepository } from './test-support/in-m
 import { TwoFactorAttemptLimiter, CodeEntryLockedException } from './two-factor-attempt.limiter';
 import { TwoFactorPendingStore } from './two-factor-pending.store';
 import { TwoFactorTokenStore } from './two-factor-token.store';
-import { CODE_ATTEMPTS_MAX, CODE_LOCK_SECONDS, INVALID_CHALLENGE_MESSAGE, INVALID_CODE_MESSAGE } from './two-factor.constants';
+import {
+  CODE_ATTEMPTS_MAX,
+  CODE_LOCK_SECONDS,
+  INVALID_CHALLENGE_MESSAGE,
+  INVALID_CODE_MESSAGE,
+  TWO_FACTOR_INCORRECT_PASSWORD_CODE,
+  TWO_FACTOR_INVALID_CHALLENGE_CODE,
+  TWO_FACTOR_INVALID_CODE_CODE,
+} from './two-factor.constants';
 import { TwoFactorService } from './two-factor.service';
 import { generateTotpCode, stepAt } from './totp.util';
 
@@ -588,5 +596,112 @@ describe('TwoFactorService: admin reset', () => {
     for (let i = 0; i < CODE_ATTEMPTS_MAX; i++) await h.svc.completeChallenge('admin', c.challengeToken, '000000').catch(() => undefined);
     await h.svc.resetAdmin('a1', async () => undefined);
     expect(h.redis.keys().filter((k) => k.startsWith('2fa:attempts:admin:a1'))).toEqual([]);
+  });
+});
+
+// backend/two-factor-api-codes: stable machine-readable `code` on the three two-factor 401s. Status and message are
+// exactly as before (asserted again here, next to the code).
+describe('TwoFactorService: 401 codes', () => {
+  it('the code names are the documented ones', () => {
+    expect(TWO_FACTOR_INVALID_CODE_CODE).toBe('two_factor_invalid_code');
+    expect(TWO_FACTOR_INVALID_CHALLENGE_CODE).toBe('two_factor_invalid_challenge');
+    expect(TWO_FACTOR_INCORRECT_PASSWORD_CODE).toBe('two_factor_incorrect_password');
+  });
+
+  it('a WRONG, a REPLAYED and a SPENT backup code give the same status, message AND code', async () => {
+    const h = build();
+    const { secret, codes } = await enrol(h, 'user', 'u1');
+    h.setNow(T0 + 30_000);
+    const replayCode = generateTotpCode(secret, nowMs);
+    const c1 = await h.svc.issueChallenge('user', 'u1', false);
+    await h.svc.completeChallenge('user', c1.challengeToken, replayCode);
+    const c2 = await h.svc.issueChallenge('user', 'u1', false);
+    await h.svc.completeChallenge('user', c2.challengeToken, codes[0]);
+
+    const c3 = await h.svc.issueChallenge('user', 'u1', false);
+    const wrong = await h.svc.completeChallenge('user', c3.challengeToken, '000000').catch((e) => e);
+    const replayed = await h.svc.completeChallenge('user', c3.challengeToken, replayCode).catch((e) => e);
+    const spent = await h.svc.completeChallenge('user', c3.challengeToken, codes[0]).catch((e) => e);
+
+    for (const e of [wrong, replayed, spent]) {
+      expect(e.status).toBe(401);
+      expect(e.message).toBe(INVALID_CODE_MESSAGE);
+      expect(e.getResponse()).toEqual({
+        statusCode: 401,
+        error: 'Unauthorized',
+        code: 'two_factor_invalid_code',
+        message: INVALID_CODE_MESSAGE,
+      });
+    }
+    expect(replayed.getResponse()).toEqual(wrong.getResponse());
+    expect(spent.getResponse()).toEqual(wrong.getResponse());
+  });
+
+  it('a wrong code at enrolment confirm carries the same code', async () => {
+    const h = build();
+    h.users.seed({ id: 'u1', passwordHash: 'hash:correct-password' });
+    const { secret } = await h.svc.startEnrolment('user', 'u1');
+    const wrong = generateTotpCode(secret, nowMs) === '000000' ? '000001' : '000000';
+    const e = await h.svc.confirmEnrolment('user', 'u1', wrong).catch((x) => x);
+    expect(e.status).toBe(401);
+    expect(e.message).toBe(INVALID_CODE_MESSAGE);
+    expect(e.getResponse()).toMatchObject({ code: 'two_factor_invalid_code' });
+  });
+
+  it('every invalid-challenge path (unknown, wrong audience, expired, admin enrolment token) is ONE code', async () => {
+    const h = build();
+    const { secret } = await enrol(h, 'user', 'u1');
+    const expectChallenge = (e: { status: number; message: string; getResponse(): unknown }) => {
+      expect(e.status).toBe(401);
+      expect(e.message).toBe(INVALID_CHALLENGE_MESSAGE);
+      expect(e.getResponse()).toEqual({
+        statusCode: 401,
+        error: 'Unauthorized',
+        code: 'two_factor_invalid_challenge',
+        message: INVALID_CHALLENGE_MESSAGE,
+      });
+    };
+
+    expectChallenge(await h.svc.completeChallenge('user', 'not-a-token', '123456').catch((e) => e));
+    expectChallenge(await h.svc.startAdminEnrolmentWithToken('not-a-token').catch((e) => e));
+
+    const c = await h.svc.issueChallenge('user', 'u1', false);
+    expectChallenge(await h.svc.completeChallenge('admin', c.challengeToken, '123456').catch((e) => e));
+
+    const expired = await h.svc.issueChallenge('user', 'u1', false);
+    h.redis.advance(5 * 60 + 1);
+    expectChallenge(
+      await h.svc.completeChallenge('user', expired.challengeToken, generateTotpCode(secret, nowMs)).catch((e) => e),
+    );
+  });
+
+  it('a wrong password on regenerate and on disable (user and admin) is one code, with the message unchanged', async () => {
+    const h = build();
+    await enrol(h, 'user', 'u1');
+    await enrol(h, 'admin', 'a1');
+    const attempts = [
+      h.svc.regenerateBackupCodes('user', 'u1', 'wrong'),
+      h.svc.disable('user', 'u1', 'wrong'),
+      h.svc.regenerateBackupCodes('admin', 'a1', 'wrong'),
+      h.svc.disable('admin', 'a1', 'wrong'),
+    ];
+    for (const attempt of attempts) {
+      const e = await attempt.catch((x) => x);
+      expect(e.status).toBe(401);
+      expect(e.getResponse()).toEqual({
+        statusCode: 401,
+        error: 'Unauthorized',
+        code: 'two_factor_incorrect_password',
+        message: 'Incorrect password',
+      });
+    }
+  });
+
+  it('the generic "Invalid credentials" for a vanished account stays code-less', async () => {
+    const h = build();
+    const e = await h.svc.getStatus('user', 'nobody').catch((x) => x);
+    expect(e.status).toBe(401);
+    expect(e.message).toBe('Invalid credentials');
+    expect(e.getResponse()).not.toHaveProperty('code');
   });
 });

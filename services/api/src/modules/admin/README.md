@@ -128,6 +128,8 @@ token is rejected at `/auth/refresh`.
 | GET | `/admin/profile` | `AdminJwtAuthGuard` | Own profile — Full name, Email, Role, Phone, accountStatus, createdAt, updatedAt. |
 | PATCH | `/admin/profile` | `AdminJwtAuthGuard` | Edits `fullName`/`phone` only — `role`/`email`/`accountStatus` are never self-editable (rejected outright by the global `ValidationPipe`'s `forbidNonWhitelisted`). |
 
+**Two-factor routes** (`/admin/auth/two-factor/*`, `/admin/auth/login/two-factor*`) are documented in `../two-factor/README.md`. Two additive details for the console: `GET /admin/auth/two-factor/status` returns `{ enabled, backupCodesRemaining, enforced }` (`enforced` is true only when `ADMIN_2FA_ENFORCED` is exactly `"true"`, so Turn off can be hidden when it would be refused), and the two-factor 401s carry a stable `code` (`two_factor_invalid_code`, `two_factor_invalid_challenge`, `two_factor_incorrect_password`) next to the unchanged message. `GET /admin/staff` (superadmin only, `../admin-staff-roles`) adds `twoFactorEnabled` to each item.
+
 `@AuthRateLimit()` on `/admin/auth/login` is reused as-is from the
 User-facing auth module (see `admin-auth.controller.ts`'s own comment) —
 it's generic, IP-based rate-limiting infrastructure with zero User-typed

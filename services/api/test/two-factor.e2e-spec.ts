@@ -215,7 +215,8 @@ describe('Two-factor e2e (B-086, B-270)', () => {
         .set(user.auth)
         .send({ code: wrongCode(start.body.secret) })
         .expect(401)
-        .expect((r) => expect(r.body.message).toBe(INVALID_CODE));
+        .expect((r) => expect(r.body.message).toBe(INVALID_CODE))
+        .expect((r) => expect(r.body.code).toBe('two_factor_invalid_code'));
       expect((await userColumns(user.id)).totpEnabledAt).toBeNull();
 
       const confirm = await http()
@@ -314,6 +315,8 @@ describe('Two-factor e2e (B-086, B-270)', () => {
         .expect(401);
       expect(replay.body).toEqual(wrong.body); // byte-identical answer: wrong and used cannot be told apart
       expect(replay.body.message).toBe(INVALID_CODE);
+      expect(replay.body.code).toBe('two_factor_invalid_code'); // wrong and replayed share ONE code
+      expect(wrong.body.code).toBe('two_factor_invalid_code');
     });
 
     it('a backup code works ONCE (DB: usedAt set on exactly one row), typed in lower case with a hyphen', async () => {
@@ -463,7 +466,8 @@ describe('Two-factor e2e (B-086, B-270)', () => {
   describe('user: backup codes and turning it off', () => {
     it('regenerate needs the password, replaces all ten, and the old ones are dead', async () => {
       const user = await enrolledUser();
-      await http().post('/auth/two-factor/backup-codes/regenerate').set(user.auth).send({ password: 'wrong-password' }).expect(401);
+      const wrongPw = await http().post('/auth/two-factor/backup-codes/regenerate').set(user.auth).send({ password: 'wrong-password' }).expect(401);
+      expect(wrongPw.body).toMatchObject({ code: 'two_factor_incorrect_password', message: 'Incorrect password' });
       expect(await userCodeRows(user.id)).toHaveLength(10);
 
       const fresh = await http().post('/auth/two-factor/backup-codes/regenerate').set(user.auth).send({ password: PASSWORD }).expect(200);
@@ -542,7 +546,8 @@ describe('Two-factor e2e (B-086, B-270)', () => {
 
       // The new session works, and the token is spent.
       const status = await http().get('/admin/auth/two-factor/status').set(bearer(done.body.accessToken)).expect(200);
-      expect(status.body).toEqual({ enabled: true, backupCodesRemaining: 10 });
+      // `enforced` (backend/two-factor-api-codes) is additive; the enrolment gate above ran with enforcement on.
+      expect(status.body).toEqual({ enabled: true, backupCodesRemaining: 10, enforced: true });
       await http().post('/admin/auth/login/two-factor/enrol/start').send({ enrolmentToken: token }).expect(401);
     });
 
@@ -612,7 +617,8 @@ describe('Two-factor e2e (B-086, B-270)', () => {
 
     it('an admin can regenerate their backup codes with the password (the old ones die)', async () => {
       const admin = await enrolledAdmin('editor');
-      await http().post('/admin/auth/two-factor/backup-codes/regenerate').set(admin.auth).send({ password: 'wrong-password' }).expect(401);
+      const wrongAdminPw = await http().post('/admin/auth/two-factor/backup-codes/regenerate').set(admin.auth).send({ password: 'wrong-password' }).expect(401);
+      expect(wrongAdminPw.body).toMatchObject({ code: 'two_factor_incorrect_password', message: 'Incorrect password' });
       const fresh = await http().post('/admin/auth/two-factor/backup-codes/regenerate').set(admin.auth).send({ password: PASSWORD }).expect(200);
       expect(fresh.body.backupCodes).toHaveLength(10);
       const c = await twoFactor.issueChallenge('admin', admin.id, false);
@@ -769,6 +775,47 @@ describe('Two-factor e2e (B-086, B-270)', () => {
       process.env.ADMIN_2FA_ENFORCED = 'true';
       const login = await http().post('/admin/auth/login').send({ email: target.email, password: PASSWORD }).expect(200);
       expect(login.body).toMatchObject({ twoFactorEnrolmentRequired: true });
+    });
+
+    it('GET /admin/staff reports twoFactorEnabled per admin (and leaks no secret); a reset flips it', async () => {
+      const peer = await seedAdmin('superadmin');
+      const target = await enrolledAdmin('editor');
+      const plain = await seedAdmin('moderator');
+
+      const before = await http().get('/admin/staff').set(peer.auth).expect(200);
+      const byId = (body: { items: Array<{ id: string; twoFactorEnabled: boolean }> }, id: string) =>
+        body.items.find((i) => i.id === id);
+      expect(byId(before.body, target.id)?.twoFactorEnabled).toBe(true);
+      expect(byId(before.body, plain.id)?.twoFactorEnabled).toBe(false);
+      expect(byId(before.body, peer.id)?.twoFactorEnabled).toBe(false);
+      expect(JSON.stringify(before.body)).not.toMatch(/totp|passwordHash|secret/i);
+
+      await http().post(`/admin/staff/${target.id}/two-factor/reset`).set(peer.auth).expect(200);
+      const after = await http().get('/admin/staff').set(peer.auth).expect(200);
+      expect(byId(after.body, target.id)?.twoFactorEnabled).toBe(false);
+    });
+
+    it('GET /admin/auth/two-factor/status reports enforced only for the literal "true"', async () => {
+      const admin = await seedAdmin('editor');
+      const off = await http().get('/admin/auth/two-factor/status').set(admin.auth).expect(200);
+      expect(off.body).toEqual({ enabled: false, backupCodesRemaining: 0, enforced: false });
+      process.env.ADMIN_2FA_ENFORCED = 'TRUE';
+      expect((await http().get('/admin/auth/two-factor/status').set(admin.auth).expect(200)).body.enforced).toBe(false);
+      process.env.ADMIN_2FA_ENFORCED = 'true';
+      expect((await http().get('/admin/auth/two-factor/status').set(admin.auth).expect(200)).body.enforced).toBe(true);
+    });
+
+    it('an unknown challenge or enrolment token carries the invalid-challenge code (status and message unchanged)', async () => {
+      const a = await http().post('/auth/login/two-factor').send({ challengeToken: 'not-a-token', code: '123456' }).expect(401);
+      const b = await http().post('/admin/auth/login/two-factor/enrol/start').send({ enrolmentToken: 'not-a-token' }).expect(401);
+      for (const res of [a, b]) {
+        expect(res.body).toEqual({
+          statusCode: 401,
+          error: 'Unauthorized',
+          code: 'two_factor_invalid_challenge',
+          message: 'This sign-in step has expired. Sign in again.',
+        });
+      }
     });
 
     it('nobody can reset their OWN (403), only a superadmin can reset anyone, and there must be something to reset (409)', async () => {

@@ -37,9 +37,11 @@ import { AdminAccessTokenPayload } from './token/admin-token.types';
 export class AdminTwoFactorController {
   constructor(private readonly twoFactor: TwoFactorService) {}
 
+  // `enforced` (backend/two-factor-api-codes): whether ADMIN_2FA_ENFORCED is exactly "true", so the console knows
+  // whether to offer Turn off (disable below is a 403 while it is). The user status response is unchanged.
   @Get('status')
-  status(@CurrentAdmin() admin: AdminAccessTokenPayload): Promise<TwoFactorStatus> {
-    return this.twoFactor.getStatus('admin', admin.sub);
+  async status(@CurrentAdmin() admin: AdminAccessTokenPayload): Promise<TwoFactorStatus & { enforced: boolean }> {
+    return { ...(await this.twoFactor.getStatus('admin', admin.sub)), enforced: this.twoFactor.isAdminEnforced() };
   }
 
   @Post('enrol/start')

@@ -41,6 +41,17 @@ export const INVALID_CODE_MESSAGE = 'That code did not work. Check it and try ag
 export const INVALID_CHALLENGE_MESSAGE = 'This sign-in step has expired. Sign in again.';
 
 // Machine-readable codes on the coded errors.
+// The three 401s of the two-factor flows. HTTP status and message are unchanged; the code is the stable thing a
+// client reads (matching the message text breaks the day the wording is edited). A wrong, a replayed and an
+// already-spent code share the ONE code below, exactly as they share one message.
+export const TWO_FACTOR_INVALID_CODE_CODE = 'two_factor_invalid_code';
+// A sign-in challenge or admin enrolment token that is malformed, expired, spent, for another audience, or for an
+// account that changed in between.
+export const TWO_FACTOR_INVALID_CHALLENGE_CODE = 'two_factor_invalid_challenge';
+// A wrong password on backup-codes/regenerate and on disable (user and admin). NOT the login password step, which
+// keeps its generic 'Invalid credentials'.
+export const TWO_FACTOR_INCORRECT_PASSWORD_CODE = 'two_factor_incorrect_password';
+export const INCORRECT_PASSWORD_MESSAGE = 'Incorrect password';
 export const TWO_FACTOR_ALREADY_ENABLED_CODE = 'two_factor_already_enabled';
 export const TWO_FACTOR_NOT_ENABLED_CODE = 'two_factor_not_enabled';
 export const TWO_FACTOR_NO_PENDING_ENROLMENT_CODE = 'two_factor_no_pending_enrolment';
