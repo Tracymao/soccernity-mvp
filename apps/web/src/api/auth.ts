@@ -45,6 +45,26 @@ export interface LoginResponse {
   user: AuthUserSummary;
 }
 
+// B-087 / B-111 (backend B-086, services/api modules/two-factor): for an account with
+// two-factor on, POST /auth/login and POST /auth/reactivate-account answer 200 with this
+// challenge instead of tokens -- no session and no cookie exist yet. The second step is
+// POST /auth/login/two-factor (completeTwoFactorLogin below). The challenge token is opaque,
+// short-lived (the server says how long) and lives only in component state.
+export interface TwoFactorChallenge {
+  twoFactorRequired: true;
+  challengeToken: string;
+  challengeExpiresInSeconds: number;
+}
+
+export function isTwoFactorChallenge(result: unknown): result is TwoFactorChallenge {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    (result as { twoFactorRequired?: unknown }).twoFactorRequired === true &&
+    typeof (result as { challengeToken?: unknown }).challengeToken === "string"
+  );
+}
+
 // Shared by LoginResponse and RegisterResponse -- mirrors
 // services/api's auth-response.mapper.ts's AuthUserSummary exactly.
 // Never includes `passwordHash`; deliberately does include
@@ -144,7 +164,7 @@ export class AuthApiError extends Error {
   }
 }
 
-export async function login(payload: LoginRequest): Promise<LoginResponse> {
+export async function login(payload: LoginRequest): Promise<LoginResponse | TwoFactorChallenge> {
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/auth/login`, {
@@ -196,7 +216,7 @@ export async function login(payload: LoginRequest): Promise<LoginResponse> {
     throw new AuthApiError(message, { status: response.status });
   }
 
-  return (await response.json()) as LoginResponse;
+  return (await response.json()) as LoginResponse | TwoFactorChallenge;
 }
 
 // --- Guardian consent (Build Plan Section 8.3, F5) ------------------------
@@ -659,7 +679,10 @@ export async function deleteAccount(accessToken: string, password: string): Prom
 // right credentials is treated as a plain login (also 200); a
 // "pending_deletion" account or a wrong password both get the generic
 // 401 "Invalid credentials" (non-enumeration -- see auth.service.ts).
-export async function reactivateAccount(email: string, password: string): Promise<LoginResponse> {
+export async function reactivateAccount(
+  email: string,
+  password: string,
+): Promise<LoginResponse | TwoFactorChallenge> {
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/auth/reactivate-account`, {
@@ -680,6 +703,59 @@ export async function reactivateAccount(email: string, password: string): Promis
         ? "We couldn't reactivate this account. The password may be wrong, or the account is scheduled for deletion."
         : "Couldn't reactivate your account. Please try again shortly.";
     throw new AuthApiError(message, { status: response.status });
+  }
+
+  // With two-factor on this is a challenge, not tokens; the reactivation itself
+  // happens when POST /auth/login/two-factor accepts the code (backend B-086).
+  return (await response.json()) as LoginResponse | TwoFactorChallenge;
+}
+
+// POST /auth/login/two-factor -- the second step of sign-in (and of reactivating a
+// deactivated account) for an account with two-factor on. `code` is a 6-digit
+// authenticator code OR a backup code; the server tells them apart. The "stay signed in"
+// choice made at the password step is kept on the challenge, so nothing is re-sent here.
+// On success it issues the session exactly like login (httpOnly refresh cookie, access
+// token in the body).
+//
+// Errors carry a `code` the caller branches on:
+//   two_factor_challenge_expired -- 401 with the server's "This sign-in step has expired"
+//     message (also what a deactivated / suspended account gets mid-flow): go back to sign-in.
+//   two_factor_invalid_code      -- any other 401. By design the server gives ONE answer
+//     for a wrong code, a replayed code and a spent backup code; this client does not
+//     try to tell them apart.
+//   two_factor_locked            -- 429: five wrong codes lock code entry for that account.
+export const TWO_FACTOR_CHALLENGE_EXPIRED_MESSAGE = "This sign-in step has expired. Sign in again.";
+
+export async function completeTwoFactorLogin(challengeToken: string, code: string): Promise<LoginResponse> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/login/two-factor`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...COOKIE_MODE_HEADERS },
+      credentials: "include",
+      body: JSON.stringify({ challengeToken, code }),
+    });
+  } catch (networkError) {
+    throw new AuthApiError("Couldn't reach the Soccernity server. Please try again shortly.", {
+      cause: networkError,
+    });
+  }
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      const body = (await response.json().catch(() => null)) as { message?: unknown } | null;
+      if (body?.message === TWO_FACTOR_CHALLENGE_EXPIRED_MESSAGE) {
+        throw new AuthApiError("This sign-in step has expired.", {
+          status: 401,
+          code: "two_factor_challenge_expired",
+        });
+      }
+      throw new AuthApiError("That code didn’t work.", { status: 401, code: "two_factor_invalid_code" });
+    }
+    if (response.status === 429) {
+      throw new AuthApiError("Too many incorrect codes.", { status: 429, code: "two_factor_locked" });
+    }
+    throw new AuthApiError("Something went wrong signing you in.", { status: response.status });
   }
 
   return (await response.json()) as LoginResponse;

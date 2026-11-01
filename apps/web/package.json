@@ -13,6 +13,7 @@
     "@soccernity/shared": "*",
     "@stripe/react-stripe-js": "^6.11.0",
     "@stripe/stripe-js": "^9.17.0",
+    "qrcode.react": "4.2.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.5.0"

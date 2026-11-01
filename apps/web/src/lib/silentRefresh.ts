@@ -51,6 +51,30 @@ const NO_REFRESH_PATHS = [
   "/auth/delete-inactive-account",
 ];
 
+// B-087 / B-111: three authenticated two-factor routes answer 401 for a WRONG credential
+// (a wrong code, a wrong password), not for an expired access token. Replaying one after a
+// refresh would count a second failed attempt against the five-tries lock, so a 401 whose
+// body carries the server's wrong-credential message is returned as it is. Any other 401
+// on these paths (a genuinely expired access token) still refreshes and replays as usual.
+// Messages mirror services/api modules/two-factor/two-factor.constants.ts and
+// two-factor.service.ts.
+const WRONG_CREDENTIAL_401: Record<string, string> = {
+  "/auth/two-factor/enrol/confirm": "That code did not work. Check it and try again.",
+  "/auth/two-factor/disable": "Incorrect password",
+  "/auth/two-factor/backup-codes/regenerate": "Incorrect password",
+};
+
+async function isWrongCredentialRejection(path: string, response: Response): Promise<boolean> {
+  const expected = WRONG_CREDENTIAL_401[path];
+  if (!expected) return false;
+  try {
+    const body = (await response.clone().json()) as { message?: unknown };
+    return body.message === expected;
+  } catch {
+    return false;
+  }
+}
+
 // The DOM fetch types, derived from `fetch` itself (the lint config has no
 // DOM-global type names in scope).
 type FetchInput = Parameters<typeof fetch>[0];
@@ -222,6 +246,7 @@ export function installSilentRefresh(): void {
     if (!url || !url.startsWith(API_BASE_URL)) return response;
     const path = url.slice(API_BASE_URL.length).split("?")[0];
     if (NO_REFRESH_PATHS.includes(path)) return response;
+    if (await isWrongCredentialRejection(path, response)) return response;
 
     const usedToken = bearerFrom(init?.headers);
     if (!usedToken) return response;
