@@ -1,5 +1,6 @@
 import { ExecutionContext, INestApplication, UnauthorizedException, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
 import * as request from 'supertest';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -26,6 +27,7 @@ const AUTHENTICATED_USER = { sub: 'user-1', role: 'fan' };
 
 describe('AuthController (HTTP layer)', () => {
   let app: INestApplication;
+  const guardianNotices = { notifyInBackground: jest.fn(), notify: jest.fn() };
   const authService = {
     login: jest.fn(),
     refresh: jest.fn(),
@@ -65,7 +67,10 @@ describe('AuthController (HTTP layer)', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [AuthController],
-      providers: [{ provide: AuthService, useValue: authService }],
+      providers: [
+        { provide: AuthService, useValue: authService },
+        { provide: GuardianSecurityNoticeService, useValue: guardianNotices },
+      ],
     })
       // Same reasoning as registration.controller.spec.ts: @UseGuards()
       // resolves by class reference, so overrideGuard() bypasses
@@ -262,6 +267,48 @@ describe('AuthController (HTTP layer)', () => {
         .post('/auth/change-password')
         .send({ currentPassword: 'wrong', newPassword: 'new-password-123' })
         .expect(401);
+    });
+
+    // B-275 (Decision Log #456): a minor's confirmed guardian is told after a successful change. The route only
+    // hands the user id and the event key over; who is actually emailed is decided in the notice service.
+    it('asks for a guardian security notice exactly once after a successful change, for the caller and no one else', async () => {
+      guardianNotices.notifyInBackground.mockClear();
+      authService.changePassword.mockResolvedValueOnce(undefined);
+
+      await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .send({ currentPassword: 'old-password', newPassword: 'new-password-123' })
+        .expect(204);
+
+      expect(guardianNotices.notifyInBackground).toHaveBeenCalledTimes(1);
+      expect(guardianNotices.notifyInBackground).toHaveBeenCalledWith(AUTHENTICATED_USER.sub, 'password_changed');
+    });
+
+    it('sends no guardian notice when the change fails (wrong current password) or the body is invalid', async () => {
+      guardianNotices.notifyInBackground.mockClear();
+      authService.changePassword.mockRejectedValueOnce(new UnauthorizedException('Current password is incorrect'));
+
+      await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .send({ currentPassword: 'wrong', newPassword: 'new-password-123' })
+        .expect(401);
+      await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .send({ currentPassword: 'old-password', newPassword: 'short' })
+        .expect(400);
+
+      expect(guardianNotices.notifyInBackground).not.toHaveBeenCalled();
+    });
+
+    it('does not change the response: still a bare 204, even if the notice call is a no-op', async () => {
+      authService.changePassword.mockResolvedValueOnce(undefined);
+
+      const res = await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .send({ currentPassword: 'old-password', newPassword: 'new-password-123' })
+        .expect(204);
+
+      expect(res.text).toBe('');
     });
   });
 
