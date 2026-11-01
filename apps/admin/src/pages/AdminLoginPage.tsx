@@ -14,15 +14,19 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { useAdminAuth } from "../auth/AdminAuthContext";
 import { AdminAuthError } from "../api/adminAuth";
+import type { AdminAuthResult } from "../api/adminAuth";
 import logoMark from "../assets/icons/logo-mark.svg";
+import TwoFactorSignIn, { type SignInStep } from "./two-factor/TwoFactorSignIn";
+import { NOTICE_BODY, NOTICE_TITLE } from "./two-factor/twoFactorCopy";
 import "./AdminLoginPage.css";
+import "./two-factor/twoFactor.css";
 
 interface LocationState {
   from?: string;
 }
 
 export default function AdminLoginPage() {
-  const { status, login } = useAdminAuth();
+  const { status, login, adoptSession, signedOutReason } = useAdminAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as LocationState | null)?.from;
@@ -31,6 +35,16 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // B-271: after the password step, a second screen (code prompt or enrolment) until a session exists.
+  // The token it carries is held here, in memory, and nowhere else.
+  const [step, setStep] = useState<SignInStep | null>(null);
+
+  const destination = from && from !== "/login" ? from : "/dashboard";
+
+  const handleSignedIn = (result: AdminAuthResult) => {
+    adoptSession(result);
+    navigate(destination, { replace: true });
+  };
 
   // Already signed in (e.g. navigated to /login with a live session) —
   // bounce to the console.
@@ -46,8 +60,20 @@ export default function AdminLoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await login(email.trim(), password);
-      navigate(from && from !== "/login" ? from : "/dashboard", { replace: true });
+      const outcome = await login(email.trim(), password);
+      if (outcome && outcome.kind === "challenge") {
+        setPassword("");
+        setStep({ kind: "challenge", challengeToken: outcome.challengeToken });
+        setSubmitting(false);
+        return;
+      }
+      if (outcome && outcome.kind === "enrolment") {
+        setPassword("");
+        setStep({ kind: "enrolment", enrolmentToken: outcome.enrolmentToken });
+        setSubmitting(false);
+        return;
+      }
+      navigate(destination, { replace: true });
     } catch (err) {
       if (err instanceof AdminAuthError) {
         setError(err.message);
@@ -58,6 +84,14 @@ export default function AdminLoginPage() {
     }
   };
 
+  if (step) {
+    return (
+      <div className="admin-login">
+        <TwoFactorSignIn step={step} onBack={() => setStep(null)} onSignedIn={handleSignedIn} />
+      </div>
+    );
+  }
+
   return (
     <div className="admin-login">
       <form className="admin-login__card" onSubmit={handleSubmit}>
@@ -67,6 +101,16 @@ export default function AdminLoginPage() {
         </div>
         <h1 className="admin-login__title">Admin Console</h1>
         <p className="admin-login__subtitle">Sign in with your staff account.</p>
+
+        {signedOutReason === "two-factor-enrolment-required" ? (
+          <div className="tf-banner tf-banner--alert" role="status">
+            <span className="tf-banner__bar" aria-hidden />
+            <div>
+              <p className="tf-banner__title">{NOTICE_TITLE}</p>
+              <p className="tf-banner__body">{NOTICE_BODY}</p>
+            </div>
+          </div>
+        ) : null}
 
         {error ? (
           <p className="admin-login__error" role="alert">

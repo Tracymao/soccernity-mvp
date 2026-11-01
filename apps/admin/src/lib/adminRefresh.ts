@@ -43,9 +43,16 @@ const API_BASE_URL =
 // a 403 on refresh/logout instead of silently falling back to body tokens.
 export const ADMIN_COOKIE_MODE_HEADERS = { "X-Auth-Mode": "cookie" } as const;
 
+// services/api two-factor.constants.ts ADMIN_TWO_FACTOR_ENROLMENT_REQUIRED_CODE.
+export const ADMIN_TWO_FACTOR_ENROLMENT_REQUIRED_CODE = "admin_two_factor_enrolment_required";
+
 export type AdminRefreshOutcome =
   | "ok" // a new access token is in memory
   | "signed-out" // 401: no cookie, or it is expired / revoked / reused
+  // 401 with body code admin_two_factor_enrolment_required (B-270 refresh gate): ADMIN_2FA_ENFORCED is on and
+  // this admin has no two-factor. The server has ended every session of the admin. Signed out like "signed-out",
+  // but the login screen explains why (B-271).
+  | "enrolment-required"
   | "forbidden" // 403: the API refused the Origin (a deployment mistake, not a sign-out)
   | "failed"; // network error or 5xx: the session is left alone
 
@@ -136,7 +143,17 @@ async function callRefresh(): Promise<AdminRefreshOutcome> {
       replaceAdminAccessToken(body.accessToken);
       return "ok";
     }
-    if (response.status === 401) return "signed-out";
+    if (response.status === 401) {
+      // Any other 401 stays a plain sign-out. Only the one coded answer gets the notice, and an unreadable body
+      // never turns into anything but a sign-out.
+      try {
+        const body = (await response.json()) as { code?: unknown };
+        if (body && body.code === ADMIN_TWO_FACTOR_ENROLMENT_REQUIRED_CODE) return "enrolment-required";
+      } catch {
+        /* no body: a plain sign-out */
+      }
+      return "signed-out";
+    }
     if (response.status === 403) return "forbidden";
     return "failed";
   } catch {

@@ -22,6 +22,7 @@ import {
   type AdminSummary,
 } from "../api/adminAuth";
 import { AdminApiError } from "../api/adminClient";
+import TwoFactorCard from "./two-factor/TwoFactorCard";
 import "./AdminProfilePage.css";
 
 function initialsFor(name: string): string {
@@ -310,6 +311,7 @@ export default function AdminProfilePage() {
         ) : null}
         {mode === "password" ? <ChangePasswordPanel onClose={() => setMode("view")} /> : null}
       </div>
+      <TwoFactorCard />
     </>
   );
 }
