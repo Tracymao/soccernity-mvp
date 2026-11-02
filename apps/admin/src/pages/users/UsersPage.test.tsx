@@ -34,6 +34,19 @@ function user(overrides: Partial<AdminUserListItem> = {}): AdminUserListItem {
 }
 
 describe("UsersPage", () => {
+  it("shows the working admin search bar (B-114), as the Users frame draws it", async () => {
+    vi.mocked(listUsers).mockResolvedValue({ items: [], nextCursor: null });
+    render(
+      <MemoryRouter>
+        <UsersPage />
+      </MemoryRouter>,
+    );
+    const bar = screen.getByRole("textbox", { name: "Search Soccernity" }) as HTMLInputElement;
+    expect(bar.disabled).toBe(false);
+    expect(screen.queryByText(/not available/i)).toBeNull();
+    await waitFor(() => expect(listUsers).toHaveBeenCalled());
+  });
+
   it("loads real users and renders name/date/status", async () => {
     vi.mocked(listUsers).mockResolvedValue({ items: [user()], nextCursor: null });
 

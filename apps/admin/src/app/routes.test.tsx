@@ -103,4 +103,40 @@ describe("adminRoutes (integration)", () => {
 
     await waitFor(() => expect(screen.getByText(/page not found/i)).not.toBeNull());
   });
+
+  it("routes /search?q= to the search results, inside the shell, with the query in the bar (B-114)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/admin/auth/refresh")) return jsonResponse(200, { accessToken: "acc-1" });
+        if (url.includes("/admin/search?q=zaha")) {
+          return jsonResponse(200, {
+            groups: {
+              articles: {
+                items: [
+                  {
+                    id: "a1",
+                    title: "Zaha double",
+                    status: "published",
+                    category: null,
+                    publishedAt: null,
+                    createdAt: "2022-08-08T09:00:00.000Z",
+                  },
+                ],
+                truncated: false,
+              },
+            },
+          });
+        }
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+    vi.mocked(getAdminProfile).mockResolvedValue(PROFILE);
+
+    renderAt("/search?q=zaha");
+
+    expect(await screen.findByRole("table", { name: "Articles" })).not.toBeNull();
+    expect(screen.getByText("Ada Lovelace")).not.toBeNull();
+    expect((screen.getByRole("textbox", { name: "Search Soccernity" }) as HTMLInputElement).value).toBe("zaha");
+  });
 });

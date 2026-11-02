@@ -163,7 +163,7 @@ export default function UsersPage() {
 
   return (
     <>
-      <AdminPageHeader title="Users" hideSearch />
+      <AdminPageHeader title="Users" />
       <div className="us-page">
         <div className="us-action-row">
           <div className="us-tabs">
