@@ -169,3 +169,24 @@ describe("router - guardian withdrawal route (B-080 / B-112)", () => {
     expect(screen.queryByRole("heading", { name: "Withdraw your consent" })).toBeNull();
   });
 });
+
+describe("router - user two-factor recovery link pages (B-278)", () => {
+  it.each([
+    ["/two-factor-recovery/confirm"],
+    ["/two-factor-recovery/cancel"],
+    ["/two-factor-recovery/guardian"],
+  ])("%s is public: with no session and no token it renders 'not valid' under the logo-only Top Bar, calling nothing", async (path) => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      await renderAt(path);
+      expect(screen.getByRole("heading", { name: "This link isn’t valid" })).not.toBeNull();
+      expect(screen.getByRole("link", { name: "Soccernity home" })).not.toBeNull();
+      expect(screen.queryByRole("navigation", { name: "Primary" })).toBeNull();
+      expect(document.querySelector("footer")).toBeNull();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

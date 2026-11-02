@@ -51,6 +51,8 @@ export default function LoginPage() {
   // B-087: an account with two-factor on is answered with a challenge instead of tokens.
   // It lives in component state only and is dropped the moment the code step ends.
   const [challengeToken, setChallengeToken] = useState<string | null>(null);
+  // B-278: the challenge says a lost-device recovery request is waiting for this account.
+  const [recoveryPending, setRecoveryPending] = useState(false);
 
   function finishSignIn(result: LoginResponse) {
     // B-246: the access token goes into memory; the refresh token is the
@@ -88,6 +90,7 @@ export default function LoginPage() {
         // for the code. (The email stays, so a person sent back here does not retype it.)
         setPassword("");
         setChallengeToken(result.challengeToken);
+        setRecoveryPending(result.recoveryPending === true);
         return;
       }
       finishSignIn(result);
@@ -115,10 +118,16 @@ export default function LoginPage() {
     return (
       <TwoFactorCodePrompt
         challengeToken={challengeToken}
+        email={email.trim()}
+        recoveryPending={recoveryPending}
         onSignedIn={finishSignIn}
         onExpired={() => {
           setChallengeToken(null);
           setFormError("Your sign-in expired. Please log in again.");
+        }}
+        onBackToLogin={() => {
+          setChallengeToken(null);
+          setFormError(null);
         }}
       />
     );

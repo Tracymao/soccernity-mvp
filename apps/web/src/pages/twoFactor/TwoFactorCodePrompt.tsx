@@ -11,9 +11,15 @@
 // The challenge token comes in as a prop and is never stored anywhere. The code is in
 // component state only. Nothing here logs.
 //
-// Not built, on purpose: the "Recovery: choose method / email and password / check your
-// email" frames (6711:27559, 6711:27646, 6711:27673 and the mobile twins). The backend has no
-// email-recovery route and its details are undecided, so there is no link to them.
+// Lost-device recovery (B-278; backend B-276, Decision Log #455): the code mode now carries the link
+// "Lost your device and backup codes?" (revised prompt, Figma 1.1 = 6912:34766 / 6912:34795), which
+// swaps this prompt for TwoFactorRecoveryRequest (email and password -> an emailed link). When the
+// challenge says a recovery request is already WAITING for the account (`recoveryPending`, Figma 2.8 =
+// 6914:35106 / 6914:35140) a banner says so: entering a code now cancels it. A successful code needs no
+// extra message here; the server cancels the request.
+//
+// NOT built from the older choose-method frames (6711:27559, 6711:27646, 6711:27673 and the mobile
+// twins): they describe a superseded flow (choose a method, then email, then password).
 import { useState, type FormEvent } from "react";
 import { AuthApiError, completeTwoFactorLogin, type LoginResponse } from "../../api/auth";
 import {
@@ -23,6 +29,7 @@ import {
 } from "../../api/twoFactorCodes";
 import CopyTag from "./CopyTag";
 import TwoFactorCodeInput from "./TwoFactorCodeInput";
+import TwoFactorRecoveryRequest from "./TwoFactorRecoveryRequest";
 import "./twoFactor.css";
 
 interface Props {
@@ -30,6 +37,12 @@ interface Props {
   onSignedIn: (result: LoginResponse) => void;
   /** The challenge ran out (or the account changed mid-flow): the caller sends the person back. */
   onExpired: () => void;
+  /** The email just signed in with; prefills the recovery request. */
+  email?: string;
+  /** The challenge's `recoveryPending`: a lost-device request is waiting for this account. */
+  recoveryPending?: boolean;
+  /** Leave the code step for the log-in form (no "expired" message). Defaults to `onExpired`. */
+  onBackToLogin?: () => void;
 }
 
 type Mode = "code" | "backup";
@@ -38,7 +51,15 @@ const WRONG_APP_CODE = "That code didn’t work. Check your authenticator app an
 const WRONG_BACKUP_CODE = "That code didn’t work. Check your backup code and try again.";
 const LOCKED = "Too many incorrect codes. Try again later.";
 
-export default function TwoFactorCodePrompt({ challengeToken, onSignedIn, onExpired }: Props) {
+export default function TwoFactorCodePrompt({
+  challengeToken,
+  onSignedIn,
+  onExpired,
+  email,
+  recoveryPending = false,
+  onBackToLogin,
+}: Props) {
+  const [view, setView] = useState<"prompt" | "recovery">("prompt");
   const [mode, setMode] = useState<Mode>("code");
   const [code, setCode] = useState("");
   const [backup, setBackup] = useState("");
@@ -87,10 +108,26 @@ export default function TwoFactorCodePrompt({ challengeToken, onSignedIn, onExpi
     setError(null);
   }
 
+  if (view === "recovery") {
+    return (
+      <TwoFactorRecoveryRequest
+        email={email}
+        onBack={() => setView("prompt")}
+        onBackToLogin={onBackToLogin ?? onExpired}
+      />
+    );
+  }
+
   return (
     <div className="tf-prompt">
       <form className="tf-prompt__inner" onSubmit={submit} noValidate>
         <CopyTag />
+        {recoveryPending && (
+          <div className="tf-banner" role="status" data-testid="recovery-pending-banner">
+            <p className="tf-banner__title">A recovery request is waiting</p>
+            <p className="tf-banner__text">Entering a code now cancels it.</p>
+          </div>
+        )}
         {mode === "code" ? (
           <>
             <h1 className="tf-heading">Enter the 6-digit code</h1>
@@ -149,9 +186,14 @@ export default function TwoFactorCodePrompt({ challengeToken, onSignedIn, onExpi
         </div>
 
         {mode === "code" && (
-          <button type="button" className="tf-link" onClick={() => switchMode("backup")} disabled={busy}>
-            Can&rsquo;t use your authenticator app?
-          </button>
+          <>
+            <button type="button" className="tf-link" onClick={() => switchMode("backup")} disabled={busy}>
+              Use a backup code instead
+            </button>
+            <button type="button" className="tf-link" onClick={() => setView("recovery")} disabled={busy}>
+              Lost your device and backup codes?
+            </button>
+          </>
         )}
       </form>
     </div>

@@ -22,6 +22,16 @@ export const TWO_FACTOR_ALREADY_ENABLED = "two_factor_already_enabled";
 export const TWO_FACTOR_NOT_ENABLED = "two_factor_not_enabled";
 export const TWO_FACTOR_NO_PENDING_ENROLMENT = "two_factor_no_pending_enrolment";
 
+// User two-factor RECOVERY (B-276/B-278; services/api two-factor/recovery/two-factor-recovery.constants.ts).
+//   two_factor_recovery_unavailable   503: Redis is down; recovery is off until it returns.
+//   two_factor_recovery_link_invalid  400 on a link action: the link is unknown or for another kind.
+//   two_factor_recovery_link_expired  400: the link ran out (or a newer request replaced it).
+//   two_factor_recovery_link_used     400: the link, or the request it opened, was already used.
+export const TWO_FACTOR_RECOVERY_UNAVAILABLE = "two_factor_recovery_unavailable";
+export const TWO_FACTOR_RECOVERY_LINK_INVALID = "two_factor_recovery_link_invalid";
+export const TWO_FACTOR_RECOVERY_LINK_EXPIRED = "two_factor_recovery_link_expired";
+export const TWO_FACTOR_RECOVERY_LINK_USED = "two_factor_recovery_link_used";
+
 /** The `code` of a JSON error body, or null when there is none / the body is not JSON. */
 export async function errorBodyCode(response: Response): Promise<string | null> {
   try {
