@@ -31,6 +31,13 @@ export const ADMIN_ACTION_LOG_ACTIONS = {
   // change. targetType 'user'. Notes carry the revoked handle, the 30-day hold
   // end and the REASON.
   USER_USERNAME_REVOKED: 'user.username_revoked',
+  // /admin/users/:id/guardian-notices/{withhold,clear,review} (backend/b280-withhold-guardian-notices, B-280, Decision
+  // Log #458). targetType 'user' (the minor). Written in the SAME transaction as the change. Notes carry the REASON
+  // (withhold, clear) or the NOTE (review), never anything about the guardian. Only child-safety-vetted admins read
+  // them (no endpoint lists this log at all today; see modules/admin-users/README.md).
+  USER_GUARDIAN_NOTICES_WITHHELD: 'user.guardian_notices_withheld',
+  USER_GUARDIAN_NOTICES_CLEARED: 'user.guardian_notices_cleared',
+  USER_GUARDIAN_NOTICES_REVIEWED: 'user.guardian_notices_reviewed',
   // HoldService (backend/w6-hold-rule-extension, B-044, Decision Log #376 / #398 D1 / #403 item 8). targetType
   // 'user' (the HELD account); one row per hold, written in the SAME transaction as the AccountHold change. Notes
   // carry the hold id, the report id and the REASON. The held user is never told.

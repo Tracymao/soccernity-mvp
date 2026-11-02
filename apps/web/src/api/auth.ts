@@ -60,6 +60,12 @@ export interface TwoFactorChallenge {
   twoFactorRequired: true;
   challengeToken: string;
   challengeExpiresInSeconds: number;
+  // B-278 (backend B-276): present on a USER challenge, added only after the password step
+  // succeeded. true when a lost-device recovery request is WAITING for this account (an
+  // adult confirmed one); a successful code cancels it. `recoveryExecuteAt` (ISO) only
+  // when true.
+  recoveryPending?: boolean;
+  recoveryExecuteAt?: string;
 }
 
 export function isTwoFactorChallenge(result: unknown): result is TwoFactorChallenge {

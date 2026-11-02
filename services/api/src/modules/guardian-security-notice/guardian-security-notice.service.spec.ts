@@ -135,6 +135,8 @@ describe('GuardianSecurityNoticeService', () => {
           isMinor: true,
           displayName: true,
           guardian: { select: { email: true, consentStatus: true } },
+          // B-280: existence only; the withhold reason is never selected.
+          guardianNoticeWithhold: { select: { id: true } },
         },
       });
     });

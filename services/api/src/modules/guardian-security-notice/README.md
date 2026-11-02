@@ -161,3 +161,38 @@ TTL, (B) minor reports and blocks send nothing, holds send nothing).
 
 All wording is plain functional copy and is **[COPY PENDING LEGAL REVIEW]**; it is listed in
 `docs/pending-copy-manifest.md` (the `services/api` section).
+
+## What the withhold flag gates (B-280; Decision Log #458)
+
+A child-safety-vetted admin can switch **"withhold guardian notices"** on for a MINOR's account, with a written reason
+(`GuardianNoticeWithhold`, one row per account while it is on; routes in `../admin-users/README.md`, "Guardian notices").
+While the row exists, `decide()` returns `skipped_withheld` **after** the `isMinor` check and **before** the Guardian
+check, so:
+
+- every B-275 security notice and every B-279 safety notice for that account is skipped silently. The only trace is an
+  internal log line ("withheld") with no reason, no admin, no address and no name;
+- `decide()` runs before the throttle claim, so a withheld account never takes a throttle slot (a test proves it);
+- `prepare()` returns `null` for it, so the account-removal notice is covered too;
+- notices skipped while it was on are **not** queued: clearing the flag does not send them;
+- nothing is created in-app for the guardian (no guardian Notification row exists).
+
+An adult is unaffected (`isMinor` is checked first, so when the account turns 18 the flag is inert; the row stays until
+the account is anonymised, and an admin can still clear it). The user query selects the flag as `{ id: true }` only: the
+reason is never read here.
+
+### Every sender to a guardian address, and whether the flag gates it
+
+Found by grepping every `send*` call whose recipient is `Guardian.email` (or `guardian.email`):
+
+| Email | Sent by | Gated by the flag? | Why |
+|---|---|---|---|
+| `guardian-security-notice` (B-275: two-factor on/off, backup codes, password change/reset, sign-in lock) | `GuardianSecurityNoticeService` | **Yes** | The point of the flag. |
+| `guardian-safety-notice` (B-279: content removed, warning, suspension, reinstated, removed, username removed, room deactivated, media/profile image not approved, appeal upheld/overturned) | `GuardianSecurityNoticeService` | **Yes** | The point of the flag. |
+| `two-factor-recovery-guardian-link` (B-276) | `TwoFactorRecoveryService.request` | **Yes**, differently | Recovery is switched off: a withheld minor is answered `no_guardian`, the request is never created and nothing is sent. Existing guardian links read as expired. |
+| `guardian-consent` (the consent request: registration, resend, change-guardian-email, DOB-correction restart) | `RegistrationService`, `GuardianConsentService`, `AdminUserDobCorrectionService` | No | Consent mechanics are untouched (#458). Without it a withheld minor could never be approved. |
+| `guardian-withdrawal-request` (the withdrawal link/code) | `GuardianConsentService` | No | Consent mechanics: a guardian must always be able to withdraw. |
+| `guardian-email-replaced` (to the OLD guardian address) | `GuardianConsentService.changeGuardianEmail` | No | A consent-flow notice (the old address is told the request was withdrawn). Decision Log #458 leaves it. |
+| `guardian-minor-turned-18` | `AgeReclassificationSweepService` | No | Consent/age mechanics; the flag is inert once the account is an adult anyway. |
+
+Emails that go to the **minor**, not the guardian (the consent reminder, decline/withdrawn/expired notices, the
+stale-decline reminder, the recovery minor notice), are not guardian notices and are not affected.

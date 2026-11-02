@@ -107,11 +107,14 @@ model User {
   //                        what "two-factor is on" means.
   //   totpLastUsedStep     the 30-second time step of the last accepted code; a code for a step at or below it is
   //                        refused (replay protection), updated with an atomic compare.
-  totpSecretEncrypted String?
-  totpEnabledAt       DateTime?
-  totpLastUsedStep    Int?
-  twoFactorBackupCodes UserBackupCode[]
+  totpSecretEncrypted       String?
+  totpEnabledAt             DateTime?
+  totpLastUsedStep          Int?
+  twoFactorBackupCodes      UserBackupCode[]
   twoFactorRecoveryRequests TwoFactorRecoveryRequest[]
+  // backend/b280-withhold-guardian-notices (B-280): reverse relation for GuardianNoticeWithhold. Never selected by any
+  // user-facing query; see the model's comment.
+  guardianNoticeWithhold    GuardianNoticeWithhold?
 
   // sprint-2/account-deletion-sweep — a genuine addition beyond Section
   // 3's literal User field list, flagged per CLAUDE.md's "the data model
@@ -1911,11 +1914,11 @@ model AdminUser {
   // is a distinct act from reviewing or escalating a report. No
   // application code reads or writes any of these three fields yet --
   // no vetting endpoint, no gate on Report review keyed to this flag.
-  childSafetyVetted       Boolean          @default(false)
+  childSafetyVetted       Boolean                  @default(false)
   vettedAt                DateTime?
   vettedByAdminId         String?
-  vettedByAdmin           AdminUser?       @relation("adminVettedBy", fields: [vettedByAdminId], references: [id])
-  vettedAdmins            AdminUser[]      @relation("adminVettedBy")
+  vettedByAdmin           AdminUser?               @relation("adminVettedBy", fields: [vettedByAdminId], references: [id])
+  vettedAdmins            AdminUser[]              @relation("adminVettedBy")
   // backend/b086-two-factor (B-086, B-270; Decision Log #446) -- same three fields as User (see the comment there):
   // authenticator-app two-factor for an admin, MANDATORY before launch (enforced at sign-in by ADMIN_2FA_ENFORCED),
   // secret encrypted with DOB_ENCRYPTION_KEY, replay protection by totpLastUsedStep. A peer superadmin can reset it
@@ -1928,10 +1931,12 @@ model AdminUser {
   // comment). No application code writes AdminActionLog rows yet.
   actionLogs              AdminActionLog[]
   // backend/w6-hold-rule-extension (B-044) -- reverse relations for AccountHold's two AdminUser FKs.
-  placedAccountHolds      AccountHold[]    @relation("accountHoldPlacedBy")
-  liftedAccountHolds      AccountHold[]    @relation("accountHoldLiftedBy")
+  placedAccountHolds      AccountHold[]            @relation("accountHoldPlacedBy")
+  liftedAccountHolds      AccountHold[]            @relation("accountHoldLiftedBy")
+  // backend/b280-withhold-guardian-notices (B-280) -- reverse relation for GuardianNoticeWithhold.setByAdmin.
+  guardianNoticeWithholds GuardianNoticeWithhold[] @relation("guardianNoticeWithholdSetBy")
   // backend/w7-contact-us-enquiry (B-046) -- reverse relation for ContactEnquiry.handledByAdmin.
-  handledContactEnquiries ContactEnquiry[] @relation("contactEnquiryHandledBy")
+  handledContactEnquiries ContactEnquiry[]         @relation("contactEnquiryHandledBy")
 }
 
 // schema/report-severity-escalation-admin-vetting -- a genuine new model,
@@ -2732,4 +2737,33 @@ model TwoFactorRecoveryRequest {
   @@index([userId])
   @@index([state, executeAt])
   @@index([state, doneAt])
+}
+
+// backend/b280-withhold-guardian-notices (B-280; Decision Log #458, on #455 / #456). A genuine NEW model, flagged as a
+// Decision Log candidate per CLAUDE.md's "the data model is a fixed spec" rule. One row per MINOR's account while a
+// child-safety-vetted admin has "withhold guardian notices" switched ON; the row is DELETED when it is cleared (the
+// history of sets, reviews and clears lives in AdminActionLog). While a row exists the guardian security notices
+// (B-275), the guardian safety-action notices (B-279) and guardian-assisted two-factor recovery (B-276) are off for that
+// account; consent mechanics are untouched.
+//
+// A table of its own, NOT columns on User, on purpose: no existing User select, serialiser or spread can leak the
+// flag or its reason. Nothing user-facing reads this model. The reason is visible to child-safety-vetted admins only.
+//
+// userId is unique (one flag per account) and CASCADEs like TwoFactorRecoveryRequest; the anonymiser also deletes the
+// row in the same transaction that anonymises the account (a held-only-by-report account is MINIMISED, not
+// anonymised, and keeps its flag). setByAdminId is RESTRICT, like every other AdminUser reference.
+// lastReviewedAt / lastReviewNote hold only the LATEST review. There is no automatic expiry: "review due" is derived
+// (30 days after the later of setAt and lastReviewedAt) and changes nothing by itself.
+model GuardianNoticeWithhold {
+  id             String    @id @default(uuid())
+  userId         String    @unique
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  setByAdminId   String
+  setByAdmin     AdminUser @relation("guardianNoticeWithholdSetBy", fields: [setByAdminId], references: [id], onDelete: Restrict)
+  reason         String
+  setAt          DateTime  @default(now())
+  lastReviewedAt DateTime?
+  lastReviewNote String?
+
+  @@index([setByAdminId])
 }

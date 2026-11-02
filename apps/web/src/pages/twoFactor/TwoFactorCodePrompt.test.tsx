@@ -1,6 +1,7 @@
 // B-087 / B-111: the sign-in code prompt shared by LoginPage and InactiveAccountPage.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
 import TwoFactorCodePrompt from "./TwoFactorCodePrompt";
 import { AuthApiError, type LoginResponse } from "../../api/auth";
 
@@ -20,14 +21,18 @@ const onSignedIn = vi.fn();
 const onExpired = vi.fn();
 
 function open() {
-  render(<TwoFactorCodePrompt challengeToken="chal-1" onSignedIn={onSignedIn} onExpired={onExpired} />);
+  render(
+    <MemoryRouter>
+      <TwoFactorCodePrompt challengeToken="chal-1" onSignedIn={onSignedIn} onExpired={onExpired} />
+    </MemoryRouter>,
+  );
 }
 
 function typeCode(value: string) {
   fireEvent.change(screen.getByLabelText("Digit 1 of 6"), { target: { value } });
 }
 
-const CANT_USE = /can.t use your authenticator app\?/i;
+const CANT_USE = "Use a backup code instead";
 
 beforeEach(() => {
   vi.mocked(completeTwoFactorLogin).mockReset();
@@ -199,10 +204,63 @@ describe("backup-code mode (Figma 6711:27590 / 6711:27617)", () => {
   });
 });
 
-describe("the recovery frames that are deliberately not built", () => {
-  it("offers no link to email recovery or to any recovery route", () => {
+// B-278 (Decision Log #455): REPLACES the earlier assertion that the prompt offers NO route to email
+// recovery. That was right while the backend had no recovery routes; the founder decided the flow and it is
+// built, so the prompt now carries the link "Lost your device and backup codes?" (Figma 1.1 = 6912:34766).
+describe("the lost-device recovery entry point (Figma 1.1)", () => {
+  it("offers 'Lost your device and backup codes?' next to 'Use a backup code instead' in code mode", () => {
     open();
-    expect(screen.queryAllByRole("link")).toHaveLength(0);
-    expect(screen.queryByText(/email and password|check your email|choose a method/i)).toBeNull();
+    expect(screen.getByRole("button", { name: "Lost your device and backup codes?" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Use a backup code instead" })).not.toBeNull();
+    // The older choose-method wording is gone.
+    expect(screen.queryByText(/can.t use your authenticator app/i)).toBeNull();
+  });
+
+  it("is not shown in backup-code mode (that frame is unchanged)", () => {
+    open();
+    fireEvent.click(screen.getByRole("button", { name: CANT_USE }));
+    expect(screen.queryByRole("button", { name: "Lost your device and backup codes?" })).toBeNull();
+  });
+
+  it("opens the email-and-password request, prefilled with the sign-in email, and Back returns to the prompt", () => {
+    render(
+      <MemoryRouter>
+        <TwoFactorCodePrompt
+          challengeToken="chal-1"
+          email="tobi@example.com"
+          onSignedIn={onSignedIn}
+          onExpired={onExpired}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Lost your device and backup codes?" }));
+    expect(screen.getByRole("heading", { name: "Confirm it’s you" })).not.toBeNull();
+    expect((screen.getByLabelText("Email") as HTMLInputElement).value).toBe("tobi@example.com");
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByRole("heading", { name: "Enter the 6-digit code" })).not.toBeNull();
+  });
+});
+
+describe("a recovery request is waiting (Figma 2.8 = 6914:35106)", () => {
+  it("shows the banner when the challenge says so, and the code step still works", async () => {
+    vi.mocked(completeTwoFactorLogin).mockResolvedValue(SESSION);
+    render(
+      <MemoryRouter>
+        <TwoFactorCodePrompt challengeToken="chal-1" recoveryPending onSignedIn={onSignedIn} onExpired={onExpired} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId("recovery-pending-banner")).not.toBeNull();
+    expect(screen.getByText("A recovery request is waiting")).not.toBeNull();
+    expect(screen.getByText("Entering a code now cancels it.")).not.toBeNull();
+    typeCode("482017");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(onSignedIn).toHaveBeenCalledWith(SESSION));
+    // A successful code needs no extra message from the page.
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows no banner otherwise", () => {
+    open();
+    expect(screen.queryByTestId("recovery-pending-banner")).toBeNull();
   });
 });

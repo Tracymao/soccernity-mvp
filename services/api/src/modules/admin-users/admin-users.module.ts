@@ -7,6 +7,9 @@ import { GuardianSecurityNoticeModule } from '../guardian-security-notice/guardi
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
+import { AdminChildSafetyVettedGuard } from './admin-child-safety-vetted.guard';
+import { AdminGuardianNoticesController } from './admin-guardian-notices.controller';
+import { AdminGuardianNoticesService } from './admin-guardian-notices.service';
 import { AdminUserDetailService } from './admin-user-detail.service';
 import { AdminUserDobCorrectionService } from './admin-user-dob-correction.service';
 import { AdminUserUsernameRevokeService } from './admin-user-username-revoke.service';
@@ -37,12 +40,15 @@ import { AdminUsersService } from './admin-users.service';
   // (the guardian consent email a DOB-correction restart sends). DobEncryptionService
   // comes from the global CryptoModule.
   imports: [AdminAuthFoundationModule, AuthFoundationModule, AccountDeletionModule, AdminActionLogModule, ConfigModule, GuardianSecurityNoticeModule],
-  controllers: [AdminUsersController],
+  controllers: [AdminUsersController, AdminGuardianNoticesController],
   providers: [
     AdminUsersService,
     AdminUserDetailService,
     AdminUserDobCorrectionService,
     AdminUserUsernameRevokeService,
+    // B-280: the "withhold guardian notices" flag.
+    AdminGuardianNoticesService,
+    AdminChildSafetyVettedGuard,
     PrismaService,
     RegistrationEmailService,
   ],

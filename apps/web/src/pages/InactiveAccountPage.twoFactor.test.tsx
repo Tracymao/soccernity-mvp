@@ -17,7 +17,12 @@ vi.mock("../api/auth", async () => {
   const actual = await vi.importActual<typeof import("../api/auth")>("../api/auth");
   return { ...actual, reactivateAccount: vi.fn(), completeTwoFactorLogin: vi.fn() };
 });
+vi.mock("../api/twoFactorRecovery", async () => {
+  const actual = await vi.importActual<typeof import("../api/twoFactorRecovery")>("../api/twoFactorRecovery");
+  return { ...actual, requestRecovery: vi.fn() };
+});
 import { completeTwoFactorLogin, reactivateAccount } from "../api/auth";
+import { requestRecovery } from "../api/twoFactorRecovery";
 import { clearSession, heldAccessToken } from "../test/session";
 
 const CHALLENGE = { twoFactorRequired: true as const, challengeToken: "chal-r", challengeExpiresInSeconds: 300 };
@@ -77,7 +82,7 @@ describe("Inactive Account, two-factor on", () => {
     vi.mocked(completeTwoFactorLogin).mockResolvedValue(SESSION);
     renderPage();
     fireEvent.click(screen.getByRole("button", { name: "Activate account" }));
-    fireEvent.click(await screen.findByRole("button", { name: /can.t use your authenticator app\?/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Use a backup code instead" }));
     fireEvent.change(screen.getByLabelText("Backup code"), { target: { value: "ABCDE-12345" } });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/community"));
@@ -97,5 +102,37 @@ describe("Inactive Account, two-factor on", () => {
     expect((await screen.findByRole("alert")).textContent).toMatch(/this step has expired/i);
     expect(screen.getByRole("button", { name: "Activate account" })).not.toBeNull();
     expect(heldAccessToken()).toBeNull();
+  });
+});
+
+// B-278 (Decision Log #455): the same lost-device recovery entry point on the reactivation prompt.
+describe("Inactive Account, lost-device recovery", () => {
+  it("the shared prompt offers the link, prefilled with the account email", async () => {
+    vi.mocked(reactivateAccount).mockResolvedValue(CHALLENGE);
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "Activate account" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Lost your device and backup codes?" }));
+    expect(screen.getByRole("heading", { name: "Confirm it’s you" })).not.toBeNull();
+    expect((screen.getByLabelText("Email") as HTMLInputElement).value).toBe("sam@example.com");
+    expect(requestRecovery).not.toHaveBeenCalled();
+  });
+
+  it("'Back to log in' leaves for /login", async () => {
+    vi.mocked(reactivateAccount).mockResolvedValue(CHALLENGE);
+    vi.mocked(requestRecovery).mockResolvedValue({ audience: "guardian" });
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "Activate account" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Lost your device and backup codes?" }));
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "longenough1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Back to log in" }));
+    expect(navigateMock).toHaveBeenCalledWith("/login");
+  });
+
+  it("a challenge with recoveryPending shows the banner", async () => {
+    vi.mocked(reactivateAccount).mockResolvedValue({ ...CHALLENGE, recoveryPending: true });
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "Activate account" }));
+    expect(await screen.findByText("A recovery request is waiting")).not.toBeNull();
   });
 });

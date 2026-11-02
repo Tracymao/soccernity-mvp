@@ -17,6 +17,7 @@ import { AuthLimitExceeded, AuthLimitsService } from '../../auth/rate-limit/auth
 import { AuthLimitsStore, limitKey, normaliseEmail } from '../../auth/rate-limit/auth-limits/auth-limits.store';
 import { RegistrationEmailService } from '../../auth/registration/email/registration-email.service';
 import { TokenService } from '../../auth/token/token.service';
+import { isGuardianNoticeWithheld } from '../../guardian-security-notice/guardian-notice-withhold.util';
 import { formatNoticeTime } from '../../guardian-security-notice/guardian-security-notice.service';
 import { resolvePublicName } from '../../users/public-name.util';
 import { TwoFactorService } from '../two-factor.service';
@@ -174,6 +175,8 @@ export class TwoFactorRecoveryService implements OnModuleInit {
           isMinor: true,
           displayName: true,
           guardian: { select: { email: true, consentStatus: true } },
+          // B-280: existence of the row is the flag; the reason is never selected.
+          guardianNoticeWithhold: { select: { id: true } },
         },
       });
       const valid = await this.passwordService.verify(user?.passwordHash ?? this.dummyPasswordHash, password);
@@ -197,8 +200,11 @@ export class TwoFactorRecoveryService implements OnModuleInit {
       }
 
       const guardianEmail = user.guardian?.email?.trim();
-      if (user.guardian?.consentStatus !== 'confirmed' || !guardianEmail) {
-        // A minor with no confirmed guardian: nothing is created and nothing is sent. The page points to Contact Us.
+      // B-280 (Decision Log #458): while guardian notices are withheld for this account, guardian-assisted recovery is
+      // OFF and looks exactly like "no confirmed guardian". Reached only after a correct password, so the audience
+      // is revealed to no one else (the anti-enumeration rule is unchanged), and the budget spent is the same.
+      if (user.guardianNoticeWithhold || user.guardian?.consentStatus !== 'confirmed' || !guardianEmail) {
+        // A minor with no usable guardian: nothing is created and nothing is sent. The page points to Contact Us.
         return { audience: 'no_guardian' };
       }
       const created = await this.createRequest(user.id, 'guardian', now, GUARDIAN_LINK_TTL_MS);
@@ -288,6 +294,9 @@ export class TwoFactorRecoveryService implements OnModuleInit {
     const kind = found.row.kind as RecoveryKind;
     if (state !== 'valid') return { state, kind };
     if (kind === 'adult') return { state, kind };
+    // B-280: a guardian link for an account whose notices are withheld reads as expired (setting the flag cancels
+    // such links; this covers one created in the instant before the flag was set).
+    if (await isGuardianNoticeWithheld(this.prisma, found.row.userId)) return { state: 'expired', kind };
     const user = await this.prisma.user.findUnique({
       where: { id: found.row.userId },
       select: { username: true, displayName: true },
@@ -358,6 +367,8 @@ export class TwoFactorRecoveryService implements OnModuleInit {
     if (!found || found.row.kind !== 'guardian') throw this.linkError('invalid');
     const state = this.linkState(found.row);
     if (state !== 'valid') throw this.linkError(state);
+    // B-280: withheld => the link reads as expired and nothing changes.
+    if (await isGuardianNoticeWithheld(this.prisma, found.row.userId)) throw this.linkError('expired');
 
     const user = await this.prisma.user.findUnique({
       where: { id: found.row.userId },
@@ -386,6 +397,8 @@ export class TwoFactorRecoveryService implements OnModuleInit {
     if (!found || found.row.kind !== 'guardian') throw this.linkError('invalid');
     const state = this.linkState(found.row);
     if (state !== 'valid') throw this.linkError(state);
+    // B-280: withheld => the link reads as expired and nothing changes (the minor is not emailed either).
+    if (await isGuardianNoticeWithheld(this.prisma, found.row.userId)) throw this.linkError('expired');
 
     const ended = await this.endRequest(found.row.id, 'declined', ['pending']);
     if (!ended) throw this.linkError('used');
