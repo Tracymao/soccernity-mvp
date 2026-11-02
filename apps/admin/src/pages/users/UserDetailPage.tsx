@@ -23,12 +23,18 @@
 // frame says where to show it. The rest of the summary (guardian, age flags,
 // safeguarding country, revocation history) has no place in the frames and is
 // not rendered.
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useParams } from "react-router";
 import { AdminApiError } from "../../api/adminClient";
 import { getUserSummary, revokeUsername, type AdminUserSummary } from "../../api/adminUsers";
+import { useOptionalAdminAuth } from "../../auth/AdminAuthContext";
+import { useDialogFocus } from "../moderation/HoldDialog";
+import { VettingRestrictedNotice } from "../moderation/moderationShared";
+import GuardianNoticesSection from "./GuardianNoticesSection";
+import * as noticesCopy from "./guardianNoticesCopy";
 import { formatDate, useAsyncData } from "./usersShared";
+import "../moderation/moderation.css";
 import "./users.css";
 
 const REASON_MIN = 10;
@@ -142,11 +148,72 @@ function RevokeUsernameDialog({
   );
 }
 
+// Frame 6921:36445: the existing restricted callout in a dialog, shown when the server answers the
+// child-safety-vetting 403 to a page that was loaded while the admin was vetted.
+function RestrictedDialog({ title, onClose }: { title: string; onClose: () => void }) {
+  const titleId = useId();
+  const ref = useRef<HTMLDivElement>(null);
+  useDialogFocus(ref, onClose);
+  return (
+    <div className="ud-scrim" role="presentation">
+      <div ref={ref} className="ud-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+        <div className="ud-dialog__head">
+          <h2 id={titleId}>{title}</h2>
+          <button type="button" className="ud-dialog__close" aria-label="Close" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        <div className="ud-dialog__body">
+          <VettingRestrictedNotice />
+          <div className="ud-dialog__buttons">
+            <button type="button" className="us-btn us-btn--outline us-btn--lg" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function UserDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
   const { data: user, loading, error, reload } = useAsyncData(() => getUserSummary(id), [id]);
   const [revoking, setRevoking] = useState(false);
   const [revoked, setRevoked] = useState(false);
+
+  // B-282: the Guardian notices section is for a child-safety-vetted admin only. That state can change while a
+  // session is open, so the admin's own profile is re-read when this screen opens, and the section waits for it.
+  // Outside an auth provider (a screen mounted on its own) there is no admin, so there is no section.
+  const auth = useOptionalAdminAuth();
+  const refreshProfile = auth?.refreshProfile;
+  const [profileChecked, setProfileChecked] = useState(false);
+  const [restrictedTitle, setRestrictedTitle] = useState<string | null>(null);
+  const [cleared, setCleared] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setProfileChecked(false);
+    setCleared(false);
+    void (refreshProfile ? refreshProfile() : Promise.resolve(null)).finally(() => {
+      if (!cancelled) setProfileChecked(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, refreshProfile]);
+
+  const showNotices =
+    profileChecked &&
+    auth?.admin?.childSafetyVetted === true &&
+    user?.isMinor === true &&
+    user.accountStatus !== "deleted";
+  const hasConfirmedGuardian = user?.guardian?.consentStatus === "confirmed";
+
+  function handleRestricted(title: string) {
+    setRestrictedTitle(title);
+    // The server says this admin is no longer vetted: re-read the profile so the stale section goes away.
+    void refreshProfile?.();
+  }
 
   const hasUsername = Boolean(user?.username);
 
@@ -189,6 +256,13 @@ export default function UserDetailPage() {
           </p>
         ) : null}
 
+        {cleared && user ? (
+          <div className="ud-callout gn-banner" role="status">
+            <p className="gn-alert__title">{noticesCopy.CLEARED_BANNER_TITLE}</p>
+            <p className="gn-alert__body">{noticesCopy.clearedBannerBody(user.displayName)}</p>
+          </div>
+        ) : null}
+
         {user ? (
           <>
             <section className="us-card" aria-labelledby="ud-account">
@@ -217,6 +291,14 @@ export default function UserDetailPage() {
                 <div className="ud-fields__row">
                   <dt>Joined</dt>
                   <dd>{formatDate(user.createdAt)}</dd>
+                </div>
+                <div className="ud-fields__row">
+                  <dt>Age group</dt>
+                  <dd>{user.isMinor ? "Under 18" : "18 or over"}</dd>
+                </div>
+                <div className="ud-fields__row">
+                  <dt>Guardian</dt>
+                  <dd>{hasConfirmedGuardian ? "Confirmed" : "None confirmed"}</dd>
                 </div>
                 <div className="ud-fields__row">
                   <dt>User ID</dt>
@@ -255,9 +337,21 @@ export default function UserDetailPage() {
                 </Link>
               </div>
             </section>
+
+            {showNotices ? (
+              <GuardianNoticesSection
+                userId={user.id}
+                displayName={user.displayName}
+                hasConfirmedGuardian={hasConfirmedGuardian}
+                onRestricted={handleRestricted}
+                onCleared={() => setCleared(true)}
+              />
+            ) : null}
           </>
         ) : null}
       </div>
+
+      {restrictedTitle ? <RestrictedDialog title={restrictedTitle} onClose={() => setRestrictedTitle(null)} /> : null}
 
       {user && revoking ? (
         <RevokeUsernameDialog user={user} onClose={() => setRevoking(false)} onRevoked={handleRevoked} />
