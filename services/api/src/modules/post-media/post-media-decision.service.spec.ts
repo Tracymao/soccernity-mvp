@@ -33,10 +33,14 @@ function build(row: Record<string, unknown> | null) {
     calls.push('write');
     return { count: 1 };
   });
-  const service = new PostMediaDecisionService(prisma as unknown as PrismaService, objects as unknown as PostMediaObjectsService, {
-    now: () => NOW,
-  });
-  return { service, prisma, objects, calls };
+  const guardianNotices = { notifyInBackground: jest.fn() };
+  const service = new PostMediaDecisionService(
+    prisma as unknown as PrismaService,
+    objects as unknown as PostMediaObjectsService,
+    { now: () => NOW },
+    guardianNotices as never,
+  );
+  return { service, prisma, objects, calls, guardianNotices };
 }
 
 const row = (over: Record<string, unknown> = {}) => ({
@@ -200,5 +204,37 @@ describe('PostMediaDecisionService.reject', () => {
     expect(prisma.postMedia.updateMany).not.toHaveBeenCalled();
     expect(prisma.notification.create).not.toHaveBeenCalled();
     expect(objects.withdraw).not.toHaveBeenCalled();
+  });
+});
+
+// B-279 (Decision Log #456 A): a moderator REJECTING a file is a platform action on the uploader's content, so the
+// uploader's guardian (if a minor with a confirmed guardian) is told the kind of action. An approval, and a
+// "kept" decision on a reported file, are not safety actions and send nothing.
+describe('PostMediaDecisionService: guardian notice (B-279)', () => {
+  it('a rejection asks for a media_not_approved notice for the UPLOADER, once, and never passes the reason', async () => {
+    const { service, guardianNotices } = build(row());
+    await service.reject('m1', 'admin-1', 'Shows a private address');
+    expect(guardianNotices.notifyInBackground).toHaveBeenCalledTimes(1);
+    expect(guardianNotices.notifyInBackground).toHaveBeenCalledWith('u1', 'media_not_approved');
+  });
+
+  it('an approval sends nothing', async () => {
+    const { service, guardianNotices } = build(row());
+    await service.approve('m1', 'admin-1');
+    expect(guardianNotices.notifyInBackground).not.toHaveBeenCalled();
+  });
+
+  it('keeping a reported, already-approved file sends nothing (the uploader never knew it was reported)', async () => {
+    const { service, guardianNotices } = build(row({ status: 'approved', reportCount: 3 }));
+    await service.approve('m1', 'admin-1');
+    expect(guardianNotices.notifyInBackground).not.toHaveBeenCalled();
+  });
+
+  it('a refused rejection (already decided, not in the queue, not found) sends nothing', async () => {
+    for (const r of [row({ status: 'rejected' }), row({ reviewEnteredAt: null }), null]) {
+      const { service, guardianNotices } = build(r);
+      await expect(service.reject('m1', 'admin-1', 'x reason here')).rejects.toBeDefined();
+      expect(guardianNotices.notifyInBackground).not.toHaveBeenCalled();
+    }
   });
 });

@@ -32,6 +32,7 @@ export type RegistrationEmailTemplate =
   | 'guardian-minor-turned-18'
   | 'guardian-email-replaced'
   | 'guardian-security-notice'
+  | 'guardian-safety-notice'
   | 'two-factor-recovery-link'
   | 'two-factor-recovery-guardian-link'
   | 'two-factor-recovery-minor-notice'
@@ -347,6 +348,24 @@ export class RegistrationEmailService {
       subject,
       template: 'guardian-security-notice',
       data: { summary, when },
+    });
+  }
+
+  // backend/b279-guardian-safety-notices (B-279; Decision Log #456 groups A and C). To the CONFIRMED guardian of a
+  // minor when SOCCERNITY took a safety action on the minor's account or content. Same shape as the security
+  // notice (subject, one-sentence summary, time, all from the registry in guardian-security-notice.constants.ts)
+  // plus a pointer to the Contact Us page. The email says the KIND of action and when, and NOTHING else: never
+  // the reason, the rule, a report, a reporter, a moderator or any content of a post. The Contact Us link is
+  // built from WEB_APP_BASE_URL; when that is unusable the email is still sent, without the link, because the
+  // notice itself matters more than its pointer (unlike a token email, nothing here depends on the link).
+  // [COPY PENDING LEGAL REVIEW]: functional wording only (docs/pending-copy-manifest.md).
+  async sendGuardianSafetyNoticeEmail(to: string, subject: string, summary: string, when: string): Promise<void> {
+    const contactLink = buildWebAppLink(this.config.get<string>('WEB_APP_BASE_URL'), '/contact', {}) ?? '';
+    await this.dispatch({
+      to,
+      subject,
+      template: 'guardian-safety-notice',
+      data: { summary, when, contactLink },
     });
   }
 
@@ -813,6 +832,13 @@ ${data.link}
         `When: ${data.when}\n\n` +
         `You are receiving this because you are the guardian on this account. If this was not expected, please contact support@soccernity.com.`
       );
+    case 'guardian-safety-notice':
+      return (
+        `${data.summary}\n\n` +
+        `When: ${data.when}\n\n` +
+        `You are receiving this because you are the guardian on this account. If you have questions, you can contact support through the Contact Us page on Soccernity` +
+        (data.contactLink ? `: ${data.contactLink}` : '.')
+      );
     case 'two-factor-recovery-link':
       return (
         `Hi,\n\n` +
@@ -1018,6 +1044,15 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
         `<p>${escapeHtml(data.summary)}</p>` +
         `<p><strong>When:</strong> ${escapeHtml(data.when)}</p>` +
         `<p>You are receiving this because you are the guardian on this account. If this was not expected, please contact support@soccernity.com.</p>`
+      );
+    case 'guardian-safety-notice':
+      return (
+        `<p>${escapeHtml(data.summary)}</p>` +
+        `<p><strong>When:</strong> ${escapeHtml(data.when)}</p>` +
+        `<p>You are receiving this because you are the guardian on this account. If you have questions, you can contact support through the ` +
+        (data.contactLink
+          ? `<a href="${escapeHtml(data.contactLink)}">Contact Us page</a> on Soccernity.</p>`
+          : `Contact Us page on Soccernity.</p>`)
       );
     case 'two-factor-recovery-link':
       return (

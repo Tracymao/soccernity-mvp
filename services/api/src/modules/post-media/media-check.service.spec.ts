@@ -37,6 +37,7 @@ function build(opts: { configured?: boolean; env?: Record<string, string> } = {}
     discardUnrecordedCopy: jest.fn().mockResolvedValue(undefined),
     finishPublish: jest.fn().mockResolvedValue(undefined),
   };
+  const guardianNotices = { notifyInBackground: jest.fn() };
   const service = new MediaCheckService(
     prisma as unknown as PrismaService,
     storage as unknown as DirectUploadStorageService,
@@ -45,8 +46,9 @@ function build(opts: { configured?: boolean; env?: Record<string, string> } = {}
     new PostMediaConfig(new ConfigService(opts.env ?? {})),
     objects as unknown as PostMediaObjectsService,
     { now: () => NOW },
+    guardianNotices as never,
   );
-  return { service, prisma, storage, processor, moderation, objects };
+  return { service, prisma, storage, processor, moderation, objects, guardianNotices };
 }
 
 const imageRow = (over: Record<string, unknown> = {}) => ({
@@ -326,5 +328,43 @@ describe('PostMediaSweepService', () => {
     expect(media.purgeQuarantine).toHaveBeenCalledTimes(1);
     expect(media.purgeUnattached).toHaveBeenCalledTimes(1);
     expect(objects.reconcile).toHaveBeenCalledTimes(1);
+  });
+});
+
+// B-279 (Decision Log #456 A): an AUTOMATIC rejection (image screening) is a platform action on the uploader's
+// content, so the uploader's guardian (if a minor with a confirmed guardian) is told the kind of action. The
+// notice is asked for only when the rejection was actually written, and never carries the labels.
+describe('MediaCheckService: guardian notice (B-279)', () => {
+  it('an automatic rejection asks for a media_not_approved notice for the uploader, once', async () => {
+    const { service, prisma, moderation, guardianNotices } = build();
+    prisma.postMedia.findUnique.mockResolvedValue(imageRow());
+    moderation.detectModerationLabels.mockResolvedValue([{ name: 'Explicit', parentName: '', confidence: 99 }]);
+    expect(await service.checkOne('m1', NOW)).toBe('rejected');
+    expect(guardianNotices.notifyInBackground).toHaveBeenCalledTimes(1);
+    expect(guardianNotices.notifyInBackground).toHaveBeenCalledWith('u1', 'media_not_approved');
+  });
+
+  it('an automatic APPROVAL sends nothing', async () => {
+    const { service, prisma, guardianNotices } = build();
+    prisma.postMedia.findUnique.mockResolvedValue(imageRow());
+    expect(await service.checkOne('m1', NOW)).toBe('approved');
+    expect(guardianNotices.notifyInBackground).not.toHaveBeenCalled();
+  });
+
+  it('an uncertain result (sent to a moderator) sends nothing', async () => {
+    const { service, prisma, moderation, guardianNotices } = build();
+    prisma.postMedia.findUnique.mockResolvedValue(imageRow());
+    moderation.detectModerationLabels.mockResolvedValue([{ name: 'Suggestive', parentName: '', confidence: 60 }]);
+    expect(await service.checkOne('m1', NOW)).toBe('pending');
+    expect(guardianNotices.notifyInBackground).not.toHaveBeenCalled();
+  });
+
+  it('a rejection that lost a race (nothing written) sends nothing', async () => {
+    const { service, prisma, moderation, guardianNotices } = build();
+    prisma.postMedia.findUnique.mockResolvedValue(imageRow());
+    moderation.detectModerationLabels.mockResolvedValue([{ name: 'Explicit', parentName: '', confidence: 99 }]);
+    prisma.postMedia.updateMany.mockResolvedValueOnce({ count: 0 });
+    expect(await service.checkOne('m1', NOW)).toBe('skipped');
+    expect(guardianNotices.notifyInBackground).not.toHaveBeenCalled();
   });
 });

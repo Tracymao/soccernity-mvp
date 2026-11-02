@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { GuardianSecurityNoticeModule } from '../guardian-security-notice/guardian-security-notice.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageModule } from '../../storage/storage.module';
@@ -24,7 +25,7 @@ import { UsersService } from './users.service';
 // for the profile picture (POST/DELETE /users/:id/avatar), on the same
 // StorageService the admin media upload uses.
 @Module({
-  imports: [AuthFoundationModule, StorageModule],
+  imports: [AuthFoundationModule, StorageModule, GuardianSecurityNoticeModule],
   controllers: [UsersController, UserAvatarController, UserCoverController],
   providers: [UsersService, UsernamePolicyService, UserAvatarService, UserCoverService, UserImageReviewService, PrismaService],
   // B-214: the image review queue (B-037) will import UsersModule and call this.
