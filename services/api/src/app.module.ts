@@ -28,6 +28,7 @@ import { ViewQualificationModule } from './modules/view-qualification/view-quali
 import { ContactModule } from './modules/contact/contact.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
 import { AdminContentModule } from './modules/admin-content/admin-content.module';
+import { AdminSearchModule } from './modules/admin-search/admin-search.module';
 import { AdminUsersModule } from './modules/admin-users/admin-users.module';
 import { AdminStaffVettingModule } from './modules/admin-staff-vetting/admin-staff-vetting.module';
 import { AdminStaffRolesModule } from './modules/admin-staff-roles/admin-staff-roles.module';
@@ -173,6 +174,9 @@ import { GlobalRateLimitModule } from './rate-limit/global-rate-limit.module';
     // closed in AuthService.reactivateAccount — see that file's own
     // comment). See modules/admin-users/README.md.
     AdminUsersModule,
+    // backend/b114-admin-search (B-114, Decision Log #463): GET /admin/search, one read-only route over the
+    // sections above. See modules/admin-search/README.md.
+    AdminSearchModule,
     // schema/report-severity-escalation-admin-vetting-application —
     // PATCH /admin/users/:id/child-safety-vetting, superadmin-only. The
     // application half of AdminUser.childSafetyVetted/vettedAt/
