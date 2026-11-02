@@ -75,6 +75,12 @@ interface AdminAuthContextValue {
   /** Adopt a fresh AdminSummary (e.g. after PATCH /admin/profile) so the
    *  shell's identity block reflects it without a refetch. */
   applyProfile: (profile: AdminSummary) => void;
+  /**
+   * Re-read GET /admin/profile and adopt it (B-282). The admin's own childSafetyVetted can change while a
+   * session is open, so a screen that depends on it refreshes it when it opens. Resolves with the fresh
+   * profile, or null if the read failed (the held profile is left as it was).
+   */
+  refreshProfile: () => Promise<AdminSummary | null>;
 }
 
 const AdminAuthContext = createContext<AdminAuthContextValue | null>(null);
@@ -200,9 +206,19 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     setAdmin(profile);
   }, []);
 
+  const refreshProfile = useCallback(async (): Promise<AdminSummary | null> => {
+    try {
+      const profile = await getAdminProfile();
+      setAdmin(profile);
+      return profile;
+    } catch {
+      return null;
+    }
+  }, []);
+
   const value = useMemo<AdminAuthContextValue>(
-    () => ({ status, admin, login, adoptSession, signedOutReason, logout, applyProfile }),
-    [status, admin, login, adoptSession, signedOutReason, logout, applyProfile],
+    () => ({ status, admin, login, adoptSession, signedOutReason, logout, applyProfile, refreshProfile }),
+    [status, admin, login, adoptSession, signedOutReason, logout, applyProfile, refreshProfile],
   );
 
   return <AdminAuthContext.Provider value={value}>{children}</AdminAuthContext.Provider>;
@@ -212,4 +228,12 @@ export function useAdminAuth(): AdminAuthContextValue {
   const ctx = useContext(AdminAuthContext);
   if (!ctx) throw new Error("useAdminAuth must be used within <AdminAuthProvider>");
   return ctx;
+}
+
+/**
+ * Like useAdminAuth, but null outside a provider instead of throwing. For screens that must still render
+ * (and show nothing session-dependent) when mounted on their own.
+ */
+export function useOptionalAdminAuth(): AdminAuthContextValue | null {
+  return useContext(AdminAuthContext);
 }

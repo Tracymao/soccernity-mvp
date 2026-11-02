@@ -530,3 +530,114 @@ p.ud-callout {
   flex-direction: column;
   gap: 4px;
 }
+
+/* B-282 Guardian notices section (Figma 6920:34766 and its family, Decision Log #458). Tokens only, two-colour
+ * palette. The alert colour is the callout bar only (Decision Log #408 item 4); the buttons are navy, because no
+ * destructive token exists (non-negotiable #3). */
+
+.gn-card {
+  gap: 14px;
+}
+
+.gn-copy-tag {
+  margin: 0;
+  align-self: flex-start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background-color: var(--sn-green-tint-12);
+  font-size: 12px;
+  color: var(--sn-text-primary);
+}
+
+.gn-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.gn-heading .us-card__title {
+  margin: 0;
+}
+
+.gn-text {
+  margin: 0;
+  font-size: 14px;
+  color: var(--sn-text-secondary);
+}
+
+.gn-info {
+  margin: 0;
+}
+
+.gn-alert {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background-color: var(--sn-background-surface);
+  font-weight: normal;
+}
+
+.gn-alert__title {
+  margin: 0;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.gn-alert__body {
+  margin: 0;
+  font-size: 13px;
+}
+
+.gn-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gn-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px 48px;
+  margin: 0;
+}
+
+.gn-facts dt {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.gn-facts dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.gn-reason {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gn-reason__label {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sn-text-secondary);
+}
+
+.gn-reason__text {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.gn-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}

@@ -20,6 +20,10 @@ export interface AdminSummary {
   phone: string | null;
   role: AdminRole;
   accountStatus: string; // "active" | "deactivated"
+  // B-280 / B-282: the admin's OWN child-safety-vetting state (GET /admin/profile and the login answer; never about
+  // another admin). The Guardian notices section shows only when this is true. Typed optional so an answer that
+  // lacks it reads as NOT vetted (the section stays hidden); the server's own fresh check is the real gate.
+  childSafetyVetted?: boolean;
   createdAt: string;
   updatedAt: string;
 }
