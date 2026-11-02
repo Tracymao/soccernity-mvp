@@ -69,6 +69,8 @@ export default function InactiveAccountPage() {
   // B-111: with two-factor on, "Activate account" is answered with a challenge, and the
   // account is only reactivated once POST /auth/login/two-factor accepts a code.
   const [challengeToken, setChallengeToken] = useState<string | null>(null);
+  // B-278: the challenge says a lost-device recovery request is waiting for this account.
+  const [recoveryPending, setRecoveryPending] = useState(false);
 
   useEffect(() => {
     if (step !== "deleted") return;
@@ -96,6 +98,7 @@ export default function InactiveAccountPage() {
       const result = await reactivateAccount(email, loginPassword);
       if (isTwoFactorChallenge(result)) {
         setChallengeToken(result.challengeToken);
+        setRecoveryPending(result.recoveryPending === true);
         return;
       }
       finishActivation(result);
@@ -131,6 +134,12 @@ export default function InactiveAccountPage() {
     return (
       <TwoFactorCodePrompt
         challengeToken={challengeToken}
+        email={email}
+        recoveryPending={recoveryPending}
+        onBackToLogin={() => {
+          setChallengeToken(null);
+          navigate("/login");
+        }}
         onSignedIn={finishActivation}
         onExpired={() => {
           setChallengeToken(null);

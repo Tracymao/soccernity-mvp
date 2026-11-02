@@ -68,6 +68,9 @@ import GuardianConsentPage from "../pages/GuardianConsentPage";
 import ChangeGuardianEmailPage from "../pages/guardian-consent/ChangeGuardianEmailPage";
 import GuardianConsentConfirmPage from "../pages/GuardianConsentConfirmPage";
 import GuardianWithdrawalPage from "../pages/guardian-consent/GuardianWithdrawalPage";
+import RecoveryConfirmPage from "../pages/twoFactor/recovery/RecoveryConfirmPage";
+import RecoveryCancelPage from "../pages/twoFactor/recovery/RecoveryCancelPage";
+import RecoveryGuardianPage from "../pages/twoFactor/recovery/RecoveryGuardianPage";
 import VerifyEmailPage from "../pages/VerifyEmailPage";
 import VerifyEmailPromptPage from "../pages/VerifyEmailPromptPage";
 import CreateProfilePage from "../pages/CreateProfilePage";
@@ -139,6 +142,13 @@ export const routes: RouteObject[] = [
       // (6654:2 and the five that follow). `?token=` is the withdrawal email's link and pre-fills the
       // code; the consent email links here without a token. See GuardianWithdrawalPage.tsx.
       { path: "guardian-consent/withdraw", element: <GuardianWithdrawalPage /> },
+      // User two-factor recovery (B-278; backend B-276, Decision Log #455, #456): the pages the lost-device
+      // recovery emails link to. Nobody is signed in here (the person cannot sign in; a guardian has no
+      // account), so they sit under the logo-only Top Bar like the guardian pages. `?token=` selects the
+      // request; each page reads its link on load (no side effects) and only changes anything on a button press.
+      { path: "two-factor-recovery/confirm", element: <RecoveryConfirmPage /> },
+      { path: "two-factor-recovery/cancel", element: <RecoveryCancelPage /> },
+      { path: "two-factor-recovery/guardian", element: <RecoveryGuardianPage /> },
     ],
   },
   {
