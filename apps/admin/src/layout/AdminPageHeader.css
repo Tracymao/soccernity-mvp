@@ -28,30 +28,7 @@
 }
 
 .admin-page-header__search {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  height: 41px;
-  padding: 0 16px;
-  border-radius: 4px;
-  background-color: var(--sn-green-tint-12);
-  opacity: 0.6;
-}
-
-.admin-page-header__search-icon {
-  width: 21px;
-  height: 21px;
-  display: block;
-}
-
-.admin-page-header__search input {
-  border: none;
-  background: transparent;
-  outline: none;
-  font: inherit;
-  font-size: 14px;
-  color: var(--sn-text-secondary);
-  width: 220px;
+  flex: 1 0 100%;
 }
 
 .admin-page-header__action {

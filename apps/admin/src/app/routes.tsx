@@ -60,6 +60,7 @@ import ContactEnquiriesPage from "../pages/moderation/ContactEnquiriesPage";
 import ContactEnquiryDetailPage from "../pages/moderation/ContactEnquiryDetailPage";
 import MediaReviewQueuePage from "../pages/media-review/MediaReviewQueuePage";
 import MediaReviewItemPage from "../pages/media-review/MediaReviewItemPage";
+import SearchPage from "../pages/search/SearchPage";
 import AdminNotFound from "../pages/AdminNotFound";
 
 export const adminRoutes: RouteObject[] = [
@@ -160,6 +161,8 @@ export const adminRoutes: RouteObject[] = [
           // /admin/profile + POST /admin/auth/change-password are built
           // (Decision Log #54).
           { path: "profile", element: <AdminProfilePage /> },
+          // B-114 (Decision Log #463): the admin search results, GET /admin/search?q=. The query is in the URL.
+          { path: "search", element: <SearchPage /> },
           { path: "*", element: <AdminNotFound /> },
         ],
       },
