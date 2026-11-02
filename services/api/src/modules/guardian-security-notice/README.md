@@ -114,6 +114,8 @@ recorded decisions:
 Adding it later is one entry in the registry plus one call in `HoldService` (and a rule in `decide()` if some holds
 should be excluded). The e2e spec pins today's behaviour (a legal hold, a bad-faith hold and a lift send nothing).
 
+*Decided 2026-11-02 (Decision Log #459, founder): holds NEVER notify a guardian: not a legal hold, a bad-faith hold, the lifting of a hold, or the report-derived account hold. The open question above is closed; today's behaviour is final, not a placeholder.*
+
 ## Where the decision lives
 
 `GuardianSecurityNoticeService.decide()` is the **one place** that decides whether a guardian may be emailed: a minor
