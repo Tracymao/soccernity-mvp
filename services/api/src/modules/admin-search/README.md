@@ -1,0 +1,60 @@
+# admin-search
+
+`GET /admin/search?q=...` — build-register row B-114, Decision Log #463 (founder decision of 2026-11-02: the admin search bar is built, versions 1 and 2, before launch). This module is the **backend leg**. The Figma frames (results page, grouped rows, empty / loading / error states) and the `apps/admin` bar are separate legs and are **not built here**.
+
+One read-only route. It adds **no new data-access rule**: for each group it applies the rule the matching admin **list** route already applies, and returns no more than that list shows.
+
+## What comes back
+
+```json
+{ "groups": { "users": { "items": [...], "truncated": false }, "reports": {...}, ... } }
+```
+
+A group a caller's role cannot open is **absent** (the key does not exist). A group the role can open but with no match is **present and empty** (`{ "items": [], "truncated": false }`). `q` is never echoed.
+
+| Group | Who may open it (read from the section's own controller, not copied) | Matches | Returned fields |
+| --- | --- | --- | --- |
+| `users` | `AdminUsersController` list → moderator, superadmin | user ID exact; **email exact** (lowercased, the column is stored lowercase); **username prefix** (lowercased). An anonymised (`deleted`) account is found by **ID only**. | what the Users list shows: `id, displayName, username, email, accountStatus, createdAt` |
+| `reports` | `AdminModerationController` list → moderator, superadmin | report ID exact; given a **user ID**, the reports **by** that user (reporter), **about** that user, and about a post or comment that user wrote (bounded id lists) | `id, targetType, targetId, status, severity, concernsMinor, createdAt, source` — never the reason, a contact email or an escalation note |
+| `contactEnquiries` | `ContactEnquiryAdminController` list → moderator, superadmin | sender email **exact** (case-insensitive); subject **contains** (case-insensitive) | the inbox list fields; **never the message**, never `userId` / `escalatedReportId` (shown as `submitter`, `hasEscalation`, like the list) |
+| `articles` | `AdminArticlesController` list → editor, superadmin | title contains (case-insensitive) | `id, title, status, category, publishedAt, createdAt` — never the body |
+| `staff` | `AdminStaffRolesController` list → superadmin | name contains; email exact | `id, email, fullName, role, accountStatus` |
+| `media` | `AdminMediaReviewController` list → moderator, superadmin | media item ID exact; only an item that has been through the queue (as `GET /admin/media-review/:id`) | `id, kind, status, reportCount, createdAt` |
+
+Role matrix, therefore: **editor** → `articles`; **moderator** → `users, reports, contactEnquiries, media`; **superadmin** → all six. The role comes from the verified admin access token (the same trust model as `AdminRolesGuard`); the service reads each section's `@AdminRoles` metadata through `Reflector` (handler first, then class, like the guard), so a change to a section's roles changes the search with no edit here. A unit test asserts the two agree for every group.
+
+## Rules every search follows
+
+- `q` is trimmed, then must be **3 to 254 characters** (below / above → `400` with `admin_search_query_too_short` / `admin_search_query_too_long`). Control characters (including NUL, which would make Postgres reject the parameter) → `400 admin_search_query_invalid`. A missing `q` is the same as an empty one. Any other query parameter → `400` (global `ValidationPipe`).
+- **Prisma only, no raw SQL.** Prisma passes `contains` / `startsWith` values to `LIKE` unescaped (checked against the real engine: `startsWith: 'a_b%'` is sent as `a_b%%`), so `%`, `_` and `\` are escaped by `escapeLike` and a typed `_` is literal. Proven against Postgres.
+- **Emails are exact, never a prefix or a substring**, so the bar cannot be used to enumerate addresses. The exact-email matchers run only when `q` is a whole address.
+- **Child-safety vetting is untouched.** For an admin who is not vetted (read fresh, once, only if `reports` or `media` is searched): `concernsMinor` reports and a minor uploader's media are left out — the same conditions `GET /admin/moderation/reports` and `GET /admin/media-review` apply.
+- **Never searched, never returned:** date of birth, guardian emails, message / post text, and anything from `GuardianNoticeWithhold`. The service never reads that table, so the response for an unvetted admin is byte-for-byte what it would be if the flag did not exist (a test pins this, including against the same search before the flag was created, and the unit fake throws if any unexpected model is touched).
+- **Audit.** A search whose text **contains an `@`** (it may be, or be part of, an email address) writes **one** `AdminActionLog` row: action `admin.search_performed`, targetType `search`, targetId `email`, notes `kind=email results=<n>` (n = total items over the groups the caller can open). **The text typed is never recorded.** A failed write propagates (the log's own rule). Rejected (400) queries write nothing. *No endpoint lists `AdminActionLog` yet (register Section 69c), so these rows are unreadable through the API until one exists; a future reader must hide them from admins who are not child-safety vetted.*
+
+## Defaults chosen (all veto-able; none is stated by the founder)
+
+| Default | Value | Where it comes from |
+| --- | --- | --- |
+| Minimum query length | 3 | the shortest username (`UpdateUserDto` 3–30) — reused, not invented |
+| Maximum query length | 254 | `CONTACT_EMAIL_MAX_LENGTH`, the longest email stored / accepted — reused |
+| Per-group result cap | 20 (+1 read to set `truncated`) | Section 5.5 default page size; a test ties `ADMIN_SEARCH_GROUP_CAP` to `ADMIN_USERS_DEFAULT_PAGE_SIZE` |
+| Rate limit | **30 requests / 60 s per IP**, `429` over it | **NEW FIGURE.** Uses the existing `@AuthRateLimit({ limit, windowMs })` per-handler override (the form the admin login uses, 5 / 15 min). No existing admin read limit to reuse. |
+| Owned-content id lookup (reports by user) | 200 post ids + 200 comment ids | same order as `INCORRECT_DETAILS_LIST_CAP` (a safety cap on a small read); bounds the work, the reports list is capped at 20 anyway |
+| Audit trigger | text contains `@` | broader than "is a whole address" on purpose: half an address is personal data too |
+| Audit wording | `kind=email results=<n>` | kind and count only |
+| Username search | prefix, case-insensitive | usernames are stored lowercase (Decision Log #364) |
+| Staff group | superadmin only | the staff routes' own rule |
+| Contact enquiries | no vetting filter | the inbox list has none (an escalated minor-concern enquiry is already visible in the inbox to any moderator); matched to the list, not stricter |
+| Report ordering | newest first | as every list |
+
+## Notes and limits
+
+- The 429 comes from the shared per-IP `AuthThrottlerGuard`, whose header is `Retry-After-auth` (named after the throttler), not `Retry-After`. Existing behaviour of every `@AuthRateLimit` route; not changed here.
+- Admin access tokens are counted by the global limiter as anonymous per IP (documented in the rate-limit module); this route's own limit is per IP as well, so staff behind one office address share it.
+- Reports about a user's posts / comments are found only among the user's 200 most recent of each; older reports remain reachable by report ID.
+- Search over `Report` by free text (reason) is deliberately not offered.
+
+## Tests
+
+`admin-search.query.spec.ts` (parse, escape), `admin-search.service.spec.ts` (role matrix against the real controllers' metadata, vetting reads, pinned selects, the fake that throws on an unexpected model, caps, audit), `admin-search.controller.http.spec.ts` (HTTP layer, guards, validation), and `test/admin-search.e2e-spec.ts` (real Postgres: matchers, case, wildcard escaping, anonymised user, vetting, withheld-minor identity, pinned response keys, audit row content, 429 on request 31).

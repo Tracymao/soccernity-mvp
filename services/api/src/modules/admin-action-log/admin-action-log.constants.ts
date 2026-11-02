@@ -81,6 +81,10 @@ export const ADMIN_ACTION_LOG_ACTIONS = {
   // The reject note carries the reason the uploader reads.
   MEDIA_APPROVED: 'media.approved',
   MEDIA_REJECTED: 'media.rejected',
+  // GET /admin/search (backend/b114-admin-search, B-114, Decision Log #463) -- written ONLY for a search whose text
+  // contains an '@' (a possible email address). targetType 'search', targetId the KIND of search ('email'); notes
+  // are 'kind=email results=<n>'. The text typed is personal data and is NEVER recorded.
+  ADMIN_SEARCH_PERFORMED: 'admin.search_performed',
 } as const;
 
 export type AdminActionLogAction = (typeof ADMIN_ACTION_LOG_ACTIONS)[keyof typeof ADMIN_ACTION_LOG_ACTIONS];
@@ -98,6 +102,7 @@ export const ADMIN_ACTION_LOG_TARGET_TYPES = {
   CONTEST_CYCLE: 'contest_cycle',
   POST_MEDIA: 'post_media',
   CONTACT_ENQUIRY: 'contact_enquiry',
+  SEARCH: 'search',
 } as const;
 
 export type AdminActionLogTargetType =
