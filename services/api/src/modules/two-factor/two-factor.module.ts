@@ -3,7 +3,11 @@ import { ConfigModule } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisModule } from '../../redis/redis.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
+import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
 import { GuardianSecurityNoticeModule } from '../guardian-security-notice/guardian-security-notice.module';
+import { TwoFactorRecoveryController } from './recovery/two-factor-recovery.controller';
+import { TwoFactorRecoverySweepService } from './recovery/two-factor-recovery-sweep.service';
+import { TwoFactorRecoveryService } from './recovery/two-factor-recovery.service';
 import { TwoFactorAttemptLimiter } from './two-factor-attempt.limiter';
 import { TwoFactorLockInterceptor } from './two-factor-lock.interceptor';
 import { TwoFactorPendingStore } from './two-factor-pending.store';
@@ -20,9 +24,13 @@ import { UserTwoFactorController } from './user-two-factor.controller';
 // Dependencies point one way: AuthModule, AdminModule and AdminStaffRolesModule import THIS module; it imports
 // AuthFoundationModule (JwtAuthGuard, PasswordService, AuthRateLimitModule) and nothing that imports it back.
 // CryptoModule (DobEncryptionService) is global.
+//
+// B-276 adds the USER recovery flow (./recovery/): its controller (no sign-in guard: the person cannot sign in),
+// service and hourly sweep. AuthService imports TwoFactorRecoveryService from here for the two sign-in hooks; the
+// recovery service itself imports nothing from AuthService, so there is no cycle.
 @Module({
   imports: [ConfigModule, RedisModule, AuthFoundationModule, GuardianSecurityNoticeModule],
-  controllers: [UserTwoFactorController],
+  controllers: [UserTwoFactorController, TwoFactorRecoveryController],
   providers: [
     PrismaService,
     UserTwoFactorRepository,
@@ -32,7 +40,12 @@ import { UserTwoFactorController } from './user-two-factor.controller';
     TwoFactorAttemptLimiter,
     TwoFactorLockInterceptor,
     TwoFactorService,
+    // B-276 (recovery): RegistrationEmailService is provided directly, the way every module outside
+    // auth/registration does it.
+    RegistrationEmailService,
+    TwoFactorRecoveryService,
+    TwoFactorRecoverySweepService,
   ],
-  exports: [TwoFactorService, TwoFactorLockInterceptor],
+  exports: [TwoFactorService, TwoFactorLockInterceptor, TwoFactorRecoveryService],
 })
 export class TwoFactorModule {}

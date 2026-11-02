@@ -49,8 +49,13 @@ function build(row: ReturnType<typeof userRow> | null) {
     issueChallenge: jest.fn(async () => CHALLENGE),
     completeChallenge: jest.fn(),
   };
-  const service = new AuthService(prisma as never, passwords as never, tokens as never, buildTestDobEncryption(), twoFactor as never);
-  return { service, prisma, passwords, tokens, twoFactor };
+  // B-276: no recovery request is waiting; nothing to cancel.
+  const recovery = {
+    findWaiting: jest.fn<Promise<{ executeAt: Date } | null>, [string]>(async () => null),
+    cancelWaitingOnSignIn: jest.fn(async (_userId: string) => undefined),
+  };
+  const service = new AuthService(prisma as never, passwords as never, tokens as never, buildTestDobEncryption(), twoFactor as never, recovery as never);
+  return { service, prisma, passwords, tokens, twoFactor, recovery };
 }
 
 describe('AuthService.login with two-factor', () => {
@@ -58,7 +63,7 @@ describe('AuthService.login with two-factor', () => {
     const { service, tokens, twoFactor } = build(userRow());
     await service.onModuleInit();
     const result = await service.login('Kid@Example.com', 'correct-password', true);
-    expect(result).toEqual(CHALLENGE);
+    expect(result).toEqual({ ...CHALLENGE, recoveryPending: false });
     expect(twoFactor.issueChallenge).toHaveBeenCalledWith('user', 'user-1', true);
     expect(tokens.issueTokenPair).not.toHaveBeenCalled();
   });
@@ -99,12 +104,69 @@ describe('AuthService.login with two-factor', () => {
   });
 });
 
+describe('AuthService two-factor recovery hooks (B-276)', () => {
+  it('login: the challenge says a recovery request is WAITING, and when it will run (only after the password step)', async () => {
+    const { service, recovery } = build(userRow());
+    recovery.findWaiting.mockResolvedValue({ executeAt: new Date('2030-01-02T10:00:00.000Z') });
+    await service.onModuleInit();
+
+    const result = await service.login('kid@example.com', 'correct-password');
+
+    expect(result).toEqual({
+      ...CHALLENGE,
+      recoveryPending: true,
+      recoveryExecuteAt: '2030-01-02T10:00:00.000Z',
+    });
+    expect(recovery.findWaiting).toHaveBeenCalledWith('user-1');
+  });
+
+  it('login: a wrong password never looks up recovery state (the field is behind the password)', async () => {
+    const { service, recovery } = build(userRow());
+    await service.onModuleInit();
+    await expect(service.login('kid@example.com', 'nope')).rejects.toThrow('Invalid credentials');
+    expect(recovery.findWaiting).not.toHaveBeenCalled();
+
+    const unknown = build(null);
+    await unknown.service.onModuleInit();
+    await expect(unknown.service.login('nobody@example.com', 'correct-password')).rejects.toThrow('Invalid credentials');
+    expect(unknown.recovery.findWaiting).not.toHaveBeenCalled();
+  });
+
+  it('an account WITHOUT two-factor gets no challenge and no recovery lookup', async () => {
+    const { service, recovery } = build(userRow({ totpEnabledAt: null }));
+    await service.onModuleInit();
+    const result = await service.login('kid@example.com', 'correct-password');
+    expect(result).toMatchObject({ accessToken: 'access' });
+    expect(recovery.findWaiting).not.toHaveBeenCalled();
+  });
+
+  it('reactivate-account: its challenge carries the same recovery state', async () => {
+    const { service, recovery } = build(userRow({ accountStatus: 'deactivated' }));
+    recovery.findWaiting.mockResolvedValue({ executeAt: new Date('2030-01-02T10:00:00.000Z') });
+    await service.onModuleInit();
+    const result = await service.reactivateAccount('kid@example.com', 'correct-password');
+    expect(result).toMatchObject({ twoFactorRequired: true, recoveryPending: true, recoveryExecuteAt: '2030-01-02T10:00:00.000Z' });
+  });
+
+  it('a successful two-factor sign-in cancels a waiting recovery request; a wrong code does not', async () => {
+    const ok = build(userRow());
+    ok.twoFactor.completeChallenge.mockResolvedValue({ subjectId: 'user-1', persistent: false, purpose: 'login' });
+    await ok.service.completeTwoFactorLogin('id.secret', '123456');
+    expect(ok.recovery.cancelWaitingOnSignIn).toHaveBeenCalledWith('user-1');
+
+    const bad = build(userRow());
+    bad.twoFactor.completeChallenge.mockRejectedValue(new UnauthorizedException('That code did not work. Check it and try again.'));
+    await expect(bad.service.completeTwoFactorLogin('id.secret', '000000')).rejects.toThrow('That code did not work');
+    expect(bad.recovery.cancelWaitingOnSignIn).not.toHaveBeenCalled();
+  });
+});
+
 describe('AuthService.reactivateAccount with two-factor (it would otherwise be a way round the second factor)', () => {
   it('a deactivated account with two-factor gets a REACTIVATION challenge; it is NOT reactivated and gets no session yet', async () => {
     const { service, prisma, tokens, twoFactor } = build(userRow({ accountStatus: 'deactivated' }));
     await service.onModuleInit();
     const result = await service.reactivateAccount('kid@example.com', 'correct-password');
-    expect(result).toEqual(CHALLENGE);
+    expect(result).toEqual({ ...CHALLENGE, recoveryPending: false });
     expect(twoFactor.issueChallenge).toHaveBeenCalledWith('user', 'user-1', false, 'reactivate');
     expect(prisma.user.update).not.toHaveBeenCalled();
     expect(tokens.issueTokenPair).not.toHaveBeenCalled();

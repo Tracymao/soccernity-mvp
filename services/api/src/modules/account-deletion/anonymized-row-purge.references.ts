@@ -117,6 +117,7 @@ export const ANONYMISER_DELETES_RELATIONS: readonly RelationKey[] = [
   'ContestImpression.viewer',
   'PostMedia.uploader', // rows deleted (the files follow, rejected private objects excepted, B-206)
   'UserBackupCode.user', // B-086: CASCADE; deleted (credential material goes with the account's ability to sign in)
+  'TwoFactorRecoveryRequest.user', // B-276: CASCADE; deleted (open recovery requests hold link-token hashes)
 ];
 
 /** Implicit m2m relations the anonymiser clears itself (ClubPage membership). */
