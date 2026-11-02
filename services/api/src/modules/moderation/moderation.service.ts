@@ -15,6 +15,8 @@ import { resolveReportAppealWindowDays } from '../account-hold/account-hold.conf
 import { ADMIN_ACTION_LOG_ACTIONS, ADMIN_ACTION_LOG_TARGET_TYPES } from '../admin-action-log/admin-action-log.constants';
 import { BanterService } from '../banter/banter.service';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
+import { GuardianSecurityEventKey } from '../guardian-security-notice/guardian-security-notice.constants';
+import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
 import { resolveReportedUserId } from './report-target.util';
 import { decodeModerationCursor, encodeModerationCursor } from './cursor.util';
 import { ActionReportDto } from './dto/action-report.dto';
@@ -60,6 +62,16 @@ export interface ReportContactEnquiryView {
 
 export type ReportDetail = ReportWithSource & { contactEnquiry?: ReportContactEnquiryView | null };
 
+// B-279 (Decision Log #456 A and C): the guardian of a MINOR who is the reported user is told the OUTCOME of an
+// actioned report, as the kind of action that was taken and nothing else. 'dismissed' took no action, so it has
+// no entry: a guardian is never told that a report exists. The reporter is never notified this way (B).
+const GUARDIAN_NOTICE_FOR_REPORT_ACTION: Partial<Record<ReportAction, GuardianSecurityEventKey>> = {
+  content_removed: 'content_removed',
+  warning_issued: 'warning_issued',
+  user_suspended: 'account_suspended',
+  room_deactivated: 'room_deactivated',
+};
+
 function withSourceHint(report: Report): ReportWithSource {
   return report.targetType === ENQUIRY_REPORT_TARGET_TYPE
     ? { ...report, source: REPORT_SOURCE_CONTACT_ENQUIRY }
@@ -86,6 +98,8 @@ export class ModerationService {
     // Decision Log #357 — room_deactivated writes BanterRoom.status through
     // BanterService.setRoomStatus, inside actionReport's own transaction.
     private readonly banterService: BanterService,
+    // B-279: the guardian of a minor who is the REPORTED user hears the outcome (never that a report exists).
+    private readonly guardianNotices: GuardianSecurityNoticeService,
   ) {}
 
   // -------------------------------------------------------------------
@@ -536,6 +550,12 @@ export class ModerationService {
 
     void this.notifyReporterOfOutcome(report, dto.action);
 
+    // B-279: tell the REPORTED minor's guardian the outcome (never the reporter's, and never on 'dismissed').
+    const guardianEvent = GUARDIAN_NOTICE_FOR_REPORT_ACTION[dto.action];
+    if (guardianEvent && reportedUserId) {
+      this.guardianNotices.notifyInBackground(reportedUserId, guardianEvent);
+    }
+
     return updated;
   }
 
@@ -603,6 +623,14 @@ export class ModerationService {
     );
 
     void this.notifyAppellantOfDecision(reportId, reportedUserId, dto.decision);
+
+    // B-279: the appeal OUTCOME only, to the appellant's (the reported user's) guardian if they are a minor.
+    if (reportedUserId) {
+      this.guardianNotices.notifyInBackground(
+        reportedUserId,
+        dto.decision === 'upheld' ? 'appeal_upheld' : 'appeal_overturned',
+      );
+    }
 
     return updated;
   }

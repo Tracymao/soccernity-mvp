@@ -18,7 +18,10 @@ type UserRow = {
 };
 
 const NOW = new Date('2026-11-01T14:32:09.000Z');
-const ALL_KEYS = Object.keys(GUARDIAN_SECURITY_EVENTS) as GuardianSecurityEventKey[];
+// The B-275 SECURITY events. The B-279 safety events (kind 'safety') have their own spec, guardian-safety-notice.service.spec.ts.
+const ALL_KEYS = (Object.keys(GUARDIAN_SECURITY_EVENTS) as GuardianSecurityEventKey[]).filter(
+  (k) => GUARDIAN_SECURITY_EVENTS[k].kind !== 'safety',
+);
 
 function build(user: UserRow | null = confirmedMinor()) {
   const prisma = { user: { findUnique: jest.fn(async () => user) } };

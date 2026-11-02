@@ -9,6 +9,7 @@ import {
   ADMIN_ACTION_LOG_TARGET_TYPES,
 } from '../admin-action-log/admin-action-log.constants';
 import { TokenService } from '../auth/token/token.service';
+import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
 import { revokeEngagementPointsForAccount } from '../points/engagement-points.util';
 import { ACCOUNT_HOLD_ACTIVE_CODE, ADMIN_USERS_DEFAULT_PAGE_SIZE, ADMIN_USERS_MAX_PAGE_SIZE } from './admin-users.constants';
 import { decodeAdminUsersCursor, encodeAdminUsersCursor } from './cursor.util';
@@ -69,6 +70,9 @@ export class AdminUsersService {
     // feat/admin-action-log — see AdminActionLogService's own header
     // comment. Called after each successful accountStatus write below.
     private readonly adminActionLogService: AdminActionLogService,
+    // B-279 (Decision Log #456 A): the guardian of a MINOR is told when Soccernity suspends, reinstates or removes
+    // the account. See modules/guardian-security-notice/README.md.
+    private readonly guardianNotices: GuardianSecurityNoticeService,
   ) {}
 
   // GET /admin/users/held-investigations -- accounts whose deletion has
@@ -235,6 +239,9 @@ export class AdminUsersService {
       // primitive the scheduled sweep uses. Sessions are revoked first so
       // a still-live access token stops working immediately.
       await this.tokenService.revokeAllSessionsForUser(userId);
+      // B-279: anonymisation deletes the Guardian row (after snapshotting it), so who to tell has to be read BEFORE
+      // it runs. null = no notice (adult, no confirmed guardian, lookup failed); prepare() never throws.
+      const guardianRecipient = await this.guardianNotices.prepare(userId);
       await this.accountDeletionSweepService.anonymizeUser(userId, user.isMinor);
       this.logger.log(`Admin ${adminId} anonymized user ${userId} (immediate, grace period skipped).`);
       await this.adminActionLogService.record(
@@ -244,6 +251,7 @@ export class AdminUsersService {
         userId,
         `status=${dto.status}`,
       );
+      if (guardianRecipient) this.guardianNotices.notifyInBackground(userId, 'account_removed', guardianRecipient);
       return { deleted: true, id: userId };
     }
 
@@ -278,6 +286,14 @@ export class AdminUsersService {
       userId,
       `status=${dto.status}`,
     );
+
+    // B-279: a suspension, and the lifting of one, are platform actions on the account. Other moves (for example
+    // undoing a self-requested deletion) are not safety actions and send nothing.
+    if (dto.status === 'suspended') {
+      this.guardianNotices.notifyInBackground(userId, 'account_suspended');
+    } else if (dto.status === 'active' && user.accountStatus === 'suspended') {
+      this.guardianNotices.notifyInBackground(userId, 'account_reinstated');
+    }
     return { deleted: false, user: updated };
   }
 }

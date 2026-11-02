@@ -19,7 +19,7 @@ function build(user: unknown, opts: { updateCount?: number; emailFails?: boolean
       if (opts.emailFails) throw new Error('postmark down');
     }),
   };
-  const service = new AdminUserUsernameRevokeService(prisma as never, email as never);
+  const service = new AdminUserUsernameRevokeService(prisma as never, email as never, { notifyInBackground: jest.fn() } as never);
   return { service, tx, prisma, email };
 }
 

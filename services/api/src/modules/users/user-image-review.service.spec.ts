@@ -19,7 +19,8 @@ function build(updateCount = 1, row: Record<string, unknown> | null = { avatarSt
   const prisma = {
     $transaction: jest.fn(async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx)),
   } as unknown as PrismaService;
-  return { tx, prisma, service: new UserImageReviewService(prisma) };
+  const guardianNotices = { notifyInBackground: jest.fn() };
+  return { tx, prisma, guardianNotices, service: new UserImageReviewService(prisma, guardianNotices as never) };
 }
 
 describe('UserImageReviewService.rejectProfileImage (B-214)', () => {
@@ -105,5 +106,26 @@ describe('UserImageReviewService.rejectProfileImage (B-214)', () => {
     const { tx, service } = build();
     tx.notification.create.mockRejectedValue(new Error('db'));
     await expect(service.rejectProfileImage('u1', 'avatar', 'r')).rejects.toThrow('db');
+  });
+});
+
+// B-279 (Decision Log #456 A): rejecting a profile picture or cover is a platform action on the user's profile,
+// so the guardian of a minor is told the kind of action, never the reason.
+describe('UserImageReviewService: guardian notice (B-279)', () => {
+  it.each(['avatar', 'cover'] as const)('rejecting a %s asks for ONE profile_image_not_approved notice, without the reason', async (kind) => {
+    const { service, guardianNotices } = build();
+    await service.rejectProfileImage('u1', kind, 'Not a clear photo of you');
+    expect(guardianNotices.notifyInBackground).toHaveBeenCalledTimes(1);
+    expect(guardianNotices.notifyInBackground).toHaveBeenCalledWith('u1', 'profile_image_not_approved');
+  });
+
+  it('sends nothing when the rejection did not happen (no reason, already rejected, nothing to reject)', async () => {
+    const empty = build();
+    await expect(empty.service.rejectProfileImage('u1', 'avatar', '   ')).rejects.toBeDefined();
+    const already = build(0, { avatarStatus: 'rejected', coverStatus: 'pending' });
+    await expect(already.service.rejectProfileImage('u1', 'avatar', 'a reason')).rejects.toBeDefined();
+    const none = build(0, null);
+    await expect(none.service.rejectProfileImage('u1', 'avatar', 'a reason')).rejects.toBeDefined();
+    for (const b of [empty, already, none]) expect(b.guardianNotices.notifyInBackground).not.toHaveBeenCalled();
   });
 });

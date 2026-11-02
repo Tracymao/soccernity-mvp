@@ -53,6 +53,82 @@ Enforcement applies **at sign-in and at the next refresh** (founder decision 202
 
 *Accepted:* **access tokens already issued stay valid until they expire (15 minutes by default, `ADMIN_JWT_ACCESS_TTL_SECONDS`).** There is deliberately no per-request database check, so an unenrolled admin's last access token runs out within that time, not at once. Proven by an e2e test.
 
+## Recovery: a USER who lost the device AND the backup codes (B-276; Decision Log #455, #456)
+
+Users only. Admins keep the peer-superadmin reset. Code: `recovery/` (`two-factor-recovery.service.ts` is the rules,
+`.controller.ts` the routes, `-sweep.service.ts` the hourly job). Table `TwoFactorRecoveryRequest` (migration
+`20261106090000_add_two_factor_recovery_request`): link and cancel tokens only as SHA-256 hashes, state in a CHECK, and a
+partial unique index so an account has at most ONE active (pending or waiting) request. **No sign-in guard on any of
+these routes**: the person cannot sign in and a guardian has no account; each route's credential is what it carries.
+
+**Routes** (`/auth/two-factor/recovery/...`, for the web agent):
+
+| Route | Body | Answer |
+|---|---|---|
+| `POST request` | `{ email, password }` | `202 { audience: "account" \| "guardian" \| "no_guardian" }` |
+| `GET link/:token` | | `{ state: "valid"\|"expired"\|"used"\|"invalid", kind: "adult"\|"guardian"\|null, minor?: { publicName }, requestedAt? }` (no side effects; `Cache-Control: no-store`) |
+| `POST confirm` | `{ token }` | `{ state: "waiting", executeAt, cancelToken }` (adult) |
+| `POST cancel` | `{ cancelToken }` | `{ state: "cancelled" }` (adult; the notice email's link, or the confirm page's "This wasn't me") |
+| `POST guardian/approve` | `{ token }` | `{ state: "done" }` |
+| `POST guardian/decline` | `{ token }` | `{ state: "declined" }` |
+
+A rejected link action is **400** `{ statusCode, error, code, state, message }` with `state` one of `invalid` / `expired`
+/ `used` and `code` `two_factor_recovery_link_<state>`. A superseded link reads as `expired`; every other ended state as
+`used`. `minor` and `requestedAt` appear only on a **valid guardian** link and carry the minor's PUBLIC name (username, or
+"Soccernity member"; never the real name).
+
+**Emailed links** (the web pages to build; the token is `?token=`): adult confirm `/two-factor-recovery/confirm`, guardian
+`/two-factor-recovery/guardian`, adult cancel `/two-factor-recovery/cancel` (that page calls `POST cancel` with
+`{ cancelToken: <token> }`; use a button, not an automatic call on load, so a scanner cannot cancel). Adult link lives
+24 hours (DEFAULT), guardian link 72 hours.
+
+**`request`**: an unknown email, a wrong password, two-factor off and a non-active account are the SAME `202 { audience:
+"account" }`, send nothing, do one argon2 verification each (a dummy hash when there is no account) and spend the same
+budget, so the audience is revealed only after a correct password. After one: an **adult** gets a link at their own
+address; a **minor with a confirmed guardian** (and an email on file) gets a link sent to the **guardian** and a notice at
+their own address that it went there; a **minor with no confirmed guardian** gets `no_guardian` and nothing is created or
+sent. A new request supersedes an earlier unused one; a request that is already WAITING is left alone (same 202, no new
+row, no email). Adult or minor is `User.isMinor` at the moment of the request.
+
+**Limits.** The route first charges the EXISTING login limiter (`AuthLimitsService.beginLogin/endLogin`: the per-IP
+ceiling, the per-(account, IP) failed-attempt budget and the account-wide ceiling), so a wrong password here spends the
+same budget as a wrong password at sign-in, and a correct one gives the slot back. Then a recovery budget keyed on the
+normalised email alone and charged for EVERY request, existing account or not: **3 an hour and a 60-second gap** (a
+refused request spends neither). Plus `@AuthRateLimit` 20 per 15 minutes per IP (DEFAULT). A limit is the standard `429`
+with `Retry-After`. **While Redis is down, `request` and `guardian/approve` answer `503 { code:
+"two_factor_recovery_unavailable" }`** (Decision Log #439: the sign-in the flow ends in needs Redis, and the limiters
+would otherwise silently fall back to per-process memory). The other routes use only Postgres and keep working.
+
+**Adult wait.** `confirm` consumes the link atomically, sets `executeAt = now + 24 h` and emails the account a notice with
+a separate single-use cancel link (the same token is returned in the response so the confirm page can offer "This wasn't
+me"). `cancel` works until the sweep has actually removed two-factor (even a little past `executeAt`). A successful
+two-factor sign-in (device code or backup code, `AuthService.completeTwoFactorLogin`) cancels a **waiting** request (a
+pending one is left alone: the brief says "waiting"), and the sign-in **challenge** carries `recoveryPending: boolean`
+(and `recoveryExecuteAt`, ISO, when true), added only after the password step succeeded, on both login and
+reactivate-account.
+
+**Removing two-factor** is one primitive (`complete()`), used by guardian approve and by the sweep: **sessions are ended
+first** (they live in Redis and cannot join a database transaction; ending them first means "two-factor removed" never
+exists alongside a session that was opened with it; the cost is that a request which then loses its race signs the person
+out once), then the claim on the request row and the clearing of the secret and every backup code
+(`TwoFactorService.resetUser`, the user twin of the admin `resetAdmin`) happen in ONE transaction, so a lost race clears
+nothing. A guardian can only remove two-factor from a **minor's active** account; if the person turned 18, closed the
+account or already turned two-factor off, the link reads as expired.
+
+**Sweep** (`TwoFactorRecoverySweepService`, `@Cron(EVERY_HOUR)`, reads `APP_CLOCK`): completes every confirmed request whose
+`executeAt` has passed (two-factor and backup codes removed, all sessions ended, completion email), cancels a wait whose
+account closed or already turned two-factor off, and deletes ended rows 30 days after `doneAt` and never-used links 30
+days after they expired. At most 200 completions per run; a failing row is logged and retried next hour.
+
+**Emails** (seven templates on `RegistrationEmailService`, all `[COPY PENDING LEGAL REVIEW]`, listed in
+`docs/pending-copy-manifest.md`): none logs a recipient, a token or a link, live or not; a link email is skipped, with an
+error logged, if `WEB_APP_BASE_URL` is unusable. **No B-275 guardian security notice is sent for any recovery step**: the
+guardian's own link email is the one guardian email of the request, and approve/decline are the guardian's own actions.
+
+**Defaults I chose (founder can veto):** adult link 24 h · per-IP 20 per 15 min · a waiting request is not replaced by a
+new one · a successful sign-in cancels only a waiting request · all four failure cases spend the login budget · the
+cancel token is also returned by `confirm`.
+
 ## Defaults I chose (founder can veto — each is flagged in the PR)
 
 SHA-1 / 6 digits / 30 s / ±1 step · replay of a used step refused · challenge valid **5 min**, admin enrolment token and pending secret **10 min** · per-IP limits **30 (users) / 10 (admins) per 15 min** · an admin **cannot turn off their own** two-factor while enforced · turn-off and regenerate **do not end other sessions** · **no email** on reset (or on anything) · the reset of a non-enrolled admin is a **409**, not a silent success · a wrong-format code (neither 6 digits nor a backup code) still counts as an attempt.
@@ -73,7 +149,7 @@ SHA-1 / 6 digits / 30 s / ±1 step · replay of a used step refused · challenge
 
 ## Not built / open
 
-- No frontend, QR image, email notice, SMS, WebAuthn; no admin screens (B-271); no guardian involvement for a minor's two-factor.
+- No frontend, QR image, SMS, WebAuthn; no admin screens (B-271). A minor's lost-device recovery goes through the guardian (see "Recovery"); the recovery web pages are not built.
 - **Refresh is gated; access tokens already issued run out within 15 minutes** (see "The refresh gate"). No per-request check, by decision.
 - No in-memory fallback for the code lock; no per-IP limit on `POST /auth/two-factor/regenerate|disable` (they need an access token *and* the password; the global write limit still applies).
 - Anyone who has a user's password can lock that user's *code entry* for 15 minutes by failing five codes (the same shared-lockout trade-off Decision Log #432 records for the password lock). The password is already needed to obtain a challenge.

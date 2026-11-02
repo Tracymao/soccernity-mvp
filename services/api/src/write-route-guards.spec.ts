@@ -18,6 +18,7 @@ import { ContactController } from './modules/contact/contact.controller';
 import { ConversationsController } from './modules/messaging/conversations.controller';
 import { PublicReportsController } from './modules/moderation/public-reports.controller';
 import { ReportsController } from './modules/moderation/reports.controller';
+import { TwoFactorRecoveryController } from './modules/two-factor/recovery/two-factor-recovery.controller';
 import { PostMediaController } from './modules/post-media/post-media.controller';
 import { PostMediaReportController } from './modules/post-media/post-media-report.controller';
 import { NotificationsController } from './modules/notifications/notifications.controller';
@@ -67,6 +68,18 @@ const OPEN_ROUTES: Record<string, string> = {
   'POST /posts/:id/view-heartbeat':
     'looking at a post is not a social write (B-093): a restricted or unverified account may keep reading and simply earns nothing',
   'DELETE /teams/:id': 'admin-only (AdminJwtAuthGuard), a different auth domain',
+  // backend/b276-two-factor-recovery (B-276; Decision Log #455): USER two-factor recovery for someone who lost the
+  // device AND the backup codes. Nobody here is signed in (the person cannot sign in; a guardian has no account), so
+  // there is no JwtAuthGuard and no consent / verified-email / profile guard to apply: each route's credential is
+  // what it carries.
+  'POST /auth/two-factor/recovery/request':
+    'unauthenticated by design: email + password is the credential; the same 202 for every failure; limited per IP, per account and by the login limiter',
+  'POST /auth/two-factor/recovery/confirm': 'unauthenticated by design: the single-use link token emailed to the account is the credential',
+  'POST /auth/two-factor/recovery/cancel': 'unauthenticated by design: the single-use cancel token emailed to the account is the credential',
+  'POST /auth/two-factor/recovery/guardian/approve':
+    'unauthenticated by design: a guardian has no account; the single-use link token emailed to them is the credential',
+  'POST /auth/two-factor/recovery/guardian/decline':
+    'unauthenticated by design: a guardian has no account; the single-use link token emailed to them is the credential',
   // backend/w14-post-media-pipeline: removing your OWN upload is an undo that touches no one else, so an
   // account that was restricted after uploading can still delete what it holds (JwtAuthGuard stays).
   'DELETE /media/uploads/:id': 'removing your own upload is an undo; a restricted account may still delete its own files',
@@ -169,6 +182,7 @@ const CONTROLLERS = [
   ViewQualificationController,
   PostMediaController,
   PostMediaReportController,
+  TwoFactorRecoveryController,
 ];
 
 // Controller files deliberately NOT in CONTROLLERS, with the reason. A new
@@ -178,7 +192,8 @@ const NOT_INSPECTED_DIRS = [
   'auth', // the open set by design
   // backend/b086-two-factor (B-086): the signed-in user's two-factor SETTINGS (enrol, backup codes, turn off). An
   // authentication setting, not a social or profile write, and JwtAuthGuard only by decision (#446): a restricted-
-  // pending minor may protect their own account. The same open set as /auth/*.
+  // pending minor may protect their own account. The same open set as /auth/*. (The recovery controller in
+  // two-factor/recovery/ is ALSO listed in CONTROLLERS above, so its write routes are pinned individually.)
   'two-factor',
   'blog', // read-only
   'leaderboard', // read-only
