@@ -6,7 +6,7 @@ import {
   ADMIN_SEARCH_QUERY_TOO_LONG_CODE,
   ADMIN_SEARCH_QUERY_TOO_SHORT_CODE,
 } from './admin-search.constants';
-import { escapeLike, parseAdminSearchQuery } from './admin-search.query';
+import { escapeLike, isEmailShaped, parseAdminSearchQuery } from './admin-search.query';
 
 function codeOf(fn: () => unknown): string | undefined {
   try {
@@ -75,5 +75,25 @@ describe('escapeLike', () => {
 
   it('leaves everything else alone', () => {
     expect(escapeLike('Nelson O. Iheagwam-1')).toBe('Nelson O. Iheagwam-1');
+  });
+});
+
+describe('isEmailShaped', () => {
+  it.each(['a@b.co', 'Temi@Example.com', 'first.last+tag@sub.example.co.uk'])('accepts %s', (v) => {
+    expect(isEmailShaped(v)).toBe(true);
+  });
+
+  it.each(['', 'abc', '@b.co', 'a@', 'a@b', 'a@.co', 'a@b.', 'a@@b.co', 'a@b@c.co', 'a b@c.co', 'a@b .co', 'a@b.	co'])(
+    'rejects %j',
+    (v) => {
+      expect(isEmailShaped(v)).toBe(false);
+    },
+  );
+
+  it('stays fast on the input CodeQL named for the old regex (many repetitions of "!.")', () => {
+    const hostile = '!@!.' + '!.'.repeat(120);
+    const started = Date.now();
+    isEmailShaped(hostile);
+    expect(Date.now() - started).toBeLessThan(50);
   });
 });

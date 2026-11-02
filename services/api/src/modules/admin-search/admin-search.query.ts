@@ -9,7 +9,20 @@ import {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // A whole email address, nothing else. Deliberately strict: the exact-email matchers only run on this shape.
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Checked by hand, not with a regex: the usual `[^\s@]+@[^\s@]+\.[^\s@]+` has two overlapping quantifiers around
+// the dot and CodeQL flags it as polynomial ReDoS (js/polynomial-redos). This is a single linear pass.
+// Shape: no whitespace, exactly one '@' with something before it, and a dot in the domain that has at least one
+// character on each side.
+export function isEmailShaped(text: string): boolean {
+  if (/\s/.test(text)) return false;
+  const at = text.indexOf('@');
+  if (at < 1 || at !== text.lastIndexOf('@')) return false;
+  const domain = text.slice(at + 1);
+  for (let i = 1; i < domain.length - 1; i += 1) {
+    if (domain[i] === '.') return true;
+  }
+  return false;
+}
 // A username as the platform stores it (UpdateUserDto: [A-Za-z0-9_], 3-30; stored lowercase, Decision Log #364).
 const USERNAME_SHAPED = /^[A-Za-z0-9_]+$/;
 // eslint-disable-next-line no-control-regex
@@ -50,7 +63,7 @@ export function parseAdminSearchQuery(raw: string | undefined): ParsedAdminSearc
     text,
     lower: text.toLowerCase(),
     isUuid: UUID.test(text),
-    isEmail: EMAIL.test(text),
+    isEmail: isEmailShaped(text),
     isUsernameShaped: USERNAME_SHAPED.test(text),
     containsAt: text.includes('@'),
   };
