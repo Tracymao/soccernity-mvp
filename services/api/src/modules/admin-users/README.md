@@ -325,3 +325,54 @@ database work (`reason-date-check.util.ts`). It catches numeric dates with separ
 year. It does NOT catch a bare year, a date spelled out in words, or an obfuscated one:
 free text cannot be proven free of every date form, so it errs towards false positives
 (a version number such as 1.2.34 is rejected).
+
+## Guardian notices: the withhold flag (B-280; Decision Log #458)
+
+`GET|POST /admin/users/:id/guardian-notices[...]`, `AdminGuardianNoticesController`. A child-safety-vetted admin can
+withhold the guardian security/safety notices (B-275, B-279) and guardian-assisted two-factor recovery (B-276) for ONE
+minor's account, with a written reason. Consent mechanics are never touched (see
+`../guardian-security-notice/README.md` for the full sender table).
+
+**Guards, in order:** `AdminJwtAuthGuard`, `AdminRolesGuard('moderator', 'superadmin')`, then
+`AdminChildSafetyVettedGuard`. The vetting check is a **guard**, so it runs before the validation pipe, before the route
+parameter is used and before any account is loaded: it reads `AdminUser.childSafetyVetted` fresh from Postgres on every
+request (the shared `assertAdminChildSafetyVetted`, whatever the role: an unvetted superadmin gets it too) and an
+unvetted admin gets the **same coded 403** (`child_safety_vetting_required`) for a real minor, an adult and an id that
+does not exist. Tests prove the bodies are identical.
+
+| Route | Body | Result |
+|---|---|---|
+| `GET .../guardian-notices` | | `{ withheld: false }` or `{ withheld: true, setAt, setBy: { id, displayName }, reason, lastReviewedAt, lastReviewNote, reviewDueAt, reviewDue }` |
+| `POST .../withhold` | `{ reason }` | the new state (200) |
+| `POST .../clear` | `{ reason }` | `{ withheld: false }` |
+| `POST .../review` | `{ note }` | the new state |
+
+Errors: `404` unknown user; `409 guardian_notices_not_applicable` (not a minor, or anonymised); `409
+guardian_notices_already_withheld`; `409 guardian_notices_not_withheld`; `400 guardian_notices_text_invalid` (missing,
+or not 10 to 1000 characters after trimming). Codes are in `../guardian-security-notice/guardian-notice-withhold.constants.ts`.
+
+**Storage:** table `GuardianNoticeWithhold` (one row per account while ON; deleted on clear; unique `userId`), NOT columns
+on `User`, so no existing `User` select or serialiser can leak it. Cascades with the user; the anonymiser
+(`anonymizeUser`, and therefore the admin immediate delete) deletes it in the same transaction; a report-held account
+(`minimiseHeldUser`) keeps it.
+
+**Audit:** each of withhold, clear and review writes one `AdminActionLog` row (`user.guardian_notices_withheld`,
+`_cleared`, `_reviewed`; target type `user`) **inside the same transaction** as the change (`tx.adminActionLog.create`,
+as the username revoke does), with the reason or note in the entry. The row keeps only the latest review; history is the
+log. **No endpoint lists the action log today** (only the media-review statistics count a few action kinds), so the
+three entries are readable by nobody through the API; if a log reader is ever built it must hide these three actions
+from admins who are not child-safety vetted.
+
+**Review marker:** `reviewDueAt` = 30 days after the later of `setAt` and `lastReviewedAt`; `reviewDue` compares it to
+`APP_CLOCK`. Nothing happens automatically when it is due (no expiry, no email).
+
+**Visibility (checked and tested):** nothing a minor, a guardian or a non-vetted admin can call carries the flag or its
+reason. The user routes, `GET /admin/users`, `GET /admin/users/:id`, `GET /admin/users/:id/summary` and the login payload
+do not select the relation (Prisma returns relations only when selected), and an e2e test asserts it. The admin's own
+vetting state is now exposed to the admin about **themselves**: `AdminSummary.childSafetyVetted` on `GET /admin/profile`
+and the admin login response (it was not there before), so the console knows whether to show the section.
+
+**Defaults I chose (founder can veto):** reason and note trimmed, 10 to 1000 characters; the admin who set the flag may
+also review it; the review basis is the later of set time and last review; when the minor turns 18 the flag is inert
+and the row stays until anonymisation (clear still works); only the latest review is returned; the flag may be set on a
+minor with no confirmed guardian (no effect until one is confirmed).
