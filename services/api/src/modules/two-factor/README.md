@@ -129,6 +129,22 @@ guardian's own link email is the one guardian email of the request, and approve/
 new one · a successful sign-in cancels only a waiting request · all four failure cases spend the login budget · the
 cancel token is also returned by `confirm`.
 
+## Recovery and the withhold flag (B-280; Decision Log #458)
+
+Guardian-assisted recovery is **off** while a child-safety-vetted admin has "withhold guardian notices" switched on for
+the minor's account:
+
+- `request()` returns `{ audience: "no_guardian" }` exactly as for a minor with no confirmed guardian: nothing created,
+  nothing sent, the same limiter budget spent. It is reached only after a correct password, so the anti-enumeration rule
+  is unchanged (a wrong password is still the generic `{ audience: "account" }`).
+- The guardian routes (`GET link/:token` for a guardian link, `guardian/approve`, `guardian/decline`) treat a withheld
+  account as an **expired** link and do nothing (no session ended, no email, the request row untouched).
+- Setting the flag also **cancels, in the same transaction**, any active guardian-kind request for the account
+  (`state: cancelled`, `doneAt` set), so an old link stays dead after the flag is cleared (it reads as used/expired).
+- The adult flow is not touched. What staff do to help a minor whose recovery is switched off is not built: the minor is
+  pointed to Contact Us and staff use the existing paths.
+
+
 ## Defaults I chose (founder can veto — each is flagged in the PR)
 
 SHA-1 / 6 digits / 30 s / ±1 step · replay of a used step refused · challenge valid **5 min**, admin enrolment token and pending secret **10 min** · per-IP limits **30 (users) / 10 (admins) per 15 min** · an admin **cannot turn off their own** two-factor while enforced · turn-off and regenerate **do not end other sessions** · **no email** on reset (or on anything) · the reset of a non-enrolled admin is a **409**, not a silent success · a wrong-format code (neither 6 digits nor a backup code) still counts as an attempt.

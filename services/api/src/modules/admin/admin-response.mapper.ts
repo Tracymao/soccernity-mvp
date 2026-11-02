@@ -35,6 +35,10 @@ export interface AdminSummary {
   phone: string | null;
   role: string;
   accountStatus: string;
+  // B-280: the admin's OWN child-safety-vetting state, so the Admin Console knows whether to show the
+  // child-safety-vetted-only sections (for example "Guardian notices"). Sent only about the caller themselves
+  // (login, GET /admin/profile); never about another admin in this shape.
+  childSafetyVetted: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -47,6 +51,7 @@ export function toAdminSummary(admin: AdminUser): AdminSummary {
     phone: admin.phone,
     role: admin.role,
     accountStatus: admin.accountStatus,
+    childSafetyVetted: admin.childSafetyVetted,
     createdAt: admin.createdAt,
     updatedAt: admin.updatedAt,
   };
