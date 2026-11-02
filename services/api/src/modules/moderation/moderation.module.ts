@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AccountHoldModule } from '../account-hold/account-hold.module';
 import { AdminActionLogModule } from '../admin-action-log/admin-action-log.module';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
+import { GuardianSecurityNoticeModule } from '../guardian-security-notice/guardian-security-notice.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
 import { AuthRateLimitModule } from '../auth/rate-limit/rate-limit.module';
@@ -65,6 +66,8 @@ import { ReportsController } from './reports.controller';
     BanterModule,
     // B-045 (Decision Log #376) -- HoldService for the admin hold routes.
     AccountHoldModule,
+    // B-279 (Decision Log #456): GuardianSecurityNoticeService for the outcome notices to a minor's guardian.
+    GuardianSecurityNoticeModule,
   ],
   controllers: [ReportsController, PublicReportsController, AdminModerationController],
   providers: [ModerationService, ModerationHoldsService, PrismaService, RegistrationEmailService],

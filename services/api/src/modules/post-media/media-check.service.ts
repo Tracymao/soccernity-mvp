@@ -12,6 +12,7 @@ import { MODERATION_MAX_IMAGE_BYTES, MediaModerationClient } from './media-moder
 import { AUTO_REJECTION_REASON, ModerationLabel, decideModeration, sampleFrameTimes } from './media-moderation-decision.util';
 import { POST_MEDIA_DEFAULTS, PostMediaConfig } from './post-media.config';
 import { writeDecisionNotification } from './post-media-decision.service';
+import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
 import { PostMediaObjectsService } from './post-media-objects.service';
 import { PostMediaService } from './post-media.service';
 
@@ -55,6 +56,10 @@ export class MediaCheckService {
     private readonly config: PostMediaConfig,
     private readonly objects: PostMediaObjectsService,
     @Optional() @Inject(APP_CLOCK) private readonly clock: Clock = systemClock,
+    // B-279 (Decision Log #456 A): an AUTOMATIC rejection of a minor's file (image screening) is a platform
+    // action, so the minor's guardian is told the kind of action (never the labels or reason). Optional only so
+    // a spec that builds this service without it keeps its shape; PostMediaModule always provides it.
+    @Optional() private readonly guardianNotices?: GuardianSecurityNoticeService,
   ) {}
 
   /**
@@ -234,6 +239,7 @@ export class MediaCheckService {
         if (outcome === 'approved' && row.publicKey && !row.publishedAt) await this.objects.discardUnrecordedCopy(id, row.publicKey);
         throw err;
       }
+      if (outcome === 'rejected' && written) this.guardianNotices?.notifyInBackground(uploaderId, 'media_not_approved');
       if (outcome === 'approved') {
         if (written) await this.objects.finishPublish(id);
         else if (row.publicKey && !row.publishedAt) await this.objects.discardUnrecordedCopy(id, row.publicKey);

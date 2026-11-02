@@ -8,6 +8,7 @@ import {
 } from './post-media-review.constants';
 import { MEDIA_REVIEW_CODES, postMediaError } from './post-media.errors';
 import { PostMediaObjectsService } from './post-media-objects.service';
+import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
 
 // backend/w15-media-review-queue (B-037; Decision Log #419 items 4 and 6). A MODERATOR's decision on one
 // item. (The automatic check writes its own decisions in media-check.service.ts; both write the same
@@ -75,6 +76,10 @@ export class PostMediaDecisionService {
     private readonly prisma: PrismaService,
     private readonly objects: PostMediaObjectsService,
     @Optional() @Inject(APP_CLOCK) private readonly clock: Clock = systemClock,
+    // B-279 (Decision Log #456 A): a moderator REJECTING a minor's file is a platform action, so the minor's
+    // guardian is told the kind of action (never the reason). Optional only so a spec that builds this service
+    // without it keeps its shape; PostMediaModule always provides it.
+    @Optional() private readonly guardianNotices?: GuardianSecurityNoticeService,
   ) {}
 
   async approve(mediaId: string, adminId: string): Promise<ModeratorDecisionResult> {
@@ -148,7 +153,8 @@ export class PostMediaDecisionService {
   }
 
   async reject(mediaId: string, adminId: string, reason: string): Promise<ModeratorDecisionResult> {
-    const result = await this.rejectInTransaction(mediaId, adminId, reason);
+    const { result, uploaderId } = await this.rejectInTransaction(mediaId, adminId, reason);
+    this.guardianNotices?.notifyInBackground(uploaderId, 'media_not_approved');
     // The status is written, so the database gate already hides the file. If it was published, move it back
     // to the private prefix. Never throws: a failure is retried by the reconciler. NEVER deletes the file.
     await this.objects.withdraw(mediaId).catch((err) => {
@@ -157,7 +163,11 @@ export class PostMediaDecisionService {
     return result;
   }
 
-  private async rejectInTransaction(mediaId: string, adminId: string, reason: string): Promise<ModeratorDecisionResult> {
+  private async rejectInTransaction(
+    mediaId: string,
+    adminId: string,
+    reason: string,
+  ): Promise<{ result: ModeratorDecisionResult; uploaderId: string }> {
     return this.prisma.$transaction(async (tx) => {
       const row = await this.load(tx, mediaId);
       const now = this.clock.now();
@@ -181,7 +191,7 @@ export class PostMediaDecisionService {
 
       await this.resolveReports(tx, mediaId, now);
       await writeDecisionNotification(tx, row.uploaderId, mediaId, 'rejected');
-      return { id: mediaId, outcome: 'rejected', status: 'rejected' } as const;
+      return { result: { id: mediaId, outcome: 'rejected', status: 'rejected' } as const, uploaderId: row.uploaderId };
     });
   }
 

@@ -59,6 +59,11 @@ export interface TwoFactorChallenge {
   twoFactorRequired: true;
   challengeToken: string;
   challengeExpiresInSeconds: number;
+  // B-276: added by AuthService.login / reactivateAccount AFTER the password step succeeded, for a USER whose
+  // two-factor recovery is waiting out its 24 hours, so the code prompt can warn that entering a code cancels it.
+  // Absent on admin challenges.
+  recoveryPending?: boolean;
+  recoveryExecuteAt?: string;
 }
 
 export interface AdminEnrolmentRequired {
@@ -218,6 +223,19 @@ export class TwoFactorService implements OnModuleInit {
     await this.admins.disable(adminId, extra);
     await this.pending.clear('admin', adminId);
     await this.limiter.clear('admin', adminId);
+    return true;
+  }
+
+  // B-276 (recovery, Decision Log #455): the USER counterpart of resetAdmin. Clears the user's secret fields and
+  // backup codes (the same repository code the admin reset uses) with `extra` run in the SAME transaction; if
+  // `extra` throws, nothing is cleared. Returns false if two-factor was not enabled. The caller ends the user's
+  // sessions (it needs TokenService, which this service deliberately does not depend on).
+  async resetUser(userId: string, extra: (tx: TransactionClient) => Promise<void>): Promise<boolean> {
+    const subject = await this.users.find(userId);
+    if (!subject || !subject.totpEnabledAt) return false;
+    await this.users.disable(userId, extra);
+    await this.pending.clear('user', userId);
+    await this.limiter.clear('user', userId);
     return true;
   }
 

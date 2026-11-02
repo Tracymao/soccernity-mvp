@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ServerClient } from 'postmark';
+import {
+  RECOVERY_CANCEL_PATH,
+  RECOVERY_CONFIRM_PATH,
+  RECOVERY_GUARDIAN_PATH,
+} from '../../../two-factor/recovery/two-factor-recovery.constants';
 import { buildWebAppLink } from './web-app-link.util';
 
 // sprint-1/guardian-consent-decline-withdraw-expiry added the five
@@ -27,6 +32,14 @@ export type RegistrationEmailTemplate =
   | 'guardian-minor-turned-18'
   | 'guardian-email-replaced'
   | 'guardian-security-notice'
+  | 'guardian-safety-notice'
+  | 'two-factor-recovery-link'
+  | 'two-factor-recovery-guardian-link'
+  | 'two-factor-recovery-minor-notice'
+  | 'two-factor-recovery-waiting'
+  | 'two-factor-recovery-completed'
+  | 'two-factor-recovery-approved'
+  | 'two-factor-recovery-declined'
   | 'public-report-acknowledgement'
   | 'report-actioned'
   | 'appeal-decision'
@@ -40,6 +53,20 @@ export interface OutboundRegistrationEmail {
   template: RegistrationEmailTemplate;
   data: Record<string, string>;
 }
+
+// backend/b276-two-factor-recovery (B-276). The two-factor RECOVERY emails carry single-use links that remove a
+// security control, and they go to a named person's mailbox. For these templates nothing identifying is written to
+// the log (no recipient, no data, so no token and no link), live or not. The older templates keep their existing
+// logging, which is deliberate for dev (see dispatch()).
+const RECOVERY_TEMPLATES: ReadonlySet<RegistrationEmailTemplate> = new Set<RegistrationEmailTemplate>([
+  'two-factor-recovery-link',
+  'two-factor-recovery-guardian-link',
+  'two-factor-recovery-minor-notice',
+  'two-factor-recovery-waiting',
+  'two-factor-recovery-completed',
+  'two-factor-recovery-approved',
+  'two-factor-recovery-declined',
+]);
 
 // Decision Log #17 (Build Plan Section 9): Postmark is the chosen
 // transactional email provider. Wired to activate automatically the
@@ -324,6 +351,24 @@ export class RegistrationEmailService {
     });
   }
 
+  // backend/b279-guardian-safety-notices (B-279; Decision Log #456 groups A and C). To the CONFIRMED guardian of a
+  // minor when SOCCERNITY took a safety action on the minor's account or content. Same shape as the security
+  // notice (subject, one-sentence summary, time, all from the registry in guardian-security-notice.constants.ts)
+  // plus a pointer to the Contact Us page. The email says the KIND of action and when, and NOTHING else: never
+  // the reason, the rule, a report, a reporter, a moderator or any content of a post. The Contact Us link is
+  // built from WEB_APP_BASE_URL; when that is unusable the email is still sent, without the link, because the
+  // notice itself matters more than its pointer (unlike a token email, nothing here depends on the link).
+  // [COPY PENDING LEGAL REVIEW]: functional wording only (docs/pending-copy-manifest.md).
+  async sendGuardianSafetyNoticeEmail(to: string, subject: string, summary: string, when: string): Promise<void> {
+    const contactLink = buildWebAppLink(this.config.get<string>('WEB_APP_BASE_URL'), '/contact', {}) ?? '';
+    await this.dispatch({
+      to,
+      subject,
+      template: 'guardian-safety-notice',
+      data: { summary, when, contactLink },
+    });
+  }
+
   // ---------------------------------------------------------------
   // feat/public-report-submission
   // ---------------------------------------------------------------
@@ -456,6 +501,89 @@ export class RegistrationEmailService {
     });
   }
 
+  // ---------------------------------------------------------------
+  // backend/b276-two-factor-recovery (B-276; Decision Log #455, #456). A user who lost BOTH their authenticator
+  // device and their backup codes. All seven are plain functional copy, [COPY PENDING LEGAL REVIEW] by the standing
+  // convention (docs/pending-copy-manifest.md); the tag does not hold the build. None logs a recipient or a token
+  // (RECOVERY_TEMPLATES). Each link email is skipped, and an error logged, if WEB_APP_BASE_URL is unusable.
+  // ---------------------------------------------------------------
+
+  // To an ADULT account's own address: the link that lets them confirm the request. Opening it changes nothing.
+  async sendTwoFactorRecoveryLinkEmail(to: string, token: string): Promise<void> {
+    const link = this.linkFor('two-factor-recovery-link', RECOVERY_CONFIRM_PATH, token);
+    if (!link) return;
+    await this.dispatch({
+      to,
+      subject: 'Remove two-factor from your Soccernity account?',
+      template: 'two-factor-recovery-link',
+      data: { link },
+    });
+  }
+
+  // To the GUARDIAN of a minor (confirmed consent). 72 hours. Names the minor the way the other guardian emails do.
+  async sendTwoFactorRecoveryGuardianLinkEmail(to: string, token: string, minorDisplayName: string): Promise<void> {
+    const link = this.linkFor('two-factor-recovery-guardian-link', RECOVERY_GUARDIAN_PATH, token);
+    if (!link) return;
+    await this.dispatch({
+      to,
+      subject: `${minorDisplayName} asked to remove two-factor from their Soccernity account`,
+      template: 'two-factor-recovery-guardian-link',
+      data: { link, minorDisplayName },
+    });
+  }
+
+  // To the MINOR's own address, when the request went to their guardian instead.
+  async sendTwoFactorRecoveryMinorNoticeEmail(to: string, minorDisplayName: string): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: 'We asked your guardian about removing two-factor',
+      template: 'two-factor-recovery-minor-notice',
+      data: { minorDisplayName },
+    });
+  }
+
+  // To an adult account's address when they confirm: the wait has started, with the separate cancel link.
+  async sendTwoFactorRecoveryWaitingEmail(to: string, cancelToken: string, executeAtText: string): Promise<void> {
+    const link = this.linkFor('two-factor-recovery-waiting', RECOVERY_CANCEL_PATH, cancelToken);
+    if (!link) return;
+    await this.dispatch({
+      to,
+      subject: 'Two-factor will be removed from your Soccernity account',
+      template: 'two-factor-recovery-waiting',
+      data: { link, executeAtText },
+    });
+  }
+
+  // To an adult account's address when the wait ends and two-factor has been removed.
+  async sendTwoFactorRecoveryCompletedEmail(to: string): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: 'Two-factor was removed from your Soccernity account',
+      template: 'two-factor-recovery-completed',
+      data: {},
+    });
+  }
+
+  // To the MINOR's own address when their guardian approves.
+  async sendTwoFactorRecoveryApprovedEmail(to: string, minorDisplayName: string): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: 'Two-factor was removed from your Soccernity account',
+      template: 'two-factor-recovery-approved',
+      data: { minorDisplayName },
+    });
+  }
+
+  // To the MINOR's own address when their guardian says they did not expect the request.
+  async sendTwoFactorRecoveryDeclinedEmail(to: string, minorDisplayName: string): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: 'Your guardian did not expect the two-factor request',
+      template: 'two-factor-recovery-declined',
+      data: { minorDisplayName },
+    });
+  }
+
   // B-016. Builds the apps/web link for a token email, or refuses. When
   // WEB_APP_BASE_URL is unset/placeholder the email's only call to action would
   // be a dead link, so NOTHING is sent and an error is logged (without the
@@ -474,10 +602,13 @@ export class RegistrationEmailService {
   }
 
   private async dispatch(email: OutboundRegistrationEmail): Promise<void> {
+    const quiet = RECOVERY_TEMPLATES.has(email.template);
     if (!this.isConfigured) {
       this.logger.log(
-        `[email] EMAIL_PROVIDER_API_KEY not set — wired but inactive. ` +
-          `Would send "${email.template}" to ${email.to} with data=${JSON.stringify(email.data)}`,
+        quiet
+          ? `[email] EMAIL_PROVIDER_API_KEY not set — wired but inactive. Would send "${email.template}" (recipient and content are not logged for this template).`
+          : `[email] EMAIL_PROVIDER_API_KEY not set — wired but inactive. ` +
+              `Would send "${email.template}" to ${email.to} with data=${JSON.stringify(email.data)}`,
       );
       return;
     }
@@ -498,11 +629,15 @@ export class RegistrationEmailService {
         MessageStream: 'outbound',
       });
       this.logger.log(
-        `[email] sent "${email.template}" to ${email.to} (MessageID=${result.MessageID})`,
+        quiet
+          ? `[email] sent "${email.template}" (MessageID=${result.MessageID})`
+          : `[email] sent "${email.template}" to ${email.to} (MessageID=${result.MessageID})`,
       );
     } catch (err) {
       this.logger.error(
-        `[email] failed to send "${email.template}" to ${email.to}: ${(err as Error).message}`,
+        quiet
+          ? `[email] failed to send "${email.template}": ${(err as Error).message}`
+          : `[email] failed to send "${email.template}" to ${email.to}: ${(err as Error).message}`,
       );
     }
   }
@@ -697,6 +832,59 @@ ${data.link}
         `When: ${data.when}\n\n` +
         `You are receiving this because you are the guardian on this account. If this was not expected, please contact support@soccernity.com.`
       );
+    case 'guardian-safety-notice':
+      return (
+        `${data.summary}\n\n` +
+        `When: ${data.when}\n\n` +
+        `You are receiving this because you are the guardian on this account. If you have questions, you can contact support through the Contact Us page on Soccernity` +
+        (data.contactLink ? `: ${data.contactLink}` : '.')
+      );
+    case 'two-factor-recovery-link':
+      return (
+        `Hi,\n\n` +
+        `Someone said they have lost both the device and the backup codes for two-factor on your Soccernity account, and asked us to remove it. If that was you, open this link to continue:\n\n${data.link}\n\n` +
+        `Opening the link changes nothing yet. After you confirm, we wait 24 hours before removing two-factor, and we email you so you can stop it.\n\n` +
+        `If this was not you, ignore this email and think about changing your password.`
+      );
+    case 'two-factor-recovery-guardian-link':
+      return (
+        `${data.minorDisplayName} has asked us to remove two-factor (a second sign-in step) from their Soccernity account, because they lost their device and their backup codes.\n\n` +
+        `As their guardian you can approve this or say you did not expect it. No account is needed:\n\n${data.link}\n\n` +
+        `The link works for 72 hours. Nothing changes unless you approve.\n\n` +
+        `If you did not expect this, you can answer "I didn't expect this" on the page, or just ignore this email.`
+      );
+    case 'two-factor-recovery-minor-notice':
+      return (
+        `Hi ${data.minorDisplayName},\n\n` +
+        `You asked to remove two-factor from your Soccernity account. Because you are under 18, we have sent the request to your guardian instead of your own inbox.\n\n` +
+        `Nothing changes unless they approve it. Ask them to check their email, including their spam folder.\n\n` +
+        `If you did not make this request, change your password.`
+      );
+    case 'two-factor-recovery-waiting':
+      return (
+        `Hi,\n\n` +
+        `You confirmed a request to remove two-factor from your Soccernity account. It will be removed after ${data.executeAtText}.\n\n` +
+        `If this was not you, stop it now:\n\n${data.link}\n\n` +
+        `Signing in with your authenticator app or a backup code before then also stops it.`
+      );
+    case 'two-factor-recovery-completed':
+      return (
+        `Hi,\n\n` +
+        `Two-factor has been removed from your Soccernity account, and you have been signed out everywhere. Sign in with your password. You can turn two-factor on again in your account settings.\n\n` +
+        `If you did not ask for this, reset your password and contact support@soccernity.com.`
+      );
+    case 'two-factor-recovery-approved':
+      return (
+        `Hi ${data.minorDisplayName},\n\n` +
+        `Your guardian approved your request. Two-factor has been removed from your Soccernity account, and you have been signed out everywhere. Sign in with your password. You can turn two-factor on again in your account settings.\n\n` +
+        `If you did not ask for this, change your password and tell your guardian.`
+      );
+    case 'two-factor-recovery-declined':
+      return (
+        `Hi ${data.minorDisplayName},\n\n` +
+        `Your guardian said they did not expect your request to remove two-factor, so nothing has changed on your Soccernity account.\n\n` +
+        `If you did not make that request, change your password now.`
+      );
     case 'public-report-acknowledgement':
       return (
         `Thank you for letting us know.\n\n` +
@@ -856,6 +1044,64 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
         `<p>${escapeHtml(data.summary)}</p>` +
         `<p><strong>When:</strong> ${escapeHtml(data.when)}</p>` +
         `<p>You are receiving this because you are the guardian on this account. If this was not expected, please contact support@soccernity.com.</p>`
+      );
+    case 'guardian-safety-notice':
+      return (
+        `<p>${escapeHtml(data.summary)}</p>` +
+        `<p><strong>When:</strong> ${escapeHtml(data.when)}</p>` +
+        `<p>You are receiving this because you are the guardian on this account. If you have questions, you can contact support through the ` +
+        (data.contactLink
+          ? `<a href="${escapeHtml(data.contactLink)}">Contact Us page</a> on Soccernity.</p>`
+          : `Contact Us page on Soccernity.</p>`)
+      );
+    case 'two-factor-recovery-link':
+      return (
+        `<p>Hi,</p>` +
+        `<p>Someone said they have lost both the device and the backup codes for two-factor on your Soccernity account, and asked us to remove it. If that was you, <a href="${escapeHtml(data.link)}">open this link to continue</a>.</p>` +
+        `<p>Opening the link changes nothing yet. After you confirm, we wait 24 hours before removing two-factor, and we email you so you can stop it.</p>` +
+        `<p>If the link does not work, copy this into your browser: ${escapeHtml(data.link)}</p>` +
+        `<p>If this was not you, ignore this email and think about changing your password.</p>`
+      );
+    case 'two-factor-recovery-guardian-link':
+      return (
+        `<p><strong>${escapeHtml(data.minorDisplayName)}</strong> has asked us to remove two-factor (a second sign-in step) from their Soccernity account, because they lost their device and their backup codes.</p>` +
+        `<p>As their guardian you can approve this or say you did not expect it. No account is needed: <a href="${escapeHtml(data.link)}">review the request</a>.</p>` +
+        `<p>The link works for 72 hours. Nothing changes unless you approve.</p>` +
+        `<p>If the link does not work, copy this into your browser: ${escapeHtml(data.link)}</p>` +
+        `<p>If you did not expect this, you can answer "I didn't expect this" on the page, or just ignore this email.</p>`
+      );
+    case 'two-factor-recovery-minor-notice':
+      return (
+        `<p>Hi ${escapeHtml(data.minorDisplayName)},</p>` +
+        `<p>You asked to remove two-factor from your Soccernity account. Because you are under 18, we have sent the request to your guardian instead of your own inbox.</p>` +
+        `<p>Nothing changes unless they approve it. Ask them to check their email, including their spam folder.</p>` +
+        `<p>If you did not make this request, change your password.</p>`
+      );
+    case 'two-factor-recovery-waiting':
+      return (
+        `<p>Hi,</p>` +
+        `<p>You confirmed a request to remove two-factor from your Soccernity account. It will be removed after ${escapeHtml(data.executeAtText)}.</p>` +
+        `<p>If this was not you, <a href="${escapeHtml(data.link)}">stop it now</a>.</p>` +
+        `<p>If the link does not work, copy this into your browser: ${escapeHtml(data.link)}</p>` +
+        `<p>Signing in with your authenticator app or a backup code before then also stops it.</p>`
+      );
+    case 'two-factor-recovery-completed':
+      return (
+        `<p>Hi,</p>` +
+        `<p>Two-factor has been removed from your Soccernity account, and you have been signed out everywhere. Sign in with your password. You can turn two-factor on again in your account settings.</p>` +
+        `<p>If you did not ask for this, reset your password and contact support@soccernity.com.</p>`
+      );
+    case 'two-factor-recovery-approved':
+      return (
+        `<p>Hi ${escapeHtml(data.minorDisplayName)},</p>` +
+        `<p>Your guardian approved your request. Two-factor has been removed from your Soccernity account, and you have been signed out everywhere. Sign in with your password. You can turn two-factor on again in your account settings.</p>` +
+        `<p>If you did not ask for this, change your password and tell your guardian.</p>`
+      );
+    case 'two-factor-recovery-declined':
+      return (
+        `<p>Hi ${escapeHtml(data.minorDisplayName)},</p>` +
+        `<p>Your guardian said they did not expect your request to remove two-factor, so nothing has changed on your Soccernity account.</p>` +
+        `<p>If you did not make that request, change your password now.</p>`
       );
     case 'public-report-acknowledgement':
       return (
