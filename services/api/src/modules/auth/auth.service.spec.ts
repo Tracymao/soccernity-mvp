@@ -145,6 +145,8 @@ async function buildHarness() {
     tokenService,
     buildTestDobEncryption(),
     twoFactorStub as never,
+    // B-276: no recovery request is waiting; accounts here have two-factor off, so it is never reached.
+    { findWaiting: jest.fn(), cancelWaitingOnSignIn: jest.fn() } as never,
   );
   await authService.onModuleInit();
 

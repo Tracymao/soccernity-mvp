@@ -612,4 +612,89 @@ describe('RegistrationEmailService', () => {
       errorSpy.mockRestore();
     });
   });
+
+  // backend/b276-two-factor-recovery (B-276; Decision Log #455, #456).
+  describe('two-factor recovery templates', () => {
+    const live = () =>
+      new RegistrationEmailService(
+        buildConfig({
+          EMAIL_PROVIDER_API_KEY: 'a-real-key',
+          POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example',
+          WEB_APP_BASE_URL: 'https://app.soccernity.com',
+        }),
+      );
+
+    it.each([
+      ['link', (s: RegistrationEmailService) => s.sendTwoFactorRecoveryLinkEmail('adult@example.com', 'id.secret'), 'https://app.soccernity.com/two-factor-recovery/confirm?token=id.secret'],
+      ['guardian link', (s: RegistrationEmailService) => s.sendTwoFactorRecoveryGuardianLinkEmail('guardian@example.com', 'id.secret', 'Sam'), 'https://app.soccernity.com/two-factor-recovery/guardian?token=id.secret'],
+      ['waiting', (s: RegistrationEmailService) => s.sendTwoFactorRecoveryWaitingEmail('adult@example.com', 'id.cancel', '2 January 2030, 10:00 UTC'), 'https://app.soccernity.com/two-factor-recovery/cancel?token=id.cancel'],
+    ])('the %s email carries the right web link in both bodies', async (_name, send, link) => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-rec' });
+      await send(live());
+      const sent = mockSendEmail.mock.calls[0][0];
+      expect(sent.TextBody).toContain(link);
+      expect(sent.HtmlBody).toContain(link);
+    });
+
+    it('the waiting email says when two-factor will be removed, and the guardian email says it works for 72 hours', async () => {
+      mockSendEmail.mockResolvedValue({ MessageID: 'msg-rec' });
+      await live().sendTwoFactorRecoveryWaitingEmail('adult@example.com', 'id.cancel', '2 January 2030, 10:00 UTC');
+      await live().sendTwoFactorRecoveryGuardianLinkEmail('guardian@example.com', 'id.secret', 'Sam');
+      expect(mockSendEmail.mock.calls[0][0].TextBody).toContain('2 January 2030, 10:00 UTC');
+      expect(mockSendEmail.mock.calls[1][0].TextBody).toContain('72 hours');
+      expect(mockSendEmail.mock.calls[1][0].Subject).toContain('Sam');
+    });
+
+    it('the four notices without a link send to the right person and say what happened', async () => {
+      mockSendEmail.mockResolvedValue({ MessageID: 'msg-rec' });
+      const s = live();
+      await s.sendTwoFactorRecoveryMinorNoticeEmail('minor@example.com', 'Sam');
+      await s.sendTwoFactorRecoveryCompletedEmail('adult@example.com');
+      await s.sendTwoFactorRecoveryApprovedEmail('minor@example.com', 'Sam');
+      await s.sendTwoFactorRecoveryDeclinedEmail('minor@example.com', 'Sam');
+      const to = mockSendEmail.mock.calls.map((c) => c[0].To);
+      expect(to).toEqual(['minor@example.com', 'adult@example.com', 'minor@example.com', 'minor@example.com']);
+      expect(mockSendEmail.mock.calls[0][0].TextBody).toContain('guardian');
+      expect(mockSendEmail.mock.calls[1][0].TextBody).toContain('removed');
+      expect(mockSendEmail.mock.calls[2][0].TextBody).toContain('approved');
+      expect(mockSendEmail.mock.calls[3][0].TextBody).toContain('change your password');
+    });
+
+    it('escapes a display name containing markup in the HTML bodies only', async () => {
+      mockSendEmail.mockResolvedValue({ MessageID: 'msg-rec' });
+      await live().sendTwoFactorRecoveryGuardianLinkEmail('guardian@example.com', 'id.secret', '<b>Sam</b>');
+      const sent = mockSendEmail.mock.calls[0][0];
+      expect(sent.HtmlBody).toContain('&lt;b&gt;Sam&lt;/b&gt;');
+      expect(sent.HtmlBody).not.toContain('<b>Sam</b>');
+    });
+
+    it('logs NEITHER the recipient NOR the token NOR the link, whether Postmark is live or not', async () => {
+      const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+
+      const inactive = new RegistrationEmailService(buildConfig({ EMAIL_PROVIDER_API_KEY: 'replace-me', WEB_APP_BASE_URL: 'https://app.soccernity.com' }));
+      await inactive.sendTwoFactorRecoveryLinkEmail('adult@example.com', 'id.secret-token');
+      await inactive.sendTwoFactorRecoveryWaitingEmail('adult@example.com', 'id.cancel-token', 'when');
+
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-ok' }).mockRejectedValueOnce(new Error('postmark down'));
+      await live().sendTwoFactorRecoveryLinkEmail('adult@example.com', 'id.secret-token');
+      await live().sendTwoFactorRecoveryLinkEmail('adult@example.com', 'id.secret-token');
+
+      const logged = [...logSpy.mock.calls, ...errorSpy.mock.calls].map((c) => String(c[0])).join(' | ');
+      expect(logged).toContain('two-factor-recovery-link');
+      expect(logged).not.toMatch(/adult@example\.com|secret-token|cancel-token|two-factor-recovery\/confirm/);
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
+    });
+
+    it('sends nothing, and logs an error without the token, when WEB_APP_BASE_URL is unusable', async () => {
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      const broken = new RegistrationEmailService(buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', WEB_APP_BASE_URL: undefined }));
+      await broken.sendTwoFactorRecoveryLinkEmail('adult@example.com', 'id.secret-token');
+      expect(mockSendEmail).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      expect(String(errorSpy.mock.calls[0][0])).not.toMatch(/secret-token|adult@example\.com/);
+      errorSpy.mockRestore();
+    });
+  });
 });
