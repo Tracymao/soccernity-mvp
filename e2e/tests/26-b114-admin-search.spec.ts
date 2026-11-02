@@ -56,7 +56,7 @@ test.describe.serial('admin search: the bar and the results page', () => {
     await shot(page, '01-users-page-bar');
 
     await searchFor(page, player.email);
-    await expect(page).toHaveURL(new RegExp(`/search\\?q=${encodeURIComponent(player.email).replace(/\./g, '\\.')}`));
+    await page.waitForURL((url) => url.pathname === '/search' && url.searchParams.get('q') === player.email);
     await expect(page.getByRole('heading', { name: 'Search' })).toBeVisible();
     await expect(page.getByText(`Results for “${player.email}”`)).toBeVisible();
     await expect(page.getByText('1 result in 1 group')).toBeVisible();
