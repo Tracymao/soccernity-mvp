@@ -51,6 +51,8 @@ interface UserRow {
   displayName: string;
   username: string | null;
   guardian: { email: string; consentStatus: string } | null;
+  // B-280: the "withhold guardian notices" flag (the existence of a GuardianNoticeWithhold row).
+  withheld: boolean;
 }
 
 function userRow(over: Partial<UserRow> & { id: string; email: string }): UserRow {
@@ -62,6 +64,7 @@ function userRow(over: Partial<UserRow> & { id: string; email: string }): UserRo
     displayName: 'Real Name',
     username: null,
     guardian: null,
+    withheld: false,
     ...over,
   };
 }
@@ -191,8 +194,13 @@ function build(users: UserRow[]) {
     user: {
       findUnique: jest.fn(async ({ where }: { where: { id?: string; email?: string } }) => {
         const u = users.find((x) => (where.id ? x.id === where.id : x.email === where.email));
-        return u ? { ...u } : null;
+        return u ? { ...u, guardianNoticeWithhold: u.withheld ? { id: 'withhold-1' } : null } : null;
       }),
+    },
+    guardianNoticeWithhold: {
+      findUnique: jest.fn(async ({ where }: { where: { userId: string } }) =>
+        users.find((x) => x.id === where.userId)?.withheld ? { id: 'withhold-1' } : null,
+      ),
     },
     $transaction: jest.fn(async (cb: (tx: unknown) => unknown): Promise<unknown> => cb(prismaRef)),
   };
@@ -941,5 +949,84 @@ describe('guardian approve / decline', () => {
     await expect(t.service.approve(token)).rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(t.users[0].totpEnabledAt).not.toBeNull();
     expect(t.rows[0].state).toBe('pending');
+  });
+});
+
+// B-280 (Decision Log #458): while guardian notices are withheld for a minor's account, guardian-assisted recovery is off.
+describe('withhold guardian notices (B-280)', () => {
+  it('request: a withheld minor gets { audience: "no_guardian" } exactly like a minor with no confirmed guardian, and nothing is created or sent', async () => {
+    const withheld = build([minor()]);
+    withheld.users[0].withheld = true;
+    await withheld.service.onModuleInit();
+    const noGuardian = build([minor(null)]);
+    await noGuardian.service.onModuleInit();
+
+    const a = await withheld.service.request('minor@example.com', 'pw', IP);
+    const b = await noGuardian.service.request('minor@example.com', 'pw', IP);
+
+    expect(a).toEqual({ audience: 'no_guardian' });
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+    expect(withheld.rows).toHaveLength(0);
+    for (const fn of Object.values(withheld.emails)) expect(fn).not.toHaveBeenCalled();
+  });
+
+  it('request: the same work and the same budget as a normal request (one verification, the limiter is charged)', async () => {
+    const t = build([minor()]);
+    t.users[0].withheld = true;
+    await t.service.onModuleInit();
+
+    await t.service.request('minor@example.com', 'pw', IP);
+    expect(t.passwords.verify).toHaveBeenCalledTimes(1);
+    // The 60-second gap was spent, so an immediate second request is limited like any other.
+    await expect(t.service.request('minor@example.com', 'pw', IP)).rejects.toBeInstanceOf(AuthLimitExceeded);
+  });
+
+  it('request: a WRONG password on a withheld minor is still the generic account answer (the audience is not revealed)', async () => {
+    const t = build([minor()]);
+    t.users[0].withheld = true;
+    await t.service.onModuleInit();
+
+    expect(await t.service.request('minor@example.com', 'WRONG', IP)).toEqual({ audience: 'account' });
+  });
+
+  it('request: an ADULT is untouched by the flag', async () => {
+    const t = build([adult()]);
+    t.users[0].withheld = true;
+    await t.service.onModuleInit();
+
+    expect(await t.service.request('adult@example.com', 'pw', IP)).toEqual({ audience: 'account' });
+    expect(t.emails.sendTwoFactorRecoveryLinkEmail).toHaveBeenCalledTimes(1);
+  });
+
+  describe('guardian links created before the flag was set', () => {
+    async function requested() {
+      const t = build([minor()]);
+      await t.service.onModuleInit();
+      await t.service.request('minor@example.com', 'pw', IP);
+      const token = sentToken(t.emails.sendTwoFactorRecoveryGuardianLinkEmail);
+      t.users[0].withheld = true;
+      return { t, token };
+    }
+
+    it('describeLink reads as expired (no minor name, no request time)', async () => {
+      const { t, token } = await requested();
+      expect(await t.service.describeLink(token)).toEqual({ state: 'expired', kind: 'guardian' });
+    });
+
+    it('approve answers expired and removes nothing: two-factor stays on, no session ended, no email', async () => {
+      const { t, token } = await requested();
+      await expectLinkError(t.service.approve(token), 'expired');
+      expect(t.users[0].totpEnabledAt).not.toBeNull();
+      expect(t.rows[0]).toMatchObject({ state: 'pending' });
+      expect(t.tokenService.revokeAllSessionsForUser).not.toHaveBeenCalled();
+      expect(t.emails.sendTwoFactorRecoveryApprovedEmail).not.toHaveBeenCalled();
+    });
+
+    it('decline answers expired and does nothing: the request is untouched and the minor is not emailed', async () => {
+      const { t, token } = await requested();
+      await expectLinkError(t.service.decline(token), 'expired');
+      expect(t.rows[0]).toMatchObject({ state: 'pending' });
+      expect(t.emails.sendTwoFactorRecoveryDeclinedEmail).not.toHaveBeenCalled();
+    });
   });
 });

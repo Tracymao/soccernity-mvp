@@ -142,3 +142,11 @@ Tests added/updated:
   model (the endpoint above, or a report that joins across it), that PR
   should add real e2e coverage then, per `test/README.md`'s own
   raw-SQL/transaction/novel-relation trigger list.
+
+## B-280 additions (`backend/b280-withhold-guardian-notices`)
+
+Three new actions, all `targetType: 'user'` (the minor), written in the SAME transaction as the change they record:
+`user.guardian_notices_withheld`, `user.guardian_notices_cleared`, `user.guardian_notices_reviewed`. Their notes hold the
+admin's reason or note. **No endpoint reads this log**, so they are visible to nobody through the API; if one is ever
+added it must hide these three actions from admins who are not child-safety vetted (Decision Log #458: nobody except
+vetted admins may learn that the flag exists).

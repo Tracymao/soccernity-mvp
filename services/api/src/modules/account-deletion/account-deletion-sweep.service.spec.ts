@@ -27,6 +27,8 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
     // B-086: the hashes of the user's two-factor backup codes go with the account's ability to sign in.
     userBackupCode: { deleteMany: jest.fn() },
     twoFactorRecoveryRequest: { deleteMany: jest.fn() },
+    // B-280: the withhold-guardian-notices flag goes with the anonymised account.
+    guardianNoticeWithhold: { deleteMany: jest.fn() },
     follow: { deleteMany: jest.fn() },
     // B-039: Block rows (both directions) are removed with the user's other relationship rows.
     block: { deleteMany: jest.fn() },
@@ -92,6 +94,24 @@ describe('AccountDeletionSweepService', () => {
       const prisma = buildPrismaMock();
       await new AccountDeletionSweepService(prisma).minimiseHeldUser('user-1');
       expect(prisma.contactEnquiry.deleteMany).not.toHaveBeenCalled();
+    });
+  });
+
+  // B-280 (Decision Log #458): the "withhold guardian notices" flag goes with the anonymised account.
+  describe('anonymizeUser withhold-guardian-notices flag (B-280)', () => {
+    it('deletes the flag row inside the anonymising transaction (the admin immediate delete uses the same method)', async () => {
+      const prisma = buildPrismaMock();
+      await new AccountDeletionSweepService(prisma).anonymizeUser('user-1', true);
+
+      expect(prisma.guardianNoticeWithhold.deleteMany).toHaveBeenCalledTimes(1);
+      expect(prisma.guardianNoticeWithhold.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect((prisma as unknown as { $transaction: jest.Mock }).$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the flag of a held (minimised) account: it is not anonymised, so its guardian notices stay off', async () => {
+      const prisma = buildPrismaMock();
+      await new AccountDeletionSweepService(prisma).minimiseHeldUser('user-1');
+      expect(prisma.guardianNoticeWithhold.deleteMany).not.toHaveBeenCalled();
     });
   });
 

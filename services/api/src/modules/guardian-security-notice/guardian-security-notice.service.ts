@@ -11,6 +11,7 @@ import {
 export type GuardianSecurityNoticeOutcome =
   | 'sent'
   | 'skipped_not_minor'
+  | 'skipped_withheld'
   | 'skipped_no_user'
   | 'skipped_guardian_not_confirmed'
   | 'skipped_no_guardian_email'
@@ -148,8 +149,11 @@ export class GuardianSecurityNoticeService {
   // THE one place that decides whether a guardian may be emailed about this account. Rules, in order:
   //   1. Only a user with isMinor = true. Adults never trigger a guardian notice (a Guardian row can outlive
   //      minority; isMinor is the gate, not the row).
-  //   2. Only a CONFIRMED guardian (Guardian.consentStatus 'confirmed') with an email on file. For pending,
+  //   2. Not when guardian notices are WITHHELD for the account (B-280, Decision Log #458). Silent.
+  //   3. Only a CONFIRMED guardian (Guardian.consentStatus 'confirmed') with an email on file. For pending,
   //      declined or expired consent the address has not been confirmed as the guardian's.
+  // Only the B-275 security and B-279 safety notices come through here. The consent request, withdrawal, expiry, the
+  // turned-18 notice and the guardian-email-replaced notice do NOT (see README, "What the withhold flag gates").
   private async decide(userId: string): Promise<RecipientDecision> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -157,10 +161,16 @@ export class GuardianSecurityNoticeService {
         isMinor: true,
         displayName: true,
         guardian: { select: { email: true, consentStatus: true } },
+        // B-280: existence of the row is the flag; the reason is never selected here.
+        guardianNoticeWithhold: { select: { id: true } },
       },
     });
     if (!user) return { send: false, outcome: 'skipped_no_user' };
     if (!user.isMinor) return { send: false, outcome: 'skipped_not_minor' };
+    // B-280 (Decision Log #458): a child-safety-vetted admin switched guardian notices OFF for this account. Skipped
+    // silently: an internal log line only (no reason, no admin, no address). Checked BEFORE the Guardian rule and,
+    // because decide() runs before the throttle claim, a withheld account never takes (or burns) a throttle slot.
+    if (user.guardianNoticeWithhold) return { send: false, outcome: 'skipped_withheld' };
     if (user.guardian?.consentStatus !== 'confirmed') return { send: false, outcome: 'skipped_guardian_not_confirmed' };
     const to = user.guardian.email?.trim();
     if (!to) return { send: false, outcome: 'skipped_no_guardian_email' };
