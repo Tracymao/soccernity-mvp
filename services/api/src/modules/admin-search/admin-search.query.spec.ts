@@ -63,6 +63,13 @@ describe('parseAdminSearchQuery', () => {
     expect(parseAdminSearchQuery('nelson_ihe').isUsernameShaped).toBe(true);
     for (const not of ['nel son', 'nel-son', 'a@bcd', 'nelson%']) expect(parseAdminSearchQuery(not).isUsernameShaped).toBe(false);
   });
+
+  it('classifies an 8-hex-character report reference (any case), and nothing shorter, longer or non-hex', () => {
+    expect(parseAdminSearchQuery('9A1B2C3d').isReportReference).toBe(true);
+    for (const not of ['9a1b2c3', '9a1b2c3de', '9a1b2c3g', '9a1b-2c3', '3f2504e0-4f89-41d3-9a0c-0305e82c3301']) {
+      expect(parseAdminSearchQuery(not).isReportReference).toBe(false);
+    }
+  });
 });
 
 describe('escapeLike', () => {

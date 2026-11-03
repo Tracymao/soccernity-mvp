@@ -14,12 +14,33 @@ A group a caller's role cannot open is **absent** (the key does not exist). A gr
 
 | Group | Who may open it (read from the section's own controller, not copied) | Matches | Returned fields |
 | --- | --- | --- | --- |
-| `users` | `AdminUsersController` list → moderator, superadmin | user ID exact; **email exact** (lowercased, the column is stored lowercase); **username prefix** (lowercased). An anonymised (`deleted`) account is found by **ID only**. | what the Users list shows: `id, displayName, username, email, accountStatus, createdAt` |
-| `reports` | `AdminModerationController` list → moderator, superadmin | report ID exact; given a **user ID**, the reports **by** that user (reporter), **about** that user, and about a post or comment that user wrote (bounded id lists) | `id, targetType, targetId, status, severity, concernsMinor, createdAt, source` — never the reason, a contact email or an escalation note |
-| `contactEnquiries` | `ContactEnquiryAdminController` list → moderator, superadmin | sender email **exact** (case-insensitive); subject **contains** (case-insensitive) | the inbox list fields; **never the message**, never `userId` / `escalatedReportId` (shown as `submitter`, `hasEscalation`, like the list) |
-| `articles` | `AdminArticlesController` list → editor, superadmin | title contains (case-insensitive) | `id, title, status, category, publishedAt, createdAt` — never the body |
-| `staff` | `AdminStaffRolesController` list → superadmin | name contains; email exact | `id, email, fullName, role, accountStatus` |
-| `media` | `AdminMediaReviewController` list → moderator, superadmin | media item ID exact; only an item that has been through the queue (as `GET /admin/media-review/:id`) | `id, kind, status, reportCount, createdAt` |
+| `users` | `AdminUsersController` list → moderator, superadmin | user ID exact; **email exact** (lowercased, the column is stored lowercase); **username prefix** (lowercased). An anonymised (`deleted`) account is found by **ID only**. | what the Users list shows: `id, displayName, username, email, accountStatus, createdAt` + `matchedOn` |
+| `reports` | `AdminModerationController` list → moderator, superadmin | report ID exact; **report reference** (the first 8 characters of the id, exactly 8 hex characters, as an id prefix); **target username prefix** (reports ABOUT a user whose username starts with the text, or about a post or comment they wrote); given a **user ID**, the reports **by** that user (reporter), **about** that user, and about a post or comment that user wrote (bounded id lists). **Never the free-text reason.** | `id, targetType, targetId, status, severity, concernsMinor, createdAt, source, matchedOn` — never the reason, a contact email, the reporter id or an escalation note |
+| `contactEnquiries` | `ContactEnquiryAdminController` list → moderator, superadmin | sender email **exact** (case-insensitive); subject **contains** (case-insensitive) | the inbox list fields + `matchedOn`; **never the message**, never `userId` / `escalatedReportId` (shown as `submitter`, `hasEscalation`, like the list) |
+| `articles` | `AdminArticlesController` list → editor, superadmin | title contains (case-insensitive) | `id, title, status, category, publishedAt, createdAt, matchedOn` — never the body |
+| `staff` | `AdminStaffRolesController` list → superadmin | name contains; email exact | `id, email, fullName, role, accountStatus, twoFactorEnabled, matchedOn` — `twoFactorEnabled` is a boolean derived from `totpEnabledAt` (same name as `GET /admin/staff`); the secret, the backup codes and the timestamp are never returned |
+| `media` | `AdminMediaReviewController` list → moderator, superadmin | media item ID exact; only an item that has been through the queue (as `GET /admin/media-review/:id`) | `id, kind, status, reportCount, createdAt, sources, uploader, matchedOn` — `sources` is derived exactly as the review list does (`auto_check` and/or `user_report`); `uploader` is `{ id, publicName }`, the PUBLIC name only (never an email or a real name) |
+
+### `matchedOn` (backend/b114-search-fields-report-search, Decision Log #464)
+
+One stable key per hit saying which field the text matched; the admin app owns the English label. If several fields would match, the first listed wins.
+
+| Group | Keys |
+| --- | --- |
+| `users` | `user_id`, `email`, `username` |
+| `reports` | `report_id`, `report_reference`, `reporter_user_id`, `target_user_id`, `target_username` |
+| `contactEnquiries` | `email`, `subject` |
+| `articles` | `title` |
+| `staff` | `email`, `name` |
+| `media` | `item_id` |
+
+### Reason category (not built: blocked)
+
+Decision Log #464 / the Figma frames ask for a report **reason** column ("Abusive language", "Impersonation") and for reports to be searchable by **reason category**. **There is no reason category in the data model.** `Report.reason` is the reporter's own free text (1 to 500 characters), `POST /reports` and `POST /reports/public` accept no category, and the web `ReportAction` says "no reasons taxonomy exists". The free-text reason is the report description, which is never searched or returned here. So neither the `reason` field nor the category matcher exists. Building them needs a decision (a fixed list of categories), a `Report` column and a change to both submission routes: not done, not invented.
+
+### Display name (not matched)
+
+The brief asked for reports to match the target's "username or display name (exact or prefix as for users)". The Users group matches the **username prefix only** (never the real name, Decision Log #364 / #369: no one is searched by a real name), so the report matcher follows it. Matching the real `displayName` is a one-line addition if the founder wants it.
 
 Role matrix, therefore: **editor** → `articles`; **moderator** → `users, reports, contactEnquiries, media`; **superadmin** → all six. The role comes from the verified admin access token (the same trust model as `AdminRolesGuard`); the service reads each section's `@AdminRoles` metadata through `Reflector` (handler first, then class, like the guard), so a change to a section's roles changes the search with no edit here. A unit test asserts the two agree for every group.
 
@@ -53,7 +74,8 @@ Role matrix, therefore: **editor** → `articles`; **moderator** → `users, rep
 - The 429 comes from the shared per-IP `AuthThrottlerGuard`, whose header is `Retry-After-auth` (named after the throttler), not `Retry-After`. Existing behaviour of every `@AuthRateLimit` route; not changed here.
 - Admin access tokens are counted by the global limiter as anonymous per IP (documented in the rate-limit module); this route's own limit is per IP as well, so staff behind one office address share it.
 - Reports about a user's posts / comments are found only among the user's 200 most recent of each; older reports remain reachable by report ID.
-- Search over `Report` by free text (reason) is deliberately not offered.
+- Search over `Report` by free text (reason) is deliberately not offered. The new report matchers (reference, target username) never read `reason`; a test asserts it is neither selected nor in the `where`.
+- The target-username lookup reads at most 200 user ids (`ADMIN_SEARCH_OWNED_CONTENT_ID_CAP`), then at most 200 posts and 200 comments by them. A very common prefix is therefore bounded, not complete.
 
 ## Tests
 

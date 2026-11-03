@@ -25,6 +25,8 @@ export function isEmailShaped(text: string): boolean {
 }
 // A username as the platform stores it (UpdateUserDto: [A-Za-z0-9_], 3-30; stored lowercase, Decision Log #364).
 const USERNAME_SHAPED = /^[A-Za-z0-9_]+$/;
+// The short report reference an admin sees on screen: the first 8 characters of the report's uuid.
+const REPORT_REFERENCE = /^[0-9a-f]{8}$/i;
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
 
@@ -38,6 +40,8 @@ export interface ParsedAdminSearchQuery {
   isEmail: boolean;
   /** Could be a username prefix. */
   isUsernameShaped: boolean;
+  /** Exactly 8 hex characters: the short report reference shown on screen (first 8 characters of a report id). */
+  isReportReference: boolean;
   /** Contains an '@', even if not a whole address: a half-typed address is personal data too, so it is audited. */
   containsAt: boolean;
 }
@@ -65,6 +69,7 @@ export function parseAdminSearchQuery(raw: string | undefined): ParsedAdminSearc
     isUuid: UUID.test(text),
     isEmail: isEmailShaped(text),
     isUsernameShaped: USERNAME_SHAPED.test(text),
+    isReportReference: REPORT_REFERENCE.test(text),
     containsAt: text.includes('@'),
   };
 }
