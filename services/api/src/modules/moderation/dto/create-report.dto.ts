@@ -24,6 +24,8 @@ export class CreateReportDto {
   targetId!: string;
 
   // B-284 (Decision Log #465): REQUIRED. The fixed list is REPORT_REASON_CATEGORIES.
+  // Decision Log #466: 'child_safety_concern' makes the stored report concernsMinor = true. This route has no
+  // concernsMinor field of its own, so the category is the only way to raise that flag here.
   @IsIn(REPORT_REASON_CATEGORIES)
   reasonCategory!: ReportReasonCategory;
 

@@ -43,7 +43,7 @@ Reports now carry a fixed **reason category** (`Report.reasonCategory`, see `mod
 
 A short prefix such as `spa` therefore also finds reports categorised `spam_or_scam`, next to any username or other match: that is the cost of a prefix matcher on the minimum 3 characters (an adopted default, veto-able).
 
-**Still true, and pinned by tests:** the free-text description (`Report.reason`) is never selected, searched or returned by this module. A category sets neither `concernsMinor` nor `severity`, so the child-safety vetting gate on report hits is unchanged: a report that concerns a minor is hidden from an unvetted admin whatever its category.
+**Still true, and pinned by tests:** the free-text description (`Report.reason`) is never selected, searched or returned by this module. A category sets no `severity`, and only `child_safety_concern` sets `concernsMinor` (Decision Log #466: always `true` for that category, see `moderation/README.md`). The child-safety vetting gate on report hits is unchanged: a report that concerns a minor is hidden from an unvetted admin whatever its category, so a `child_safety_concern` report is hidden from an unvetted admin's search.
 
 ### Display name (not matched)
 

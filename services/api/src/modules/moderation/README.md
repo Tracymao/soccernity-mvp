@@ -172,7 +172,7 @@ Founder decision 2026-11-03: a report carries a **reason category**, so an admin
 
 * `reasonCategory` is **required** and must be one of the nine keys. A missing or unknown value is the DTO's `400` (the global `ValidationPipe`, a code-less message, like every other DTO field in this module).
 * `reason` (the free-text description) is **optional**, except for category `other`, where it is required and must not be only spaces: otherwise the coded `400 report_reason_required` (`REPORT_REASON_REQUIRED_CODE`), raised before any database read. When omitted it is stored as the **empty string**, never `NULL` and never missing, so no reader of `Report.reason` breaks. A provided value is still 1 to 500 characters, so an explicit `""` stays a `400` (the existing behaviour; only an absent or `null` value counts as omitted).
-* The category sets **neither `concernsMinor` nor `severity`** (`child_safety_concern` included). A reporter who means the report to be treated as concerning a minor says so with `concernsMinor` on the public route; the category is only the reason.
+* The category sets **no `severity`**. It sets **`concernsMinor` for exactly one category**: `child_safety_concern` (see "Child safety category sets the minor flag" below, Decision Log #466). Every other category leaves `concernsMinor` as the reporter sent it (`false` on `POST /reports`, which has no such field; the reporter's own value on the public route).
 * `PostMediaReport` (the media report) is untouched.
 
 **Readers of `Report.reason` checked (all keep receiving a string):** the admin list, detail, action and appeal responses return whole `Report` rows, so `reasonCategory` appears next to `reason` with no mapper change (`null` when not categorised); the appeal routes and the hold, vetting and retention queries read other columns; the admin search never reads `reason` (it returns `reasonCategory`, see `admin-search/README.md`); `PostMediaReport.reason` is a different column. Nothing in `account-deletion` or the 12-month contact retention copies or blanks `Report` columns by list (they read `id`, `targetId`, `reporterId`, `concernsMinor`, `status` and dates only).
@@ -180,6 +180,19 @@ Founder decision 2026-11-03: a report carries a **reason category**, so an admin
 **A category is not personal data** (it is one of nine fixed labels, not a description of a person), so the anonymisation sweep, the held-account minimisation and the purge job are unchanged.
 
 **`apps/web` and `apps/admin` need a follow-up:** the web report form (`ReportAction`, `ReportPage`) sends no `reasonCategory` yet, so until the frontend leg ships those submissions are a `400`. The Figma frames and the admin screens that show the category are the next legs.
+
+---
+
+## Child safety category sets the minor flag (backend/b284-child-safety-category-flag, Decision Log #466)
+
+Founder decision 2026-11-03. **A report whose `reasonCategory` is `child_safety_concern` is ALWAYS stored with `concernsMinor = true`**, on `POST /reports` and `POST /reports/public`, whatever else the reporter sent. This REPLACES default (5) of #465 (a category sets neither flag), which was an adopted default and is now a founder decision.
+
+* **One rule, one function:** `resolveConcernsMinor(reasonCategory, reporterConcernsMinor)` in `report-concerns-minor.util.ts` (category constant `CHILD_SAFETY_REASON_CATEGORY` in `moderation.constants.ts`). Both create paths call it. It returns `category === 'child_safety_concern' || reporterConcernsMinor`, so the category can only **raise** the flag, never lower it: the public route's own `concernsMinor: true` stays true under any category, and `concernsMinor: false` with `child_safety_concern` is stored `true`.
+* **`POST /reports`** has no `concernsMinor` field (the DTO does not declare it, and the global pipe rejects an unknown property with a `400`), so on this route the flag can only come from the category. **`POST /reports/public`** requires `concernsMinor` (`@IsBoolean()`); an omitted value is a `400` as before, so "omitted" is not a reachable case there.
+* **Severity is not changed** by the category (still `medium` unless the reporter sent one).
+* **Reports already filed are not changed:** none carries a category, and nothing backfills.
+* **Consequence (read from the code, pinned by tests):** such a report is listed, opened, actioned, appealed, held and escalated only by a child-safety-vetted admin (the existing `concernsMinor` gate, unchanged), carries the minor flag in the moderation queue, and is left out of admin search and the audit-log reader for an unvetted admin (both already apply the `concernsMinor` rule). Nothing the **reporter** is told changes: the signed-in reporter's `moderation_decision` notification and outcome email, and the public reporter's acknowledgement and outcome email, do not read `concernsMinor`.
+* **Open, not decided here (Decision Log #466):** with no child-safety-vetted admin in the system, nobody can see these reports; and `POST /reports` has no way for the reporter to say "this concerns a minor" except by choosing this category.
 
 ---
 
