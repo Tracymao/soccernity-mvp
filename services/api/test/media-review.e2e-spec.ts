@@ -681,7 +681,7 @@ describe('Media review queue e2e (B-037)', () => {
       expect(storage.has(`post-media/${owner.id}/${id}.jpg`)).toBe(true);
     });
 
-    it('rejecting a pending item moves nothing: the file stays private, and no cleanup ever deletes it (reconcile, both purges, 30 days later)', async () => {
+    it('rejecting a pending item moves nothing: the file stays private through reconcile and the quarantine purge; the unattached purge (B-283) then removes it with its row', async () => {
       const owner = await seedUser('owner');
       const mod = await adminAuth();
       const id = await uploadChecked(owner, SUGGESTIVE);
@@ -693,12 +693,16 @@ describe('Media review queue e2e (B-037)', () => {
       const { PostMediaObjectsService } = await import('../src/modules/post-media/post-media-objects.service');
       const { PostMediaService } = await import('../src/modules/post-media/post-media.service');
       await app.get(PostMediaObjectsService).reconcile();
-      await app.get(PostMediaService).purgeUnattached(new Date(clockNow));
       await app.get(PostMediaService).purgeQuarantine(new Date(clockNow));
 
       expect(storage.has(key)).toBe(true);
       expect(await prisma().postMedia.count({ where: { id } })).toBe(1);
       expect((await row(id)).status).toBe('rejected');
+
+      // B-283: the unattached purge now deletes a rejected file too (object first, then the row).
+      await app.get(PostMediaService).purgeUnattached(new Date(clockNow));
+      expect(storage.has(key)).toBe(false);
+      expect(await prisma().postMedia.count({ where: { id } })).toBe(0);
     });
 
     it('a failed move back to the private prefix is retried by the reconciler and never loses the file', async () => {

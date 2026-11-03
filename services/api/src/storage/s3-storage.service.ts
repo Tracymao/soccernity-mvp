@@ -5,6 +5,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -13,7 +14,7 @@ import { createReadStream, createWriteStream } from 'fs';
 import { stat } from 'fs/promises';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
-import { DirectUploadStorageService } from './direct-upload-storage.service';
+import { DirectUploadStorageService, ListedObject, StorageListNotPermittedError } from './direct-upload-storage.service';
 
 // The real StorageService implementation — configured ENTIRELY through
 // env vars (S3_ENDPOINT, S3_REGION, S3_BUCKET, S3_ACCESS_KEY,
@@ -213,5 +214,33 @@ export class S3StorageService extends DirectUploadStorageService {
   publicUrlFor(key: string): string {
     const { publicUrlBase } = this.requireClient('building a public URL');
     return `${publicUrlBase}/${key}`;
+  }
+
+  // ---- backend/b283-delete-rejected-media (B-283; Decision Log #464) -------------------------------
+
+  async listObjects(
+    prefix: string,
+    options: { maxKeys?: number; continuationToken?: string | null } = {},
+  ): Promise<{ objects: ListedObject[]; nextToken: string | null }> {
+    const { client, bucket } = this.requireClient('listing objects');
+    try {
+      const res = await client.send(
+        new ListObjectsV2Command({
+          Bucket: bucket,
+          Prefix: prefix,
+          MaxKeys: options.maxKeys ?? 1000,
+          ContinuationToken: options.continuationToken ?? undefined,
+        }),
+      );
+      const objects = (res.Contents ?? [])
+        .filter((o): o is typeof o & { Key: string } => typeof o.Key === 'string')
+        .map((o) => ({ key: o.Key, size: o.Size ?? 0, lastModified: o.LastModified ?? null }));
+      return { objects, nextToken: res.IsTruncated ? (res.NextContinuationToken ?? null) : null };
+    } catch (err) {
+      const name = (err as { name?: string }).name;
+      const status = (err as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+      if (name === 'AccessDenied' || name === 'Forbidden' || status === 403) throw new StorageListNotPermittedError();
+      throw err;
+    }
   }
 }

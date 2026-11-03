@@ -19,7 +19,8 @@ import {
   looksLikeHeic,
 } from './media-signature.util';
 import { PostMediaConfig } from './post-media.config';
-import { deletableKeys, deleteStoredObjects } from './post-media-cleanup.util';
+import { deletableKeys, deleteStoredObjects, evidenceKeyOf, keysToDeleteNow } from './post-media-cleanup.util';
+import { partitionEvidence } from './rejected-media-evidence.util';
 import { PRIVATE_PREFIX, PUBLIC_PREFIX, privateKeyFor, publicKeyFor } from './post-media-objects.service';
 import { HEIC_NOT_SUPPORTED_MESSAGE, POST_MEDIA_CODES, UPLOADS_UNAVAILABLE_MESSAGE, postMediaError } from './post-media.errors';
 
@@ -410,6 +411,7 @@ export class PostMediaService {
       where: { id, uploaderId: userId },
       select: {
         id: true,
+        uploaderId: true,
         uploadState: true,
         postId: true,
         publicUrl: true,
@@ -430,14 +432,17 @@ export class PostMediaService {
         throw postMediaError(409, POST_MEDIA_CODES.mediaInContestEntry, "A contest entry's file can't be removed.");
       }
     }
+    let keys: string[] = [];
     await this.prisma.$transaction(async (tx) => {
       if (row.postId && row.publicUrl) {
         await tx.$executeRaw`UPDATE "Post" SET "mediaUrls" = array_remove("mediaUrls", ${row.publicUrl}) WHERE "id" = ${row.postId}`;
       }
       await tx.postMedia.delete({ where: { id: row.id } });
+      // B-283: a REJECTED file's private object is deleted too, unless the uploader is under an active hold or
+      // the post has a report not yet closed; then a deferral record is written in this same transaction.
+      keys = await keysToDeleteNow(tx, [row], this.clock.now());
     });
-    // deletableKeys never includes a rejected file's private object (B-206, evidence handling OPEN).
-    await deleteStoredObjects(this.storage, this.logger, deletableKeys(row), `Delete of upload ${row.id}`);
+    await deleteStoredObjects(this.storage, this.logger, keys, `Delete of upload ${row.id}`);
   }
 
   // ---- housekeeping ------------------------------------------------------------------------------
@@ -450,24 +455,43 @@ export class PostMediaService {
   async purgeQuarantine(now: Date = this.clock.now()): Promise<{ purged: number }> {
     const cutoff = new Date(now.getTime() - this.config.quarantineMaxAgeHours * 3600 * 1000);
     let purged = 0;
+    // Rows left alone this run (a rejected file under the B-283 protection rule): excluded from the next batch
+    // so the loop cannot spin on them, and picked up again by the next run.
+    const heldBackIds: string[] = [];
     for (;;) {
       const batch = await this.prisma.postMedia.findMany({
-        where: { quarantineKey: { not: null }, createdAt: { lt: cutoff } },
-        select: { id: true, quarantineKey: true, uploadState: true },
+        where: { quarantineKey: { not: null }, createdAt: { lt: cutoff }, id: { notIn: heldBackIds } },
+        select: { id: true, quarantineKey: true, uploadState: true, uploaderId: true, postId: true, status: true, privateKey: true },
         take: 200,
         orderBy: { createdAt: 'asc' },
       });
       if (batch.length === 0) break;
       for (const r of batch) {
         const key = r.quarantineKey as string;
+        // B-283: when this row is a REJECTED file that is already processed, its private object goes with the
+        // leftover original, unless the uploader is under an active hold or the post has a report not yet
+        // closed (then the whole row is left for the next run).
+        const evidence = r.uploadState === 'ready' ? evidenceKeyOf(r) : null;
+        if (evidence) {
+          const { protectedItems } = await partitionEvidence(
+            this.prisma,
+            [{ mediaId: r.id, uploaderId: r.uploaderId, postId: r.postId, key: evidence }],
+            now,
+          );
+          if (protectedItems.length > 0) {
+            heldBackIds.push(r.id);
+            continue;
+          }
+        }
         try {
           await this.storage.delete(key);
+          if (evidence) await this.storage.delete(evidence);
         } catch (err) {
-          this.logger.warn(`Quarantine purge: ${key} not deleted (${err instanceof Error ? err.message : String(err)}).`);
+          this.logger.warn(`Quarantine purge: media ${r.id} not fully deleted (${err instanceof Error ? err.message : String(err)}).`);
           return { purged }; // storage is down; stop and retry next run instead of spinning
         }
         if (r.uploadState === 'ready') {
-          await this.prisma.postMedia.update({ where: { id: r.id }, data: { quarantineKey: null } });
+          await this.prisma.postMedia.update({ where: { id: r.id }, data: { quarantineKey: null, ...(evidence ? { privateKey: null } : {}) } });
         } else {
           await this.prisma.postMedia.delete({ where: { id: r.id } });
         }
@@ -483,43 +507,66 @@ export class PostMediaService {
    * were never attached to a post once they are older than POST_MEDIA_UNATTACHED_MAX_AGE_DAYS (default 7):
    * the objects first, then the row. A deletion failure is logged and the row is left for the next run.
    *
-   * NEVER removes a rejected item (a rejected file is kept, private, until counsel decides evidence
-   * handling, B-206): the query excludes status 'rejected', and deletableKeys would not list its private
-   * object anyway.
+   * backend/b283-delete-rejected-media (B-283; Decision Log #464): a REJECTED item is now purged too, its
+   * private object included. The exception is the protection rule (rejected-media-evidence.util.ts): an
+   * uploader under an active hold keeps the whole row and object, which the next run tries again. (An
+   * unattached item has no post, so there is no report to check.)
    */
-  async purgeUnattached(now: Date = this.clock.now()): Promise<{ purged: number; failed: number }> {
+  async purgeUnattached(now: Date = this.clock.now()): Promise<{ purged: number; failed: number; heldBack: number }> {
     const cutoff = new Date(now.getTime() - this.config.unattachedMaxAgeDays * 24 * 3600 * 1000);
     const failedIds: string[] = [];
+    const heldBackIds: string[] = [];
     let purged = 0;
     for (;;) {
       const batch = await this.prisma.postMedia.findMany({
         where: {
           uploadState: 'ready',
           postId: null,
-          status: { not: 'rejected' },
           confirmedAt: { lt: cutoff },
-          id: { notIn: failedIds },
+          id: { notIn: [...failedIds, ...heldBackIds] },
         },
-        select: { id: true, status: true, publishedAt: true, publicKey: true, privateKey: true, quarantineKey: true },
+        select: {
+          id: true,
+          uploaderId: true,
+          postId: true,
+          status: true,
+          publishedAt: true,
+          publicKey: true,
+          privateKey: true,
+          quarantineKey: true,
+        },
         take: 200,
         orderBy: { confirmedAt: 'asc' },
       });
       if (batch.length === 0) break;
+      const evidenceItems = batch.flatMap((r) => {
+        const key = evidenceKeyOf(r);
+        return key ? [{ mediaId: r.id, uploaderId: r.uploaderId, postId: r.postId, key }] : [];
+      });
+      const { protectedItems } = await partitionEvidence(this.prisma, evidenceItems, now);
+      const protectedIds = new Set(protectedItems.map((i) => i.mediaId));
       for (const r of batch) {
+        if (protectedIds.has(r.id)) {
+          heldBackIds.push(r.id);
+          continue;
+        }
         try {
-          for (const key of deletableKeys(r)) await this.storage.delete(key);
+          for (const key of [...deletableKeys(r), ...(evidenceKeyOf(r) ? [evidenceKeyOf(r) as string] : [])]) {
+            await this.storage.delete(key);
+          }
         } catch (err) {
           this.logger.warn(`Unattached purge: media ${r.id} not removed (${err instanceof Error ? err.message : String(err)}); will retry.`);
           failedIds.push(r.id);
           continue;
         }
-        // Still unattached and not rejected at the moment of the delete (a post may have claimed it).
-        const gone = await this.prisma.postMedia.deleteMany({ where: { id: r.id, postId: null, status: { not: 'rejected' } } });
+        // Still unattached and in the status we read at the moment of the delete (a post may have claimed it, or
+        // a moderator may have just rejected it: then the row stays and the next run handles it).
+        const gone = await this.prisma.postMedia.deleteMany({ where: { id: r.id, postId: null, status: r.status } });
         purged += gone.count;
       }
       if (batch.length < 200) break;
     }
-    return { purged, failed: failedIds.length };
+    return { purged, failed: failedIds.length, heldBack: heldBackIds.length };
   }
 }
 

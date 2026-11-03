@@ -343,6 +343,41 @@ describe('AnonymizedRowPurgeService', () => {
     });
   });
 
+  describe('stored media of a purged account (B-283)', () => {
+    const media = () => ({ deleteUploaderObjects: jest.fn().mockResolvedValue({ outcome: 'ok', deleted: 2, failed: 0 }) });
+
+    it('asks the media sweep to clean the purged user\'s leftover objects, AFTER the purge', async () => {
+      const { prisma, tx } = buildPrisma();
+      const rejectedMedia = media();
+      await new AnonymizedRowPurgeService(prisma, rejectedMedia as never).purgeAnonymizedRows(NOW);
+      expect(rejectedMedia.deleteUploaderObjects).toHaveBeenCalledWith('u1');
+      expect(tx.user.deleteMany.mock.invocationCallOrder[0]).toBeLessThan(rejectedMedia.deleteUploaderObjects.mock.invocationCallOrder[0]);
+    });
+
+    it('does NOT clean anything for a row that was kept (something still refers to it)', async () => {
+      const { prisma, tx } = buildPrisma();
+      tx.report.findFirst.mockResolvedValue({ id: 'r1' });
+      const rejectedMedia = media();
+      const r = await new AnonymizedRowPurgeService(prisma, rejectedMedia as never).purgeAnonymizedRows(NOW);
+      expect(r.purgedUserIds).toEqual([]);
+      expect(rejectedMedia.deleteUploaderObjects).not.toHaveBeenCalled();
+    });
+
+    it('a failing or unavailable cleanup never undoes or fails the purge', async () => {
+      const { prisma } = buildPrisma();
+      const rejectedMedia = { deleteUploaderObjects: jest.fn().mockRejectedValue(new Error('list denied')) };
+      const r = await new AnonymizedRowPurgeService(prisma, rejectedMedia as never).purgeAnonymizedRows(NOW);
+      expect(r.purgedUserIds).toEqual(['u1']);
+      expect(r.erroredUserIds).toEqual([]);
+    });
+
+    it('works without a media sweep wired (the unit-test construction)', async () => {
+      const { prisma } = buildPrisma();
+      const r = await new AnonymizedRowPurgeService(prisma).purgeAnonymizedRows(NOW);
+      expect(r.purgedUserIds).toEqual(['u1']);
+    });
+  });
+
   describe('safety', () => {
     it('never touches ConsentAuditRecord (it runs on its own 6-month clock)', async () => {
       const { prisma, tx } = buildPrisma({

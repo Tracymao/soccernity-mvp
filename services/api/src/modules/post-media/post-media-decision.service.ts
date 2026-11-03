@@ -36,8 +36,10 @@ import { GuardianSecurityNoticeService } from '../guardian-security-notice/guard
 //   approve  copies the file private -> public and VERIFIES it BEFORE writing 'approved'. FAILS CLOSED: if the
 //            copy fails nothing changes, the item stays pending, and the moderator gets a retryable 503.
 //   reject   writes 'rejected' first (the database gate hides the file at once), then moves a published file
-//            back to the private prefix. A failed move is logged and retried by the reconciler. The rejected
-//            file is NEVER deleted.
+//            back to the private prefix. A failed move is logged and retried by the reconciler. A moderator
+//            Reject does not itself delete the file: it stays private until its post or upload is deleted or
+//            its account is anonymised or purged, and is then deleted (B-283, Decision Log #464) unless the
+//            uploader is under an active hold or the post has a report not yet closed.
 
 export type ModeratorOutcome = 'approved' | 'kept' | 'rejected';
 
@@ -156,7 +158,8 @@ export class PostMediaDecisionService {
     const { result, uploaderId } = await this.rejectInTransaction(mediaId, adminId, reason);
     this.guardianNotices?.notifyInBackground(uploaderId, 'media_not_approved');
     // The status is written, so the database gate already hides the file. If it was published, move it back
-    // to the private prefix. Never throws: a failure is retried by the reconciler. NEVER deletes the file.
+    // to the private prefix. Never throws: a failure is retried by the reconciler. Reject does not delete the
+    // file (see the header: the lifecycle deletion paths do, B-283).
     await this.objects.withdraw(mediaId).catch((err) => {
       this.logger.warn(`Rejected media ${mediaId} not yet moved back to the private prefix (${err instanceof Error ? err.message : String(err)}).`);
     });

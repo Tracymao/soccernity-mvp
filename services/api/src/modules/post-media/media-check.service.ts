@@ -332,7 +332,9 @@ export class PostMediaSweepService {
   async purgeUnattached(): Promise<void> {
     try {
       const r = await this.media.purgeUnattached();
-      if (r.purged > 0 || r.failed > 0) this.logger.log(`Unattached upload purge: removed ${r.purged}, failed ${r.failed}.`);
+      if (r.purged > 0 || r.failed > 0 || r.heldBack > 0) {
+        this.logger.log(`Unattached upload purge: removed ${r.purged}, failed ${r.failed}, held back ${r.heldBack}.`);
+      }
     } catch (err) {
       this.logger.error(`Unattached upload purge failed: ${err instanceof Error ? err.message : String(err)}`);
     }

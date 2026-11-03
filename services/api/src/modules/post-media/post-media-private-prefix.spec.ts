@@ -9,7 +9,7 @@ import { PostMediaService } from './post-media.service';
 
 // backend/media-privacy-vetting-followups (B-257, B-259; Decision Log #430 items 2 and 4): the upload
 // pipeline's use of the private prefix, the author's signed view link, HEIC, the unattached purge, and the
-// rule that no purge or cleanup path deletes a rejected file.
+// rule that a rejected file's private object is deleted on every path unless held / reported (B-283).
 
 // Every confirm makes and removes a real temp directory (the service works on files). On a slow or busy disk
 // that alone can pass the 30 s global default, so this file allows more; nothing here waits on anything else.
@@ -34,6 +34,10 @@ function build(env: Record<string, string> = {}) {
       deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     contestEntry: { findUnique: jest.fn().mockResolvedValue(null) },
+    // B-283: the protection rule reads active admin holds and the reports on a post, and writes deferrals.
+    accountHold: { findMany: jest.fn().mockResolvedValue([]) },
+    report: { findMany: jest.fn().mockResolvedValue([]) },
+    postMediaDeferredDeletion: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     $executeRaw: jest.fn(),
     $transaction: jest.fn(),
   };
@@ -231,9 +235,10 @@ describe('the author\'s own view link (B-257)', () => {
   });
 });
 
-describe('deleting your own upload never deletes a rejected file\'s private object (B-206 OPEN)', () => {
+describe('deleting your own upload deletes a rejected file\'s private object too (B-283), unless held or reported', () => {
   const row = (over: Record<string, unknown> = {}) => ({
     id: 'abc',
+    uploaderId: 'u1',
     uploadState: 'ready',
     postId: 'p1',
     publicUrl: 'https://cdn.test/post-media/u1/abc.jpg',
@@ -245,12 +250,45 @@ describe('deleting your own upload never deletes a rejected file\'s private obje
     ...over,
   });
 
-  it('a REJECTED file: the row goes, the private object is kept', async () => {
+  it('a REJECTED file: the row goes and the private object is deleted', async () => {
     const { service, prisma, storage } = build();
     prisma.postMedia.findFirst.mockResolvedValue(row({ status: 'rejected' }));
     await service.deleteOwnUpload('u1', 'abc');
     expect(prisma.postMedia.delete).toHaveBeenCalledWith({ where: { id: 'abc' } });
+    expect(storage.delete.mock.calls.map((c) => c[0])).toEqual(['private-media/u1/abc.jpg']);
+    expect(prisma.postMediaDeferredDeletion.createMany).not.toHaveBeenCalled();
+  });
+
+  it('a REJECTED file whose uploader is under an active hold: the row goes, the object is KEPT and the deletion is recorded', async () => {
+    const { service, prisma, storage } = build();
+    prisma.accountHold.findMany.mockResolvedValue([{ id: 'h1', type: 'legal_hold', reportId: null, expiresAt: null }]);
+    prisma.postMedia.findFirst.mockResolvedValue(row({ status: 'rejected' }));
+    await service.deleteOwnUpload('u1', 'abc');
+    expect(prisma.postMedia.delete).toHaveBeenCalledWith({ where: { id: 'abc' } });
     expect(storage.delete).not.toHaveBeenCalled();
+    expect(prisma.postMediaDeferredDeletion.createMany).toHaveBeenCalledWith({
+      data: [{ objectKey: 'private-media/u1/abc.jpg', mediaId: 'abc', uploaderId: 'u1', postId: 'p1' }],
+      skipDuplicates: true,
+    });
+  });
+
+  it('a REJECTED file on a post with an OPEN report: the object is KEPT and the deletion is recorded', async () => {
+    const { service, prisma, storage } = build();
+    prisma.report.findMany.mockResolvedValue([{ targetId: 'p1', status: 'open', appealStatus: null, reviewedAt: null, appealReviewedAt: null }]);
+    prisma.postMedia.findFirst.mockResolvedValue(row({ status: 'rejected' }));
+    await service.deleteOwnUpload('u1', 'abc');
+    expect(storage.delete).not.toHaveBeenCalled();
+    expect(prisma.postMediaDeferredDeletion.createMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('the deferral is written in the SAME transaction as the row delete', async () => {
+    const { service, prisma } = build();
+    prisma.accountHold.findMany.mockResolvedValue([{ id: 'h1', type: 'legal_hold', reportId: null, expiresAt: null }]);
+    prisma.postMedia.findFirst.mockResolvedValue(row({ status: 'rejected' }));
+    await service.deleteOwnUpload('u1', 'abc');
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    const tx = prisma.$transaction.mock.invocationCallOrder[0];
+    expect(prisma.postMediaDeferredDeletion.createMany.mock.invocationCallOrder[0]).toBeGreaterThan(tx);
   });
 
   it('a pending file: its private object is deleted', async () => {
@@ -268,9 +306,11 @@ describe('deleting your own upload never deletes a rejected file\'s private obje
   });
 });
 
-describe('purgeUnattached (B-259): confirmed uploads never attached to a post, after 7 days', () => {
+describe('purgeUnattached (B-259, B-283): confirmed uploads never attached to a post, after 7 days', () => {
   const stale = (over: Record<string, unknown> = {}) => ({
     id: 'a',
+    uploaderId: 'u1',
+    postId: null,
     status: 'pending',
     publishedAt: null,
     publicKey: 'post-media/u1/a.jpg',
@@ -279,14 +319,13 @@ describe('purgeUnattached (B-259): confirmed uploads never attached to a post, a
     ...over,
   });
 
-  it('selects only ready, unattached, NOT-rejected uploads confirmed more than 7 days ago', async () => {
+  it('selects ready, unattached uploads confirmed more than 7 days ago (a rejected one too, B-283)', async () => {
     const { service, prisma } = build();
     await service.purgeUnattached(NOW);
     expect(prisma.postMedia.findMany).toHaveBeenCalledTimes(1);
     expect(prisma.postMedia.findMany.mock.calls[0][0].where).toEqual({
       uploadState: 'ready',
       postId: null,
-      status: { not: 'rejected' },
       confirmedAt: { lt: new Date(NOW.getTime() - 7 * 24 * 3600 * 1000) },
       id: { notIn: [] },
     });
@@ -305,9 +344,9 @@ describe('purgeUnattached (B-259): confirmed uploads never attached to a post, a
   it('removes the objects first, then the row, and counts it', async () => {
     const { service, prisma, storage } = build();
     prisma.postMedia.findMany.mockResolvedValueOnce([stale()]);
-    expect(await service.purgeUnattached(NOW)).toEqual({ purged: 1, failed: 0 });
+    expect(await service.purgeUnattached(NOW)).toEqual({ purged: 1, failed: 0, heldBack: 0 });
     expect(storage.delete).toHaveBeenCalledWith('private-media/u1/a.jpg');
-    expect(prisma.postMedia.deleteMany).toHaveBeenCalledWith({ where: { id: 'a', postId: null, status: { not: 'rejected' } } });
+    expect(prisma.postMedia.deleteMany).toHaveBeenCalledWith({ where: { id: 'a', postId: null, status: 'pending' } });
     expect(storage.delete.mock.invocationCallOrder[0]).toBeLessThan(prisma.postMedia.deleteMany.mock.invocationCallOrder[0]);
   });
 
@@ -317,7 +356,7 @@ describe('purgeUnattached (B-259): confirmed uploads never attached to a post, a
     storage.delete.mockImplementation(async (key: string) => {
       if (key.includes('/a.')) throw new Error('storage down');
     });
-    expect(await service.purgeUnattached(NOW)).toEqual({ purged: 1, failed: 1 });
+    expect(await service.purgeUnattached(NOW)).toEqual({ purged: 1, failed: 1, heldBack: 0 });
     expect(prisma.postMedia.deleteMany).toHaveBeenCalledTimes(1);
     expect(prisma.postMedia.deleteMany.mock.calls[0][0].where.id).toBe('b');
   });
@@ -331,25 +370,101 @@ describe('purgeUnattached (B-259): confirmed uploads never attached to a post, a
     expect(prisma.postMedia.findMany.mock.calls[1][0].where.id.notIn).toHaveLength(200);
   });
 
-  // The rule that matters: a rejected file is never purged, even if one were somehow returned.
-  it('NEVER purges a rejected item: the query excludes it, and even if one were returned its private object is not deleted and its row is not removed', async () => {
+  it('a REJECTED item is purged like any other: its private object is deleted, then the row', async () => {
     const { service, prisma, storage } = build();
-    prisma.postMedia.findMany.mockResolvedValueOnce([stale({ status: 'rejected', privateKey: 'private-media/u1/r.jpg', publishedAt: null })]);
-    await service.purgeUnattached(NOW);
-    expect(prisma.postMedia.findMany.mock.calls[0][0].where.status).toEqual({ not: 'rejected' });
+    prisma.postMedia.findMany.mockResolvedValueOnce([stale({ id: 'r', status: 'rejected', privateKey: 'private-media/u1/r.jpg' })]);
+    expect(await service.purgeUnattached(NOW)).toEqual({ purged: 1, failed: 0, heldBack: 0 });
+    expect(storage.delete).toHaveBeenCalledWith('private-media/u1/r.jpg');
+    expect(prisma.postMedia.deleteMany).toHaveBeenCalledWith({ where: { id: 'r', postId: null, status: 'rejected' } });
+  });
+
+  it('a REJECTED item whose uploader is under an active hold is HELD BACK: nothing deleted, the row stays, the next batch skips it', async () => {
+    const { service, prisma, storage } = build();
+    prisma.accountHold.findMany.mockResolvedValue([{ id: 'h1', type: 'legal_hold', reportId: null, expiresAt: null }]);
+    prisma.postMedia.findMany
+      .mockResolvedValueOnce([stale({ id: 'r', status: 'rejected', privateKey: 'private-media/u1/r.jpg' }), stale({ id: 'p' })])
+      .mockResolvedValueOnce([]);
+    const r = await service.purgeUnattached(NOW);
+    expect(r).toEqual({ purged: 1, failed: 0, heldBack: 1 });
     expect(storage.delete).not.toHaveBeenCalledWith('private-media/u1/r.jpg');
-    expect(prisma.postMedia.deleteMany.mock.calls.every((c) => c[0].where.status?.not === 'rejected')).toBe(true);
+    expect(prisma.postMedia.deleteMany.mock.calls.map((c) => c[0].where.id)).toEqual(['p']);
+  });
+
+  it('a held-back item is excluded from the next batch of the same run (no spinning)', async () => {
+    const { service, prisma } = build();
+    prisma.accountHold.findMany.mockResolvedValue([{ id: 'h1', type: 'legal_hold', reportId: null, expiresAt: null }]);
+    prisma.postMedia.findMany
+      .mockResolvedValueOnce(Array.from({ length: 200 }, (_v, i) => stale({ id: `r${i}`, status: 'rejected', privateKey: `private-media/u1/r${i}.jpg` })))
+      .mockResolvedValueOnce([]);
+    await service.purgeUnattached(NOW);
+    expect(prisma.postMedia.findMany.mock.calls[1][0].where.id.notIn).toHaveLength(200);
   });
 });
 
-describe('purgeQuarantine never deletes a rejected file (B-206 OPEN)', () => {
-  it('only touches rows that still hold a quarantined ORIGINAL; a ready row only loses that key, and its private object is never named', async () => {
-    const { service, prisma, storage } = build();
-    prisma.postMedia.findMany.mockResolvedValueOnce([{ id: 'r', quarantineKey: 'quarantine/u1/r', uploadState: 'ready' }]);
+describe('purgeQuarantine (B-283): a rejected file\'s private object goes with its leftover original, unless held', () => {
+  const rejectedReady = (over: Record<string, unknown> = {}) => ({
+    id: 'r',
+    quarantineKey: 'quarantine/u1/r',
+    uploadState: 'ready',
+    uploaderId: 'u1',
+    postId: 'p1',
+    status: 'rejected',
+    privateKey: 'private-media/u1/r.jpg',
+    ...over,
+  });
+
+  it('selects rows that still hold a quarantined ORIGINAL (and skips none at first)', async () => {
+    const { service, prisma } = build();
     await service.purgeQuarantine(NOW);
-    expect(prisma.postMedia.findMany.mock.calls[0][0].where).toEqual({ quarantineKey: { not: null }, createdAt: { lt: new Date(NOW.getTime() - 24 * 3600 * 1000) } });
+    expect(prisma.postMedia.findMany.mock.calls[0][0].where).toEqual({
+      quarantineKey: { not: null },
+      createdAt: { lt: new Date(NOW.getTime() - 24 * 3600 * 1000) },
+      id: { notIn: [] },
+    });
+  });
+
+  it('a ready, REJECTED row: both the leftover original and the private object are deleted, and both keys are cleared', async () => {
+    const { service, prisma, storage } = build();
+    prisma.postMedia.findMany.mockResolvedValueOnce([rejectedReady()]).mockResolvedValueOnce([]);
+    expect(await service.purgeQuarantine(NOW)).toEqual({ purged: 1 });
+    expect(storage.delete.mock.calls.map((c) => c[0])).toEqual(['quarantine/u1/r', 'private-media/u1/r.jpg']);
+    expect(prisma.postMedia.delete).not.toHaveBeenCalled();
+    expect(prisma.postMedia.update).toHaveBeenCalledWith({ where: { id: 'r' }, data: { quarantineKey: null, privateKey: null } });
+  });
+
+  it('a ready row that is NOT rejected only loses the leftover original', async () => {
+    const { service, prisma, storage } = build();
+    prisma.postMedia.findMany.mockResolvedValueOnce([rejectedReady({ status: 'pending' })]).mockResolvedValueOnce([]);
+    await service.purgeQuarantine(NOW);
     expect(storage.delete.mock.calls.map((c) => c[0])).toEqual(['quarantine/u1/r']);
-    expect(prisma.postMedia.delete).not.toHaveBeenCalled(); // a ready (e.g. rejected) row is never deleted by this purge
     expect(prisma.postMedia.update).toHaveBeenCalledWith({ where: { id: 'r' }, data: { quarantineKey: null } });
+  });
+
+  it('a rejected row whose uploader is under an active hold is left ENTIRELY for the next run', async () => {
+    const { service, prisma, storage } = build();
+    prisma.accountHold.findMany.mockResolvedValue([{ id: 'h1', type: 'legal_hold', reportId: null, expiresAt: null }]);
+    prisma.postMedia.findMany.mockResolvedValueOnce([rejectedReady()]);
+    expect(await service.purgeQuarantine(NOW)).toEqual({ purged: 0 });
+    expect(storage.delete).not.toHaveBeenCalled();
+    expect(prisma.postMedia.update).not.toHaveBeenCalled();
+    expect(prisma.postMedia.delete).not.toHaveBeenCalled();
+  });
+
+  it('held rows are excluded from the next batch of the same run (no spinning on a full page)', async () => {
+    const { service, prisma } = build();
+    prisma.accountHold.findMany.mockResolvedValue([{ id: 'h1', type: 'legal_hold', reportId: null, expiresAt: null }]);
+    prisma.postMedia.findMany
+      .mockResolvedValueOnce(Array.from({ length: 200 }, (_v, i) => rejectedReady({ id: `r${i}`, quarantineKey: `quarantine/u1/r${i}` })))
+      .mockResolvedValueOnce([]);
+    await service.purgeQuarantine(NOW);
+    expect(prisma.postMedia.findMany.mock.calls[1][0].where.id.notIn).toHaveLength(200);
+  });
+
+  it('a never-confirmed upload loses its object and its row, as before', async () => {
+    const { service, prisma, storage } = build();
+    prisma.postMedia.findMany.mockResolvedValueOnce([rejectedReady({ uploadState: 'awaiting_upload', status: 'pending', privateKey: null })]).mockResolvedValueOnce([]);
+    await service.purgeQuarantine(NOW);
+    expect(storage.delete.mock.calls.map((c) => c[0])).toEqual(['quarantine/u1/r']);
+    expect(prisma.postMedia.delete).toHaveBeenCalledWith({ where: { id: 'r' } });
   });
 });

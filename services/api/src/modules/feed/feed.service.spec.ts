@@ -88,6 +88,11 @@ function buildPrismaMock() {
       findMany: jest.fn().mockResolvedValue([]),
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
+    // B-283: deletePost applies the rejected-media protection rule (active admin hold / unclosed report on the
+    // post) and writes a deferral record when it holds an object back. Defaults: nothing protects anything.
+    accountHold: { findMany: jest.fn().mockResolvedValue([]) },
+    report: { findMany: jest.fn().mockResolvedValue([]) },
+    postMediaDeferredDeletion: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
     savedPost: {
       create: jest.fn(),
       delete: jest.fn(),
@@ -1587,7 +1592,16 @@ describe('FeedService', () => {
 
       expect(prisma.postMedia.findMany).toHaveBeenCalledWith({
         where: { postId: 'p' },
-        select: { status: true, publishedAt: true, publicKey: true, privateKey: true, quarantineKey: true },
+        select: {
+          id: true,
+          uploaderId: true,
+          postId: true,
+          status: true,
+          publishedAt: true,
+          publicKey: true,
+          privateKey: true,
+          quarantineKey: true,
+        },
       });
       expect(st.delete.mock.calls.map((c) => c[0])).toEqual(['post-media/owner/a.jpg', 'post-media/owner/b.mp4', 'quarantine/owner/b']);
       const del = (prisma.post.delete as jest.Mock).mock.invocationCallOrder[0];
@@ -1606,19 +1620,48 @@ describe('FeedService', () => {
       expect(prisma.post.delete).toHaveBeenCalled();
     });
 
-    // B-257 (Decision Log #430 item 2): a pending file's private object goes with the post; a REJECTED file's
-    // never does (evidence handling is OPEN under counsel, B-206).
-    it('deletes a pending file\'s private object but NEVER a rejected file\'s', async () => {
+    // B-283 (Decision Log #462 (g), #464): a REJECTED file's private object goes with the post too, unless the
+    // uploader is under an active admin hold or the post has a report not yet closed.
+    const rejectedRows = () => [
+      { id: 'p1', uploaderId: 'owner', postId: 'p', status: 'pending', publishedAt: null, publicKey: 'post-media/owner/p.jpg', privateKey: 'private-media/owner/p.jpg', quarantineKey: null },
+      { id: 'r1', uploaderId: 'owner', postId: 'p', status: 'rejected', publishedAt: null, publicKey: 'post-media/owner/r.jpg', privateKey: 'private-media/owner/r.jpg', quarantineKey: null },
+    ];
+
+    it("deletes a pending file's private object AND a rejected file's", async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'p', authorId: 'owner' });
-      (prisma.postMedia.findMany as jest.Mock).mockResolvedValue([
-        { status: 'pending', publishedAt: null, publicKey: 'post-media/owner/p.jpg', privateKey: 'private-media/owner/p.jpg', quarantineKey: null },
-        { status: 'rejected', publishedAt: null, publicKey: 'post-media/owner/r.jpg', privateKey: 'private-media/owner/r.jpg', quarantineKey: null },
-      ]);
+      (prisma.postMedia.findMany as jest.Mock).mockResolvedValue(rejectedRows());
+      const st = storage();
+      await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, st).deletePost('p', 'owner');
+      expect(st.delete.mock.calls.map((c) => c[0])).toEqual(['private-media/owner/p.jpg', 'private-media/owner/r.jpg']);
+      expect(prisma.postMediaDeferredDeletion.createMany).not.toHaveBeenCalled();
+    });
+
+    it("an OPEN report on the post: the rejected file's object is kept and recorded in the same transaction; the pending file still goes", async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'p', authorId: 'owner' });
+      (prisma.postMedia.findMany as jest.Mock).mockResolvedValue(rejectedRows());
+      (prisma.report.findMany as jest.Mock).mockResolvedValue([{ targetId: 'p', status: 'open', appealStatus: null, reviewedAt: null, appealReviewedAt: null }]);
       const st = storage();
       await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, st).deletePost('p', 'owner');
       expect(st.delete.mock.calls.map((c) => c[0])).toEqual(['private-media/owner/p.jpg']);
+      expect(prisma.postMediaDeferredDeletion.createMany).toHaveBeenCalledWith({
+        data: [{ objectKey: 'private-media/owner/r.jpg', mediaId: 'r1', uploaderId: 'owner', postId: 'p' }],
+        skipDuplicates: true,
+      });
+      const del = (prisma.post.delete as jest.Mock).mock.invocationCallOrder[0];
+      expect((prisma.postMediaDeferredDeletion.createMany as jest.Mock).mock.invocationCallOrder[0]).toBeLessThan(del);
+    });
+
+    it("the author under an ACTIVE admin hold: the rejected file's object is kept and recorded", async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'p', authorId: 'owner' });
+      (prisma.postMedia.findMany as jest.Mock).mockResolvedValue(rejectedRows());
+      (prisma.accountHold.findMany as jest.Mock).mockResolvedValue([{ id: 'h', type: 'legal_hold', reportId: null, expiresAt: null }]);
+      const st = storage();
+      await new FeedService(prisma, FIXED_CLOCK, undefined, undefined, st).deletePost('p', 'owner');
       expect(st.delete).not.toHaveBeenCalledWith('private-media/owner/r.jpg');
+      expect(prisma.postMediaDeferredDeletion.createMany).toHaveBeenCalledTimes(1);
     });
 
     it('a post with no media touches no object', async () => {

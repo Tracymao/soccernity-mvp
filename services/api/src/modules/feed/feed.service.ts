@@ -1319,7 +1319,9 @@ export class FeedService {
     // (Decision Log #419 item 9), so read their keys first.
     let mediaKeys: string[] = [];
     await this.prisma.$transaction(async (tx) => {
-      mediaKeys = await collectPostMediaKeys(tx, postId);
+      // B-283: a REJECTED file's private object is deleted too, unless the uploader is under an active hold or
+      // this post has a report not yet closed; then a deferral record is written in this same transaction.
+      mediaKeys = await collectPostMediaKeys(tx, postId, this.clock.now());
       const links = await tx.postHashtag.findMany({ where: { postId }, select: { hashtagId: true } });
       for (const { hashtagId } of links) {
         await tx.hashtag.updateMany({

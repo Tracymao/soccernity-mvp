@@ -8,6 +8,12 @@ Backend only: no frontend, no Figma, no Decision Log docx edit.
 > "Private and public prefixes" below. The decision of record is **automatic check first, plus report-and-review**
 > (#430 item 1, correcting #419 item 4 "every upload is approved by a person").
 
+> **Updated by `backend/b283-delete-rejected-media`** (build register B-283; Decision Log #462 (g), #464). A
+> **rejected file's private object is now deleted** on every path that removes its row, and by a daily sweep.
+> Everywhere below that says a rejected file is "never deleted" is superseded: see "Deleting a rejected file
+> (B-283)". The rule from #430 item 2 that kept it is gone; evidence handling beyond an active hold and the
+> statutory-reporting question stay OPEN under counsel (B-206).
+
 A user's photo or video reaches a post (or a contest final entry) only through this pipeline. A free URL
 is no longer accepted from a user on any route.
 
@@ -17,7 +23,7 @@ is no longer accepted from a user on any route.
 POST /media/uploads                a one-time link into the QUARANTINE prefix  (JwtAuthGuard + GuardianConsentGuard + EmailVerifiedGuard + ProfileCompleteGuard, the POST /posts set)
 browser PUTs the file to the link  (type and exact length are part of the signature)
 POST /media/uploads/:id/confirm    verify -> strip metadata -> PRIVATE prefix -> delete the original -> queue the check
-(background sweep, every minute)   Amazon Rekognition check -> approved (copied to PUBLIC) | rejected (stays private) | left pending (stays private)
+(background sweep, every minute)   Amazon Rekognition check -> approved (copied to PUBLIC) | rejected (stays private until its post/upload/account is deleted) | left pending (stays private)
 POST /posts  { mediaIds: [...] }   attaches the caller's own uploads
 GET    /media/uploads/:id          the uploader's own view (status, reason, url, viewUrl)
 DELETE /media/uploads/:id          remove an upload and its files
@@ -59,12 +65,9 @@ prefix (`private-media/`). The private prefix name deliberately does **not** sta
 | **withdraw** public -> private | a moderator Reject of a published item, or reports reaching the hold threshold | the status is written first (the database visibility gate hides the file at once), then a verified private copy is made and the public object deleted. A failed move only leaves an object lingering; `publishedAt` stays set and the reconciler retries. |
 | **reconcile** (`PostMediaSweepService.reconcileObjects`, every 5 minutes) | always | restores "a public object exists iff approved and not held": withdraws what should not be public, re-publishes an approved item whose public object is missing, deletes the private original of an approved published item. |
 
-**A rejected file is never deleted** by any of these, by the quarantine purge, by the unattached purge, by `DELETE
-/media/uploads/:id`, by post deletion or by account anonymisation (`deletableKeys` in `post-media-cleanup.util.ts` never lists
-a rejected file's private object; tests pin it). Evidence handling is OPEN under counsel (B-206). Consequence, flagged: deleting a
-post or anonymising an account removes the *row* of a rejected file but leaves its private object, so Decision Log #419 item 9
-("media of a deleted post or anonymised account is deleted") is knowingly unmet for rejected files until counsel decides.
-The object key (`private-media/<uploaderId>/<mediaId>.<ext>`) still identifies the uploader and the file.
+**A rejected file stays in the private prefix while its row exists** — none of the moves above (publish, withdraw, reconcile)
+deletes it, and a moderator Reject does not delete it either. It is deleted when its row is removed: see "Deleting a rejected
+file (B-283)" below. *(This replaces the earlier rule that no purge or cleanup path ever deleted it, #430 item 2.)*
 
 **Known narrow race:** a moderator "keep" landing in the same instant as an automatic withdraw of the same item can leave an
 approved row whose public object was just removed; the reconciler heals it from the retained private copy.
@@ -106,13 +109,55 @@ ranked at the crown.
 - `DELETE /posts/:id` removes the media rows (cascade) and then the stored objects (best effort, after the commit).
 - Anonymising an account (`AccountDeletionSweepService.anonymizeUser`) deletes the user's media rows, removes their URLs
   from the posts that survive (#341 keeps the post), and removes the objects after the commit.
-- `DELETE /media/uploads/:id` (the uploader) removes one file; a contest entry's file cannot be removed (409). A rejected file's
-  private object is kept (above).
+- `DELETE /media/uploads/:id` (the uploader) removes one file; a contest entry's file cannot be removed (409).
 - `PostMediaService.purgeUnattached` (hourly, B-259) removes **confirmed uploads never attached to a post** once older than
   `POST_MEDIA_UNATTACHED_MAX_AGE_DAYS` (default 7): objects first, then the row; a deletion failure is logged and retried next run.
-  **Never a rejected item.**
+  A rejected item is purged too (B-283), except for an uploader under an active hold (then it is left whole and tried again).
 - `PostMediaService.purgeQuarantine` (hourly) removes quarantine objects older than `POST_MEDIA_QUARANTINE_MAX_AGE_HOURS` (24).
-  A link never used loses its row; a confirmed upload whose original could not be deleted loses only the original.
+  A link never used loses its row; a confirmed upload whose original could not be deleted loses only the original — and, for a
+  rejected one, its private object too (B-283).
+
+### Deleting a rejected file (B-283)
+
+`backend/b283-delete-rejected-media`; build register B-283; Decision Log #462 (g) and #464 (founder decision 2026-11-02).
+**A rejected file's private object is deleted on every path that removes its row:** a post deleted by a live account,
+`DELETE /media/uploads/:id`, the quarantine purge, the unattached purge, account anonymisation and the account purge
+(`post-media-cleanup.util.ts`, `post-media.service.ts`, `AccountDeletionSweepService`, `AnonymizedRowPurgeService`).
+
+**The protection rule** (`rejected-media-evidence.util.ts`, one place for every path). The object is NOT deleted, and the
+deletion is retried later, when either holds:
+
+1. the uploader has an **active admin hold** (a legal hold or a bad-faith hold; `findActiveAccountHold` from
+   `account-hold.rules.ts`, not a copy of it); or
+2. the **post** the file is attached to has a report that is **not yet closed** (`reportClosedAt`, the one closure
+   predicate of the hold rules, so an open report, an appeal pending and a still-running appeal window all count).
+
+It applies to the rejected file's private object only. A pending or approved file, a leftover quarantined original and a public
+object are deleted as before.
+
+**Why a record.** When a post or an upload is deleted its `PostMedia` row goes with it, so a skipped deletion has nothing left to
+retry from. The skip is written to **`PostMediaDeferredDeletion`** (`objectKey` unique, `mediaId`, `uploaderId`, `postId`; no
+foreign keys, so it outlives the account and the post) **in the same transaction as the row delete**. The purges instead leave
+the whole row in place (no record needed) and try again next run.
+
+**The daily sweep** (`rejected-media-sweep.service.ts`, `@Cron('0 0 4 * * *')`, after the 03:00 account sweep and 03:30 purge):
+
+1. `processDeferred` — for each deferral record, deletes the object (and the record) once neither protection applies.
+2. `sweepStrays` — **lists** the `private-media/`, `post-media/` and `quarantine/` prefixes and deletes every object that has
+   **no `PostMedia` row**. Never: an object younger than `POST_MEDIA_STRAY_MIN_AGE_DAYS` (default 7, measured on the object's own
+   last-modified time; an object with no time counts as young); an object that has a row; an object with a deferral record; an
+   object whose uploader (named in the key) has an active hold; an object whose key shape it cannot attribute (counted, never
+   deleted). At most `POST_MEDIA_STRAY_SWEEP_MAX_DELETES` (default 200, the cap convention of `ANONYMIZED_PURGE_MAX_PER_RUN`) per
+   run. `POST_MEDIA_STRAY_SWEEP_DRY_RUN=true` only counts and logs. **A stray cannot be tied to a report** (the key names only the
+   uploader and the media id), so the minimum age is the only protection a stray has against an open report.
+3. `deleteUploaderObjects` — called by the account purge right after it deletes a `User` row: removes whatever is still under that
+   user's media prefixes (no age limit: the account is gone), skipping an object with a row or a deferral record.
+
+**Needs a LIST permission on the storage key** (the B-207 launch-gate step). Without it the sweep logs one plain error naming the
+fix and deletes nothing; `processDeferred` and every lifecycle path still work. The same error class
+(`StorageListNotPermittedError`) is raised by `S3StorageService.listObjects` for an `AccessDenied` / 403.
+
+Logs carry counts and media ids only, never an uploader id, a key or any content.
 
 ## What is stored, sent, retained and who can read it (for the DPIA drafter; NOT legal copy)
 
@@ -152,10 +197,10 @@ check with counsel/the founder** (not decided here): whether to opt out of AWS u
 |---|---|---|
 | Original in quarantine | seconds, normally | right after a successful confirm; otherwise by the hourly purge once older than 24 h |
 | Never-confirmed upload (row + object) | up to 24 h | the purge |
-| Processed file + `PostMedia` row | while the post exists | post deleted (objects removed by the app); uploader deletes it; account anonymised. A **rejected** file's private object is never deleted (OPEN, B-206) |
-| Confirmed upload never attached to a post | 7 days (`POST_MEDIA_UNATTACHED_MAX_AGE_DAYS`) | the hourly unattached purge (never a rejected one) |
+| Processed file + `PostMedia` row | while the post exists | post deleted (objects removed by the app); uploader deletes it; account anonymised. A **rejected** file's private object goes too (B-283), unless the uploader is under an active hold or the post has an unclosed report: then it waits in `PostMediaDeferredDeletion` |
+| Confirmed upload never attached to a post | 7 days (`POST_MEDIA_UNATTACHED_MAX_AGE_DAYS`) | the hourly unattached purge (a rejected one too, unless the uploader is held) |
 | `checkLabels`, `rejectionReason`, decision fields | with the row | with the row. **No separate retention clock exists** (OPEN: see the report) |
-| A rejected file | stays in the **private** prefix; no purge or cleanup path deletes it | OPEN under counsel (legal-hold / CSAM evidence handling is undecided, B-206) |
+| A rejected file | stays in the **private** prefix while its row exists; deleted with its row / post / upload / account (B-283); a stray with no row is deleted by the daily sweep once older than `POST_MEDIA_STRAY_MIN_AGE_DAYS` (7) | protected by an active hold or an unclosed report on its post; statutory reporting / evidence beyond that is OPEN under counsel (B-206) |
 
 ### Who can read what
 
@@ -224,14 +269,15 @@ Open points and the defaults chosen: `docs/backend-w15-review-queue-report.md`.
 ## Configuration
 
 All in `.env.example` and `render.yaml` (both services): `POST_MEDIA_*` limits, `FFMPEG_PATH`/`FFPROBE_PATH`,
-`REKOGNITION_*`, `MEDIA_CHECK_*` thresholds, and (B-037) `MEDIA_REPORT_HIDE_THRESHOLD`, `MEDIA_REVIEW_UNCHECKED_AFTER_MINUTES`, and (B-258, B-259) `POST_MEDIA_REPORT_DAILY_LIMIT` (default 20), `POST_MEDIA_UNATTACHED_MAX_AGE_DAYS` (default 7). Human steps before it works in production: R2 bucket + keys and a **CORS rule
+`REKOGNITION_*`, `MEDIA_CHECK_*` thresholds, and (B-037) `MEDIA_REPORT_HIDE_THRESHOLD`, `MEDIA_REVIEW_UNCHECKED_AFTER_MINUTES`, and (B-258, B-259) `POST_MEDIA_REPORT_DAILY_LIMIT` (default 20), `POST_MEDIA_UNATTACHED_MAX_AGE_DAYS` (default 7), and (B-283, all founder-veto-able) `POST_MEDIA_STRAY_MIN_AGE_DAYS` (7), `POST_MEDIA_STRAY_SWEEP_MAX_DELETES` (200), `POST_MEDIA_STRAY_SWEEP_DRY_RUN` (false). Human steps before it works in production: R2 bucket + keys and a **CORS rule
 allowing PUT from the web app origin** (B-207, B-090), ffmpeg/ffprobe on the host (not on Render's native Node runtime), an AWS
 account and a `rekognition:DetectModerationLabels` IAM user, optionally a bucket lifecycle rule expiring `quarantine/` after 1 day
-as a backstop to the purge.
+as a backstop to the purge. **B-283: the R2/S3 key must be allowed to LIST objects** (a founder step at the launch gate, B-207;
+Cloudflare's "Object Read & Write" token permission is believed to include it, not re-checked against Cloudflare's documentation).
 
 ## Not built here
 
-The frontend switch to `viewUrl` (apps/web still reads `url`; B-260); CSAM / evidence handling for rejected files (B-206, OPEN under counsel);
+The frontend switch to `viewUrl` (apps/web still reads `url`; B-260); CSAM and statutory reporting for rejected files, and evidence retention beyond an active hold (B-206, OPEN under counsel);
 HEIC conversion; direct-message media (`Message.mediaUrl` is **removed from the API** by B-259 — the send-message DTO, controller and
 service no longer accept or return it, so a message is text only until DM upload exists; the database column is deliberately left);
 admin article/cover media (`MediaAsset`, the admin-only path, is unchanged); avatars and covers (they have their own pipeline).

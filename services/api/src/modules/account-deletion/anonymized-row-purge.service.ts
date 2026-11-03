@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RejectedMediaSweepService } from '../post-media/rejected-media-sweep.service';
 import { findFirstBlocker } from './anonymized-row-purge.references';
 
 // backend/w6-purge-anonymised-rows (B-043; Decision Log #375, which SUPERSEDES #344's "no purge timer,
@@ -24,10 +25,15 @@ import { findFirstBlocker } from './anonymized-row-purge.references';
 // prove the 30-day boundary without mocking global time.
 //
 // WHAT THE PURGE DOES NOT TOUCH: ConsentAuditRecord (its own 6-month clock, #42, deleted by the sweep's
-// purgeExpiredConsentAuditRecords) and any stored object. In particular the private object of a REJECTED
-// post-media file stays in the bucket (B-206, OPEN under counsel): once this job removes the User row,
-// that object's only database pointer is already gone (PostMedia rows are deleted at anonymisation) and
-// only its key remains, which names the uploader's user id. See account-deletion/README.md.
+// purgeExpiredConsentAuditRecords).
+//
+// STORED MEDIA (backend/b283-delete-rejected-media, B-283; Decision Log #462 (g), #464): the private object of a
+// REJECTED post-media file is deleted with the account, at anonymisation (deleteUserPostMedia) and, as a safety
+// net, here: after a row is purged, RejectedMediaSweepService.deleteUploaderObjects lists what is still stored
+// under that user's media prefixes and removes it (skipping any object that still has a PostMedia row or a
+// deferred-deletion record). This SUPERSEDES the earlier rule that a rejected file stays in the bucket (#430
+// item 2). A failed or unavailable cleanup never undoes the purge; the daily stray sweep finishes the job. See
+// account-deletion/README.md.
 
 /** 30 days, measured from User.anonymizedAt. Fixed-length days, like the sweep's grace period. */
 export const ANONYMIZED_ROW_RETENTION_DAYS = 30;
@@ -68,7 +74,12 @@ type RowOutcome =
 export class AnonymizedRowPurgeService {
   private readonly logger = new Logger(AnonymizedRowPurgeService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  // The media sweep is optional so the unit specs that build this service with a prisma fake alone still work;
+  // in the app AccountDeletionModule always injects it (B-283).
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly rejectedMedia?: RejectedMediaSweepService,
+  ) {}
 
   // 03:30 -- after AccountDeletionSweepService's 03:00 run, so a row the sweep anonymised today (which is
   // 30 days from eligible, never due now) and a long run of the sweep cannot overlap this one in a way
@@ -176,6 +187,7 @@ export class AnonymizedRowPurgeService {
           result.purgedUserIds.push(id);
           result.purgedReasons[id] = outcome.reason;
           this.logger.log(`Anonymized-row purge: deleted User ${id} (${outcome.reason}).`);
+          await this.removeLeftoverMedia(id);
         } else if (outcome.outcome === 'kept') {
           result.keptUserIds.push({ userId: id, blocker: outcome.blocker, kind: outcome.kind });
         }
@@ -187,6 +199,19 @@ export class AnonymizedRowPurgeService {
       }
     }
     return result;
+  }
+
+  // B-283: best effort, AFTER the purge committed. Never throws, never undoes the purge.
+  private async removeLeftoverMedia(userId: string): Promise<void> {
+    if (!this.rejectedMedia) return;
+    try {
+      const r = await this.rejectedMedia.deleteUploaderObjects(userId);
+      if (r.deleted > 0 || r.failed > 0 || r.outcome !== 'ok') {
+        this.logger.log(`Anonymized-row purge: leftover media cleanup outcome=${r.outcome} deleted=${r.deleted} failed=${r.failed}.`);
+      }
+    } catch (err) {
+      this.logger.warn(`Anonymized-row purge: leftover media cleanup failed (${err instanceof Error ? err.message : String(err)}).`);
+    }
   }
 
   // One row, one transaction. Eligibility is RE-CHECKED inside the transaction -- the selection above is
