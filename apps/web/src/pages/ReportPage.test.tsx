@@ -126,7 +126,8 @@ describe("ReportPage — the category step", () => {
         targetId: TARGET_ID,
         reasonCategory: category,
         reason: undefined,
-        concernsMinor: false,
+        // Decision Log #466: the child safety category always sends true.
+        concernsMinor: category === "child_safety_concern",
       });
       expect(JSON.parse(JSON.stringify(payload))).not.toHaveProperty("reason");
     },
@@ -213,28 +214,114 @@ describe("ReportPage — the rest of the form", () => {
     vi.mocked(createPublicReport).mockResolvedValueOnce(CREATED);
     renderPage();
     fillBasics();
-    choose("Child safety concern");
+    choose("Harassment or bullying");
     fireEvent.change(screen.getByLabelText("What are you reporting?"), { target: { value: "user" } });
     fireEvent.click(screen.getByLabelText("This involves a child"));
     fireEvent.click(submitButton());
 
     await waitFor(() =>
       expect(createPublicReport).toHaveBeenCalledWith(
-        expect.objectContaining({ targetType: "user", reasonCategory: "child_safety_concern", concernsMinor: true }),
+        expect.objectContaining({ targetType: "user", reasonCategory: "harassment_or_bullying", concernsMinor: true }),
+      ),
+    );
+  });
+});
+
+describe("ReportPage — 'this involves a child' follows the child safety category (Decision Log #466)", () => {
+  function box() {
+    return screen.getByLabelText("This involves a child") as HTMLInputElement;
+  }
+
+  it("ticks and disables the box when the category is chosen", () => {
+    renderPage();
+    expect(box().checked).toBe(false);
+    expect(box().disabled).toBe(false);
+    choose("Child safety concern");
+    expect(box().checked).toBe(true);
+    expect(box().disabled).toBe(true);
+    // Announced as disabled, with the same label and hint as before.
+    expect(screen.getByRole("checkbox", { name: "This involves a child" })).toHaveProperty("disabled", true);
+    expect(screen.getByText(/concerns the safety of anyone under/)).toBeTruthy();
+  });
+
+  it("cannot be unticked while that category is chosen", () => {
+    renderPage();
+    choose("Child safety concern");
+    fireEvent.click(box());
+    expect(box().checked).toBe(true);
+  });
+
+  it("goes back to unticked for a person who never touched it", () => {
+    renderPage();
+    choose("Child safety concern");
+    choose("Spam or scam");
+    expect(box().checked).toBe(false);
+    expect(box().disabled).toBe(false);
+  });
+
+  it("goes back to ticked for a person who ticked it by hand first", () => {
+    renderPage();
+    fireEvent.click(box());
+    choose("Child safety concern");
+    expect(box().checked).toBe(true);
+    expect(box().disabled).toBe(true);
+    choose("Spam or scam");
+    expect(box().checked).toBe(true);
+    expect(box().disabled).toBe(false);
+  });
+
+  it("goes back to unticked for a person who ticked it and then unticked it by hand", () => {
+    renderPage();
+    fireEvent.click(box());
+    fireEvent.click(box());
+    choose("Child safety concern");
+    expect(box().checked).toBe(true);
+    choose("Other");
+    expect(box().checked).toBe(false);
+  });
+
+  it("sends concernsMinor true under the category even if it had been unticked earlier", async () => {
+    vi.mocked(createPublicReport).mockResolvedValueOnce(CREATED);
+    renderPage();
+    fillBasics();
+    fireEvent.click(box());
+    fireEvent.click(box());
+    choose("Child safety concern");
+    fireEvent.click(submitButton());
+    await waitFor(() =>
+      expect(createPublicReport).toHaveBeenCalledWith(
+        expect.objectContaining({ reasonCategory: "child_safety_concern", concernsMinor: true }),
       ),
     );
   });
 
-  it("choosing the child safety category does not tick 'this involves a child' on its own", async () => {
+  it("sends what the person set by hand once another category is chosen", async () => {
     vi.mocked(createPublicReport).mockResolvedValueOnce(CREATED);
     renderPage();
     fillBasics();
     choose("Child safety concern");
-    expect((screen.getByLabelText("This involves a child") as HTMLInputElement).checked).toBe(false);
+    choose("Spam or scam");
     fireEvent.click(submitButton());
     await waitFor(() =>
-      expect(createPublicReport).toHaveBeenCalledWith(expect.objectContaining({ concernsMinor: false })),
+      expect(createPublicReport).toHaveBeenCalledWith(
+        expect.objectContaining({ reasonCategory: "spam_or_scam", concernsMinor: false }),
+      ),
     );
+  });
+
+  it("leaves the box as set under every other category", () => {
+    renderPage();
+    for (const category of REPORT_REASON_CATEGORIES.filter((c) => c !== "child_safety_concern")) {
+      choose(REPORT_REASON_LABELS[category]);
+      expect(box().checked).toBe(false);
+      expect(box().disabled).toBe(false);
+    }
+    fireEvent.click(box());
+    for (const category of REPORT_REASON_CATEGORIES.filter((c) => c !== "child_safety_concern")) {
+      choose(REPORT_REASON_LABELS[category]);
+      expect(box().checked).toBe(true);
+      expect(box().disabled).toBe(false);
+    }
   });
 });
 

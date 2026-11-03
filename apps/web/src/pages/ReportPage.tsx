@@ -50,6 +50,10 @@ const TARGET_TYPE_LABELS: Record<ReportTargetType, string> = {
 // an exact post/comment/account ID to paste in.
 const SUPPORT_MAILTO_HREF = "mailto:support@soccernity.com?subject=Report%20a%20concern";
 
+// The server stores a report in this category as concerning a minor whatever the form sends (Decision Log #466);
+// the form shows the same.
+const CHILD_SAFETY_CATEGORY: ReportReasonCategory = "child_safety_concern";
+
 type Status = "idle" | "submitting" | "submitted" | "error";
 
 export default function ReportPage() {
@@ -58,7 +62,11 @@ export default function ReportPage() {
   const [targetId, setTargetId] = useState("");
   const [category, setCategory] = useState<ReportReasonCategory | null>(null);
   const [details, setDetails] = useState("");
-  const [concernsMinor, setConcernsMinor] = useState(false);
+  // What the person set by hand. The box the form shows (and sends) is `concernsMinor` below: forced on while
+  // "Child safety concern" is chosen (Decision Log #466), otherwise this remembered value.
+  const [manualConcernsMinor, setManualConcernsMinor] = useState(false);
+  const minorForced = category === CHILD_SAFETY_CATEGORY;
+  const concernsMinor = minorForced || manualConcernsMinor;
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [submittedEmail, setSubmittedEmail] = useState("");
@@ -191,7 +199,8 @@ export default function ReportPage() {
             type="checkbox"
             aria-label="This involves a child"
             checked={concernsMinor}
-            onChange={(e) => setConcernsMinor(e.target.checked)}
+            disabled={minorForced || status === "submitting"}
+            onChange={(e) => setManualConcernsMinor(e.target.checked)}
           />
           <span className="report-page__checkbox-text">
             <span className="report-page__checkbox-title">This involves a child</span>
