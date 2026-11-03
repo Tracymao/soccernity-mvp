@@ -359,9 +359,9 @@ on `User`, so no existing `User` select or serialiser can leak it. Cascades with
 **Audit:** each of withhold, clear and review writes one `AdminActionLog` row (`user.guardian_notices_withheld`,
 `_cleared`, `_reviewed`; target type `user`) **inside the same transaction** as the change (`tx.adminActionLog.create`,
 as the username revoke does), with the reason or note in the entry. The row keeps only the latest review; history is the
-log. **No endpoint lists the action log today** (only the media-review statistics count a few action kinds), so the
-three entries are readable by nobody through the API; if a log reader is ever built it must hide these three actions
-from admins who are not child-safety vetted.
+log. **`GET /admin/action-log` now lists it** (`backend/admin-action-log-read`, Decision Log #464: a superadmin reads every
+row, any other admin only their own) and it hides these three actions, and every other guardian-notice and
+date-of-birth action, from admins who are not child-safety vetted; see `../admin-action-log/README.md`.
 
 **Review marker:** `reviewDueAt` = 30 days after the later of `setAt` and `lastReviewedAt`; `reviewDue` compares it to
 `APP_CLOCK`. Nothing happens automatically when it is due (no expiry, no email).
