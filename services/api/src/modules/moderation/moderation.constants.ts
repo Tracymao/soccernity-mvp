@@ -98,6 +98,10 @@ export const REPORT_REASON_CATEGORY_LABELS: Record<ReportReasonCategory, string>
   other: 'Other',
 };
 
+// Decision Log #466 (founder decision 2026-11-03): a report with this category is ALWAYS stored with
+// concernsMinor = true (see report-concerns-minor.util.ts), so it is limited to child-safety-vetted admins.
+export const CHILD_SAFETY_REASON_CATEGORY: ReportReasonCategory = 'child_safety_concern';
+
 // The only category that REQUIRES a written description (Report.reason, 1 to 500 characters). For every other
 // category the description is optional and is stored as the empty string when omitted, so every reader of
 // Report.reason keeps getting a string.

@@ -15,7 +15,13 @@ import { seedDob } from './dob-seed';
 describe('Report reason category e2e', () => {
   let app: INestApplication;
 
+  // POST /reports/public carries the shared @AuthRateLimit() (5 per 60 s per IP by default). This file makes more
+  // public submissions than that (Decision Log #466 tests every flag/category combination), so the limit is raised
+  // for this file only; the module reads it when the app is built. Restored in afterAll.
+  const previousAuthRateLimit = process.env.AUTH_RATE_LIMIT_MAX;
+
   beforeAll(async () => {
+    process.env.AUTH_RATE_LIMIT_MAX = '1000';
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
@@ -27,6 +33,8 @@ describe('Report reason category e2e', () => {
   });
 
   afterAll(async () => {
+    if (previousAuthRateLimit === undefined) delete process.env.AUTH_RATE_LIMIT_MAX;
+    else process.env.AUTH_RATE_LIMIT_MAX = previousAuthRateLimit;
     await app.close();
     await disconnectTestPrismaClient();
   });
@@ -50,14 +58,14 @@ describe('Report reason category e2e', () => {
     return { userId: user.id, accessToken: accessToken.token };
   }
 
-  async function createAdmin(label: string, role = 'moderator'): Promise<{ adminId: string; accessToken: string }> {
+  async function createAdmin(label: string, role = 'moderator', childSafetyVetted = true): Promise<{ adminId: string; accessToken: string }> {
     const admin = await prisma().adminUser.create({
       data: {
         email: `e2e-rrc-admin-${label}-${Date.now()}-${rand()}@example.com`,
         passwordHash: 'unused',
         fullName: `E2E RRC Admin ${label}`,
         role,
-        childSafetyVetted: true,
+        childSafetyVetted,
       },
     });
     const { accessToken } = await app.get(AdminTokenService).issueTokenPair(admin.id, admin.role);
@@ -140,7 +148,8 @@ describe('Report reason category e2e', () => {
       expect(await prisma().report.count()).toBe(0);
     });
 
-    it('a category sets neither concernsMinor nor severity (child_safety_concern included)', async () => {
+    // Decision Log #466: child_safety_concern ALWAYS stores concernsMinor = true; severity is not touched.
+    it('child_safety_concern stores concernsMinor true and leaves severity at medium', async () => {
       const reporter = await createUser('reporter-csc');
       const postId = await seedPost((await createUser('author-csc')).userId);
       const res = await request(server())
@@ -149,7 +158,183 @@ describe('Report reason category e2e', () => {
         .send({ targetType: 'post', targetId: postId, reasonCategory: 'child_safety_concern' })
         .expect(201);
       const row = await prisma().report.findUniqueOrThrow({ where: { id: res.body.id } });
-      expect(row).toMatchObject({ concernsMinor: false, severity: 'medium' });
+      expect(row).toMatchObject({ concernsMinor: true, severity: 'medium', reasonCategory: 'child_safety_concern' });
+    });
+
+    it('POST /reports has no concernsMinor field: sending one (true or false) is a 400 and creates nothing', async () => {
+      const reporter = await createUser('reporter-csc-field');
+      const postId = await seedPost((await createUser('author-csc-field')).userId);
+      for (const concernsMinor of [true, false]) {
+        await request(server())
+          .post('/reports')
+          .set(auth(reporter.accessToken))
+          .send({ targetType: 'post', targetId: postId, reasonCategory: 'child_safety_concern', concernsMinor })
+          .expect(400);
+      }
+      expect(await prisma().report.count()).toBe(0);
+    });
+
+    it('every other category stores concernsMinor false on this route', async () => {
+      const reporter = await createUser('reporter-others');
+      const postId = await seedPost((await createUser('author-others')).userId);
+      const others = [
+        'harassment_or_bullying',
+        'hate_or_abusive_language',
+        'threats_or_violence',
+        'sexual_or_inappropriate_content',
+        'impersonation_or_fake_account',
+        'spam_or_scam',
+        'privacy_or_image_misuse',
+        'other',
+      ];
+      for (const reasonCategory of others) {
+        const res = await request(server())
+          .post('/reports')
+          .set(auth(reporter.accessToken))
+          .send({ targetType: 'post', targetId: postId, reasonCategory, reason: 'details' })
+          .expect(201);
+        const row = await prisma().report.findUniqueOrThrow({ where: { id: res.body.id } });
+        expect(row.concernsMinor).toBe(false);
+      }
+    });
+  });
+
+  // Decision Log #466 on the public route, where concernsMinor IS a (required) field.
+  describe('POST /reports/public and the child_safety_concern flag', () => {
+    it('child_safety_concern is stored true when the flag is sent false and when it is sent true; severity unchanged', async () => {
+      const postId = await seedPost((await createUser('author-pub-csc')).userId);
+      const base = { reporterContactEmail: 'parent@example.com', targetType: 'post', targetId: postId, reasonCategory: 'child_safety_concern' };
+      for (const sent of [false, true]) {
+        const res = await request(server()).post('/reports/public').send({ ...base, concernsMinor: sent }).expect(201);
+        const row = await prisma().report.findUniqueOrThrow({ where: { id: res.body.id } });
+        expect(row).toMatchObject({ concernsMinor: true, severity: 'medium', reporterId: null });
+      }
+    });
+
+    it('omitting concernsMinor is still the required-field 400 on this route, even with the category, and creates nothing', async () => {
+      const postId = await seedPost((await createUser('author-pub-omit')).userId);
+      await request(server())
+        .post('/reports/public')
+        .send({ reporterContactEmail: 'parent@example.com', targetType: 'post', targetId: postId, reasonCategory: 'child_safety_concern' })
+        .expect(400);
+      expect(await prisma().report.count()).toBe(0);
+    });
+
+    it('every other category leaves the flag as the reporter sent it', async () => {
+      const postId = await seedPost((await createUser('author-pub-others')).userId);
+      const base = { reporterContactEmail: 'parent@example.com', targetType: 'post', targetId: postId, reason: 'details' };
+      for (const reasonCategory of ['spam_or_scam', 'harassment_or_bullying', 'other']) {
+        for (const sent of [false, true]) {
+          const res = await request(server()).post('/reports/public').send({ ...base, reasonCategory, concernsMinor: sent }).expect(201);
+          const row = await prisma().report.findUniqueOrThrow({ where: { id: res.body.id } });
+          expect(row.concernsMinor).toBe(sent);
+        }
+      }
+    });
+  });
+
+  // Decision Log #466 consequences, through the real routes: a report created via POST /reports with the category
+  // is limited to child-safety-vetted admins everywhere the concernsMinor gate applies.
+  describe('a child_safety_concern report and the child-safety-vetting gate', () => {
+    async function makeCategorisedReport() {
+      const reporter = await createUser('gate-reporter');
+      const author = await createUser('gate-author');
+      const postId = await seedPost(author.userId);
+      const res = await request(server())
+        .post('/reports')
+        .set(auth(reporter.accessToken))
+        .send({ targetType: 'post', targetId: postId, reasonCategory: 'child_safety_concern' })
+        .expect(201);
+      return { reportId: res.body.id as string, reporter, author, postId };
+    }
+
+    it('an UNVETTED admin cannot list, open, action or find it; a VETTED admin can', async () => {
+      const { reportId } = await makeCategorisedReport();
+      const unvetted = await createAdmin('unvetted', 'moderator', false);
+      const vetted = await createAdmin('vetted', 'moderator', true);
+
+      const unvettedList = await request(server()).get('/admin/moderation/reports').set(auth(unvetted.accessToken)).expect(200);
+      expect(unvettedList.body.items.map((r: { id: string }) => r.id)).not.toContain(reportId);
+      const unvettedOpen = await request(server()).get(`/admin/moderation/reports/${reportId}`).set(auth(unvetted.accessToken)).expect(403);
+      expect(unvettedOpen.body.code).toBe('child_safety_vetting_required');
+      const unvettedAction = await request(server())
+        .patch(`/admin/moderation/reports/${reportId}`)
+        .set(auth(unvetted.accessToken))
+        .send({ action: 'dismissed' })
+        .expect(403);
+      expect(unvettedAction.body.code).toBe('child_safety_vetting_required');
+      // Searching by the category label finds nothing for the unvetted admin.
+      const unvettedSearch = await request(server()).get('/admin/search').query({ q: 'child safety' }).set(auth(unvetted.accessToken)).expect(200);
+      expect(unvettedSearch.body.groups.reports.items).toHaveLength(0);
+      // And the report is untouched.
+      expect((await prisma().report.findUniqueOrThrow({ where: { id: reportId } })).status).toBe('open');
+
+      const vettedList = await request(server()).get('/admin/moderation/reports').set(auth(vetted.accessToken)).expect(200);
+      const listed = vettedList.body.items.find((r: { id: string }) => r.id === reportId);
+      expect(listed).toMatchObject({ concernsMinor: true, reasonCategory: 'child_safety_concern' });
+      await request(server()).get(`/admin/moderation/reports/${reportId}`).set(auth(vetted.accessToken)).expect(200);
+      const vettedSearch = await request(server()).get('/admin/search').query({ q: 'child safety' }).set(auth(vetted.accessToken)).expect(200);
+      expect(vettedSearch.body.groups.reports.items.map((r: { id: string }) => r.id)).toEqual([reportId]);
+      expect(vettedSearch.body.groups.reports.items[0]).toMatchObject({ matchedOn: 'reason_category' });
+    });
+
+    it('an UNVETTED admin cannot review an appeal on it, and cannot escalate it; a vetted admin reviews it', async () => {
+      const { reportId, author } = await makeCategorisedReport();
+      const actioner = await createAdmin('actioner', 'moderator', true);
+      const second = await createAdmin('second', 'moderator', true);
+      const unvetted = await createAdmin('unvetted-appeal', 'moderator', false);
+      await request(server())
+        .patch(`/admin/moderation/reports/${reportId}`)
+        .set(auth(actioner.accessToken))
+        .send({ action: 'warning_issued' })
+        .expect(200);
+      // The reported user (the post's author) appeals.
+      await request(server()).post(`/reports/${reportId}/appeal`).set(auth(author.accessToken)).send({ reason: 'This was a mistake.' }).expect(201);
+
+      const unvettedDecision = await request(server())
+        .patch(`/admin/moderation/reports/${reportId}/appeal`)
+        .set(auth(unvetted.accessToken))
+        .send({ decision: 'upheld' })
+        .expect(403);
+      expect(unvettedDecision.body.code).toBe('child_safety_vetting_required');
+      const unvettedEscalate = await request(server())
+        .patch(`/admin/moderation/reports/${reportId}/escalate`)
+        .set(auth(unvetted.accessToken))
+        .send({ escalationNotes: 'Escalating this report.', escalatedToAuthority: false })
+        .expect(403);
+      expect(unvettedEscalate.body.code).toBe('child_safety_vetting_required');
+
+      await request(server())
+        .patch(`/admin/moderation/reports/${reportId}/appeal`)
+        .set(auth(second.accessToken))
+        .send({ decision: 'upheld' })
+        .expect(200);
+    });
+
+    it('the signed-in reporter still gets their normal moderation_decision notification when it is actioned', async () => {
+      const { reportId, reporter } = await makeCategorisedReport();
+      const vetted = await createAdmin('vetted-outcome', 'moderator', true);
+      await request(server())
+        .patch(`/admin/moderation/reports/${reportId}`)
+        .set(auth(vetted.accessToken))
+        .send({ action: 'warning_issued' })
+        .expect(200);
+      const notifications = await prisma().notification.findMany({ where: { userId: reporter.userId, type: 'moderation_decision' } });
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0].payloadRefId).toBe(reportId);
+    });
+
+    it('an older uncategorised report is unchanged: concernsMinor false, visible to an unvetted admin', async () => {
+      const reporter = await createUser('legacy-reporter');
+      const postId = await seedPost((await createUser('legacy-author')).userId);
+      const legacy = await prisma().report.create({
+        data: { reporterId: reporter.userId, targetType: 'post', targetId: postId, reason: 'old free text' },
+      });
+      const unvetted = await createAdmin('unvetted-legacy', 'moderator', false);
+      const row = await prisma().report.findUniqueOrThrow({ where: { id: legacy.id } });
+      expect(row).toMatchObject({ concernsMinor: false, reasonCategory: null });
+      const list = await request(server()).get('/admin/moderation/reports').set(auth(unvetted.accessToken)).expect(200);
+      expect(list.body.items.map((r: { id: string }) => r.id)).toContain(legacy.id);
     });
   });
 

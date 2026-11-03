@@ -17,6 +17,7 @@ import { BanterService } from '../banter/banter.service';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
 import { GuardianSecurityEventKey } from '../guardian-security-notice/guardian-security-notice.constants';
 import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
+import { resolveConcernsMinor } from './report-concerns-minor.util';
 import { resolveReportedUserId } from './report-target.util';
 import { decodeModerationCursor, encodeModerationCursor } from './cursor.util';
 import { ActionReportDto } from './dto/action-report.dto';
@@ -119,6 +120,9 @@ export class ModerationService {
         targetId: dto.targetId,
         reason,
         reasonCategory: dto.reasonCategory,
+        // Decision Log #466: POST /reports has no concernsMinor field, so the flag can only come from the
+        // 'child_safety_concern' category here.
+        concernsMinor: resolveConcernsMinor(dto.reasonCategory, false),
         // Defaults to 'medium' when omitted — matched explicitly here
         // rather than left to Report.severity's own DB-level default, so
         // the API's documented behaviour doesn't depend on a Prisma
@@ -149,7 +153,8 @@ export class ModerationService {
         targetId: dto.targetId,
         reason,
         reasonCategory: dto.reasonCategory,
-        concernsMinor: dto.concernsMinor,
+        // Decision Log #466: the reporter's own value, raised to true by the 'child_safety_concern' category.
+        concernsMinor: resolveConcernsMinor(dto.reasonCategory, dto.concernsMinor),
         // Defaults to 'medium' when omitted — see createReport's own
         // comment on why this is matched explicitly rather than left to
         // Report.severity's DB-level default.

@@ -40,6 +40,8 @@ export class CreatePublicReportDto {
   targetId!: string;
 
   // B-284 (Decision Log #465): REQUIRED. The fixed list is REPORT_REASON_CATEGORIES.
+  // Decision Log #466: 'child_safety_concern' forces the stored concernsMinor to true, even if concernsMinor
+  // below is sent false. The category can only raise the flag, never lower it.
   @IsIn(REPORT_REASON_CATEGORIES)
   reasonCategory!: ReportReasonCategory;
 
@@ -60,7 +62,8 @@ export class CreatePublicReportDto {
   // non-authenticated reporter flagging content about themselves or
   // their child is exactly the caller who can state this reliably, so
   // there's no reason to let it silently default false the way it does
-  // for every OTHER route that doesn't set it yet.
+  // for every OTHER route that doesn't set it yet. The stored value is
+  // this one OR'd with the 'child_safety_concern' category (see above).
   @IsBoolean()
   concernsMinor!: boolean;
 

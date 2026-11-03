@@ -188,6 +188,7 @@ describe('ModerationService', () => {
           targetId: 'post-1',
           reasonCategory: 'spam_or_scam',
           reason: 'spam',
+          concernsMinor: false,
           severity: 'medium',
         },
       });
@@ -271,7 +272,8 @@ describe('ModerationService', () => {
         });
       });
 
-      it('does not touch concernsMinor or severity, whichever category (child_safety_concern included)', async () => {
+      // Decision Log #466: child_safety_concern ALWAYS stores concernsMinor = true; severity is not touched.
+      it('child_safety_concern stores concernsMinor true and leaves severity at the default', async () => {
         const { prisma, service } = setup();
         await service.createReport('reporter-1', {
           targetType: 'post',
@@ -279,9 +281,36 @@ describe('ModerationService', () => {
           reasonCategory: 'child_safety_concern',
         });
         const data = (prisma.report.create as jest.Mock).mock.calls[0][0].data;
+        expect(data.concernsMinor).toBe(true);
         expect(data.severity).toBe('medium');
-        expect(data).not.toHaveProperty('concernsMinor');
       });
+
+      it('child_safety_concern does not change an explicit severity either way', async () => {
+        const { prisma, service } = setup();
+        await service.createReport('reporter-1', {
+          targetType: 'post',
+          targetId: 'post-1',
+          reasonCategory: 'child_safety_concern',
+          severity: 'low',
+        });
+        const data = (prisma.report.create as jest.Mock).mock.calls[0][0].data;
+        expect(data).toMatchObject({ concernsMinor: true, severity: 'low' });
+      });
+
+      it.each(CATEGORIES.filter((c) => c !== 'child_safety_concern'))(
+        'every other category (%s) stores concernsMinor false on this route',
+        async (category) => {
+          const { prisma, service } = setup();
+          await service.createReport('reporter-1', {
+            targetType: 'post',
+            targetId: 'post-1',
+            reasonCategory: category,
+            reason: 'details',
+          });
+          const data = (prisma.report.create as jest.Mock).mock.calls[0][0].data;
+          expect(data.concernsMinor).toBe(false);
+        },
+      );
 
       it("rejects 'other' with no description, with the coded 400 and no database read", async () => {
         const { prisma, service } = setup();
@@ -369,6 +398,7 @@ describe('ModerationService', () => {
           targetId: 'user-9',
           reasonCategory: 'harassment_or_bullying',
           reason: 'harassment',
+          concernsMinor: false,
           severity: 'medium',
         },
       });
@@ -1772,6 +1802,55 @@ describe('ModerationService', () => {
 
       expect(prisma.report.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ reasonCategory: 'impersonation_or_fake_account', reason: '', concernsMinor: true }),
+      });
+    });
+
+    // Decision Log #466: the category can only RAISE the flag, never lower it.
+    describe('concernsMinor and the child_safety_concern category (Decision Log #466)', () => {
+      async function stored(category: string, reporterConcernsMinor: boolean): Promise<boolean> {
+        const prisma = buildPrismaMock();
+        (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+        (prisma.report.create as jest.Mock).mockResolvedValue(report({ reporterId: null }));
+        const service = buildService(prisma, buildEmailServiceMock());
+        await service.createPublicReport({
+          ...dto,
+          reasonCategory: category as typeof dto.reasonCategory,
+          concernsMinor: reporterConcernsMinor,
+        });
+        return (prisma.report.create as jest.Mock).mock.calls[0][0].data.concernsMinor;
+      }
+
+      it('child_safety_concern with the flag sent false is stored true', async () => {
+        expect(await stored('child_safety_concern', false)).toBe(true);
+      });
+
+      it('child_safety_concern with the flag sent true is stored true', async () => {
+        expect(await stored('child_safety_concern', true)).toBe(true);
+      });
+
+      it.each([
+        'harassment_or_bullying',
+        'hate_or_abusive_language',
+        'threats_or_violence',
+        'sexual_or_inappropriate_content',
+        'impersonation_or_fake_account',
+        'spam_or_scam',
+        'privacy_or_image_misuse',
+        'other',
+      ])('%s leaves the reporter\'s value as sent (false stays false, true stays true)', async (category) => {
+        expect(await stored(category, false)).toBe(false);
+        expect(await stored(category, true)).toBe(true);
+      });
+
+      it('does not change severity and still sends the acknowledgement email', async () => {
+        const prisma = buildPrismaMock();
+        (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+        (prisma.report.create as jest.Mock).mockResolvedValue(report({ reporterId: null }));
+        const emailService = buildEmailServiceMock();
+        const service = buildService(prisma, emailService);
+        await service.createPublicReport({ ...dto, reasonCategory: 'child_safety_concern', concernsMinor: false });
+        expect((prisma.report.create as jest.Mock).mock.calls[0][0].data.severity).toBe('medium');
+        expect(emailService.sendPublicReportAcknowledgementEmail).toHaveBeenCalledWith(dto.reporterContactEmail);
       });
     });
 
