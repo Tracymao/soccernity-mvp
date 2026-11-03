@@ -114,7 +114,7 @@ export default function ModerationQueuePage() {
 
   return (
     <>
-      <AdminPageHeader title="Moderation Queue" hideSearch />
+      <AdminPageHeader title="Moderation Queue" />
       <div className="mod-page">
         <div className="mod-tabs">
           <button

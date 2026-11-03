@@ -63,7 +63,7 @@ export default function ContactEnquiryDetailPage() {
   if (loadState === "loading") {
     return (
       <>
-        <AdminPageHeader title="Enquiry" hideSearch />
+        <AdminPageHeader title="Enquiry" />
         <div className="mod-page">
           {BACK_LINK}
           <p className="mod-loading">Loading the enquiry…</p>
@@ -75,7 +75,7 @@ export default function ContactEnquiryDetailPage() {
   if (loadState !== "loaded" || !enquiry) {
     return (
       <>
-        <AdminPageHeader title="Enquiry" hideSearch />
+        <AdminPageHeader title="Enquiry" />
         <div className="mod-page">
           {BACK_LINK}
           <div className="mod-card">
@@ -119,7 +119,7 @@ export default function ContactEnquiryDetailPage() {
 
   return (
     <>
-      <AdminPageHeader title={`Enquiry #${enquiry.id.slice(0, 8)}`} hideSearch />
+      <AdminPageHeader title={`Enquiry #${enquiry.id.slice(0, 8)}`} />
       <div className="mod-page">
         {BACK_LINK}
 

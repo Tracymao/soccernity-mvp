@@ -93,7 +93,7 @@ export default function ContestImpressionsPage() {
 
   return (
     <>
-      <AdminPageHeader title="Finalist impressions" hideSearch />
+      <AdminPageHeader title="Finalist impressions" />
       <div className="ct-page">
         <div className="ct-back">
           <Link to="/contest">← Back to console</Link>

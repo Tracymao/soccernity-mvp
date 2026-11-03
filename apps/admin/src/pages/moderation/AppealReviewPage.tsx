@@ -133,7 +133,7 @@ export default function AppealReviewPage() {
   if (loadState === "loading") {
     return (
       <>
-        <AdminPageHeader title="Appeal" hideSearch />
+        <AdminPageHeader title="Appeal" />
         <div className="mod-page">
           {backLink}
           <p className="mod-loading">Loading the appeal…</p>
@@ -145,7 +145,7 @@ export default function AppealReviewPage() {
   if (loadState === "restricted") {
     return (
       <>
-        <AdminPageHeader title="Appeal" hideSearch />
+        <AdminPageHeader title="Appeal" />
         <div className="mod-page">
           {backLink}
           <VettingRestrictedNotice />
@@ -157,7 +157,7 @@ export default function AppealReviewPage() {
   if (loadState === "not-found" || loadState === "error" || !report) {
     return (
       <>
-        <AdminPageHeader title="Appeal" hideSearch />
+        <AdminPageHeader title="Appeal" />
         <div className="mod-page">
           {backLink}
           <div className="mod-card">
@@ -181,7 +181,7 @@ export default function AppealReviewPage() {
   if (report.appealStatus !== "pending") {
     return (
       <>
-        <AdminPageHeader title={`Appeal — Report #${report.id.slice(0, 8)}`} hideSearch />
+        <AdminPageHeader title={`Appeal — Report #${report.id.slice(0, 8)}`} />
         <div className="mod-page">
           {backLink}
           <HoldStatus holds={report.holds} onLifted={handleHoldsLifted} />
@@ -213,7 +213,7 @@ export default function AppealReviewPage() {
 
   return (
     <>
-      <AdminPageHeader title={`Appeal — Report #${report.id.slice(0, 8)}`} hideSearch />
+      <AdminPageHeader title={`Appeal — Report #${report.id.slice(0, 8)}`} />
       <div className="mod-page">
         {backLink}
 

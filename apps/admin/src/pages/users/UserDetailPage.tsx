@@ -36,6 +36,7 @@ import * as noticesCopy from "./guardianNoticesCopy";
 import { formatDate, useAsyncData } from "./usersShared";
 import "../moderation/moderation.css";
 import "./users.css";
+import AdminSearchBar from "../../components/search/AdminSearchBar";
 
 const REASON_MIN = 10;
 const REASON_MAX = 500;
@@ -236,6 +237,9 @@ export default function UserDetailPage() {
           <Link to="/users" className="us-btn us-btn--outline">
             Back to users
           </Link>
+        </div>
+        <div className="admin-page-header__search">
+          <AdminSearchBar />
         </div>
       </div>
 

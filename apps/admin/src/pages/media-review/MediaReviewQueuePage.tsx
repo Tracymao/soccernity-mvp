@@ -139,7 +139,7 @@ export default function MediaReviewQueuePage() {
 
   return (
     <>
-      <AdminPageHeader title="Media review" hideSearch />
+      <AdminPageHeader title="Media review" />
       <div className="mod-page">
         <div className="media-heading">
           <Link className="mod-link" to="/moderation">

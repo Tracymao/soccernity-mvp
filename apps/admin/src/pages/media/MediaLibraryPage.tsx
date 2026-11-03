@@ -64,7 +64,7 @@ export default function MediaLibraryPage() {
 
   return (
     <>
-      <AdminPageHeader title="Media" hideSearch />
+      <AdminPageHeader title="Media" />
       <div className="med-page">
         <div className="med-action-row">
           <div className="med-tabs">

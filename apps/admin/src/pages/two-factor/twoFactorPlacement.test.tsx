@@ -29,7 +29,11 @@ afterEach(cleanup);
 
 describe("placement", () => {
   it("Admin Profile shows the two-factor card below the profile card, loading the real status", async () => {
-    render(<AdminProfilePage />);
+    render(
+      <MemoryRouter>
+        <AdminProfilePage />
+      </MemoryRouter>,
+    );
     expect(await screen.findByText("7 of 10")).not.toBeNull();
     expect(getAdminTwoFactorStatus).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "Edit Profile" })).not.toBeNull();

@@ -14,7 +14,7 @@ describe("Competitions stub screens", () => {
     expect(screen.getByRole("note").textContent).toMatch(/competitions can.t be created yet/i);
     expect(screen.getByRole("note").textContent).not.toMatch(DEVELOPER_NOTE);
     expect(screen.getByRole("button", { name: "Create Competition" }).hasAttribute("disabled")).toBe(true);
-    for (const el of screen.queryAllByRole("textbox")) {
+    for (const el of screen.queryAllByRole("textbox").filter((el) => el.getAttribute("aria-label") !== "Search Soccernity")) {
       expect(el.hasAttribute("disabled")).toBe(true);
     }
   });

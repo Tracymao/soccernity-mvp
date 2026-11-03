@@ -105,7 +105,7 @@ export default function ArticlesPage() {
 
   return (
     <>
-      <AdminPageHeader title="Articles" hideSearch />
+      <AdminPageHeader title="Articles" />
       <div className="ac-page">
         <div className="ac-action-row">
           <div className="ac-tabs">

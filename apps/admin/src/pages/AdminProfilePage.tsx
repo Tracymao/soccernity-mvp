@@ -279,7 +279,7 @@ export default function AdminProfilePage() {
   if (!admin) {
     return (
       <>
-        <AdminPageHeader title="Admin Profile" hideSearch />
+        <AdminPageHeader title="Admin Profile" />
         <p className="admin-profile__loading">Loading your profile…</p>
       </>
     );
@@ -287,7 +287,7 @@ export default function AdminProfilePage() {
 
   return (
     <>
-      <AdminPageHeader title="Admin Profile" hideSearch />
+      <AdminPageHeader title="Admin Profile" />
       <div className="admin-profile__card">
         <div className="admin-profile__header">
           <span className="admin-profile__avatar" aria-hidden>

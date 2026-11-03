@@ -112,7 +112,7 @@ export default function AdminStubScreen({
   return (
     <>
       {backLink ? <div className="admin-stub__back">{backLink}</div> : null}
-      <AdminPageHeader title={title} hideSearch />
+      <AdminPageHeader title={title} />
       <StubBanner>{banner}</StubBanner>
       <div className="admin-stub__body">{children}</div>
     </>

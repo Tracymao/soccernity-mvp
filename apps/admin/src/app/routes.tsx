@@ -61,6 +61,7 @@ import ContactEnquiryDetailPage from "../pages/moderation/ContactEnquiryDetailPa
 import MediaReviewQueuePage from "../pages/media-review/MediaReviewQueuePage";
 import MediaReviewItemPage from "../pages/media-review/MediaReviewItemPage";
 import SearchPage from "../pages/search/SearchPage";
+import AuditLogPage from "../pages/activity/AuditLogPage";
 import AdminNotFound from "../pages/AdminNotFound";
 
 export const adminRoutes: RouteObject[] = [
@@ -163,6 +164,9 @@ export const adminRoutes: RouteObject[] = [
           { path: "profile", element: <AdminProfilePage /> },
           // B-114 (Decision Log #463): the admin search results, GET /admin/search?q=. The query is in the URL.
           { path: "search", element: <SearchPage /> },
+          // Decision Log #464: Audit log (superadmin) / My activity (every other admin), GET /admin/action-log. The server
+          // decides what each admin sees.
+          { path: "activity", element: <AuditLogPage /> },
           { path: "*", element: <AdminNotFound /> },
         ],
       },

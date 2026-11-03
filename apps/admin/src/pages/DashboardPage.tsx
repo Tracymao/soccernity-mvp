@@ -101,7 +101,7 @@ export default function DashboardPage() {
 
   return (
     <>
-      <AdminPageHeader title="Dashboard" hideSearch />
+      <AdminPageHeader title="Dashboard" />
       <div className="admin-stub__body">
         {error ? (
           <p className="admin-dashboard__error" role="alert">

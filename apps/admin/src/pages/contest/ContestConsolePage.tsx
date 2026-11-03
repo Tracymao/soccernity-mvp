@@ -17,7 +17,7 @@ export default function ContestConsolePage() {
 
   return (
     <>
-      <AdminPageHeader title="Contest" hideSearch />
+      <AdminPageHeader title="Contest" />
       <div className="ct-page">
         <div className="ct-top-row">
           <h1 className="ct-title">{data?.cycle ? data.cycle.title : "Contest"}</h1>

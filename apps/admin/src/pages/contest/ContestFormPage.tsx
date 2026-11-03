@@ -297,7 +297,7 @@ export default function ContestFormPage({ mode }: { mode: "create" | "edit" }) {
 
   return (
     <>
-      <AdminPageHeader title={title} hideSearch />
+      <AdminPageHeader title={title} />
       <div className="ct-page">
         <div className="ct-back">
           <Link to="/contest">← Back to console</Link>

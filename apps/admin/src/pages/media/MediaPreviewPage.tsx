@@ -59,7 +59,7 @@ export default function MediaPreviewPage() {
   if (loadState === "loading") {
     return (
       <>
-        <AdminPageHeader title="Media preview" hideSearch />
+        <AdminPageHeader title="Media preview" />
         <div className="med-page">
           {backLink}
           <p className="med-loading">Loading the file…</p>
@@ -71,7 +71,7 @@ export default function MediaPreviewPage() {
   if (loadState === "not-found" || loadState === "error" || !media) {
     return (
       <>
-        <AdminPageHeader title="Media preview" hideSearch />
+        <AdminPageHeader title="Media preview" />
         <div className="med-page">
           {backLink}
           <div className="med-card">
@@ -96,7 +96,7 @@ export default function MediaPreviewPage() {
 
   return (
     <>
-      <AdminPageHeader title="Media preview" hideSearch />
+      <AdminPageHeader title="Media preview" />
       <div className="med-page">
         {backLink}
 

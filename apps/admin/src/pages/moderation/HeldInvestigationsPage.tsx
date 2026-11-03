@@ -119,7 +119,7 @@ export default function HeldInvestigationsPage() {
 
   return (
     <>
-      <AdminPageHeader title="Held investigations" hideSearch />
+      <AdminPageHeader title="Held investigations" />
       <div className="mod-page">
         <div className="hi-page-title">
           {data ? (

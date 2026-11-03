@@ -92,7 +92,7 @@ export default function CategoriesPage() {
 
   return (
     <>
-      <AdminPageHeader title="Categories" hideSearch />
+      <AdminPageHeader title="Categories" />
       <div className="ac-page">
         <div className="ac-action-row">
           <div className="ac-tabs">

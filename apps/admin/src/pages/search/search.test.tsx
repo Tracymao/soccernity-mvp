@@ -37,6 +37,7 @@ function renderAt(path: string) {
 }
 
 const USER = {
+  matchedOn: "username" as const,
   id: "11111111-aaaa-4aaa-8aaa-111111111111",
   displayName: "Nelson Iheagwam",
   username: "nelson_iheagwam",
@@ -46,6 +47,7 @@ const USER = {
 };
 const SUSPENDED_USER = { ...USER, id: "22222222-aaaa-4aaa-8aaa-222222222222", username: null, displayName: "Nelson K", accountStatus: "suspended" };
 const REPORT = {
+  matchedOn: "report_id" as const,
   id: "33333333-bbbb-4bbb-8bbb-333333333333",
   targetType: "post",
   targetId: "p1",
@@ -56,6 +58,7 @@ const REPORT = {
   source: null,
 };
 const ENQUIRY = {
+  matchedOn: "subject" as const,
   id: "44444444-cccc-4ccc-8ccc-444444444444",
   name: "Tunde Bello",
   email: "tunde@example.com",
@@ -70,6 +73,7 @@ const ENQUIRY = {
   hasEscalation: true,
 };
 const ARTICLE = {
+  matchedOn: "title" as const,
   id: "55555555-dddd-4ddd-8ddd-555555555555",
   title: "Zaha double helps Crystal Palace",
   status: "published",
@@ -78,18 +82,23 @@ const ARTICLE = {
   createdAt: "2022-08-08T09:00:00.000Z",
 };
 const STAFF = {
+  matchedOn: "name" as const,
   id: "66666666-eeee-4eee-8eee-666666666666",
   email: "amara@soccernity.com",
   fullName: "Amara Okafor",
   role: "moderator",
   accountStatus: "active",
+  twoFactorEnabled: true,
 };
 const MEDIA = {
+  matchedOn: "item_id" as const,
   id: "77777777-ffff-4fff-8fff-777777777777",
   kind: "video",
   status: "pending",
   reportCount: 2,
   createdAt: "2026-10-30T10:00:00.000Z",
+  sources: ["user_report" as const, "auto_check" as const],
+  uploader: { id: "u9", publicName: "amaka_fc" },
 };
 
 const ALL_GROUPS: AdminSearchResult = {
@@ -418,31 +427,145 @@ describe("SearchPage: the query lives in the URL", () => {
   });
 });
 
-describe("SearchPage: only what the server returns", () => {
-  it("draws no MATCHED ON, REASON, SOURCE, UPLOADER or TWO-FACTOR column and no message or reason text", async () => {
+describe("SearchPage: the response's extra fields (MATCHED ON, SOURCE, UPLOADER, TWO-FACTOR)", () => {
+  it("every group draws a MATCHED ON column with the label for the server's key", async () => {
     search.mockResolvedValue(ALL_GROUPS);
-    const { container } = renderAt("/search?q=nelson");
+    renderAt("/search?q=nelson");
     await screen.findByText("Results for “nelson”");
-    for (const header of ["matched on", "reason", "source", "uploader", "two-factor", "message"]) {
-      expect(screen.queryByRole("columnheader", { name: new RegExp(`^${header}$`, "i") })).toBeNull();
+    expect(screen.getAllByRole("columnheader", { name: "Matched on" }).length).toBe(6);
+    const cell = (table: string, text: string) =>
+      within(screen.getByRole("table", { name: table })).getByText(text, { selector: ".se-cell--muted" });
+    expect(within(screen.getByRole("table", { name: "Users" })).getAllByText("Username (starts with)").length).toBe(2);
+    expect(cell("Reports", "Report ID")).not.toBeNull();
+    expect(cell("Contact enquiries", "Subject")).not.toBeNull();
+    expect(cell("Articles", "Title")).not.toBeNull();
+    expect(cell("Staff", "Name")).not.toBeNull();
+    expect(cell("Media review", "Item ID")).not.toBeNull();
+  });
+
+  it.each([
+    ["user_id", "User ID"],
+    ["email", "Email address (exact)"],
+    ["username", "Username (starts with)"],
+  ] as const)("users: %s is labelled %s", async (key, label) => {
+    search.mockResolvedValue({ groups: { users: { items: [{ ...USER, matchedOn: key }], truncated: false } } });
+    renderAt("/search?q=nelson");
+    expect(await screen.findByText(label)).not.toBeNull();
+  });
+
+  it.each([
+    ["report_id", "Report ID"],
+    ["report_reference", "Report reference"],
+    ["reporter_user_id", "Reporter user ID"],
+    ["target_user_id", "Target user ID"],
+    ["target_username", "Target username"],
+  ] as const)("reports: %s is labelled %s", async (key, label) => {
+    search.mockResolvedValue({ groups: { reports: { items: [{ ...REPORT, matchedOn: key }], truncated: false } } });
+    renderAt("/search?q=nelson");
+    expect(await screen.findByText(label)).not.toBeNull();
+  });
+
+  it("an unknown matchedOn key is shown as it came, not guessed", async () => {
+    search.mockResolvedValue({
+      groups: { users: { items: [{ ...USER, matchedOn: "something_new" as never }], truncated: false } },
+    });
+    renderAt("/search?q=nelson");
+    expect(await screen.findByText("something_new")).not.toBeNull();
+  });
+
+  it("contact enquiries: SOURCE says Signed-in or Guest", async () => {
+    search.mockResolvedValue({
+      groups: {
+        contactEnquiries: {
+          items: [ENQUIRY, { ...ENQUIRY, id: "e2", submitter: "signed_in" as const, matchedOn: "email" as const }],
+          truncated: false,
+        },
+      },
+    });
+    renderAt("/search?q=tunde");
+    const table = await screen.findByRole("table", { name: "Contact enquiries" });
+    expect(within(table).getByRole("columnheader", { name: "Source" })).not.toBeNull();
+    expect(within(table).getByText("Guest")).not.toBeNull();
+    expect(within(table).getByText("Signed-in")).not.toBeNull();
+    expect(within(table).getByText("Email address (exact)")).not.toBeNull();
+  });
+
+  it("media: SOURCE pills for each reason it is in the queue, the uploader's public name, and an age", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-30T10:38:00.000Z"));
+    try {
+      search.mockResolvedValue({
+        groups: {
+          media: {
+            items: [
+              MEDIA,
+              {
+                ...MEDIA,
+                id: "m2",
+                sources: ["auto_check" as const],
+                uploader: { id: "u2", publicName: "chris" },
+                createdAt: "2026-10-30T05:38:00.000Z",
+              },
+            ],
+            truncated: false,
+          },
+        },
+      });
+      renderAt("/search?q=7777");
+      const table = await screen.findByRole("table", { name: "Media review" });
+      for (const header of ["Source", "Uploader", "Type", "Age", "Matched on"]) {
+        expect(within(table).getByRole("columnheader", { name: header })).not.toBeNull();
+      }
+      expect(within(table).getAllByText("Automatic check").length).toBe(2);
+      expect(within(table).getByText("User report")).not.toBeNull();
+      expect(within(table).getByText("amaka_fc")).not.toBeNull();
+      expect(within(table).getByText("chris")).not.toBeNull();
+      expect(within(table).getByText("38 min")).not.toBeNull();
+      expect(within(table).getByText("5 h")).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
     }
-    expect(container.textContent).not.toMatch(/matched on/i);
+  });
+
+  it("staff: TWO-FACTOR is On or Off from the response", async () => {
+    search.mockResolvedValue({
+      groups: {
+        staff: {
+          items: [STAFF, { ...STAFF, id: "s2", fullName: "Dayo Adeleke", twoFactorEnabled: false }],
+          truncated: false,
+        },
+      },
+    });
+    renderAt("/search?q=ama");
+    const table = await screen.findByRole("table", { name: "Staff" });
+    expect(within(table).getByRole("columnheader", { name: "Two-factor" })).not.toBeNull();
+    expect(within(table).getByText("On")).not.toBeNull();
+    expect(within(table).getByText("Off")).not.toBeNull();
+  });
+
+  it("reports: no REASON column and no description, because the response has none", async () => {
+    search.mockResolvedValue({ groups: { reports: { items: [REPORT], truncated: false } } });
+    const { container } = renderAt("/search?q=33333333");
+    await screen.findByRole("table", { name: "Reports" });
+    expect(screen.queryByRole("columnheader", { name: /^reason$/i })).toBeNull();
+    expect(container.textContent).not.toMatch(/description|message/i);
   });
 });
 
 describe("AdminPageHeader", () => {
-  it("shows the working bar unless a screen hides it", () => {
+  it("shows the working bar, and a screen can swap in its own", () => {
     const { rerender } = render(
       <MemoryRouter>
         <AdminPageHeader title="Users" />
       </MemoryRouter>,
     );
-    expect(screen.getByRole("search")).not.toBeNull();
+    expect(screen.getAllByRole("search").length).toBe(1);
     rerender(
       <MemoryRouter>
-        <AdminPageHeader title="Users" hideSearch />
+        <AdminPageHeader title="Users" search={<p>own bar</p>} />
       </MemoryRouter>,
     );
     expect(screen.queryByRole("search")).toBeNull();
+    expect(screen.getByText("own bar")).not.toBeNull();
   });
 });

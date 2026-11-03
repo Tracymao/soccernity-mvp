@@ -31,6 +31,7 @@ import {
 } from "../../api/adminUsers";
 import { formatDate, useAsyncData } from "./usersShared";
 import "./users.css";
+import AdminSearchBar from "../../components/search/AdminSearchBar";
 
 const EXPLAINER =
   "A guardian has said the details on a consent request are wrong. While a report is open the guardian cannot approve or start the card payment; they can still decline or withdraw. Resolving a report lets the guardian approve again. No date of birth is shown here. [COPY PENDING LEGAL REVIEW]";
@@ -137,6 +138,9 @@ export default function IncorrectDetailsReportsPage() {
           <Link to="/users" className="us-btn us-btn--outline">
             Back to users
           </Link>
+        </div>
+        <div className="admin-page-header__search">
+          <AdminSearchBar />
         </div>
       </div>
 

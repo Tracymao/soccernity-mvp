@@ -5,9 +5,10 @@
 // Route: /search?q=<text>. The query lives in the URL. The server's answer is shown as it is:
 //   - a group the role cannot open is ABSENT from the response and is not drawn (no "not allowed" wording);
 //   - a group with no match is present and empty and is not drawn either (the frames draw no empty groups);
-//   - the page never works out a role rule, and never renders a field the server does not return. The frames'
-//     MATCHED ON, REASON, SOURCE, UPLOADER and TWO-FACTOR columns have no field behind them in the response, so
-//     they are not drawn (see the PR description).
+//   - the page never works out a role rule, and never renders a field the server does not return. The response
+//     carries MATCHED ON (a key, labelled here), SOURCE and UPLOADER (media) and TWO-FACTOR (staff), so those are
+//     drawn. The frames' REASON column on Reports is NOT: no reason category exists in the data model, so the
+//     response has no such field (see the PR description).
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import AdminPageHeader from "../../layout/AdminPageHeader";
@@ -47,6 +48,46 @@ type View =
 // ---------------------------------------------------------------------------------------------------------------
 // small presentational pieces
 // ---------------------------------------------------------------------------------------------------------------
+
+type MatchedOnKey = string;
+
+// The labels for the server's matchedOn keys (Figma frame 13 "what each column shows"). An unknown key is shown
+// as it came rather than guessed at.
+const MATCHED_ON_LABELS: Record<string, string> = {
+  user_id: "User ID",
+  email: "Email address (exact)",
+  username: "Username (starts with)",
+  report_id: "Report ID",
+  report_reference: "Report reference",
+  reporter_user_id: "Reporter user ID",
+  target_user_id: "Target user ID",
+  target_username: "Target username",
+  subject: "Subject",
+  title: "Title",
+  name: "Name",
+  item_id: "Item ID",
+};
+
+function matchedOnLabel(key: MatchedOnKey): string {
+  return MATCHED_ON_LABELS[key] ?? key;
+}
+
+const matchedOnColumn = <T extends { matchedOn: MatchedOnKey }>(): Column<T> => ({
+  key: "matched",
+  header: "Matched on",
+  render: (item) => <span className="se-cell--muted">{matchedOnLabel(item.matchedOn)}</span>,
+});
+
+// "38 min", "5 h", "3 d": how long ago, from the item's creation time (the Figma Media review AGE column).
+function formatAge(iso: string): string {
+  const created = new Date(iso).getTime();
+  if (Number.isNaN(created)) return "—";
+  const minutes = Math.max(0, Math.floor((Date.now() - created) / 60000));
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours} h`;
+  return `${Math.floor(hours / 24)} d`;
+}
 
 type PillTone = "neutral" | "positive" | "alert" | "outline";
 
@@ -132,6 +173,7 @@ const usersDef: GroupDef<SearchUserHit> = {
         </Pill>
       ),
     },
+    matchedOnColumn<SearchUserHit>(),
   ],
   rowName: (u) => u.displayName,
   linkTo: (u) => `/users/${u.id}`,
@@ -156,6 +198,7 @@ const reportsDef: GroupDef<SearchReportHit> = {
       header: "Flags",
       render: (r) => (r.concernsMinor ? <Pill tone="neutral">Concerns a minor</Pill> : <span aria-hidden>—</span>),
     },
+    matchedOnColumn<SearchReportHit>(),
   ],
   rowName: (r) => `report ${r.id.slice(0, 8)}`,
   linkTo: (r) => `/moderation/reports/${r.id}`,
@@ -181,6 +224,8 @@ const contactEnquiriesDef: GroupDef<SearchContactEnquiryHit> = {
         </span>
       ),
     },
+    { key: "source", header: "Source", render: (e) => (e.submitter === "signed_in" ? "Signed-in" : "Guest") },
+    matchedOnColumn<SearchContactEnquiryHit>(),
   ],
   rowName: (e) => e.subject,
   linkTo: (e) => `/moderation/contact-enquiries/${e.id}`,
@@ -204,6 +249,7 @@ const articlesDef: GroupDef<SearchArticleHit> = {
       header: "Status",
       render: (a) => <Pill tone={a.status === "published" ? "positive" : "neutral"}>{capitalise(a.status)}</Pill>,
     },
+    matchedOnColumn<SearchArticleHit>(),
   ],
   rowName: (a) => a.title,
   // There is no article detail screen; the Articles list is where an article is managed.
@@ -232,6 +278,12 @@ const staffDef: GroupDef<SearchStaffHit> = {
         <Pill tone={s.accountStatus === "active" ? "positive" : "outline"}>{capitalise(s.accountStatus)}</Pill>
       ),
     },
+    {
+      key: "twofactor",
+      header: "Two-factor",
+      render: (s) => <Pill tone={s.twoFactorEnabled ? "positive" : "outline"}>{s.twoFactorEnabled ? "On" : "Off"}</Pill>,
+    },
+    matchedOnColumn<SearchStaffHit>(),
   ],
   rowName: (s) => s.fullName,
   linkTo: (s) => `/settings/roles/edit/${s.id}`,
@@ -244,13 +296,32 @@ const mediaDef: GroupDef<SearchMediaHit> = {
   grid: "media",
   columns: [
     {
+      key: "source",
+      header: "Source",
+      render: (m) => (
+        <span className="se-cell--stack">
+          {m.sources.map((source) => (
+            <Pill key={source} tone={source === "user_report" ? "neutral" : "outline"}>
+              {source === "user_report" ? "User report" : "Automatic check"}
+            </Pill>
+          ))}
+        </span>
+      ),
+    },
+    {
+      key: "uploader",
+      header: "Uploader",
+      render: (m) => <span className="se-cell--strong se-cell--truncate">{m.uploader.publicName}</span>,
+    },
+    {
       key: "type",
       header: "Type",
       render: (m) => <span className="se-cell--strong">{m.kind === "video" ? "Video" : "Picture"}</span>,
     },
     { key: "status", header: "Status", render: (m) => <Pill tone="outline">{capitalise(m.status)}</Pill> },
     { key: "reports", header: "Reports", render: (m) => String(m.reportCount) },
-    { key: "uploaded", header: "Uploaded", render: (m) => formatShortDate(m.createdAt) },
+    { key: "age", header: "Age", render: (m) => formatAge(m.createdAt) },
+    matchedOnColumn<SearchMediaHit>(),
   ],
   rowName: (m) => `${m.kind === "video" ? "video" : "picture"} ${m.id.slice(0, 8)}`,
   linkTo: (m) => `/moderation/media/${m.id}`,
@@ -434,9 +505,11 @@ export default function SearchPage() {
 
   return (
     <>
-      <AdminPageHeader title="Search" hideSearch />
+      <AdminPageHeader
+        title="Search"
+        search={<AdminSearchBar initialQuery={rawQuery} submitting={view.kind === "loading"} onSubmit={handleSubmit} />}
+      />
       <div className="se-page">
-        <AdminSearchBar initialQuery={rawQuery} submitting={view.kind === "loading"} onSubmit={handleSubmit} />
 
         {view.kind === "idle" ? (
           <section className="se-intro" aria-label="What you can search">
