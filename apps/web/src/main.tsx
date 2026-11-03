@@ -4,6 +4,19 @@ import App from "./App";
 import { applyTheme } from "./theme/applyTheme";
 import { installSilentRefresh } from "./lib/silentRefresh";
 import { initSessionChannel } from "./lib/session";
+// Self-hosted fonts (@fontsource, latin subset): no request to Google Fonts or any font CDN, so the
+// site needs no extra font-src origin. Inter and Montserrat are the two families the Figma web frames
+// use and the CSS names. Load exactly the weights the CSS uses -- src/fonts.test.ts fails if a CSS rule
+// uses a family/weight with no import here.
+import "@fontsource/inter/latin-400.css";
+import "@fontsource/inter/latin-500.css";
+import "@fontsource/inter/latin-600.css";
+import "@fontsource/inter/latin-700.css";
+import "@fontsource/montserrat/latin-400.css";
+import "@fontsource/montserrat/latin-500.css";
+import "@fontsource/montserrat/latin-600.css";
+import "@fontsource/montserrat/latin-700.css";
+import "@fontsource/montserrat/latin-800.css";
 import "./styles/global.css";
 
 // Sets --sn-* CSS custom properties from packages/shared's design tokens
