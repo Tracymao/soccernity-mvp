@@ -202,7 +202,7 @@ describe('GET /admin/search (real Postgres)', () => {
       });
       await prisma().guardianNoticeWithhold.create({ data: { userId: minor.id, setByAdminId: mod.id, reason: 'Safeguarding reason text that must never appear.' } });
       const res = await search(mod.token, minor.id).expect(200);
-      expect(Object.keys(res.body.groups.users.items[0]).sort()).toEqual(['accountStatus', 'createdAt', 'displayName', 'email', 'id', 'username']);
+      expect(Object.keys(res.body.groups.users.items[0]).sort()).toEqual(['accountStatus', 'createdAt', 'displayName', 'email', 'id', 'matchedOn', 'username']);
       const text = JSON.stringify(res.body).toLowerCase();
       for (const forbidden of ['dateofbirth', 'v1:', 'guardian', 'withhold', 'safeguarding reason', 'isminor', 'consent']) {
         expect(text).not.toContain(forbidden);
@@ -263,7 +263,7 @@ describe('GET /admin/search (real Postgres)', () => {
       const reporter = await user();
       const r = await prisma().report.create({ data: { reporterId: reporter.id, targetType: 'user', targetId: reporter.id, reason: 'secret reason words', reporterContactEmail: 'contact@example.com' } });
       const res = await search(mod.token, r.id).expect(200);
-      expect(Object.keys(res.body.groups.reports.items[0]).sort()).toEqual(['concernsMinor', 'createdAt', 'id', 'severity', 'source', 'status', 'targetId', 'targetType']);
+      expect(Object.keys(res.body.groups.reports.items[0]).sort()).toEqual(['concernsMinor', 'createdAt', 'id', 'matchedOn', 'severity', 'source', 'status', 'targetId', 'targetType']);
       expect(JSON.stringify(res.body)).not.toContain('secret reason words');
       expect(JSON.stringify(res.body)).not.toContain('contact@example.com');
     });
@@ -280,6 +280,66 @@ describe('GET /admin/search (real Postgres)', () => {
         expect(ids((await search(a.token, reporter.id).expect(200)).body.groups.reports)).toEqual([plainReport.id]);
         expect((await search(a.token, minorReport.id).expect(200)).body.groups.reports.items).toEqual([]);
       }
+    });
+
+    it('finds a report by its short reference (the first 8 characters of the id, any case); 7 or 9 characters find nothing', async () => {
+      const mod = await admin('moderator');
+      const reporter = await user();
+      const r = await prisma().report.create({ data: { reporterId: reporter.id, targetType: 'user', targetId: reporter.id, reason: 'r' } });
+      const ref = r.id.slice(0, 8);
+      const res = await search(mod.token, ref.toUpperCase()).expect(200);
+      expect(ids(res.body.groups.reports)).toEqual([r.id]);
+      expect(res.body.groups.reports.items[0].matchedOn).toBe('report_reference');
+      expect((await search(mod.token, r.id.slice(0, 7)).expect(200)).body.groups.reports.items).toEqual([]);
+      expect((await search(mod.token, r.id.replace(/-/g, '').slice(0, 9)).expect(200)).body.groups.reports.items).toEqual([]);
+    });
+
+    it('finds reports ABOUT a user (or their post or comment) by the username prefix; matchedOn says which way; the wildcard is literal', async () => {
+      const mod = await admin('moderator');
+      const reporter = await user({ username: 'zz_reporter_one' });
+      const subject = await user({ username: 'kelechi_target' });
+      const decoy = await user({ username: 'kelechiXtarget' });
+      const subjectPost = await post(subject.id);
+      const aboutUser = await prisma().report.create({ data: { reporterId: reporter.id, targetType: 'user', targetId: subject.id, reason: 'r' } });
+      const aboutPost = await prisma().report.create({ data: { reporterId: reporter.id, targetType: 'post', targetId: subjectPost.id, reason: 'r' } });
+      const aboutDecoy = await prisma().report.create({ data: { reporterId: reporter.id, targetType: 'user', targetId: decoy.id, reason: 'r' } });
+      const byTarget = await prisma().report.create({ data: { reporterId: subject.id, targetType: 'user', targetId: reporter.id, reason: 'r' } });
+
+      const res = await search(mod.token, 'Kelechi_Tar').expect(200);
+      expect(ids(res.body.groups.reports)).toEqual([aboutUser.id, aboutPost.id].sort());
+      expect(res.body.groups.reports.items.every((i: { matchedOn: string }) => i.matchedOn === 'target_username')).toBe(true);
+      // the underscore is literal: it does not pull in the 'kelechiXtarget' decoy
+      expect(ids(res.body.groups.reports)).not.toContain(aboutDecoy.id);
+      // reports BY the user are found by user id, not by username
+      expect(ids(res.body.groups.reports)).not.toContain(byTarget.id);
+      const byId = await search(mod.token, subject.id).expect(200);
+      const kinds = Object.fromEntries(byId.body.groups.reports.items.map((i: { id: string; matchedOn: string }) => [i.id, i.matchedOn]));
+      expect(kinds[byTarget.id]).toBe('reporter_user_id');
+      expect(kinds[aboutUser.id]).toBe('target_user_id');
+    });
+
+    it('NEVER matches the free-text reason, and a reason category does not exist to match', async () => {
+      const mod = await admin('moderator');
+      const reporter = await user();
+      await prisma().report.create({
+        data: { reporterId: reporter.id, targetType: 'user', targetId: reporter.id, reason: 'uniquereasonword zebra impersonation abusive' },
+      });
+      for (const q of ['uniquereasonword', 'impersonation', 'abusive language']) {
+        expect((await search(mod.token, q).expect(200)).body.groups.reports.items).toEqual([]);
+      }
+    });
+
+    it('the child-safety rule wraps the new matchers: a concernsMinor report found by reference or username is hidden from an unvetted admin', async () => {
+      const subject = await user({ username: 'minorish_target' });
+      const reporter = await user();
+      const minorReport = await prisma().report.create({ data: { reporterId: reporter.id, targetType: 'user', targetId: subject.id, reason: 'r', concernsMinor: true } });
+      const plainReport = await prisma().report.create({ data: { reporterId: reporter.id, targetType: 'user', targetId: subject.id, reason: 'r' } });
+      const vetted = await admin('moderator', { vetted: true });
+      const unvetted = await admin('moderator', { vetted: false });
+      expect(ids((await search(vetted.token, 'minorish_t').expect(200)).body.groups.reports)).toEqual([minorReport.id, plainReport.id].sort());
+      expect(ids((await search(unvetted.token, 'minorish_t').expect(200)).body.groups.reports)).toEqual([plainReport.id]);
+      expect((await search(unvetted.token, minorReport.id.slice(0, 8)).expect(200)).body.groups.reports.items).toEqual([]);
+      expect(ids((await search(vetted.token, minorReport.id.slice(0, 8)).expect(200)).body.groups.reports)).toEqual([minorReport.id]);
     });
 
     it('marks a report made from a contact enquiry', async () => {
@@ -307,6 +367,13 @@ describe('GET /admin/search (real Postgres)', () => {
       expect((await search(mod.token, 'sender.exact@example').expect(200)).body.groups.contactEnquiries.items).toEqual([]);
     });
 
+    it('matchedOn: email when the whole address is the sender, subject otherwise', async () => {
+      const mod = await admin('moderator');
+      await enquiry({ email: 'matched.on@example.com', subject: 'Wrong fixture time' });
+      expect((await search(mod.token, 'matched.on@example.com').expect(200)).body.groups.contactEnquiries.items[0].matchedOn).toBe('email');
+      expect((await search(mod.token, 'fixture time').expect(200)).body.groups.contactEnquiries.items[0].matchedOn).toBe('subject');
+    });
+
     it('subject wildcards are literal', async () => {
       const mod = await admin('moderator');
       const hit = await enquiry({ subject: 'Is it 50%_off today' });
@@ -319,7 +386,7 @@ describe('GET /admin/search (real Postgres)', () => {
       const e = await enquiry({ subject: 'Distinct subject words', message: 'Do not leak this message' });
       const res = await search(mod.token, 'Distinct subject').expect(200);
       expect(Object.keys(res.body.groups.contactEnquiries.items[0]).sort()).toEqual([
-        'category', 'createdAt', 'email', 'handledAt', 'handledByAdminId', 'hasEscalation', 'id', 'lastMessageAt', 'name', 'status', 'subject', 'submitter',
+        'category', 'createdAt', 'email', 'handledAt', 'handledByAdminId', 'hasEscalation', 'id', 'lastMessageAt', 'matchedOn', 'name', 'status', 'subject', 'submitter',
       ]);
       expect(res.body.groups.contactEnquiries.items[0].id).toBe(e.id);
       expect(JSON.stringify(res.body)).not.toContain('Do not leak this message');
@@ -341,7 +408,25 @@ describe('GET /admin/search (real Postgres)', () => {
       expect((await search(editor.token, '100%').expect(200)).body.groups.articles.items).toHaveLength(1);
       expect((await search(editor.token, 'the body').expect(200)).body.groups.articles.items).toEqual([]);
       const res = await search(editor.token, 'grassroots football').expect(200);
-      expect(Object.keys(res.body.groups.articles.items[0]).sort()).toEqual(['category', 'createdAt', 'id', 'publishedAt', 'status', 'title']);
+      expect(Object.keys(res.body.groups.articles.items[0]).sort()).toEqual(['category', 'createdAt', 'id', 'matchedOn', 'publishedAt', 'status', 'title']);
+    });
+
+    it('staff: twoFactorEnabled is true only for an admin with two-factor on; matchedOn is name or email; no secret in the response', async () => {
+      const superadmin = await admin('superadmin');
+      const on = await admin('moderator', { fullName: 'Twofa Enabled', email: 'twofa.on@example.com' });
+      const off = await admin('moderator', { fullName: 'Twofa Disabled', email: 'twofa.off@example.com' });
+      await prisma().adminUser.update({ where: { id: on.id }, data: { totpEnabledAt: new Date(), totpSecretEncrypted: 'v1:secret-ciphertext' } });
+      const res = await search(superadmin.token, 'twofa').expect(200);
+      const byId = Object.fromEntries(res.body.groups.staff.items.map((i: { id: string; twoFactorEnabled: boolean }) => [i.id, i.twoFactorEnabled]));
+      expect(byId[on.id]).toBe(true);
+      expect(byId[off.id]).toBe(false);
+      expect(res.body.groups.staff.items.every((i: { matchedOn: string }) => i.matchedOn === 'name')).toBe(true);
+      expect(JSON.stringify(res.body)).not.toContain('secret-ciphertext');
+      expect(JSON.stringify(res.body)).not.toContain('totp');
+      const byEmail = await search(superadmin.token, 'twofa.on@example.com').expect(200);
+      expect(byEmail.body.groups.staff.items[0].matchedOn).toBe('email');
+      // a moderator never gets the staff group, so never the two-factor state of anyone
+      expect('staff' in (await search(on.token, 'twofa').expect(200)).body.groups).toBe(false);
     });
 
     it('staff: name contains or exact email; superadmin only; only the pinned fields', async () => {
@@ -351,7 +436,7 @@ describe('GET /admin/search (real Postgres)', () => {
       expect(ids((await search(superadmin.token, 'Chidinma.Okafor@Example.com').expect(200)).body.groups.staff)).toEqual([mod.id]);
       expect((await search(superadmin.token, 'chidinma.okafor@').expect(200)).body.groups.staff.items).toEqual([]);
       const res = await search(superadmin.token, 'chidinma').expect(200);
-      expect(Object.keys(res.body.groups.staff.items[0]).sort()).toEqual(['accountStatus', 'email', 'fullName', 'id', 'role']);
+      expect(Object.keys(res.body.groups.staff.items[0]).sort()).toEqual(['accountStatus', 'email', 'fullName', 'id', 'matchedOn', 'role', 'twoFactorEnabled']);
       expect(JSON.stringify(res.body)).not.toContain('passwordHash');
       // a moderator never gets the group, and never sees a name through another group
       const asMod = await search(mod.token, 'chidinma').expect(200);
@@ -374,8 +459,27 @@ describe('GET /admin/search (real Postgres)', () => {
       const never = await media(uploader.id, { reviewEnteredAt: null, reviewEntrySource: null, status: 'approved', decisionSource: 'auto', decidedAt: new Date() });
       const res = await search(mod.token, queued.id.toUpperCase()).expect(200);
       expect(ids(res.body.groups.media)).toEqual([queued.id]);
-      expect(Object.keys(res.body.groups.media.items[0]).sort()).toEqual(['createdAt', 'id', 'kind', 'reportCount', 'status']);
+      expect(Object.keys(res.body.groups.media.items[0]).sort()).toEqual(['createdAt', 'id', 'kind', 'matchedOn', 'reportCount', 'sources', 'status', 'uploader']);
       expect((await search(mod.token, never.id).expect(200)).body.groups.media.items).toEqual([]);
+    });
+
+    it('returns sources (like the review list) and the uploader as a PUBLIC name only; matchedOn is item_id', async () => {
+      const mod = await admin('moderator');
+      const uploader = await user({ username: 'amaka_fc', displayName: 'Amaka Realname' });
+      const noName = await user({ username: null, displayName: 'Hidden Realname' });
+      const auto = await media(uploader.id, { reviewEntrySource: 'auto_check' });
+      const reported = await media(noName.id, { reviewEnteredAt: null, reviewEntrySource: null, status: 'approved', decisionSource: 'auto', decidedAt: new Date(), reportCount: 1 });
+      await prisma().postMediaReport.create({ data: { mediaId: reported.id, reporterId: uploader.id } as never });
+      const a = (await search(mod.token, auto.id).expect(200)).body.groups.media.items[0];
+      expect(a.sources).toEqual(['auto_check']);
+      expect(a.uploader).toEqual({ id: uploader.id, publicName: 'amaka_fc' });
+      expect(a.matchedOn).toBe('item_id');
+      const r = (await search(mod.token, reported.id).expect(200)).body.groups.media.items[0];
+      expect(r.sources).toEqual(['user_report']);
+      expect(r.uploader).toEqual({ id: noName.id, publicName: 'Soccernity member' });
+      const text = JSON.stringify([a, r]);
+      expect(text).not.toContain('Amaka Realname');
+      expect(text).not.toContain('Hidden Realname');
     });
 
     it("a minor's item is hidden from an admin who is not child-safety vetted (any role), shown to a vetted one", async () => {
@@ -418,6 +522,18 @@ describe('GET /admin/search (real Postgres)', () => {
       expect(rows[0]).toMatchObject({ adminId: mod.id, targetType: 'search', targetId: 'email', notes: 'kind=email results=1' });
       expect(JSON.stringify(rows[0]).toLowerCase()).not.toContain('private');
       expect(JSON.stringify(rows[0]).toLowerCase()).not.toContain('example.com');
+    });
+
+    it('a report-reference or username search (no @) writes no audit row and an @-search that runs the new matchers records no text', async () => {
+      const mod = await admin('moderator');
+      await user({ username: 'auditword_user' });
+      await search(mod.token, 'auditword_').expect(200);
+      await search(mod.token, 'abcdef12').expect(200);
+      expect(await prisma().adminActionLog.count({ where: { action: ADMIN_ACTION_LOG_ACTIONS.ADMIN_SEARCH_PERFORMED } })).toBe(0);
+      await search(mod.token, 'auditword_@').expect(200);
+      const rows = await prisma().adminActionLog.findMany({ where: { action: ADMIN_ACTION_LOG_ACTIONS.ADMIN_SEARCH_PERFORMED } });
+      expect(rows).toHaveLength(1);
+      expect(JSON.stringify(rows[0]).toLowerCase()).not.toContain('auditword');
     });
 
     it('a half-typed address is audited; a search with no @ writes nothing; each email-shaped search writes its own row', async () => {

@@ -181,17 +181,18 @@ describe('AdminSearchService: what is asked of the database', () => {
   });
 
   it('reports: a user id also finds the reports by or about that user, through bounded id lists', async () => {
-    const { service, models } = build({ vetted: true, rows: { post: [{ id: 'p1' }], comment: [{ id: 'c1' }] } });
+    const { service, models } = build({ vetted: true, rows: { post: [{ id: 'p1', authorId: UUID }], comment: [{ id: 'c1', authorId: UUID }] } });
     await service.search(UUID, admin('moderator'));
     const or = models.report.findMany.mock.calls[0][0].where.OR;
     expect(or).toEqual([
       { id: UUID },
       { reporterId: UUID },
-      { targetType: 'user', targetId: UUID },
+      { targetType: 'user', targetId: { in: [UUID] } },
       { targetType: 'post', targetId: { in: ['p1'] } },
       { targetType: 'comment', targetId: { in: ['c1'] } },
     ]);
     expect(models.post.findMany.mock.calls[0][0].take).toBe(200);
+    expect(models.post.findMany.mock.calls[0][0].where).toEqual({ authorId: { in: [UUID] } });
   });
 
   it('reports and media: a query that is not an id makes no report or media call', async () => {
@@ -208,13 +209,18 @@ describe('AdminSearchService: what is asked of the database', () => {
     await service.search(UUID, admin('superadmin'));
     const keys = (m: string) => Object.keys(models[m].findMany.mock.calls[0][0].select).sort();
     expect(keys('user')).toEqual(['accountStatus', 'createdAt', 'displayName', 'email', 'id', 'username']);
-    expect(keys('report')).toEqual(['concernsMinor', 'createdAt', 'id', 'severity', 'status', 'targetId', 'targetType']);
-    expect(keys('postMedia')).toEqual(['createdAt', 'id', 'kind', 'reportCount', 'status']);
+    // reporterId is selected only to work out matchedOn; the returned-keys test below proves it is stripped.
+    // There is NO `reason` here: the free-text report description is never selected.
+    expect(keys('report')).toEqual(['concernsMinor', 'createdAt', 'id', 'reporterId', 'severity', 'status', 'targetId', 'targetType']);
+    expect(keys('report')).not.toContain('reason');
+    expect(keys('postMedia')).toEqual(['_count', 'createdAt', 'id', 'kind', 'reportCount', 'reviewEntrySource', 'status', 'uploader']);
+    expect(Object.keys(models.postMedia.findMany.mock.calls[0][0].select.uploader.select).sort()).toEqual(['displayName', 'id', 'username']);
     const e = build();
     await e.service.search('hello world', admin('superadmin'));
     expect(Object.keys(e.models.contactEnquiry.findMany.mock.calls[0][0].select)).not.toContain('message');
     expect(Object.keys(e.models.article.findMany.mock.calls[0][0].select)).not.toContain('body');
-    expect(Object.keys(e.models.adminUser.findMany.mock.calls[0][0].select).sort()).toEqual(['accountStatus', 'email', 'fullName', 'id', 'role']);
+    // totpEnabledAt only to derive the boolean; never the secret or backup codes.
+    expect(Object.keys(e.models.adminUser.findMany.mock.calls[0][0].select).sort()).toEqual(['accountStatus', 'email', 'fullName', 'id', 'role', 'totpEnabledAt']);
   });
 });
 
@@ -248,7 +254,8 @@ describe('AdminSearchService: the audit row', () => {
 
   it('writes exactly one row for an email-shaped search: the kind and the count, never the text', async () => {
     const typed = 'secret.person@example.com';
-    const { service, actionLog } = build({ rows: { user: [{ id: 'u1' }], contactEnquiry: [{ id: 'e1' }, { id: 'e2' }] } });
+    const enq = (id: string) => ({ id, name: 'N', email: 'secret.person@example.com', subject: 's', userId: null, escalatedReportId: null });
+    const { service, actionLog } = build({ rows: { user: [{ id: 'u1' }], contactEnquiry: [enq('e1'), enq('e2')] } });
     await service.search(typed, admin('moderator'));
     expect(actionLog.record).toHaveBeenCalledTimes(1);
     const args = actionLog.record.mock.calls[0] as unknown[];
@@ -266,5 +273,251 @@ describe('AdminSearchService: the audit row', () => {
     const { service, actionLog } = build();
     actionLog.record.mockRejectedValueOnce(new Error('audit down'));
     await expect(service.search('a@b.io', admin('superadmin'))).rejects.toThrow('audit down');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// backend/b114-search-fields-report-search (Decision Log #464): matchedOn, the new columns, the new report matchers.
+// ---------------------------------------------------------------------------------------------------------------------
+
+const USER_ROW = {
+  id: UUID,
+  displayName: 'Nelson I',
+  username: 'nelson_iheagwam',
+  email: 'nelson@example.com',
+  accountStatus: 'active',
+  createdAt: new Date('2026-01-01'),
+};
+const REPORT_ID = '9a1b2c3d-1111-4222-8333-444455556666';
+const reportRow = (over: Record<string, unknown> = {}) => ({
+  id: REPORT_ID,
+  reporterId: null,
+  targetType: 'post',
+  targetId: 'p1',
+  status: 'open',
+  severity: 'medium',
+  concernsMinor: false,
+  createdAt: new Date('2026-02-01'),
+  ...over,
+});
+const mediaRow = (over: Record<string, unknown> = {}) => ({
+  id: UUID,
+  kind: 'image',
+  status: 'pending',
+  reportCount: 0,
+  createdAt: new Date('2026-03-01'),
+  reviewEntrySource: 'auto_check',
+  _count: { reports: 0 },
+  uploader: { id: 'u9', username: 'amaka_fc', displayName: 'Amaka Real Name' },
+  ...over,
+});
+
+describe('AdminSearchService: matchedOn (a key per hit, which field matched)', () => {
+  it('users: user_id, email or username, in that order', async () => {
+    const byId = build({ rows: { user: [USER_ROW] } });
+    expect((await byId.service.search(UUID, admin('moderator'))).groups.users?.items[0].matchedOn).toBe('user_id');
+    const byEmail = build({ rows: { user: [USER_ROW] } });
+    expect((await byEmail.service.search('Nelson@Example.com', admin('moderator'))).groups.users?.items[0].matchedOn).toBe('email');
+    const byName = build({ rows: { user: [USER_ROW] } });
+    expect((await byName.service.search('nelson_ih', admin('moderator'))).groups.users?.items[0].matchedOn).toBe('username');
+  });
+
+  it('contact enquiries: email when the whole address equals the sender, otherwise subject (case-insensitive)', async () => {
+    const row = {
+      id: 'e1',
+      name: 'Tunde',
+      email: 'Tunde@Example.com',
+      category: 'data',
+      subject: 'Wrong fixture time',
+      status: 'new',
+      createdAt: new Date(),
+      lastMessageAt: new Date(),
+      handledAt: null,
+      handledByAdminId: null,
+      userId: null,
+      escalatedReportId: null,
+    };
+    const byEmail = build({ rows: { contactEnquiry: [row] } });
+    expect((await byEmail.service.search('tunde@example.com', admin('moderator'))).groups.contactEnquiries?.items[0].matchedOn).toBe('email');
+    const bySubject = build({ rows: { contactEnquiry: [row] } });
+    expect((await bySubject.service.search('fixture time', admin('moderator'))).groups.contactEnquiries?.items[0].matchedOn).toBe('subject');
+  });
+
+  it('articles: title. staff: email when the whole address equals, otherwise name. media: item_id', async () => {
+    const art = build({
+      rows: { article: [{ id: 'a1', title: 'Zaha double', status: 'published', category: null, publishedAt: null, createdAt: new Date() }] },
+    });
+    expect((await art.service.search('zaha', admin('editor'))).groups.articles?.items[0].matchedOn).toBe('title');
+    const staff = { id: 's1', email: 'Amara@Soccernity.com', fullName: 'Amara Okafor', role: 'moderator', accountStatus: 'active', totpEnabledAt: null };
+    const byEmail = build({ rows: { adminUser: [staff] } });
+    expect((await byEmail.service.search('amara@soccernity.com', admin('superadmin'))).groups.staff?.items[0].matchedOn).toBe('email');
+    const byName = build({ rows: { adminUser: [staff] } });
+    expect((await byName.service.search('amara', admin('superadmin'))).groups.staff?.items[0].matchedOn).toBe('name');
+    const media = build({ vetted: true, rows: { postMedia: [mediaRow()] } });
+    expect((await media.service.search(UUID, admin('moderator'))).groups.media?.items[0].matchedOn).toBe('item_id');
+  });
+});
+
+describe('AdminSearchService: reports (matchers and fields)', () => {
+  it('matches a report reference: exactly 8 hex characters as an id prefix; 7 or 9 characters do not', async () => {
+    const { service, models } = build({ vetted: true, rows: { report: [reportRow()] } });
+    const res = await service.search('9A1B2C3D', admin('moderator'));
+    expect(models.report.findMany.mock.calls[0][0].where.OR).toContainEqual({ id: { startsWith: '9a1b2c3d' } });
+    expect(res.groups.reports?.items[0].matchedOn).toBe('report_reference');
+    const seven = build({ vetted: true });
+    await seven.service.search('9a1b2c3', admin('moderator'));
+    const sevenOr = (seven.models.report.findMany.mock.calls[0]?.[0].where.OR ?? []) as unknown[];
+    expect(sevenOr).not.toContainEqual({ id: { startsWith: '9a1b2c3' } });
+    const nine = build({ vetted: true });
+    await nine.service.search('9a1b2c3de', admin('moderator'));
+    const nineOr = (nine.models.report.findMany.mock.calls[0]?.[0].where.OR ?? []) as unknown[];
+    expect(nineOr).not.toContainEqual({ id: { startsWith: '9a1b2c3de' } });
+  });
+
+  it('matches a report whose target is a user with that username prefix (escaped), and one on that user post', async () => {
+    const { service, models } = build({
+      vetted: true,
+      rows: {
+        user: [{ id: 'user-k' }],
+        post: [{ id: 'p1', authorId: 'user-k' }],
+        report: [
+          reportRow({ targetType: 'user', targetId: 'user-k', id: 'r-user' }),
+          reportRow({ targetType: 'post', targetId: 'p1', id: 'r-post' }),
+        ],
+      },
+    });
+    const res = await service.search('nelson_k', admin('moderator'));
+    // call 0 is the Users group; call 1 is the report group's target-username lookup
+    expect(models.user.findMany.mock.calls[1][0].where).toEqual({ username: { startsWith: 'nelson\\_k' }, accountStatus: { not: 'deleted' } });
+    expect(models.report.findMany.mock.calls[0][0].where.OR).toEqual([
+      { targetType: 'user', targetId: { in: ['user-k'] } },
+      { targetType: 'post', targetId: { in: ['p1'] } },
+    ]);
+    expect(res.groups.reports?.items.map((r) => r.matchedOn)).toEqual(['target_username', 'target_username']);
+  });
+
+  it('a typed underscore is literal in the target-username lookup; a typed percent makes the query non-username-shaped (no lookup)', async () => {
+    const a = build({ vetted: true });
+    await a.service.search('a_b_c', admin('moderator'));
+    expect(a.models.user.findMany.mock.calls[1][0].where.username).toEqual({ startsWith: 'a\\_b\\_c' });
+    const b = build({ vetted: true });
+    await b.service.search('abc%', admin('moderator'));
+    expect(b.models.report.findMany).not.toHaveBeenCalled();
+    expect(b.models.user.findMany).not.toHaveBeenCalled();
+  });
+
+  it('matchedOn for a user id: report_id, reporter_user_id or target_user_id', async () => {
+    const { service } = build({
+      vetted: true,
+      rows: {
+        post: [{ id: 'p1', authorId: UUID }],
+        report: [
+          reportRow({ id: UUID, targetType: 'user', targetId: 'x' }),
+          reportRow({ id: 'r2', reporterId: UUID, targetType: 'user', targetId: 'x' }),
+          reportRow({ id: 'r3', targetType: 'post', targetId: 'p1' }),
+        ],
+      },
+    });
+    const res = await service.search(UUID, admin('moderator'));
+    expect(res.groups.reports?.items.map((r) => r.matchedOn)).toEqual(['report_id', 'reporter_user_id', 'target_user_id']);
+  });
+
+  it('never selects, matches or returns the free-text reason, and does not return reporterId', async () => {
+    const { service, models } = build({ vetted: true, rows: { report: [reportRow({ reporterId: 'secret-reporter' })] } });
+    const res = await service.search('9a1b2c3d', admin('moderator'));
+    const call = models.report.findMany.mock.calls[0][0];
+    expect(JSON.stringify(call.where)).not.toContain('reason');
+    expect(Object.keys(call.select)).not.toContain('reason');
+    expect(Object.keys(res.groups.reports!.items[0]).sort()).toEqual([
+      'concernsMinor',
+      'createdAt',
+      'id',
+      'matchedOn',
+      'severity',
+      'source',
+      'status',
+      'targetId',
+      'targetType',
+    ]);
+    expect(JSON.stringify(res)).not.toContain('secret-reporter');
+  });
+
+  it('adds source (contact_enquiry) for an enquiry report and null otherwise', async () => {
+    const { service } = build({ vetted: true, rows: { report: [reportRow({ targetType: 'enquiry' }), reportRow({ id: 'r2' })] } });
+    const items = (await service.search('9a1b2c3d', admin('moderator'))).groups.reports!.items;
+    expect(items.map((r) => r.source)).toEqual(['contact_enquiry', null]);
+  });
+
+  it('the vetting gate still wraps every new report matcher', async () => {
+    const { service, models } = build({ vetted: false });
+    await service.search('9a1b2c3d', admin('moderator'));
+    expect(models.report.findMany.mock.calls[0][0].where).toEqual({ AND: [{ OR: expect.any(Array) }, { concernsMinor: false }] });
+    const named = build({ vetted: false, rows: { user: [{ id: 'user-k' }] } });
+    await named.service.search('nelson_k', admin('moderator'));
+    expect(named.models.report.findMany.mock.calls[0][0].where).toEqual({ AND: [{ OR: expect.any(Array) }, { concernsMinor: false }] });
+  });
+});
+
+describe('AdminSearchService: media and staff fields', () => {
+  it('media: sources and uploader like the review list; the uploader is the PUBLIC name, never the real name', async () => {
+    const { service } = build({ vetted: true, rows: { postMedia: [mediaRow({ reviewEntrySource: 'auto_check', _count: { reports: 0 } })] } });
+    const hit = (await service.search(UUID, admin('moderator'))).groups.media!.items[0];
+    expect(hit.sources).toEqual(['auto_check']);
+    expect(hit.uploader).toEqual({ id: 'u9', publicName: 'amaka_fc' });
+    expect(JSON.stringify(hit)).not.toContain('Amaka Real Name');
+    expect(Object.keys(hit).sort()).toEqual(['createdAt', 'id', 'kind', 'matchedOn', 'reportCount', 'sources', 'status', 'uploader']);
+  });
+
+  it('media: a reported item lists user_report, with or without the auto check', async () => {
+    const both = build({ vetted: true, rows: { postMedia: [mediaRow({ reviewEntrySource: 'auto_check', _count: { reports: 2 } })] } });
+    expect((await both.service.search(UUID, admin('moderator'))).groups.media!.items[0].sources).toEqual(['auto_check', 'user_report']);
+    const reportedOnly = build({ vetted: true, rows: { postMedia: [mediaRow({ reviewEntrySource: null, _count: { reports: 1 } })] } });
+    expect((await reportedOnly.service.search(UUID, admin('moderator'))).groups.media!.items[0].sources).toEqual(['user_report']);
+  });
+
+  it('media: an uploader with no username shows the shared placeholder, not the real name', async () => {
+    const { service } = build({
+      vetted: true,
+      rows: { postMedia: [mediaRow({ uploader: { id: 'u9', username: null, displayName: 'Real Person' } })] },
+    });
+    const hit = (await service.search(UUID, admin('moderator'))).groups.media!.items[0];
+    expect(hit.uploader.publicName).toBe('Soccernity member');
+    expect(JSON.stringify(hit)).not.toContain('Real Person');
+  });
+
+  it('staff: twoFactorEnabled is a boolean from totpEnabledAt; the timestamp is not returned', async () => {
+    const rows = [
+      { id: 's1', email: 'a@x.io', fullName: 'Amara', role: 'moderator', accountStatus: 'active', totpEnabledAt: new Date() },
+      { id: 's2', email: 'b@x.io', fullName: 'Amaka', role: 'editor', accountStatus: 'active', totpEnabledAt: null },
+    ];
+    const { service } = build({ rows: { adminUser: rows } });
+    const items = (await service.search('ama', admin('superadmin'))).groups.staff!.items;
+    expect(items.map((s) => s.twoFactorEnabled)).toEqual([true, false]);
+    expect(Object.keys(items[0]).sort()).toEqual(['accountStatus', 'email', 'fullName', 'id', 'matchedOn', 'role', 'twoFactorEnabled']);
+  });
+});
+
+describe('AdminSearchService: new fields obey the role matrix and are the same for a vetted and an unvetted admin', () => {
+  it('a moderator gets no staff group (so no twoFactor field); an editor gets no media or report group', async () => {
+    const mod = build({ vetted: true });
+    expect('staff' in (await mod.service.search(UUID, admin('moderator'))).groups).toBe(false);
+    const ed = build({ vetted: true });
+    const groups = (await ed.service.search(UUID, admin('editor'))).groups;
+    expect('media' in groups).toBe(false);
+    expect('reports' in groups).toBe(false);
+  });
+
+  it('for a row both admins can see, the whole response is byte-identical (no vetting-dependent field)', async () => {
+    const rows = { report: [reportRow()], postMedia: [mediaRow()] };
+    const a = await build({ vetted: true, rows }).service.search(UUID, admin('moderator'));
+    const b = await build({ vetted: false, rows }).service.search(UUID, admin('moderator'));
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+  });
+
+  it('the audit row still holds no query text even when the new matchers run (a username-shaped half address)', async () => {
+    const { service, actionLog } = build({ vetted: true });
+    await service.search('nelson_k@', admin('superadmin'));
+    const args = actionLog.record.mock.calls[0] as unknown[];
+    for (const a of args) expect(String(a)).not.toContain('nelson');
   });
 });
