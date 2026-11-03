@@ -233,13 +233,15 @@ describe("PostMedia — as another viewer", () => {
     expect(screen.getByRole("button", { name: "Report user" })).not.toBeNull();
     expect(document.activeElement).toBe(postChoice);
     fireEvent.click(screen.getByRole("button", { name: "Report user" }));
-    fireEvent.change(screen.getByLabelText("Reason for report"), { target: { value: "Something involving a child" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Child safety concern" }));
+    fireEvent.change(screen.getByLabelText("Details (optional)"), { target: { value: "Something involving a child" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
-    await screen.findByText("Reported — thanks, our team will review it.");
+    await screen.findByText("Reported — thanks");
     expect(createReport).toHaveBeenCalledTimes(1);
     expect(createReport).toHaveBeenCalledWith("tok", {
       targetType: "user",
       targetId: "author-9",
+      reasonCategory: "child_safety_concern",
       reason: "Something involving a child",
     });
     // Nothing went to POST /media/:id/report a second time.
@@ -258,9 +260,15 @@ describe("PostMedia — as another viewer", () => {
     expect(createReport).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Report the post or person" }));
     fireEvent.click(screen.getByRole("button", { name: "Report post" }));
-    fireEvent.change(screen.getByLabelText("Reason for report"), { target: { value: "Spam" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Spam or scam" }));
     fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
-    await waitFor(() => expect(createReport).toHaveBeenCalledWith("tok", { targetType: "post", targetId: "post-9", reason: "Spam" }));
+    await waitFor(() =>
+      expect(createReport).toHaveBeenCalledWith("tok", {
+        targetType: "post",
+        targetId: "post-9",
+        reasonCategory: "spam_or_scam",
+      }),
+    );
     expect(reportMedia).toHaveBeenCalledTimes(1);
   });
 

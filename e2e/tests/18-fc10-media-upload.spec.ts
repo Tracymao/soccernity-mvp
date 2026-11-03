@@ -233,9 +233,11 @@ test.describe.serial('FC10: media upload, the whole path with the fake check', (
     await urgent.click();
     await expect(page.getByRole('button', { name: 'Report post' })).toBeFocused();
     await page.getByRole('button', { name: 'Report user' }).click();
-    await page.getByLabel('Reason for report').fill('Urgent: something involving a child');
+    // B-284: the general report now asks for a reason category first; the description stays optional.
+    await page.getByRole('radio', { name: 'Child safety concern' }).check();
+    await page.getByLabel('Details (optional)').fill('Urgent: something involving a child');
     await page.getByRole('button', { name: 'Submit report' }).click();
-    await expect(page.getByText('Reported — thanks, our team will review it.')).toBeVisible();
+    await expect(page.getByText('Reported — thanks')).toBeVisible();
     // The general report is a Report row about the post's author (no per-account daily cap on POST /reports); the
     // media-report count did not move.
     const general = await db().report.findMany({ where: { reporterId: reporter.userId }, select: { targetType: true, targetId: true, reason: true } });

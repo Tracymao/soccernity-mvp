@@ -1,12 +1,7 @@
-// Report a concern — an unauthenticated public reporting page. No Figma
-// frame exists anywhere in the file for this (checked before building):
-// every existing report/flag surface (ReportAction.tsx, the file-wide
-// text search that component's own header comment describes) is for a
-// signed-in user reporting something they can already see inside the
-// app. There is no public-facing "report abuse" screen anywhere in
-// Figma. Built plainly and disclosed, following the exact same
-// no-Figma-frame precedent ReportAction.tsx itself already set for the
-// authenticated version of this feature.
+// Report a concern — an unauthenticated public reporting page. B-284 (Decision Log #465) added the reason
+// category step; Figma: "Report — Public page" frames 6947:39713 to 6947:40905
+// (docs/figma-report-reason-categories.md). Before B-284 no Figma frame existed for this page, and the rest of
+// the form (email, target, ID, the "involves a child" box) is unchanged from that plain build.
 //
 // Wiring: POST /reports/public (services/api/src/modules/moderation/
 // public-reports.controller.ts — no guard at all besides its own rate
@@ -14,6 +9,9 @@
 // a parent, a school, or anyone else with no Soccernity account uses to
 // flag a post, comment, or account — including anything concerning a
 // child's safety — without registering first.
+//
+// The category step is the same radio group the in-app report dialog uses (components/report/ReportFields.tsx,
+// labels in lib/reportReasons.ts). A category is required; the description is optional except for "Other".
 //
 // `reporterContactName` is deliberately not collected — CreatePublicReportDto
 // has no such field (see that DTO's own comment); this form only asks
@@ -31,10 +29,13 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import {
   createPublicReport,
-  ModerationApiError,
   REPORT_TARGET_TYPES,
+  reportSubmitErrorMessage,
+  type ReportReasonCategory,
   type ReportTargetType,
 } from "../api/moderation";
+import { ReportCategoryField, ReportDetailsField } from "../components/report/ReportFields";
+import { canSubmitReport, detailsToSend } from "../lib/reportReasons";
 import "./ReportPage.css";
 
 const TARGET_TYPE_LABELS: Record<ReportTargetType, string> = {
@@ -43,8 +44,6 @@ const TARGET_TYPE_LABELS: Record<ReportTargetType, string> = {
   user: "A user account",
   banter_room: "A Bants room",
 };
-
-const REASON_MAX_LENGTH = 500;
 
 // Same real, confirmed support destination VerifyEmailPage.tsx already
 // uses (Decision Log #37) — the fallback for a reporter who doesn't have
@@ -57,18 +56,22 @@ export default function ReportPage() {
   const [email, setEmail] = useState("");
   const [targetType, setTargetType] = useState<ReportTargetType>("post");
   const [targetId, setTargetId] = useState("");
-  const [reason, setReason] = useState("");
+  const [category, setCategory] = useState<ReportReasonCategory | null>(null);
+  const [details, setDetails] = useState("");
   const [concernsMinor, setConcernsMinor] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [submittedEmail, setSubmittedEmail] = useState("");
 
   const canSubmit =
-    email.trim().length > 0 && targetId.trim().length > 0 && reason.trim().length > 0 && status !== "submitting";
+    email.trim().length > 0 &&
+    targetId.trim().length > 0 &&
+    canSubmitReport(category, details) &&
+    status !== "submitting";
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!canSubmit) return;
+    if (!canSubmit || category === null) return;
     setStatus("submitting");
     setError(null);
     try {
@@ -76,14 +79,15 @@ export default function ReportPage() {
         reporterContactEmail: email.trim(),
         targetType,
         targetId: targetId.trim(),
-        reason: reason.trim(),
+        reasonCategory: category,
+        reason: detailsToSend(details),
         concernsMinor,
       });
       setSubmittedEmail(email.trim());
       setStatus("submitted");
     } catch (err) {
       setStatus("error");
-      setError(err instanceof ModerationApiError ? err.message : "Couldn't submit that report. Please try again.");
+      setError(reportSubmitErrorMessage(err));
     }
   }
 
@@ -172,20 +176,15 @@ export default function ReportPage() {
           </p>
         </div>
 
-        <div className="report-page__field">
-          <label className="report-page__label" htmlFor="report-reason">
-            Why are you reporting this?
-          </label>
-          <textarea
-            id="report-reason"
-            className="report-page__textarea"
-            placeholder="Describe what you saw and why it concerns you."
-            required
-            maxLength={REASON_MAX_LENGTH}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          />
-        </div>
+        <ReportCategoryField value={category} onChange={setCategory} disabled={status === "submitting"} />
+
+        <ReportDetailsField
+          category={category}
+          value={details}
+          onChange={setDetails}
+          placeholder="Describe what you saw and why it concerns you."
+          disabled={status === "submitting"}
+        />
 
         <label className="report-page__checkbox">
           <input

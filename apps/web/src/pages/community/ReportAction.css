@@ -1,6 +1,6 @@
-/* ReportAction.tsx — no Figma frame exists for this (see that file's own
- * header comment); built plainly, matching the surrounding post/comment
- * chrome's tokens. */
+/* ReportAction.tsx — the trigger and the small target menu (no Figma frame, built plainly, matching the
+ * surrounding post/comment chrome's tokens); the report dialog itself is at the end of this file. The
+ * .report-action__target/__textarea/__buttons/__submit/__cancel/__error rules are still used by OwnPostMenu.tsx. */
 
 .report-action__trigger {
   background: none;
@@ -107,4 +107,97 @@
   font: 400 12px/1.4 "Inter", sans-serif;
   color: var(--sn-brand-navy);
   margin: 0;
+}
+
+/* --- Report dialog (B-284, Decision Log #465) ----------------------------------------------------------
+ * Figma "Report — In-app form" (6946:40232 …): a 440px white dialog, radius 12, over the scrim. The category
+ * radio list and the details field are in components/report/ReportFields.css. */
+
+.report-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: var(--sn-overlay-scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.report-dialog {
+  width: 100%;
+  max-width: 440px;
+  box-sizing: border-box;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px;
+  background: var(--sn-background-surface);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px 0 var(--sn-shadow-elevated);
+}
+
+.report-dialog__title {
+  margin: 0;
+  font: 600 20px/24px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.report-dialog__subtitle {
+  margin: 0;
+  font: 600 12px/15px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.report-dialog__error {
+  margin: 0;
+  font: 500 13px/1.4 "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+}
+
+.report-dialog__buttons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.report-dialog__submit,
+.report-dialog__cancel {
+  border-radius: 999px;
+  padding: 10px 18px;
+  font: 500 12px/15px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.report-dialog__submit {
+  background: var(--sn-brand-navy);
+  border: 1px solid var(--sn-brand-navy);
+  color: #fff; /* no --sn-text-on-navy token -- disclosed exception, same as accountActions.css */
+}
+
+.report-dialog__submit:disabled {
+  background: var(--sn-icon-inactive);
+  border-color: transparent;
+  color: var(--sn-text-secondary);
+  cursor: not-allowed;
+}
+
+.report-dialog__cancel {
+  background: transparent;
+  border: 1px solid var(--sn-brand-navy);
+  color: var(--sn-text-primary);
+}
+
+.report-dialog__cancel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.report-dialog__submit:focus-visible,
+.report-dialog__cancel:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 2px;
 }
