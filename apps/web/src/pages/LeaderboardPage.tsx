@@ -11,13 +11,15 @@
 // BACKEND STATE:
 //   - OVERALL board: REAL. Wired to GET /leaderboard (Decision Log #292,
 //     the materialized weekly rollup, refreshed every 15 minutes). The
-//     endpoint returns { userId, displayName, points, rank } per row for
+//     endpoint returns { userId, publicName, points, rank } per row for
 //     ONE ISO week (defaults to the current week), keyset-paginated, so the
-//     board shows the current week only and pages with "Load more". It has
-//     no club filter, no all-time period, and no per-row club or
-//     weekly-change field, so on this tab: "By club" and "All-time" are
-//     disabled with an inline note (never faked client-side), and the
-//     Club / 7-day-change columns are not rendered.
+//     board shows the current week only and pages with "Load more". It
+//     supports a club board for the caller's OWN represented club only
+//     (`?clubId=`, Decision Log #128), which the "By club" scope uses
+//     (disabled until the caller has a represented club). It has no
+//     all-time period and no per-row club or weekly-change field, so on
+//     this tab: "All-time" is disabled with an inline note (never faked
+//     client-side), and the Club / 7-day-change columns are not rendered.
 //   - COMPETITION board: still illustrative -- the Competition data model
 //     (Prediction / Commentary) does not exist (Decision Log #72/#73). See
 //     ./leaderboard/leaderboardData.ts.
@@ -33,10 +35,10 @@
 // Log #128 ties "By club" to clubMemberships; GET /clubs, Decision Log
 // #154, is the source). Its initial selection is the caller's real
 // represented club from GET /users/:id (Decision Log #74, PATCH
-// /users/:id/represented-club). Changing the dropdown here is a local view
-// filter only: it does NOT write the represented club. The Settings
-// selector owns that write. Wiring this control into the club-axis
-// leaderboard is Decision Log #128's own follow-up, not built here.
+// /users/:id/represented-club). Changing the dropdown here does NOT write
+// the represented club; the Settings selector owns that write. The Overall
+// board's "By club" scope requests GET /leaderboard?clubId= for the
+// caller's represented club (Decision Log #128).
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { listClubs, ClubsApiError, type ClubSummary } from "../api/clubs";
