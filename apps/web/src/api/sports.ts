@@ -14,12 +14,11 @@
 //      box-score endpoint. The Figma redesign this page converts assumed
 //      player rows were available; they are not, from this vendor.
 //   2. PublicStandingRow carries no `form` (recent-results) field --
-//      Highlightly's own /standings response has none. The Figma
-//      Standing screen's FORM column has no real data source; this
-//      client does not fabricate one.
-// Both gaps are surfaced to the page, not hidden here, so the UI can
-// render an honest "not available" state instead of silently omitting
-// the section.
+//      Highlightly's own /standings response has none. This client does
+//      not fabricate one; `form` is optional and present only if the
+//      server sends it.
+// Per Decision Log #378 / #462 item (h) the page HIDES a field the
+// vendor does not supply (no placeholder, no notice).
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
 
 export type MatchPhase = "scheduled" | "live" | "finished" | "postponed" | "cancelled";
@@ -199,7 +198,9 @@ export interface HeadToHead {
   updatedAt: string | null;
 }
 
-// No `form` field -- see this file's own header comment, data gap #2.
+// `form` is present only when the active data provider supplies it (the server adds the
+// key only if the capability registry says so and the row carries data). With Highlightly
+// it is always absent, so the FORM column is not drawn.
 export interface StandingRow {
   position: number;
   team: TeamRef;
@@ -211,6 +212,7 @@ export interface StandingRow {
   goalsFor: number;
   goalsAgainst: number;
   goalDifference: number;
+  form?: ("W" | "D" | "L")[];
 }
 
 export interface StandingsGroup {
