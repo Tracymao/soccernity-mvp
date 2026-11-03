@@ -729,3 +729,35 @@
   text-align: right;
   font-weight: 600;
 }
+
+.mc-form-chips {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.mc-form-chip {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  font: 600 11px "Inter", sans-serif;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* W/D/L palette-only scheme (Decision Log #149): green / navy / alert-free outline for L. */
+.mc-form-chip--w {
+  background: var(--sn-brand-green);
+  color: var(--sn-text-on-green);
+}
+
+.mc-form-chip--d {
+  background: var(--sn-brand-navy);
+  color: #fff;
+}
+
+.mc-form-chip--l {
+  background: var(--sn-green-tint-12);
+  color: var(--sn-brand-navy);
+  border: 1px solid var(--sn-brand-navy);
+}
