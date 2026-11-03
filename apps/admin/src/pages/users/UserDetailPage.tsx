@@ -20,9 +20,10 @@
 //
 // NOT IN THE FRAMES, so not built: the 30-day hold wording. The Revoke dialog
 // frame says only what is removed; the response carries `heldUntil` but no
-// frame says where to show it. The rest of the summary (guardian, age flags,
-// safeguarding country, revocation history) has no place in the frames and is
-// not rendered.
+// frame says where to show it. The rest of the summary (safeguarding country,
+// revocation history) has no place in the frames and is not rendered. The
+// under-16 flag IS rendered (B-172, Figma frames 6950:40855 / 6950:41024 /
+// 6950:41191): `isUnder16` from the summary, as "Yes" / "No", for every account.
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useParams } from "react-router";
@@ -299,6 +300,12 @@ export default function UserDetailPage() {
                 <div className="ud-fields__row">
                   <dt>Age group</dt>
                   <dd>{user.isMinor ? "Under 18" : "18 or over"}</dd>
+                </div>
+                {/* B-172 (Decision Log #462 item (e)): the server's stored flag, shown for every account, never
+                    derived here from a date of birth or an age. Frame 6950:40855 / 41024 / 41191. */}
+                <div className="ud-fields__row">
+                  <dt>Under 16</dt>
+                  <dd>{user.isUnder16 ? "Yes" : "No"}</dd>
                 </div>
                 <div className="ud-fields__row">
                   <dt>Guardian</dt>
