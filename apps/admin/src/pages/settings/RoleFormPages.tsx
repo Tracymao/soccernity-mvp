@@ -15,12 +15,13 @@
 // vetting fields ride along on GET/PATCH /admin/staff's own response
 // even though this module doesn't write them.
 //
-// AddRolePage/DeleteRolePage remain disclosed stubs — per Decision Log
-// #191 there is still no self-service admin/moderator account
-// creation/deletion endpoint (admin-staff-roles/README.md's own "Not
-// built" list explicitly leaves both out of scope). "Add a New Role" is
-// really "create an admin/moderator account". Delete Role is navy, not
-// red — no destructive token (CLAUDE.md non-negotiable #3).
+// AddRolePage/DeleteRolePage remain disclosed stubs in this app. "Add a
+// New Role" is really "create an admin/moderator account": POST
+// /admin/staff now exists (superadmin-only, Decision Log #191 resolved by
+// feat/admin-staff-create, PR #340), but no client function or form here
+// calls it yet, so AddRolePage is not wired. There is still no DELETE
+// /admin/staff/:id, so DeleteRolePage has nothing to call. Delete Role is
+// navy, not red — no destructive token (CLAUDE.md non-negotiable #3).
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import AdminPageHeader from "../../layout/AdminPageHeader";
