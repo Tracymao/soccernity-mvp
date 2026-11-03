@@ -11,6 +11,8 @@ import { AdminMediaReviewController } from '../admin-media-review/admin-media-re
 import { AdminStaffRolesController } from '../admin-staff-roles/admin-staff-roles.controller';
 import { ContactEnquiryAdminController } from '../contact/contact-enquiry-admin.controller';
 import { isAdminChildSafetyVetted } from '../moderation/child-safety-vetting.util';
+import { PostMediaReviewSource } from '../post-media/post-media-review.constants';
+import { PUBLIC_NAME_SELECT, toPublicUser } from '../users/public-name.util';
 import { AdminModerationController } from '../moderation/admin-moderation.controller';
 import { ENQUIRY_REPORT_TARGET_TYPE, REPORT_SOURCE_CONTACT_ENQUIRY } from '../moderation/moderation.constants';
 import {
@@ -47,6 +49,16 @@ export interface SearchGroup<T> {
   truncated: boolean;
 }
 
+// What field of the record the typed text matched (backend/b114-search-fields-report-search, Decision Log #464).
+// A stable KEY, never English: the admin app owns the labels ("Username (starts with)", "Report ID", ...). One value
+// per hit; when several fields would match, the first in the order each type lists below wins.
+export type UserMatchedOn = 'user_id' | 'email' | 'username';
+export type ReportMatchedOn = 'report_id' | 'report_reference' | 'reporter_user_id' | 'target_user_id' | 'target_username';
+export type ContactEnquiryMatchedOn = 'email' | 'subject';
+export type ArticleMatchedOn = 'title';
+export type StaffMatchedOn = 'email' | 'name';
+export type MediaMatchedOn = 'item_id';
+
 // What the Users list shows (admin-users.service USER_LIST_SELECT), and nothing else.
 const USER_HIT_SELECT = {
   id: true,
@@ -59,6 +71,8 @@ const USER_HIT_SELECT = {
 
 const REPORT_HIT_SELECT = {
   id: true,
+  // Read only to work out `matchedOn`; stripped before the hit is returned.
+  reporterId: true,
   targetType: true,
   targetId: true,
   status: true,
@@ -92,19 +106,42 @@ const ARTICLE_HIT_SELECT = {
   createdAt: true,
 } as const;
 
-const STAFF_HIT_SELECT = { id: true, email: true, fullName: true, role: true, accountStatus: true } as const;
+// totpEnabledAt is read only to derive `twoFactorEnabled` (the secret and the backup codes are never selected).
+const STAFF_HIT_SELECT = { id: true, email: true, fullName: true, role: true, accountStatus: true, totpEnabledAt: true } as const;
 
-const MEDIA_HIT_SELECT = { id: true, kind: true, status: true, reportCount: true, createdAt: true } as const;
+const MEDIA_HIT_SELECT = {
+  id: true,
+  kind: true,
+  status: true,
+  reportCount: true,
+  createdAt: true,
+  reviewEntrySource: true,
+  _count: { select: { reports: true } },
+  uploader: { select: { id: true, ...PUBLIC_NAME_SELECT } },
+} as const;
 
-export type UserHit = Prisma.UserGetPayload<{ select: typeof USER_HIT_SELECT }>;
-export type ReportHit = Prisma.ReportGetPayload<{ select: typeof REPORT_HIT_SELECT }> & { source: string | null };
+export type UserHit = Prisma.UserGetPayload<{ select: typeof USER_HIT_SELECT }> & { matchedOn: UserMatchedOn };
+export type ReportHit = Omit<Prisma.ReportGetPayload<{ select: typeof REPORT_HIT_SELECT }>, 'reporterId'> & {
+  source: string | null;
+  matchedOn: ReportMatchedOn;
+};
 export type ContactEnquiryHit = Omit<Prisma.ContactEnquiryGetPayload<{ select: typeof ENQUIRY_HIT_SELECT }>, 'userId' | 'escalatedReportId'> & {
   submitter: 'signed_in' | 'guest';
   hasEscalation: boolean;
+  matchedOn: ContactEnquiryMatchedOn;
 };
-export type ArticleHit = Prisma.ArticleGetPayload<{ select: typeof ARTICLE_HIT_SELECT }>;
-export type StaffHit = Prisma.AdminUserGetPayload<{ select: typeof STAFF_HIT_SELECT }>;
-export type MediaHit = Prisma.PostMediaGetPayload<{ select: typeof MEDIA_HIT_SELECT }>;
+export type ArticleHit = Prisma.ArticleGetPayload<{ select: typeof ARTICLE_HIT_SELECT }> & { matchedOn: ArticleMatchedOn };
+export type StaffHit = Omit<Prisma.AdminUserGetPayload<{ select: typeof STAFF_HIT_SELECT }>, 'totpEnabledAt'> & {
+  twoFactorEnabled: boolean;
+  matchedOn: StaffMatchedOn;
+};
+export type MediaHit = Omit<Prisma.PostMediaGetPayload<{ select: typeof MEDIA_HIT_SELECT }>, 'reviewEntrySource' | '_count' | 'uploader'> & {
+  /** Why the item is in the queue, as GET /admin/media-review shows it: the automatic check and/or user reports. */
+  sources: PostMediaReviewSource[];
+  /** The uploader's PUBLIC name and id (as the review list shows them), never an email or a real name. */
+  uploader: { id: string; publicName: string };
+  matchedOn: MediaMatchedOn;
+};
 
 export interface AdminSearchResult {
   groups: {
@@ -193,32 +230,67 @@ export class AdminSearchService {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: ADMIN_SEARCH_GROUP_CAP + 1,
     });
-    return capped(rows);
+    return capped(
+      rows.map((r) => ({
+        ...r,
+        matchedOn: (r.id === q.lower ? 'user_id' : r.email === q.lower ? 'email' : 'username') as UserMatchedOn,
+      })),
+    );
   }
 
-  // ---- reports: the report id, or (given a user id) the reports by or about that user. -----------------------------
+  // ---- reports: report id, report reference, or (a user id / a username prefix) the reports by or about that user. ----
+  // NEVER the free-text reason: Report.reason is the reporter's own description. It is not selected, searched or
+  // returned. (There is no reason CATEGORY column; see README "Reason category".)
 
   private async searchReports(q: ParsedAdminSearchQuery, vetted: boolean): Promise<SearchGroup<ReportHit>> {
-    if (!q.isUuid) return EMPTY;
+    const or: Prisma.ReportWhereInput[] = [];
+    // Users whose content the reports may be ABOUT, with how each was found.
+    const subjects = new Map<string, 'target_user_id' | 'target_username'>();
+    if (q.isUuid) {
+      or.push({ id: q.lower }, { reporterId: q.lower });
+      subjects.set(q.lower, 'target_user_id');
+    }
+    // The short reference an admin sees on screen (first 8 characters of the id). Exactly 8 hex characters, so it
+    // cannot be used as a loose id prefix search.
+    if (q.isReportReference) or.push({ id: { startsWith: q.lower } });
+    if (q.isUsernameShaped) {
+      // Same rule as the Users group: username prefix (usernames are stored lowercase). The real name is not searched.
+      const users = await this.prisma.user.findMany({
+        where: { username: { startsWith: escapeLike(q.lower) }, accountStatus: { not: 'deleted' } },
+        select: { id: true },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: ADMIN_SEARCH_OWNED_CONTENT_ID_CAP,
+      });
+      for (const u of users) if (!subjects.has(u.id)) subjects.set(u.id, 'target_username');
+    }
+    if (or.length === 0 && subjects.size === 0) return EMPTY;
+
     // Report.targetId is a bare string, so "about a user" is: the user, a post they wrote, a comment they wrote.
-    // The two id lists are bounded; the reports list below is capped anyway.
-    const [posts, comments] = await Promise.all([
-      this.prisma.post.findMany({
-        where: { authorId: q.lower },
-        select: { id: true },
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        take: ADMIN_SEARCH_OWNED_CONTENT_ID_CAP,
-      }),
-      this.prisma.comment.findMany({
-        where: { authorId: q.lower },
-        select: { id: true },
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        take: ADMIN_SEARCH_OWNED_CONTENT_ID_CAP,
-      }),
-    ]);
-    const or: Prisma.ReportWhereInput[] = [{ id: q.lower }, { reporterId: q.lower }, { targetType: 'user', targetId: q.lower }];
-    if (posts.length > 0) or.push({ targetType: 'post', targetId: { in: posts.map((p) => p.id) } });
-    if (comments.length > 0) or.push({ targetType: 'comment', targetId: { in: comments.map((c) => c.id) } });
+    // The id lists are bounded; the reports list below is capped anyway.
+    const postAuthor = new Map<string, string>();
+    const commentAuthor = new Map<string, string>();
+    if (subjects.size > 0) {
+      const authorIds = [...subjects.keys()];
+      const [posts, comments] = await Promise.all([
+        this.prisma.post.findMany({
+          where: { authorId: { in: authorIds } },
+          select: { id: true, authorId: true },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: ADMIN_SEARCH_OWNED_CONTENT_ID_CAP,
+        }),
+        this.prisma.comment.findMany({
+          where: { authorId: { in: authorIds } },
+          select: { id: true, authorId: true },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: ADMIN_SEARCH_OWNED_CONTENT_ID_CAP,
+        }),
+      ]);
+      for (const p of posts) postAuthor.set(p.id, p.authorId);
+      for (const c of comments) commentAuthor.set(c.id, c.authorId);
+      or.push({ targetType: 'user', targetId: { in: authorIds } });
+      if (postAuthor.size > 0) or.push({ targetType: 'post', targetId: { in: [...postAuthor.keys()] } });
+      if (commentAuthor.size > 0) or.push({ targetType: 'comment', targetId: { in: [...commentAuthor.keys()] } });
+    }
 
     // The same gate GET /admin/moderation/reports applies: a report that concerns a minor is for vetted admins only.
     const where: Prisma.ReportWhereInput = vetted ? { OR: or } : { AND: [{ OR: or }, { concernsMinor: false }] };
@@ -229,7 +301,22 @@ export class AdminSearchService {
       take: ADMIN_SEARCH_GROUP_CAP + 1,
     });
     return capped(
-      rows.map((r) => ({ ...r, source: r.targetType === ENQUIRY_REPORT_TARGET_TYPE ? REPORT_SOURCE_CONTACT_ENQUIRY : null })),
+      rows.map(({ reporterId, ...r }) => {
+        let matchedOn: ReportMatchedOn;
+        const aboutUser =
+          r.targetType === 'user'
+            ? r.targetId
+            : r.targetType === 'post'
+              ? postAuthor.get(r.targetId)
+              : r.targetType === 'comment'
+                ? commentAuthor.get(r.targetId)
+                : undefined;
+        if (r.id === q.lower) matchedOn = 'report_id';
+        else if (q.isReportReference && r.id.startsWith(q.lower)) matchedOn = 'report_reference';
+        else if (reporterId !== null && reporterId === q.lower) matchedOn = 'reporter_user_id';
+        else matchedOn = (aboutUser !== undefined && subjects.get(aboutUser)) || 'target_user_id';
+        return { ...r, source: r.targetType === ENQUIRY_REPORT_TARGET_TYPE ? REPORT_SOURCE_CONTACT_ENQUIRY : null, matchedOn };
+      }),
     );
   }
 
@@ -249,6 +336,7 @@ export class AdminSearchService {
         ...rest,
         submitter: userId ? ('signed_in' as const) : ('guest' as const),
         hasEscalation: escalatedReportId !== null,
+        matchedOn: (q.isEmail && rest.email.toLowerCase() === q.lower ? 'email' : 'subject') as ContactEnquiryMatchedOn,
       })),
     );
   }
@@ -262,7 +350,7 @@ export class AdminSearchService {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: ADMIN_SEARCH_GROUP_CAP + 1,
     });
-    return capped(rows);
+    return capped(rows.map((r) => ({ ...r, matchedOn: 'title' as const })));
   }
 
   // ---- staff: name contains, or exact email. Superadmin only (the staff routes' own rule). -----------------------
@@ -276,7 +364,13 @@ export class AdminSearchService {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: ADMIN_SEARCH_GROUP_CAP + 1,
     });
-    return capped(rows);
+    return capped(
+      rows.map(({ totpEnabledAt, ...r }) => ({
+        ...r,
+        twoFactorEnabled: Boolean(totpEnabledAt),
+        matchedOn: (q.isEmail && r.email.toLowerCase() === q.lower ? 'email' : 'name') as StaffMatchedOn,
+      })),
+    );
   }
 
   // ---- media review items: the item id. Same visibility as GET /admin/media-review/:id. -------------------------
@@ -294,7 +388,15 @@ export class AdminSearchService {
       select: MEDIA_HIT_SELECT,
       take: ADMIN_SEARCH_GROUP_CAP + 1,
     });
-    return capped(rows);
+    return capped(
+      rows.map(({ reviewEntrySource, _count, uploader, ...r }) => {
+        // Same derivation as GET /admin/media-review (toItem): why the item is in the queue.
+        const sources: PostMediaReviewSource[] = [];
+        if (reviewEntrySource === 'auto_check') sources.push('auto_check');
+        if (reviewEntrySource === 'user_report' || _count.reports > 0) sources.push('user_report');
+        return { ...r, sources, uploader: toPublicUser(uploader), matchedOn: 'item_id' as const };
+      }),
+    );
   }
 
   // ---- audit ---------------------------------------------------------------------------------------------------
