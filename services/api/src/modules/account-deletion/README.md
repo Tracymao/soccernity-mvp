@@ -51,9 +51,14 @@
 >   `LeaderboardEntry`, `ContestVote`, `ContestEngagement`, `PointsLedgerEntry`) mean most accounts that
 >   did anything are kept; the purge mainly removes accounts that left nothing behind. Having the anonymiser
 >   delete those ephemeral rows is a separate decision, not made here.
-> - **Storage is not touched.** A *rejected* post-media file's private object stays in the bucket (B-206,
->   OPEN under counsel). Once the row is purged that object has **no database pointer at all** — only its
->   key, `private-media/<uploaderId>/<mediaId>.<ext>`, which names the uploader's user id. Not decided here.
+> - **Stored media (B-283, Decision Log #462 (g), #464).** *Superseded:* this bullet used to say a *rejected*
+>   post-media file's private object stays in the bucket. It no longer does. A rejected file's private object
+>   is deleted with the account at anonymisation (`deleteUserPostMedia`), unless the uploader is under an
+>   active admin hold or the post has a report not yet closed — then a `PostMediaDeferredDeletion` record is
+>   written in the same transaction and the daily sweep deletes it later. As a safety net the purge job asks
+>   `RejectedMediaSweepService.deleteUploaderObjects` to remove whatever is still stored under the purged
+>   user's media prefixes right after the row is deleted (best effort; it never undoes the purge). See
+>   `post-media/README.md`. Evidence handling beyond an active hold stays OPEN under counsel (B-206).
 > - **Untouched:** `ConsentAuditRecord` (its own 6-month clock), the investigation hold (B-044), admin
 >   screens (B-045).
 >

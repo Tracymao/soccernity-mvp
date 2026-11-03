@@ -1,5 +1,25 @@
 import { StorageService } from './storage.service';
 
+/** One object found by listObjects(). */
+export interface ListedObject {
+  key: string;
+  size: number;
+  /** When the object was last written; null if the store did not say. */
+  lastModified: Date | null;
+}
+
+/**
+ * The store refused a LIST (the access key may read and write objects but not list them). backend/b283-delete-
+ * rejected-media: the stray sweep needs a list permission on the key (the B-207 launch-gate step); this is its
+ * own error class so the sweep can report "list permission missing" plainly instead of crashing.
+ */
+export class StorageListNotPermittedError extends Error {
+  constructor(message = 'The storage key is not allowed to list objects') {
+    super(message);
+    this.name = 'StorageListNotPermittedError';
+  }
+}
+
 // backend/w14-post-media-pipeline (B-041; Decision Log #419). The extra capabilities the user-media
 // pipeline needs on top of plain upload()/delete(): a one-time upload link, and reading an object back to
 // the server for verification. A SUBCLASS of StorageService (not more abstract methods on it) so the many
@@ -50,4 +70,15 @@ export abstract class DirectUploadStorageService extends StorageService {
    * while the file is still private.
    */
   abstract publicUrlFor(key: string): string;
+
+  /**
+   * backend/b283-delete-rejected-media (B-283; Decision Log #464). One page of the objects whose key starts with
+   * `prefix`, at most `maxKeys` (the store may return fewer). `continuationToken` is the previous page's
+   * `nextToken`; `nextToken` is null on the last page. Throws StorageListNotPermittedError when the key may not
+   * list, and a 503 when no object store is configured.
+   */
+  abstract listObjects(
+    prefix: string,
+    options?: { maxKeys?: number; continuationToken?: string | null },
+  ): Promise<{ objects: ListedObject[]; nextToken: string | null }>;
 }

@@ -17,8 +17,11 @@ import { DirectUploadStorageService } from '../../storage/direct-upload-storage.
 //            visibility fragment) already hides the item the moment its status changes, so a failed move
 //            only leaves an object lingering; publishedAt stays set and reconcile() retries it.
 //
-// A REJECTED file's private object is NEVER deleted by anything in here or in any purge or cleanup job
-// (evidence handling is OPEN under counsel, B-206). reconcile() selects only approved rows for deletion.
+// Nothing IN HERE deletes a REJECTED file's private object: reconcile() selects only approved rows for deletion.
+// (B-283, Decision Log #464: the object IS deleted, by the lifecycle paths -- post deleted, upload deleted,
+// quarantine/unattached purge, account anonymised or purged -- and by the daily stray sweep, unless the uploader
+// is under an active hold or the post has a report not yet closed. See rejected-media-evidence.util.ts.
+// Statutory-reporting/evidence handling beyond that stays OPEN under counsel, B-206.)
 //
 // KNOWN NARROW RACE (documented in README.md): a moderator "keep" landing in the same instant as an
 // automatic withdraw of that same item can leave an approved row whose public object was just removed.
@@ -181,7 +184,8 @@ export class PostMediaObjectsService {
    *   1. published but should not be -> withdraw
    *   2. approved, not held, not published, still has a private file -> publish
    *   3. approved, not held, published, private original still there -> delete the private original
-   * It NEVER deletes the private object of a rejected, pending or held item.
+   * It never deletes the private object of a rejected, pending or held item (those follow the lifecycle
+   * deletion paths, B-283).
    */
   async reconcile(): Promise<{ withdrawn: number; published: number; cleaned: number }> {
     let withdrawn = 0;

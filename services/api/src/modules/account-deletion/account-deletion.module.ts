@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageModule } from '../../storage/storage.module';
+import { RejectedMediaModule } from '../post-media/rejected-media.module';
 import { AccountDeletionSweepService } from './account-deletion-sweep.service';
 import { AnonymizedRowPurgeService } from './anonymized-row-purge.service';
 
@@ -13,7 +14,9 @@ import { AnonymizedRowPurgeService } from './anonymized-row-purge.service';
 // doesn't belong to this module specifically.
 @Module({
   // StorageModule: lets anonymizeUser remove the user's avatar object (B-035).
-  imports: [StorageModule],
+  // RejectedMediaModule (B-283): the purge removes a purged user's leftover media objects, and registers the daily
+  // deferred-deletion retry / stray sweep.
+  imports: [StorageModule, RejectedMediaModule],
   providers: [AccountDeletionSweepService, AnonymizedRowPurgeService, PrismaService],
   exports: [AccountDeletionSweepService, AnonymizedRowPurgeService],
 })

@@ -223,6 +223,42 @@ describe('environment completeness (B-018)', () => {
     });
   });
 
+  // Rejected-media deletion (B-283; Decision Log #464). The three sweep variables must exist in code, in
+  // render.yaml for BOTH services and in .env.example, with the same value as the code default.
+  describe('rejected-media stray sweep variables', () => {
+    const DEFAULT_OF: Record<string, number> = {
+      POST_MEDIA_STRAY_MIN_AGE_DAYS: POST_MEDIA_DEFAULTS.strayMinAgeDays,
+      POST_MEDIA_STRAY_SWEEP_MAX_DELETES: POST_MEDIA_DEFAULTS.straySweepMaxDeletes,
+    };
+    const NAMES = [...Object.keys(DEFAULT_OF), 'POST_MEDIA_STRAY_SWEEP_DRY_RUN'];
+
+    it('are read by the code, declared in both render.yaml services and documented in .env.example', () => {
+      for (const name of NAMES) expect(read.has(name)).toBe(true);
+      for (const keys of services) for (const name of NAMES) expect(keys.has(name)).toBe(true);
+      for (const name of NAMES) expect(example.has(name)).toBe(true);
+    });
+
+    it('carry the same numbers in render.yaml (both services) and .env.example as the code defaults, and the dry run is off', () => {
+      const renderText = fs.readFileSync(path.join(REPO_ROOT, 'render.yaml'), 'utf8');
+      const exampleText = fs.readFileSync(path.join(REPO_ROOT, '.env.example'), 'utf8');
+      for (const name of Object.keys(DEFAULT_OF)) {
+        const inRender = [...renderText.matchAll(new RegExp(`-\\s+key:\\s+${name}\\s+value:\\s+"(\\d+)"`, 'g'))].map((m) => Number(m[1]));
+        expect(inRender).toEqual([DEFAULT_OF[name], DEFAULT_OF[name]]);
+        const inExample = exampleText.match(new RegExp(`^${name}=(\\d+)\\s*$`, 'm'));
+        expect(inExample && Number(inExample[1])).toBe(DEFAULT_OF[name]);
+      }
+      const dryRender = [...renderText.matchAll(/-\s+key:\s+POST_MEDIA_STRAY_SWEEP_DRY_RUN\s+value:\s+"(\w+)"/g)].map((m) => m[1]);
+      expect(dryRender).toEqual(['false', 'false']);
+      expect(exampleText).toMatch(/^POST_MEDIA_STRAY_SWEEP_DRY_RUN=false\s*$/m);
+    });
+
+    it('state the founder-veto-able defaults: 7 days minimum object age, 200 deletions per run', () => {
+      expect(POST_MEDIA_DEFAULTS.strayMinAgeDays).toBe(7);
+      expect(POST_MEDIA_DEFAULTS.strayMinAgeDays).toBe(POST_MEDIA_DEFAULTS.unattachedMaxAgeDays);
+      expect(POST_MEDIA_DEFAULTS.straySweepMaxDeletes).toBe(200);
+    });
+  });
+
   // Auth limits for shared school and club networks (B-256). Same drift guard as the global limits: the ten
   // names must be read in code, declared in both render.yaml services and documented in .env.example, and the
   // numbers in render.yaml / .env.example must equal the code defaults.

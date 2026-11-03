@@ -363,6 +363,17 @@ as having already covered them.
   The fake clock (`APP_CLOCK`) is why the throttle window and the purge are exact: the service writes
   `PostMedia.createdAt` from the app clock, not the database's `now()`.
 
+- **`rejected-media-deletion.e2e-spec.ts`** (backend/b283-delete-rejected-media, B-283) — a REJECTED
+  post-media file's private object is deleted on every path that removes its row, against real Postgres
+  and the in-memory object store: `DELETE /posts/:id`, `DELETE /media/uploads/:id`, the unattached and
+  quarantine purges, account anonymisation and the account purge. Each path is also proven to KEEP the
+  object (and write a `PostMediaDeferredDeletion` record in the same transaction) when the uploader has an
+  active admin hold or the post has a report not yet closed, and the daily sweep is proven to finish the
+  job once the hold is lifted or the report closes. The stray sweep (objects with no row) is proven to
+  delete only objects older than the minimum age, never one with a row, a deferral record or a held
+  uploader, to report a missing list permission instead of crashing, and to be idempotent over several
+  pages. The store double (`InMemoryStorage`) gained `listObjects`, `modified` and `listNotPermitted`.
+
 ## Running locally
 
 1. `docker compose up -d` (repo root) — real local Postgres + Redis.

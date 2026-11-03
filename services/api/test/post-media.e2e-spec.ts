@@ -712,7 +712,7 @@ describe('Post media pipeline e2e', () => {
       await getPost(fan, postId).expect(200);
     });
 
-    it("a REJECTED file keeps its post hidden; removing that file makes the post (now without it) visible, and its PRIVATE object is KEPT (B-206 OPEN)", async () => {
+    it("a REJECTED file keeps its post hidden; removing that file makes the post (now without it) visible, and its PRIVATE object is DELETED with it (B-283)", async () => {
       const author = await seedUser('author');
       const fan = await seedUser('fan');
       const mediaId = await uploadImage(author);
@@ -728,7 +728,7 @@ describe('Post media pipeline e2e', () => {
       await getPost(author, postId).expect(200);
 
       await request(http()).delete(`/media/uploads/${mediaId}`).set(author.auth).expect(204);
-      expect(storage.has(privateKey)).toBe(true); // a rejected file is never deleted
+      expect(storage.has(privateKey)).toBe(false); // B-283: a rejected file's private object goes with its row
       expect(await prisma().postMedia.count({ where: { id: mediaId } })).toBe(0);
       const after = await getPost(fan, postId).expect(200);
       expect(after.body.mediaUrls).toEqual([]);
@@ -1192,7 +1192,7 @@ describe('Post media pipeline e2e', () => {
     });
 
     describe('the 7-day purge of confirmed uploads that were never attached to a post', () => {
-      it('removes a stale unattached upload (objects first, then the row), keeps a fresh one and an attached one, and never touches a rejected one', async () => {
+      it('removes a stale unattached upload (objects first, then the row), keeps a fresh one and an attached one, and purges a rejected one too (B-283)', async () => {
         const u = await seedUser('a');
         const stale = await uploadImage(u);
         const rejected = await uploadImage(u);
@@ -1206,15 +1206,15 @@ describe('Post media pipeline e2e', () => {
 
         const out = await app.get(PostMediaService).purgeUnattached(new Date(clockNow));
 
-        expect(out).toEqual({ purged: 1, failed: 0 });
+        expect(out).toEqual({ purged: 2, failed: 0, heldBack: 0 });
         expect(await prisma().postMedia.count({ where: { id: stale } })).toBe(0);
         expect(storage.has(`private-media/${u.id}/${stale}.jpg`)).toBe(false);
         expect(await prisma().postMedia.count({ where: { id: fresh } })).toBe(1);
         expect(await prisma().postMedia.count({ where: { id: attached } })).toBe(1);
         expect(storage.has(`private-media/${u.id}/${attached}.jpg`)).toBe(true);
-        // the rejected file: row and private object both kept, however old
-        expect(await prisma().postMedia.count({ where: { id: rejected } })).toBe(1);
-        expect(storage.has(`private-media/${u.id}/${rejected}.jpg`)).toBe(true);
+        // the rejected file (B-283): object first, then the row
+        expect(await prisma().postMedia.count({ where: { id: rejected } })).toBe(0);
+        expect(storage.has(`private-media/${u.id}/${rejected}.jpg`)).toBe(false);
       });
 
       it('is exactly 7 days by default: nothing is purged at 6 days', async () => {
@@ -1230,7 +1230,7 @@ describe('Post media pipeline e2e', () => {
         advance(8 * 24 * 3600 * 1000);
         storage.failDeleteFor.add(`private-media/${u.id}/${id}.jpg`);
         const first = await app.get(PostMediaService).purgeUnattached(new Date(clockNow));
-        expect(first).toEqual({ purged: 0, failed: 1 });
+        expect(first).toEqual({ purged: 0, failed: 1, heldBack: 0 });
         expect(await prisma().postMedia.count({ where: { id } })).toBe(1);
 
         storage.failDeleteFor.clear();
@@ -1238,14 +1238,14 @@ describe('Post media pipeline e2e', () => {
         expect(await prisma().postMedia.count({ where: { id } })).toBe(0);
       });
 
-      it('anonymising an account keeps the private object of a REJECTED file (B-206 OPEN) and removes the rest', async () => {
+      it('anonymising an account deletes the private object of a REJECTED file too (B-283)', async () => {
         const a = await seedUser('a');
         const rejected = await uploadImage(a);
         const pending = await uploadImage(a);
         await prisma().postMedia.update({ where: { id: rejected }, data: { status: 'rejected', decisionSource: 'auto', decidedAt: new Date(), rejectionReason: 'x' } });
         await app.get(AccountDeletionSweepService).anonymizeUser(a.id, false);
         expect(await prisma().postMedia.count({ where: { uploaderId: a.id } })).toBe(0);
-        expect(storage.has(`private-media/${a.id}/${rejected}.jpg`)).toBe(true);
+        expect(storage.has(`private-media/${a.id}/${rejected}.jpg`)).toBe(false);
         expect(storage.has(`private-media/${a.id}/${pending}.jpg`)).toBe(false);
       });
     });

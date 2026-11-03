@@ -9,7 +9,11 @@ import { ModerationLabel } from '../../src/modules/post-media/media-moderation-d
 import { MediaProcessor, SanitizedImage, VideoProbe } from '../../src/modules/post-media/media-processor';
 import { PostMediaContentType } from '../../src/modules/post-media/media-signature.util';
 import { PostMediaConfig } from '../../src/modules/post-media/post-media.config';
-import { DirectUploadStorageService } from '../../src/storage/direct-upload-storage.service';
+import {
+  DirectUploadStorageService,
+  ListedObject,
+  StorageListNotPermittedError,
+} from '../../src/storage/direct-upload-storage.service';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const sharp = require('sharp') as typeof SharpFactory;
@@ -109,6 +113,37 @@ export class InMemoryStorage extends DirectUploadStorageService {
 
   publicUrlFor(key: string): string {
     return `https://cdn.test/${key}`;
+  }
+
+  // backend/b283-delete-rejected-media (B-283): the list the stray sweep needs. An object's last-modified time
+  // defaults to NOW (so a freshly written object is "too young"); a test makes one old by setting `modified`.
+  readonly modified = new Map<string, Date>();
+  /** The store refuses LIST (the key has no list permission). */
+  listNotPermitted = false;
+  /** Objects per page, so pagination is exercised. */
+  pageSize = 1000;
+
+  async listObjects(
+    prefix: string,
+    options: { maxKeys?: number; continuationToken?: string | null } = {},
+  ): Promise<{ objects: ListedObject[]; nextToken: string | null }> {
+    this.ensure();
+    if (this.listNotPermitted) throw new StorageListNotPermittedError();
+    // The continuation token is the last key of the previous page (like a real store), so deleting objects while
+    // paging does not skip any.
+    const after = options.continuationToken ?? '';
+    const keys = [...this.objects.keys()].filter((k) => k.startsWith(prefix) && k > after).sort();
+    const size = Math.min(options.maxKeys ?? 1000, this.pageSize);
+    const slice = keys.slice(0, size);
+    const next = keys.length > size ? slice[slice.length - 1] : null;
+    return {
+      objects: slice.map((key) => ({
+        key,
+        size: this.objects.get(key)!.buffer.length,
+        lastModified: this.modified.get(key) ?? new Date(),
+      })),
+      nextToken: next,
+    };
   }
 }
 

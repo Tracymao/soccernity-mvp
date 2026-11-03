@@ -77,6 +77,26 @@ describe('PostMediaConfig', () => {
     expect(cfg({ MEDIA_REVIEW_UNCHECKED_AFTER_MINUTES: 'soon' }).uncheckedToReviewAfterMinutes).toBe(30);
   });
 
+  it('the stray-sweep settings have the veto-able defaults and are configurable (B-283)', () => {
+    const c = cfg();
+    expect(c.strayMinAgeDays).toBe(7);
+    expect(c.strayMinAgeDays).toBe(c.unattachedMaxAgeDays); // starts equal to the B-259 window
+    expect(c.straySweepMaxDeletes).toBe(200);
+    expect(c.straySweepDryRun).toBe(false);
+    expect(cfg({ POST_MEDIA_STRAY_MIN_AGE_DAYS: '14', POST_MEDIA_STRAY_SWEEP_MAX_DELETES: '50' }).strayMinAgeDays).toBe(14);
+    expect(cfg({ POST_MEDIA_STRAY_SWEEP_MAX_DELETES: '50' }).straySweepMaxDeletes).toBe(50);
+    // a bad value falls back to the default rather than producing a nonsense limit
+    expect(cfg({ POST_MEDIA_STRAY_MIN_AGE_DAYS: '0' }).strayMinAgeDays).toBe(7);
+    expect(cfg({ POST_MEDIA_STRAY_MIN_AGE_DAYS: 'soon' }).strayMinAgeDays).toBe(7);
+    expect(cfg({ POST_MEDIA_STRAY_SWEEP_MAX_DELETES: '-5' }).straySweepMaxDeletes).toBe(200);
+  });
+
+  it('the dry run is on only for the literal "true" (any case, trimmed)', () => {
+    expect(cfg({ POST_MEDIA_STRAY_SWEEP_DRY_RUN: 'true' }).straySweepDryRun).toBe(true);
+    expect(cfg({ POST_MEDIA_STRAY_SWEEP_DRY_RUN: ' TRUE ' }).straySweepDryRun).toBe(true);
+    for (const v of ['false', '1', 'yes', '', 'on']) expect(cfg({ POST_MEDIA_STRAY_SWEEP_DRY_RUN: v }).straySweepDryRun).toBe(false);
+  });
+
   it('video sampling and retry settings have bounded defaults', () => {
     const c = cfg();
     expect(c.videoSampling).toEqual({ intervalSeconds: 5, maxFrames: 30 });

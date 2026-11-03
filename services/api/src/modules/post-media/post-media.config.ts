@@ -42,6 +42,13 @@ export const POST_MEDIA_DEFAULTS = {
   reportDailyLimit: 20,
   // A confirmed upload that was never attached to a post is purged after this many days (never a rejected one).
   unattachedMaxAgeDays: 7,
+  // backend/b283-delete-rejected-media (B-283; Decision Log #464). ADOPTED DEFAULTS, founder-veto-able.
+  // The stray sweep deletes no stored object younger than this many days (measured on the object's own
+  // last-modified time). A NEW value on purpose: it starts equal to unattachedMaxAgeDays (the B-259 window the
+  // founder named) but can be tuned on its own.
+  strayMinAgeDays: 7,
+  // The most objects one sweep run deletes (the cap convention of ANONYMIZED_PURGE_MAX_PER_RUN, 200 per run).
+  straySweepMaxDeletes: 200,
 } as const;
 
 export interface PostMediaLimits {
@@ -173,6 +180,21 @@ export class PostMediaConfig {
   /** B-259: days after which a confirmed, never-attached upload is purged. */
   get unattachedMaxAgeDays(): number {
     return this.num('POST_MEDIA_UNATTACHED_MAX_AGE_DAYS', POST_MEDIA_DEFAULTS.unattachedMaxAgeDays, 1, 365);
+  }
+
+  /** B-283: the minimum age in days of a stored object before the stray sweep may delete it. */
+  get strayMinAgeDays(): number {
+    return this.num('POST_MEDIA_STRAY_MIN_AGE_DAYS', POST_MEDIA_DEFAULTS.strayMinAgeDays, 1, 365);
+  }
+
+  /** B-283: the most objects one sweep run deletes, per phase (deferred deletions, then strays). */
+  get straySweepMaxDeletes(): number {
+    return this.num('POST_MEDIA_STRAY_SWEEP_MAX_DELETES', POST_MEDIA_DEFAULTS.straySweepMaxDeletes, 1, 10000);
+  }
+
+  /** B-283: when "true" the stray sweep only counts and logs what it would delete; it deletes nothing. */
+  get straySweepDryRun(): boolean {
+    return this.config.get<string>('POST_MEDIA_STRAY_SWEEP_DRY_RUN')?.trim().toLowerCase() === 'true';
   }
 
   get checkBatchSize(): number {

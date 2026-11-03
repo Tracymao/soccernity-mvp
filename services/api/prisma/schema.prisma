@@ -2591,8 +2591,11 @@ model PostMedia {
   // (publicKey) only when it is approved. publicKey / publicUrl are the DETERMINISTIC public location,
   // computed at confirm time so Post.mediaUrls can point at it; the object only exists there while
   // publishedAt is set. Invariant the reconciler enforces: a public object exists iff status 'approved' and
-  // not hiddenPendingReview. A rejected file keeps its privateKey object (evidence handling is OPEN under
-  // counsel, B-206): no purge or cleanup path deletes it.
+  // not hiddenPendingReview. A rejected file keeps its privateKey object only while its row exists: every
+  // lifecycle deletion (post deleted, upload deleted, quarantine/unattached purge, account anonymised or
+  // purged) now deletes it too (B-283, Decision Log #464), unless the uploader has an active hold or the post
+  // has an open report, in which case the deletion is recorded in PostMediaDeferredDeletion and retried.
+  // Statutory-reporting/evidence handling stays OPEN under counsel (B-206).
   privateKey          String?   @unique
   // Set while the object is in the public prefix; NULL otherwise.
   publishedAt         DateTime?
@@ -2667,6 +2670,24 @@ model PostMediaReport {
   reason     String?
 
   @@unique([mediaId, reporterId])
+  @@index([createdAt])
+}
+
+// backend/b283-delete-rejected-media (B-283; Decision Log #462 (g), #464). A genuine new model, flagged per CLAUDE.md's
+// "fixed spec" rule. One stored media object whose deletion was DEFERRED because, at the moment its PostMedia row
+// went away (post deleted, upload deleted, account anonymised), the uploader had an active hold or the post had a
+// report that was not yet closed. The row is gone, so without this record nothing could retry the deletion.
+// RejectedMediaSweepService.processDeferred deletes the object (and this record) once neither protection applies.
+// uploaderId and postId are plain strings with NO foreign key on purpose: the record must outlive the account and the
+// post it describes. objectKey is unique: one record per object.
+model PostMediaDeferredDeletion {
+  id         String   @id @default(uuid())
+  objectKey  String   @unique
+  mediaId    String
+  uploaderId String
+  postId     String?
+  createdAt  DateTime @default(now())
+
   @@index([createdAt])
 }
 

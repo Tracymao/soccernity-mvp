@@ -1,10 +1,11 @@
 import { ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { CopyObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { CopyObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import * as path from 'path';
 import { Readable } from 'stream';
+import { StorageListNotPermittedError } from './direct-upload-storage.service';
 import { S3StorageService } from './s3-storage.service';
 
 // backend/w14-post-media-pipeline (B-041): the direct-to-storage half of S3StorageService. Unlike
@@ -99,6 +100,52 @@ describe('S3StorageService direct upload', () => {
       const url = await new S3StorageService(cfg({ ...base, S3_PUBLIC_BASE_URL: 'https://media.example.com' })).uploadFile(file, 'post-media/u1/x.mp4', 'video/mp4');
       expect(url).toBe('https://media.example.com/post-media/u1/x.mp4');
       expect(sent[0].input).toMatchObject({ Bucket: 'b', Key: 'post-media/u1/x.mp4', ContentType: 'video/mp4', ContentLength: 10 });
+    });
+  });
+
+  // backend/b283-delete-rejected-media (B-283; Decision Log #464): the list the stray sweep needs.
+  describe('listObjects', () => {
+    it('lists one page under the prefix and reports the next token (only while truncated)', async () => {
+      const sent: ListObjectsV2Command[] = [];
+      jest.spyOn(S3Client.prototype, 'send').mockImplementation((async (cmd: ListObjectsV2Command) => {
+        sent.push(cmd);
+        return {
+          IsTruncated: true,
+          NextContinuationToken: 'tok2',
+          Contents: [
+            { Key: 'private-media/u1/a.jpg', Size: 5, LastModified: new Date('2026-11-01T00:00:00Z') },
+            { Key: 'private-media/u1/b.jpg' },
+            { Size: 9 }, // no key: dropped
+          ],
+        };
+      }) as never);
+      const page = await new S3StorageService(cfg(base)).listObjects('private-media/', { maxKeys: 50, continuationToken: 'tok1' });
+      expect(sent[0]).toBeInstanceOf(ListObjectsV2Command);
+      expect(sent[0].input).toMatchObject({ Bucket: 'b', Prefix: 'private-media/', MaxKeys: 50, ContinuationToken: 'tok1' });
+      expect(page.nextToken).toBe('tok2');
+      expect(page.objects).toEqual([
+        { key: 'private-media/u1/a.jpg', size: 5, lastModified: new Date('2026-11-01T00:00:00Z') },
+        { key: 'private-media/u1/b.jpg', size: 0, lastModified: null },
+      ]);
+    });
+
+    it('the last page has no next token, and an empty prefix is an empty page', async () => {
+      jest.spyOn(S3Client.prototype, 'send').mockResolvedValue({ IsTruncated: false } as never);
+      expect(await new S3StorageService(cfg(base)).listObjects('x/')).toEqual({ objects: [], nextToken: null });
+    });
+
+    it('a refused list (AccessDenied / 403) becomes StorageListNotPermittedError; any other failure passes through', async () => {
+      jest.spyOn(S3Client.prototype, 'send').mockRejectedValueOnce(Object.assign(new Error('denied'), { name: 'AccessDenied' }) as never);
+      await expect(new S3StorageService(cfg(base)).listObjects('x/')).rejects.toBeInstanceOf(StorageListNotPermittedError);
+      jest.spyOn(S3Client.prototype, 'send').mockRejectedValueOnce(Object.assign(new Error('x'), { $metadata: { httpStatusCode: 403 } }) as never);
+      await expect(new S3StorageService(cfg(base)).listObjects('x/')).rejects.toBeInstanceOf(StorageListNotPermittedError);
+      jest.spyOn(S3Client.prototype, 'send').mockRejectedValueOnce(new Error('boom') as never);
+      await expect(new S3StorageService(cfg(base)).listObjects('x/')).rejects.toThrow('boom');
+    });
+
+    it('is a 503 when no store is configured', async () => {
+      const service = new S3StorageService(cfg({ S3_BUCKET: 'replace-me', S3_ACCESS_KEY: 'replace-me', S3_SECRET_KEY: 'replace-me' }));
+      await expect(service.listObjects('x/')).rejects.toBeInstanceOf(ServiceUnavailableException);
     });
   });
 

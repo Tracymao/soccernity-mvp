@@ -447,7 +447,8 @@ export class AccountDeletionSweepService {
       // and contest entries go with the account. The rows are deleted here, their URLs are removed from
       // the (surviving, #341) posts, and the stored objects are removed after the commit below.
       // (A minimised report-held account KEEPS its PostMedia: it may be the reported content, B-044.)
-      postMediaKeys = await deleteUserPostMedia(tx, userId);
+      // B-283: the private object of a REJECTED file goes too (unless held / open report, then deferred).
+      postMediaKeys = await deleteUserPostMedia(tx, userId, now);
 
       // Teams they organised go dormant: no organiser, so every
       // createdById-based authorization check fails closed (403).
