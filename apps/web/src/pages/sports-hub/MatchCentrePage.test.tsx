@@ -5,8 +5,11 @@
 // comment) -- these tests exercise that directly by asserting a given
 // resource fetch has NOT fired until its own tab is activated.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import MatchCentrePage from "./MatchCentrePage";
 import {
   SportsApiError,
@@ -19,6 +22,7 @@ import {
   type Highlights,
   type MatchAvailability,
   type MatchBoxScore,
+  type StandingRow,
 } from "../../api/sports";
 import FieldAvailabilityGate from "./FieldAvailabilityGate";
 
@@ -204,7 +208,8 @@ describe("MatchCentrePage", () => {
     expect(await screen.findByText("58%")).not.toBeNull();
     expect(screen.getByText("42%")).not.toBeNull();
     expect(screen.getByText("Ball Possession")).not.toBeNull();
-    expect(screen.getByText(/Player ratings and expected goals are shown below/i)).not.toBeNull();
+    // The old pointer to the (now hidden) ratings / xG sections is gone.
+    expect(screen.queryByText(/shown below/i)).toBeNull();
     expect(getMatchStatistics).toHaveBeenCalledWith("m1");
   });
 
@@ -337,7 +342,11 @@ describe("MatchCentrePage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Standings" }));
 
-    expect(await screen.findByText(/recent-form data isn.t available/i)).not.toBeNull();
+    expect(await screen.findByRole("table")).not.toBeNull();
+    // Highlightly sends no form: no FORM column, and no notice explaining its absence.
+    expect(screen.queryByRole("columnheader", { name: "Form" })).toBeNull();
+    expect(screen.queryByText(/recent-form data/i)).toBeNull();
+    expect(screen.getAllByRole("columnheader")).toHaveLength(10);
     expect(getStandings).toHaveBeenCalledWith("39", "2026");
     // Both rows render inside the standings table (team names appear
     // twice on screen now -- once in the header, once in the table).
@@ -414,14 +423,14 @@ describe("MatchCentrePage", () => {
   });
 });
 
-describe("MatchCentrePage — vendor-dependent field placeholders", () => {
+describe("MatchCentrePage — vendor-absent fields are hidden", () => {
   const TEAM_STATS = {
     home: { team: team("hp1", "Liverpool"), statistics: [{ label: "Ball Possession", value: "58%" }] },
     away: { team: team("ap1", "Chelsea"), statistics: [{ label: "Ball Possession", value: "42%" }] },
     updatedAt: null,
   };
 
-  it("renders each vendor-only Statistics metric as a disabled 'not available from provider' placeholder, with no value shown", async () => {
+  it("renders nothing for each vendor-absent Statistics metric: no title, no notice, no disabled section", async () => {
     vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
     vi.mocked(getMatchStatistics).mockResolvedValueOnce({ ...TEAM_STATS, availability: STATS_NOT_AVAILABLE });
 
@@ -429,13 +438,16 @@ describe("MatchCentrePage — vendor-dependent field placeholders", () => {
     await screen.findByText("Liverpool");
     fireEvent.click(screen.getByRole("button", { name: "Statistics" }));
 
-    expect(await screen.findByText("Player box score · RATING")).not.toBeNull();
-    expect(screen.getByText("Expected goals (xG)")).not.toBeNull();
-    expect(screen.getByText("Pressure index")).not.toBeNull();
-    expect(screen.getByText("Shot map")).not.toBeNull();
-    expect(screen.getAllByText("Not available from current data provider")).toHaveLength(4);
+    expect(await screen.findByText("Ball Possession")).not.toBeNull();
+    await waitFor(() => expect(getMatchBoxScore).toHaveBeenCalled());
+    expect(screen.queryByText("Player box score · RATING")).toBeNull();
+    expect(screen.queryByText("Expected goals (xG)")).toBeNull();
+    expect(screen.queryByText("Pressure index")).toBeNull();
+    expect(screen.queryByText("Shot map")).toBeNull();
+    expect(screen.queryByText("Not available from current data provider")).toBeNull();
     expect(screen.queryByText("No data for this match yet")).toBeNull();
-    expect(document.querySelectorAll('[aria-disabled="true"]')).toHaveLength(4);
+    expect(document.querySelectorAll('[aria-disabled="true"]')).toHaveLength(0);
+    expect(document.querySelectorAll(".mc-disabled")).toHaveLength(0);
   });
 
   it("tells 'no data for this match' apart from 'not available from provider' on the same tab", async () => {
@@ -459,7 +471,10 @@ describe("MatchCentrePage — vendor-dependent field placeholders", () => {
     fireEvent.click(screen.getByRole("button", { name: "Statistics" }));
 
     expect(await screen.findAllByText("No data for this match yet")).toHaveLength(2);
-    expect(screen.getAllByText("Not available from current data provider")).toHaveLength(2);
+    // The vendor-absent half is hidden outright, only the vendor-can-supply half shows.
+    expect(screen.queryByText("Shot map")).toBeNull();
+    expect(screen.queryByText("Expected goals (xG)")).toBeNull();
+    expect(screen.queryByText("Not available from current data provider")).toBeNull();
   });
 
   it("renders real player ratings and team xG from the box score when the provider supplies them", async () => {
@@ -491,10 +506,12 @@ describe("MatchCentrePage — vendor-dependent field placeholders", () => {
     expect(screen.getByText("8.2")).not.toBeNull();
     expect(screen.getByText("1.14")).not.toBeNull();
     expect(screen.getByText("0.25")).not.toBeNull();
-    // Only the metrics with no source at all remain gated.
+    // Only the metrics with no source at all stay hidden.
     expect(screen.queryByText("Player box score · RATING")).toBeNull();
-    expect(screen.getAllByText("Not available from current data provider")).toHaveLength(2);
-    expect(document.querySelectorAll('[aria-disabled="true"]')).toHaveLength(2);
+    expect(screen.queryByText("Pressure index")).toBeNull();
+    expect(screen.queryByText("Shot map")).toBeNull();
+    expect(screen.queryByText("Not available from current data provider")).toBeNull();
+    expect(document.querySelectorAll('[aria-disabled="true"]')).toHaveLength(0);
   });
 
   it("does not fetch the box score until the Statistics tab is opened", async () => {
@@ -505,11 +522,10 @@ describe("MatchCentrePage — vendor-dependent field placeholders", () => {
 
     expect(getMatchBoxScore).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Statistics" }));
-    await screen.findByText("Player box score · RATING");
-    expect(getMatchBoxScore).toHaveBeenCalledWith("m1");
+    await waitFor(() => expect(getMatchBoxScore).toHaveBeenCalledWith("m1"));
   });
 
-  it("still shows the advanced-metric placeholders when team totals are missing entirely", async () => {
+  it("keeps the existing empty state, and no placeholder, when team totals are missing and every advanced metric is vendor-absent", async () => {
     vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
     vi.mocked(getMatchStatistics).mockResolvedValueOnce({ home: null, away: null, updatedAt: null, availability: STATS_NOT_AVAILABLE });
 
@@ -518,10 +534,11 @@ describe("MatchCentrePage — vendor-dependent field placeholders", () => {
     fireEvent.click(screen.getByRole("button", { name: "Statistics" }));
 
     expect(await screen.findByText(/team statistics aren.t available for this match yet/i)).not.toBeNull();
-    expect(screen.getAllByText("Not available from current data provider")).toHaveLength(4);
+    expect(screen.queryByText("Not available from current data provider")).toBeNull();
+    expect(document.querySelectorAll(".mc-section")).toHaveLength(0);
   });
 
-  it("shows an 'Expected lineups' placeholder on the Lineups tab, even when no XI is available yet", async () => {
+  it("hides 'Expected lineups' on the Lineups tab, leaving only the existing empty message, when no XI is available yet", async () => {
     vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
     vi.mocked(getMatchLineups).mockResolvedValueOnce({ ...EMPTY_LINEUPS, expectedLineups: "not_available_from_provider" });
 
@@ -529,8 +546,9 @@ describe("MatchCentrePage — vendor-dependent field placeholders", () => {
     await screen.findByText("Liverpool");
     fireEvent.click(screen.getByRole("button", { name: "Lineups" }));
 
-    expect(await screen.findByText("Expected lineups")).not.toBeNull();
-    expect(screen.getByText("Not available from current data provider")).not.toBeNull();
+    expect(await screen.findByText(/Lineups aren.t available for this match yet/)).not.toBeNull();
+    expect(screen.queryByText("Expected lineups")).toBeNull();
+    expect(screen.queryByText("Not available from current data provider")).toBeNull();
   });
 
   it("a top-scorers failure does not hide the standings table beneath which it renders", async () => {
@@ -557,15 +575,18 @@ describe("MatchCentrePage — vendor-dependent field placeholders", () => {
     expect(getTopScorers).toHaveBeenCalledWith("39", "2026");
   });
 
-  it("renders top scorers as a disabled placeholder when the provider cannot supply them", async () => {
+  it("hides top scorers entirely when the provider cannot supply them", async () => {
     vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
 
     renderPage();
     await screen.findByText("Liverpool");
     fireEvent.click(screen.getByRole("button", { name: "Standings" }));
 
-    expect(await screen.findByText("Top scorers")).not.toBeNull();
-    expect(await screen.findByText("Not available from current data provider")).not.toBeNull();
+    await waitFor(() => expect(getTopScorers).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText("Loading top scorers…")).toBeNull());
+    expect(screen.queryByText("Top scorers")).toBeNull();
+    expect(screen.queryByText("Not available from current data provider")).toBeNull();
+    expect(document.querySelectorAll(".mc-disabled")).toHaveLength(0);
   });
 
   it("renders top scorers as real rows only when the provider supports them", async () => {
@@ -586,6 +607,54 @@ describe("MatchCentrePage — vendor-dependent field placeholders", () => {
   });
 });
 
+describe("MatchCentrePage — Standings FORM column", () => {
+  const ROWS: StandingRow[] = [
+    { position: 1, team: team("hp1", "Liverpool"), points: 20, played: 8, won: 6, drawn: 2, lost: 0, goalsFor: 18, goalsAgainst: 6, goalDifference: 12 },
+    { position: 2, team: team("ap1", "Chelsea"), points: 18, played: 8, won: 6, drawn: 0, lost: 2, goalsFor: 15, goalsAgainst: 8, goalDifference: 7 },
+  ];
+
+  async function openStandings(rows: StandingRow[]) {
+    vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
+    vi.mocked(getStandings).mockResolvedValueOnce({ leagueId: "39", season: "2026", groups: [{ name: null, rows }], updatedAt: null });
+    renderPage();
+    await screen.findByText("Liverpool");
+    fireEvent.click(screen.getByRole("button", { name: "Standings" }));
+    await screen.findByRole("table");
+  }
+
+  it("without form: no FORM header or cell, 10 columns on every row", async () => {
+    await openStandings(ROWS);
+    expect(screen.queryByRole("columnheader", { name: "Form" })).toBeNull();
+    expect(screen.getAllByRole("columnheader")).toHaveLength(10);
+    for (const row of screen.getAllByRole("row").slice(1)) {
+      expect(row.querySelectorAll("td")).toHaveLength(10);
+    }
+    expect(document.querySelectorAll(".mc-form-chip")).toHaveLength(0);
+  });
+
+  it("with form on the rows (a provider that supplies it): FORM column drawn, header and cells aligned", async () => {
+    await openStandings([
+      { ...ROWS[0], form: ["W", "W", "D"] },
+      { ...ROWS[1], form: ["L", "W"] },
+    ]);
+    expect(screen.getByRole("columnheader", { name: "Form" })).not.toBeNull();
+    expect(screen.getAllByRole("columnheader")).toHaveLength(11);
+    for (const row of screen.getAllByRole("row").slice(1)) {
+      expect(row.querySelectorAll("td")).toHaveLength(11);
+    }
+    expect(document.querySelectorAll(".mc-form-chip")).toHaveLength(5);
+  });
+
+  it("an empty form array on every row counts as absent: still no column", async () => {
+    await openStandings([
+      { ...ROWS[0], form: [] },
+      { ...ROWS[1], form: [] },
+    ]);
+    expect(screen.queryByRole("columnheader", { name: "Form" })).toBeNull();
+    expect(screen.getAllByRole("columnheader")).toHaveLength(10);
+  });
+});
+
 describe("FieldAvailabilityGate", () => {
   it("renders children, and no placeholder, only when the signal is 'available'", () => {
     render(
@@ -597,13 +666,99 @@ describe("FieldAvailabilityGate", () => {
     expect(screen.queryByText("Shot map")).toBeNull();
   });
 
-  it("never renders children for an unavailable state", () => {
+  it("renders nothing at all for a vendor-absent field: empty DOM, no label, no notice", () => {
+    const { container } = render(
+      <FieldAvailabilityGate label="Shot map" availability="not_available_from_provider">
+        <p>should not appear</p>
+      </FieldAvailabilityGate>,
+    );
+    expect(container.innerHTML).toBe("");
+    expect(screen.queryByText("should not appear")).toBeNull();
+    expect(screen.queryByText("Shot map")).toBeNull();
+  });
+
+  it("keeps the 'no data for this match yet' state: the vendor can supply it, nothing is cached", () => {
     render(
       <FieldAvailabilityGate label="Shot map" availability="no_data">
         <p>should not appear</p>
       </FieldAvailabilityGate>,
     );
     expect(screen.queryByText("should not appear")).toBeNull();
+    expect(screen.getByText("Shot map")).not.toBeNull();
     expect(screen.getByText("No data for this match yet")).not.toBeNull();
+  });
+});
+
+// One test per vendor-dependent field: the backend availability signal (derived from the
+// capability registry) maps to "hidden" in the Match Centre. Registry contents themselves are
+// tested in services/api (sports-data-provider.constants.spec.ts); this pins the web side.
+describe("MatchCentrePage — each vendor-absent field is hidden", () => {
+  const TEAM_STATS = {
+    home: { team: team("hp1", "Liverpool"), statistics: [{ label: "Ball Possession", value: "58%" }] },
+    away: { team: team("ap1", "Chelsea"), statistics: [{ label: "Ball Possession", value: "42%" }] },
+    updatedAt: null,
+  };
+  const ABSENT = "not_available_from_provider" as const;
+
+  it.each([
+    ["Pressure index", { pressureIndex: ABSENT, shotMaps: "available" as const }],
+    ["Shot map", { pressureIndex: "available" as const, shotMaps: ABSENT }],
+  ])("%s is hidden when the signal is not_available_from_provider", async (label, availability) => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
+    vi.mocked(getMatchStatistics).mockResolvedValueOnce({ ...TEAM_STATS, availability });
+    renderPage();
+    await screen.findByText("Liverpool");
+    fireEvent.click(screen.getByRole("button", { name: "Statistics" }));
+    await screen.findByText("Ball Possession");
+    expect(screen.queryByText(label)).toBeNull();
+  });
+
+  it.each([
+    ["Player box score · RATING", { playerRatings: ABSENT, expectedGoals: "no_data" as const }, "Expected goals (xG)"],
+    ["Expected goals (xG)", { playerRatings: "no_data" as const, expectedGoals: ABSENT }, "Player box score · RATING"],
+  ])("%s is hidden when the box-score signal is not_available_from_provider", async (label, availability, visibleLabel) => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
+    vi.mocked(getMatchStatistics).mockResolvedValueOnce({ ...TEAM_STATS, availability: STATS_NOT_AVAILABLE });
+    vi.mocked(getMatchBoxScore).mockResolvedValueOnce({ home: null, away: null, updatedAt: null, availability });
+    renderPage();
+    await screen.findByText("Liverpool");
+    fireEvent.click(screen.getByRole("button", { name: "Statistics" }));
+    // the sibling field (vendor can supply it, no data yet) still shows, the absent one does not
+    expect(await screen.findByText(visibleLabel)).not.toBeNull();
+    expect(screen.queryByText(label)).toBeNull();
+  });
+
+  it("Expected lineups is hidden when the lineups signal is not_available_from_provider, even with a full XI", async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(LIVERPOOL_V_CHELSEA);
+    vi.mocked(getMatchLineups).mockResolvedValueOnce({
+      ...EMPTY_LINEUPS,
+      home: { ...EMPTY_LINEUPS.home, startingXI: [{ id: "1", name: "Alisson", number: 1, position: "GK" }] },
+      expectedLineups: ABSENT,
+    });
+    renderPage();
+    await screen.findByText("Liverpool");
+    fireEvent.click(screen.getByRole("button", { name: "Lineups" }));
+    expect(await screen.findByText("Alisson")).not.toBeNull();
+    expect(screen.queryByText("Expected lineups")).toBeNull();
+  });
+});
+
+// The removed wording must not creep back anywhere in the web sources.
+describe("removed vendor-absent wording", () => {
+  it("appears in no non-test web source file", () => {
+    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (/\.(tsx?|css)$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
+          const text = fs.readFileSync(full, "utf8");
+          if (/Not available from current data provider|Recent-form data isn/i.test(text)) offenders.push(full);
+        }
+      }
+    };
+    walk(root);
+    expect(offenders).toEqual([]);
   });
 });

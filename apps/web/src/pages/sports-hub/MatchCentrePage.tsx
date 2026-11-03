@@ -32,9 +32,12 @@
 //      exists from this vendor. The Figma redesign's player box-score
 //      table is NOT reproduced here; an honest disclosure note is shown
 //      instead.
-//   2. Standings rows carry no "form" (recent-results) field. The Figma
-//      Standing screen's FORM column is NOT reproduced; a disclosure
-//      note is shown instead.
+//   2. Standings rows carry no "form" (recent-results) field. The FORM
+//      column is hidden (Decision Log #378 / #462 item (h)), and drawn only
+//      if the server sends `form` on the rows.
+//
+// Vendor-absent fields are HIDDEN, not shown as placeholders (see
+// FieldAvailabilityGate.tsx).
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import {
@@ -268,7 +271,6 @@ function StatisticsTab({
           );
         })}
       </ul>
-      <StatusMessage>Team totals. Player ratings and expected goals are shown below.</StatusMessage>
     </Section>
     {advanced}
     </>
@@ -278,7 +280,7 @@ function StatisticsTab({
 // ---------- Statistics: vendor-dependent gates ----------
 
 // Ratings and xG come from the per-player box score, shown when the backend reports them available.
-// Pressure index and shot map have no source at all yet, so they stay on the placeholder. Changing
+// Pressure index and shot map have no source at all yet, so they are hidden. Changing
 // SPORTS_DATA_PROVIDER on the backend flips every gate here without any edit in this file.
 function AdvancedMetricGates({
   availability,
@@ -657,7 +659,10 @@ function StandingsTab({ standings, homeTeamId, awayTeamId, onRetry }: {
 
   return (
     <Section title="Standings">
-      {standings.data.groups.map((group, gi) => (
+      {standings.data.groups.map((group, gi) => {
+        // FORM column only when the server sent `form` on at least one row of the group.
+        const showForm = group.rows.some((r) => r.form != null && r.form.length > 0);
+        return (
         <div key={gi} className="mc-standings-group">
           {group.name && <h3 className="mc-subheading">{group.name}</h3>}
           <table className="mc-standings-table">
@@ -673,6 +678,7 @@ function StandingsTab({ standings, homeTeamId, awayTeamId, onRetry }: {
                 <th>GA</th>
                 <th>GD</th>
                 <th>Pts</th>
+                {showForm && <th>Form</th>}
               </tr>
             </thead>
             <tbody>
@@ -697,14 +703,25 @@ function StandingsTab({ standings, homeTeamId, awayTeamId, onRetry }: {
                     <td>
                       <strong>{row.points}</strong>
                     </td>
+                    {showForm && (
+                      <td>
+                        <span className="mc-form-chips" aria-label={`Recent form: ${(row.form ?? []).join(" ")}`}>
+                          {(row.form ?? []).map((c, i) => (
+                            <span key={i} className={`mc-form-chip mc-form-chip--${c.toLowerCase()}`}>
+                              {c}
+                            </span>
+                          ))}
+                        </span>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
-      ))}
-      <StatusMessage>Recent-form data isn&rsquo;t available from this data source yet.</StatusMessage>
+        );
+      })}
     </Section>
   );
 }
