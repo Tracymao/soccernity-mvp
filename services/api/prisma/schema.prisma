@@ -583,9 +583,45 @@ model RevokedUsername {
   userId    String
   revokedAt DateTime @default(now())
   holdUntil DateTime
+  // backend/b139-username-review (B-139 part (c), Decision Log #467): the AdminUser who revoked. A plain string,
+  // not a foreign key, for the same reason userId is not one (a moderation record outlives the accounts it
+  // names). Set by the revoke service from now on; NULL on rows written before this column existed, where the
+  // review route falls back to the 'user.username_revoked' AdminActionLog row. It is how "a DIFFERENT admin
+  // decides" is enforced.
+  revokedByAdminId String?
+  // The user's one request for a review of THIS revocation (if any). Deleting this record deletes the request.
+  reviewRequest UsernameReviewRequest?
 
   @@unique([username, userId])
   @@index([username, holdUntil])
+}
+
+// backend/b139-username-review (B-139 part (c), Decision Log #467, founder decision 2026-11-03): a revoked user's
+// request for a REVIEW of an admin's username removal. ONE per revocation (revokedUsernameId is unique). A genuine
+// addition beyond Section 3's entity list -- flagged as a Decision Log candidate, not silently added.
+//   - `userId` is a plain string for the same reason RevokedUsername.userId is (the record must survive the
+//     account's anonymization; a real FK would add a RESTRICT reference to User, #341).
+//   - `status` is a plain string, like every other status column here: pending | reinstated | declined. A
+//     reinstated request is written for an instant and then deleted with its RevokedUsername record (the decision
+//     lives in the audit log), so 'reinstated' is never read back.
+//   - The deciding admin's REASON is NOT stored here: it goes to the AdminActionLog row written in the same
+//     transaction ('user.username_review_decided'). `decidedByAdminId` is a plain string like RevokedUsername's.
+//   - The row is deleted by cascade with its RevokedUsername record (the anonymization-plus-hold path and the
+//     reinstatement), and explicitly at anonymization (the message is the user's free text).
+model UsernameReviewRequest {
+  id                String          @id @default(uuid())
+  revokedUsernameId String          @unique
+  revokedUsername   RevokedUsername @relation(fields: [revokedUsernameId], references: [id], onDelete: Cascade)
+  userId            String
+  // Optional free text from the user, trimmed, at most 500 characters (CHECK in the migration).
+  message           String?
+  status            String          @default("pending")
+  createdAt         DateTime        @default(now())
+  decidedAt         DateTime?
+  decidedByAdminId  String?
+
+  @@index([status, createdAt])
+  @@index([userId])
 }
 
 // sprint-2/account-deletion-sweep, implementing Decision Log #42's
@@ -1291,7 +1327,7 @@ model Notification {
   // (contest.service.ts, one per ContestRoundWinner row, not the monthly
   // ContestStanding crown). `reply` / `system` (this comment's previous
   // wording) were never actually implemented anywhere -- dropped.
-  type         String // follow | like | comment | message | fixture_scheduled | result_logged | contest_win | profile_image_rejected (B-214, payloadRefId = 'avatar' | 'cover'; the reason is NOT copied, it lives on User) | age_milestone (age-reclassification sweep, user turned 16; payloadRefId = milestone key) | match_kickoff (sports kickoff watch, payloadRefId = MatchData.externalRef) | contest_week_opens | contest_votes_closing | contest_week_result (payloadRefId = "<cycleId>:<week>") | contest_finalist | contest_reveal | contest_final_result | contest_upload_reminder (payloadRefId = "<cycleId>") -- backend/w3c-contest-notifications, Decision Log #404 item 16
+  type         String // follow | like | comment | message | fixture_scheduled | result_logged | contest_win | profile_image_rejected (B-214, payloadRefId = 'avatar' | 'cover'; the reason is NOT copied, it lives on User) | age_milestone (age-reclassification sweep, user turned 16; payloadRefId = milestone key) | match_kickoff (sports kickoff watch, payloadRefId = MatchData.externalRef) | contest_week_opens | contest_votes_closing | contest_week_result (payloadRefId = "<cycleId>:<week>") | contest_finalist | contest_reveal | contest_final_result | contest_upload_reminder (payloadRefId = "<cycleId>") -- backend/w3c-contest-notifications, Decision Log #404 item 16 | username_review_decided (backend/b139-username-review, Decision Log #467; payloadRefId = 'reinstated' | 'declined'; the admin's reason is NOT copied)
   payloadRefId String?
   read         Boolean  @default(false)
   createdAt    DateTime @default(now())

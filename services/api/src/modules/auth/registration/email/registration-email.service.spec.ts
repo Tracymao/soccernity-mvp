@@ -239,7 +239,8 @@ describe('RegistrationEmailService', () => {
         buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
       );
 
-      await service.sendUsernameRevokedEmail('user@example.com', 'Ada <b>Obi</b>');
+      // 2026-12-03 is the last day to ask (the caller computes it from the review-window helper).
+      await service.sendUsernameRevokedEmail('user@example.com', 'Ada <b>Obi</b>', new Date(Date.UTC(2026, 11, 3)));
 
       const sent = mockSendEmail.mock.calls[0][0] as { To: string; Subject: string; TextBody: string; HtmlBody: string };
       expect(sent.To).toBe('user@example.com');
@@ -253,6 +254,46 @@ describe('RegistrationEmailService', () => {
       }
       expect(sent.HtmlBody).toContain('Ada &lt;b&gt;Obi&lt;/b&gt;');
       expect(sent.HtmlBody).not.toContain('<b>Obi</b>');
+    });
+
+    // backend/b139-username-review (Decision Log #467, as amended): the email says the person can ask for a review,
+    // how, and until which day. Every earlier sentence is unchanged.
+    it('the username-revoked email says how to ask for a review and names the last day, in both bodies; the old sentences are unchanged', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-revoked-2' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example', WEB_APP_BASE_URL: 'https://app.soccernity.com' }),
+      );
+
+      await service.sendUsernameRevokedEmail('user@example.com', 'Ada Obi', new Date(Date.UTC(2026, 11, 3)));
+
+      const sent = mockSendEmail.mock.calls[0][0] as { TextBody: string; HtmlBody: string };
+      for (const body of [sent.TextBody, sent.HtmlBody]) {
+        expect(body).toContain('You can ask for a review of this decision.');
+        expect(body).toContain('"Ask for a review" button');
+        expect(body).toContain('the screen where you choose a new username');
+        expect(body).toContain('You can ask until 3 December 2026.');
+        // the earlier sentences, verbatim
+        expect(body).toContain('A Soccernity moderator has removed your username because it did not follow our username rules.');
+        expect(body).toContain('Until you choose a new username, other people see you as "Soccernity member"');
+        expect(body).toContain('The next time you log in you will be asked to choose a new username.');
+        expect(body).toContain("You can't use the removed username again, and nobody else can take it for 30 days.");
+        expect(body).toContain('If you think this was a mistake, contact support@soccernity.com.');
+        expect(body).not.toMatch(/https?:\/\//);
+        // founder-reviewed wording: NOT tagged for counsel
+        expect(body).not.toContain('COPY PENDING LEGAL REVIEW');
+      }
+      // the new paragraph sits before the closing sentence
+      expect(sent.TextBody.indexOf('You can ask for a review')).toBeLessThan(sent.TextBody.indexOf('If you think this was a mistake'));
+    });
+
+    it('the date is read in UTC, whatever the server time zone (a moment late on 3 December UTC is still 3 December)', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-revoked-3' });
+      const service = new RegistrationEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example' }),
+      );
+      await service.sendUsernameRevokedEmail('user@example.com', 'Ada', new Date(Date.UTC(2026, 11, 3, 23, 59, 59)));
+      const sent = mockSendEmail.mock.calls[0][0] as { TextBody: string };
+      expect(sent.TextBody).toContain('You can ask until 3 December 2026.');
     });
 
     describe('sendContactEnquiryNotificationEmail', () => {
@@ -349,7 +390,7 @@ describe('RegistrationEmailService', () => {
 
     it('does not send a username-revoked email while the provider is not configured (logs only)', async () => {
       const service = new RegistrationEmailService(buildConfig({ EMAIL_PROVIDER_API_KEY: 'replace-me' }));
-      await expect(service.sendUsernameRevokedEmail('user@example.com', 'Ada')).resolves.toBeUndefined();
+      await expect(service.sendUsernameRevokedEmail('user@example.com', 'Ada', new Date(Date.UTC(2026, 11, 3)))).resolves.toBeUndefined();
       expect(mockSendEmail).not.toHaveBeenCalled();
     });
 

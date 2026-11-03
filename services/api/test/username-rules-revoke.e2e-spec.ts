@@ -196,7 +196,12 @@ describe('Username rules, admin revoke and name keyset e2e (real Postgres)', () 
       expect(logs[0]!.notes).toContain(`reason=${REASON}`);
 
       expect(emailSpy).toHaveBeenCalledTimes(1);
-      expect(emailSpy).toHaveBeenCalledWith(u.email, 'Ada Obi');
+      // backend/b139-username-review: the third argument is the last day to ask for a review, midnight UTC of the
+      // day 30 days after the record's own revokedAt (worked out here independently of the helper).
+      const r = rev[0]!.revokedAt;
+      const lastDay = new Date(Date.UTC(r.getUTCFullYear(), r.getUTCMonth(), r.getUTCDate() + 30));
+      expect(emailSpy).toHaveBeenCalledWith(u.email, 'Ada Obi', lastDay);
+      expect(rev[0]!.revokedByAdminId).toBe(mod.id);
     });
 
     it('puts the account back in the incomplete-profile gate on its EXISTING token: placeholder name, create_profile, cannot post', async () => {

@@ -25,6 +25,7 @@ import { NotificationsController } from './modules/notifications/notifications.c
 import { SportsMatchesController } from './modules/sports/sports-matches.controller';
 import { UserAvatarController } from './modules/users/user-avatar.controller';
 import { UserCoverController } from './modules/users/user-cover.controller';
+import { UsernameReviewController } from './modules/username-review/username-review.controller';
 import { UsersController } from './modules/users/users.controller';
 import { ViewQualificationController } from './modules/view-qualification/view-qualification.controller';
 
@@ -84,6 +85,11 @@ const OPEN_ROUTES: Record<string, string> = {
   // account that was restricted after uploading can still delete what it holds (JwtAuthGuard stays).
   'DELETE /media/uploads/:id': 'removing your own upload is an undo; a restricted account may still delete its own files',
   // B-197 (Decision Log #411 item 5): a safety action needs authentication only (JwtAuthGuard stays, pinned below).
+  // backend/b139-username-review (B-139 part (c), Decision Log #467): a revoked user asks for a review of the
+  // removal. The person has NO username, so ProfileCompleteGuard would refuse them by design, and like report /
+  // appeal it must stay open to a restricted-pending or unverified account (#370). JwtAuthGuard stays.
+  'POST /users/me/username-review':
+    'the asker has no username (ProfileCompleteGuard would refuse them) and, like report / appeal, must stay open to a restricted-pending or unverified account (#370)',
   'POST /users/:id/block': 'a restricted-pending or unverified account must still be able to block (#411 item 5)',
   'DELETE /users/:id/block': 'a restricted-pending or unverified account must still be able to unblock (#411 item 5)',
 };
@@ -166,6 +172,7 @@ const CONTROLLERS = [
   BlockController,
   UserAvatarController,
   UserCoverController,
+  UsernameReviewController,
   FeedController,
   ClubsController,
   BanterController,

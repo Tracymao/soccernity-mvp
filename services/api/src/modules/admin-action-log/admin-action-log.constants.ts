@@ -31,6 +31,12 @@ export const ADMIN_ACTION_LOG_ACTIONS = {
   // change. targetType 'user'. Notes carry the revoked handle, the 30-day hold
   // end and the REASON.
   USER_USERNAME_REVOKED: 'user.username_revoked',
+  // POST /admin/username-reviews/:id/decide (backend/b139-username-review, B-139 part (c), Decision Log #467) -- a
+  // different admin decided a revoked user's request for a review: reinstate or decline. Written in the SAME
+  // transaction as the decision. targetType 'user' (the revoked user), so a row about a MINOR is absent for an
+  // admin who is not child-safety vetted (the reader's existing rule). Notes carry the decision, the handle and
+  // the REASON (internal: never sent to the user or the guardian).
+  USER_USERNAME_REVIEW_DECIDED: 'user.username_review_decided',
   // /admin/users/:id/guardian-notices/{withhold,clear,review} (backend/b280-withhold-guardian-notices, B-280, Decision
   // Log #458). targetType 'user' (the minor). Written in the SAME transaction as the change. Notes carry the REASON
   // (withhold, clear) or the NOTE (review), never anything about the guardian. Only child-safety-vetted admins read

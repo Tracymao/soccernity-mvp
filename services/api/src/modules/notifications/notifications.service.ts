@@ -11,6 +11,7 @@ import { PUBLIC_NAME_SELECT, toPublicUser } from '../users/public-name.util';
 import { notificationBlockHiddenFilter } from './block-visibility.util';
 import { PROFILE_IMAGE_KINDS, ProfileImageKind } from '../users/user-image-review.service';
 import { POST_MEDIA_NOTIFICATION_TYPES } from '../post-media/post-media-review.constants';
+import { USERNAME_REVIEW_NOTIFICATION_TYPE, UsernameReviewOutcome } from '../username-review/username-review.constants';
 
 // The seven real MVP notification types — see schema.prisma's own comment
 // on Notification.type for the authoritative list and where each is
@@ -141,7 +142,10 @@ export type NotificationData =
   | { image: ProfileImageKind }
   // post_media_approved / post_media_rejected (B-037): payloadRefId is the PostMedia id. Names which file
   // only; the moderator's reason is NOT here, it is on the uploader's own GET /media/uploads/:id.
-  | { media: { id: string; kind: string } };
+  | { media: { id: string; kind: string } }
+  // username_review_decided (B-139 part (c), Decision Log #467): payloadRefId is the outcome. The admin's reason is
+  // NOT here or anywhere the user can read it.
+  | { usernameReview: { outcome: UsernameReviewOutcome } };
 
 export interface NotificationView {
   id: string;
@@ -553,6 +557,10 @@ export class NotificationsService {
         const media = lookups.mediaById.get(row.payloadRefId);
         return media ? { media: { id: media.id, kind: media.kind } } : null;
       }
+      case USERNAME_REVIEW_NOTIFICATION_TYPE:
+        return row.payloadRefId === 'reinstated' || row.payloadRefId === 'declined'
+          ? { usernameReview: { outcome: row.payloadRefId } }
+          : null;
       case 'profile_image_rejected':
         return (PROFILE_IMAGE_KINDS as readonly string[]).includes(row.payloadRefId)
           ? { image: row.payloadRefId as ProfileImageKind }

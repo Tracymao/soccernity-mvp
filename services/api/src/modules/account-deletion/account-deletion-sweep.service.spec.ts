@@ -43,6 +43,8 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
     grassrootsTeam: { updateMany: jest.fn() },
     // B-139: anonymizeUser deletes the user's RevokedUsername records whose hold is already over.
     revokedUsername: { deleteMany: jest.fn() },
+    // backend/b139-username-review: anonymizeUser deletes the user's review requests.
+    usernameReviewRequest: { deleteMany: jest.fn() },
     // B-046: anonymizeUser deletes the user's non-escalated Contact Us enquiries.
     contactEnquiry: { deleteMany: jest.fn() },
     $executeRaw: jest.fn().mockResolvedValue(0),
@@ -137,6 +139,23 @@ describe('AccountDeletionSweepService', () => {
       const prisma = buildPrismaMock();
       await new AccountDeletionSweepService(prisma).minimiseHeldUser('user-1');
       expect(prisma.revokedUsername.deleteMany).not.toHaveBeenCalled();
+    });
+
+    // backend/b139-username-review (Decision Log #467): the user's review request is their own free text and has
+    // nothing left to reinstate, so it is deleted at anonymisation even when the record's hold is still running.
+    it("deletes the user's username-review requests at anonymisation, in the same transaction, for EVERY record (hold running or not)", async () => {
+      const prisma = buildPrismaMock();
+      await new AccountDeletionSweepService(prisma).anonymizeUser('user-1', false, new Date('2026-11-01T00:00:00.000Z'));
+      expect(prisma.usernameReviewRequest.deleteMany).toHaveBeenCalledTimes(1);
+      // not limited by holdUntil, unlike the RevokedUsername delete just before it
+      expect(prisma.usernameReviewRequest.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect((prisma as unknown as { $transaction: jest.Mock }).$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not touch the requests of a held (minimised) account', async () => {
+      const prisma = buildPrismaMock();
+      await new AccountDeletionSweepService(prisma).minimiseHeldUser('user-1');
+      expect(prisma.usernameReviewRequest.deleteMany).not.toHaveBeenCalled();
     });
   });
 

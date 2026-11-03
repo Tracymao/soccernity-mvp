@@ -7,6 +7,7 @@ import {
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
 import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
 import { USERNAME_REVOKE_HOLD_DAYS } from '../users/username-rules.constants';
+import { usernameReviewLastDay } from '../username-review/username-review-window.util';
 import { RevokeUsernameDto } from './dto/revoke-username.dto';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -93,8 +94,9 @@ export class AdminUserUsernameRevokeService {
 
       await tx.revokedUsername.upsert({
         where: { username_userId: { username: handle, userId } },
-        create: { username: handle, userId, revokedAt: now, holdUntil: heldUntil },
-        update: { revokedAt: now, holdUntil: heldUntil },
+        // revokedByAdminId (backend/b139-username-review): who revoked, so a DIFFERENT admin decides a review.
+        create: { username: handle, userId, revokedAt: now, holdUntil: heldUntil, revokedByAdminId: adminId },
+        update: { revokedAt: now, holdUntil: heldUntil, revokedByAdminId: adminId },
       });
 
       await tx.adminActionLog.create({
@@ -111,7 +113,9 @@ export class AdminUserUsernameRevokeService {
     });
 
     try {
-      await this.emailService.sendUsernameRevokedEmail(outcome.email, outcome.displayName);
+      // The last day the user can ask for a review comes from the SAME helper the review route uses, from the SAME
+      // revokedAt (`now`), so the email and the route cannot disagree.
+      await this.emailService.sendUsernameRevokedEmail(outcome.email, outcome.displayName, usernameReviewLastDay(now));
     } catch (err) {
       this.logger.warn(`Username-revoked email for user ${userId} failed: ${(err as Error).message}`);
     }

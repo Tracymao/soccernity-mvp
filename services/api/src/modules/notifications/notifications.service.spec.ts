@@ -435,6 +435,29 @@ describe('NotificationsService', () => {
       }
     });
 
+    // B-139 part (c) (Decision Log #467): a decided username review names the OUTCOME only.
+    it('resolves username_review_decided to { usernameReview: { outcome } } with no extra query, never carries a reason, and degrades an unknown outcome to null', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        row({ type: 'username_review_decided', payloadRefId: 'reinstated' }),
+        row({ id: 'notif-2', type: 'username_review_decided', payloadRefId: 'declined' }),
+        row({ id: 'notif-3', type: 'username_review_decided', payloadRefId: 'something-else' }),
+        row({ id: 'notif-4', type: 'username_review_decided', payloadRefId: null }),
+      ]);
+      const service = new NotificationsService(prisma);
+
+      const page = await service.listNotifications(CALLER, {});
+
+      expect(page.items[0].data).toEqual({ usernameReview: { outcome: 'reinstated' } });
+      expect(page.items[1].data).toEqual({ usernameReview: { outcome: 'declined' } });
+      expect(page.items[2].data).toBeNull();
+      expect(page.items[3].data).toBeNull();
+      expect(JSON.stringify(page.items)).not.toMatch(/reason/i);
+      for (const model of ['post', 'conversation', 'user', 'fixture', 'contestCycle', 'matchData'] as const) {
+        expect((prisma[model].findMany as jest.Mock)).not.toHaveBeenCalled();
+      }
+    });
+
     // B-037: post_media_approved / post_media_rejected name the file (kind only); the reason is never here.
     it('resolves post_media_approved and post_media_rejected to { media: { id, kind } } with one batched lookup, and a deleted file to null', async () => {
       const prisma = buildPrismaMock();
