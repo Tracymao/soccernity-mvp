@@ -112,6 +112,7 @@ function baseReport(overrides: Partial<Report> = {}): Report {
     reporterContactName: null,
     targetType: "post",
     targetId: "post-5678",
+    reasonCategory: "harassment_or_bullying",
     reason: "Abusive language",
     status: "open",
     createdAt: "2026-09-14T10:00:00.000Z",

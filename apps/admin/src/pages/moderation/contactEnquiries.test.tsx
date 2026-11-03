@@ -88,6 +88,7 @@ function enquiryReport(overrides: Partial<Report> = {}): Report {
     reporterContactName: "Chioma Eze",
     targetType: "enquiry",
     targetId: ENQUIRY_ID,
+    reasonCategory: null,
     reason: "Contact enquiry (Technical issues) - Score not updating: The live score…",
     status: "open",
     createdAt: "2026-10-30T08:00:00.000Z",

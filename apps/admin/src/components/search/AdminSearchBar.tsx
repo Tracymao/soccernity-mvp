@@ -12,7 +12,10 @@ import clearIcon from "../../assets/icons/search-clear.svg";
 import "./AdminSearchBar.css";
 
 export const SEARCH_ROUTE = "/search";
-export const SEARCH_HELPER = "Email lookups need the full address, for example name@example.com.";
+// Figma 6947:41433 / 6947:41607 (B-284). The second sentence names the ways a report can be found; the server
+// decides what each role may actually search, so this line is the same for every admin.
+export const SEARCH_HELPER =
+  "Email lookups need the full address, for example name@example.com. Reports can be found by reference, username or reason category.";
 export const SEARCH_ENTER_HINT = "Press Enter to search.";
 
 interface AdminSearchBarProps {

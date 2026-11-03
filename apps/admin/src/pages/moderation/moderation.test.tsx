@@ -84,6 +84,7 @@ function openReport(overrides: Partial<Report> = {}): Report {
     reporterContactName: null,
     targetType: "post",
     targetId: "post-5678",
+    reasonCategory: "harassment_or_bullying",
     reason: "Abusive language",
     status: "open",
     createdAt: "2026-09-14T10:00:00.000Z",
@@ -133,7 +134,8 @@ describe("ModerationQueuePage", () => {
     );
 
     await waitFor(() => expect(listReports).toHaveBeenCalledWith({ status: "open", limit: 50 }));
-    expect(await screen.findByText("Abusive language")).not.toBeNull();
+    // B-284: the Reason column is the reason CATEGORY (the description is on Report Detail).
+    expect(await screen.findByText("Harassment or bullying")).not.toBeNull();
     expect(screen.getByText("Post")).not.toBeNull();
     expect(screen.getByText("open")).not.toBeNull();
   });
@@ -143,7 +145,7 @@ describe("ModerationQueuePage", () => {
     const decidedAppeal = actionedReportWithAppeal({
       id: "report-decided",
       appealStatus: "upheld",
-      reason: "Off-topic abuse",
+      reasonCategory: "spam_or_scam",
     });
     vi.mocked(listReports)
       .mockResolvedValueOnce({ items: [openReport()], nextCursor: null })
@@ -155,14 +157,14 @@ describe("ModerationQueuePage", () => {
       </MemoryRouter>,
     );
 
-    await screen.findByText("Abusive language");
+    await screen.findByText("Harassment or bullying");
     fireEvent.click(screen.getByRole("button", { name: "Appeals" }));
 
     await waitFor(() => expect(listReports).toHaveBeenLastCalledWith({ status: "actioned", limit: 50 }));
-    // pendingAppeal.reason (inherited from openReport()) shows; the
-    // already-decided report's own distinct reason must be filtered out.
-    expect(await screen.findByText("Abusive language")).not.toBeNull();
-    expect(screen.queryByText("Off-topic abuse")).toBeNull();
+    // pendingAppeal's category (inherited from openReport()) shows; the
+    // already-decided report's own distinct category must be filtered out.
+    expect(await screen.findByText("Harassment or bullying")).not.toBeNull();
+    expect(screen.queryByText("Spam or scam")).toBeNull();
   });
 
   it("shows the empty state when there are no open reports", async () => {

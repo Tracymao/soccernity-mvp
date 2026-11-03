@@ -6,8 +6,8 @@
 // Shapes mirror services/api admin-search.service.ts exactly (dates are ISO strings over HTTP). Nothing that
 // the server does not return is read: there is no per-group count and no total. Every hit carries `matchedOn`,
 // a stable KEY for the field the text matched (the label is this app's, in SearchPage.tsx), added by
-// backend/b114-search-fields-report-search (Decision Log #464). Report hits have NO reason field: no reason
-// category exists in the data model, so the frames' REASON column is not built.
+// backend/b114-search-fields-report-search (Decision Log #464). Report hits carry `reasonCategory` (B-284, Decision
+// Log #465); the reporter's free-text description is never returned or searched.
 import { adminFetch } from "./adminClient";
 
 export interface SearchGroup<T> {
@@ -22,7 +22,8 @@ export type ReportMatchedOn =
   | "report_reference"
   | "reporter_user_id"
   | "target_user_id"
-  | "target_username";
+  | "target_username"
+  | "reason_category";
 export type ContactEnquiryMatchedOn = "email" | "subject";
 export type ArticleMatchedOn = "title";
 export type StaffMatchedOn = "email" | "name";
@@ -46,6 +47,8 @@ export interface SearchReportHit {
   status: string;
   severity: string;
   concernsMinor: boolean;
+  /** B-284: one of the report reason categories, or null for a report that carries none. */
+  reasonCategory: string | null;
   createdAt: string;
   /** "contact_enquiry" for a report made from a Contact Us enquiry, otherwise null. */
   source: string | null;
