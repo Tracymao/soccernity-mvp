@@ -41,7 +41,7 @@ export default function AddCategoryPage() {
       <div className="ac-back">
         <Link to="/categories">← Categories</Link>
       </div>
-      <AdminPageHeader title="Add a new category" hideSearch />
+      <AdminPageHeader title="Add a new category" />
       <div className="ac-page">
         {error ? (
           <p className="ac-error" role="alert">

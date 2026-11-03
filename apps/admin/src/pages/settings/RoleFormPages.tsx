@@ -46,7 +46,7 @@ function StubShell({ title, children }: { title: string; children: ReactNode }) 
       <div className="rl-back">
         <Link to="/settings">← Roles</Link>
       </div>
-      <AdminPageHeader title={title} hideSearch />
+      <AdminPageHeader title={title} />
       <StubBanner>
         Admin and moderator accounts can't be added or removed from this screen yet.
       </StubBanner>
@@ -185,7 +185,7 @@ export function EditRolePage() {
   if (loadState === "loading") {
     return (
       <>
-        <AdminPageHeader title="Edit role" hideSearch />
+        <AdminPageHeader title="Edit role" />
         <div className="rl-page">
           {backLink}
           <p className="rl-loading">Loading this admin account…</p>
@@ -197,7 +197,7 @@ export function EditRolePage() {
   if (loadState === "not-found" || loadState === "error" || !admin) {
     return (
       <>
-        <AdminPageHeader title="Edit role" hideSearch />
+        <AdminPageHeader title="Edit role" />
         <div className="rl-page">
           {backLink}
           <div className="rl-card">
@@ -220,7 +220,7 @@ export function EditRolePage() {
 
   return (
     <>
-      <AdminPageHeader title="Edit role" hideSearch />
+      <AdminPageHeader title="Edit role" />
       <div className="rl-page">
         {backLink}
 

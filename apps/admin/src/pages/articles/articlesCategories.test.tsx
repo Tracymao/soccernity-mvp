@@ -581,7 +581,7 @@ describe("AddCategoryPage", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "La Liga" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Category name" }), { target: { value: "La Liga" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit" }));
 
     await waitFor(() => expect(createCategory).toHaveBeenCalledWith({ name: "La Liga" }));
@@ -596,7 +596,7 @@ describe("AddCategoryPage", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Premier League" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Category name" }), { target: { value: "Premier League" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit" }));
 
     expect(await screen.findByText("A category with this name already exists.")).not.toBeNull();

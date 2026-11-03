@@ -46,6 +46,7 @@ import {
 } from "../../api/adminUsers";
 import { reasonHasDate, useAsyncData } from "./usersShared";
 import "./users.css";
+import AdminSearchBar from "../../components/search/AdminSearchBar";
 
 const REASON_MIN = 10;
 const REASON_MAX = 500;
@@ -200,6 +201,9 @@ export default function CorrectDobPage() {
           <Link to={`/users/${id}`} className="us-btn us-btn--outline">
             Back to user
           </Link>
+        </div>
+        <div className="admin-page-header__search">
+          <AdminSearchBar />
         </div>
       </div>
 

@@ -90,7 +90,7 @@ export default function SettingsRolesPage() {
 
   return (
     <>
-      <AdminPageHeader title="Roles" hideSearch />
+      <AdminPageHeader title="Roles" />
       <div className="rl-page">
         <div className="rl-action-row">
           <span aria-hidden />

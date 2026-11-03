@@ -4,7 +4,10 @@
 // does not exist); a group with no match is present and empty. The client never works out a role rule.
 //
 // Shapes mirror services/api admin-search.service.ts exactly (dates are ISO strings over HTTP). Nothing that
-// the server does not return is read: there is no per-group count, no "matched on" and no total.
+// the server does not return is read: there is no per-group count and no total. Every hit carries `matchedOn`,
+// a stable KEY for the field the text matched (the label is this app's, in SearchPage.tsx), added by
+// backend/b114-search-fields-report-search (Decision Log #464). Report hits have NO reason field: no reason
+// category exists in the data model, so the frames' REASON column is not built.
 import { adminFetch } from "./adminClient";
 
 export interface SearchGroup<T> {
@@ -13,7 +16,20 @@ export interface SearchGroup<T> {
   truncated: boolean;
 }
 
+export type UserMatchedOn = "user_id" | "email" | "username";
+export type ReportMatchedOn =
+  | "report_id"
+  | "report_reference"
+  | "reporter_user_id"
+  | "target_user_id"
+  | "target_username";
+export type ContactEnquiryMatchedOn = "email" | "subject";
+export type ArticleMatchedOn = "title";
+export type StaffMatchedOn = "email" | "name";
+export type MediaMatchedOn = "item_id";
+
 export interface SearchUserHit {
+  matchedOn: UserMatchedOn;
   id: string;
   displayName: string;
   username: string | null;
@@ -23,6 +39,7 @@ export interface SearchUserHit {
 }
 
 export interface SearchReportHit {
+  matchedOn: ReportMatchedOn;
   id: string;
   targetType: string;
   targetId: string;
@@ -35,6 +52,7 @@ export interface SearchReportHit {
 }
 
 export interface SearchContactEnquiryHit {
+  matchedOn: ContactEnquiryMatchedOn;
   id: string;
   name: string;
   email: string;
@@ -50,6 +68,7 @@ export interface SearchContactEnquiryHit {
 }
 
 export interface SearchArticleHit {
+  matchedOn: ArticleMatchedOn;
   id: string;
   title: string;
   status: string;
@@ -59,19 +78,29 @@ export interface SearchArticleHit {
 }
 
 export interface SearchStaffHit {
+  matchedOn: StaffMatchedOn;
   id: string;
   email: string;
   fullName: string;
   role: string;
   accountStatus: string;
+  /** Whether the admin has an authenticator app set up. Derived on the server; no secret or code is returned. */
+  twoFactorEnabled: boolean;
 }
 
+export type MediaReviewSource = "auto_check" | "user_report";
+
 export interface SearchMediaHit {
+  matchedOn: MediaMatchedOn;
   id: string;
   kind: string;
   status: string;
   reportCount: number;
   createdAt: string;
+  /** Why the item is in the queue: the automatic check and/or user reports. */
+  sources: MediaReviewSource[];
+  /** The uploader's PUBLIC name only (never an email or a real name). */
+  uploader: { id: string; publicName: string };
 }
 
 export interface AdminSearchResult {

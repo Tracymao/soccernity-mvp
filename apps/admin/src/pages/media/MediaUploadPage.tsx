@@ -83,7 +83,7 @@ export default function MediaUploadPage() {
       <div className="med-back">
         <Link to="/media">← Media</Link>
       </div>
-      <AdminPageHeader title="Upload media" hideSearch />
+      <AdminPageHeader title="Upload media" />
       <div className="med-page">
         {formError ? (
           <p className="med-error" role="alert">

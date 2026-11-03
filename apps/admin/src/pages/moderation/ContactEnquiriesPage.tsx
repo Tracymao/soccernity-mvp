@@ -110,7 +110,7 @@ export default function ContactEnquiriesPage() {
 
   return (
     <>
-      <AdminPageHeader title="Moderation Queue" hideSearch />
+      <AdminPageHeader title="Moderation Queue" />
       <div className="mod-page">
         <div className="mod-tabs">
           <Link className="mod-tab" to="/moderation">

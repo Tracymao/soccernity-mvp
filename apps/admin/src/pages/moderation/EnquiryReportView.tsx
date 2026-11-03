@@ -49,7 +49,7 @@ export default function EnquiryReportView({ report }: { report: Report }) {
 
   return (
     <>
-      <AdminPageHeader title={`Report #${report.id.slice(0, 8)}`} hideSearch />
+      <AdminPageHeader title={`Report #${report.id.slice(0, 8)}`} />
       <div className="mod-page">
         <div className="mod-back">
           <Link to="/moderation">← Moderation Queue</Link>

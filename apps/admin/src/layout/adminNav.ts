@@ -1,5 +1,5 @@
-// The Admin Console sidebar nav — the 10-item list from the shared
-// "Admin Shell" Figma component (node 6014:12948): 8 stacked items, then
+// The Admin Console sidebar nav — the 11-item list from the shared
+// "Admin Shell" Figma component (node 6014:12948): 9 stacked items (Activity added by Decision Log #464), then
 // Settings pinned to the bottom. Icons are the Carbon glyphs the shell
 // was standardised on (Decision Log #49/#147/#179), exported from Figma
 // and committed under src/assets/icons (normalised to `currentColor` so
@@ -17,6 +17,7 @@ import navCategories from "../assets/icons/nav-categories.svg";
 import navContest from "../assets/icons/nav-contest.svg";
 import navCompetitions from "../assets/icons/nav-contest.svg";
 import navMedia from "../assets/icons/nav-media.svg";
+import navActivity from "../assets/icons/nav-activity.svg";
 import navSettings from "../assets/icons/nav-settings.svg";
 
 export interface AdminNavItem {
@@ -41,6 +42,9 @@ export const ADMIN_NAV_PRIMARY: AdminNavItem[] = [
   { key: "contest", label: "Contest", path: "/contest", icon: navContest },
   { key: COMPETITIONS_KEY, label: "Competitions", path: "/competitions", icon: navCompetitions },
   { key: "media", label: "Media", path: "/media", icon: navMedia },
+  // Audit log / My activity (Decision Log #464): in the nav for EVERY role. One label because the shell has no role
+  // variants; the page title differs by role.
+  { key: "activity", label: "Activity", path: "/activity", icon: navActivity },
 ];
 
 export const ADMIN_NAV_SETTINGS: AdminNavItem = {

@@ -3,7 +3,7 @@
 // inside it via <Outlet/>.
 //
 //  - 260px sidebar: Soccernity logo, the signed-in admin's identity
-//    block (links to /profile), the 8-item nav, Settings pinned to the
+//    block (links to /profile), the 9-item nav, Settings pinned to the
 //    bottom.
 //  - content region: a top bar carrying the Log Out action, then the
 //    routed screen.

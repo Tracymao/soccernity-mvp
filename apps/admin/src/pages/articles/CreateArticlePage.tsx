@@ -87,7 +87,7 @@ export default function CreateArticlePage() {
       <div className="ac-back">
         <Link to="/articles">← Articles</Link>
       </div>
-      <AdminPageHeader title="Create New Post" hideSearch />
+      <AdminPageHeader title="Create New Post" />
       <div className="ac-page">
         {error ? (
           <p className="ac-error" role="alert">

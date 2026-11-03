@@ -3,11 +3,12 @@
 // component exposes as `Show Action Button` / `Action Label` props
 // (they're screen-configured, not shell chrome).
 //
-// The search bar is the real, working one (B-114, Decision Log #463): a
-// form that opens /search?q=. Most screens still pass `hideSearch`, because
-// their Figma frames draw no bar; the Users screen shows it, as the
-// frame does. `action` is wired to a callback; screens that have a backed
-// action pass one, the rest omit it.
+// The search bar is the real, working one (B-114, Decision Log #463, #464):
+// a form that opens /search?q=, shown on EVERY admin screen, because the Admin
+// Shell Figma component carries it in all variants. The only screen that swaps
+// it is the results page, which passes its own bar through `search` so the
+// bar can show the query and the running search. `action` is wired to a
+// callback; screens that have a backed action pass one, the rest omit it.
 import type { ReactNode } from "react";
 import AdminSearchBar from "../components/search/AdminSearchBar";
 import "./AdminPageHeader.css";
@@ -16,11 +17,11 @@ interface AdminPageHeaderProps {
   title: string;
   subtitle?: ReactNode;
   action?: { label: string; onClick: () => void };
-  /** Hide the search bar on screens whose Figma frame has none. Default: shown. */
-  hideSearch?: boolean;
+  /** Replaces the default search bar. Only the results page uses it. */
+  search?: ReactNode;
 }
 
-export default function AdminPageHeader({ title, subtitle, action, hideSearch }: AdminPageHeaderProps) {
+export default function AdminPageHeader({ title, subtitle, action, search }: AdminPageHeaderProps) {
   return (
     <div className="admin-page-header">
       <div className="admin-page-header__titles">
@@ -34,11 +35,7 @@ export default function AdminPageHeader({ title, subtitle, action, hideSearch }:
           </button>
         </div>
       ) : null}
-      {!hideSearch ? (
-        <div className="admin-page-header__search">
-          <AdminSearchBar />
-        </div>
-      ) : null}
+      <div className="admin-page-header__search">{search ?? <AdminSearchBar />}</div>
     </div>
   );
 }

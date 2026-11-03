@@ -138,7 +138,7 @@ export default function MediaReviewItemPage() {
   if (load === "loading" && !item) {
     return (
       <>
-        <AdminPageHeader title="Media review" hideSearch />
+        <AdminPageHeader title="Media review" />
         <div className="mod-page">
           {back}
           <p className="mod-loading">Loading the item…</p>
@@ -149,7 +149,7 @@ export default function MediaReviewItemPage() {
   if (!item) {
     return (
       <>
-        <AdminPageHeader title="Media review" hideSearch />
+        <AdminPageHeader title="Media review" />
         <div className="mod-page">
           {back}
           <div className="mod-card mod-card--restricted" role="alert">
@@ -213,7 +213,7 @@ export default function MediaReviewItemPage() {
 
   return (
     <>
-      <AdminPageHeader title={`Review ${noun}`} hideSearch />
+      <AdminPageHeader title={`Review ${noun}`} />
       <div className="mod-page media-item-page">
         {back}
 

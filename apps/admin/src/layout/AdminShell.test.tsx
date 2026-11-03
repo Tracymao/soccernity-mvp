@@ -42,7 +42,7 @@ describe("AdminShell", () => {
   beforeEach(() => logout.mockReset());
   afterEach(cleanup);
 
-  it("renders all 10 nav items and the routed outlet", () => {
+  it("renders all 11 nav items and the routed outlet", () => {
     renderShell({ fullName: "Ada Lovelace", role: "moderator" });
     for (const item of ADMIN_NAV_ALL) {
       expect(screen.getByRole("link", { name: new RegExp(item.label) })).not.toBeNull();

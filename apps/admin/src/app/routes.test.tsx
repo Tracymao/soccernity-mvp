@@ -9,7 +9,7 @@
 // AbortSignal-realm mismatch in this Node version. useRoutes has none of
 // that and renders the identical tree.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, useRoutes } from "react-router";
 import { adminRoutes } from "./routes";
 import { AdminAuthProvider } from "../auth/AdminAuthContext";
@@ -138,5 +138,96 @@ describe("adminRoutes (integration)", () => {
     expect(await screen.findByRole("table", { name: "Articles" })).not.toBeNull();
     expect(screen.getByText("Ada Lovelace")).not.toBeNull();
     expect((screen.getByRole("textbox", { name: "Search Soccernity" }) as HTMLInputElement).value).toBe("zaha");
+  });
+
+  // B-114 (Decision Log #464): the working search bar is on EVERY admin screen, including those that used to hide
+  // it and the three that draw their own header. Exactly one bar per screen (the results page swaps in its own).
+  it.each([
+    "/dashboard",
+    "/articles",
+    "/articles/new",
+    "/users",
+    "/users/abc",
+    "/users/abc/dob-correction",
+    "/users/incorrect-details-reports",
+    "/moderation",
+    "/moderation/reports/abc",
+    "/moderation/appeals/abc",
+    "/moderation/held-investigations",
+    "/moderation/contact-enquiries",
+    "/moderation/contact-enquiries/abc",
+    "/moderation/media",
+    "/moderation/media/abc",
+    "/categories",
+    "/categories/new",
+    "/contest",
+    "/contest/history",
+    "/contest/impressions",
+    "/contest/cycles/abc",
+    "/competitions",
+    "/media",
+    "/media/upload",
+    "/settings",
+    "/settings/roles/new",
+    "/profile",
+    "/search",
+    "/activity",
+    "/does-not-exist",
+  ])("shows exactly one working search bar on %s", async (path) => {
+    stubApi(jsonResponse(200, { accessToken: "acc-1" }));
+    vi.mocked(getAdminProfile).mockResolvedValue(PROFILE);
+
+    renderAt(path);
+
+    expect(await screen.findByRole("textbox", { name: "Search Soccernity" })).not.toBeNull();
+    expect(screen.getAllByRole("search")).toHaveLength(1);
+  });
+
+  it("the search bar on another screen opens the results with the query in the URL", async () => {
+    stubApi(jsonResponse(200, { accessToken: "acc-1" }));
+    vi.mocked(getAdminProfile).mockResolvedValue(PROFILE);
+    renderAt("/dashboard");
+
+    const input = await screen.findByRole("textbox", { name: "Search Soccernity" });
+    fireEvent.change(input, { target: { value: "nelson" } });
+    fireEvent.submit(screen.getByRole("search"));
+
+    expect(await screen.findByRole("heading", { name: "Search" })).not.toBeNull();
+    expect((screen.getByRole("textbox", { name: "Search Soccernity" }) as HTMLInputElement).value).toBe("nelson");
+  });
+
+  it("the nav carries an Activity row for every role, linking to /activity", async () => {
+    for (const role of ["superadmin", "moderator", "editor"]) {
+      stubApi(jsonResponse(200, { accessToken: "acc-1" }));
+      vi.mocked(getAdminProfile).mockResolvedValue({ ...PROFILE, role } as never);
+      const { unmount } = renderAt("/dashboard");
+      const link = await screen.findByRole("link", { name: "Activity" });
+      expect(link.getAttribute("href")).toBe("/activity");
+      unmount();
+    }
+  });
+
+  it("/activity is the Audit log for a superadmin and My activity for any other admin", async () => {
+    const stub = () =>
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) => {
+          if (url.endsWith("/admin/auth/refresh")) return jsonResponse(200, { accessToken: "acc-1" });
+          if (url.includes("/admin/action-log")) return jsonResponse(200, { items: [], nextCursor: null });
+          if (url.includes("/admin/staff")) return jsonResponse(200, { items: [], nextCursor: null });
+          throw new TypeError("Failed to fetch");
+        }),
+      );
+
+    stub();
+    vi.mocked(getAdminProfile).mockResolvedValue(PROFILE);
+    const first = renderAt("/activity");
+    expect(await screen.findByRole("heading", { level: 1, name: "Audit log" })).not.toBeNull();
+    first.unmount();
+
+    stub();
+    vi.mocked(getAdminProfile).mockResolvedValue({ ...PROFILE, role: "moderator" } as never);
+    renderAt("/activity");
+    expect(await screen.findByRole("heading", { level: 1, name: "My activity" })).not.toBeNull();
   });
 });

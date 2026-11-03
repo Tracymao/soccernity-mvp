@@ -210,7 +210,9 @@ describe("Add / Delete Role — disclosed stubs, Decision Log #191", () => {
     );
     expect(screen.getByRole("note").textContent).toMatch(/can.t be added or removed from this screen yet/i);
     expect(screen.getByRole("note").textContent).not.toMatch(/Decision Log|endpoint|DB insert/i);
-    for (const el of [...screen.queryAllByRole("textbox"), ...screen.queryAllByRole("combobox")]) {
+    for (const el of [...screen.queryAllByRole("textbox"), ...screen.queryAllByRole("combobox")].filter(
+      (el) => el.getAttribute("aria-label") !== "Search Soccernity",
+    )) {
       expect(el.hasAttribute("disabled")).toBe(true);
     }
     expect(screen.getByRole("button", { name: "Submit" }).hasAttribute("disabled")).toBe(true);

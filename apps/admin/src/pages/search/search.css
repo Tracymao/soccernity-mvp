@@ -128,6 +128,10 @@
   white-space: nowrap;
 }
 
+.se-cell--muted {
+  color: var(--sn-text-secondary);
+}
+
 .se-cell--stack {
   display: inline-flex;
   gap: 6px;
@@ -148,24 +152,24 @@
   color: var(--sn-text-secondary);
 }
 
-/* column templates: the last track is the action button */
+/* column templates: the last track is the action button. MATCHED ON is the track before it. */
 .se-card--users .se-row {
-  grid-template-columns: minmax(0, 1fr) 150px 130px 100px;
+  grid-template-columns: minmax(0, 1fr) 130px 120px 170px 90px;
 }
 .se-card--reports .se-row {
-  grid-template-columns: 130px 170px 110px 110px minmax(0, 1fr) 100px;
+  grid-template-columns: 100px 130px 100px 90px 150px minmax(0, 1fr) 90px;
 }
 .se-card--enquiries .se-row {
-  grid-template-columns: 110px 150px 160px minmax(0, 1fr) 150px 100px;
+  grid-template-columns: 100px 120px 130px minmax(0, 1fr) 120px 90px 140px 90px;
 }
 .se-card--articles .se-row {
-  grid-template-columns: 110px minmax(0, 1fr) 160px 110px 100px;
+  grid-template-columns: 100px minmax(0, 1fr) 130px 100px 100px 90px;
 }
 .se-card--staff .se-row {
-  grid-template-columns: 200px minmax(0, 1fr) 130px 110px 100px;
+  grid-template-columns: 150px minmax(0, 1fr) 110px 90px 90px 120px 90px;
 }
 .se-card--media .se-row {
-  grid-template-columns: 140px 130px 100px minmax(0, 1fr) 100px;
+  grid-template-columns: 150px 120px 80px 90px 70px 60px 90px 90px;
 }
 
 /* pills (Figma Pill: Neutral / Positive / Alert / Outline) */

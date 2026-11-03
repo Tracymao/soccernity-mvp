@@ -1,0 +1,62 @@
+/* Audit log / My activity (Decision Log #464; Figma 6939:39109 and 6939:39539). Tokens only. Rows are a grid:
+ * TIME, ACTOR (superadmin only), ACTION, TARGET TYPE, TARGET, NOTES. */
+
+.al-field {
+  width: 220px;
+}
+
+.al-row {
+  display: grid;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 20px;
+  font-size: 13px;
+  min-width: 0;
+  grid-template-columns: 170px 170px minmax(0, 1fr) 130px 170px minmax(0, 1fr);
+}
+
+.al-table[data-actor="false"] .al-row {
+  grid-template-columns: 170px minmax(0, 1fr) 130px 170px minmax(0, 1fr);
+}
+
+.al-row > span {
+  min-width: 0;
+}
+
+.al-row.mod-table__row--head {
+  background-color: var(--sn-green-tint-12);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+  text-transform: uppercase;
+}
+
+.al-row + .al-row:not(.mod-table__row--head) {
+  border-top: 1px solid var(--sn-icon-inactive);
+}
+
+.al-notes {
+  overflow-wrap: anywhere;
+}
+
+.al-target {
+  font-weight: 600;
+  color: var(--sn-text-primary);
+  text-decoration: underline;
+}
+
+.al-target--plain {
+  text-decoration: none;
+}
+
+.al-skeleton {
+  display: block;
+  height: 12px;
+  border-radius: 4px;
+  background-color: var(--sn-icon-inactive);
+}
+
+.al-skeleton--head {
+  background-color: var(--sn-icon-inactive);
+  opacity: 0.8;
+}

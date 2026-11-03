@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
 import AdminProfilePage from "./AdminProfilePage";
 import { AdminApiError } from "../api/adminClient";
 
@@ -38,23 +39,35 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+// The page header now carries the working admin search bar (B-114); the form fields exclude it.
+const fieldTextboxes = () =>
+  screen.queryAllByRole("textbox").filter((el) => el.getAttribute("aria-label") !== "Search Soccernity");
+
 describe("AdminProfilePage — view", () => {
   it("shows the four fields read-only with a title-cased role", () => {
-    render(<AdminProfilePage />);
+    render(
+      <MemoryRouter>
+        <AdminProfilePage />
+      </MemoryRouter>,
+    );
     expect(screen.getAllByText("Kuponiyi Abraham").length).toBeGreaterThan(0);
     expect(screen.getByText("kuponiyi.abraham@soccernity.com")).not.toBeNull();
     expect(screen.getAllByText("Super Admin").length).toBeGreaterThan(0);
     expect(screen.getByText("+234 800 000 0000")).not.toBeNull();
-    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(fieldTextboxes()).toHaveLength(0);
   });
 });
 
 describe("AdminProfilePage — edit", () => {
   it("edits fullName + phone only; email and role are locked, not inputs", () => {
-    render(<AdminProfilePage />);
+    render(
+      <MemoryRouter>
+        <AdminProfilePage />
+      </MemoryRouter>,
+    );
     fireEvent.click(screen.getByRole("button", { name: "Edit Profile" }));
     // exactly two text inputs: Full name + Phone
-    const inputs = screen.getAllByRole("textbox");
+    const inputs = fieldTextboxes();
     expect(inputs.length).toBe(2);
     expect(screen.getByText(/changed by a superadmin, not here/i)).not.toBeNull();
   });
@@ -62,9 +75,13 @@ describe("AdminProfilePage — edit", () => {
   it("PATCHes the profile and adopts the result", async () => {
     const updated = { ...ADMIN, fullName: "Kuponiyi A. Abraham" };
     vi.mocked(updateAdminProfile).mockResolvedValue(updated);
-    render(<AdminProfilePage />);
+    render(
+      <MemoryRouter>
+        <AdminProfilePage />
+      </MemoryRouter>,
+    );
     fireEvent.click(screen.getByRole("button", { name: "Edit Profile" }));
-    const [nameInput] = screen.getAllByRole("textbox");
+    const [nameInput] = fieldTextboxes();
     fireEvent.change(nameInput, { target: { value: "Kuponiyi A. Abraham" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -80,7 +97,11 @@ describe("AdminProfilePage — edit", () => {
 
 describe("AdminProfilePage — change password", () => {
   function openPanel() {
-    render(<AdminProfilePage />);
+    render(
+      <MemoryRouter>
+        <AdminProfilePage />
+      </MemoryRouter>,
+    );
     fireEvent.click(screen.getByRole("button", { name: "Change Password" }));
   }
   const fill = (label: RegExp, value: string) =>

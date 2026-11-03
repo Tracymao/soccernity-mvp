@@ -25,7 +25,7 @@ export default function ContestHistoryPage() {
 
   return (
     <>
-      <AdminPageHeader title="Cycle History" hideSearch />
+      <AdminPageHeader title="Cycle History" />
       <div className="ct-page">
         <div className="ct-back">
           <Link to="/contest">← Contest</Link>

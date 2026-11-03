@@ -147,7 +147,7 @@ export default function ReportDetailPage() {
   if (loadState === "loading") {
     return (
       <>
-        <AdminPageHeader title="Report" hideSearch />
+        <AdminPageHeader title="Report" />
         <div className="mod-page">
           {backLink}
           <p className="mod-loading">Loading the report…</p>
@@ -159,7 +159,7 @@ export default function ReportDetailPage() {
   if (loadState === "restricted") {
     return (
       <>
-        <AdminPageHeader title="Report" hideSearch />
+        <AdminPageHeader title="Report" />
         <div className="mod-page">
           {backLink}
           <VettingRestrictedNotice />
@@ -171,7 +171,7 @@ export default function ReportDetailPage() {
   if (loadState === "not-found" || loadState === "error" || !report) {
     return (
       <>
-        <AdminPageHeader title="Report" hideSearch />
+        <AdminPageHeader title="Report" />
         <div className="mod-page">
           {backLink}
           <div className="mod-card">
@@ -199,7 +199,7 @@ export default function ReportDetailPage() {
 
   return (
     <>
-      <AdminPageHeader title={`Report #${report.id.slice(0, 8)}`} hideSearch />
+      <AdminPageHeader title={`Report #${report.id.slice(0, 8)}`} />
       <div className="mod-page">
         {backLink}
 
