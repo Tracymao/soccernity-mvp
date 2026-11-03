@@ -157,7 +157,7 @@
   grid-template-columns: minmax(0, 1fr) 130px 120px 170px 90px;
 }
 .se-card--reports .se-row {
-  grid-template-columns: 100px 130px 100px 90px 150px minmax(0, 1fr) 90px;
+  grid-template-columns: 100px 120px 170px 100px 90px 150px minmax(0, 1fr) 90px;
 }
 .se-card--enquiries .se-row {
   grid-template-columns: 100px 120px 130px minmax(0, 1fr) 120px 90px 140px 90px;

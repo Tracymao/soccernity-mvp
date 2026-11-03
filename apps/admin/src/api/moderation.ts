@@ -60,6 +60,45 @@ export const REPORT_SEVERITY_LABELS: Record<ReportSeverity, string> = {
   critical: "Critical",
 };
 
+// B-284 (Decision Log #465): the reason category a report carries. Mirrors services/api
+// moderation.constants.ts's REPORT_REASON_CATEGORIES and REPORT_REASON_CATEGORY_LABELS (the labels an admin
+// reads). The one admin-side copy; reasonCategories.test.ts fails the build if it drifts from the backend list.
+// Nothing here decides anything: the server returns `reasonCategory` (a key, or null for a report made before
+// categories existed) and this only turns it into words.
+export const REPORT_REASON_CATEGORIES = [
+  "harassment_or_bullying",
+  "hate_or_abusive_language",
+  "threats_or_violence",
+  "child_safety_concern",
+  "sexual_or_inappropriate_content",
+  "impersonation_or_fake_account",
+  "spam_or_scam",
+  "privacy_or_image_misuse",
+  "other",
+] as const;
+export type ReportReasonCategory = (typeof REPORT_REASON_CATEGORIES)[number];
+
+export const REPORT_REASON_CATEGORY_LABELS: Record<ReportReasonCategory, string> = {
+  harassment_or_bullying: "Harassment or bullying",
+  hate_or_abusive_language: "Hate or abusive language",
+  threats_or_violence: "Threats or violence",
+  child_safety_concern: "Child safety concern",
+  sexual_or_inappropriate_content: "Sexual or inappropriate content",
+  impersonation_or_fake_account: "Impersonation or fake account",
+  spam_or_scam: "Spam or scam",
+  privacy_or_image_misuse: "Privacy or image misuse",
+  other: "Other",
+};
+
+export const REASON_CATEGORY_NOT_SET_LABEL = "Not categorised";
+
+// null / missing -> "Not categorised" (an older report, a Grassroots sensitive-content report, a report made from a
+// contact enquiry). A key this app does not know (the server added one) is shown as it came, never guessed at.
+export function reasonCategoryLabel(category: string | null | undefined): string {
+  if (category === null || category === undefined || category === "") return REASON_CATEGORY_NOT_SET_LABEL;
+  return (REPORT_REASON_CATEGORY_LABELS as Record<string, string>)[category] ?? category;
+}
+
 // The machine-readable `code` on the 403 thrown when a report concerning
 // a minor is listed/actioned/appeal-reviewed by a non-child-safety-vetted
 // admin, and when PATCH .../escalate is called by a non-vetted admin
@@ -108,6 +147,9 @@ export interface Report {
   reporterContactName: string | null;
   targetType: string; // "post" | "user" | "comment" | "banter_room" | "grassroots_team" | "fixture"
   targetId: string;
+  // B-284: one of REPORT_REASON_CATEGORIES, or null for a report that carries none.
+  reasonCategory: string | null;
+  // The reporter's free-text description. Optional on a new report (the empty string when omitted).
   reason: string;
   status: string; // "open" | "reviewed" | "actioned"
   createdAt: string;

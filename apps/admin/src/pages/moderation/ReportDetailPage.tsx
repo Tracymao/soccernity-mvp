@@ -32,6 +32,7 @@ import {
   actionReport,
   getReportById,
   isChildSafetyVettingRequiredError,
+  reasonCategoryLabel,
   REPORT_ACTIONS,
   REPORT_ACTION_LABELS,
   type HoldView,
@@ -224,9 +225,16 @@ export default function ReportDetailPage() {
             <span className="mod-field__value">{reporterFullLabel(report)}</span>
           </div>
           <div className="mod-field">
-            <span className="mod-field__label">Reason</span>
-            <span className="mod-field__value">{report.reason}</span>
+            <span className="mod-field__label">Reason category</span>
+            <span className="mod-field__value">{reasonCategoryLabel(report.reasonCategory)}</span>
           </div>
+          {/* Optional free text (stored as "" when the reporter wrote none): the row is drawn only when there is some. */}
+          {report.reason.trim() !== "" ? (
+            <div className="mod-field">
+              <span className="mod-field__label">Description</span>
+              <span className="mod-field__value">{report.reason}</span>
+            </div>
+          ) : null}
           <div className="mod-field">
             <span className="mod-field__label">Severity</span>
             <span className="mod-field__value">

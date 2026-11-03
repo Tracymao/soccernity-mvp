@@ -54,6 +54,7 @@ const REPORT = {
   status: "open",
   severity: "high",
   concernsMinor: true,
+  reasonCategory: "impersonation_or_fake_account" as string | null,
   createdAt: "2026-10-01T10:00:00.000Z",
   source: null,
 };
@@ -117,7 +118,11 @@ describe("SearchPage: idle", () => {
     renderAt("/search");
     expect(screen.getByRole("heading", { name: "Search" })).not.toBeNull();
     expect(screen.getByRole("textbox", { name: "Search Soccernity" })).not.toBeNull();
-    expect(screen.getByText("Email lookups need the full address, for example name@example.com.")).not.toBeNull();
+    expect(
+      screen.getByText(
+        "Email lookups need the full address, for example name@example.com. Reports can be found by reference, username or reason category.",
+      ),
+    ).not.toBeNull();
     expect(screen.getByText("What you can search")).not.toBeNull();
     expect(
       screen.getByText("Type in the bar above and press Enter. Each result opens the page you already use for it."),
@@ -243,7 +248,7 @@ describe("SearchPage: results", () => {
     search.mockResolvedValue({
       groups: {
         reports: {
-          items: [REPORT, { ...REPORT, id: "88888888-bbbb-4bbb-8bbb-888888888888", concernsMinor: false, source: "contact_enquiry" }],
+          items: [REPORT, { ...REPORT, id: "88888888-bbbb-4bbb-8bbb-888888888888", concernsMinor: false, source: "contact_enquiry", reasonCategory: null }],
           truncated: false,
         },
       },

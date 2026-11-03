@@ -31,6 +31,7 @@ import {
   decideAppeal,
   getReportById,
   isChildSafetyVettingRequiredError,
+  reasonCategoryLabel,
   REPORT_ACTION_LABELS,
   type AppealDecision,
   type HoldView,
@@ -244,9 +245,15 @@ export default function AppealReviewPage() {
             <span className="mod-field__value">{formatDateTime(report.reviewedAt)}</span>
           </div>
           <div className="mod-field">
-            <span className="mod-field__label">Original report reason</span>
-            <span className="mod-field__value">{report.reason}</span>
+            <span className="mod-field__label">Reason category</span>
+            <span className="mod-field__value">{reasonCategoryLabel(report.reasonCategory)}</span>
           </div>
+          {report.reason.trim() !== "" ? (
+            <div className="mod-field">
+              <span className="mod-field__label">Description</span>
+              <span className="mod-field__value">{report.reason}</span>
+            </div>
+          ) : null}
           <div className="mod-field">
             <span className="mod-field__label">Severity</span>
             <span className="mod-field__value">

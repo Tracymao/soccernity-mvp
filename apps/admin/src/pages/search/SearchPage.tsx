@@ -6,9 +6,9 @@
 //   - a group the role cannot open is ABSENT from the response and is not drawn (no "not allowed" wording);
 //   - a group with no match is present and empty and is not drawn either (the frames draw no empty groups);
 //   - the page never works out a role rule, and never renders a field the server does not return. The response
-//     carries MATCHED ON (a key, labelled here), SOURCE and UPLOADER (media) and TWO-FACTOR (staff), so those are
-//     drawn. The frames' REASON column on Reports is NOT: no reason category exists in the data model, so the
-//     response has no such field (see the PR description).
+//     carries MATCHED ON (a key, labelled here), SOURCE and UPLOADER (media), TWO-FACTOR (staff) and, on Reports,
+//     the REASON CATEGORY (B-284, Decision Log #465; "Not categorised" when the server returns null). The
+//     reporter's free-text description is never in the response and is never shown here.
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import AdminPageHeader from "../../layout/AdminPageHeader";
@@ -33,6 +33,7 @@ import {
   type SearchUserHit,
 } from "../../api/adminSearch";
 import { contactCategoryLabel } from "../../api/contactEnquiries";
+import { reasonCategoryLabel } from "../../api/moderation";
 import { formatShortDate, severityLabel, targetLabel } from "../moderation/moderationShared";
 import "./search.css";
 
@@ -62,6 +63,7 @@ const MATCHED_ON_LABELS: Record<string, string> = {
   reporter_user_id: "Reporter user ID",
   target_user_id: "Target user ID",
   target_username: "Target username",
+  reason_category: "Reason category",
   subject: "Subject",
   title: "Title",
   name: "Name",
@@ -190,6 +192,11 @@ const reportsDef: GroupDef<SearchReportHit> = {
       key: "type",
       header: "Type",
       render: (r) => (r.source === "contact_enquiry" ? "Contact enquiry" : targetLabel(r.targetType)),
+    },
+    {
+      key: "reasonCategory",
+      header: "Reason category",
+      render: (r) => reasonCategoryLabel(r.reasonCategory),
     },
     { key: "status", header: "Status", render: (r) => <Pill tone="outline">{capitalise(r.status)}</Pill> },
     { key: "severity", header: "Severity", render: (r) => severityLabel(r.severity) },

@@ -26,7 +26,7 @@
 import { Link, useSearchParams } from "react-router";
 import { useState } from "react";
 import AdminPageHeader from "../../layout/AdminPageHeader";
-import { listReports, type Report } from "../../api/moderation";
+import { listReports, reasonCategoryLabel, type Report } from "../../api/moderation";
 import {
   MinorFlagBadge,
   reporterCellLabel,
@@ -51,8 +51,9 @@ function ReportRow({ report, tab }: { report: Report; tab: Tab }) {
         <SeverityPill severity={report.severity} />
         {report.concernsMinor ? <MinorFlagBadge /> : null}
       </span>
-      <span className="mod-cell--secondary mod-cell--truncate" title={report.reason}>
-        {report.reason}
+      {/* B-284: the category (Figma 6947:40930); the reporter's own description is on Report Detail and is kept here as the hover text. */}
+      <span className="mod-cell--secondary mod-cell--truncate" title={report.reason || undefined}>
+        {reasonCategoryLabel(report.reasonCategory)}
       </span>
       <span className="mod-cell--secondary" title={reporterFullLabel(report)}>
         {reporterCellLabel(report)}
@@ -177,7 +178,7 @@ export default function ModerationQueuePage() {
               <span>Reported</span>
               <span>Type</span>
               <span>Flags</span>
-              <span>Reason</span>
+              <span>Reason category</span>
               <span>Reporter</span>
               <span>Status</span>
               <span aria-hidden />
