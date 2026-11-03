@@ -1,6 +1,6 @@
 # Soccernity — Draft Legal Copy: Terms of Service & Privacy Policy
 
-## DRAFT (v0.11) — NOT APPROVED AS LIVE COPY, NOT LEGAL ADVICE
+## DRAFT (v0.12) — NOT APPROVED AS LIVE COPY, NOT LEGAL ADVICE
 
 **Status: draft output of the `safeguarding-drafter` workflow (`CLAUDE.md` non-negotiable #2). It is
 not approved, not in force, and not ready to publish.**
@@ -33,11 +33,15 @@ Do not fill either from this file. The sign-off block at the end of this documen
 - **Grounded in:** Build Plan Sections 3, 8 and 9; Log Book Section 10; the DPIA draft
   (`docs/sprint-1-dpia-outline-draft.md`); and the merged code on `main` as of 2026-10-05 (checked
   against `services/api`, not recalled from earlier drafts).
-- **Version:** 0.11 (draft — still NOT APPROVED). Earlier versions: v0.1 drafted 2026-09-05; v0.2 applied counsel's
+- **Version:** 0.12 (draft — still NOT APPROVED). Earlier versions: v0.1 drafted 2026-09-05; v0.2 applied counsel's
   09/09/2026 review; v0.3–v0.6 (2026-09-20 to 2026-09-22) added the under-16 tier, adult-to-minor
   messaging block, consent audit evidence, age reclassification and card verification; v0.7 applied the
   counsel-reviewed decisions; v0.8 (2026-10-12) added the audit-driven changes; v0.9 (2026-10-30) wrote the Contact Us retention wording; v0.10 (2026-10-30) added the Contact Us form notice. Their
   per-version changelogs are superseded by this one and live in git history.
+
+### v0.12 changelog (2026-11-03)
+
+Housekeeping only, per founder decision 2026-11-02 (Decision Log #462 item (j), build-register B-072). **No clause wording changed; counsel-approved v0.2 wording is untouched.** (1) Part C row 22: the guardian consent page's request summary is now built, so "not yet built" is replaced by a pointer to the endpoint and the page. (2) Part C row 32: the web UI now renders the guardian contact on the other-user profile page, so "does not render it yet" is replaced. (3) ToS §3.1 against §3.2 and Privacy Policy §3 were re-read: they no longer contradict (v0.8 rewrote §3.1 to say the account is created at Register, in a restricted state), so nothing was changed there. One possible wording tidy-up is listed under "Open for counsel (added v0.12)" in Part C, tagged `[COPY PENDING LEGAL REVIEW]`. Many other `[PROPOSAL, not yet built]` markers and Part C row 44 are probably also out of date now that the code has caught up; they were not touched (outside this brief).
 
 ### v0.11 changelog (2026-10-30)
 
@@ -1110,7 +1114,7 @@ mistaken for settled by the time this reaches counsel or gets converted into Fig
 | 19 | **Resolved (signed off)** — see row 4 | PP §2 | — |
 | 20 | Cross-border transfer assessment (standalone restatement of row 9) | PP §5 | Counsel |
 | 21 | Encryption-at-rest and breach-notification technical standard (restates row 11) | PP §11 | Founder + `backend-api` + counsel |
-| 22 | **Resolved and built (Decision Log #362, merged):** the full date of birth is used (not an age band) and is encrypted at rest, not hashed (comment 26). The earlier "backend build pending" note is stale and removed. New v0.8 use of the decrypted DOB — the guardian consent page's request summary (Decision Log #372, not yet built) — needs counsel's view on proportionality | PP §1.1, §4.2 | Counsel |
+| 22 | **Resolved and built (Decision Log #362, merged):** the full date of birth is used (not an age band) and is encrypted at rest, not hashed (comment 26). The earlier "backend build pending" note is stale and removed. New v0.8 use of the decrypted DOB — the guardian consent page's request summary (Decision Log #372; **now built** — `GET /auth/guardian-consent/request-summary`, shown on the guardian confirm page; it returns the minor's name and full date of birth to the holder of the single-use link) — needs counsel's view on proportionality | PP §1.1, §4.2 | Counsel |
 | 23 | Investigation hold has no maximum duration **while a report is open** (Decision Log #345 gives visibility only). v0.8 adds a post-closure period (Decision Log #376, see rows 39 and 40) | PP §9 | Founder + counsel |
 | 24 | **Age-reclassification (Decision Log #349)**: accepted ~24h misclassification window; reliance on unverified date of birth; younger-direction corrections re-apply restrictions with no notice | ToS §3.6; PP §4.5 | Counsel |
 | 25 | **Resolved (Decision Log #351, live in `messaging.service.ts`)** — under-16 recipient refusal is the same 404 as other blocked paths | PP §8 | — |
@@ -1120,7 +1124,7 @@ mistaken for settled by the time this reaches counsel or gets converted into Fig
 | 29 | **Resolved (signed off)** — card verification (PRs #297/#298) is the stated COPPA control; no further step unless a regulator requires one | ToS §3.7, §12; PP §4.6 | — |
 | 30 | **Superseded** — operational items moved to row 36 | — | — |
 | 31 | **Resolved (signed off)** — the blanket "we comply with all applicable laws" sentence stays removed; replacement scope wording applied in v0.7 | ToS §12; PP scope note | — |
-| 32 | **Guardian contact for every minor (under 18). Backend built (Decision Log #363); the web UI does not render it yet** (`GET /users/:id/public-profile` has no consumer — audit section 5 item 14). **Founder states counsel agrees** to showing it for all minors; counsel review of the final wording is pending, as is whether already-confirmed (v1) guardians need notifying. v0.8 corrects the ToS/PP wording, which said under-16, to match the code and the guardian screen ("under 18"). The consent screen version was bumped to v2 for this disclosure | ToS §3.5(c); PP §1.2, §7, §8 | Founder + counsel |
+| 32 | **Guardian contact for every minor (under 18). Backend built (Decision Log #363); the web UI now renders it** on the other-user profile page (`OtherProfilePage`, FC5), so the audit's "no consumer" finding (`GET /users/:id/public-profile` had no consumer — audit section 5 item 14). **Founder states counsel agrees** to showing it for all minors; counsel review of the final wording is pending, as is whether already-confirmed (v1) guardians need notifying. v0.8 corrects the ToS/PP wording, which said under-16, to match the code and the guardian screen ("under 18"). The consent screen version was bumped to v2 for this disclosure | ToS §3.5(c); PP §1.2, §7, §8 | Founder + counsel |
 | 33 | **Usernames are built but optional (Decision Log #364); v0.8 makes them required before a profile is complete (Decision Log #369, not yet built).** The username-first public-name convention is in code (`publicName`). Not built: the incomplete-profile placeholder and gate, required-at-Create-Profile, and username moderation (reserved words, impersonation, profanity, cooldown, released-handle holding, admin revoke). Create Profile has no code | ToS §4.4, §9.1; PP §1.1, §1.5, §7 | Founder + `backend-api` |
 | 34 | **Built (Decision Log #365) -- the user-initiated guardian-email change now exists and matches ToS §3.3 / PP §4.3; counsel to confirm the wording against the shipped behaviour (below).** Original note: **User-initiated guardian-email change is not built.** No endpoint lets the minor change the guardian's email while consent is pending (the restart behaviour of Decision Log #60 has no code). As built: `POST /auth/guardian-consent/change-guardian-email`, available only while consent is *pending*; it restarts the request against the new address and the old link stops working. It is refused once consent is confirmed or declined. Also built in the same change: the new request requires the guardian's **name and relationship** (re-captured, since the new address may be a different person); the **previous guardian address is emailed** that the request was withdrawn (plain functional copy, not counsel-reviewed); a minor cannot list their **own** email as the guardian email (at registration or on change); and a **per-minor cap of 5 successful changes per 24h** applies. Counsel to review the withdrawn-notice wording | ToS §3.3; PP §4.3 | Founder + counsel |
 | 35 | A public (logged-out) report page now exists in the app (`/report`, `POST /reports/public`). Counsel removed non-user-reporting framing from the ToS, so §7.4 still does not describe it — counsel/product to confirm that is intended | ToS §7.4; PP §13 | Product + counsel |
@@ -1142,6 +1146,12 @@ In-app wording for the notice that appears directly under the Contact Us form. I
 > Our support team reads the messages sent through this form. **[COPY PENDING LEGAL REVIEW]** We keep your message for 12 months after the last message in the enquiry and then delete it automatically; if it raises a safeguarding concern or a complaint, it may be kept for longer as part of a report or case record. See our [Privacy Policy](/privacy). **[COPY PENDING LEGAL REVIEW]**
 
 Notes for counsel: (1) 12 months is the only figure, and it is the founder's decision (Decision Log #440), not counsel's. (2) The notice does not say a reply will be sent or when; no response commitment is decided. (3) The "may be kept for longer" sentence relies on the escalation action, which is not built (row 42).
+
+### Open for counsel (added v0.12)
+
+Suggestions only. Nothing below is in the Terms or Privacy Policy text, and nothing is approved.
+
+1. **ToS §3.2, the sentence "Registration cannot be completed until the guardian approves"** (housekeeping, not a blocker). §3.1 and Privacy Policy §3 say the minor's account is created at the Register step, in a restricted state, and §3.2's first sentence says the account "exists but is restricted". "Registration" in the later sentence could be read as the account creation §3.1 says has already happened. Suggested wording, **[COPY PENDING LEGAL REVIEW]**: "The account cannot be fully set up until the guardian approves (including the card verification in 3.7 where it applies)." Not applied to the clause above.
 
 ---
 
