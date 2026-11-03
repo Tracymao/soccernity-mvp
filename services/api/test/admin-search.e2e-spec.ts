@@ -263,7 +263,7 @@ describe('GET /admin/search (real Postgres)', () => {
       const reporter = await user();
       const r = await prisma().report.create({ data: { reporterId: reporter.id, targetType: 'user', targetId: reporter.id, reason: 'secret reason words', reporterContactEmail: 'contact@example.com' } });
       const res = await search(mod.token, r.id).expect(200);
-      expect(Object.keys(res.body.groups.reports.items[0]).sort()).toEqual(['concernsMinor', 'createdAt', 'id', 'matchedOn', 'severity', 'source', 'status', 'targetId', 'targetType']);
+      expect(Object.keys(res.body.groups.reports.items[0]).sort()).toEqual(['concernsMinor', 'createdAt', 'id', 'matchedOn', 'reasonCategory', 'severity', 'source', 'status', 'targetId', 'targetType']);
       expect(JSON.stringify(res.body)).not.toContain('secret reason words');
       expect(JSON.stringify(res.body)).not.toContain('contact@example.com');
     });

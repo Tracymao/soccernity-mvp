@@ -43,8 +43,8 @@ on submission" and "The child-safety-vetting gate" sections below.
 
 | Method & path | Guards | Purpose |
 |---|---|---|
-| `POST /reports` | `JwtAuthGuard` | Report a post, comment, or user. Accepts an optional `severity`. **Genuine spec-gap addition** — see below. |
-| `POST /reports/public` | none (`@AuthRateLimit()` only) | A non-authenticated party reports content that depicts them or their child. Accepts an optional `severity`. **Genuine spec-gap addition, feat/public-report-submission** — see below. |
+| `POST /reports` | `JwtAuthGuard` | Report a post, comment, or user. Requires a `reasonCategory` (the description is optional except for `other`); accepts an optional `severity`. **Genuine spec-gap addition** — see below. |
+| `POST /reports/public` | none (`@AuthRateLimit()` only) | A non-authenticated party reports content that depicts them or their child. Requires a `reasonCategory`; accepts an optional `severity`. **Genuine spec-gap addition, feat/public-report-submission** — see below. |
 | `POST /reports/:id/appeal` | `JwtAuthGuard` | The reported user appeals an actioned report. **Genuine spec-gap addition** — see below. |
 | `GET /admin/moderation/reports` | `AdminJwtAuthGuard` + `AdminRolesGuard('moderator', 'superadmin')` + the child-safety-vetting gate | The moderation queue, keyset-paginated, optional `?status=` filter. Section 4.8's literal line. |
 | `PATCH /admin/moderation/reports/:id` | `AdminJwtAuthGuard` + `AdminRolesGuard('moderator', 'superadmin')` + the child-safety-vetting gate | Action a report: content removal, warning, suspension, or dismissed. Section 4.8's literal line. |
@@ -157,6 +157,29 @@ rule rather than added silently. Without these, there is no way to record
 who reviewed a report, what action was taken, or the appeal trail Section
 8.4's own workflow text assumes exists — see the schema's own comment on
 `Report` for the full reasoning.
+
+---
+
+## Reason category (backend/b284-report-reason-categories, B-284, Decision Log #465)
+
+Founder decision 2026-11-03: a report carries a **reason category**, so an admin can read and search "why" without parsing free text. Every figure and rule below is an **adopted default, veto-able**; the founder did not state the list or the labels.
+
+**The list** (`REPORT_REASON_CATEGORIES`, `moderation.constants.ts`; the labels an admin reads are `REPORT_REASON_CATEGORY_LABELS`): `harassment_or_bullying`, `hate_or_abusive_language`, `threats_or_violence`, `child_safety_concern`, `sexual_or_inappropriate_content`, `impersonation_or_fake_account`, `spam_or_scam`, `privacy_or_image_misuse`, `other`.
+
+**Storage:** `Report.reasonCategory String?`, a plain string like `status` and `severity` (not a Prisma enum), additive migration `20261109090000_add_report_reason_category`, **no backfill**. `NULL` means "not categorised": every report made before the column, a Grassroots sensitive-content report (`GrassrootsService.logSensitiveContentReport`) and a report raised by escalating a Contact Us enquiry (`ContactEnquiryAdminService.escalate`). Those creators were not changed. A genuine addition beyond Section 3's `Report` field list, flagged in the schema comment per the fixed-spec rule.
+
+**Both submission routes** (`POST /reports`, `POST /reports/public`):
+
+* `reasonCategory` is **required** and must be one of the nine keys. A missing or unknown value is the DTO's `400` (the global `ValidationPipe`, a code-less message, like every other DTO field in this module).
+* `reason` (the free-text description) is **optional**, except for category `other`, where it is required and must not be only spaces: otherwise the coded `400 report_reason_required` (`REPORT_REASON_REQUIRED_CODE`), raised before any database read. When omitted it is stored as the **empty string**, never `NULL` and never missing, so no reader of `Report.reason` breaks. A provided value is still 1 to 500 characters, so an explicit `""` stays a `400` (the existing behaviour; only an absent or `null` value counts as omitted).
+* The category sets **neither `concernsMinor` nor `severity`** (`child_safety_concern` included). A reporter who means the report to be treated as concerning a minor says so with `concernsMinor` on the public route; the category is only the reason.
+* `PostMediaReport` (the media report) is untouched.
+
+**Readers of `Report.reason` checked (all keep receiving a string):** the admin list, detail, action and appeal responses return whole `Report` rows, so `reasonCategory` appears next to `reason` with no mapper change (`null` when not categorised); the appeal routes and the hold, vetting and retention queries read other columns; the admin search never reads `reason` (it returns `reasonCategory`, see `admin-search/README.md`); `PostMediaReport.reason` is a different column. Nothing in `account-deletion` or the 12-month contact retention copies or blanks `Report` columns by list (they read `id`, `targetId`, `reporterId`, `concernsMinor`, `status` and dates only).
+
+**A category is not personal data** (it is one of nine fixed labels, not a description of a person), so the anonymisation sweep, the held-account minimisation and the purge job are unchanged.
+
+**`apps/web` and `apps/admin` need a follow-up:** the web report form (`ReportAction`, `ReportPage`) sends no `reasonCategory` yet, so until the frontend leg ships those submissions are a `400`. The Figma frames and the admin screens that show the category are the next legs.
 
 ---
 

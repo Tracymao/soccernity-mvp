@@ -1584,6 +1584,16 @@ model Report {
   targetType           String // post | user | comment
   targetId             String
   reason               String
+  // backend/b284-report-reason-categories (Decision Log #465, B-284) -- a genuine addition beyond Section 3's
+  // Report field list, flagged per CLAUDE.md's "the data model is a fixed spec" rule. The reporter's chosen
+  // reason category: one of harassment_or_bullying | hate_or_abusive_language | threats_or_violence |
+  // child_safety_concern | sexual_or_inappropriate_content | impersonation_or_fake_account | spam_or_scam |
+  // privacy_or_image_misuse | other (REPORT_REASON_CATEGORIES in moderation.constants.ts). A plain String, not a
+  // Prisma enum, like status and severity. NULL = not categorised: every report made before this column, a
+  // Grassroots sensitive-content report and a report raised by escalating a contact enquiry. Never backfilled.
+  // A category sets neither concernsMinor nor severity. `reason` above stays the free-text description (the
+  // empty string when the reporter gave none; required only for 'other').
+  reasonCategory       String?
   status               String     @default("open") // open | reviewed | actioned
   createdAt            DateTime   @default(now())
   // Whether the reported content/behaviour concerns a minor -- distinct

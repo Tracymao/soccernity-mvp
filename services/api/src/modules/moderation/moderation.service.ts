@@ -33,6 +33,8 @@ import {
   ENQUIRY_REPORT_TARGET_TYPE,
   MODERATION_DEFAULT_PAGE_SIZE,
   MODERATION_MAX_PAGE_SIZE,
+  REASON_REQUIRED_CATEGORY,
+  REPORT_REASON_REQUIRED_CODE,
   REPORT_SOURCE_CONTACT_ENQUIRY,
   ROOM_DEACTIVATED_ACTION,
   ReportAction,
@@ -107,6 +109,7 @@ export class ModerationService {
   // this is deliberately NOT GuardianConsentGuard-gated).
   // -------------------------------------------------------------------
   async createReport(reporterId: string, dto: CreateReportDto): Promise<Report> {
+    const reason = this.resolveReportReason(dto.reasonCategory, dto.reason);
     await this.assertReportTargetExists(dto.targetType, dto.targetId);
 
     return this.prisma.report.create({
@@ -114,7 +117,8 @@ export class ModerationService {
         reporterId,
         targetType: dto.targetType,
         targetId: dto.targetId,
-        reason: dto.reason,
+        reason,
+        reasonCategory: dto.reasonCategory,
         // Defaults to 'medium' when omitted — matched explicitly here
         // rather than left to Report.severity's own DB-level default, so
         // the API's documented behaviour doesn't depend on a Prisma
@@ -134,6 +138,7 @@ export class ModerationService {
   // Decision Log candidate.
   // -------------------------------------------------------------------
   async createPublicReport(dto: CreatePublicReportDto): Promise<Report> {
+    const reason = this.resolveReportReason(dto.reasonCategory, dto.reason);
     await this.assertReportTargetExists(dto.targetType, dto.targetId);
 
     const report = await this.prisma.report.create({
@@ -142,7 +147,8 @@ export class ModerationService {
         reporterContactEmail: dto.reporterContactEmail,
         targetType: dto.targetType,
         targetId: dto.targetId,
-        reason: dto.reason,
+        reason,
+        reasonCategory: dto.reasonCategory,
         concernsMinor: dto.concernsMinor,
         // Defaults to 'medium' when omitted — see createReport's own
         // comment on why this is matched explicitly rather than left to
@@ -162,6 +168,23 @@ export class ModerationService {
     });
 
     return report;
+  }
+
+  // B-284 (Decision Log #465). The text stored in Report.reason: the description as given, or the empty string
+  // when the reporter gave none, so every reader of Report.reason keeps getting a string. Category 'other'
+  // requires a description that is not blank (coded 400); every other category does not. Checked before the
+  // target-exists 404 (bad input first, no database read).
+  private resolveReportReason(category: string, reason: string | undefined): string {
+    const text = reason ?? '';
+    if (category === REASON_REQUIRED_CATEGORY && text.trim().length === 0) {
+      throw new BadRequestException({
+        statusCode: 400,
+        error: 'Bad Request',
+        code: REPORT_REASON_REQUIRED_CODE,
+        message: 'Please describe the problem in a few words.',
+      });
+    }
+    return text;
   }
 
   // A well-formed but non-existent target must 404, never a raw FK-less

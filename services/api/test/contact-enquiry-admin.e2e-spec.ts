@@ -287,9 +287,9 @@ describe('Contact enquiry admin e2e (real Postgres)', () => {
 
       await request(server())
         .post('/reports/public')
-        .send({ targetType: 'enquiry', targetId: enquiry.id, reason: 'x', reporterContactEmail: 'a@example.com', concernsMinor: false })
+        .send({ targetType: 'enquiry', targetId: enquiry.id, reasonCategory: 'harassment_or_bullying', reason: 'x', reporterContactEmail: 'a@example.com', concernsMinor: false })
         .expect(400);
-      await request(server()).post('/reports').set(auth(accessToken.token)).send({ targetType: 'enquiry', targetId: enquiry.id, reason: 'x' }).expect(400);
+      await request(server()).post('/reports').set(auth(accessToken.token)).send({ targetType: 'enquiry', targetId: enquiry.id, reasonCategory: 'harassment_or_bullying', reason: 'x' }).expect(400);
       expect(await prisma().report.count()).toBe(0);
     });
   });

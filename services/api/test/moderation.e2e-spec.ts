@@ -116,7 +116,7 @@ describe('Moderation e2e: report -> action -> appeal -> second-reviewer review',
     await request(server())
       .post('/reports')
       .set(auth(reporter.accessToken))
-      .send({ targetType: 'post', targetId: '11111111-1111-4111-8111-111111111111', reason: 'spam' })
+      .send({ targetType: 'post', targetId: '11111111-1111-4111-8111-111111111111', reasonCategory: 'harassment_or_bullying', reason: 'spam' })
       .expect(404);
 
     const prisma = getTestPrismaClient();
@@ -152,7 +152,7 @@ describe('Moderation e2e: report -> action -> appeal -> second-reviewer review',
     const createRes = await request(server())
       .post('/reports')
       .set(auth(reporter.accessToken))
-      .send({ targetType: 'post', targetId: postId, reason: 'this is spam' })
+      .send({ targetType: 'post', targetId: postId, reasonCategory: 'harassment_or_bullying', reason: 'this is spam' })
       .expect(201);
     const reportId = createRes.body.id as string;
 
@@ -276,7 +276,7 @@ describe('Moderation e2e: report -> action -> appeal -> second-reviewer review',
     const createRes = await request(server())
       .post('/reports')
       .set(auth(reporter.accessToken))
-      .send({ targetType: 'post', targetId: postId, reason: 'spam' })
+      .send({ targetType: 'post', targetId: postId, reasonCategory: 'harassment_or_bullying', reason: 'spam' })
       .expect(201);
     const reportId = createRes.body.id as string;
 
@@ -311,7 +311,7 @@ describe('Moderation e2e: report -> action -> appeal -> second-reviewer review',
     const openReport = await request(server())
       .post('/reports')
       .set(auth(reporter.accessToken))
-      .send({ targetType: 'post', targetId: postId, reason: 'spam' })
+      .send({ targetType: 'post', targetId: postId, reasonCategory: 'harassment_or_bullying', reason: 'spam' })
       .expect(201);
 
     // Still open -- nothing to appeal yet.
@@ -325,7 +325,7 @@ describe('Moderation e2e: report -> action -> appeal -> second-reviewer review',
     const dismissedReport = await request(server())
       .post('/reports')
       .set(auth(reporter.accessToken))
-      .send({ targetType: 'post', targetId: postId, reason: 'spam again' })
+      .send({ targetType: 'post', targetId: postId, reasonCategory: 'harassment_or_bullying', reason: 'spam again' })
       .expect(201);
     await request(server())
       .patch(`/admin/moderation/reports/${dismissedReport.body.id}`)
@@ -349,7 +349,7 @@ describe('Moderation e2e: report -> action -> appeal -> second-reviewer review',
     const createRes = await request(server())
       .post('/reports')
       .set(auth(reporter.accessToken))
-      .send({ targetType: 'user', targetId: reportedUser.userId, reason: 'harassment' })
+      .send({ targetType: 'user', targetId: reportedUser.userId, reasonCategory: 'harassment_or_bullying', reason: 'harassment' })
       .expect(201);
     const reportId = createRes.body.id as string;
 
@@ -383,12 +383,12 @@ describe('Moderation e2e: report -> action -> appeal -> second-reviewer review',
     const first = await request(server())
       .post('/reports')
       .set(auth(reporter.accessToken))
-      .send({ targetType: 'post', targetId: postId, reason: 'one' })
+      .send({ targetType: 'post', targetId: postId, reasonCategory: 'harassment_or_bullying', reason: 'one' })
       .expect(201);
     const second = await request(server())
       .post('/reports')
       .set(auth(reporter.accessToken))
-      .send({ targetType: 'post', targetId: postId, reason: 'two' })
+      .send({ targetType: 'post', targetId: postId, reasonCategory: 'harassment_or_bullying', reason: 'two' })
       .expect(201);
     // Action the first one -- it should drop out of the ?status=open list.
     await request(server())
@@ -423,7 +423,7 @@ describe('Moderation e2e: report -> action -> appeal -> second-reviewer review',
     const reportRes = await request(server())
       .post('/reports')
       .set(auth(reporter.accessToken))
-      .send({ targetType: 'banter_room', targetId: room.id, reason: 'abusive room' })
+      .send({ targetType: 'banter_room', targetId: room.id, reasonCategory: 'harassment_or_bullying', reason: 'abusive room' })
       .expect(201);
 
     await request(server())
@@ -441,7 +441,7 @@ describe('Moderation e2e: report -> action -> appeal -> second-reviewer review',
     const postReport = await request(server())
       .post('/reports')
       .set(auth(reporter.accessToken))
-      .send({ targetType: 'post', targetId: postId, reason: 'spam' })
+      .send({ targetType: 'post', targetId: postId, reasonCategory: 'harassment_or_bullying', reason: 'spam' })
       .expect(201);
     await request(server())
       .patch(`/admin/moderation/reports/${postReport.body.id}`)
@@ -463,7 +463,7 @@ describe('Moderation e2e: report -> action -> appeal -> second-reviewer review',
     const defaultRes = await request(server())
       .post('/reports')
       .set(auth(reporter.accessToken))
-      .send({ targetType: 'post', targetId: postId, reason: 'no severity given' })
+      .send({ targetType: 'post', targetId: postId, reasonCategory: 'harassment_or_bullying', reason: 'no severity given' })
       .expect(201);
     expect(defaultRes.body.severity).toBe('medium');
     const defaultRow = await prisma.report.findUniqueOrThrow({ where: { id: defaultRes.body.id } });
@@ -472,7 +472,7 @@ describe('Moderation e2e: report -> action -> appeal -> second-reviewer review',
     const explicitRes = await request(server())
       .post('/reports')
       .set(auth(reporter.accessToken))
-      .send({ targetType: 'post', targetId: postId, reason: 'urgent', severity: 'critical' })
+      .send({ targetType: 'post', targetId: postId, reasonCategory: 'harassment_or_bullying', reason: 'urgent', severity: 'critical' })
       .expect(201);
     expect(explicitRes.body.severity).toBe('critical');
   });
@@ -485,7 +485,7 @@ describe('Moderation e2e: report -> action -> appeal -> second-reviewer review',
     await request(server())
       .post('/reports')
       .set(auth(reporter.accessToken))
-      .send({ targetType: 'post', targetId: postId, reason: 'x', severity: 'catastrophic' })
+      .send({ targetType: 'post', targetId: postId, reasonCategory: 'harassment_or_bullying', reason: 'x', severity: 'catastrophic' })
       .expect(400);
   });
 
@@ -616,7 +616,7 @@ describe('Moderation e2e: report -> action -> appeal -> second-reviewer review',
       const createRes = await request(server())
         .post('/reports')
         .set(auth(reporter.accessToken))
-        .send({ targetType: 'post', targetId: postId, reason: 'needs escalating' })
+        .send({ targetType: 'post', targetId: postId, reasonCategory: 'harassment_or_bullying', reason: 'needs escalating' })
         .expect(201);
       const reportId = createRes.body.id as string;
       const prisma = getTestPrismaClient();
@@ -670,7 +670,7 @@ describe('Moderation e2e: report -> action -> appeal -> second-reviewer review',
       const createRes = await request(server())
         .post('/reports')
         .set(auth(reporter.accessToken))
-        .send({ targetType: 'post', targetId: postId, reason: 'already actioned' })
+        .send({ targetType: 'post', targetId: postId, reasonCategory: 'harassment_or_bullying', reason: 'already actioned' })
         .expect(201);
       const reportId = createRes.body.id as string;
 

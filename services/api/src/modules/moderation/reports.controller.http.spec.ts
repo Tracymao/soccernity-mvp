@@ -51,12 +51,13 @@ describe('ReportsController (HTTP layer)', () => {
 
       const res = await request(app.getHttpServer())
         .post('/reports')
-        .send({ targetType: 'post', targetId: '11111111-1111-4111-8111-111111111111', reason: 'spam' })
+        .send({ targetType: 'post', targetId: '11111111-1111-4111-8111-111111111111', reasonCategory: 'spam_or_scam', reason: 'spam' })
         .expect(201);
 
       expect(moderationService.createReport).toHaveBeenCalledWith('user-1', {
         targetType: 'post',
         targetId: '11111111-1111-4111-8111-111111111111',
+        reasonCategory: 'spam_or_scam',
         reason: 'spam',
       });
       expect(res.body.id).toBe('report-1');
@@ -65,7 +66,7 @@ describe('ReportsController (HTTP layer)', () => {
     it('rejects an invalid targetType', async () => {
       await request(app.getHttpServer())
         .post('/reports')
-        .send({ targetType: 'club', targetId: '11111111-1111-4111-8111-111111111111', reason: 'spam' })
+        .send({ targetType: 'club', targetId: '11111111-1111-4111-8111-111111111111', reasonCategory: 'spam_or_scam', reason: 'spam' })
         .expect(400);
       expect(moderationService.createReport).not.toHaveBeenCalled();
     });
@@ -73,15 +74,93 @@ describe('ReportsController (HTTP layer)', () => {
     it('rejects a non-UUID targetId', async () => {
       await request(app.getHttpServer())
         .post('/reports')
-        .send({ targetType: 'post', targetId: 'not-a-uuid', reason: 'spam' })
+        .send({ targetType: 'post', targetId: 'not-a-uuid', reasonCategory: 'spam_or_scam', reason: 'spam' })
         .expect(400);
     });
 
     it('rejects an empty reason', async () => {
       await request(app.getHttpServer())
         .post('/reports')
-        .send({ targetType: 'post', targetId: '11111111-1111-4111-8111-111111111111', reason: '' })
+        .send({ targetType: 'post', targetId: '11111111-1111-4111-8111-111111111111', reasonCategory: 'spam_or_scam', reason: '' })
         .expect(400);
+    });
+
+    const REPORT_ID = '11111111-1111-4111-8111-111111111111';
+    const ALL_CATEGORIES = [
+      'harassment_or_bullying',
+      'hate_or_abusive_language',
+      'threats_or_violence',
+      'child_safety_concern',
+      'sexual_or_inappropriate_content',
+      'impersonation_or_fake_account',
+      'spam_or_scam',
+      'privacy_or_image_misuse',
+      'other',
+    ];
+
+    it('rejects a missing reasonCategory (required)', async () => {
+      await request(app.getHttpServer())
+        .post('/reports')
+        .send({ targetType: 'post', targetId: REPORT_ID, reason: 'spam' })
+        .expect(400);
+      expect(moderationService.createReport).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown reasonCategory', async () => {
+      await request(app.getHttpServer())
+        .post('/reports')
+        .send({ targetType: 'post', targetId: REPORT_ID, reasonCategory: 'rudeness', reason: 'spam' })
+        .expect(400);
+      expect(moderationService.createReport).not.toHaveBeenCalled();
+    });
+
+    it.each(ALL_CATEGORIES)('accepts category %s with a description', async (category) => {
+      moderationService.createReport.mockResolvedValue({ id: 'report-1', status: 'open' });
+      await request(app.getHttpServer())
+        .post('/reports')
+        .send({ targetType: 'post', targetId: REPORT_ID, reasonCategory: category, reason: 'details' })
+        .expect(201);
+      expect(moderationService.createReport).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({ reasonCategory: category, reason: 'details' }),
+      );
+    });
+
+    it('accepts a non-other category with NO description (reason omitted)', async () => {
+      moderationService.createReport.mockResolvedValue({ id: 'report-1', status: 'open' });
+      await request(app.getHttpServer())
+        .post('/reports')
+        .send({ targetType: 'post', targetId: REPORT_ID, reasonCategory: 'spam_or_scam' })
+        .expect(201);
+      expect(moderationService.createReport.mock.calls[0][1]).not.toHaveProperty('reason');
+    });
+
+    it("passes 'other' with no description through to the service (which answers the coded 400)", async () => {
+      moderationService.createReport.mockResolvedValue({ id: 'report-1', status: 'open' });
+      await request(app.getHttpServer())
+        .post('/reports')
+        .send({ targetType: 'post', targetId: REPORT_ID, reasonCategory: 'other' })
+        .expect(201);
+      expect(moderationService.createReport).toHaveBeenCalledWith('user-1', {
+        targetType: 'post',
+        targetId: REPORT_ID,
+        reasonCategory: 'other',
+      });
+    });
+
+    it('still rejects a description over 500 characters', async () => {
+      await request(app.getHttpServer())
+        .post('/reports')
+        .send({ targetType: 'post', targetId: REPORT_ID, reasonCategory: 'other', reason: 'x'.repeat(501) })
+        .expect(400);
+    });
+
+    it('accepts a description of exactly 500 characters', async () => {
+      moderationService.createReport.mockResolvedValue({ id: 'report-1', status: 'open' });
+      await request(app.getHttpServer())
+        .post('/reports')
+        .send({ targetType: 'post', targetId: REPORT_ID, reasonCategory: 'other', reason: 'x'.repeat(500) })
+        .expect(201);
     });
 
     it('rejects an unrecognised extra field (whitelist: true, forbidNonWhitelisted: true)', async () => {
@@ -90,6 +169,7 @@ describe('ReportsController (HTTP layer)', () => {
         .send({
           targetType: 'post',
           targetId: '11111111-1111-4111-8111-111111111111',
+          reasonCategory: 'spam_or_scam',
           reason: 'spam',
           status: 'actioned',
         })

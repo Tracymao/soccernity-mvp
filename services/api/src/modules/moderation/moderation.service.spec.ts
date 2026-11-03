@@ -144,7 +144,7 @@ describe('ModerationService', () => {
       (prisma.report.create as jest.Mock).mockResolvedValue(report({ targetType: 'grassroots_team' }));
       const service = buildService(prisma);
 
-      await service.createReport('reporter-1', { targetType: 'grassroots_team', targetId: 'team-1', reason: 'x' });
+      await service.createReport('reporter-1', { targetType: 'grassroots_team', targetId: 'team-1', reasonCategory: 'harassment_or_bullying', reason: 'x' });
 
       expect(prisma.report.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ targetType: 'grassroots_team', targetId: 'team-1' }) }),
@@ -158,10 +158,10 @@ describe('ModerationService', () => {
       const service = buildService(prisma);
 
       await expect(
-        service.createReport('reporter-1', { targetType: 'grassroots_team', targetId: 'nope', reason: 'x' }),
+        service.createReport('reporter-1', { targetType: 'grassroots_team', targetId: 'nope', reasonCategory: 'harassment_or_bullying', reason: 'x' }),
       ).rejects.toThrow(NotFoundException);
       await expect(
-        service.createReport('reporter-1', { targetType: 'fixture', targetId: 'nope', reason: 'x' }),
+        service.createReport('reporter-1', { targetType: 'fixture', targetId: 'nope', reasonCategory: 'harassment_or_bullying', reason: 'x' }),
       ).rejects.toThrow(NotFoundException);
       expect(prisma.report.create).not.toHaveBeenCalled();
     });
@@ -177,6 +177,7 @@ describe('ModerationService', () => {
       const result = await service.createReport('reporter-1', {
         targetType: 'post',
         targetId: 'post-1',
+        reasonCategory: 'spam_or_scam',
         reason: 'spam',
       });
 
@@ -185,6 +186,7 @@ describe('ModerationService', () => {
           reporterId: 'reporter-1',
           targetType: 'post',
           targetId: 'post-1',
+          reasonCategory: 'spam_or_scam',
           reason: 'spam',
           severity: 'medium',
         },
@@ -198,7 +200,7 @@ describe('ModerationService', () => {
       (prisma.report.create as jest.Mock).mockResolvedValue(report({ severity: 'medium' }));
       const service = buildService(prisma);
 
-      await service.createReport('reporter-1', { targetType: 'post', targetId: 'post-1', reason: 'spam' });
+      await service.createReport('reporter-1', { targetType: 'post', targetId: 'post-1', reasonCategory: 'harassment_or_bullying', reason: 'spam' });
 
       expect(prisma.report.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ severity: 'medium' }) }),
@@ -214,6 +216,7 @@ describe('ModerationService', () => {
       await service.createReport('reporter-1', {
         targetType: 'post',
         targetId: 'post-1',
+        reasonCategory: 'spam_or_scam',
         reason: 'spam',
         severity: 'critical',
       });
@@ -223,13 +226,110 @@ describe('ModerationService', () => {
       );
     });
 
+    describe('reason category (B-284, Decision Log #465)', () => {
+      const CATEGORIES = [
+        'harassment_or_bullying',
+        'hate_or_abusive_language',
+        'threats_or_violence',
+        'child_safety_concern',
+        'sexual_or_inappropriate_content',
+        'impersonation_or_fake_account',
+        'spam_or_scam',
+        'privacy_or_image_misuse',
+        'other',
+      ] as const;
+
+      function setup() {
+        const prisma = buildPrismaMock();
+        (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+        (prisma.report.create as jest.Mock).mockResolvedValue(report());
+        return { prisma, service: buildService(prisma) };
+      }
+
+      it.each(CATEGORIES)('stores category %s and the description given', async (category) => {
+        const { prisma, service } = setup();
+        await service.createReport('reporter-1', {
+          targetType: 'post',
+          targetId: 'post-1',
+          reasonCategory: category,
+          reason: 'details',
+        });
+        expect(prisma.report.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ reasonCategory: category, reason: 'details' }),
+        });
+      });
+
+      it('stores the empty string when a non-other category has no description', async () => {
+        const { prisma, service } = setup();
+        await service.createReport('reporter-1', {
+          targetType: 'post',
+          targetId: 'post-1',
+          reasonCategory: 'spam_or_scam',
+        });
+        expect(prisma.report.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ reasonCategory: 'spam_or_scam', reason: '' }),
+        });
+      });
+
+      it('does not touch concernsMinor or severity, whichever category (child_safety_concern included)', async () => {
+        const { prisma, service } = setup();
+        await service.createReport('reporter-1', {
+          targetType: 'post',
+          targetId: 'post-1',
+          reasonCategory: 'child_safety_concern',
+        });
+        const data = (prisma.report.create as jest.Mock).mock.calls[0][0].data;
+        expect(data.severity).toBe('medium');
+        expect(data).not.toHaveProperty('concernsMinor');
+      });
+
+      it("rejects 'other' with no description, with the coded 400 and no database read", async () => {
+        const { prisma, service } = setup();
+        const call = service.createReport('reporter-1', {
+          targetType: 'post',
+          targetId: 'post-1',
+          reasonCategory: 'other',
+        });
+        await expect(call).rejects.toThrow(BadRequestException);
+        await expect(call).rejects.toMatchObject({ response: { code: 'report_reason_required' } });
+        expect(prisma.post.findUnique).not.toHaveBeenCalled();
+        expect(prisma.report.create).not.toHaveBeenCalled();
+      });
+
+      it("rejects 'other' with a whitespace-only description", async () => {
+        const { prisma, service } = setup();
+        await expect(
+          service.createReport('reporter-1', {
+            targetType: 'post',
+            targetId: 'post-1',
+            reasonCategory: 'other',
+            reason: '   ',
+          }),
+        ).rejects.toMatchObject({ response: { code: 'report_reason_required' } });
+        expect(prisma.report.create).not.toHaveBeenCalled();
+      });
+
+      it("accepts 'other' with a description", async () => {
+        const { prisma, service } = setup();
+        await service.createReport('reporter-1', {
+          targetType: 'post',
+          targetId: 'post-1',
+          reasonCategory: 'other',
+          reason: 'Something else is wrong',
+        });
+        expect(prisma.report.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ reasonCategory: 'other', reason: 'Something else is wrong' }),
+        });
+      });
+    });
+
     it('404s when the reported post does not exist', async () => {
       const prisma = buildPrismaMock();
       (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
       const service = buildService(prisma);
 
       await expect(
-        service.createReport('reporter-1', { targetType: 'post', targetId: 'missing', reason: 'spam' }),
+        service.createReport('reporter-1', { targetType: 'post', targetId: 'missing', reasonCategory: 'harassment_or_bullying', reason: 'spam' }),
       ).rejects.toThrow(NotFoundException);
       expect(prisma.report.create).not.toHaveBeenCalled();
     });
@@ -240,7 +340,7 @@ describe('ModerationService', () => {
       const service = buildService(prisma);
 
       await expect(
-        service.createReport('reporter-1', { targetType: 'comment', targetId: 'missing', reason: 'abuse' }),
+        service.createReport('reporter-1', { targetType: 'comment', targetId: 'missing', reasonCategory: 'harassment_or_bullying', reason: 'abuse' }),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -250,7 +350,7 @@ describe('ModerationService', () => {
       const service = buildService(prisma);
 
       await expect(
-        service.createReport('reporter-1', { targetType: 'user', targetId: 'missing', reason: 'harassment' }),
+        service.createReport('reporter-1', { targetType: 'user', targetId: 'missing', reasonCategory: 'harassment_or_bullying', reason: 'harassment' }),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -260,13 +360,14 @@ describe('ModerationService', () => {
       (prisma.report.create as jest.Mock).mockResolvedValue(report({ targetType: 'user', targetId: 'user-9' }));
       const service = buildService(prisma);
 
-      await service.createReport('reporter-1', { targetType: 'user', targetId: 'user-9', reason: 'harassment' });
+      await service.createReport('reporter-1', { targetType: 'user', targetId: 'user-9', reasonCategory: 'harassment_or_bullying', reason: 'harassment' });
 
       expect(prisma.report.create).toHaveBeenCalledWith({
         data: {
           reporterId: 'reporter-1',
           targetType: 'user',
           targetId: 'user-9',
+          reasonCategory: 'harassment_or_bullying',
           reason: 'harassment',
           severity: 'medium',
         },
@@ -476,6 +577,20 @@ describe('ModerationService', () => {
       expect(result.nextCursor).toBeNull();
     });
 
+    it('returns reasonCategory on each row (null for a report that was never categorised), next to the free-text reason', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findMany as jest.Mock).mockResolvedValue([
+        report({ id: 'a', reasonCategory: 'spam_or_scam', reason: '' }),
+        report({ id: 'b', reasonCategory: null, reason: 'old free text' }),
+      ]);
+      const service = buildService(prisma);
+
+      const { items } = await service.listReports({}, 'admin-1');
+
+      expect(items[0]).toMatchObject({ reasonCategory: 'spam_or_scam', reason: '' });
+      expect(items[1]).toMatchObject({ reasonCategory: null, reason: 'old free text' });
+    });
+
     it("adds source: 'contact_enquiry' to an enquiry report and leaves every other row exactly as it was", async () => {
       const prisma = buildPrismaMock();
       const plain = report({ id: 'plain' });
@@ -584,6 +699,16 @@ describe('ModerationService', () => {
       const service = buildService(prisma);
 
       await expect(service.getReportById('missing', 'admin-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('returns reasonCategory on the report detail', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.report.findUnique as jest.Mock).mockResolvedValue(report({ reasonCategory: 'threats_or_violence' }));
+      const service = buildService(prisma);
+
+      const result = await service.getReportById('report-1', 'admin-1');
+
+      expect(result).toMatchObject({ reasonCategory: 'threats_or_violence', reason: 'spam' });
     });
 
     it('returns the report as-is when it does not concern a minor, without checking vetting at all', async () => {
@@ -1552,6 +1677,7 @@ describe('ModerationService', () => {
       reporterContactEmail: 'concerned-parent@example.com',
       targetType: 'post' as const,
       targetId: 'post-1',
+      reasonCategory: 'privacy_or_image_misuse' as const,
       reason: 'This photo shows my child without consent.',
       concernsMinor: true,
     };
@@ -1574,6 +1700,7 @@ describe('ModerationService', () => {
           targetType: 'post',
           targetId: 'post-1',
           reason: dto.reason,
+          reasonCategory: 'privacy_or_image_misuse',
           concernsMinor: true,
           severity: 'medium',
         },
@@ -1631,6 +1758,35 @@ describe('ModerationService', () => {
       await service.createPublicReport({ ...dto, targetType: 'user', targetId: 'user-9' });
 
       expect(emailService.sendPublicReportAcknowledgementEmail).toHaveBeenCalledWith(dto.reporterContactEmail);
+    });
+
+    it('stores the category, and the empty string when the description is omitted', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1' });
+      (prisma.report.create as jest.Mock).mockResolvedValue(report({ reporterId: null }));
+      const service = buildService(prisma, buildEmailServiceMock());
+
+      const { reason, ...withoutReason } = dto;
+      void reason;
+      await service.createPublicReport({ ...withoutReason, reasonCategory: 'impersonation_or_fake_account' });
+
+      expect(prisma.report.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ reasonCategory: 'impersonation_or_fake_account', reason: '', concernsMinor: true }),
+      });
+    });
+
+    it("rejects 'other' without a description (coded 400) and creates nothing, sends nothing", async () => {
+      const prisma = buildPrismaMock();
+      const emailService = buildEmailServiceMock();
+      const service = buildService(prisma, emailService);
+
+      const { reason, ...withoutReason } = dto;
+      void reason;
+      await expect(service.createPublicReport({ ...withoutReason, reasonCategory: 'other' })).rejects.toMatchObject({
+        response: { code: 'report_reason_required' },
+      });
+      expect(prisma.report.create).not.toHaveBeenCalled();
+      expect(emailService.sendPublicReportAcknowledgementEmail).not.toHaveBeenCalled();
     });
 
     it('does not let a failed acknowledgment email reject report submission', async () => {
