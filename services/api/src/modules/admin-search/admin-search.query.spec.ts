@@ -6,7 +6,8 @@ import {
   ADMIN_SEARCH_QUERY_TOO_LONG_CODE,
   ADMIN_SEARCH_QUERY_TOO_SHORT_CODE,
 } from './admin-search.constants';
-import { escapeLike, isEmailShaped, parseAdminSearchQuery } from './admin-search.query';
+import { escapeLike, isEmailShaped, matchReasonCategories, parseAdminSearchQuery } from './admin-search.query';
+import { REPORT_REASON_CATEGORIES, REPORT_REASON_CATEGORY_LABELS } from '../moderation/moderation.constants';
 
 function codeOf(fn: () => unknown): string | undefined {
   try {
@@ -102,5 +103,40 @@ describe('isEmailShaped', () => {
     const started = Date.now();
     isEmailShaped(hostile);
     expect(Date.now() - started).toBeLessThan(50);
+  });
+});
+
+describe('matchReasonCategories (B-284: a typed prefix of the label an admin reads)', () => {
+  it('every category has exactly one label and the label map has no extra key', () => {
+    expect(Object.keys(REPORT_REASON_CATEGORY_LABELS).sort()).toEqual([...REPORT_REASON_CATEGORIES].sort());
+  });
+
+  it('finds a category by a prefix of its label, case-insensitively', () => {
+    expect(matchReasonCategories('harass')).toEqual(['harassment_or_bullying']);
+    expect(matchReasonCategories('HARASS')).toEqual(['harassment_or_bullying']);
+    expect(matchReasonCategories('Harassment or')).toEqual(['harassment_or_bullying']);
+    expect(matchReasonCategories('imperson')).toEqual(['impersonation_or_fake_account']);
+    expect(matchReasonCategories('child safety')).toEqual(['child_safety_concern']);
+    expect(matchReasonCategories('oth')).toEqual(['other']);
+  });
+
+  it('treats runs of whitespace as one space and ignores the ends', () => {
+    expect(matchReasonCategories('  hate   or  abus ')).toEqual(['hate_or_abusive_language']);
+  });
+
+  it('only a PREFIX of the label: a word from the middle, or a label that is longer than the text, does not match', () => {
+    expect(matchReasonCategories('bullying')).toEqual([]);
+    expect(matchReasonCategories('scam')).toEqual([]);
+    expect(matchReasonCategories('harassment or bullying and more')).toEqual([]);
+    expect(matchReasonCategories('')).toEqual([]);
+  });
+
+  it('can match more than one category when the prefix is shared', () => {
+    const matched = matchReasonCategories('s');
+    expect(matched).toEqual(['sexual_or_inappropriate_content', 'spam_or_scam']);
+  });
+
+  it('does not match the machine key, only the label', () => {
+    expect(matchReasonCategories('harassment_or_bullying')).toEqual([]);
   });
 });

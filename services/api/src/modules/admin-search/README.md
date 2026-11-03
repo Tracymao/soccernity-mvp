@@ -28,15 +28,22 @@ One stable key per hit saying which field the text matched; the admin app owns t
 | Group | Keys |
 | --- | --- |
 | `users` | `user_id`, `email`, `username` |
-| `reports` | `report_id`, `report_reference`, `reporter_user_id`, `target_user_id`, `target_username` |
+| `reports` | `report_id`, `report_reference`, `reporter_user_id`, `target_user_id`, `target_username`, `reason_category` |
 | `contactEnquiries` | `email`, `subject` |
 | `articles` | `title` |
 | `staff` | `email`, `name` |
 | `media` | `item_id` |
 
-### Reason category (not built: blocked)
+### Reason category (backend/b284-report-reason-categories, B-284, Decision Log #465)
 
-Decision Log #464 / the Figma frames ask for a report **reason** column ("Abusive language", "Impersonation") and for reports to be searchable by **reason category**. **There is no reason category in the data model.** `Report.reason` is the reporter's own free text (1 to 500 characters), `POST /reports` and `POST /reports/public` accept no category, and the web `ReportAction` says "no reasons taxonomy exists". The free-text reason is the report description, which is never searched or returned here. So neither the `reason` field nor the category matcher exists. Building them needs a decision (a fixed list of categories), a `Report` column and a change to both submission routes: not done, not invented.
+Reports now carry a fixed **reason category** (`Report.reasonCategory`, see `modules/moderation/README.md` "Reason category"). The search uses it two ways:
+
+* **Returned:** every report hit carries `reasonCategory`: the key (`harassment_or_bullying`, ...) or `null` for a report that was never categorised. The admin app owns the label text.
+* **Matched:** a report is also found when the typed text is a **prefix of a category label as an admin reads it**, case-insensitive, runs of spaces treated as one (`harass` finds `harassment_or_bullying`; `hate or abus` finds `hate_or_abusive_language`; `oth` finds `other`). A word from the middle of a label (`bullying`) or the machine key does not match, so a loose query cannot pull in every report. The labels are ONE constant, `REPORT_REASON_CATEGORY_LABELS` in `moderation.constants.ts`; `matchReasonCategories()` in `admin-search.query.ts` reads it. `matchedOn` is `reason_category` when this is why the report was found (an id, reference or target-user match wins if the row also matches one of those).
+
+A short prefix such as `spa` therefore also finds reports categorised `spam_or_scam`, next to any username or other match: that is the cost of a prefix matcher on the minimum 3 characters (an adopted default, veto-able).
+
+**Still true, and pinned by tests:** the free-text description (`Report.reason`) is never selected, searched or returned by this module. A category sets neither `concernsMinor` nor `severity`, so the child-safety vetting gate on report hits is unchanged: a report that concerns a minor is hidden from an unvetted admin whatever its category.
 
 ### Display name (not matched)
 

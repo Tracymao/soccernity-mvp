@@ -65,6 +65,48 @@ export const REPORT_SEVERITIES = ['low', 'medium', 'high', 'critical'] as const;
 export type ReportSeverity = (typeof REPORT_SEVERITIES)[number];
 export const DEFAULT_REPORT_SEVERITY: ReportSeverity = 'medium';
 
+// backend/b284-report-reason-categories (Decision Log #465, B-284; founder decision 2026-11-03). The fixed list of
+// reason categories a report carries. ADOPTED DEFAULTS, veto-able: the nine keys and the labels below were
+// proposed by the build, not stated by the founder. Stored as a plain String in Report.reasonCategory (not a
+// Prisma enum), like status and severity. A report made before this existed, a report made by the Grassroots
+// sensitive-content screen and a report raised by escalating a contact enquiry carry NO category (null).
+export const REPORT_REASON_CATEGORIES = [
+  'harassment_or_bullying',
+  'hate_or_abusive_language',
+  'threats_or_violence',
+  'child_safety_concern',
+  'sexual_or_inappropriate_content',
+  'impersonation_or_fake_account',
+  'spam_or_scam',
+  'privacy_or_image_misuse',
+  'other',
+] as const;
+export type ReportReasonCategory = (typeof REPORT_REASON_CATEGORIES)[number];
+
+// The labels as an admin reads them. ONE map, used by admin search to match a typed prefix ("harass" finds
+// harassment_or_bullying). The admin app owns its own display copy; this exists so the search and the screen
+// cannot drift in meaning. Keep each label's first word distinctive: search matches a case-insensitive PREFIX.
+export const REPORT_REASON_CATEGORY_LABELS: Record<ReportReasonCategory, string> = {
+  harassment_or_bullying: 'Harassment or bullying',
+  hate_or_abusive_language: 'Hate or abusive language',
+  threats_or_violence: 'Threats or violence',
+  child_safety_concern: 'Child safety concern',
+  sexual_or_inappropriate_content: 'Sexual or inappropriate content',
+  impersonation_or_fake_account: 'Impersonation or fake account',
+  spam_or_scam: 'Spam or scam',
+  privacy_or_image_misuse: 'Privacy or image misuse',
+  other: 'Other',
+};
+
+// The only category that REQUIRES a written description (Report.reason, 1 to 500 characters). For every other
+// category the description is optional and is stored as the empty string when omitted, so every reader of
+// Report.reason keeps getting a string.
+export const REASON_REQUIRED_CATEGORY: ReportReasonCategory = 'other';
+
+// 400 code: category 'other' with no (or only whitespace) description. A missing or unknown category is rejected
+// by the DTO (global ValidationPipe, a code-less 400), like every other DTO field in this module.
+export const REPORT_REASON_REQUIRED_CODE = 'report_reason_required';
+
 // The 403 code thrown when a report concerning a minor (Report.concernsMinor)
 // is listed/actioned/appeal-reviewed by an AdminUser whose childSafetyVetted
 // flag is not true, and when PATCH /admin/moderation/reports/:id/escalate is

@@ -1,5 +1,12 @@
-import { IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
-import { REPORT_SEVERITIES, REPORT_TARGET_TYPES, ReportSeverity, ReportTargetType } from '../moderation.constants';
+import { IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength, ValidateIf } from 'class-validator';
+import {
+  REPORT_REASON_CATEGORIES,
+  REPORT_SEVERITIES,
+  REPORT_TARGET_TYPES,
+  ReportReasonCategory,
+  ReportSeverity,
+  ReportTargetType,
+} from '../moderation.constants';
 
 // POST /reports — a genuine spec-gap addition, not a literal Section 4
 // line item. Section 4's API Contract Sketch never defines a
@@ -16,10 +23,20 @@ export class CreateReportDto {
   @IsUUID()
   targetId!: string;
 
+  // B-284 (Decision Log #465): REQUIRED. The fixed list is REPORT_REASON_CATEGORIES.
+  @IsIn(REPORT_REASON_CATEGORIES)
+  reasonCategory!: ReportReasonCategory;
+
+  // The free-text description. OPTIONAL, except for reasonCategory 'other' where the service requires a
+  // non-blank one (coded 400, REPORT_REASON_REQUIRED_CODE). When omitted it is stored as
+  // the empty string, so every reader of Report.reason keeps getting a string. The 500-character limit is
+  // unchanged. Validation is skipped only for an omitted (or null) value; a provided value must still be a
+  // string of 1 to 500 characters, as before, so an explicit "" stays a 400 (the existing behaviour).
+  @ValidateIf((o: { reason?: unknown }) => o.reason !== undefined && o.reason !== null)
   @IsString()
   @MinLength(1)
   @MaxLength(500)
-  reason!: string;
+  reason?: string;
 
   // Optional — defaults to 'medium' at the service layer when omitted
   // (see moderation.constants.ts's DEFAULT_REPORT_SEVERITY). A reporter

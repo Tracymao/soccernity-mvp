@@ -6,6 +6,11 @@ import {
   ADMIN_SEARCH_QUERY_TOO_LONG_CODE,
   ADMIN_SEARCH_QUERY_TOO_SHORT_CODE,
 } from './admin-search.constants';
+import {
+  REPORT_REASON_CATEGORIES,
+  REPORT_REASON_CATEGORY_LABELS,
+  ReportReasonCategory,
+} from '../moderation/moderation.constants';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // A whole email address, nothing else. Deliberately strict: the exact-email matchers only run on this shape.
@@ -81,4 +86,16 @@ export function parseAdminSearchQuery(raw: string | undefined): ParsedAdminSearc
  */
 export function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (ch) => '\\' + ch);
+}
+
+/**
+ * B-284 (Decision Log #465): the report reason categories whose LABEL, as an admin reads it, starts with the typed
+ * text (case-insensitive, runs of whitespace treated as one space). "harass" finds harassment_or_bullying; "hate or"
+ * finds hate_or_abusive_language. A prefix of the label only: a word from the middle ("bullying") does not match, so
+ * a loose query cannot pull in every report. Reads the one label map in moderation.constants.ts.
+ */
+export function matchReasonCategories(text: string): ReportReasonCategory[] {
+  const typed = text.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (typed.length === 0) return [];
+  return REPORT_REASON_CATEGORIES.filter((key) => REPORT_REASON_CATEGORY_LABELS[key].toLowerCase().startsWith(typed));
 }

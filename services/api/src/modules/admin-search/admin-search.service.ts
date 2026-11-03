@@ -20,7 +20,7 @@ import {
   ADMIN_SEARCH_OWNED_CONTENT_ID_CAP,
   AdminSearchGroup,
 } from './admin-search.constants';
-import { escapeLike, parseAdminSearchQuery, ParsedAdminSearchQuery } from './admin-search.query';
+import { escapeLike, matchReasonCategories, parseAdminSearchQuery, ParsedAdminSearchQuery } from './admin-search.query';
 
 // ---------------------------------------------------------------------------------------------------------------
 // GET /admin/search (backend/b114-admin-search; B-114, founder decision of 2026-11-02, Decision Log #463).
@@ -53,7 +53,13 @@ export interface SearchGroup<T> {
 // A stable KEY, never English: the admin app owns the labels ("Username (starts with)", "Report ID", ...). One value
 // per hit; when several fields would match, the first in the order each type lists below wins.
 export type UserMatchedOn = 'user_id' | 'email' | 'username';
-export type ReportMatchedOn = 'report_id' | 'report_reference' | 'reporter_user_id' | 'target_user_id' | 'target_username';
+export type ReportMatchedOn =
+  | 'report_id'
+  | 'report_reference'
+  | 'reporter_user_id'
+  | 'target_user_id'
+  | 'target_username'
+  | 'reason_category';
 export type ContactEnquiryMatchedOn = 'email' | 'subject';
 export type ArticleMatchedOn = 'title';
 export type StaffMatchedOn = 'email' | 'name';
@@ -78,6 +84,8 @@ const REPORT_HIT_SELECT = {
   status: true,
   severity: true,
   concernsMinor: true,
+  // B-284: the reason CATEGORY (a fixed key, null when not categorised). Never the free-text reason.
+  reasonCategory: true,
   createdAt: true,
 } as const;
 
@@ -239,8 +247,9 @@ export class AdminSearchService {
   }
 
   // ---- reports: report id, report reference, or (a user id / a username prefix) the reports by or about that user. ----
+  // ... or a reason CATEGORY whose label starts with the typed text (B-284, Decision Log #465).
   // NEVER the free-text reason: Report.reason is the reporter's own description. It is not selected, searched or
-  // returned. (There is no reason CATEGORY column; see README "Reason category".)
+  // returned; only the category (a fixed key) is.
 
   private async searchReports(q: ParsedAdminSearchQuery, vetted: boolean): Promise<SearchGroup<ReportHit>> {
     const or: Prisma.ReportWhereInput[] = [];
@@ -263,6 +272,10 @@ export class AdminSearchService {
       });
       for (const u of users) if (!subjects.has(u.id)) subjects.set(u.id, 'target_username');
     }
+    // B-284: reports whose reason category's label starts with the typed text. Independent of the id / username
+    // shapes above, so "hate or" (not username-shaped) still finds hate_or_abusive_language.
+    const categories = matchReasonCategories(q.text);
+    if (categories.length > 0) or.push({ reasonCategory: { in: categories } });
     if (or.length === 0 && subjects.size === 0) return EMPTY;
 
     // Report.targetId is a bare string, so "about a user" is: the user, a post they wrote, a comment they wrote.
@@ -314,7 +327,9 @@ export class AdminSearchService {
         if (r.id === q.lower) matchedOn = 'report_id';
         else if (q.isReportReference && r.id.startsWith(q.lower)) matchedOn = 'report_reference';
         else if (reporterId !== null && reporterId === q.lower) matchedOn = 'reporter_user_id';
-        else matchedOn = (aboutUser !== undefined && subjects.get(aboutUser)) || 'target_user_id';
+        else if (aboutUser !== undefined && subjects.get(aboutUser)) matchedOn = subjects.get(aboutUser)!;
+        else if (r.reasonCategory !== null && (categories as string[]).includes(r.reasonCategory)) matchedOn = 'reason_category';
+        else matchedOn = 'target_user_id';
         return { ...r, source: r.targetType === ENQUIRY_REPORT_TARGET_TYPE ? REPORT_SOURCE_CONTACT_ENQUIRY : null, matchedOn };
       }),
     );

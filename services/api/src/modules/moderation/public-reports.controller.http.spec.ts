@@ -25,6 +25,7 @@ describe('PublicReportsController (HTTP layer)', () => {
     reporterContactEmail: 'concerned-parent@example.com',
     targetType: 'post',
     targetId: '11111111-1111-4111-8111-111111111111',
+    reasonCategory: 'privacy_or_image_misuse',
     reason: 'This photo shows my child without consent.',
     concernsMinor: true,
   };
@@ -103,6 +104,56 @@ describe('PublicReportsController (HTTP layer)', () => {
       await request(app.getHttpServer())
         .post('/reports/public')
         .send({ ...validBody, reason: '' })
+        .expect(400);
+    });
+
+    it('rejects a missing reasonCategory (required)', async () => {
+      await request(app.getHttpServer()).post('/reports/public').send(withoutField('reasonCategory')).expect(400);
+      expect(moderationService.createPublicReport).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown reasonCategory', async () => {
+      await request(app.getHttpServer())
+        .post('/reports/public')
+        .send({ ...validBody, reasonCategory: 'rudeness' })
+        .expect(400);
+    });
+
+    it('accepts every category, and a non-other category with the description omitted', async () => {
+      moderationService.createPublicReport.mockResolvedValue({ id: 'report-1', reporterId: null, status: 'open' });
+      const categories = [
+        'harassment_or_bullying',
+        'hate_or_abusive_language',
+        'threats_or_violence',
+        'child_safety_concern',
+        'sexual_or_inappropriate_content',
+        'impersonation_or_fake_account',
+        'spam_or_scam',
+        'privacy_or_image_misuse',
+        'other',
+      ];
+      for (const reasonCategory of categories) {
+        await request(app.getHttpServer())
+          .post('/reports/public')
+          .send({ ...validBody, reasonCategory })
+          .expect(201);
+      }
+      const { reason, ...withoutReason } = validBody;
+      void reason;
+      await request(app.getHttpServer())
+        .post('/reports/public')
+        .send({ ...withoutReason, reasonCategory: 'spam_or_scam' })
+        .expect(201);
+      expect(moderationService.createPublicReport).toHaveBeenLastCalledWith({
+        ...withoutReason,
+        reasonCategory: 'spam_or_scam',
+      });
+    });
+
+    it('still rejects a description over 500 characters', async () => {
+      await request(app.getHttpServer())
+        .post('/reports/public')
+        .send({ ...validBody, reason: 'x'.repeat(501) })
         .expect(400);
     });
 

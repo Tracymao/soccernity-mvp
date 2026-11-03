@@ -164,7 +164,7 @@ describe('W3 gates e2e: write-route guards (B-026 restricted-pending, B-118 unve
       const report = await request(http())
         .post('/reports')
         .set(minor.auth)
-        .send({ targetType: 'post', targetId: post.id, reason: 'spam' });
+        .send({ targetType: 'post', targetId: post.id, reasonCategory: 'harassment_or_bullying', reason: 'spam' });
       expect(report.status).toBe(201);
 
       await request(http()).get('/auth/guardian-consent/status').set(minor.auth).expect(200);
@@ -255,7 +255,7 @@ describe('W3 gates e2e: write-route guards (B-026 restricted-pending, B-118 unve
       await request(http())
         .post('/reports')
         .set(u.auth)
-        .send({ targetType: 'post', targetId: post.id, reason: 'spam' })
+        .send({ targetType: 'post', targetId: post.id, reasonCategory: 'harassment_or_bullying', reason: 'spam' })
         .expect(201);
     });
 

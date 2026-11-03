@@ -186,7 +186,7 @@ describe('Guardian safety notices (B-279) -- real Postgres + real Redis', () => 
     const res = await http()
       .post('/reports')
       .set(reporter.auth)
-      .send({ targetType: 'post', targetId: postId, reason: SECRET_REASON })
+      .send({ targetType: 'post', targetId: postId, reasonCategory: 'harassment_or_bullying', reason: SECRET_REASON })
       .expect(201);
     return { reportId: res.body.id as string, postId };
   }
@@ -465,8 +465,8 @@ describe('Guardian safety notices (B-279) -- real Postgres + real Redis', () => 
       const other = await seedUser({ isMinor: false });
       const postId = await seedPost(other.id);
 
-      await http().post('/reports').set(minor.auth).send({ targetType: 'post', targetId: postId, reason: 'mean' }).expect(201);
-      await http().post('/reports').set(minor.auth).send({ targetType: 'user', targetId: other.id, reason: 'mean' }).expect(201);
+      await http().post('/reports').set(minor.auth).send({ targetType: 'post', targetId: postId, reasonCategory: 'harassment_or_bullying', reason: 'mean' }).expect(201);
+      await http().post('/reports').set(minor.auth).send({ targetType: 'user', targetId: other.id, reasonCategory: 'harassment_or_bullying', reason: 'mean' }).expect(201);
       await settle();
 
       expect(sent.filter((c) => c.method.startsWith('sendGuardian'))).toHaveLength(0);
@@ -479,7 +479,7 @@ describe('Guardian safety notices (B-279) -- real Postgres + real Redis', () => 
 
       await http()
         .post('/reports/public')
-        .send({ reporterContactEmail: 'someone@example.com', targetType: 'post', targetId: postId, reason: 'concerning', concernsMinor: true })
+        .send({ reporterContactEmail: 'someone@example.com', targetType: 'post', targetId: postId, reasonCategory: 'harassment_or_bullying', reason: 'concerning', concernsMinor: true })
         .expect(201);
       await settle();
 

@@ -211,7 +211,7 @@ describe('AdminSearchService: what is asked of the database', () => {
     expect(keys('user')).toEqual(['accountStatus', 'createdAt', 'displayName', 'email', 'id', 'username']);
     // reporterId is selected only to work out matchedOn; the returned-keys test below proves it is stripped.
     // There is NO `reason` here: the free-text report description is never selected.
-    expect(keys('report')).toEqual(['concernsMinor', 'createdAt', 'id', 'reporterId', 'severity', 'status', 'targetId', 'targetType']);
+    expect(keys('report')).toEqual(['concernsMinor', 'createdAt', 'id', 'reasonCategory', 'reporterId', 'severity', 'status', 'targetId', 'targetType']);
     expect(keys('report')).not.toContain('reason');
     expect(keys('postMedia')).toEqual(['_count', 'createdAt', 'id', 'kind', 'reportCount', 'reviewEntrySource', 'status', 'uploader']);
     expect(Object.keys(models.postMedia.findMany.mock.calls[0][0].select.uploader.select).sort()).toEqual(['displayName', 'id', 'username']);
@@ -297,6 +297,7 @@ const reportRow = (over: Record<string, unknown> = {}) => ({
   status: 'open',
   severity: 'medium',
   concernsMinor: false,
+  reasonCategory: null,
   createdAt: new Date('2026-02-01'),
   ...over,
 });
@@ -433,6 +434,7 @@ describe('AdminSearchService: reports (matchers and fields)', () => {
       'createdAt',
       'id',
       'matchedOn',
+      'reasonCategory',
       'severity',
       'source',
       'status',
@@ -440,6 +442,56 @@ describe('AdminSearchService: reports (matchers and fields)', () => {
       'targetType',
     ]);
     expect(JSON.stringify(res)).not.toContain('secret-reporter');
+  });
+
+  it('B-284: a typed prefix of a category label finds the reports with that category (hit, miss, case, prefix)', async () => {
+    const hit = build({ vetted: true, rows: { report: [reportRow({ reasonCategory: 'harassment_or_bullying' })] } });
+    const res = await hit.service.search('Harass', admin('moderator'));
+    expect(hit.models.report.findMany.mock.calls[0][0].where.OR).toContainEqual({ reasonCategory: { in: ['harassment_or_bullying'] } });
+    expect(res.groups.reports?.items[0]).toMatchObject({ reasonCategory: 'harassment_or_bullying', matchedOn: 'reason_category' });
+
+    // A phrase with spaces is not username-shaped and still finds the category.
+    const phrase = build({ vetted: true, rows: { report: [reportRow({ reasonCategory: 'hate_or_abusive_language' })] } });
+    const phraseRes = await phrase.service.search('hate or abus', admin('moderator'));
+    expect(phrase.models.report.findMany.mock.calls[0][0].where.OR).toEqual([{ reasonCategory: { in: ['hate_or_abusive_language'] } }]);
+    expect(phraseRes.groups.reports?.items[0].matchedOn).toBe('reason_category');
+
+    // A miss: text that is not a label prefix makes no report call at all.
+    const miss = build({ vetted: true });
+    await miss.service.search('bullying', admin('moderator'));
+    expect(miss.models.report.findMany).not.toHaveBeenCalled();
+  });
+
+  it('B-284: the category matcher sits behind the same vetting gate and is audited like any other report query', async () => {
+    const { service, models } = build({ vetted: false });
+    await service.search('harass', admin('moderator'));
+    expect(models.report.findMany.mock.calls[0][0].where).toEqual({
+      AND: [{ OR: [{ reasonCategory: { in: ['harassment_or_bullying'] } }] }, { concernsMinor: false }],
+    });
+  });
+
+  it('B-284: matchedOn prefers an id / user match over the category; a report with no category returns null', async () => {
+    const { service } = build({
+      vetted: true,
+      rows: {
+        report: [
+          reportRow({ id: UUID, reasonCategory: 'spam_or_scam' }),
+          reportRow({ id: 'r2', reasonCategory: null }),
+        ],
+      },
+    });
+    const items = (await service.search(UUID, admin('moderator'))).groups.reports!.items;
+    expect(items[0]).toMatchObject({ matchedOn: 'report_id', reasonCategory: 'spam_or_scam' });
+    expect(items[1].reasonCategory).toBeNull();
+  });
+
+  it('B-284: the category search still never selects, matches or returns the free-text reason', async () => {
+    const { service, models } = build({ vetted: true, rows: { report: [reportRow({ reasonCategory: 'spam_or_scam' })] } });
+    const res = await service.search('spam', admin('moderator'));
+    const call = models.report.findMany.mock.calls[0][0];
+    expect(JSON.stringify(call.where)).not.toContain('"reason"');
+    expect(Object.keys(call.select)).not.toContain('reason');
+    expect(Object.keys(res.groups.reports!.items[0])).not.toContain('reason');
   });
 
   it('adds source (contact_enquiry) for an enquiry report and null otherwise', async () => {
