@@ -1,21 +1,24 @@
-// A minimal, disclosed "report" affordance — reused for reporting a post
-// (with an adjacent "report the author" option) and for reporting a
-// comment.
+// The in-app "report" affordance — reused for reporting a post (with an adjacent "report the author" option),
+// a comment, a user and a Bants room.
 //
-// No Figma frame exists anywhere in the file for this: a file-wide text
-// search across every TEXT node on page 0:1 for "report"/"flag" turned up
-// only the Admin Console's moderation-queue screens and internal design
-// notes — nothing on any Community/Post/Comment/Profile-facing frame.
-// Built plainly and disclosed, following the same "no Figma frame exists,
-// built plainly" precedent apps/admin's AdminProfilePage.tsx Change
-// Password panel already set.
+// B-284 (Decision Log #465): a report carries a REQUIRED reason category from a fixed list plus an OPTIONAL
+// description (required only for "Other"). Figma: "Report — In-app form" frames 6946:40232 to 6946:40796
+// (docs/figma-report-reason-categories.md) — a dialog over the page with the category radio list, the details
+// field, a send error, and a "Reported — thanks" confirmation. The small target menu that picks post-or-user
+// first has no frame and stays as it was.
 //
-// POST /reports (services/api moderation module, JwtAuthGuard only —
-// reachable even for a restricted-pending minor, since reporting abuse
-// directed at you must always be possible). Free-text reason only — no
-// reasons taxonomy exists on the backend (CreateReportDto.reason).
-import { useState } from "react";
-import { createReport, ModerationApiError, type ReportTargetType } from "../../api/moderation";
+// POST /reports (services/api moderation module, JwtAuthGuard only — reachable even for a restricted-pending
+// minor, since reporting abuse directed at you must always be possible).
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
+import {
+  createReport,
+  reportSubmitErrorMessage,
+  type ReportReasonCategory,
+  type ReportTargetType,
+} from "../../api/moderation";
+import { ReportCategoryField, ReportDetailsField } from "../../components/report/ReportFields";
+import { canSubmitReport, detailsToSend } from "../../lib/reportReasons";
 import "./ReportAction.css";
 
 export interface ReportTarget {
@@ -27,20 +30,30 @@ export interface ReportTarget {
 
 interface ReportActionProps {
   accessToken: string;
-  /** One target -> the trigger opens the reason form directly. More than
+  /** One target -> the trigger opens the report dialog directly. More than
    *  one -> the trigger opens a small menu to pick which one first. */
   targets: ReportTarget[];
   /** Collapsed trigger label. Default: "Report". */
   triggerLabel?: string;
-  /** Open straight away (no trigger click), with focus on the first choice or the reason field. Used where
-   *  another control has already asked to report, e.g. the media report daily-limit sheet (B-266). */
+  /** Open straight away (no trigger click), with focus on the first choice. Used where another control has
+   *  already asked to report, e.g. the media report daily-limit sheet (B-266). */
   startOpen?: boolean;
   /** Called when the person cancels, and with `startOpen` the caller takes over instead of a "Report"
    *  trigger being shown. */
   onCancel?: () => void;
 }
 
-type Stage = "closed" | "menu" | "reason" | "done";
+type Stage = "closed" | "menu" | "reason" | "done" | "reported";
+
+// The dialog title names what is being reported (Figma: "Report this post / comment / user").
+const DIALOG_TITLES: Record<ReportTargetType, string> = {
+  post: "Report this post",
+  comment: "Report this comment",
+  user: "Report this user",
+  banter_room: "Report this room",
+};
+
+const FOCUSABLE = 'button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])';
 
 export default function ReportAction({
   accessToken,
@@ -56,9 +69,23 @@ export default function ReportAction({
   const [selected, setSelected] = useState<ReportTarget | null>(() =>
     startOpen && targets.length === 1 ? targets[0] : null,
   );
-  const [reason, setReason] = useState("");
+  const [category, setCategory] = useState<ReportReasonCategory | null>(null);
+  const [details, setDetails] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const titleId = useId();
+  const subtitleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const reportedRef = useRef<HTMLSpanElement>(null);
+  // Opened by another control: that control, not a trigger here, gets focus back.
+  const handedOver = startOpen && Boolean(onCancel);
+
+  // The confirmation takes focus so it does not fall back to the page; so does the "Reported" note.
+  useEffect(() => {
+    if (stage === "done") dialogRef.current?.querySelector<HTMLElement>("button")?.focus();
+    if (stage === "reported") reportedRef.current?.focus();
+  }, [stage]);
 
   if (targets.length === 0) return null;
 
@@ -79,37 +106,67 @@ export default function ReportAction({
   function cancel() {
     setStage("closed");
     setSelected(null);
-    setReason("");
+    setCategory(null);
+    setDetails("");
     setError(null);
     onCancel?.();
+    if (!handedOver) setTimeout(() => triggerRef.current?.focus(), 0);
+  }
+
+  // After the confirmation there is nothing more to send, so the trigger gives way to a plain "Reported" note.
+  function close() {
+    setStage("reported");
   }
 
   async function submit() {
-    const trimmed = reason.trim();
-    if (!trimmed || submitting || !selected) return;
+    if (submitting || !selected || category === null || !canSubmitReport(category, details)) return;
     setSubmitting(true);
     setError(null);
     try {
-      await createReport(accessToken, { targetType: selected.targetType, targetId: selected.targetId, reason: trimmed });
+      await createReport(accessToken, {
+        targetType: selected.targetType,
+        targetId: selected.targetId,
+        reasonCategory: category,
+        reason: detailsToSend(details),
+      });
       setStage("done");
     } catch (err) {
-      setError(err instanceof ModerationApiError ? err.message : "Couldn't submit that report.");
+      setError(reportSubmitErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
   }
 
-  if (stage === "done") {
-    return <span className="report-action__done">Reported — thanks, our team will review it.</span>;
+  // Escape closes (not mid-send); Tab stays inside the dialog.
+  function onDialogKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Escape") {
+      if (submitting) return;
+      e.preventDefault();
+      if (stage === "done") close();
+      else cancel();
+      return;
+    }
+    if (e.key !== "Tab") return;
+    const nodes = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []).filter(
+      (n) => !n.hasAttribute("disabled"),
+    );
+    if (nodes.length === 0) return;
+    const first = nodes[0];
+    const last = nodes[nodes.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
   }
 
-  if (stage === "closed") {
-    // Opened by another control and then cancelled: the caller takes over, no stray trigger here.
-    if (startOpen && onCancel) return null;
+  if (stage === "reported") {
     return (
-      <button type="button" className="report-action__trigger" onClick={open}>
-        {triggerLabel}
-      </button>
+      <span className="report-action__done" tabIndex={-1} ref={reportedRef}>
+        Reported
+      </span>
     );
   }
 
@@ -134,36 +191,93 @@ export default function ReportAction({
     );
   }
 
-  return (
-    <div className="report-action">
-      <p className="report-action__target">{selected?.label}</p>
-      {error && (
-        <p className="report-action__error" role="alert">
-          {error}
-        </p>
-      )}
-      <textarea
-        className="report-action__textarea"
-        placeholder="Why are you reporting this?"
-        aria-label="Reason for report"
-        autoFocus={startOpen}
-        value={reason}
-        maxLength={500}
-        onChange={(e) => setReason(e.target.value)}
-      />
-      <div className="report-action__buttons">
-        <button
-          type="button"
-          className="report-action__submit"
-          onClick={submit}
-          disabled={!reason.trim() || submitting}
-        >
-          {submitting ? "Submitting…" : "Submit report"}
-        </button>
-        <button type="button" className="report-action__cancel" onClick={cancel} disabled={submitting}>
-          Cancel
-        </button>
+  const trigger =
+    handedOver && stage === "closed" ? null : (
+      <button type="button" className="report-action__trigger" onClick={open} ref={triggerRef}>
+        {triggerLabel}
+      </button>
+    );
+
+  if (stage === "closed") return trigger;
+
+  const dialog = (
+    <div
+      className="report-dialog-overlay"
+      onClick={() => {
+        if (submitting) return;
+        if (stage === "done") close();
+        else cancel();
+      }}
+      data-testid="report-dialog-overlay"
+    >
+      <div
+        className="report-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={subtitleId}
+        ref={dialogRef}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={onDialogKeyDown}
+      >
+        {stage === "done" ? (
+          <>
+            <h2 className="report-dialog__title" id={titleId}>
+              Reported — thanks
+            </h2>
+            <p className="report-dialog__subtitle" id={subtitleId}>
+              Our team will review it.
+            </p>
+            <div className="report-dialog__buttons">
+              <button type="button" className="report-dialog__submit" onClick={close}>
+                Close
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <h2 className="report-dialog__title" id={titleId}>
+              {DIALOG_TITLES[selected?.targetType ?? "post"]}
+            </h2>
+            <p className="report-dialog__subtitle" id={subtitleId}>
+              Tell us what’s wrong. Our team will review it.
+            </p>
+            <ReportCategoryField value={category} onChange={setCategory} disabled={submitting} autoFocus />
+            <ReportDetailsField
+              category={category}
+              value={details}
+              onChange={setDetails}
+              placeholder="Add anything that would help our team look into it."
+              disabled={submitting}
+            />
+            {error && (
+              <p className="report-dialog__error" role="alert">
+                {error}
+              </p>
+            )}
+            <div className="report-dialog__buttons">
+              <button
+                type="button"
+                className="report-dialog__submit"
+                onClick={submit}
+                disabled={!canSubmitReport(category, details) || submitting}
+              >
+                {submitting ? "Submitting…" : "Submit report"}
+              </button>
+              <button type="button" className="report-dialog__cancel" onClick={cancel} disabled={submitting}>
+                Cancel
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
+  );
+
+  return (
+    <>
+      {trigger}
+      {createPortal(dialog, document.body)}
+    </>
   );
 }

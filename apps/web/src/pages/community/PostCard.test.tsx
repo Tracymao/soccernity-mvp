@@ -84,11 +84,19 @@ describe("PostCard — report affordances", () => {
     renderPost(post());
     fireEvent.click(screen.getByRole("button", { name: "Report" }));
     fireEvent.click(screen.getByRole("button", { name: "Report post" }));
-    fireEvent.change(screen.getByLabelText("Reason for report"), { target: { value: "Spam" } });
+    expect(screen.getByRole("heading", { name: "Report this post" })).not.toBeNull();
+    fireEvent.click(screen.getByRole("radio", { name: "Spam or scam" }));
+    fireEvent.change(screen.getByLabelText("Details (optional)"), { target: { value: "Spam" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
 
-    expect(await screen.findByText(/thanks, our team will review it/i)).not.toBeNull();
-    expect(createReport).toHaveBeenCalledWith("tok", { targetType: "post", targetId: "post-1", reason: "Spam" });
+    expect(await screen.findByText("Reported — thanks")).not.toBeNull();
+    expect(screen.getByText("Our team will review it.")).not.toBeNull();
+    expect(createReport).toHaveBeenCalledWith("tok", {
+      targetType: "post",
+      targetId: "post-1",
+      reasonCategory: "spam_or_scam",
+      reason: "Spam",
+    });
   });
 
   it("submits a user report with the post author's real id", async () => {
@@ -104,11 +112,18 @@ describe("PostCard — report affordances", () => {
     renderPost(post());
     fireEvent.click(screen.getByRole("button", { name: "Report" }));
     fireEvent.click(screen.getByRole("button", { name: "Report user" }));
-    fireEvent.change(screen.getByLabelText("Reason for report"), { target: { value: "Impersonation" } });
+    expect(screen.getByRole("heading", { name: "Report this user" })).not.toBeNull();
+    fireEvent.click(screen.getByRole("radio", { name: "Impersonation or fake account" }));
     fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
 
-    expect(await screen.findByText(/thanks, our team will review it/i)).not.toBeNull();
-    expect(createReport).toHaveBeenCalledWith("tok", { targetType: "user", targetId: "user-2", reason: "Impersonation" });
+    expect(await screen.findByText("Reported — thanks")).not.toBeNull();
+    // The description is optional: nothing is sent for it.
+    expect(vi.mocked(createReport).mock.calls[0][1]).toEqual({
+      targetType: "user",
+      targetId: "user-2",
+      reasonCategory: "impersonation_or_fake_account",
+      reason: undefined,
+    });
   });
 
   it("offers Report on another user's comment, but not on the caller's own comment", async () => {
@@ -135,11 +150,18 @@ describe("PostCard — report affordances", () => {
       createdAt: new Date().toISOString(),
     });
     fireEvent.click(within(otherComment).getByRole("button", { name: "Report" }));
-    fireEvent.change(screen.getByLabelText("Reason for report"), { target: { value: "Off-topic" } });
+    expect(screen.getByRole("heading", { name: "Report this comment" })).not.toBeNull();
+    fireEvent.click(screen.getByRole("radio", { name: "Other" }));
+    fireEvent.change(screen.getByLabelText("Details (required)"), { target: { value: "Off-topic" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
 
-    expect(await screen.findByText(/thanks, our team will review it/i)).not.toBeNull();
-    expect(createReport).toHaveBeenCalledWith("tok", { targetType: "comment", targetId: "c1", reason: "Off-topic" });
+    expect(await screen.findByText("Reported — thanks")).not.toBeNull();
+    expect(createReport).toHaveBeenCalledWith("tok", {
+      targetType: "comment",
+      targetId: "c1",
+      reasonCategory: "other",
+      reason: "Off-topic",
+    });
   });
 });
 
