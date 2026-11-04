@@ -40,6 +40,10 @@
 //     picture and the cover ("Your picture/cover photo wasn't approved — see why in
 //     Edit Profile"), linking to /profile?edit=1. No reason text is in the notification;
 //     it is read from the owner's own profile. Untagged functional wording (#412 item 5).
+//   - username_review_decided (B-139 part (c), Decision Log #467): "Your username review was approved. ..." or
+//     "... was decided. The username stays removed." (Figma 6956:46618 / 6956:47034). The frame also names the
+//     handle ("@adab is back"); the notification carries only the outcome, so the handle is left out. Links
+//     to /create-profile, which moves a reinstated user on. The admin's reason never reaches the user.
 //   - an unknown type: a generic "You have a new notification" row, not a link.
 //   - `data: null` (a stale/orphaned payloadRefId — Decision Log #290) is
 //     rendered as a generic "This notification is no longer available."
@@ -72,6 +76,8 @@ import notifWhistle from "../assets/icons/notif-whistle.svg";
 import notifTrophy from "../assets/icons/notif-trophy.svg";
 import notifBell from "../assets/icons/notif-bell.svg";
 import notifImageAdd from "../assets/icons/notif-image-add.svg";
+import notifUsernameReview from "../assets/icons/notif-username-review.svg";
+import { USERNAME_REVIEW_APPROVED_REST, USERNAME_REVIEW_DECLINED_REST } from "./notifications/usernameReviewCopy";
 import "./notifications/NotificationCentrePage.css";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
@@ -125,6 +131,9 @@ function linkFor(n: Notification): string | null {
   // The file-decision rows (FC10, B-240): the author's post is on their Community feed, where the post card
   // shows the file's status and, for a rejected file, the reason.
   if ((n.type === "post_media_approved" || n.type === "post_media_rejected") && "media" in n.data) return "/community";
+  // The username-review outcome (B-139): the create-profile screen shows the result; a reinstated user is
+  // routed on from there by the server's own onboarding state.
+  if (n.type === "username_review_decided" && "usernameReview" in n.data) return "/create-profile";
   if (n.type === "match_kickoff" && "match" in n.data) return `/sports-hub/matches/${n.data.match.externalRef}`;
   return null;
 }
@@ -206,6 +215,12 @@ function bodyFor(n: Notification): { subject: string; rest: string } {
         ? { subject: `Your ${noun}`, rest: " was approved" }
         : { subject: `Your ${noun}`, rest: " wasn’t approved — see why on your post" };
     }
+    case "username_review_decided": {
+      const approved = data && "usernameReview" in data && data.usernameReview.outcome === "reinstated";
+      return approved
+        ? { subject: "Your username review was approved.", rest: ` ${USERNAME_REVIEW_APPROVED_REST}` }
+        : { subject: "Your username review was decided.", rest: ` ${USERNAME_REVIEW_DECLINED_REST}` };
+    }
     case "age_milestone":
       // Plain, non-alarming, no age threshold in the copy (PR #277's
       // under-16 UI tone). Any milestone key gets the same message: the
@@ -231,6 +246,7 @@ const KNOWN_TYPES = new Set([
   "profile_image_rejected",
   "post_media_approved",
   "post_media_rejected",
+  "username_review_decided",
 ]);
 
 function isKnownType(type: string): boolean {
@@ -248,7 +264,8 @@ function RowAvatar({ notification }: { notification: Notification }) {
     type === "age_milestone" ||
     type === "profile_image_rejected" ||
     type === "post_media_approved" ||
-    type === "post_media_rejected";
+    type === "post_media_rejected" ||
+    type === "username_review_decided";
   const className = usesIconDisc
     ? "notif-row__avatar notif-row__avatar--icon"
     : `notif-row__avatar ${read ? "notif-row__avatar--read" : "notif-row__avatar--unread"}`;
@@ -292,6 +309,13 @@ function RowAvatar({ notification }: { notification: Notification }) {
     return (
       <span className={className}>
         <img src={notifImageAdd} alt="" width={24} height={24} />
+      </span>
+    );
+  }
+  if (type === "username_review_decided") {
+    return (
+      <span className={className}>
+        <img src={notifUsernameReview} alt="" width={22} height={22} />
       </span>
     );
   }

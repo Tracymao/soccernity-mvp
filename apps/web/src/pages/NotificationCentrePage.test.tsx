@@ -482,6 +482,61 @@ describe("NotificationCentrePage", () => {
     });
   });
 
+  describe("username-review rows (username_review_decided, B-139 part (c) / Decision Log #467)", () => {
+    function reviewRow(outcome: "reinstated" | "declined", over: Partial<Notification> = {}): Notification {
+      return {
+        id: `n-review-${outcome}`,
+        type: "username_review_decided",
+        read: false,
+        createdAt: "2026-11-03T09:00:00.000Z",
+        payloadRefId: outcome,
+        data: { usernameReview: { outcome } },
+        ...over,
+      };
+    }
+
+    it("approved: the frame's wording without the handle, and a link to the create-profile screen", async () => {
+      seedSession("test-token");
+      vi.mocked(listNotifications).mockResolvedValueOnce({ items: [reviewRow("reinstated")], nextCursor: null, unreadCount: 1 });
+      renderPage();
+      const row = (await screen.findByText("Your username review was approved.")).closest("a");
+      expect(row?.textContent).toContain("Your username review was approved. Your username is back on your account. [COPY PENDING LEGAL REVIEW]");
+      expect(row?.textContent).not.toContain("@");
+      expect(row?.getAttribute("href")).toBe("/create-profile");
+    });
+
+    it("declined: 'was decided. The username stays removed.' and the same link", async () => {
+      seedSession("test-token");
+      vi.mocked(listNotifications).mockResolvedValueOnce({ items: [reviewRow("declined")], nextCursor: null, unreadCount: 1 });
+      renderPage();
+      const row = (await screen.findByText("Your username review was decided.")).closest("a");
+      expect(row?.textContent).toContain("Your username review was decided. The username stays removed. [COPY PENDING LEGAL REVIEW]");
+      expect(row?.getAttribute("href")).toBe("/create-profile");
+    });
+
+    it("shows the username-review icon disc and marks the row read when opened", async () => {
+      seedSession("test-token");
+      vi.mocked(listNotifications).mockResolvedValueOnce({ items: [reviewRow("reinstated")], nextCursor: null, unreadCount: 1 });
+      vi.mocked(markNotificationRead).mockResolvedValue(undefined as never);
+      renderPage();
+      const link = (await screen.findByText("Your username review was approved.")).closest("a") as HTMLAnchorElement;
+      expect(link.querySelector(".notif-row__avatar--icon img")).not.toBeNull();
+      fireEvent.click(link);
+      await waitFor(() => expect(markNotificationRead).toHaveBeenCalledWith("test-token", "n-review-reinstated"));
+    });
+
+    it("a row whose data is gone is the 'no longer available' row, not a broken one", async () => {
+      seedSession("test-token");
+      vi.mocked(listNotifications).mockResolvedValueOnce({
+        items: [reviewRow("declined", { payloadRefId: "unknown", data: null })],
+        nextCursor: null,
+        unreadCount: 1,
+      });
+      renderPage();
+      expect(await screen.findByText("This notification is no longer available.")).not.toBeNull();
+    });
+  });
+
   describe("file-decision rows (post_media_approved / post_media_rejected, FC10 B-240)", () => {
     function mediaRow(type: "post_media_approved" | "post_media_rejected", kind: "image" | "video", over: Partial<Notification> = {}): Notification {
       return {
