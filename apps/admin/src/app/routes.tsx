@@ -60,6 +60,8 @@ import ContactEnquiriesPage from "../pages/moderation/ContactEnquiriesPage";
 import ContactEnquiryDetailPage from "../pages/moderation/ContactEnquiryDetailPage";
 import MediaReviewQueuePage from "../pages/media-review/MediaReviewQueuePage";
 import MediaReviewItemPage from "../pages/media-review/MediaReviewItemPage";
+import UsernameReviewsPage from "../pages/username-reviews/UsernameReviewsPage";
+import UsernameReviewDetailPage from "../pages/username-reviews/UsernameReviewDetailPage";
 import SearchPage from "../pages/search/SearchPage";
 import AuditLogPage from "../pages/activity/AuditLogPage";
 import AdminNotFound from "../pages/AdminNotFound";
@@ -115,6 +117,11 @@ export const adminRoutes: RouteObject[] = [
           // pictures and videos the automatic check was unsure about, and files users reported.
           { path: "moderation/media", element: <MediaReviewQueuePage /> },
           { path: "moderation/media/:id", element: <MediaReviewItemPage /> },
+          // Real screens (B-139 part (c), Decision Log #467): the review route for a removed username
+          // (GET /admin/username-reviews, POST .../:id/decide). Moderator and superadmin; the nav row is
+          // limited to those roles and the server answers an editor with a 403.
+          { path: "username-reviews", element: <UsernameReviewsPage /> },
+          { path: "username-reviews/:id", element: <UsernameReviewDetailPage /> },
           // Real screens (sprint-5/admin-articles-categories-frontend) —
           // wired to GET/POST /admin/categories, PATCH
           // /admin/categories/:id (the Status column's own real

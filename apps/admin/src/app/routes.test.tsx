@@ -158,6 +158,8 @@ describe("adminRoutes (integration)", () => {
     "/moderation/contact-enquiries/abc",
     "/moderation/media",
     "/moderation/media/abc",
+    "/username-reviews",
+    "/username-reviews/abc",
     "/categories",
     "/categories/new",
     "/contest",
@@ -194,6 +196,35 @@ describe("adminRoutes (integration)", () => {
 
     expect(await screen.findByRole("heading", { name: "Search" })).not.toBeNull();
     expect((screen.getByRole("textbox", { name: "Search Soccernity" }) as HTMLInputElement).value).toBe("nelson");
+  });
+
+  // B-139 part (c): the Username reviews row is for moderator and superadmin only (the server enforces it too).
+  it("the nav carries a Username reviews row for a moderator and a superadmin, not for an editor", async () => {
+    for (const [role, shown] of [["superadmin", true], ["moderator", true], ["editor", false]] as const) {
+      stubApi(jsonResponse(200, { accessToken: "acc-1" }));
+      vi.mocked(getAdminProfile).mockResolvedValue({ ...PROFILE, role } as never);
+      const { unmount } = renderAt("/dashboard");
+      await screen.findByRole("link", { name: "Activity" });
+      const link = screen.queryByRole("link", { name: "Username reviews" });
+      if (shown) expect(link?.getAttribute("href")).toBe("/username-reviews");
+      else expect(link).toBeNull();
+      unmount();
+    }
+  });
+
+  it("/username-reviews opens the list inside the shell", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/admin/auth/refresh")) return jsonResponse(200, { accessToken: "acc-1" });
+        if (url.includes("/admin/username-reviews")) return jsonResponse(200, { items: [], nextCursor: null });
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+    vi.mocked(getAdminProfile).mockResolvedValue({ ...PROFILE, role: "moderator" } as never);
+    renderAt("/username-reviews");
+    expect(await screen.findByRole("heading", { level: 1, name: "Username reviews" })).not.toBeNull();
+    expect(await screen.findByText("No pending requests.")).not.toBeNull();
   });
 
   it("the nav carries an Activity row for every role, linking to /activity", async () => {
