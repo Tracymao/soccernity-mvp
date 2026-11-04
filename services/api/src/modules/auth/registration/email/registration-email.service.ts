@@ -266,8 +266,13 @@ export class RegistrationEmailService {
   // untrue here (the guardian answered; the minor did nothing). A new request
   // has gone to the guardian, and a second lapse of THAT request closes the
   // account, so this is the warning the unanswered-request path always gives
-  // before closure. [COPY PENDING LEGAL REVIEW] -- plain functional wording, not
-  // counsel-reviewed. No decline count is mentioned (#395 B2).
+  // before closure. No decline count is mentioned (#395 B2).
+  //
+  // backend/b158-clear-guardian-email-tags (B-158, founder decision 2026-11-04): the founder has read this
+  // wording and the accuracy check was done (the days come from GRACE_PERIOD_DAYS, the same constant the
+  // deletion sweep uses; the lapse path is refuseConsentAndScheduleDeletion; the change-guardian-email screen
+  // it points to exists). It is deliberately NOT tagged [COPY PENDING LEGAL REVIEW] and is not on the counsel
+  // list.
   async sendConsentDeclineLapseReminderEmail(
     to: string,
     minorDisplayName: string,
@@ -290,7 +295,12 @@ export class RegistrationEmailService {
   // respond (by declining). The wording now says only what is true on every
   // route here: the account was not approved in time. It names no history, no
   // decline count (#395 B2) and no guardian action.
-  // [COPY PENDING LEGAL REVIEW] -- plain functional wording, not counsel-reviewed.
+  //
+  // backend/b158-clear-guardian-email-tags (B-158, founder decision 2026-11-04): the founder has read this
+  // wording and the accuracy check was done (graceDays comes from GRACE_PERIOD_DAYS, the same constant the
+  // deletion sweep uses; "closed and scheduled for deletion" matches the second-lapse path through
+  // refuseConsentAndScheduleDeletion). It is deliberately NOT tagged [COPY PENDING LEGAL REVIEW] and is not on
+  // the counsel list.
   async sendConsentExpiredEmail(to: string, minorDisplayName: string, graceDays: number): Promise<void> {
     await this.dispatch({
       to,
