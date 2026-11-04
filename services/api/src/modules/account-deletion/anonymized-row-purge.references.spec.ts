@@ -156,6 +156,7 @@ describe('findFirstBlocker', () => {
 
     it.each([
       ['RevokedUsername.userId', 'revokedUsername', { userId }],
+      ['UsernameReviewRequest.userId', 'usernameReviewRequest', { userId }],
       ['AdminActionLog.targetId', 'adminActionLog', { targetType: 'user', targetId: userId }],
       ['ContestVoteEvent.voterId', 'contestVoteEvent', { voterId: userId }],
       ['AgeReclassificationLog.userId', 'ageReclassificationLog', { userId }],

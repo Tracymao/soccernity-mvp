@@ -27,6 +27,8 @@ export type GuardianSafetyEventKey =
   | 'account_reinstated'
   | 'account_removed'
   | 'username_removed'
+  | 'username_restored'
+  | 'username_review_declined'
   | 'room_deactivated'
   | 'media_not_approved'
   | 'profile_image_not_approved'
@@ -117,6 +119,20 @@ const GUARDIAN_SAFETY_EVENTS: Record<GuardianSafetyEventKey, GuardianSecurityEve
     kind: 'safety',
     subject: safetySubject,
     summary: (name) => `Soccernity removed the username on ${name}'s account.`,
+    throttleSeconds: SAFETY_THROTTLE_SECONDS,
+  },
+  // backend/b139-username-review (B-139 part (c), Decision Log #467): the outcome of a review of a username removal.
+  // Kind of action only: never the reason, never the handle, never who decided. [COPY PENDING LEGAL REVIEW]
+  username_restored: {
+    kind: 'safety',
+    subject: safetySubject,
+    summary: (name) => `Soccernity restored the username on ${name}'s account.`,
+    throttleSeconds: SAFETY_THROTTLE_SECONDS,
+  },
+  username_review_declined: {
+    kind: 'safety',
+    subject: safetySubject,
+    summary: (name) => `Soccernity reviewed the removal of the username on ${name}'s account. The removal stands.`,
     throttleSeconds: SAFETY_THROTTLE_SECONDS,
   },
   room_deactivated: {

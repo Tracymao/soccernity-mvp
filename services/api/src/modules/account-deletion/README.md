@@ -86,6 +86,11 @@
 >    anonymised are never touched** (including `deleted` rows with a NULL `anonymizedAt`).
 > 5. **No reinstate action.** No route or service reinstates a revoked username (checked by reading
 >    `admin-user-username-revoke.service.ts` and the username policy); it needs a design and is a later item.
+>    *Dated note, 2026-11-03 (`backend/b139-username-review`, Decision Log #467): the review route now exists
+>    (`modules/username-review/README.md`). A request for a review (`UsernameReviewRequest`) hangs off the
+>    `RevokedUsername` record by a cascading foreign key, so it is deleted with the record on every path above.
+>    `anonymizeUser` also deletes the user's requests explicitly, even while a hold keeps the record (the message is
+>    the user's own free text). A reinstatement deletes the record, and so the request.*
 >
 > ---
 

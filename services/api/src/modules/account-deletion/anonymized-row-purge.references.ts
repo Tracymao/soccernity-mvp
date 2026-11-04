@@ -149,6 +149,10 @@ export const PLAIN_USER_REFERENCES: Readonly<Record<string, PlainReferenceClass>
   // AnonymizedRowPurgeService.cleanupRevokedUsernames afterwards, and purgeOne for this row just before it
   // looks), so any record this check still finds is a running hold: it blocks this run, retried next run.
   'RevokedUsername.userId': 'content',
+  // backend/b139-username-review (Decision Log #467): a revoked user's request for a review. Deleted by cascade with
+  // its RevokedUsername record, and at anonymisation (anonymizeUser), so after the anonymiser has run none is left;
+  // classified 'content' so a surviving request blocks the purge rather than being silently dropped.
+  'UsernameReviewRequest.userId': 'content',
   'AdminActionLog.targetId': 'content', // targetType 'user'; veto-able default
   'ContestVoteEvent.voterId': 'content', // append-only audit of this user's votes
   'AgeReclassificationLog.userId': 'content', // append-only audit; veto-able default
@@ -221,6 +225,7 @@ async function plainContentBlocker(db: Prisma.TransactionClient, userId: string)
 
   const checks: [string, () => Promise<unknown>][] = [
     ['RevokedUsername.userId', () => db.revokedUsername.findFirst({ where: { userId }, select: { id: true } })],
+    ['UsernameReviewRequest.userId', () => db.usernameReviewRequest.findFirst({ where: { userId }, select: { id: true } })],
     [
       'AdminActionLog.targetId',
       () => db.adminActionLog.findFirst({ where: { targetType: 'user', targetId: userId }, select: { id: true } }),

@@ -57,7 +57,7 @@ describe('GuardianSecurityNoticeService: safety events (B-279)', () => {
   });
   afterEach(() => jest.restoreAllMocks());
 
-  it('registers exactly the eleven safety events decided in B-279', () => {
+  it('registers exactly the safety events decided in B-279, plus the two review outcomes added by B-139 (Decision Log #467)', () => {
     expect([...SAFETY_KEYS].sort()).toEqual(
       [
         'account_reinstated',
@@ -70,6 +70,8 @@ describe('GuardianSecurityNoticeService: safety events (B-279)', () => {
         'profile_image_not_approved',
         'room_deactivated',
         'username_removed',
+        'username_restored',
+        'username_review_declined',
         'warning_issued',
       ].sort(),
     );

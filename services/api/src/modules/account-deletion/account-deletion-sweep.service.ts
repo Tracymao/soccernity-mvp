@@ -460,6 +460,11 @@ export class AccountDeletionSweepService {
       // AnonymizedRowPurgeService.cleanupRevokedUsernames the first run after holdUntil. Same transaction
       // as the anonymisation, so a record is never left behind for an account that is already gone.
       await tx.revokedUsername.deleteMany({ where: { userId, holdUntil: { lte: now } } });
+      // backend/b139-username-review (Decision Log #467): a revoked user's request for a review of the removal.
+      // Deleted here for EVERY record of this user, including ones whose hold is still running (the records stay
+      // for the hold, their requests do not): the message is the user's own free text, and there is nothing left
+      // to reinstate on an anonymised account. A request whose record is deleted just above also goes by cascade.
+      await tx.usernameReviewRequest.deleteMany({ where: { userId } });
 
       await tx.user.update({
         where: { id: userId },

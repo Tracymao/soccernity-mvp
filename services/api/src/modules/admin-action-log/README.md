@@ -194,7 +194,7 @@ read), so the page size and cursor behave exactly as if the rows did not exist: 
    date-of-birth actions).
 2. **By target, using the checks the codebase already has:**
    - target is a `user` who is a minor (`User.isMinor`, the media review's own test), **or cannot be found** (fail
-     closed). This covers `user.status_updated`, `user.username_revoked`, the `account_hold.*` actions and any other row
+     closed). This covers `user.status_updated`, `user.username_revoked`, `user.username_review_decided` (backend/b139-username-review: the decision on a revoked user's request for a review, notes `decision=...; username=<handle>; reason=...`), the `account_hold.*` actions and any other row
      with `targetType = 'user'`.
    - target is a `report` with `concernsMinor` (the moderation queue's own test), or cannot be found (fail closed).
    - target is a `post_media` item whose uploader is a minor, or that cannot be found (fail closed: a media item is

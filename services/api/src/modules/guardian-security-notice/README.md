@@ -86,6 +86,7 @@ email, which is the security email plus a pointer to the **Contact Us** page.
 | `updateUserStatus` `active` after `suspended` | Yes | No | **Notify** `account_reinstated`. Other moves to `active` (undoing a self-requested deletion) are not safety actions: nothing |
 | `updateUserStatus` `deleted` (immediate removal) | Yes | No | **Notify** `account_removed`. The Guardian row is deleted by the same request, so the recipient is read first with `prepare()` and passed to `notify()` |
 | `AdminUserUsernameRevokeService.revokeUsername` | Yes | Yes (`username-revoked`) | **Notify** `username_removed` (never the reason) |
+| `AdminUsernameReviewsService.decide` (`reinstate` / `decline`; backend/b139-username-review, Decision Log #467) | Yes (the user whose username was removed) | In-app `username_review_decided`, no email | **Notify** `username_restored` / `username_review_declined`, kind of action only: never the reason, never the handle, never who decided |
 | `AdminUserDobCorrectionService` (date of birth correction) | Yes | No | **No notice**: a data correction, not a safety action; if it restarts consent the existing guardian consent flow already contacts the guardian. A notice would risk leaking the date of birth or the age tier |
 | `PostMediaDecisionService.reject` (a moderator rejects a file) | Yes (the uploader) | In-app `post_media_rejected` | **Notify** `media_not_approved` |
 | `MediaCheckService.apply` (the **automatic** image check rejects a file) | Yes | In-app `post_media_rejected` | **Notify** `media_not_approved` |
@@ -143,6 +144,7 @@ is skipped and logged (same rule as B-275: a missed notice is better than a floo
 | `appeal_upheld`, `appeal_overturned` | `ModerationService.decideAppeal` |
 | `account_suspended`, `account_reinstated`, `account_removed` | `AdminUsersService.updateUserStatus` (`prepare()` first for removal) |
 | `username_removed` | `AdminUserUsernameRevokeService.revokeUsername` |
+| `username_restored`, `username_review_declined` | `AdminUsernameReviewsService.decide` |
 | `media_not_approved` | `PostMediaDecisionService.reject` and `MediaCheckService.apply` |
 | `profile_image_not_approved` | `UserImageReviewService.rejectProfileImage` |
 

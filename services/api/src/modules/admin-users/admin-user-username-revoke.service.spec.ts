@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { usernameReviewLastDay } from '../username-review/username-review-window.util';
 import { AdminUserUsernameRevokeService } from './admin-user-username-revoke.service';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -59,11 +60,25 @@ describe('AdminUserUsernameRevokeService (B-033)', () => {
     expect(data.notes).toContain('held_until=');
   });
 
-  it('emails the user after commit with the display name only (the reason is internal)', async () => {
-    const { service, email } = build(liveUser);
+  it('emails the user after commit with the display name and the last day to ask for a review (the reason is internal)', async () => {
+    const { service, email, tx } = build(liveUser);
     await service.revokeUsername('u-1', 'admin-1', { reason: REASON });
-    expect(email.sendUsernameRevokedEmail).toHaveBeenCalledWith('u@example.com', 'Ada Obi');
+    expect(email.sendUsernameRevokedEmail).toHaveBeenCalledWith('u@example.com', 'Ada Obi', expect.any(Date));
     expect(JSON.stringify(email.sendUsernameRevokedEmail.mock.calls)).not.toContain('Impersonates');
+
+    // backend/b139-username-review: the email's date and the route's window come from the SAME helper and the
+    // SAME revokedAt, so they cannot disagree.
+    const create = (tx.revokedUsername.upsert.mock.calls[0] as unknown as [{ create: { revokedAt: Date } }])[0].create;
+    const sentDate = (email.sendUsernameRevokedEmail.mock.calls[0] as unknown as [string, string, Date])[2];
+    expect(sentDate.getTime()).toBe(usernameReviewLastDay(create.revokedAt).getTime());
+  });
+
+  it('records WHO revoked on the record, on create and on update (so a different admin decides a review)', async () => {
+    const { service, tx } = build(liveUser);
+    await service.revokeUsername('u-1', 'admin-9', { reason: REASON });
+    const call = (tx.revokedUsername.upsert.mock.calls[0] as unknown as [{ create: { revokedByAdminId: string }; update: { revokedByAdminId: string } }])[0];
+    expect(call.create.revokedByAdminId).toBe('admin-9');
+    expect(call.update.revokedByAdminId).toBe('admin-9');
   });
 
   it('a mail failure never undoes the revoke', async () => {

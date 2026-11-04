@@ -450,12 +450,19 @@ export class RegistrationEmailService {
   // account until a new name is chosen, and that the old name cannot be used
   // again. No link and no token: the next login routes the user to pick a new
   // username (nextStep = create_profile), so there is nothing to protect in a URL.
-  async sendUsernameRevokedEmail(to: string, displayName: string): Promise<void> {
+  //
+  // backend/b139-username-review (B-139 part (c), Decision Log #467, as amended 2026-11-03): the email also says
+  // the person can ASK FOR A REVIEW of the removal, and how (the "Ask for a review" button on the screen where
+  // they choose a new username, when they next log in) and until which day. The founder reviews that added
+  // paragraph himself: it is deliberately NOT tagged [COPY PENDING LEGAL REVIEW] and is not on the counsel list.
+  // Every earlier sentence is unchanged. `lastDayToAsk` is computed by the caller from the same helper and the
+  // same revokedAt the review route uses (username-review-window.util.ts), so the two cannot disagree.
+  async sendUsernameRevokedEmail(to: string, displayName: string, lastDayToAsk: Date): Promise<void> {
     await this.dispatch({
       to,
       subject: 'Your Soccernity username was removed',
       template: 'username-revoked',
-      data: { displayName },
+      data: { displayName, lastDayToAsk: formatLongDateUtc(lastDayToAsk) },
     });
   }
 
@@ -690,6 +697,9 @@ function renderTextBody(template: RegistrationEmailTemplate, data: Record<string
         `- The next time you log in you will be asked to choose a new username.
 ` +
         `- You can't use the removed username again, and nobody else can take it for 30 days.
+
+` +
+        `You can ask for a review of this decision. The next time you log in, the screen where you choose a new username has an "Ask for a review" button. You can ask until ${data.lastDayToAsk}.
 
 ` +
         `If you think this was a mistake, contact support@soccernity.com.`
@@ -959,6 +969,7 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
         `<li>The next time you log in you will be asked to choose a new username.</li>` +
         `<li>You can't use the removed username again, and nobody else can take it for 30 days.</li>` +
         `</ul>` +
+        `<p>You can ask for a review of this decision. The next time you log in, the screen where you choose a new username has an "Ask for a review" button. You can ask until ${escapeHtml(data.lastDayToAsk)}.</p>` +
         `<p>If you think this was a mistake, contact support@soccernity.com.</p>`
       );
     case 'verify-email':
@@ -1161,6 +1172,12 @@ function reportOutcomeCopy(action: string): { label: string; reason: string } {
     default:
       throw new Error(`Unknown report action for outcome email: ${action}`);
   }
+}
+
+// "3 December 2026", always read in UTC (the review window ends at the end of a UTC day, see
+// username-review-window.util.ts). en-GB for day-month-year order.
+function formatLongDateUtc(value: Date): string {
+  return value.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
 
 // Minimal HTML escape for user-supplied text placed in an HTML body. Added with
