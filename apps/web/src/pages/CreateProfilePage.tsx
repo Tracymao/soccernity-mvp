@@ -27,6 +27,10 @@
 //     screened by the server; a flagged value is the inline "Please rephrase"
 //     state with the typed text kept and no override (#394 A3, #411 item 2).
 //
+// USERNAME REVIEW (B-139 part (c), Decision Log #467): a user whose username an admin removed sees the
+// "Ask for a review" card above the form (components in pages/profile/UsernameReviewCard.tsx; every
+// state and rule comes from GET /users/me/username-review). They can still choose a new username below.
+//
 // Nothing here asks for a position, a school team or any other field no endpoint
 // stores.
 import { useEffect, useRef, useState } from "react";
@@ -40,6 +44,7 @@ import { ONBOARDING_ROUTES, routeForNextStep } from "../lib/onboarding";
 import { profileCountryOptions } from "../lib/countries";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
 import ProfileImageControl from "./profile/ProfileImageControl";
+import UsernameReviewCard from "./profile/UsernameReviewCard";
 import { NOT_FLAGGED, RephraseNote, flaggedFieldsFrom, type FlaggedFields } from "./profile/rephrase";
 import {
   BIO_MAX_LENGTH,
@@ -118,6 +123,22 @@ export default function CreateProfilePage() {
   if (!token || !userId) return <Navigate to="/login" replace />;
   if (redirectTo) return <Navigate to={redirectTo} replace />;
 
+  // A username review decided in the person's favour gives the account its username back, so the
+  // server's own onboarding state moves on (nextStep is no longer create_profile). Ask it, and route
+  // exactly as the first read above does (B-139 part (c), Decision Log #467).
+  function handleReinstated() {
+    if (!token || !userId) return;
+    getUser(token, userId)
+      .then((user) => {
+        if (user.nextStep !== "create_profile") {
+          setRedirectTo(user.nextStep === "none" ? ONBOARDING_ROUTES.clubPicker : routeForNextStep(user.nextStep));
+        }
+      })
+      .catch(() => {
+        // Stay put; the server still decides on submit.
+      });
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!token || !userId) return;
@@ -164,6 +185,8 @@ export default function CreateProfilePage() {
     >
       <h1 className="signup-split__heading">Create your profile</h1>
       <p className="signup-split__subheading">Add a few details to finish setting up your profile.</p>
+
+      <UsernameReviewCard accessToken={token} onReinstated={handleReinstated} />
 
       <form className="signup-form create-profile" onSubmit={handleSubmit} noValidate>
         <ProfileImageControl
