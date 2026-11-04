@@ -104,7 +104,12 @@ export type NotificationData =
   // post_media_approved / post_media_rejected (B-037, W15; FC10): which file was decided, by media id and
   // kind. The moderator's reason is NOT here; it is on the uploader's own GET /media/uploads/:id, which is
   // where the rejected row sends them (the author's post card shows it).
-  | { media: { id: string; kind: "image" | "video" | string } };
+  | { media: { id: string; kind: "image" | "video" | string } }
+  // username_review_decided (B-139 part (c), Decision Log #467): only the outcome. The admin's reason
+  // is internal and never reaches the user, and no handle is sent.
+  | { usernameReview: { outcome: UsernameReviewOutcome } };
+
+export type UsernameReviewOutcome = "reinstated" | "declined";
 
 export interface Notification {
   id: string;
