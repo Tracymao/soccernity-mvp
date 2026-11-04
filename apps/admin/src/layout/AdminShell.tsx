@@ -3,7 +3,7 @@
 // inside it via <Outlet/>.
 //
 //  - 260px sidebar: Soccernity logo, the signed-in admin's identity
-//    block (links to /profile), the 9-item nav, Settings pinned to the
+//    block (links to /profile), the nav (a row may be limited to some roles), Settings pinned to the
 //    bottom.
 //  - content region: a top bar carrying the Log Out action, then the
 //    routed screen.
@@ -84,9 +84,11 @@ export default function AdminShell() {
 
         <nav className="admin-nav" aria-label="Admin sections">
           <div className="admin-nav__group">
-            {ADMIN_NAV_PRIMARY.map((item) => (
-              <NavItem key={item.key} item={item} />
-            ))}
+            {ADMIN_NAV_PRIMARY.filter((item) => !item.roles || (admin?.role && item.roles.includes(admin.role))).map(
+              (item) => (
+                <NavItem key={item.key} item={item} />
+              ),
+            )}
           </div>
           <div className="admin-nav__group admin-nav__group--pinned">
             <NavItem item={ADMIN_NAV_SETTINGS} />
