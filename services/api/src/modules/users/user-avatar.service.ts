@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
+import { MediaProcessor } from '../post-media/media-processor';
 import {
   PROFILE_IMAGE_MAX_FILE_SIZE_BYTES,
   PROFILE_IMAGE_UNSUPPORTED_MESSAGE,
@@ -44,8 +45,9 @@ export interface AvatarResult {
 // child is the unsafe default, so until B-036 flips the status an avatar is
 // visible to its owner only. (OPEN in docs/backend-w5-report.md: the founder may
 // instead choose to serve unchecked avatars; that is one line in
-// getPublicProfile.) The bytes are stored AS UPLOADED, so embedded EXIF/location
-// metadata is not stripped here either (B-036).
+// getPublicProfile.) The bytes are RE-ENCODED before they are stored (B-205,
+// profile-image.util.ts): orientation applied, all EXIF/GPS/XMP/IPTC removed, the
+// original never stored.
 @Injectable()
 export class UserAvatarService {
   private readonly logger = new Logger(UserAvatarService.name);
@@ -53,6 +55,7 @@ export class UserAvatarService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly processor: MediaProcessor,
   ) {}
 
   // POST /users/:id/avatar (self only). Order matters: validate the file, then
@@ -63,7 +66,7 @@ export class UserAvatarService {
     const upload = file as UploadedAvatarFile;
 
     const key = `avatars/${userId}/${randomUUID()}.${type.ext}`;
-    const url = await uploadProfileImage(this.storage, this.logger, upload.buffer, key, upload.mimetype);
+    const url = await uploadProfileImage(this.storage, this.processor, this.logger, upload.buffer, key, upload.mimetype);
 
     const previous = await this.prisma.user.findUnique({ where: { id: userId }, select: { avatarKey: true } });
     try {

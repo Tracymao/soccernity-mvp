@@ -41,6 +41,7 @@ import { PostMediaService } from './post-media.service';
     PostMediaObjectsService,
   ],
   // PostMediaDecisionService + DirectUploadStorageService reach AdminMediaReviewModule (B-037).
-  exports: [PostMediaConfig, PostMediaDecisionService, PostMediaObjectsService],
+  // MediaProcessor reaches UsersModule: avatar and cover re-encode (B-205).
+  exports: [PostMediaConfig, PostMediaDecisionService, PostMediaObjectsService, MediaProcessor],
 })
 export class PostMediaModule {}

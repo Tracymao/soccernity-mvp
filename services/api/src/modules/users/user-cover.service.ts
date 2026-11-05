@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
+import { MediaProcessor } from '../post-media/media-processor';
 import { UploadedProfileImage, uploadProfileImage, validateProfileImage } from './profile-image.util';
 
 // B-196 (Decision Log #411 item 4, #371, #394 A2): the cover photo, built on the
@@ -16,7 +17,8 @@ import { UploadedProfileImage, uploadProfileImage, validateProfileImage } from '
 //     automatic image check (B-036) and the review queue (B-037) exist;
 //   - the same object removal on replacement, delete and anonymization.
 // It does NOT create a MediaAsset row (that table is the admin media library).
-// The bytes are stored AS UPLOADED: EXIF is not stripped (B-205).
+// The bytes are RE-ENCODED before they are stored (B-205, profile-image.util.ts), the same
+// as the avatar: all metadata removed, the original never stored.
 // NOT decided (a frontend concern until a frame draws it): cover dimensions and
 // aspect ratio.
 
@@ -33,6 +35,7 @@ export class UserCoverService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly processor: MediaProcessor,
   ) {}
 
   // POST /users/:id/cover (self only). Same order as the avatar: validate the
@@ -43,7 +46,7 @@ export class UserCoverService {
     const upload = file as UploadedProfileImage;
 
     const key = `covers/${userId}/${randomUUID()}.${type.ext}`;
-    const url = await uploadProfileImage(this.storage, this.logger, upload.buffer, key, upload.mimetype);
+    const url = await uploadProfileImage(this.storage, this.processor, this.logger, upload.buffer, key, upload.mimetype);
 
     const previous = await this.prisma.user.findUnique({ where: { id: userId }, select: { coverKey: true } });
     try {

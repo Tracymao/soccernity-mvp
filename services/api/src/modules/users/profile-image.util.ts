@@ -1,5 +1,11 @@
 import { BadRequestException, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
+import { rm, writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import * as path from 'path';
 import { StorageService } from '../../storage/storage.service';
+import { MediaProcessor, UnprocessableMediaError } from '../post-media/media-processor';
+import { PostMediaContentType } from '../post-media/media-signature.util';
 
 // Shared file rules for the two profile pictures: the avatar (B-035) and the
 // cover photo (B-196, Decision Log #411 item 4: "built on the avatar pipeline
@@ -59,18 +65,50 @@ export function validateProfileImage(
 // for the server logs and for POST /admin/media/upload, not for an end user.
 export const PROFILE_IMAGE_UNAVAILABLE_MESSAGE = "Picture uploads aren't available right now. Please try again later.";
 
-// Uploads a profile picture, turning the storage layer's 503 into the friendly
-// message above. The original message (with the S3_* detail) goes to the server
-// log only. Any other failure is rethrown unchanged.
+// Re-encodes a validated profile picture through the SAME MediaProcessor.sanitizeImage the post-image
+// pipeline uses (B-205; Decision Log #468 item 3: no second implementation). Orientation is applied to the
+// pixels first, then ALL metadata (EXIF, GPS, XMP, IPTC) is dropped, so the stored bytes carry none of it.
+// What is reused from the post-image pipeline, with nothing new invented:
+//   - the output format: the same type as the input (JPEG -> JPEG at quality 90 with mozjpeg, PNG -> PNG,
+//     WebP -> WebP at quality 90);
+//   - the decode limit: 100 megapixels (a decompression-bomb guard). There is no resize or dimension cap,
+//     as for post images, and the 5 MB upload limit above is unchanged (it applies to the original upload).
+// The sanitizer reads from a file path, so the bytes go through a temp file that is always removed.
+// Bytes that decode as nothing (a corrupt file whose first bytes pass the magic-byte check) are a 400 with
+// the same unsupported-file message, before anything is stored.
+export async function sanitizeProfileImage(
+  processor: MediaProcessor,
+  buffer: Buffer,
+  contentType: string,
+): Promise<Buffer> {
+  const file = path.join(tmpdir(), `profile-image-${randomUUID()}`);
+  try {
+    await writeFile(file, buffer);
+    const clean = await processor.sanitizeImage(file, contentType as PostMediaContentType);
+    return clean.buffer;
+  } catch (err) {
+    if (err instanceof UnprocessableMediaError) throw new BadRequestException(PROFILE_IMAGE_UNSUPPORTED_MESSAGE);
+    throw err;
+  } finally {
+    await rm(file, { force: true });
+  }
+}
+
+// Uploads a profile picture: first re-encodes it without metadata (sanitizeProfileImage), then stores ONLY
+// the re-encoded bytes (the original is never stored), turning the storage layer's 503 into the friendly
+// message above. The original message (with the S3_* detail) goes to the server log only. Any other
+// failure is rethrown unchanged. Both the avatar and the cover go through here, so they cannot drift.
 export async function uploadProfileImage(
   storage: StorageService,
+  processor: MediaProcessor,
   logger: Logger,
   buffer: Buffer,
   key: string,
   contentType: string,
 ): Promise<string> {
+  const clean = await sanitizeProfileImage(processor, buffer, contentType);
   try {
-    return await storage.upload(buffer, key, contentType);
+    return await storage.upload(clean, key, contentType);
   } catch (err) {
     if (err instanceof ServiceUnavailableException) {
       logger.warn(`Profile image upload refused (storage unavailable): ${err.message}`);

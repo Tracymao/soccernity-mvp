@@ -1,13 +1,28 @@
 import { BadRequestException, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { readFile } from 'fs/promises';
 import { PrismaService } from '../../prisma/prisma.service';
 import { S3StorageService } from '../../storage/s3-storage.service';
 import { StorageService } from '../../storage/storage.service';
+import { MediaProcessor } from '../post-media/media-processor';
 import { AVATAR_UNSUPPORTED_MESSAGE, UserAvatarService } from './user-avatar.service';
 
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0]);
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
 const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.from([0, 0, 0, 0]), Buffer.from('WEBPVP8 ')]);
+
+// The pre-B-205 tests below pin validation, store-before-write ordering and the 503 using fake bytes
+// that only pass the magic-byte check, so the re-encode step is a pass-through here. The re-encode itself
+// (metadata gone, orientation applied, corrupt file = 400) is proven with real sharp in
+// profile-image.reencode.spec.ts.
+const PASSTHROUGH = {
+  sanitizeImage: async (inputPath: string, contentType: string) => ({
+    buffer: await readFile(inputPath),
+    contentType,
+    width: 1,
+    height: 1,
+  }),
+} as unknown as MediaProcessor;
 
 function file(buffer: Buffer, mimetype: string) {
   return { buffer, mimetype, size: buffer.length, originalname: 'me.jpg' };
@@ -22,7 +37,7 @@ function build(storage: Partial<StorageService> = {}) {
     delete: jest.fn().mockResolvedValue(undefined),
     ...storage,
   } as unknown as StorageService;
-  return { prisma, store, service: new UserAvatarService(prisma, store) };
+  return { prisma, store, service: new UserAvatarService(prisma, store, PASSTHROUGH) };
 }
 
 describe('UserAvatarService (B-035)', () => {
@@ -97,7 +112,7 @@ describe('UserAvatarService (B-035)', () => {
     const prisma = {
       user: { findUnique: jest.fn(), update: jest.fn() },
     } as unknown as PrismaService;
-    const service = new UserAvatarService(prisma, real);
+    const service = new UserAvatarService(prisma, real, PASSTHROUGH);
 
     const err = await service.uploadAvatar('u1', file(JPEG, 'image/jpeg')).catch((e) => e);
     expect(err).toBeInstanceOf(ServiceUnavailableException);
@@ -112,7 +127,7 @@ describe('UserAvatarService (B-035)', () => {
     try {
       const config = { get: () => undefined } as unknown as ConfigService;
       const prisma = { user: { findUnique: jest.fn(), update: jest.fn() } } as unknown as PrismaService;
-      const service = new UserAvatarService(prisma, new S3StorageService(config));
+      const service = new UserAvatarService(prisma, new S3StorageService(config), PASSTHROUGH);
       const err = await service.uploadAvatar('u1', file(JPEG, 'image/jpeg')).catch((e) => e);
       expect(err.message).not.toMatch(/S3_/);
       expect(warn.mock.calls.some(([m]) => /S3_BUCKET/.test(String(m)))).toBe(true);

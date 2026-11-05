@@ -1,8 +1,10 @@
 import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { readFile } from 'fs/promises';
 import { PrismaService } from '../../prisma/prisma.service';
 import { S3StorageService } from '../../storage/s3-storage.service';
 import { StorageService } from '../../storage/storage.service';
+import { MediaProcessor } from '../post-media/media-processor';
 import { PROFILE_IMAGE_UNSUPPORTED_MESSAGE } from './profile-image.util';
 import { UserAvatarService } from './user-avatar.service';
 import { UserCoverService } from './user-cover.service';
@@ -14,6 +16,19 @@ import { UserCoverService } from './user-cover.service';
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0]);
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
 const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.from([0, 0, 0, 0]), Buffer.from('WEBPVP8 ')]);
+
+// The pre-B-205 tests below pin validation, store-before-write ordering and the 503 using fake bytes
+// that only pass the magic-byte check, so the re-encode step is a pass-through here. The re-encode itself
+// (metadata gone, orientation applied, corrupt file = 400) is proven with real sharp in
+// profile-image.reencode.spec.ts.
+const PASSTHROUGH = {
+  sanitizeImage: async (inputPath: string, contentType: string) => ({
+    buffer: await readFile(inputPath),
+    contentType,
+    width: 1,
+    height: 1,
+  }),
+} as unknown as MediaProcessor;
 
 function file(buffer: Buffer, mimetype: string) {
   return { buffer, mimetype, size: buffer.length, originalname: 'cover.jpg' };
@@ -31,7 +46,7 @@ function build(storage: Partial<StorageService> = {}) {
     delete: jest.fn().mockResolvedValue(undefined),
     ...storage,
   } as unknown as StorageService;
-  return { prisma, store, service: new UserCoverService(prisma, store) };
+  return { prisma, store, service: new UserCoverService(prisma, store, PASSTHROUGH) };
 }
 
 describe('UserCoverService (B-196)', () => {
@@ -109,7 +124,7 @@ describe('UserCoverService (B-196)', () => {
     const config = { get: () => undefined } as unknown as ConfigService;
     const real = new S3StorageService(config);
     const prisma = { user: { findUnique: jest.fn(), update: jest.fn() } } as unknown as PrismaService;
-    const service = new UserCoverService(prisma, real);
+    const service = new UserCoverService(prisma, real, PASSTHROUGH);
 
     const err = await service.uploadCover('u1', file(JPEG, 'image/jpeg')).catch((e) => e);
     expect(err).toBeInstanceOf(ServiceUnavailableException);
@@ -161,7 +176,7 @@ describe('UserCoverService (B-196)', () => {
           () => 'accepted',
           (e: Error & { getStatus?: () => number }) => `${e.getStatus?.()}:${e.message}`,
         );
-      const avatarResult = await outcome(() => new UserAvatarService(a.prisma, a.store).uploadAvatar('u1', file(buf, mime)));
+      const avatarResult = await outcome(() => new UserAvatarService(a.prisma, a.store, PASSTHROUGH).uploadAvatar('u1', file(buf, mime)));
       const coverResult = await outcome(() => c.service.uploadCover('u1', file(buf, mime)));
       expect(coverResult).toBe(avatarResult);
     });
@@ -170,8 +185,8 @@ describe('UserCoverService (B-196)', () => {
       const config = { get: () => undefined } as unknown as ConfigService;
       const real = new S3StorageService(config);
       const prisma = { user: { findUnique: jest.fn(), update: jest.fn() } } as unknown as PrismaService;
-      const a = await new UserAvatarService(prisma, real).uploadAvatar('u1', file(JPEG, 'image/jpeg')).catch((e) => e);
-      const c = await new UserCoverService(prisma, real).uploadCover('u1', file(JPEG, 'image/jpeg')).catch((e) => e);
+      const a = await new UserAvatarService(prisma, real, PASSTHROUGH).uploadAvatar('u1', file(JPEG, 'image/jpeg')).catch((e) => e);
+      const c = await new UserCoverService(prisma, real, PASSTHROUGH).uploadCover('u1', file(JPEG, 'image/jpeg')).catch((e) => e);
       expect(c.getStatus()).toBe(503);
       expect(c.getResponse()).toEqual(a.getResponse());
     });
