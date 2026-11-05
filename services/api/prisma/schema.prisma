@@ -211,12 +211,15 @@ model User {
   preferredClub  String?
   profileCountry String?
 
-  // The avatar (#371, B-035). The upload route stores the object through
-  // StorageService and records where. avatarStatus gates VISIBILITY: only
-  // 'approved' is served to other users. A new upload is 'pending', and nothing
-  // in this codebase sets 'approved' yet (the automatic image check, B-036, is
-  // not built), so an avatar is visible to its owner only until that check
-  // exists. 'rejected' is reserved for B-036/B-037. url, key and status are all
+  // The avatar (#371, B-035, B-036). The upload route stores the object through
+  // the storage layer and records where. avatarStatus gates VISIBILITY: only
+  // 'approved' is served to other users. A new upload is 'pending' and is stored in
+  // the PRIVATE prefix (private-profile/); only the automatic image check
+  // (ProfileImageCheckService, B-036) approves it, and it first copies the file to the
+  // PUBLIC prefix (profile-media/). avatarKey always holds the file's CURRENT key (the
+  // prefix says private or public); avatarUrl holds its FUTURE public URL, served to
+  // other users only while the status is 'approved' and the key is public. 'rejected'
+  // is set by the check or by the review queue (B-037). url, key and status are all
   // NULL or all set (CHECK constraint in the migration).
   avatarUrl             String?
   avatarKey             String?
@@ -230,10 +233,10 @@ model User {
   avatarRejectionReason String?
 
   // The cover photo (B-196, #411 item 4): the avatar pipeline with the same rule.
-  // Same three-columns-move-together shape and the same visibility gate: only an
-  // 'approved' cover is served to other users, a new upload is 'pending', and
-  // nothing sets 'approved' until B-036/B-037 exist. url, key and status are all
-  // NULL or all set (CHECK constraint in the migration).
+  // Same three-columns-move-together shape, the same private-then-public storage and the
+  // same visibility gate: only an 'approved' cover is served to other users, a new upload
+  // is 'pending' (private prefix), and only the image check (B-036) approves it. url, key
+  // and status are all NULL or all set (CHECK constraint in the migration).
   coverUrl             String?
   coverKey             String?
   coverStatus          String?
@@ -2860,4 +2863,32 @@ model GuardianNoticeWithhold {
   lastReviewNote String?
 
   @@index([setByAdminId])
+}
+
+// backend/b036-avatar-cover-check (B-036; Decision Log #411 item 1, #394 A2, #468). A genuine NEW model beyond
+// Section 3's entity list (flagged per CLAUDE.md's "the data model is a fixed spec" rule): the retry state of the
+// automatic image check (Amazon Rekognition) for ONE avatar or cover of one user. It holds bookkeeping only -- no
+// image, no labels, no user content.
+//   userId + kind  primary key: at most one row per image slot.
+//   objectKey      the stored file this row describes; a re-upload has a new key, so a row whose objectKey no
+//                  longer equals the user's avatarKey / coverKey is stale and is overwritten by the next claim.
+//   state          'retry'   claimed or failed, try again at nextAttemptAt (the claim itself pushes nextAttemptAt
+//                            forward by the lease, so two sweeps cannot take the same image)
+//                  'review'  checked, result between the thresholds: stays pending, waits for the moderator queue (B-037)
+//                  'gave_up' failed the configured number of times: stays pending, waits for a moderator
+//   attempts       failed attempts so far
+//   nextAttemptAt  when a 'retry' row is next due
+// userId is a plain string with NO foreign key (retry bookkeeping, not content); the row is deleted when the image is
+// approved or rejected, and by anonymisation. Nothing about the image is ever approved by default: no row means
+// "not checked yet", and a pending image stays pending until the check (or a moderator) decides.
+model ProfileImageCheck {
+  userId        String
+  kind          String
+  objectKey     String
+  state         String    @default("retry")
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime?
+
+  @@id([userId, kind])
+  @@index([state, nextAttemptAt])
 }

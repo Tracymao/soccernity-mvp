@@ -113,6 +113,41 @@ describe('MediaCheckService.runDueChecks', () => {
   });
 });
 
+// backend/b036-avatar-cover-check: the same download / shrink / detect / decide steps for ONE stored image, for
+// callers other than post media.
+describe('MediaCheckService.checkStoredImage (avatars and covers, B-036)', () => {
+  it('reads the stored file, runs the SAME steps and thresholds, and returns the decision without writing anything', async () => {
+    const { service, prisma, storage, processor, moderation } = build();
+    moderation.detectModerationLabels.mockResolvedValue([{ name: 'Suggestive', parentName: null, confidence: 60 }]);
+
+    const decision = await service.checkStoredImage('private-profile/u1/a.jpg', false);
+
+    expect(storage.downloadToFile).toHaveBeenCalledWith('private-profile/u1/a.jpg', expect.any(String));
+    expect(processor.shrinkForModeration).toHaveBeenCalledTimes(1);
+    expect(moderation.detectModerationLabels).toHaveBeenCalledWith(expect.any(Buffer), 40);
+    expect(decision).toEqual({ outcome: 'pending', categories: ['Suggestive'] });
+    expect(prisma.postMedia.updateMany).not.toHaveBeenCalled();
+    expect(prisma.postMedia.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('is stricter for a minor: asks from the lower minor threshold and rejects at the minor reject threshold', async () => {
+    const { service, moderation } = build();
+    moderation.detectModerationLabels.mockResolvedValue([{ name: 'Explicit', parentName: null, confidence: 85 }]);
+    expect(await service.checkStoredImage('private-profile/u1/a.jpg', true)).toMatchObject({ outcome: 'rejected' });
+    expect(moderation.detectModerationLabels).toHaveBeenCalledWith(expect.any(Buffer), 20);
+    expect(await service.checkStoredImage('private-profile/u1/a.jpg', false)).toMatchObject({ outcome: 'pending' });
+  });
+
+  it('a clean image is approved; a failure to read or to call Rekognition propagates (the caller decides what it means)', async () => {
+    const { service, storage, moderation } = build();
+    expect(await service.checkStoredImage('k', false)).toEqual({ outcome: 'approved', categories: [] });
+    moderation.detectModerationLabels.mockRejectedValueOnce(new Error('Rekognition is down'));
+    await expect(service.checkStoredImage('k', false)).rejects.toThrow('Rekognition is down');
+    storage.downloadToFile.mockRejectedValueOnce(new Error('missing'));
+    await expect(service.checkStoredImage('k', false)).rejects.toThrow('missing');
+  });
+});
+
 describe('MediaCheckService.checkOne', () => {
   it('loses the claim race quietly: another worker has it, so nothing is downloaded or sent', async () => {
     const { service, prisma, storage, moderation } = build();

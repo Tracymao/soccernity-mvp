@@ -37,6 +37,7 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
     // backend/w14-post-media-pipeline: the user's uploaded post media (none by default).
     postMedia: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() },
     matchSubscription: { deleteMany: jest.fn() },
+    profileImageCheck: { deleteMany: jest.fn() },
     // B-092: a viewer's Final-week carousel impression rows go with their account.
     contestImpression: { deleteMany: jest.fn() },
     banterRoomMember: { deleteMany: jest.fn() },
@@ -419,6 +420,7 @@ describe('AccountDeletionSweepService', () => {
       expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.contestImpression.deleteMany).toHaveBeenCalledWith({ where: { viewerId: 'user-1' } });
       expect(prisma.matchSubscription.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.profileImageCheck.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.banterRoomMember.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.communityGroupMember.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       const sql = (prisma.$executeRaw as unknown as jest.Mock).mock.calls.map((c) => (c[0] as string[]).join('?'));
@@ -720,6 +722,7 @@ describe('AccountDeletionSweepService', () => {
       });
       expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.matchSubscription.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.profileImageCheck.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.contestImpression.deleteMany).toHaveBeenCalledWith({ where: { viewerId: 'user-1' } });
       expect(prisma.grassrootsTeam.updateMany).toHaveBeenCalledWith({
         where: { createdById: 'user-1' },

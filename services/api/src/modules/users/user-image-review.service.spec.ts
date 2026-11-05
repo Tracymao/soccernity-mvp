@@ -53,6 +53,31 @@ describe('UserImageReviewService.rejectProfileImage (B-214)', () => {
     expect(tx.notification.create.mock.calls[0][0].data.payloadRefId).toBe('cover');
   });
 
+  // B-036: the automatic check passes the key it checked, so a re-upload during the check is never rejected by it.
+  it.each([
+    ['avatar', 'avatarKey'],
+    ['cover', 'coverKey'],
+  ] as const)('with an expected key the %s rejection is written ONLY while the row still points at that file', async (kind, keyCol) => {
+    const { tx, service } = build();
+    await service.rejectProfileImage('u1', kind, 'Too dark to see', 'private-profile/u1/checked.jpg');
+    expect(tx.user.updateMany.mock.calls[0][0].where).toMatchObject({ id: 'u1', [keyCol]: 'private-profile/u1/checked.jpg' });
+  });
+
+  it('without an expected key the rejection is not tied to a file (a moderator decision)', async () => {
+    const { tx, service } = build();
+    await service.rejectProfileImage('u1', 'avatar', 'Too dark to see');
+    expect(tx.user.updateMany.mock.calls[0][0].where).not.toHaveProperty('avatarKey');
+  });
+
+  it('a picture replaced under the check (key no longer matches) is a 404, writes no notification and notifies no guardian', async () => {
+    const { tx, guardianNotices, service } = build(0, { avatarStatus: 'pending', coverStatus: null });
+    await expect(service.rejectProfileImage('u1', 'avatar', 'Too dark to see', 'private-profile/u1/old.jpg')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(tx.notification.create).not.toHaveBeenCalled();
+    expect(guardianNotices.notifyInBackground).not.toHaveBeenCalled();
+  });
+
   it('trims the reason before storing it', async () => {
     const { tx, service } = build();
     await service.rejectProfileImage('u1', 'avatar', '   Too dark to see   \n');
