@@ -115,6 +115,13 @@ describe("router — rendered footer presence", () => {
     expect(screen.queryByRole("contentinfo")).toBeNull();
   });
 
+  it("/auth/social/:provider/callback resolves under the logo-only Top Bar (B-085) -- with nothing saved it refuses, no footer", async () => {
+    const router = createMemoryRouter(routes, { initialEntries: ["/auth/social/google/callback?code=c&state=s"] });
+    render(<RouterProvider router={router} />);
+    expect(await screen.findByRole("heading", { name: "We couldn’t sign you in" })).not.toBeNull();
+    expect(screen.queryByRole("contentinfo")).toBeNull();
+  });
+
   it("/search resolves — no session -> its own log-in prompt, no footer", async () => {
     await renderAt("/search");
     expect(screen.queryByRole("contentinfo")).toBeNull();

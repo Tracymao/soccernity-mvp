@@ -38,6 +38,7 @@ import { AuthApiError, isTwoFactorChallenge, login, type LoginResponse } from ".
 import { storeSession } from "../lib/session";
 import { routeForNextStep } from "../lib/onboarding";
 import TwoFactorCodePrompt from "./twoFactor/TwoFactorCodePrompt";
+import SocialButtons from "./social/SocialButtons";
 import loginHero from "../assets/illustrations/login-hero.svg";
 import "./LoginPage.css";
 
@@ -203,6 +204,9 @@ export default function LoginPage() {
             {submitting ? "Logging in…" : "Log in"}
           </button>
         </form>
+
+        {/* B-085: Google / Facebook buttons, only for the providers the API says are switched on. */}
+        <SocialButtons staySignedIn={staySignedIn} />
 
         <p className="sn-login__footer">
           Don&rsquo;t have an account? <Link to="/signup">Create one here.</Link>
