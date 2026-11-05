@@ -58,6 +58,16 @@
 // "I consent", and leaves "I do not consent" alone. A failed summary lookup
 // (invalid / expired token) is not shown as its own error: the page keeps its
 // existing behaviour and the real POST returns the real rejection.
+// W9 (B-078, B-176, B-079, B-169; docs/w9-activation-guardian-pages-report.md): the
+// request-time view is now the single centred bordered card Figma 5108:6629 draws
+// (heading personalised with the account holder's first name when the request
+// summary loaded, the summary panel, "What {name} will be able to do", the new
+// "What we collect" list, "What stays switched off", the consent checkbox, the
+// actions and the footnote). The route sits under AuthChrome (logo-only Top Bar,
+// like the withdrawal pages): the guardian has no account and needs no site nav.
+// The approved state is Figma 5488:7164 ("Thank you -- {name} can continue", the
+// "What happens next" card, Done). One CONSENT_SCREEN_VERSION bump (v8) covers every
+// guardian-visible change in this file (Decision Log #348).
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 import {
@@ -116,20 +126,56 @@ const WHAT_THEY_CAN_DO = [
   },
 ];
 
+// B-078 / B-176 (Figma 5108:6629, "What we collect"). New guardian-facing
+// wording, each body tagged. These are TOP-LEVEL consts on purpose: the consent
+// tripwire (services/api consent-screen-text-hash.util.ts, Decision Log #348)
+// hashes only JSX text and strings in top-level consts, so wording moved into a
+// function body would silently drop out of it. "{name}" and "{possessive}" are
+// filled in at render time (fillName) with the account holder's first name.
+const WHAT_WE_COLLECT = [
+  {
+    title: "Name and date of birth",
+    body: "Date of birth is used for age checks only. It is never shown publicly. [COPY PENDING LEGAL REVIEW]",
+  },
+  {
+    title: "Email address",
+    body: "For sign-in and account notices. [COPY PENDING LEGAL REVIEW]",
+  },
+  {
+    title: "Anything {name} chooses to post",
+    body: "Profile details, posts, comments and images they upload. [COPY PENDING LEGAL REVIEW]",
+  },
+  {
+    title: "Your name, email and relationship",
+    body: "Kept only to record that you gave consent, and to contact you about it. [COPY PENDING LEGAL REVIEW]",
+  },
+];
+
 const WHAT_STAYS_OFF = [
   {
     title: "Public search engine listing",
-    body: "The profile will not be indexed by Google or shown to logged-out visitors.",
+    body: "{possessive} profile will not be indexed by Google or shown to logged-out visitors.",
   },
   {
     title: "Messages from unverified accounts",
-    body: "Only accounts they follow can start a direct message.",
+    body: "Only accounts {name} follows can start a direct message.",
   },
   {
     title: "Targeted advertising",
     body: "Under-18 accounts are excluded from ad targeting.",
   },
 ];
+
+// Without a request summary nothing is guessed: the wording falls back to these.
+const NAME_FALLBACK = "the account holder";
+const NAME_FALLBACK_CAPITAL = "The account holder";
+const THIS_ACCOUNT = "this account";
+const INTRO_NAMED = "{name} named you as their parent or guardian.";
+const INTRO_UNNAMED = "You were named as the parent or guardian for a new Soccernity account.";
+
+function fillName(text: string, name: string, possessive: string): string {
+  return text.replace("{name}", name).replace("{possessive}", possessive);
+}
 
 // safeguarding/guardian-contact-public-visibility (legal-copy Part C row
 // 32): disclosed here because it widens what a guardian consents to.
@@ -158,6 +204,9 @@ export default function GuardianConsentConfirmPage() {
   const [cardGate, setCardGate] = useState<CardGate>("loading");
   const [summary, setSummary] = useState<GuardianRequestSummary | null>(null);
   const [reportState, setReportState] = useState<ReportState>("idle");
+  // "Recorded on {date}" on the approved screen: the confirm response carries no
+  // date, so the moment of the successful call is shown.
+  const [recordedOn, setRecordedOn] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -173,6 +222,15 @@ export default function GuardianConsentConfirmPage() {
       cancelled = true;
     };
   }, [token]);
+
+  // The account holder's first name from the request summary. Without a summary
+  // (an invalid link, or the lookup failed) the wording falls back to "the
+  // account holder" -- nothing is guessed (B-078: the server's summary carries
+  // minorName, so no server change was needed).
+  const first = summary ? firstName(summary.minorName) : null;
+  const name = first ?? NAME_FALLBACK;
+  const nameCap = first ?? NAME_FALLBACK_CAPITAL;
+  const possessive = `${nameCap}’s`;
 
   // True while support has not resolved a report (this session's or an earlier one).
   const onHold = (summary?.incorrectDetailsReported ?? false) || reportState === "sent";
@@ -195,6 +253,7 @@ export default function GuardianConsentConfirmPage() {
     setStatus("submitting");
     try {
       await confirmGuardianConsent(token);
+      setRecordedOn(formatLongDate(new Date().toISOString()));
       setStatus("confirmed");
     } catch (error) {
       setErrorMessage(error instanceof AuthApiError ? error.message : GENERIC_ERROR_MESSAGE);
@@ -225,13 +284,68 @@ export default function GuardianConsentConfirmPage() {
             </p>
           </div>
         ) : status === "confirmed" ? (
-          <div className="consent-card">
-            <h1 className="consent-page__heading">Thank you</h1>
-            <p className="consent-status-message" role="status">
-              Your approval has been recorded. The account holder can now continue registration. You can close
-              this page. [COPY PENDING LEGAL REVIEW]
-            </p>
-          </div>
+          <>
+            <div className="consent-icon-circle consent-icon-circle--approved consent-icon-circle--large" aria-hidden="true">
+              ✓
+            </div>
+            <div>
+              <h1 className="consent-page__heading">Thank you — {name} can continue</h1>
+              <p className="consent-page__subheading" role="status">
+                Recorded on {recordedOn}. {nameCap} can now continue registration, with under-18 protections in
+                place. [COPY PENDING LEGAL REVIEW]
+              </p>
+            </div>
+            <div className="consent-card">
+              <p className="consent-card__title">What happens next</p>
+              <div className="consent-list consent-list--plain">
+                <div className="consent-row">
+                  <span className="consent-row__icon consent-row__icon--on" aria-hidden="true">
+                    ✓
+                  </span>
+                  <div className="consent-row__text">
+                    <span className="consent-row__title">{nameCap} continues registration</span>
+                    <span className="consent-row__body">
+                      {nameCap} now sets up a profile and picks a club. [COPY PENDING LEGAL REVIEW]
+                    </span>
+                  </div>
+                </div>
+                <div className="consent-row">
+                  <span className="consent-row__icon consent-row__icon--on" aria-hidden="true">
+                    ✓
+                  </span>
+                  <div className="consent-row__text">
+                    <span className="consent-row__title">You stay in control</span>
+                    <span className="consent-row__body">
+                      You can review or withdraw your consent at any time on the{" "}
+                      <Link to="/guardian-consent/withdraw">guardian withdrawal page</Link>. {nameCap} can share the
+                      details from their account. [COPY PENDING LEGAL REVIEW]
+                    </span>
+                  </div>
+                </div>
+                <div className="consent-row">
+                  <span className="consent-row__icon consent-row__icon--on" aria-hidden="true">
+                    ✓
+                  </span>
+                  <div className="consent-row__text">
+                    <span className="consent-row__title">Nothing else is needed from you</span>
+                    <span className="consent-row__body">
+                      You don&rsquo;t need a Soccernity account. It&rsquo;s safe to close this window now. [COPY
+                      PENDING LEGAL REVIEW]
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="consent-actions consent-actions--single">
+              <Link
+                to="/"
+                className="consent-button consent-button--secondary"
+                style={{ textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center" }}
+              >
+                Done
+              </Link>
+            </div>
+          </>
         ) : status === "declined" ? (
           <div className="consent-card">
             <h1 className="consent-page__heading">Your decision has been recorded</h1>
@@ -241,13 +355,16 @@ export default function GuardianConsentConfirmPage() {
             </p>
           </div>
         ) : (
-          <>
-            <div className="consent-card">
+          <div className="consent-card consent-card--main">
+            <div>
               <p className="consent-eyebrow">GUARDIAN CONSENT REQUEST</p>
-              <h1 className="consent-page__heading">Do you give permission for this account to be activated?</h1>
+              <h1 className="consent-page__heading">
+                Do you give permission for {first ?? THIS_ACCOUNT} to use Soccernity?
+              </h1>
               <p className="consent-page__subheading">
-                You were named as the parent or guardian for a new Soccernity account. Please read this before you
-                decide -- it explains what the account can do and what we collect.
+                {first ? fillName(INTRO_NAMED, first, possessive) : INTRO_UNNAMED}{" "}
+                Please read this before you decide — it explains what the account can do and what we collect. [COPY
+                PENDING LEGAL REVIEW]
               </p>
             </div>
 
@@ -314,9 +431,11 @@ export default function GuardianConsentConfirmPage() {
               </div>
             )}
 
-            <div className="consent-card">
-              <p className="consent-card__title">What the account holder will be able to do</p>
-              <div className="consent-list">
+            <section className="consent-section" aria-labelledby="consent-can-do">
+              <h2 className="consent-section__title" id="consent-can-do">
+                What {name} will be able to do
+              </h2>
+              <div className="consent-list consent-list--plain">
                 {WHAT_THEY_CAN_DO.map((row) => (
                   <div className="consent-row" key={row.title}>
                     <span className="consent-row__icon consent-row__icon--on" aria-hidden="true">
@@ -329,96 +448,117 @@ export default function GuardianConsentConfirmPage() {
                   </div>
                 ))}
               </div>
-            </div>
+            </section>
 
-            <div className="consent-card">
-              <p className="consent-card__title">What stays switched off for under-18 accounts</p>
-              <div className="consent-list">
-                {WHAT_STAYS_OFF.map((row) => (
-                  <div className="consent-row" key={row.title}>
-                    <span className="consent-row__icon consent-row__icon--off" aria-hidden="true">
-                      –
+            <section className="consent-section" aria-labelledby="consent-collect">
+              <h2 className="consent-section__title" id="consent-collect">
+                What we collect
+              </h2>
+              <div className="consent-list consent-list--plain">
+                {WHAT_WE_COLLECT.map((row) => (
+                  <div className="consent-row" key={fillName(row.title, name, possessive)}>
+                    <span className="consent-row__icon consent-row__icon--on" aria-hidden="true">
+                      ✓
                     </span>
                     <div className="consent-row__text">
-                      <span className="consent-row__title">{row.title}</span>
-                      <span className="consent-row__body">{row.body}</span>
+                      <span className="consent-row__title">{fillName(row.title, name, possessive)}</span>
+                      <span className="consent-row__body">{fillName(row.body, name, possessive)}</span>
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
+            </section>
 
-            <div className="consent-card">
-              <p className="consent-card__title">{GUARDIAN_CONTACT_NOTICE.title}</p>
+            <section className="consent-section" aria-labelledby="consent-off">
+              <h2 className="consent-section__title" id="consent-off">
+                What stays switched off for under-18 accounts
+              </h2>
+              <div className="consent-list consent-list--plain">
+                {WHAT_STAYS_OFF.map((row) => (
+                  <div className="consent-row" key={fillName(row.title, name, possessive)}>
+                    <span className="consent-row__icon consent-row__icon--off" aria-hidden="true">
+                      –
+                    </span>
+                    <div className="consent-row__text">
+                      <span className="consent-row__title">{fillName(row.title, name, possessive)}</span>
+                      <span className="consent-row__body">{fillName(row.body, name, possessive)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="consent-section" aria-labelledby="consent-contact">
+              <h2 className="consent-section__title" id="consent-contact">
+                {GUARDIAN_CONTACT_NOTICE.title}
+              </h2>
               <p className="consent-page__subheading">{GUARDIAN_CONTACT_NOTICE.body}</p>
-            </div>
+            </section>
 
             {token && <CardVerificationPanel token={token} onGateChange={setCardGate} />}
 
-            <form onSubmit={handleConsent}>
-                <div className="consent-card" style={{ gap: "24px" }}>
-                  <div className="consent-checkbox-row">
-                    <input
-                      type="checkbox"
-                      id="consent-confirm-checkbox"
-                      checked={agreed}
-                      onChange={(event) => setAgreed(event.target.checked)}
-                    />
-                    <label htmlFor="consent-confirm-checkbox">
-                      I confirm I am this account holder&rsquo;s parent or legal guardian, and I give permission for
-                      this account to be activated.{" "}
-                      <span className="consent-fineprint">[COPY PENDING LEGAL REVIEW]</span>
-                    </label>
-                  </div>
+            <form className="consent-form" onSubmit={handleConsent}>
+              <div className="consent-checkbox-row">
+                <input
+                  type="checkbox"
+                  id="consent-confirm-checkbox"
+                  checked={agreed}
+                  onChange={(event) => setAgreed(event.target.checked)}
+                />
+                <label htmlFor="consent-confirm-checkbox">
+                  I confirm I am this account holder&rsquo;s parent or legal guardian, and I give permission for
+                  this account to be activated.{" "}
+                  <span className="consent-fineprint">[COPY PENDING LEGAL REVIEW]</span>
+                </label>
+              </div>
 
-                  {status === "error" && (
-                    <p className="consent-status-message consent-status-message--error" role="alert">
-                      {errorMessage}
-                    </p>
-                  )}
+              {status === "error" && (
+                <p className="consent-status-message consent-status-message--error" role="alert">
+                  {errorMessage}
+                </p>
+              )}
 
-                  <div className="consent-actions">
-                    <button
-                      type="submit"
-                      className="consent-button consent-button--primary"
-                      disabled={!agreed || status === "submitting" || cardGate === "needed" || onHold}
-                    >
-                      {status === "submitting" ? "Submitting…" : "I consent"}
-                    </button>
-                    <button
-                      type="button"
-                      className="consent-button consent-button--secondary"
-                      onClick={handleDecline}
-                      disabled={status === "submitting"}
-                    >
-                      I do not consent
-                    </button>
-                  </div>
+              <div className="consent-actions">
+                <button
+                  type="submit"
+                  className="consent-button consent-button--primary"
+                  disabled={!agreed || status === "submitting" || cardGate === "needed" || onHold}
+                >
+                  {status === "submitting" ? "Submitting…" : "I consent"}
+                </button>
+                <button
+                  type="button"
+                  className="consent-button consent-button--secondary"
+                  onClick={handleDecline}
+                  disabled={status === "submitting"}
+                >
+                  I do not consent
+                </button>
+              </div>
 
-                  {/* The Figma footnote (K5, B-185): link expiry, the cap, withdrawal,
-                      then the Privacy Policy link. Each sentence that describes a guardian
-                      or a child is its own span so it carries its own tag and its own
-                      manifest row. The expiry sentence needs the request summary (the
-                      date comes from it); without a summary it is left out rather than
-                      guessed. */}
-                  <p className="consent-footnote">
-                    {summary && (
-                      <>
-                        <span>
-                          This link expires on {formatLongDate(summary.expiresAt)}. [COPY PENDING LEGAL REVIEW]
-                        </span>{" "}
-                      </>
-                    )}
-                    <span>{GUARDIAN_CAP_SENTENCE}</span>{" "}
+              {/* The Figma footnote (K5, B-185): link expiry, the cap, withdrawal,
+                  then the Privacy Policy link. Each sentence that describes a guardian
+                  or a child is its own span so it carries its own tag and its own
+                  manifest row. The expiry sentence needs the request summary (the
+                  date comes from it); without a summary it is left out rather than
+                  guessed. */}
+              <p className="consent-footnote">
+                {summary && (
+                  <>
                     <span>
-                      You can withdraw consent at any time on the{" "}
-                      <Link to="/guardian-consent/withdraw">guardian withdrawal page</Link>. [COPY PENDING LEGAL REVIEW]
+                      This link expires on {formatLongDate(summary.expiresAt)}. [COPY PENDING LEGAL REVIEW]
                     </span>{" "}
-                    Read our <Link to="/privacy">Privacy Policy</Link>.
-                  </p>
-                </div>
+                  </>
+                )}
+                <span>{GUARDIAN_CAP_SENTENCE}</span>{" "}
+                <span>
+                  You can withdraw consent at any time on the{" "}
+                  <Link to="/guardian-consent/withdraw">guardian withdrawal page</Link>. [COPY PENDING LEGAL REVIEW]
+                </span>{" "}
+                Read our <Link to="/privacy">Privacy Policy</Link>.
+              </p>
             </form>
-          </>
+          </div>
         )}
       </div>
     </div>

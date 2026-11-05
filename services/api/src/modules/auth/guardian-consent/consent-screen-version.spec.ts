@@ -38,19 +38,25 @@ describe('consent screen version tripwire', () => {
 
   it('extracts real wording (guards against an extractor that silently matches nothing)', () => {
     const text = extractConsentText(source);
-    expect(text).toContain('whattheaccountholderwillbeabletodo');
+    // The heading is personalised ("What {name} will be able to do"), so only its fixed words are hashed.
+    expect(text).toContain('whatwillbeabletodo');
+    // W9 (v8): the new "What we collect" list and the personalised intro are inside the hash.
+    expect(text).toContain('whatwecollect');
+    expect(text).toContain('dateofbirthisusedforagechecksonly');
+    expect(text).toContain('namenamedyouastheirparentorguardian');
+    expect(text).toContain('thankyou');
     expect(text).toContain('publicsearchenginelisting');
     expect(text).toContain('idonotconsent');
     expect(text).not.toContain('consentpage__column');
   });
 
-  it('keeps the "guardian withdrawal page" words in the hash when they are a link (v7, Decision Log #415)', () => {
+  it('keeps the "guardian withdrawal page" words in the hash when they are a link (v7, Decision Log #415; still true at v8)', () => {
     // v7 turned these words into a <Link to="/guardian-consent/withdraw">. The extractor reads JSX
     // text inside child elements, so the link neither adds nor removes hashed wording: the hash is
     // unchanged and only CONSENT_SCREEN_VERSION moved (the guardian is now offered a route).
     expect(source).toContain('to="/guardian-consent/withdraw"');
     expect(extractConsentText(source)).toContain('youcanwithdrawconsentatanytimeontheguardianwithdrawalpage');
-    expect(CONSENT_SCREEN_VERSION).toBe('v7');
+    expect(CONSENT_SCREEN_VERSION).toBe('v8');
   });
 
   it('FAILS when the wording is changed without updating the recorded hash/version', () => {

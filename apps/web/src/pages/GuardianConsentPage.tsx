@@ -139,6 +139,26 @@ const DECLINED_CAN_DO = [
   },
 ];
 
+// Figma 5488:7248 / 5501:8342, "What happens next". Bodies are tagged (new
+// minor-facing wording about what stays off and the guardian email).
+const RESENT_NEXT = [
+  {
+    title: "Your guardian gets a new email",
+    body: "It has a fresh, single-use approval link. The previous link no longer works. [COPY PENDING LEGAL REVIEW]",
+    changeEmailLink: false,
+  },
+  {
+    title: "Your account stays restricted for now",
+    body: "Profile, direct messages and posting stay switched off until they approve. [COPY PENDING LEGAL REVIEW]",
+    changeEmailLink: false,
+  },
+  {
+    title: "Wrong email address?",
+    body: "You can change your guardian’s email address from your account. [COPY PENDING LEGAL REVIEW]",
+    changeEmailLink: true,
+  },
+];
+
 function longDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 }
@@ -371,11 +391,15 @@ export default function GuardianConsentPage() {
             >
               Continue registration
             </Link>
-            {/* The privacy settings page exists now, but is not part of this
-                routing change -- left as the disabled placeholder it was. */}
-            <button type="button" className="consent-button consent-button--secondary" disabled title="Coming soon">
+            {/* W9 (B-077, Figma 5108:6631 / 5531:7544): Review privacy settings is an
+                enabled link to /settings/privacy, which exists. */}
+            <Link
+              to="/settings/privacy"
+              className="consent-button consent-button--secondary"
+              style={{ textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center" }}
+            >
               Review privacy settings
-            </button>
+            </Link>
           </div>
         </div>
       </div>
@@ -464,6 +488,63 @@ export default function GuardianConsentPage() {
               Couldn&rsquo;t send that just now. Please try again shortly.
             </p>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  // W9 (B-079; Figma 5488:7248 desktop / 5501:8342 mobile): after a resend the
+  // minor sees the "New request sent" screen instead of an inline footnote. The
+  // frame also says "The new link is valid for 3 days"; neither the resend
+  // response nor the status carries the link lifetime (it is configuration on the
+  // server), so that sentence is left out rather than hard-coded. A resend after
+  // decline 1 or 2 reopens the request, so the re-read status is pending here.
+  if (resendState === "sent") {
+    return (
+      <div className="consent-page" style={consentThemeVars} data-testid="guardian-consent-resent">
+        <div className="consent-page__column">
+          <div className="consent-icon-circle consent-icon-circle--approved consent-icon-circle--large" aria-hidden="true">
+            ✓
+          </div>
+          <div>
+            <h1 className="consent-page__heading">New request sent</h1>
+            <p className="consent-page__subheading" role="status">
+              We&rsquo;ve emailed a fresh approval request to {status.guardianEmail}. [COPY PENDING LEGAL REVIEW]
+            </p>
+          </div>
+          <div className="consent-card">
+            <p className="consent-card__title">What happens next</p>
+            <div className="consent-list consent-list--plain">
+              {RESENT_NEXT.map((row) => (
+                <div className="consent-row" key={row.title}>
+                  <span className="consent-row__icon consent-row__icon--on" aria-hidden="true">
+                    ✓
+                  </span>
+                  <div className="consent-row__text">
+                    <span className="consent-row__title">{row.title}</span>
+                    <span className="consent-row__body">
+                      {row.body}
+                      {row.changeEmailLink && (
+                        <>
+                          {" "}
+                          <Link to="/guardian-consent/change-email">Change guardian email</Link>
+                        </>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="consent-actions consent-actions--single">
+            <button
+              type="button"
+              className="consent-button consent-button--primary"
+              onClick={() => setResendState("idle")}
+            >
+              Back to my account
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -577,11 +658,6 @@ export default function GuardianConsentPage() {
           </Link>
         </div>
 
-        {resendState === "sent" && (
-          <p className="consent-footnote" role="status">
-            We&rsquo;ve sent a new approval email to {status.guardianEmail}. The previous link no longer works.
-          </p>
-        )}
         {resendState === "error" && (
           <p className="consent-status-message consent-status-message--error" role="alert">
             Couldn&rsquo;t send that just now. Please try again shortly.

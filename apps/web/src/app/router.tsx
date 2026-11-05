@@ -142,6 +142,10 @@ export const routes: RouteObject[] = [
       // (6654:2 and the five that follow). `?token=` is the withdrawal email's link and pre-fills the
       // code; the consent email links here without a token. See GuardianWithdrawalPage.tsx.
       { path: "guardian-consent/withdraw", element: <GuardianWithdrawalPage /> },
+      // The guardian's own confirm page (F5; W9 B-176): the same reasoning as the withdrawal page above
+      // (a guardian has no account and needs no site nav), and the Figma frame 5108:6629 is a bare
+      // centred card with the logo. The page's full-bleed CSS cancels AuthChrome's 32px padding.
+      { path: "guardian-consent/confirm", element: <GuardianConsentConfirmPage /> },
       // User two-factor recovery (B-278; backend B-276, Decision Log #455, #456): the pages the lost-device
       // recovery emails link to. Nobody is signed in here (the person cannot sign in; a guardian has no
       // account), so they sit under the logo-only Top Bar like the guardian pages. `?token=` selects the
@@ -350,13 +354,13 @@ export const routes: RouteObject[] = [
       // are NOT here -- they're children of AuthChrome above.
       //
       // F5: /guardian-consent is the MINOR's own authenticated status view
-      // (GET /auth/guardian-consent/status); /guardian-consent/confirm is
+      // (GET /auth/guardian-consent/status); /guardian-consent/confirm (now a
+      // child of AuthChrome, W9) is
       // the new, separate, public route for the GUARDIAN's own
       // unauthenticated confirmation action (POST /auth/guardian-consent)
       // -- see GuardianConsentConfirmPage.tsx's header comment for the
       // full routing-split argument.
       { path: "guardian-consent", element: <GuardianConsentPage /> }, // F5
-      { path: "guardian-consent/confirm", element: <GuardianConsentConfirmPage /> }, // F5
       // Decision Log #365 -- the minor's own "Change guardian email" screen
       // (Figma 5498:7164); authenticated, pending-consent only.
       { path: "guardian-consent/change-email", element: <ChangeGuardianEmailPage /> },

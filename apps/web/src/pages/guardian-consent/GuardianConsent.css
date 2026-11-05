@@ -318,3 +318,51 @@
     min-height: 52px;
   }
 }
+
+/* W9 (B-078, B-176; Figma 5108:6629): the guardian's request-time view is one
+ * centred bordered card, with plain titled sections inside it. Tokens only. */
+.consent-card--main {
+  padding: 48px 56px;
+  gap: 30px;
+}
+
+.consent-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.consent-section__title {
+  font: 600 18px "Inter", sans-serif;
+  margin: 0;
+  color: var(--consent-text-primary);
+}
+
+.consent-form {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+/* The approved screens (5488:7164 / 5488:7248) draw an 88px icon and a single,
+ * left-aligned action rather than a full-width row. */
+.consent-icon-circle--large {
+  width: 88px;
+  height: 88px;
+  font-size: 44px;
+}
+
+.consent-actions--single .consent-button {
+  flex: 0 1 316px;
+  text-decoration: none;
+}
+
+@media (max-width: 520px) {
+  .consent-card--main {
+    padding: 28px 20px;
+  }
+
+  .consent-actions--single .consent-button {
+    flex: 1;
+  }
+}
