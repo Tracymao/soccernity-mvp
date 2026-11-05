@@ -9,6 +9,10 @@
 // Deviations from the frame, each because the API does not provide it:
 //   - "27 pending" / "Showing 5 of 27": the list endpoint returns no total, so the count is of what has
 //     been loaded and reads "N+" while more pages exist.
+//   - Profile pictures and cover photos (B-037, Decision Log #468; Figma 6972:46142) are in this one list, as
+//     "Profile picture" / "Cover photo" rows with source "Automatic check". The server decides what is listed
+//     and who may see it (a minor's pictures are for child-safety-vetted admins only): this page filters nothing.
+//     An item whose upload time is unknown (a picture uploaded before the age was stored) has age null and shows "—".
 //   - Status and source filters are not drawn; they are plain selects because the API takes them and a
 //     moderator needs the Approved / Rejected views ("decided" is drawn only on the item screen).
 import { useState } from "react";
@@ -17,6 +21,7 @@ import AdminPageHeader from "../../layout/AdminPageHeader";
 import {
   getMediaReviewStats,
   listMediaReview,
+  mediaReviewItemPath,
   type MediaReviewItem,
   type MediaReviewSource,
   type MediaReviewStatusFilter,
@@ -25,7 +30,8 @@ import { useAsyncData } from "../moderation/moderationShared";
 import "../moderation/moderation.css";
 import "./mediaReview.css";
 
-export function formatAge(seconds: number): string {
+export function formatAge(seconds: number | null): string {
+  if (seconds === null) return "—";
   if (seconds < 90) return "just now";
   const minutes = Math.round(seconds / 60);
   if (minutes < 60) return `${minutes} min`;
@@ -38,8 +44,11 @@ export function sourceLabel(source: MediaReviewSource): string {
   return source === "auto_check" ? "Automatic check" : "User report";
 }
 
-export function kindLabel(kind: string): string {
-  return kind === "video" ? "Video" : "Picture";
+/** What the TYPE column says. A profile picture and a cover photo are named as such (B-037); the rest by file kind. */
+export function itemTypeLabel(item: Pick<MediaReviewItem, "type" | "kind">): string {
+  if (item.type === "profile_avatar") return "Profile picture";
+  if (item.type === "profile_cover") return "Cover photo";
+  return item.kind === "video" ? "Video" : "Picture";
 }
 
 function StatsCard() {
@@ -87,16 +96,23 @@ function StatsCard() {
 
 function QueueRow({ item }: { item: MediaReviewItem }) {
   return (
-    <div className="media-table__row">
+    <div className="media-table__row" role="row">
       <span>
-        {item.sources.length === 0 ? "—" : item.sources.map((s) => sourceLabel(s)).join(" + ")}
+        {item.sources.length === 0 ? (
+          "—"
+        ) : (
+          // The Source is a pill in the frames (6972:46142); a user report carries a small alert dot.
+          <span className={`mod-pill mod-pill--soft mod-pill--plain${item.sources.includes("user_report") ? " media-source--report" : ""}`}>
+            {item.sources.map((s) => sourceLabel(s)).join(" + ")}
+          </span>
+        )}
         {item.hiddenPendingReview ? <span className="mod-pill mod-pill--soft media-held">hidden</span> : null}
       </span>
       <span className="mod-cell--primary">{item.uploader.publicName}</span>
-      <span>{kindLabel(item.kind)}</span>
+      <span>{itemTypeLabel(item)}</span>
       <span className="mod-cell--secondary">{formatAge(item.ageSeconds)}</span>
       <span>
-        <Link className="mod-btn mod-btn--outline mod-btn--sm" to={`/moderation/media/${item.id}`} state={{ item }}>
+        <Link className="mod-btn mod-btn--outline mod-btn--sm" to={mediaReviewItemPath(item.id)} state={{ item }}>
           Review
         </Link>
       </span>

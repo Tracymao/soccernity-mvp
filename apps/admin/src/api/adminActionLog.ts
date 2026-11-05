@@ -130,6 +130,29 @@ export function targetTypeLabel(targetType: string): string {
   return TARGET_TYPE_LABELS[targetType] ?? targetType;
 }
 
+// A profile-picture decision (B-037) is stored as media.approved / media.rejected on target type "profile_image"
+// with the PERSON's user id as the target and the kind in the notes: "avatar" or "cover" when approved,
+// "avatar: <reason>" or "cover: <reason>" when rejected. These helpers only make that readable; they hide no row
+// (the server decides which rows an admin gets).
+export interface ProfileImageRowText {
+  /** "Profile picture" or "Cover photo". */
+  typeLabel: string;
+  /** "Profile picture approved" / "Cover photo rejected". */
+  actionText: string;
+  /** The rejection reason, or null when there is none (an approval). */
+  reason: string | null;
+}
+
+export function profileImageRowText(item: Pick<ActionLogItem, "action" | "notes">): ProfileImageRowText {
+  const notes = item.notes ?? "";
+  const kind = notes.startsWith("cover") ? "cover" : "avatar";
+  const typeLabel = kind === "cover" ? "Cover photo" : "Profile picture";
+  const colon = notes.indexOf(":");
+  const reason = colon >= 0 && notes.slice(colon + 1).trim() ? notes.slice(colon + 1).trim() : null;
+  const verb = item.action === "media.rejected" ? "rejected" : item.action === "media.approved" ? "approved" : null;
+  return { typeLabel, actionText: verb ? `${typeLabel} ${verb}` : actionLabel(item.action), reason };
+}
+
 // Where a row's TARGET opens: the existing detail screen for it. A search row has no target to open, and an
 // unknown target type is plain text.
 export function targetPath(targetType: string, targetId: string): string | null {

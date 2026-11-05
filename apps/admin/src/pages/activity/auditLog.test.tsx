@@ -140,10 +140,33 @@ describe("Audit log (superadmin)", () => {
     expect(href("Media #44444444")).toBe("/moderation/media/44444444-aaaa");
     expect(href("User #55555555")).toBe("/users/55555555-aaaa");
     expect(href("Contest #66666666")).toBe("/contest/cycles/66666666-aaaa");
-    // B-037: an avatar / cover decision names a person; it opens that person's user detail.
-    expect(href("Profile picture #88888888")).toBe("/users/88888888-aaaa");
+    // B-037: an avatar / cover decision names a person (its target id is their user id); it opens that person's
+    // user detail and is labelled as a user, not as a picture.
+    expect(href("User #88888888")).toBe("/users/88888888-aaaa");
     expect(screen.getByText("Email search").closest("a")).toBeNull();
     expect(within(screen.getByRole("table")).getByText("Search performed")).not.toBeNull();
+  });
+
+  it("profile-picture decisions read plainly: the file, the verb, the person, and the reason when there is one", async () => {
+    list.mockResolvedValue(
+      page([
+        row({ id: "p1", action: "media.approved", targetType: "profile_image", targetId: "aaaa1111-0000", notes: "avatar" }),
+        row({ id: "p2", action: "media.rejected", targetType: "profile_image", targetId: "bbbb2222-0000", notes: "cover: Not appropriate." }),
+        row({ id: "p3", action: "media.rejected", targetType: "profile_image", targetId: "cccc3333-0000", notes: "avatar: Not a photo: of you" }),
+        row({ id: "m1", action: "media.rejected", targetType: "post_media", targetId: "dddd4444-0000", notes: "Off topic" }),
+      ]),
+    );
+    renderPage();
+    await screen.findByRole("table");
+    const rows = screen.getAllByRole("row").slice(1);
+    const cells = (i: number) => within(rows[i]).getAllByRole("cell").map((c) => c.textContent);
+    // [time, actor, action, target type, target, notes]
+    expect(cells(0).slice(2)).toEqual(["Profile picture approved", "Profile picture", "User #aaaa1111", "—"]);
+    expect(cells(1).slice(2)).toEqual(["Cover photo rejected", "Cover photo", "User #bbbb2222", "Reason: Not appropriate."]);
+    // Only the first colon splits the kind from the reason.
+    expect(cells(2).slice(2)).toEqual(["Profile picture rejected", "Profile picture", "User #cccc3333", "Reason: Not a photo: of you"]);
+    // A post media decision keeps its ordinary wording and notes exactly as stored.
+    expect(cells(3).slice(2)).toEqual(["Media rejected", "Media", "Media #dddd4444", "Off topic"]);
   });
 
   it("an action the app does not know is shown as its key, notes as stored, a missing note as a dash", async () => {

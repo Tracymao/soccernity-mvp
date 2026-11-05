@@ -138,3 +138,118 @@
 .media-dialog__help {
   margin: 0;
 }
+
+/* Reject dialog header with the close control (Figma 6972:46863 / 6972:47057 / 6972:47248). */
+.media-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.media-dialog__close {
+  border: 0;
+  background: transparent;
+  color: var(--sn-text-primary);
+  font-size: 24px;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.media-dialog__close:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* Profile picture / cover photo item (B-037; Figma 6972:46346, 6972:46516): preview card left, details right. */
+.media-profile-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.media-preview__tag {
+  align-self: flex-start;
+}
+
+.media-profile-viewer img {
+  display: block;
+  border-radius: 8px;
+  /* The reviewer sees the whole upload, never a crop that hides part of it. */
+  object-fit: contain;
+}
+
+.media-profile-viewer--avatar img {
+  width: 380px;
+  max-width: 100%;
+  aspect-ratio: 1 / 1;
+}
+
+.media-profile-viewer--cover img {
+  width: 100%;
+  max-width: 620px;
+  /* The cover is saved at one crop, 796:192 (Decision Log #414 item 2). */
+  aspect-ratio: 796 / 192;
+}
+
+.media-details--stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+}
+
+.media-details__row {
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+
+.media-details__row .mod-field__label {
+  flex: 0 0 110px;
+  text-transform: none;
+  font-weight: 400;
+}
+
+@media (max-width: 980px) {
+  .media-profile-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* A user-report source carries a small alert dot (Figma 6972:46142); the dot is not the only signal, the text says it. */
+.media-source--report::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background-color: var(--sn-semantic-alert);
+}
+
+/* Reject dialog fields as drawn in 6972:46863: a sentence-case label, and a red border and bar when the reason is missing. */
+.media-dialog .mod-field__label {
+  text-transform: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.media-dialog .mod-textarea[aria-invalid="true"] {
+  border-color: var(--sn-semantic-alert);
+  background-color: var(--sn-green-tint-12);
+}
+
+.media-dialog__error {
+  border: 0;
+  border-left: 3px solid var(--sn-semantic-alert);
+  border-radius: 0;
+  background: transparent;
+  padding: 0 0 0 8px;
+  font-size: 13px;
+  font-weight: 400;
+}
