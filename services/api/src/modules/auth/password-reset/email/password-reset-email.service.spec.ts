@@ -38,7 +38,7 @@ describe('PasswordResetEmailService', () => {
         buildConfig({
           EMAIL_PROVIDER_API_KEY: 'a-real-key',
           POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example',
-          WEB_APP_BASE_URL: 'https://app.soccernity.example',
+          WEB_APP_BASE_URL: 'https://app.soccernity.com',
         }),
       );
 
@@ -50,10 +50,10 @@ describe('PasswordResetEmailService', () => {
           To: 'player@example.com',
           Subject: 'Reset your Soccernity password',
           HtmlBody: expect.stringContaining(
-            'https://app.soccernity.example/reset-password?token=reset-tok',
+            'https://app.soccernity.com/reset-password?token=reset-tok',
           ),
           TextBody: expect.stringContaining(
-            'https://app.soccernity.example/reset-password?token=reset-tok',
+            'https://app.soccernity.com/reset-password?token=reset-tok',
           ),
         }),
       );
@@ -63,7 +63,11 @@ describe('PasswordResetEmailService', () => {
       const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
       mockSendEmail.mockRejectedValueOnce(new Error('Postmark: invalid API token'));
       const service = new PasswordResetEmailService(
-        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example' }),
+        buildConfig({
+          EMAIL_PROVIDER_API_KEY: 'a-real-key',
+          POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example',
+          WEB_APP_BASE_URL: 'https://app.soccernity.com',
+        }),
       );
 
       await expect(
@@ -75,6 +79,89 @@ describe('PasswordResetEmailService', () => {
       expect(loggedMessage).not.toContain('super-secret-reset-token');
 
       errorSpy.mockRestore();
+    });
+  });
+
+  // B-115 (Decision Log #468): the reset link is the point of the email, so an
+  // unusable WEB_APP_BASE_URL means nothing is sent. Same rule, same helper
+  // (buildWebAppLink) as the registration emails (B-016).
+  describe('when WEB_APP_BASE_URL is unusable (B-115)', () => {
+    const unusable: Array<[string, string | undefined]> = [
+      ['unset', undefined],
+      ['empty', ''],
+      ['blank', '   '],
+      ['malformed', 'not a url'],
+      ['a non-http scheme', 'ftp://app.soccernity.com'],
+      ['the old placeholder host', 'https://app.soccernity.example'],
+      ['a replace-me placeholder', 'https://replace-me.invalid'],
+      ['plain http on a real host', 'http://app.soccernity.com'],
+    ];
+
+    it.each(unusable)('sends nothing when it is %s, in live mode', async (_label, value) => {
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      const service = new PasswordResetEmailService(
+        buildConfig({
+          EMAIL_PROVIDER_API_KEY: 'a-real-key',
+          POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example',
+          WEB_APP_BASE_URL: value,
+        }),
+      );
+
+      await expect(
+        service.sendPasswordResetEmail('player@example.com', 'super-secret-reset-token'),
+      ).resolves.toBeUndefined();
+
+      expect(mockSendEmail).not.toHaveBeenCalled();
+      errorSpy.mockRestore();
+    });
+
+    it.each(unusable)('sends nothing when it is %s, in not-live mode too', async (_label, value) => {
+      const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      const service = new PasswordResetEmailService(buildConfig({ WEB_APP_BASE_URL: value }));
+
+      await service.sendPasswordResetEmail('player@example.com', 'super-secret-reset-token');
+
+      expect(mockSendEmail).not.toHaveBeenCalled();
+      // Not-live mode must not log a made-up link either.
+      expect(logSpy).not.toHaveBeenCalled();
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
+    });
+
+    it('logs exactly one clear error that names the variable and never the address or the token', async () => {
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      const service = new PasswordResetEmailService(
+        buildConfig({ EMAIL_PROVIDER_API_KEY: 'a-real-key', WEB_APP_BASE_URL: undefined }),
+      );
+
+      await service.sendPasswordResetEmail('player@example.com', 'super-secret-reset-token');
+
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const message = errorSpy.mock.calls[0][0] as string;
+      expect(message).toContain('WEB_APP_BASE_URL');
+      expect(message).not.toContain('player@example.com');
+      expect(message).not.toContain('super-secret-reset-token');
+      errorSpy.mockRestore();
+    });
+
+    it('still sends, with the link, once the URL is usable (plain http on localhost is allowed)', async () => {
+      mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-2' });
+      const service = new PasswordResetEmailService(
+        buildConfig({
+          EMAIL_PROVIDER_API_KEY: 'a-real-key',
+          POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example',
+          WEB_APP_BASE_URL: 'http://localhost:5173',
+        }),
+      );
+
+      await service.sendPasswordResetEmail('player@example.com', 'reset-tok');
+
+      expect(mockSendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          TextBody: expect.stringContaining('http://localhost:5173/reset-password?token=reset-tok'),
+        }),
+      );
     });
   });
 });

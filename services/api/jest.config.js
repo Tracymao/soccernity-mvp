@@ -52,6 +52,14 @@
 // false-negative CI failures on perfectly healthy code, which is worse
 // for this project than a slower failure signal on an actually-broken
 // test.
+//
+// argon2 test cost (B-116, Decision Log #468): the unit suite maps `argon2` to
+// jest-support/argon2-test-cost.js, which only lowers hash() cost when a caller
+// passes no options. Read that file for the measurements and the reasoning. It
+// is the cause of the "passes only with --maxWorkers=4" flake: dozens of
+// default-cost hashes per worker, times ~11 workers, starve the real-HTTP
+// specs. No timeout was raised for it; test/jest-e2e.config.js is untouched
+// and keeps the real cost.
 /** @type {import('jest').Config} */
 module.exports = {
   rootDir: 'src',
@@ -62,4 +70,7 @@ module.exports = {
   testRegex: '.*\\.spec\\.ts$',
   moduleFileExtensions: ['ts', 'js', 'json'],
   testTimeout: 30000,
+  moduleNameMapper: {
+    '^argon2$': '<rootDir>/../jest-support/argon2-test-cost.js',
+  },
 };

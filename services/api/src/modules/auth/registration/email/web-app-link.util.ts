@@ -7,9 +7,8 @@
 // `replace-me` placeholders), or plain http outside localhost (a one-time
 // credential must not travel in a downgradeable link).
 //
-// password-reset-email.service.ts predates this and falls back to the
-// placeholder host 'https://app.soccernity.example'; it is intentionally left
-// as it was (not part of B-016) and is listed as a follow-up in the report.
+// password-reset-email.service.ts used to fall back to a placeholder host
+// instead; B-115 (Decision Log #468) moved it onto this helper too.
 export function buildWebAppLink(
   baseUrl: string | undefined | null,
   path: string,

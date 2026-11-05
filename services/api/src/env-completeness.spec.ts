@@ -4,6 +4,12 @@ import { TEST_CLOCK_ENV_VARS } from './clock/clock';
 import { POST_MEDIA_DEFAULTS } from './modules/post-media/post-media.config';
 import { GLOBAL_RATE_LIMIT_DEFAULTS } from './rate-limit/global-rate-limit.constants';
 import { AUTH_LIMIT_DEFAULTS } from './modules/auth/rate-limit/auth-limits/auth-limits.constants';
+import {
+  DEFAULT_CONTACT_ENQUIRY_RETENTION_MONTHS,
+  DEFAULT_CONTACT_EMAIL_RATE_LIMIT_MAX,
+  DEFAULT_CONTACT_EMAIL_RATE_LIMIT_WINDOW_MS,
+  DEFAULT_SUPPORT_INBOX_EMAIL,
+} from './modules/contact/contact.constants';
 
 // B-018 regression guard. The build register found ~22 variables read in code
 // but absent from render.yaml, so a deploy silently ran with code defaults (or
@@ -24,20 +30,10 @@ const SRC = path.resolve(__dirname);
 //  - PORT: Render injects it.
 //  - TEST_CLOCK_ISO / TEST_CLOCK_ADVANCE / E2E_TEST_CLOCK: QA only; the process REFUSES TO START if any
 //    is set in production (validate-runtime-env.ts), so they must never appear in render.yaml.
-//  - backend/w7-contact-us-enquiry (B-046): the four Contact Us variables in CONTACT_NOT_YET_IN_RENDER are NOT
-//    YET in render.yaml, because that PR's brief forbade touching render.yaml (other open PRs edit it). They
-//    are documented in .env.example and each has a code default equal to the decided value
-//    (support@soccernity.com, 12 months, 3 per hour), so a deploy without them behaves as decided; what is
-//    missing is only the ability to tune them on Render. FOLLOW-UP: add all four to BOTH render.yaml
-//    services and delete this exemption. Narrow on purpose: any OTHER new variable still has to be in
-//    render.yaml.
-const CONTACT_NOT_YET_IN_RENDER = [
-  'SUPPORT_INBOX_EMAIL',
-  'CONTACT_ENQUIRY_RETENTION_MONTHS',
-  'CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_MAX',
-  'CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_WINDOW_MS',
-] as const;
-const NOT_IN_RENDER = new Set<string>(['NODE_ENV', 'PORT', ...TEST_CLOCK_ENV_VARS, ...CONTACT_NOT_YET_IN_RENDER]);
+//  Nothing else is exempt. The four Contact Us variables (B-046) were exempt until
+//  backend/b018-render-env-completion added them to both services; the exemption is gone, so any NEW variable
+//  has to be in render.yaml.
+const NOT_IN_RENDER = new Set<string>(['NODE_ENV', 'PORT', ...TEST_CLOCK_ENV_VARS]);
 // Not in .env.example on purpose: NODE_ENV has a comment-only entry there.
 const NOT_IN_EXAMPLE = new Set(['NODE_ENV']);
 
@@ -311,22 +307,42 @@ describe('environment completeness (B-018)', () => {
     });
   });
 
-  // backend/w7-contact-us-enquiry (B-046): the exemption above must stay narrow and honest -- the names are
-  // really read by the code and really documented, and the .env.example numbers are the code defaults.
+  // Contact Us (B-046 / B-018). Same drift guard as the limits above: read by the code, declared in both
+  // render.yaml services and documented in .env.example, with the same value as the code default.
   describe('contact us variables (B-046)', () => {
-    it('are read by the code and documented in .env.example', () => {
-      for (const name of CONTACT_NOT_YET_IN_RENDER) {
-        expect(read.has(name)).toBe(true);
-        expect(example.has(name)).toBe(true);
+    const DEFAULT_OF: Record<string, string> = {
+      SUPPORT_INBOX_EMAIL: DEFAULT_SUPPORT_INBOX_EMAIL,
+      CONTACT_ENQUIRY_RETENTION_MONTHS: String(DEFAULT_CONTACT_ENQUIRY_RETENTION_MONTHS),
+      CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_MAX: String(DEFAULT_CONTACT_EMAIL_RATE_LIMIT_MAX),
+      CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_WINDOW_MS: String(DEFAULT_CONTACT_EMAIL_RATE_LIMIT_WINDOW_MS),
+    };
+    const NAMES = Object.keys(DEFAULT_OF);
+
+    it('are read by the code, declared in both render.yaml services and documented in .env.example', () => {
+      for (const name of NAMES) expect(read.has(name)).toBe(true);
+      for (const keys of services) for (const name of NAMES) expect(keys.has(name)).toBe(true);
+      for (const name of NAMES) expect(example.has(name)).toBe(true);
+    });
+
+    it('carry the code default in render.yaml (both services) and .env.example', () => {
+      const renderText = fs.readFileSync(path.join(REPO_ROOT, 'render.yaml'), 'utf8');
+      const exampleText = fs.readFileSync(path.join(REPO_ROOT, '.env.example'), 'utf8');
+      for (const name of NAMES) {
+        // Backslashes are doubled: in a template literal a bare \s or \S silently becomes the letter s / S.
+        const inRender = [...renderText.matchAll(new RegExp(`-\\s+key:\\s+${name}\\s+value:\\s+"?([^"\\r\\n]+)"?\\s*$`, 'gm'))].map((m) => m[1]);
+        expect(inRender).toEqual([DEFAULT_OF[name], DEFAULT_OF[name]]);
+        const inExample = exampleText.match(new RegExp(`^${name}=(\\S+)\\s*$`, 'm'));
+        expect(inExample && inExample[1]).toBe(DEFAULT_OF[name]);
       }
     });
 
-    it('carry the decided defaults in .env.example (12 months, 3 per hour)', () => {
-      const text = fs.readFileSync(path.join(REPO_ROOT, '.env.example'), 'utf8');
-      expect(text).toMatch(/^SUPPORT_INBOX_EMAIL=support@soccernity\.com\s*$/m);
-      expect(text).toMatch(/^CONTACT_ENQUIRY_RETENTION_MONTHS=12\s*$/m);
-      expect(text).toMatch(/^CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_MAX=3\s*$/m);
-      expect(text).toMatch(/^CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_WINDOW_MS=3600000\s*$/m);
+    it('state the decided defaults (support@soccernity.com, 12 months, 3 per hour)', () => {
+      expect(DEFAULT_OF).toEqual({
+        SUPPORT_INBOX_EMAIL: 'support@soccernity.com',
+        CONTACT_ENQUIRY_RETENTION_MONTHS: '12',
+        CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_MAX: '3',
+        CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_WINDOW_MS: '3600000',
+      });
     });
   });
 
