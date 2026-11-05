@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { assertProductionEnv, findInvalidProductionOrigins, findInvalidProductionSecrets } from './validate-runtime-env';
 
 const GOOD_SECRETS = { JWT_SECRET: 'a'.repeat(44), ADMIN_JWT_SECRET: 'b'.repeat(44) };
@@ -258,5 +260,24 @@ describe('assertProductionEnv: key rotation settings (DOB_ENCRYPTION_KEY_VERSION
       expect(message).not.toContain(current);
       expect(message).not.toContain(previous);
     }
+  });
+});
+
+// B-018: the check only protects anything if the process runs it BEFORE it starts serving. The unit tests above
+// prove assertProductionEnv refuses an unset ADMIN_JWT_SECRET; this pins that main.ts really calls it, first.
+describe('main.ts boot wiring (B-018)', () => {
+  const main = fs.readFileSync(path.join(__dirname, 'main.ts'), 'utf8');
+
+  it('calls assertProductionEnv() before NestFactory.create, so a bad deploy never goes healthy', () => {
+    const check = main.indexOf('assertProductionEnv()');
+    const create = main.indexOf('NestFactory.create(');
+    expect(check).toBeGreaterThan(-1);
+    expect(create).toBeGreaterThan(-1);
+    expect(check).toBeLessThan(create);
+  });
+
+  it('turns a refused boot into a printed message and a non-zero exit, not a silent hang', () => {
+    expect(main).toMatch(/bootstrap\(\)\.catch\(/);
+    expect(main).toMatch(/process\.exit\(1\)/);
   });
 });
