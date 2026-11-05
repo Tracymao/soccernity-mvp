@@ -349,6 +349,17 @@ services:
         value: "6"
       - key: BAD_FAITH_HOLD_MONTHS
         value: "6"
+      # B-046 / B-018 Contact Us (modules/contact/contact.config.ts). Every value equals the code default
+      # (Decision Log #440, #445); they are listed so they can be tuned on Render. SUPPORT_INBOX_EMAIL is a
+      # public mailbox address, not a secret.
+      - key: SUPPORT_INBOX_EMAIL
+        value: support@soccernity.com
+      - key: CONTACT_ENQUIRY_RETENTION_MONTHS
+        value: "12"
+      - key: CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_MAX
+        value: "3"
+      - key: CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_WINDOW_MS
+        value: "3600000"
       # --- Error monitoring ---
       - key: SENTRY_DSN
         sync: false
@@ -660,6 +671,17 @@ services:
         value: "6"
       - key: BAD_FAITH_HOLD_MONTHS
         value: "6"
+      # B-046 / B-018 Contact Us (modules/contact/contact.config.ts). Every value equals the code default
+      # (Decision Log #440, #445); they are listed so they can be tuned on Render. SUPPORT_INBOX_EMAIL is a
+      # public mailbox address, not a secret.
+      - key: SUPPORT_INBOX_EMAIL
+        value: support@soccernity.com
+      - key: CONTACT_ENQUIRY_RETENTION_MONTHS
+        value: "12"
+      - key: CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_MAX
+        value: "3"
+      - key: CONTACT_ENQUIRY_EMAIL_RATE_LIMIT_WINDOW_MS
+        value: "3600000"
       # --- Error monitoring ---
       - key: SENTRY_DSN
         sync: false

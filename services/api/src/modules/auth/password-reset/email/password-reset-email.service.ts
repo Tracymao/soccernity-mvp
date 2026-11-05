@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ServerClient } from 'postmark';
+import { buildWebAppLink } from '../../registration/email/web-app-link.util';
 
 // Decision Log #17 (Build Plan Section 9): Postmark is the chosen
 // transactional email provider — same pattern as
@@ -14,8 +15,7 @@ import { ServerClient } from 'postmark';
 // of calling Postmark.
 //
 // Unlike the not-live branch (which deliberately logs the full reset
-// link, including the token, purely for dev/manual testing — see
-// buildResetLink's own note), the live branch below never logs the
+// link, including the token, purely for dev/manual testing), the live branch below never logs the
 // link or token, only send success/failure and Postmark's MessageID.
 @Injectable()
 export class PasswordResetEmailService {
@@ -34,7 +34,23 @@ export class PasswordResetEmailService {
   }
 
   async sendPasswordResetEmail(email: string, resetToken: string): Promise<void> {
-    const resetLink = this.buildResetLink(resetToken);
+    // B-115 (Decision Log #468). The reset link is the whole point of this
+    // email, so when WEB_APP_BASE_URL is unusable NOTHING is sent -- the same
+    // rule, through the same helper, as the registration, guardian-consent and
+    // withdrawal emails (B-016). The caller (PasswordResetService.forgotPassword)
+    // returns the same generic answer either way, so the response never shows
+    // that a mail was or was not sent. The error names the variable only: no
+    // address and no token.
+    const resetLink = buildWebAppLink(this.config.get<string>('WEB_APP_BASE_URL'), '/reset-password', {
+      token: resetToken,
+    });
+    if (!resetLink) {
+      this.logger.error(
+        `[email] WEB_APP_BASE_URL is missing, a placeholder, or not https -- NOT sending "password-reset" ` +
+          `because it would contain no usable link. Set WEB_APP_BASE_URL (docs/deployment.md).`,
+      );
+      return;
+    }
 
     if (!this.isLive) {
       // Graceful no-op, matching src/instrument.ts's Sentry pattern: log
@@ -72,10 +88,5 @@ export class PasswordResetEmailService {
         `[email] failed to send password-reset email to ${email}: ${(err as Error).message}`,
       );
     }
-  }
-
-  private buildResetLink(resetToken: string): string {
-    const webBaseUrl = this.config.get<string>('WEB_APP_BASE_URL') ?? 'https://app.soccernity.example';
-    return `${webBaseUrl}/reset-password?token=${encodeURIComponent(resetToken)}`;
   }
 }
