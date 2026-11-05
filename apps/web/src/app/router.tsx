@@ -76,6 +76,7 @@ import VerifyEmailPromptPage from "../pages/VerifyEmailPromptPage";
 import CreateProfilePage from "../pages/CreateProfilePage";
 import ContinuePage from "../pages/ContinuePage";
 import ClubPickerRoute from "../pages/signup/ClubPickerRoute";
+import SocialCallbackPage from "../pages/social/SocialCallbackPage";
 import ProfilePage from "../pages/ProfilePage";
 import NotificationCentrePage from "../pages/NotificationCentrePage";
 import PrivacySettingsPage from "../pages/PrivacySettingsPage";
@@ -117,6 +118,8 @@ export const routes: RouteObject[] = [
     children: [
       { path: "login", element: <LoginPage /> }, // F2
       { path: "signup", element: <SignupPage /> }, // F3 (age gate + signup)
+      // B-085: the OAuth redirect page, <WEB_APP_BASE_URL>/auth/social/<provider>/callback.
+      { path: "auth/social/:provider/callback", element: <SocialCallbackPage /> },
       { path: "forgot-password", element: <ForgotPasswordPage /> }, // F4
       { path: "reset-password", element: <ResetPasswordPage /> }, // F4
       // Login-time interstitial for a deactivated ("inactive") account:
