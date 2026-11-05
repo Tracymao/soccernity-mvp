@@ -176,6 +176,29 @@
   border-radius: 50%;
   background-color: var(--sn-green-tint-12);
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* B-230: initials (no approved picture) or the approved picture. Figma
+ * "Avatar - Initials": Montserrat SemiBold 12px, color/text/primary on
+ * brand/green-tint, inside the 31px circle (the widest pair, WW, is 28px). */
+.sn-header__avatar-initials {
+  font-family: "Montserrat", sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--sn-text-primary);
+}
+
+.sn-header__avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
 }
 
 .sn-header__avatar:focus-visible {

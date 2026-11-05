@@ -31,6 +31,7 @@ import { useEffect } from "react";
 import { NavLink } from "react-router";
 import logoMark from "../assets/icons/soccernity-logo-mark.svg";
 import type { UserProfile } from "../api/users";
+import { initialsFor } from "../lib/initials";
 import { drawerNavItems, loggedOutDrawerNavItems } from "./navigation";
 import "./NavDrawer.css";
 
@@ -52,15 +53,6 @@ interface NavDrawerProps {
    * no Log out. Defaults to the signed-in drawer.
    */
   variant?: "signed-in" | "logged-out";
-}
-
-// Same pattern as ProfilePage.tsx / PostCard.tsx (a third small local
-// copy -- extracting a shared util is a nice-to-have, not done here).
-function initialsFor(displayName: string): string {
-  const parts = displayName.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? "?";
-  return `${parts[0][0] ?? ""}${parts[parts.length - 1][0] ?? ""}`.toUpperCase();
 }
 
 export default function NavDrawer({

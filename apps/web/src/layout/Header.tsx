@@ -26,6 +26,11 @@
 // #162): the account dropdown on desktop, the Navigation Drawer on
 // mobile -- picked by useIsMobile().
 //
+// B-230 (Decision Log #417 item 2, #468): the avatar circle shows the owner's
+// initials (their displayName, lib/initials.ts -- the same rule the drawer uses)
+// when there is no approved picture, and the approved picture otherwise; see
+// HeaderAvatarFace.tsx. It reads the same `profile` as NavDrawer below.
+//
 // Decision Log #168: when a session exists, Header fetches the signed-in
 // user's profile once (getUser(accessToken, sub)) and passes it to
 // NavDrawer for its identity block. The fetch is keyed on the access
@@ -62,6 +67,7 @@ import { primaryNavItems } from "./navigation";
 import { useIsMobile } from "./useIsMobile";
 import AccountDropdown from "./AccountDropdown";
 import NavDrawer from "./NavDrawer";
+import HeaderAvatarFace from "./HeaderAvatarFace";
 import "./Header.css";
 
 export default function Header() {
@@ -239,6 +245,7 @@ export default function Header() {
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((open) => !open)}
             >
+              <HeaderAvatarFace profile={profile} />
               {unreadCount > 0 && <span className="sn-header__avatar-dot" aria-hidden="true" />}
             </button>
             {menuOpen && !isMobile && (
