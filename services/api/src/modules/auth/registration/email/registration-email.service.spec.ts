@@ -343,6 +343,43 @@ describe('RegistrationEmailService', () => {
       });
     });
 
+    describe('sendSocialEmailCodeEmail (B-084)', () => {
+      const live = { EMAIL_PROVIDER_API_KEY: 'a-real-key', POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example' };
+
+      it('sends the one-time code to the typed address in both bodies, with no link, no account information and no legal tag', async () => {
+        mockSendEmail.mockResolvedValueOnce({ MessageID: 'msg-code' });
+        const log = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+        const service = new RegistrationEmailService(buildConfig(live));
+
+        await service.sendSocialEmailCodeEmail('me@example.com', '482913');
+
+        const sent = mockSendEmail.mock.calls[0][0] as { To: string; Subject: string; TextBody: string; HtmlBody: string };
+        expect(sent.To).toBe('me@example.com');
+        expect(sent.Subject).toContain('482913');
+        for (const body of [sent.TextBody, sent.HtmlBody]) {
+          expect(body).toContain('482913');
+          expect(body).toContain('10 minutes');
+          expect(body).not.toMatch(/https?:\/\//);
+          expect(body).not.toContain('COPY PENDING LEGAL REVIEW');
+        }
+        // The code is a credential: it must never reach a log line, sent or not.
+        expect(log.mock.calls.map((c) => String(c[0])).join(' | ')).not.toContain('482913');
+        log.mockRestore();
+      });
+
+      it('when email is not configured it resolves and logs neither the address nor the code', async () => {
+        const log = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+        const service = new RegistrationEmailService(buildConfig({ EMAIL_PROVIDER_API_KEY: undefined }));
+        await expect(service.sendSocialEmailCodeEmail('me@example.com', '482913')).resolves.toBeUndefined();
+        expect(mockSendEmail).not.toHaveBeenCalled();
+        const logged = log.mock.calls.map((c) => String(c[0])).join(' | ');
+        expect(logged).toContain('social-email-code');
+        expect(logged).not.toContain('482913');
+        expect(logged).not.toContain('me@example.com');
+        log.mockRestore();
+      });
+    });
+
     describe('sendLoginLockoutNoticeEmail', () => {
       const liveConfig = {
         EMAIL_PROVIDER_API_KEY: 'a-real-key',

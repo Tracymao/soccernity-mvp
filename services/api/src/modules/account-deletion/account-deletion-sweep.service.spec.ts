@@ -26,6 +26,7 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
     savedPost: { deleteMany: jest.fn() },
     // B-086: the hashes of the user's two-factor backup codes go with the account's ability to sign in.
     userBackupCode: { deleteMany: jest.fn() },
+    socialIdentity: { deleteMany: jest.fn() },
     twoFactorRecoveryRequest: { deleteMany: jest.fn() },
     // B-280: the withhold-guardian-notices flag goes with the anonymised account.
     guardianNoticeWithhold: { deleteMany: jest.fn() },
@@ -407,6 +408,8 @@ describe('AccountDeletionSweepService', () => {
       expect(prisma.like.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.savedPost.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.userBackupCode.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      // B-084: the links to Google / Facebook are sign-in credentials and go with the ability to sign in.
+      expect(prisma.socialIdentity.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.follow.deleteMany).toHaveBeenCalledWith({
         where: { OR: [{ followerId: 'user-1' }, { followeeId: 'user-1' }] },
       });
@@ -707,6 +710,8 @@ describe('AccountDeletionSweepService', () => {
       expect(prisma.like.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.savedPost.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.userBackupCode.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      // B-084: the links to Google / Facebook are sign-in credentials and go with the ability to sign in.
+      expect(prisma.socialIdentity.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.follow.deleteMany).toHaveBeenCalledWith({
         where: { OR: [{ followerId: 'user-1' }, { followeeId: 'user-1' }] },
       });
