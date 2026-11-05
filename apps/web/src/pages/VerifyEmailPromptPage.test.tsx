@@ -131,3 +131,23 @@ describe("ContinuePage", () => {
     expect(getUser).not.toHaveBeenCalled();
   });
 });
+
+
+// W9 / B-174: markup that pins the differences found against the frames 6750:29378 .. 6750:29633.
+describe("VerifyEmailPromptPage -- W9 frame comparison", () => {
+  it("draws the mail icon as the exported image (no text glyph) and carries the prompt-scoped class", async () => {
+    seedSession(fakeToken());
+    vi.mocked(getUser).mockResolvedValue({
+      email: "tobi@example.com",
+      verificationStatus: "unverified",
+    } as Awaited<ReturnType<typeof getUser>>);
+    renderAt("/verify-email/prompt");
+    const page = await screen.findByTestId("verify-email-prompt");
+    expect(page.classList.contains("verify-page--prompt")).toBe(true);
+    const icon = page.querySelector("img.verify-prompt-icon") as HTMLImageElement | null;
+    expect(icon).not.toBeNull();
+    expect(icon?.getAttribute("width")).toBe("88");
+    expect(page.textContent).not.toContain("✉");
+    expect(page.querySelector(".verify-icon-circle")).toBeNull();
+  });
+});

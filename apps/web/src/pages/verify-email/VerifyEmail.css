@@ -264,3 +264,60 @@
     width: 100%;
   }
 }
+
+/* W9 / B-174: the verify-email PROMPT (VerifyEmailPromptPage) compared with the
+ * frames 6750:29378 / 29429 / 29480 (desktop) and 6750:29531 / 29582 / 29633
+ * (mobile). Scoped to .verify-page--prompt: the other four states (Verifying,
+ * Verified, Link invalid, Missing token) use frames this pass did not read.
+ * Differences fixed: the exported 88px (72px on mobile) mail icon instead of a
+ * text glyph, step numbers at weight 600, 60px (20px on mobile) from the chrome
+ * to the content, the 26px subheading line height, and the resend row (14/18
+ * link and status lines, 10px gap). */
+.verify-page--prompt {
+  padding-top: 60px;
+}
+
+.verify-prompt-icon {
+  display: block;
+  width: 88px;
+  height: 88px;
+  flex-shrink: 0;
+}
+
+.verify-page--prompt .verify-heading {
+  line-height: 44px;
+}
+
+.verify-page--prompt .verify-subheading {
+  line-height: 26px;
+}
+
+.verify-page--prompt .verify-row__icon {
+  font-weight: 600;
+}
+
+.verify-page--prompt .verify-resend {
+  gap: 10px;
+}
+
+.verify-page--prompt .verify-link-button,
+.verify-page--prompt .verify-resend__message {
+  font-size: 14px;
+  line-height: 18px;
+}
+
+@media (max-width: 520px) {
+  .verify-page--prompt {
+    padding: 20px 24px 64px;
+  }
+
+  .verify-page--prompt .verify-prompt-icon {
+    width: 72px;
+    height: 72px;
+  }
+
+  .verify-page--prompt .verify-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+}

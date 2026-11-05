@@ -217,3 +217,41 @@ describe("ClubPickerStep", () => {
     expect(alert.textContent).toMatch(/couldn.t load clubs/i);
   });
 });
+
+
+// W9 / B-175: markup that pins the differences found against the frames 5146:6635 / 5645:8023.
+describe("ClubPickerStep -- W9 frame comparison", () => {
+  const BIG: ClubSummary = { ...CLUB_A, id: "club-big", name: "Ijebu Ode Rovers FC", memberCount: 1284 };
+  const ONE: ClubSummary = { ...CLUB_B, id: "club-one", name: "Peckham Town Youth", memberCount: 1 };
+
+  it("shows the member count on its own line, with a thousands separator, apart from league and country", async () => {
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [BIG, ONE], nextCursor: null });
+    const { container } = render(
+      <MemoryRouter>
+        <ClubPickerStep accessToken="test-token" onDone={vi.fn()} />
+      </MemoryRouter>,
+    );
+    await screen.findByText("Ijebu Ode Rovers FC");
+    const secondary = container.querySelectorAll(".club-picker__secondary");
+    const members = container.querySelectorAll(".club-picker__members");
+    expect(secondary[0].textContent).toBe("Sunday League • England");
+    expect(members[0].textContent).toBe("1,284 members");
+    // No league or country: "Independent", and a singular count (frame 5146:6635, third card).
+    expect(secondary[1].textContent).toBe("Independent");
+    expect(members[1].textContent).toBe("1 member");
+  });
+
+  it("draws the search field icon as the exported 18px image, not a text glyph", async () => {
+    vi.mocked(listClubs).mockResolvedValueOnce({ items: [BIG], nextCursor: null });
+    const { container } = render(
+      <MemoryRouter>
+        <ClubPickerStep accessToken="test-token" onDone={vi.fn()} />
+      </MemoryRouter>,
+    );
+    await screen.findByText("Ijebu Ode Rovers FC");
+    const icon = container.querySelector("img.club-picker__search-icon") as HTMLImageElement | null;
+    expect(icon).not.toBeNull();
+    expect(icon?.getAttribute("width")).toBe("18");
+    expect(container.textContent).not.toContain("⌕");
+  });
+});
