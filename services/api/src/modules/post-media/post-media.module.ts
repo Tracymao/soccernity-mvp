@@ -41,7 +41,15 @@ import { PostMediaService } from './post-media.service';
     PostMediaObjectsService,
   ],
   // PostMediaDecisionService + DirectUploadStorageService reach AdminMediaReviewModule (B-037).
-  // MediaProcessor reaches UsersModule: avatar and cover re-encode (B-205).
-  exports: [PostMediaConfig, PostMediaDecisionService, PostMediaObjectsService, MediaProcessor],
+  // MediaProcessor reaches UsersModule: avatar and cover re-encode (B-205). MediaCheckService and
+  // MediaModerationClient reach UsersModule too: the avatar and cover check reuses the post-media check (B-036).
+  exports: [
+    PostMediaConfig,
+    PostMediaDecisionService,
+    PostMediaObjectsService,
+    MediaProcessor,
+    MediaCheckService,
+    MediaModerationClient,
+  ],
 })
 export class PostMediaModule {}

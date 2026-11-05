@@ -3,8 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import { readFile } from 'fs/promises';
 import { PrismaService } from '../../prisma/prisma.service';
 import { S3StorageService } from '../../storage/s3-storage.service';
-import { StorageService } from '../../storage/storage.service';
+import { DirectUploadStorageService } from '../../storage/direct-upload-storage.service';
 import { MediaProcessor } from '../post-media/media-processor';
+import { ProfileImageViewService } from './profile-image-view.service';
 import { AVATAR_UNSUPPORTED_MESSAGE, UserAvatarService } from './user-avatar.service';
 
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0]);
@@ -28,16 +29,19 @@ function file(buffer: Buffer, mimetype: string) {
   return { buffer, mimetype, size: buffer.length, originalname: 'me.jpg' };
 }
 
-function build(storage: Partial<StorageService> = {}) {
+function build(storage: Partial<DirectUploadStorageService> = {}) {
   const prisma = {
     user: { findUnique: jest.fn().mockResolvedValue({ avatarKey: null }), update: jest.fn().mockResolvedValue({ id: 'u1' }) },
   } as unknown as PrismaService;
   const store = {
-    upload: jest.fn().mockResolvedValue('https://cdn.example/avatars/u1/x.jpg'),
+    // upload() would return the URL of the PRIVATE key (not a URL anyone may use); the service must ignore it.
+    upload: jest.fn().mockImplementation(async (_b: Buffer, key: string) => `https://cdn.example/${key}`),
     delete: jest.fn().mockResolvedValue(undefined),
+    publicUrlFor: jest.fn().mockImplementation((key: string) => `https://cdn.example/${key}`),
+    createDownloadUrl: jest.fn().mockResolvedValue('https://signed.example/view?sig=1'),
     ...storage,
-  } as unknown as StorageService;
-  return { prisma, store, service: new UserAvatarService(prisma, store, PASSTHROUGH) };
+  } as unknown as DirectUploadStorageService;
+  return { prisma, store, service: new UserAvatarService(prisma, store, new ProfileImageViewService(store), PASSTHROUGH) };
 }
 
 describe('UserAvatarService (B-035)', () => {
@@ -45,15 +49,24 @@ describe('UserAvatarService (B-035)', () => {
     const { prisma, store, service } = build();
     const res = await service.uploadAvatar('u1', file(JPEG, 'image/jpeg'));
 
-    expect(res).toEqual({ avatar: { url: 'https://cdn.example/avatars/u1/x.jpg', status: 'pending', rejectionReason: null } });
     const [, key, type] = (store.upload as jest.Mock).mock.calls[0];
-    expect(key).toMatch(/^avatars\/u1\/[0-9a-f-]{36}\.jpg$/);
+    // B-036: stored in the PRIVATE prefix, never under a prefix the public address could serve.
+    expect(key).toMatch(/^private-profile\/u1\/[0-9a-f-]{36}\.jpg$/);
     expect(type).toBe('image/jpeg');
+    // The owner is handed a short-lived signed link to the private file, never a public address.
+    expect(res).toEqual({ avatar: { url: 'https://signed.example/view?sig=1', status: 'pending', rejectionReason: null } });
+    expect(store.createDownloadUrl).toHaveBeenCalledWith(key, 300);
+    // The row stores the file's PRIVATE key and its FUTURE public URL (profile-media/), built not fetched.
+    const publicKey = key.replace('private-profile/', 'profile-media/');
+    expect(store.publicUrlFor).toHaveBeenCalledWith(publicKey);
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: 'u1' },
-      data: { avatarUrl: 'https://cdn.example/avatars/u1/x.jpg', avatarKey: key, avatarStatus: 'pending', avatarRejectionReason: null },
+      data: { avatarUrl: `https://cdn.example/${publicKey}`, avatarKey: key, avatarStatus: 'pending', avatarRejectionReason: null },
       select: { id: true },
     });
+    // The response never contains the public URL of a pending picture.
+    expect(JSON.stringify(res)).not.toContain('profile-media');
+    expect(JSON.stringify(res)).not.toContain('private-profile');
   });
 
   it.each([
@@ -84,16 +97,23 @@ describe('UserAvatarService (B-035)', () => {
     expect(store.upload).not.toHaveBeenCalled();
   });
 
+  it('a signed link that cannot be made gives url null, never a failure or a public address', async () => {
+    const { service } = build({ createDownloadUrl: jest.fn().mockRejectedValue(new Error('r2 down')) });
+    await expect(service.uploadAvatar('u1', file(JPEG, 'image/jpeg'))).resolves.toEqual({
+      avatar: { url: null, status: 'pending', rejectionReason: null },
+    });
+  });
+
   it('removes the PREVIOUS object after a successful replace, best effort', async () => {
     const { prisma, store, service } = build();
-    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ avatarKey: 'avatars/u1/old.jpg' });
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ avatarKey: 'private-profile/u1/old.jpg' });
     await service.uploadAvatar('u1', file(JPEG, 'image/jpeg'));
-    expect(store.delete).toHaveBeenCalledWith('avatars/u1/old.jpg');
+    expect(store.delete).toHaveBeenCalledWith('private-profile/u1/old.jpg');
   });
 
   it('a failure removing the old object never fails the upload', async () => {
     const { prisma, service } = build({ delete: jest.fn().mockRejectedValue(new Error('r2 down')) });
-    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ avatarKey: 'avatars/u1/old.jpg' });
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ avatarKey: 'private-profile/u1/old.jpg' });
     await expect(service.uploadAvatar('u1', file(JPEG, 'image/jpeg'))).resolves.toBeDefined();
   });
 
@@ -112,7 +132,7 @@ describe('UserAvatarService (B-035)', () => {
     const prisma = {
       user: { findUnique: jest.fn(), update: jest.fn() },
     } as unknown as PrismaService;
-    const service = new UserAvatarService(prisma, real, PASSTHROUGH);
+    const service = new UserAvatarService(prisma, real, new ProfileImageViewService(real), PASSTHROUGH);
 
     const err = await service.uploadAvatar('u1', file(JPEG, 'image/jpeg')).catch((e) => e);
     expect(err).toBeInstanceOf(ServiceUnavailableException);
@@ -127,7 +147,8 @@ describe('UserAvatarService (B-035)', () => {
     try {
       const config = { get: () => undefined } as unknown as ConfigService;
       const prisma = { user: { findUnique: jest.fn(), update: jest.fn() } } as unknown as PrismaService;
-      const service = new UserAvatarService(prisma, new S3StorageService(config), PASSTHROUGH);
+      const real = new S3StorageService(config);
+      const service = new UserAvatarService(prisma, real, new ProfileImageViewService(real), PASSTHROUGH);
       const err = await service.uploadAvatar('u1', file(JPEG, 'image/jpeg')).catch((e) => e);
       expect(err.message).not.toMatch(/S3_/);
       expect(warn.mock.calls.some(([m]) => /S3_BUCKET/.test(String(m)))).toBe(true);
@@ -139,14 +160,14 @@ describe('UserAvatarService (B-035)', () => {
   describe('deleteAvatar', () => {
     it('clears all three columns together and removes the object', async () => {
       const { prisma, store, service } = build();
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ avatarKey: 'avatars/u1/a.jpg' });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ avatarKey: 'private-profile/u1/a.jpg' });
       await expect(service.deleteAvatar('u1')).resolves.toEqual({ avatar: null });
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'u1' },
         data: { avatarUrl: null, avatarKey: null, avatarStatus: null, avatarRejectionReason: null },
         select: { id: true },
       });
-      expect(store.delete).toHaveBeenCalledWith('avatars/u1/a.jpg');
+      expect(store.delete).toHaveBeenCalledWith('private-profile/u1/a.jpg');
     });
 
     it('is a 200 no-op without an avatar (no storage call)', async () => {

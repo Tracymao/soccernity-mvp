@@ -1,9 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
-import { StorageService } from '../../storage/storage.service';
+import { DirectUploadStorageService } from '../../storage/direct-upload-storage.service';
 import { MediaProcessor } from '../post-media/media-processor';
-import { UploadedProfileImage, uploadProfileImage, validateProfileImage } from './profile-image.util';
+import { ProfileImageViewService } from './profile-image-view.service';
+import {
+  UploadedProfileImage,
+  privateProfileKey,
+  publicProfileKeyFor,
+  uploadProfileImage,
+  validateProfileImage,
+} from './profile-image.util';
 
 // B-196 (Decision Log #411 item 4, #371, #394 A2): the cover photo, built on the
 // avatar pipeline with the SAME rules -- not a second design:
@@ -11,10 +18,10 @@ import { UploadedProfileImage, uploadProfileImage, validateProfileImage } from '
 //     a 503 and NOTHING is written (the message a person sees is the friendly one
 //     from profile-image.util.ts; the S3_* detail stays in the server log);
 //   - the same file rules (profile-image.util.ts: JPEG/PNG/WebP, 5 MB, magic bytes);
-//   - the same PENDING-AND-INVISIBLE rule: a new upload is stored 'pending' and
-//     is visible to its owner only; only an 'approved' cover is ever served to
-//     another user, and nothing in this codebase sets 'approved' until the
-//     automatic image check (B-036) and the review queue (B-037) exist;
+//   - the same PENDING-AND-INVISIBLE rule: a new upload is stored 'pending' in the PRIVATE prefix
+//     (private-profile/) and is visible to its owner only, through a signed link; only an 'approved' cover is
+//     ever served to another user, and only the automatic image check (ProfileImageCheckService, B-036)
+//     sets 'approved' -- after copying the file to the public prefix (profile-media/);
 //   - the same object removal on replacement, delete and anonymization.
 // It does NOT create a MediaAsset row (that table is the admin media library).
 // The bytes are RE-ENCODED before they are stored (B-205, profile-image.util.ts), the same
@@ -25,7 +32,7 @@ import { UploadedProfileImage, uploadProfileImage, validateProfileImage } from '
 export interface CoverResult {
   // rejectionReason (B-214): always null here -- an upload clears any earlier reason; a
   // reason exists only on a 'rejected' cover and is read from the owner's GET /users/:id.
-  cover: { url: string; status: 'pending' | 'approved' | 'rejected'; rejectionReason: string | null } | null;
+  cover: { url: string | null; status: 'pending' | 'approved' | 'rejected'; rejectionReason: string | null } | null;
 }
 
 @Injectable()
@@ -34,7 +41,8 @@ export class UserCoverService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly storage: StorageService,
+    private readonly storage: DirectUploadStorageService,
+    private readonly view: ProfileImageViewService,
     private readonly processor: MediaProcessor,
   ) {}
 
@@ -45,8 +53,12 @@ export class UserCoverService {
     const type = validateProfileImage(file);
     const upload = file as UploadedProfileImage;
 
-    const key = `covers/${userId}/${randomUUID()}.${type.ext}`;
-    const url = await uploadProfileImage(this.storage, this.processor, this.logger, upload.buffer, key, upload.mimetype);
+    // Stored in the PRIVATE prefix: nothing at the public address can serve it until the check approves it.
+    const key = privateProfileKey(userId, randomUUID(), type.ext);
+    await uploadProfileImage(this.storage, this.processor, this.logger, upload.buffer, key, upload.mimetype);
+    // The URL the file WILL have once approved (built, not fetched). It is served to other users only while the
+    // status is 'approved'; the owner is given a signed link to the private file instead.
+    const url = this.storage.publicUrlFor(publicProfileKeyFor(key));
 
     const previous = await this.prisma.user.findUnique({ where: { id: userId }, select: { coverKey: true } });
     try {
@@ -61,7 +73,7 @@ export class UserCoverService {
     }
     if (previous?.coverKey) await this.removeObject(previous.coverKey);
 
-    return { cover: { url, status: 'pending', rejectionReason: null } };
+    return { cover: { url: await this.view.signedLink(key), status: 'pending', rejectionReason: null } };
   }
 
   // DELETE /users/:id/cover (self only). Idempotent: no cover is a 200 no-op.

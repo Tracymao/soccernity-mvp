@@ -3,9 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { readFile } from 'fs/promises';
 import { PrismaService } from '../../prisma/prisma.service';
 import { S3StorageService } from '../../storage/s3-storage.service';
-import { StorageService } from '../../storage/storage.service';
+import { DirectUploadStorageService } from '../../storage/direct-upload-storage.service';
 import { MediaProcessor } from '../post-media/media-processor';
 import { PROFILE_IMAGE_UNSUPPORTED_MESSAGE } from './profile-image.util';
+import { ProfileImageViewService } from './profile-image-view.service';
 import { UserAvatarService } from './user-avatar.service';
 import { UserCoverService } from './user-cover.service';
 
@@ -34,7 +35,7 @@ function file(buffer: Buffer, mimetype: string) {
   return { buffer, mimetype, size: buffer.length, originalname: 'cover.jpg' };
 }
 
-function build(storage: Partial<StorageService> = {}) {
+function build(storage: Partial<DirectUploadStorageService> = {}) {
   const prisma = {
     user: {
       findUnique: jest.fn().mockResolvedValue({ coverKey: null, avatarKey: null }),
@@ -42,11 +43,13 @@ function build(storage: Partial<StorageService> = {}) {
     },
   } as unknown as PrismaService;
   const store = {
-    upload: jest.fn().mockResolvedValue('https://cdn.example/covers/u1/x.jpg'),
+    upload: jest.fn().mockImplementation(async (_b: Buffer, key: string) => `https://cdn.example/${key}`),
     delete: jest.fn().mockResolvedValue(undefined),
+    publicUrlFor: jest.fn().mockImplementation((key: string) => `https://cdn.example/${key}`),
+    createDownloadUrl: jest.fn().mockResolvedValue('https://signed.example/view?sig=1'),
     ...storage,
-  } as unknown as StorageService;
-  return { prisma, store, service: new UserCoverService(prisma, store, PASSTHROUGH) };
+  } as unknown as DirectUploadStorageService;
+  return { prisma, store, service: new UserCoverService(prisma, store, new ProfileImageViewService(store), PASSTHROUGH) };
 }
 
 describe('UserCoverService (B-196)', () => {
@@ -54,15 +57,18 @@ describe('UserCoverService (B-196)', () => {
     const { prisma, store, service } = build();
     const res = await service.uploadCover('u1', file(JPEG, 'image/jpeg'));
 
-    expect(res).toEqual({ cover: { url: 'https://cdn.example/covers/u1/x.jpg', status: 'pending', rejectionReason: null } });
     const [, key, type] = (store.upload as jest.Mock).mock.calls[0];
-    expect(key).toMatch(/^covers\/u1\/[0-9a-f-]{36}\.jpg$/);
+    // B-036: stored in the PRIVATE prefix; the owner gets a signed link, the row keeps the FUTURE public URL.
+    expect(key).toMatch(/^private-profile\/u1\/[0-9a-f-]{36}\.jpg$/);
     expect(type).toBe('image/jpeg');
+    expect(res).toEqual({ cover: { url: 'https://signed.example/view?sig=1', status: 'pending', rejectionReason: null } });
+    const publicKey = key.replace('private-profile/', 'profile-media/');
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: 'u1' },
-      data: { coverUrl: 'https://cdn.example/covers/u1/x.jpg', coverKey: key, coverStatus: 'pending', coverRejectionReason: null },
+      data: { coverUrl: `https://cdn.example/${publicKey}`, coverKey: key, coverStatus: 'pending', coverRejectionReason: null },
       select: { id: true },
     });
+    expect(JSON.stringify(res)).not.toContain('profile-media');
   });
 
   it('never writes the avatar columns', async () => {
@@ -102,14 +108,14 @@ describe('UserCoverService (B-196)', () => {
 
   it('removes the PREVIOUS cover object after a successful replace, best effort', async () => {
     const { prisma, store, service } = build();
-    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ coverKey: 'covers/u1/old.jpg' });
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ coverKey: 'private-profile/u1/old.jpg' });
     await service.uploadCover('u1', file(JPEG, 'image/jpeg'));
-    expect(store.delete).toHaveBeenCalledWith('covers/u1/old.jpg');
+    expect(store.delete).toHaveBeenCalledWith('private-profile/u1/old.jpg');
   });
 
   it('a failure removing the old object never fails the upload', async () => {
     const { prisma, service } = build({ delete: jest.fn().mockRejectedValue(new Error('r2 down')) });
-    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ coverKey: 'covers/u1/old.jpg' });
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ coverKey: 'private-profile/u1/old.jpg' });
     await expect(service.uploadCover('u1', file(JPEG, 'image/jpeg'))).resolves.toBeDefined();
   });
 
@@ -124,7 +130,7 @@ describe('UserCoverService (B-196)', () => {
     const config = { get: () => undefined } as unknown as ConfigService;
     const real = new S3StorageService(config);
     const prisma = { user: { findUnique: jest.fn(), update: jest.fn() } } as unknown as PrismaService;
-    const service = new UserCoverService(prisma, real, PASSTHROUGH);
+    const service = new UserCoverService(prisma, real, new ProfileImageViewService(real), PASSTHROUGH);
 
     const err = await service.uploadCover('u1', file(JPEG, 'image/jpeg')).catch((e) => e);
     expect(err).toBeInstanceOf(ServiceUnavailableException);
@@ -137,14 +143,14 @@ describe('UserCoverService (B-196)', () => {
   describe('deleteCover', () => {
     it('clears all three columns together and removes the object', async () => {
       const { prisma, store, service } = build();
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ coverKey: 'covers/u1/a.jpg' });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ coverKey: 'private-profile/u1/a.jpg' });
       await expect(service.deleteCover('u1')).resolves.toEqual({ cover: null });
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'u1' },
         data: { coverUrl: null, coverKey: null, coverStatus: null, coverRejectionReason: null },
         select: { id: true },
       });
-      expect(store.delete).toHaveBeenCalledWith('covers/u1/a.jpg');
+      expect(store.delete).toHaveBeenCalledWith('private-profile/u1/a.jpg');
     });
 
     it('is a 200 no-op without a cover (no storage call)', async () => {
@@ -176,7 +182,7 @@ describe('UserCoverService (B-196)', () => {
           () => 'accepted',
           (e: Error & { getStatus?: () => number }) => `${e.getStatus?.()}:${e.message}`,
         );
-      const avatarResult = await outcome(() => new UserAvatarService(a.prisma, a.store, PASSTHROUGH).uploadAvatar('u1', file(buf, mime)));
+      const avatarResult = await outcome(() => new UserAvatarService(a.prisma, a.store, new ProfileImageViewService(a.store), PASSTHROUGH).uploadAvatar('u1', file(buf, mime)));
       const coverResult = await outcome(() => c.service.uploadCover('u1', file(buf, mime)));
       expect(coverResult).toBe(avatarResult);
     });
@@ -185,8 +191,8 @@ describe('UserCoverService (B-196)', () => {
       const config = { get: () => undefined } as unknown as ConfigService;
       const real = new S3StorageService(config);
       const prisma = { user: { findUnique: jest.fn(), update: jest.fn() } } as unknown as PrismaService;
-      const a = await new UserAvatarService(prisma, real, PASSTHROUGH).uploadAvatar('u1', file(JPEG, 'image/jpeg')).catch((e) => e);
-      const c = await new UserCoverService(prisma, real, PASSTHROUGH).uploadCover('u1', file(JPEG, 'image/jpeg')).catch((e) => e);
+      const a = await new UserAvatarService(prisma, real, new ProfileImageViewService(real), PASSTHROUGH).uploadAvatar('u1', file(JPEG, 'image/jpeg')).catch((e) => e);
+      const c = await new UserCoverService(prisma, real, new ProfileImageViewService(real), PASSTHROUGH).uploadCover('u1', file(JPEG, 'image/jpeg')).catch((e) => e);
       expect(c.getStatus()).toBe(503);
       expect(c.getResponse()).toEqual(a.getResponse());
     });

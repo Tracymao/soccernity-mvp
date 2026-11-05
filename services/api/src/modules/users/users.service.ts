@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -25,6 +26,8 @@ import { calculateAge } from '../auth/registration/age.util';
 import { deriveOnboardingState, GuardianConsentState, OnboardingNextStep } from '../auth/onboarding-state.util';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PUBLIC_NAME_SELECT, resolvePublicName, toPublicUser } from './public-name.util';
+import { isPublicProfileKey } from './profile-image.util';
+import { ProfileImageViewService } from './profile-image-view.service';
 import { UsernamePolicyService } from './username-policy.service';
 import { USERNAME_REQUIRED_CODE } from './username-rules.constants';
 
@@ -96,7 +99,9 @@ export type GuardianContact = { label: 'Guardian contact'; email: string };
 // when status is 'rejected', null otherwise. Owner-only: it exists on this type and on no
 // type returned for another user.
 export type OwnAvatar = {
-  url: string;
+  // The owner's URL for the picture: the public URL once approved; while pending, rejected or in review a
+  // short-lived signed link to the PRIVATE file (never the public address); null if no link could be made.
+  url: string | null;
   status: 'pending' | 'approved' | 'rejected';
   rejectionReason: string | null;
 };
@@ -115,9 +120,9 @@ export type PublicProfile = {
   // country is visible only if the minor entered it. null otherwise (the client
   // shows no country line at all).
   country: string | null;
-  // Only an 'approved' avatar is ever served to another user. Nothing sets
-  // 'approved' until the automatic image check (B-036) exists, so today this is
-  // always null for every viewer except in the owner's own profile.
+  // Only an 'approved' avatar is ever served to another user, and only once its file is in the public prefix
+  // (profile-image.util.ts). The automatic image check (B-036) is what approves and publishes it; until then this
+  // is null for every viewer, the owner included (the owner's own profile read carries a signed link instead).
   avatarUrl: string | null;
   // B-196: same rule for the cover photo -- only an 'approved' cover is served
   // to another viewer, so today this is null for everyone but the owner's view.
@@ -210,8 +215,10 @@ export interface RepresentedClubResult {
 
 // The reason is surfaced only for a 'rejected' image (the CHECK constraint guarantees it is
 // null otherwise; this keeps the API honest even if a row were ever written around it).
-function toOwnImage(url: string | null, status: string | null, reason: string | null): OwnAvatar | null {
-  if (!url || !status) return null;
+function toOwnImage(url: string | null, status: string | null, reason: string | null, hasImage: boolean): OwnAvatar | null {
+  // hasImage: the row has a stored picture. `url` is what the OWNER may use to see it (the public URL once
+  // approved, otherwise a short-lived signed link; ProfileImageViewService), or null if no link could be made.
+  if (!hasImage || !status) return null;
   return {
     url,
     status: status as OwnAvatar['status'],
@@ -234,14 +241,15 @@ function toOwnProfile(
     ...rest
   }: OwnProfileRow,
   dob: DobEncryptionService,
+  ownerUrls: { avatar: string | null; cover: string | null },
 ): OwnProfile {
   void _avatarKey; // internal storage key, never returned
   void _coverKey; // internal storage key, never returned
   const plainDob = dob.decryptNullable(dateOfBirth);
   return {
     ...rest,
-    avatar: toOwnImage(avatarUrl, avatarStatus, avatarRejectionReason),
-    cover: toOwnImage(coverUrl, coverStatus, coverRejectionReason),
+    avatar: toOwnImage(ownerUrls.avatar, avatarStatus, avatarRejectionReason, Boolean(avatarUrl)),
+    cover: toOwnImage(ownerUrls.cover, coverStatus, coverRejectionReason, Boolean(coverUrl)),
     ...deriveOnboardingState({
       isMinor: rest.isMinor,
       guardianConsentStatus: guardian?.consentStatus,
@@ -339,7 +347,25 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly dobEncryption: DobEncryptionService,
     private readonly usernamePolicy: UsernamePolicyService,
+    // B-036: turns a stored picture into the URL its OWNER may use (the public URL once approved, otherwise a signed
+    // link to the private file). Optional so a spec that builds this service without it keeps its shape; the module
+    // always provides it. Without it a picture that is not approved has url null.
+    @Optional() private readonly images?: ProfileImageViewService,
   ) {}
+
+  // The owner's picture URLs for a profile row. See ProfileImageViewService.
+  private async ownerUrls(row: OwnProfileRow): Promise<{ avatar: string | null; cover: string | null }> {
+    const resolve = async (url: string | null, key: string | null, status: string | null): Promise<string | null> => {
+      if (this.images) return this.images.ownerUrl({ url, key, status });
+      // No view service: only an approved picture has a URL we can stand behind.
+      return status === 'approved' ? url : null;
+    };
+    const [avatar, cover] = await Promise.all([
+      resolve(row.avatarUrl, row.avatarKey, row.avatarStatus),
+      resolve(row.coverUrl, row.coverKey, row.coverStatus),
+    ]);
+    return { avatar, cover };
+  }
 
   async getOwnProfile(userId: string): Promise<OwnProfile> {
     const user = await this.prisma.user.findUnique({
@@ -352,7 +378,7 @@ export class UsersService {
       // can't know the account is gone.
       throw new NotFoundException('User not found');
     }
-    return toOwnProfile(user, this.dobEncryption);
+    return toOwnProfile(user, this.dobEncryption, await this.ownerUrls(user));
   }
 
   // GET /users/:id/public-profile -- the profile card any authenticated
@@ -391,8 +417,10 @@ export class UsersService {
           bio: true,
           profileCountry: true,
           avatarUrl: true,
+          avatarKey: true,
           avatarStatus: true,
           coverUrl: true,
+          coverKey: true,
           coverStatus: true,
         },
       }),
@@ -428,8 +456,11 @@ export class UsersService {
       ),
       bio: user.bio,
       country: user.profileCountry,
-      avatarUrl: user.avatarStatus === 'approved' ? user.avatarUrl : null,
-      coverUrl: user.coverStatus === 'approved' ? user.coverUrl : null,
+      // Served only while APPROVED *and* PUBLISHED (the file is in the public prefix). The second test is
+      // defence in depth: a status flipped to 'approved' without the file being copied would otherwise hand
+      // out a URL for an object that is not there (or, worse, for one that is still private).
+      avatarUrl: user.avatarStatus === 'approved' && user.avatarKey && isPublicProfileKey(user.avatarKey) ? user.avatarUrl : null,
+      coverUrl: user.coverStatus === 'approved' && user.coverKey && isPublicProfileKey(user.coverKey) ? user.coverUrl : null,
       isFollowing: followRow !== null,
       viewerHasBlocked: relation === 'viewer_blocked_other',
     };
@@ -518,7 +549,7 @@ export class UsersService {
         data,
         select: OWN_PROFILE_SELECT,
       });
-      return toOwnProfile(updated, this.dobEncryption);
+      return toOwnProfile(updated, this.dobEncryption, await this.ownerUrls(updated));
     } catch (err) {
       // The only unique column this update can write is username. Racing
       // claims on the same name lose here with a clean 409, never a 500.

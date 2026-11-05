@@ -5,10 +5,9 @@ import { GuardianSecurityNoticeService } from '../guardian-security-notice/guard
 // B-214 (Decision Log #412 item 2, #398 D2, #371): the storage half of "tell the
 // uploader why their profile picture or cover was not approved".
 //
-// This is the method the image review queue (B-037) and the automatic image check
-// (B-036) will call. Neither exists yet and the admin reject endpoint and screen
-// are NOT built here, so nothing in the running app calls it today; the unit and
-// e2e tests call it directly.
+// This is the method the automatic image check (ProfileImageCheckService, B-036) calls
+// for a clear reject, and the image review queue (B-037) will call. The admin reject
+// endpoint and screen are NOT built (B-037), so no HTTP route calls it; the check does.
 //
 // One call does three things in ONE transaction, so they cannot land apart:
 //   1. moves the image to status 'rejected' (it was 'pending' or 'approved'),
@@ -45,7 +44,20 @@ export class UserImageReviewService {
     private readonly guardianNotices: GuardianSecurityNoticeService,
   ) {}
 
-  async rejectProfileImage(userId: string, kind: ProfileImageKind, reason: unknown): Promise<ProfileImageRejection> {
+  // expectedKey (B-036): when given, the rejection is written ONLY while the user's avatar / cover still points at
+  // that stored file. The automatic check passes the key it checked, so a re-upload that landed while the check ran
+  // (a different file, new key) can never be rejected by the OLD file's result. A moderator's decision (B-037) will
+  // not pass it. A key that no longer matches is reported exactly like "no such image" (404).
+  //
+  // NOTE for B-037: rejecting an image that is already APPROVED (status 'approved', file in the public prefix
+  // profile-media/) must also move the file back to the private prefix, or it stays fetchable at its old address.
+  // This method changes the database only; withdrawing the object is the moderator action's job.
+  async rejectProfileImage(
+    userId: string,
+    kind: ProfileImageKind,
+    reason: unknown,
+    expectedKey?: string,
+  ): Promise<ProfileImageRejection> {
     const cleaned = this.cleanReason(reason);
 
     await this.prisma.$transaction(async (tx) => {
@@ -54,11 +66,21 @@ export class UserImageReviewService {
       const changed =
         kind === 'avatar'
           ? await tx.user.updateMany({
-              where: { id: userId, avatarUrl: { not: null }, avatarStatus: { in: ['pending', 'approved'] } },
+              where: {
+                id: userId,
+                avatarUrl: { not: null },
+                avatarStatus: { in: ['pending', 'approved'] },
+                ...(expectedKey ? { avatarKey: expectedKey } : {}),
+              },
               data: { avatarStatus: 'rejected', avatarRejectionReason: cleaned },
             })
           : await tx.user.updateMany({
-              where: { id: userId, coverUrl: { not: null }, coverStatus: { in: ['pending', 'approved'] } },
+              where: {
+                id: userId,
+                coverUrl: { not: null },
+                coverStatus: { in: ['pending', 'approved'] },
+                ...(expectedKey ? { coverKey: expectedKey } : {}),
+              },
               data: { coverStatus: 'rejected', coverRejectionReason: cleaned },
             });
 

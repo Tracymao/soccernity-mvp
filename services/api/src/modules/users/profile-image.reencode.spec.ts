@@ -4,11 +4,12 @@ import { access } from 'fs/promises';
 import type SharpFactory from 'sharp';
 import { PrismaService } from '../../prisma/prisma.service';
 import { S3StorageService } from '../../storage/s3-storage.service';
-import { StorageService } from '../../storage/storage.service';
+import { DirectUploadStorageService } from '../../storage/direct-upload-storage.service';
 import { FfmpegMediaProcessor } from '../post-media/ffmpeg-media-processor';
 import { MediaProcessor } from '../post-media/media-processor';
 import { PostMediaConfig } from '../post-media/post-media.config';
 import { PROFILE_IMAGE_UNSUPPORTED_MESSAGE } from './profile-image.util';
+import { ProfileImageViewService } from './profile-image-view.service';
 import { UserAvatarService } from './user-avatar.service';
 import { UserCoverService } from './user-cover.service';
 
@@ -42,7 +43,7 @@ async function exifJpeg(): Promise<Buffer> {
 type Kind = 'avatar' | 'cover';
 const CASES: Kind[] = ['avatar', 'cover'];
 
-function build(kind: Kind, processor: MediaProcessor = realProcessor(), storage: Partial<StorageService> = {}) {
+function build(kind: Kind, processor: MediaProcessor = realProcessor(), storage: Partial<DirectUploadStorageService> = {}) {
   const prisma = {
     user: {
       findUnique: jest.fn().mockResolvedValue({ avatarKey: null, coverKey: null }),
@@ -52,13 +53,15 @@ function build(kind: Kind, processor: MediaProcessor = realProcessor(), storage:
   const store = {
     upload: jest.fn().mockResolvedValue('https://cdn.example/stored'),
     delete: jest.fn().mockResolvedValue(undefined),
+    publicUrlFor: jest.fn().mockImplementation((key: string) => `https://cdn.example/${key}`),
+    createDownloadUrl: jest.fn().mockResolvedValue('https://signed.example/view'),
     ...storage,
-  } as unknown as StorageService;
+  } as unknown as DirectUploadStorageService;
   const upload = (buffer: Buffer, mimetype: string) => {
     const file = { buffer, mimetype, size: buffer.length, originalname: 'p' };
     return kind === 'avatar'
-      ? new UserAvatarService(prisma, store, processor).uploadAvatar('u1', file)
-      : new UserCoverService(prisma, store, processor).uploadCover('u1', file);
+      ? new UserAvatarService(prisma, store, new ProfileImageViewService(store), processor).uploadAvatar('u1', file)
+      : new UserCoverService(prisma, store, new ProfileImageViewService(store), processor).uploadCover('u1', file);
   };
   return { prisma, store, upload };
 }
@@ -132,8 +135,8 @@ describe.each(CASES)('%s upload: metadata re-encode (B-205)', (kind) => {
     const file = { buffer: image, mimetype: 'image/jpeg', size: image.length, originalname: 'p' };
     const attempt =
       kind === 'avatar'
-        ? new UserAvatarService(prisma, real, realProcessor()).uploadAvatar('u1', file)
-        : new UserCoverService(prisma, real, realProcessor()).uploadCover('u1', file);
+        ? new UserAvatarService(prisma, real, new ProfileImageViewService(real), realProcessor()).uploadAvatar('u1', file)
+        : new UserCoverService(prisma, real, new ProfileImageViewService(real), realProcessor()).uploadCover('u1', file);
     const err = await attempt.catch((e) => e);
     expect(err).toBeInstanceOf(ServiceUnavailableException);
     expect(err.message).toBe("Picture uploads aren't available right now. Please try again later.");

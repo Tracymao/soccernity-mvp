@@ -4,6 +4,8 @@ import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageModule } from '../../storage/storage.module';
 import { PostMediaModule } from '../post-media/post-media.module';
+import { ProfileImageCheckService, ProfileImageCheckSweepService } from './profile-image-check.service';
+import { ProfileImageViewService } from './profile-image-view.service';
 import { UserAvatarController } from './user-avatar.controller';
 import { UserAvatarService } from './user-avatar.service';
 import { UserCoverController } from './user-cover.controller';
@@ -30,7 +32,18 @@ import { UsersService } from './users.service';
   // same sanitizeImage post images use (B-205).
   imports: [AuthFoundationModule, StorageModule, GuardianSecurityNoticeModule, PostMediaModule],
   controllers: [UsersController, UserAvatarController, UserCoverController],
-  providers: [UsersService, UsernamePolicyService, UserAvatarService, UserCoverService, UserImageReviewService, PrismaService],
+  providers: [
+    UsersService,
+    UsernamePolicyService,
+    UserAvatarService,
+    UserCoverService,
+    UserImageReviewService,
+    ProfileImageViewService,
+    // B-036: the automatic check for avatars and covers (runs only when Rekognition is configured).
+    ProfileImageCheckService,
+    ProfileImageCheckSweepService,
+    PrismaService,
+  ],
   // B-214: the image review queue (B-037) will import UsersModule and call this.
   exports: [UserImageReviewService],
 })

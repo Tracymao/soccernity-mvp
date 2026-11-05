@@ -278,6 +278,8 @@ export class AccountDeletionSweepService {
     // serve no purpose once they are gone (the entry's folded total is an aggregate, not theirs).
     await tx.contestImpression.deleteMany({ where: { viewerId: userId } });
     await tx.matchSubscription.deleteMany({ where: { userId } });
+    // B-036: the automatic image check's retry bookkeeping for this user's avatar and cover (no image, no labels).
+    await tx.profileImageCheck.deleteMany({ where: { userId } });
 
     // Membership rows (Banter Rooms, Community Groups, Club pages) are
     // ephemeral participation signal, the same category as Follow/Like,

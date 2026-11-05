@@ -6,7 +6,9 @@ import { AppModule } from '../src/app.module';
 import { AccountDeletionSweepService } from '../src/modules/account-deletion/account-deletion-sweep.service';
 import { AdminTokenService } from '../src/modules/admin/token/admin-token.service';
 import { TokenService } from '../src/modules/auth/token/token.service';
+import { DirectUploadStorageService } from '../src/storage/direct-upload-storage.service';
 import { StorageService } from '../src/storage/storage.service';
+import { InMemoryStorage } from './support/post-media-doubles';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
 import { seedDob } from './dob-seed';
 
@@ -760,20 +762,20 @@ describe('Block + profile content e2e (real Postgres)', () => {
 describe('Avatar lifecycle e2e (fake object store)', () => {
   let app: INestApplication;
   const http = () => app.getHttpServer();
-  const store = new Map<string, Buffer>();
-  const fake = {
-    upload: jest.fn(async (buffer: Buffer, key: string) => {
-      store.set(key, buffer);
-      return `https://cdn.test/${key}`;
-    }),
-    delete: jest.fn(async (key: string) => {
-      store.delete(key);
-    }),
-    failNext: false,
+  // B-036: avatars go through DirectUploadStorageService (private key, signed owner link, publicUrlFor), so the
+  // in-memory store with those methods replaces the old two-method fake. `store` is a view of its objects.
+  const storage = new InMemoryStorage();
+  const fake = { upload: jest.spyOn(storage, 'upload') };
+  const store = {
+    get size() {
+      return storage.objects.size;
+    },
+    values: () => [...storage.objects.values()].map((o) => o.buffer),
+    clear: () => storage.objects.clear(),
   };
 
   beforeAll(async () => {
-    app = await bootApp((b) => b.overrideProvider(StorageService).useValue(fake));
+    app = await bootApp((b) => b.overrideProvider(StorageService).useValue(storage).overrideProvider(DirectUploadStorageService).useValue(storage));
   });
   beforeEach(async () => {
     await resetDatabase();
@@ -793,7 +795,9 @@ describe('Avatar lifecycle e2e (fake object store)', () => {
     const viewer = await seedUser(app, { label: 'viewer' });
     const res = await upload(owner, JPEG, 'image/jpeg').expect(201);
     expect(res.body.avatar.status).toBe('pending');
-    expect(res.body.avatar.url).toMatch(new RegExp(`^https://cdn.test/avatars/${owner.id}/[0-9a-f-]{36}\\.jpg$`));
+    // B-036: the owner gets a short-lived signed link to the file in the PRIVATE prefix, never a public address.
+    expect(res.body.avatar.url).toMatch(new RegExp(`^https://view.test/private-profile/${owner.id}/[0-9a-f-]{36}\\.jpg\\?ttl=300$`));
+    expect([...storage.objects.keys()]).toEqual([expect.stringMatching(new RegExp(`^private-profile/${owner.id}/`))]);
     expect(store.size).toBe(1);
 
     const mine = await request(http()).get(`/users/${owner.id}`).set(owner.auth).expect(200);
@@ -801,9 +805,14 @@ describe('Avatar lifecycle e2e (fake object store)', () => {
     expect(JSON.stringify(mine.body)).not.toContain('"avatarKey"');
     expect((await request(http()).get(`/users/${owner.id}/public-profile`).set(viewer.auth).expect(200)).body.avatarUrl).toBeNull();
 
-    // The status flip belongs to the (unbuilt) image check, B-036; simulate it directly.
-    await getTestPrismaClient().user.update({ where: { id: owner.id }, data: { avatarStatus: 'approved' } });
-    expect((await request(http()).get(`/users/${owner.id}/public-profile`).set(viewer.auth).expect(200)).body.avatarUrl).toBe(res.body.avatar.url);
+    // Approval belongs to the image check (profile-image-check e2e proves the real path); simulate a PUBLISHED approval here.
+    const before = await getTestPrismaClient().user.findUniqueOrThrow({ where: { id: owner.id } });
+    const publicKey = before.avatarKey!.replace('private-profile/', 'profile-media/');
+    await getTestPrismaClient().user.update({ where: { id: owner.id }, data: { avatarStatus: 'approved', avatarKey: publicKey } });
+    expect((await request(http()).get(`/users/${owner.id}/public-profile`).set(viewer.auth).expect(200)).body.avatarUrl).toBe(before.avatarUrl);
+    // Marked approved but the file never published: NOT served (defence in depth).
+    await getTestPrismaClient().user.update({ where: { id: owner.id }, data: { avatarStatus: 'approved', avatarKey: before.avatarKey } });
+    expect((await request(http()).get(`/users/${owner.id}/public-profile`).set(viewer.auth).expect(200)).body.avatarUrl).toBeNull();
     await getTestPrismaClient().user.update({ where: { id: owner.id }, data: { avatarStatus: 'rejected' } });
     expect((await request(http()).get(`/users/${owner.id}/public-profile`).set(viewer.auth).expect(200)).body.avatarUrl).toBeNull();
   });
@@ -877,11 +886,12 @@ describe('Avatar lifecycle e2e (fake object store)', () => {
 
   it('a storage outage is a 503 and leaves the previous avatar untouched', async () => {
     const owner = await seedUser(app, { label: 'owner' });
-    const first = await upload(owner, JPEG, 'image/jpeg').expect(201);
+    await upload(owner, JPEG, 'image/jpeg').expect(201);
+    const kept = await getTestPrismaClient().user.findUniqueOrThrow({ where: { id: owner.id } });
     fake.upload.mockRejectedValueOnce(new ServiceUnavailableException('down'));
     await upload(owner, JPEG, 'image/jpeg').expect(503);
     const row = await getTestPrismaClient().user.findUniqueOrThrow({ where: { id: owner.id } });
-    expect(row.avatarUrl).toBe(first.body.avatar.url);
+    expect(row).toMatchObject({ avatarUrl: kept.avatarUrl, avatarKey: kept.avatarKey });
   });
 });
 
@@ -889,19 +899,18 @@ describe('Avatar lifecycle e2e (fake object store)', () => {
 describe('Cover photo lifecycle e2e (fake object store, B-196)', () => {
   let app: INestApplication;
   const http = () => app.getHttpServer();
-  const store = new Map<string, Buffer>();
-  const fake = {
-    upload: jest.fn(async (buffer: Buffer, key: string) => {
-      store.set(key, buffer);
-      return `https://cdn.test/${key}`;
-    }),
-    delete: jest.fn(async (key: string) => {
-      store.delete(key);
-    }),
+  const storage = new InMemoryStorage();
+  const fake = { upload: jest.spyOn(storage, 'upload') };
+  const store = {
+    get size() {
+      return storage.objects.size;
+    },
+    values: () => [...storage.objects.values()].map((o) => o.buffer),
+    clear: () => storage.objects.clear(),
   };
 
   beforeAll(async () => {
-    app = await bootApp((b) => b.overrideProvider(StorageService).useValue(fake));
+    app = await bootApp((b) => b.overrideProvider(StorageService).useValue(storage).overrideProvider(DirectUploadStorageService).useValue(storage));
   });
   beforeEach(async () => {
     await resetDatabase();
@@ -921,7 +930,9 @@ describe('Cover photo lifecycle e2e (fake object store, B-196)', () => {
     const viewer = await seedUser(app, { label: 'viewer' });
     const res = await upload(owner, JPEG, 'image/jpeg').expect(201);
     expect(res.body.cover.status).toBe('pending');
-    expect(res.body.cover.url).toMatch(new RegExp(`^https://cdn.test/covers/${owner.id}/[0-9a-f-]{36}\\.jpg$`));
+    // B-036: the owner gets a short-lived signed link to the file in the PRIVATE prefix, never a public address.
+    expect(res.body.cover.url).toMatch(new RegExp(`^https://view.test/private-profile/${owner.id}/[0-9a-f-]{36}\\.jpg\\?ttl=300$`));
+    expect([...storage.objects.keys()]).toEqual([expect.stringMatching(new RegExp(`^private-profile/${owner.id}/`))]);
     expect(store.size).toBe(1);
 
     const mine = await request(http()).get(`/users/${owner.id}`).set(owner.auth).expect(200);
@@ -930,9 +941,11 @@ describe('Cover photo lifecycle e2e (fake object store, B-196)', () => {
     expect(JSON.stringify(mine.body)).not.toContain('"coverKey"');
     expect((await request(http()).get(`/users/${owner.id}/public-profile`).set(viewer.auth).expect(200)).body.coverUrl).toBeNull();
 
-    // The status flip belongs to the (unbuilt) image check, B-036; simulate it directly.
-    await getTestPrismaClient().user.update({ where: { id: owner.id }, data: { coverStatus: 'approved' } });
-    expect((await request(http()).get(`/users/${owner.id}/public-profile`).set(viewer.auth).expect(200)).body.coverUrl).toBe(res.body.cover.url);
+    // Approval belongs to the image check (profile-image-check e2e proves the real path); simulate a PUBLISHED approval here.
+    const before = await getTestPrismaClient().user.findUniqueOrThrow({ where: { id: owner.id } });
+    const publicKey = before.coverKey!.replace('private-profile/', 'profile-media/');
+    await getTestPrismaClient().user.update({ where: { id: owner.id }, data: { coverStatus: 'approved', coverKey: publicKey } });
+    expect((await request(http()).get(`/users/${owner.id}/public-profile`).set(viewer.auth).expect(200)).body.coverUrl).toBe(before.coverUrl);
     await getTestPrismaClient().user.update({ where: { id: owner.id }, data: { coverStatus: 'rejected' } });
     expect((await request(http()).get(`/users/${owner.id}/public-profile`).set(viewer.auth).expect(200)).body.coverUrl).toBeNull();
   });
@@ -1021,11 +1034,12 @@ describe('Cover photo lifecycle e2e (fake object store, B-196)', () => {
 
   it('a storage outage is a 503 and leaves the previous cover untouched', async () => {
     const owner = await seedUser(app, { label: 'owner' });
-    const first = await upload(owner, JPEG, 'image/jpeg').expect(201);
+    await upload(owner, JPEG, 'image/jpeg').expect(201);
+    const kept = await getTestPrismaClient().user.findUniqueOrThrow({ where: { id: owner.id } });
     fake.upload.mockRejectedValueOnce(new ServiceUnavailableException('down'));
     await upload(owner, JPEG, 'image/jpeg').expect(503);
     const row = await getTestPrismaClient().user.findUniqueOrThrow({ where: { id: owner.id } });
-    expect(row.coverUrl).toBe(first.body.cover.url);
+    expect(row).toMatchObject({ coverUrl: kept.coverUrl, coverKey: kept.coverKey });
   });
 
   it('anonymization clears the cover reference AND removes the cover object from the store', async () => {

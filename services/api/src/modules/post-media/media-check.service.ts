@@ -41,8 +41,9 @@ import { PostMediaService } from './post-media.service';
 
 export type CheckOutcome = 'approved' | 'rejected' | 'pending' | 'retry' | 'gave_up' | 'skipped';
 
-const BACKOFF_BASE_MS = 60_000;
-const BACKOFF_MAX_MS = 60 * 60_000;
+// Exported so the avatar/cover check (users/profile-image-check.service.ts) backs off by the same schedule.
+export const CHECK_BACKOFF_BASE_MS = 60_000;
+export const CHECK_BACKOFF_MAX_MS = 60 * 60_000;
 
 @Injectable()
 export class MediaCheckService {
@@ -164,10 +165,6 @@ export class MediaCheckService {
     uploader: { isMinor: boolean };
   }): Promise<{ outcome: 'approved' | 'rejected' | 'pending'; categories: string[] }> {
     if (!row.privateKey) throw new Error('The stored file is missing');
-    const thresholds = this.config.thresholdsFor(row.uploader.isMinor);
-    // Ask Rekognition for labels down to the LOWER of the two thresholds, or a label that should have
-    // kept the file out of auto-approval would never be returned.
-    const minConfidence = Math.min(thresholds.pass, thresholds.reject);
 
     const dir = await mkdtemp(path.join(tmpdir(), 'media-check-'));
     try {
@@ -183,16 +180,47 @@ export class MediaCheckService {
         const times = sampleFrameTimes(row.durationSeconds ?? 0, sampling.intervalSeconds, sampling.maxFrames);
         images = await this.processor.extractFrames(source, times);
       }
-
-      const frames: ModerationLabel[][] = [];
-      for (const image of images) {
-        const forApi = await this.processor.shrinkForModeration(image, MODERATION_MAX_IMAGE_BYTES);
-        frames.push(await this.moderation.detectModerationLabels(forApi, minConfidence));
-      }
-      return decideModeration(frames, thresholds);
+      return await this.moderateImages(images, row.uploader.isMinor);
     } finally {
       await rm(dir, { recursive: true, force: true }).catch(() => undefined);
     }
+  }
+
+  /**
+   * The automatic check for ONE stored image at `key`, for callers other than post media (the avatar and cover
+   * check, B-036): reads the file from storage, runs the SAME moderation steps and thresholds a post image gets
+   * (stricter for a minor), and returns the decision. Throws on any failure (the caller decides what a failure
+   * means); never writes anything.
+   */
+  async checkStoredImage(
+    key: string,
+    uploaderIsMinor: boolean,
+  ): Promise<{ outcome: 'approved' | 'rejected' | 'pending'; categories: string[] }> {
+    const dir = await mkdtemp(path.join(tmpdir(), 'media-check-'));
+    try {
+      const source = path.join(dir, 'source');
+      await this.storage.downloadToFile(key, source);
+      return await this.moderateImages([await readFile(source)], uploaderIsMinor);
+    } finally {
+      await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+    }
+  }
+
+  /** Frames in, decision out: shrink for the API limit, detect labels, apply the thresholds. Shared by post media and profile pictures. */
+  private async moderateImages(
+    images: Buffer[],
+    uploaderIsMinor: boolean,
+  ): Promise<{ outcome: 'approved' | 'rejected' | 'pending'; categories: string[] }> {
+    const thresholds = this.config.thresholdsFor(uploaderIsMinor);
+    // Ask Rekognition for labels down to the LOWER of the two thresholds, or a label that should have
+    // kept the file out of auto-approval would never be returned.
+    const minConfidence = Math.min(thresholds.pass, thresholds.reject);
+    const frames: ModerationLabel[][] = [];
+    for (const image of images) {
+      const forApi = await this.processor.shrinkForModeration(image, MODERATION_MAX_IMAGE_BYTES);
+      frames.push(await this.moderation.detectModerationLabels(forApi, minConfidence));
+    }
+    return decideModeration(frames, thresholds);
   }
 
   /**
@@ -276,7 +304,7 @@ export class MediaCheckService {
       });
       return 'gave_up';
     }
-    const delay = Math.min(BACKOFF_BASE_MS * 2 ** (attempts - 1), BACKOFF_MAX_MS);
+    const delay = Math.min(CHECK_BACKOFF_BASE_MS * 2 ** (attempts - 1), CHECK_BACKOFF_MAX_MS);
     await this.prisma.postMedia.updateMany({
       where: { id, status: 'pending', decisionSource: null },
       data: {

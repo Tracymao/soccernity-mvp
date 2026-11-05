@@ -222,8 +222,10 @@ describe('UsersService', () => {
       bio: null,
       profileCountry: null,
       avatarUrl: null,
+      avatarKey: null,
       avatarStatus: null,
       coverUrl: null,
+      coverKey: null,
       coverStatus: null,
       ...over,
     });
@@ -254,8 +256,18 @@ describe('UsersService', () => {
       ['rejected', null],
       ['approved', 'https://cdn/c.jpg'],
     ])('serves a %s cover to another viewer as %s', async (status, expected) => {
-      const result = await run(row({ coverUrl: 'https://cdn/c.jpg', coverStatus: status }));
+      // B-036: an approved picture lives in the PUBLIC prefix; the others in the private one.
+      const coverKey = status === 'approved' ? 'profile-media/minor-1/c.jpg' : 'private-profile/minor-1/c.jpg';
+      const result = await run(row({ coverUrl: 'https://cdn/c.jpg', coverKey, coverStatus: status }));
       expect(result.coverUrl).toBe(expected);
+    });
+
+    // B-036 defence in depth: a status flipped to 'approved' WITHOUT the file being published is not served.
+    it.each(['avatar', 'cover'])('does not serve an %s that is marked approved but whose file is still private', async (kind) => {
+      const result = await run(
+        row({ [`${kind}Url`]: 'https://cdn/x.jpg', [`${kind}Key`]: `private-profile/minor-1/x.jpg`, [`${kind}Status`]: 'approved' }),
+      );
+      expect(result[kind === 'avatar' ? 'avatarUrl' : 'coverUrl']).toBeNull();
     });
 
     it('also shows it for a 16-17 minor', async () => {
