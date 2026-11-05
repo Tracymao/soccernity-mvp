@@ -52,6 +52,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { joinClub, listClubs, ClubsApiError } from "../../api/clubs";
 import type { ClubSummary } from "../../api/clubs";
+import searchIcon from "../../assets/icons/club-picker-search.svg";
 import { clubPickerThemeVars } from "./clubPickerThemeVars";
 import "./ClubPickerStep.css";
 
@@ -162,9 +163,7 @@ export default function ClubPickerStep({ accessToken, onDone, confirmationMessag
           </p>
 
           <div className="club-picker__search-bar">
-            <span className="club-picker__search-icon" aria-hidden="true">
-              ⌕
-            </span>
+            <img src={searchIcon} alt="" aria-hidden="true" className="club-picker__search-icon" width={18} height={18} />
             <input
               type="search"
               className="club-picker__search"
@@ -232,8 +231,10 @@ export default function ClubPickerStep({ accessToken, onDone, confirmationMessag
                       <div className="club-picker__meta">
                         <span className="club-picker__name">{club.name}</span>
                         <span className="club-picker__secondary">
-                          {[club.league, club.country].filter(Boolean).join(" • ") || "Independent"} ·{" "}
-                          {club.memberCount} {club.memberCount === 1 ? "member" : "members"}
+                          {[club.league, club.country].filter(Boolean).join(" • ") || "Independent"}
+                        </span>
+                        <span className="club-picker__members">
+                          {club.memberCount.toLocaleString("en-GB")} {club.memberCount === 1 ? "member" : "members"}
                         </span>
                       </div>
                       <button

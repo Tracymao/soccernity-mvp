@@ -18,6 +18,7 @@ import { Link, Navigate } from "react-router";
 import { AuthApiError, resendVerificationEmail } from "../api/auth";
 import { getUser } from "../api/users";
 import { ONBOARDING_ROUTES } from "../lib/onboarding";
+import mailIcon from "../assets/icons/verify-prompt-mail.svg";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
 import { verifyThemeVars } from "./verify-email/verifyEmailThemeVars";
 import "./verify-email/VerifyEmail.css";
@@ -69,11 +70,9 @@ export default function VerifyEmailPromptPage() {
   if (alreadyVerified) return <Navigate to={ONBOARDING_ROUTES.resolve} replace />;
 
   return (
-    <div className="verify-page" style={verifyThemeVars} data-testid="verify-email-prompt">
+    <div className="verify-page verify-page--prompt" style={verifyThemeVars} data-testid="verify-email-prompt">
       <div className="verify-page__column">
-        <div className="verify-icon-circle verify-icon-circle--neutral" aria-hidden="true">
-          ✉
-        </div>
+        <img src={mailIcon} alt="" aria-hidden="true" className="verify-prompt-icon" width={88} height={88} />
         <div className="verify-header">
           <h1 className="verify-heading">Verify your email to continue</h1>
           <p className="verify-subheading">

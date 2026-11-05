@@ -12,7 +12,14 @@
  * view, which is under AppShell's site Header -- so it renders its own
  * full-bleed dark shell (a sibling of SignupSplitScreen, not nested
  * inside it) using the same negative-margin technique to cancel
- * AppShell's content padding. (RegisterStep itself, on the /signup
+ * AppShell's content padding.
+ *
+ * W9 / B-175: compared line by line with the desktop frame 5146:6635 and the
+ * mobile family 5645:8023 .. 5646:8023 -- spacing from the chrome (60px desktop,
+ * 24px mobile), the separate 13/12px member-count line, the 12% green tint for
+ * logo tiles and the Joined button (green-tint-28 is not a design-system token,
+ * Decision Log #47), the 18px search icon, Load more / continue heights, and the
+ * stacked full-width Join button on mobile. (RegisterStep itself, on the /signup
  * route, now renders under the AuthChrome logo-only Top Bar --
  * Decision Log #172 -- but this success-view step keeps its own
  * full-bleed shell regardless.) */
@@ -20,7 +27,7 @@
 .club-picker-page {
   min-height: calc(100vh - var(--sn-chrome-height, 90px)); /* B-187: AppShell 90/64px, AuthChrome 90px */
   margin: -32px;
-  padding: 64px 32px;
+  padding: 60px 32px 64px; /* frame 5146:6635: content starts 60px below the bar */
   background-color: var(--picker-bg);
   color: var(--picker-text-primary);
   font-family: "Inter", sans-serif;
@@ -65,14 +72,14 @@
 }
 
 .club-picker__heading {
-  font: 600 34px/1.3 "Inter", sans-serif;
+  font: 600 34px/44px "Inter", sans-serif;
   margin: 0;
   color: var(--picker-text-primary);
 }
 
 .club-picker__subheading {
-  font: 400 16px/1.6 "Inter", sans-serif;
-  margin: 0;
+  font: 400 16px/26px "Inter", sans-serif;
+  margin: -16px 0 0; /* header block: 12px between title and body (frame), not the 28px column gap */
   color: var(--picker-text-secondary);
 }
 
@@ -90,9 +97,9 @@
 
 .club-picker__search-icon {
   flex-shrink: 0;
-  color: var(--picker-text-secondary);
-  font-size: 15px;
-  line-height: 1;
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .club-picker__search {
@@ -159,7 +166,7 @@
   justify-content: center;
   font: 600 20px "Inter", sans-serif;
   color: var(--picker-brand-navy);
-  background-color: var(--picker-green-tint-28);
+  background-color: var(--picker-green-tint);
 }
 
 .club-picker__logo--placeholder {
@@ -183,7 +190,13 @@
 }
 
 .club-picker__secondary {
-  font: 400 14px/1.5 "Inter", sans-serif;
+  font: 400 14px/21px "Inter", sans-serif;
+  color: var(--picker-text-secondary);
+}
+
+/* Separate member-count line (frame: 13px / 20px). */
+.club-picker__members {
+  font: 400 13px/20px "Inter", sans-serif;
   color: var(--picker-text-secondary);
 }
 
@@ -204,7 +217,7 @@
 }
 
 .club-picker__join-button--joined {
-  background-color: var(--picker-green-tint-28);
+  background-color: var(--picker-green-tint);
   color: var(--picker-brand-navy);
   cursor: default;
 }
@@ -220,13 +233,13 @@
 }
 
 .club-picker__item-error {
-  font: 400 13px/1.5 "Inter", sans-serif;
+  font: 400 13px/20px "Inter", sans-serif;
   color: var(--picker-text-primary);
   margin: 0;
 }
 
 .club-picker__load-more {
-  height: 52px;
+  height: 50px;
   border: 1px solid var(--picker-icon-inactive);
   border-radius: 6px;
   background: transparent;
@@ -252,4 +265,91 @@
   color: var(--picker-text-on-green);
   font: 600 16px "Inter", sans-serif;
   cursor: pointer;
+}
+
+/* Mobile family (frames 5645:8023, 5645:8082, 5646:8023, ...): 20px side
+ * padding, 24px below the bar, 22px between blocks, a 26px heading, a 48px
+ * search field, 10px between cards, and a stacked card -- logo + text on the
+ * first row, a full-width 44px Join / Joined / Joining button below. */
+@media (max-width: 520px) {
+  .club-picker-page {
+    padding: 24px 20px 40px;
+  }
+
+  .club-picker-page__column,
+  .club-picker {
+    gap: 22px;
+  }
+
+  .club-picker__heading {
+    font: 600 26px/normal "Inter", sans-serif;
+  }
+
+  .club-picker__subheading {
+    font: 400 14px/normal "Inter", sans-serif;
+    margin: -14px 0 0; /* header block: 8px between title and body (frame), not the 22px column gap */
+  }
+
+  .club-picker__search-bar {
+    height: 48px;
+    padding: 0 16px;
+    gap: 10px;
+  }
+
+  .club-picker__search {
+    font-size: 14px;
+  }
+
+  .club-picker__list {
+    gap: 10px;
+  }
+
+  .club-picker__item {
+    gap: 12px;
+    padding: 14px 16px;
+  }
+
+  .club-picker__item-row {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .club-picker__logo {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    font-size: 18px;
+  }
+
+  .club-picker__meta {
+    gap: 2px;
+  }
+
+  .club-picker__name {
+    font: 600 15px/normal "Inter", sans-serif;
+  }
+
+  .club-picker__secondary {
+    font: 400 13px/normal "Inter", sans-serif;
+  }
+
+  .club-picker__members {
+    font: 400 12px/normal "Inter", sans-serif;
+  }
+
+  .club-picker__join-button {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .club-picker__load-more {
+    height: 45px;
+    font-size: 14px;
+  }
+
+  .club-picker__continue {
+    width: 100%;
+    height: 50px;
+    font-size: 15px;
+  }
 }
