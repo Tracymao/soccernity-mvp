@@ -1,9 +1,15 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PasswordService } from '../password/password.service';
 import { InMemoryResetRedisFake } from './test-support/in-memory-reset-redis.fake';
 import { FORGOT_PASSWORD_GENERIC_MESSAGE, PasswordResetService } from './password-reset.service';
 import { ResetTokenStore } from './reset-token.store';
+import { PasswordResetEmailService } from './email/password-reset-email.service';
+
+const mockPostmarkSend = jest.fn();
+jest.mock('postmark', () => ({
+  ServerClient: jest.fn().mockImplementation(() => ({ sendEmail: mockPostmarkSend })),
+}));
 
 // Fakes rather than @nestjs/testing's TestingModule — matches B1's own
 // spec style (see token/token.service.spec.ts) of constructing services
@@ -67,6 +73,63 @@ describe('PasswordResetService', () => {
         existingUser!.email,
         expect.stringMatching(/^[0-9a-f-]{36}\./),
       );
+    });
+
+    // B-115 (Decision Log #468): with the REAL email service and an unusable
+    // WEB_APP_BASE_URL no mail is sent, and forgotPassword behaves exactly as it
+    // does when a mail is sent -- same resolved value, no throw -- so the HTTP
+    // answer cannot reveal whether a mail went out or whether an account exists.
+    describe('with the real email service (B-115)', () => {
+      function withRealEmailService(webBaseUrl: string | undefined) {
+        const built = buildService();
+        const realEmail = new PasswordResetEmailService(
+          new ConfigService({
+            EMAIL_PROVIDER_API_KEY: 'a-real-key',
+            POSTMARK_FROM_EMAIL: 'no-reply@soccernity.example',
+            ...(webBaseUrl === undefined ? {} : { WEB_APP_BASE_URL: webBaseUrl }),
+          }),
+        );
+        const service = new PasswordResetService(
+          built.prisma as never,
+          built.resetTokenStore,
+          new PasswordService(),
+          built.tokenService as never,
+          realEmail,
+          new ConfigService({}),
+          built.authLimits as never,
+          built.guardianNotices as never,
+        );
+        return { service, existingUser: built.existingUser! };
+      }
+
+      beforeEach(() => mockPostmarkSend.mockReset());
+
+      it.each([['unset', undefined], ['empty', ''], ['malformed', 'not a url']])(
+        'sends nothing and resolves normally when WEB_APP_BASE_URL is %s',
+        async (_label, value) => {
+          const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+          const { service, existingUser } = withRealEmailService(value);
+
+          await expect(service.forgotPassword(existingUser.email)).resolves.toBeUndefined();
+          await expect(service.forgotPassword('nobody@example.com')).resolves.toBeUndefined();
+
+          expect(mockPostmarkSend).not.toHaveBeenCalled();
+          // One error for the existing account; none for the unknown address.
+          const messages = errorSpy.mock.calls.map((c) => String(c[0]));
+          expect(messages.filter((m) => m.includes('WEB_APP_BASE_URL'))).toHaveLength(1);
+          expect(messages.join(' | ')).not.toContain(existingUser.email);
+          errorSpy.mockRestore();
+        },
+      );
+
+      it('sends the mail and resolves identically when WEB_APP_BASE_URL is usable', async () => {
+        mockPostmarkSend.mockResolvedValue({ MessageID: 'm-1' });
+        const { service, existingUser } = withRealEmailService('https://app.soccernity.com');
+
+        await expect(service.forgotPassword(existingUser.email)).resolves.toBeUndefined();
+
+        expect(mockPostmarkSend).toHaveBeenCalledTimes(1);
+      });
     });
 
     it('does not send an email and does not throw for a non-existent account', async () => {
