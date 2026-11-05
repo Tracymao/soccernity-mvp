@@ -1,6 +1,7 @@
 import { INestApplication, ServiceUnavailableException, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
+import type SharpFactory from 'sharp';
 import { AppModule } from '../src/app.module';
 import { AccountDeletionSweepService } from '../src/modules/account-deletion/account-deletion-sweep.service';
 import { AdminTokenService } from '../src/modules/admin/token/admin-token.service';
@@ -14,9 +15,17 @@ import { seedDob } from './dob-seed';
 //   1. Block + profile content, with the REAL (unconfigured) StorageService,
 //   2. the avatar lifecycle, with a FAKE StorageService (no object store exists in CI).
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const sharp = require('sharp') as typeof SharpFactory;
+
 const rand = () => Math.random().toString(36).slice(2, 10);
 const bearer = (t: string) => ({ Authorization: `Bearer ${t}` });
-const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+// A real (8x8) JPEG: avatars and covers are re-encoded with real sharp now (B-205), so a few magic bytes
+// no longer pass. The magic-byte refusals below still use fake bytes on purpose.
+const JPEG = Buffer.from(
+  '/9j/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAIAAgDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAB//EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AIMAnDx//9k=',
+  'base64',
+);
 
 async function bootApp(configure?: (b: ReturnType<typeof Test.createTestingModule>) => void): Promise<INestApplication> {
   const builder = Test.createTestingModule({ imports: [AppModule] });
@@ -799,6 +808,29 @@ describe('Avatar lifecycle e2e (fake object store)', () => {
     expect((await request(http()).get(`/users/${owner.id}/public-profile`).set(viewer.auth).expect(200)).body.avatarUrl).toBeNull();
   });
 
+  it('B-205: the stored avatar has no EXIF/GPS/author tags and the orientation is applied; a corrupt file is a 400 and stores nothing', async () => {
+    const owner = await seedUser(app, { label: 'owner' });
+    const withExif = await sharp({ create: { width: 30, height: 10, channels: 3, background: '#e22' } })
+      .jpeg()
+      .withExif({ IFD0: { Artist: 'secret-photographer@example.com' }, IFD3: { GPSLatitudeRef: 'N' } })
+      .withMetadata({ orientation: 6 })
+      .toBuffer();
+    expect(withExif.toString('latin1')).toContain('secret-photographer');
+    await upload(owner, withExif, 'image/jpeg').expect(201);
+    expect(store.size).toBe(1);
+    const stored = [...store.values()][0];
+    expect(stored.toString('latin1')).not.toContain('secret-photographer');
+    const meta = await sharp(stored).metadata();
+    expect(meta.exif).toBeUndefined();
+    expect([meta.width, meta.height]).toEqual([10, 30]);
+
+    store.clear();
+    const corrupt = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('not really a jpeg')]);
+    const bad = await upload(owner, corrupt, 'image/jpeg').expect(400);
+    expect(bad.body.message).toBe('Please choose a JPEG, PNG or WebP picture.');
+    expect(store.size).toBe(0);
+  });
+
   it('replacing removes the previous object and re-enters review (pending again)', async () => {
     const owner = await seedUser(app, { label: 'owner' });
     const first = await upload(owner, JPEG, 'image/jpeg').expect(201);
@@ -915,6 +947,29 @@ describe('Cover photo lifecycle e2e (fake object store, B-196)', () => {
     expect(row.avatarUrl).not.toBeNull();
     expect(row).toMatchObject({ coverUrl: null, coverKey: null, coverStatus: null });
     expect(store.size).toBe(1);
+  });
+
+  it('B-205: the stored cover has no EXIF/GPS/author tags and the orientation is applied; a corrupt file is a 400 and stores nothing', async () => {
+    const owner = await seedUser(app, { label: 'owner' });
+    const withExif = await sharp({ create: { width: 30, height: 10, channels: 3, background: '#e22' } })
+      .jpeg()
+      .withExif({ IFD0: { Artist: 'secret-photographer@example.com' }, IFD3: { GPSLatitudeRef: 'N' } })
+      .withMetadata({ orientation: 6 })
+      .toBuffer();
+    expect(withExif.toString('latin1')).toContain('secret-photographer');
+    await upload(owner, withExif, 'image/jpeg').expect(201);
+    expect(store.size).toBe(1);
+    const stored = [...store.values()][0];
+    expect(stored.toString('latin1')).not.toContain('secret-photographer');
+    const meta = await sharp(stored).metadata();
+    expect(meta.exif).toBeUndefined();
+    expect([meta.width, meta.height]).toEqual([10, 30]);
+
+    store.clear();
+    const corrupt = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('not really a jpeg')]);
+    const bad = await upload(owner, corrupt, 'image/jpeg').expect(400);
+    expect(bad.body.message).toBe('Please choose a JPEG, PNG or WebP picture.');
+    expect(store.size).toBe(0);
   });
 
   it('replacing removes the previous object and re-enters review (pending again)', async () => {

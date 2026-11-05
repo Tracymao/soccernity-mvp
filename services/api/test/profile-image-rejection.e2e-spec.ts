@@ -17,7 +17,12 @@ import { seedDob } from './dob-seed';
 
 const rand = () => Math.random().toString(36).slice(2, 10);
 const bearer = (t: string) => ({ Authorization: `Bearer ${t}` });
-const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+// A real (8x8) JPEG: avatars and covers are re-encoded with real sharp now (B-205), so a few magic bytes
+// no longer pass. The magic-byte refusals below still use fake bytes on purpose.
+const JPEG = Buffer.from(
+  '/9j/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAIAAgDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAB//EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AIMAnDx//9k=',
+  'base64',
+);
 const REASON = 'The photo does not show your face clearly';
 
 describe('Profile image rejection reason e2e (real Postgres, fake object store)', () => {

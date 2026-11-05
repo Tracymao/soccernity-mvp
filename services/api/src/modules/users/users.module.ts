@@ -3,6 +3,7 @@ import { GuardianSecurityNoticeModule } from '../guardian-security-notice/guardi
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageModule } from '../../storage/storage.module';
+import { PostMediaModule } from '../post-media/post-media.module';
 import { UserAvatarController } from './user-avatar.controller';
 import { UserAvatarService } from './user-avatar.service';
 import { UserCoverController } from './user-cover.controller';
@@ -25,7 +26,9 @@ import { UsersService } from './users.service';
 // for the profile picture (POST/DELETE /users/:id/avatar), on the same
 // StorageService the admin media upload uses.
 @Module({
-  imports: [AuthFoundationModule, StorageModule, GuardianSecurityNoticeModule],
+  // PostMediaModule exports MediaProcessor: avatars and covers are re-encoded without metadata by the
+  // same sanitizeImage post images use (B-205).
+  imports: [AuthFoundationModule, StorageModule, GuardianSecurityNoticeModule, PostMediaModule],
   controllers: [UsersController, UserAvatarController, UserCoverController],
   providers: [UsersService, UsernamePolicyService, UserAvatarService, UserCoverService, UserImageReviewService, PrismaService],
   // B-214: the image review queue (B-037) will import UsersModule and call this.
