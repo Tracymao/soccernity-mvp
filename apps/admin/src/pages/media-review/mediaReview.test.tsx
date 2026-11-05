@@ -45,6 +45,7 @@ beforeEach(() => {
 function item(over: Partial<MediaReviewItem> = {}): MediaReviewItem {
   return {
     id: "media-1",
+    type: "post_media",
     kind: "image",
     contentType: "image/jpeg",
     sizeBytes: 1234,

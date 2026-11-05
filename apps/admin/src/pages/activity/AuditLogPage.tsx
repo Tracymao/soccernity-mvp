@@ -35,6 +35,7 @@ import {
   actionLogErrorCode,
   listActionLog,
   targetPath,
+  profileImageRowText,
   targetTypeLabel,
   type ActionLogItem,
   type ActionLogPage,
@@ -58,11 +59,14 @@ interface Applied {
 
 function targetText(item: ActionLogItem): string {
   if (item.targetType === "search") return "Email search";
+  // A profile-picture row is about a person: its target id is their user id, not a picture id.
+  if (item.targetType === "profile_image") return `User #${item.targetId.slice(0, 8)}`;
   return `${targetTypeLabel(item.targetType)} #${item.targetId.slice(0, 8)}`;
 }
 
 function ActivityRow({ item, showActor }: { item: ActionLogItem; showActor: boolean }) {
   const path = targetPath(item.targetType, item.targetId);
+  const profileImage = item.targetType === "profile_image" ? profileImageRowText(item) : null;
   return (
     <div className="al-row" role="row">
       <span role="cell">{formatDateTime(item.createdAt)}</span>
@@ -71,8 +75,8 @@ function ActivityRow({ item, showActor }: { item: ActionLogItem; showActor: bool
           {item.actor.displayName}
         </span>
       ) : null}
-      <span role="cell">{actionLabel(item.action)}</span>
-      <span role="cell">{targetTypeLabel(item.targetType)}</span>
+      <span role="cell">{profileImage ? profileImage.actionText : actionLabel(item.action)}</span>
+      <span role="cell">{profileImage ? profileImage.typeLabel : targetTypeLabel(item.targetType)}</span>
       <span role="cell">
         {path ? (
           <Link className="al-target" to={path}>
@@ -83,7 +87,7 @@ function ActivityRow({ item, showActor }: { item: ActionLogItem; showActor: bool
         )}
       </span>
       <span className="al-notes" role="cell">
-        {item.notes ?? "—"}
+        {profileImage ? (profileImage.reason ? `Reason: ${profileImage.reason}` : "—") : (item.notes ?? "—")}
       </span>
     </div>
   );

@@ -9,10 +9,17 @@
 import { AdminApiError, adminFetch } from "./adminClient";
 
 export type MediaReviewSource = "auto_check" | "user_report";
+/** What an item is. The screens branch on this, never on the shape of the id (B-037). */
+export type MediaReviewItemType = "post_media" | "profile_avatar" | "profile_cover";
 export type MediaReviewStatusFilter = "pending" | "approved" | "rejected";
 
 export interface MediaReviewItem {
+  /**
+   * Post and contest media: a UUID. A profile picture: "avatar:<userId>:<file>" or "cover:<userId>:<file>" (it
+   * contains ":" and must be URL-encoded in a path; the helpers below do it).
+   */
   id: string;
+  type: MediaReviewItemType;
   kind: "image" | "video" | string;
   contentType: string | null;
   sizeBytes: number | null;
@@ -26,8 +33,9 @@ export interface MediaReviewItem {
   checkLabels: string[];
   uploader: { id: string; publicName: string };
   postId: string | null;
-  uploadedAt: string;
-  ageSeconds: number;
+  /** null only for a profile picture uploaded before B-037 (age unknown; the queue lists it as the oldest). */
+  uploadedAt: string | null;
+  ageSeconds: number | null;
   enteredQueueAt: string | null;
   decidedAt: string | null;
   decisionSource: string | null;
@@ -61,6 +69,8 @@ export interface MediaDecisionResult {
 }
 
 export const MEDIA_REVIEW_ALREADY_DECIDED = "already_decided";
+/** 503 on Approve when the file could not be published: nothing changed and the moderator may simply try again. */
+export const MEDIA_REVIEW_PUBLISH_FAILED = "media_publish_failed";
 export const MEDIA_REVIEW_REJECT_REASON_MAX = 300;
 
 export function listMediaReview(
@@ -81,15 +91,15 @@ export function getMediaReviewStats(days = 7): Promise<MediaReviewStats> {
 }
 
 export function getMediaReviewItem(id: string): Promise<MediaReviewItem> {
-  return adminFetch<MediaReviewItem>(`/admin/media-review/${id}`);
+  return adminFetch<MediaReviewItem>(`/admin/media-review/${encodeURIComponent(id)}`);
 }
 
 export function approveMedia(id: string): Promise<MediaDecisionResult> {
-  return adminFetch<MediaDecisionResult>(`/admin/media-review/${id}/approve`, { method: "POST" });
+  return adminFetch<MediaDecisionResult>(`/admin/media-review/${encodeURIComponent(id)}/approve`, { method: "POST" });
 }
 
 export function rejectMedia(id: string, reason: string): Promise<MediaDecisionResult> {
-  return adminFetch<MediaDecisionResult>(`/admin/media-review/${id}/reject`, {
+  return adminFetch<MediaDecisionResult>(`/admin/media-review/${encodeURIComponent(id)}/reject`, {
     method: "POST",
     body: { reason },
   });
@@ -100,4 +110,26 @@ export function isAlreadyDecided(err: unknown): boolean {
   if (!(err instanceof AdminApiError) || err.status !== 409) return false;
   const body = err.body as { code?: unknown } | null | undefined;
   return body?.code === MEDIA_REVIEW_ALREADY_DECIDED;
+}
+
+/** True when Approve failed only because the file could not be published right now (503 media_publish_failed). */
+export function isPublishFailed(err: unknown): boolean {
+  if (!(err instanceof AdminApiError) || err.status !== 503) return false;
+  const body = err.body as { code?: unknown } | null | undefined;
+  return body?.code === MEDIA_REVIEW_PUBLISH_FAILED;
+}
+
+/** A profile picture or cover photo (B-037), as opposed to a post or contest file. */
+export function isProfileItem(item: Pick<MediaReviewItem, "type">): boolean {
+  return item.type === "profile_avatar" || item.type === "profile_cover";
+}
+
+/** The path of an item's review screen. The id is encoded: a profile picture's id contains ":". */
+export function mediaReviewItemPath(id: string): string {
+  return `/moderation/media/${encodeURIComponent(id)}`;
+}
+
+/** The cheap test for a profile-picture id before any item is in hand ("avatar:..." or "cover:..."). */
+export function isProfileItemId(id: string): boolean {
+  return id.startsWith("avatar:") || id.startsWith("cover:");
 }
