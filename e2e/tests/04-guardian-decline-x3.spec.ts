@@ -103,8 +103,9 @@ test.describe.serial('guardian declines three times', () => {
     await loginViaUi(page, email);
     await expect(page).toHaveURL(/\/guardian-consent$/);
     await page.getByRole('button', { name: 'Resend approval request' }).click();
-    await expect(page.getByTestId('guardian-consent-pending')).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText(/sent a new approval email/i)).toBeVisible();
+    // W9 (B-079): after the resend the minor sees the "New request sent" screen (Figma 5488:7248).
+    await expect(page.getByTestId('guardian-consent-resent')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('heading', { name: 'New request sent' })).toBeVisible();
     await page.screenshot({ path: '.run/shots/decline-1-after-resend.png', fullPage: true });
   });
 

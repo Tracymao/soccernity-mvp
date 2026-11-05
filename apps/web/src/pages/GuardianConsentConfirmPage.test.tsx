@@ -102,11 +102,132 @@ describe("GuardianConsentConfirmPage", () => {
     fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: "I consent" }));
 
-    expect(await screen.findByText(/your approval has been recorded/i)).not.toBeNull();
+    // W9 (B-079, Figma 5488:7164): "Thank you -- {name} can continue".
+    expect(await screen.findByRole("heading", { name: /thank you — the account holder can continue/i })).not.toBeNull();
     // QA D-09: the minor still has to verify email and create a profile, so the
     // account is not "now active" at this point.
     expect(document.body.textContent ?? "").not.toMatch(/now active/i);
     expect(screen.getByText(/can now continue registration/i)).not.toBeNull();
+  });
+
+  // W9 (B-078, B-176): the request-time layout of Figma 5108:6629.
+  describe("request-time layout (B-078 / B-176)", () => {
+    it("is one bordered card with personalised heading and intro when the request summary loaded", async () => {
+      vi.mocked(getGuardianRequestSummary).mockResolvedValue(SUMMARY);
+      renderConfirmPage();
+      await screen.findByTestId("request-summary");
+      const heading = screen.getByRole("heading", { level: 1 });
+      expect(heading.textContent).toBe("Do you give permission for Ade to use Soccernity?");
+      expect(document.querySelectorAll(".consent-card--main")).toHaveLength(1);
+      expect(document.body.textContent).toMatch(
+        /Ade named you as their parent or guardian\. Please read this before you decide/,
+      );
+      expect(screen.getByRole("heading", { name: "What Ade will be able to do" })).not.toBeNull();
+      expect(screen.getByText("Anything Ade chooses to post")).not.toBeNull();
+      expect(screen.getByText("Ade’s profile will not be indexed by Google or shown to logged-out visitors.")).not.toBeNull();
+      expect(screen.getByText("Only accounts Ade follows can start a direct message.")).not.toBeNull();
+    });
+
+    it("falls back to 'this account' / 'the account holder' when there is no summary (nothing is guessed)", () => {
+      renderConfirmPage();
+      const heading = screen.getByRole("heading", { level: 1 });
+      expect(heading.textContent).toBe("Do you give permission for this account to use Soccernity?");
+      expect(document.body.textContent).toMatch(/You were named as the parent or guardian for a new Soccernity account\./);
+      expect(screen.getByRole("heading", { name: "What the account holder will be able to do" })).not.toBeNull();
+      expect(screen.getByText("Only accounts the account holder follows can start a direct message.")).not.toBeNull();
+    });
+
+    it("has the sections in the frame's order, including the new 'What we collect' list with four tagged rows", () => {
+      renderConfirmPage();
+      const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+      expect(headings).toEqual([
+        "What the account holder will be able to do",
+        "What we collect",
+        "What stays switched off for under-18 accounts",
+        "Your email on their profile",
+      ]);
+      const collect = screen.getByRole("heading", { name: "What we collect" }).closest("section") as HTMLElement;
+      const rows = collect.querySelectorAll(".consent-row");
+      expect(rows).toHaveLength(4);
+      expect([...rows].map((r) => r.querySelector(".consent-row__title")?.textContent)).toEqual([
+        "Name and date of birth",
+        "Email address",
+        "Anything the account holder chooses to post",
+        "Your name, email and relationship",
+      ]);
+      // Every new guardian-facing sentence carries the tag (it is also in the manifest).
+      for (const row of rows) {
+        expect(row.querySelector(".consent-row__body")?.textContent).toMatch(/\[COPY PENDING LEGAL REVIEW\]$/);
+      }
+      expect(collect.textContent).toMatch(/never shown publicly/);
+    });
+
+    it("tags the intro sentence", () => {
+      renderConfirmPage();
+      expect(document.querySelector(".consent-page__subheading")?.textContent).toMatch(
+        /what we collect\. \[COPY PENDING LEGAL REVIEW\]$/,
+      );
+    });
+
+    it("sections are labelled regions (keyboard / screen-reader structure)", () => {
+      renderConfirmPage();
+      const regions = document.querySelectorAll("section[aria-labelledby]");
+      expect(regions).toHaveLength(4);
+      for (const region of regions) {
+        const id = region.getAttribute("aria-labelledby") as string;
+        expect(document.getElementById(id)?.textContent).toBeTruthy();
+      }
+    });
+  });
+
+  // W9 (B-079, Figma 5488:7164): the guardian's approved screen.
+  describe("approved screen (B-079)", () => {
+    async function approve(summary: GuardianRequestSummary | null) {
+      if (summary) vi.mocked(getGuardianRequestSummary).mockResolvedValue(summary);
+      vi.mocked(confirmGuardianConsent).mockResolvedValueOnce({ message: "Guardian consent confirmed." });
+      renderConfirmPage();
+      if (summary) await screen.findByTestId("request-summary");
+      fireEvent.click(screen.getByRole("checkbox"));
+      fireEvent.click(screen.getByRole("button", { name: "I consent" }));
+      await screen.findByRole("heading", { name: /thank you/i });
+    }
+
+    it("names the account holder, shows the date it was recorded and the 'What happens next' card", async () => {
+      await approve(SUMMARY);
+      expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Thank you — Ade can continue");
+      expect(screen.getByRole("status").textContent).toMatch(
+        /^Recorded on \d{1,2} [A-Z][a-z]+ \d{4}\. Ade can now continue registration, with under-18 protections in place\. \[COPY PENDING LEGAL REVIEW\]$/,
+      );
+      expect(screen.getByText("What happens next")).not.toBeNull();
+      expect(screen.getByText("Ade continues registration")).not.toBeNull();
+      expect(screen.getByText(/Ade now sets up a profile and picks a club\. \[COPY PENDING LEGAL REVIEW\]/)).not.toBeNull();
+      expect(screen.getByText("You stay in control")).not.toBeNull();
+      expect(screen.getByText("Nothing else is needed from you")).not.toBeNull();
+      // The form is gone and nothing says the account is active.
+      expect(screen.queryByRole("button", { name: "I consent" })).toBeNull();
+      expect(document.body.textContent ?? "").not.toMatch(/now active|is active/i);
+    });
+
+    it("every new sentence on the approved screen is tagged", async () => {
+      await approve(SUMMARY);
+      const bodies = [...document.querySelectorAll(".consent-row__body")].map((el) => el.textContent ?? "");
+      expect(bodies).toHaveLength(3);
+      for (const body of bodies) expect(body).toMatch(/\[COPY PENDING LEGAL REVIEW\]$/);
+    });
+
+    it("links 'guardian withdrawal page' to /guardian-consent/withdraw and Done to the home page", async () => {
+      await approve(SUMMARY);
+      expect(
+        (screen.getByRole("link", { name: "guardian withdrawal page" }) as HTMLAnchorElement).getAttribute("href"),
+      ).toBe("/guardian-consent/withdraw");
+      expect((screen.getByRole("link", { name: "Done" }) as HTMLAnchorElement).getAttribute("href")).toBe("/");
+    });
+
+    it("without a summary it still reads correctly (no invented name)", async () => {
+      await approve(null);
+      expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Thank you — the account holder can continue");
+      expect(screen.getByText("The account holder continues registration")).not.toBeNull();
+    });
   });
 
   it("no longer promises a player profile or following (Decision Log #377, QA D-13/D-15)", () => {

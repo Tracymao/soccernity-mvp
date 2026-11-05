@@ -206,6 +206,116 @@ describe("GuardianConsentPage", () => {
     expect(screen.queryByRole("link", { name: /go to my profile/i })).toBeNull();
   });
 
+  // W9 (B-077, Figma 5108:6631 / 5531:7544): the privacy link is enabled.
+  it("approved state: 'Review privacy settings' is an enabled link to /settings/privacy, not a disabled button", async () => {
+    seedSession(fakeAccessToken());
+    vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({
+      consentStatus: "confirmed",
+      guardianEmail: "guardian@example.com",
+      canResend: false,
+      consentTimestamp: "2026-08-15T12:00:00.000Z",
+    });
+    renderPage();
+
+    const link = (await screen.findByRole("link", { name: "Review privacy settings" })) as HTMLAnchorElement;
+    expect(link.getAttribute("href")).toBe("/settings/privacy");
+    expect(screen.queryByRole("button", { name: "Review privacy settings" })).toBeNull();
+    // The two actions the frame draws, in order.
+    expect([...document.querySelectorAll(".consent-actions .consent-button")].map((el) => el.textContent)).toEqual([
+      "Continue registration",
+      "Review privacy settings",
+    ]);
+  });
+
+  // W9 (B-079, Figma 5488:7248 / 5501:8342): the resent confirmation is a screen.
+  describe("approval request resent screen", () => {
+    function seedPending() {
+      seedSession(fakeAccessToken());
+      vi.mocked(getGuardianConsentStatus).mockResolvedValue({
+        consentStatus: "pending",
+        guardianEmail: "guardian@example.com",
+        canResend: true,
+        consentTimestamp: null,
+      });
+      vi.mocked(resendGuardianConsentRequest).mockResolvedValue({ message: "sent" });
+    }
+
+    it("replaces the page with 'New request sent', the guardian's email and the three 'What happens next' rows", async () => {
+      seedPending();
+      renderPage();
+      fireEvent.click(await screen.findByRole("button", { name: /resend approval request/i }));
+
+      expect(await screen.findByRole("heading", { name: "New request sent" })).not.toBeNull();
+      expect(screen.getByTestId("guardian-consent-resent")).not.toBeNull();
+      expect(screen.getByRole("status").textContent).toBe(
+        "We’ve emailed a fresh approval request to guardian@example.com. [COPY PENDING LEGAL REVIEW]",
+      );
+      expect(screen.getByText("What happens next")).not.toBeNull();
+      expect([...document.querySelectorAll(".consent-row__title")].map((el) => el.textContent)).toEqual([
+        "Your guardian gets a new email",
+        "Your account stays restricted for now",
+        "Wrong email address?",
+      ]);
+      // Every new sentence is tagged; the frame's link lifetime is not invented.
+      for (const body of document.querySelectorAll(".consent-row__body")) {
+        expect(body.textContent).toMatch(/\[COPY PENDING LEGAL REVIEW\]/);
+      }
+      expect(document.body.textContent ?? "").not.toMatch(/3 days/);
+      // The inline footnote the old page used is gone.
+      expect(screen.queryByText(/The previous link no longer works\.$/)).toBeNull();
+    });
+
+    it("the 'Wrong email address?' row links to the Change guardian email screen", async () => {
+      seedPending();
+      renderPage();
+      fireEvent.click(await screen.findByRole("button", { name: /resend approval request/i }));
+      const link = (await screen.findByRole("link", { name: "Change guardian email" })) as HTMLAnchorElement;
+      expect(link.getAttribute("href")).toBe("/guardian-consent/change-email");
+    });
+
+    it("'Back to my account' returns to the status view", async () => {
+      seedPending();
+      renderPage();
+      fireEvent.click(await screen.findByRole("button", { name: /resend approval request/i }));
+      fireEvent.click(await screen.findByRole("button", { name: "Back to my account" }));
+
+      expect(await screen.findByText(/waiting for approval/i)).not.toBeNull();
+      expect(screen.queryByTestId("guardian-consent-resent")).toBeNull();
+    });
+
+    it("a resend after decline 1 or 2 ends on the same screen once the reopened (pending) status is read", async () => {
+      seedSession(fakeAccessToken());
+      vi.mocked(getGuardianConsentStatus)
+        .mockResolvedValueOnce({
+          consentStatus: "declined",
+          guardianEmail: "guardian@example.com",
+          canResend: true,
+          consentTimestamp: null,
+        })
+        .mockResolvedValue({
+          consentStatus: "pending",
+          guardianEmail: "guardian@example.com",
+          canResend: true,
+          consentTimestamp: null,
+        });
+      vi.mocked(resendGuardianConsentRequest).mockResolvedValue({ message: "sent" });
+      renderPage();
+      fireEvent.click(await screen.findByRole("button", { name: /resend approval request/i }));
+
+      expect(await screen.findByRole("heading", { name: "New request sent" })).not.toBeNull();
+    });
+
+    it("a failed resend keeps the status page and shows the error, not the screen", async () => {
+      seedPending();
+      vi.mocked(resendGuardianConsentRequest).mockRejectedValue(new AuthApiError("nope", { status: 429 }));
+      renderPage();
+      fireEvent.click(await screen.findByRole("button", { name: /resend approval request/i }));
+
+      expect((await screen.findByRole("alert")).textContent).toMatch(/couldn.t send that just now/i);
+      expect(screen.queryByTestId("guardian-consent-resent")).toBeNull();
+    });
+  });
+
   // B-110 / B-125 (Decision Log #395, #402): `declined` is its own state and is
   // never rendered as pending. After decline 1 or 2 the session stays valid and
   // this is the page the minor sees.
