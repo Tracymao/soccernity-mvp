@@ -16,7 +16,12 @@
 // v7 (Decision Log #415 item 1): "guardian withdrawal page" in the footnote is now a link to
 // /guardian-consent/withdraw. The hashed wording is unchanged; the version moves because what the
 // guardian is shown changed (a route to withdraw).
-export const CONSENT_SCREEN_VERSION = 'v7';
+// v8 (W9, B-078 / B-176 / B-079 / B-169, build register): the guardian confirm page is now the single centred card
+// Figma 5108:6629 draws -- the heading and intro name the account holder, a new "What we collect" list (four tagged
+// rows), "What stays switched off" is personalised, and the approved screen is Figma 5488:7164 ("Thank you --
+// {name} can continue", a "What happens next" card with a withdrawal-page link). What the guardian is told changed,
+// so the version moves once for the whole change.
+export const CONSENT_SCREEN_VERSION = 'v8';
 
 
 // TRIPWIRE (consent-screen-version.spec.ts): sha256 of the normalised
@@ -26,4 +31,4 @@ export const CONSENT_SCREEN_VERSION = 'v7';
 // guardian is told/agrees to, and update this hash in the same PR. For a
 // meaning-neutral fix (e.g. a typo) update only this hash. The spec prints
 // the current hash. Deliberately not auto-bumped -- a human decides.
-export const CONSENT_SCREEN_TEXT_HASH = '4cc3c2027c9d343c574900e6ec62454a8d1a5bce49bb9fec5cc46c92bdcae178';
+export const CONSENT_SCREEN_TEXT_HASH = '39c309d61e66fcc8613577b5568fc0fa4c8228349b5b64d81094a5cb09117b0d';

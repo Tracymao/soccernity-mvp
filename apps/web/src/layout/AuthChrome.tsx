@@ -12,8 +12,9 @@
 // screens (Guardian Consent, Verify Email, Club Picker) already draw
 // exactly this bar; this makes the shipped app match.
 //
-// The other auth-flow routes (/guardian-consent, /guardian-consent/confirm,
-// /verify-email) and /profile deliberately stay under AppShell -- they
+// /guardian-consent/confirm (W9, B-176) now sits here too, like the guardian
+// withdrawal page: a guardian has no account. The other auth-flow routes
+// (/guardian-consent, /verify-email) and /profile deliberately stay under AppShell -- they
 // were built to render full-bleed *within* AppShell's content area (see
 // each one's own CSS header comment) and are out of scope for this
 // change.

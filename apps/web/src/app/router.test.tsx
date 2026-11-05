@@ -168,6 +168,24 @@ describe("router - guardian withdrawal route (B-080 / B-112)", () => {
     await renderAt("/guardian-consent/confirm");
     expect(screen.queryByRole("heading", { name: "Withdraw your consent" })).toBeNull();
   });
+
+  // W9 (B-176): the guardian has no account, so the confirm page sits under the same logo-only Top Bar
+  // as the withdrawal page (Figma 5108:6629 draws no site nav).
+  it("/guardian-consent/confirm renders under the logo-only Top Bar, with no site nav and no footer", async () => {
+    await renderAt("/guardian-consent/confirm?token=tok-123");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+      "Do you give permission for this account to use Soccernity?",
+    );
+    expect(screen.getByRole("link", { name: "Soccernity home" })).not.toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Primary" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Login" })).toBeNull();
+    expect(document.querySelector("footer")).toBeNull();
+  });
+
+  it("/guardian-consent (the minor's own status page) still sits under the site Header", async () => {
+    await renderAt("/guardian-consent");
+    expect(screen.getByRole("navigation", { name: "Primary" })).not.toBeNull();
+  });
 });
 
 describe("router - user two-factor recovery link pages (B-278)", () => {
