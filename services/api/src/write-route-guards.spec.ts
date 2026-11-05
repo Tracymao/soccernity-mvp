@@ -20,6 +20,7 @@ import { PublicReportsController } from './modules/moderation/public-reports.con
 import { ReportsController } from './modules/moderation/reports.controller';
 import { TwoFactorRecoveryController } from './modules/two-factor/recovery/two-factor-recovery.controller';
 import { PostMediaController } from './modules/post-media/post-media.controller';
+import { SocialAuthController } from './modules/social-auth/social-auth.controller';
 import { PostMediaReportController } from './modules/post-media/post-media-report.controller';
 import { NotificationsController } from './modules/notifications/notifications.controller';
 import { SportsMatchesController } from './modules/sports/sports-matches.controller';
@@ -84,6 +85,19 @@ const OPEN_ROUTES: Record<string, string> = {
   // backend/w14-post-media-pipeline: removing your OWN upload is an undo that touches no one else, so an
   // account that was restricted after uploading can still delete what it holds (JwtAuthGuard stays).
   'DELETE /media/uploads/:id': 'removing your own upload is an undo; a restricted account may still delete its own files',
+  // backend/b084-social-signin (B-084; Decision Log #378, #468): Google / Facebook sign-in. Nobody here is signed in yet
+  // (they are signing in or signing up), so there is no JwtAuthGuard and no consent / verified-email / profile guard to
+  // apply. Each route's credential is what it carries: the single-use OAuth state, or the single-use registration token.
+  // All five are limited by the shared auth limiters (see the controller).
+  'POST /auth/social/:provider/start': 'unauthenticated by design: starts an OAuth round trip; creates only a short-lived state',
+  'POST /auth/social/:provider/callback':
+    'unauthenticated by design: the single-use OAuth state and the provider-verified code are the credential; same refusals, two-factor challenge and session as the password login',
+  'POST /auth/social/email-code':
+    'unauthenticated by design: the single-use registration token is the credential; sends a verification code to an address typed by a person who has no account yet',
+  'POST /auth/social/email-code/verify':
+    'unauthenticated by design: the single-use registration token plus the emailed code are the credential',
+  'POST /auth/social/register':
+    'unauthenticated by design: the single-use registration token is the credential; this IS registration, with the Age Gate and guardian flow of POST /auth/register',
   // B-197 (Decision Log #411 item 5): a safety action needs authentication only (JwtAuthGuard stays, pinned below).
   // backend/b139-username-review (B-139 part (c), Decision Log #467): a revoked user asks for a review of the
   // removal. The person has NO username, so ProfileCompleteGuard would refuse them by design, and like report /
@@ -190,6 +204,7 @@ const CONTROLLERS = [
   PostMediaController,
   PostMediaReportController,
   TwoFactorRecoveryController,
+  SocialAuthController,
 ];
 
 // Controller files deliberately NOT in CONTROLLERS, with the reason. A new

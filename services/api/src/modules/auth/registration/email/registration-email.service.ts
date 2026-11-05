@@ -45,6 +45,7 @@ export type RegistrationEmailTemplate =
   | 'appeal-decision'
   | 'username-revoked'
   | 'login-lockout-notice'
+  | 'social-email-code'
   | 'contact-enquiry-notification';
 
 export interface OutboundRegistrationEmail {
@@ -66,6 +67,8 @@ const RECOVERY_TEMPLATES: ReadonlySet<RegistrationEmailTemplate> = new Set<Regis
   'two-factor-recovery-completed',
   'two-factor-recovery-approved',
   'two-factor-recovery-declined',
+  // B-084: carries a one-time code that proves ownership of an email address; the code must not reach a log.
+  'social-email-code',
 ]);
 
 // Decision Log #17 (Build Plan Section 9): Postmark is the chosen
@@ -502,6 +505,18 @@ export class RegistrationEmailService {
     return true;
   }
 
+  // B-084 (Decision Log #378, #468). The one-time code a person receives when a social sign-in gave no email (Facebook
+  // can return none): they enter an address and prove they own it BEFORE any account exists. Plain functional copy; it
+  // makes no promise and asks for nothing but the code. The code is never logged (see RECOVERY_TEMPLATES).
+  async sendSocialEmailCodeEmail(to: string, code: string): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: `Your Soccernity verification code: ${code}`,
+      template: 'social-email-code',
+      data: { code },
+    });
+  }
+
   // backend/w7-contact-us-enquiry (B-046). To the SUPPORT mailbox (not the sender), once per new Contact Us
   // enquiry. It says only that an enquiry arrived, its category, and where to read it: NEVER the sender's
   // name, email, subject or message (the message is read in the admin inbox, behind admin sign-in), so the
@@ -677,6 +692,16 @@ function renderTextBody(template: RegistrationEmailTemplate, data: Record<string
 
 ` +
         (data.link ? `Read it in the admin inbox: ${data.link}` : `Read it in the admin inbox.`)
+      );
+    case 'social-email-code':
+      return (
+        `Hi,
+
+` +
+        `Your Soccernity verification code is ${data.code}.
+
+` +
+        `It expires in 10 minutes. If you did not ask for it, you can ignore this email.`
       );
     case 'login-lockout-notice':
       return (
@@ -960,6 +985,12 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
         (data.link
           ? `<p><a href="${escapeHtml(data.link)}">Read it in the admin inbox</a>.</p>`
           : `<p>Read it in the admin inbox.</p>`)
+      );
+    case 'social-email-code':
+      return (
+        `<p>Hi,</p>` +
+        `<p>Your Soccernity verification code is <strong>${escapeHtml(data.code)}</strong>.</p>` +
+        `<p>It expires in 10 minutes. If you did not ask for it, you can ignore this email.</p>`
       );
     case 'login-lockout-notice':
       return (

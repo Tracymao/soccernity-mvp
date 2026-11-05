@@ -1,6 +1,7 @@
 import { buildTestDobEncryption } from '../../../crypto/test-dob-encryption';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
-import { RegistrationService } from './registration.service';
+import { Prisma } from '@prisma/client';
+import { RegistrationService, SOCIAL_SIGNUP_UNAVAILABLE_CODE } from './registration.service';
 
 describe('RegistrationService', () => {
   const asOfAdult = { dateOfBirth: '1990-01-01' };
@@ -540,6 +541,103 @@ describe('RegistrationService', () => {
 
       expect(tokenService.issueTokenPair).toHaveBeenCalledWith('user-1', 'fan');
       expect(result.tokens.accessToken.token).toBe('access-token');
+    });
+  });
+
+  // B-084 (Decision Log #378, #468): register() with a provider-verified social identity. The age checks, guardian
+  // capture, country derivation and session are the SAME code; only the password and the email verification differ.
+  describe('register with a social context (B-084)', () => {
+    const social = { provider: 'google', providerAccountId: 'g-1', emailVerified: true };
+    const adult = { email: 'Ada@Example.com', password: 'random-never-shown', displayName: 'Ada', countryCode: 'GB', ...asOfAdult };
+
+    it('writes the social identity in the SAME create as the account, so they exist together or not at all', async () => {
+      const { service, prisma } = buildService();
+      await service.register(adult as any, '203.0.113.9', social);
+      expect(prisma.user.create).toHaveBeenCalledTimes(1);
+      expect(prisma.user.create.mock.calls[0][0].data.socialIdentities).toEqual({
+        create: { provider: 'google', providerAccountId: 'g-1' },
+      });
+    });
+
+    it('an address Google vouched for is stored as VERIFIED and no verification email is sent or token issued', async () => {
+      const { service, prisma, emailService, emailVerificationTokenStore } = buildService();
+      const result = await service.register(adult as any, undefined, social);
+      expect(prisma.user.create.mock.calls[0][0].data.verificationStatus).toBe('verified');
+      expect(result.user.verificationStatus).toBe('verified');
+      expect(emailVerificationTokenStore.issue).not.toHaveBeenCalled();
+      expect(emailService.sendVerificationEmail).not.toHaveBeenCalled();
+    });
+
+    it('an address that is NOT proven (a Facebook email) is stored unverified and gets the usual verification email', async () => {
+      const { service, prisma, emailService } = buildService();
+      await service.register(adult as any, undefined, { ...social, provider: 'facebook', emailVerified: false });
+      expect(prisma.user.create.mock.calls[0][0].data.verificationStatus).toBe('unverified');
+      expect(emailService.sendVerificationEmail).toHaveBeenCalledWith('ada@example.com', 'verify-token');
+    });
+
+    it('the password is hashed like any password (an argon2id hash of a value nobody knows), so no login path changes', async () => {
+      const { service, passwordService, prisma } = buildService();
+      await service.register(adult as any, undefined, social);
+      expect(passwordService.hash).toHaveBeenCalledWith('random-never-shown');
+      expect(prisma.user.create.mock.calls[0][0].data.passwordHash).toBe('hashed-password');
+    });
+
+    it('a minor via social sign-in still needs guardian details and still creates the pending Guardian + consent email', async () => {
+      const { service, prisma, emailService } = buildService();
+      await expect(service.register({ ...adult, ...asOfMinor } as any, undefined, social)).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.user.create).not.toHaveBeenCalled();
+
+      const result = await service.register(
+        { ...adult, ...asOfMinor, guardian: { name: 'Mum', email: 'mum@example.com', relationship: 'Parent' } } as any,
+        undefined,
+        social,
+      );
+      expect(result.user.isMinor).toBe(true);
+      expect(result.guardian?.consentStatus).toBe('pending');
+      expect(emailService.sendGuardianConsentEmail).toHaveBeenCalledWith('mum@example.com', expect.any(String), 'Ada');
+    });
+
+    it('below the minimum age is refused exactly as for email registration, before anything is written', async () => {
+      const { service, prisma } = buildService();
+      await expect(
+        service.register({ ...adult, dateOfBirth: new Date(Date.now() - 2 * 365 * 24 * 3600 * 1000).toISOString().slice(0, 10) } as any, undefined, social),
+      ).rejects.toMatchObject({ response: { code: 'below_minimum_age' } });
+      expect(prisma.user.create).not.toHaveBeenCalled();
+    });
+
+    it('an email that already has an account is the ONE generic social answer, not the email-registration 409 text', async () => {
+      const { service, prisma } = buildService();
+      prisma.user.findUnique.mockResolvedValue({ id: 'existing' });
+      const err: any = await service.register(adult as any, undefined, social).catch((e) => e);
+      expect(err).toBeInstanceOf(ConflictException);
+      expect(err.getResponse()).toMatchObject({ code: SOCIAL_SIGNUP_UNAVAILABLE_CODE });
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      // Password registration keeps its existing message.
+      const pw: any = await service.register(adult as any).catch((e) => e);
+      expect(pw.message).toBe('An account with this email already exists');
+    });
+
+    it('a concurrent sign-up that loses the race on the unique email or identity gets the same generic answer, not a 500', async () => {
+      const { service, prisma } = buildService();
+      prisma.user.create.mockRejectedValue(new Prisma.PrismaClientKnownRequestError('dup', { code: 'P2002', clientVersion: 'x' }));
+      const err: any = await service.register(adult as any, undefined, social).catch((e) => e);
+      expect(err).toBeInstanceOf(ConflictException);
+      expect(err.getResponse()).toMatchObject({ code: SOCIAL_SIGNUP_UNAVAILABLE_CODE });
+    });
+
+    it('a password registration is untouched: no identity, no forced verification status', async () => {
+      const { service, prisma, emailService } = buildService();
+      await service.register(adult as any);
+      const data = prisma.user.create.mock.calls[0][0].data;
+      expect(data).not.toHaveProperty('socialIdentities');
+      expect(data).not.toHaveProperty('verificationStatus');
+      expect(emailService.sendVerificationEmail).toHaveBeenCalled();
+    });
+
+    it('a non-unique database error on a social sign-up is NOT swallowed', async () => {
+      const { service, prisma } = buildService();
+      prisma.user.create.mockRejectedValue(new Error('connection lost'));
+      await expect(service.register(adult as any, undefined, social)).rejects.toThrow('connection lost');
     });
   });
 

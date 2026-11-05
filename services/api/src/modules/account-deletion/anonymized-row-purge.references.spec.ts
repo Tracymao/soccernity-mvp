@@ -62,6 +62,7 @@ describe('purge reference classification', () => {
         'GuardianNoticeWithhold.user',
         'PointsLedgerEntry.user',
         'TwoFactorRecoveryRequest.user',
+        'SocialIdentity.user',
         'UserBackupCode.user',
       ].sort(),
     );

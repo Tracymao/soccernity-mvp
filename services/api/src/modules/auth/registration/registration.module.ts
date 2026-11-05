@@ -48,5 +48,7 @@ import { RegistrationService } from './registration.service';
     ResendVerificationService,
     ResendVerificationLimiter,
   ],
+  // B-084: the social-auth module completes a social sign-up through RegistrationService.register.
+  exports: [RegistrationService],
 })
 export class AuthRegistrationModule {}
