@@ -64,7 +64,7 @@ export class UserCoverService {
     try {
       await this.prisma.user.update({
         where: { id: userId },
-        data: { coverUrl: url, coverKey: key, coverStatus: 'pending', coverRejectionReason: null },
+        data: { coverUrl: url, coverKey: key, coverStatus: 'pending', coverRejectionReason: null, coverUploadedAt: new Date() },
         select: { id: true },
       });
     } catch (err) {
@@ -81,7 +81,7 @@ export class UserCoverService {
     const current = await this.prisma.user.findUnique({ where: { id: userId }, select: { coverKey: true } });
     await this.prisma.user.update({
       where: { id: userId },
-      data: { coverUrl: null, coverKey: null, coverStatus: null, coverRejectionReason: null },
+      data: { coverUrl: null, coverKey: null, coverStatus: null, coverRejectionReason: null, coverUploadedAt: null },
       select: { id: true },
     });
     if (current?.coverKey) await this.removeObject(current.coverKey);

@@ -14,7 +14,12 @@ import { currentObjectKey } from '../post-media/post-media.service';
 import { PUBLIC_NAME_SELECT, toPublicUser } from '../users/public-name.util';
 import { ListMediaReviewQueryDto } from './dto/list-media-review-query.dto';
 import { MEDIA_REVIEW_STATS_DEFAULT_DAYS } from './dto/media-review-stats-query.dto';
-import { decodeMediaReviewCursor, encodeMediaReviewCursor } from './media-review.cursor';
+import { decodeMediaReviewPosition, encodeMediaReviewPosition, MediaReviewPosition } from './media-review.cursor';
+import { MediaReviewItem, MediaReviewPage } from './media-review.types';
+import { ProfileImageReviewService, ProfileQueueRow } from './profile-image-review.service';
+import { isProfileItemId } from './profile-image-item-id';
+
+export { MediaReviewItem, MediaReviewItemType, MediaReviewPage } from './media-review.types';
 
 // backend/w15-media-review-queue (B-037; Decision Log #419 item 4). The moderator side of the media review
 // queue. The queue holds ONLY:
@@ -37,6 +42,13 @@ import { decodeMediaReviewCursor, encodeMediaReviewCursor } from './media-review
 //     The statistics counts stay accurate and are counts only;
 //   - what reporters wrote (the optional reason) is shown here and nowhere else, never with who wrote it.
 
+// backend/b037-profile-image-review (B-037; Decision Log #411 item 1, #468). The queue also holds PROFILE PICTURES
+// (an avatar or a cover photo the automatic check left undecided; profile-image-review.service.ts). Both kinds come
+// back in ONE list with ONE cursor: the post-media stream (ordered by its insertion sequence, exactly as before) and
+// the profile stream (ordered by upload time) are merged by time. The list shows profile pictures only for the
+// default 'pending' status and only for the automatic-check source (they are never reported and have no decision
+// history). The statistics card stays post and contest media only. A picture's id names its FILE
+// (profile-image-item-id.ts); everything else about an id (a UUID) is as before.
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
 
@@ -65,48 +77,15 @@ const ROW_SELECT = {
   uploader: { select: { id: true, ...PUBLIC_NAME_SELECT } },
   _count: { select: { reports: true } },
   // Reporters' optional reasons, newest first. Reason text only: never the reporter.
-  reports: { where: { reason: { not: null } }, select: { reason: true }, orderBy: { createdAt: 'desc' }, take: 20 },
+  reports: {
+    where: { reason: { not: null } },
+    select: { reason: true },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+  },
 } satisfies Prisma.PostMediaSelect;
 
 type Row = Prisma.PostMediaGetPayload<{ select: typeof ROW_SELECT }>;
-
-export interface MediaReviewItem {
-  id: string;
-  kind: string;
-  contentType: string | null;
-  sizeBytes: number | null;
-  durationSeconds: number | null;
-  /** 'pending' (undecided) | 'approved' | 'rejected'. An approved item with reportCount > 0 is waiting for a decision. */
-  status: string;
-  awaitingDecision: boolean;
-  /** Why the item is (or was) in the queue: the automatic check and/or user reports. */
-  sources: PostMediaReviewSource[];
-  /** Open reports; 0 once decided. A count only, never who. */
-  reportCount: number;
-  /** True once the report threshold hid it from everyone but its author. */
-  hiddenPendingReview: boolean;
-  /** What reporters wrote (optional free text, newest first, at most 20). Never who wrote it. */
-  reportReasons: string[];
-  /** The automatic check's category labels (e.g. "Suggestive"); empty when the check never ran. */
-  checkLabels: string[];
-  uploader: { id: string; publicName: string };
-  postId: string | null;
-  uploadedAt: Date;
-  /** Seconds since the file was uploaded (confirmed). */
-  ageSeconds: number;
-  enteredQueueAt: Date | null;
-  decidedAt: Date | null;
-  decisionSource: string | null;
-  rejectionReason: string | null;
-  /** A short-lived link to the file; null if storage is unavailable. */
-  viewUrl: string | null;
-  viewUrlExpiresAt: Date | null;
-}
-
-export interface MediaReviewPage {
-  items: MediaReviewItem[];
-  nextCursor: string | null;
-}
 
 export interface MediaReviewStats {
   windowDays: number;
@@ -122,6 +101,12 @@ export interface MediaReviewStats {
   decidedByModerator: number;
 }
 
+/** The person and kind a (well-formed) profile item id names, for the audit row. */
+function profileTarget(id: string): { userId: string; kind: string } {
+  const [kind, userId] = id.split(':');
+  return { userId, kind };
+}
+
 @Injectable()
 export class AdminMediaReviewService {
   constructor(
@@ -131,6 +116,9 @@ export class AdminMediaReviewService {
     private readonly actionLog: AdminActionLogService,
     private readonly config: PostMediaConfig,
     @Optional() @Inject(APP_CLOCK) private readonly clock: Clock = systemClock,
+    // Last and optional so a spec that builds this service for post media alone keeps its shape (and a queue with
+    // no profile stream behaves exactly as before B-037); AdminMediaReviewModule always provides it.
+    @Optional() private readonly profileImages?: ProfileImageReviewService,
   ) {}
 
   // ---- GET /admin/media-review -------------------------------------------------------------------
@@ -138,18 +126,24 @@ export class AdminMediaReviewService {
   async list(query: ListMediaReviewQueryDto, adminId: string): Promise<MediaReviewPage> {
     const limit = Math.min(query.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     const order = query.order ?? 'newest';
-    const conditions: Prisma.PostMediaWhereInput[] = [{ uploadState: 'ready' }, this.statusWhere(query.status ?? 'pending')];
+    const status = query.status ?? 'pending';
+    const position: MediaReviewPosition = query.cursor ? decodeMediaReviewPosition(query.cursor) : {};
+    const conditions: Prisma.PostMediaWhereInput[] = [{ uploadState: 'ready' }, this.statusWhere(status)];
+    const vetted = await isAdminChildSafetyVetted(this.prisma, adminId);
     // A minor's items are for child-safety-vetted admins only (B-258): left out of the list, not flagged.
-    if (!(await isAdminChildSafetyVetted(this.prisma, adminId))) conditions.push({ uploader: { is: { isMinor: false } } });
+    if (!vetted) conditions.push({ uploader: { is: { isMinor: false } } });
 
     if (query.source === 'auto_check') {
       conditions.push({ reviewEntrySource: 'auto_check' });
     } else if (query.source === 'user_report') {
-      conditions.push({ OR: [{ reviewEntrySource: 'user_report' }, { reports: { some: {} } }] });
+      conditions.push({
+        OR: [{ reviewEntrySource: 'user_report' }, { reports: { some: {} } }],
+      });
     }
-    if (query.cursor) {
-      const sequence = decodeMediaReviewCursor(query.cursor);
-      conditions.push({ sequence: order === 'newest' ? { lt: sequence } : { gt: sequence } });
+    if (position.sequence !== undefined) {
+      conditions.push({
+        sequence: order === 'newest' ? { lt: position.sequence } : { gt: position.sequence },
+      });
     }
 
     const rows = await this.prisma.postMedia.findMany({
@@ -158,19 +152,67 @@ export class AdminMediaReviewService {
       take: limit + 1,
       select: ROW_SELECT,
     });
-    const hasMore = rows.length > limit;
-    const page = hasMore ? rows.slice(0, limit) : rows;
-    const last = page[page.length - 1];
-    return {
-      items: await Promise.all(page.map((r) => this.toItem(r))),
-      nextCursor: hasMore && last ? encodeMediaReviewCursor(last.sequence) : null,
-    };
+
+    // Profile pictures: only the waiting ones, only for the automatic-check source (see the header comment).
+    const includeProfile = !!this.profileImages && status === 'pending' && (!query.source || query.source === 'auto_check');
+    const profileRows: ProfileQueueRow[] = includeProfile
+      ? await (this.profileImages as ProfileImageReviewService).listCandidates({
+          order,
+          after: position.profile,
+          limit: limit + 1,
+          vetted,
+        })
+      : [];
+
+    // Merge the two streams by upload time. Each stream keeps its own order; ties go to post media.
+    const timeOfPost = (r: Row) => (r.confirmedAt ?? r.createdAt).getTime();
+    const timeOfProfile = (r: ProfileQueueRow) => r.uploadedAt?.getTime() ?? 0;
+    const taken: Array<{ post: Row } | { profile: ProfileQueueRow }> = [];
+    let i = 0;
+    let j = 0;
+    while (taken.length < limit && (i < rows.length || j < profileRows.length)) {
+      let takePost: boolean;
+      if (i >= rows.length) takePost = false;
+      else if (j >= profileRows.length) takePost = true;
+      else {
+        const p = timeOfPost(rows[i]);
+        const q = timeOfProfile(profileRows[j]);
+        takePost = order === 'newest' ? p >= q : p <= q;
+      }
+      if (takePost) taken.push({ post: rows[i++] });
+      else taken.push({ profile: profileRows[j++] });
+    }
+    const hasMore = i < rows.length || j < profileRows.length;
+
+    const now = this.clock.now();
+    const takenProfile = taken.flatMap((t) => ('profile' in t ? [t.profile] : []));
+    const profileItems = takenProfile.length > 0 ? await (this.profileImages as ProfileImageReviewService).toItems(takenProfile, now) : [];
+    let nextProfileItem = 0;
+    const items = await Promise.all(
+      taken.map((t) => ('post' in t ? this.toItem(t.post) : Promise.resolve(profileItems[nextProfileItem++]))),
+    );
+
+    // Where each stream stopped: the last item taken from it, else wherever it already was.
+    let nextCursor: string | null = null;
+    if (hasMore) {
+      const lastPost = [...taken].reverse().find((t): t is { post: Row } => 'post' in t);
+      const lastProfile = takenProfile[takenProfile.length - 1];
+      const next: MediaReviewPosition = {};
+      const sequence = lastPost ? lastPost.post.sequence : position.sequence;
+      if (sequence !== undefined) next.sequence = sequence;
+      const profile = lastProfile ? ProfileImageReviewService.positionOf(lastProfile) : position.profile;
+      if (profile !== undefined) next.profile = profile;
+      nextCursor = encodeMediaReviewPosition(next);
+    }
+    return { items, nextCursor };
   }
 
   /** The review state a status filter names. 'pending' = waiting for a decision. */
   private statusWhere(status: 'pending' | 'approved' | 'rejected'): Prisma.PostMediaWhereInput {
     if (status === 'pending') {
-      return { OR: [{ status: 'pending', reviewEnteredAt: { not: null } }, { reportCount: { gt: 0 } }] };
+      return {
+        OR: [{ status: 'pending', reviewEnteredAt: { not: null } }, { reportCount: { gt: 0 } }],
+      };
     }
     return { status, reviewEnteredAt: { not: null }, reportCount: 0 };
   }
@@ -178,13 +220,19 @@ export class AdminMediaReviewService {
   // ---- GET /admin/media-review/:id ---------------------------------------------------------------
 
   async get(id: string, adminId: string): Promise<MediaReviewItem> {
+    if (isProfileItemId(id) && this.profileImages) {
+      return this.profileImages.get(id, await isAdminChildSafetyVetted(this.prisma, adminId), this.clock.now());
+    }
     // Only items that have been through the queue: this is not a general browser of everyone's uploads.
     const conditions: Prisma.PostMediaWhereInput[] = [
       { id, uploadState: 'ready' },
       { OR: [{ reviewEnteredAt: { not: null } }, { reportCount: { gt: 0 } }] },
     ];
     if (!(await isAdminChildSafetyVetted(this.prisma, adminId))) conditions.push({ uploader: { is: { isMinor: false } } });
-    const row = await this.prisma.postMedia.findFirst({ where: { AND: conditions }, select: ROW_SELECT });
+    const row = await this.prisma.postMedia.findFirst({
+      where: { AND: conditions },
+      select: ROW_SELECT,
+    });
     if (!row) throw postMediaError(404, 'media_not_found', 'Media not found');
     return this.toItem(row);
   }
@@ -195,13 +243,29 @@ export class AdminMediaReviewService {
    */
   private async assertMayActOn(id: string, adminId: string): Promise<void> {
     if (await isAdminChildSafetyVetted(this.prisma, adminId)) return;
-    const minorItem = await this.prisma.postMedia.findFirst({ where: { id, uploader: { is: { isMinor: true } } }, select: { id: true } });
+    const minorItem = await this.prisma.postMedia.findFirst({
+      where: { id, uploader: { is: { isMinor: true } } },
+      select: { id: true },
+    });
     if (minorItem) throw postMediaError(404, 'media_not_found', 'Media not found');
   }
 
   // ---- POST /admin/media-review/:id/approve | reject ---------------------------------------------
 
   async approve(id: string, adminId: string): Promise<ModeratorDecisionResult> {
+    if (isProfileItemId(id) && this.profileImages) {
+      const profile = await this.profileImages.approve(id, await isAdminChildSafetyVetted(this.prisma, adminId));
+      // targetId is the person (so the audit log can apply the child-safety rule to it); the kind goes in the note.
+      const target = profileTarget(id);
+      await this.actionLog.record(
+        adminId,
+        ADMIN_ACTION_LOG_ACTIONS.MEDIA_APPROVED,
+        ADMIN_ACTION_LOG_TARGET_TYPES.PROFILE_IMAGE,
+        target.userId,
+        target.kind,
+      );
+      return profile;
+    }
     await this.assertMayActOn(id, adminId);
     const result = await this.decisions.approve(id, adminId);
     await this.actionLog.record(
@@ -215,6 +279,21 @@ export class AdminMediaReviewService {
   }
 
   async reject(id: string, adminId: string, reason: string): Promise<ModeratorDecisionResult> {
+    if (isProfileItemId(id) && this.profileImages) {
+      const { userId, kind, ...profile } = await this.profileImages.reject(
+        id,
+        await isAdminChildSafetyVetted(this.prisma, adminId),
+        reason,
+      );
+      await this.actionLog.record(
+        adminId,
+        ADMIN_ACTION_LOG_ACTIONS.MEDIA_REJECTED,
+        ADMIN_ACTION_LOG_TARGET_TYPES.PROFILE_IMAGE,
+        userId,
+        `${kind}: ${reason}`,
+      );
+      return profile;
+    }
     await this.assertMayActOn(id, adminId);
     const result = await this.decisions.reject(id, adminId, reason);
     await this.actionLog.record(adminId, ADMIN_ACTION_LOG_ACTIONS.MEDIA_REJECTED, ADMIN_ACTION_LOG_TARGET_TYPES.POST_MEDIA, id, reason);
@@ -230,19 +309,47 @@ export class AdminMediaReviewService {
     const inWindow = { gte: from, lte: to };
 
     const [autoApproved, autoRejected, sentToReview, reportedGroups, decidedByModerator] = await Promise.all([
-      this.prisma.postMedia.count({ where: { decisionSource: 'auto', status: 'approved', decidedAt: inWindow } }),
-      this.prisma.postMedia.count({ where: { decisionSource: 'auto', status: 'rejected', decidedAt: inWindow } }),
-      this.prisma.postMedia.count({ where: { reviewEntrySource: 'auto_check', reviewEnteredAt: inWindow } }),
-      this.prisma.postMediaReport.groupBy({ by: ['mediaId'], where: { createdAt: inWindow } }),
+      this.prisma.postMedia.count({
+        where: {
+          decisionSource: 'auto',
+          status: 'approved',
+          decidedAt: inWindow,
+        },
+      }),
+      this.prisma.postMedia.count({
+        where: {
+          decisionSource: 'auto',
+          status: 'rejected',
+          decidedAt: inWindow,
+        },
+      }),
+      this.prisma.postMedia.count({
+        where: { reviewEntrySource: 'auto_check', reviewEnteredAt: inWindow },
+      }),
+      this.prisma.postMediaReport.groupBy({
+        by: ['mediaId'],
+        where: { createdAt: inWindow },
+      }),
       this.prisma.adminActionLog.count({
         where: {
           targetType: ADMIN_ACTION_LOG_TARGET_TYPES.POST_MEDIA,
-          action: { in: [ADMIN_ACTION_LOG_ACTIONS.MEDIA_APPROVED, ADMIN_ACTION_LOG_ACTIONS.MEDIA_REJECTED] },
+          action: {
+            in: [ADMIN_ACTION_LOG_ACTIONS.MEDIA_APPROVED, ADMIN_ACTION_LOG_ACTIONS.MEDIA_REJECTED],
+          },
           createdAt: inWindow,
         },
       }),
     ]);
-    return { windowDays: days, from, to, autoApproved, autoRejected, sentToReview, reported: reportedGroups.length, decidedByModerator };
+    return {
+      windowDays: days,
+      from,
+      to,
+      autoApproved,
+      autoRejected,
+      sentToReview,
+      reported: reportedGroups.length,
+      decidedByModerator,
+    };
   }
 
   // ---- shaping -----------------------------------------------------------------------------------
@@ -253,11 +360,16 @@ export class AdminMediaReviewService {
     if (row.reviewEntrySource === 'user_report' || row._count.reports > 0) sources.push('user_report');
 
     const { url, expiresAt } = await this.viewLink(
-      currentObjectKey({ publishedAt: row.publishedAt, publicKey: row.publicKey, privateKey: row.privateKey }),
+      currentObjectKey({
+        publishedAt: row.publishedAt,
+        publicKey: row.publicKey,
+        privateKey: row.privateKey,
+      }),
     );
     const uploadedAt = row.confirmedAt ?? row.createdAt;
     return {
       id: row.id,
+      type: 'post_media',
       kind: row.kind,
       contentType: row.contentType,
       sizeBytes: row.byteSize,
@@ -288,7 +400,10 @@ export class AdminMediaReviewService {
     const ttl = this.config.reviewViewUrlTtlSeconds;
     try {
       const url = await this.storage.createDownloadUrl(objectKey, ttl);
-      return { url, expiresAt: new Date(this.clock.now().getTime() + ttl * 1000) };
+      return {
+        url,
+        expiresAt: new Date(this.clock.now().getTime() + ttl * 1000),
+      };
     } catch (err) {
       if (err instanceof ServiceUnavailableException) return { url: null, expiresAt: null };
       throw err;

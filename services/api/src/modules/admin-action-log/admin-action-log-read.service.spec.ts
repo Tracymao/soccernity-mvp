@@ -108,6 +108,7 @@ describe('AdminActionLogReadService', () => {
       expect(q.sql).not.toContain('"isMinor"');
       expect(q.sql).not.toContain('"concernsMinor"');
       expect(q.sql).not.toContain('<> ALL');
+      expect(q.values).not.toContain('profile_image');
     });
 
     it('an unvetted reader excludes the child-safety actions and every minor-target kind in the QUERY', async () => {
@@ -120,6 +121,8 @@ describe('AdminActionLogReadService', () => {
       expect(q.sql).toContain('"Report" r');
       expect(q.sql).toContain('"PostMedia" m');
       expect(q.sql).toContain('"ContactEnquiry" ce');
+      // B-037: a profile-picture decision is about a PERSON (targetId = their user id); a minor's or a missing one is hidden.
+      expect(q.values).toContain('profile_image');
       expect(q.sql).toContain('"concernsMinor" = false');
       expect(q.sql).toContain('"concernsMinor" = true');
     });

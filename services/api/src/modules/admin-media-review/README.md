@@ -42,3 +42,39 @@ reporters wrote (newest first, at most 20, text only, never who); the uploader a
 
 Approving publishes the file first (private -> public copy, verified); if that fails nothing changes and the moderator gets a
 retryable `503 media_publish_failed`. See `post-media/README.md`, "Private and public prefixes".
+
+## Profile pictures in the same queue (B-037; Decision Log #411 item 1, #468)
+
+An avatar or cover photo is reviewed in this queue as a new kind of item. Every item carries `type`: `post_media`,
+`profile_avatar` or `profile_cover`.
+
+**What is in it.** A picture whose status is `pending` AND (its `ProfileImageCheck` state is `review` or `gave_up`, OR the automatic
+check is not configured, so nothing would ever decide it). One still being retried, or not yet picked up while the check IS
+configured, is not shown: the check will decide it. Source is always `auto_check`. No label percentages (the check does not store
+them), no size. The age comes from `User.avatarUploadedAt` / `coverUploadedAt` (migration `20261113090000`); older rows are NULL and are
+listed as the oldest, with `uploadedAt` and `ageSeconds` null.
+
+**The id.** `avatar:<userId>:<file>` or `cover:<userId>:<file>` (`profile-image-item-id.ts`). `<file>` is the stored file's name, so the
+id names the exact FILE the moderator was shown. If the person has uploaded another picture since, the id matches nothing (404) and the
+old decision can never reach the new one. A post media id is a UUID and never contains `:`.
+
+**One list, one cursor.** The post-media stream (ordered by insertion sequence, as before) and the profile stream (upload time, then
+`<kind>:<userId>`) are merged by time; ties go to post media. The cursor holds a position in each stream. A page with no profile
+items encodes exactly as before, and an old `{ sequence }` cursor still works. Profile pictures are listed only for the default
+`pending` status and the `auto_check` source (they have no reports and no decision history). Statistics stay post and contest media only.
+
+**Approve** is `ProfileImagePublishService.publish`, the same code the automatic check runs: copy to `profile-media/`, verify, then flip
+the status and key, only while the row still points at the key shown. Fails closed with the same retryable `503 media_publish_failed`. No
+notification (the automatic approval sends none).
+
+**Reject** is `UserImageReviewService.rejectProfileImage` with the key shown: required reason (trimmed, 1 to 300 characters), ONE
+notification, and the guardian notice for a minor. It now also takes down an already-APPROVED picture: copy to the private prefix and verify,
+delete the public object, then one transaction rejects it and points the row at the private key. Any failure before that transaction
+throws and rejects nothing; a retry finishes the job. A repeat or an already-decided item is a `409 already_decided` with no second
+notification and no second log row.
+
+**Minors.** Same rule as post media (B-258): a minor's pictures are visible to, and decidable by, a child-safety-vetted admin only; anyone
+else gets the same 404 as a missing id.
+
+**Audit.** `media.approved` / `media.rejected`, target type `profile_image`, `targetId` the PERSON's user id (so the audit-log reader can
+hide a minor's rows from an unvetted admin by joining `User`), the kind in the notes (`avatar`, or `avatar: <reason>`).

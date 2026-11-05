@@ -87,6 +87,10 @@ export class AdminActionLogReadService {
       conditions.push(Prisma.sql`NOT (l."targetType" = ${T.POST_MEDIA} AND NOT EXISTS (
         SELECT 1 FROM "PostMedia" m JOIN "User" mu ON mu."id" = m."uploaderId"
         WHERE m."id" = l."targetId" AND mu."isMinor" = false))`);
+      // B-037: a profile picture decision is about a PERSON (targetId is their user id): a minor's, or one that no
+      // longer exists, is hidden from an admin who is not vetted -- like a user row above.
+      conditions.push(Prisma.sql`NOT (l."targetType" = ${T.PROFILE_IMAGE} AND NOT EXISTS (
+        SELECT 1 FROM "User" u WHERE u."id" = l."targetId" AND u."isMinor" = false))`);
       conditions.push(Prisma.sql`NOT (l."targetType" = ${T.CONTACT_ENQUIRY} AND EXISTS (
         SELECT 1 FROM "ContactEnquiry" ce JOIN "Report" er ON er."id" = ce."escalatedReportId"
         WHERE ce."id" = l."targetId" AND er."concernsMinor" = true))`);
