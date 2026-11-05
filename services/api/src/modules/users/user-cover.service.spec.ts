@@ -65,7 +65,7 @@ describe('UserCoverService (B-196)', () => {
     const publicKey = key.replace('private-profile/', 'profile-media/');
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: 'u1' },
-      data: { coverUrl: `https://cdn.example/${publicKey}`, coverKey: key, coverStatus: 'pending', coverRejectionReason: null },
+      data: { coverUrl: `https://cdn.example/${publicKey}`, coverKey: key, coverStatus: 'pending', coverRejectionReason: null, coverUploadedAt: expect.any(Date) },
       select: { id: true },
     });
     expect(JSON.stringify(res)).not.toContain('profile-media');
@@ -75,7 +75,7 @@ describe('UserCoverService (B-196)', () => {
     const { prisma, service } = build();
     await service.uploadCover('u1', file(JPEG, 'image/jpeg'));
     const data = (prisma.user.update as jest.Mock).mock.calls[0][0].data;
-    expect(Object.keys(data).sort()).toEqual(['coverKey', 'coverRejectionReason', 'coverStatus', 'coverUrl']);
+    expect(Object.keys(data).sort()).toEqual(['coverKey', 'coverRejectionReason', 'coverStatus', 'coverUploadedAt', 'coverUrl']);
   });
 
   it.each([
@@ -147,7 +147,7 @@ describe('UserCoverService (B-196)', () => {
       await expect(service.deleteCover('u1')).resolves.toEqual({ cover: null });
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'u1' },
-        data: { coverUrl: null, coverKey: null, coverStatus: null, coverRejectionReason: null },
+        data: { coverUrl: null, coverKey: null, coverStatus: null, coverRejectionReason: null, coverUploadedAt: null },
         select: { id: true },
       });
       expect(store.delete).toHaveBeenCalledWith('private-profile/u1/a.jpg');

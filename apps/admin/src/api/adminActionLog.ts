@@ -121,6 +121,7 @@ export const TARGET_TYPE_LABELS: Record<string, string> = {
   user: "User",
   contest_cycle: "Contest",
   post_media: "Media",
+  profile_image: "Profile picture",
   contact_enquiry: "Contact enquiry",
   search: "Search",
 };
@@ -142,6 +143,9 @@ export function targetPath(targetType: string, targetId: string): string | null 
     case "post_media":
       return `/moderation/media/${targetId}`;
     case "user":
+      return `/users/${targetId}`;
+    case "profile_image":
+      // B-037: a profile-picture decision is about a person; its targetId is their user id.
       return `/users/${targetId}`;
     case "contest_cycle":
       return `/contest/cycles/${targetId}`;

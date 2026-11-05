@@ -78,7 +78,7 @@ export class UserAvatarService {
     try {
       await this.prisma.user.update({
         where: { id: userId },
-        data: { avatarUrl: url, avatarKey: key, avatarStatus: 'pending', avatarRejectionReason: null },
+        data: { avatarUrl: url, avatarKey: key, avatarStatus: 'pending', avatarRejectionReason: null, avatarUploadedAt: new Date() },
         select: { id: true },
       });
     } catch (err) {
@@ -95,7 +95,7 @@ export class UserAvatarService {
     const current = await this.prisma.user.findUnique({ where: { id: userId }, select: { avatarKey: true } });
     await this.prisma.user.update({
       where: { id: userId },
-      data: { avatarUrl: null, avatarKey: null, avatarStatus: null, avatarRejectionReason: null },
+      data: { avatarUrl: null, avatarKey: null, avatarStatus: null, avatarRejectionReason: null, avatarUploadedAt: null },
       select: { id: true },
     });
     if (current?.avatarKey) await this.removeObject(current.avatarKey);

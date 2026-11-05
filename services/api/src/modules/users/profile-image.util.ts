@@ -73,6 +73,17 @@ export function publicProfileKeyFor(currentKey: string): string {
   return `${PUBLIC_PROFILE_PREFIX}/${user}/${file}`;
 }
 
+/**
+ * The private key a published picture is moved back to when it is withdrawn (B-037): the same user and file name
+ * under the private prefix. The inverse of publicProfileKeyFor for a key written by privateProfileKey.
+ */
+export function privateProfileKeyFor(currentKey: string): string {
+  const parts = currentKey.split('/');
+  const file = parts[parts.length - 1];
+  const user = parts[parts.length - 2];
+  return `${PRIVATE_PROFILE_PREFIX}/${user}/${file}`;
+}
+
 /** True when the key is already in the public prefix (the picture is published). */
 export function isPublicProfileKey(key: string): boolean {
   return key.startsWith(`${PUBLIC_PROFILE_PREFIX}/`);

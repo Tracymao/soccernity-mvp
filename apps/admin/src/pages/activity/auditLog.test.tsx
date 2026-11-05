@@ -127,6 +127,7 @@ describe("Audit log (superadmin)", () => {
         row({ id: "4", targetType: "post_media", targetId: "44444444-aaaa" }),
         row({ id: "5", targetType: "user", targetId: "55555555-aaaa" }),
         row({ id: "6", targetType: "contest_cycle", targetId: "66666666-aaaa" }),
+        row({ id: "8", targetType: "profile_image", targetId: "88888888-aaaa", notes: "avatar" }),
         row({ id: "7", targetType: "search", targetId: "email", action: "admin.search_performed", notes: "kind=email results=2" }),
       ]),
     );
@@ -139,6 +140,8 @@ describe("Audit log (superadmin)", () => {
     expect(href("Media #44444444")).toBe("/moderation/media/44444444-aaaa");
     expect(href("User #55555555")).toBe("/users/55555555-aaaa");
     expect(href("Contest #66666666")).toBe("/contest/cycles/66666666-aaaa");
+    // B-037: an avatar / cover decision names a person; it opens that person's user detail.
+    expect(href("Profile picture #88888888")).toBe("/users/88888888-aaaa");
     expect(screen.getByText("Email search").closest("a")).toBeNull();
     expect(within(screen.getByRole("table")).getByText("Search performed")).not.toBeNull();
   });

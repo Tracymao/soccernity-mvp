@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { StorageModule } from '../../storage/storage.module';
 import { PostMediaModule } from '../post-media/post-media.module';
 import { ProfileImageCheckService, ProfileImageCheckSweepService } from './profile-image-check.service';
+import { ProfileImagePublishService } from './profile-image-publish.service';
 import { ProfileImageViewService } from './profile-image-view.service';
 import { UserAvatarController } from './user-avatar.controller';
 import { UserAvatarService } from './user-avatar.service';
@@ -39,12 +40,14 @@ import { UsersService } from './users.service';
     UserCoverService,
     UserImageReviewService,
     ProfileImageViewService,
+    // B-036 / B-037: the one place a pending picture is published (the check and the moderator queue).
+    ProfileImagePublishService,
     // B-036: the automatic check for avatars and covers (runs only when Rekognition is configured).
     ProfileImageCheckService,
     ProfileImageCheckSweepService,
     PrismaService,
   ],
-  // B-214: the image review queue (B-037) will import UsersModule and call this.
-  exports: [UserImageReviewService],
+  // B-214 / B-037: the moderator media review queue imports UsersModule for these.
+  exports: [UserImageReviewService, ProfileImagePublishService, ProfileImageViewService],
 })
 export class UsersModule {}

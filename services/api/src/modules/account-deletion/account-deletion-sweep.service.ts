@@ -351,6 +351,9 @@ export class AccountDeletionSweepService {
           coverKey: null,
           coverStatus: null,
           coverRejectionReason: null,
+          // B-037: the upload times go with the pictures.
+          avatarUploadedAt: null,
+          coverUploadedAt: null,
         },
       });
     });
@@ -511,6 +514,9 @@ export class AccountDeletionSweepService {
           coverKey: null,
           coverStatus: null,
           coverRejectionReason: null,
+          // B-037: the upload times go with the pictures.
+          avatarUploadedAt: null,
+          coverUploadedAt: null,
           accountStatus: 'deleted',
           pendingDeletionAt: null,
           // B-043 (#375): when this row became 'deleted' -- the 30-day purge clock starts here. The FIRST

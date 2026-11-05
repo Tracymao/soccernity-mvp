@@ -83,8 +83,8 @@ export const ADMIN_ACTION_LOG_ACTIONS = {
   // the field NAMES that changed (the minimum tally and points are recorded as changed, not by value).
   CONTEST_CYCLE_UPDATED: 'contest_cycle.updated',
   // POST /admin/media-review/:id/approve and /reject (backend/w15-media-review-queue, B-037). targetType
-  // 'post_media'. Approving an approved-but-reported item (keeping it) is logged as MEDIA_APPROVED with a note.
-  // The reject note carries the reason the uploader reads.
+  // 'post_media', or 'profile_image' for an avatar / cover (B-037). Approving an approved-but-reported item (keeping
+  // it) is logged as MEDIA_APPROVED with a note. The reject note carries the reason the uploader reads.
   MEDIA_APPROVED: 'media.approved',
   MEDIA_REJECTED: 'media.rejected',
   // GET /admin/search (backend/b114-admin-search, B-114, Decision Log #463) -- written ONLY for a search whose text
@@ -107,6 +107,9 @@ export const ADMIN_ACTION_LOG_TARGET_TYPES = {
   USER: 'user',
   CONTEST_CYCLE: 'contest_cycle',
   POST_MEDIA: 'post_media',
+  // backend/b037-profile-image-review (B-037): an approved / rejected avatar or cover. targetId is the PERSON'S user id
+  // (so the audit log can hide a minor's rows from an unvetted admin); the notes name the kind (avatar | cover).
+  PROFILE_IMAGE: 'profile_image',
   CONTACT_ENQUIRY: 'contact_enquiry',
   SEARCH: 'search',
 } as const;
