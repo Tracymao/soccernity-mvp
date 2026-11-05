@@ -71,6 +71,12 @@ export const E2E_INERT_EXTERNAL_ENV: Readonly<Record<string, string>> = {
   // backend/w14-post-media-pipeline: no real Rekognition account in e2e; the check is inert unless a spec supplies a fake.
   REKOGNITION_ACCESS_KEY_ID: 'replace-me',
   REKOGNITION_SECRET_ACCESS_KEY: 'replace-me',
+  // B-084: no real OAuth app in e2e; the social-auth specs override the provider client with a fake and switch providers
+  // on and off through it, never through these keys.
+  GOOGLE_OAUTH_CLIENT_ID: 'replace-me',
+  GOOGLE_OAUTH_CLIENT_SECRET: 'replace-me',
+  FACEBOOK_OAUTH_CLIENT_ID: 'replace-me',
+  FACEBOOK_OAUTH_CLIENT_SECRET: 'replace-me',
   SENTRY_DSN: 'replace-me-with-real-dsn-once-account-exists',
   // B-024: no real GeoLite2 database in e2e unless a spec supplies one.
   GEOLITE2_DB_PATH: '/nonexistent/e2e-geolite2-disabled.mmdb',

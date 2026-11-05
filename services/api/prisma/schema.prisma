@@ -111,6 +111,8 @@ model User {
   totpEnabledAt             DateTime?
   totpLastUsedStep          Int?
   twoFactorBackupCodes      UserBackupCode[]
+  // B-084 (Decision Log #378, #468): the Google / Facebook identities linked to this account. See SocialIdentity.
+  socialIdentities          SocialIdentity[]
   twoFactorRecoveryRequests TwoFactorRecoveryRequest[]
   // backend/b280-withhold-guardian-notices (B-280): reverse relation for GuardianNoticeWithhold. Never selected by any
   // user-facing query; see the model's comment.
@@ -2751,6 +2753,30 @@ model UserBackupCode {
   usedAt    DateTime?
   createdAt DateTime  @default(now())
 
+  @@index([userId])
+}
+
+// B-084 (Decision Log #378, #468). A genuine NEW model beyond Section 3's entity list (flagged per CLAUDE.md's "the
+// data model is a fixed spec" rule): the link between a Soccernity account and an account at a social sign-in
+// provider (Google or Facebook). Written in the same create as the account for a social sign-up, or when a verified
+// Google identity is linked to an existing verified account.
+//
+// Deliberately minimal for privacy: the provider's own user id and nothing else. No email, name, picture, access
+// token or refresh token is stored (the provider's profile is read once, in memory, during the callback). The
+// provider's date of birth is never requested at all (the Age Gate is the only source of a date of birth).
+// `provider` is a plain string ('google' | 'facebook'), the schema's usual string-enum convention. Credential
+// material, so it is deleted whenever the account can no longer sign in (anonymisation and held-account
+// minimisation), and CASCADEs with the User row like UserBackupCode.
+model SocialIdentity {
+  id             String   @id @default(uuid())
+  provider       String
+  providerAccountId String
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+
+  // One provider identity belongs to exactly one account.
+  @@unique([provider, providerAccountId])
   @@index([userId])
 }
 

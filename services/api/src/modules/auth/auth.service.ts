@@ -92,6 +92,14 @@ export class AuthService implements OnModuleInit {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    return this.signInVerifiedUser(user, persistent);
+  }
+
+  // B-084 (Decision Log #378, #468): everything login() does once the person's identity is PROVEN -- the status checks,
+  // the two-factor challenge, the session. Extracted unchanged so the password sign-in and the social sign-in (Google /
+  // Facebook, social-auth module) cannot drift: same refusals, same challenge, same session. What proves identity is the
+  // caller's job (a verified password, or a provider-verified identity already linked to this account).
+  async signInVerifiedUser(user: User, persistent: boolean): Promise<AuthResponse | TwoFactorChallenge> {
     // sprint-1/f5-f6-missing-endpoints: checked AFTER password
     // verification succeeds, deliberately — this distinct message is only
     // ever revealed to someone who already proved they know the correct
