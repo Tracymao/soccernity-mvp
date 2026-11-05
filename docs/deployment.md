@@ -211,9 +211,14 @@ No two may be the same.
      nothing public serves `private-media/`. With Cloudflare R2 the bucket's
      `r2.dev` address or a custom domain serves the *whole bucket* unless a
      rule limits it. So `S3_PUBLIC_BASE_URL` must map **only** `post-media/`
-     (a path rule or a Worker), **or** the private files must live in a
-     separate bucket. Then prove it: request a `private-media/` object through
-     the public address and check you are refused (not served). This has not
+     **and `profile-media/`** (a path rule or a Worker), **or** the private
+     files must live in a separate bucket. `profile-media/` is where an
+     *approved* profile picture or cover photo is served from; its private
+     counterpart is `private-profile/` (backend/b036-avatar-cover-check,
+     B-036), which the public address must not serve either. Then prove it:
+     request a `private-media/` object **and a `private-profile/` object**
+     through the public address and check you are refused (not served), and
+     that a `profile-media/` object is served. This has not
      been verified against a real bucket; until it is done, a pending or
      rejected file is fetchable by anyone who holds its URL;
      (3) **ffmpeg and ffprobe on the API host**: Render's native Node runtime

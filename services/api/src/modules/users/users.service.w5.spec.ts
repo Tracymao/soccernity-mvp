@@ -2,6 +2,8 @@ import { buildTestDobEncryption } from '../../crypto/test-dob-encryption';
 import { BadRequestException, ForbiddenException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { policyStub } from './test-username-policy';
+import { DirectUploadStorageService } from '../../storage/direct-upload-storage.service';
+import { ProfileImageViewService } from './profile-image-view.service';
 import { UsersService } from './users.service';
 
 // backend/w5-profile-block: profile content (bio, preferred club, the optional
@@ -50,8 +52,12 @@ const OWN_ROW = {
   avatarStatus: null,
 };
 
+// B-036: the owner's URL for a picture that is not approved is a signed link to the PRIVATE file.
+const SIGN = jest.fn(async (key: string) => `https://signed.example/${key}`);
+const imageView = () => new ProfileImageViewService({ createDownloadUrl: SIGN } as unknown as DirectUploadStorageService);
+
 function service(prisma: PrismaService) {
-  return new UsersService(prisma, dobEnc, policyStub());
+  return new UsersService(prisma, dobEnc, policyStub(), imageView());
 }
 
 describe('UsersService — profile content (B-038, B-081)', () => {
@@ -60,12 +66,12 @@ describe('UsersService — profile content (B-038, B-081)', () => {
     const prisma = buildPrisma();
     p(prisma).user.findUnique.mockResolvedValue({
       ...OWN_ROW,
-      avatarUrl: 'https://cdn/a.jpg', avatarKey: 'avatars/u1/a.jpg', avatarStatus: 'rejected', avatarRejectionReason: 'Not a clear photo of you',
-      coverUrl: 'https://cdn/c.jpg', coverKey: 'covers/u1/c.jpg', coverStatus: 'pending', coverRejectionReason: null,
+      avatarUrl: 'https://cdn/a.jpg', avatarKey: 'private-profile/u1/a.jpg', avatarStatus: 'rejected', avatarRejectionReason: 'Not a clear photo of you',
+      coverUrl: 'https://cdn/c.jpg', coverKey: 'private-profile/u1/c.jpg', coverStatus: 'pending', coverRejectionReason: null,
     });
     const me = await service(prisma).getOwnProfile('u1');
-    expect(me.avatar).toEqual({ url: 'https://cdn/a.jpg', status: 'rejected', rejectionReason: 'Not a clear photo of you' });
-    expect(me.cover).toEqual({ url: 'https://cdn/c.jpg', status: 'pending', rejectionReason: null });
+    expect(me.avatar).toEqual({ url: 'https://signed.example/private-profile/u1/a.jpg', status: 'rejected', rejectionReason: 'Not a clear photo of you' });
+    expect(me.cover).toEqual({ url: 'https://signed.example/private-profile/u1/c.jpg', status: 'pending', rejectionReason: null });
     expect(p(prisma).user.findUnique.mock.calls[0][0].select).toMatchObject({ avatarRejectionReason: true, coverRejectionReason: true });
     // The flat columns are folded into avatar/cover, not returned beside them.
     expect(me).not.toHaveProperty('avatarRejectionReason');
@@ -89,18 +95,68 @@ describe('UsersService — profile content (B-038, B-081)', () => {
       preferredClub: 'Ikoyi Rovers',
       profileCountry: 'NG',
       avatarUrl: 'https://cdn/x.jpg',
-      avatarKey: 'avatars/u1/x.jpg',
+      avatarKey: 'private-profile/u1/x.jpg',
       avatarStatus: 'pending',
     });
     const me = await service(prisma).getOwnProfile('u1');
     expect(me).toMatchObject({ bio: 'Left back', preferredClub: 'Ikoyi Rovers', profileCountry: 'NG' });
-    expect(me.avatar).toEqual({ url: 'https://cdn/x.jpg', status: 'pending', rejectionReason: null });
-    expect(JSON.stringify(me)).not.toContain('avatars/u1/x.jpg');
+    expect(me.avatar).toEqual({ url: 'https://signed.example/private-profile/u1/x.jpg', status: 'pending', rejectionReason: null });
+    // The public address of a pending picture is never used (only the short-lived signed link to the private file).
+    expect(JSON.stringify(me)).not.toContain('https://cdn/x.jpg');
     expect(me).not.toHaveProperty('avatarKey');
     // The select asks for the safeguarding country NOWHERE.
     const select = p(prisma).user.findUnique.mock.calls[0][0].select;
     expect(select).not.toHaveProperty('declaredCountry');
     expect(select).not.toHaveProperty('derivedCountry');
+  });
+
+  // backend/b036-avatar-cover-check: the owner's URL for a picture.
+  describe('the owner URL of a profile picture (B-036)', () => {
+    const own = (over: Record<string, unknown>) => {
+      const prisma = buildPrisma();
+      p(prisma).user.findUnique.mockResolvedValue({ ...OWN_ROW, ...over });
+      return service(prisma).getOwnProfile('u1');
+    };
+
+    it('an APPROVED picture gets its public URL (the file is in the public prefix)', async () => {
+      SIGN.mockClear();
+      const me = await own({ avatarUrl: 'https://cdn/profile-media/u1/a.jpg', avatarKey: 'profile-media/u1/a.jpg', avatarStatus: 'approved' });
+      expect(me.avatar).toEqual({ url: 'https://cdn/profile-media/u1/a.jpg', status: 'approved', rejectionReason: null });
+      expect(SIGN).not.toHaveBeenCalled();
+    });
+
+    it.each(['pending', 'rejected'])('a %s picture gets a SIGNED link to the private file, never the public address', async (status) => {
+      SIGN.mockClear();
+      const me = await own({
+        avatarUrl: 'https://cdn/profile-media/u1/a.jpg',
+        avatarKey: 'private-profile/u1/a.jpg',
+        avatarStatus: status,
+        avatarRejectionReason: status === 'rejected' ? 'Not a clear photo of you' : null,
+      });
+      expect(me.avatar?.url).toBe('https://signed.example/private-profile/u1/a.jpg');
+      expect(SIGN).toHaveBeenCalledWith('private-profile/u1/a.jpg', 300);
+      expect(JSON.stringify(me)).not.toContain('profile-media');
+    });
+
+    it('a link that cannot be made gives url null and keeps the status (the request does not fail)', async () => {
+      const prisma = buildPrisma();
+      p(prisma).user.findUnique.mockResolvedValue({
+        ...OWN_ROW,
+        avatarUrl: 'https://cdn/profile-media/u1/a.jpg',
+        avatarKey: 'private-profile/u1/a.jpg',
+        avatarStatus: 'pending',
+      });
+      const down = new ProfileImageViewService({ createDownloadUrl: jest.fn().mockRejectedValue(new Error('r2 down')) } as unknown as DirectUploadStorageService);
+      const me = await new UsersService(prisma, dobEnc, policyStub(), down).getOwnProfile('u1');
+      expect(me.avatar).toEqual({ url: null, status: 'pending', rejectionReason: null });
+    });
+
+    it('without a view service a picture that is not approved has url null (nothing public is ever handed out)', async () => {
+      const prisma = buildPrisma();
+      p(prisma).user.findUnique.mockResolvedValue({ ...OWN_ROW, avatarUrl: 'https://cdn/x.jpg', avatarKey: 'private-profile/u1/x.jpg', avatarStatus: 'pending' });
+      const me = await new UsersService(prisma, dobEnc, policyStub()).getOwnProfile('u1');
+      expect(me.avatar).toEqual({ url: null, status: 'pending', rejectionReason: null });
+    });
   });
 
   it('avatar is null when none is stored', async () => {
@@ -199,6 +255,7 @@ describe('UsersService — other-user public profile (B-082 backend leg, B-039)'
     bio: 'Winger',
     profileCountry: 'NG',
     avatarUrl: 'https://cdn/a.jpg',
+    avatarKey: 'profile-media/t1/a.jpg',
     avatarStatus: 'approved',
     ...over,
   });
@@ -212,7 +269,8 @@ describe('UsersService — other-user public profile (B-082 backend leg, B-039)'
     expect(JSON.stringify(res)).not.toContain('Ada Obi');
     for (const k of ['preferredClub', 'declaredCountry', 'derivedCountry', 'avatarKey', 'avatarStatus']) expect(res).not.toHaveProperty(k);
     const select = p(prisma).user.findUnique.mock.calls[0][0].select;
-    for (const k of ['preferredClub', 'declaredCountry', 'derivedCountry', 'avatarKey']) expect(select).not.toHaveProperty(k);
+    // avatarKey / coverKey ARE selected, only to check the file is published; they are never returned (asserted above).
+    for (const k of ['preferredClub', 'declaredCountry', 'derivedCountry']) expect(select).not.toHaveProperty(k);
   });
 
   // B-214 (Decision Log #412 item 2): the moderator's reason is shown to the owner alone.

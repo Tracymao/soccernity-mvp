@@ -154,6 +154,10 @@ export const PLAIN_USER_REFERENCES: Readonly<Record<string, PlainReferenceClass>
   // its RevokedUsername record, and at anonymisation (anonymizeUser), so after the anonymiser has run none is left;
   // classified 'content' so a surviving request blocks the purge rather than being silently dropped.
   'UsernameReviewRequest.userId': 'content',
+  // backend/b036-avatar-cover-check: retry bookkeeping of the avatar / cover image check (no image, no labels). Deleted at
+  // anonymisation (deleteBehaviouralRows) and by the check's own cleanup, so none is left; classified 'content' so a
+  // survivor blocks the purge rather than being silently dropped.
+  'ProfileImageCheck.userId': 'content',
   'AdminActionLog.targetId': 'content', // targetType 'user'; veto-able default
   'ContestVoteEvent.voterId': 'content', // append-only audit of this user's votes
   'AgeReclassificationLog.userId': 'content', // append-only audit; veto-able default

@@ -35,6 +35,49 @@ export const PROFILE_IMAGE_TYPES = {
 } as const;
 export type ProfileImageMime = keyof typeof PROFILE_IMAGE_TYPES;
 
+// ---- where a profile picture lives (backend/b036-avatar-cover-check; Decision Log #411 item 1, B-257 design) ----
+//
+// The same private-then-public design post media uses, so an unchecked picture of a child is never readable
+// through the public address:
+//
+//     a picture is in the PUBLIC prefix (profile-media/) only while it is APPROVED;
+//     a picture that is pending, rejected or awaiting review lives in the PRIVATE prefix (private-profile/).
+//
+// User.avatarKey / coverKey always hold the file's CURRENT key, so the prefix says which state it is in.
+// User.avatarUrl / coverUrl hold the file's FUTURE public URL (what publicUrlFor returns for the public key; no
+// network call, built at upload time), and are served to other users only while the status is 'approved'.
+// The owner sees a pending or rejected picture through a short-lived signed link to the private object
+// (ProfileImageViewService), never through the public address.
+//
+// Both prefixes are NEW on purpose and neither starts with "post-media" or "private-media": the post-media stray
+// sweep (RejectedMediaSweepService) lists those prefixes and deletes any object with no PostMedia row, which would
+// destroy profile pictures. LAUNCH-GATE CONSEQUENCE (B-265): the public address must serve post-media/ AND
+// profile-media/ (and nothing else), or the private files must live in a separate bucket.
+export const PRIVATE_PROFILE_PREFIX = 'private-profile';
+export const PUBLIC_PROFILE_PREFIX = 'profile-media';
+
+/** The private key a new upload is stored under. */
+export function privateProfileKey(userId: string, uuid: string, ext: string): string {
+  return `${PRIVATE_PROFILE_PREFIX}/${userId}/${uuid}.${ext}`;
+}
+
+/**
+ * The public key a picture is copied to when approved: the same user and file name under the public prefix. A key
+ * written before this design (avatars/<user>/<file>, covers/<user>/<file>) maps the same way, so a legacy pending
+ * picture is published by the same code path.
+ */
+export function publicProfileKeyFor(currentKey: string): string {
+  const parts = currentKey.split('/');
+  const file = parts[parts.length - 1];
+  const user = parts[parts.length - 2];
+  return `${PUBLIC_PROFILE_PREFIX}/${user}/${file}`;
+}
+
+/** True when the key is already in the public prefix (the picture is published). */
+export function isPublicProfileKey(key: string): boolean {
+  return key.startsWith(`${PUBLIC_PROFILE_PREFIX}/`);
+}
+
 export const PROFILE_IMAGE_UNSUPPORTED_MESSAGE = 'Please choose a JPEG, PNG or WebP picture.';
 
 export interface UploadedProfileImage {

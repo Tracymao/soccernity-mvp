@@ -5,7 +5,9 @@ import { AppModule } from '../src/app.module';
 import { AccountDeletionSweepService } from '../src/modules/account-deletion/account-deletion-sweep.service';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { UserImageReviewService } from '../src/modules/users/user-image-review.service';
+import { DirectUploadStorageService } from '../src/storage/direct-upload-storage.service';
 import { StorageService } from '../src/storage/storage.service';
+import { InMemoryStorage } from './support/post-media-doubles';
 import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from './reset-database';
 import { seedDob } from './dob-seed';
 
@@ -28,21 +30,24 @@ const REASON = 'The photo does not show your face clearly';
 describe('Profile image rejection reason e2e (real Postgres, fake object store)', () => {
   let app: INestApplication;
   const http = () => app.getHttpServer();
-  const store = new Map<string, Buffer>();
-  const fake = {
-    upload: jest.fn(async (buffer: Buffer, key: string) => {
-      store.set(key, buffer);
-      return `https://cdn.test/${key}`;
-    }),
-    delete: jest.fn(async (key: string) => {
-      store.delete(key);
-    }),
+  // B-036: avatars and covers go through DirectUploadStorageService (private key, signed owner link).
+  const storage = new InMemoryStorage();
+  const fake = { upload: jest.spyOn(storage, 'upload'), delete: jest.spyOn(storage, 'delete') };
+  const store = {
+    get size() {
+      return storage.objects.size;
+    },
+    has: (key: string) => storage.objects.has(key),
+    keys: () => [...storage.objects.keys()],
+    clear: () => storage.objects.clear(),
   };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(StorageService)
-      .useValue(fake)
+      .useValue(storage)
+      .overrideProvider(DirectUploadStorageService)
+      .useValue(storage)
       .compile();
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
