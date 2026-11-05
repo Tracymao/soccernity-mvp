@@ -3,13 +3,12 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
-import { DirectUploadStorageService } from '../../storage/direct-upload-storage.service';
 import { CHECK_BACKOFF_BASE_MS, CHECK_BACKOFF_MAX_MS, MediaCheckService } from '../post-media/media-check.service';
 import { AUTO_REJECTION_REASON } from '../post-media/media-moderation-decision.util';
 import { MediaModerationClient } from '../post-media/media-moderation-client';
 import { POST_MEDIA_DEFAULTS, PostMediaConfig } from '../post-media/post-media.config';
 import { ProfileImageKind, UserImageReviewService } from './user-image-review.service';
-import { publicProfileKeyFor } from './profile-image.util';
+import { ProfileImagePublishService } from './profile-image-publish.service';
 
 // backend/b036-avatar-cover-check (B-036; Decision Log #411 item 1, #394 A2, #468). The automatic image check for
 // avatars and cover photos. It REUSES the post-media check -- the same Amazon Rekognition client, the same label
@@ -38,13 +37,6 @@ import { publicProfileKeyFor } from './profile-image.util';
 
 export type ProfileCheckOutcome = 'approved' | 'rejected' | 'pending' | 'retry' | 'gave_up' | 'skipped';
 
-const CONTENT_TYPE_BY_EXT: Record<string, string> = {
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  png: 'image/png',
-  webp: 'image/webp',
-};
-
 export interface DueProfileImage {
   userId: string;
   kind: ProfileImageKind;
@@ -57,7 +49,7 @@ export class ProfileImageCheckService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly storage: DirectUploadStorageService,
+    private readonly publisher: ProfileImagePublishService,
     private readonly checks: MediaCheckService,
     private readonly moderation: MediaModerationClient,
     private readonly config: PostMediaConfig,
@@ -185,7 +177,7 @@ export class ProfileImageCheckService {
     if (outcome === 'approved') {
       // FAIL CLOSED: publishing copies the file first. If the copy fails this throws, the caller records it as a
       // check failure, and the picture stays pending and private.
-      const written = await this.publish(image);
+      const written = await this.publisher.publish(image);
       if (written) await this.dropBookkeeping(image);
       return written ? 'approved' : 'skipped';
     }
@@ -208,61 +200,6 @@ export class ProfileImageCheckService {
       data: { state: 'review', nextAttemptAt: null },
     });
     return 'pending';
-  }
-
-  /**
-   * Copies the checked file to the public prefix, verifies the copy, then flips the row to 'approved' pointing at the
-   * public key -- ONLY if the row still points at the key that was checked. Returns false (and removes the copy) when
-   * it does not. The old private object is removed afterwards, best effort.
-   */
-  private async publish(image: DueProfileImage): Promise<boolean> {
-    const { userId, kind, key } = image;
-    const publicKey = publicProfileKeyFor(key);
-
-    const original = await this.storage.head(key);
-    if (!original) throw new Error(`The stored ${kind} ${key} is missing`);
-    const contentType = original.contentType ?? CONTENT_TYPE_BY_EXT[key.split('.').pop() ?? ''] ?? 'application/octet-stream';
-    await this.storage.copyObject(key, publicKey, contentType);
-    const copy = await this.storage.head(publicKey);
-    if (!copy || copy.size !== original.size) {
-      await this.deleteQuietly(publicKey, `Bad public copy of ${kind}`);
-      throw new Error(`The public copy of ${kind} ${key} does not match the original`);
-    }
-
-    const url = this.storage.publicUrlFor(publicKey);
-    let written: number;
-    try {
-      const result =
-        kind === 'avatar'
-          ? await this.prisma.user.updateMany({
-              where: { id: userId, avatarKey: key, avatarStatus: 'pending' },
-              data: { avatarKey: publicKey, avatarStatus: 'approved', avatarUrl: url },
-            })
-          : await this.prisma.user.updateMany({
-              where: { id: userId, coverKey: key, coverStatus: 'pending' },
-              data: { coverKey: publicKey, coverStatus: 'approved', coverUrl: url },
-            });
-      written = result.count;
-    } catch (err) {
-      await this.deleteQuietly(publicKey, `Unrecorded public copy of ${kind}`);
-      throw err;
-    }
-
-    if (written === 0) {
-      // The picture was replaced, removed or decided while the copy was made. The public copy is not the live file.
-      await this.discardUnrecordedCopy(userId, kind, publicKey);
-      return false;
-    }
-    await this.deleteQuietly(key, `Private original of ${kind}`);
-    return true;
-  }
-
-  /** Removes a public copy that was made but never recorded -- unless something else has since made it the live file. */
-  private async discardUnrecordedCopy(userId: string, kind: ProfileImageKind, publicKey: string): Promise<void> {
-    const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { avatarKey: true, coverKey: true } });
-    const live = row ? (kind === 'avatar' ? row.avatarKey : row.coverKey) : null;
-    if (live === publicKey) return;
-    await this.deleteQuietly(publicKey, `Unrecorded public copy of ${kind}`);
   }
 
   private async dropBookkeeping(image: DueProfileImage): Promise<void> {
@@ -294,14 +231,6 @@ export class ProfileImageCheckService {
       data: { state: 'retry', attempts, nextAttemptAt: new Date(now.getTime() + delay) },
     });
     return 'retry';
-  }
-
-  private async deleteQuietly(key: string, context: string): Promise<void> {
-    try {
-      await this.storage.delete(key);
-    } catch (err) {
-      this.logger.warn(`${context}: ${key} not deleted (${err instanceof Error ? err.message : String(err)}).`);
-    }
   }
 }
 

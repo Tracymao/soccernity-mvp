@@ -7,6 +7,7 @@ import { MediaCheckService } from '../post-media/media-check.service';
 import { MediaModerationClient } from '../post-media/media-moderation-client';
 import { PostMediaConfig } from '../post-media/post-media.config';
 import { ProfileImageCheckService, ProfileImageCheckSweepService } from './profile-image-check.service';
+import { ProfileImagePublishService } from './profile-image-publish.service';
 import { UserImageReviewService } from './user-image-review.service';
 
 // backend/b036-avatar-cover-check (B-036). Unit level: each outcome, the claim, the race, the failure path and the
@@ -44,7 +45,8 @@ function build(opts: { configured?: boolean; env?: Record<string, string> } = {}
   const review = { rejectProfileImage: jest.fn().mockResolvedValue({}) };
   const service = new ProfileImageCheckService(
     prisma as unknown as PrismaService,
-    storage as unknown as DirectUploadStorageService,
+    // B-037: publishing is its own service, shared with the moderator queue; here it runs over the same fakes.
+    new ProfileImagePublishService(prisma as unknown as PrismaService, storage as unknown as DirectUploadStorageService),
     checks as unknown as MediaCheckService,
     moderation as unknown as MediaModerationClient,
     new PostMediaConfig(new ConfigService(opts.env ?? {})),

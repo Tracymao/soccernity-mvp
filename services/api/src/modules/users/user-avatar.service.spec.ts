@@ -61,7 +61,7 @@ describe('UserAvatarService (B-035)', () => {
     expect(store.publicUrlFor).toHaveBeenCalledWith(publicKey);
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: 'u1' },
-      data: { avatarUrl: `https://cdn.example/${publicKey}`, avatarKey: key, avatarStatus: 'pending', avatarRejectionReason: null },
+      data: { avatarUrl: `https://cdn.example/${publicKey}`, avatarKey: key, avatarStatus: 'pending', avatarRejectionReason: null, avatarUploadedAt: expect.any(Date) },
       select: { id: true },
     });
     // The response never contains the public URL of a pending picture.
@@ -164,7 +164,7 @@ describe('UserAvatarService (B-035)', () => {
       await expect(service.deleteAvatar('u1')).resolves.toEqual({ avatar: null });
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'u1' },
-        data: { avatarUrl: null, avatarKey: null, avatarStatus: null, avatarRejectionReason: null },
+        data: { avatarUrl: null, avatarKey: null, avatarStatus: null, avatarRejectionReason: null, avatarUploadedAt: null },
         select: { id: true },
       });
       expect(store.delete).toHaveBeenCalledWith('private-profile/u1/a.jpg');

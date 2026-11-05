@@ -87,4 +87,18 @@ describe('AdminMediaReviewController (HTTP layer)', () => {
     await request(app.getHttpServer()).post('/admin/media-review/m1/reject').send({ reason: 'ok', extra: 1 }).expect(400);
     expect(service.reject).toHaveBeenCalledTimes(1);
   });
+
+  // B-037: a profile picture's id is "<avatar|cover>:<userId>:<file>" -- colons and a dot in one path segment.
+  it('routes a profile-picture id (with colons and a file extension) on every :id route', async () => {
+    const id = 'avatar:9c776b8d-c69f-4862-b8cc-ae7c660cf951:437ebb39-071c-4d1d-a235-7e7e9f462b77.jpg';
+    service.get.mockResolvedValue({ id });
+    service.approve.mockResolvedValue({ id, outcome: 'approved', status: 'approved' });
+    service.reject.mockResolvedValue({ id, outcome: 'rejected', status: 'rejected' });
+    await request(app.getHttpServer()).get(`/admin/media-review/${id}`).expect(200);
+    await request(app.getHttpServer()).post(`/admin/media-review/${id}/approve`).expect(200);
+    await request(app.getHttpServer()).post(`/admin/media-review/${id}/reject`).send({ reason: 'Too dark to see' }).expect(200);
+    expect(service.get).toHaveBeenCalledWith(id, 'mod-1');
+    expect(service.approve).toHaveBeenCalledWith(id, 'mod-1');
+    expect(service.reject).toHaveBeenCalledWith(id, 'mod-1', 'Too dark to see');
+  });
 });

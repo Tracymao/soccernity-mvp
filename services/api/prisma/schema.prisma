@@ -231,6 +231,11 @@ model User {
   // owner's own GET /users/:id and never selected by any other-user read. The
   // Notification does not copy it. CHECK in the migration: only on a rejected image.
   avatarRejectionReason String?
+  // backend/b037-profile-image-review (B-037): when the CURRENT avatar file was stored. Set by the upload route,
+  // cleared with the avatar (delete, anonymisation). A genuine addition beyond Section 3's User list, flagged for
+  // the Decision Log: the moderator queue lists profile pictures beside post media and needs an upload time to
+  // order and page by. Rows uploaded before this column existed are NULL (age unknown, listed as the oldest).
+  avatarUploadedAt DateTime?
 
   // The cover photo (B-196, #411 item 4): the avatar pipeline with the same rule.
   // Same three-columns-move-together shape, the same private-then-public storage and the
@@ -242,6 +247,8 @@ model User {
   coverStatus          String?
   // B-214: the cover's rejection reason, same rules as avatarRejectionReason.
   coverRejectionReason String?
+  // B-037: when the CURRENT cover file was stored; same rules as avatarUploadedAt.
+  coverUploadedAt DateTime?
 
   // Safeguarding — required per Build Plan Section 8.3. Do not remove.
   guardian Guardian?
