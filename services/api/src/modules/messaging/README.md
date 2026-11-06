@@ -213,3 +213,82 @@ exchange for closing a direct enumeration signal on minor accounts. The
 *sender* side is unchanged (an under-16 caller still gets the clear 403
 from `Under16RestrictionGuard`; that reveals only the caller's own status).
 Layered on, never replacing, `GuardianConsentGuard`.
+
+## Edit, delete for me, delete for everyone, delete chat (B-067, Decision Log #472 (b))
+
+`backend/b067-message-edit-delete-hide`. Adopted default (b) of #472, DECIDED and now built on the backend; the web
+PR is written from this section. Migration `20261115090000_add_message_edit_delete_hide` (additive, rollback in its
+header): `Message.editedAt`, `Message.originalContentText`, `Message.deletedForEveryoneAt`, and two new tables,
+`MessageHide` and `ConversationHide` (composite primary keys on user + message / user + conversation).
+
+### Endpoints
+
+| Method & path | Guards | Result |
+|---|---|---|
+| `PATCH /conversations/:id/messages/:messageId` `{ contentText }` | `JwtAuthGuard` + `GuardianConsentGuard` + `EmailVerifiedGuard` + `ProfileCompleteGuard` (the guard set of a send) | **200**, the message. |
+| `DELETE /conversations/:id/messages/:messageId?scope=me` | `JwtAuthGuard` + `GuardianConsentGuard` | **204**. Hides one message for the caller. |
+| `DELETE /conversations/:id/messages/:messageId?scope=everyone` | same | **204**. Sender only. |
+| `DELETE /conversations/:id` | same | **204**. "Delete chat", for the caller only. |
+
+`scope` is required on the message delete (`me` or `everyone`); missing or any other value is a 400.
+
+**Edit rules.** Sender only; text only; not deleted for everyone; within 15 minutes of `sentAt` measured on the server
+clock (`MESSAGE_EDIT_WINDOW_MINUTES`; exactly 15:00.000 is allowed, one millisecond later is refused). It passes exactly
+the checks a send passes: conversation participant (404), Block in both directions with the same split (the blocked
+sender gets the 404 `Conversation not found` a send gets, the blocker gets the 403 `you_blocked_this_user`), the same
+DTO bounds (1 to 3000 characters, no extra fields). The first edit stores the text as first sent in
+`originalContentText`; later edits never overwrite it. An edit creates no Notification and does not change
+`lastMessageAt`. Errors:
+
+| Status | `code` | When |
+|---|---|---|
+| 404 | none | conversation not found or caller not in it; message not in this conversation; the blocked sender |
+| 403 | `you_blocked_this_user` | the caller blocked the other person |
+| 403 | `message_edit_not_sender` | the caller did not send the message |
+| 409 | `message_not_editable` | deleted for everyone, or not a text message (a legacy row with `mediaUrl`) |
+| 409 | `message_edit_window_closed` | more than 15 minutes after `sentAt` |
+
+**Delete rules.** `me`: any message in a conversation the caller is in, including the other person's. Inserts a
+`MessageHide` row; idempotent (a second call is a no-op 204). `everyone`: the sender only (403
+`message_delete_not_sender` otherwise), at any time, idempotent (the first timestamp is kept). **The row, the text and
+any original STAY in the database; nothing is purged.** Deleting never checks Block (a person can always delete) and
+has no time limit. `DELETE /conversations/:id` upserts `ConversationHide` at the server time for the caller; calling it
+again moves the cutoff forward.
+
+### Read paths
+
+`GET /conversations/:id/messages` (newest first, unchanged ordering and cursor):
+
+* leaves out messages the caller hid with `scope=me`, and everything with `sentAt` at or before the caller's
+  `ConversationHide.hiddenAt`;
+* a message deleted for everyone comes back, for BOTH people, as
+  `{ id, conversationId, senderId, sentAt, deletedForEveryone: true, contentText: null, editedAt: null }`;
+* every other message is `{ id, conversationId, senderId, contentText, sentAt, readAt, editedAt, deletedForEveryone:
+  false }`. `editedAt` is `null` until an edit, then the time of the latest edit. A message the caller just sent
+  (`POST .../messages`) has the same shape;
+* the original text is never returned to a user, and is not even selected.
+
+`GET /conversations`:
+
+* a conversation the caller deleted is left out unless a message newer than their `hiddenAt` exists (the rule is
+  `lastMessageAt > hiddenAt`: `lastMessageAt` is bumped by every send), in which case it returns and shows only the
+  newer messages;
+* `lastMessage` and `unreadCount` ignore messages the caller hid, messages deleted for everyone, and anything at or
+  before the caller's `hiddenAt`. `PATCH /conversations/:id/read` is unchanged.
+
+Account anonymisation deletes the user's `MessageHide` and `ConversationHide` rows (their own view settings); every
+`Message` stays.
+
+### DEFAULTS, founder-veto-able
+
+* **15 minutes** is a figure borrowed from other messaging apps (`MESSAGE_EDIT_WINDOW_MINUTES`, one constant).
+* **"Delete for me" is built per message AND as "delete chat"**: the Figma frames draw both (B2 and B3 per message, C1
+  for the chat) while build-register B-067 read it as conversation hiding only.
+* **No user can ever read an original.** There is no admin read of originals in this PR; one needs its own decision
+  (who may read it, audited how) and is a follow-up.
+* **No new retention period.** The original is kept under whatever message retention exists, which today is "kept".
+  Because the text stays, "delete for everyone" is NOT erasure; the register already records this (Section 80b).
+* The hidden-conversation rule compares `lastMessageAt` with `hiddenAt`, so a newer message the caller hid
+  individually or that was deleted for everyone still brings the conversation back, as an empty-looking thread.
+* A legacy message that carries `mediaUrl` (the column still exists) cannot be edited.
+* Reporting a message is NOT built and NOT decided (`REPORT_TARGET_TYPES` has no message type).
