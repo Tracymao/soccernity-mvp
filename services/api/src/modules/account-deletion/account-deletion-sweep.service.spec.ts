@@ -51,6 +51,8 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
     revokedUsername: { deleteMany: jest.fn() },
     // backend/b139-username-review: anonymizeUser deletes the user's review requests.
     usernameReviewRequest: { deleteMany: jest.fn() },
+    // B-060: the user's 'Download my data' requests are deleted (none by default); fixture-only addition.
+    dataExportRequest: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() },
     // B-046: anonymizeUser deletes the user's non-escalated Contact Us enquiries.
     contactEnquiry: { deleteMany: jest.fn() },
     $executeRaw: jest.fn().mockResolvedValue(0),
@@ -354,6 +356,55 @@ describe('AccountDeletionSweepService', () => {
   });
 
   // B-044 (Decision Log #376): what a REPORT-held account keeps and loses.
+  // B-060: the person's 'Download my data' requests and their stored files go with the account, both when it is
+  // anonymised and when a report-held account is minimised (it can no longer sign in, so nobody can download).
+  describe('data export requests (B-060)', () => {
+    function withExports(prisma: ReturnType<typeof buildPrismaMock>) {
+      (prisma.dataExportRequest.findMany as jest.Mock).mockResolvedValue([
+        { fileKey: 'data-export/user-1/a.json' },
+        { fileKey: null }, // a preparing or failed request has no file yet
+        { fileKey: 'data-export/user-1/b.json' },
+      ]);
+    }
+
+    it('anonymizeUser deletes the rows inside the transaction and the stored files after the commit', async () => {
+      const prisma = buildPrismaMock();
+      withExports(prisma);
+      const storage = { upload: jest.fn(), delete: jest.fn().mockResolvedValue(undefined) };
+      await new AccountDeletionSweepService(prisma, storage).anonymizeUser('user-1', false);
+
+      expect(prisma.dataExportRequest.findMany).toHaveBeenCalledWith({ where: { userId: 'user-1' }, select: { fileKey: true } });
+      expect(prisma.dataExportRequest.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(storage.delete.mock.calls.map((c) => c[0])).toEqual(['data-export/user-1/a.json', 'data-export/user-1/b.json']);
+      const upd = (prisma.user.update as jest.Mock).mock.invocationCallOrder[0];
+      expect(storage.delete.mock.invocationCallOrder[0]).toBeGreaterThan(upd);
+    });
+
+    it('minimiseHeldUser does the same (a report-held account cannot sign in, so the file has no one to serve)', async () => {
+      const prisma = buildPrismaMock();
+      withExports(prisma);
+      const storage = { upload: jest.fn(), delete: jest.fn().mockResolvedValue(undefined) };
+      await new AccountDeletionSweepService(prisma, storage).minimiseHeldUser('user-1');
+
+      expect(prisma.dataExportRequest.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(storage.delete.mock.calls.map((c) => c[0])).toEqual(['data-export/user-1/a.json', 'data-export/user-1/b.json']);
+    });
+
+    it('a storage failure removing a file never fails the anonymization (the row is already gone)', async () => {
+      const prisma = buildPrismaMock();
+      withExports(prisma);
+      const storage = { upload: jest.fn(), delete: jest.fn().mockRejectedValue(new Error('503')) };
+      await expect(new AccountDeletionSweepService(prisma, storage).anonymizeUser('user-1', false)).resolves.toBeUndefined();
+    });
+
+    it('with no requests nothing is deleted from storage', async () => {
+      const prisma = buildPrismaMock();
+      const storage = { upload: jest.fn(), delete: jest.fn() };
+      await new AccountDeletionSweepService(prisma, storage).anonymizeUser('user-1', false);
+      expect(storage.delete).not.toHaveBeenCalled();
+    });
+  });
+
   describe('minimiseHeldUser', () => {
     const CLEARED_FIELDS = {
       passwordHash: UNUSABLE_PASSWORD_HASH,
