@@ -31,6 +31,7 @@ import { ModerationModule } from './modules/moderation/moderation.module';
 import { AdminContentModule } from './modules/admin-content/admin-content.module';
 import { AdminSearchModule } from './modules/admin-search/admin-search.module';
 import { UsernameReviewModule } from './modules/username-review/username-review.module';
+import { DataExportModule } from './modules/data-export/data-export.module';
 import { AdminActionLogReadModule } from './modules/admin-action-log/admin-action-log-read.module';
 import { AdminUsersModule } from './modules/admin-users/admin-users.module';
 import { AdminStaffVettingModule } from './modules/admin-staff-vetting/admin-staff-vetting.module';
@@ -184,6 +185,8 @@ import { GlobalRateLimitModule } from './rate-limit/global-rate-limit.module';
     // sections above. See modules/admin-search/README.md.
     AdminSearchModule,
     UsernameReviewModule,
+    // backend/b060-data-export (B-060; Decision Log #472 (g)): 'Download my data'. See modules/data-export/README.md.
+    DataExportModule,
     AdminActionLogReadModule,
     // schema/report-severity-escalation-admin-vetting-application —
     // PATCH /admin/users/:id/child-safety-vetting, superadmin-only. The

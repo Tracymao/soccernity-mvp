@@ -324,12 +324,14 @@ export class AccountDeletionSweepService {
   // its only caller.
   async minimiseHeldUser(userId: string): Promise<void> {
     const stored: { avatarKey: string | null; coverKey: string | null } = { avatarKey: null, coverKey: null };
+    let dataExportKeys: string[] = [];
     await this.prisma.$transaction(async (tx) => {
       const before = await tx.user.findUnique({ where: { id: userId }, select: { avatarKey: true, coverKey: true } });
       stored.avatarKey = before?.avatarKey ?? null;
       stored.coverKey = before?.coverKey ?? null;
 
       await this.deleteBehaviouralRows(tx, userId);
+      dataExportKeys = await this.deleteDataExportRows(tx, userId);
 
       await tx.user.update({
         where: { id: userId },
@@ -363,6 +365,19 @@ export class AccountDeletionSweepService {
     });
 
     await this.removeProfileImageObjects(userId, stored, 'Minimisation');
+    await deleteStoredObjects(this.storage, this.logger, dataExportKeys, `Minimisation of ${userId}: data export`);
+  }
+
+  // backend/b060-data-export (B-060; Decision Log #472 (g)): the person's 'Download my data' requests and their
+  // stored JSON files. The file holds their messages, posts and profile, so it goes whenever the account can no
+  // longer sign in -- at anonymisation AND at the minimisation of a report-held account (both call this). Deletes
+  // the rows inside the caller's transaction and returns the file keys; the OBJECTS are removed after the commit
+  // (best effort, deleteStoredObjects), so a storage outage never undoes the deletion. Deliberately NOT in
+  // deleteBehaviouralRows: that helper returns nothing and its callers have no use for keys.
+  private async deleteDataExportRows(tx: Prisma.TransactionClient, userId: string): Promise<string[]> {
+    const rows = await tx.dataExportRequest.findMany({ where: { userId }, select: { fileKey: true } });
+    await tx.dataExportRequest.deleteMany({ where: { userId } });
+    return rows.map((r) => r.fileKey).filter((k): k is string => Boolean(k));
   }
 
   // Best effort, AFTER a commit: the row no longer points at the object, so a storage outage (or no store)
@@ -397,6 +412,7 @@ export class AccountDeletionSweepService {
   async anonymizeUser(userId: string, isMinor: boolean, now: Date = new Date()): Promise<void> {
     const stored: { avatarKey: string | null; coverKey: string | null } = { avatarKey: null, coverKey: null };
     let postMediaKeys: string[] = [];
+    let dataExportKeys: string[] = [];
     await this.prisma.$transaction(async (tx) => {
       // B-035: remember where the avatar object lives, so it can be removed from
       // storage once the row no longer points at it.
@@ -445,6 +461,8 @@ export class AccountDeletionSweepService {
       }
 
       await this.deleteBehaviouralRows(tx, userId);
+      // B-060: the 'Download my data' requests and their stored files go with the account.
+      dataExportKeys = await this.deleteDataExportRows(tx, userId);
       // B-046 (Decision Log #440, #444): the Contact Us enquiries this user sent while signed in go with the
       // account -- EXCEPT an escalated one (escalatedReportId set), which became (or sits beside) a report or
       // case record and follows that record's retention instead. The escalated ones are what is left, and
@@ -536,6 +554,7 @@ export class AccountDeletionSweepService {
     // logged with the key so it can be cleaned up by hand.
     await deleteStoredObjects(this.storage, this.logger, postMediaKeys, `Anonymization of ${userId}: post media`);
     await this.removeProfileImageObjects(userId, stored, 'Anonymization');
+    await deleteStoredObjects(this.storage, this.logger, dataExportKeys, `Anonymization of ${userId}: data export`);
   }
 
   // (b) — purges ConsentAuditRecord rows past their OWN 6-month mark,

@@ -119,6 +119,7 @@ export const ANONYMISER_DELETES_RELATIONS: readonly RelationKey[] = [
   'SocialIdentity.user', // B-084: CASCADE; deleted (a sign-in credential goes with the account's ability to sign in)
   'UserBackupCode.user', // B-086: CASCADE; deleted (credential material goes with the account's ability to sign in)
   'TwoFactorRecoveryRequest.user', // B-276: CASCADE; deleted (open recovery requests hold link-token hashes)
+  'DataExportRequest.user', // B-060: RESTRICT; deleted (rows and stored files) at anonymisation and at minimisation
   'MessageHide.user', // B-067: the user's own per-message "delete for me" rows; deleted
   'ConversationHide.user', // B-067: the user's own "delete chat" rows; deleted
   'GuardianNoticeWithhold.user', // B-280: CASCADE; deleted in anonymizeUser (not in minimiseHeldUser: the flag stays)

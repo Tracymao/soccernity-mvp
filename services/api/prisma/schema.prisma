@@ -114,6 +114,8 @@ model User {
   // B-084 (Decision Log #378, #468): the Google / Facebook identities linked to this account. See SocialIdentity.
   socialIdentities          SocialIdentity[]
   twoFactorRecoveryRequests TwoFactorRecoveryRequest[]
+  // backend/b060-data-export: the person's own 'Download my data' requests (reverse relation only).
+  dataExportRequests        DataExportRequest[]
   // backend/b280-withhold-guardian-notices (B-280): reverse relation for GuardianNoticeWithhold. Never selected by any
   // user-facing query; see the model's comment.
   guardianNoticeWithhold    GuardianNoticeWithhold?
@@ -625,6 +627,28 @@ model RevokedUsername {
   @@unique([username, userId])
   @@index([username, holdUntil])
 }
+// backend/b060-data-export (B-060; Decision Log #472 adopted default (g)) -- a genuine addition beyond Section 3's
+// entity list, flagged as a Decision Log candidate. One row per 'Download my data' request by the account holder.
+//   - status: preparing -> ready | failed. A ready row always has fileKey, readyAt and expiresAt (CHECK).
+//   - fileKey: the JSON file in PRIVATE storage under data-export/ (never post-media/ or profile-media/, the two
+//     prefixes the public address serves, B-265). The file is deleted, with this row, when expiresAt passes
+//     (DataExportSweepService), and with the account (anonymizeUser / minimiseHeldUser).
+//   - The file holds ONLY the person's own profile, posts, comments, follows (id and public name) and sent messages.
+//   - FK is RESTRICT like every other User reference (Decision Log #341); the anonymiser deletes the rows.
+model DataExportRequest {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  status    String    @default("preparing") // preparing | ready | failed
+  createdAt DateTime  @default(now())
+  readyAt   DateTime?
+  fileKey   String?
+  expiresAt DateTime?
+
+  @@index([userId, createdAt])
+  @@index([status, expiresAt])
+}
+
 
 // backend/b139-username-review (B-139 part (c), Decision Log #467, founder decision 2026-11-03): a revoked user's
 // request for a REVIEW of an admin's username removal. ONE per revocation (revokedUsernameId is unique). A genuine

@@ -27,6 +27,7 @@ import { SportsMatchesController } from './modules/sports/sports-matches.control
 import { UserAvatarController } from './modules/users/user-avatar.controller';
 import { UserCoverController } from './modules/users/user-cover.controller';
 import { UsernameReviewController } from './modules/username-review/username-review.controller';
+import { DataExportController } from './modules/data-export/data-export.controller';
 import { UsersController } from './modules/users/users.controller';
 import { ViewQualificationController } from './modules/view-qualification/view-qualification.controller';
 
@@ -55,6 +56,10 @@ type Flags = '' | 'C' | 'CE' | 'CEP';
 
 // Routes the decisions deliberately leave OPEN, each with the reason.
 const OPEN_ROUTES: Record<string, string> = {
+  // backend/b060-data-export (B-060; Decision Log #472 (g)): 'Download my data' is the person's OWN data (the right of
+  // access), so it stays open to every signed-in account: a minor, a restricted-pending or unverified account, an
+  // incomplete profile. JwtAuthGuard plus the password re-entry in the service.
+  'POST /users/me/data-export': 'own data access; open to every signed-in account by design (B-060)',
   'POST /reports': 'report/appeal stay open to a restricted-pending user (#370)',
   'POST /reports/:id/appeal': 'report/appeal stay open to a restricted-pending user (#370)',
   'POST /reports/public': 'unauthenticated public report',
@@ -196,6 +201,7 @@ const CONTROLLERS = [
   UserAvatarController,
   UserCoverController,
   UsernameReviewController,
+  DataExportController,
   FeedController,
   ClubsController,
   BanterController,
