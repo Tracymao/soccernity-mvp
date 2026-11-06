@@ -15,17 +15,15 @@
 // vetting fields ride along on GET/PATCH /admin/staff's own response
 // even though this module doesn't write them.
 //
-// AddRolePage/DeleteRolePage remain disclosed stubs in this app. "Add a
-// New Role" is really "create an admin/moderator account": POST
-// /admin/staff now exists (superadmin-only, Decision Log #191 resolved by
-// feat/admin-staff-create, PR #340), but no client function or form here
-// calls it yet, so AddRolePage is not wired. There is still no DELETE
-// /admin/staff/:id, so DeleteRolePage has nothing to call. Delete Role is
+// AddRolePage lives in AddRolePage.tsx (B-057: POST /admin/staff, PR #340,
+// Decision Log #191, is wired) and is re-exported below so the route table
+// and tests keep importing it from here. DeleteRolePage remains a
+// disclosed stub: there is still no DELETE /admin/staff/:id. Delete Role is
 // navy, not red — no destructive token (CLAUDE.md non-negotiable #3).
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import AdminPageHeader from "../../layout/AdminPageHeader";
-import { StubBanner, StubButton, StubField } from "../../components/stub/AdminStub";
+import { StubBanner, StubButton } from "../../components/stub/AdminStub";
 import { AdminApiError } from "../../api/adminClient";
 import {
   ADMIN_STAFF_ROLES,
@@ -56,23 +54,7 @@ function StubShell({ title, children }: { title: string; children: ReactNode }) 
   );
 }
 
-export function AddRolePage() {
-  return (
-    <StubShell title="Add a new role">
-      <p className="admin-stub__note">
-        This screen would create an admin or moderator account (name, email, password).
-      </p>
-      <StubField label="Name" value="" />
-      <StubField label="Email" value="" />
-      <StubField label="Role" kind="select" value="Moderator" />
-      <StubField label="Create password" value="" />
-      <StubField label="Confirm password" value="" />
-      <div className="admin-stub__actions">
-        <StubButton>Submit</StubButton>
-      </div>
-    </StubShell>
-  );
-}
+export { default as AddRolePage } from "./AddRolePage";
 
 type LoadState = "loading" | "loaded" | "not-found" | "error";
 

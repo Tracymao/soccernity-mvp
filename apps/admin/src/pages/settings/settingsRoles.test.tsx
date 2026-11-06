@@ -139,7 +139,7 @@ describe("SettingsRolesPage", () => {
     expect(await screen.findByText("A Moderator")).not.toBeNull();
   });
 
-  it('the "Add Role" button is disabled (Decision Log #191 — no account-creation endpoint)', async () => {
+  it('"Add Role" is a real link to the Add Role page (B-057, POST /admin/staff)', async () => {
     vi.mocked(listStaff).mockResolvedValue({ items: [], nextCursor: null });
 
     render(
@@ -148,8 +148,8 @@ describe("SettingsRolesPage", () => {
       </MemoryRouter>,
     );
 
-    const addRole = await screen.findByRole("button", { name: "Add Role" });
-    expect(addRole.hasAttribute("disabled")).toBe(true);
+    const addRole = await screen.findByRole("link", { name: "Add Role" });
+    expect(addRole.getAttribute("href")).toBe("/settings/roles/new");
   });
 
   it("each row's Edit link points at the real edit route, carrying the admin via router state", async () => {
@@ -199,23 +199,11 @@ describe("SettingsRolesPage", () => {
   });
 });
 
-// ---- AddRolePage / DeleteRolePage (stay disclosed stubs) -----------------
+// ---- DeleteRolePage (stays a disclosed stub; AddRolePage is covered in addRole.test.tsx) ----
 
-describe("Add / Delete Role — disclosed stubs, Decision Log #191", () => {
-  it("Add Role: full account form + Submit, all disabled", () => {
-    render(
-      <MemoryRouter>
-        <AddRolePage />
-      </MemoryRouter>,
-    );
-    expect(screen.getByRole("note").textContent).toMatch(/can.t be added or removed from this screen yet/i);
-    expect(screen.getByRole("note").textContent).not.toMatch(/Decision Log|endpoint|DB insert/i);
-    for (const el of [...screen.queryAllByRole("textbox"), ...screen.queryAllByRole("combobox")].filter(
-      (el) => el.getAttribute("aria-label") !== "Search Soccernity",
-    )) {
-      expect(el.hasAttribute("disabled")).toBe(true);
-    }
-    expect(screen.getByRole("button", { name: "Submit" }).hasAttribute("disabled")).toBe(true);
+describe("Delete Role — disclosed stub, no DELETE /admin/staff/:id", () => {
+  it("AddRolePage is still exported from RoleFormPages for the route table", () => {
+    expect(typeof AddRolePage).toBe("function");
   });
 
   it("Delete Role: reproduced, disabled, navy (not red)", () => {

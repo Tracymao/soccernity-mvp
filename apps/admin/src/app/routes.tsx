@@ -13,8 +13,8 @@
 // file storage this codebase has ever had); Settings/Roles (/admin/staff*,
 // /admin/users/:id/child-safety-vetting — feat/admin-roles-vetting-wiring —
 // EditRolePage's role select + its child-safety-vetting toggle are real;
-// "Add Role"/"Delete Role" stay disclosed stubs, no account
-// creation/deletion endpoint exists, Decision Log #191). Only
+// "Add Role" is real since B-057 (POST /admin/staff, Decision Log #191);
+// "Delete Role" stays a disclosed stub, no deletion endpoint exists). Only
 // Competitions remains an honest disclosed stub (its backend endpoint
 // doesn't exist yet). A stub's PR swaps it for real data when its
 // endpoints land; the paths and the nav do not change.
