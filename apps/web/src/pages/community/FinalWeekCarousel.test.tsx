@@ -52,6 +52,7 @@ function item(n: number, over: Partial<FinalWeekCarouselItem> = {}): FinalWeekCa
     entryId: `entry-${n}`,
     postId: `post-${n}`,
     finalist: { userId: `user-${n}`, publicName: `Finalist ${n}` },
+    club: null,
     post: {
       id: `post-${n}`,
       contentText: `Entry ${n}`,

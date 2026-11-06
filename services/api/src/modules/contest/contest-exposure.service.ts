@@ -25,6 +25,13 @@ export interface FinalWeekCarouselItem {
   entryId: string;
   postId: string;
   finalist: { userId: string; publicName: string };
+  /**
+   * The finalist's represented club (Decision Log #74), or null. B-234 (Decision Log #418 item 5, #472):
+   * ALWAYS null for a MINOR finalist (adopted default, veto-able: whether a minor's club may appear on a
+   * public tile is open under #371 and #363), and null for a finalist with no represented club.
+   * Additive and nullable. No count or ranking figure rides with it.
+   */
+  club: { id: string; name: string } | null;
   post: { id: string; contentText: string; mediaUrls: string[]; createdAt: Date };
 }
 
@@ -83,7 +90,7 @@ const LIVE_ENTRY_SELECT = {
   id: true,
   postId: true,
   userId: true,
-  user: { select: PUBLIC_NAME_SELECT },
+  user: { select: { ...PUBLIC_NAME_SELECT, isMinor: true, representedClub: { select: { id: true, name: true } } } },
   post: { select: { id: true, contentText: true, mediaUrls: true, createdAt: true } },
 } satisfies Prisma.ContestEntrySelect;
 
@@ -187,6 +194,8 @@ export class ContestExposureService {
         entryId: e.id,
         postId: e.postId,
         finalist: { userId: e.userId, publicName: resolvePublicName(e.user) },
+        // B-234: a minor's club is never returned; an adult's only when they represent one.
+        club: e.user.isMinor || !e.user.representedClub ? null : { id: e.user.representedClub.id, name: e.user.representedClub.name },
         post: e.post,
       };
     });

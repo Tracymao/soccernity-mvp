@@ -323,6 +323,8 @@ export interface FinalWeekCarouselItem {
   entryId: string;
   postId: string;
   finalist: { userId: string; publicName: string };
+  // B-234: the finalist's represented club, or null (always null for a minor). The web does not draw it yet.
+  club: { id: string; name: string } | null;
   post: { id: string; contentText: string; mediaUrls: string[]; createdAt: string };
 }
 

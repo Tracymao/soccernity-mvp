@@ -15,11 +15,11 @@ const MONTH_END = new Date('2026-12-01T00:00:00.000Z');
 const VIEWER = 'viewer-1';
 const EVENT = { eventId: '22222222-2222-4222-8222-222222222222', visibleRatio: 0.5, visibleMs: 1000 };
 
-const entry = (id: string, userId: string, name = id) => ({
+const entry = (id: string, userId: string, name = id, extra: { isMinor?: boolean; representedClub?: { id: string; name: string } | null } = {}) => ({
   id,
   postId: `post-${id}`,
   userId,
-  user: { username: name, displayName: `Real ${name}` },
+  user: { username: name, displayName: `Real ${name}`, isMinor: extra.isMinor ?? false, representedClub: extra.representedClub ?? null },
   post: { id: `post-${id}`, contentText: `text ${id}`, mediaUrls: [`https://cdn.example.com/${id}.mp4`], createdAt: new Date('2026-11-23T10:00:00Z') },
 });
 
@@ -213,10 +213,59 @@ describe('ContestExposureService.getCarousel', () => {
       args.where.viewerId ? [] : [{ entryId: 'e1', _count: { _all: 7 } }],
     );
     const res = await service.getCarousel(VIEWER, 6, LIVE);
-    expect(Object.keys(res.items[0]).sort()).toEqual(['entryId', 'finalist', 'post', 'postId']);
+    expect(Object.keys(res.items[0]).sort()).toEqual(['club', 'entryId', 'finalist', 'post', 'postId']);
     expect(Object.keys(res.items[0].post).sort()).toEqual(['contentText', 'createdAt', 'id', 'mediaUrls']);
     expect(res.items[0].finalist).toEqual({ userId: 'u1', publicName: 'nelson' });
     expect(JSON.stringify(res)).not.toMatch(/Real nelson|impression|\b7\b/);
+  });
+
+  describe('club (B-234)', () => {
+    const CLUB = { id: 'club-1', name: 'Yaba Athletic' };
+    const clubsOf = async (entries: ReturnType<typeof entry>[]) => {
+      const { service, prisma } = build();
+      prisma.contestEntry.findMany.mockResolvedValue(entries);
+      const res = await service.getCarousel(VIEWER, 6, LIVE);
+      return Object.fromEntries(res.items.map((i) => [i.finalist.userId, i.club]));
+    };
+
+    it('an adult finalist with a represented club carries { id, name } and nothing else', async () => {
+      expect(await clubsOf([entry('e1', 'u1', 'adult', { representedClub: CLUB })])).toEqual({ u1: CLUB });
+    });
+
+    it('an adult finalist with no represented club is null', async () => {
+      expect(await clubsOf([entry('e1', 'u1')])).toEqual({ u1: null });
+    });
+
+    it('a MINOR finalist is null even when they represent a club (adopted default, #371/#363)', async () => {
+      expect(await clubsOf([entry('e1', 'u1', 'kid', { isMinor: true, representedClub: CLUB })])).toEqual({ u1: null });
+    });
+
+    it('an anonymised finalist (club link cleared) is null, and the read still only takes eligible authors', async () => {
+      const { service, prisma } = build();
+      prisma.contestEntry.findMany.mockResolvedValue([entry('e1', 'u1', 'gone', { representedClub: null })]);
+      const res = await service.getCarousel(VIEWER, 6, LIVE);
+      expect(res.items[0].club).toBeNull();
+      expect(prisma.contestEntry.findMany.mock.calls[0][0].where.user).toEqual({ is: CONTEST_ELIGIBLE_USER });
+    });
+
+    it('mixed field: each tile gets its own finalist club', async () => {
+      expect(
+        await clubsOf([
+          entry('e1', 'u1', 'a', { representedClub: CLUB }),
+          entry('e2', 'u2', 'b', { isMinor: true, representedClub: { id: 'club-2', name: 'Other FC' } }),
+          entry('e3', 'u3', 'c'),
+        ]),
+      ).toEqual({ u1: CLUB, u2: null, u3: null });
+    });
+
+    it('selects only id and name of the club and the minor flag', async () => {
+      const { service, prisma } = build();
+      prisma.contestEntry.findMany.mockResolvedValue([entry('e1', 'u1')]);
+      await service.getCarousel(VIEWER, 6, LIVE);
+      const sel = prisma.contestEntry.findMany.mock.calls[0][0].select.user.select;
+      expect(sel.representedClub).toEqual({ select: { id: true, name: true } });
+      expect(sel.isMinor).toBe(true);
+    });
   });
 
   it('an empty field is live with no items', async () => {

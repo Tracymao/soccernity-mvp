@@ -134,6 +134,7 @@ describe("CommunityPage", () => {
           entryId: "e1",
           postId: "p1",
           finalist: { userId: "u9", publicName: "Sarah Bello" },
+          club: null,
           post: { id: "p1", contentText: "Drill", mediaUrls: [], createdAt: "2026-09-24T10:00:00.000Z" },
         },
       ],
