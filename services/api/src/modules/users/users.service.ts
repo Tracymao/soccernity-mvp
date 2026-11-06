@@ -25,6 +25,8 @@ import { FEED_DEFAULT_PAGE_SIZE, FEED_MAX_PAGE_SIZE, FeedQueryDto } from '../fee
 import { calculateAge } from '../auth/registration/age.util';
 import { deriveOnboardingState, GuardianConsentState, OnboardingNextStep } from '../auth/onboarding-state.util';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateUserSettingsDto } from './dto/update-user-settings.dto';
+import { DmPermission, UserSettings } from './user-settings.constants';
 import { PUBLIC_NAME_SELECT, resolvePublicName, toPublicUser } from './public-name.util';
 import { isPublicProfileKey } from './profile-image.util';
 import { ProfileImageViewService } from './profile-image-view.service';
@@ -464,6 +466,46 @@ export class UsersService {
       isFollowing: followRow !== null,
       viewerHasBlocked: relation === 'viewer_blocked_other',
     };
+  }
+
+  // backend/b061-dm-permission-media-sensitive (B-061; Decision Log #472 (d) and (i)).
+  // GET /users/me/settings and PATCH /users/me/settings: the caller's own two privacy
+  // settings, always read fresh from Postgres. The id is the token subject (never a path
+  // or body value). PATCH is partial; an empty body is a harmless no-op that returns the
+  // current values (DEFAULT, founder-veto-able). Both settings only ever TIGHTEN or
+  // soften presentation (DM start rule, a blur flag), so no consent or email guard is
+  // placed on the route (see write-route-guards.spec.ts).
+  async getOwnSettings(userId: string): Promise<UserSettings> {
+    const row = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { dmPermission: true, mediaSensitive: true },
+    });
+    if (!row) {
+      throw new NotFoundException('User not found');
+    }
+    return { dmPermission: row.dmPermission as DmPermission, mediaSensitive: row.mediaSensitive };
+  }
+
+  async updateOwnSettings(userId: string, dto: UpdateUserSettingsDto): Promise<UserSettings> {
+    const data: Prisma.UserUpdateInput = {};
+    if (dto.dmPermission !== undefined) data.dmPermission = dto.dmPermission;
+    if (dto.mediaSensitive !== undefined) data.mediaSensitive = dto.mediaSensitive;
+    if (Object.keys(data).length === 0) {
+      return this.getOwnSettings(userId);
+    }
+    try {
+      const row = await this.prisma.user.update({
+        where: { id: userId },
+        data,
+        select: { dmPermission: true, mediaSensitive: true },
+      });
+      return { dmPermission: row.dmPermission as DmPermission, mediaSensitive: row.mediaSensitive };
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+        throw new NotFoundException('User not found');
+      }
+      throw err;
+    }
   }
 
   // PATCH /users/:id. displayName and phone are plain writes. A USERNAME change

@@ -104,6 +104,11 @@ const OPEN_ROUTES: Record<string, string> = {
   // appeal it must stay open to a restricted-pending or unverified account (#370). JwtAuthGuard stays.
   'POST /users/me/username-review':
     'the asker has no username (ProfileCompleteGuard would refuse them) and, like report / appeal, must stay open to a restricted-pending or unverified account (#370)',
+  // backend/b061-dm-permission-media-sensitive (B-061, Decision Log #472 (d) and (i)): both settings only
+  // tighten who can start a DM or blur the author's own media, so a restricted-pending or unverified account
+  // may still change them. JwtAuthGuard stays (class level).
+  'PATCH /users/me/settings':
+    'both settings only tighten who can start a DM or blur the author own media, so a restricted-pending or unverified account may still change them',
   'POST /users/:id/block': 'a restricted-pending or unverified account must still be able to block (#411 item 5)',
   'DELETE /users/:id/block': 'a restricted-pending or unverified account must still be able to unblock (#411 item 5)',
 };

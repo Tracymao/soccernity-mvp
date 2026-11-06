@@ -152,6 +152,13 @@ export class MessagingService {
         isUnder16: true,
         accountStatus: true,
         guardian: { select: { consentStatus: true } },
+        // B-061 (Decision Log #472 (i)): the recipient's DM permission and whether THE RECIPIENT
+        // follows the caller, both folded into this ONE existing read (a nested relation select,
+        // not a new query), so the fixed set of reads that keeps every not-messageable outcome
+        // indistinguishable in timing (#350) is unchanged. On the caller's own row the follow
+        // filter is meaningless (nobody follows themselves) and is ignored.
+        dmPermission: true,
+        following: { where: { followeeId: callerId }, select: { id: true }, take: 1 },
       },
     });
     const existing = await this.prisma.conversation.findUnique({
@@ -198,6 +205,14 @@ export class MessagingService {
       // Enumeration prevention: the SAME 404 (same class, same message,
       // hence same body) a non-existent / restricted-pending /
       // deactivated recipient gets.
+      throw new NotFoundException('User not found');
+    }
+    // B-061 (Decision Log #472 (i), the 'Who can message me' setting): applied AFTER every rule above
+    // has decided, so it can only TIGHTEN them, never loosen one. It governs STARTING a new conversation
+    // only (an existing thread was returned above and keeps working; DEFAULT, founder-veto-able).
+    // 'following' = the RECIPIENT follows the caller. A refusal is the SAME 404 'User not found' every
+    // other not-messageable recipient gets, decided in memory from the reads above.
+    if (!this.recipientAcceptsNewConversation(recipient)) {
       throw new NotFoundException('User not found');
     }
 
@@ -515,6 +530,17 @@ export class MessagingService {
   // Pure and synchronous on purpose (no DB access): the recipient row,
   // including its guardian consent status, is fetched by startConversation
   // in the same query as the caller's, so every outcome costs the same.
+  // B-061: pure, in-memory. Missing/undefined values (rows read before the setting existed, or test
+  // doubles) behave as the default 'everyone'; an unrecognised value fails CLOSED (treated as 'none').
+  private recipientAcceptsNewConversation(
+    recipient: { dmPermission?: string; following?: unknown[] } | undefined,
+  ): boolean {
+    const permission = recipient?.dmPermission ?? 'everyone';
+    if (permission === 'everyone') return true;
+    if (permission === 'following') return (recipient?.following?.length ?? 0) > 0;
+    return false;
+  }
+
   private assertRecipientMessageable(
     user:
       | {

@@ -7,6 +7,7 @@ import { FeedQueryDto } from '../feed/dto/feed-query.dto';
 import { SetRepresentedClubDto } from './dto/set-represented-club.dto';
 import { SuggestedUsersQueryDto } from './dto/suggested-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateUserSettingsDto } from './dto/update-user-settings.dto';
 import { SUGGESTED_USERS_DEFAULT_LIMIT, SUGGESTED_USERS_MAX_LIMIT } from './suggested-users.constants';
 import { UsersService } from './users.service';
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
@@ -69,6 +70,21 @@ export class UsersController {
   async suggested(@CurrentUser() user: AccessTokenPayload, @Query() query: SuggestedUsersQueryDto) {
     const limit = Math.min(query.limit ?? SUGGESTED_USERS_DEFAULT_LIMIT, SUGGESTED_USERS_MAX_LIMIT);
     return this.usersService.getSuggestedUsers(user.sub, limit);
+  }
+
+  // GET/PATCH /users/me/settings (B-061, Decision Log #472 (d) and (i)): the caller's own DM
+  // permission and sensitive-media toggle. Declared BEFORE every :id route, for the same reason
+  // as 'suggested' above: GET :id / PATCH :id would otherwise bind :id to the literal "me" and
+  // answer 403. JwtAuthGuard only (class level): both settings only tighten or soften
+  // presentation, so a restricted-pending or unverified account may still use them.
+  @Get('me/settings')
+  async getMySettings(@CurrentUser() user: AccessTokenPayload) {
+    return this.usersService.getOwnSettings(user.sub);
+  }
+
+  @Patch('me/settings')
+  async updateMySettings(@CurrentUser() user: AccessTokenPayload, @Body() dto: UpdateUserSettingsDto) {
+    return this.usersService.updateOwnSettings(user.sub, dto);
   }
 
   // GET /users/:id/public-profile -- viewer-scoped card (any authenticated
