@@ -28,6 +28,7 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
     userBackupCode: { deleteMany: jest.fn() },
     socialIdentity: { deleteMany: jest.fn() },
     twoFactorRecoveryRequest: { deleteMany: jest.fn() },
+    emailChangeRequest: { deleteMany: jest.fn() },
     // B-280: the withhold-guardian-notices flag goes with the anonymised account.
     guardianNoticeWithhold: { deleteMany: jest.fn() },
     follow: { deleteMany: jest.fn() },

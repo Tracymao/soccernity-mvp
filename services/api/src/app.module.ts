@@ -30,6 +30,7 @@ import { ContactModule } from './modules/contact/contact.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
 import { AdminContentModule } from './modules/admin-content/admin-content.module';
 import { AdminSearchModule } from './modules/admin-search/admin-search.module';
+import { EmailChangeModule } from './modules/email-change/email-change.module';
 import { UsernameReviewModule } from './modules/username-review/username-review.module';
 import { AdminActionLogReadModule } from './modules/admin-action-log/admin-action-log-read.module';
 import { AdminUsersModule } from './modules/admin-users/admin-users.module';
@@ -184,6 +185,7 @@ import { GlobalRateLimitModule } from './rate-limit/global-rate-limit.module';
     // sections above. See modules/admin-search/README.md.
     AdminSearchModule,
     UsernameReviewModule,
+    EmailChangeModule,
     AdminActionLogReadModule,
     // schema/report-severity-escalation-admin-vetting-application —
     // PATCH /admin/users/:id/child-safety-vetting, superadmin-only. The

@@ -16,7 +16,8 @@ export type GuardianSecurityOnlyEventKey =
   | 'backup_codes_regenerated'
   | 'password_changed'
   | 'password_reset'
-  | 'login_locked';
+  | 'login_locked'
+  | 'email_changed';
 
 // backend/b279-guardian-safety-notices (B-279; Decision Log #456 groups A and C). Safety actions the PLATFORM
 // took on a minor's account or content. Defined in the safety block below.
@@ -186,6 +187,13 @@ const GUARDIAN_SECURITY_ONLY_EVENTS: Record<GuardianSecurityOnlyEventKey, Guardi
   password_changed: {
     subject: (name) => `Security change on ${name}'s Soccernity account`,
     summary: (name) => `The password on ${name}'s Soccernity account was changed.`,
+  },
+  // backend/email-change (B-059; Decision Log #472 default (f)). The sign-in email of a minor's account was changed
+  // (after the new address was verified). Says that it changed, never what to; the guardian is told, not asked.
+  // [COPY PENDING LEGAL REVIEW]: listed in docs/pending-copy-manifest.md.
+  email_changed: {
+    subject: (name) => `Security change on ${name}'s Soccernity account`,
+    summary: (name) => `The email address on ${name}'s Soccernity account was changed.`,
   },
   password_reset: {
     subject: (name) => `Security change on ${name}'s Soccernity account`,
