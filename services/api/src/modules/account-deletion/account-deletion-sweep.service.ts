@@ -278,6 +278,10 @@ export class AccountDeletionSweepService {
     // serve no purpose once they are gone (the entry's folded total is an aggregate, not theirs).
     await tx.contestImpression.deleteMany({ where: { viewerId: userId } });
     await tx.matchSubscription.deleteMany({ where: { userId } });
+    // B-067: the user's own "delete for me" / "delete chat" view settings. They hide messages from THIS user's reads
+    // only; the Message rows themselves (and any edit original) are content and stay (Message.sender is RESTRICT).
+    await tx.messageHide.deleteMany({ where: { userId } });
+    await tx.conversationHide.deleteMany({ where: { userId } });
     // B-036: the automatic image check's retry bookkeeping for this user's avatar and cover (no image, no labels).
     await tx.profileImageCheck.deleteMany({ where: { userId } });
 

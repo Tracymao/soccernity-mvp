@@ -1,5 +1,14 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   blockedPairWhere,
@@ -9,6 +18,11 @@ import {
   YOU_BLOCKED_THIS_USER_MESSAGE,
 } from '../block/block.util';
 import {
+  MESSAGE_EDIT_WINDOW_MS,
+  MESSAGE_NOT_EDITABLE_CODE,
+  MESSAGE_EDIT_WINDOW_CLOSED_CODE,
+  MESSAGE_EDIT_NOT_SENDER_CODE,
+  MESSAGE_DELETE_NOT_SENDER_CODE,
   MESSAGING_DEFAULT_PAGE_SIZE,
   MESSAGING_MAX_PAGE_SIZE,
 } from './messaging.constants';
@@ -20,6 +34,8 @@ import {
   participantKey,
 } from './cursor.util';
 import { SendMessageDto } from './dto/send-message.dto';
+import { EditMessageDto } from './dto/edit-message.dto';
+import { DeleteMessageScope } from './dto/delete-message-query.dto';
 import { MessagingQueryDto } from './dto/messaging-query.dto';
 import { PUBLIC_NAME_SELECT, resolvePublicName } from '../users/public-name.util';
 
@@ -37,10 +53,11 @@ const CONVERSATION_SELECT = {
 
 type ConversationRow = Prisma.ConversationGetPayload<{ select: typeof CONVERSATION_SELECT }>;
 
-// Every field on Message is safe to return to a participant — there is
-// nothing sensitive on the row. Selected explicitly (not a bare model
-// return) so a future column addition is a deliberate choice to expose,
-// same discipline as POST_SELECT / ROOM_SELECT elsewhere.
+// Every field selected here is safe to return to a participant. Selected explicitly (not a bare model
+// return) so a future column addition is a deliberate choice to expose, same discipline as POST_SELECT /
+// ROOM_SELECT elsewhere. B-067: `originalContentText` is DELIBERATELY NOT here -- the text as first sent is
+// kept in the database after an edit, and no user-facing read ever returns it. `deletedForEveryoneAt` is
+// selected only so the row can be turned into the placeholder below; it is not itself returned.
 const MESSAGE_SELECT = {
   id: true,
   conversationId: true,
@@ -48,9 +65,58 @@ const MESSAGE_SELECT = {
   contentText: true,
   sentAt: true,
   readAt: true,
+  editedAt: true,
+  deletedForEveryoneAt: true,
 } as const;
 
-export type MessageView = Prisma.MessageGetPayload<{ select: typeof MESSAGE_SELECT }>;
+type MessageRow = Prisma.MessageGetPayload<{ select: typeof MESSAGE_SELECT }>;
+
+// What a message looks like to a participant (B-067). A message deleted for everyone comes back as the
+// placeholder to BOTH people: the text is gone from the response (the row and the text stay in the database).
+export interface LiveMessageView {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  contentText: string;
+  sentAt: Date;
+  readAt: Date | null;
+  editedAt: Date | null;
+  deletedForEveryone: false;
+}
+export interface DeletedMessageView {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  sentAt: Date;
+  editedAt: null;
+  deletedForEveryone: true;
+  contentText: null;
+}
+export type MessageView = LiveMessageView | DeletedMessageView;
+
+function toMessageView(row: MessageRow): MessageView {
+  if (row.deletedForEveryoneAt) {
+    return {
+      id: row.id,
+      conversationId: row.conversationId,
+      senderId: row.senderId,
+      sentAt: row.sentAt,
+      deletedForEveryone: true,
+      contentText: null,
+      editedAt: null,
+    };
+  }
+  return {
+    id: row.id,
+    conversationId: row.conversationId,
+    senderId: row.senderId,
+    contentText: row.contentText,
+    sentAt: row.sentAt,
+    readAt: row.readAt,
+    editedAt: row.editedAt ?? null,
+    deletedForEveryone: false,
+  };
+}
 
 // The other person in a 2-party conversation. `publicName` (username if set,
 // else displayName) is nullable
@@ -102,7 +168,12 @@ export interface MarkReadResult {
 
 @Injectable()
 export class MessagingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // B-067: the 15-minute edit window is measured on the SERVER clock (APP_CLOCK falls back to the system clock;
+    // the e2e overrides it). Last and optional so a spec that builds the service by hand keeps its shape.
+    @Optional() @Inject(APP_CLOCK) private readonly clock: Clock = systemClock,
+  ) {}
 
   // POST /conversations — find-or-create between the caller and ONE
   // recipient. Returns `created` so the controller can send 201 (a new
@@ -252,7 +323,16 @@ export class MessagingService {
   ): Promise<ConversationPage> {
     const limit = Math.min(query.limit ?? MESSAGING_DEFAULT_PAGE_SIZE, MESSAGING_MAX_PAGE_SIZE);
 
+    // B-067: a conversation the caller deleted ("delete chat", for them only) is left out unless a message
+    // newer than the moment they hid it exists (lastMessageAt is bumped by every send). The hide rows are read
+    // first (a Prisma where cannot compare two columns), and the exclusion is added only when there are any.
+    const cutoffs = await this.conversationHideCutoffs(callerId);
     const base: Prisma.ConversationWhereInput = { participantIds: { has: callerId } };
+    if (cutoffs.size > 0) {
+      base.NOT = {
+        OR: [...cutoffs].map(([id, hiddenAt]) => ({ id, lastMessageAt: { lte: hiddenAt } })),
+      };
+    }
     const where: Prisma.ConversationWhereInput = query.cursor
       ? { AND: [base, this.buildConversationCursorFilter(query.cursor)] }
       : base;
@@ -272,7 +352,7 @@ export class MessagingService {
         ? encodeConversationCursor({ lastMessageAt: last.lastMessageAt, id: last.id })
         : null;
 
-    const items = await this.toConversationViews(trimmed, callerId);
+    const items = await this.toConversationViews(trimmed, callerId, cutoffs);
     return { items, nextCursor };
   }
 
@@ -303,7 +383,14 @@ export class MessagingService {
 
     const limit = Math.min(query.limit ?? MESSAGING_DEFAULT_PAGE_SIZE, MESSAGING_MAX_PAGE_SIZE);
 
+    // B-067: leave out what the caller deleted for themselves -- everything sent at or before the moment they
+    // deleted the chat, and any single message they hid. The clauses are added only when the caller has such a
+    // row, so an ordinary thread reads exactly as before. A message deleted for EVERYONE is NOT left out: it
+    // comes back as the placeholder to both people (toMessageView).
+    const thread = await this.readThreadHides(callerId, conversationId);
     const base: Prisma.MessageWhereInput = { conversationId };
+    if (thread.hiddenAt) base.sentAt = { gt: thread.hiddenAt };
+    if (thread.hasHiddenMessages) base.hides = { none: { userId: callerId } };
     const where: Prisma.MessageWhereInput = query.cursor
       ? { AND: [base, this.buildMessageCursorFilter(query.cursor)] }
       : base;
@@ -316,12 +403,12 @@ export class MessagingService {
     });
 
     const hasMore = rows.length > limit;
-    const items = hasMore ? rows.slice(0, limit) : rows;
-    const last = items[items.length - 1];
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const last = page[page.length - 1];
     const nextCursor =
       hasMore && last ? encodeMessageCursor({ sentAt: last.sentAt, id: last.id }) : null;
 
-    return { items, nextCursor };
+    return { items: page.map(toMessageView), nextCursor };
   }
 
   private buildMessageCursorFilter(raw: string): Prisma.MessageWhereInput {
@@ -388,27 +475,9 @@ export class MessagingService {
     const conversation = await this.assertParticipant(conversationId, senderId);
     const recipientId = conversation.participantIds.find((id) => id !== senderId) ?? null;
 
-    // B-039: messages stop in both directions once either side has blocked the
-    // other. The blocked SENDER gets the 404 an unreachable conversation gets
-    // (never a message saying they are blocked, #404 item 11); the blocker gets
-    // the explicit 403. The existing thread and its history stay readable and
-    // listed -- whether a blocked pair's thread should disappear from either
-    // inbox is NOT decided (docs/backend-w5-report.md, OPEN).
-    if (recipientId !== null) {
-      const blockRows = await this.prisma.block.findMany({
-        where: blockedPairWhere(senderId, recipientId),
-        select: { blockerId: true, blockedId: true },
-      });
-      const relation = relationFromRows(blockRows, senderId, recipientId);
-      if (relation === 'other_blocked_viewer') {
-        throw new NotFoundException('Conversation not found');
-      }
-      if (relation === 'viewer_blocked_other') {
-        throw new ForbiddenException({ message: YOU_BLOCKED_THIS_USER_MESSAGE, code: YOU_BLOCKED_THIS_USER_CODE });
-      }
-    }
+    await this.assertNoBlock(senderId, recipientId);
 
-    return this.prisma.$transaction(async (tx) => {
+    const created = await this.prisma.$transaction(async (tx) => {
       const message = await tx.message.create({
         data: {
           conversationId,
@@ -442,6 +511,208 @@ export class MessagingService {
       }
       return message;
     });
+    return toMessageView(created);
+  }
+
+  // B-039: messages stop in both directions once either side has blocked the
+  // other. The blocked SENDER gets the 404 an unreachable conversation gets
+  // (never a message saying they are blocked, #404 item 11); the blocker gets
+  // the explicit 403. The existing thread and its history stay readable and
+  // listed -- whether a blocked pair's thread should disappear from either
+  // inbox is NOT decided (docs/backend-w5-report.md, OPEN).
+  // B-067: shared by sendMessage and editMessage so an edit passes exactly the checks a send does. Deleting
+  // (either scope) deliberately does NOT call this: a person can always delete, even with a Block between them.
+  private async assertNoBlock(senderId: string, recipientId: string | null): Promise<void> {
+    if (recipientId === null) return;
+    const blockRows = await this.prisma.block.findMany({
+      where: blockedPairWhere(senderId, recipientId),
+      select: { blockerId: true, blockedId: true },
+    });
+    const relation = relationFromRows(blockRows, senderId, recipientId);
+    if (relation === 'other_blocked_viewer') {
+      throw new NotFoundException('Conversation not found');
+    }
+    if (relation === 'viewer_blocked_other') {
+      throw new ForbiddenException({ message: YOU_BLOCKED_THIS_USER_MESSAGE, code: YOU_BLOCKED_THIS_USER_CODE });
+    }
+  }
+
+  // PATCH /conversations/:id/messages/:messageId { contentText } (B-067, Decision Log #472 (b)).
+  // The SENDER may edit their own text message within MESSAGE_EDIT_WINDOW_MINUTES of sentAt (server clock).
+  // Passes exactly what sendMessage passes: participant (404), Block in both directions (the same 404 / 403
+  // split), the same DTO bounds -- and the controller carries the same guard set. No new Notification, and
+  // lastMessageAt is not touched (an edit is not new activity).
+  // The first edit stores the text as first sent in originalContentText; later edits never overwrite it. No read
+  // path returns it.
+  // Order of refusals: 404 (conversation, Block, message) -> 403 (not the sender) -> 409 message_not_editable
+  // (deleted for everyone, or not a text message) -> 409 message_edit_window_closed.
+  async editMessage(
+    conversationId: string,
+    messageId: string,
+    senderId: string,
+    dto: EditMessageDto,
+  ): Promise<MessageView> {
+    const conversation = await this.assertParticipant(conversationId, senderId);
+    const recipientId = conversation.participantIds.find((id) => id !== senderId) ?? null;
+    await this.assertNoBlock(senderId, recipientId);
+
+    const message = await this.prisma.message.findFirst({
+      where: { id: messageId, conversationId },
+      select: {
+        id: true,
+        senderId: true,
+        contentText: true,
+        mediaUrl: true,
+        sentAt: true,
+        originalContentText: true,
+        deletedForEveryoneAt: true,
+      },
+    });
+    if (!message) {
+      throw new NotFoundException('Message not found');
+    }
+    if (message.senderId !== senderId) {
+      throw new ForbiddenException({
+        message: 'You can only edit your own messages',
+        code: MESSAGE_EDIT_NOT_SENDER_CODE,
+      });
+    }
+    if (message.deletedForEveryoneAt || message.mediaUrl) {
+      throw new ConflictException({
+        message: 'This message can no longer be edited',
+        code: MESSAGE_NOT_EDITABLE_CODE,
+      });
+    }
+
+    const now = this.clock.now();
+    const earliestSentAt = new Date(now.getTime() - MESSAGE_EDIT_WINDOW_MS);
+    // sentAt exactly MESSAGE_EDIT_WINDOW_MS ago is still inside the window; one millisecond older is not.
+    if (message.sentAt.getTime() < earliestSentAt.getTime()) {
+      throw new ConflictException({
+        message: 'The time for editing this message has passed',
+        code: MESSAGE_EDIT_WINDOW_CLOSED_CODE,
+      });
+    }
+
+    // The conditions are repeated in the write, so a delete that lands between the read and the write wins.
+    const result = await this.prisma.message.updateMany({
+      where: {
+        id: messageId,
+        conversationId,
+        senderId,
+        deletedForEveryoneAt: null,
+        sentAt: { gte: earliestSentAt },
+      },
+      data: {
+        contentText: dto.contentText,
+        editedAt: now,
+        originalContentText: message.originalContentText ?? message.contentText,
+      },
+    });
+    if (result.count === 0) {
+      throw new ConflictException({
+        message: 'This message can no longer be edited',
+        code: MESSAGE_NOT_EDITABLE_CODE,
+      });
+    }
+
+    const updated = await this.prisma.message.findUniqueOrThrow({
+      where: { id: messageId },
+      select: MESSAGE_SELECT,
+    });
+    return toMessageView(updated);
+  }
+
+  // DELETE /conversations/:id/messages/:messageId?scope=me|everyone (B-067).
+  //  - me: any message in a conversation the caller is in. A MessageHide row (idempotent); the other person and
+  //    the database are untouched.
+  //  - everyone: the SENDER only, at any time. Sets deletedForEveryoneAt (idempotent). The row, the text and any
+  //    original STAY in the database; nothing is purged, and both people then see the placeholder.
+  // Participant check only: no Block check (a person can always delete) and no edit window.
+  async deleteMessage(
+    conversationId: string,
+    messageId: string,
+    callerId: string,
+    scope: DeleteMessageScope,
+  ): Promise<void> {
+    await this.assertParticipant(conversationId, callerId);
+
+    const message = await this.prisma.message.findFirst({
+      where: { id: messageId, conversationId },
+      select: { id: true, senderId: true },
+    });
+    if (!message) {
+      throw new NotFoundException('Message not found');
+    }
+
+    if (scope === 'me') {
+      await this.prisma.messageHide.createMany({
+        data: [{ userId: callerId, messageId, hiddenAt: this.clock.now() }],
+        skipDuplicates: true,
+      });
+      return;
+    }
+
+    if (message.senderId !== callerId) {
+      throw new ForbiddenException({
+        message: 'You can only delete your own messages for everyone',
+        code: MESSAGE_DELETE_NOT_SENDER_CODE,
+      });
+    }
+    await this.prisma.message.updateMany({
+      where: { id: messageId, deletedForEveryoneAt: null },
+      data: { deletedForEveryoneAt: this.clock.now() },
+    });
+  }
+
+  // DELETE /conversations/:id (B-067): "delete chat" for the CALLER only. Upserts ConversationHide at now: the
+  // caller's reads then leave out everything sent up to that moment, and the other person's view is unchanged.
+  // A message sent afterwards brings the conversation back with only the newer messages. Nothing is deleted.
+  async deleteConversation(conversationId: string, callerId: string): Promise<void> {
+    await this.assertParticipant(conversationId, callerId);
+    const hiddenAt = this.clock.now();
+    await this.prisma.conversationHide.upsert({
+      where: { userId_conversationId: { userId: callerId, conversationId } },
+      create: { userId: callerId, conversationId, hiddenAt },
+      update: { hiddenAt },
+    });
+  }
+
+  // B-067: the caller's "delete chat" moments, conversationId -> hiddenAt. One primary-key read of the caller
+  // with the relation selected (their own per-user view settings), optionally limited to a page's conversations.
+  private async conversationHideCutoffs(
+    callerId: string,
+    conversationIds?: string[],
+  ): Promise<Map<string, Date>> {
+    const me = await this.prisma.user.findUnique({
+      where: { id: callerId },
+      select: {
+        conversationHides: {
+          where: conversationIds ? { conversationId: { in: conversationIds } } : undefined,
+          select: { conversationId: true, hiddenAt: true },
+        },
+      },
+    });
+    return new Map((me?.conversationHides ?? []).map((h) => [h.conversationId, h.hiddenAt]));
+  }
+
+  // B-067: what the caller hid inside ONE thread -- the moment they deleted the chat (or null), and whether they
+  // hid any single message there (take: 1, only the existence matters).
+  private async readThreadHides(
+    callerId: string,
+    conversationId: string,
+  ): Promise<{ hiddenAt: Date | null; hasHiddenMessages: boolean }> {
+    const me = await this.prisma.user.findUnique({
+      where: { id: callerId },
+      select: {
+        conversationHides: { where: { conversationId }, select: { hiddenAt: true }, take: 1 },
+        messageHides: { where: { message: { conversationId } }, select: { messageId: true }, take: 1 },
+      },
+    });
+    return {
+      hiddenAt: me?.conversationHides[0]?.hiddenAt ?? null,
+      hasHiddenMessages: (me?.messageHides.length ?? 0) > 0,
+    };
   }
 
   // PATCH /conversations/:id/read — marks every message in the
@@ -588,12 +859,28 @@ export class MessagingService {
   private async toConversationViews(
     conversations: ConversationRow[],
     callerId: string,
+    knownCutoffs?: Map<string, Date>,
   ): Promise<ConversationView[]> {
     if (conversations.length === 0) {
       return [];
     }
 
     const conversationIds = conversations.map((c) => c.id);
+    // B-067: the unread count and the last-message preview ignore messages the caller deleted for themselves
+    // (one message, or everything up to a "delete chat") and messages deleted for everyone.
+    const cutoffs = knownCutoffs ?? (await this.conversationHideCutoffs(callerId, conversationIds));
+    const visibleMessages: Prisma.MessageWhereInput = {
+      ...(cutoffs.size > 0
+        ? {
+            OR: conversationIds.map((id) => {
+              const hiddenAt = cutoffs.get(id);
+              return hiddenAt ? { conversationId: id, sentAt: { gt: hiddenAt } } : { conversationId: id };
+            }),
+          }
+        : { conversationId: { in: conversationIds } }),
+      deletedForEveryoneAt: null,
+      hides: { none: { userId: callerId } },
+    };
     const otherIds = [
       ...new Set(
         conversations
@@ -611,7 +898,7 @@ export class MessagingService {
         : Promise.resolve([] as { id: string; username: string | null; displayName: string }[]),
       this.prisma.message.groupBy({
         by: ['conversationId'],
-        where: { conversationId: { in: conversationIds }, senderId: { not: callerId }, readAt: null },
+        where: { AND: [visibleMessages, { senderId: { not: callerId }, readAt: null }] },
         _count: { _all: true },
       }),
       // Latest message per conversation in one query: `distinct` on
@@ -619,7 +906,7 @@ export class MessagingService {
       // order, so ordering by (conversationId, sentAt desc, id desc)
       // yields each conversation's newest message.
       this.prisma.message.findMany({
-        where: { conversationId: { in: conversationIds } },
+        where: visibleMessages,
         orderBy: [{ conversationId: 'asc' }, { sentAt: 'desc' }, { id: 'desc' }],
         distinct: ['conversationId'],
         select: { conversationId: true, contentText: true, senderId: true, sentAt: true },

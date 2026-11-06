@@ -155,6 +155,10 @@ const EXPECTED: Record<string, Flags> = {
   // messaging
   'POST /conversations': 'CEP',
   'POST /conversations/:id/messages': 'CEP',
+  // B-067: edit publishes text under the user's identity (the full stack); deleting is an undo form (C only).
+  'PATCH /conversations/:id/messages/:messageId': 'CEP',
+  'DELETE /conversations/:id/messages/:messageId': 'C',
+  'DELETE /conversations/:id': 'C',
   // contest (backend/w7-contest, B-091)
   'POST /contest/entries': 'CEP',
   // A finalist's final upload creates a post under the user's identity: the full CEP stack.
