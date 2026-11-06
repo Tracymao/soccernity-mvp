@@ -215,6 +215,19 @@ export class TwoFactorService implements OnModuleInit {
     await this.limiter.clear(aud, id);
   }
 
+  // backend/email-change: lets another module ask a signed-in USER for a second factor before a sensitive change.
+  // Both go through the exact code path sign-in uses (the per-account wrong-code lock, replay guard, single-use
+  // backup codes), so there is no second, weaker way to guess a code. assertUserCode throws the same coded 401 /
+  // 429 as sign-in; the caller decides how to present it.
+  async isEnabledForUser(userId: string): Promise<boolean> {
+    return (await this.requireSubject('user', userId)).totpEnabledAt !== null;
+  }
+
+  async assertUserCode(userId: string, code: unknown): Promise<void> {
+    const subject = await this.requireEnabled('user', userId);
+    await this.assertCodeAccepted('user', subject, code);
+  }
+
   // Used by the admin peer reset (AdminStaffRolesService): clears the target's secret fields and backup codes, with
   // `extra` (the audit-log row) written in the SAME transaction. Returns false if two-factor was not enabled.
   async resetAdmin(adminId: string, extra: (tx: TransactionClient) => Promise<void>): Promise<boolean> {

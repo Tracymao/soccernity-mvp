@@ -50,7 +50,7 @@ describe('purge reference classification', () => {
     });
     // The five the register named, plus the two membership tables the anonymiser empties itself, plus the
     // two-factor backup codes it deletes (B-086), plus the open recovery requests (B-276), plus the withhold-guardian-
-    // notices flag (B-280).
+    // notices flag (B-280), plus the pending email-change requests (B-059).
     expect(cascading.map((r) => r.key).sort()).toEqual(
       [
         'BanterRoomMember.user',
@@ -59,6 +59,7 @@ describe('purge reference classification', () => {
         'ContestEntry.user',
         'ContestRoundWinner.user',
         'ContestStanding.user',
+        'EmailChangeRequest.user',
         'GuardianNoticeWithhold.user',
         'PointsLedgerEntry.user',
         'TwoFactorRecoveryRequest.user',

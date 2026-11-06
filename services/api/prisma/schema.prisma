@@ -114,6 +114,8 @@ model User {
   // B-084 (Decision Log #378, #468): the Google / Facebook identities linked to this account. See SocialIdentity.
   socialIdentities          SocialIdentity[]
   twoFactorRecoveryRequests TwoFactorRecoveryRequest[]
+  // backend/email-change (Decision Log #472 default (f), register Section 80b item 8): reverse relation for EmailChangeRequest.
+  emailChangeRequests       EmailChangeRequest[]
   // backend/b280-withhold-guardian-notices (B-280): reverse relation for GuardianNoticeWithhold. Never selected by any
   // user-facing query; see the model's comment.
   guardianNoticeWithhold    GuardianNoticeWithhold?
@@ -2960,4 +2962,28 @@ model ProfileImageCheck {
 
   @@id([userId, kind])
   @@index([state, nextAttemptAt])
+}
+
+// backend/email-change (B-059; Decision Log #472 adopted default (f), register Section 80b item 8). A genuine NEW
+// model beyond Section 3's entity list (flagged per CLAUDE.md's "the data model is a fixed spec" rule). One row per
+// email-change request: a signed-in user proved their password (and a second factor when it is on), and a
+// verification link was sent to newEmail. Nothing changes on User until the link is used.
+//   newEmail   lower-cased and trimmed at write time.
+//   tokenHash  SHA-256 (hex) of the emailed secret; the secret itself is never stored (the way password-reset tokens
+//              are held). Unique, so the link lookup is a single indexed read.
+//   usedAt     set in the same transaction that changes User.email; a used or expired row is dead.
+// ONE pending (unused) request per user: a new request deletes the earlier unused one, so its link stops working.
+// CASCADE on User like the other per-account credential rows; the anonymiser also deletes them explicitly (an open
+// request holds an address and a link-token hash).
+model EmailChangeRequest {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  newEmail  String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
