@@ -1,0 +1,516 @@
+/* Community message sidebar + chat pop-ups (B-066). Figma source: frame
+ * 1306:354 -- "Messages Window" 1306:2548, "Chat Window" 1456:8885, the
+ * minimised bar 1456:8930. Light theme, app-wide --sn-* tokens only.
+ *
+ * Colours the frame draws that are NOT used (off the two-colour palette, or
+ * unreadable): the solid navy search bar and Inbox chip with navy text, the
+ * amber unread preview (#DBA111), the blue chip border (#041BF2), the grey
+ * hover and the grey message bubbles (#D9D9D9). They are drawn from the
+ * brand tokens instead -- see MessagesSidebar.tsx. */
+
+/* --- sidebar panel --------------------------------------------------- */
+
+.msg-panel {
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 12px;
+  padding: 24px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: calc(100vh - 130px);
+  position: sticky;
+  top: 16px;
+  min-width: 0;
+}
+
+.msg-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 9px;
+}
+
+.msg-panel__title {
+  font: 700 16px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.msg-panel__compose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
+.msg-panel__compose:hover,
+.msg-panel__compose:focus-visible {
+  background: var(--sn-green-tint-12);
+}
+
+.msg-panel__search {
+  margin: 0 9px;
+  height: 38px;
+  border: 0;
+  border-radius: 27px;
+  background: var(--sn-green-tint-12);
+  padding: 0 19px;
+  font: 500 12px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.msg-panel__search::placeholder {
+  color: var(--sn-text-secondary);
+}
+
+.msg-panel__search:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 1px;
+}
+
+.msg-panel__chip {
+  align-self: flex-start;
+  margin: 0 9px;
+  height: 27px;
+  padding: 0 25px;
+  border-radius: 33px;
+  background: var(--sn-green-tint-12);
+  font: 500 12px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  display: inline-flex;
+  align-items: center;
+}
+
+.msg-panel__status {
+  font: 400 13px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+  padding: 8px 9px;
+  text-align: center;
+}
+
+.msg-panel__status--error {
+  color: var(--sn-brand-navy);
+}
+
+.msg-panel__link-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--sn-brand-navy);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.msg-panel__empty {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  text-align: center;
+  padding: 16px 9px;
+}
+
+.msg-panel__empty-title {
+  font: 600 14px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  margin: 0;
+}
+
+.msg-panel__empty-body {
+  font: 400 12px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.msg-panel__empty-cta {
+  margin-top: 6px;
+  font: 600 13px "Inter", sans-serif;
+  color: var(--sn-text-on-green);
+  background: var(--sn-brand-green);
+  border-radius: 999px;
+  padding: 8px 16px;
+  text-decoration: none;
+}
+
+.msg-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.msg-panel__more {
+  align-self: center;
+  background: none;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 999px;
+  padding: 6px 16px;
+  font: 500 12px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  cursor: pointer;
+}
+
+.msg-panel__more:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* --- conversation rows ----------------------------------------------- */
+
+.msg-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 9px;
+  background: none;
+  border: 0;
+  border-radius: 10px;
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+}
+
+.msg-row:hover,
+.msg-row:focus-visible,
+.msg-row--open {
+  background: var(--sn-green-tint-12);
+}
+
+.msg-row:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: -2px;
+}
+
+.msg-row__avatar,
+.chat-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy, #fff);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 15px "Inter", sans-serif;
+  flex-shrink: 0;
+}
+
+.msg-row__text {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+
+.msg-row__name {
+  font: 500 14px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-row__line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 500 12px "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+  min-width: 0;
+}
+
+.msg-row__preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.msg-row__time {
+  flex-shrink: 0;
+}
+
+.msg-row__sep {
+  flex-shrink: 0;
+}
+
+.msg-row--unread .msg-row__name,
+.msg-row--unread .msg-row__preview {
+  font-weight: 700;
+}
+
+.msg-row__unread {
+  flex-shrink: 0;
+}
+
+/* --- chat tray + windows --------------------------------------------- */
+
+/* Floating, docked to the bottom, to the left of the message sidebar. The
+ * offset follows CommunityPage.css: a 1180px centred container, the 320px
+ * right rail, a 16px gap. */
+.chat-tray {
+  position: fixed;
+  bottom: 0;
+  right: calc(max(32px, (100vw - 1180px) / 2) + 336px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: stretch;
+  width: 388px;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+
+.chat-window {
+  pointer-events: auto;
+  background: var(--sn-background-surface);
+  border-radius: 8px;
+  box-shadow:
+    0 2px 6px var(--sn-shadow-ambient),
+    0 8px 24px var(--sn-shadow-elevated);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: min(538px, calc(100vh - 140px));
+}
+
+.chat-window--minimised {
+  height: auto;
+}
+
+.chat-window__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 18px 11px 0;
+  padding: 10px 14px 10px 9px;
+  border-radius: 8px;
+  background: var(--sn-green-tint-12);
+  border-bottom: 0;
+  flex-shrink: 0;
+}
+
+.chat-window__who {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.chat-window__name {
+  font: 500 14px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-window__controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.chat-window__control {
+  background: none;
+  border: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.chat-window__control:hover,
+.chat-window__control:focus-visible {
+  background: var(--sn-green-tint-12);
+}
+
+.chat-window__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 14px 20px 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--sn-icon-inactive);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-window__status {
+  font: 400 13px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+  text-align: center;
+}
+
+.chat-window__status--error {
+  color: var(--sn-brand-navy);
+}
+
+.chat-window__retry,
+.chat-window__older {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: 500 12px "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+  text-decoration: underline;
+  cursor: pointer;
+  align-self: center;
+}
+
+.chat-window__older:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.chat-message-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-message-time {
+  font: 500 12px "Montserrat", "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+  text-align: center;
+  margin: 8px 0 4px;
+}
+
+.chat-message {
+  display: flex;
+  align-items: flex-end;
+  gap: 11px;
+  max-width: 100%;
+}
+
+.chat-message--mine {
+  justify-content: flex-end;
+}
+
+.chat-avatar--small {
+  width: 33px;
+  height: 33px;
+  font-size: 12px;
+}
+
+.chat-avatar--blank {
+  visibility: hidden;
+}
+
+.chat-message__bubble {
+  margin: 0;
+  max-width: 75%;
+  padding: 8px 14px;
+  border-radius: 15px;
+  background: var(--sn-icon-inactive);
+  color: var(--sn-text-primary);
+  font: 500 12px/1.5 "Montserrat", "Inter", sans-serif;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat-message--mine .chat-message__bubble {
+  background: var(--sn-brand-green);
+  color: var(--sn-text-on-green);
+}
+
+.chat-window__send-error {
+  margin: 8px 20px 0;
+  font: 500 12px/1.5 "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+}
+
+.chat-window__composer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 12px 20px 16px;
+  flex-shrink: 0;
+}
+
+.chat-window__input {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  border: 0;
+  border-radius: 38px;
+  background: var(--sn-green-tint-12);
+  padding: 0 16px;
+  font: 500 12px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.chat-window__input::placeholder {
+  color: var(--sn-text-secondary);
+}
+
+.chat-window__input:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 1px;
+}
+
+.chat-window__send {
+  height: 40px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 38px;
+  background: var(--sn-brand-navy);
+  color: #fff;
+  font: 600 12px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.chat-window__send:disabled,
+.chat-window__input:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Minimised bar (frame 1456:8930): avatar, name, chevron. */
+.chat-minimised {
+  width: 100%;
+  height: 65px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 0 22px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.chat-minimised:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: -2px;
+}
+
+.chat-minimised .chat-avatar {
+  width: 33px;
+  height: 33px;
+  font-size: 12px;
+}
+
+.chat-minimised__name {
+  flex: 1;
+  font: 500 14px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}

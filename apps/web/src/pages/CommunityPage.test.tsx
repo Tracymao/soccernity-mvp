@@ -43,7 +43,19 @@ vi.mock("../api/contest", async () => {
   };
 });
 
+vi.mock("../api/messaging", async () => {
+  const actual = await vi.importActual<typeof import("../api/messaging")>("../api/messaging");
+  return {
+    ...actual,
+    listConversations: vi.fn(),
+    getMessages: vi.fn(),
+    sendMessage: vi.fn(),
+    markConversationRead: vi.fn(),
+  };
+});
+
 import { getFeed, createPost, likePost } from "../api/feed";
+import { listConversations } from "../api/messaging";
 import { getUser } from "../api/users";
 import {
   getCurrentContest,
@@ -95,6 +107,8 @@ beforeEach(() => {
   vi.mocked(submitContestEntry).mockReset();
   vi.mocked(getFinalWeekCarousel).mockReset();
   vi.mocked(getFinalWeekCarousel).mockResolvedValue({ live: false, items: [] });
+  vi.mocked(listConversations).mockReset();
+  vi.mocked(listConversations).mockResolvedValue({ items: [], nextCursor: null });
 });
 
 function renderPage(path = "/community") {
@@ -300,5 +314,56 @@ describe("CommunityPage", () => {
     expect(screen.getByRole("button", { name: "Following" })).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Follow" })).toBeNull();
     expect(likePost).not.toHaveBeenCalled();
+  });
+
+  // B-066 (Figma frame 1306:354): the right rail is the message sidebar.
+  it("shows the message sidebar in the right rail at desktop width, wired to GET /conversations", async () => {
+    seedSession(fakeAccessToken("user-1"));
+    vi.mocked(getFeed).mockResolvedValue({ items: [post()], nextCursor: null });
+    vi.mocked(getUser).mockResolvedValue({ publicName: "Ada Player" } as never);
+    vi.mocked(listConversations).mockResolvedValue({
+      items: [
+        {
+          id: "c1",
+          otherParticipant: { id: "u2", publicName: "Kingsley Chukwudi" },
+          lastMessageAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          lastMessage: { contentText: "Morning", senderId: "u2", sentAt: new Date().toISOString() },
+          unreadCount: 1,
+        },
+      ],
+      nextCursor: null,
+    });
+
+    renderPage();
+
+    expect(await screen.findByText("Kingsley Chukwudi")).not.toBeNull();
+    expect(screen.getByRole("complementary", { name: "Messages" })).not.toBeNull();
+    expect(listConversations).toHaveBeenCalledWith(expect.any(String));
+    // The old sample right-rail cards are gone.
+    expect(screen.queryByText("Who to follow")).toBeNull();
+  });
+
+  it("shows no message sidebar and fetches no conversations at phone width", async () => {
+    const original = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 500 });
+    try {
+      seedSession(fakeAccessToken("user-1"));
+      vi.mocked(getFeed).mockResolvedValue({ items: [post()], nextCursor: null });
+      vi.mocked(getUser).mockResolvedValue({ publicName: "Ada Player" } as never);
+
+      renderPage();
+
+      expect(await screen.findByText(/first goal of the season/i)).not.toBeNull();
+      expect(screen.queryByRole("complementary", { name: "Messages" })).toBeNull();
+      expect(listConversations).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: original });
+    }
+  });
+
+  it("does not load conversations when there is no session", () => {
+    renderPage();
+    expect(listConversations).not.toHaveBeenCalled();
   });
 });
