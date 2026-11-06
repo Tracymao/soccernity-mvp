@@ -60,6 +60,28 @@ export function listStaff(
   return adminFetch<AdminStaffListPage>(`/admin/staff${qs ? `?${qs}` : ""}`);
 }
 
+// POST /admin/staff (feat/admin-staff-create, PR #340, Decision Log #191) — superadmin-only. Mirrors
+// services/api CreateAdminStaffDto: email (valid, <= 254), fullName (1-120), role, and an OPTIONAL
+// temporaryPassword (8-128). Omitted -> the server generates one and returns it ONCE as `temporaryPassword`;
+// supplied -> it is never returned. No email is sent to the new admin. 409 = an account with that email exists.
+export const ADMIN_STAFF_EMAIL_MAX = 254;
+export const ADMIN_STAFF_NAME_MAX = 120;
+export const ADMIN_STAFF_PASSWORD_MIN = 8;
+export const ADMIN_STAFF_PASSWORD_MAX = 128;
+
+export interface CreateAdminStaffInput {
+  email: string;
+  fullName: string;
+  role: AdminStaffRole;
+  temporaryPassword?: string;
+}
+
+export type CreatedAdminStaff = AdminStaffListItem & { temporaryPassword?: string };
+
+export function createStaff(input: CreateAdminStaffInput): Promise<CreatedAdminStaff> {
+  return adminFetch<CreatedAdminStaff>("/admin/staff", { method: "POST", body: input });
+}
+
 // PATCH /admin/staff/:id/role — reassigns ONLY AdminUser.role. A 409
 // means the target is the last active superadmin (see that module's
 // README); surfaced verbatim by the caller via AdminApiError.message.

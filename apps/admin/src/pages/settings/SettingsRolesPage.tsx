@@ -8,11 +8,10 @@
 // real-data pattern; see admin-staff-roles/README.md for the full guard
 // reasoning.
 //
-// "Add Role" and "Delete Role" remain disclosed stubs — per Decision Log
-// #191 there is still no self-service admin/moderator account creation
-// or deletion endpoint anywhere in this codebase; only reassigning an
-// EXISTING admin's role, or setting their accountStatus (both via
-// "Edit"), is real.
+// "Add Role" opens AddRolePage (B-057, POST /admin/staff, PR #340, Decision
+// Log #191). "Delete Role" remains a disclosed stub: there is still no
+// DELETE /admin/staff/:id. Reassigning an EXISTING admin's role, or
+// setting their accountStatus, happens via "Edit".
 //
 // The Status column (feat/admin-staff-status, Decision Log #193) reads
 // accountStatus straight off the same AdminStaffListItem this page's
@@ -21,7 +20,6 @@
 import { Link } from "react-router";
 import { useState } from "react";
 import AdminPageHeader from "../../layout/AdminPageHeader";
-import { StubButton } from "../../components/stub/AdminStub";
 import { listStaff, type AdminStaffListItem } from "../../api/adminStaff";
 import { useAsyncData } from "./settingsShared";
 import "./settings.css";
@@ -94,11 +92,9 @@ export default function SettingsRolesPage() {
       <div className="rl-page">
         <div className="rl-action-row">
           <span aria-hidden />
-          {/* There is no self-service admin/moderator account-creation
-              endpoint (Decision Log #191) — accounts are provisioned by
-              direct DB insert. Left disabled rather than inventing a
-              registration path. */}
-          <StubButton>Add Role</StubButton>
+          <Link to="/settings/roles/new" className="rl-btn rl-btn--primary">
+            Add Role
+          </Link>
         </div>
 
         <p className="rl-note">
