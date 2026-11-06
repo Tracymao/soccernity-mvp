@@ -12,6 +12,18 @@ export interface LeaderboardEntryView {
   publicName: string;
   points: number;
   rank: number;
+  // backend/b053-leaderboard-periods (B-053, Decision Log #472): the club this row belongs to, null when
+  // the person is a minor or represents no club. On the Overall and all-time boards it is the person's
+  // current represented club; on a club board it is that club.
+  club: LeaderboardClubView | null;
+  // Rank now minus rank on the same board seven days earlier, so NEGATIVE means the person moved UP.
+  // null when they were not on that board then; never a made-up 0.
+  rankChange7d: number | null;
+}
+
+export interface LeaderboardClubView {
+  id: string;
+  name: string;
 }
 
 export interface LeaderboardPage {

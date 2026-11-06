@@ -3,12 +3,13 @@ import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { decodeLeaderboardCursor, encodeLeaderboardCursor } from './cursor.util';
 import { getCurrentIsoWeekPeriod, parseIsoWeekPeriod } from './iso-week.util';
+import { computeRankChange7d, isAllTimePeriod } from './leaderboard-period.util';
 import {
   GLOBAL_BOARD_CLUB_ID,
   LEADERBOARD_DEFAULT_PAGE_SIZE,
   LEADERBOARD_MAX_PAGE_SIZE,
 } from './leaderboard.constants';
-import { LeaderboardEntryView, LeaderboardPage } from './leaderboard.types';
+import { LeaderboardClubView, LeaderboardEntryView, LeaderboardPage } from './leaderboard.types';
 import { LeaderboardQueryDto } from './dto/leaderboard-query.dto';
 import { PUBLIC_NAME_SELECT, resolvePublicName } from '../users/public-name.util';
 
@@ -35,7 +36,8 @@ export class LeaderboardService {
     // Throws BadRequestException for a malformed/out-of-range period —
     // see iso-week.util.ts. Return value discarded; this call is purely
     // for validation before it's used as a literal WHERE-clause value.
-    parseIsoWeekPeriod(period);
+    // B-053: 'all-time' is the one non-weekly period; it has no week to validate.
+    if (!isAllTimePeriod(period)) parseIsoWeekPeriod(period);
 
     // Decision Log #128 -- the club board is only ever the caller's OWN
     // represented club. Checked here, server-side, against a fresh read,
@@ -43,14 +45,19 @@ export class LeaderboardService {
     // offer. A club the caller doesn't represent, or any clubId when they
     // represent none, is a 403.
     const boardClubId = query.clubId ?? GLOBAL_BOARD_CLUB_ID;
+    // B-053: on a club board every row belongs to THAT club (the board only exists because the points were
+    // attributed to it), which is the caller's own represented club. Null on the Overall board, where each
+    // row carries its person's own represented club instead.
+    let boardClub: LeaderboardClubView | null = null;
     if (query.clubId !== undefined) {
       const caller = await this.prisma.user.findUnique({
         where: { id: callerId },
-        select: { representedClubId: true },
+        select: { representedClubId: true, representedClub: { select: { id: true, name: true } } },
       });
       if (caller?.representedClubId !== query.clubId) {
         throw new ForbiddenException('You can only view the leaderboard for the club you represent.');
       }
+      boardClub = caller.representedClub ?? null;
     }
 
     const limit = Math.min(query.limit ?? LEADERBOARD_DEFAULT_PAGE_SIZE, LEADERBOARD_MAX_PAGE_SIZE);
@@ -80,7 +87,16 @@ export class LeaderboardService {
             }
           : {}),
       },
-      include: { user: { select: PUBLIC_NAME_SELECT } },
+      include: {
+        user: {
+          select: {
+            ...PUBLIC_NAME_SELECT,
+            // B-053: the club column and its minor rule.
+            isMinor: true,
+            representedClub: { select: { id: true, name: true } },
+          },
+        },
+      },
       // rank ASC — ties (RANK() gives equal ranks on a points tie,
       // Decision Log #61(c)) are broken by userId ASC for a
       // deterministic keyset order. Postgres's own default null
@@ -104,6 +120,13 @@ export class LeaderboardService {
       // Rank was computed on the exact units, so rounding never creates a false tie.
       points: quartersToDisplayPoints(row.quarterPoints),
       rank: row.rank ?? 0,
+      // B-053 (Decision Log #472). A minor's club is NEVER returned (adopted default, veto-able, same as
+      // B-234): null whatever board it is. Otherwise the board's club on a club board, else the person's
+      // current represented club, else null.
+      club: row.user.isMinor ? null : (boardClub ?? row.user.representedClub ?? null),
+      // Rank now minus rank on this board seven days earlier (negative = moved up); null when they were
+      // not on it then. Never a made-up 0.
+      rankChange7d: computeRankChange7d(row.rank, row.rankSevenDaysAgo),
     }));
 
     return {
