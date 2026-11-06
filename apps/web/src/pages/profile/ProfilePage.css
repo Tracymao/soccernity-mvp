@@ -283,3 +283,17 @@
   object-fit: cover;
   display: block;
 }
+
+/* Saved tab (B-064): the post cards stack like the feed's, with a gap under the tab strip. */
+.profile-saved {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+}
+
+.profile-saved__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}

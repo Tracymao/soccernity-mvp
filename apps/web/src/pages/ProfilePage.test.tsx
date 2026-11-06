@@ -38,6 +38,11 @@ vi.mock("./community/PinnedEntry", () => ({
   ),
 }));
 
+// The tab's own states are covered by profile/SavedPostsTab.test.tsx; here only the wiring.
+vi.mock("./profile/SavedPostsTab", () => ({
+  default: (props: { userId: string }) => <div data-testid="saved-tab-stub">{props.userId}</div>,
+}));
+
 import { getUser, updateUser, getFollowers, getFollowing } from "../api/users";
 import { seedSession, clearSession } from "../test/session";
 
@@ -123,6 +128,24 @@ describe("ProfilePage", () => {
     expect(screen.queryByTestId("pinned-entry-stub")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Posts" }));
     expect(screen.getByTestId("pinned-entry-stub")).not.toBeNull();
+  });
+
+  it("offers a Saved tab that mounts the saved list only once it is opened", async () => {
+    seedSession(fakeAccessToken("user-1"));
+    vi.mocked(getUser).mockResolvedValueOnce(BASE_PROFILE);
+
+    renderProfilePage();
+
+    await screen.findByText("Adeniyi Christiana");
+    expect(screen.getByRole("button", { name: "Saved" })).not.toBeNull();
+    expect(screen.queryByTestId("saved-tab-stub")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Saved" }));
+    expect((await screen.findByTestId("saved-tab-stub")).textContent).toBe("user-1");
+    // The placeholder of the other tabs is replaced, and leaving the tab removes the list again.
+    expect(screen.queryByText(/posts for this profile aren.t available yet/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Media" }));
+    expect(screen.queryByTestId("saved-tab-stub")).toBeNull();
   });
 
   it("/profile?edit=1 opens the edit form straight away (the image-decision notification row lands here)", async () => {

@@ -1,0 +1,139 @@
+/* Add Role (Figma 1658:2456). Tokens only. The frame draws underline-style fields on a white card with a
+ * navy pill Submit at the right; the errors and success state have no frame and reuse the Roles screens' own
+ * error / success / callout look (settings.css). */
+
+.ar-card {
+  max-width: 720px;
+  padding: 28px 32px;
+  gap: 18px;
+  box-shadow: 0 4px 16px var(--sn-shadow-elevated, rgba(40, 46, 101, 0.14));
+}
+
+.ar-card .rl-card__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ar-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ar-field label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--sn-text-secondary);
+}
+
+.ar-field input,
+.ar-field select {
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 8px 0;
+  border: none;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+  border-radius: 0;
+  background: transparent;
+  color: var(--sn-text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.ar-field input:focus-visible,
+.ar-field select:focus-visible {
+  outline: none;
+  border-bottom: 2px solid var(--sn-brand-navy);
+}
+
+.ar-field input[aria-invalid="true"],
+.ar-field select[aria-invalid="true"] {
+  border-bottom: 2px solid var(--sn-brand-navy);
+}
+
+.ar-field input:disabled,
+.ar-field select:disabled {
+  opacity: 0.55;
+}
+
+.ar-field__error,
+.ar-field__hint {
+  margin: 0;
+  font-size: 12px;
+}
+
+.ar-field__error {
+  font-weight: 600;
+  color: var(--sn-text-primary);
+  padding-left: 8px;
+  border-left: 3px solid var(--sn-brand-navy);
+}
+
+.ar-field__hint {
+  color: var(--sn-text-secondary);
+}
+
+.ar-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.ar-actions--split {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ar-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 150px;
+  padding: 12px 28px;
+  border: none;
+  border-radius: 999px;
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.ar-pill:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.ar-generated {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ar-generated p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ar-generated__value {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background-color: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px;
+  word-break: break-all;
+  user-select: all;
+}
+
+.ar-generated__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
