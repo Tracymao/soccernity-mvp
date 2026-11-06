@@ -124,6 +124,8 @@ function buildPrismaMock() {
     block: {
       findFirst: jest.fn().mockResolvedValue(null),
     },
+    // B-062: the notification triggers read the recipient's notification preferences (none = all off).
+    notificationPreference: { findUnique: jest.fn().mockResolvedValue(null) },
     notification: {
       create: jest.fn(),
     },
@@ -1223,6 +1225,48 @@ describe('FeedService', () => {
         expect(prisma.notification.create).not.toHaveBeenCalled();
       });
 
+      it('B-062: the Block rule is applied first - a blocked pair never reaches the notification preferences', async () => {
+        const prisma = buildPrismaMock();
+        (prisma.post.findUnique as jest.Mock).mockImplementation((args: { select?: unknown }) => {
+          const select = args.select as Record<string, unknown> | undefined;
+          if (select?.likeCount) return Promise.resolve({ likeCount: 1 });
+          return Promise.resolve({ id: 'post-1', authorId: 'post-author-1' });
+        });
+        (prisma.like.create as jest.Mock).mockResolvedValue({ id: 'like-1' });
+        (prisma.post.update as jest.Mock).mockResolvedValue({});
+        (prisma.block.findFirst as jest.Mock).mockResolvedValue({ id: 'block-1' });
+        const service = new FeedService(prisma, FIXED_CLOCK);
+
+        await service.likePost('liker-1', 'post-1');
+
+        expect(prisma.notificationPreference.findUnique).not.toHaveBeenCalled();
+      });
+
+      it("B-062: a like is recorded but NO Notification is stored when the post author's preferences suppress it", async () => {
+        const prisma = buildPrismaMock();
+        (prisma.post.findUnique as jest.Mock).mockImplementation((args: { select?: unknown }) => {
+          const select = args.select as Record<string, unknown> | undefined;
+          if (select?.likeCount) return Promise.resolve({ likeCount: 1 });
+          return Promise.resolve({ id: 'post-1', authorId: 'post-author-1' });
+        });
+        (prisma.like.create as jest.Mock).mockResolvedValue({ id: 'like-1' });
+        (prisma.post.update as jest.Mock).mockResolvedValue({});
+        (prisma.notificationPreference.findUnique as jest.Mock).mockResolvedValue({
+          qualityFilter: false,
+          muteNonFollowing: true,
+          muteNonFollowers: false,
+          muteNewAccounts: false,
+        });
+        (prisma as unknown as { follow: { findUnique: jest.Mock } }).follow.findUnique.mockResolvedValue(null);
+        const service = new FeedService(prisma, FIXED_CLOCK);
+
+        await service.likePost('liker-1', 'post-1');
+
+        expect(prisma.like.create).toHaveBeenCalled();
+        expect(prisma.notificationPreference.findUnique).toHaveBeenCalledWith({ where: { userId: 'post-author-1' } });
+        expect(prisma.notification.create).not.toHaveBeenCalled();
+      });
+
       it('creates exactly one Notification row across a like followed by a duplicate (idempotent) like', async () => {
         const prisma = buildPrismaMock();
         let liked = false;
@@ -1426,6 +1470,26 @@ describe('FeedService', () => {
             { blockerId: 'post-author-1', blockedId: 'commenter-1' },
           ],
         });
+      });
+
+      it("B-062: a comment is recorded but NO Notification is stored when the post author's preferences suppress it", async () => {
+        const prisma = buildPrismaMock();
+        (prisma.post.findUnique as jest.Mock).mockResolvedValue({ id: 'post-1', authorId: 'post-author-1' });
+        (prisma.comment.create as jest.Mock).mockResolvedValue(buildCommentRow({ authorId: 'commenter-1' }));
+        (prisma.post.update as jest.Mock).mockResolvedValue({});
+        (prisma.notificationPreference.findUnique as jest.Mock).mockResolvedValue({
+          qualityFilter: false,
+          muteNonFollowing: false,
+          muteNonFollowers: true,
+          muteNewAccounts: false,
+        });
+        const service = new FeedService(prisma, FIXED_CLOCK);
+
+        await service.addComment('post-1', 'commenter-1', { contentText: 'Nice goal' });
+
+        expect(prisma.comment.create).toHaveBeenCalled();
+        expect(prisma.notificationPreference.findUnique).toHaveBeenCalledWith({ where: { userId: 'post-author-1' } });
+        expect(prisma.notification.create).not.toHaveBeenCalled();
       });
 
       it('creates no Notification row when a user comments on their own post (no self-notification)', async () => {

@@ -27,6 +27,8 @@ function buildPrismaMock() {
       findMany: jest.fn().mockResolvedValue([]),
       findFirst: jest.fn().mockResolvedValue(null),
     },
+    // B-062: the notification triggers read the recipient's notification preferences (none = all off).
+    notificationPreference: { findUnique: jest.fn().mockResolvedValue(null) },
     guardian: {
       findUnique: jest.fn(),
     },
@@ -405,6 +407,26 @@ describe('UsersService', () => {
       // B-094 (Decision Log #382): a follow earns no points.
       expect((prisma as unknown as { pointsLedgerEntry: { createMany: jest.Mock } }).pointsLedgerEntry.createMany).not.toHaveBeenCalled();
       expect(result).toEqual({ following: true });
+    });
+
+    it("B-062: the Follow row is created but NO Notification is stored when the followee's preferences suppress it", async () => {
+      const prisma = buildPrismaMock();
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'followee-1' });
+      (prisma.follow.create as jest.Mock).mockResolvedValue({ id: 'follow-1' });
+      (prisma.notificationPreference.findUnique as jest.Mock).mockResolvedValue({
+        qualityFilter: false,
+        muteNonFollowing: true,
+        muteNonFollowers: false,
+        muteNewAccounts: false,
+      });
+      const service = new UsersService(prisma, buildTestDobEncryption(), policyStub());
+
+      await expect(service.followUser('follower-1', 'followee-1')).resolves.toEqual({ following: true });
+
+      expect(prisma.follow.create).toHaveBeenCalled();
+      // The rule is asked about the FOLLOWEE as recipient and the FOLLOWER as actor.
+      expect(prisma.notificationPreference.findUnique).toHaveBeenCalledWith({ where: { userId: 'followee-1' } });
+      expect(prisma.notification.create).not.toHaveBeenCalled();
     });
 
     it('does not award a points row on a duplicate (idempotent) follow', async () => {

@@ -118,6 +118,8 @@ model User {
   dataExportRequests        DataExportRequest[]
   // backend/email-change (Decision Log #472 default (f), register Section 80b item 8): reverse relation for EmailChangeRequest.
   emailChangeRequests       EmailChangeRequest[]
+  // backend/b062-notification-preferences (B-062, Decision Log #472 adopted default (c)): reverse relation for NotificationPreference.
+  notificationPreference    NotificationPreference?
   // backend/b280-withhold-guardian-notices (B-280): reverse relation for GuardianNoticeWithhold. Never selected by any
   // user-facing query; see the model's comment.
   guardianNoticeWithhold    GuardianNoticeWithhold?
@@ -3010,4 +3012,20 @@ model EmailChangeRequest {
   createdAt DateTime  @default(now())
 
   @@index([userId])
+}
+
+// backend/b062-notification-preferences (B-062; Decision Log #472 adopted default (c)). The person's notification
+// filters: the Quality filter and the three "mute" options on the Settings > Notification Preferences leaves.
+// ONE row per user (userId is the primary key); NO row means all four are false. Genuine addition beyond Section 3's
+// entity list, flagged as a Decision Log candidate. The rule that reads it is notification-policy.util.ts: a
+// notification the rule suppresses is NOT stored (DEFAULT, founder-veto-able), and only like, comment and follow
+// notifications are ever affected. CASCADE on User like the other per-account rows; the anonymiser deletes it too.
+model NotificationPreference {
+  userId           String   @id
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  qualityFilter    Boolean  @default(false)
+  muteNonFollowing Boolean  @default(false)
+  muteNonFollowers Boolean  @default(false)
+  muteNewAccounts  Boolean  @default(false)
+  updatedAt        DateTime @updatedAt
 }
