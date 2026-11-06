@@ -352,6 +352,19 @@
 .post__author {
   font: 600 14px "Inter", sans-serif;
   color: var(--sn-text-primary);
+  /* A long name shortens with an ellipsis instead of running under the Follow / Report buttons
+     (390px, B-064). */
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.post__follow,
+.post__report {
+  flex-shrink: 0;
 }
 
 .post__time {

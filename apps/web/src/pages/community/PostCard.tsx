@@ -60,6 +60,8 @@ interface PostCardProps {
   currentUserId: string;
   /** Called after the author hard-deletes the post. The card also removes itself. */
   onDeleted?: (postId: string) => void;
+  /** Called with the resulting state after the Save / Saved button succeeds (the profile's Saved tab drops an unsaved card). */
+  onSavedChange?: (postId: string, saved: boolean) => void;
   /**
    * A final contest entry before the reveal: all engagement is locked (the server refuses a like,
    * comment or save with `contest_final_locked`, even from the author), so the controls are drawn
@@ -78,6 +80,7 @@ export default function PostCard({
   accessToken,
   currentUserId,
   onDeleted,
+  onSavedChange,
   engagementLocked = false,
   initialCommentsOpen = false,
   playVideo = false,
@@ -143,6 +146,7 @@ export default function PostCard({
     try {
       const result = saved ? await unsavePost(accessToken, post.id) : await savePost(accessToken, post.id);
       setSaved(result.saved);
+      onSavedChange?.(post.id, result.saved);
     } catch (err) {
       setActionError(err instanceof FeedApiError ? err.message : "Something went wrong.");
     } finally {
