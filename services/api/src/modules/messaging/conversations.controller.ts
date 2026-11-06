@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
@@ -16,6 +17,8 @@ import { RestrictUnder16, Under16RestrictionGuard } from '../auth/guards/under-1
 import { GuardianConsentGuard } from '../auth/guards/guardian-consent.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
+import { DeleteMessageQueryDto } from './dto/delete-message-query.dto';
+import { EditMessageDto } from './dto/edit-message.dto';
 import { MessagingQueryDto } from './dto/messaging-query.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { StartConversationDto } from './dto/start-conversation.dto';
@@ -100,6 +103,45 @@ export class ConversationsController {
     @Body() dto: SendMessageDto,
   ) {
     return this.messaging.sendMessage(id, user.sub, dto);
+  }
+
+  // PATCH /conversations/:id/messages/:messageId { contentText } (B-067, Decision Log #472 (b)) -- the sender
+  // edits their own text message within 15 minutes. It publishes text under the user's identity just as a send
+  // does, so it carries exactly the guard set of POST /conversations/:id/messages (consent, verified email,
+  // profile complete); the service passes the same participant and Block checks. 200 with the message.
+  @Patch(':id/messages/:messageId')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard, ProfileCompleteGuard)
+  async editMessage(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: EditMessageDto,
+  ) {
+    return this.messaging.editMessage(id, messageId, user.sub, dto);
+  }
+
+  // DELETE /conversations/:id/messages/:messageId?scope=me|everyone (B-067) -- 204. Removing your own view, or
+  // your own message, creates nothing under your identity, so it carries the consent guard only (the "undo form"
+  // rule of the uniform write block: delete own post, delete own comment). Allowed even when a Block exists.
+  @Delete(':id/messages/:messageId')
+  @HttpCode(204)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
+  async deleteMessage(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Query() query: DeleteMessageQueryDto,
+  ): Promise<void> {
+    await this.messaging.deleteMessage(id, messageId, user.sub, query.scope);
+  }
+
+  // DELETE /conversations/:id (B-067) -- "delete chat" for the caller only; 204. Same guard as the message delete.
+  @Delete(':id')
+  @HttpCode(204)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard)
+  async deleteConversation(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload): Promise<void> {
+    await this.messaging.deleteConversation(id, user.sub);
   }
 
   // PATCH /conversations/:id/read — mark the thread read for the caller.

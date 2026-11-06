@@ -327,6 +327,9 @@ model User {
   matchSubscriptions MatchSubscription[]
   reportsFiled       Report[]            @relation("reporter")
   messagesSent       Message[]
+  // backend/b067-message-edit-delete-hide (B-067): this user's per-message and per-conversation hides.
+  messageHides       MessageHide[]
+  conversationHides  ConversationHide[]
   createdTeams       GrassrootsTeam[]
   resultsEntered     Result[]
   leaderboardEntry   LeaderboardEntry[]
@@ -1302,8 +1305,37 @@ model Conversation {
 
   createdAt DateTime  @default(now())
   messages  Message[]
+  hides     ConversationHide[]
 
   @@index([lastMessageAt])
+}
+
+// backend/b067-message-edit-delete-hide (B-067, Decision Log #472 (b)): "delete for me" on ONE message. A per-user
+// view preference: the message stays for the other person and in the database. Deleted by the anonymiser (a
+// behavioural row of the account), see account-deletion/README.md.
+model MessageHide {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  hiddenAt  DateTime @default(now())
+
+  @@id([userId, messageId])
+  @@index([messageId])
+}
+
+// backend/b067-message-edit-delete-hide (B-067): "delete chat" for the caller only. Messages sent at or before
+// hiddenAt are left out of this user's reads; a message newer than hiddenAt brings the conversation back showing
+// only the newer messages. The other person's view is unchanged.
+model ConversationHide {
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  hiddenAt       DateTime     @default(now())
+
+  @@id([userId, conversationId])
+  @@index([conversationId])
 }
 
 model Message {
@@ -1317,6 +1349,16 @@ model Message {
   mediaUrl       String?
   sentAt         DateTime     @default(now())
   readAt         DateTime?
+
+  // backend/b067-message-edit-delete-hide (B-067, Decision Log #472 (b)) -- additive.
+  // editedAt: set on every edit. originalContentText: the text as first sent, written ONCE on the first edit
+  // and never overwritten; NO user-facing read returns it (it is kept under the existing message retention,
+  // there is no admin read of it yet). deletedForEveryoneAt: the sender deleted the message for both people;
+  // the row, the text and any original STAY in the database (nothing is purged), reads show a placeholder.
+  editedAt             DateTime?
+  originalContentText  String?
+  deletedForEveryoneAt DateTime?
+  hides                MessageHide[]
 
   // sprint-3/messaging-direct-messaging -- GET /conversations/:id/messages
   // filters by conversationId and keyset-paginates newest-first

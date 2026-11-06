@@ -38,6 +38,9 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
     postMedia: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() },
     matchSubscription: { deleteMany: jest.fn() },
     profileImageCheck: { deleteMany: jest.fn() },
+    // B-067: the user's own "delete for me" / "delete chat" rows.
+    messageHide: { deleteMany: jest.fn() },
+    conversationHide: { deleteMany: jest.fn() },
     // B-092: a viewer's Final-week carousel impression rows go with their account.
     contestImpression: { deleteMany: jest.fn() },
     banterRoomMember: { deleteMany: jest.fn() },
@@ -423,6 +426,8 @@ describe('AccountDeletionSweepService', () => {
       expect(prisma.contestImpression.deleteMany).toHaveBeenCalledWith({ where: { viewerId: 'user-1' } });
       expect(prisma.matchSubscription.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.profileImageCheck.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.messageHide.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.conversationHide.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.banterRoomMember.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.communityGroupMember.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       const sql = (prisma.$executeRaw as unknown as jest.Mock).mock.calls.map((c) => (c[0] as string[]).join('?'));
