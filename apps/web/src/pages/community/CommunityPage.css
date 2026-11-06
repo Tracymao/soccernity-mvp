@@ -8,14 +8,14 @@
  *
  * The Figma template is a three-column social layout. Only the centre
  * column (composer + feed) is wired to real data (Build Plan Section 4.3
- * Feed + 4.2 Follow). The left "Trends" rail and the right
- * "Who to follow" / "Trending News" rails have no backing endpoint in
- * Section 4 -- they render illustrative sample content, clearly labelled,
- * the same discipline ProfilePage.tsx applies to its unbacked tabs. */
+ * Feed + 4.2 Follow). The left "Trends" rail has no backing endpoint in
+ * Section 4 -- it renders illustrative sample content, clearly labelled,
+ * the same discipline ProfilePage.tsx applies to its unbacked tabs. The
+ * right rail is the message sidebar (B-066, community/messages/). */
 
 .community {
   display: grid;
-  grid-template-columns: minmax(0, 260px) minmax(0, 1fr) minmax(0, 300px);
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr) minmax(0, 320px);
   gap: 24px;
   max-width: 1180px;
   margin: 0 auto;
@@ -24,7 +24,7 @@
 
 @media (max-width: 1080px) {
   .community {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 300px);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 320px);
   }
   .community__left {
     display: none;

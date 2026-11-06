@@ -14,13 +14,15 @@
 //   - per post  -> like/unlike, save/unsave,
 //                  comments (GET/POST), follow author (api/feed.ts + api/users.ts)
 //
-// The left "Trends" rail and the right "Who to follow" / "Trending News"
-// rails have NO backing endpoint anywhere in Build Plan Section 4 (no
-// trending, fixtures, or suggested-users endpoint exists -- Section 4.2
-// defines only follow / followers / following). They render illustrative
-// sample content, clearly captioned "Sample", rather than being faked as
-// live or wired to an invented algorithm -- the same discipline
-// ProfilePage.tsx applies to its own unbacked Posts/Media tabs.
+// The left "Trends" rail has NO backing endpoint anywhere in Build Plan
+// Section 4 (no trending endpoint exists on this screen's data path) and
+// renders illustrative sample content, clearly captioned "Sample", the
+// same discipline ProfilePage.tsx applies to its own unbacked tabs.
+//
+// The right rail is the message sidebar + chat pop-ups (B-066, Figma frame
+// 1306:354), wired to the Messaging endpoints (api/messaging.ts) -- see
+// community/messages/CommunityMessages.tsx. Desktop only; on a phone-width
+// viewport the right rail is hidden and /messages is the messaging screen.
 //
 // No-session handling mirrors ProfilePage.tsx: a visit with no stored
 // access token renders an explicit "log in to see your feed" prompt and
@@ -36,6 +38,7 @@ import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
 import PostCard from "./community/PostCard";
 import FinalWeekCarousel from "./community/FinalWeekCarousel";
 import PostComposer from "./community/PostComposer";
+import CommunityMessages from "./community/messages/CommunityMessages";
 import "./community/CommunityPage.css";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
@@ -50,25 +53,6 @@ const SAMPLE_TRENDS = [
   { topic: "#NPFL", meta: "1,213 posts" },
   { topic: "#Europa", meta: "998 posts" },
 ];
-
-const SAMPLE_SUGGESTIONS = [
-  { name: "Emeka John", handle: "@mekusa" },
-  { name: "Abdul Yusuf", handle: "@naijamessi" },
-  { name: "Chukwu James", handle: "@nicekidzz" },
-];
-
-const SAMPLE_NEWS = [
-  "Kane joins the 250 club after heading Spurs past Wolves",
-  "Arsenal's title push tested by a resurgent Newcastle",
-  "Grassroots cup final draws a record crowd in Surulere",
-];
-
-function initialsFor(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? "?";
-  return `${parts[0][0] ?? ""}${parts[parts.length - 1][0] ?? ""}`.toUpperCase();
-}
 
 export default function CommunityPage() {
   const token = getStoredAccessToken();
@@ -165,35 +149,6 @@ export default function CommunityPage() {
     </div>
   );
 
-  const rightRail = (
-    <div className="community__right">
-      <div className="community-aside">
-        <p className="community-aside__title">Who to follow</p>
-        <p className="community-aside__note">Sample content</p>
-        {SAMPLE_SUGGESTIONS.map((s) => (
-          <div key={s.handle} className="community-suggest">
-            <span className="community-suggest__avatar" aria-hidden="true">
-              {initialsFor(s.name)}
-            </span>
-            <span className="community-suggest__text">
-              <span className="community-suggest__name">{s.name}</span>
-              <span className="community-suggest__handle">{s.handle}</span>
-            </span>
-          </div>
-        ))}
-      </div>
-      <div className="community-aside">
-        <p className="community-aside__title">Trending News</p>
-        <p className="community-aside__note">Sample content</p>
-        {SAMPLE_NEWS.map((headline) => (
-          <div key={headline} className="community-trend">
-            <span className="community-trend__topic">{headline}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
   return (
     <div className="community">
       {leftRail}
@@ -253,7 +208,12 @@ export default function CommunityPage() {
         )}
       </div>
 
-      {rightRail}
+      {/* B-066: the message sidebar replaces the sample right rail (Figma 1306:354). Desktop only. */}
+      {token && decoded && (
+        <div className="community__right">
+          <CommunityMessages accessToken={token} currentUserId={decoded.sub} />
+        </div>
+      )}
     </div>
   );
 }
