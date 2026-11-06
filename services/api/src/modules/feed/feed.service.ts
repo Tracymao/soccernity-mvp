@@ -69,7 +69,11 @@ type PublicAuthor = { id: string; publicName: string };
 const POST_SELECT = {
   id: true,
   authorId: true,
-  author: { select: POST_AUTHOR_SELECT },
+  // B-061 (Decision Log #472 (d)): the AUTHOR's current 'mark my media as sensitive' toggle,
+  // read with the post so a change also applies to posts already published. Pulled here, on
+  // POST_SELECT's author only (not POST_AUTHOR_SELECT, which comments and others share), and
+  // reduced to a post-level `mediaSensitive` boolean in toFeedPost; it is never left on author.
+  author: { select: { ...POST_AUTHOR_SELECT, mediaSensitive: true } },
   contentText: true,
   mediaUrls: true,
   clubPageId: true,
@@ -132,6 +136,9 @@ export interface FeedPostMedia {
 
 export type FeedPost = Omit<RawFeedPost, 'author' | 'contestEntry' | 'media'> & {
   author: PublicAuthor;
+  // B-061: true only for a post that HAS media whose author currently has the toggle on. Returned to
+  // every viewer including the author. A post with no media is always false.
+  mediaSensitive: boolean;
   contest: FeedPostContest | null;
   media: FeedPostMedia[];
 };
@@ -154,7 +161,14 @@ function toFeedPost(row: RawFeedPost, now: Date): FeedPost {
         label: 'Contest post',
       }
     : null;
-  return { ...rest, author: toPublicUser(row.author), contest, media };
+  const { mediaSensitive: authorMediaSensitive, ...authorName } = row.author;
+  return {
+    ...rest,
+    author: toPublicUser(authorName),
+    mediaSensitive: (media.length > 0 || rest.mediaUrls.length > 0) && authorMediaSensitive === true,
+    contest,
+    media,
+  };
 }
 
 // backend/w7-contest (B-091, Decision Log #386, #400, #404). Two read gates for contest entries:

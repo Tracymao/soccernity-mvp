@@ -194,7 +194,13 @@ function asView<T extends { author: { id: string; username: string | null; displ
     // to order them is not part of the payload.
     // Only POST rows carry files (a comment row has no mediaUrls and no media).
     ...('mediaUrls' in row
-      ? { media: ((row as { media?: Array<{ id: string; kind: string }> }).media ?? []).map((m) => ({ id: m.id, kind: m.kind })) }
+      ? {
+          media: ((row as { media?: Array<{ id: string; kind: string }> }).media ?? []).map((m) => ({ id: m.id, kind: m.kind })),
+          // B-061: every post carries `mediaSensitive` (the author's toggle, only true for a post with media).
+          // These fixtures' authors never set it, so it is false; the cases that turn it on are in
+          // feed.service.media-sensitive.spec.ts.
+          mediaSensitive: false,
+        }
       : {}),
   };
 }
@@ -2213,7 +2219,8 @@ describe('FeedService', () => {
       (prisma.post.findFirst as jest.Mock).mockResolvedValue(buildPostRow());
       await new FeedService(prisma, FIXED_CLOCK).getPostById('post-1', 'viewer-1');
       const sel = (prisma.post.findFirst as jest.Mock).mock.calls[0][0].select.author.select;
-      expect(sel).toEqual({ id: true, username: true, displayName: true });
+      // B-061: plus the author's sensitive-media toggle (reduced to a post-level boolean, never left on author).
+      expect(sel).toEqual({ id: true, username: true, displayName: true, mediaSensitive: true });
     });
   });
 
