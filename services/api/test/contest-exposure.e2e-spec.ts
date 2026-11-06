@@ -199,13 +199,48 @@ describe('Contest exposure e2e: the Final-week carousel', () => {
       expect(res.body.live).toBe(true);
       expect(res.body.items.map((i: { entryId: string }) => i.entryId).sort()).toEqual(finalists.map((f) => f.entryId).sort());
       const tile = res.body.items[0];
-      expect(Object.keys(tile).sort()).toEqual(['entryId', 'finalist', 'post', 'postId']);
+      expect(Object.keys(tile).sort()).toEqual(['club', 'entryId', 'finalist', 'post', 'postId']);
       expect(JSON.stringify(res.body)).not.toMatch(/impression|Real Name|likeCount|commentCount|viewCount/i);
 
       // a finalist does not see their own video in the carousel
       const own = await carousel(finalists[0].user).expect(200);
       expect(own.body.items.map((i: { entryId: string }) => i.entryId)).not.toContain(finalists[0].entryId);
       expect(own.body.items).toHaveLength(3);
+    });
+
+    it('B-234: each tile carries the finalist’s represented club ({ id, name } or null); a MINOR finalist’s is always null', async () => {
+      const admin = await adminToken();
+      const { cycleId, round4Id } = await createCycle(admin);
+      const club = await prisma().clubPage.create({ data: { name: 'Yaba Athletic', league: 'Lagos Sunday League', country: 'NG' } });
+      const adultWithClub = await createUser('fclub', { representedClubId: club.id });
+      const adultNoClub = await createUser('fnoclub');
+      const minorWithClub = await createUser('fminor', { isMinor: true, dateOfBirth: seedDob('2012-03-01'), representedClubId: club.id });
+      await prisma().guardian.create({
+        data: {
+          minorUserId: minorWithClub.userId,
+          name: 'Guardian',
+          email: `g-${rand()}@example.com`,
+          relationship: 'Parent',
+          consentStatus: 'confirmed',
+          consentToken: `tok-${rand()}`,
+          consentTokenExpiresAt: new Date('2027-01-01T00:00:00Z'),
+        },
+      });
+      // an anonymised finalist (no longer eligible, club link cleared) never reaches the carousel
+      const gone = await createUser('fgone', { accountStatus: 'deleted', representedClubId: null });
+      for (const f of [adultWithClub, adultNoClub, minorWithClub, gone]) await seedFinalEntry(cycleId, round4Id, f);
+      const viewer = await createUser('viewer');
+      at(LIVE);
+
+      const tiles = (await carousel(viewer).expect(200)).body.items as { finalist: { userId: string }; club: unknown }[];
+      const clubOf = (u: TestUser) => tiles.find((t) => t.finalist.userId === u.userId)?.club;
+      expect(clubOf(adultWithClub)).toEqual({ id: club.id, name: 'Yaba Athletic' });
+      expect(clubOf(adultNoClub)).toBeNull();
+      expect(clubOf(minorWithClub)).toBeNull();
+      expect(tiles.find((t) => t.finalist.userId === gone.userId)).toBeUndefined();
+      expect(tiles).toHaveLength(3);
+      // the only club fields are id and name; nothing else about the club rides along
+      expect(Object.keys(clubOf(adultWithClub) as object).sort()).toEqual(['id', 'name']);
     });
 
     it('honours the limit (default 6, at most 9)', async () => {
