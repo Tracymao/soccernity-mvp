@@ -81,6 +81,14 @@ describe("OtherProfilePage", () => {
     expect(screen.getByText("Nigeria")).not.toBeNull();
   });
 
+  it("has no Saved tab on someone else's profile (saved posts are private, Decision Log #22)", async () => {
+    vi.mocked(getPublicProfile).mockResolvedValue(profile());
+    renderAt();
+    await screen.findByRole("heading", { name: "tobi_9" });
+    expect(screen.queryByRole("button", { name: "Saved" })).toBeNull();
+    expect(screen.queryByText(/^Saved$/)).toBeNull();
+  });
+
   it("shows the person's pinned contest entry (the server decides whether this viewer may see it)", async () => {
     vi.mocked(getPublicProfile).mockResolvedValue(profile());
     renderAt();

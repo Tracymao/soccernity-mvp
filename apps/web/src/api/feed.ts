@@ -135,6 +135,21 @@ export type CreatedPost = Omit<FeedPost, "isLiked" | "isSaved" | "author"> & {
   author: Omit<FeedPostAuthor, "isFollowing">;
 };
 
+// GET /users/:id/saved-posts (Build Plan Section 4.3; self-only, Decision Log #22). Each entry is the
+// SavedPost row plus the post, in the same unenriched shape as POST /posts: NO per-caller isLiked or
+// author.isFollowing (Decision Log #153 left this endpoint out). `isSaved` is true by definition. The
+// caller (profile/SavedPostsTab.tsx) fills the three in; see the note there.
+export interface SavedPostEntry {
+  postId: string;
+  savedAt: string;
+  post: CreatedPost;
+}
+
+export interface SavedPostPage {
+  items: SavedPostEntry[];
+  nextCursor: string | null;
+}
+
 export class FeedApiError extends Error {
   readonly status?: number;
 
@@ -182,6 +197,19 @@ export async function getFeed(accessToken: string, cursor?: string): Promise<Fee
     throw new FeedApiError(`Couldn't load your feed (${response.status}).`, { status: response.status });
   }
   return (await response.json()) as FeedPage;
+}
+
+// GET /users/:id/saved-posts -- the caller's own saved posts, most recently saved first, keyset-paginated
+// (default 20 / max 50). The server answers 403 for any id but the caller's own, so only the own profile
+// ever calls this. A post removed, hidden or blocked since saving is already absent from the page.
+export async function getSavedPosts(accessToken: string, userId: string, cursor?: string): Promise<SavedPostPage> {
+  const url = new URL(`${API_BASE_URL}/users/${encodeURIComponent(userId)}/saved-posts`);
+  if (cursor) url.searchParams.set("cursor", cursor);
+  const response = await authedFetch(url.pathname + url.search, accessToken);
+  if (!response.ok) {
+    throw new FeedApiError(`Couldn't load your saved posts (${response.status}).`, { status: response.status });
+  }
+  return (await response.json()) as SavedPostPage;
 }
 
 // POST /posts -- JwtAuthGuard + GuardianConsentGuard. A 403 here means the

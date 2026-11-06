@@ -29,10 +29,11 @@ import { countryName } from "../lib/countries";
 import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
 import EditProfileModal from "./profile/EditProfileModal";
 import PinnedEntry from "./community/PinnedEntry";
+import SavedPostsTab from "./profile/SavedPostsTab";
 import "./profile/ProfilePage.css";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
-type Tab = "posts" | "media";
+type Tab = "posts" | "media" | "saved";
 type FollowPanel = null | "followers" | "following";
 
 function initialsFor(displayName: string): string {
@@ -278,15 +279,28 @@ export default function ProfilePage() {
           >
             Media
           </button>
+          {/* Own profile only: the saved-posts endpoint answers 403 for any other id, and
+              OtherProfilePage has no such tab (B-064, Decision Log #22). */}
+          <button
+            type="button"
+            className={tab === "saved" ? "profile-tab profile-tab--active" : "profile-tab"}
+            onClick={() => setTab("saved")}
+          >
+            Saved
+          </button>
         </div>
         {tab === "posts" && token && decoded && (
           <PinnedEntry accessToken={token} userId={decoded.sub} currentUserId={decoded.sub} />
         )}
-        <div className="profile-empty-state">
-          {/* Section 4 has no GET /users/:id/posts -- see this file's
-              header comment. */}
-          Posts for this profile aren&rsquo;t available yet.
-        </div>
+        {tab === "saved" && token && decoded ? (
+          <SavedPostsTab accessToken={token} userId={decoded.sub} />
+        ) : (
+          <div className="profile-empty-state">
+            {/* Section 4 has no GET /users/:id/posts -- see this file's
+                header comment. */}
+            Posts for this profile aren&rsquo;t available yet.
+          </div>
+        )}
       </div>
 
       {editing && token && (
