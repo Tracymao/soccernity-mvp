@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { LeaderboardController } from './leaderboard.controller';
+import { LeaderboardHistoryRollupService } from './leaderboard-history-rollup.service';
 import { LeaderboardRollupService } from './leaderboard-rollup.service';
 import { LeaderboardService } from './leaderboard.service';
 
@@ -23,7 +24,7 @@ import { LeaderboardService } from './leaderboard.service';
 @Module({
   imports: [AuthFoundationModule],
   controllers: [LeaderboardController],
-  providers: [LeaderboardService, LeaderboardRollupService, PrismaService],
-  exports: [LeaderboardRollupService],
+  providers: [LeaderboardService, LeaderboardRollupService, LeaderboardHistoryRollupService, PrismaService],
+  exports: [LeaderboardRollupService, LeaderboardHistoryRollupService],
 })
 export class LeaderboardModule {}

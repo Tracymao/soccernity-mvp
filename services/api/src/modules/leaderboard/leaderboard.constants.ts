@@ -18,3 +18,11 @@ export const LEADERBOARD_MAX_PAGE_SIZE = 50;
 
 // LeaderboardEntry.clubId value for the Overall (global) board (Decision Log #128).
 export const GLOBAL_BOARD_CLUB_ID = '';
+
+// backend/b053-leaderboard-periods (B-053, Decision Log #472).
+// The `period` value of the all-time board: the total of the same quarter-point ledger since the start.
+// It is stored in LeaderboardEntry.period like any weekly period ("2026-W33"), so the read path is the same.
+export const ALL_TIME_PERIOD = 'all-time';
+
+// "Seven days earlier" for the 7-day rank change.
+export const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;

@@ -2182,6 +2182,11 @@ model LeaderboardEntry {
   // string rather than NULL so the unique key below stays enforceable
   // (Postgres treats NULLs as distinct in a UNIQUE index).
   clubId        String @default("")
+  // backend/b053-leaderboard-periods (B-053, Decision Log #472): this row's rank on the SAME board (same
+  // period, same clubId) as it stood seven days earlier, derived from the PointsLedgerEntry ledger by
+  // LeaderboardHistoryRollupService. NULL = the person was not on that board then (or the baseline has
+  // not been computed for this row yet): never 0. GET /leaderboard returns rank - rankSevenDaysAgo.
+  rankSevenDaysAgo Int?
 
   @@unique([userId, period, clubId])
 }

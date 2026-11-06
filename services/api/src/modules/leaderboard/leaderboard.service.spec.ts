@@ -104,8 +104,8 @@ describe('LeaderboardService', () => {
 
       expect(result).toEqual({
         items: [
-          { userId: 'u-1', publicName: 'Soccernity member', points: 251, rank: 1 },
-          { userId: 'u-2', publicName: 'Soccernity member', points: 180, rank: 2 },
+          { userId: 'u-1', publicName: 'Soccernity member', points: 251, rank: 1, club: null, rankChange7d: null },
+          { userId: 'u-2', publicName: 'Soccernity member', points: 180, rank: 2, club: null, rankChange7d: null },
         ],
         nextCursor: null,
       });
@@ -208,7 +208,8 @@ describe('LeaderboardService club boards (Decision Log #128)', () => {
 
     expect(prisma.user.findUnique).toHaveBeenCalledWith({
       where: { id: 'caller-1' },
-      select: { representedClubId: true },
+      // B-053: the same read now also returns the club's name, for the club column on a club board.
+      select: { representedClubId: true, representedClub: { select: { id: true, name: true } } },
     });
     const call = (prisma.leaderboardEntry.findMany as jest.Mock).mock.calls[0][0];
     expect(call.where.clubId).toBe('club-a');

@@ -276,9 +276,11 @@ Response shape:
 ```ts
 interface LeaderboardEntryView {
   userId: string;
-  displayName: string;
+  publicName: string;
   points: number;
   rank: number;
+  club: { id: string; name: string } | null; // B-053, null for a minor
+  rankChange7d: number | null; // B-053, rank now - rank 7 days ago, negative = moved up
 }
 interface LeaderboardPage {
   items: LeaderboardEntryView[];
@@ -309,6 +311,66 @@ deactivated user's row at all, and a *stale* already-written row being
 hidden at read time after the user later deactivates), period isolation,
 ties sharing a rank, rollup idempotency across repeated runs, and full
 keyset pagination across 5 users with no gaps or duplicates.
+
+## All-time board, club per row, 7-day change (B-053, Decision Log #472)
+
+`backend/b053-leaderboard-periods`. Three things the board did not answer before. Each is defined from the
+stored quarter-point ledger (`PointsLedgerEntry`) and `LeaderboardEntry` rows, nothing else.
+
+**1. All-time.** `GET /leaderboard?period=all-time` (the one non-weekly `period` value; anything else that is
+not `YYYY-Www` is still a 400). It is the total of the SAME quarter-point ledger since the start: every row
+that has not been revoked (`revokedAt IS NULL`), active accounts only, ranked with the same `RANK()` and the
+same rounding as a weekly board, club boards included (`?clubId=` works with it). It is materialized like the
+weekly boards: `LeaderboardEntry` rows with `period = 'all-time'`, built by the existing
+`LeaderboardRollupService.rollupPeriod('all-time')` (the window is the whole ledger instead of an ISO week).
+The read path is unchanged (it still never aggregates on read). Cost note: the all-time rollup scans the
+whole ledger every 15 minutes; fine at MVP volume, the first thing to revisit if the ledger gets large.
+
+**2. Club per row.** Every item has `club: { id, name } | null`.
+- Overall and all-time boards: the person's CURRENT represented club (`User.representedClubId`).
+- A club board: that club, for every row (the board only exists because the points were attributed to it
+  at earning time, Decision Log #128). The caller can only open their own represented club's board, so this
+  is a lookup of the club they already represent; a person who has since switched club still shows the
+  club of the board they are on.
+- `null` when the person represents no club.
+- **`null` for a minor (`User.isMinor`), always, on every board** (adopted default, veto-able, the same rule
+  as B-234). The minor stays on the board and keeps their rank; only the club is withheld. The login gate
+  and the active-account / restricted-pending visibility rules are unchanged.
+Only the club id and name are selected.
+
+**3. 7-day change.** Every item has `rankChange7d: number | null` = **the person's rank now minus their rank
+on the same board seven days earlier**. A NEGATIVE number means they moved UP. It is `null` (never 0) when
+they were not on that board then. A real zero (same rank both times) is `0`. "The same board" means the same
+period kind and the same club (or none).
+
+How "seven days earlier" is derived, because no snapshot table exists (`GET /leaderboard` stays a plain read
+of `LeaderboardEntry`): `LeaderboardHistoryRollupService` re-ranks the board as it stood at the earlier
+instant and stores the result in `LeaderboardEntry.rankSevenDaysAgo` (one additive nullable column). A
+ledger row counts at that instant only if it had been awarded by then (`occurredAt <= asOf`) and was not yet
+revoked by then (`revokedAt IS NULL OR revokedAt > asOf`). The instants are pure UTC arithmetic in
+`leaderboard-period.util.ts`:
+- **All-time:** `asOf = now - 7 days`, counting from the start.
+- **A weekly board:** the reference instant is the earlier of `now` and the last millisecond of the week;
+  `asOf` is that minus 7 days, and the earlier board is the ISO week containing `asOf`, counted up to `asOf`.
+  For the current week that is last week's board at the same moment (week to date against week to date). For
+  a week that has ended it is the previous week's final board, so a settled week does not drift with the
+  clock.
+- **Club boards** use the club snapshot on the ledger row, exactly like the live club rollup.
+
+It runs as its own service on its own cron (`0 7,22,37,52 * * * *`, seven minutes after the main rollup, so
+the rows it annotates exist) rather than inside `runRollup`, which stays untouched. Each pass builds the
+all-time board, then sets the baseline for the current week, the previous week and all-time, in one
+`UPDATE` per period (a row whose person was not on the earlier board gets NULL through a scalar subquery).
+
+Honest limits:
+- **Account status is today's.** "Active account" in the earlier board is the account's status NOW (no status
+  history exists), so a person deactivated since is absent from both boards and others' earlier ranks are
+  computed without them.
+- **A new row has a NULL baseline until the next pass** (up to ~15 minutes), and rows from before this change
+  stay NULL (older periods are not backfilled). NULL reads as "no change figure", not as 0.
+- **A platform less than seven days old** has no earlier board at all, so every `rankChange7d` is null.
+- Ranks are `RANK()` values, so ties share a rank and a tie can show a 0 or a move that is only the tie
+  breaking.
 
 ## Club boards (Decision Log #128)
 

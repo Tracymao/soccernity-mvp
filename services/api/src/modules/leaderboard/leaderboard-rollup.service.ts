@@ -2,7 +2,8 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
-import { getCurrentIsoWeekPeriod, getIsoWeekBoundaries, getPreviousIsoWeekPeriod } from './iso-week.util';
+import { getCurrentIsoWeekPeriod, getPreviousIsoWeekPeriod } from './iso-week.util';
+import { getBoardWindow } from './leaderboard-period.util';
 import { GLOBAL_BOARD_CLUB_ID } from './leaderboard.constants';
 
 // The shape $queryRaw's aggregation below actually returns, after the
@@ -89,7 +90,8 @@ export class LeaderboardRollupService {
   // manual-backfill script can call it directly for an arbitrary period
   // without waiting for the cron tick.
   async rollupPeriod(period: string): Promise<RollupPeriodResult> {
-    const { start, end } = getIsoWeekBoundaries(period);
+    // A weekly period is its ISO week; 'all-time' (B-053) is the whole ledger. Weekly behaviour unchanged.
+    const { start, end } = getBoardWindow(period);
 
     const globalRows = await this.aggregateGlobalBoard(start, end);
     const clubRows = await this.aggregateClubBoards(start, end);

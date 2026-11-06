@@ -121,8 +121,8 @@ describe('Leaderboard e2e (Section 4.9)', () => {
         .expect(200);
 
       expect(res.body.items).toEqual([
-        { userId: alice.userId, publicName: 'E2E Leaderboard alice', points: 6, rank: 1 },
-        { userId: bob.userId, publicName: 'E2E Leaderboard bob', points: 3, rank: 2 },
+        { userId: alice.userId, publicName: 'E2E Leaderboard alice', points: 6, rank: 1, club: null, rankChange7d: null },
+        { userId: bob.userId, publicName: 'E2E Leaderboard bob', points: 3, rank: 2, club: null, rankChange7d: null },
       ]);
       expect(res.body.nextCursor).toBeNull();
     });
@@ -173,7 +173,7 @@ describe('Leaderboard e2e (Section 4.9)', () => {
         .set('Authorization', `Bearer ${user.accessToken}`)
         .expect(200);
 
-      expect(res.body.items[0]).toEqual({ userId: user.userId, publicName: 'E2E Leaderboard mixed', points: 290, rank: 1 });
+      expect(res.body.items[0]).toEqual({ userId: user.userId, publicName: 'E2E Leaderboard mixed', points: 290, rank: 1, club: null, rankChange7d: null });
     });
 
     it('ranks on the EXACT quarter-point value and shows the rounded points: equal displays can still rank differently (half rounds up)', async () => {
@@ -217,7 +217,7 @@ describe('Leaderboard e2e (Section 4.9)', () => {
         .query({ period: PERIOD })
         .set('Authorization', `Bearer ${tiny.accessToken}`)
         .expect(200);
-      expect(res.body.items).toEqual([{ userId: tiny.userId, publicName: 'E2E Leaderboard tiny', points: 0, rank: 1 }]);
+      expect(res.body.items).toEqual([{ userId: tiny.userId, publicName: 'E2E Leaderboard tiny', points: 0, rank: 1, club: null, rankChange7d: null }]);
     });
 
     it('excludes a DEACTIVATED user from a fresh rollup entirely — no LeaderboardEntry row is written at all', async () => {
@@ -451,8 +451,8 @@ describe('Leaderboard e2e (Section 4.9)', () => {
 
       const club = await getBoard(alice.accessToken, { clubId: clubA }).expect(200);
       expect(club.body.items).toEqual([
-        { userId: bob.userId, publicName: 'E2E Leaderboard bob', points: 6, rank: 1 },
-        { userId: alice.userId, publicName: 'E2E Leaderboard alice', points: 3, rank: 2 },
+        { userId: bob.userId, publicName: 'E2E Leaderboard bob', points: 6, rank: 1, club: { id: clubA, name: 'Club A' }, rankChange7d: null },
+        { userId: alice.userId, publicName: 'E2E Leaderboard alice', points: 3, rank: 2, club: { id: clubA, name: 'Club A' }, rankChange7d: null },
       ]);
 
       const overall = await getBoard(alice.accessToken, {}).expect(200);
@@ -491,7 +491,7 @@ describe('Leaderboard e2e (Section 4.9)', () => {
       // Bob still represents Club A, so he can read it and sees Alice's pre-switch points there.
       const boardA = await getBoard(bob.accessToken, { clubId: clubA }).expect(200);
       expect(boardA.body.items).toEqual([
-        { userId: alice.userId, publicName: 'E2E Leaderboard alice', points: 3, rank: 1 },
+        { userId: alice.userId, publicName: 'E2E Leaderboard alice', points: 3, rank: 1, club: { id: clubA, name: 'Club A' }, rankChange7d: null },
       ]);
     });
 
