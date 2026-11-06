@@ -120,6 +120,8 @@ model User {
   emailChangeRequests       EmailChangeRequest[]
   // backend/b062-notification-preferences (B-062, Decision Log #472 adopted default (c)): reverse relation for NotificationPreference.
   notificationPreference    NotificationPreference?
+  // backend/b285-web-push (B-285, Decision Log #472 adopted default (e)): the person's browsers that opted in to web push. See PushSubscription.
+  pushSubscriptions         PushSubscription[]
   // backend/b280-withhold-guardian-notices (B-280): reverse relation for GuardianNoticeWithhold. Never selected by any
   // user-facing query; see the model's comment.
   guardianNoticeWithhold    GuardianNoticeWithhold?
@@ -1445,6 +1447,10 @@ model Notification {
   // reverse relation for no integrity gain. Used only to hide a blocked pair's rows at read time
   // (notifications/block-visibility.util.ts); never selected into any API payload.
   actorId      String?
+  // backend/b285-web-push (B-285): set by the per-minute push sweep (PushSweepService) when the generic web push for this
+  // row has been sent, or claimed for sending. NULL = not pushed (the usual state for anyone with no push subscription
+  // and for every row older than the sweep window). Never selected into any API payload.
+  pushSentAt   DateTime?
 
   @@index([userId, actorId])
 }
@@ -3028,4 +3034,23 @@ model NotificationPreference {
   muteNonFollowers Boolean  @default(false)
   muteNewAccounts  Boolean  @default(false)
   updatedAt        DateTime @updatedAt
+}
+
+// backend/b285-web-push (B-285; Decision Log #472 adopted default (e)): one row per BROWSER that opted in to web push.
+// A genuine addition beyond Section 3's entity list, flagged as a Decision Log candidate. `endpoint` is the push
+// service address the browser handed us (unique: one row per browser; subscribing again from the same browser is
+// idempotent, and if a different account subscribes from the same browser the row moves to that account). `p256dh`
+// and `auth` are the browser's public key and secret for encrypting the payload. Credential-like data: never
+// returned by any endpoint and never logged. CASCADE on User like the other per-account rows; the anonymiser also
+// deletes the rows (a held or anonymised account must not keep receiving pushes).
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
