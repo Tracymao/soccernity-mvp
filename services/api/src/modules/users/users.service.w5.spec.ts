@@ -18,6 +18,8 @@ function buildPrisma() {
     user: { findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
     follow: { create: jest.fn(), delete: jest.fn(), findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null) },
     block: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
+    // B-062: the notification triggers read the recipient's notification preferences (none = all off).
+    notificationPreference: { findUnique: jest.fn().mockResolvedValue(null) },
     guardian: { findUnique: jest.fn() },
     notification: { create: jest.fn() },
     pointsLedgerEntry: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },

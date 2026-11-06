@@ -13,6 +13,7 @@ import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
 import { hasBlockBetween, notBlockedWith } from '../block/block.util';
+import { shouldCreateNotification } from '../notifications/notification-policy.util';
 import {
   assertFinalEntryUnlocked,
   commentCountsForContest,
@@ -886,7 +887,12 @@ export class FeedService {
         // like falls inside its counting window). Same transaction as the Like, so a duplicate like
         // (P2002 above) rolls it back too.
         await recordEntryEngagement(tx, contest, { giverId: userId, kind: 'like', now });
-        if (post.authorId !== userId && !(await hasBlockBetween(tx, userId, post.authorId))) {
+        // B-062: the Block rule first (unchanged), then the recipient's notification preferences.
+        if (
+          post.authorId !== userId &&
+          !(await hasBlockBetween(tx, userId, post.authorId)) &&
+          (await shouldCreateNotification(tx, post.authorId, userId, 'like', now))
+        ) {
           await tx.notification.create({
             data: { userId: post.authorId, type: 'like', payloadRefId: postId, actorId: userId },
           });
@@ -1027,7 +1033,12 @@ export class FeedService {
           caps: this.pointsCaps,
         });
       }
-      if (post.authorId !== authorId && !(await hasBlockBetween(tx, authorId, post.authorId))) {
+      // B-062: the Block rule first (unchanged), then the recipient's notification preferences.
+      if (
+        post.authorId !== authorId &&
+        !(await hasBlockBetween(tx, authorId, post.authorId)) &&
+        (await shouldCreateNotification(tx, post.authorId, authorId, 'comment', now))
+      ) {
         await tx.notification.create({
           data: { userId: post.authorId, type: 'comment', payloadRefId: postId, actorId: authorId },
         });

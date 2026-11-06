@@ -270,6 +270,8 @@ export class AccountDeletionSweepService {
     await tx.twoFactorRecoveryRequest.deleteMany({ where: { userId } });
     // B-059: an open email-change request holds the address a person asked to move to and a link-token hash.
     await tx.emailChangeRequest.deleteMany({ where: { userId } });
+    // B-062: the person's notification filter options. Personal preference data; nothing to keep.
+    await tx.notificationPreference.deleteMany({ where: { userId } });
     await tx.follow.deleteMany({ where: { OR: [{ followerId: userId }, { followeeId: userId }] } });
     // B-039: a Block is a personal-relationship record in BOTH directions (the
     // ones this user made, and the ones made against them); like Follow it is

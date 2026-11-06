@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { shouldCreateNotification } from '../notifications/notification-policy.util';
 import {
   blockedPairWhere,
   hasBlockBetween,
@@ -774,7 +775,11 @@ export class UsersService {
         await tx.follow.create({ data: { followerId, followeeId } });
         // B-197: no new Notification where the pair has a Block (the follow itself is
         // refused earlier for a blocked pair; this keeps the rule in one place).
-        if (!(await hasBlockBetween(tx, followerId, followeeId))) {
+        // B-062: then the recipient's notification preferences (the Block rule above stays first).
+        if (
+          !(await hasBlockBetween(tx, followerId, followeeId)) &&
+          (await shouldCreateNotification(tx, followeeId, followerId, 'follow'))
+        ) {
           await tx.notification.create({
             data: { userId: followeeId, type: 'follow', payloadRefId: followerId },
           });

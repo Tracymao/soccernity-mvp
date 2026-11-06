@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
+import { NotificationPolicyService } from './notification-policy.service';
+import { NotificationSettingsController } from './notification-settings.controller';
+import { NotificationSettingsService } from './notification-settings.service';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 
@@ -18,7 +21,8 @@ import { NotificationsService } from './notifications.service';
 // — nothing in this module is a "posting" action.
 @Module({
   imports: [AuthFoundationModule],
-  controllers: [NotificationsController],
-  providers: [NotificationsService, PrismaService],
+  controllers: [NotificationsController, NotificationSettingsController],
+  providers: [NotificationsService, NotificationSettingsService, NotificationPolicyService, PrismaService],
+  exports: [NotificationPolicyService],
 })
 export class NotificationsModule {}

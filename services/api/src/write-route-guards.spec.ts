@@ -22,6 +22,7 @@ import { TwoFactorRecoveryController } from './modules/two-factor/recovery/two-f
 import { PostMediaController } from './modules/post-media/post-media.controller';
 import { SocialAuthController } from './modules/social-auth/social-auth.controller';
 import { PostMediaReportController } from './modules/post-media/post-media-report.controller';
+import { NotificationSettingsController } from './modules/notifications/notification-settings.controller';
 import { NotificationsController } from './modules/notifications/notifications.controller';
 import { SportsMatchesController } from './modules/sports/sports-matches.controller';
 import { UserAvatarController } from './modules/users/user-avatar.controller';
@@ -69,6 +70,8 @@ const OPEN_ROUTES: Record<string, string> = {
   'POST /contact': 'public Contact Us form; open to every caller by design',
   'PATCH /notifications/read-all': 'own inbox read-state; not a social or profile write',
   'PATCH /notifications/:id/read': 'own inbox read-state; not a social or profile write',
+  'PATCH /notification-settings':
+    'only reduces what the person is notified of about other people (B-062), so a restricted-pending or unverified account may still change it',
   'PATCH /conversations/:id/read': 'own read-state; touches no one else',
   'PUT /sports/matches/:id/subscription': 'private kickoff-alert preference; founder-confirmed JwtAuthGuard-only (sprint-4/match-kickoff-alerts)',
   'DELETE /sports/matches/:id/subscription': 'private kickoff-alert preference',
@@ -224,6 +227,7 @@ const CONTROLLERS = [
   PublicReportsController,
   ContactController,
   NotificationsController,
+  NotificationSettingsController,
   SportsMatchesController,
   ViewQualificationController,
   PostMediaController,
