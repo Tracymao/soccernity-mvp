@@ -26,6 +26,7 @@ import { NotificationsController } from './modules/notifications/notifications.c
 import { SportsMatchesController } from './modules/sports/sports-matches.controller';
 import { UserAvatarController } from './modules/users/user-avatar.controller';
 import { UserCoverController } from './modules/users/user-cover.controller';
+import { EmailChangeController } from './modules/email-change/email-change.controller';
 import { UsernameReviewController } from './modules/username-review/username-review.controller';
 import { DataExportController } from './modules/data-export/data-export.controller';
 import { UsersController } from './modules/users/users.controller';
@@ -109,6 +110,11 @@ const OPEN_ROUTES: Record<string, string> = {
   // appeal it must stay open to a restricted-pending or unverified account (#370). JwtAuthGuard stays.
   'POST /users/me/username-review':
     'the asker has no username (ProfileCompleteGuard would refuse them) and, like report / appeal, must stay open to a restricted-pending or unverified account (#370)',
+  // backend/email-change (B-059, Decision Log #472 default (f)): the emailed single-use secret is the credential, so
+  // there is no sign-in guard by design; the link is opened from a mailbox, possibly on another device. The request
+  // route is pinned in EXPECTED below.
+  'POST /auth/email-change/confirm':
+    'unauthenticated by design: the single-use secret in the emailed link is the credential; it completes a change that was already authorised with a password (and a second factor) when it was requested',
   // backend/b061-dm-permission-media-sensitive (B-061, Decision Log #472 (d) and (i)): both settings only
   // tighten who can start a DM or blur the author's own media, so a restricted-pending or unverified account
   // may still change them. JwtAuthGuard stays (class level).
@@ -121,6 +127,9 @@ const OPEN_ROUTES: Record<string, string> = {
 const EXPECTED: Record<string, Flags> = {
   // users
   'PATCH /users/:id': 'CE',
+  // backend/email-change (B-059): C only. The consent guard IS the "restricted-pending minors may not change their
+  // email" rule. Deliberately NOT E: an unverified user may fix a mistyped address, the purpose of the feature.
+  'POST /users/me/email-change': 'C',
   'PATCH /users/:id/represented-club': 'CE',
   'POST /users/:id/follow': 'CE',
   'DELETE /users/:id/follow': 'C',
@@ -202,6 +211,7 @@ const CONTROLLERS = [
   UserCoverController,
   UsernameReviewController,
   DataExportController,
+  EmailChangeController,
   FeedController,
   ClubsController,
   BanterController,

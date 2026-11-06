@@ -6,6 +6,7 @@ import {
   RECOVERY_CONFIRM_PATH,
   RECOVERY_GUARDIAN_PATH,
 } from '../../../two-factor/recovery/two-factor-recovery.constants';
+import { DEFAULT_EMAIL_VERIFICATION_TTL_MS } from '../email-verification/email-verification-token.store';
 import { buildWebAppLink } from './web-app-link.util';
 
 // sprint-1/guardian-consent-decline-withdraw-expiry added the five
@@ -46,7 +47,9 @@ export type RegistrationEmailTemplate =
   | 'username-revoked'
   | 'login-lockout-notice'
   | 'social-email-code'
-  | 'contact-enquiry-notification';
+  | 'contact-enquiry-notification'
+  | 'email-change-verify'
+  | 'email-change-notice';
 
 export interface OutboundRegistrationEmail {
   to: string;
@@ -69,6 +72,10 @@ const RECOVERY_TEMPLATES: ReadonlySet<RegistrationEmailTemplate> = new Set<Regis
   'two-factor-recovery-declined',
   // B-084: carries a one-time code that proves ownership of an email address; the code must not reach a log.
   'social-email-code',
+  // backend/email-change: the verify email carries a single-use link that changes the account's address; the link
+  // must not reach a log. The notice (to the OLD address) is quiet too: it names an account holder's mailbox.
+  'email-change-verify',
+  'email-change-notice',
 ]);
 
 // Decision Log #17 (Build Plan Section 9): Postmark is the chosen
@@ -505,6 +512,35 @@ export class RegistrationEmailService {
     return true;
   }
 
+  // backend/email-change (B-059; Decision Log #472 default (f)). To the NEW address: a single-use link that
+  // completes the change. Returns false (sending nothing) when WEB_APP_BASE_URL is unusable, because the link is the
+  // whole point of the email; the caller then discards the request. The link path is a PROPOSAL for the web page
+  // (/email-change/confirm?token=), which is not built yet. Plain functional wording, no promise about safety, data
+  // or who is told, so it is not tagged [COPY PENDING LEGAL REVIEW].
+  async sendEmailChangeVerifyEmail(to: string, token: string): Promise<boolean> {
+    const link = this.linkFor('email-change-verify', '/email-change/confirm', token);
+    if (!link) return false;
+    await this.dispatch({
+      to,
+      subject: 'Confirm your new Soccernity email address',
+      template: 'email-change-verify',
+      data: { link, hours: String(Math.round(DEFAULT_EMAIL_VERIFICATION_TTL_MS / 3_600_000)) },
+    });
+    return true;
+  }
+
+  // backend/email-change (B-059). To the OLD (current) address, at request time (DEFAULT, founder-veto-able): a
+  // request was made, and nothing changes until it is confirmed from the new address. Deliberately does NOT name the
+  // new address. Plain functional wording.
+  async sendEmailChangeNoticeEmail(to: string): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: 'A request to change the email on your Soccernity account',
+      template: 'email-change-notice',
+      data: {},
+    });
+  }
+
   // B-084 (Decision Log #378, #468). The one-time code a person receives when a social sign-in gave no email (Facebook
   // can return none): they enter an address and prove they own it BEFORE any account exists. Plain functional copy; it
   // makes no promise and asks for nothing but the code. The code is never logged (see RECOVERY_TEMPLATES).
@@ -738,6 +774,22 @@ function renderTextBody(template: RegistrationEmailTemplate, data: Record<string
 
 ` +
         `If you think this was a mistake, contact support@soccernity.com.`
+      );
+    case 'email-change-verify':
+      return (
+        `Someone asked to use this address for a Soccernity account. To confirm the change, open this link:
+
+${data.link}
+
+` +
+        `The link works once and expires in ${data.hours} hours. If you did not ask for this, ignore this email and nothing changes.`
+      );
+    case 'email-change-notice':
+      return (
+        `A request was made to change the email address on your Soccernity account.
+
+` +
+        `Nothing changes until the request is confirmed from the new address. If this was not you, contact support@soccernity.com and change your password.`
       );
     case 'verify-email':
       return `Verify your Soccernity email address by opening this link:\n\n${data.link}\n\nIf you did not request this, you can safely ignore this email.`;
@@ -1012,6 +1064,18 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
         `</ul>` +
         `<p>You can ask for a review of this decision. The next time you log in, the screen where you choose a new username has an "Ask for a review" button. You can ask until ${escapeHtml(data.lastDayToAsk)}.</p>` +
         `<p>If you think this was a mistake, contact support@soccernity.com.</p>`
+      );
+    case 'email-change-verify':
+      return (
+        `<p>Someone asked to use this address for a Soccernity account. To confirm the change:</p>` +
+        `<p><a href="${escapeHtml(data.link)}">Confirm my new email</a></p>` +
+        `<p>If the button does not work, copy this link into your browser: ${escapeHtml(data.link)}</p>` +
+        `<p>The link works once and expires in ${escapeHtml(data.hours)} hours. If you did not ask for this, ignore this email and nothing changes.</p>`
+      );
+    case 'email-change-notice':
+      return (
+        `<p>A request was made to change the email address on your Soccernity account.</p>` +
+        `<p>Nothing changes until the request is confirmed from the new address. If this was not you, contact support@soccernity.com and change your password.</p>`
       );
     case 'verify-email':
       return `<p>Verify your Soccernity email address:</p><p><a href="${data.link}">Verify my email</a></p><p>If the button does not work, copy this link into your browser: ${data.link}</p><p>If you did not request this, you can safely ignore this email.</p>`;
