@@ -38,9 +38,10 @@
 //   - Download my data — REAL as of B-060: the row links to
 //     /settings/privacy/download-data (DataExportPage.tsx, POST/GET
 //     /users/me/data-export). This was a disabled row before.
-//   - Your Post / Direct Message — NO post-visibility or DM-permission
-//     backend, and the Figma destination sub-pages (2926:8996 /
-//     2926:8764) are not converted. Rows disabled.
+//   - Your Post / Direct Message — REAL as of B-061: the rows link to
+//     /settings/privacy/your-posts (Sensitive media switch) and
+//     /settings/privacy/direct-messages ("Who can message me"), both on
+//     GET / PATCH /users/me/settings. They were disabled rows before.
 //   - Account status — "Deactivate account" / "Delete account" link to
 //     /settings/account/deactivate and /settings/account/delete, real, built
 //     flows as of sprint-2/account-deactivation-to-code (Decision Log
@@ -193,35 +194,38 @@ export default function PrivacySettingsPage() {
             </li>
           )}
 
-          {/* Your Post — interaction-privacy sub-page, no backend / no
-              converted screen. */}
-          <li className="privacy-row privacy-row--disabled">
-            <span className="privacy-row__icon" aria-hidden="true">
-              ⓘ
-            </span>
-            <div className="privacy-row__body">
-              <p className="privacy-row__title">Your Post</p>
-              <p className="privacy-row__desc">Manage information associated with your post.</p>
-              <p className="privacy-row__note">Not available yet.</p>
-            </div>
-            <span className="privacy-row__chevron" aria-hidden="true">
-              ›
-            </span>
+          {/* Your Post: REAL (B-061). The whole row links to the Sensitive media switch at
+              /settings/privacy/your-posts (Figma 6983:48741 ..). */}
+          <li>
+            <Link to="/settings/privacy/your-posts" className="privacy-row privacy-row--link">
+              <span className="privacy-row__icon" aria-hidden="true">
+                ⓘ
+              </span>
+              <div className="privacy-row__body">
+                <p className="privacy-row__title">Your Post</p>
+                <p className="privacy-row__desc">Manage information associated with your post.</p>
+              </div>
+              <span className="privacy-row__chevron" aria-hidden="true">
+                ›
+              </span>
+            </Link>
           </li>
 
-          {/* Direct Message — same. */}
-          <li className="privacy-row privacy-row--disabled">
-            <span className="privacy-row__icon" aria-hidden="true">
-              ✉
-            </span>
-            <div className="privacy-row__body">
-              <p className="privacy-row__title">Direct Message</p>
-              <p className="privacy-row__desc">Manage who can message you directly.</p>
-              <p className="privacy-row__note">Not available yet.</p>
-            </div>
-            <span className="privacy-row__chevron" aria-hidden="true">
-              ›
-            </span>
+          {/* Direct Message: REAL (B-061). The whole row links to "Who can message me" at
+              /settings/privacy/direct-messages (Figma 6981:48879 ..). */}
+          <li>
+            <Link to="/settings/privacy/direct-messages" className="privacy-row privacy-row--link">
+              <span className="privacy-row__icon" aria-hidden="true">
+                ✉
+              </span>
+              <div className="privacy-row__body">
+                <p className="privacy-row__title">Direct Message</p>
+                <p className="privacy-row__desc">Manage who can message you directly.</p>
+              </div>
+              <span className="privacy-row__chevron" aria-hidden="true">
+                ›
+              </span>
+            </Link>
           </li>
 
           {/* Download my data — REAL (B-060). The whole row is a link to the flow at
