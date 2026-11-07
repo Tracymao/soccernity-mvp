@@ -13,6 +13,12 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    # Without this the GitHub default (360 minutes) applies. On 2026-11-07 two
+    # runs sat in "Run e2e tests" for 1 to 2+ hours after Jest finished,
+    # because Jest did not exit ("too many clients already" from the CI
+    # Postgres left leaked connections open). A normal run is 13 to 18 minutes
+    # end to end, so 40 minutes fails a hang fast and visibly.
+    timeout-minutes: 40
     env:
       DATABASE_URL: postgresql://soccernity:soccernity@localhost:5432/soccernity_test
       # One-line, additive deviation from this PR's own brief (which asked
@@ -94,6 +100,9 @@ jobs:
 
       - name: Run e2e tests
         working-directory: services/api
+        # Normal: 13 minutes. A tighter step limit than the job's, so a Jest
+        # that finished but will not exit is cut off with the log intact.
+        timeout-minutes: 30
         # Prints the open Postgres connection count after each spec file
         # ([e2e-connections] lines), to find what leaks. test/connection-reporter.js
         env:

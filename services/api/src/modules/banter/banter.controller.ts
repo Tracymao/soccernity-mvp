@@ -165,8 +165,9 @@ export class BanterController {
   // POST /banter-rooms/:id/posts — JwtAuthGuard + GuardianConsentGuard
   // (posting). Delegates to FeedService.createPost with banterRoomId set
   // — the single post-creation path, not a parallel one. 404 room ->
-  // 403 not-a-member -> create, in that order. Nest's default 201 (this
-  // really does create a Post).
+  // create. NO room membership is required (B-117, Decision Log #404
+  // item 10): a room is an open thread and "join" is only the My Bants
+  // bookmark. Nest's default 201 (this really does create a Post).
   @Post(':id/posts')
   @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard, ProfileCompleteGuard)
   async postToRoom(
