@@ -68,8 +68,15 @@ export interface PublicMatchSummary {
   score: string | null;
 }
 
+// The three Sports Hub match reads (GET /sports/fixtures, /live-scores, /matches/:id) return this shape.
+// B-070 (Decision Log #472): `kickoffAlert` is true iff the SIGNED-IN caller has a kickoff-alert
+// subscription row for the match. Per-caller, computed per request, never stored on MatchData. Always
+// present: false for a logged-out caller. DEFAULT, founder-veto-able: "has a row" counts even after the
+// alert has fired. The head-to-head `meetings` stay plain PublicMatchSummary (no alert control there).
+export type PublicMatchListItem = PublicMatchSummary & { kickoffAlert: boolean };
+
 export interface PublicMatchesPage {
-  items: PublicMatchSummary[];
+  items: PublicMatchListItem[];
   nextCursor: string | null;
 }
 
@@ -494,6 +501,21 @@ export class SportsService {
     return this.prisma.matchData.upsert({ where: { externalRef }, update: data, create: data });
   }
 
+  // Attaches the per-caller `kickoffAlert` flag to a page of summaries with ONE batched lookup (no
+  // N+1, none at all for a logged-out caller or an empty page). The Decision Log #153/#154 pattern.
+  private async withKickoffAlerts(
+    items: PublicMatchSummary[],
+    viewerId: string | undefined,
+  ): Promise<PublicMatchListItem[]> {
+    if (!viewerId || items.length === 0) return items.map((item) => ({ ...item, kickoffAlert: false }));
+    const subscribed = await this.prisma.matchSubscription.findMany({
+      where: { userId: viewerId, externalRef: { in: items.map((i) => i.id) } },
+      select: { externalRef: true },
+    });
+    const refs = new Set(subscribed.map((s) => s.externalRef));
+    return items.map((item) => ({ ...item, kickoffAlert: refs.has(item.id) }));
+  }
+
   private toPublicMatchSummary(row: MatchData): PublicMatchSummary {
     return {
       id: row.externalRef,
@@ -548,7 +570,7 @@ export class SportsService {
   }
 
   // GET /sports/fixtures?date=&league=&cursor=&limit=
-  async listFixtures(query: ListFixturesQueryDto): Promise<PublicMatchesPage> {
+  async listFixtures(query: ListFixturesQueryDto, viewerId?: string): Promise<PublicMatchesPage> {
     const today = new Date().toISOString().slice(0, 10);
     await this.refreshMatchesForDate(query.date, query.league, query.date === today);
     return this.readMatchesPage({
@@ -557,6 +579,7 @@ export class SportsService {
       leagueId: query.league,
       cursor: query.cursor,
       limit: query.limit,
+      viewerId,
     });
   }
 
@@ -564,10 +587,10 @@ export class SportsService {
   // listFixtures (same lock key, so if a caller already refreshed today's fixtures moments ago this
   // is a no-op), then reads status='live' rows only. There is no separate "live-scores" upstream
   // call — see this file's own header comment.
-  async listLiveScores(query: ListLiveScoresQueryDto): Promise<PublicMatchesPage> {
+  async listLiveScores(query: ListLiveScoresQueryDto, viewerId?: string): Promise<PublicMatchesPage> {
     const today = new Date().toISOString().slice(0, 10);
     await this.refreshMatchesForDate(today, query.league, true);
-    return this.readMatchesPage({ status: 'live', leagueId: query.league, cursor: query.cursor, limit: query.limit });
+    return this.readMatchesPage({ status: 'live', leagueId: query.league, cursor: query.cursor, limit: query.limit, viewerId });
   }
 
   private async readMatchesPage(params: {
@@ -577,6 +600,7 @@ export class SportsService {
     leagueId?: string;
     cursor?: string;
     limit?: number;
+    viewerId?: string;
   }): Promise<PublicMatchesPage> {
     const limit = Math.min(params.limit ?? SPORTS_DEFAULT_PAGE_SIZE, SPORTS_MAX_PAGE_SIZE);
 
@@ -600,7 +624,10 @@ export class SportsService {
 
     const hasMore = rows.length > limit;
     const pageRows = hasMore ? rows.slice(0, limit) : rows;
-    const items = pageRows.map((row) => this.toPublicMatchSummary(row));
+    const items = await this.withKickoffAlerts(
+      pageRows.map((row) => this.toPublicMatchSummary(row)),
+      params.viewerId,
+    );
     const last = pageRows[pageRows.length - 1];
     const nextCursor = hasMore && last ? encodeMatchCursor({ kickoffTime: last.kickoffTime, id: last.id }) : null;
 
@@ -612,7 +639,7 @@ export class SportsService {
   // service, a genuine upstream failure here IS allowed to propagate as a 503 (via the caller —
   // see sports-matches.controller.ts) when there's no existing row to fall back on, since there is
   // nothing to degrade to.
-  async getMatchById(externalRef: string): Promise<PublicMatchSummary> {
+  async getMatchById(externalRef: string, viewerId?: string): Promise<PublicMatchListItem> {
     let row = await this.prisma.matchData.findUnique({ where: { externalRef } });
     const isFresh = row != null && Date.now() - row.updatedAt.getTime() < this.ttlForPhase(row.status as MatchPhase) * 1000;
 
@@ -640,7 +667,8 @@ export class SportsService {
     }
 
     if (!row) throw new NotFoundException('Match not found');
-    return this.toPublicMatchSummary(row);
+    const [summary] = await this.withKickoffAlerts([this.toPublicMatchSummary(row)], viewerId);
+    return summary;
   }
 
   private async getMatchRowOrThrow(externalRef: string): Promise<MatchData> {

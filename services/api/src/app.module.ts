@@ -23,6 +23,7 @@ import { GrassrootsModule } from './modules/grassroots/grassroots.module';
 import { BanterModule } from './modules/banter/banter.module';
 import { MessagingModule } from './modules/messaging/messaging.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { PushModule } from './modules/push/push.module';
 import { CommunityGroupsModule } from './modules/community-groups/community-groups.module';
 import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
 import { ViewQualificationModule } from './modules/view-qualification/view-qualification.module';
@@ -294,6 +295,7 @@ import { GlobalRateLimitModule } from './rate-limit/global-rate-limit.module';
     // Notification rows into ready-to-render data server-side (batched,
     // no N+1) — see modules/notifications/README.md for the full design.
     NotificationsModule,
+    PushModule,
     // sprint-3/community-groups-backend — Build Plan Sprint 3, Decision
     // Log #281 (design by `sprint-3/community-groups-design`). Full
     // endpoint set: POST /community-groups, GET /community-groups, GET

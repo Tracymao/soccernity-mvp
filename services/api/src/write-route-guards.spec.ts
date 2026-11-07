@@ -23,6 +23,7 @@ import { PostMediaController } from './modules/post-media/post-media.controller'
 import { SocialAuthController } from './modules/social-auth/social-auth.controller';
 import { PostMediaReportController } from './modules/post-media/post-media-report.controller';
 import { NotificationSettingsController } from './modules/notifications/notification-settings.controller';
+import { PushSettingsController } from './modules/push/push-settings.controller';
 import { NotificationsController } from './modules/notifications/notifications.controller';
 import { SportsMatchesController } from './modules/sports/sports-matches.controller';
 import { UserAvatarController } from './modules/users/user-avatar.controller';
@@ -72,6 +73,9 @@ const OPEN_ROUTES: Record<string, string> = {
   'PATCH /notifications/:id/read': 'own inbox read-state; not a social or profile write',
   'PATCH /notification-settings':
     'only reduces what the person is notified of about other people (B-062), so a restricted-pending or unverified account may still change it',
+  'POST /notification-settings/push/subscription':
+    "turns on a notification channel for the person's OWN browser (B-285): no content, nobody else told; a restricted-pending or unverified account may use it",
+  'DELETE /notification-settings/push/subscription': "turns the person's own browser push off (B-285)",
   'PATCH /conversations/:id/read': 'own read-state; touches no one else',
   'PUT /sports/matches/:id/subscription': 'private kickoff-alert preference; founder-confirmed JwtAuthGuard-only (sprint-4/match-kickoff-alerts)',
   'DELETE /sports/matches/:id/subscription': 'private kickoff-alert preference',
@@ -228,6 +232,7 @@ const CONTROLLERS = [
   ContactController,
   NotificationsController,
   NotificationSettingsController,
+  PushSettingsController,
   SportsMatchesController,
   ViewQualificationController,
   PostMediaController,

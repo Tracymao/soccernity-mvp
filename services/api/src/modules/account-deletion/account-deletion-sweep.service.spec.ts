@@ -31,6 +31,8 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
     emailChangeRequest: { deleteMany: jest.fn() },
     // B-062: the person's notification filter options go with the account.
     notificationPreference: { deleteMany: jest.fn() },
+    // B-285: web-push subscriptions go with the account.
+    pushSubscription: { deleteMany: jest.fn() },
     // B-280: the withhold-guardian-notices flag goes with the anonymised account.
     guardianNoticeWithhold: { deleteMany: jest.fn() },
     follow: { deleteMany: jest.fn() },
@@ -471,6 +473,7 @@ describe('AccountDeletionSweepService', () => {
       // B-084: the links to Google / Facebook are sign-in credentials and go with the ability to sign in.
       expect(prisma.socialIdentity.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.notificationPreference.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.pushSubscription.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.follow.deleteMany).toHaveBeenCalledWith({
         where: { OR: [{ followerId: 'user-1' }, { followeeId: 'user-1' }] },
       });
@@ -779,6 +782,7 @@ describe('AccountDeletionSweepService', () => {
       // B-084: the links to Google / Facebook are sign-in credentials and go with the ability to sign in.
       expect(prisma.socialIdentity.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.notificationPreference.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.pushSubscription.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.follow.deleteMany).toHaveBeenCalledWith({
         where: { OR: [{ followerId: 'user-1' }, { followeeId: 'user-1' }] },
       });

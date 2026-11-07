@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -12,6 +12,20 @@ const KICKOFF_SWEEP_BATCH_SIZE = 500;
 // so its subscriptions stay pending. If the vendor later reschedules it, kickoffTime moves and the
 // alert fires at the new time.
 const NON_KICKOFF_STATUSES = ['postponed', 'cancelled'];
+
+// B-070 (Decision Log #472): stable machine-readable code on the 409 for a match that has already started.
+export const MATCH_ALREADY_STARTED_CODE = 'match_already_started';
+
+// A kickoff alert only makes sense BEFORE kickoff. The sweep fires any pending subscription whose match
+// has kickoffTime <= now and is not postponed or cancelled, so a PUT made after kickoff would fire on the
+// very next tick, even for a finished match. A match counts as started when the vendor says live or
+// finished, OR when its scheduled kickoff has passed and it is not postponed or cancelled (the vendor
+// can lag, and the sweep would fire for it anyway). Both fields missing is treated as not started.
+function hasStarted(match: { status?: string; kickoffTime?: string }, now: number): boolean {
+  if (match.status === 'live' || match.status === 'finished') return true;
+  if (match.status && NON_KICKOFF_STATUSES.includes(match.status)) return false;
+  return Date.parse(match.kickoffTime ?? '') <= now;
+}
 
 // sprint-4/match-kickoff-alerts (Decision Log #336 item 2). In-app kickoff alerts only: the founder's
 // v1 delivery decision is no push and no email. The alert is a Notification row, shown on the user's
@@ -30,8 +44,21 @@ export class MatchKickoffService {
   // bootstraps the row if it has never been fetched, so a typo'd id 404s instead of creating a
   // subscription that can never fire. Idempotent: re-subscribing is a no-op and never resets
   // notifiedAt, so an already-notified subscription cannot fire a second time.
-  async subscribe(userId: string, externalRef: string): Promise<void> {
-    await this.sportsService.getMatchById(externalRef);
+  //
+  // B-070: a match that has already started is a coded 409 (match_already_started), checked AFTER the 404
+  // so an unknown id stays a 404. Unsubscribing is always allowed. DEFAULT, founder-veto-able: re-subscribing
+  // to a match that has started is also refused even if the person already has the row (the PUT is a no-op
+  // for them either way, and the UI shows "Started").
+  async subscribe(userId: string, externalRef: string, now: Date = new Date()): Promise<void> {
+    const match = await this.sportsService.getMatchById(externalRef);
+    if (hasStarted(match, now.getTime())) {
+      throw new ConflictException({
+        statusCode: 409,
+        error: 'Conflict',
+        code: MATCH_ALREADY_STARTED_CODE,
+        message: 'This match has already started, so a kickoff alert can no longer be set.',
+      });
+    }
     try {
       await this.prisma.matchSubscription.create({ data: { userId, externalRef } });
     } catch (err) {

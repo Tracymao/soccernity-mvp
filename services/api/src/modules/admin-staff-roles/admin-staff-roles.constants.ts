@@ -6,6 +6,27 @@
 export const ADMIN_USER_ROLES = ['editor', 'moderator', 'superadmin'] as const;
 export type AdminUserRole = (typeof ADMIN_USER_ROLES)[number];
 
+// backend/b069-transactional-emails (B-069). What the "account created" email says about each role: the label
+// the email uses and ONE sentence of what that role can do, read from the role gates in the admin controllers
+// (@AdminRoles(...)): editor = articles, categories, media; moderator = reports and appeals, platform user
+// accounts, uploaded-media review, Contact Us enquiries; superadmin passes every editor and moderator gate and
+// alone manages admin accounts (this module). Wording is DEFAULT, founder-veto-able.
+export const ADMIN_ROLE_EMAIL_DETAILS: Record<AdminUserRole, { label: string; sentence: string }> = {
+  editor: {
+    label: 'editor',
+    sentence: 'As an editor you can write, edit and publish articles and categories, and upload media to the library.',
+  },
+  moderator: {
+    label: 'moderator',
+    sentence:
+      'As a moderator you can review reports and appeals, manage platform user accounts, review uploaded pictures and videos, and read Contact Us enquiries.',
+  },
+  superadmin: {
+    label: 'super admin',
+    sentence: 'As a super admin you can do everything an editor and a moderator can, and also manage admin accounts and roles.',
+  },
+};
+
 // AdminUser.accountStatus's real value set (schema.prisma's own comment:
 // "active" | "deactivated" — mirrors User.accountStatus's string-enum
 // convention, but only two values: there is no admin-side equivalent of
