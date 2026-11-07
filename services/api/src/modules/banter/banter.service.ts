@@ -582,35 +582,27 @@ export class BanterService {
   // "at most one of clubPageId/banterRoomId" check all apply as-is). We
   // never build a second post.create here.
   //
-  // Membership is REQUIRED to post (403 otherwise) — judgment call,
-  // flagged in banter/README.md: "join a room to participate" matches
-  // the Figma flow and Section 8.3 step 5's "read-only" framing for
-  // pending-consent minors (which only makes sense if participation
-  // means being a member). Existence (404) is settled before membership
-  // (403), the FeedService.deleteComment ordering convention.
+  // B-117 (Decision Log #403 item 16, #404 item 10): a Banter Room is an
+  // open-forum THREAD and its room posts are the comments. Anyone eligible
+  // may post WITHOUT joining; "join" is only the My Bants bookmark. The
+  // old membership check (403 "You must join this Banter Room before
+  // posting in it") is deliberately gone. Eligibility is unchanged and
+  // lives on the controller: JwtAuthGuard, Under16RestrictionGuard (an
+  // under-16 is fully locked out, accounts aged 16 and 17 have full
+  // access), GuardianConsentGuard, EmailVerifiedGuard, ProfileCompleteGuard.
+  // Existence (404) is still settled first.
   async postToRoom(
     userId: string,
     roomId: string,
     dto: CreateBanterPostDto,
   ): Promise<FeedPost> {
     await this.assertRoomExists(roomId);
-    await this.assertRoomMembership(userId, roomId);
 
     return this.feed.createPost(userId, {
       contentText: dto.contentText,
       mediaIds: dto.mediaIds,
       banterRoomId: roomId,
     });
-  }
-
-  private async assertRoomMembership(userId: string, roomId: string): Promise<void> {
-    const membership = await this.prisma.banterRoomMember.findUnique({
-      where: { userId_banterRoomId: { userId, banterRoomId: roomId } },
-      select: { id: true },
-    });
-    if (!membership) {
-      throw new ForbiddenException('You must join this Banter Room before posting in it');
-    }
   }
 
   // GET /banter-rooms/:id/posts — the room feed. assertRoomExists is

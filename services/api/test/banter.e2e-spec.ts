@@ -521,12 +521,17 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
       const roomA = await createRoom(owner.accessToken, { name: 'Room A' });
       const roomB = await createRoom(owner.accessToken, { name: 'Room B' });
 
-      // Non-member cannot post.
+      // B-117 (Decision Log #404 item 10): a non-member posts too. It
+      // creates NO membership and does not touch memberCount.
       await request(server())
         .post(`/banter-rooms/${roomA.id}/posts`)
         .set('Authorization', `Bearer ${nonMember.accessToken}`)
-        .send({ contentText: 'sneaking in' })
-        .expect(403);
+        .send({ contentText: 'open thread' })
+        .expect(201);
+      expect(
+        await getTestPrismaClient().banterRoomMember.count({ where: { userId: nonMember.userId } }),
+      ).toBe(0);
+      expect(await cachedMemberCount(roomA.id)).toBe(1); // only the owner
 
       // Owner is a member (auto-joined) — can post into both rooms.
       const inA = await request(server())
@@ -545,8 +550,9 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
         .get(`/banter-rooms/${roomA.id}/posts`)
         .set('Authorization', `Bearer ${owner.accessToken}`)
         .expect(200);
-      expect(feedA.body.items.map((p: { contentText: string }) => p.contentText)).toEqual([
+      expect(feedA.body.items.map((p: { contentText: string }) => p.contentText).sort()).toEqual([
         'hello room A',
+        'open thread',
       ]);
       // FeedPostWithViewerState shape (Decision Log #153) — same as GET /posts/feed.
       expect(feedA.body.items[0]).toHaveProperty('isLiked', false);
@@ -556,7 +562,7 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
 
       // And the room post is confirmed in Postgres against Post.banterRoomId.
       const prisma = getTestPrismaClient();
-      expect(await prisma.post.count({ where: { banterRoomId: roomA.id } })).toBe(1);
+      expect(await prisma.post.count({ where: { banterRoomId: roomA.id } })).toBe(2);
 
       // A post to a room the caller then leaves still belongs to the room.
       await request(server())
@@ -567,7 +573,7 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
         .get(`/banter-rooms/${roomA.id}/posts`)
         .set('Authorization', `Bearer ${owner.accessToken}`)
         .expect(200);
-      expect(stillThere.body.items).toHaveLength(1);
+      expect(stillThere.body.items).toHaveLength(2);
     });
 
     it('GET /banter-rooms/:id/posts 404s for a non-existent room', async () => {
@@ -878,6 +884,179 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
         .set('Authorization', `Bearer ${creator.accessToken}`)
         .expect(200);
       expect(noTerm.body.items).toHaveLength(4);
+    });
+  });
+
+  // ---------- B-117: Bants is an open forum (Decision Log #403 item 16, #404 item 10) ----------
+
+  describe('B-117: open forum — no membership needed to take part', () => {
+    const bearer = (t: string) => ({ Authorization: `Bearer ${t}` });
+
+    // 'under16' is fully locked out of Bants (DL #346); 'teen' is aged
+    // 16-17 (isMinor, NOT isUnder16) with CONFIRMED consent and has full
+    // access.
+    async function createAged(kind: 'under16' | 'teen'): Promise<{ userId: string; accessToken: string }> {
+      const prisma = getTestPrismaClient();
+      const user = await prisma.user.create({
+        data: {
+          email: `e2e-banter-${kind}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
+          passwordHash: 'unused',
+          displayName: `E2E Banter ${kind}`,
+          verificationStatus: 'verified',
+          username: `e2e_${Math.random().toString(36).slice(2, 12)}`,
+          dateOfBirth: seedDob(kind === 'under16' ? '2014-01-01' : '2009-01-01'),
+          isMinor: true,
+          isUnder16: kind === 'under16',
+          guardian: {
+            create: {
+              name: 'Guardian Name',
+              email: `guardian-${kind}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
+              relationship: 'Parent',
+              consentStatus: 'confirmed',
+              consentToken: `tok-${kind}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              consentTokenExpiresAt: new Date(Date.now() + 72 * 3600 * 1000),
+            },
+          },
+        },
+      });
+      const { accessToken } = await app.get(TokenService).issueTokenPair(user.id, user.role);
+      return { userId: user.id, accessToken: accessToken.token };
+    }
+
+    async function postInto(roomId: string, token: string, contentText: string) {
+      const res = await request(server())
+        .post(`/banter-rooms/${roomId}/posts`)
+        .set(bearer(token))
+        .send({ contentText })
+        .expect(201);
+      return res.body as { id: string };
+    }
+
+    it('a non-member can post, comment and like; join and leave still only move the My Bants bookmark', async () => {
+      const owner = await createUser('open-owner');
+      const visitor = await createUser('open-visitor');
+      const room = await createRoom(owner.accessToken, { name: 'Open thread' });
+      const prisma = getTestPrismaClient();
+
+      const ownerPost = await postInto(room.id, owner.accessToken, 'the thread starter');
+      const visitorPost = await postInto(room.id, visitor.accessToken, 'a reply from outside');
+
+      await request(server())
+        .post(`/posts/${ownerPost.id}/comments`)
+        .set(bearer(visitor.accessToken))
+        .send({ contentText: 'a comment from a non-member' })
+        .expect(201);
+
+      // Likes are toggled, one per user per item; the public count is a
+      // number and the post payload carries no like-identity list.
+      await request(server()).post(`/posts/${ownerPost.id}/like`).set(bearer(visitor.accessToken)).expect(200);
+      await request(server()).post(`/posts/${ownerPost.id}/like`).set(bearer(visitor.accessToken)).expect(200);
+      expect(await prisma.like.count({ where: { postId: ownerPost.id } })).toBe(1);
+      const feed = await request(server())
+        .get(`/banter-rooms/${room.id}/posts`)
+        .set(bearer(owner.accessToken))
+        .expect(200);
+      const seen = feed.body.items.find((p: { id: string }) => p.id === ownerPost.id);
+      expect(seen.likeCount).toBe(1);
+      expect(seen.commentCount).toBe(1);
+      for (const key of ['likers', 'likes', 'likedBy', 'likeIdentities']) {
+        expect(seen).not.toHaveProperty(key);
+      }
+      await request(server()).delete(`/posts/${ownerPost.id}/like`).set(bearer(visitor.accessToken)).expect(200);
+      expect(await prisma.like.count({ where: { postId: ownerPost.id } })).toBe(0);
+
+      // Nothing above created a membership or moved memberCount.
+      expect(await prisma.banterRoomMember.count({ where: { userId: visitor.userId } })).toBe(0);
+      expect(await cachedMemberCount(room.id)).toBe(1);
+
+      // join / leave still work and only move the bookmark.
+      await request(server()).post(`/banter-rooms/${room.id}/join`).set(bearer(visitor.accessToken)).expect(200);
+      expect(await cachedMemberCount(room.id)).toBe(2);
+      const mine = await request(server()).get('/banter-rooms/mine').set(bearer(visitor.accessToken)).expect(200);
+      expect(mine.body.items.map((r: { id: string }) => r.id)).toEqual([room.id]);
+      await request(server()).delete(`/banter-rooms/${room.id}/join`).set(bearer(visitor.accessToken)).expect(200);
+      expect(await cachedMemberCount(room.id)).toBe(1);
+      expect(await prisma.post.findUnique({ where: { id: visitorPost.id } })).not.toBeNull();
+    });
+
+    it('Block hides posts, comments and like identities in BOTH directions while the counts stay unchanged', async () => {
+      const a = await createUser('block-a');
+      const b = await createUser('block-b');
+      const c = await createUser('block-c');
+      const room = await createRoom(a.accessToken, { name: 'Blocked thread' });
+      const aPost = await postInto(room.id, a.accessToken, 'from A');
+      const bPost = await postInto(room.id, b.accessToken, 'from B');
+      // B comments on and likes A's post; C comments on B's post.
+      await request(server())
+        .post(`/posts/${aPost.id}/comments`)
+        .set(bearer(b.accessToken))
+        .send({ contentText: 'B comment on A' })
+        .expect(201);
+      await request(server()).post(`/posts/${aPost.id}/like`).set(bearer(b.accessToken)).expect(200);
+      await request(server())
+        .post(`/posts/${bPost.id}/comments`)
+        .set(bearer(c.accessToken))
+        .send({ contentText: 'C comment on B' })
+        .expect(201);
+
+      await request(server()).post(`/users/${b.userId}/block`).set(bearer(a.accessToken)).send({}).expect(200);
+
+      const roomFeed = async (token: string) => {
+        const res = await request(server()).get(`/banter-rooms/${room.id}/posts`).set(bearer(token)).expect(200);
+        return res.body.items as Array<{ id: string; likeCount: number; commentCount: number }>;
+      };
+
+      // Blocker A: B's post is gone; A's own post keeps its counts even
+      // though the commenter and the liker are hidden.
+      const aSees = await roomFeed(a.accessToken);
+      expect(aSees.map((p) => p.id)).toEqual([aPost.id]);
+      expect(aSees[0].likeCount).toBe(1);
+      expect(aSees[0].commentCount).toBe(1);
+      const aComments = await request(server()).get(`/posts/${aPost.id}/comments`).set(bearer(a.accessToken)).expect(200);
+      expect(aComments.body.items).toEqual([]);
+
+      // Blocked B: A's post is gone too (the other direction).
+      const bSees = await roomFeed(b.accessToken);
+      expect(bSees.map((p) => p.id)).toEqual([bPost.id]);
+
+      // An uninvolved viewer still sees both posts and the comment.
+      const cSees = await roomFeed(c.accessToken);
+      expect(cSees.map((p) => p.id).sort()).toEqual([aPost.id, bPost.id].sort());
+      const cComments = await request(server()).get(`/posts/${aPost.id}/comments`).set(bearer(c.accessToken)).expect(200);
+      expect(cComments.body.items).toHaveLength(1);
+    });
+
+    it('age rules: a 16-17 account (confirmed consent) takes part without joining; an under-16 stays fully disabled', async () => {
+      const owner = await createUser('age-owner');
+      const teen = await createAged('teen');
+      const kid = await createAged('under16');
+      const room = await createRoom(owner.accessToken, { name: 'Age rules' });
+      const ownerPost = await postInto(room.id, owner.accessToken, 'hello');
+
+      // 16-17: reads, posts and comments with no membership.
+      await request(server()).get(`/banter-rooms/${room.id}/posts`).set(bearer(teen.accessToken)).expect(200);
+      await postInto(room.id, teen.accessToken, 'teen post, not a member');
+      await request(server())
+        .post(`/posts/${ownerPost.id}/comments`)
+        .set(bearer(teen.accessToken))
+        .send({ contentText: 'teen comment, not a member' })
+        .expect(201);
+      expect(await getTestPrismaClient().banterRoomMember.count({ where: { userId: teen.userId } })).toBe(0);
+
+      // Under-16: every Banter route is the under_16_restricted 403, reads included.
+      for (const call of [
+        () => request(server()).get(`/banter-rooms/${room.id}/posts`).set(bearer(kid.accessToken)),
+        () =>
+          request(server())
+            .post(`/banter-rooms/${room.id}/posts`)
+            .set(bearer(kid.accessToken))
+            .send({ contentText: 'no' }),
+        () => request(server()).post(`/banter-rooms/${room.id}/join`).set(bearer(kid.accessToken)),
+      ]) {
+        const res = await call();
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe('under_16_restricted');
+      }
     });
   });
 });
