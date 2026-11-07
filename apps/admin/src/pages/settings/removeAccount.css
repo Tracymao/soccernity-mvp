@@ -1,0 +1,123 @@
+/* B-058: the Remove account dialog (Figma 6991:56553 and its state frames). The look of the other admin dialogs
+ * (pages/moderation/moderation.css .mod-dialog); every colour is a --sn-* token and the buttons are navy, not red
+ * (no destructive token exists, non-negotiable #3). */
+
+.rm-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background-color: var(--sn-overlay-scrim);
+}
+
+.rm-dialog {
+  width: min(560px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  border-radius: 16px;
+  background-color: var(--sn-background-surface);
+  box-shadow:
+    0 24px 56px var(--sn-shadow-key),
+    0 8px 24px var(--sn-shadow-elevated),
+    0 2px 6px var(--sn-shadow-ambient);
+}
+
+.rm-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 28px 20px;
+  border-bottom: 1px solid var(--sn-icon-inactive);
+}
+
+.rm-dialog__head h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--sn-text-primary);
+}
+
+.rm-dialog__close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--sn-icon-inactive);
+  background: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.rm-dialog__close:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.rm-dialog__body {
+  padding: 22px 28px 16px;
+  font-size: 14px;
+  color: var(--sn-text-primary);
+}
+
+.rm-dialog__text {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.rm-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 0 28px 24px;
+}
+
+.rm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.rm-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.rm-btn--primary {
+  background-color: var(--sn-brand-navy);
+  color: var(--sn-text-on-navy);
+}
+
+.rm-btn--neutral {
+  background-color: var(--sn-background-surface);
+  border-color: var(--sn-icon-inactive);
+  color: var(--sn-text-primary);
+}
+
+/* Row action on the Roles list and the removed-row look (Figma 6991:57548). */
+
+.rl-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rl-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rl-table__row--removed .rl-row-actions {
+  opacity: 0.5;
+}
