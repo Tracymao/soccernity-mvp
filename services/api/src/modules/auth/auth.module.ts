@@ -1,3 +1,4 @@
+import { AccountEmailsModule } from '../account-emails/account-emails.module';
 import { GuardianSecurityNoticeModule } from '../guardian-security-notice/guardian-security-notice.module';
 import { Module } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -19,7 +20,7 @@ import { AuthService } from './auth.service';
 // introduces a global PrismaModule, this provider should be dropped in
 // favour of importing that instead.
 @Module({
-  imports: [AuthFoundationModule, TwoFactorModule, GuardianSecurityNoticeModule],
+  imports: [AuthFoundationModule, TwoFactorModule, GuardianSecurityNoticeModule, AccountEmailsModule],
   controllers: [AuthController],
   providers: [AuthService, PrismaService],
   // sprint-1/guardian-consent-decline-withdraw-expiry -- AuthService is

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
 import { AdminActionLogModule } from '../admin-action-log/admin-action-log.module';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
 import { TwoFactorModule } from '../two-factor/two-factor.module';
@@ -31,6 +32,8 @@ import { AdminStaffRolesService } from './admin-staff-roles.service';
 @Module({
   imports: [AdminAuthFoundationModule, AdminActionLogModule, TwoFactorModule],
   controllers: [AdminStaffRolesController],
-  providers: [AdminStaffRolesService, PrismaService],
+  // B-069: RegistrationEmailService is provided directly (the way every module outside auth/registration does
+  // it) for the "account created" email.
+  providers: [AdminStaffRolesService, PrismaService, RegistrationEmailService],
 })
 export class AdminStaffRolesModule {}

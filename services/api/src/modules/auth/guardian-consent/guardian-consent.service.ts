@@ -1,8 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { GRACE_PERIOD_DAYS } from '../../account-deletion/account-deletion-sweep.service';
+import { AccountEmailService } from '../../account-emails/account-email.service';
 import { AuthService } from '../auth.service';
 import { RegistrationEmailService } from '../registration/email/registration-email.service';
 import { verificationMethodFor } from './card-verification-policy.util';
@@ -116,6 +117,9 @@ export class GuardianConsentService {
     // imports AuthFoundationModule only, and does not import this module
     // (or anything that does) -- see guardian-consent.module.ts.
     private readonly authService: AuthService,
+    // backend/b069-transactional-emails (B-069): the welcome email, sent when this approval is what makes a
+    // minor's account fully active. @Optional(): absent = nothing is sent.
+    @Optional() private readonly accountEmails?: AccountEmailService,
   ) {}
 
   async confirmConsent(consentToken: string, deviceType: ConsentDeviceType = 'unknown'): Promise<void> {
@@ -251,6 +255,10 @@ export class GuardianConsentService {
       void this.notifyMinorOfApproval(guardian.minorUserId).catch((err: Error) =>
         this.logger.error(`Could not notify minor ${guardian.minorUserId} of approval: ${err.message}`),
       );
+      // B-069: the same single transition. If the minor's email is already verified the account is now fully
+      // active and the welcome is sent; if not, AccountEmailService sends nothing and verifying the email later
+      // sends it. Fire-and-log.
+      this.accountEmails?.welcomeIfReadyInBackground(guardian.minorUserId);
     }
   }
 
