@@ -61,6 +61,6 @@ import { TokenService } from './token/token.service';
     }),
   ],
   providers: [PasswordService, TokenService, RefreshTokenStore, JwtAuthGuard, OptionalJwtAuthGuard, PrismaService, GuardianConsentGuard, Under16RestrictionGuard],
-  exports: [AuthLimitsModule, PasswordService, TokenService, RefreshTokenStore, JwtAuthGuard, OptionalJwtAuthGuard, GuardianConsentGuard, Under16RestrictionGuard],
+  exports: [AuthLimitsModule, PrismaService, PasswordService, TokenService, RefreshTokenStore, JwtAuthGuard, OptionalJwtAuthGuard, GuardianConsentGuard, Under16RestrictionGuard],
 })
 export class AuthFoundationModule {}
