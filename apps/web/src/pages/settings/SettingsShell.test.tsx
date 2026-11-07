@@ -32,6 +32,21 @@ vi.mock("../../api/twoFactor", async () => {
   };
 });
 
+vi.mock("../../api/notificationSettings", async () => {
+  const actual = await vi.importActual<typeof import("../../api/notificationSettings")>(
+    "../../api/notificationSettings",
+  );
+  return {
+    ...actual,
+    getNotificationSettings: vi.fn().mockResolvedValue({
+      qualityFilter: false,
+      muteNonFollowing: false,
+      muteNonFollowers: false,
+      muteNewAccounts: false,
+    }),
+  };
+});
+
 // header.payload.signature with payload {"sub":"u1","role":"fan"}
 const TOKEN = `x.${btoa(JSON.stringify({ sub: "u1", role: "fan" }))}.y`;
 
@@ -282,13 +297,11 @@ describe("Notification Preferences section", () => {
     expect(current[0].textContent).toContain("Notification Preferences");
   });
 
-  it("Filters leaf renders the Quality filter row, permanently disabled with a note", async () => {
+  it("Filters leaf renders the live Quality filter row (B-062; every state is in NotificationSettingsLeaves.test.tsx)", async () => {
     await renderAt("/settings/notifications/filters");
     expect(screen.getByRole("heading", { name: "Filters" })).not.toBeNull();
-    expect(screen.getByText(/choose what you see in your notifications/i)).not.toBeNull();
-    expect(screen.getByText("Quality filter")).not.toBeNull();
-    expect(screen.getByRole("img", { name: /quality filter: off \(not adjustable yet\)/i })).not.toBeNull();
-    expect(screen.getByText(/notification filtering isn.t available yet/i)).not.toBeNull();
+    expect(screen.getByText(/choose which notifications you see/i)).not.toBeNull();
+    expect(await screen.findByRole("switch", { name: "Quality filter" })).not.toBeNull();
     // Removed "Mute notifications ›" row (Decision Log #230 decision #6) —
     // muting is reached only via the Muted accounts leaf.
     expect(screen.queryByText(/mute notifications/i)).toBeNull();
@@ -315,20 +328,12 @@ describe("Notification Preferences section", () => {
     expect(toggles).toHaveLength(4);
   });
 
-  it("Muted accounts leaf renders all 3 rows, permanently disabled with a note each", async () => {
+  it("Muted accounts leaf renders the 3 live rows (B-062)", async () => {
     await renderAt("/settings/notifications/muted-accounts");
     expect(screen.getByRole("heading", { name: "Muted accounts" })).not.toBeNull();
-    for (const label of [
-      "People you don't follow",
-      "People who don't follow you",
-      "People with a new account",
-    ]) {
-      expect(screen.getByText(label)).not.toBeNull();
+    for (const label of ["People you don’t follow", "People who don’t follow you", "People with a new account"]) {
+      expect(await screen.findByRole("switch", { name: label })).not.toBeNull();
     }
-    const toggles = screen.getAllByRole("img", { name: /off \(not adjustable yet\)/i });
-    expect(toggles).toHaveLength(3);
-    const notes = screen.getAllByText(/muting isn.t available yet/i);
-    expect(notes).toHaveLength(3);
   });
 
   it("no session → log-in prompt on the hub and every leaf, no crash", async () => {

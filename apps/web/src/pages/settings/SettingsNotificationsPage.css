@@ -115,3 +115,49 @@
     gap: 22px;
   }
 }
+
+/* --- live leaves (Filters, Muted accounts; B-062) --- */
+
+.notif-rows--live .notif-row__title {
+  font-weight: 500;
+}
+
+.notif-rows--live .notif-row__desc {
+  font-size: 12px;
+}
+
+.notif-footnote {
+  font: 400 12px/1.5 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+.notif-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.notif-state__line {
+  font: 400 13px/1.5 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  margin: 0;
+}
+
+/* A failed save: navy text with a navy accent bar (semantic/alert is not an apps/web token). */
+.notif-state__line--error {
+  color: var(--sn-text-primary);
+  border-left: 3px solid var(--sn-brand-navy);
+  padding-left: 10px;
+}
+
+.notif-state__retry {
+  padding: 10px 18px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 10px;
+  background: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+  font: 500 14px "Montserrat", "Inter", sans-serif;
+  cursor: pointer;
+}
