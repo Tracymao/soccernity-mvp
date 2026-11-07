@@ -31,3 +31,22 @@ export interface AdminDashboardStats {
 export function getDashboardStats(): Promise<AdminDashboardStats> {
   return adminFetch<AdminDashboardStats>("/admin/dashboard/stats");
 }
+
+// GET /admin/dashboard/latest-posts?limit= — a bare array of up to 5 items,
+// newest first (B-056, services/api modules/admin-dashboard "Latest posts").
+// The author is the PUBLIC name only (the username, else "Soccernity
+// member"); the server already leaves out minors' posts and posts by
+// accounts that are not active.
+export interface AdminLatestPost {
+  id: string;
+  createdAt: string;
+  mediaType: "photo" | "video" | null;
+  excerpt: string;
+  author: { publicName: string };
+  likeCount: number;
+  commentCount: number;
+}
+
+export function getLatestPosts(limit = 5): Promise<AdminLatestPost[]> {
+  return adminFetch<AdminLatestPost[]>(`/admin/dashboard/latest-posts?limit=${limit}`);
+}

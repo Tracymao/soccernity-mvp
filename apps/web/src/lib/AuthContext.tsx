@@ -19,7 +19,13 @@
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { logoutSession } from "../api/auth";
-import { clearStoredSession, getStoredAccessToken, storeSession, subscribeSession } from "./session";
+import {
+  clearStoredSession,
+  getStoredAccessToken,
+  storeSession,
+  subscribeSession,
+  takePendingSessionEndWork,
+} from "./session";
 import type { SessionTokens } from "./session";
 import { restoreSession } from "./silentRefresh";
 
@@ -36,7 +42,7 @@ export interface Auth {
   // A fresh sign-in (login, registration, reactivation).
   signIn: (tokens: SessionTokens) => void;
   // Ends the session: revokes the cookie server-side (best-effort, never awaited
-  // by the UI) and clears the in-memory token in this and every other tab.
+  // by the UI, after this browser's push subscription is removed) and clears the in-memory token in this and every other tab.
   signOut: () => void;
 }
 
@@ -45,8 +51,13 @@ function signIn(tokens: SessionTokens): void {
 }
 
 function signOut(): void {
-  void logoutSession();
   clearStoredSession();
+  // This browser's push subscription is removed first (privacy rule), then the refresh cookie is
+  // revoked. The screen signs out at once either way; with no push cleanup to wait for the server
+  // logout still starts immediately.
+  const pushCleanup = takePendingSessionEndWork();
+  if (pushCleanup) void pushCleanup.finally(() => logoutSession());
+  else void logoutSession();
 }
 
 export function useAccessToken(): string | null {
