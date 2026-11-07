@@ -193,3 +193,20 @@ describe("SavedPostsTab", () => {
     expect(screen.queryByText("Late")).toBeNull();
   });
 });
+
+describe("SavedPostsTab — sensitive media (B-061)", () => {
+  it("blurs a saved post's media behind Tap to view, because the card is the shared PostCard", async () => {
+    const sensitive = entry("p1", "Saved with a picture");
+    sensitive.post.mediaUrls = ["https://cdn.test/post-media/photo.jpg"];
+    sensitive.post.media = [{ id: "m1", kind: "image" }];
+    sensitive.post.mediaSensitive = true;
+    vi.mocked(getSavedPosts).mockResolvedValueOnce({ items: [sensitive, entry("p2", "Saved, plain text")], nextCursor: null });
+    const { container } = renderTab();
+    await screen.findByText("Saved with a picture");
+    fireEvent.load(container.querySelector("img.post__media-img")!);
+    fireEvent.click(screen.getByRole("button", { name: "Sensitive picture hidden. Tap to view." }));
+    expect(screen.getByRole("button", { name: "Hide" })).not.toBeNull();
+    // The plain-text card has no media, so nothing is blurred on it.
+    expect(container.querySelectorAll(".sensitive")).toHaveLength(1);
+  });
+});

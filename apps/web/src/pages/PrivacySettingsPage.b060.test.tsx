@@ -82,14 +82,16 @@ describe("Adult variant", () => {
     expect(screen.queryByRole("switch")).toBeNull();
   });
 
-  it("leaves Your Post and Direct Message disabled (not built here)", async () => {
+  it("makes Your Post and Direct Message real links (B-061)", async () => {
     seedSession(token("user-1"));
     vi.mocked(getUser).mockResolvedValueOnce(ADULT);
     renderPage();
     await screen.findByText("Your Post");
-    expect(screen.getAllByText("Not available yet.")).toHaveLength(2);
-    expect(screen.queryByRole("link", { name: /your post/i })).toBeNull();
-    expect(screen.queryByRole("link", { name: /direct message/i })).toBeNull();
+    expect(screen.queryByText("Not available yet.")).toBeNull();
+    expect(screen.getByRole("link", { name: /your post/i }).getAttribute("href")).toBe("/settings/privacy/your-posts");
+    expect(screen.getByRole("link", { name: /direct message/i }).getAttribute("href")).toBe(
+      "/settings/privacy/direct-messages",
+    );
   });
 });
 

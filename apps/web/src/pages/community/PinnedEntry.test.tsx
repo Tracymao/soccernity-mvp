@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import PinnedEntry from "./PinnedEntry";
 import { ContestApiError } from "../../api/contest";
@@ -138,5 +138,18 @@ describe("PinnedEntry", () => {
     await waitFor(() => expect(getPostById).toHaveBeenCalled());
     expect(screen.queryByTestId("pinned-entry")).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
+describe("PinnedEntry — sensitive media (B-061)", () => {
+  it("inherits the blur from the shared PostCard when the author marked their media sensitive", async () => {
+    vi.mocked(getPinnedEntry).mockResolvedValue(PINNED);
+    vi.mocked(getPostById).mockResolvedValue(
+      finalPost({ contest: { entryId: "entry-9", kind: "weekly", weekNumber: 2, pinned: true, label: "Contest post" }, mediaSensitive: true }),
+    );
+    const { container } = renderEntry();
+    await screen.findByTestId("pinned-entry");
+    fireEvent.loadedData(container.querySelector("video")!);
+    expect(screen.getByRole("button", { name: "Sensitive video hidden. Tap to view." })).not.toBeNull();
   });
 });

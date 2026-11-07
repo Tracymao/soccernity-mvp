@@ -1,0 +1,149 @@
+/* Sensitive media on a post card (B-061; Figma "Post Card — Sensitive Media" G1 to G10). Tokens only (--sn-*).
+   Frame colours that are off-palette or unreadable are replaced by the nearest token: the frames' light grey
+   state surface (#F3F4F9) is --sn-green-tint-12 (the same wash every other media placeholder in this app uses),
+   the white overlay card is --sn-background-surface, the dark duration/Hide chip text is --sn-brand-navy. */
+
+.sensitive {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  vertical-align: top;
+}
+
+/* While loading or failed there is nothing to size the box from yet, so give it the frame's placeholder size. */
+.sensitive[data-sensitive-state="loading"],
+.sensitive[data-sensitive-state="failed"] {
+  display: block;
+  width: 100%;
+  min-height: 200px;
+}
+
+.sensitive__media--blurred {
+  filter: blur(28px);
+  /* The blur bleeds past the edge; the parent's overflow:hidden clips it. A touch of scale hides the soft edge. */
+  transform: scale(1.08);
+  pointer-events: none;
+  user-select: none;
+}
+
+.sensitive__media .post__media-img,
+.sensitive__media .post__media-video {
+  display: block;
+}
+
+/* G4 loading and G5 failed: a placeholder over the (not yet shown) media. */
+.sensitive__state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font: 600 12px "Inter", sans-serif;
+  border: none;
+  padding: 0;
+  width: 100%;
+  text-align: center;
+}
+
+.sensitive__state--button {
+  cursor: pointer;
+}
+
+.sensitive__state--button:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: -4px;
+}
+
+.sensitive__state-title {
+  font: 600 12px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.sensitive__state-hint {
+  font: 400 11px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+/* The cover button in the middle of the blurred media (G1, G2, G6). */
+.sensitive__cover {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 162px;
+  padding: 14px 18px;
+  border: none;
+  border-radius: 12px;
+  background: var(--sn-background-surface);
+  box-shadow: 0 4px 16px var(--sn-shadow-elevated);
+  color: var(--sn-text-primary);
+  cursor: pointer;
+}
+
+.sensitive__cover:focus-visible,
+.sensitive__hide:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 2px;
+}
+
+.sensitive__cover-icon {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.sensitive__cover-title {
+  font: 600 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.sensitive__cover-hint {
+  font: 400 11px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+/* The video's length chip in the blurred state (G2). */
+.sensitive__duration {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--sn-brand-navy);
+  color: #fff;
+  font: 600 11px "Inter", sans-serif;
+}
+
+/* The Hide chip over the revealed media (G3). */
+.sensitive__hide {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 999px;
+  background: var(--sn-background-surface);
+  color: var(--sn-brand-navy);
+  font: 600 12px "Inter", sans-serif;
+  cursor: pointer;
+  box-shadow: 0 1px 6px var(--sn-shadow-elevated);
+}
+
+@media (max-width: 820px) {
+  .sensitive__cover {
+    min-width: 148px;
+    padding: 12px 14px;
+  }
+}

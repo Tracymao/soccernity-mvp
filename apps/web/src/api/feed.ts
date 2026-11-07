@@ -52,6 +52,11 @@ export interface FeedPost {
   mediaUrls: string[];
   // The attached files, in the same order as `mediaUrls` (B-259).
   media: FeedPostMedia[];
+  // The AUTHOR's "sensitive media" setting at read time (B-061, Decision Log #472 default (d)): when true the
+  // card blurs the files behind "Tap to view", for every viewer including the author. False for a post with no
+  // media. Contest entries, profile pictures and covers are not covered. Optional only so older fixtures without
+  // it read as "not sensitive".
+  mediaSensitive?: boolean;
   clubPageId: string | null;
   banterRoomId: string | null;
   likeCount: number;

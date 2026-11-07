@@ -312,6 +312,7 @@ export default function PostCard({
         postId={post.id}
         authorId={post.authorId}
         isOwn={isOwnPost}
+        sensitive={post.mediaSensitive === true}
         playVideo={playVideo}
       />
 
