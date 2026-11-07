@@ -31,8 +31,13 @@
 // disabled state, with a short note — never a control that looks live
 // but silently does nothing:
 //   - Public profile visibility — NO `User` column, NO endpoint. Toggle
-//     disabled.
-//   - Download my data — NO data-export / DSAR endpoint. Row disabled.
+//     disabled. Adult variant only (Figma 6991:53454): an account with a
+//     Guardian record gets the under-18 variant (6991:53687), which has no
+//     Public profile row and shows the Guardian approval row instead (it
+//     links to the existing guardian consent status page, /guardian-consent).
+//   - Download my data — REAL as of B-060: the row links to
+//     /settings/privacy/download-data (DataExportPage.tsx, POST/GET
+//     /users/me/data-export). This was a disabled row before.
 //   - Your Post / Direct Message — NO post-visibility or DM-permission
 //     backend, and the Figma destination sub-pages (2926:8996 /
 //     2926:8764) are not converted. Rows disabled.
@@ -48,8 +53,9 @@
 //     renders disabled ("Coming soon"), matching that page's precedent,
 //     while the row as a whole links to /guardian-consent (the real
 //     minor status page).
-//   - Marketing emails — designed as a disabled "Coming soon" row;
-//     services/api sends only transactional email. Rendered as designed.
+//   - Marketing emails — still a visibly disabled "Coming soon" row (no
+//     backend, no decision). The frames now draw it as a live preference
+//     toggle; deliberately NOT built here (B-060 brief).
 //
 // No-session handling mirrors ProfilePage.tsx / ClubsPage.tsx: no stored
 // access token → a "log in" prompt, and the API is never called.
@@ -125,6 +131,11 @@ export default function PrivacySettingsPage() {
     load();
   }, [load]);
 
+  // Under-18 variant (Figma 6991:53687): shown when the account has a Guardian record, i.e. the
+  // Guardian approval row is present. A minor whose status call 404s (no Guardian row, a data
+  // invariant edge) gets the adult layout, as it did before.
+  const underEighteen = guardian.kind !== "hidden";
+
   if (loadState === "no-session") {
     return (
       <div className="privacy-status" role="status">
@@ -162,22 +173,25 @@ export default function PrivacySettingsPage() {
         </div>
 
         <ul className="privacy-rows">
-          {/* Public profile — no backend field/endpoint yet. */}
-          <li className="privacy-row privacy-row--disabled">
-            <span className="privacy-row__icon" aria-hidden="true">
-              ◉
-            </span>
-            <div className="privacy-row__body">
-              <p className="privacy-row__title">Public profile</p>
-              <p className="privacy-row__desc">
-                When this is off, only people who follow you can see your profile, posts, and activity.
-              </p>
-              <p className="privacy-row__note">
-                Not adjustable yet — profiles are currently visible to all signed-in members.
-              </p>
-            </div>
-            <VisualToggle on label="Public profile" />
-          </li>
+          {/* Public profile — no backend field/endpoint yet. Adult variant only: the
+              under-18 variant (Figma 6991:53687) has no such row. */}
+          {!underEighteen && (
+            <li className="privacy-row privacy-row--disabled">
+              <span className="privacy-row__icon" aria-hidden="true">
+                ◉
+              </span>
+              <div className="privacy-row__body">
+                <p className="privacy-row__title">Public profile</p>
+                <p className="privacy-row__desc">
+                  When this is off, only people who follow you can see your profile, posts, and activity.
+                </p>
+                <p className="privacy-row__note">
+                  Not adjustable yet — profiles are currently visible to all signed-in members.
+                </p>
+              </div>
+              <VisualToggle on label="Public profile" />
+            </li>
+          )}
 
           {/* Your Post — interaction-privacy sub-page, no backend / no
               converted screen. */}
@@ -210,23 +224,23 @@ export default function PrivacySettingsPage() {
             </span>
           </li>
 
-          {/* Download my data — no data-export / DSAR endpoint. */}
-          <li className="privacy-row privacy-row--disabled">
-            <span className="privacy-row__icon" aria-hidden="true">
-              ⭳
-            </span>
-            <div className="privacy-row__body">
-              <p className="privacy-row__title">Download my data</p>
-              <p className="privacy-row__desc">
-                Request a copy of your Soccernity data. We&rsquo;ll email you a link when it&rsquo;s ready.
-              </p>
-              <p className="privacy-row__note">
-                Not available yet.
-              </p>
-            </div>
-            <span className="privacy-row__chevron" aria-hidden="true">
-              ›
-            </span>
+          {/* Download my data — REAL (B-060). The whole row is a link to the flow at
+              /settings/privacy/download-data (Figma 6991:53920 ..). */}
+          <li>
+            <Link to="/settings/privacy/download-data" className="privacy-row privacy-row--link">
+              <span className="privacy-row__icon" aria-hidden="true">
+                ⭳
+              </span>
+              <div className="privacy-row__body">
+                <p className="privacy-row__title">Download my data</p>
+                <p className="privacy-row__desc">
+                  Download a copy of your profile, posts, comments, follows and the messages you sent.
+                </p>
+              </div>
+              <span className="privacy-row__chevron" aria-hidden="true">
+                ›
+              </span>
+            </Link>
           </li>
 
           {/* Blocked users: real (W5 Block). The blocker's own list, with Unblock. */}

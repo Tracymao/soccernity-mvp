@@ -81,6 +81,7 @@ import ProfilePage from "../pages/ProfilePage";
 import NotificationCentrePage from "../pages/NotificationCentrePage";
 import PrivacySettingsPage from "../pages/PrivacySettingsPage";
 import BlockedUsersPage from "../pages/settings/BlockedUsersPage";
+import DataExportPage from "../pages/settings/DataExportPage";
 import OtherProfilePage from "../pages/OtherProfilePage";
 import ChangePasswordPage from "../pages/settings/ChangePasswordPage";
 import AccountInformationPage from "../pages/settings/AccountInformationPage";
@@ -420,6 +421,8 @@ export const routes: RouteObject[] = [
           { path: "privacy", element: <PrivacySettingsPage /> },
           // B-108: the blocker's own list, with Unblock (Figma 6705:26172).
           { path: "privacy/blocked", element: <BlockedUsersPage /> },
+          // B-060: Download my data (Figma 6991:53920 ..).
+          { path: "privacy/download-data", element: <DataExportPage /> },
           { path: "security", element: <SecurityOverviewPage /> },
           { path: "security/two-factor", element: <TwoFactorAuthPage /> },
           { path: "notifications", element: <NotificationPreferencesPage /> },
