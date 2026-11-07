@@ -49,7 +49,12 @@ export type RegistrationEmailTemplate =
   | 'social-email-code'
   | 'contact-enquiry-notification'
   | 'email-change-verify'
-  | 'email-change-notice';
+  | 'email-change-notice'
+  | 'password-changed'
+  | 'password-reset-completed'
+  | 'welcome'
+  | 'staff-account-created'
+  | 'account-deletion-requested';
 
 export interface OutboundRegistrationEmail {
   to: string;
@@ -541,6 +546,112 @@ export class RegistrationEmailService {
     });
   }
 
+  // backend/b069-transactional-emails (B-069; Decision Log #472, adopted default (a)). Five plain account emails
+  // that had a Figma frame but no template. The founder reviews the wording himself (not counsel), so none of it
+  // is tagged [COPY PENDING LEGAL REVIEW]; the PR body lists every sentence that states something about
+  // retention, deletion, who is told or safety. Each is fire-and-log like every other send here: dispatch()
+  // swallows a provider failure, and the callers never await these on the request path.
+  //
+  // To the account's own address after a password change made while SIGNED IN (Figma 1380:2318). It carries no
+  // link: signed-in users know where they are, and there is nothing to click.
+  async sendPasswordChangedEmail(to: string, firstName: string): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: 'Your Soccernity password was changed',
+      template: 'password-changed',
+      data: { firstName },
+    });
+  }
+
+  // To the account's own address after a password change made through the EMAILED RESET LINK (Figma 1380:2297,
+  // "Unusual password change"; adopted default (a)). The frame says Soccernity "noticed" an unusual change;
+  // nothing detects that, so the wording says only what happened. The button opens the forgot-password page
+  // (WEB_APP_BASE_URL), for the person who did not do this. Returns false (sending nothing) when that base URL is
+  // unusable, because the button is the point of the email.
+  async sendPasswordResetCompletedEmail(to: string, firstName: string): Promise<boolean> {
+    const link = buildWebAppLink(this.config.get<string>('WEB_APP_BASE_URL'), '/forgot-password', {});
+    if (!link) {
+      this.logger.error(
+        `[email] WEB_APP_BASE_URL is missing, a placeholder, or not https -- NOT sending ` +
+          `"password-reset-completed" because it would contain no usable link. Set WEB_APP_BASE_URL (docs/deployment.md).`,
+      );
+      return false;
+    }
+    await this.dispatch({
+      to,
+      subject: 'Your Soccernity password was reset',
+      template: 'password-reset-completed',
+      data: { firstName, link },
+    });
+    return true;
+  }
+
+  // To the person when their account first becomes fully active (Figma 1380:2274): an adult once the email is
+  // verified, a minor once the email is verified AND the guardian has approved. The frame's "Unsubscribe at any
+  // time" line is deliberately NOT here: no unsubscribe exists for these emails. Returns false (sending
+  // nothing) when WEB_APP_BASE_URL is unusable, because the sign-in button is the point.
+  async sendWelcomeEmail(to: string, firstName: string): Promise<boolean> {
+    const link = buildWebAppLink(this.config.get<string>('WEB_APP_BASE_URL'), '/login', {});
+    if (!link) {
+      this.logger.error(
+        `[email] WEB_APP_BASE_URL is missing, a placeholder, or not https -- NOT sending "welcome" ` +
+          `because it would contain no usable link. Set WEB_APP_BASE_URL (docs/deployment.md).`,
+      );
+      return false;
+    }
+    await this.dispatch({
+      to,
+      subject: 'Welcome to Soccernity',
+      template: 'welcome',
+      data: { firstName, link },
+    });
+    return true;
+  }
+
+  // To a new admin account when POST /admin/staff creates it (Figma 1661:2741 moderator, 1661:2724 admin; one
+  // template for the shipped roles editor, moderator, super admin). It carries NO password: emailing one would be
+  // a new security decision (adopted default, founder-veto-able). `roleLabel` and `roleSentence` come from the
+  // caller (admin-staff-roles.constants.ts) so the wording of what a role can do lives next to the roles.
+  // `twoFactorRequired` is true when ADMIN_2FA_ENFORCED is on, so the email never promises a set-up step the
+  // sign-in does not ask for. `link` is the admin sign-in page (ADMIN_APP_BASE_URL); null when that is unusable,
+  // in which case the email is still sent, without the link (the account exists either way).
+  async sendStaffAccountCreatedEmail(
+    to: string,
+    firstName: string,
+    roleLabel: string,
+    roleSentence: string,
+    link: string | null,
+    twoFactorRequired: boolean,
+  ): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: `Your Soccernity ${roleLabel} account`,
+      template: 'staff-account-created',
+      data: {
+        firstName,
+        roleLabel,
+        roleSentence,
+        email: to,
+        link: link ?? '',
+        twoFactorRequired: twoFactorRequired ? 'yes' : '',
+      },
+    });
+  }
+
+  // To the person who asked to delete their account (Figma 5439:7074), self-service paths only (signed in, or
+  // from the Inactive Account screen). It says only what the code does (auth.service.ts startPendingDeletion and
+  // account-deletion/README.md): the account is closed at once and cannot be signed in to; after the grace period
+  // it is anonymised IN PLACE, posts/comments/messages stay as "[deleted user]". The frame's "sign back in to
+  // cancel" and "all posts permanently removed" are false for the shipped behaviour and are not repeated.
+  async sendAccountDeletionRequestedEmail(to: string, firstName: string, graceDays: number): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: 'Your Soccernity account deletion request',
+      template: 'account-deletion-requested',
+      data: { firstName, graceDays: String(graceDays) },
+    });
+  }
+
   // B-084 (Decision Log #378, #468). The one-time code a person receives when a social sign-in gave no email (Facebook
   // can return none): they enter an address and prove they own it BEFORE any account exists. Plain functional copy; it
   // makes no promise and asks for nothing but the code. The code is never logged (see RECOVERY_TEMPLATES).
@@ -719,6 +830,53 @@ export class RegistrationEmailService {
 // deliverable.
 function renderTextBody(template: RegistrationEmailTemplate, data: Record<string, string>): string {
   switch (template) {
+    case 'password-changed':
+      return (
+        `Hi ${data.firstName},\n\n` +
+        `This confirms that the password for your Soccernity account was changed. For your security, all your signed-in sessions have been ended, so you will need to sign in again.\n\n` +
+        `If you did not make this change, contact us right away at support@soccernity.com so we can help secure your account.\n\n` +
+        `Thanks,\nThe Soccernity Team`
+      );
+    case 'password-reset-completed':
+      return (
+        `Hi ${data.firstName},\n\n` +
+        `The password for your Soccernity account was just changed using a password reset link sent to this email address. For your security, all your signed-in sessions have been ended, so you will need to sign in again.\n\n` +
+        `If this was you, there is nothing more to do.\n\n` +
+        `If it was not you, someone may have had access to your email. Reset your password again now: ${data.link}\n\n` +
+        `Then contact us at support@soccernity.com so we can help secure your account.\n\n` +
+        `Thanks,\nThe Soccernity Team`
+      );
+    case 'welcome':
+      return (
+        `Hi ${data.firstName},\n\n` +
+        `Your email is verified and your account is ready. Welcome aboard.\n\n` +
+        `Soccernity is where grassroots football lives: follow the clubs and communities you care about, and keep up with the game as it happens.\n\n` +
+        `Sign in to Soccernity: ${data.link}\n\n` +
+        `See you on the pitch,\nThe Soccernity Team\n\n` +
+        `You are receiving this email because you have a Soccernity account.`
+      );
+    case 'staff-account-created':
+      return (
+        `Hi ${data.firstName},\n\n` +
+        `A ${data.roleLabel} account has been created for you on Soccernity.\n\n` +
+        `${data.roleSentence}\n\n` +
+        `Your sign-in email: ${data.email}\n` +
+        (data.link ? `Sign in here: ${data.link}\n` : '') +
+        `\nThis email does not contain a password. The person who created your account will give you your password separately. Sign in and change it straight away.\n\n` +
+        (data.twoFactorRequired
+          ? `Admin accounts need two-factor authentication with an authenticator app. You will be asked to set it up the first time you sign in.\n\n`
+          : '') +
+        `Welcome to the team,\nThe Soccernity Team`
+      );
+    case 'account-deletion-requested':
+      return (
+        `Hi ${data.firstName},\n\n` +
+        `We have received your request to delete your Soccernity account. Your account is now closed: you have been signed out everywhere and can no longer sign in.\n\n` +
+        `After ${data.graceDays} days your account is anonymised. Your name, email address, phone number and profile details are removed or replaced, and the account can no longer be used. Posts, comments and messages you wrote are not deleted; they stay and are shown as "[deleted user]". Your likes, follows, saved posts, notifications and memberships of rooms, groups and clubs are removed.\n\n` +
+        `In some cases we keep an account's data for longer, for example while a report involving it is still being looked at.\n\n` +
+        `If you did not ask for this, contact us at support@soccernity.com as soon as you can.\n\n` +
+        `The Soccernity Team`
+      );
     case 'contact-enquiry-notification':
       return (
         `A new enquiry arrived through the Soccernity Contact Us form.
@@ -1030,6 +1188,55 @@ ${data.link}
 
 function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string, string>): string {
   switch (template) {
+    case 'password-changed':
+      return (
+        `<p>Hi ${escapeHtml(data.firstName)},</p>` +
+        `<p>This confirms that the password for your Soccernity account was changed. For your security, all your signed-in sessions have been ended, so you will need to sign in again.</p>` +
+        `<p>If you did not make this change, contact us right away at support@soccernity.com so we can help secure your account.</p>` +
+        `<p>Thanks,<br>The Soccernity Team</p>`
+      );
+    case 'password-reset-completed':
+      return (
+        `<p>Hi ${escapeHtml(data.firstName)},</p>` +
+        `<p>The password for your Soccernity account was just changed using a password reset link sent to this email address. For your security, all your signed-in sessions have been ended, so you will need to sign in again.</p>` +
+        `<p>If this was you, there is nothing more to do.</p>` +
+        `<p>If it was not you, someone may have had access to your email. Reset your password again now:</p>` +
+        `<p><a href="${escapeHtml(data.link)}">Reset your password</a></p>` +
+        `<p>If the button does not work, copy this into your browser: ${escapeHtml(data.link)}</p>` +
+        `<p>Then contact us at support@soccernity.com so we can help secure your account.</p>` +
+        `<p>Thanks,<br>The Soccernity Team</p>`
+      );
+    case 'welcome':
+      return (
+        `<p>Hi ${escapeHtml(data.firstName)},</p>` +
+        `<p>Your email is verified and your account is ready. Welcome aboard.</p>` +
+        `<p>Soccernity is where grassroots football lives: follow the clubs and communities you care about, and keep up with the game as it happens.</p>` +
+        `<p><a href="${escapeHtml(data.link)}">Sign in to Soccernity</a></p>` +
+        `<p>See you on the pitch,<br>The Soccernity Team</p>` +
+        `<p>You are receiving this email because you have a Soccernity account.</p>`
+      );
+    case 'staff-account-created':
+      return (
+        `<p>Hi ${escapeHtml(data.firstName)},</p>` +
+        `<p>A ${escapeHtml(data.roleLabel)} account has been created for you on Soccernity.</p>` +
+        `<p>${escapeHtml(data.roleSentence)}</p>` +
+        `<p>Your sign-in email: ${escapeHtml(data.email)}</p>` +
+        (data.link ? `<p><a href="${escapeHtml(data.link)}">Sign in to the admin console</a></p>` : '') +
+        `<p>This email does not contain a password. The person who created your account will give you your password separately. Sign in and change it straight away.</p>` +
+        (data.twoFactorRequired
+          ? `<p>Admin accounts need two-factor authentication with an authenticator app. You will be asked to set it up the first time you sign in.</p>`
+          : '') +
+        `<p>Welcome to the team,<br>The Soccernity Team</p>`
+      );
+    case 'account-deletion-requested':
+      return (
+        `<p>Hi ${escapeHtml(data.firstName)},</p>` +
+        `<p>We have received your request to delete your Soccernity account. Your account is now closed: you have been signed out everywhere and can no longer sign in.</p>` +
+        `<p>After ${escapeHtml(data.graceDays)} days your account is anonymised. Your name, email address, phone number and profile details are removed or replaced, and the account can no longer be used. Posts, comments and messages you wrote are not deleted; they stay and are shown as "[deleted user]". Your likes, follows, saved posts, notifications and memberships of rooms, groups and clubs are removed.</p>` +
+        `<p>In some cases we keep an account's data for longer, for example while a report involving it is still being looked at.</p>` +
+        `<p>If you did not ask for this, contact us at support@soccernity.com as soon as you can.</p>` +
+        `<p>The Soccernity Team</p>`
+      );
     case 'contact-enquiry-notification':
       return (
         `<p>A new enquiry arrived through the Soccernity Contact Us form.</p>` +
