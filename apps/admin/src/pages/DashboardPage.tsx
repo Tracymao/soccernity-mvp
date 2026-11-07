@@ -1,28 +1,25 @@
-// Dashboard — Figma node 110:5.
+// Dashboard — Figma node 110:5, superseded by the W8 frames (B-056, Decision
+// Log #472): Default 6990:56075, Latest posts loading 6990:56299, empty
+// 6990:56357, load error 6990:56415.
 //
 // Real data: GET /admin/dashboard/stats (Build Plan Section 4.8, AdminJwtAuthGuard
-// only — reachable by every admin role). New Users (this calendar month),
-// Total Visits (all time), Total Articles (Published), Community Users
-// (Registered), and the visitor-statistics chart (the last 6 UTC months of
-// anonymous page views) are all real, computed server-side.
+// only — reachable by every admin role) for Total Visits (all time), Total
+// Articles (Published), Community Users (Registered), New This Month and the
+// visitor-statistics chart (the last 6 UTC months of anonymous page views);
+// and GET /admin/dashboard/latest-posts for the Latest posts table (its own
+// loading, empty and error states, independent of the stats request).
 //
-// Still sample / not wired: the "New users by league" breakdown — a league
-// concept doesn't exist on User at all (blocked on Decision Log #6) — and the
-// "Latest posts" table, neither of which is in the stats endpoint's contract.
+// "New users by league" is gone: a league concept doesn't exist on User.
 import { useEffect, useState } from "react";
 import AdminPageHeader from "../layout/AdminPageHeader";
 import { AdminApiError } from "../api/adminClient";
-import { getDashboardStats, type AdminDashboardStats } from "../api/adminDashboard";
-import { StubSection, StubTable } from "../components/stub/AdminStub";
+import {
+  getDashboardStats,
+  getLatestPosts,
+  type AdminDashboardStats,
+  type AdminLatestPost,
+} from "../api/adminDashboard";
 import "./DashboardPage.css";
-
-const LEAGUE_BREAKDOWN = ["Premier League", "La Liga", "NPFL", "Europa", "Bundesliga"];
-
-const LATEST_POSTS: string[][] = [
-  ["08/08/2022", "Zaha double helps Crystal Palace ease past Villa", "Premier League"],
-  ["08/08/2022", "Late Barça winner sinks Sevilla", "La Liga"],
-  ["08/08/2022", "Rangers edge Enyimba in Aba", "NPFL"],
-];
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -89,20 +86,155 @@ function VisitorChart({ series }: { series: AdminDashboardStats["visitsByMonth"]
   );
 }
 
+// "2026-11-05T10:00:00.000Z" → "05/11/2026". UTC parts, no locale formatting,
+// so the label is the same for every viewer and timezone (the frame's format
+// is DD/MM/YYYY).
+function postDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${d.getUTCFullYear()}`;
+}
+
+function useLatestPosts() {
+  const [posts, setPosts] = useState<AdminLatestPost[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [nonce, setNonce] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setFailed(false);
+    getLatestPosts()
+      .then((res) => {
+        if (!cancelled) setPosts(res);
+      })
+      .catch(() => {
+        // Never show the server's text here: the frame has one fixed line.
+        if (!cancelled) setFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [nonce]);
+
+  return { posts, loading, failed, reload: () => setNonce((n) => n + 1) };
+}
+
+const POST_COLUMNS = ["Date", "Media", "Post", "Author", "Likes", "Comments"];
+
+function LatestPostsCard() {
+  const { posts, loading, failed, reload } = useLatestPosts();
+
+  return (
+    <section className="admin-dashboard__card" aria-labelledby="admin-dashboard-latest-title">
+      <div className="admin-dashboard__card-head">
+        <h2 id="admin-dashboard-latest-title" className="admin-dashboard__card-title">
+          Latest posts
+        </h2>
+        {!failed && !loading && posts && posts.length > 0 ? (
+          <span className="admin-dashboard__caption">Newest first</span>
+        ) : null}
+      </div>
+
+      {failed ? (
+        <div className="admin-dashboard__banner" role="alert">
+          <span className="admin-dashboard__banner-bar" aria-hidden />
+          <div className="admin-dashboard__banner-text">
+            <strong>Couldn’t load the latest posts</strong>
+            <span>Check the connection and try again.</span>
+          </div>
+          <button type="button" className="admin-dashboard__banner-action" onClick={reload}>
+            Try again
+          </button>
+        </div>
+      ) : loading ? (
+        <div className="admin-dashboard__posts-skeleton" aria-busy="true">
+          <div className="admin-dashboard__posts-head" aria-hidden>
+            {POST_COLUMNS.map((c) => (
+              <span key={c}>{c}</span>
+            ))}
+          </div>
+          <p className="admin-dashboard__sr-only" role="status">
+            Loading the latest posts…
+          </p>
+          {[0, 1, 2, 3, 4].map((n) => (
+            <div key={n} className="admin-dashboard__posts-row" aria-hidden>
+              <span className="admin-dashboard__skeleton" />
+              <span className="admin-dashboard__skeleton" />
+              <span className="admin-dashboard__skeleton admin-dashboard__skeleton--wide" />
+              <span className="admin-dashboard__skeleton" />
+              <span className="admin-dashboard__skeleton admin-dashboard__skeleton--narrow" />
+              <span className="admin-dashboard__skeleton admin-dashboard__skeleton--narrow" />
+            </div>
+          ))}
+        </div>
+      ) : posts && posts.length === 0 ? (
+        <div className="admin-dashboard__empty">
+          <strong>No posts yet</strong>
+          <span>Posts that people share will appear here.</span>
+        </div>
+      ) : posts ? (
+        <table className="admin-dashboard__posts">
+          <thead>
+            <tr>
+              {POST_COLUMNS.map((c) => (
+                <th key={c} scope="col">
+                  {c}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {posts.map((post) => (
+              <tr key={post.id}>
+                <td>{postDate(post.createdAt)}</td>
+                <td>
+                  {post.mediaType ? (
+                    <span className="admin-dashboard__media-tag">
+                      {post.mediaType === "video" ? "Video" : "Photo"}
+                    </span>
+                  ) : (
+                    <span className="admin-dashboard__muted" aria-label="No media">
+                      —
+                    </span>
+                  )}
+                </td>
+                <td className="admin-dashboard__post-text">
+                  <span>{post.excerpt}</span>
+                </td>
+                <td>{post.author.publicName}</td>
+                <td>{post.likeCount}</td>
+                <td>{post.commentCount}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+    </section>
+  );
+}
+
 export default function DashboardPage() {
   const { data, loading, error, reload } = useDashboardStats();
 
+  // Order and labels as drawn in the W8 frame (the old duplicate tile is gone).
   const statCards = [
-    { label: "New Users", sub: "This month", value: data?.newUsersThisMonth },
-    { label: "Total Visits", sub: "All time", value: data?.totalVisits },
-    { label: "Total Articles", sub: "Published", value: data?.totalArticlesPublished },
-    { label: "Community Users", sub: "Registered", value: data?.communityUsersTotal },
+    { label: "Total Visits", value: data?.totalVisits },
+    { label: "Total Articles", value: data?.totalArticlesPublished },
+    { label: "Community Users", value: data?.communityUsersTotal },
+    { label: "New This Month", value: data?.newUsersThisMonth },
   ];
 
   return (
     <>
       <AdminPageHeader title="Dashboard" />
-      <div className="admin-stub__body">
+      <div className="admin-dashboard">
         {error ? (
           <p className="admin-dashboard__error" role="alert">
             {error}{" "}
@@ -119,36 +251,24 @@ export default function DashboardPage() {
                 {loading ? "…" : c.value === undefined || c.value === null ? "—" : c.value}
               </span>
               <span className="admin-dashboard__stat-label">{c.label}</span>
-              <span className="admin-dashboard__stat-sub">{c.sub}</span>
             </div>
           ))}
         </div>
 
-        <StubSection title="New users by league">
-          <p className="admin-stub__sample-caption">
-            Sample — not real data.
-          </p>
-          <ul className="admin-dashboard__breakdown">
-            {LEAGUE_BREAKDOWN.map((l) => (
-              <li key={l}>
-                <span>{l}</span>
-                <span aria-hidden>—</span>
-              </li>
-            ))}
-          </ul>
-        </StubSection>
-
-        <StubSection title="Visitor statistics">
+        <section className="admin-dashboard__card" aria-labelledby="admin-dashboard-visitors-title">
+          <div className="admin-dashboard__card-head">
+            <h2 id="admin-dashboard-visitors-title" className="admin-dashboard__card-title">
+              Visitor statistics
+            </h2>
+          </div>
           {data ? (
             <VisitorChart series={data.visitsByMonth} />
           ) : (
-            <p className="admin-stub__sample-caption">{loading ? "Loading…" : "No data yet."}</p>
+            <p className="admin-dashboard__muted-line">{loading ? "Loading…" : "No data yet."}</p>
           )}
-        </StubSection>
+        </section>
 
-        <StubSection title="Latest posts">
-          <StubTable columns={["Date", "Title", "Category"]} rows={LATEST_POSTS} />
-        </StubSection>
+        <LatestPostsCard />
       </div>
     </>
   );
