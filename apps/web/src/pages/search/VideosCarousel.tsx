@@ -44,6 +44,9 @@ function viewsLabel(count: number): string {
 }
 
 function toVideoItem(post: FeedPost): VideoItem | null {
+  // B-061: a post whose author marked their media sensitive is never shown as a bare thumbnail or played from
+  // here (this carousel has no blur or Tap to view); it stays viewable, blurred, on its post card.
+  if (post.mediaSensitive === true) return null;
   const url = firstVideoUrl(post.mediaUrls);
   if (!url) return null;
   return {
