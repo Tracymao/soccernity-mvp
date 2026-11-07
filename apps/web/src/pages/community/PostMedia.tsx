@@ -33,6 +33,8 @@ import {
   type PostMediaView,
 } from "../../api/postMedia";
 import type { FeedPostMedia } from "../../api/feed";
+import MediaElement from "./MediaElement";
+import SensitiveMedia from "./SensitiveMedia";
 import ReportAction from "./ReportAction";
 import "./MediaUpload.css";
 
@@ -40,31 +42,25 @@ const POLL_MS = 5000;
 // How many times a file's signed link is re-fetched after the browser fails to load it (it lasts 5 minutes).
 const MAX_LINK_REFRESHES = 2;
 
+// One file: the bare element, or, when the author marked their media sensitive (B-061), the blurred wrapper.
 function Media({
   kind,
   src,
   playVideo,
+  sensitive,
   onLoadError,
 }: {
   kind: FeedPostMedia["kind"];
   src: string;
   playVideo?: boolean;
+  sensitive?: boolean;
   onLoadError?: () => void;
 }) {
-  if (kind === "video") {
-    return (
-      <video
-        className="post__media-video"
-        src={src}
-        controls
-        preload={playVideo ? "metadata" : "none"}
-        playsInline
-        aria-label="Video attached to this post"
-        onError={onLoadError}
-      />
-    );
+  if (sensitive) {
+    // Keyed by address so a refreshed signed link starts a fresh load state.
+    return <SensitiveMedia key={src} kind={kind} src={src} playVideo={playVideo} onLoadError={onLoadError} />;
   }
-  return <img className="post__media-img" src={src} alt="Picture attached to this post" loading="lazy" onError={onLoadError} />;
+  return <MediaElement kind={kind} src={src} playVideo={playVideo} onLoadError={onLoadError} />;
 }
 
 type ReportStage = "closed" | "confirm" | "done" | "limit" | "urgent";
@@ -203,11 +199,13 @@ function OwnMedia({
   accessToken,
   item,
   publicUrl,
+  sensitive,
   onRemoved,
 }: {
   accessToken: string;
   item: FeedPostMedia;
   publicUrl: string | null;
+  sensitive: boolean;
   onRemoved: (id: string) => void;
 }) {
   const id = item.id;
@@ -276,7 +274,7 @@ function OwnMedia({
 
   return (
     <div className="post__media-item" data-media-status={status ?? "unknown"}>
-      {src && <Media kind={item.kind} src={src} onLoadError={notPublicYet ? refreshLink : undefined} />}
+      {src && <Media kind={item.kind} src={src} sensitive={sensitive} onLoadError={notPublicYet ? refreshLink : undefined} />}
       {pendingNow && (
         <div className="post-media-author__row">
           <div className="media-item__body">
@@ -331,11 +329,13 @@ interface Props {
   postId: string;
   authorId: string;
   isOwn: boolean;
+  /** The post's `mediaSensitive` (the author's setting at read time): the files are blurred behind "Tap to view". */
+  sensitive?: boolean;
   /** The standalone entry page shows the video player straight away. */
   playVideo?: boolean;
 }
 
-export default function PostMedia({ media, urls, accessToken, postId, authorId, isOwn, playVideo }: Props) {
+export default function PostMedia({ media, urls, accessToken, postId, authorId, isOwn, sensitive = false, playVideo }: Props) {
   const [removed, setRemoved] = useState<string[]>([]);
   const shown = media
     .map((item, index) => ({ item, publicUrl: urls[index] ?? null }))
@@ -350,11 +350,12 @@ export default function PostMedia({ media, urls, accessToken, postId, authorId, 
             accessToken={accessToken}
             item={item}
             publicUrl={publicUrl}
+            sensitive={sensitive}
             onRemoved={(id) => setRemoved((r) => [...r, id])}
           />
         ) : (
           <div key={item.id} className="post__media-item">
-            {publicUrl && <Media kind={item.kind} src={publicUrl} playVideo={playVideo} />}
+            {publicUrl && <Media kind={item.kind} src={publicUrl} playVideo={playVideo} sensitive={sensitive} />}
             <MediaReport accessToken={accessToken} item={item} postId={postId} authorId={authorId} />
           </div>
         ),

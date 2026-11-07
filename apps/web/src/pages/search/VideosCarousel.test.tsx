@@ -148,4 +148,18 @@ describe("VideosCarousel", () => {
     expect(await screen.findByText("No videos in your feed yet.")).not.toBeNull();
     expect(getFeed).not.toHaveBeenCalled();
   });
+
+  it("leaves out a video whose author marked their media sensitive (B-061): no bare thumbnail here", async () => {
+    vi.mocked(getFeed).mockResolvedValue({
+      items: [
+        { ...post("p1", ["https://cdn/x/a.mp4"], 5, "Ada"), mediaSensitive: true },
+        post("p2", ["https://cdn/x/b.mp4"], 7, "Bo"),
+      ],
+      nextCursor: null,
+    });
+    render(<VideosCarousel />);
+    expect(await screen.findByText("7 views")).not.toBeNull();
+    expect(screen.queryByText("5 views")).toBeNull();
+    expect(screen.getAllByRole("button", { name: /^Play video by/ })).toHaveLength(1);
+  });
 });
