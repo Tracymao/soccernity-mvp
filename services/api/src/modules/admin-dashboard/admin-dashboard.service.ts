@@ -1,6 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
+import { POST_MEDIA_ALL_APPROVED } from '../post-media/post-media-visibility.util';
+import { resolvePublicName } from '../users/public-name.util';
 import { PageViewService, type MonthlyPageViewCount } from '../page-views/page-view.service';
+import { DASHBOARD_LATEST_POSTS_DEFAULT } from './admin-dashboard.constants';
+import { type DashboardMediaType, toExcerpt, toMediaType } from './latest-posts.util';
 import { startOfCurrentMonthUtc } from './month.util';
 
 // GET /admin/dashboard/stats' response shape. Every field here is
@@ -21,6 +27,34 @@ export interface AdminDashboardStats {
   visitsByMonth: MonthlyPageViewCount[];
 }
 
+// B-056 (Decision Log #472): one row of the Dashboard's "Latest posts" table. The author is the PUBLIC name
+// (username, else the shared placeholder) and nothing else: no real name, no email, no account id.
+export interface DashboardLatestPost {
+  id: string;
+  createdAt: Date;
+  mediaType: DashboardMediaType;
+  excerpt: string;
+  author: { publicName: string };
+  likeCount: number;
+  commentCount: number;
+}
+
+// Which posts may appear in "Latest posts". DEFAULT, founder-veto-able (the register says this is not decided):
+//  - the author must be an ACTIVE account: deactivated, pending-deletion, suspended and anonymised ('deleted')
+//    authors are left out;
+//  - the author must not be a minor (isMinor) or under 16 (isUnder16). A restricted-pending account is by
+//    definition a minor whose guardian has not confirmed, so it is excluded by the same condition; a minor with
+//    confirmed consent is excluded too, so an editor never sees a minor's post on this screen;
+//  - the post must be visible: a final contest entry before its reveal (Post.visibleFrom) is hidden, and a post
+//    with any media that is not approved (pending, rejected, or held for review) is hidden.
+// There is no "removed" flag on Post: DELETE /posts/:id is a hard delete, so a removed post is simply gone.
+function latestPostsWhere(now: Date): Prisma.PostWhereInput {
+  return {
+    author: { accountStatus: 'active', isMinor: false, isUnder16: false },
+    AND: [{ OR: [{ visibleFrom: null }, { visibleFrom: { lte: now } }] }, POST_MEDIA_ALL_APPROVED],
+  };
+}
+
 // Build Plan Section 4.8 (Admin Service) — the Dashboard's literal
 // contract line. See README.md for the full reasoning, including why
 // this is its own module rather than folded into AdminUsersModule (they
@@ -32,7 +66,43 @@ export class AdminDashboardService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly pageViewService: PageViewService,
+    @Optional() @Inject(APP_CLOCK) private readonly clock: Clock = systemClock,
   ) {}
+
+  // GET /admin/dashboard/latest-posts. Newest first (createdAt, then the monotonic Post.sequence as the
+  // tiebreaker, so posts sharing a millisecond keep creation order). Plain reads only.
+  async getLatestPosts(limit: number = DASHBOARD_LATEST_POSTS_DEFAULT): Promise<DashboardLatestPost[]> {
+    const rows = await this.prisma.post.findMany({
+      where: latestPostsWhere(this.clock.now()),
+      orderBy: [{ createdAt: 'desc' }, { sequence: 'desc' }],
+      take: limit,
+      select: {
+        id: true,
+        createdAt: true,
+        contentText: true,
+        mediaUrls: true,
+        likeCount: true,
+        commentCount: true,
+        media: { select: { kind: true } },
+        // username, plus displayName ONLY so resolvePublicName can recognise the '[deleted user]' sentinel;
+        // it is never copied into the response.
+        author: { select: { username: true, displayName: true } },
+      },
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      createdAt: row.createdAt,
+      mediaType: toMediaType(
+        row.media.map((m) => m.kind),
+        row.mediaUrls,
+      ),
+      excerpt: toExcerpt(row.contentText),
+      author: { publicName: resolvePublicName(row.author) },
+      likeCount: row.likeCount,
+      commentCount: row.commentCount,
+    }));
+  }
 
   async getStats(now: Date = new Date()): Promise<AdminDashboardStats> {
     const monthStart = startOfCurrentMonthUtc(now);

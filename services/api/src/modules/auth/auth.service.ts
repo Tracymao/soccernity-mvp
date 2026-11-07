@@ -1,8 +1,9 @@
-import { Injectable, OnModuleInit, UnauthorizedException } from '@nestjs/common';
+import { Injectable, OnModuleInit, Optional, UnauthorizedException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { User } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DobEncryptionService } from '../../crypto/dob-encryption.service';
+import { AccountEmailService } from '../account-emails/account-email.service';
 import { TwoFactorRecoveryService } from '../two-factor/recovery/two-factor-recovery.service';
 import { TwoFactorChallenge, TwoFactorService } from '../two-factor/two-factor.service';
 import { AuthResponse, toAuthUserSummary, toTokenPairResponse, TokenPairResponse } from './auth-response.mapper';
@@ -47,6 +48,9 @@ export class AuthService implements OnModuleInit {
     // backend/b276-two-factor-recovery (B-276): a waiting recovery request is reported on the sign-in challenge and
     // cancelled by a successful two-factor sign-in.
     private readonly recovery: TwoFactorRecoveryService,
+    // backend/b069-transactional-emails (B-069): the plain "password changed" and "deletion requested" emails.
+    // @Optional(): a module or test that does not provide it sends nothing. Fire-and-log, never awaited.
+    @Optional() private readonly accountEmails?: AccountEmailService,
   ) {}
 
   // B-030: the minor's current Guardian.consentStatus, read fresh, for the
@@ -232,6 +236,8 @@ export class AuthService implements OnModuleInit {
     const newPasswordHash = await this.passwordService.hash(newPassword);
     await this.prisma.user.update({ where: { id: userId }, data: { passwordHash: newPasswordHash } });
     await this.tokenService.revokeAllSessionsForUser(userId);
+    // B-069: the change has committed; tell the person (Figma 1380:2318). Never delays or fails the change.
+    this.accountEmails?.passwordChangedInBackground(userId);
   }
 
   // POST /auth/deactivate-account. Requires password re-entry as a
@@ -278,6 +284,8 @@ export class AuthService implements OnModuleInit {
       throw new UnauthorizedException('Invalid credentials');
     }
     await this.startPendingDeletion(user.id);
+    // B-069: a self-service request, so the person is told what happens next (Figma 5439:7074).
+    this.accountEmails?.deletionRequestedInBackground(user.id);
   }
 
   // POST /auth/delete-inactive-account (sprint-2/account-deactivation-backend).
@@ -321,6 +329,8 @@ export class AuthService implements OnModuleInit {
     }
 
     await this.startPendingDeletion(user.id);
+    // B-069: the other self-service entry point (Inactive Account screen); same email as deleteAccount().
+    this.accountEmails?.deletionRequestedInBackground(user.id);
   }
 
   // The single place accountStatus flips to "pending_deletion". Sets

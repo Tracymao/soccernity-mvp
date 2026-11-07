@@ -1,6 +1,8 @@
-import { Controller, Delete, Get, Param, Put, Query, UseGuards } from '@nestjs/common';
+import { Controller, Delete, Get, Param, Put, Query, Res, UseGuards } from '@nestjs/common';
+import { Response } from 'express';
 import { CurrentUser } from '../auth/guards/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { AccessTokenPayload } from '../auth/token/token.types';
 import { ListFixturesQueryDto } from './dto/list-fixtures-query.dto';
 import { ListLiveScoresQueryDto } from './dto/list-live-scores-query.dto';
@@ -13,6 +15,16 @@ import { SportsService } from './sports.service';
 // ArticlesController already established for public content (Build Plan Section 4's own "no auth
 // required" line applies the same way here — nothing in Section 4.6 names an auth requirement, and
 // live scores/fixtures are exactly the kind of content a logged-out visitor should be able to see).
+//
+// B-070 (Decision Log #472): THREE reads (live-scores, fixtures, matches/:id) are enriched for a signed-in
+// caller with a per-caller `kickoffAlert` flag, via OptionalJwtAuthGuard (the Decision Log #153 / POST
+// /posts/:id/view pattern): it never rejects, a missing or invalid token is simply "logged out". Those
+// responses therefore differ by caller, so each sets `Vary: Authorization` (res.vary APPENDS, so the CORS
+// middleware's Vary: Origin is kept). Checked: there is no response-caching layer in this API (no
+// CacheInterceptor or CacheModule, no Cache-Control set by sports), and the Redis keys here are refresh
+// locks that gate upstream calls, never cached response bodies. So today one person's flag cannot reach
+// another; the Vary header is the safeguard for the day a shared HTTP cache (the planned Cloudflare proxy,
+// B-251) sits in front.
 @Controller('sports')
 export class SportsMatchesController {
   constructor(
@@ -21,13 +33,25 @@ export class SportsMatchesController {
   ) {}
 
   @Get('live-scores')
-  async liveScores(@Query() query: ListLiveScoresQueryDto) {
-    return this.sportsService.listLiveScores(query);
+  @UseGuards(OptionalJwtAuthGuard)
+  async liveScores(
+    @Query() query: ListLiveScoresQueryDto,
+    @CurrentUser() user: AccessTokenPayload | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    res.vary('Authorization');
+    return this.sportsService.listLiveScores(query, user?.sub);
   }
 
   @Get('fixtures')
-  async fixtures(@Query() query: ListFixturesQueryDto) {
-    return this.sportsService.listFixtures(query);
+  @UseGuards(OptionalJwtAuthGuard)
+  async fixtures(
+    @Query() query: ListFixturesQueryDto,
+    @CurrentUser() user: AccessTokenPayload | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    res.vary('Authorization');
+    return this.sportsService.listFixtures(query, user?.sub);
   }
 
   // Deliberately AFTER 'live-scores'/'fixtures' above but that's irrelevant here — those are
@@ -35,8 +59,14 @@ export class SportsMatchesController {
   // literal 'mine'/'search' segment sharing the SAME position as ':id' would create (see e.g.
   // banter.controller.ts's own comment on that exact hazard).
   @Get('matches/:id')
-  async getById(@Param('id') id: string) {
-    return this.sportsService.getMatchById(id);
+  @UseGuards(OptionalJwtAuthGuard)
+  async getById(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    res.vary('Authorization');
+    return this.sportsService.getMatchById(id, user?.sub);
   }
 
   @Get('matches/:id/stats')

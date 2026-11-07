@@ -64,6 +64,10 @@ export const E2E_INERT_EXTERNAL_ENV: Readonly<Record<string, string>> = {
   POSTMARK_FROM_EMAIL: 'replace-me@example.com',
   STRIPE_SECRET_KEY: 'replace-me',
   STRIPE_PUBLISHABLE_KEY: 'replace-me',
+  // B-285: no real VAPID key pair in e2e; the push spec sets fake values for itself and overrides the sender.
+  VAPID_PUBLIC_KEY: 'replace-me',
+  VAPID_PRIVATE_KEY: 'replace-me',
+  VAPID_SUBJECT: 'mailto:support@soccernity.com',
   S3_BUCKET: 'replace-me',
   S3_ACCESS_KEY: 'replace-me',
   S3_SECRET_KEY: 'replace-me',
