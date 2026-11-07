@@ -307,14 +307,13 @@ describe("Notification Preferences section", () => {
     expect(screen.queryByText(/mute notifications/i)).toBeNull();
   });
 
-  it("Push Notifications leaf renders one disabled toggle row", async () => {
+  // B-062 / B-285: the leaf is live (every state is in PushNotificationsPage.test.tsx). jsdom has no
+  // service worker / PushManager, so the shell route shows the "not supported" state.
+  it("Push Notifications leaf renders under the shell (jsdom has no push support: Not supported state)", async () => {
     await renderAt("/settings/notifications/push");
     expect(screen.getByRole("heading", { name: "Push notifications" })).not.toBeNull();
-    expect(screen.getByText("Turn on push notifications")).not.toBeNull();
-    expect(
-      screen.getByRole("img", { name: /turn on push notifications: off \(not adjustable yet\)/i }),
-    ).not.toBeNull();
-    expect(screen.getByText(/push notifications aren.t available yet/i)).not.toBeNull();
+    expect(await screen.findByText(/can.t receive push notifications/i)).not.toBeNull();
+    expect(screen.queryByRole("switch")).toBeNull();
   });
 
   it("Email Notifications leaf renders the master row plus 3 sub-rows, all disabled", async () => {

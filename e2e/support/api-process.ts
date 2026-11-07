@@ -104,6 +104,12 @@ export function apiEnvironment(dbUrl: string, redisUrl: string, clock: ApiClock 
     AWS_ENDPOINT_URL_REKOGNITION: FAKE_MEDIA.rekognition,
     FFMPEG_PATH: videoTools().ffmpeg,
     FFPROBE_PATH: videoTools().ffprobe,
+    // B-062 / B-285 web push: a TEST-ONLY VAPID key pair (generated for this harness, protects nothing) so GET
+    // /notification-settings/push answers available: true. Spec 44 subscribes with a fake browser endpoint, so no
+    // real push is ever sent.
+    VAPID_PUBLIC_KEY: 'BJNYZ1kduSV34apmZdOVsDZFns9UG4cpl2Rzp769pzgepWRnoZJKyKoav3X9V2Hsyacf6w60H8JbGciisLcZ0Lw',
+    VAPID_PRIVATE_KEY: 'L1WQb-I1iwcBEebuknCCuxqaCGcRLWrr5OUY-QAsdGA',
+    VAPID_SUBJECT: 'mailto:support@soccernity.com',
     TEST_CLOCK_ISO: iso,
     E2E_TEST_CLOCK: iso ? '1' : '',
     TEST_CLOCK_ADVANCE: iso && clock.advance ? '1' : '',
