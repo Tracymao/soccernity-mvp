@@ -181,6 +181,23 @@
   border-color: var(--sn-brand-navy);
 }
 
+/* B-070: the kickoff-alert bell (a sibling of the link, never inside it) sits over the card's
+   right edge; the link keeps clear of it. */
+.sh-match-row {
+  position: relative;
+}
+
+.sh-match--with-alert {
+  padding-right: 66px;
+}
+
+.sh-match-row__alert {
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  transform: translateY(-50%);
+}
+
 .sh-match__crest {
   width: 24px;
   height: 24px;

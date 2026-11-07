@@ -54,6 +54,18 @@ export function phaseLabel(match: Pick<MatchSummary, "status" | "statusDetail" |
   }
 }
 
+// Mirrors the server's own rule (services/api match-kickoff.service.ts hasStarted), so the control
+// is not offered for a match whose alert the API would refuse with 409 `match_already_started`:
+// live or finished, or the scheduled kickoff has passed and the match is not postponed or cancelled.
+export function matchHasStarted(
+  match: Pick<MatchSummary, "status" | "kickoffTime">,
+  now: number = Date.now(),
+): boolean {
+  if (match.status === "live" || match.status === "finished") return true;
+  if (match.status === "postponed" || match.status === "cancelled") return false;
+  return Date.parse(match.kickoffTime) <= now;
+}
+
 export function phaseClass(status: MatchPhase): string {
   if (status === "live") return "sh-status sh-status--live";
   if (status === "finished") return "sh-status sh-status--ft";

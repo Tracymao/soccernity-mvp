@@ -44,6 +44,13 @@
   text-align: center;
 }
 
+/* B-070: the kickoff-alert control under the status line (Figma C3 / C4). */
+.mc-header__alert {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .mc-header__competition {
   font: 600 13px "Inter", sans-serif;
   color: var(--sn-text-secondary);

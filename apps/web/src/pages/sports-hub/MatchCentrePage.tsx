@@ -7,7 +7,10 @@
 // Route: /sports-hub/matches/:matchId.
 //
 // NO LOGIN REQUIRED — every SportsService route is genuinely public,
-// same as SportsHubPage.tsx. No site footer (a drill-down/detail page,
+// same as SportsHubPage.tsx. B-070: a SIGNED-IN person also gets the labelled
+// kickoff-alert control under the header's status line (KickoffAlertButton.tsx);
+// GET /sports/matches/:id then carries their own `kickoffAlert` flag because that
+// read sends the access token when a session exists (api/sports.ts). No site footer (a drill-down/detail page,
 // same category as ClubFanPage/GrassrootsTeamPage/ContestPage — not in
 // FooterLayout's own route list).
 //
@@ -54,6 +57,7 @@ import {
   SportsApiError,
   type MatchAvailability,
   type MatchBoxScore,
+  type MatchListItem,
   type MatchSummary,
   type MatchStatistics,
   type TeamBoxScore,
@@ -66,8 +70,10 @@ import {
   type Highlights,
   type MatchEvent,
 } from "../../api/sports";
+import { useAccessToken } from "../../lib/AuthContext";
 import FieldAvailabilityGate from "./FieldAvailabilityGate";
-import { formatKickoffFull, monogramFor, phaseClass, phaseLabel } from "./format";
+import { formatKickoffFull, matchHasStarted, monogramFor, phaseClass, phaseLabel } from "./format";
+import { KickoffAlertButton, KickoffAlertError, useKickoffAlert } from "./KickoffAlertButton";
 import "./SportsHubPage.css";
 import "./MatchCentrePage.css";
 
@@ -153,6 +159,22 @@ function RetryButton({ onRetry }: { onRetry: () => void }) {
 
 function isGoalEvent(e: MatchEvent): boolean {
   return e.type.toLowerCase() === "goal";
+}
+
+// The kickoff-alert control under the status line (B-070, Figma C3 / C4). Signed-in only; the
+// caller does not render it for a logged-out visitor.
+function MatchHeaderAlert({ match }: { match: MatchListItem }) {
+  const alert = useKickoffAlert({
+    matchId: match.id,
+    initialOn: match.kickoffAlert === true,
+    started: matchHasStarted(match),
+  });
+  return (
+    <div className="mc-header__alert">
+      <KickoffAlertButton alert={alert} variant="labelled" />
+      <KickoffAlertError alert={alert} />
+    </div>
+  );
 }
 
 function MatchSummaryTab({ match, events }: { match: MatchSummary; events: Loadable<MatchEvents> }) {
@@ -838,7 +860,8 @@ export default function MatchCentrePage() {
     SUB_TABS.some((t) => t.key === searchParams.get("sub")) ? (searchParams.get("sub") as MatchSubTab) : "summary",
   );
 
-  const [matchState, setMatchState] = useState<Loadable<MatchSummary>>({ status: "idle" });
+  const [matchState, setMatchState] = useState<Loadable<MatchListItem>>({ status: "idle" });
+  const signedIn = useAccessToken() !== null;
 
   const loadMatch = useCallback(() => {
     if (!matchId) return;
@@ -851,7 +874,8 @@ export default function MatchCentrePage() {
           message: err instanceof SportsApiError && err.status === 404 ? "Match not found." : errorMessage(err, "Couldn't load this match."),
         }),
       );
-  }, [matchId]);
+    // `signedIn`: the read only fills in this person's `kickoffAlert` when it carries their token (B-070).
+  }, [matchId, signedIn]);
 
   useEffect(() => {
     loadMatch();
@@ -963,6 +987,7 @@ export default function MatchCentrePage() {
           </div>
         </div>
         <p className={phaseClass(match.status)}>{phaseLabel(match)}</p>
+        {signedIn && <MatchHeaderAlert key={match.id} match={match} />}
       </header>
 
       <nav className="mc-tabs" aria-label="Match sections">
