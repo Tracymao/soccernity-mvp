@@ -1,7 +1,8 @@
-import { ExecutionContext, INestApplication, NotFoundException, ValidationPipe } from '@nestjs/common';
+import { ConflictException, ExecutionContext, INestApplication, NotFoundException, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { MatchKickoffService } from './match-kickoff.service';
 import { SportsMatchesController } from './sports-matches.controller';
 import { SportsStandingsController } from './sports-standings.controller';
@@ -49,6 +50,17 @@ describe('Sports controllers (HTTP layer)', () => {
           return true;
         },
       })
+      // B-070: the three match reads now sit behind OptionalJwtAuthGuard (needs TokenService, which this
+      // isolated module does not provide). Stand-in with the real guard's contract: it never rejects, and
+      // attaches the caller only when an Authorization header is present.
+      .overrideGuard(OptionalJwtAuthGuard)
+      .useValue({
+        canActivate: (context: ExecutionContext) => {
+          const req = context.switchToHttp().getRequest();
+          if (req.headers.authorization) req.user = CALLER;
+          return true;
+        },
+      })
       .compile();
 
     const nestApp = moduleRef.createNestApplication();
@@ -70,13 +82,13 @@ describe('Sports controllers (HTTP layer)', () => {
     it('reaches the service with no Authorization header at all — genuinely public', async () => {
       sportsService.listLiveScores.mockResolvedValue({ items: [], nextCursor: null });
       await request(app.getHttpServer()).get('/sports/live-scores').expect(200);
-      expect(sportsService.listLiveScores).toHaveBeenCalledWith({});
+      expect(sportsService.listLiveScores).toHaveBeenCalledWith({}, undefined);
     });
 
     it('passes league/cursor/limit through to the service', async () => {
       sportsService.listLiveScores.mockResolvedValue({ items: [], nextCursor: null });
       await request(app.getHttpServer()).get('/sports/live-scores').query({ league: '133', cursor: 'abc', limit: '10' }).expect(200);
-      expect(sportsService.listLiveScores).toHaveBeenCalledWith({ league: '133', cursor: 'abc', limit: 10 });
+      expect(sportsService.listLiveScores).toHaveBeenCalledWith({ league: '133', cursor: 'abc', limit: 10 }, undefined);
     });
 
     it('rejects a limit above 50 with 400 before the service is called', async () => {
@@ -99,7 +111,7 @@ describe('Sports controllers (HTTP layer)', () => {
     it('reaches the service with a valid date, no Authorization header at all', async () => {
       sportsService.listFixtures.mockResolvedValue({ items: [], nextCursor: null });
       await request(app.getHttpServer()).get('/sports/fixtures').query({ date: '2026-09-16' }).expect(200);
-      expect(sportsService.listFixtures).toHaveBeenCalledWith({ date: '2026-09-16' });
+      expect(sportsService.listFixtures).toHaveBeenCalledWith({ date: '2026-09-16' }, undefined);
     });
   });
 
@@ -107,7 +119,7 @@ describe('Sports controllers (HTTP layer)', () => {
     it('reaches the service with no Authorization header at all', async () => {
       sportsService.getMatchById.mockResolvedValue({ id: 'match-1' });
       await request(app.getHttpServer()).get('/sports/matches/match-1').expect(200);
-      expect(sportsService.getMatchById).toHaveBeenCalledWith('match-1');
+      expect(sportsService.getMatchById).toHaveBeenCalledWith('match-1', undefined);
     });
 
     it('propagates a 404 the service throws for an unknown match', async () => {
@@ -205,6 +217,71 @@ describe('Sports controllers (HTTP layer)', () => {
     it('surfaces a service 404 for an unknown match unchanged', async () => {
       matchKickoffService.subscribe.mockRejectedValue(new NotFoundException('Match not found'));
       await request(app.getHttpServer()).put('/sports/matches/nope/subscription').expect(404);
+    });
+  });
+
+  // B-070 (Decision Log #472): the optional-auth enrichment. The service is mocked, so these prove the
+  // wiring only: the caller id (from the token, never a query param) is passed to each of the three reads
+  // when a token is present, nothing when absent, and the response varies on Authorization.
+  describe('kickoffAlert enrichment wiring (OptionalJwtAuthGuard)', () => {
+    const bearer = { Authorization: 'Bearer anything' };
+
+    it.each([
+      ['/sports/live-scores', 'listLiveScores'],
+      ['/sports/fixtures?date=2026-09-16', 'listFixtures'],
+    ] as const)('%s passes the signed-in caller id to the service', async (url, method) => {
+      sportsService[method].mockResolvedValue({ items: [], nextCursor: null });
+      await request(app.getHttpServer()).get(url).set(bearer).expect(200);
+      expect(sportsService[method].mock.calls[0][1]).toBe('user-1');
+    });
+
+    it('GET /sports/matches/:id passes the signed-in caller id to the service', async () => {
+      sportsService.getMatchById.mockResolvedValue({ id: 'match-1', kickoffAlert: true });
+      await request(app.getHttpServer()).get('/sports/matches/match-1').set(bearer).expect(200);
+      expect(sportsService.getMatchById).toHaveBeenCalledWith('match-1', 'user-1');
+    });
+
+    it('a logged-out caller reaches all three reads with no caller id (still public)', async () => {
+      sportsService.listLiveScores.mockResolvedValue({ items: [], nextCursor: null });
+      sportsService.listFixtures.mockResolvedValue({ items: [], nextCursor: null });
+      sportsService.getMatchById.mockResolvedValue({ id: 'match-1', kickoffAlert: false });
+      await request(app.getHttpServer()).get('/sports/live-scores').expect(200);
+      await request(app.getHttpServer()).get('/sports/fixtures').query({ date: '2026-09-16' }).expect(200);
+      await request(app.getHttpServer()).get('/sports/matches/match-1').expect(200);
+      expect(sportsService.listLiveScores.mock.calls[0][1]).toBeUndefined();
+      expect(sportsService.listFixtures.mock.calls[0][1]).toBeUndefined();
+      expect(sportsService.getMatchById).toHaveBeenCalledWith('match-1', undefined);
+    });
+
+    it('marks the three responses Vary: Authorization and keeps any Vary already set', async () => {
+      sportsService.listLiveScores.mockResolvedValue({ items: [], nextCursor: null });
+      sportsService.listFixtures.mockResolvedValue({ items: [], nextCursor: null });
+      sportsService.getMatchById.mockResolvedValue({ id: 'match-1', kickoffAlert: false });
+      for (const url of ['/sports/live-scores', '/sports/fixtures?date=2026-09-16', '/sports/matches/match-1']) {
+        const res = await request(app.getHttpServer()).get(url).expect(200);
+        expect(res.headers.vary).toMatch(/Authorization/i);
+      }
+    });
+
+    it('does not enrich the other match reads (they stay caller-independent)', async () => {
+      sportsService.getMatchStatistics.mockResolvedValue({});
+      await request(app.getHttpServer()).get('/sports/matches/match-1/stats').set(bearer).expect(200);
+      expect(sportsService.getMatchStatistics).toHaveBeenCalledWith('match-1');
+    });
+  });
+
+  describe('PUT subscription when the match has already started', () => {
+    it('surfaces the coded 409 unchanged', async () => {
+      matchKickoffService.subscribe.mockRejectedValue(
+        new ConflictException({ statusCode: 409, error: 'Conflict', code: 'match_already_started', message: 'x' }),
+      );
+      const res = await request(app.getHttpServer()).put('/sports/matches/ext-1/subscription').expect(409);
+      expect(res.body.code).toBe('match_already_started');
+    });
+
+    it('DELETE is still allowed (the service is never asked about the match state)', async () => {
+      matchKickoffService.unsubscribe.mockResolvedValue(undefined);
+      await request(app.getHttpServer()).delete('/sports/matches/ext-1/subscription').expect(200, { subscribed: false });
     });
   });
 });

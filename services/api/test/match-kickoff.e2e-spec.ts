@@ -117,6 +117,14 @@ describe('Match kickoff alerts e2e (sprint-4/match-kickoff-alerts)', () => {
     return { userId: user.id, accessToken: accessToken.token };
   }
 
+  // B-070: PUT now refuses a match whose kickoff has passed (409 match_already_started), and the sweep
+  // tests below use fixed Oct-2026 kickoffs that are in the past by the real clock. A subscription made
+  // BEFORE kickoff (the only kind the API allows) is therefore seeded directly, which is exactly the row
+  // the PUT would have written.
+  async function subscribeBeforeKickoff(userId: string, externalRef: string) {
+    await getTestPrismaClient().matchSubscription.create({ data: { userId, externalRef } });
+  }
+
   describe('PUT / DELETE /sports/matches/:id/subscription', () => {
     it('subscribes a real user to a real match and writes one MatchSubscription row', async () => {
       await seedMatch('ext-sub-1', { kickoffTime: new Date('2099-01-01T15:00:00.000Z') });
@@ -202,10 +210,7 @@ describe('Match kickoff alerts e2e (sprint-4/match-kickoff-alerts)', () => {
     it('fires a due match exactly once across repeated sweeps (at-most-once claim)', async () => {
       await seedMatch('ext-fire');
       const { userId, accessToken } = await createUser('fire');
-      await request(server())
-        .put('/sports/matches/ext-fire/subscription')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .expect(200);
+      await subscribeBeforeKickoff(userId, 'ext-fire');
 
       const now = new Date('2026-10-03T19:05:00.000Z');
       expect(await kickoff.runKickoffSweep(now)).toEqual({ notified: 1 });
@@ -225,10 +230,7 @@ describe('Match kickoff alerts e2e (sprint-4/match-kickoff-alerts)', () => {
     it('does not fire a match whose kickoff is still in the future', async () => {
       await seedMatch('ext-future', { kickoffTime: new Date('2026-10-03T21:00:00.000Z') });
       const { userId, accessToken } = await createUser('future');
-      await request(server())
-        .put('/sports/matches/ext-future/subscription')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .expect(200);
+      await subscribeBeforeKickoff(userId, 'ext-future');
 
       expect(await kickoff.runKickoffSweep(new Date('2026-10-03T19:05:00.000Z'))).toEqual({ notified: 0 });
       expect(await getTestPrismaClient().notification.count({ where: { userId } })).toBe(0);
@@ -256,11 +258,8 @@ describe('Match kickoff alerts e2e (sprint-4/match-kickoff-alerts)', () => {
 
     it('resolves the match_kickoff notification to the match summary through GET /notifications', async () => {
       await seedMatch('ext-inbox');
-      const { accessToken } = await createUser('inbox');
-      await request(server())
-        .put('/sports/matches/ext-inbox/subscription')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .expect(200);
+      const { userId, accessToken } = await createUser('inbox');
+      await subscribeBeforeKickoff(userId, 'ext-inbox');
       await kickoff.runKickoffSweep(new Date('2026-10-03T19:05:00.000Z'));
 
       const res = await request(server())
