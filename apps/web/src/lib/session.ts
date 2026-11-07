@@ -19,6 +19,8 @@
 // others (they would otherwise each have to rotate again) and so a log-out in
 // one tab signs out the rest.
 
+import { isPushSupported, removeThisBrowserPush } from "./pushBrowser";
+
 let channelName = "sn-session";
 
 let accessToken: string | null = null;
@@ -118,8 +120,25 @@ export function replaceAccessToken(next: string): void {
 // cleared by the API (POST /auth/logout) or is already revoked server-side
 // (deactivate / delete / a rejected refresh).
 export function clearStoredSession(): void {
+  const endedToken = accessToken;
   setToken(null);
   post({ type: "signout" });
+  // Privacy rule (founder, 2026-11-07): remove THIS browser's push subscription as the session
+  // ends, so the next person to sign in here does not get the previous person's alerts. Started
+  // here (not in one page) so it covers every way a session ends: sign-out, deactivate, delete,
+  // an email change, a rejected refresh. Only when there was a session and the browser can do
+  // push at all. The promise is kept so sign-out can order its server logout after it.
+  pendingSessionEndWork = endedToken !== null && isPushSupported() ? removeThisBrowserPush(endedToken) : null;
+}
+
+let pendingSessionEndWork: Promise<void> | null = null;
+
+// The async work clearStoredSession() just started (push cleanup), or null if there was none.
+// Never rejects. Sign-out uses it to run POST /auth/logout after the cleanup.
+export function takePendingSessionEndWork(): Promise<void> | null {
+  const work = pendingSessionEndWork;
+  pendingSessionEndWork = null;
+  return work;
 }
 
 // Clears this tab without telling the others -- for a failed refresh, where
@@ -153,6 +172,7 @@ export function getSessionChannelName(): string {
 // lazily). Never called by app code.
 export function __resetSessionForTests(): void {
   accessToken = null;
+  pendingSessionEndWork = null;
   restoring = false;
   tokenVersion = 0;
   if (channel) {
