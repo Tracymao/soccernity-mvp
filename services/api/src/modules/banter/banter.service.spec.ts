@@ -616,7 +616,7 @@ describe('BanterService', () => {
   });
 
   describe('postToRoom', () => {
-    it('404s for an unknown room before any membership check', async () => {
+    it('404s for an unknown room before anything else', async () => {
       const prisma = buildPrismaMock();
       const feed = buildFeedMock();
       (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue(null);
@@ -629,24 +629,26 @@ describe('BanterService', () => {
       expect(feed.createPost).not.toHaveBeenCalled();
     });
 
-    it('403s when the caller is not a member (existence settled first)', async () => {
+    it('B-117: a non-member posts without joining (no membership read, no 403, memberCount untouched)', async () => {
       const prisma = buildPrismaMock();
       const feed = buildFeedMock();
       (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ id: 'room-1' });
-      (prisma.banterRoomMember.findUnique as jest.Mock).mockResolvedValue(null);
+      (feed.createPost as jest.Mock).mockResolvedValue({ id: 'post-1' });
       const service = new BanterService(prisma, feed);
 
       await expect(
         service.postToRoom('user-1', 'room-1', { contentText: 'hi' }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-      expect(feed.createPost).not.toHaveBeenCalled();
+      ).resolves.toEqual({ id: 'post-1' });
+      expect(prisma.banterRoomMember.findUnique).not.toHaveBeenCalled();
+      expect(prisma.banterRoomMember.create).not.toHaveBeenCalled();
+      expect(prisma.banterRoom.update).not.toHaveBeenCalled();
+      expect(feed.createPost).toHaveBeenCalledTimes(1);
     });
 
-    it('delegates to FeedService.createPost with banterRoomId set once the caller is a member', async () => {
+    it('delegates to FeedService.createPost with banterRoomId set', async () => {
       const prisma = buildPrismaMock();
       const feed = buildFeedMock();
       (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ id: 'room-1' });
-      (prisma.banterRoomMember.findUnique as jest.Mock).mockResolvedValue({ id: 'm-1' });
       (feed.createPost as jest.Mock).mockResolvedValue({ id: 'post-1' });
       const service = new BanterService(prisma, feed);
 

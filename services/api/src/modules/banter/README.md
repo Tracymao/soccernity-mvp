@@ -329,7 +329,7 @@ Section 4.4 lists: `GET /banter-rooms`, `GET /banter-rooms/:id`, `POST
 | `POST /banter-rooms/:id/join` | `JwtAuthGuard` + `GuardianConsentGuard` | Join. `200`, idempotent (P2002-catch), `memberCount` incremented transactionally. `{ roomId, joined: true, memberCount }`. |
 | `DELETE /banter-rooms/:id/join` | `JwtAuthGuard` + `GuardianConsentGuard` | Leave. `200`, idempotent (leaving a room you're not in is not a 404), `memberCount` decremented transactionally and floor-guarded `>= 0`. |
 | `GET /banter-rooms/:id/posts` | `JwtAuthGuard` | Room feed. `assertRoomExists` (404) → `FeedService.getBanterRoomFeed`. Identical `FeedPage` / `FeedPostWithViewerState` shape to `GET /posts/feed`. |
-| `POST /banter-rooms/:id/posts` | `JwtAuthGuard` + `GuardianConsentGuard` | Post into a room. `assertRoomExists` (404) → **must be a member** (403) → `FeedService.createPost(userId, { ...dto, banterRoomId: id })` — the single post-creation path, never a parallel one. `{ contentText, mediaUrls? }`. |
+| `POST /banter-rooms/:id/posts` | `JwtAuthGuard` + `GuardianConsentGuard` | Post into a room. `assertRoomExists` (404) → (no membership check since B-117) → `FeedService.createPost(userId, { ...dto, banterRoomId: id })` — the single post-creation path, never a parallel one. `{ contentText, mediaUrls? }`. |
 | `GET /banter-rooms/topics` | `JwtAuthGuard` | The topics catalog. Alphabetical by `name`, keyset-paginated. `sprint-3/banter-room-topics`, Decision Log #276. |
 | `POST /banter-rooms/:id/topics` | `JwtAuthGuard` + `GuardianConsentGuard` | Attach one or more topics to a room. **Room creator only** (403 otherwise). `{ names: string[] }`, max 5. Find-or-create + idempotent attach — see "Topics" above. `sprint-3/banter-room-topics`, resolves Decision Log #276. |
 
@@ -365,7 +365,7 @@ the same way `GrassrootsController` flagged `PATCH /fixtures/:id/status`
 |---|---|---|
 | `POST /banter-rooms` (create a room) | **any authenticated, consent-confirmed user** — becomes `createdBy` | `JwtAuthGuard` + `GuardianConsentGuard` |
 | `POST`/`DELETE /banter-rooms/:id/join` | any authenticated, consent-confirmed user | `JwtAuthGuard` + `GuardianConsentGuard` |
-| `POST /banter-rooms/:id/posts` | any authenticated, consent-confirmed user **who is a member of the room** | `JwtAuthGuard` + `GuardianConsentGuard` |
+| `POST /banter-rooms/:id/posts` | any eligible user (B-117: **no room membership needed**) | `JwtAuthGuard` + `GuardianConsentGuard` |
 | `POST /banter-rooms/:id/topics` | **the room's creator only** (`createdBy`) | `JwtAuthGuard` + `GuardianConsentGuard` |
 | all GET reads (list / search / mine / :id / :id/posts / topics) | any authenticated user | `JwtAuthGuard` only |
 
@@ -391,11 +391,16 @@ the same way `GrassrootsController` flagged `PATCH /fixtures/:id/status`
    restricted-pending minor can browse rooms and read room feeds; they
    cannot join, leave, or post.
 
-3. **Posting requires room membership (403 otherwise)**. "Join a room to
-   participate" matches the Figma flow and is the only reading of Section
-   8.3 step 5's "read-only [without participating]" that makes sense.
-   Alternative (any consent-confirmed user may post into any room without
-   joining) considered, not chosen — **flagged**.
+3. **Posting does NOT require room membership (B-117, Decision Log #403
+   item 16, #404 item 10 — SUPERSEDES the original rule below).** A room
+   is an open-forum thread and its room posts are the comments: anyone
+   eligible posts or comments without joining; "join" stays only as the
+   My Bants bookmark. Eligibility is unchanged: the controller's
+   `Under16RestrictionGuard` (under-16 fully disabled, 16 and 17 have
+   full access), `GuardianConsentGuard`, `EmailVerifiedGuard` and
+   `ProfileCompleteGuard`. The original rule was: "Posting requires room
+   membership (403 otherwise)", the alternative of letting any
+   consent-confirmed user post without joining was considered, not chosen.
 
 4. **The creator is auto-joined** on `POST /banter-rooms` (`memberCount`
    starts at 1, a `BanterRoomMember` row is written in the same
