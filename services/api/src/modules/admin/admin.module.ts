@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthRateLimitModule } from '../auth/rate-limit/rate-limit.module';
 import { TwoFactorModule } from '../two-factor/two-factor.module';
 import { AdminTwoFactorController } from './admin-two-factor.controller';
@@ -29,8 +29,8 @@ import { AdminProfileService } from './admin-profile.service';
 // top-level module in this codebase (AuthModule, FeedModule, etc.) does
 // the same thing today.
 @Module({
-  imports: [AdminAuthFoundationModule, AuthRateLimitModule, TwoFactorModule],
+  imports: [PrismaModule, AdminAuthFoundationModule, AuthRateLimitModule, TwoFactorModule],
   controllers: [AdminAuthController, AdminProfileController, AdminTwoFactorController],
-  providers: [AdminAuthService, AdminProfileService, PrismaService],
+  providers: [AdminAuthService, AdminProfileService],
 })
 export class AdminModule {}

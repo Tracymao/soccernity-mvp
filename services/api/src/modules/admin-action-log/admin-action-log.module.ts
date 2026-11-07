@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AdminActionLogService } from './admin-action-log.service';
 
 // feat/admin-action-log — a small, dedicated module purely to export
@@ -14,7 +14,8 @@ import { AdminActionLogService } from './admin-action-log.service';
 // same "one small cross-cutting service, several importing modules" shape
 // AccountDeletionModule already established for AccountDeletionSweepService.
 @Module({
-  providers: [AdminActionLogService, PrismaService],
+  imports: [PrismaModule],
+  providers: [AdminActionLogService],
   exports: [AdminActionLogService],
 })
 export class AdminActionLogModule {}

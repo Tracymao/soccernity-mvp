@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { ConversationsController } from './conversations.controller';
 import { MessagingService } from './messaging.service';
@@ -22,8 +22,8 @@ import { MessagingService } from './messaging.service';
 // shape decisions, and the restricted-pending enforcement (Decision Log
 // #12).
 @Module({
-  imports: [AuthFoundationModule],
+  imports: [PrismaModule, AuthFoundationModule],
   controllers: [ConversationsController],
-  providers: [MessagingService, PrismaService],
+  providers: [MessagingService],
 })
 export class MessagingModule {}

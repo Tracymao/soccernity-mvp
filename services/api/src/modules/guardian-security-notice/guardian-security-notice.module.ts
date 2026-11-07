@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { RedisModule } from '../../redis/redis.module';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
 import { GuardianSecurityNoticeService } from './guardian-security-notice.service';
@@ -10,8 +10,8 @@ import { GuardianSecurityNoticeService } from './guardian-security-notice.servic
 // PrismaService and RegistrationEmailService are provided directly, the same way AuthLimitsModule and the other
 // modules outside auth/registration do it.
 @Module({
-  imports: [ConfigModule, RedisModule],
-  providers: [GuardianSecurityNoticeService, PrismaService, RegistrationEmailService],
+  imports: [PrismaModule, ConfigModule, RedisModule],
+  providers: [GuardianSecurityNoticeService, RegistrationEmailService],
   exports: [GuardianSecurityNoticeService],
 })
 export class GuardianSecurityNoticeModule {}

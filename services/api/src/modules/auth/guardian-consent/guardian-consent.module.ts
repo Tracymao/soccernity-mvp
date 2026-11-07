@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AccountEmailsModule } from '../../account-emails/account-emails.module';
 import { ConfigModule } from '@nestjs/config';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaModule } from '../../../prisma/prisma.module';
 import { PaymentsModule } from '../../../payments/payments.module';
 import { AuthFoundationModule } from '../auth-foundation.module';
 import { AuthModule } from '../auth.module';
@@ -80,7 +80,7 @@ import { RedisModule } from '../../../redis/redis.module';
 //    being triggerable on demand. It stays directly callable in-process,
 //    with an explicit `now`, for tests.
 @Module({
-  imports: [ConfigModule, AuthFoundationModule, AuthModule, PaymentsModule, RedisModule, AccountEmailsModule],
+  imports: [PrismaModule, ConfigModule, AuthFoundationModule, AuthModule, PaymentsModule, RedisModule, AccountEmailsModule],
   controllers: [GuardianConsentController, GuardianConsentSummaryController],
   providers: [
     GuardianConsentService,
@@ -91,7 +91,6 @@ import { RedisModule } from '../../../redis/redis.module';
     GuardianStaleDeclineSweepService,
     GuardianCardVerificationService,
     CardRefundRetrySweepService,
-    PrismaService,
     RegistrationEmailService,
   ],
   exports: [GuardianConsentService, GuardianConsentExpirySweepService],

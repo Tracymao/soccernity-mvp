@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { GrassrootsFixturesController } from './grassroots-fixtures.controller';
@@ -21,8 +21,8 @@ import { GrassrootsService } from './grassroots.service';
 @Module({
   // AdminAuthFoundationModule supplies AdminJwtAuthGuard/AdminRolesGuard for
   // the admin-only DELETE /teams/:id (Decision Log #343).
-  imports: [AuthFoundationModule, AdminAuthFoundationModule],
+  imports: [PrismaModule, AuthFoundationModule, AdminAuthFoundationModule],
   controllers: [GrassrootsTeamsController, GrassrootsFixturesController],
-  providers: [GrassrootsService, PrismaService],
+  providers: [GrassrootsService],
 })
 export class GrassrootsModule {}

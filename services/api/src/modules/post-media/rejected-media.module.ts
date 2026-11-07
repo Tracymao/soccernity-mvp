@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { StorageModule } from '../../storage/storage.module';
 import { PostMediaConfig } from './post-media.config';
 import { RejectedMediaSweepService } from './rejected-media-sweep.service';
@@ -10,8 +10,8 @@ import { RejectedMediaSweepService } from './rejected-media-sweep.service';
 // objects. Its own small module (not PostMediaModule) so AccountDeletionModule can import it without pulling in
 // the upload controllers and the Rekognition/ffmpeg providers. PostMediaConfig is a plain ConfigService reader.
 @Module({
-  imports: [ConfigModule, StorageModule],
-  providers: [PrismaService, PostMediaConfig, RejectedMediaSweepService],
+  imports: [PrismaModule, ConfigModule, StorageModule],
+  providers: [PostMediaConfig, RejectedMediaSweepService],
   exports: [RejectedMediaSweepService],
 })
 export class RejectedMediaModule {}

@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { CommunityGroupsController } from './community-groups.controller';
 import { CommunityGroupsService } from './community-groups.service';
@@ -24,8 +24,8 @@ import { CommunityGroupsService } from './community-groups.service';
 // modules/community-groups/README.md for the endpoint list, the
 // permission model, and every Decision Log candidate this raises.
 @Module({
-  imports: [AuthFoundationModule],
+  imports: [PrismaModule, AuthFoundationModule],
   controllers: [CommunityGroupsController],
-  providers: [CommunityGroupsService, PrismaService],
+  providers: [CommunityGroupsService],
 })
 export class CommunityGroupsModule {}

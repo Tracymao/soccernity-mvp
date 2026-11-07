@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AdminActionLogModule } from '../admin-action-log/admin-action-log.module';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
@@ -25,7 +25,7 @@ import { ContestService } from './contest.service';
 // ContestLifecycleService carries the @Cron job (ScheduleModule.forRoot() is registered once,
 // globally, in app.module.ts). The clock comes from the global ClockModule.
 @Module({
-  imports: [AuthFoundationModule, AdminAuthFoundationModule, FeedModule, AdminActionLogModule],
+  imports: [PrismaModule, AuthFoundationModule, AdminAuthFoundationModule, FeedModule, AdminActionLogModule],
   controllers: [ContestController, ContestAdminController],
   providers: [
     ContestService,
@@ -34,7 +34,6 @@ import { ContestService } from './contest.service';
     ContestExposureService,
     ContestLifecycleService,
     ContestReadModel,
-    PrismaService,
   ],
   exports: [ContestLifecycleService],
 })

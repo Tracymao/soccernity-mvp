@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AccountDeletionModule } from '../account-deletion/account-deletion.module';
 import { AdminActionLogModule } from '../admin-action-log/admin-action-log.module';
 import { GuardianSecurityNoticeModule } from '../guardian-security-notice/guardian-security-notice.module';
@@ -39,7 +39,7 @@ import { AdminUsersService } from './admin-users.service';
   // B-103/B-109: ConfigModule (consent-token TTL) and RegistrationEmailService
   // (the guardian consent email a DOB-correction restart sends). DobEncryptionService
   // comes from the global CryptoModule.
-  imports: [AdminAuthFoundationModule, AuthFoundationModule, AccountDeletionModule, AdminActionLogModule, ConfigModule, GuardianSecurityNoticeModule],
+  imports: [PrismaModule, AdminAuthFoundationModule, AuthFoundationModule, AccountDeletionModule, AdminActionLogModule, ConfigModule, GuardianSecurityNoticeModule],
   controllers: [AdminUsersController, AdminGuardianNoticesController],
   providers: [
     AdminUsersService,
@@ -49,7 +49,6 @@ import { AdminUsersService } from './admin-users.service';
     // B-280: the "withhold guardian notices" flag.
     AdminGuardianNoticesService,
     AdminChildSafetyVettedGuard,
-    PrismaService,
     RegistrationEmailService,
   ],
 })

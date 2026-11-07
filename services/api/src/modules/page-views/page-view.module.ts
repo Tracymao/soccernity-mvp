@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { PageViewService } from './page-view.service';
 import { PageViewInterceptor } from './page-view.interceptor';
 
@@ -17,9 +17,9 @@ import { PageViewInterceptor } from './page-view.interceptor';
 // directly for GET /admin/dashboard/stats' real `totalVisits`/
 // `visitsByMonth` fields — see admin-dashboard.module.ts.
 @Module({
+  imports: [PrismaModule],
   providers: [
     PageViewService,
-    PrismaService,
     { provide: APP_INTERCEPTOR, useClass: PageViewInterceptor },
   ],
   exports: [PageViewService],

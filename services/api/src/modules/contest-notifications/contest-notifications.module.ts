@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { ContestNotificationFacts } from './contest-notification-facts.service';
 import { ContestNotificationSweepService } from './contest-notification-sweep.service';
 
@@ -7,7 +7,8 @@ import { ContestNotificationSweepService } from './contest-notification-sweep.se
 // (ScheduleModule.forRoot() is registered once, globally, in app.module.ts), the same shape as
 // AccountDeletionModule / AgeReclassificationModule. See README.md.
 @Module({
-  providers: [ContestNotificationSweepService, ContestNotificationFacts, PrismaService],
+  imports: [PrismaModule],
+  providers: [ContestNotificationSweepService, ContestNotificationFacts],
   exports: [ContestNotificationSweepService],
 })
 export class ContestNotificationsModule {}

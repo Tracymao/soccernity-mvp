@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { NotificationPolicyService } from './notification-policy.service';
 import { NotificationSettingsController } from './notification-settings.controller';
@@ -20,9 +20,9 @@ import { NotificationsService } from './notifications.service';
 // pattern every other feature module uses). No GuardianConsentGuard here
 // — nothing in this module is a "posting" action.
 @Module({
-  imports: [AuthFoundationModule],
+  imports: [PrismaModule, AuthFoundationModule],
   controllers: [NotificationsController, NotificationSettingsController],
-  providers: [NotificationsService, NotificationSettingsService, NotificationPolicyService, PrismaService],
+  providers: [NotificationsService, NotificationSettingsService, NotificationPolicyService],
   exports: [NotificationPolicyService],
 })
 export class NotificationsModule {}

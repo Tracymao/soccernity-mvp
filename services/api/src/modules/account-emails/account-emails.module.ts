@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
 import { AccountEmailService } from './account-email.service';
 
@@ -9,8 +9,8 @@ import { AccountEmailService } from './account-email.service';
 // GuardianSecurityNoticeModule has). PrismaService and RegistrationEmailService are provided directly, the way
 // every module outside auth/registration does it.
 @Module({
-  imports: [ConfigModule],
-  providers: [AccountEmailService, PrismaService, RegistrationEmailService],
+  imports: [PrismaModule, ConfigModule],
+  providers: [AccountEmailService, RegistrationEmailService],
   exports: [AccountEmailService],
 })
 export class AccountEmailsModule {}

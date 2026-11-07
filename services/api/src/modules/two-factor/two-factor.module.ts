@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { RedisModule } from '../../redis/redis.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
@@ -29,10 +29,9 @@ import { UserTwoFactorController } from './user-two-factor.controller';
 // service and hourly sweep. AuthService imports TwoFactorRecoveryService from here for the two sign-in hooks; the
 // recovery service itself imports nothing from AuthService, so there is no cycle.
 @Module({
-  imports: [ConfigModule, RedisModule, AuthFoundationModule, GuardianSecurityNoticeModule],
+  imports: [PrismaModule, ConfigModule, RedisModule, AuthFoundationModule, GuardianSecurityNoticeModule],
   controllers: [UserTwoFactorController, TwoFactorRecoveryController],
   providers: [
-    PrismaService,
     UserTwoFactorRepository,
     AdminTwoFactorRepository,
     TwoFactorTokenStore,

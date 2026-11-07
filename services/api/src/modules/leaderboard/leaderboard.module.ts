@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { LeaderboardController } from './leaderboard.controller';
 import { LeaderboardHistoryRollupService } from './leaderboard-history-rollup.service';
@@ -22,9 +22,9 @@ import { LeaderboardService } from './leaderboard.service';
 // script / admin endpoint could call rollupPeriod() directly without
 // waiting for the cron tick — not consumed by any other module today.
 @Module({
-  imports: [AuthFoundationModule],
+  imports: [PrismaModule, AuthFoundationModule],
   controllers: [LeaderboardController],
-  providers: [LeaderboardService, LeaderboardRollupService, LeaderboardHistoryRollupService, PrismaService],
+  providers: [LeaderboardService, LeaderboardRollupService, LeaderboardHistoryRollupService],
   exports: [LeaderboardRollupService, LeaderboardHistoryRollupService],
 })
 export class LeaderboardModule {}

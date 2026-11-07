@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AccountHoldModule } from '../account-hold/account-hold.module';
 import { AdminActionLogModule } from '../admin-action-log/admin-action-log.module';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
@@ -57,6 +57,7 @@ import { ReportsController } from './reports.controller';
 // modules/admin-action-log/README.md for the full call-site table.
 @Module({
   imports: [
+    PrismaModule,
     AuthFoundationModule,
     AdminAuthFoundationModule,
     AuthRateLimitModule,
@@ -70,6 +71,6 @@ import { ReportsController } from './reports.controller';
     GuardianSecurityNoticeModule,
   ],
   controllers: [ReportsController, PublicReportsController, AdminModerationController],
-  providers: [ModerationService, ModerationHoldsService, PrismaService, RegistrationEmailService],
+  providers: [ModerationService, ModerationHoldsService, RegistrationEmailService],
 })
 export class ModerationModule {}

@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { StorageModule } from '../../storage/storage.module';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
 import { AdminMediaController } from './admin-media.controller';
@@ -18,8 +18,8 @@ import { MediaService } from './media.service';
 // provider-agnostic file-storage abstraction this module's own
 // MediaService depends on (see storage/storage.service.ts).
 @Module({
-  imports: [AdminAuthFoundationModule, StorageModule],
+  imports: [PrismaModule, AdminAuthFoundationModule, StorageModule],
   controllers: [AdminMediaController],
-  providers: [MediaService, PrismaService],
+  providers: [MediaService],
 })
 export class MediaModule {}

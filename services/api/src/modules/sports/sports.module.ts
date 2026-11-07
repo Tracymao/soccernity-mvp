@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { SportsDataModule } from '../../sports-data/sports-data.module';
 import { MatchKickoffService } from './match-kickoff.service';
@@ -16,8 +16,8 @@ import { SportsService } from './sports.service';
 // AuthFoundationModule for JwtAuthGuard. MatchKickoffService also registers the per-minute kickoff
 // sweep (ScheduleModule.forRoot() is global, see app.module.ts).
 @Module({
-  imports: [ConfigModule, SportsDataModule, AuthFoundationModule],
+  imports: [PrismaModule, ConfigModule, SportsDataModule, AuthFoundationModule],
   controllers: [SportsMatchesController, SportsStandingsController],
-  providers: [SportsService, MatchKickoffService, PrismaService],
+  providers: [SportsService, MatchKickoffService],
 })
 export class SportsModule {}

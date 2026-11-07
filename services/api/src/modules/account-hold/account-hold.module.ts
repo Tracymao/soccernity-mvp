@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { HoldService } from './hold.service';
 
 // backend/w6-hold-rule-extension (B-044). Exports HoldService, the place and lift of the two admin holds
@@ -8,7 +8,8 @@ import { HoldService } from './hold.service';
 // functions and reads, no provider), so AccountDeletionModule and AdminUsersModule use them without
 // importing this module.
 @Module({
-  providers: [HoldService, PrismaService],
+  imports: [PrismaModule],
+  providers: [HoldService],
   exports: [HoldService],
 })
 export class AccountHoldModule {}
