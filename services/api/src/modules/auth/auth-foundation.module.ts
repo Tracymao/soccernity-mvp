@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { RedisModule } from '../../redis/redis.module';
 import { GuardianConsentGuard } from './guards/guardian-consent.guard';
 import { Under16RestrictionGuard } from './guards/under-16-restriction.guard';
@@ -45,6 +45,7 @@ import { TokenService } from './token/token.service';
 // guards/optional-jwt-auth.guard.ts.
 @Module({
   imports: [
+    PrismaModule,
     ConfigModule,
     RedisModule,
     AuthRateLimitModule,
@@ -60,7 +61,7 @@ import { TokenService } from './token/token.service';
       }),
     }),
   ],
-  providers: [PasswordService, TokenService, RefreshTokenStore, JwtAuthGuard, OptionalJwtAuthGuard, PrismaService, GuardianConsentGuard, Under16RestrictionGuard],
-  exports: [AuthLimitsModule, PrismaService, PasswordService, TokenService, RefreshTokenStore, JwtAuthGuard, OptionalJwtAuthGuard, GuardianConsentGuard, Under16RestrictionGuard],
+  providers: [PasswordService, TokenService, RefreshTokenStore, JwtAuthGuard, OptionalJwtAuthGuard, GuardianConsentGuard, Under16RestrictionGuard],
+  exports: [AuthLimitsModule, PrismaModule, PasswordService, TokenService, RefreshTokenStore, JwtAuthGuard, OptionalJwtAuthGuard, GuardianConsentGuard, Under16RestrictionGuard],
 })
 export class AuthFoundationModule {}

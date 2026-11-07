@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { SearchController } from './search.controller';
 import { SearchService } from './search.service';
@@ -35,8 +35,8 @@ import { TrendingService } from './trending.service';
 // no import of this module at all.
 @Module({
   // B-039: AuthFoundationModule only for OptionalJwtAuthGuard on GET /search.
-  imports: [AuthFoundationModule],
+  imports: [PrismaModule, AuthFoundationModule],
   controllers: [SearchController, TrendingController],
-  providers: [SearchService, TrendingService, PrismaService],
+  providers: [SearchService, TrendingService],
 })
 export class SearchModule {}

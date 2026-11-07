@@ -30,4 +30,9 @@ module.exports = {
   // unit suite by design. 30s is generous headroom over what these specs
   // actually take locally, not a value chosen to paper over flakiness.
   testTimeout: 30000,
+  // Opt-in diagnostic: prints the open Postgres connection count after every
+  // spec file. See connection-reporter.js for why it exists.
+  reporters: process.env.E2E_LOG_CONNECTIONS === '1'
+    ? ['default', '<rootDir>/test/connection-reporter.js']
+    : ['default'],
 };

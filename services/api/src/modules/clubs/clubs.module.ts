@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { FeedModule } from '../feed/feed.module';
 import { ClubsController } from './clubs.controller';
@@ -20,9 +20,9 @@ import { ClubsService } from './clubs.service';
 // FeedModule imports neither ClubsModule nor AuthRegistrationModule, so
 // there is no import cycle (ClubsModule -> FeedModule only).
 @Module({
-  imports: [AuthFoundationModule, FeedModule],
+  imports: [PrismaModule, AuthFoundationModule, FeedModule],
   controllers: [ClubsController],
-  providers: [ClubsService, PrismaService],
+  providers: [ClubsService],
   exports: [ClubsService],
 })
 export class ClubsModule {}

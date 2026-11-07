@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { BlockController } from './block.controller';
 import { BlockService } from './block.service';
@@ -9,8 +9,8 @@ import { BlockService } from './block.service';
 // block.util.ts, called from the services that serve each surface, so no other
 // module has to import this one.
 @Module({
-  imports: [AuthFoundationModule],
+  imports: [PrismaModule, AuthFoundationModule],
   controllers: [BlockController],
-  providers: [BlockService, PrismaService],
+  providers: [BlockService],
 })
 export class BlockModule {}

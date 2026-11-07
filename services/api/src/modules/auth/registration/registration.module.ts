@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { GeoIpModule } from '../../../geoip/geoip.module';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaModule } from '../../../prisma/prisma.module';
 import { RedisModule } from '../../../redis/redis.module';
 import { AccountEmailsModule } from '../../account-emails/account-emails.module';
 import { ClubsModule } from '../../clubs/clubs.module';
@@ -38,10 +38,9 @@ import { RegistrationService } from './registration.service';
 // ClubsModule, GuardianConsentModule does not import AuthRegistrationModule
 // (or any module that does) — see guardian-consent.module.ts's own comment.
 @Module({
-  imports: [AuthFoundationModule, RedisModule, ClubsModule, GuardianConsentModule, GeoIpModule, AccountEmailsModule],
+  imports: [PrismaModule, AuthFoundationModule, RedisModule, ClubsModule, GuardianConsentModule, GeoIpModule, AccountEmailsModule],
   controllers: [RegistrationController],
   providers: [
-    PrismaService,
     RegistrationService,
     EmailVerificationTokenStore,
     RegistrationEmailService,

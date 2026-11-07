@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { PointsModule } from '../points/points.module';
 import { PostMediaModule } from '../post-media/post-media.module';
@@ -27,9 +27,9 @@ import { SavedPostsController } from './saved-posts.controller';
 @Module({
   // PostMediaModule exports PostMediaConfig (the per-post file limit); StorageModule lets a deleted post's
   // uploaded files be removed from the object store (backend/w14-post-media-pipeline).
-  imports: [AuthFoundationModule, PointsModule, PostMediaModule, StorageModule],
+  imports: [PrismaModule, AuthFoundationModule, PointsModule, PostMediaModule, StorageModule],
   controllers: [FeedController, SavedPostsController],
-  providers: [FeedService, PrismaService],
+  providers: [FeedService],
   exports: [FeedService],
 })
 export class FeedModule {}

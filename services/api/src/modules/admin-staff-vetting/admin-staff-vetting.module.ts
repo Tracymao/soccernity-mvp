@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AdminActionLogModule } from '../admin-action-log/admin-action-log.module';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
 import { AdminStaffVettingController } from './admin-staff-vetting.controller';
@@ -26,8 +26,8 @@ import { AdminStaffVettingService } from './admin-staff-vetting.service';
 // setChildSafetyVetting can record an audit-log row after each write. See
 // modules/admin-action-log/README.md.
 @Module({
-  imports: [AdminAuthFoundationModule, AdminActionLogModule],
+  imports: [PrismaModule, AdminAuthFoundationModule, AdminActionLogModule],
   controllers: [AdminStaffVettingController],
-  providers: [AdminStaffVettingService, PrismaService],
+  providers: [AdminStaffVettingService],
 })
 export class AdminStaffVettingModule {}

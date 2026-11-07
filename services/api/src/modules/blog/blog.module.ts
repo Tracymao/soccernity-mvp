@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { ArticlesController } from './articles.controller';
 import { BlogService } from './blog.service';
 import { CategoriesController } from './categories.controller';
@@ -19,6 +19,7 @@ import { CategoriesController } from './categories.controller';
 // Category). No migration.
 @Module({
   controllers: [ArticlesController, CategoriesController],
-  providers: [BlogService, PrismaService],
+  imports: [PrismaModule],
+  providers: [BlogService],
 })
 export class BlogModule {}

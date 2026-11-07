@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { AuthRateLimitModule } from '../auth/rate-limit/rate-limit.module';
@@ -21,8 +21,8 @@ import { ContactService } from './contact.service';
 // AuthRateLimitModule: the shared @AuthRateLimit() guard. RegistrationEmailService is provided here directly,
 // the same way ModerationModule and AgeReclassificationModule do it (no dedicated email module exists).
 @Module({
-  imports: [AuthFoundationModule, AdminAuthFoundationModule, AuthRateLimitModule, ConfigModule],
+  imports: [PrismaModule, AuthFoundationModule, AdminAuthFoundationModule, AuthRateLimitModule, ConfigModule],
   controllers: [ContactController, ContactEnquiryAdminController],
-  providers: [ContactService, ContactEnquiryAdminService, ContactEnquiryRetentionService, PrismaService, RegistrationEmailService],
+  providers: [ContactService, ContactEnquiryAdminService, ContactEnquiryRetentionService, RegistrationEmailService],
 })
 export class ContactModule {}

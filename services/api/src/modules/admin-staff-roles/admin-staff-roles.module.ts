@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
 import { AdminActionLogModule } from '../admin-action-log/admin-action-log.module';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
@@ -30,10 +30,10 @@ import { AdminStaffRolesService } from './admin-staff-roles.service';
 // so updateAdminRole/updateAdminStatus can record an audit-log row after
 // each write (modules/admin-action-log/README.md).
 @Module({
-  imports: [AdminAuthFoundationModule, AdminActionLogModule, TwoFactorModule],
+  imports: [PrismaModule, AdminAuthFoundationModule, AdminActionLogModule, TwoFactorModule],
   controllers: [AdminStaffRolesController],
   // B-069: RegistrationEmailService is provided directly (the way every module outside auth/registration does
   // it) for the "account created" email.
-  providers: [AdminStaffRolesService, PrismaService, RegistrationEmailService],
+  providers: [AdminStaffRolesService, RegistrationEmailService],
 })
 export class AdminStaffRolesModule {}

@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { StorageModule } from '../../storage/storage.module';
 import { AdminActionLogModule } from '../admin-action-log/admin-action-log.module';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
@@ -17,8 +17,8 @@ import { ProfileImageReviewService } from './profile-image-review.service';
 // backend/b037-profile-image-review (B-037): the queue also holds profile pictures (an avatar or cover the automatic
 // check left undecided); UsersModule supplies the publish and reject code they share with the automatic check.
 @Module({
-  imports: [AdminAuthFoundationModule, AdminActionLogModule, StorageModule, PostMediaModule, UsersModule],
+  imports: [PrismaModule, AdminAuthFoundationModule, AdminActionLogModule, StorageModule, PostMediaModule, UsersModule],
   controllers: [AdminMediaReviewController],
-  providers: [AdminMediaReviewService, ProfileImageReviewService, PrismaService],
+  providers: [AdminMediaReviewService, ProfileImageReviewService],
 })
 export class AdminMediaReviewModule {}

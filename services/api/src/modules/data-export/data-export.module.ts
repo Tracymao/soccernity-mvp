@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { CryptoModule } from '../../crypto/crypto.module';
 import { StorageModule } from '../../storage/storage.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
@@ -11,8 +11,8 @@ import { DataExportService } from './data-export.service';
 // StorageModule: the private file. CryptoModule: the date of birth is stored encrypted and decrypted for its owner.
 // APP_CLOCK comes from the global ClockModule; ScheduleModule is registered once in app.module.ts.
 @Module({
-  imports: [AuthFoundationModule, StorageModule, CryptoModule],
+  imports: [PrismaModule, AuthFoundationModule, StorageModule, CryptoModule],
   controllers: [DataExportController],
-  providers: [DataExportService, DataExportSweepService, PrismaService],
+  providers: [DataExportService, DataExportSweepService],
 })
 export class DataExportModule {}

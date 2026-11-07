@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { RedisModule } from '../../redis/redis.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { AuthModule } from '../auth/auth.module';
@@ -18,10 +18,9 @@ import { SocialAuthStateStore, SocialRegistrationStore } from './social-auth.sto
 // RegistrationService.register (age checks, guardian flow, country, club join). The real provider client is bound
 // here; the unit and e2e specs override SocialAuthClient with an in-memory fake, so no test reaches the network.
 @Module({
-  imports: [ConfigModule, RedisModule, AuthFoundationModule, AuthModule, AuthRegistrationModule],
+  imports: [PrismaModule, ConfigModule, RedisModule, AuthFoundationModule, AuthModule, AuthRegistrationModule],
   controllers: [SocialAuthController],
   providers: [
-    PrismaService,
     RegistrationEmailService,
     { provide: SocialAuthClient, useClass: HttpSocialAuthClient },
     SocialAuthStateStore,

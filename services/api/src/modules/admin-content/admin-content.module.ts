@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
 import { AdminArticlesController } from './admin-articles.controller';
 import { AdminCategoriesController } from './admin-categories.controller';
@@ -18,8 +18,8 @@ import { AdminContentService } from './admin-content.service';
 // (Articles, Categories) — mirrors GrassrootsModule's own "one service,
 // two resource-scoped controllers" shape (see grassroots.module.ts).
 @Module({
-  imports: [AdminAuthFoundationModule],
+  imports: [PrismaModule, AdminAuthFoundationModule],
   controllers: [AdminArticlesController, AdminCategoriesController],
-  providers: [AdminContentService, PrismaService],
+  providers: [AdminContentService],
 })
 export class AdminContentModule {}

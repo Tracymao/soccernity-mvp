@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { FeedModule } from '../feed/feed.module';
 import { BanterController } from './banter.controller';
@@ -23,9 +23,9 @@ import { BanterService } from './banter.service';
 // impossible. See modules/banter/README.md for the endpoint list, the
 // permission model, and every Decision Log candidate this raises.
 @Module({
-  imports: [AuthFoundationModule, FeedModule],
+  imports: [PrismaModule, AuthFoundationModule, FeedModule],
   controllers: [BanterController],
-  providers: [BanterService, PrismaService],
+  providers: [BanterService],
   // Exported so ModerationModule can call setRoomStatus inside the
   // room_deactivated report action (Decision Log #357).
   exports: [BanterService],

@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { GuardianSecurityNoticeModule } from '../guardian-security-notice/guardian-security-notice.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { StorageModule } from '../../storage/storage.module';
 import { PostMediaModule } from '../post-media/post-media.module';
 import { ProfileImageCheckService, ProfileImageCheckSweepService } from './profile-image-check.service';
@@ -31,7 +31,7 @@ import { UsersService } from './users.service';
 @Module({
   // PostMediaModule exports MediaProcessor: avatars and covers are re-encoded without metadata by the
   // same sanitizeImage post images use (B-205).
-  imports: [AuthFoundationModule, StorageModule, GuardianSecurityNoticeModule, PostMediaModule],
+  imports: [PrismaModule, AuthFoundationModule, StorageModule, GuardianSecurityNoticeModule, PostMediaModule],
   controllers: [UsersController, UserAvatarController, UserCoverController],
   providers: [
     UsersService,
@@ -45,7 +45,6 @@ import { UsersService } from './users.service';
     // B-036: the automatic check for avatars and covers (runs only when Rekognition is configured).
     ProfileImageCheckService,
     ProfileImageCheckSweepService,
-    PrismaService,
   ],
   // B-214 / B-037: the moderator media review queue imports UsersModule for these.
   exports: [UserImageReviewService, ProfileImagePublishService, ProfileImageViewService],

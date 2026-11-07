@@ -103,6 +103,10 @@ jobs:
         # Normal: 13 minutes. A tighter step limit than the job's, so a Jest
         # that finished but will not exit is cut off with the log intact.
         timeout-minutes: 30
+        # Prints the open Postgres connection count after each spec file
+        # ([e2e-connections] lines), to find what leaks. test/connection-reporter.js
+        env:
+          E2E_LOG_CONNECTIONS: '1'
         run: npm run test:e2e
 
       - name: Build

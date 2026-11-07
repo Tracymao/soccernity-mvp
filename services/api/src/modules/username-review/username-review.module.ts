@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AdminAuthFoundationModule } from '../admin/admin-auth-foundation.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { AuthRateLimitModule } from '../auth/rate-limit/rate-limit.module';
@@ -15,8 +15,8 @@ import { UsernameReviewService } from './username-review.service';
 // (GuardianSecurityNoticeModule). The revoke itself stays in AdminUsersModule; it only imports this module's
 // window helper, so there is no module cycle.
 @Module({
-  imports: [AdminAuthFoundationModule, AuthFoundationModule, AuthRateLimitModule, GuardianSecurityNoticeModule],
+  imports: [PrismaModule, AdminAuthFoundationModule, AuthFoundationModule, AuthRateLimitModule, GuardianSecurityNoticeModule],
   controllers: [UsernameReviewController, AdminUsernameReviewsController],
-  providers: [UsernameReviewService, AdminUsernameReviewsService, PrismaService],
+  providers: [UsernameReviewService, AdminUsernameReviewsService],
 })
 export class UsernameReviewModule {}
