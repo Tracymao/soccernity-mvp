@@ -126,7 +126,7 @@ export default function MessagesSidebar({
             const unread = c.unreadCount > 0;
             const last = c.lastMessage;
             const preview = last
-              ? `${last.senderId === currentUserId ? "You: " : ""}${last.contentText}`
+              ? `${last.senderId === currentUserId ? "You: " : ""}${last.contentText ?? "This message was deleted"}`
               : "No messages yet";
             const className = [
               "msg-row",

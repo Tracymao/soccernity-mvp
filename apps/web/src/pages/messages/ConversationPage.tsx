@@ -38,22 +38,41 @@
 // single-conversation read; a real fix is adding `GET /conversations/:id`
 // server-side, not something this frontend-only PR can build around.
 //
+// B-067 (Decision Log #472 (b)): edit your own message for 15 minutes (the
+// server clock decides), delete for me, delete for everyone, delete chat, and
+// the conversation actions menu (Mark as read, View profile, Block, Delete
+// chat). A long-press (touch) or the "..." button opens a message's menu. See
+// actions/ for the shared pieces; the Community pop-up (ChatWindow.tsx) uses
+// the same ones.
+//
 // A 404 (conversation doesn't exist, or the caller isn't a participant --
 // MessagingService.assertParticipant never distinguishes the two, a DM
 // thread's existence is never disclosed to a non-participant) renders an
 // honest "Conversation not found" state, never a crash.
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useLocation, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import {
   getMessages,
   sendMessage,
   markConversationRead,
+  isDeletedMessage,
   MessagingApiError,
-  type Message,
   type OtherParticipant,
+  type ThreadMessage,
 } from "../../api/messaging";
 import { getStoredAccessToken, decodeAccessToken } from "../../lib/session";
 import { UNDER_16_MESSAGE, isUnder16Restricted } from "../../lib/under16";
+import {
+  ConversationActions,
+  DeleteMessageDialog,
+  DeletedText,
+  EditBar,
+  MessageHost,
+  editedSuffix,
+} from "./actions/ActionUi";
+import { useConversationActions } from "./actions/useConversationActions";
+import { useMessageActions } from "./actions/useMessageActions";
+import { firstNameOf } from "./actions/messageActionRules";
 import "./MessagesPage.css";
 
 type LoadState = "loading" | "loaded" | "error" | "not-found" | "no-session";
@@ -75,6 +94,7 @@ function timeFor(iso: string): string {
 export default function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const location = useLocation();
+  const navigate = useNavigate();
   const passedOther = (location.state as { otherParticipant?: OtherParticipant } | null)?.otherParticipant ?? null;
 
   const token = getStoredAccessToken();
@@ -82,7 +102,7 @@ export default function ConversationPage() {
 
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [restricted, setRestricted] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]); // ascending: oldest first, newest last
+  const [messages, setMessages] = useState<ThreadMessage[]>([]); // ascending: oldest first, newest last
   const [olderCursor, setOlderCursor] = useState<string | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
 
@@ -91,6 +111,26 @@ export default function ConversationPage() {
   const [sendError, setSendError] = useState<string | null>(null);
 
   const markedReadRef = useRef(false);
+
+  // B-067: edit, delete for me, delete for everyone, delete chat. The other
+  // person's id comes from the router state; on a direct visit it falls back
+  // to the sender of any message that is not mine.
+  const otherId =
+    passedOther?.id ?? messages.find((m) => decoded && m.senderId !== decoded.sub)?.senderId ?? null;
+  const otherName = passedOther?.publicName ?? null;
+  const messageActions = useMessageActions({
+    accessToken: token ?? "",
+    conversationId: conversationId ?? "",
+    currentUserId: decoded?.sub ?? "",
+    otherName,
+    setMessages,
+  });
+  const conversationActions = useConversationActions({
+    accessToken: token ?? "",
+    conversationId: conversationId ?? "",
+    otherId,
+    onChatDeleted: () => navigate("/messages", { replace: true }),
+  });
 
   const load = useCallback(async () => {
     if (!token || !decoded) {
@@ -221,6 +261,13 @@ export default function ConversationPage() {
           {initialsFor(passedOther?.publicName ?? null)}
         </span>
         <h1 className="conversation-page__name">{headerName}</h1>
+        <ConversationActions
+          actions={conversationActions}
+          accessToken={token ?? ""}
+          otherName={otherName}
+          firstName={firstNameOf(otherName)}
+          triggerClassName="conversation-page__more"
+        />
       </header>
 
       <div className="conversation-page__thread">
@@ -238,29 +285,48 @@ export default function ConversationPage() {
 
         {messages.map((m) => {
           const mine = m.senderId === decoded.sub;
+          if (isDeletedMessage(m)) {
+            return (
+              <div key={m.id} className={mine ? "conversation-bubble conversation-bubble--mine" : "conversation-bubble"}>
+                <p className="conversation-bubble__text">
+                  <DeletedText />
+                </p>
+                <span className="conversation-bubble__time">{timeFor(m.sentAt)}</span>
+              </div>
+            );
+          }
           return (
-            <div key={m.id} className={mine ? "conversation-bubble conversation-bubble--mine" : "conversation-bubble"}>
-              <p className="conversation-bubble__text">{m.contentText}</p>
-              <span className="conversation-bubble__time">{timeFor(m.sentAt)}</span>
-            </div>
+            <MessageHost key={m.id} message={m} mine={mine} actions={messageActions}>
+              <div className={mine ? "conversation-bubble conversation-bubble--mine" : "conversation-bubble"}>
+                <p className="conversation-bubble__text">{m.contentText}</p>
+                <span className="conversation-bubble__time">
+                  {timeFor(m.sentAt)}
+                  {editedSuffix(m)}
+                </span>
+              </div>
+            </MessageHost>
           );
         })}
       </div>
 
-      <form className="conversation-composer" onSubmit={handleSend}>
-        <input
-          type="text"
-          className="conversation-composer__input"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="Write a message…"
-          maxLength={MAX_LENGTH}
-          aria-label="Write a message"
-        />
-        <button type="submit" className="conversation-composer__submit" disabled={sending || !draft.trim()}>
-          {sending ? "Sending…" : "Send"}
-        </button>
-      </form>
+      {messageActions.edit ? (
+        <EditBar actions={messageActions} />
+      ) : (
+        <form className="conversation-composer" onSubmit={handleSend}>
+          <input
+            type="text"
+            className="conversation-composer__input"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Write a message…"
+            maxLength={MAX_LENGTH}
+            aria-label="Write a message"
+          />
+          <button type="submit" className="conversation-composer__submit" disabled={sending || !draft.trim()}>
+            {sending ? "Sending…" : "Send"}
+          </button>
+        </form>
+      )}
 
       {sendError && (
         <p className="messages-status messages-status--error" role="alert">
@@ -273,6 +339,8 @@ export default function ConversationPage() {
           )}
         </p>
       )}
+
+      <DeleteMessageDialog actions={messageActions} />
     </div>
   );
 }

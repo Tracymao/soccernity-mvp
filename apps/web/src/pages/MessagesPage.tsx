@@ -48,7 +48,7 @@ function nameFor(conversation: Conversation): string {
 
 function previewFor(conversation: Conversation): string {
   if (!conversation.lastMessage) return "No messages yet — say hello.";
-  return conversation.lastMessage.contentText;
+  return conversation.lastMessage.contentText ?? "This message was deleted";
 }
 
 function timeFor(iso: string): string {
