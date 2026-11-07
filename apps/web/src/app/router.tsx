@@ -83,6 +83,9 @@ import PrivacySettingsPage from "../pages/PrivacySettingsPage";
 import BlockedUsersPage from "../pages/settings/BlockedUsersPage";
 import OtherProfilePage from "../pages/OtherProfilePage";
 import ChangePasswordPage from "../pages/settings/ChangePasswordPage";
+import AccountInformationPage from "../pages/settings/AccountInformationPage";
+import ChangeEmailPage from "../pages/settings/ChangeEmailPage";
+import EmailChangeConfirmPage from "../pages/email-change/EmailChangeConfirmPage";
 import DeactivateAccountPage from "../pages/settings/DeactivateAccountPage";
 import DeleteAccountPage from "../pages/settings/DeleteAccountPage";
 import SettingsLayout from "../pages/settings/SettingsLayout";
@@ -157,6 +160,9 @@ export const routes: RouteObject[] = [
       { path: "two-factor-recovery/confirm", element: <RecoveryConfirmPage /> },
       { path: "two-factor-recovery/cancel", element: <RecoveryCancelPage /> },
       { path: "two-factor-recovery/guardian", element: <RecoveryGuardianPage /> },
+      // B-059: the page the email-change link opens. Public (the link's secret is the credential),
+      // so it sits under the logo-only Top Bar like the other emailed-link pages.
+      { path: "email-change/confirm", element: <EmailChangeConfirmPage /> },
     ],
   },
   {
@@ -406,6 +412,9 @@ export const routes: RouteObject[] = [
           { path: "menu", element: <SettingsMenuPage /> },
           { path: "account", element: <AccountOverviewPage /> },
           { path: "account/change-password", element: <ChangePasswordPage /> },
+          // B-059: Account Information and the email-change steps (Figma 6989:49962 ..).
+          { path: "account/information", element: <AccountInformationPage /> },
+          { path: "account/information/change-email", element: <ChangeEmailPage /> },
           { path: "account/deactivate", element: <DeactivateAccountPage /> },
           { path: "account/delete", element: <DeleteAccountPage /> },
           { path: "privacy", element: <PrivacySettingsPage /> },

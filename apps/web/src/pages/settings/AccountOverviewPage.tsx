@@ -5,10 +5,8 @@
 //
 // Built here: Deactivate, Delete, Club representation (the selector,
 // Decision Log #74, 5570:7813 — a standalone flow screen opened from this
-// row) and Change password (2924:6870, B-059, ChangePasswordPage). Account
-// information stays visibly disabled with a "not built yet" note: its leaf
-// (2922:6396/2924:7112) waits for the email-change backend, and its
-// Username/Country also lack backing columns (Decision Log #58).
+// row), Change password (2924:6870, B-059, ChangePasswordPage) and Account
+// information (6989:49962, B-059, AccountInformationPage + ChangeEmailPage).
 import { Link } from "react-router";
 import { getStoredAccessToken } from "../../lib/session";
 
@@ -19,7 +17,11 @@ interface Row {
 }
 
 const ROWS: Row[] = [
-  { label: "Account information", desc: "Your name, phone, and email" },
+  {
+    label: "Account information",
+    desc: "Your phone, email, and date of birth",
+    to: "/settings/account/information",
+  },
   {
     label: "Club representation",
     desc: "Set your represented club",

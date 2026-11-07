@@ -178,7 +178,7 @@ describe("Mobile hub + back bar", () => {
 });
 
 describe("Account overview", () => {
-  it("links Deactivate/Delete/Club representation/Change password to their real screens; Account information is disabled", async () => {
+  it("links Deactivate/Delete/Club representation/Change password/Account information to their real screens", async () => {
     await renderAt("/settings/account");
     expect(
       screen.getByRole("link", { name: /deactivate account/i }).getAttribute("href"),
@@ -189,7 +189,9 @@ describe("Account overview", () => {
     expect(
       screen.getByRole("link", { name: /club representation/i }).getAttribute("href"),
     ).toBe("/settings/account/club-representation");
-    expect(screen.getByText(/account information/i).closest("[aria-disabled='true']")).not.toBeNull();
+    expect(screen.getByRole("link", { name: /account information/i }).getAttribute("href")).toBe(
+      "/settings/account/information",
+    );
     expect(screen.getByRole("link", { name: /change password/i }).getAttribute("href")).toBe(
       "/settings/account/change-password",
     );
