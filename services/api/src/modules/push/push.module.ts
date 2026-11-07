@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { PushSettingsController } from './push-settings.controller';
 import { PushSweepService } from './push-sweep.service';
@@ -18,7 +17,6 @@ import { WebPushLibSender, WebPushSender } from './web-push-sender';
     PushService,
     PushSweepService,
     PushConfig,
-    PrismaService,
     { provide: WebPushSender, useClass: WebPushLibSender },
   ],
 })
