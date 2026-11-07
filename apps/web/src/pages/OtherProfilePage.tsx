@@ -32,7 +32,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
 import {
   UsersApiError,
-  blockUser,
   followUser,
   getPublicProfile,
   unblockUser,
@@ -42,6 +41,7 @@ import {
 import { MessagingApiError, startConversation } from "../api/messaging";
 import { countryName } from "../lib/countries";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
+import BlockUserDialog from "../components/block/BlockUserDialog";
 import NotFoundPage from "./NotFoundPage";
 import PinnedEntry from "./community/PinnedEntry";
 import { initialsFor } from "./profile/profileFields";
@@ -62,7 +62,6 @@ export default function OtherProfilePage() {
   const [blocked, setBlocked] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [blockOpen, setBlockOpen] = useState(false);
-  const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -151,24 +150,6 @@ export default function OtherProfilePage() {
       setNotice("Profile link copied.");
     } catch {
       setNotice(url);
-    }
-  }
-
-  async function confirmBlock() {
-    if (busy) return;
-    setBusy(true);
-    setActionError(null);
-    try {
-      await blockUser(accessToken, targetId, reason);
-      setBlocked(true);
-      setFollowing(false);
-      setBlockOpen(false);
-      setReason("");
-      setNotice(null);
-    } catch (err) {
-      setActionError(err instanceof UsersApiError ? err.message : "Couldn't block that user.");
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -308,54 +289,19 @@ export default function OtherProfilePage() {
         Posts and follower counts for this profile aren&rsquo;t available yet.
       </div>
 
-      {blockOpen && (
-        <div className="other-profile__scrim" onClick={() => !busy && setBlockOpen(false)}>
-          <div
-            className="other-profile__dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="block-dialog-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2 id="block-dialog-title" className="other-profile__dialog-title">
-              Block {person.publicName}?
-            </h2>
-            <p className="other-profile__dialog-body">Blocking {person.publicName}:</p>
-            <ul className="other-profile__dialog-list">
-              <li>hides their posts, comments, likes and search results from you, and yours from them</li>
-              <li>stops messages in both directions</li>
-              <li>removes follows in both directions</li>
-            </ul>
-            <p className="other-profile__dialog-body">
-              You can undo it at any time in Settings; unblocking does not restore follows. They are not told.
-              [COPY PENDING LEGAL REVIEW]
-            </p>
-            <label className="other-profile__dialog-label" htmlFor="block-reason">
-              Reason (optional)
-            </label>
-            <input
-              id="block-reason"
-              className="other-profile__dialog-input"
-              value={reason}
-              maxLength={500}
-              onChange={(event) => setReason(event.target.value)}
-              placeholder="Add a note for yourself"
-            />
-            {actionError && (
-              <p className="profile-status-message profile-status-message--error" role="alert">
-                {actionError}
-              </p>
-            )}
-            <div className="other-profile__dialog-actions">
-              <button type="button" className="profile-load-more" onClick={() => setBlockOpen(false)} disabled={busy}>
-                Cancel
-              </button>
-              <button type="button" className="profile-edit-button" onClick={() => void confirmBlock()} disabled={busy}>
-                {busy ? "Blocking…" : "Block"}
-              </button>
-            </div>
-          </div>
-        </div>
+      {blockOpen && token && (
+        <BlockUserDialog
+          accessToken={token}
+          userId={targetId}
+          name={person.publicName}
+          onClose={() => setBlockOpen(false)}
+          onBlocked={() => {
+            setBlocked(true);
+            setFollowing(false);
+            setBlockOpen(false);
+            setNotice(null);
+          }}
+        />
       )}
     </div>
   );

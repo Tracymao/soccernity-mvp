@@ -295,6 +295,25 @@ persistent room's own discoverability metadata (it's exactly what
 `?topicId=` filters against), the same category of action room *creation*
 already treats as consent-gated.
 
+### Removing a topic — `DELETE /banter-rooms/:id/topics/:topicId` (`backend/banter-topic-remove`)
+
+Built for the remove cross on the Bants topic chips (Figma frame `6999:56133`,
+`docs/figma-w8-bants.md`, which marked it SCOPE OPEN because no endpoint existed).
+
+- Same guards, same order and same creator-only rule as `POST .../topics` (`BanterService.detachTopic`):
+  404 for a missing room, then 403 for a non-creator, then the topic id is looked up. A non-creator
+  therefore learns nothing about which topic ids exist.
+- `204`, no body. Deletes **only** the `BanterRoomTopic` junction row. The shared `Topic` row is never
+  deleted: other rooms use it and the topics catalog keeps listing it.
+- Idempotent: a `Topic` that exists but is not attached to the room (for example a repeat call) is a
+  `204` no-op (`deleteMany`, never a P2025).
+- No schema change. `:id` and `:topicId` are not format-validated anywhere in this controller, so a
+  garbage id is simply "not found".
+- **DEFAULT, founder-veto-able:** a `topicId` that matches no `Topic` row is a `404 Topic not found`.
+- **DEFAULT, founder-veto-able:** an inactive room can still have topics removed (tidying a room's own
+  tags is not posting).
+- Under-16 accounts are blocked by the existing whole-controller guard, unchanged.
+
 ### `GET /banter-rooms/topics` — beyond Section 4.4's literal list, built anyway
 
 Section 4.4 names only `POST /banter-rooms/:id/topics`. Without a topics
@@ -332,6 +351,7 @@ Section 4.4 lists: `GET /banter-rooms`, `GET /banter-rooms/:id`, `POST
 | `POST /banter-rooms/:id/posts` | `JwtAuthGuard` + `GuardianConsentGuard` | Post into a room. `assertRoomExists` (404) → (no membership check since B-117) → `FeedService.createPost(userId, { ...dto, banterRoomId: id })` — the single post-creation path, never a parallel one. `{ contentText, mediaUrls? }`. |
 | `GET /banter-rooms/topics` | `JwtAuthGuard` | The topics catalog. Alphabetical by `name`, keyset-paginated. `sprint-3/banter-room-topics`, Decision Log #276. |
 | `POST /banter-rooms/:id/topics` | `JwtAuthGuard` + `GuardianConsentGuard` | Attach one or more topics to a room. **Room creator only** (403 otherwise). `{ names: string[] }`, max 5. Find-or-create + idempotent attach — see "Topics" above. `sprint-3/banter-room-topics`, resolves Decision Log #276. |
+| `DELETE /banter-rooms/:id/topics/:topicId` | `JwtAuthGuard` + `GuardianConsentGuard` + `EmailVerifiedGuard` | Remove one topic tag from a room. **Room creator only**, same order as attach: 404 missing room, then 403 non-creator, then 404 unknown topic id. `204`, idempotent. Deletes only the `BanterRoomTopic` link, never the shared `Topic`. See "Removing a topic" below. |
 
 ### Not built
 

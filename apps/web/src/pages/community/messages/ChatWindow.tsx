@@ -11,9 +11,14 @@
 //   - PATCH /conversations/:id/read     once, right after the first page
 //     loads ("the person opened this chat").
 //
+// B-067 (Decision Log #472 (b)) adds, from the same shared pieces the mobile
+// page uses (pages/messages/actions/): edit your own message for 15 minutes,
+// delete for me, delete for everyone, the "..." menu on each bubble, and the
+// conversation actions menu in the header (Mark as read, View profile, Block,
+// Delete chat).
+//
 // Not in the frame's behaviour and deliberately not built here:
-//   - the per-message heart and delete icons and the dropdown beside the
-//     name (the conversation actions menu, B-067);
+//   - the per-message heart icon;
 //   - the video / photo / GIF / emoji controls in the footer (a message is
 //     text only since B-259; no emoji picker exists);
 //   - "Active 6h ago." (no presence data exists anywhere in the API).
@@ -26,13 +31,26 @@ import {
   sendMessage,
   markConversationRead,
   MessagingApiError,
+  isDeletedMessage,
   type Conversation,
   type Message,
+  type MessagePreview,
+  type ThreadMessage,
 } from "../../../api/messaging";
 import { isUnder16Restricted, UNDER_16_MESSAGE } from "../../../lib/under16";
 import chatMinimise from "../../../assets/icons/chat-minimise.svg";
 import chatClose from "../../../assets/icons/chat-close.svg";
 import chatExpand from "../../../assets/icons/chat-expand.svg";
+import {
+  ConversationActions,
+  DeleteMessageDialog,
+  DeletedText,
+  EditBar,
+  MessageHost,
+} from "../../messages/actions/ActionUi";
+import { useConversationActions } from "../../messages/actions/useConversationActions";
+import { useMessageActions } from "../../messages/actions/useMessageActions";
+import { firstNameOf } from "../../messages/actions/messageActionRules";
 import { initialsFor, messageTimeLabel, TIME_LABEL_GAP_MS } from "./time";
 
 type LoadState = "loading" | "loaded" | "error" | "not-found";
@@ -49,6 +67,11 @@ export interface ChatWindowProps {
   onClose: () => void;
   onRead: (conversationId: string) => void;
   onSent: (conversationId: string, message: Message) => void;
+  // After an edit or a delete, the new last message for the sidebar preview
+  // (null when no message is left to show).
+  onPreviewChange?: (conversationId: string, preview: MessagePreview | null) => void;
+  // "Delete chat": the chat closes and leaves the sidebar.
+  onChatDeleted?: (conversationId: string) => void;
 }
 
 export default function ChatWindow({
@@ -61,13 +84,15 @@ export default function ChatWindow({
   onClose,
   onRead,
   onSent,
+  onPreviewChange,
+  onChatDeleted,
 }: ChatWindowProps) {
   const name = conversation.otherParticipant?.publicName ?? "Deleted user";
   const initials = initialsFor(conversation.otherParticipant?.publicName ?? null);
 
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [restricted, setRestricted] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]); // oldest first
+  const [messages, setMessages] = useState<ThreadMessage[]>([]); // oldest first
   const [olderCursor, setOlderCursor] = useState<string | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [draft, setDraft] = useState("");
@@ -81,6 +106,36 @@ export default function ChatWindow({
   onReadRef.current = onRead;
 
   const conversationId = conversation.id;
+  const otherName = conversation.otherParticipant?.publicName ?? null;
+  const onPreviewRef = useRef(onPreviewChange);
+  onPreviewRef.current = onPreviewChange;
+
+  const messageActions = useMessageActions({ accessToken, conversationId, currentUserId, otherName, setMessages });
+  const conversationActions = useConversationActions({
+    accessToken,
+    conversationId,
+    otherId: conversation.otherParticipant?.id ?? null,
+    onMarkedRead: () => onReadRef.current(conversationId),
+    onChatDeleted: () => onChatDeleted?.(conversationId),
+  });
+
+  // After an edit or a delete that worked, tell the sidebar what the last
+  // message is now. Not done on load, so opening a chat never rewrites a row.
+  const changeTick = messageActions.changeTick;
+  useEffect(() => {
+    if (changeTick === 0) return;
+    const last = [...messages].reverse().find((m) => !isDeletedMessage(m));
+    if (last && !isDeletedMessage(last)) {
+      onPreviewRef.current?.(conversationId, {
+        contentText: last.contentText,
+        senderId: last.senderId,
+        sentAt: last.sentAt,
+      });
+    } else if (!olderCursor) {
+      onPreviewRef.current?.(conversationId, null);
+    }
+    // Runs only when a change succeeded.
+  }, [changeTick]); // eslint-disable-line
 
   const load = useCallback(async () => {
     setLoadState("loading");
@@ -176,6 +231,13 @@ export default function ChatWindow({
           <span className="chat-window__name">{name}</span>
         </div>
         <div className="chat-window__controls">
+          <ConversationActions
+            actions={conversationActions}
+            accessToken={accessToken}
+            otherName={otherName}
+            firstName={firstNameOf(otherName)}
+            triggerClassName="chat-window__control"
+          />
           <button type="button" className="chat-window__control" onClick={onMinimise} aria-label="Minimise chat">
             <img src={chatMinimise} alt="" width={12} height={2} />
           </button>
@@ -229,6 +291,7 @@ export default function ChatWindow({
               const showTime =
                 !prev || new Date(m.sentAt).getTime() - new Date(prev.sentAt).getTime() >= TIME_LABEL_GAP_MS;
               const startsRun = !prev || prev.senderId !== m.senderId || showTime;
+              const deleted = isDeletedMessage(m);
               return (
                 <div key={m.id} className="chat-message-wrap">
                   {showTime && <p className="chat-message-time">{messageTimeLabel(m.sentAt)}</p>}
@@ -241,7 +304,18 @@ export default function ChatWindow({
                         {startsRun ? initials : ""}
                       </span>
                     )}
-                    <p className="chat-message__bubble">{m.contentText}</p>
+                    {deleted ? (
+                      <p className="chat-message__bubble chat-message__bubble--deleted">
+                        <DeletedText />
+                      </p>
+                    ) : (
+                      <MessageHost message={m} mine={mine} actions={messageActions}>
+                        <p className="chat-message__bubble">
+                          {m.contentText}
+                          {m.editedAt && <span className="chat-message__edited">Edited</span>}
+                        </p>
+                      </MessageHost>
+                    )}
                   </div>
                 </div>
               );
@@ -262,21 +336,27 @@ export default function ChatWindow({
         </p>
       )}
 
-      <form className="chat-window__composer" onSubmit={handleSend}>
-        <input
-          type="text"
-          className="chat-window__input"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="Write a message…"
-          maxLength={MAX_LENGTH}
-          aria-label={`Write a message to ${name}`}
-          disabled={loadState !== "loaded"}
-        />
-        <button type="submit" className="chat-window__send" disabled={loadState !== "loaded" || sending || !draft.trim()}>
-          {sending ? "Sending…" : "Send"}
-        </button>
-      </form>
+      {messageActions.edit ? (
+        <EditBar actions={messageActions} />
+      ) : (
+        <form className="chat-window__composer" onSubmit={handleSend}>
+          <input
+            type="text"
+            className="chat-window__input"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Write a message…"
+            maxLength={MAX_LENGTH}
+            aria-label={`Write a message to ${name}`}
+            disabled={loadState !== "loaded"}
+          />
+          <button type="submit" className="chat-window__send" disabled={loadState !== "loaded" || sending || !draft.trim()}>
+            {sending ? "Sending…" : "Send"}
+          </button>
+        </form>
+      )}
+
+      <DeleteMessageDialog actions={messageActions} />
     </section>
   );
 }

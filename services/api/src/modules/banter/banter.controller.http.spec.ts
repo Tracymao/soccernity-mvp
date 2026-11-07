@@ -34,6 +34,7 @@ describe('BanterController (HTTP layer)', () => {
     // sprint-3/banter-room-topics (Decision Log #276).
     listTopics: jest.fn(),
     attachTopics: jest.fn(),
+    detachTopic: jest.fn(),
   };
 
   beforeAll(async () => {
@@ -290,6 +291,25 @@ describe('BanterController (HTTP layer)', () => {
 
     it('rejects a missing names field (400)', async () => {
       await request(app.getHttpServer()).post('/banter-rooms/r-1/topics').send({}).expect(400);
+    });
+  });
+
+  describe('DELETE /banter-rooms/:id/topics/:topicId', () => {
+    it('removes the topic, returns 204 with no body, and runs the consent guard', async () => {
+      banter.detachTopic.mockResolvedValue(undefined);
+      consentGuardCalls = 0;
+      const res = await request(app.getHttpServer()).delete('/banter-rooms/r-1/topics/t-1').expect(204);
+      expect(res.text).toBe('');
+      expect(banter.detachTopic).toHaveBeenCalledWith('user-1', 'r-1', 't-1');
+      expect(consentGuardCalls).toBe(1);
+    });
+
+    it('does not shadow or get shadowed by the other topic routes', async () => {
+      banter.detachTopic.mockResolvedValue(undefined);
+      banter.listTopics.mockResolvedValue({ items: [], nextCursor: null });
+      await request(app.getHttpServer()).get('/banter-rooms/topics').expect(200);
+      expect(banter.listTopics).toHaveBeenCalled();
+      expect(banter.detachTopic).not.toHaveBeenCalled();
     });
   });
 });

@@ -37,7 +37,10 @@ export interface OtherParticipant {
 }
 
 export interface MessagePreview {
-  contentText: string;
+  // The server skips messages deleted for everyone when it builds the
+  // preview, so null cannot arrive today; the type stays honest anyway and
+  // the lists show the placeholder wording if it ever does.
+  contentText: string | null;
   senderId: string;
   sentAt: string;
 }
@@ -60,7 +63,9 @@ export interface ConversationPage {
 }
 
 // GET /conversations/:id/messages, POST /conversations/:id/messages
-// (MessageView).
+// (MessageView). B-067 added `editedAt` (null until an edit, then the time
+// of the latest one) and the deleted-for-everyone placeholder below. Both
+// stay optional on the live shape so a response from before B-067 still types.
 export interface Message {
   id: string;
   conversationId: string;
@@ -68,12 +73,48 @@ export interface Message {
   contentText: string;
   sentAt: string;
   readAt: string | null;
+  editedAt?: string | null;
+  deletedForEveryone?: false;
+}
+
+// A message deleted for everyone arrives like this for BOTH people: no text,
+// no read time (B-067, messaging/README.md "Read paths").
+export interface DeletedMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  sentAt: string;
+  editedAt: null;
+  deletedForEveryone: true;
+  contentText: null;
+}
+
+export type ThreadMessage = Message | DeletedMessage;
+
+export function isDeletedMessage(message: ThreadMessage): message is DeletedMessage {
+  return message.deletedForEveryone === true;
 }
 
 export interface MessagePage {
-  items: Message[];
+  items: ThreadMessage[];
   nextCursor: string | null;
 }
+
+// The coded errors the B-067 routes add (services/api messaging.constants.ts).
+// Errors are told apart by `code`, never by the server's message text.
+export const MESSAGE_EDIT_WINDOW_CLOSED_CODE = "message_edit_window_closed";
+export const MESSAGE_NOT_EDITABLE_CODE = "message_not_editable";
+export const MESSAGE_EDIT_NOT_SENDER_CODE = "message_edit_not_sender";
+export const MESSAGE_DELETE_NOT_SENDER_CODE = "message_delete_not_sender";
+
+// The latest edit's result: the fields an edit can change.
+export interface EditMessageResult {
+  id: string;
+  contentText: string;
+  editedAt: string | null;
+}
+
+export type DeleteMessageScope = "me" | "everyone";
 
 export interface SendMessageRequest {
   contentText: string;
@@ -99,6 +140,19 @@ export class MessagingApiError extends Error {
 interface AuthedFetchInit {
   method?: string;
   body?: string;
+}
+
+// Builds the error for a non-ok response and keeps the server's `code` (the
+// shared apiFailure only keeps the under-16 one).
+async function failure(response: Response, fallback: string, useServerMessage: boolean): Promise<MessagingApiError> {
+  const body = (await response.clone().json().catch(() => null)) as { code?: unknown } | null;
+  const code = body && typeof body.code === "string" ? body.code : undefined;
+  return apiFailure(
+    (m, o) => new MessagingApiError(m, { ...o, code: o.code ?? code }),
+    response,
+    fallback,
+    useServerMessage,
+  );
 }
 
 async function authedFetch(path: string, accessToken: string, init?: AuthedFetchInit): Promise<Response> {
@@ -195,6 +249,56 @@ export async function sendMessage(
 // Notification server-side (sprint-3/banter-messaging-to-code,
 // messaging.service.ts's own markConversationRead) -- nothing extra to
 // call from here, it's the same one request.
+// PATCH /conversations/:id/messages/:messageId { contentText } -- the sender
+// edits their own text message. The SERVER clock decides the 15 minutes, so
+// a message_edit_window_closed reply is the answer, whatever the client
+// thought. Same guard set as a send.
+export async function editMessage(
+  accessToken: string,
+  conversationId: string,
+  messageId: string,
+  contentText: string,
+): Promise<EditMessageResult> {
+  const response = await authedFetch(
+    `/conversations/${conversationId}/messages/${messageId}`,
+    accessToken,
+    { method: "PATCH", body: JSON.stringify({ contentText }) },
+  );
+  if (!response.ok) {
+    throw await failure(response, `Couldn't save that edit (${response.status}).`, true);
+  }
+  return (await response.json()) as EditMessageResult;
+}
+
+// DELETE /conversations/:id/messages/:messageId?scope=me|everyone -- 204.
+// `me` hides one message for the caller; `everyone` (sender only) replaces
+// it with the placeholder for both people. The server keeps the row either way.
+export async function deleteMessage(
+  accessToken: string,
+  conversationId: string,
+  messageId: string,
+  scope: DeleteMessageScope,
+): Promise<void> {
+  const response = await authedFetch(
+    `/conversations/${conversationId}/messages/${messageId}?scope=${scope}`,
+    accessToken,
+    { method: "DELETE" },
+  );
+  if (!response.ok) {
+    throw await failure(response, `Couldn't delete that message (${response.status}).`, true);
+  }
+}
+
+// DELETE /conversations/:id -- "Delete chat", for the caller only (204). A
+// newer message from the other person brings the chat back with only the
+// new messages.
+export async function deleteConversation(accessToken: string, conversationId: string): Promise<void> {
+  const response = await authedFetch(`/conversations/${conversationId}`, accessToken, { method: "DELETE" });
+  if (!response.ok) {
+    throw await failure(response, `Couldn't delete that chat (${response.status}).`, true);
+  }
+}
+
 export async function markConversationRead(
   accessToken: string,
   conversationId: string,

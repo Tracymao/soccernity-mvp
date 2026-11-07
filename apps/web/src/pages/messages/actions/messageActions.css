@@ -1,0 +1,352 @@
+/* Message actions (B-067). Figma: docs/figma-w8-messaging.md (A1 to D10).
+ * Palette from the brand tokens only. Where a frame uses a colour with no
+ * token (the Block User item in red in the old component, grey bubbles) the
+ * nearest token is used: navy for the menu item, the existing bubble colours
+ * for bubbles. Errors use the app's accent-bar callout (semantic alert as a
+ * bar only, text in navy), as on the other screens. */
+
+/* --- the host that wraps one bubble ------------------------------------ */
+
+.msg-host {
+  position: relative;
+  display: block;
+  max-width: 75%;
+  min-width: 0;
+  align-self: flex-start;
+}
+
+.msg-host--mine {
+  align-self: flex-end;
+}
+
+/* The surfaces' own bubble rules cap the width at 75%; the host does that. */
+.msg-host > .conversation-bubble,
+.msg-host > .chat-message__bubble {
+  max-width: 100%;
+  align-self: auto;
+}
+
+.msg-more {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 50%;
+  background: var(--sn-background-surface);
+  color: var(--sn-brand-navy);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.msg-host--mine > .msg-more {
+  right: 100%;
+  margin-right: 6px;
+}
+
+.msg-host:not(.msg-host--mine) > .msg-more {
+  left: 100%;
+  margin-left: 6px;
+}
+
+.msg-host:hover > .msg-more,
+.msg-host:focus-within > .msg-more,
+.msg-host--open > .msg-more,
+.msg-more:focus-visible {
+  opacity: 1;
+}
+
+/* Touch screens open the menu with a long-press; the button stays in the
+ * page for assistive technology and keyboards but is not tappable by accident. */
+@media (hover: none) {
+  .msg-host:hover > .msg-more {
+    opacity: 0;
+  }
+  .msg-more {
+    pointer-events: none;
+  }
+}
+
+.msg-icon {
+  flex-shrink: 0;
+}
+
+.msg-deleted {
+  font-style: italic;
+  color: var(--sn-text-secondary);
+}
+
+.msg-edited {
+  color: var(--sn-text-secondary);
+}
+
+/* --- menus --------------------------------------------------------------- */
+
+.msg-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 224px;
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: 12px;
+  background: var(--sn-background-surface);
+  box-shadow:
+    0 2px 6px var(--sn-shadow-ambient),
+    0 8px 24px var(--sn-shadow-elevated);
+}
+
+.msg-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--sn-brand-navy);
+  text-align: left;
+  cursor: pointer;
+}
+
+.msg-menu__item:hover:not(:disabled),
+.msg-menu__item:focus-visible {
+  background: var(--sn-green-tint-12);
+  outline: none;
+}
+
+.msg-menu__item:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.msg-menu__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.msg-menu__label {
+  font: 600 14px "Inter", sans-serif;
+}
+
+.msg-menu__hint {
+  font: 400 12px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+/* --- modals and the bottom sheet ---------------------------------------- */
+
+.msg-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background-color: var(--sn-overlay-scrim);
+}
+
+.msg-modal {
+  width: 100%;
+  max-width: 350px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-radius: 12px;
+  background: var(--sn-background-surface);
+  box-shadow:
+    0 2px 6px var(--sn-shadow-ambient),
+    0 8px 24px var(--sn-shadow-elevated),
+    0 24px 56px var(--sn-shadow-key);
+}
+
+.msg-modal__title {
+  margin: 0;
+  font: 600 20px "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+}
+
+.msg-modal__body {
+  margin: 0;
+  font: 400 14px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.msg-modal__note {
+  margin: 0;
+  font: 500 13px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.msg-modal__error,
+.msg-edit__error {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--sn-semantic-alert);
+  border-radius: 4px;
+  background: var(--sn-green-tint-12);
+  font: 500 13px/1.45 "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+}
+
+.msg-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 10px;
+  background: var(--sn-background-surface);
+  color: var(--sn-brand-navy);
+  text-align: left;
+  cursor: pointer;
+}
+
+.msg-choice:hover,
+.msg-choice:focus-visible {
+  background: var(--sn-green-tint-12);
+  outline: none;
+}
+
+.msg-choice__label {
+  font: 600 14px "Inter", sans-serif;
+}
+
+.msg-choice__hint {
+  font: 400 12px/1.4 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.msg-btn {
+  height: 46px;
+  padding: 0 20px;
+  border-radius: 999px;
+  font: 600 14px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.msg-btn--primary {
+  border: 1px solid var(--sn-brand-navy);
+  background: var(--sn-brand-navy);
+  color: #fff; /* no web token for text on navy; same exception as accountActions.css */
+}
+
+.msg-btn--secondary {
+  border: 1px solid var(--sn-icon-inactive);
+  background: var(--sn-background-surface);
+  color: var(--sn-brand-navy);
+}
+
+.msg-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* On a phone the choice is a sheet from the bottom of the screen (B2, B3). */
+@media (max-width: 600px) {
+  .msg-scrim:has(.msg-modal--sheet) {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .msg-modal--sheet {
+    max-width: 100%;
+    border-radius: 16px 16px 0 0;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* --- edit mode (replaces the composer) ---------------------------------- */
+
+.msg-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 12px;
+  background: var(--sn-background-surface);
+}
+
+.msg-edit__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.msg-edit__title {
+  font: 600 13px "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+}
+
+.msg-edit__cancel {
+  padding: 4px 6px;
+  border: 0;
+  background: none;
+  font: 600 13px "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+  cursor: pointer;
+}
+
+.msg-edit__cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.msg-edit__row {
+  display: flex;
+  gap: 8px;
+}
+
+.msg-edit__input {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 8px;
+  background: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+  font: 400 14px "Inter", sans-serif;
+}
+
+.msg-edit__input:disabled {
+  opacity: 0.6;
+}
+
+.msg-edit__save {
+  height: 42px;
+}
+
+/* --- toast ---------------------------------------------------------------- */
+
+.msg-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 120;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: var(--sn-brand-navy);
+  color: #fff;
+  font: 500 13px "Inter", sans-serif;
+}
