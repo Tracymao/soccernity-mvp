@@ -94,6 +94,10 @@ jobs:
 
       - name: Run e2e tests
         working-directory: services/api
+        # Prints the open Postgres connection count after each spec file
+        # ([e2e-connections] lines), to find what leaks. test/connection-reporter.js
+        env:
+          E2E_LOG_CONNECTIONS: '1'
         run: npm run test:e2e
 
       - name: Build
