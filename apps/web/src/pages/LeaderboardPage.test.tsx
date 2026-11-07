@@ -202,9 +202,9 @@ describe("LeaderboardPage", () => {
     expect(screen.getByText("You")).not.toBeNull(); // the caller's own row (sub === userId)
     expect(listClubs).toHaveBeenCalledWith(expect.any(String));
     expect(getLeaderboard).toHaveBeenCalled();
-    // No club / 7-day-change columns -- the endpoint has neither.
-    expect(screen.queryByRole("columnheader", { name: "Club" })).toBeNull();
-    expect(screen.queryByRole("columnheader", { name: "7-day change" })).toBeNull();
+    // B-053: the endpoint now carries a club and a 7-day change per row, so both columns are drawn (desktop).
+    expect(screen.getByRole("columnheader", { name: "Club" })).not.toBeNull();
+    expect(screen.getByRole("columnheader", { name: "7-day change" })).not.toBeNull();
   });
 
   it("shows an empty state when the current week has no ranked players", async () => {
@@ -214,7 +214,8 @@ describe("LeaderboardPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText(/no ranked players this week yet/i)).not.toBeNull();
+    // Figma 5542:7344 empty-state card ("No ranked players here yet").
+    expect(await screen.findByText(/no ranked players here yet/i)).not.toBeNull();
   });
 
   it("degrades to an inline message (page still renders) if GET /leaderboard fails", async () => {
@@ -260,9 +261,9 @@ describe("LeaderboardPage", () => {
     const byClub = screen.getByRole("radio", { name: "By club" }) as HTMLButtonElement;
     expect(byClub.disabled).toBe(true);
     expect(byClub.title).toMatch(/choose a club to represent/i);
-    expect((screen.getByRole("radio", { name: "All-time" }) as HTMLButtonElement).disabled).toBe(true);
+    // B-053: All-time is available on the Overall board now.
+    expect((screen.getByRole("radio", { name: "All-time" }) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.getByRole("radio", { name: "Weekly" }).getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByText(/ranks this week only/i)).not.toBeNull();
     expect(screen.getByText(/you don.t represent a club yet/i)).not.toBeNull();
     expect((screen.getByLabelText("Club") as HTMLSelectElement).disabled).toBe(true);
   });

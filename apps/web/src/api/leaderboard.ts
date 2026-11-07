@@ -5,17 +5,27 @@
 // materialized LeaderboardEntry table; `period` is an ISO-8601 week
 // ("YYYY-Www") and defaults server-side to the current week. `clubId` (Decision
 // Log #128) selects the club board for the caller's OWN represented club; any
-// other club is a 403 server-side. There is NO all-time period and NO per-row
-// club / weekly-change field.
+// other club is a 403 server-side. `period: "all-time"` (B-053, Decision Log #472) is the one non-weekly
+// value. Each row also carries `club` and `rankChange7d`.
 //
 // Shapes mirror services/api/src/modules/leaderboard/leaderboard.types.ts.
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
+
+export interface LeaderboardClubView {
+  id: string;
+  name: string;
+}
 
 export interface LeaderboardEntryView {
   userId: string;
   publicName: string;
   points: number;
   rank: number;
+  // null for a minor on every board, and for a person with no represented club.
+  club?: LeaderboardClubView | null;
+  // Rank now minus rank seven days earlier: NEGATIVE means the person moved UP. null = not on the board
+  // seven days ago (never 0 for "new"). Optional here only so a response from an older server still types.
+  rankChange7d?: number | null;
 }
 
 export interface LeaderboardPage {

@@ -16,10 +16,13 @@
 //     board shows the current week only and pages with "Load more". It
 //     supports a club board for the caller's OWN represented club only
 //     (`?clubId=`, Decision Log #128), which the "By club" scope uses
-//     (disabled until the caller has a represented club). It has no
-//     all-time period and no per-row club or weekly-change field, so on
-//     this tab: "All-time" is disabled with an inline note (never faked
-//     client-side), and the Club / 7-day-change columns are not rendered.
+//     (disabled until the caller has a represented club). B-053 (Decision
+//     Log #472): `?period=all-time` is the All-time board, and every row
+//     carries `club` (null for a minor, and for a person with no club) and
+//     `rankChange7d` (rank now minus rank seven days ago: NEGATIVE = moved
+//     UP, null = not on the board then). The Club and 7-day change columns
+//     are drawn on desktop (Figma 5171:6633); on mobile (5540:7264) the club
+//     sits under the name and the change under the points.
 //   - COMPETITION board: still illustrative -- the Competition data model
 //     (Prediction / Commentary) does not exist (Decision Log #72/#73). See
 //     ./leaderboard/leaderboardData.ts.
@@ -46,8 +49,10 @@ import { getUser } from "../api/users";
 import { getCurrentContest, type CurrentContestResponse } from "../api/contest";
 import { getLeaderboard, type LeaderboardEntryView } from "../api/leaderboard";
 import { formatPoints } from "../lib/points";
+import { useIsMobile } from "../layout/useIsMobile";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
 import ContestBoard from "./leaderboard/ContestBoard";
+import { describeRankChange } from "./leaderboard/rankChange";
 import { COMPETITION_ROWS, initialsFor, type CompetitionType } from "./leaderboard/leaderboardData";
 import "./leaderboard/LeaderboardPage.css";
 
@@ -55,6 +60,22 @@ type LoadState = "loading" | "loaded" | "error" | "no-session";
 type BoardTab = "overall" | "contest" | "competition";
 type Scope = "global" | "club";
 type TimePeriod = "weekly" | "all-time";
+
+// The 7-day change cell: an arrow (up for a place gained, down for a place lost, none for 0 or no figure) and
+// a number, plain and monochrome (the frames carry a "never colour-coded" note). See ./leaderboard/rankChange.ts.
+function RankChange({ value }: { value: number | null | undefined }) {
+  const view = describeRankChange(value);
+  return (
+    <span className={`lb-change lb-change--${view.direction}`} aria-label={view.label} title={view.label}>
+      {view.arrow && (
+        <span className="lb-change__arrow" aria-hidden="true">
+          {view.arrow}
+        </span>
+      )}
+      <span aria-hidden="true">{view.figure}</span>
+    </span>
+  );
+}
 
 function medalClass(rank: number): string | null {
   if (rank === 1) return "lb-medal lb-medal--1";
@@ -70,7 +91,8 @@ export default function LeaderboardPage() {
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [tab, setTab] = useState<BoardTab>(searchParams.get("tab") === "contest" ? "contest" : "overall");
   const [scope, setScope] = useState<Scope>("global");
-  const [timePeriod, setTimePeriod] = useState<TimePeriod>("all-time");
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>("weekly");
+  const isMobile = useIsMobile();
   const [competitionType, setCompetitionType] = useState<CompetitionType>("prediction");
 
   // Real data: the caller's own club memberships, via the already-live
@@ -95,6 +117,9 @@ export default function LeaderboardPage() {
   const [overallRows, setOverallRows] = useState<LeaderboardEntryView[]>([]);
   const [overallCursor, setOverallCursor] = useState<string | null>(null);
   const [overallError, setOverallError] = useState(false);
+  // False until the current request for the Overall board has answered, so a board that is still loading is
+  // never drawn as an empty one.
+  const [overallLoaded, setOverallLoaded] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState(false);
 
@@ -138,17 +163,21 @@ export default function LeaderboardPage() {
   const clubScopeActive = scope === "club";
   const clubScopeUnavailable = clubScopeActive && representedClubId === null;
   const boardClubId = clubScopeActive ? representedClubId : null;
+  // Weekly = the server's default (the current ISO week), so no `period` is sent for it.
+  const boardPeriod = timePeriod === "all-time" ? "all-time" : undefined;
 
   useEffect(() => {
     if (!token || clubScopeUnavailable) return;
     let cancelled = false;
-    getLeaderboard(token, { clubId: boardClubId ?? undefined })
+    setOverallLoaded(false);
+    getLeaderboard(token, { clubId: boardClubId ?? undefined, period: boardPeriod })
       .then((page) => {
         if (cancelled) return;
         setOverallRows(page.items);
         setOverallCursor(page.nextCursor);
         setOverallError(false);
         setLoadMoreError(false);
+        setOverallLoaded(true);
       })
       .catch(() => {
         if (!cancelled) setOverallError(true);
@@ -156,14 +185,18 @@ export default function LeaderboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, boardClubId, clubScopeUnavailable]);
+  }, [token, boardClubId, boardPeriod, clubScopeUnavailable]);
 
   async function loadMoreOverall() {
     if (!token || !overallCursor || loadingMore) return;
     setLoadingMore(true);
     setLoadMoreError(false);
     try {
-      const page = await getLeaderboard(token, { cursor: overallCursor, clubId: boardClubId ?? undefined });
+      const page = await getLeaderboard(token, {
+        cursor: overallCursor,
+        clubId: boardClubId ?? undefined,
+        period: boardPeriod,
+      });
       setOverallRows((prev) => [...prev, ...page.items]);
       setOverallCursor(page.nextCursor);
     } catch {
@@ -193,12 +226,16 @@ export default function LeaderboardPage() {
     );
   }
 
-  // GET /leaderboard has no all-time support, so on the Overall tab the
-  // time period is always Weekly. Club scope IS supported there (Decision
-  // Log #128), for the viewer's own represented club only.
+  // Club scope on the Overall board is for the viewer's own represented club only (Decision Log #128).
+  // The time period (Weekly / All-time) applies to the Overall board since B-053.
   const overall = tab === "overall";
   const scopeValue: Scope = scope;
-  const periodValue: TimePeriod = overall ? "weekly" : timePeriod;
+  const periodValue: TimePeriod = timePeriod;
+  const filtersAreDefault = scope === "global" && timePeriod === "weekly";
+  function resetFilters() {
+    setScope("global");
+    setTimePeriod("weekly");
+  }
 
   const competitionRows = COMPETITION_ROWS[competitionType];
 
@@ -216,7 +253,9 @@ export default function LeaderboardPage() {
               ? "Competition board shows sample data for now"
               : tab === "contest"
                 ? "Contest board — live data"
-                : "Overall board — live data, current week"}
+                : timePeriod === "all-time"
+                  ? "Overall board — live data, all-time"
+                  : "Overall board — live data, current week"}
           </p>
         </div>
       </header>
@@ -317,8 +356,6 @@ export default function LeaderboardPage() {
               type="button"
               role="radio"
               aria-checked={periodValue === "all-time"}
-              disabled={overall}
-              title={overall ? "The Overall board is weekly only for now" : undefined}
               className={periodValue === "all-time" ? "lb-segment lb-segment--active" : "lb-segment"}
               onClick={() => setTimePeriod("all-time")}
             >
@@ -327,13 +364,6 @@ export default function LeaderboardPage() {
           </div>
         </div>
       </div>
-
-      {overall && (
-        <p className="lb-note">
-          The Overall board ranks this week only. The all-time view isn&rsquo;t supported yet, so it&rsquo;s
-          switched off here.
-        </p>
-      )}
 
       {overall && representedClubId === null && (
         <p className="lb-status lb-status--inline" role="status">
@@ -359,25 +389,45 @@ export default function LeaderboardPage() {
           <p className="lb-status lb-status--inline" role="alert">
             Couldn&rsquo;t load the leaderboard right now. Please try again later.
           </p>
+        ) : overallRows.length === 0 ? (
+          overallLoaded && (
+            // Figma 5542:7344 / 5542:7695 (Empty State Card). The frame's copy says "in this club" because it
+            // is drawn for By club; the board-wide wording is used when the scope is Global. "Reset filters" is
+            // shown only when a filter differs from the default (Global, Weekly), since otherwise it would do
+            // nothing.
+            <div className="lb-empty-card">
+              <span className="lb-empty-card__icon" aria-hidden="true">
+                —
+              </span>
+              <p className="lb-empty-card__title">No ranked players here yet</p>
+              <p className="lb-empty-card__body">
+                {scope === "club" ? "Nobody in this club" : "Nobody"} has earned points for the selected time
+                period yet. Points update every 15 minutes &mdash; check back, or widen the filters.
+              </p>
+              {!filtersAreDefault && (
+                <button type="button" className="lb-empty-card__reset" onClick={resetFilters}>
+                  Reset filters
+                </button>
+              )}
+            </div>
+          )
         ) : (
-          <table className="lb-table">
+          <table className={isMobile ? "lb-table lb-table--overall lb-table--compact" : "lb-table lb-table--overall"}>
             <thead>
               <tr>
-                <th scope="col">Rank</th>
+                <th scope="col">{isMobile ? "#" : "Rank"}</th>
                 <th scope="col">Player</th>
-                <th scope="col">Points</th>
+                {!isMobile && <th scope="col">Club</th>}
+                {!isMobile && <th scope="col">7-day change</th>}
+                <th scope="col">{isMobile ? "Pts" : "Points"}</th>
               </tr>
             </thead>
             <tbody>
-              {overallRows.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="lb-empty">
-                    No ranked players this week yet.
-                  </td>
-                </tr>
-              )}
               {overallRows.map((row) => {
                 const isYou = row.userId === myUserId;
+                // A minor's club arrives as null, like a person with no club: both show a plain dash, never a
+                // marker that would hint a club is being withheld.
+                const clubName = row.club?.name ?? null;
                 return (
                   <tr key={row.userId} className={isYou ? "lb-row lb-row--you" : "lb-row"}>
                     <td>
@@ -394,13 +444,25 @@ export default function LeaderboardPage() {
                         <span className="lb-avatar" aria-hidden="true">
                           {initialsFor(row.publicName)}
                         </span>
-                        <span className="lb-player__name">
-                          {row.publicName}
-                          {isYou && <span className="lb-you-tag">You</span>}
+                        <span className="lb-player__text">
+                          <span className="lb-player__name">
+                            {row.publicName}
+                            {isYou && <span className="lb-you-tag">You</span>}
+                          </span>
+                          {isMobile && <span className="lb-player__handle">{clubName ?? "—"}</span>}
                         </span>
                       </div>
                     </td>
-                    <td className="lb-points">{formatPoints(row.points)}</td>
+                    {!isMobile && <td className="lb-club">{clubName ?? "—"}</td>}
+                    {!isMobile && (
+                      <td>
+                        <RankChange value={row.rankChange7d} />
+                      </td>
+                    )}
+                    <td className="lb-points">
+                      <span className="lb-points__value">{formatPoints(row.points)}</span>
+                      {isMobile && <RankChange value={row.rankChange7d} />}
+                    </td>
                   </tr>
                 );
               })}
