@@ -272,6 +272,9 @@ export class AccountDeletionSweepService {
     await tx.emailChangeRequest.deleteMany({ where: { userId } });
     // B-062: the person's notification filter options. Personal preference data; nothing to keep.
     await tx.notificationPreference.deleteMany({ where: { userId } });
+    // B-285: the person's web-push subscriptions (browser endpoints and encryption keys). A held or anonymised
+    // account must not keep receiving pushes, and the keys are credential-like data.
+    await tx.pushSubscription.deleteMany({ where: { userId } });
     await tx.follow.deleteMany({ where: { OR: [{ followerId: userId }, { followeeId: userId }] } });
     // B-039: a Block is a personal-relationship record in BOTH directions (the
     // ones this user made, and the ones made against them); like Follow it is

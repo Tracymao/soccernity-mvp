@@ -1,8 +1,12 @@
-import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ConfigService } from '@nestjs/config';
 import { PasswordService } from '../auth/password/password.service';
+import { RegistrationEmailService } from '../auth/registration/email/registration-email.service';
+import { buildWebAppLink } from '../auth/registration/email/web-app-link.util';
+import { firstNameOf } from '../account-emails/account-email.service';
 import { AdminActionLogService } from '../admin-action-log/admin-action-log.service';
 import {
   ADMIN_ACTION_LOG_ACTIONS,
@@ -12,6 +16,7 @@ import { AdminTokenService } from '../admin/token/admin-token.service';
 import { TWO_FACTOR_NOT_ENABLED_CODE } from '../two-factor/two-factor.constants';
 import { TwoFactorService } from '../two-factor/two-factor.service';
 import {
+  ADMIN_ROLE_EMAIL_DETAILS,
   ADMIN_STAFF_ROLES_DEFAULT_PAGE_SIZE,
   ADMIN_STAFF_ROLES_MAX_PAGE_SIZE,
 } from './admin-staff-roles.constants';
@@ -117,6 +122,10 @@ export class AdminStaffRolesService {
     private readonly adminTokenService: AdminTokenService,
     // backend/b086-two-factor (B-270): resetAdmin() clears the target's secret fields and backup codes.
     private readonly twoFactor: TwoFactorService,
+    // backend/b069-transactional-emails (B-069): the "account created" email. @Optional(): absent = nothing is
+    // sent. Fire-and-log; it never fails or delays the creation.
+    @Optional() private readonly emailService?: RegistrationEmailService,
+    @Optional() private readonly config?: ConfigService,
   ) {}
 
   // -------------------------------------------------------------------
@@ -174,7 +183,37 @@ export class AdminStaffRolesService {
       `role=${dto.role}`,
     );
 
+    // B-069: tell the new admin their account exists. The email carries NO password (the creating superadmin gives
+    // it to them separately: the generated one is returned once below, or they chose it). Never awaited.
+    this.sendAccountCreatedEmail(created);
+
     return generated ? { ...created, temporaryPassword: password } : created;
+  }
+
+  // B-069. Fire-and-log: a missing provider, an unusable ADMIN_APP_BASE_URL (the email is then sent without the
+  // sign-in link) or a send failure never touches the creation that already committed. `twoFactorRequired` is
+  // read from the same switch the admin sign-in uses, so the email never promises a set-up step that is off.
+  private sendAccountCreatedEmail(created: AdminStaffListItem): void {
+    if (!this.emailService) return;
+    try {
+      const details = ADMIN_ROLE_EMAIL_DETAILS[created.role as keyof typeof ADMIN_ROLE_EMAIL_DETAILS];
+      if (!details) return;
+      const link = buildWebAppLink(this.config?.get<string>('ADMIN_APP_BASE_URL'), '/login', {});
+      void this.emailService
+        .sendStaffAccountCreatedEmail(
+          created.email,
+          firstNameOf(created.fullName),
+          details.label,
+          details.sentence,
+          link,
+          this.twoFactor.isAdminEnforced(),
+        )
+        .catch((err: Error) =>
+          this.logger.warn(`Could not send the account-created email for admin ${created.id}: ${err.message}`),
+        );
+    } catch (err) {
+      this.logger.warn(`Could not send the account-created email for admin ${created.id}: ${(err as Error).message}`);
+    }
   }
 
   // -------------------------------------------------------------------

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AccountEmailsModule } from '../../account-emails/account-emails.module';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PaymentsModule } from '../../../payments/payments.module';
@@ -79,7 +80,7 @@ import { RedisModule } from '../../../redis/redis.module';
 //    being triggerable on demand. It stays directly callable in-process,
 //    with an explicit `now`, for tests.
 @Module({
-  imports: [ConfigModule, AuthFoundationModule, AuthModule, PaymentsModule, RedisModule],
+  imports: [ConfigModule, AuthFoundationModule, AuthModule, PaymentsModule, RedisModule, AccountEmailsModule],
   controllers: [GuardianConsentController, GuardianConsentSummaryController],
   providers: [
     GuardianConsentService,

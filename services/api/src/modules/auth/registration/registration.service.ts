@@ -1,9 +1,10 @@
 import { DobEncryptionService } from '../../../crypto/dob-encryption.service';
-import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { Guardian, Prisma, User } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { AccountEmailService } from '../../account-emails/account-email.service';
 import { ClubsService } from '../../clubs/clubs.service';
 import { GeoIpService } from '../../../geoip/geoip.service';
 import {
@@ -110,6 +111,8 @@ export class RegistrationService {
     private readonly guardianConsentService: GuardianConsentService,
     private readonly dobEncryption: DobEncryptionService,
     private readonly geoIp: GeoIpService,
+    // backend/b069-transactional-emails (B-069): the welcome email. @Optional(): absent = nothing is sent.
+    @Optional() private readonly accountEmails?: AccountEmailService,
   ) {}
 
   // `clientIp` is the request's IP as Express resolved it (see
@@ -286,6 +289,11 @@ export class RegistrationService {
       void this.emailService.sendVerificationEmail(user.email, verificationToken).catch((err: Error) => {
         this.logger.warn(`Failed to queue verification email for user ${user.id}: ${err.message}`);
       });
+    } else {
+      // B-069: a social sign-in that already proved the address needs no verification step, so an ADULT's account
+      // is fully active right here and the welcome is sent now. A minor's is not (the guardian has not approved
+      // yet), so AccountEmailService sends nothing and the guardian's approval sends it later.
+      this.accountEmails?.welcomeIfReadyInBackground(user.id);
     }
 
     if (guardian) {
@@ -328,6 +336,11 @@ export class RegistrationService {
       where: { id: userId },
       data: { verificationStatus: 'verified' },
     });
+
+    // B-069: the email is now verified. If that makes the account fully active (an adult; or a minor whose
+    // guardian has already approved) the welcome is sent; otherwise AccountEmailService finds it not ready and
+    // sends nothing, and the guardian's approval sends it later. Fire-and-log, never delays the response.
+    this.accountEmails?.welcomeIfReadyInBackground(userId);
 
     // Decision Log #38: reuses GuardianConsentService.getConsentStatusForUser
     // — the exact same query/shape GET /auth/guardian-consent/status itself
