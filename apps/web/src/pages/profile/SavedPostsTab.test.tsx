@@ -26,14 +26,25 @@ beforeEach(() => {
   vi.mocked(savePost).mockReset();
 });
 
-function entry(id: string, text: string, authorId = "user-2"): SavedPostEntry {
+function entry(
+  id: string,
+  text: string,
+  authorId = "user-2",
+  viewer: { isLiked?: boolean; isFollowing?: boolean } = {},
+): SavedPostEntry {
   return {
     postId: id,
     savedAt: "2026-11-01T10:00:00.000Z",
     post: {
       id,
       authorId,
-      author: { id: authorId, publicName: authorId === "user-1" ? "Me Myself" : "Emeka John" },
+      author: {
+        id: authorId,
+        publicName: authorId === "user-1" ? "Me Myself" : "Emeka John",
+        isFollowing: viewer.isFollowing ?? false,
+      },
+      isLiked: viewer.isLiked ?? false,
+      isSaved: true,
       contentText: text,
       mediaUrls: [],
       media: [],
@@ -75,6 +86,23 @@ describe("SavedPostsTab", () => {
     expect(screen.getAllByRole("button", { name: /Saved/ })).toHaveLength(2);
     // No "Load more" without a next page.
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+  });
+
+  it("seeds Like and Follow from the server's per-caller state on first paint, no clicks", async () => {
+    vi.mocked(getSavedPosts).mockResolvedValueOnce({
+      items: [
+        entry("p1", "Liked and followed", "user-2", { isLiked: true, isFollowing: true }),
+        entry("p2", "Neither", "user-3"),
+      ],
+      nextCursor: null,
+    });
+    renderTab();
+    const liked = (await screen.findByText("Liked and followed")).closest("article") as HTMLElement;
+    const plain = screen.getByText("Neither").closest("article") as HTMLElement;
+    expect(within(liked).getByRole("button", { name: /likes?$/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(liked).getByRole("button", { name: "Following" })).not.toBeNull();
+    expect(within(plain).getByRole("button", { name: /likes?$/ }).getAttribute("aria-pressed")).toBe("false");
+    expect(within(plain).getByRole("button", { name: "Follow" })).not.toBeNull();
   });
 
   it("shows an empty state when nothing is saved", async () => {

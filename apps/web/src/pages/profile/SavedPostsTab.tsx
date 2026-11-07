@@ -7,18 +7,15 @@
 // show the tab. The server already leaves out a post that was deleted, hidden or blocked since it
 // was saved, so a page never contains a broken card.
 //
-// Frame vs endpoint, reported not worked around: the saved-posts payload carries no per-caller
-// `isLiked` and no `author.isFollowing` (Decision Log #153 enriched only GET /posts/feed and GET
-// /posts/:id). `isSaved` is true by definition. The other two start as "not liked" and "not
-// followed" here, so a post the person already liked shows the Like button un-pressed until they act
-// (both calls are idempotent and the like count always comes from the server). A server change
-// would fix it; it is out of scope for this tab.
+// Viewer state: each saved post arrives with the same per-caller `isLiked`, `isSaved` and
+// `author.isFollowing` the feed carries (Decision Log #153), so PostCard seeds its Like, Save and Follow
+// buttons from them on first paint.
 //
 // States the frames do not draw (they show only a filled list) are plain text in the profile's
 // existing empty-state style: loading, empty, load error with a retry, and a load-more error that
 // keeps the list on screen.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getSavedPosts, type FeedPost, type SavedPostEntry } from "../../api/feed";
+import { getSavedPosts, type FeedPost } from "../../api/feed";
 import PostCard from "../community/PostCard";
 import "../community/CommunityPage.css";
 
@@ -27,16 +24,6 @@ type LoadState = "loading" | "loaded" | "error";
 interface Props {
   accessToken: string;
   userId: string;
-}
-
-function toFeedPost(entry: SavedPostEntry): FeedPost {
-  const { post } = entry;
-  return {
-    ...post,
-    isSaved: true,
-    isLiked: false,
-    author: { ...post.author, isFollowing: false },
-  };
 }
 
 export default function SavedPostsTab({ accessToken, userId }: Props) {
@@ -55,7 +42,7 @@ export default function SavedPostsTab({ accessToken, userId }: Props) {
     try {
       const page = await getSavedPosts(accessToken, userId);
       if (id !== requestId.current) return;
-      setPosts(page.items.map(toFeedPost));
+      setPosts(page.items.map((e) => e.post));
       setCursor(page.nextCursor);
       setState("loaded");
     } catch {
@@ -81,7 +68,7 @@ export default function SavedPostsTab({ accessToken, userId }: Props) {
       if (id !== requestId.current) return;
       setPosts((prev) => {
         const seen = new Set(prev.map((p) => p.id));
-        return [...prev, ...page.items.map(toFeedPost).filter((p) => !seen.has(p.id))];
+        return [...prev, ...page.items.map((e) => e.post).filter((p) => !seen.has(p.id))];
       });
       setCursor(page.nextCursor);
     } catch {
