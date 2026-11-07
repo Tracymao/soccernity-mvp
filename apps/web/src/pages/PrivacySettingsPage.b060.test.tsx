@@ -1,0 +1,115 @@
+// B-060: the Download my data row is a real link, and the Adult / Under 18 variants of the Privacy
+// page (Figma 6991:53454 / 6991:53687). The older PrivacySettingsPage.test.tsx is unchanged.
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
+import PrivacySettingsPage from "./PrivacySettingsPage";
+import type { UserProfile } from "../api/users";
+
+vi.mock("../api/users", async () => {
+  const actual = await vi.importActual<typeof import("../api/users")>("../api/users");
+  return { ...actual, getUser: vi.fn() };
+});
+vi.mock("../api/auth", async () => {
+  const actual = await vi.importActual<typeof import("../api/auth")>("../api/auth");
+  return { ...actual, getGuardianConsentStatus: vi.fn() };
+});
+
+import { getUser } from "../api/users";
+import { getGuardianConsentStatus } from "../api/auth";
+import { seedSession, clearSession } from "../test/session";
+
+function b64(value: object): string {
+  return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+const token = (sub: string) => `${b64({ alg: "none" })}.${b64({ sub, role: "fan" })}.sig`;
+
+const ADULT = {
+  id: "user-1",
+  email: "a@example.com",
+  isMinor: false,
+  role: "fan",
+} as unknown as UserProfile;
+const MINOR = { ...ADULT, id: "user-2", isMinor: true } as UserProfile;
+
+afterEach(cleanup);
+beforeEach(() => {
+  clearSession();
+  vi.mocked(getUser).mockReset();
+  vi.mocked(getGuardianConsentStatus).mockReset();
+});
+
+function renderPage() {
+  render(
+    <MemoryRouter initialEntries={["/settings/privacy"]}>
+      <PrivacySettingsPage />
+    </MemoryRouter>,
+  );
+}
+
+describe("Download my data row", () => {
+  it("is an enabled link to the flow, with the frame description and no 'not available' note", async () => {
+    seedSession(token("user-1"));
+    vi.mocked(getUser).mockResolvedValueOnce(ADULT);
+    renderPage();
+    await screen.findByText("Download my data");
+    const link = screen.getByRole("link", { name: /download my data/i });
+    expect(link.getAttribute("href")).toBe("/settings/privacy/download-data");
+    expect(link.className).not.toMatch(/disabled/);
+    expect(screen.getByText("Download a copy of your profile, posts, comments, follows and the messages you sent.")).not.toBeNull();
+    expect(link.textContent).not.toMatch(/not available yet/i);
+  });
+});
+
+describe("Adult variant", () => {
+  it("shows Public profile and no Guardian approval row", async () => {
+    seedSession(token("user-1"));
+    vi.mocked(getUser).mockResolvedValueOnce(ADULT);
+    renderPage();
+    expect(await screen.findByText("Public profile")).not.toBeNull();
+    expect(screen.queryByText("Guardian approval")).toBeNull();
+  });
+
+  it("keeps Public profile and Marketing emails visibly disabled (no backend, no decision)", async () => {
+    seedSession(token("user-1"));
+    vi.mocked(getUser).mockResolvedValueOnce(ADULT);
+    renderPage();
+    await screen.findByText("Public profile");
+    expect(screen.getByRole("img", { name: /public profile: on \(not adjustable yet\)/i })).not.toBeNull();
+    expect(screen.getByRole("img", { name: /marketing emails: off \(not adjustable yet\)/i })).not.toBeNull();
+    expect(screen.getByText("Coming soon")).not.toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByRole("switch")).toBeNull();
+  });
+
+  it("leaves Your Post and Direct Message disabled (not built here)", async () => {
+    seedSession(token("user-1"));
+    vi.mocked(getUser).mockResolvedValueOnce(ADULT);
+    renderPage();
+    await screen.findByText("Your Post");
+    expect(screen.getAllByText("Not available yet.")).toHaveLength(2);
+    expect(screen.queryByRole("link", { name: /your post/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /direct message/i })).toBeNull();
+  });
+});
+
+describe("Under 18 variant", () => {
+  it("drops the Public profile row and shows Guardian approval linked to the consent status page", async () => {
+    seedSession(token("user-2"));
+    vi.mocked(getUser).mockResolvedValueOnce(MINOR);
+    vi.mocked(getGuardianConsentStatus).mockResolvedValueOnce({
+      consentStatus: "confirmed",
+      guardianEmail: "p@example.com",
+      canResend: false,
+      consentTimestamp: "2026-02-01T00:00:00.000Z",
+    });
+    renderPage();
+    expect(await screen.findByText("Guardian approval")).not.toBeNull();
+    expect(screen.queryByText("Public profile")).toBeNull();
+    expect(screen.getByRole("link", { name: /view consent status/i }).getAttribute("href")).toBe("/guardian-consent");
+    // Download my data is still a real link for a minor.
+    expect(screen.getByRole("link", { name: /download my data/i }).getAttribute("href")).toBe(
+      "/settings/privacy/download-data",
+    );
+  });
+});
