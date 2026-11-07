@@ -317,6 +317,26 @@ How to tell what happened on any account: `User.countryDerivationMethod` is
 `geolite2_local` (resolved) or `unresolved`; the boot log says
 `GeoLite2 country database not loaded` when the file is missing.
 
+### The web app's service worker (`/sw.js`) — web push, build register B-062 / B-285
+
+`apps/web/public/sw.js` is the push service worker. Vite copies it to the web build's root, so it
+must be served at **`/sw.js`** (scope `/`). This repo has no web static-site definition yet
+(`render.yaml` defines only the two API services; the static sites are row B-179, done at the launch
+gate), so these are the settings to apply **when that site is created**:
+
+- Serve `/sw.js` with a **JavaScript content type** (`application/javascript` or `text/javascript`)
+  and **`Cache-Control: no-cache`** (or `max-age=0, must-revalidate`) so browsers always check for a
+  new worker. Do not let the host's catch-all rewrite (every path to `index.html`) answer `/sw.js`:
+  the file must be served as a real file, not as HTML, or registration fails.
+- The web CSP (B-179; `docs/security-headers-csp-audit-report.md`) must allow it: `worker-src 'self'`
+  (or `script-src 'self'` as the fallback when `worker-src` is absent). The worker makes no network
+  request of its own, and the browser contacts the push service itself, so `connect-src` needs no
+  push-service origin; the page's API calls (status, subscribe, unsubscribe) are already covered by
+  `connect-src` for the API origin.
+- Service workers only run on **https** (or `localhost`); the web app's real address must be https.
+- The API needs the VAPID key pair (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`) before
+  the Push page can turn on; until then it shows "not supported on this device".
+
 ## 5. After the first successful deploy
 
 1. Confirm each service's own URL from Render's dashboard (e.g.
