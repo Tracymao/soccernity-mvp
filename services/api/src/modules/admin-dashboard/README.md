@@ -147,11 +147,44 @@ and predates this resolution.
 
 ---
 
+## Latest posts (B-056, Decision Log #472)
+
+`GET /admin/dashboard/latest-posts?limit=` feeds the Dashboard's "Latest posts" table (Figma 6990:56075 and its
+loading, empty and error twins). Same guard as `stats`: `AdminJwtAuthGuard` only, every admin role.
+
+Response: a bare array of up to `limit` items, newest first (`createdAt` desc, then the monotonic `Post.sequence`):
+
+```
+{ id, createdAt, mediaType: 'photo' | 'video' | null, excerpt, author: { publicName }, likeCount, commentCount }
+```
+
+- `author.publicName` is the username, else the shared "Soccernity member" placeholder (`resolvePublicName`).
+  The query selects `username` and `displayName` (displayName only so the `[deleted user]` sentinel is recognised)
+  and NEVER `email`; neither the real name, the email nor the author id is in the response.
+- `mediaType` comes from the attached `PostMedia` kinds (a post with any video is `video`); a legacy post with only
+  a bare `mediaUrls` entry is classified by file extension.
+- `excerpt` is the first 140 characters of the text (by code point), trimmed, no ellipsis.
+- `limit` is 1 to 5, default 5; anything else is a 400 (rejected, not clamped).
+
+Which posts: the author must be `active`, not `isMinor` and not `isUnder16` (a restricted-pending account is a minor,
+so it is excluded too, and so is a minor with confirmed consent); a final contest entry is hidden until its
+`visibleFrom`; any post with media that is not approved (or is held for review) is hidden. There is no "removed"
+flag on `Post`: `DELETE /posts/:id` is a hard delete.
+
+**DEFAULTS, founder-veto-able** (the register says these are not decided): the exclusions above, five rows, the
+140-character excerpt, the extension rule for legacy media, 400 on an out-of-range `limit`, and treating anonymised
+(`deleted`) and suspended authors like deactivated ones.
+
+---
+
 ## Files
 
 ```
 admin-dashboard.module.ts   — wires AdminAuthFoundationModule + PageViewModule (read-only, no user-facing routes)
 admin-dashboard.service.ts  — AdminDashboardService, the three real User/Article aggregates + real totalVisits/visitsByMonth via PageViewService
-admin-dashboard.controller.ts — GET /admin/dashboard/stats
+admin-dashboard.controller.ts — GET /admin/dashboard/stats and GET /admin/dashboard/latest-posts
 month.util.ts                — startOfCurrentMonthUtc, directly unit-tested
+latest-posts.util.ts         — toExcerpt, toMediaType (B-056)
+admin-dashboard.constants.ts — limit and excerpt-length defaults (B-056)
+dto/latest-posts-query.dto.ts — ?limit= (1..5)
 ```
