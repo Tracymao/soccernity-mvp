@@ -514,3 +514,23 @@
   font: 500 14px "Inter", sans-serif;
   color: var(--sn-text-primary);
 }
+
+/* B-067: the host that carries a bubble's "..." menu, the edited label and the
+ * deleted placeholder. Inside this flex row the host must not use align-self. */
+.chat-message .msg-host {
+  align-self: auto;
+}
+
+.chat-message__edited {
+  display: block;
+  margin-top: 2px;
+  font: 500 10px "Montserrat", "Inter", sans-serif;
+  opacity: 0.75;
+}
+
+.chat-message__bubble--deleted,
+.chat-message--mine .chat-message__bubble--deleted {
+  background: transparent;
+  border: 1px dashed var(--sn-icon-inactive);
+  color: var(--sn-text-secondary);
+}

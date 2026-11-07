@@ -311,6 +311,27 @@
   font: 600 16px "Inter", sans-serif;
 }
 
+.conversation-page__more {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--sn-brand-navy);
+  cursor: pointer;
+}
+
+.conversation-page__more:hover,
+.conversation-page__more:focus-visible {
+  background: var(--sn-green-tint-12);
+}
+
 .conversation-page__name {
   font: 600 20px "Inter", sans-serif;
   color: var(--sn-text-primary);

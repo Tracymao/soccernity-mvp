@@ -21,7 +21,13 @@
 // refused list (under-16) or send (guardian consent, a block, a minor
 // recipient) shows the server's message as it came.
 import { useCallback, useEffect, useState } from "react";
-import { listConversations, MessagingApiError, type Conversation, type Message } from "../../../api/messaging";
+import {
+  listConversations,
+  MessagingApiError,
+  type Conversation,
+  type Message,
+  type MessagePreview,
+} from "../../../api/messaging";
 import { isUnder16Restricted, UNDER_16_MESSAGE } from "../../../lib/under16";
 import { useIsMobile } from "../../../layout/useIsMobile";
 import ChatWindow from "./ChatWindow";
@@ -132,6 +138,18 @@ function DesktopMessages({ accessToken, currentUserId }: CommunityMessagesProps)
     });
   }
 
+  // After an edit or delete inside a chat: the row's preview follows, and the
+  // row keeps its place in the list.
+  const setPreview = useCallback((id: string, preview: MessagePreview | null) => {
+    setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, lastMessage: preview } : c)));
+  }, []);
+
+  // "Delete chat": the chat closes and the conversation leaves the list.
+  const chatDeleted = useCallback((id: string) => {
+    setOpenChats((prev) => prev.filter((c) => c.conversation.id !== id));
+    setConversations((prev) => prev.filter((c) => c.id !== id));
+  }, []);
+
   return (
     <>
       <MessagesSidebar
@@ -167,6 +185,8 @@ function DesktopMessages({ accessToken, currentUserId }: CommunityMessagesProps)
               onClose={() => closeChat(chat.conversation.id)}
               onRead={markRead}
               onSent={recordSent}
+              onPreviewChange={setPreview}
+              onChatDeleted={chatDeleted}
             />
           ))}
         </div>
