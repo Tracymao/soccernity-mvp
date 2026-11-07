@@ -815,6 +815,144 @@ describe('Banter Rooms e2e (Section 4.4, /banter-rooms half)', () => {
     });
   });
 
+  describe('DELETE /banter-rooms/:id/topics/:topicId (remove a topic tag)', () => {
+    const bearer = (t: string) => ({ Authorization: `Bearer ${t}` });
+
+    async function attach(roomId: string, token: string, names: string[]) {
+      const res = await request(server())
+        .post(`/banter-rooms/${roomId}/topics`)
+        .set(bearer(token))
+        .send({ names })
+        .expect(200);
+      return res.body.topics as Array<{ id: string; name: string }>;
+    }
+
+    it('the creator removes a tag: only the junction row goes, the shared Topic stays and still shows on another room', async () => {
+      const creator = await createUser('detach-creator');
+      const roomA = await createRoom(creator.accessToken, { name: 'Detach Room A' });
+      const roomB = await createRoom(creator.accessToken, { name: 'Detach Room B' });
+      const [transfers] = await attach(roomA.id, creator.accessToken, ['Transfers']);
+      await attach(roomB.id, creator.accessToken, ['Transfers']);
+      await attach(roomA.id, creator.accessToken, ['Deadline Day']);
+
+      const res = await request(server())
+        .delete(`/banter-rooms/${roomA.id}/topics/${transfers.id}`)
+        .set(bearer(creator.accessToken))
+        .expect(204);
+      expect(res.text).toBe('');
+
+      const prisma = getTestPrismaClient();
+      expect(await prisma.banterRoomTopic.count({ where: { banterRoomId: roomA.id, topicId: transfers.id } })).toBe(0);
+      // The shared Topic row stays; the other tag on room A stays.
+      expect(await prisma.topic.findUnique({ where: { id: transfers.id } })).not.toBeNull();
+      const a = await request(server()).get(`/banter-rooms/${roomA.id}`).set(bearer(creator.accessToken)).expect(200);
+      expect(a.body.topics.map((t: { name: string }) => t.name)).toEqual(['Deadline Day']);
+      // Still on the other room, and still in the catalog.
+      const b = await request(server()).get(`/banter-rooms/${roomB.id}`).set(bearer(creator.accessToken)).expect(200);
+      expect(b.body.topics).toEqual([{ id: transfers.id, name: 'Transfers' }]);
+      const catalog = await request(server()).get('/banter-rooms/topics').set(bearer(creator.accessToken)).expect(200);
+      expect(catalog.body.items.map((t: { id: string }) => t.id)).toContain(transfers.id);
+    });
+
+    it('is idempotent: removing it again, or removing an existing topic that was never attached, is 204', async () => {
+      const creator = await createUser('detach-idem');
+      const room = await createRoom(creator.accessToken, { name: 'Detach Idem' });
+      const other = await createRoom(creator.accessToken, { name: 'Detach Idem Other' });
+      const [tag] = await attach(room.id, creator.accessToken, ['Idempotent']);
+      const [unattached] = await attach(other.id, creator.accessToken, ['Elsewhere']);
+
+      for (let i = 0; i < 2; i += 1) {
+        await request(server()).delete(`/banter-rooms/${room.id}/topics/${tag.id}`).set(bearer(creator.accessToken)).expect(204);
+      }
+      await request(server())
+        .delete(`/banter-rooms/${room.id}/topics/${unattached.id}`)
+        .set(bearer(creator.accessToken))
+        .expect(204);
+      // The other room's link is untouched.
+      expect(await getTestPrismaClient().banterRoomTopic.count({ where: { banterRoomId: other.id } })).toBe(1);
+    });
+
+    it('a non-creator (even a member) gets 403 and nothing changes; a missing room is 404 before the 403; an unknown topic id is 404', async () => {
+      const creator = await createUser('detach-owner');
+      const member = await createUser('detach-member');
+      const room = await createRoom(creator.accessToken, { name: 'Detach Forbidden' });
+      await request(server()).post(`/banter-rooms/${room.id}/join`).set(bearer(member.accessToken)).expect(200);
+      const [tag] = await attach(room.id, creator.accessToken, ['Protected']);
+
+      await request(server()).delete(`/banter-rooms/${room.id}/topics/${tag.id}`).set(bearer(member.accessToken)).expect(403);
+      // A non-creator learns nothing about the topic id: still 403 for an unknown one.
+      await request(server()).delete(`/banter-rooms/${room.id}/topics/not-a-topic`).set(bearer(member.accessToken)).expect(403);
+      expect(await getTestPrismaClient().banterRoomTopic.count({ where: { banterRoomId: room.id } })).toBe(1);
+
+      await request(server()).delete(`/banter-rooms/no-such-room/topics/${tag.id}`).set(bearer(member.accessToken)).expect(404);
+      await request(server()).delete(`/banter-rooms/${room.id}/topics/not-a-topic`).set(bearer(creator.accessToken)).expect(404);
+      expect(await getTestPrismaClient().banterRoomTopic.count({ where: { banterRoomId: room.id } })).toBe(1);
+    });
+
+    it('works on an inactive room (DEFAULT: tidying tags is not posting)', async () => {
+      const creator = await createUser('detach-inactive');
+      const room = await createRoom(creator.accessToken, { name: 'Detach Inactive' });
+      const [tag] = await attach(room.id, creator.accessToken, ['Quiet']);
+      await getTestPrismaClient().banterRoom.update({ where: { id: room.id }, data: { status: 'inactive' } });
+
+      await request(server()).delete(`/banter-rooms/${room.id}/topics/${tag.id}`).set(bearer(creator.accessToken)).expect(204);
+      expect(await getTestPrismaClient().banterRoomTopic.count({ where: { banterRoomId: room.id } })).toBe(0);
+    });
+
+    it('rejects unauthenticated requests (401); a restricted-pending minor gets 403 guardian_consent_pending and the tag stays', async () => {
+      const creator = await createUser('detach-auth');
+      const room = await createRoom(creator.accessToken, { name: 'Detach Auth' });
+      const [tag] = await attach(room.id, creator.accessToken, ['Guarded']);
+      await request(server()).delete(`/banter-rooms/${room.id}/topics/${tag.id}`).expect(401);
+
+      const minor = await createRestrictedMinor('detach-guard');
+      const prisma = getTestPrismaClient();
+      const seeded = await prisma.banterRoom.create({
+        data: { name: 'Seeded Detach Room', scopeType: 'topic', createdBy: minor.userId, memberCount: 1 },
+      });
+      const topic = await prisma.topic.create({ data: { name: 'Seeded', nameNormalized: 'seeded' } });
+      await prisma.banterRoomTopic.create({ data: { banterRoomId: seeded.id, topicId: topic.id } });
+      const blocked = await request(server())
+        .delete(`/banter-rooms/${seeded.id}/topics/${topic.id}`)
+        .set(bearer(minor.accessToken))
+        .expect(403);
+      expect(blocked.body.code).toBe('guardian_consent_pending');
+      expect(await prisma.banterRoomTopic.count({ where: { banterRoomId: seeded.id } })).toBe(1);
+    });
+
+    it('the whole-controller under-16 block is unchanged: an under-16 gets under_16_restricted on the new route too', async () => {
+      const prisma = getTestPrismaClient();
+      const kid = await prisma.user.create({
+        data: {
+          email: `e2e-detach-kid-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
+          passwordHash: 'unused',
+          displayName: 'E2E Detach Kid',
+          verificationStatus: 'verified',
+          username: `e2e_${Math.random().toString(36).slice(2, 12)}`,
+          dateOfBirth: seedDob('2014-01-01'),
+          isMinor: true,
+          isUnder16: true,
+          guardian: {
+            create: {
+              name: 'Guardian Name',
+              email: `guardian-detach-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
+              relationship: 'Parent',
+              consentStatus: 'confirmed',
+              consentToken: `tok-detach-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              consentTokenExpiresAt: new Date(Date.now() + 72 * 3600 * 1000),
+            },
+          },
+        },
+      });
+      const { accessToken } = await app.get(TokenService).issueTokenPair(kid.id, kid.role);
+      const res = await request(server())
+        .delete('/banter-rooms/any-room/topics/any-topic')
+        .set(bearer(accessToken.token))
+        .expect(403);
+      expect(res.body.code).toBe('under_16_restricted');
+    });
+  });
+
   describe('GET /banter-rooms?tagQuery= (free-text Tag search)', () => {
     it('matches case-insensitively across topic name, creator USERNAME, and scoped club name, and ANDs with scopeType', async () => {
       const creator = await createUser('tag-creator');

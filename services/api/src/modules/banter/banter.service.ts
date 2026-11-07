@@ -676,6 +676,38 @@ export class BanterService {
     return { roomId, topics: await this.currentTopics(roomId) };
   }
 
+  // DELETE /banter-rooms/:id/topics/:topicId — the room creator removes
+  // one topic tag from their room (B-pass: Bants Figma frame M19's remove
+  // cross). Same order and eligibility as attachTopics: room existence
+  // (404) -> creator only (403) -> then the topic id is checked.
+  //
+  // Deletes ONLY the BanterRoomTopic junction row. The shared Topic row is
+  // never touched (other rooms use it, and the topics catalog keeps it).
+  //
+  // Idempotent: a Topic that exists but is not attached to this room (e.g. a
+  // repeat call) is a 204 no-op, via deleteMany — never a P2025.
+  //
+  // DEFAULT, founder-veto-able: a topicId that matches no Topic row at all
+  // (garbage or unknown id; ids are not format-validated anywhere in this
+  // controller, so a bad id is simply "not found") is a 404, the same
+  // answer a bad room id gets — checked AFTER the 403, so a non-creator
+  // learns nothing about topics. An EXISTING-but-unattached topic is the
+  // idempotent 204.
+  //
+  // DEFAULT, founder-veto-able: an inactive room (status 'inactive') can
+  // still have topics removed — tidying a room's own tags is not "posting".
+  async detachTopic(userId: string, roomId: string, topicId: string): Promise<void> {
+    await this.assertRoomExists(roomId);
+    await this.assertRoomCreator(userId, roomId, 'Only the room creator may remove topics from this Banter Room');
+
+    const topic = await this.prisma.topic.findUnique({ where: { id: topicId }, select: { id: true } });
+    if (!topic) {
+      throw new NotFoundException('Topic not found');
+    }
+
+    await this.prisma.banterRoomTopic.deleteMany({ where: { banterRoomId: roomId, topicId } });
+  }
+
   private async assertRoomCreator(userId: string, roomId: string, message: string): Promise<void> {
     const room = await this.prisma.banterRoom.findUniqueOrThrow({
       where: { id: roomId },
