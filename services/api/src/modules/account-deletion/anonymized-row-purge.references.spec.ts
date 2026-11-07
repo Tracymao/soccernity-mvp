@@ -62,6 +62,7 @@ describe('purge reference classification', () => {
         'EmailChangeRequest.user',
         'GuardianNoticeWithhold.user',
         'NotificationPreference.user',
+        'PushSubscription.user',
         'PointsLedgerEntry.user',
         'TwoFactorRecoveryRequest.user',
         'SocialIdentity.user',
