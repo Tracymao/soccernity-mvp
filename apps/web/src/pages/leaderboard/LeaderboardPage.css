@@ -245,20 +245,86 @@
   font: 600 15px "Inter", sans-serif;
 }
 
+/* 7-day change (B-053): plain and monochrome by design -- the Figma frames (5171:6633) carry a note that it is
+   never colour-coded, because the palette has no red or negative token. Direction is the arrow glyph. */
 .lb-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font: 500 14px "Inter", sans-serif;
-}
-
-.lb-change--up {
-  color: var(--sn-brand-green);
-}
-
-.lb-change--down {
-  color: var(--sn-brand-navy);
-}
-
-.lb-change--flat {
   color: var(--sn-text-secondary);
+}
+
+.lb-change__arrow {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.lb-club {
+  color: var(--sn-text-secondary);
+}
+
+.lb-table--overall th:last-child,
+.lb-table--overall td.lb-points {
+  text-align: right;
+}
+
+/* Empty state (Figma 5542:7344 / 5542:7695). */
+.lb-empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 44px 24px 40px;
+  text-align: center;
+  background: var(--sn-background-surface);
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 12px;
+}
+
+.lb-empty-card__icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sn-green-tint-12);
+  color: var(--sn-brand-navy);
+  font: 600 24px "Inter", sans-serif;
+}
+
+.lb-empty-card__title {
+  margin: 8px 0 0;
+  font: 600 22px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.lb-empty-card__body {
+  margin: 0;
+  max-width: 640px;
+  font: 400 15px/1.6 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.lb-empty-card__reset {
+  margin-top: 8px;
+  padding: 11px 22px;
+  border: 1px solid var(--sn-brand-navy);
+  border-radius: 8px;
+  background: var(--sn-brand-navy);
+  color: #fff;
+  font: 600 14px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+/* Mobile rows (Figma 5540:7264): rank, player with the club under the name, points with the change under it. */
+.lb-table--compact .lb-points {
+  white-space: nowrap;
+}
+
+.lb-table--compact .lb-points__value {
+  display: block;
 }
 
 /* Rank medals -- ranks 1-3 only, Decision Log #69: palette-only, no
@@ -361,6 +427,60 @@
   .lb-table td {
     border-bottom: none;
     padding: 4px 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .lb-table--compact .lb-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .lb-table--compact td {
+    width: auto;
+  }
+
+  /* The frame keeps a header row on mobile ("#  PLAYER  PTS"), unlike the generic stacked-card rule above. */
+  .lb-table--compact thead {
+    display: block;
+  }
+
+  .lb-table--compact thead tr {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px;
+  }
+
+  .lb-table--compact th {
+    padding: 14px 0;
+    border-bottom: none;
+  }
+
+  .lb-table--compact th:first-child,
+  .lb-table--compact td:first-child {
+    flex: 0 0 30px;
+    width: 30px;
+  }
+
+  .lb-table--compact th:nth-child(2) {
+    flex: 1;
+  }
+
+  .lb-table--compact th:last-child {
+    margin-left: auto;
+    text-align: right;
+  }
+
+  .lb-table--compact td:nth-child(2) {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .lb-table--compact td.lb-points {
+    margin-left: auto;
+    text-align: right;
   }
 }
 

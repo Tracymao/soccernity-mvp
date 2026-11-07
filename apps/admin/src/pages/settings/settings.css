@@ -95,7 +95,7 @@
   /* Name | Role | Status | Two-factor | Actions — the Status column was added by
      feat/admin-staff-status alongside PATCH /admin/staff/:id/status; the Two-factor
      column by B-271 (twoFactorEnabled on each staff item, Figma 6909:34859). */
-  grid-template-columns: 1.2fr 110px 110px 110px 150px;
+  grid-template-columns: 1.2fr 110px 110px 110px 290px;
   gap: 16px;
   align-items: center;
   padding: 14px 20px;

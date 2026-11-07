@@ -3,12 +3,12 @@
 // Overview" (Decision Log #230 audit). Rows: Account information · Club
 // representation · Change password · Deactivate account · Delete account.
 //
-// Built here: Deactivate, Delete, and Club representation (the selector,
+// Built here: Deactivate, Delete, Club representation (the selector,
 // Decision Log #74, 5570:7813 — a standalone flow screen opened from this
-// row). Account information and Change password stay visibly disabled
-// with a "not built yet" note: their leaves (2922:6396/2924:7112, 2924:6870)
-// are follow-up PRs, and Account Information's Username/Country also lack
-// backing columns (Decision Log #58).
+// row) and Change password (2924:6870, B-059, ChangePasswordPage). Account
+// information stays visibly disabled with a "not built yet" note: its leaf
+// (2922:6396/2924:7112) waits for the email-change backend, and its
+// Username/Country also lack backing columns (Decision Log #58).
 import { Link } from "react-router";
 import { getStoredAccessToken } from "../../lib/session";
 
@@ -25,7 +25,11 @@ const ROWS: Row[] = [
     desc: "Set your represented club",
     to: "/settings/account/club-representation",
   },
-  { label: "Change password", desc: "Update your password and sign out other sessions" },
+  {
+    label: "Change password",
+    desc: "Update your password and sign out other sessions",
+    to: "/settings/account/change-password",
+  },
   {
     label: "Deactivate account",
     desc: "Hide your account until you choose to come back",

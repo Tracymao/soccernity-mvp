@@ -82,6 +82,7 @@ import NotificationCentrePage from "../pages/NotificationCentrePage";
 import PrivacySettingsPage from "../pages/PrivacySettingsPage";
 import BlockedUsersPage from "../pages/settings/BlockedUsersPage";
 import OtherProfilePage from "../pages/OtherProfilePage";
+import ChangePasswordPage from "../pages/settings/ChangePasswordPage";
 import DeactivateAccountPage from "../pages/settings/DeactivateAccountPage";
 import DeleteAccountPage from "../pages/settings/DeleteAccountPage";
 import SettingsLayout from "../pages/settings/SettingsLayout";
@@ -404,6 +405,7 @@ export const routes: RouteObject[] = [
           { index: true, element: <SettingsLandingPage /> },
           { path: "menu", element: <SettingsMenuPage /> },
           { path: "account", element: <AccountOverviewPage /> },
+          { path: "account/change-password", element: <ChangePasswordPage /> },
           { path: "account/deactivate", element: <DeactivateAccountPage /> },
           { path: "account/delete", element: <DeleteAccountPage /> },
           { path: "privacy", element: <PrivacySettingsPage /> },
