@@ -169,6 +169,7 @@ const EXPECTED: Record<string, Flags> = {
   'POST /banter-rooms/:id/posts': 'CEP',
   'PATCH /banter-rooms/:id/status': 'C',
   'POST /banter-rooms/:id/topics': 'CE',
+  'DELETE /banter-rooms/:id/topics/:topicId': 'CE',
   // community groups
   'POST /community-groups': 'CEP',
   'POST /community-groups/:id/join': 'CE',

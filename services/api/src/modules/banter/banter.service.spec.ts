@@ -55,9 +55,11 @@ function buildPrismaMock() {
     topic: {
       upsert: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn(),
     },
     banterRoomTopic: {
       upsert: jest.fn(),
+      deleteMany: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
     },
     $queryRaw: jest.fn().mockResolvedValue([]),
@@ -827,6 +829,66 @@ describe('BanterService', () => {
         create: { banterRoomId: 'room-1', topicId: 'topic-2' },
         update: {},
       });
+    });
+  });
+
+  describe('detachTopic', () => {
+    it('404s for an unknown room, touching nothing', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new BanterService(prisma, buildFeedMock());
+
+      await expect(service.detachTopic('user-1', 'nope', 't-1')).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.topic.findUnique).not.toHaveBeenCalled();
+      expect(prisma.banterRoomTopic.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('403s a non-creator (existence settled first) before the topic is even looked up', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ id: 'room-1' });
+      (prisma.banterRoom.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdBy: 'someone-else' });
+      const service = new BanterService(prisma, buildFeedMock());
+
+      await expect(service.detachTopic('user-1', 'room-1', 't-1')).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.topic.findUnique).not.toHaveBeenCalled();
+      expect(prisma.banterRoomTopic.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('404s for a topic id that matches no Topic, deleting nothing', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ id: 'room-1' });
+      (prisma.banterRoom.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdBy: 'user-1' });
+      (prisma.topic.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new BanterService(prisma, buildFeedMock());
+
+      await expect(service.detachTopic('user-1', 'room-1', 'garbage')).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.banterRoomTopic.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('deletes only the junction row for this room and topic, never the Topic', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ id: 'room-1' });
+      (prisma.banterRoom.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdBy: 'user-1' });
+      (prisma.topic.findUnique as jest.Mock).mockResolvedValue({ id: 't-1' });
+      (prisma.banterRoomTopic.deleteMany as jest.Mock).mockResolvedValue({ count: 1 });
+      const service = new BanterService(prisma, buildFeedMock());
+
+      await expect(service.detachTopic('user-1', 'room-1', 't-1')).resolves.toBeUndefined();
+      expect(prisma.banterRoomTopic.deleteMany).toHaveBeenCalledWith({
+        where: { banterRoomId: 'room-1', topicId: 't-1' },
+      });
+      expect((prisma.topic as unknown as Record<string, jest.Mock>).delete).toBeUndefined();
+    });
+
+    it('is a no-op success when the topic exists but is not attached (count 0)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.banterRoom.findUnique as jest.Mock).mockResolvedValue({ id: 'room-1' });
+      (prisma.banterRoom.findUniqueOrThrow as jest.Mock).mockResolvedValue({ createdBy: 'user-1' });
+      (prisma.topic.findUnique as jest.Mock).mockResolvedValue({ id: 't-1' });
+      (prisma.banterRoomTopic.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+      const service = new BanterService(prisma, buildFeedMock());
+
+      await expect(service.detachTopic('user-1', 'room-1', 't-1')).resolves.toBeUndefined();
     });
   });
 

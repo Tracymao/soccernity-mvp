@@ -219,4 +219,19 @@ export class BanterController {
   ) {
     return this.banter.attachTopics(user.sub, id, dto);
   }
+
+  // DELETE /banter-rooms/:id/topics/:topicId — remove one topic tag from a
+  // room. Same guards and same 404-room -> 403-not-creator order as the
+  // attach route above; removes only the room-to-topic link, never the
+  // shared Topic. 204, idempotent. See BanterService.detachTopic.
+  @Delete(':id/topics/:topicId')
+  @HttpCode(204)
+  @UseGuards(JwtAuthGuard, GuardianConsentGuard, EmailVerifiedGuard)
+  async detachTopic(
+    @Param('id') id: string,
+    @Param('topicId') topicId: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ): Promise<void> {
+    await this.banter.detachTopic(user.sub, id, topicId);
+  }
 }
