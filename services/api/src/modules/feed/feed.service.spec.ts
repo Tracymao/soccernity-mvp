@@ -2239,6 +2239,78 @@ describe('FeedService', () => {
       });
     });
 
+    // --- Decision Log #153 applied to the saved-posts read (build-register B-064 follow-up) ---
+
+    it('attaches isLiked / isSaved / author.isFollowing per saved post, same shape as the feed', async () => {
+      const prisma = buildPrismaMock();
+      const rows = [
+        buildSavedRow({ postId: 'p-liked-followed', sequence: 3, post: buildPostRow({ id: 'p-liked-followed', authorId: 'author-x' }) }),
+        buildSavedRow({ postId: 'p-plain', sequence: 2, post: buildPostRow({ id: 'p-plain', authorId: 'author-y' }) }),
+        buildSavedRow({ postId: 'p-own', sequence: 1, post: buildPostRow({ id: 'p-own', authorId: 'viewer-1' }) }),
+      ];
+      // savedPost.findMany answers BOTH the page query and the isSaved lookup; the rows carry a postId
+      // each, which is all the lookup reads.
+      (prisma.savedPost.findMany as jest.Mock).mockResolvedValue(rows);
+      (prisma.like.findMany as jest.Mock).mockResolvedValue([{ postId: 'p-liked-followed' }]);
+      (prisma.follow.findMany as jest.Mock).mockResolvedValue([{ followeeId: 'author-x' }]);
+      const service = new FeedService(prisma, FIXED_CLOCK);
+
+      const page = await service.getSavedPosts('viewer-1', {});
+
+      const byId = Object.fromEntries(page.items.map((e) => [e.postId, e.post]));
+      expect(byId['p-liked-followed']).toMatchObject({ isLiked: true, isSaved: true });
+      expect(byId['p-liked-followed'].author.isFollowing).toBe(true);
+      expect(byId['p-plain']).toMatchObject({ isLiked: false, isSaved: true });
+      expect(byId['p-plain'].author.isFollowing).toBe(false);
+      // the caller's own post: never followed, nothing looked up for it
+      expect(byId['p-own'].author.isFollowing).toBe(false);
+      expect((prisma.follow.findMany as jest.Mock).mock.calls[0][0].where.followeeId).toEqual({
+        in: ['author-x', 'author-y'],
+      });
+      // entry shape unchanged: postId and savedAt still there, internal sequence still stripped
+      expect(page.items[0]).toHaveProperty('savedAt');
+      expect(page.items[0]).not.toHaveProperty('sequence');
+    });
+
+    it('does the viewer-state lookups once for the whole page (no N+1) and none for an empty page', async () => {
+      const prisma = buildPrismaMock();
+      const rows = [
+        buildSavedRow({ postId: 'p1', sequence: 2, post: buildPostRow({ id: 'p1', authorId: 'a1' }) }),
+        buildSavedRow({ postId: 'p2', sequence: 1, post: buildPostRow({ id: 'p2', authorId: 'a2' }) }),
+      ];
+      (prisma.savedPost.findMany as jest.Mock).mockResolvedValue(rows);
+      const service = new FeedService(prisma, FIXED_CLOCK);
+
+      await service.getSavedPosts('viewer-1', {});
+
+      expect(prisma.like.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.follow.findMany).toHaveBeenCalledTimes(1);
+      expect((prisma.like.findMany as jest.Mock).mock.calls[0][0]).toEqual({
+        where: { userId: 'viewer-1', postId: { in: ['p1', 'p2'] } },
+        select: { postId: true },
+      });
+
+      const empty = buildPrismaMock();
+      (empty.savedPost.findMany as jest.Mock).mockResolvedValue([]);
+      const emptyPage = await new FeedService(empty, FIXED_CLOCK).getSavedPosts('viewer-1', {});
+      expect(emptyPage.items).toEqual([]);
+      expect(empty.like.findMany).not.toHaveBeenCalled();
+      expect(empty.follow.findMany).not.toHaveBeenCalled();
+    });
+
+    it('still excludes unsaved, blocked and hidden posts exactly as before (the page query is unchanged)', async () => {
+      const prisma = buildPrismaMock();
+      (prisma.savedPost.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new FeedService(prisma, FIXED_CLOCK);
+
+      await service.getSavedPosts('user-1', {});
+
+      expect((prisma.savedPost.findMany as jest.Mock).mock.calls[0][0].where).toEqual({
+        userId: 'user-1',
+        post: { is: { AND: [notBlockedAuthor('user-1'), visibleTo('user-1')] } },
+      });
+    });
+
     it('embeds the full post without leaking passwordHash/isMinor', async () => {
       const prisma = buildPrismaMock();
       (prisma.savedPost.findMany as jest.Mock).mockResolvedValue([]);
