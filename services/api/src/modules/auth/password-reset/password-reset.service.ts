@@ -1,6 +1,7 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, Optional, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { AccountEmailService } from '../../account-emails/account-email.service';
 import { GuardianSecurityNoticeService } from '../../guardian-security-notice/guardian-security-notice.service';
 import { PasswordService } from '../password/password.service';
 import { AuthLimitsService } from '../rate-limit/auth-limits/auth-limits.service';
@@ -31,6 +32,8 @@ export class PasswordResetService {
     configService: ConfigService,
     private readonly authLimits: AuthLimitsService,
     private readonly guardianNotices: GuardianSecurityNoticeService,
+    // backend/b069-transactional-emails (B-069): the account's own "your password was reset" email.
+    @Optional() private readonly accountEmails?: AccountEmailService,
   ) {
     this.resetTokenTtlMinutes =
       Number(configService.get('RESET_TOKEN_TTL_MINUTES')) || DEFAULT_RESET_TOKEN_TTL_MINUTES;
@@ -103,5 +106,9 @@ export class PasswordResetService {
 
     // B-275: the reset has committed; a minor's confirmed guardian is told, in the background (never fails the reset).
     this.guardianNotices.notifyInBackground(consumed.userId, 'password_reset');
+
+    // B-069 (Decision Log #472 default (a)): the person is told, at the account's own address, that the password
+    // was changed through a reset link (Figma 1380:2297). Fire-and-log, after the reset has committed.
+    this.accountEmails?.passwordResetCompletedInBackground(consumed.userId);
   }
 }

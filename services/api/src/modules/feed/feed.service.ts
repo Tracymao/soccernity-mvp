@@ -333,16 +333,11 @@ export interface ViewState {
 // timestamp plus the full embedded post (reusing POST_SELECT, same
 // field-minimization discipline as everywhere else in this module).
 //
-// NOTE (Decision Log #153): the embedded `post` here is the RAW FeedPost
-// shape, NOT FeedPostWithViewerState — getSavedPosts does not attach
-// isLiked / isSaved / author.isFollowing. `isSaved` would be trivially
-// `true` for every row (that's what "saved posts" means), but isLiked /
-// isFollowing would need the same enrichment getFeed does. Left as a
-// flagged follow-up rather than done here: this task (Decision Log #153)
-// scoped the fields to GET /posts/feed and GET /posts/:id only, and
-// apps/web's saved-posts screen isn't built yet. Same story for
-// createPost's response (a freshly created post: isLiked / isSaved /
-// isFollowing are all trivially false).
+// The embedded `post` carries the same per-caller viewer state the feed does (isLiked / isSaved /
+// author.isFollowing, Decision Log #153), attached in getSavedPosts() through the same
+// attachViewerState() helper, so a saved post the caller already liked, or whose author they follow,
+// shows that on first load. `isSaved` is true for every row by definition. createPost's response is
+// still the raw shape (a freshly created post: all three are trivially false).
 const SAVED_POST_SELECT = {
   postId: true,
   savedAt: true,
@@ -350,9 +345,10 @@ const SAVED_POST_SELECT = {
 } as const;
 
 type RawSavedPostEntry = Prisma.SavedPostGetPayload<{ select: typeof SAVED_POST_SELECT }>;
-export type SavedPostEntry = Omit<RawSavedPostEntry, 'post'> & { post: FeedPost };
+export type SavedPostEntry = Omit<RawSavedPostEntry, 'post'> & { post: FeedPostWithViewerState };
+type RawSavedPostEntryWithFeedPost = Omit<RawSavedPostEntry, 'post'> & { post: FeedPost };
 
-function toSavedPostEntry(row: RawSavedPostEntry, now: Date): SavedPostEntry {
+function toSavedPostEntry(row: RawSavedPostEntry, now: Date): RawSavedPostEntryWithFeedPost {
   return { ...row, post: toFeedPost(row.post, now) };
 }
 
@@ -1497,7 +1493,16 @@ export class FeedService {
     // Strip `sequence` back off — see SAVED_POST_SELECT_WITH_SEQUENCE's
     // own comment; it was never part of the public SavedPostEntry shape.
     const now = this.clock.now();
-    const items: SavedPostEntry[] = rowsWithSequence.map((row) => toSavedPostEntry(stripSequence(row), now));
+    const entries = rowsWithSequence.map((row) => toSavedPostEntry(stripSequence(row), now));
+
+    // Same enrichment as GET /posts/feed (Decision Log #153, one shared helper): three batched lookups for
+    // the whole page, none per post, and none at all for an empty page. attachViewerState returns the posts
+    // in the order it was given, so they are put back on their entries by position.
+    const withState = await this.attachViewerState(
+      userId,
+      entries.map((e) => e.post),
+    );
+    const items: SavedPostEntry[] = entries.map((e, i) => ({ ...e, post: withState[i] }));
 
     return { items, nextCursor };
   }

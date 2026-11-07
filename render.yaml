@@ -331,6 +331,16 @@ services:
         sync: false
       - key: STRIPE_PUBLISHABLE_KEY
         sync: false
+      # --- Web push (B-285, Decision Log #472 (e)) ---
+      # The VAPID key pair identifies this server to the browsers' push services. The founder generates it once
+      # (`npx web-push generate-vapid-keys`). Unset or "replace-me" = web push reports itself unavailable;
+      # nothing else changes. VAPID_SUBJECT is a mailto: or https:// contact address, e.g. mailto:support@soccernity.com.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
       # COPPA_VERIFICATION_AMOUNT_CENTS: code default and floor (Stripe minimum)
       - key: COPPA_VERIFICATION_AMOUNT_CENTS
         value: "50"
@@ -664,6 +674,16 @@ services:
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      # --- Web push (B-285, Decision Log #472 (e)) ---
+      # The VAPID key pair identifies this server to the browsers' push services. The founder generates it once
+      # (`npx web-push generate-vapid-keys`). Unset or "replace-me" = web push reports itself unavailable;
+      # nothing else changes. VAPID_SUBJECT is a mailto: or https:// contact address, e.g. mailto:support@soccernity.com.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
         sync: false
       # COPPA_VERIFICATION_AMOUNT_CENTS: code default and floor (Stripe minimum)
       - key: COPPA_VERIFICATION_AMOUNT_CENTS

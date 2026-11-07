@@ -136,13 +136,12 @@ export type CreatedPost = Omit<FeedPost, "isLiked" | "isSaved" | "author"> & {
 };
 
 // GET /users/:id/saved-posts (Build Plan Section 4.3; self-only, Decision Log #22). Each entry is the
-// SavedPost row plus the post, in the same unenriched shape as POST /posts: NO per-caller isLiked or
-// author.isFollowing (Decision Log #153 left this endpoint out). `isSaved` is true by definition. The
-// caller (profile/SavedPostsTab.tsx) fills the three in; see the note there.
+// SavedPost row plus the post in the same enriched shape GET /posts/feed returns: per-caller isLiked,
+// isSaved (true by definition) and author.isFollowing (Decision Log #153).
 export interface SavedPostEntry {
   postId: string;
   savedAt: string;
-  post: CreatedPost;
+  post: FeedPost;
 }
 
 export interface SavedPostPage {
