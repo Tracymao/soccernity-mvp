@@ -27,7 +27,7 @@ import { calculateAge } from '../auth/registration/age.util';
 import { deriveOnboardingState, GuardianConsentState, OnboardingNextStep } from '../auth/onboarding-state.util';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserSettingsDto } from './dto/update-user-settings.dto';
-import { DmPermission, UserSettings } from './user-settings.constants';
+import { DmPermission, effectiveReadReceipts, UserSettings } from './user-settings.constants';
 import { PUBLIC_NAME_SELECT, resolvePublicName, toPublicUser } from './public-name.util';
 import { isPublicProfileKey } from './profile-image.util';
 import { ProfileImageViewService } from './profile-image-view.service';
@@ -344,6 +344,28 @@ export interface SuggestedUsersResult {
   items: FollowUser[];
 }
 
+// The columns behind GET/PATCH /users/me/settings. isMinor is read only to turn a NULL readReceipts into its age
+// default (effectiveReadReceipts); it is never returned.
+const OWN_SETTINGS_SELECT = {
+  dmPermission: true,
+  mediaSensitive: true,
+  readReceipts: true,
+  isMinor: true,
+} as const;
+
+function toUserSettings(row: {
+  dmPermission: string;
+  mediaSensitive: boolean;
+  readReceipts: boolean | null;
+  isMinor: boolean;
+}): UserSettings {
+  return {
+    dmPermission: row.dmPermission as DmPermission,
+    mediaSensitive: row.mediaSensitive,
+    readReceipts: effectiveReadReceipts(row.readReceipts, row.isMinor),
+  };
+}
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -479,18 +501,19 @@ export class UsersService {
   async getOwnSettings(userId: string): Promise<UserSettings> {
     const row = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { dmPermission: true, mediaSensitive: true },
+      select: OWN_SETTINGS_SELECT,
     });
     if (!row) {
       throw new NotFoundException('User not found');
     }
-    return { dmPermission: row.dmPermission as DmPermission, mediaSensitive: row.mediaSensitive };
+    return toUserSettings(row);
   }
 
   async updateOwnSettings(userId: string, dto: UpdateUserSettingsDto): Promise<UserSettings> {
     const data: Prisma.UserUpdateInput = {};
     if (dto.dmPermission !== undefined) data.dmPermission = dto.dmPermission;
     if (dto.mediaSensitive !== undefined) data.mediaSensitive = dto.mediaSensitive;
+    if (dto.readReceipts !== undefined) data.readReceipts = dto.readReceipts;
     if (Object.keys(data).length === 0) {
       return this.getOwnSettings(userId);
     }
@@ -498,9 +521,9 @@ export class UsersService {
       const row = await this.prisma.user.update({
         where: { id: userId },
         data,
-        select: { dmPermission: true, mediaSensitive: true },
+        select: OWN_SETTINGS_SELECT,
       });
-      return { dmPermission: row.dmPermission as DmPermission, mediaSensitive: row.mediaSensitive };
+      return toUserSettings(row);
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
         throw new NotFoundException('User not found');

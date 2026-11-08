@@ -101,7 +101,7 @@ describe('DM permission + sensitive media settings (B-061) e2e', () => {
     it('GET returns the defaults and is not swallowed by GET /users/:id', async () => {
       const u = await createUser('get');
       const res = await request(server()).get('/users/me/settings').set(auth(u.accessToken)).expect(200);
-      expect(res.body).toEqual({ dmPermission: 'everyone', mediaSensitive: false });
+      expect(res.body).toEqual({ dmPermission: 'everyone', mediaSensitive: false, readReceipts: true });
     });
 
     it('PATCH is partial: one field leaves the other as it was, and the change is stored', async () => {
@@ -109,10 +109,10 @@ describe('DM permission + sensitive media settings (B-061) e2e', () => {
       const prisma = getTestPrismaClient();
 
       const first = await request(server()).patch('/users/me/settings').set(auth(u.accessToken)).send({ dmPermission: 'following' }).expect(200);
-      expect(first.body).toEqual({ dmPermission: 'following', mediaSensitive: false });
+      expect(first.body).toEqual({ dmPermission: 'following', mediaSensitive: false, readReceipts: true });
 
       const second = await request(server()).patch('/users/me/settings').set(auth(u.accessToken)).send({ mediaSensitive: true }).expect(200);
-      expect(second.body).toEqual({ dmPermission: 'following', mediaSensitive: true });
+      expect(second.body).toEqual({ dmPermission: 'following', mediaSensitive: true, readReceipts: true });
 
       const row = await prisma.user.findUniqueOrThrow({ where: { id: u.userId }, select: { dmPermission: true, mediaSensitive: true } });
       expect(row).toEqual({ dmPermission: 'following', mediaSensitive: true });
@@ -122,16 +122,16 @@ describe('DM permission + sensitive media settings (B-061) e2e', () => {
         .set(auth(u.accessToken))
         .send({ dmPermission: 'none', mediaSensitive: false })
         .expect(200);
-      expect(both.body).toEqual({ dmPermission: 'none', mediaSensitive: false });
+      expect(both.body).toEqual({ dmPermission: 'none', mediaSensitive: false, readReceipts: true });
 
       const empty = await request(server()).patch('/users/me/settings').set(auth(u.accessToken)).send({}).expect(200);
-      expect(empty.body).toEqual({ dmPermission: 'none', mediaSensitive: false });
+      expect(empty.body).toEqual({ dmPermission: 'none', mediaSensitive: false, readReceipts: true });
     });
 
     it('PATCH rejects invalid values with a 400 and writes nothing', async () => {
       const u = await createUser('bad');
       const prisma = getTestPrismaClient();
-      for (const body of [{ dmPermission: 'nobody' }, { dmPermission: null }, { mediaSensitive: 'yes' }, { readReceipts: true }]) {
+      for (const body of [{ dmPermission: 'nobody' }, { dmPermission: null }, { mediaSensitive: 'yes' }, { readReceipts: 'yes' }, { readReceipts: null }]) {
         await request(server()).patch('/users/me/settings').set(auth(u.accessToken)).send(body).expect(400);
       }
       const row = await prisma.user.findUniqueOrThrow({ where: { id: u.userId }, select: { dmPermission: true, mediaSensitive: true } });
@@ -155,7 +155,7 @@ describe('DM permission + sensitive media settings (B-061) e2e', () => {
         .set(auth(m.accessToken))
         .send({ dmPermission: 'none', mediaSensitive: true })
         .expect(200);
-      expect(res.body).toEqual({ dmPermission: 'none', mediaSensitive: true });
+      expect(res.body).toEqual({ dmPermission: 'none', mediaSensitive: true, readReceipts: false });
     });
 
     it('one user\'s change never touches another user', async () => {
@@ -163,7 +163,7 @@ describe('DM permission + sensitive media settings (B-061) e2e', () => {
       const b = await createUser('iso-b');
       await request(server()).patch('/users/me/settings').set(auth(a.accessToken)).send({ dmPermission: 'none', mediaSensitive: true }).expect(200);
       const res = await request(server()).get('/users/me/settings').set(auth(b.accessToken)).expect(200);
-      expect(res.body).toEqual({ dmPermission: 'everyone', mediaSensitive: false });
+      expect(res.body).toEqual({ dmPermission: 'everyone', mediaSensitive: false, readReceipts: true });
     });
   });
 

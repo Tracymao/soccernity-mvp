@@ -807,3 +807,21 @@ trio `avatarUrl` / `avatarKey` / `avatarStatus` (all NULL or all set).
 **New table, flagged (`ProfileImageCheck`, migration `20261112090000_add_profile_image_check`, additive).** The retry state, kept to the fewest columns: primary key `(userId, kind)`, `objectKey` (which file the row describes; a row for an older key is stale and is overwritten), `state` (`retry` | `review` | `gave_up`), `attempts`, `nextAttemptAt` (the claim writes `now + lease` into it, so there is no separate lease column; null once settled). No foreign key (bookkeeping, no image, no labels). Deleted when the image is approved or rejected, by the sweep's own cleanup when the image is no longer the pending one, and at anonymisation. A genuine addition beyond Section 3's entity list: a Decision Log candidate, not transcribed here.
 
 **Not built / still open.** The moderator queue and the admin reject/approve routes (B-037): a moderator **reject of an already-approved picture must also move the file back to the private prefix** (it would otherwise stay fetchable at its old public address; noted on `rejectProfileImage`). No notification on approval (not asked for). The CSAM / statutory-reporting path (B-206, counsel). The AWS account and keys (founder step B-193). Orphaned objects under the two new prefixes (a failed best-effort delete) are logged, not swept.
+
+## Read receipts (build-register B-061; Decision Log #472, founder decision 2026-11-08)
+
+`GET` and `PATCH /users/me/settings` now carry a third setting, `readReceipts: boolean` (alongside `dmPermission` and
+`mediaSensitive`; same route, same `JwtAuthGuard`-only rule, self-scoped by the token subject, no id anywhere).
+
+* **Storage:** `User.readReceipts Boolean?` (migration `20261122090000_user_read_receipts`, additive). **NULL means "use
+  the age default"**, decided at READ time from the stored `isMinor` flag: ON for an adult account, OFF for an under-18
+  account (DEFAULT, founder-veto-able). An account that turns 18 therefore changes default with no backfill. The GET
+  returns the EFFECTIVE boolean (`effectiveReadReceipts` in `user-settings.constants.ts`), never the raw nullable
+  column. The PATCH stores an explicit `true` or `false`; there is no way to set it back to NULL from the API (an
+  explicit `null` is a 400, like the other two settings).
+* **Anonymisation** (and held-account minimisation) resets it to NULL.
+* **What it controls** is only what is disclosed about `Message.readAt`, never whether it is recorded. The disclosure
+  rule (both settings on, same age class, read, sender only) is documented in the messaging README, "Read receipts".
+* The purge reference list is derived from `Prisma.dmmf` for relations to `User`; a plain column on `User` needs no entry
+  (confirmed: `anonymized-row-purge.references.spec.ts` unchanged and passing).
+

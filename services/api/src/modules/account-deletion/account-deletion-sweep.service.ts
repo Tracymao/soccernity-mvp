@@ -355,6 +355,8 @@ export class AccountDeletionSweepService {
           profileCountry: null,
           clubAffiliationId: null,
           representedClubId: null,
+          // B-061: read receipts back to "use the age default" (NULL).
+          readReceipts: null,
           // avatar / cover: all columns of each together (the CHECK constraints need it)
           avatarUrl: null,
           avatarKey: null,
@@ -533,6 +535,8 @@ export class AccountDeletionSweepService {
           bio: null,
           preferredClub: null,
           profileCountry: null,
+          // B-061: read receipts back to "use the age default" (NULL).
+          readReceipts: null,
           avatarUrl: null,
           avatarKey: null,
           avatarStatus: null,
