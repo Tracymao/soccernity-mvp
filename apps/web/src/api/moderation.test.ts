@@ -139,4 +139,12 @@ describe("reportSubmitErrorMessage", () => {
     expect(reportSubmitErrorMessage(new Error("boom"))).toBe("Couldn't submit that report. Please try again.");
     expect(reportSubmitErrorMessage("nope")).toBe("Couldn't submit that report. Please try again.");
   });
+
+  it("a 404 on a MESSAGE report shows the plain line, never the server's words; other targets keep theirs", () => {
+    const err = new ModerationApiError("Message not found", { status: 404 });
+    expect(reportSubmitErrorMessage(err, "message")).toBe("Couldn't submit that report. Please try again.");
+    expect(reportSubmitErrorMessage(err, "post")).toBe("Message not found");
+    // Other statuses on a message still use the shared sentences.
+    expect(reportSubmitErrorMessage(new ModerationApiError("x", { status: 429 }), "message")).toMatch(/too quickly/);
+  });
 });

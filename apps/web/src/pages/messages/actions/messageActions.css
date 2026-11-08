@@ -1,8 +1,7 @@
 /* Message actions (B-067). Figma: docs/figma-w8-messaging.md (A1 to D10).
  * Palette from the brand tokens only. Where a frame uses a colour with no
- * token (the Block User item in red in the old component, grey bubbles) the
- * nearest token is used: navy for the menu item, the existing bubble colours
- * for bubbles. Errors use the app's accent-bar callout (semantic alert as a
+ * token (grey bubbles) the nearest token is used: the existing bubble colours
+ * for bubbles. Block User is semantic/alert, as the corrected frames draw it. Errors use the app's accent-bar callout (semantic alert as a
  * bar only, text in navy), as on the other screens. */
 
 /* --- the host that wraps one bubble ------------------------------------ */
@@ -145,6 +144,16 @@
 .msg-menu__item:disabled {
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+/* Block User: text and icon in semantic/alert, as frames BL1 and BL3 draw it (Figma pass W8-3). #FA0606 on white
+ * is about 4.1:1, a little under AA for small text; that is the frame's own colour, kept as drawn. */
+.msg-menu__item--alert {
+  color: var(--sn-semantic-alert);
+}
+
+.msg-menu__item--alert .msg-menu__label {
+  color: inherit;
 }
 
 .msg-menu__text {

@@ -29,6 +29,10 @@ vi.mock("../../../api/messaging", async () => {
     deleteConversation: vi.fn(),
   };
 });
+vi.mock("../../../api/moderation", async () => {
+  const actual = await vi.importActual<typeof import("../../../api/moderation")>("../../../api/moderation");
+  return { ...actual, createReport: vi.fn() };
+});
 vi.mock("../../../api/users", async () => {
   const actual = await vi.importActual<typeof import("../../../api/users")>("../../../api/users");
   return { ...actual, blockUser: vi.fn() };
@@ -43,6 +47,7 @@ import {
   deleteConversation,
 } from "../../../api/messaging";
 import { blockUser } from "../../../api/users";
+import { createReport, ModerationApiError } from "../../../api/moderation";
 import { seedSession, clearSession } from "../../../test/session";
 
 const ME = "user-me";
@@ -206,13 +211,15 @@ describe.each([mobilePage, popUp])("message actions on the $name", (surface) => 
       expect(within(menu).getByText("Sent more than 15 minutes ago")).toBeTruthy();
     });
 
-    it("their message: only Delete for me, with its hint, and no Edit and no Report", async () => {
+    it("their message: Report, then Delete for me with its hint, and no Edit", async () => {
       await surface.open();
       const menu = openMenuFor("Their message");
-      expect(within(menu).getByRole("menuitem", { name: /Delete for me/ })).toBeTruthy();
+      const items = within(menu).getAllByRole("menuitem");
+      expect(items).toHaveLength(2);
+      expect(items[0].textContent).toBe("Report");
+      expect(items[1].textContent).toMatch(/^Delete for me/);
       expect(within(menu).getByText("Only you will stop seeing it")).toBeTruthy();
       expect(within(menu).queryByRole("menuitem", { name: /Edit/ })).toBeNull();
-      expect(within(menu).queryByText(/report/i)).toBeNull();
     });
 
     it("Escape closes the menu and puts focus back on its button", async () => {
@@ -545,6 +552,114 @@ describe.each([mobilePage, popUp])("message actions on the $name", (surface) => 
     });
   });
 
+  describe("report a message", () => {
+    function openReport() {
+      const menu = openMenuFor("Their message");
+      fireEvent.click(within(menu).getByRole("menuitem", { name: "Report" }));
+      return screen.getByRole("dialog", { name: "Report this message" });
+    }
+
+    const filed = {
+      id: "r1",
+      targetType: "message",
+      targetId: "m-theirs",
+      reason: "",
+      status: "open",
+      createdAt: "2026-11-08T10:00:00.000Z",
+    };
+
+    it("is on their message only: not on your own, and a placeholder has no menu at all", async () => {
+      const gone: DeletedMessage = {
+        id: "m-gone",
+        conversationId: "c1",
+        senderId: OTHER,
+        sentAt: ago(20),
+        editedAt: null,
+        deletedForEveryone: true,
+        contentText: null,
+      };
+      serve([THEIRS, gone, MINE]);
+      await surface.open();
+      expect(within(openMenuFor("My recent message")).queryByRole("menuitem", { name: "Report" })).toBeNull();
+      fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+      expect(within(openMenuFor("Their message")).getByRole("menuitem", { name: "Report" })).toBeTruthy();
+      // Only THEIRS and MINE have a menu button; the placeholder has none.
+      expect(screen.getAllByRole("button", { name: "Message options" })).toHaveLength(2);
+    });
+
+    it("opens the shared report dialog titled for a message, with focus inside it, and shows no message text", async () => {
+      await surface.open();
+      const dialog = openReport();
+      expect(screen.queryByRole("menu")).toBeNull();
+      expect(document.activeElement && dialog.contains(document.activeElement)).toBe(true);
+      expect(within(dialog).getAllByRole("radio")).toHaveLength(9);
+      expect(dialog.textContent).not.toContain("Their message");
+      expect((within(dialog).getByRole("button", { name: "Submit report" }) as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it("sends targetType message with the message id and the category, then closes the dialog and leaves no menu", async () => {
+      vi.mocked(createReport).mockResolvedValue(filed);
+      await surface.open();
+      const dialog = openReport();
+      fireEvent.click(within(dialog).getByRole("radio", { name: "Spam or scam" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Submit report" }));
+      expect(await screen.findByText("Reported — thanks")).toBeTruthy();
+      expect(vi.mocked(createReport)).toHaveBeenCalledWith(TOKEN, {
+        targetType: "message",
+        targetId: "m-theirs",
+        reasonCategory: "spam_or_scam",
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Close" }));
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(screen.queryByRole("menu")).toBeNull();
+      expect(screen.queryByText("Reported")).toBeNull();
+    });
+
+    it("a 404 shows the plain could-not-send line, says nothing about the message, and keeps what was chosen", async () => {
+      vi.mocked(createReport).mockRejectedValueOnce(new ModerationApiError("Message not found", { status: 404 }));
+      await surface.open();
+      const dialog = openReport();
+      fireEvent.click(within(dialog).getByRole("radio", { name: "Spam or scam" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Submit report" }));
+      const alert = await within(dialog).findByRole("alert");
+      expect(alert.textContent).toBe("Couldn't submit that report. Please try again.");
+      expect(dialog.textContent).not.toMatch(/not found/i);
+      expect((within(dialog).getByRole("radio", { name: "Spam or scam" }) as HTMLInputElement).checked).toBe(true);
+    });
+
+    it("a repeat that the server accepts again is a success like the first", async () => {
+      vi.mocked(createReport).mockResolvedValue(filed);
+      await surface.open();
+      for (let round = 0; round < 2; round += 1) {
+        const dialog = openReport();
+        fireEvent.click(within(dialog).getByRole("radio", { name: "Spam or scam" }));
+        fireEvent.click(within(dialog).getByRole("button", { name: "Submit report" }));
+        expect(await screen.findByText("Reported — thanks")).toBeTruthy();
+        fireEvent.click(screen.getByRole("button", { name: "Close" }));
+      }
+      expect(vi.mocked(createReport)).toHaveBeenCalledTimes(2);
+    });
+
+    it("Cancel closes the dialog without sending", async () => {
+      await surface.open();
+      const dialog = openReport();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(vi.mocked(createReport)).not.toHaveBeenCalled();
+    });
+
+    it("a long touch inside the dialog does not open a message menu (the dialog is outside the long-press host)", async () => {
+      await surface.open();
+      const dialog = openReport();
+      vi.useFakeTimers();
+      fireEvent.touchStart(within(dialog).getByRole("button", { name: "Cancel" }));
+      act(() => {
+        vi.advanceTimersByTime(800);
+      });
+      expect(screen.queryByRole("menu")).toBeNull();
+    });
+  });
+
   describe("what the server sends", () => {
     it("a message deleted for everyone arrives as the placeholder, for me and for them, with no menu", async () => {
       const gone: DeletedMessage = {
@@ -575,6 +690,13 @@ describe.each([mobilePage, popUp])("message actions on the $name", (surface) => 
       fireEvent.click(screen.getByRole("button", { name: "Conversation options" }));
       return screen.getByRole("menu", { name: "Conversation actions" });
     }
+
+    it("Block User is drawn in the alert colour, as frames BL1 and BL3 do", async () => {
+      await surface.open();
+      const menu = openConversationMenu();
+      expect(within(menu).getByRole("menuitem", { name: "Block User" }).className).toContain("msg-menu__item--alert");
+      expect(within(menu).getByRole("menuitem", { name: "Mark as Read" }).className).not.toContain("msg-menu__item--alert");
+    });
 
     it("lists Mark as Read, View User Profile, Block User and Delete Chat with its hint", async () => {
       await surface.open();

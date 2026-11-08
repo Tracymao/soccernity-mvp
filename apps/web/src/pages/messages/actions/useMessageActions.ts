@@ -49,6 +49,9 @@ export function useMessageActions({
   const [menuId, setMenuId] = useState<string | null>(null);
   const [edit, setEdit] = useState<EditState | null>(null);
   const [del, setDel] = useState<DeleteState | null>(null);
+  // The id of the message whose report dialog is open (B-284). The dialog itself is ReportAction, rendered
+  // by that message's MessageHost; the server decides everything about whether the report is allowed.
+  const [reportId, setReportId] = useState<string | null>(null);
   // Bumped after a change that succeeded, so a surface can refresh anything
   // derived from the list (the Community sidebar's preview) without doing so
   // on every load.
@@ -56,6 +59,12 @@ export function useMessageActions({
 
   const openMenu = useCallback((id: string) => setMenuId(id), []);
   const closeMenu = useCallback(() => setMenuId(null), []);
+
+  const startReport = useCallback((message: Message) => {
+    setMenuId(null);
+    setReportId(message.id);
+  }, []);
+  const closeReport = useCallback(() => setReportId(null), []);
 
   const startEdit = useCallback((message: Message) => {
     setMenuId(null);
@@ -146,6 +155,10 @@ export function useMessageActions({
   }
 
   return {
+    accessToken,
+    reportId,
+    startReport,
+    closeReport,
     menuId,
     openMenu,
     closeMenu,

@@ -265,6 +265,21 @@
   word-break: break-word;
 }
 
+/* The reported message on a message report (ReportedMessageFields.tsx). Same tinted block as the enquiry
+ * message (.ce-message); kept as its own class so the two screens can change independently. */
+
+.mod-message-text {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background-color: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* Escalate card + the child-safety-vetting restricted state
  * (schema/report-severity-escalation-admin-vetting-application). */
 
