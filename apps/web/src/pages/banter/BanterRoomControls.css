@@ -1,0 +1,441 @@
+/* Bants room creator controls (B-071): room menu, Deactivate dialog, Add
+ * topics sheet/popover, topic chips with a remove cross. Figma 6998:54762
+ * (M3) to 6999:56133 (M19) mobile, 7002:55222 (D2) onward desktop.
+ * Brand tokens only, no new colour. The frames' red error bar is
+ * semantic/alert used as an accent bar and a field border, never as text or a
+ * button fill (Decision Log #408 item 4). */
+
+/* --- room menu (kebab) ---------------------------------------------------- */
+
+.banter-room-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.banter-room-menu__kebab {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sn-text-primary);
+  font: 700 20px/1 "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.banter-room-menu__kebab[aria-expanded="true"],
+.banter-room-menu__kebab:hover {
+  background: var(--sn-green-tint-12);
+}
+
+.banter-room-menu__list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 180px;
+  padding: 6px;
+  background: var(--sn-background-surface);
+  border-radius: 10px;
+  box-shadow:
+    0 2px 6px var(--sn-shadow-ambient),
+    0 8px 24px var(--sn-shadow-elevated);
+}
+
+.banter-room-menu__item {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  font: 500 14px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  cursor: pointer;
+}
+
+.banter-room-menu__item:hover:not(:disabled) {
+  background: var(--sn-green-tint-12);
+}
+
+.banter-room-menu__item:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.banter-room-alert {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--sn-semantic-alert);
+  border-radius: 4px;
+  background: var(--sn-green-tint-12);
+  font: 500 13px/1.45 "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+}
+
+.banter-room-alert__retry {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  font: 600 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* --- title row ------------------------------------------------------------ */
+
+.banter-room-page__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.banter-room-page__title-row .banter-room-page__name {
+  min-width: 0;
+}
+
+/* --- topic chips with a remove cross -------------------------------------- */
+
+.banter-room-topics-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.banter-room-topics-editor__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.banter-room-topics-editor__none {
+  font: 400 13px "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.banter-room-topics-editor__add {
+  position: relative;
+}
+
+.banter-room-topics-editor__error {
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--sn-semantic-alert);
+  border-radius: 4px;
+  background: var(--sn-green-tint-12);
+  font: 500 13px/1.4 "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+}
+
+.banter-room-page__topic--editable {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.banter-room-page__topic--removing {
+  opacity: 0.5;
+}
+
+.banter-room-page__topic-remove {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sn-text-primary);
+  font: 600 16px/1 "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.banter-room-page__topic-remove:hover:not(:disabled) {
+  background: var(--sn-icon-inactive);
+}
+
+.banter-room-page__topic-remove:disabled {
+  cursor: not-allowed;
+}
+
+.banter-room-topic-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px dashed var(--sn-brand-navy);
+  border-radius: 999px;
+  background: transparent;
+  font: 500 12px/1.2 "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  cursor: pointer;
+}
+
+/* --- overlays --------------------------------------------------------------- */
+
+.banter-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background-color: var(--sn-overlay-scrim);
+}
+
+.banter-scrim--sheet {
+  align-items: flex-end;
+  padding: 0;
+}
+
+.banter-modal {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+  background: var(--sn-background-surface);
+  box-shadow:
+    0 2px 6px var(--sn-shadow-ambient),
+    0 8px 24px var(--sn-shadow-elevated),
+    0 24px 56px var(--sn-shadow-key);
+}
+
+.banter-modal--dialog {
+  width: 100%;
+  max-width: 440px;
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: 16px;
+}
+
+.banter-modal--sheet {
+  width: 100%;
+  max-height: 92vh;
+  overflow-y: auto;
+  border-radius: 16px 16px 0 0;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+.banter-modal--popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  width: 320px;
+  border-radius: 16px;
+}
+
+.banter-modal__grab {
+  align-self: center;
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--sn-icon-inactive);
+}
+
+.banter-modal__title {
+  margin: 0;
+  font: 600 20px/1.3 "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+}
+
+.banter-modal__body {
+  margin: 0;
+  font: 400 14px/1.5 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.banter-modal__label {
+  margin: 0;
+  font: 600 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.banter-modal__hint {
+  margin: 0;
+  font: 400 13px/1.4 "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+}
+
+.banter-modal__error {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--sn-semantic-alert);
+  border-radius: 4px;
+  background: var(--sn-green-tint-12);
+  font: 500 13px/1.45 "Inter", sans-serif;
+  color: var(--sn-brand-navy);
+}
+
+.banter-modal__input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 10px;
+  background: var(--sn-background-surface);
+  font: 400 14px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+}
+
+.banter-modal__input--invalid {
+  border: 2px solid var(--sn-semantic-alert);
+  padding: 0 13px;
+}
+
+.banter-modal__link {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: 500 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.banter-modal__link:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.banter-modal__actions {
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.banter-modal__actions--stack {
+  flex-direction: column;
+}
+
+.banter-modal__actions--sheet {
+  margin-top: 4px;
+}
+
+.banter-modal--popover .banter-modal__actions--sheet {
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
+
+.banter-modal__primary,
+.banter-modal__secondary {
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: 999px;
+  font: 600 14px "Inter", sans-serif;
+  cursor: pointer;
+}
+
+.banter-modal__primary {
+  border: 1px solid var(--sn-brand-navy);
+  background: var(--sn-brand-navy);
+  color: #fff; /* no --sn-text-on-navy token in apps/web: disclosed exception, as accountActions.css */
+}
+
+.banter-modal__secondary {
+  border: 1px solid var(--sn-icon-inactive);
+  background: var(--sn-background-surface);
+  color: var(--sn-text-primary);
+}
+
+.banter-modal__primary:disabled {
+  border-color: transparent;
+  background: var(--sn-icon-inactive);
+  color: var(--sn-text-secondary);
+  cursor: not-allowed;
+}
+
+.banter-modal__secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.banter-modal__primary:focus-visible,
+.banter-modal__secondary:focus-visible,
+.banter-modal__link:focus-visible,
+.banter-modal__input:focus-visible,
+.banter-room-menu__kebab:focus-visible,
+.banter-room-menu__item:focus-visible,
+.banter-room-topic-add:focus-visible,
+.banter-room-page__topic-remove:focus-visible,
+.banter-topics-pick__chip:focus-visible {
+  outline: 2px solid var(--sn-brand-navy);
+  outline-offset: 2px;
+}
+
+/* --- Add topics fields ---------------------------------------------------------- */
+
+.banter-topics-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.banter-topics-form--saving {
+  opacity: 0.6;
+}
+
+.banter-topics-pick {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.banter-topics-pick__chip {
+  padding: 6px 12px;
+  border: 1px solid var(--sn-icon-inactive);
+  border-radius: 999px;
+  background: var(--sn-background-surface);
+  font: 500 13px "Inter", sans-serif;
+  color: var(--sn-text-primary);
+  cursor: pointer;
+}
+
+.banter-topics-pick__chip--on {
+  border-color: var(--sn-brand-navy);
+  background: var(--sn-brand-navy);
+  color: #fff; /* see .banter-modal__primary */
+}
+
+.banter-topics-pick__chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.banter-topics-skeleton {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.banter-topics-skeleton__chip {
+  width: 84px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--sn-icon-inactive);
+}
+
+@media (max-width: 820px) {
+  .banter-room-menu__list {
+    min-width: 200px;
+  }
+}
