@@ -45,6 +45,8 @@ function profile(over: Partial<PublicProfile> = {}): PublicProfile {
     coverUrl: null,
     isFollowing: false,
     viewerHasBlocked: false,
+    isPrivate: false,
+    viewerFollows: false,
     ...over,
   };
 }

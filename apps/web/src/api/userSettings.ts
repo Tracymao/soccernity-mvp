@@ -1,8 +1,8 @@
 // The caller's own messaging and media settings (build register B-061, Decision Log #472
 // adopted defaults (d) and (i)). Backend: services/api users module.
 //
-//   GET   /users/me/settings -> { dmPermission, mediaSensitive, readReceipts }
-//   PATCH /users/me/settings   { dmPermission? , mediaSensitive? , readReceipts? }  (any of them)
+//   GET   /users/me/settings -> { dmPermission, mediaSensitive, readReceipts, isProfilePublic }
+//   PATCH /users/me/settings   { dmPermission? , mediaSensitive? , readReceipts? , isProfilePublic? }  (any of them)
 //
 // dmPermission only ever TIGHTENS the safety rules: "following" and "none" stop other people
 // STARTING a new conversation with you (existing chats keep working). mediaSensitive blurs your
@@ -10,6 +10,9 @@
 // readReceipts is the EFFECTIVE value: the saved choice, or the age default (on for an adult account,
 // off for an under-18 account). A PATCH stores an explicit true or false. It decides whether the
 // "Seen" state of the messages you SENT is shown; the server applies the rule to every message read.
+// isProfilePublic (B-060, founder decision 2026-11-08) is the EFFECTIVE value: always true for an
+// under-18 account, which cannot turn it off (a PATCH answers 403 `profile_visibility_not_available`).
+// When false, anyone who is not the owner and does not follow the owner sees a minimal private card.
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
 
 export type DmPermission = "everyone" | "following" | "none";
@@ -20,6 +23,7 @@ export interface UserSettings {
   dmPermission: DmPermission;
   mediaSensitive: boolean;
   readReceipts: boolean;
+  isProfilePublic: boolean;
 }
 
 export class UserSettingsApiError extends Error {

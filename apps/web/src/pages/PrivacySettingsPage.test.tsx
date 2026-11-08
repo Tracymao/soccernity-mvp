@@ -15,12 +15,17 @@ vi.mock("../api/users", async () => {
   return { ...actual, getUser: vi.fn() };
 });
 
+vi.mock("../api/userSettings", async () => {
+  const actual = await vi.importActual<typeof import("../api/userSettings")>("../api/userSettings");
+  return { ...actual, getUserSettings: vi.fn(), updateUserSettings: vi.fn() };
+});
 vi.mock("../api/auth", async () => {
   const actual = await vi.importActual<typeof import("../api/auth")>("../api/auth");
   return { ...actual, getGuardianConsentStatus: vi.fn() };
 });
 
 import { getUser } from "../api/users";
+import { getUserSettings } from "../api/userSettings";
 import { getGuardianConsentStatus } from "../api/auth";
 import { seedSession, clearSession } from "../test/session";
 
@@ -64,6 +69,13 @@ beforeEach(() => {
   clearSession();
   vi.mocked(getUser).mockReset();
   vi.mocked(getGuardianConsentStatus).mockReset();
+  vi.mocked(getUserSettings).mockReset();
+  vi.mocked(getUserSettings).mockResolvedValue({
+    dmPermission: "everyone",
+    mediaSensitive: false,
+    readReceipts: true,
+    isProfilePublic: true,
+  });
 });
 
 function renderPage() {
@@ -122,18 +134,20 @@ describe("PrivacySettingsPage", () => {
     );
   });
 
-  it("does not render any live control: the toggles are not real inputs", async () => {
+  it("does not render any other live control: Marketing emails is not a real input; Public profile is the one switch (B-060)", async () => {
     seedSession(fakeAccessToken("user-1"));
     vi.mocked(getUser).mockResolvedValueOnce(ADULT);
 
     renderPage();
     await screen.findByText("Public profile");
 
-    // No <input>/<button> for the privacy controls — nothing that looks
-    // interactive but silently does nothing (task brief: flag, don't fake).
+    // Nothing that looks interactive but silently does nothing (task brief: flag, don't fake): the
+    // only live control is the Public profile switch (B-060); Marketing emails stays a disabled image.
     expect(screen.queryByRole("checkbox")).toBeNull();
-    expect(screen.queryByRole("switch")).toBeNull();
-    expect(screen.getAllByText(/Not adjustable yet/i).length).toBeGreaterThan(0);
+    expect(await screen.findByRole("switch", { name: "Public profile" })).not.toBeNull();
+    expect(screen.getAllByRole("switch")).toHaveLength(1);
+    // Marketing emails is still the one visibly disabled visual toggle.
+    expect(screen.getByRole("img", { name: /marketing emails: off \(not adjustable yet\)/i })).not.toBeNull();
   });
 
   it("shows the guardian approval row with an 'Approved' pill for a minor with confirmed consent", async () => {

@@ -30,6 +30,7 @@ import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
 import EditProfileModal from "./profile/EditProfileModal";
 import PinnedEntry from "./community/PinnedEntry";
 import SavedPostsTab from "./profile/SavedPostsTab";
+import PrivateProfileNote from "./profile/PrivateProfileNote";
 import "./profile/ProfilePage.css";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
@@ -178,6 +179,9 @@ export default function ProfilePage() {
               Edit Profile
             </button>
           </div>
+
+          {/* B-060: one small line while "Public profile" is off (adult accounts only). */}
+          <PrivateProfileNote isMinor={profile.isMinor} />
 
           <div className="profile-header__badges">
             <span className="profile-badge">{profile.role}</span>

@@ -64,19 +64,19 @@ describe("Direct Messages leaf", () => {
 
   it("shows skeleton options while the settings load (E4 / E8)", async () => {
     seedSession("token");
-    const d = deferred<{ dmPermission: "everyone"; mediaSensitive: boolean; readReceipts: boolean }>();
+    const d = deferred<{ dmPermission: "everyone"; mediaSensitive: boolean; readReceipts: boolean; isProfilePublic: boolean }>();
     vi.mocked(getUserSettings).mockReturnValueOnce(d.promise);
     renderDm();
     expect(screen.getByTestId("dm-skeleton")).not.toBeNull();
     expect(screen.queryByRole("radio")).toBeNull();
-    d.resolve({ dmPermission: "everyone", mediaSensitive: false, readReceipts: true });
+    d.resolve({ dmPermission: "everyone", mediaSensitive: false, readReceipts: true, isProfilePublic: true });
     await screen.findByRole("radio", { name: /everyone the rules allow/i });
     expect(screen.queryByTestId("dm-skeleton")).toBeNull();
   });
 
   it("draws the three options with the current choice selected (E1 / E5)", async () => {
     seedSession("token");
-    vi.mocked(getUserSettings).mockResolvedValueOnce({ dmPermission: "following", mediaSensitive: false, readReceipts: true });
+    vi.mocked(getUserSettings).mockResolvedValueOnce({ dmPermission: "following", mediaSensitive: false, readReceipts: true, isProfilePublic: true });
     renderDm();
     await screen.findByRole("radio", { name: /people i follow/i });
     expect(DM_OPTIONS.map((o) => o.name)).toEqual(["Everyone the rules allow", "People I follow", "No one"]);
@@ -91,8 +91,8 @@ describe("Direct Messages leaf", () => {
 
   it("saves on change: the new choice shows at once and the options dim while saving (E2 / E6)", async () => {
     seedSession("token");
-    vi.mocked(getUserSettings).mockResolvedValueOnce({ dmPermission: "everyone", mediaSensitive: false, readReceipts: true });
-    const d = deferred<{ dmPermission: "none"; mediaSensitive: boolean; readReceipts: boolean }>();
+    vi.mocked(getUserSettings).mockResolvedValueOnce({ dmPermission: "everyone", mediaSensitive: false, readReceipts: true, isProfilePublic: true });
+    const d = deferred<{ dmPermission: "none"; mediaSensitive: boolean; readReceipts: boolean; isProfilePublic: boolean }>();
     vi.mocked(updateUserSettings).mockReturnValueOnce(d.promise);
     renderDm();
     await screen.findByRole("radio", { name: /no one/i });
@@ -104,7 +104,7 @@ describe("Direct Messages leaf", () => {
     expect(document.querySelector(".pvl-group--busy")).not.toBeNull();
     expect(radio("everyone the rules allow").matches(":disabled")).toBe(true);
 
-    d.resolve({ dmPermission: "none", mediaSensitive: false, readReceipts: true });
+    d.resolve({ dmPermission: "none", mediaSensitive: false, readReceipts: true, isProfilePublic: true });
     await waitFor(() => expect(document.querySelector(".pvl-group--busy")).toBeNull());
     expect(radio("no one").checked).toBe(true);
     expect(radio("no one").matches(":disabled")).toBe(false);
@@ -113,7 +113,7 @@ describe("Direct Messages leaf", () => {
 
   it("puts the control back and says so when the save fails (E3 / E7)", async () => {
     seedSession("token");
-    vi.mocked(getUserSettings).mockResolvedValueOnce({ dmPermission: "following", mediaSensitive: false, readReceipts: true });
+    vi.mocked(getUserSettings).mockResolvedValueOnce({ dmPermission: "following", mediaSensitive: false, readReceipts: true, isProfilePublic: true });
     vi.mocked(updateUserSettings).mockRejectedValueOnce(new UserSettingsApiError("nope", { status: 500 }));
     renderDm();
     await screen.findByRole("radio", { name: /no one/i });
@@ -129,10 +129,10 @@ describe("Direct Messages leaf", () => {
 
   it("clears the failure banner on the next attempt", async () => {
     seedSession("token");
-    vi.mocked(getUserSettings).mockResolvedValueOnce({ dmPermission: "everyone", mediaSensitive: false, readReceipts: true });
+    vi.mocked(getUserSettings).mockResolvedValueOnce({ dmPermission: "everyone", mediaSensitive: false, readReceipts: true, isProfilePublic: true });
     vi.mocked(updateUserSettings)
       .mockRejectedValueOnce(new UserSettingsApiError("nope"))
-      .mockResolvedValueOnce({ dmPermission: "none", mediaSensitive: false, readReceipts: true });
+      .mockResolvedValueOnce({ dmPermission: "none", mediaSensitive: false, readReceipts: true, isProfilePublic: true });
     renderDm();
     await screen.findByRole("radio", { name: /no one/i });
     fireEvent.click(radio("no one"));
@@ -146,7 +146,7 @@ describe("Direct Messages leaf", () => {
     seedSession("token");
     vi.mocked(getUserSettings)
       .mockRejectedValueOnce(new UserSettingsApiError("down"))
-      .mockResolvedValueOnce({ dmPermission: "none", mediaSensitive: false, readReceipts: true });
+      .mockResolvedValueOnce({ dmPermission: "none", mediaSensitive: false, readReceipts: true, isProfilePublic: true });
     renderDm();
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toBe(DM_MESSAGES.loadFailed);
@@ -158,7 +158,7 @@ describe("Direct Messages leaf", () => {
 
   it("links the back arrow to Privacy", async () => {
     seedSession("token");
-    vi.mocked(getUserSettings).mockResolvedValueOnce({ dmPermission: "everyone", mediaSensitive: false, readReceipts: true });
+    vi.mocked(getUserSettings).mockResolvedValueOnce({ dmPermission: "everyone", mediaSensitive: false, readReceipts: true, isProfilePublic: true });
     renderDm();
     await screen.findByRole("radio", { name: /no one/i });
     expect(screen.getByRole("link", { name: "Back to Privacy" }).getAttribute("href")).toBe("/settings/privacy");
@@ -172,6 +172,7 @@ describe("Direct Messages leaf: Read receipts row", () => {
     dmPermission,
     mediaSensitive: false,
     readReceipts,
+    isProfilePublic: true,
   });
 
   it("draws the switch On with the drawn title and description, and no 'not adjustable' note (S1 / S6)", async () => {
@@ -326,19 +327,19 @@ describe("Your Posts leaf", () => {
 
   it("shows a skeleton in place of the switch while loading (F4 / F8)", async () => {
     seedSession("token");
-    const d = deferred<{ dmPermission: "everyone"; mediaSensitive: boolean; readReceipts: boolean }>();
+    const d = deferred<{ dmPermission: "everyone"; mediaSensitive: boolean; readReceipts: boolean; isProfilePublic: boolean }>();
     vi.mocked(getUserSettings).mockReturnValueOnce(d.promise);
     renderPosts();
     expect(screen.getByTestId("posts-skeleton")).not.toBeNull();
     expect(screen.queryByRole("switch")).toBeNull();
-    d.resolve({ dmPermission: "everyone", mediaSensitive: true, readReceipts: true });
+    d.resolve({ dmPermission: "everyone", mediaSensitive: true, readReceipts: true, isProfilePublic: true });
     await screen.findByRole("switch", { name: SWITCH_LABEL });
     expect(screen.queryByTestId("posts-skeleton")).toBeNull();
   });
 
   it("draws the switch in the saved state with the drawn wording (F1 / F5)", async () => {
     seedSession("token");
-    vi.mocked(getUserSettings).mockResolvedValueOnce({ dmPermission: "everyone", mediaSensitive: true, readReceipts: true });
+    vi.mocked(getUserSettings).mockResolvedValueOnce({ dmPermission: "everyone", mediaSensitive: true, readReceipts: true, isProfilePublic: true });
     renderPosts();
     const sw = await screen.findByRole("switch", { name: SWITCH_LABEL });
     expect(sw.getAttribute("aria-checked")).toBe("true");
@@ -349,8 +350,8 @@ describe("Your Posts leaf", () => {
 
   it("saves on toggle: the new state shows at once and the switch locks while saving (F2 / F6)", async () => {
     seedSession("token");
-    vi.mocked(getUserSettings).mockResolvedValueOnce({ dmPermission: "everyone", mediaSensitive: false, readReceipts: true });
-    const d = deferred<{ dmPermission: "everyone"; mediaSensitive: boolean; readReceipts: boolean }>();
+    vi.mocked(getUserSettings).mockResolvedValueOnce({ dmPermission: "everyone", mediaSensitive: false, readReceipts: true, isProfilePublic: true });
+    const d = deferred<{ dmPermission: "everyone"; mediaSensitive: boolean; readReceipts: boolean; isProfilePublic: boolean }>();
     vi.mocked(updateUserSettings).mockReturnValueOnce(d.promise);
     renderPosts();
     const sw = await screen.findByRole("switch", { name: SWITCH_LABEL });
@@ -362,15 +363,15 @@ describe("Your Posts leaf", () => {
     expect(sw.getAttribute("aria-checked")).toBe("true");
     expect((sw as HTMLButtonElement).disabled).toBe(true);
 
-    d.resolve({ dmPermission: "everyone", mediaSensitive: true, readReceipts: true });
+    d.resolve({ dmPermission: "everyone", mediaSensitive: true, readReceipts: true, isProfilePublic: true });
     await waitFor(() => expect((sw as HTMLButtonElement).disabled).toBe(false));
     expect(sw.getAttribute("aria-checked")).toBe("true");
   });
 
   it("turns it off again with a second PATCH", async () => {
     seedSession("token");
-    vi.mocked(getUserSettings).mockResolvedValueOnce({ dmPermission: "everyone", mediaSensitive: true, readReceipts: true });
-    vi.mocked(updateUserSettings).mockResolvedValueOnce({ dmPermission: "everyone", mediaSensitive: false, readReceipts: true });
+    vi.mocked(getUserSettings).mockResolvedValueOnce({ dmPermission: "everyone", mediaSensitive: true, readReceipts: true, isProfilePublic: true });
+    vi.mocked(updateUserSettings).mockResolvedValueOnce({ dmPermission: "everyone", mediaSensitive: false, readReceipts: true, isProfilePublic: true });
     renderPosts();
     const sw = await screen.findByRole("switch", { name: SWITCH_LABEL });
     fireEvent.click(sw);
@@ -380,7 +381,7 @@ describe("Your Posts leaf", () => {
 
   it("puts the switch back and says it is back to Off when the save fails (F3 / F7)", async () => {
     seedSession("token");
-    vi.mocked(getUserSettings).mockResolvedValueOnce({ dmPermission: "everyone", mediaSensitive: false, readReceipts: true });
+    vi.mocked(getUserSettings).mockResolvedValueOnce({ dmPermission: "everyone", mediaSensitive: false, readReceipts: true, isProfilePublic: true });
     vi.mocked(updateUserSettings).mockRejectedValueOnce(new UserSettingsApiError("nope", { status: 500 }));
     renderPosts();
     const sw = await screen.findByRole("switch", { name: SWITCH_LABEL });
@@ -394,7 +395,7 @@ describe("Your Posts leaf", () => {
 
   it("says it is back to On when turning it off fails", async () => {
     seedSession("token");
-    vi.mocked(getUserSettings).mockResolvedValueOnce({ dmPermission: "everyone", mediaSensitive: true, readReceipts: true });
+    vi.mocked(getUserSettings).mockResolvedValueOnce({ dmPermission: "everyone", mediaSensitive: true, readReceipts: true, isProfilePublic: true });
     vi.mocked(updateUserSettings).mockRejectedValueOnce(new UserSettingsApiError("nope"));
     renderPosts();
     const sw = await screen.findByRole("switch", { name: SWITCH_LABEL });
@@ -408,7 +409,7 @@ describe("Your Posts leaf", () => {
     seedSession("token");
     vi.mocked(getUserSettings)
       .mockRejectedValueOnce(new UserSettingsApiError("down"))
-      .mockResolvedValueOnce({ dmPermission: "everyone", mediaSensitive: true, readReceipts: true });
+      .mockResolvedValueOnce({ dmPermission: "everyone", mediaSensitive: true, readReceipts: true, isProfilePublic: true });
     renderPosts();
     await screen.findByRole("alert");
     expect(screen.queryByRole("switch")).toBeNull();

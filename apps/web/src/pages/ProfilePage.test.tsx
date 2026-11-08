@@ -43,6 +43,11 @@ vi.mock("./profile/SavedPostsTab", () => ({
   default: (props: { userId: string }) => <div data-testid="saved-tab-stub">{props.userId}</div>,
 }));
 
+// The own-profile private line (B-060) is covered by profile/PrivateProfileNote.test.tsx; here only the wiring.
+vi.mock("./profile/PrivateProfileNote", () => ({
+  default: (props: { isMinor: boolean }) => <div data-testid="private-note-stub">{String(props.isMinor)}</div>,
+}));
+
 import { getUser, updateUser, getFollowers, getFollowing } from "../api/users";
 import { seedSession, clearSession } from "../test/session";
 
@@ -115,6 +120,13 @@ describe("ProfilePage", () => {
     expect(await screen.findByText("Adeniyi Christiana")).not.toBeNull();
     expect(screen.getByText("adeniyi@example.com")).not.toBeNull();
     expect(getUser).toHaveBeenCalledWith(expect.any(String), "user-1");
+  });
+
+  it("mounts the own-profile private line with the account's age flag (B-060)", async () => {
+    seedSession(fakeAccessToken("user-1"));
+    vi.mocked(getUser).mockResolvedValueOnce({ ...BASE_PROFILE, isMinor: true });
+    renderProfilePage();
+    expect((await screen.findByTestId("private-note-stub")).textContent).toBe("true");
   });
 
   it("shows the pinned contest entry for the owner on the Posts tab, and not on the Media tab", async () => {

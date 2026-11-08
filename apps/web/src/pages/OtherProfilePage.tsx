@@ -15,6 +15,19 @@
 // scoped to the caller's own and followed users' posts), so there is nothing
 // true to show; the page says so instead of faking either.
 //
+// PRIVATE PROFILE (build register B-060, founder decision 2026-11-08; backend PR #689; Figma PV1 7015:58577
+// mobile, PV5 7015:58750 desktop). When the owner turned "Public profile" off and the viewer is neither the
+// owner nor a follower, `isPrivate` is true and the response is the minimal card only. The page then draws
+// just: a neutral tinted band in place of the cover, the avatar, the public name, Follow, and "This profile
+// is private" with one tagged sentence. NOTHING else of the profile: no bio, country, guardian contact,
+// pinned entry, counts or posts, and no Message button. After a successful Follow the profile is read again
+// (silently) so the full view appears; Following is instant, there is no approval step.
+//
+// ADOPTED DEFAULT, founder-veto-able, and an OVERRIDE OF THE FRAME: the Figma card hides the "..." menu, but
+// this page keeps a small one on the private card with ONLY "Report user" and "Block {name}". A person who can
+// see nothing but a name and a picture must still be able to report or block them (a safeguarding reason),
+// and both actions work without seeing the profile. Copy Profile Link and Message are not offered there.
+//
 // BLOCK (all of it server-enforced; this page only offers it):
 //   - "..." menu: Copy Profile Link, Block {name}. Block opens a confirmation
 //     with an optional private note ("Reason (optional)", kept for the blocker
@@ -42,6 +55,7 @@ import { MessagingApiError, startConversation } from "../api/messaging";
 import { countryName } from "../lib/countries";
 import { decodeAccessToken, getStoredAccessToken } from "../lib/session";
 import BlockUserDialog from "../components/block/BlockUserDialog";
+import ReportAction from "./community/ReportAction";
 import NotFoundPage from "./NotFoundPage";
 import PinnedEntry from "./community/PinnedEntry";
 import { initialsFor } from "./profile/profileFields";
@@ -49,6 +63,11 @@ import "./profile/ProfilePage.css";
 import "./profile/OtherProfilePage.css";
 
 type LoadState = "loading" | "loaded" | "not-found" | "error";
+
+// The private-card callout (Figma PV1 / PV5). The second sentence is tagged exactly as the frame tags it
+// (B-124, docs/pending-copy-manifest.md).
+export const PRIVATE_PROFILE_TITLE = "This profile is private";
+export const PRIVATE_PROFILE_BODY = "Follow to see their profile, posts and activity. [COPY PENDING LEGAL REVIEW]";
 
 export default function OtherProfilePage() {
   const { userId } = useParams<{ userId: string }>();
@@ -62,23 +81,31 @@ export default function OtherProfilePage() {
   const [blocked, setBlocked] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [blockOpen, setBlockOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    if (!token || !userId || userId === myId) return;
-    setState("loading");
-    try {
-      const result = await getPublicProfile(token, userId);
-      setProfile(result);
-      setFollowing(result.isFollowing);
-      setBlocked(result.viewerHasBlocked);
-      setState("loaded");
-    } catch (err) {
-      setState(err instanceof UsersApiError && err.status === 404 ? "not-found" : "error");
-    }
-  }, [token, userId, myId]);
+  // `silent` reads the profile again WITHOUT the "Loading…" screen (used after a follow or unfollow). It
+  // reports whether the read worked; on a failure the page keeps what it was showing.
+  const load = useCallback(
+    async (silent = false): Promise<boolean> => {
+      if (!token || !userId || userId === myId) return false;
+      if (!silent) setState("loading");
+      try {
+        const result = await getPublicProfile(token, userId);
+        setProfile(result);
+        setFollowing(result.isFollowing);
+        setBlocked(result.viewerHasBlocked);
+        setState("loaded");
+        return true;
+      } catch (err) {
+        if (!silent) setState(err instanceof UsersApiError && err.status === 404 ? "not-found" : "error");
+        return false;
+      }
+    },
+    [token, userId, myId],
+  );
 
   useEffect(() => {
     void load();
@@ -121,6 +148,15 @@ export default function OtherProfilePage() {
     try {
       const result = following ? await unfollowUser(accessToken, targetId) : await followUser(accessToken, targetId);
       setFollowing(result.following);
+      // The view can change with the follow: following a private profile reveals it, and unfollowing a
+      // private person's profile hides it again. Read it again (silently). On a public profile a follow
+      // changes nothing, so nothing is requested.
+      if (person.isPrivate || !result.following) {
+        const refreshed = await load(true);
+        if (!refreshed && person.isPrivate) {
+          setActionError("You're now following them, but we couldn't refresh the profile. Reload the page.");
+        }
+      }
     } catch (err) {
       setActionError(err instanceof UsersApiError ? err.message : "Couldn't update that follow.");
     } finally {
@@ -165,6 +201,145 @@ export default function OtherProfilePage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  // The private card (B-060, Figma PV1 / PV5): the minimal view for a non-follower. Only what the server
+  // returned for it is drawn; the cover photo is replaced by the neutral tinted band, and nothing about
+  // the profile itself (bio, country, guardian contact, pinned entry, counts, posts) is rendered.
+  if (person.isPrivate) {
+    return (
+      <div className="profile-page other-profile other-profile--private" data-testid="private-profile">
+        <div className="other-profile__private-band" aria-hidden="true" />
+        <div className="profile-header">
+          <div className="profile-header__avatar" aria-hidden="true">
+            {person.avatarUrl ? (
+              <img className="profile-header__avatar-image" src={person.avatarUrl} alt="" />
+            ) : (
+              initialsFor(person.publicName)
+            )}
+          </div>
+
+          <div className="profile-header__body">
+            <div className="profile-header__top">
+              <div>
+                <h1 className="profile-header__name">{person.publicName}</h1>
+              </div>
+
+              {!blocked && (
+                <div className="other-profile__actions">
+                  {/* ONLY Report user and Block: see the header comment (override of the frame). */}
+                  <div className="other-profile__menu-wrap">
+                    <button
+                      type="button"
+                      className="other-profile__icon-button"
+                      onClick={() => setMenuOpen((open) => !open)}
+                      aria-label="More options"
+                      aria-haspopup="menu"
+                      aria-expanded={menuOpen}
+                    >
+                      ⋯
+                    </button>
+                    {menuOpen && (
+                      <ul className="other-profile__menu" role="menu">
+                        <li role="none">
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setMenuOpen(false);
+                              setReportOpen(true);
+                            }}
+                          >
+                            Report user
+                          </button>
+                        </li>
+                        <li role="none">
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="other-profile__menu-block"
+                            onClick={() => {
+                              setMenuOpen(false);
+                              setActionError(null);
+                              setBlockOpen(true);
+                            }}
+                          >
+                            Block {person.publicName}
+                          </button>
+                        </li>
+                      </ul>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="profile-edit-button"
+                    onClick={() => void toggleFollow()}
+                    disabled={busy}
+                    aria-pressed={following}
+                  >
+                    {following ? "Following" : "Follow"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {blocked ? (
+          <div className="profile-section other-profile__blocked" role="status">
+            <p className="profile-section__title">You blocked {person.publicName}</p>
+            <p className="profile-section__body">
+              You can&rsquo;t follow or message them, and you won&rsquo;t see their posts. Unblocking does not restore
+              follows.
+            </p>
+            <button type="button" className="profile-load-more" onClick={() => void unblock()} disabled={busy}>
+              Unblock {person.publicName}
+            </button>
+          </div>
+        ) : (
+          <div className="profile-section other-profile__private-note">
+            <p className="profile-section__title">{PRIVATE_PROFILE_TITLE}</p>
+            <p className="profile-section__body">{PRIVATE_PROFILE_BODY}</p>
+          </div>
+        )}
+
+        {notice && (
+          <p className="profile-status-message" role="status">
+            {notice}
+          </p>
+        )}
+        {actionError && !blockOpen && (
+          <p className="profile-status-message profile-status-message--error" role="alert">
+            {actionError}
+          </p>
+        )}
+
+        {reportOpen && (
+          <ReportAction
+            accessToken={accessToken}
+            targets={[{ label: "Report user", targetType: "user", targetId }]}
+            startOpen
+            onCancel={() => setReportOpen(false)}
+            onFinished={() => setReportOpen(false)}
+          />
+        )}
+
+        {blockOpen && (
+          <BlockUserDialog
+            accessToken={accessToken}
+            userId={targetId}
+            name={person.publicName}
+            onClose={() => setBlockOpen(false)}
+            onBlocked={() => {
+              setBlocked(true);
+              setFollowing(false);
+              setBlockOpen(false);
+              setNotice(null);
+            }}
+          />
+        )}
+      </div>
+    );
   }
 
   return (
