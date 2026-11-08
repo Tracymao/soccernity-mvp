@@ -60,7 +60,9 @@ describe('/users/me/settings (HTTP layer)', () => {
     [{ mediaSensitive: false }],
     [{ readReceipts: true }],
     [{ readReceipts: false }],
-    [{ dmPermission: 'none', mediaSensitive: true, readReceipts: false }],
+    [{ isProfilePublic: true }],
+    [{ isProfilePublic: false }],
+    [{ dmPermission: 'none', mediaSensitive: true, readReceipts: false, isProfilePublic: false }],
     [{ dmPermission: 'none', mediaSensitive: true }],
     [{}],
   ])('PATCH accepts %j and forwards it with the token subject', async (body) => {
@@ -80,6 +82,11 @@ describe('/users/me/settings (HTTP layer)', () => {
     [{ readReceipts: 'yes' }],
     [{ readReceipts: 1 }],
     [{ readReceipts: null }],
+    [{ isProfilePublic: 'no' }],
+    [{ isProfilePublic: 0 }],
+    [{ isProfilePublic: null }],
+    // The subject is the token; a body cannot name another account.
+    [{ isProfilePublic: false, userId: 'someone-else' }],
     [{ dmPermission: 'none', role: 'admin' }],
   ])('PATCH rejects %j with a 400 and writes nothing', async (body) => {
     await request(app.getHttpServer()).patch('/users/me/settings').send(body).expect(400);
