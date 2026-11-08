@@ -14,9 +14,11 @@
 // scrolling and clipping cannot hide them. Dialogs are portalled modals with
 // Escape, a focus trap and focus restored to where it was.
 //
-// Not built, on purpose: a Report item (the frames draw one on their
-// messages, but messages have no report type on the server and the choice of
-// reasons is not decided).
+// "Report" (frames A3 and D1) is on THEIR message only, never on your own and
+// never on the deleted placeholder (which has no host at all). It opens the
+// shared report dialog (pages/community/ReportAction.tsx) for that message;
+// the server decides whether the report is allowed and answers one 404 for
+// every case it will not explain.
 import {
   useEffect,
   useId,
@@ -31,6 +33,7 @@ import {
 import { createPortal } from "react-dom";
 import BlockUserDialog from "../../../components/block/BlockUserDialog";
 import type { Message } from "../../../api/messaging";
+import ReportAction from "../../community/ReportAction";
 import type { ConversationActions as ConversationActionsApi } from "./useConversationActions";
 import type { MessageActions } from "./useMessageActions";
 import { canEditNow, WORDING } from "./messageActionRules";
@@ -90,6 +93,12 @@ const BanIcon = () => (
   <Icon>
     <circle cx="12" cy="12" r="9" />
     <path d="M5.7 5.7l12.6 12.6" />
+  </Icon>
+);
+const FlagIcon = () => (
+  <Icon>
+    <path d="M5 21V4" />
+    <path d="M5 4h11l-2 4 2 4H5" />
   </Icon>
 );
 const DotsIcon = () => (
@@ -192,16 +201,25 @@ function MenuItem({
   label,
   hint,
   disabled,
+  alert,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
   hint?: string;
   disabled?: boolean;
+  // Text and icon in semantic/alert (the Block User item, frames BL1 and BL3).
+  alert?: boolean;
   onClick: () => void;
 }) {
   return (
-    <button type="button" role="menuitem" className="msg-menu__item" disabled={disabled} onClick={onClick}>
+    <button
+      type="button"
+      role="menuitem"
+      className={alert ? "msg-menu__item msg-menu__item--alert" : "msg-menu__item"}
+      disabled={disabled}
+      onClick={onClick}
+    >
       {icon}
       <span className="msg-menu__text">
         <span className="msg-menu__label">{label}</span>
@@ -254,7 +272,10 @@ export function MessageHost({ message, mine, actions, children }: MessageHostPro
     action();
   }
 
+  // The report dialog is a SIBLING of the host div, not a child: React events bubble through portals, so a
+  // touch inside the dialog would otherwise reach the host's long-press handler and open its menu.
   return (
+    <>
     <div
       ref={hostRef}
       className={["msg-host", mine ? "msg-host--mine" : "", open ? "msg-host--open" : ""].filter(Boolean).join(" ")}
@@ -300,16 +321,35 @@ export function MessageHost({ message, mine, actions, children }: MessageHostPro
               <MenuItem icon={<TrashIcon />} label="Delete" onClick={() => choose(() => actions.startDelete(message))} />
             </>
           ) : (
-            <MenuItem
-              icon={<EyeOffIcon />}
-              label="Delete for me"
-              hint="Only you will stop seeing it"
-              onClick={() => choose(() => actions.startDelete(message))}
-            />
+            <>
+              <MenuItem icon={<FlagIcon />} label="Report" onClick={() => choose(() => actions.startReport(message))} />
+              <MenuItem
+                icon={<EyeOffIcon />}
+                label="Delete for me"
+                hint="Only you will stop seeing it"
+                onClick={() => choose(() => actions.startDelete(message))}
+              />
+            </>
           )}
         </Popover>
       )}
     </div>
+    {!mine && actions.reportId === message.id && (
+      <ReportAction
+        accessToken={actions.accessToken}
+        targets={[{ label: "Report message", targetType: "message", targetId: message.id }]}
+        startOpen
+        onCancel={() => {
+          actions.closeReport();
+          moreRef.current?.focus({ preventScroll: true });
+        }}
+        onFinished={() => {
+          actions.closeReport();
+          moreRef.current?.focus({ preventScroll: true });
+        }}
+      />
+    )}
+    </>
   );
 }
 
@@ -627,7 +667,7 @@ export function ConversationActions({
           {actions.otherId && (
             <>
               <MenuItem icon={<UserIcon />} label="View User Profile" onClick={() => choose(actions.viewProfile)} />
-              <MenuItem icon={<BanIcon />} label="Block User" onClick={() => choose(actions.startBlock)} />
+              <MenuItem icon={<BanIcon />} label="Block User" alert onClick={() => choose(actions.startBlock)} />
             </>
           )}
           <MenuItem

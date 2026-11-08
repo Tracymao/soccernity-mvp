@@ -41,6 +41,9 @@ interface ReportActionProps {
   /** Called when the person cancels, and with `startOpen` the caller takes over instead of a "Report"
    *  trigger being shown. */
   onCancel?: () => void;
+  /** Called when the person presses Close on the "Reported — thanks" confirmation. With it, the caller takes over
+   *  (and unmounts this) instead of the plain "Reported" note replacing the trigger. Used by the message menu. */
+  onFinished?: () => void;
 }
 
 type Stage = "closed" | "menu" | "reason" | "done" | "reported";
@@ -51,6 +54,7 @@ const DIALOG_TITLES: Record<ReportTargetType, string> = {
   comment: "Report this comment",
   user: "Report this user",
   banter_room: "Report this room",
+  message: "Report this message",
 };
 
 const FOCUSABLE = 'button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])';
@@ -61,6 +65,7 @@ export default function ReportAction({
   triggerLabel = "Report",
   startOpen = false,
   onCancel,
+  onFinished,
 }: ReportActionProps) {
   const [stage, setStage] = useState<Stage>(() => {
     if (!startOpen || targets.length === 0) return "closed";
@@ -115,6 +120,10 @@ export default function ReportAction({
 
   // After the confirmation there is nothing more to send, so the trigger gives way to a plain "Reported" note.
   function close() {
+    if (onFinished) {
+      onFinished();
+      return;
+    }
     setStage("reported");
   }
 
@@ -131,7 +140,7 @@ export default function ReportAction({
       });
       setStage("done");
     } catch (err) {
-      setError(reportSubmitErrorMessage(err));
+      setError(reportSubmitErrorMessage(err, selected.targetType));
     } finally {
       setSubmitting(false);
     }
@@ -192,7 +201,7 @@ export default function ReportAction({
   }
 
   const trigger =
-    handedOver && stage === "closed" ? null : (
+    (handedOver && stage === "closed") || onFinished ? null : (
       <button type="button" className="report-action__trigger" onClick={open} ref={triggerRef}>
         {triggerLabel}
       </button>

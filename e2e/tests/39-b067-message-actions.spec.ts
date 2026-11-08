@@ -109,7 +109,8 @@ test.describe.serial('Message actions', () => {
     await expect(theirs.getByRole('menuitem', { name: /Delete for me/ })).toBeVisible();
     await expect(theirs.getByText('Only you will stop seeing it')).toBeVisible();
     await expect(theirs.getByRole('menuitem', { name: /Edit/ })).toHaveCount(0);
-    await expect(theirs.getByText(/report/i)).toHaveCount(0);
+    // Report (B-284) is on their message, ahead of Delete for me.
+    await expect(theirs.getByRole('menuitem', { name: 'Report' })).toBeVisible();
     await shot(page, '02-popup-their-menu');
   });
 

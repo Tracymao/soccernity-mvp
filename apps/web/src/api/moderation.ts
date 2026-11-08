@@ -17,8 +17,13 @@
 // plus an optional free-text description; the appeal's reason is still free text.
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
 
+// The target types the PUBLIC route (POST /reports/public) accepts. A message is not one of them: the server
+// answers a code-less 400 for it there, so the public /report page must never offer it.
 export const REPORT_TARGET_TYPES = ["post", "comment", "user", "banter_room"] as const;
-export type ReportTargetType = (typeof REPORT_TARGET_TYPES)[number];
+export type PublicReportTargetType = (typeof REPORT_TARGET_TYPES)[number];
+// Every target the signed-in route (POST /reports) accepts. "message" (B-067/B-284, backend PR #685) is reported
+// by the OTHER person in a chat, from the message's menu; targetId is the Message id.
+export type ReportTargetType = PublicReportTargetType | "message";
 
 // The fixed reason categories, in display order. Mirrors REPORT_REASON_CATEGORIES in
 // services/api/src/modules/moderation/moderation.constants.ts (B-284, Decision Log #465); the labels live in
@@ -118,8 +123,12 @@ async function submissionError(response: Response): Promise<ModerationApiError> 
 // The sentence a person sees for a failed submission. Shared by both report forms. The server's own text is
 // used where it is plain (404 "Post not found", the coded 400 "describe the problem"); the cases where it is
 // not (a validation array, the rate limiter's exception text, a bare 401) get a plain sentence instead.
-export function reportSubmitErrorMessage(err: unknown): string {
+export function reportSubmitErrorMessage(err: unknown, targetType?: ReportTargetType): string {
   if (!(err instanceof ModerationApiError)) return "Couldn't submit that report. Please try again.";
+  // A message report answers the same 404 for every case the server will not tell apart (a missing id, your own
+  // message, a message you can no longer see ...). The person gets the plain could-not-send line and nothing
+  // that explains why or says anything about the message.
+  if (targetType === "message" && err.status === 404) return "Couldn't submit that report. Please try again.";
   if (err.status === undefined) return err.message; // network failure: "Couldn't reach the Soccernity server."
   if (err.code === REPORT_REASON_REQUIRED_CODE) return err.message;
   if (err.status === 429) return "You're sending reports too quickly. Please wait a moment and try again.";
@@ -153,7 +162,11 @@ export interface PublicReport extends Report {
 // forbidNonWhitelisted would 400 the whole request if this client sent
 // one anyway.
 export async function createPublicReport(
-  payload: ReportSubmission & { reporterContactEmail: string; concernsMinor: boolean },
+  payload: Omit<ReportSubmission, "targetType"> & {
+    targetType: PublicReportTargetType;
+    reporterContactEmail: string;
+    concernsMinor: boolean;
+  },
 ): Promise<PublicReport> {
   let response: Response;
   try {
