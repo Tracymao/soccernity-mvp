@@ -29,7 +29,16 @@ import { AdminApiError, adminFetch } from "./adminClient";
 // import from services/api, so this is this codebase's usual per-side
 // copy (the same convention api/contest.ts's own header comment
 // describes for its own types).
-export const REPORT_TARGET_TYPES = ["post", "user", "comment", "banter_room", "grassroots_team", "fixture"] as const;
+export const REPORT_TARGET_TYPES = [
+  "post",
+  "user",
+  "comment",
+  "banter_room",
+  "grassroots_team",
+  "fixture",
+  // backend/b067-message-report: a message in a chat, reported by the person who received it.
+  "message",
+] as const;
 export type ReportTargetType = (typeof REPORT_TARGET_TYPES)[number];
 
 // room_deactivated is valid only against a banter_room report (Decision
@@ -145,7 +154,7 @@ export interface Report {
   reporterId: string | null;
   reporterContactEmail: string | null;
   reporterContactName: string | null;
-  targetType: string; // "post" | "user" | "comment" | "banter_room" | "grassroots_team" | "fixture"
+  targetType: string; // "post" | "user" | "comment" | "banter_room" | "grassroots_team" | "fixture" | "message"
   targetId: string;
   // B-284: one of REPORT_REASON_CATEGORIES, or null for a report that carries none.
   reasonCategory: string | null;
@@ -193,6 +202,25 @@ export interface Report {
   // user, so no hold can exist on it.
   source?: "contact_enquiry";
   contactEnquiry?: ReportContactEnquiry | null;
+
+  // backend/b067-message-report: on the single-report read of a "message" report, the reported message itself
+  // (and nothing else of the conversation). null if the row is gone; absent on the queue rows and on every
+  // other kind of report.
+  reportedMessage?: ReportedMessage | null;
+}
+
+// The one message behind a "message" report (services/api ReportedMessageView). contentText is what is
+// stored NOW; originalContentText is the text as first sent (null unless the sender edited it);
+// deletedForEveryone is true when the sender deleted it for both people (the text is kept for review). The
+// server returns no time for the deletion.
+export interface ReportedMessage {
+  id: string;
+  sentAt: string;
+  sender: { publicName: string };
+  contentText: string;
+  originalContentText: string | null;
+  editedAt: string | null;
+  deletedForEveryone: boolean;
 }
 
 // The enquiry behind an "enquiry" report (services/api ReportContactEnquiryView). Name and email are

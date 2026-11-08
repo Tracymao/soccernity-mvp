@@ -41,6 +41,7 @@ export function targetLabel(targetType: string): string {
   if (targetType === "banter_room") return "Bants room";
   if (targetType === "grassroots_team") return "Grassroots team";
   if (targetType === "fixture") return "Grassroots fixture";
+  if (targetType === "message") return "Message";
   if (targetType === "enquiry") return "Contact enquiry";
   return targetType;
 }
