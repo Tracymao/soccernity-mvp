@@ -195,6 +195,18 @@ model User {
   // anonymisation.
   readReceipts    Boolean?
 
+  // backend/b060-public-profile-toggle (build register B-060; founder decision 2026-11-08) -- a genuine
+  // addition beyond Section 3's User field list, flagged as a Decision Log candidate. The "Public profile"
+  // toggle (Settings > Privacy). true (default) = nothing changes for anyone. false = a FOLLOWERS-ONLY
+  // profile: a viewer who is not the owner and does not follow the owner sees only a minimal card (public
+  // name, avatar, an isPrivate marker) and none of the owner's posts, lists or activity
+  // (users/profile-visibility.util.ts is the one rule; users/README.md has the inventory). Following is
+  // instant and needs no approval, so this limits casual browsing, search and links, not a determined viewer.
+  // An UNDER-18 account cannot set it (403 profile_visibility_not_available) and its effective value is
+  // always "public" (the existing safeguarding rules decide, unchanged): the column is only ever read
+  // together with isMinor. Reset to true on anonymisation. Read at READ time, no cache.
+  isProfilePublic Boolean @default(true)
+
   // backend/w2-country-storage (build register B-023; Decision Log #368) --
   // genuine additions beyond Section 3's literal User field list. Country is
   // mandatory at the Age Gate (declared by the user) and DERIVED at Register

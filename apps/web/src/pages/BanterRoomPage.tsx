@@ -14,9 +14,18 @@
 // ("Add to My Bants" / "In My Bants", Figma 6998:54688 / 6999:54768), never
 // a gate. Eligibility (under-16, consent, verified email, complete profile)
 // is enforced server-side; this page does no membership check of its own.
-// Topic chips are read-only for everyone here (creator controls are a
-// separate PR); an inactive room shows the grey dot and an "Inactive" pill
-// (Figma 6999:55292).
+// An inactive room shows the grey dot and an "Inactive" pill (Figma
+// 6999:55292) to everyone.
+//
+// B-071 (Decision Log #472): the room's CREATOR (the token's subject equals the
+// server's `createdBy` on the room read -- no name is ever compared) gets
+// creator-only controls, all server-enforced (404 then 403 for anyone else):
+// a room menu (Deactivate / Reactivate room, PATCH /banter-rooms/:id/status),
+// topic chips with a remove cross (DELETE /banter-rooms/:id/topics/:topicId)
+// and an Add topic chip (POST /banter-rooms/:id/topics, with the topic
+// catalogue from GET /banter-rooms/topics). Everyone else sees the read-only
+// chips. Figma W8 Bants frames M3 to M19 / D2 to D17
+// (docs/figma-w8-bants.md section 2).
 //
 // Real data (Build Plan Section 4.4):
 //   - GET /banter-rooms/:id        -- name, scope, member count, joined
@@ -45,15 +54,19 @@ import {
   BanterApiError,
   type BanterRoom,
   type BanterRoomScopeType,
+  type BanterTopic,
 } from "../api/banter";
 import type { FeedPost } from "../api/feed";
 import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
 import { UNDER_16_MESSAGE, isUnder16Restricted } from "../lib/under16";
 import BanterJoinButton from "./banter/BanterJoinButton";
 import BanterStatusDot from "./banter/BanterStatusDot";
+import RoomStatusControls from "./banter/RoomStatusControls";
+import RoomTopicsEditor from "./banter/RoomTopicsEditor";
 import PostCard from "./community/PostCard";
 import "./banter/BanterPage.css";
 import "./banter/BanterRoomPage.css";
+import "./banter/BanterRoomControls.css";
 import "./community/CommunityPage.css";
 
 type LoadState = "loading" | "loaded" | "error" | "not-found" | "no-session";
@@ -209,6 +222,10 @@ export default function BanterRoomPage() {
     );
   }
 
+  // The server tells the page who created the room (`createdBy`, an opaque
+  // user id); the token's subject is compared to it, never a display name.
+  const isCreator = decoded?.sub !== undefined && decoded.sub === room.createdBy;
+
   return (
     <div className="banter-room-page">
       <Link to="/banter" className="banter-room-page__back">
@@ -220,10 +237,20 @@ export default function BanterRoomPage() {
           {room.name.trim()[0]?.toUpperCase() ?? "?"}
         </span>
         <div className="banter-room-page__text">
-          <h1 className="banter-room-page__name">
-            <BanterStatusDot status={room.status} />
-            {room.name}
-          </h1>
+          <div className="banter-room-page__title-row">
+            <h1 className="banter-room-page__name">
+              <BanterStatusDot status={room.status} />
+              {room.name}
+            </h1>
+            {isCreator && token && (
+              <RoomStatusControls
+                accessToken={token}
+                roomId={room.id}
+                status={room.status}
+                onChanged={(updated) => setRoom((prev) => (prev ? { ...prev, status: updated.status } : prev))}
+              />
+            )}
+          </div>
           {room.status === "inactive" && <span className="banter-room-page__inactive-pill">Inactive</span>}
           <p className="banter-room-page__meta">
             {SCOPE_LABELS[room.scopeType]} &middot; {memberLine(room.memberCount)}
@@ -231,14 +258,27 @@ export default function BanterRoomPage() {
         </div>
       </div>
 
-      {room.topics && room.topics.length > 0 && (
-        <ul className="banter-room-page__topics" aria-label="Topics">
-          {room.topics.map((topic) => (
-            <li key={topic.id} className="banter-room-page__topic">
-              {topic.name}
-            </li>
-          ))}
-        </ul>
+      {isCreator && token ? (
+        <RoomTopicsEditor
+          accessToken={token}
+          roomId={room.id}
+          topics={room.topics ?? []}
+          onTopicsReplaced={(next: BanterTopic[]) => setRoom((prev) => (prev ? { ...prev, topics: next } : prev))}
+          onTopicRemoved={(topicId) =>
+            setRoom((prev) => (prev ? { ...prev, topics: (prev.topics ?? []).filter((t) => t.id !== topicId) } : prev))
+          }
+        />
+      ) : (
+        room.topics &&
+        room.topics.length > 0 && (
+          <ul className="banter-room-page__topics" aria-label="Topics">
+            {room.topics.map((topic) => (
+              <li key={topic.id} className="banter-room-page__topic">
+                {topic.name}
+              </li>
+            ))}
+          </ul>
+        )
       )}
 
       <BanterJoinButton

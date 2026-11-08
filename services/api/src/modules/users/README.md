@@ -825,3 +825,76 @@ trio `avatarUrl` / `avatarKey` / `avatarStatus` (all NULL or all set).
 * The purge reference list is derived from `Prisma.dmmf` for relations to `User`; a plain column on `User` needs no entry
   (confirmed: `anonymized-row-purge.references.spec.ts` unchanged and passing).
 
+
+## Public profile toggle (build-register B-060; founder decision 2026-11-08)
+
+`User.isProfilePublic` (default `true`, migration `20261121090000_user_profile_public`) is the "Public profile"
+switch on Settings > Privacy. When it is OFF the profile is **followers-only**. Nothing changes for anyone until
+they turn it off. The one rule lives in `profile-visibility.util.ts` (`profileVisibleTo`, `postProfileVisibleTo`,
+`effectiveProfilePublic`), the same shape as `block/block.util.ts`: a profile is VISIBLE to a viewer when the owner
+left it public, **or the owner is under 18**, or the viewer is the owner, or the viewer follows the owner. The
+column is read **only together with `isMinor`**, so an under-18 account is always effectively public (the existing
+safeguarding rules decide, unchanged), including an adult who turned it off and is later reclassified as a minor.
+Only an explicit `false` counts as private. Read fresh from Postgres on every request; no cache sits in front of
+any of these reads (checked: none of feed, search, clubs, users, banter or leaderboard caches a response).
+
+**Known limit, stated plainly:** following is instant and needs no approval, so this limits casual browsing,
+search and links, not a determined viewer. Follow requests or approval would be a separate decision.
+
+### Settings
+
+`GET`/`PATCH /users/me/settings` gain `isProfilePublic` (the EFFECTIVE value on read). An **under-18 account
+cannot set it**: any `isProfilePublic` in a PATCH is a `403` with `code: "profile_visibility_not_available"` (a fresh
+read of `isMinor`, the whole request refused, nothing written). No notification, email or audit entry is sent
+when it changes. An anonymised account is reset to `true` in the same transaction, so its surviving posts
+("[deleted user]") stay readable.
+
+### What a stranger gets: the minimal card
+
+`GET /users/:id/public-profile` gains `isPrivate` and `viewerFollows` (the same value as the existing
+`isFollowing`, kept alongside it). `isPrivate` is true ONLY when the viewer is not allowed to see the content. Then
+the card carries `id`, `publicName`, `avatarUrl` (under the existing image-visibility rules), `isPrivate: true`,
+`viewerFollows`/`isFollowing` and `viewerHasBlocked`; `bio`, `country`, `coverUrl` and `guardianContact` are `null`.
+No count exists in this payload, so "counts absent" holds by construction (there is no follower, following or post
+count on any user read today). Block, restricted-pending and non-active 404s are decided first, exactly as before.
+
+### Inventory: every route that can return another person's profile, posts or activity
+
+| Route | Decision | Why |
+|---|---|---|
+| `GET /users/:id` | not applicable | self only (403 for anyone else) |
+| `GET /users/:id/public-profile` | **minimal card** to a non-follower | the profile read |
+| `GET /users/:id/followers`, `/following` | **404** to a non-follower (the same 404 as a missing user) | "no follower or following lists"; the existing hidden-graph convention |
+| `GET /users/suggested` | kept | identity only (public name) |
+| `GET /posts/feed` | filter applied (no-op in practice) | scope is already own plus followed |
+| `GET /clubs/:id/feed` | **hidden** from a non-follower | club feeds are listed as hidden |
+| `GET /posts/:id` | **404** to a non-follower | same 404 as a missing post |
+| `GET /posts/:id/comments` | **404** (post gate) | a hidden post has no readable thread |
+| `POST /posts/:id/like`, `/comments`, `/save`, `/view`, `/view-heartbeat` | **404** to a non-follower, nothing written | they read the post first |
+| `DELETE` like or save (undo forms) | kept open | own actions, they reveal nothing |
+| `GET /users/:id/saved-posts` | a hidden post is **dropped** from the saver's page | self only (403 otherwise); never the text. DEFAULT: dropped, not a placeholder, because the web contract needs a post on every entry and blocked or deactivated authors are already dropped the same way |
+| `GET /search` (posts) | **hidden**, anonymous searchers included | post search is a post read |
+| `GET /search` (people, clubs) | kept | identity only |
+| `GET /trending` | kept | aggregate hashtag counts, not attributable to a person |
+| `GET /banter-rooms/:id/posts`, Banter room posts everywhere | **NOT hidden** | a room is an open public forum (Decision Log #403 item 16, B-117). Applied as a post-level exemption, so likes and comments on room posts keep working for non-followers. DEFAULT, founder-veto-able |
+| Contest entries, `GET /contest/*` (entries, pinned entry, carousel) | **NOT hidden** | entering a contest is a public act. Post-level exemption. DEFAULT, founder-veto-able |
+| `POST /media/:id/report` | **404** when the file is on a hidden post | the reporter cannot see it |
+| `GET /clubs/:id/members`, community-group members, leaderboard, banter room lists | kept | identity (public name) and public ranking, no profile content |
+| Comments written by a private owner on someone else's post | kept | identity necessarily appears. **Known gap** |
+| `GET /conversations*`, `/notifications*` | not applicable | DMs and notifications show the public name only; the post text in a notification is the recipient's own post |
+| `GET /users/me/data-export*` | not applicable | the person's own data |
+| `/admin/*` (staff) | unchanged, always everything | separate admin auth domain; none of these routes goes through the filter |
+
+Post-level reads share one clause: `visibleToViewer` (feed) now ANDs in `postProfileVisibleTo`, `assertPostExists`
+(anonymous branch), `searchPosts` and the media-report lookup add it directly. Saved posts, the single post, the
+club feed, view recording and the heartbeat all go through `visibleToViewer`.
+
+### Defaults I adopted (founder-veto-able)
+
+- An under-18 account is effectively public and cannot set the toggle (403), and a viewer who is under 18 is a stranger like any other.
+- Banter Room posts and Contest entries are exempt from the filter; comments by a private owner stay visible.
+- A hidden saved post is dropped from the saver's list (no "unavailable" placeholder).
+- The follower and following lists of a private owner are a 404 to a non-follower, not an empty list.
+- `viewerFollows` is added next to the existing `isFollowing` (identical value).
+- Migration `20261121090000` sorts before the already-merged `20261122090000`; a database that already applied the
+  later one applies this one on `migrate deploy` (it is a plain additive column). `migrate dev` may report it as out of order.

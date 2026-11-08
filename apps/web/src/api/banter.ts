@@ -23,9 +23,11 @@
 //     those. The write helpers below surface the server's own message
 //     verbatim so the caller can tell a 403 (consent) from a 403
 //     (not-a-member, on posting) apart.
-//   - POST /banter-rooms/:id/posts requires room MEMBERSHIP -- a
-//     non-member gets a 403 ("You must join this Banter Room before
-//     posting in it").
+//   - POST /banter-rooms/:id/posts does NOT require membership (B-117, open
+//     forum); eligibility (consent, verified email, complete profile) is
+//     enforced by the guards on the server.
+//   - PATCH /banter-rooms/:id/status, POST /banter-rooms/:id/topics and
+//     DELETE /banter-rooms/:id/topics/:topicId are room-CREATOR only (B-071).
 //
 // Response shapes mirror services/api/src/modules/banter/banter.service.ts's
 // ROOM_SELECT / BanterRoomView / BanterRoomPage exactly.
@@ -275,4 +277,74 @@ export async function getRoomFeed(accessToken: string, roomId: string, cursor?: 
     throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't load this room's posts (${response.status}).`, false);
   }
   return (await response.json()) as FeedPage;
+}
+
+// PATCH /banter-rooms/:id/status -- JwtAuthGuard + GuardianConsentGuard, room
+// CREATOR only (404 for a missing room, then 403 for anyone else). Returns
+// the room as BanterRoomView (same shape as GET /banter-rooms/:id).
+export async function updateRoomStatus(
+  accessToken: string,
+  roomId: string,
+  status: BanterRoomStatus,
+): Promise<BanterRoom> {
+  const response = await authedFetch(`/banter-rooms/${roomId}/status`, accessToken, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+  if (!response.ok) {
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't change the room status (${response.status}).`, true);
+  }
+  return (await response.json()) as BanterRoom;
+}
+
+// POST /banter-rooms/:id/topics -- room CREATOR only. 1 to 5 free-text names
+// of 2 to 60 characters each; each is find-or-created (case-insensitive) and
+// attached, and an already-attached name is a no-op. The answer is the room's
+// FULL current topic list, so the caller simply replaces its local state.
+export interface AttachTopicsResult {
+  roomId: string;
+  topics: BanterTopic[];
+}
+
+export async function attachTopics(accessToken: string, roomId: string, names: string[]): Promise<AttachTopicsResult> {
+  const response = await authedFetch(`/banter-rooms/${roomId}/topics`, accessToken, {
+    method: "POST",
+    body: JSON.stringify({ names }),
+  });
+  if (!response.ok) {
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't add the topic (${response.status}).`, true);
+  }
+  return (await response.json()) as AttachTopicsResult;
+}
+
+// GET /banter-rooms/topics -- the topic catalogue, alphabetical, cursor-paged
+// (20 a page by default). JwtAuthGuard only.
+export interface BanterTopicPage {
+  items: BanterTopic[];
+  nextCursor: string | null;
+}
+
+export async function listTopics(accessToken: string, cursor?: string): Promise<BanterTopicPage> {
+  const url = new URL(`${API_BASE_URL}/banter-rooms/topics`);
+  if (cursor) url.searchParams.set("cursor", cursor);
+
+  const response = await authedFetch(url.pathname + url.search, accessToken);
+  if (!response.ok) {
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't load topics (${response.status}).`, false);
+  }
+  return (await response.json()) as BanterTopicPage;
+}
+
+// DELETE /banter-rooms/:id/topics/:topicId -- room CREATOR only, 204. Removes
+// only the room-to-topic link (the shared Topic stays). Idempotent for a topic
+// that exists but is not attached.
+export async function removeTopic(accessToken: string, roomId: string, topicId: string): Promise<void> {
+  const response = await authedFetch(
+    `/banter-rooms/${roomId}/topics/${encodeURIComponent(topicId)}`,
+    accessToken,
+    { method: "DELETE" },
+  );
+  if (!response.ok) {
+    throw await apiFailure((m, o) => new BanterApiError(m, o), response, `Couldn't remove the topic (${response.status}).`, true);
+  }
 }

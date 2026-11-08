@@ -284,8 +284,11 @@ describe("BanterRoomPage", () => {
     expect(screen.getByPlaceholderText(/say something/i)).not.toBeNull();
   });
 
-  it("renders topic chips read-only: no add, remove or status control, even for the room's creator", async () => {
-    seedSession(fakeAccessToken("creator-1"));
+  // B-071: this test used to seed the room's CREATOR and assert no control existed. The creator now gets
+  // controls (BanterRoomCreatorControls.test.tsx), so the read-only guarantee is asserted for a viewer who is
+  // NOT the creator: the same assertions, a different person.
+  it("renders topic chips read-only: no add, remove or status control, for anyone but the room's creator", async () => {
+    seedSession(fakeAccessToken("viewer-1"));
     vi.mocked(getRoomById).mockResolvedValueOnce(
       room({
         createdBy: "creator-1",
