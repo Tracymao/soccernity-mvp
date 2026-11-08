@@ -347,6 +347,11 @@ export interface PublicProfile {
   isFollowing: boolean;
   // True when the VIEWER has blocked this user (the only block state a viewer can see).
   viewerHasBlocked: boolean;
+  // B-060 (backend PR #689): the owner turned "Public profile" off and the viewer neither is the owner
+  // nor follows them. The response is then the minimal card only: bio, country, cover and guardian
+  // contact are null. `viewerFollows` is the same value as `isFollowing`.
+  isPrivate: boolean;
+  viewerFollows: boolean;
 }
 
 export async function getPublicProfile(accessToken: string, userId: string): Promise<PublicProfile> {

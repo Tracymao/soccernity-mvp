@@ -164,6 +164,24 @@
   margin: 0;
 }
 
+.privacy-row--saving .privacy-row__body {
+  opacity: 0.6;
+}
+
+.privacy-row-banner {
+  list-style: none;
+}
+
+.privacy-row__retry {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sn-brand-navy);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .privacy-row__actions {
   display: flex;
   flex-wrap: wrap;

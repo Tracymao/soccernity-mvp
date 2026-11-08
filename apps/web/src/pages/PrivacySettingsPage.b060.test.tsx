@@ -10,12 +10,17 @@ vi.mock("../api/users", async () => {
   const actual = await vi.importActual<typeof import("../api/users")>("../api/users");
   return { ...actual, getUser: vi.fn() };
 });
+vi.mock("../api/userSettings", async () => {
+  const actual = await vi.importActual<typeof import("../api/userSettings")>("../api/userSettings");
+  return { ...actual, getUserSettings: vi.fn(), updateUserSettings: vi.fn() };
+});
 vi.mock("../api/auth", async () => {
   const actual = await vi.importActual<typeof import("../api/auth")>("../api/auth");
   return { ...actual, getGuardianConsentStatus: vi.fn() };
 });
 
 import { getUser } from "../api/users";
+import { getUserSettings } from "../api/userSettings";
 import { getGuardianConsentStatus } from "../api/auth";
 import { seedSession, clearSession } from "../test/session";
 
@@ -37,6 +42,13 @@ beforeEach(() => {
   clearSession();
   vi.mocked(getUser).mockReset();
   vi.mocked(getGuardianConsentStatus).mockReset();
+  vi.mocked(getUserSettings).mockReset();
+  vi.mocked(getUserSettings).mockResolvedValue({
+    dmPermission: "everyone",
+    mediaSensitive: false,
+    readReceipts: true,
+    isProfilePublic: true,
+  });
 });
 
 function renderPage() {
@@ -70,16 +82,18 @@ describe("Adult variant", () => {
     expect(screen.queryByText("Guardian approval")).toBeNull();
   });
 
-  it("keeps Public profile and Marketing emails visibly disabled (no backend, no decision)", async () => {
+  it("keeps Marketing emails visibly disabled (no backend, no decision); Public profile is a live switch (B-060)", async () => {
     seedSession(token("user-1"));
     vi.mocked(getUser).mockResolvedValueOnce(ADULT);
     renderPage();
     await screen.findByText("Public profile");
-    expect(screen.getByRole("img", { name: /public profile: on \(not adjustable yet\)/i })).not.toBeNull();
+    expect(await screen.findByRole("switch", { name: "Public profile" })).not.toBeNull();
+    expect(screen.queryByRole("img", { name: /public profile/i })).toBeNull();
     expect(screen.getByRole("img", { name: /marketing emails: off \(not adjustable yet\)/i })).not.toBeNull();
     expect(screen.getByText("Coming soon")).not.toBeNull();
     expect(screen.queryByRole("checkbox")).toBeNull();
-    expect(screen.queryByRole("switch")).toBeNull();
+    // The only live switch is Public profile: Marketing emails is not one.
+    expect(screen.getAllByRole("switch")).toHaveLength(1);
   });
 
   it("makes Your Post and Direct Message real links (B-061)", async () => {

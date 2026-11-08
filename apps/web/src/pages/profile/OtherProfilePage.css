@@ -71,6 +71,19 @@
   background-color: var(--sn-green-tint-12);
 }
 
+.other-profile__private-band {
+  display: block;
+  width: 100%;
+  aspect-ratio: 796 / 192;
+  border-radius: 16px;
+  background-color: var(--sn-green-tint-12);
+}
+
+.other-profile__private-note {
+  background-color: var(--sn-green-tint-12);
+  border-color: transparent;
+}
+
 .other-profile__blocked {
   border-left: 3px solid var(--sn-semantic-alert);
 }

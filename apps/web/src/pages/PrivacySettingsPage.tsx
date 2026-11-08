@@ -30,11 +30,14 @@
 // addition — flag rather than fake") each is rendered visibly, in a
 // disabled state, with a short note — never a control that looks live
 // but silently does nothing:
-//   - Public profile visibility — NO `User` column, NO endpoint. Toggle
-//     disabled. Adult variant only (Figma 6991:53454): an account with a
-//     Guardian record gets the under-18 variant (6991:53687), which has no
-//     Public profile row and shows the Guardian approval row instead (it
-//     links to the existing guardian consent status page, /guardian-consent).
+//   - Public profile visibility — REAL as of B-060 (backend PR #689): a live
+//     switch on GET / PATCH /users/me/settings (isProfilePublic), see
+//     settings/PublicProfileRow.tsx (Figma PP1 to PP8, section PP of
+//     docs/figma-w8-privacy-reporting.md). Adult variant only (Figma 6991:53454): an
+//     account with a Guardian record gets the under-18 variant (6991:53687),
+//     which has no Public profile row and shows the Guardian approval row
+//     instead (it links to the existing guardian consent status page,
+//     /guardian-consent).
 //   - Download my data — REAL as of B-060: the row links to
 //     /settings/privacy/download-data (DataExportPage.tsx, POST/GET
 //     /users/me/data-export). This was a disabled row before.
@@ -65,6 +68,7 @@ import { Link } from "react-router";
 import { AuthApiError, getGuardianConsentStatus, type GuardianConsentStatus } from "../api/auth";
 import { getUser, type UserProfile } from "../api/users";
 import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
+import PublicProfileRow from "./settings/PublicProfileRow";
 import "./settings/PrivacySettingsPage.css";
 
 type LoadState = "loading" | "loaded" | "error" | "no-session";
@@ -74,8 +78,8 @@ type GuardianState =
   | { kind: "error" };
 
 function VisualToggle({ on, label }: { on: boolean; label: string }) {
-  // Purely visual, always disabled — none of this page's toggles have a
-  // backend. State is signalled by BOTH colour and knob position, never
+  // Purely visual, always disabled — only the Marketing emails row still uses it
+  // (no backend, no decision; the Public profile row is a live switch since B-060). State is signalled by BOTH colour and knob position, never
   // colour alone (Figma "Settings Toggle" component note, 5694:8219).
   return (
     <span
@@ -174,25 +178,10 @@ export default function PrivacySettingsPage() {
         </div>
 
         <ul className="privacy-rows">
-          {/* Public profile — no backend field/endpoint yet. Adult variant only: the
-              under-18 variant (Figma 6991:53687) has no such row. */}
-          {!underEighteen && (
-            <li className="privacy-row privacy-row--disabled">
-              <span className="privacy-row__icon" aria-hidden="true">
-                ◉
-              </span>
-              <div className="privacy-row__body">
-                <p className="privacy-row__title">Public profile</p>
-                <p className="privacy-row__desc">
-                  When this is off, only people who follow you can see your profile, posts, and activity.
-                </p>
-                <p className="privacy-row__note">
-                  Not adjustable yet — profiles are currently visible to all signed-in members.
-                </p>
-              </div>
-              <VisualToggle on label="Public profile" />
-            </li>
-          )}
+          {/* Public profile — REAL (B-060). A live switch on GET / PATCH /users/me/settings
+              (isProfilePublic). Adult variant only: the under-18 variant (Figma 6991:53687) has no
+              such row, and the server refuses the change for an under-18 account. */}
+          {!underEighteen && <PublicProfileRow />}
 
           {/* Your Post: REAL (B-061). The whole row links to the Sensitive media switch at
               /settings/privacy/your-posts (Figma 6983:48741 ..). */}
