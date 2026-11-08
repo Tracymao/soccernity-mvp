@@ -1720,7 +1720,7 @@ model Report {
   reporter             User?      @relation("reporter", fields: [reporterId], references: [id], onDelete: Restrict)
   reporterContactEmail String?
   reporterContactName  String?
-  targetType           String // post | user | comment
+  targetType           String // post | user | comment | message | banter_room | grassroots_team | fixture (plus enquiry, admin-only); message = a Message id, reportable only by the conversation recipient (b067-message-report)
   targetId             String
   reason               String
   // backend/b284-report-reason-categories (Decision Log #465, B-284) -- a genuine addition beyond Section 3's

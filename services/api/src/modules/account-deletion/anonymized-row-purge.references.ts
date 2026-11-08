@@ -150,7 +150,7 @@ export type PlainReferenceClass = 'content' | 'excluded' | 'tolerated';
  * survives the purge by design. 'tolerated' is an opaque id on ANOTHER user's row that is allowed to dangle.
  */
 export const PLAIN_USER_REFERENCES: Readonly<Record<string, PlainReferenceClass>> = {
-  'Report.targetId': 'content', // targetType 'user', or a post/comment the user authored
+  'Report.targetId': 'content', // targetType 'user', or a post/comment/message the user authored
   // B-139 (founder decision 2026-10-30): blocks only while a hold is RUNNING. The record is deleted once its
   // user is anonymised and holdUntil has passed (AccountDeletionSweepService.anonymizeUser at anonymisation,
   // AnonymizedRowPurgeService.cleanupRevokedUsernames afterwards, and purgeOne for this row just before it
@@ -220,7 +220,7 @@ async function hasRow(db: Prisma.TransactionClient, r: UserForeignKeyRelation, u
 /** The label of the first no-foreign-key 'content' reference that still names this user, or null. */
 async function plainContentBlocker(db: Prisma.TransactionClient, userId: string): Promise<string | null> {
 
-  // Report: filed AGAINST the user, or against a post/comment they authored. Any status counts (a closed
+  // Report: filed AGAINST the user, or against a post/comment/message they authored. Any status counts (a closed
   // report is still the moderation record). The reporter side is the Report.reporter foreign key.
   const reports = await db.$queryRaw<{ found: number }[]>`
     SELECT 1 AS found
@@ -230,6 +230,8 @@ async function plainContentBlocker(db: Prisma.TransactionClient, userId: string)
              SELECT 1 FROM "Post" p WHERE p."id" = r."targetId" AND p."authorId" = ${userId}))
        OR (r."targetType" = 'comment' AND EXISTS (
              SELECT 1 FROM "Comment" c WHERE c."id" = r."targetId" AND c."authorId" = ${userId}))
+       OR (r."targetType" = 'message' AND EXISTS (
+             SELECT 1 FROM "Message" m WHERE m."id" = r."targetId" AND m."senderId" = ${userId}))
     LIMIT 1
   `;
   if (reports.length > 0) return 'Report.targetId';
