@@ -30,6 +30,10 @@ import { UpdateUserSettingsDto } from './dto/update-user-settings.dto';
 import { DmPermission, effectiveReadReceipts, UserSettings } from './user-settings.constants';
 import { PUBLIC_NAME_SELECT, resolvePublicName, toPublicUser } from './public-name.util';
 import { isPublicProfileKey } from './profile-image.util';
+import {
+  effectiveProfilePublic,
+  PROFILE_VISIBILITY_NOT_AVAILABLE_CODE,
+} from './profile-visibility.util';
 import { ProfileImageViewService } from './profile-image-view.service';
 import { UsernamePolicyService } from './username-policy.service';
 import { USERNAME_REQUIRED_CODE } from './username-rules.constants';
@@ -136,6 +140,15 @@ export type PublicProfile = {
   // never gets this far (they receive the not-found response instead).
   isFollowing: boolean;
   viewerHasBlocked: boolean;
+  // backend/b060-public-profile-toggle (B-060). isPrivate is true ONLY when the viewer is NOT allowed to see the
+  // owner's content: the owner turned the Public profile toggle off and the viewer is neither the owner nor a
+  // follower. In that case this is a MINIMAL CARD: id, publicName, avatarUrl, isPrivate, viewerFollows (and the
+  // other per-viewer flags) are real; bio, country, coverUrl and guardianContact are null (and no post, list or
+  // count is reachable through any route). viewerFollows is the same value as isFollowing, named for the card
+  // (kept alongside it so existing readers do not break). A viewer who follows the owner, the owner themself and
+  // everyone looking at a public (or under-18) profile get isPrivate: false and the full card.
+  isPrivate: boolean;
+  viewerFollows: boolean;
 };
 
 // safeguarding/guardian-contact-public-visibility (legal-copy Part C row
@@ -350,6 +363,7 @@ const OWN_SETTINGS_SELECT = {
   dmPermission: true,
   mediaSensitive: true,
   readReceipts: true,
+  isProfilePublic: true,
   isMinor: true,
 } as const;
 
@@ -357,12 +371,14 @@ function toUserSettings(row: {
   dmPermission: string;
   mediaSensitive: boolean;
   readReceipts: boolean | null;
+  isProfilePublic: boolean;
   isMinor: boolean;
 }): UserSettings {
   return {
     dmPermission: row.dmPermission as DmPermission,
     mediaSensitive: row.mediaSensitive,
     readReceipts: effectiveReadReceipts(row.readReceipts, row.isMinor),
+    isProfilePublic: effectiveProfilePublic(row.isProfilePublic, row.isMinor),
   };
 }
 
@@ -438,6 +454,7 @@ export class UsersService {
           dateOfBirth: true,
           isMinor: true,
           accountStatus: true,
+          isProfilePublic: true,
           guardian: { select: { email: true, consentStatus: true } },
           bio: true,
           profileCountry: true,
@@ -472,22 +489,31 @@ export class UsersService {
     if (relation === 'other_blocked_viewer') {
       throw new NotFoundException('User not found');
     }
+    const viewerFollows = followRow !== null;
+    // B-060: a profile is private to this viewer when the owner turned the toggle off (an under-18 owner is
+    // always effectively public) and the viewer is neither the owner nor a follower. Decided here from the
+    // same fresh read as everything else; the shared rule is profile-visibility.util.ts.
+    const isPrivate = !effectiveProfilePublic(user.isProfilePublic, user.isMinor) && !isSelf && !viewerFollows;
+    // Served only while APPROVED *and* PUBLISHED (the file is in the public prefix). The second test is
+    // defence in depth: a status flipped to 'approved' without the file being copied would otherwise hand
+    // out a URL for an object that is not there (or, worse, for one that is still private).
+    const avatarUrl =
+      user.avatarStatus === 'approved' && user.avatarKey && isPublicProfileKey(user.avatarKey) ? user.avatarUrl : null;
+    const coverUrl =
+      user.coverStatus === 'approved' && user.coverKey && isPublicProfileKey(user.coverKey) ? user.coverUrl : null;
     return {
       ...toPublicUser(user),
-      guardianContact: guardianContactFor(
-        user.isMinor,
-        user.guardian,
-        this.dobEncryption.decryptNullable(user.dateOfBirth),
-      ),
-      bio: user.bio,
-      country: user.profileCountry,
-      // Served only while APPROVED *and* PUBLISHED (the file is in the public prefix). The second test is
-      // defence in depth: a status flipped to 'approved' without the file being copied would otherwise hand
-      // out a URL for an object that is not there (or, worse, for one that is still private).
-      avatarUrl: user.avatarStatus === 'approved' && user.avatarKey && isPublicProfileKey(user.avatarKey) ? user.avatarUrl : null,
-      coverUrl: user.coverStatus === 'approved' && user.coverKey && isPublicProfileKey(user.coverKey) ? user.coverUrl : null,
-      isFollowing: followRow !== null,
+      guardianContact: isPrivate
+        ? null
+        : guardianContactFor(user.isMinor, user.guardian, this.dobEncryption.decryptNullable(user.dateOfBirth)),
+      bio: isPrivate ? null : user.bio,
+      country: isPrivate ? null : user.profileCountry,
+      avatarUrl,
+      coverUrl: isPrivate ? null : coverUrl,
+      isFollowing: viewerFollows,
       viewerHasBlocked: relation === 'viewer_blocked_other',
+      isPrivate,
+      viewerFollows,
     };
   }
 
@@ -514,6 +540,22 @@ export class UsersService {
     if (dto.dmPermission !== undefined) data.dmPermission = dto.dmPermission;
     if (dto.mediaSensitive !== undefined) data.mediaSensitive = dto.mediaSensitive;
     if (dto.readReceipts !== undefined) data.readReceipts = dto.readReceipts;
+    if (dto.isProfilePublic !== undefined) {
+      // B-060: an under-18 account cannot change the Public profile toggle (the safeguarding rules decide what
+      // is visible about a minor, unchanged). A FRESH read of isMinor, never a token claim. The whole request is
+      // refused, so nothing else in the same PATCH is written either.
+      const owner = await this.prisma.user.findUnique({ where: { id: userId }, select: { isMinor: true } });
+      if (!owner) {
+        throw new NotFoundException('User not found');
+      }
+      if (owner.isMinor) {
+        throw new ForbiddenException({
+          message: 'This setting is not available for your account.',
+          code: PROFILE_VISIBILITY_NOT_AVAILABLE_CODE,
+        });
+      }
+      data.isProfilePublic = dto.isProfilePublic;
+    }
     if (Object.keys(data).length === 0) {
       return this.getOwnSettings(userId);
     }
@@ -704,7 +746,7 @@ export class UsersService {
     const [user, blockedViewer] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: userId },
-        select: { id: true, isMinor: true, accountStatus: true },
+        select: { id: true, isMinor: true, accountStatus: true, isProfilePublic: true },
       }),
       viewerId && viewerId !== userId
         ? this.prisma.block.findFirst({
@@ -718,6 +760,22 @@ export class UsersService {
     }
     if (blockedViewer) {
       throw new NotFoundException('User not found');
+    }
+    // B-060 (founder decision 2026-11-08): the follower and following LISTS of a private (followers-only)
+    // profile are hidden from anyone who is not the owner or a follower -- the same 404 a missing user gets,
+    // this method's established "hide via 404" convention. An under-18 target is always effectively public.
+    // The viewer being the target themself is the owner's own view.
+    // The follow lookup runs only for a private target (a public one needs no follow check).
+    if (!effectiveProfilePublic(user.isProfilePublic, user.isMinor) && viewerId !== userId) {
+      const viewerFollows = viewerId
+        ? await this.prisma.follow.findUnique({
+            where: { followerId_followeeId: { followerId: viewerId, followeeId: userId } },
+            select: { id: true },
+          })
+        : null;
+      if (viewerFollows === null) {
+        throw new NotFoundException('User not found');
+      }
     }
     // sprint-2/account-deactivation-backend (Decision Log #221): a
     // deactivated (or pending_deletion) TARGET's social graph is hidden

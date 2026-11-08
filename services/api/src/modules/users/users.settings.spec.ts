@@ -14,20 +14,20 @@ function build() {
   return { prisma, service };
 }
 
-const SELECT = { dmPermission: true, mediaSensitive: true, readReceipts: true, isMinor: true };
+const SELECT = { dmPermission: true, mediaSensitive: true, readReceipts: true, isProfilePublic: true, isMinor: true };
 
 describe('UsersService own settings (B-061)', () => {
   it('reads the two settings fresh, keyed on the caller id only', async () => {
     const { prisma, service } = build();
     (prisma.user.findUnique as jest.Mock).mockResolvedValue({ dmPermission: 'following', mediaSensitive: true, readReceipts: null, isMinor: false });
-    await expect(service.getOwnSettings('u1')).resolves.toEqual({ dmPermission: 'following', mediaSensitive: true, readReceipts: true });
+    await expect(service.getOwnSettings('u1')).resolves.toEqual({ dmPermission: 'following', mediaSensitive: true, readReceipts: true, isProfilePublic: true });
     expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { id: 'u1' }, select: SELECT });
   });
 
   it('returns the defaults for an account that never changed them', async () => {
     const { prisma, service } = build();
     (prisma.user.findUnique as jest.Mock).mockResolvedValue({ dmPermission: 'everyone', mediaSensitive: false, readReceipts: null, isMinor: false });
-    await expect(service.getOwnSettings('u1')).resolves.toEqual({ dmPermission: 'everyone', mediaSensitive: false, readReceipts: true });
+    await expect(service.getOwnSettings('u1')).resolves.toEqual({ dmPermission: 'everyone', mediaSensitive: false, readReceipts: true, isProfilePublic: true });
   });
 
   it('404s when the account no longer exists', async () => {
@@ -43,6 +43,7 @@ describe('UsersService own settings (B-061)', () => {
       dmPermission: 'none',
       mediaSensitive: false,
       readReceipts: true,
+      isProfilePublic: true,
     });
     expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'u1' }, data: { dmPermission: 'none' }, select: SELECT });
   });
@@ -68,7 +69,7 @@ describe('UsersService own settings (B-061)', () => {
   it('an empty body writes nothing and returns the current values (DEFAULT, founder-veto-able)', async () => {
     const { prisma, service } = build();
     (prisma.user.findUnique as jest.Mock).mockResolvedValue({ dmPermission: 'none', mediaSensitive: true, readReceipts: null, isMinor: false });
-    await expect(service.updateOwnSettings('u1', {})).resolves.toEqual({ dmPermission: 'none', mediaSensitive: true, readReceipts: true });
+    await expect(service.updateOwnSettings('u1', {})).resolves.toEqual({ dmPermission: 'none', mediaSensitive: true, readReceipts: true, isProfilePublic: true });
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 

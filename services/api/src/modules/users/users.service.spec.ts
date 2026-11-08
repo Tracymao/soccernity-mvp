@@ -249,6 +249,9 @@ describe('UsersService', () => {
         coverUrl: null,
         isFollowing: false,
         viewerHasBlocked: false,
+        // B-060: a public (here: under-18) profile is the full card.
+        isPrivate: false,
+        viewerFollows: false,
       });
     });
 

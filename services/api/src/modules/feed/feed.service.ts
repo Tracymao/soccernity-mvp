@@ -13,6 +13,7 @@ import { APP_CLOCK, Clock, systemClock } from '../../clock/clock';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
 import { hasBlockBetween, notBlockedWith } from '../block/block.util';
+import { postProfileVisibleTo } from '../users/profile-visibility.util';
 import { shouldCreateNotification } from '../notifications/notification-policy.util';
 import {
   assertFinalEntryUnlocked,
@@ -182,11 +183,15 @@ function toFeedPost(row: RawFeedPost, now: Date): FeedPost {
 //  - post media (backend/w14-post-media-pipeline, Decision Log #419 item 5): a post with ANY attached
 //    media that is not 'approved' is visible to its author only (post-media-visibility.util.ts). ANDed
 //    in here so every read path that already calls this inherits it.
+//  - the author's Public profile toggle (B-060, postProfileVisibleTo): same ANDed-in treatment.
 export function visibleToViewer(viewerId: string, now: Date): Prisma.PostWhereInput {
   return {
     AND: [
       { OR: [{ visibleFrom: null }, { visibleFrom: { lte: now } }, { authorId: viewerId }] },
       postMediaVisibleTo(viewerId),
+      // B-060 (Public profile toggle): a post by an author whose profile is private to this viewer is a 404, like a
+      // post that does not exist. Banter Room posts and Contest entries are exempt (profile-visibility.util.ts).
+      postProfileVisibleTo(viewerId),
     ],
   };
 }
@@ -828,7 +833,12 @@ export class FeedService {
         : publicOnly
           ? {
               id: postId,
-              AND: [{ OR: [{ visibleFrom: null }, { visibleFrom: { lte: this.clock.now() } }] }, POST_MEDIA_ALL_APPROVED],
+              AND: [
+                { OR: [{ visibleFrom: null }, { visibleFrom: { lte: this.clock.now() } }] },
+                POST_MEDIA_ALL_APPROVED,
+                // B-060: an anonymous reader is a stranger to every private profile.
+                postProfileVisibleTo(undefined),
+              ],
             }
           : { id: postId },
       select: { id: true, authorId: true, commentPermission: true },

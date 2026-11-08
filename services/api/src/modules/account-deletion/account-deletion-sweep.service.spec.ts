@@ -758,6 +758,7 @@ describe('AccountDeletionSweepService', () => {
           avatarUploadedAt: null,
           coverUploadedAt: null,
           readReceipts: null, // B-061
+          isProfilePublic: true, // B-060
           accountStatus: 'deleted',
           pendingDeletionAt: null,
           // B-043 (#375): the purge clock starts here.

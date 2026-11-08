@@ -22,4 +22,7 @@ export interface UserSettings {
   mediaSensitive: boolean;
   // The EFFECTIVE value (explicit choice, else the age default), never the raw nullable column.
   readReceipts: boolean;
+  // backend/b060-public-profile-toggle (B-060): the EFFECTIVE "Public profile" value. true = nothing hidden.
+  // An under-18 account always reads true (it cannot turn the toggle off; the safeguarding rules decide).
+  isProfilePublic: boolean;
 }
