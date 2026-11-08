@@ -13,7 +13,9 @@ import {
   MESSAGE_EDIT_WINDOW_CLOSED_CODE,
   MESSAGE_NOT_EDITABLE_CODE,
   MessagingApiError,
+  isDeletedMessage,
   type Message,
+  type ThreadMessage,
 } from "../../../api/messaging";
 
 export const EDIT_WINDOW_MS = 15 * 60 * 1000;
@@ -21,6 +23,28 @@ export const EDIT_WINDOW_MS = 15 * 60 * 1000;
 // Hint only -- see the header comment.
 export function canEditNow(message: Message, now: number = Date.now()): boolean {
   return now - new Date(message.sentAt).getTime() <= EDIT_WINDOW_MS;
+}
+
+// The "Seen 08:09 AM" label (B-061 read receipts, Figma V1 to V4) goes under
+// ONE message: the latest message YOU sent in the thread (the list is oldest
+// first), and only when the server says it was read (`readAt` set). The
+// server already returns `readAt` only for a message you sent, only when it
+// was read and only when both people have read receipts on in the same age
+// class; this function adds the display rule on top and decides nothing
+// about who may see what.
+//   - not under an older message of yours, even one that was read;
+//   - not under a message you received (the server sends null there anyway);
+//   - not on a "This message was deleted" placeholder (it carries no time),
+//     and then not under any earlier one either: the latest message of yours
+//     is the deleted one, so the label has no message to sit under.
+export function seenLabelMessageId(messages: readonly ThreadMessage[], currentUserId: string): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message.senderId !== currentUserId) continue;
+    if (isDeletedMessage(message)) return null;
+    return message.readAt ? message.id : null;
+  }
+  return null;
 }
 
 // "Matthew Amuloko" -> "Matthew". No name (a deleted account) -> null, and

@@ -53,6 +53,11 @@
   font-size: 18px;
 }
 
+/* A live row's title is the primary text colour (Figma S1); the disabled stubs keep the secondary one. */
+.pvl__row-title--live {
+  color: var(--sn-text-primary);
+}
+
 .pvl__row-desc,
 .pvl__note,
 .pvl__hint {
@@ -108,14 +113,9 @@
   outline-offset: 2px;
 }
 
-.pvl-switch:disabled,
-.pvl-switch--static {
+.pvl-switch:disabled {
   cursor: default;
   opacity: 0.6;
-}
-
-.pvl-switch--static {
-  display: inline-block;
 }
 
 /* Who can message me */
@@ -227,9 +227,31 @@
 }
 
 .pvl-skeleton--switch {
+  flex-shrink: 0;
   width: 44px;
   height: 24px;
   border-radius: 999px;
+}
+
+/* The Read receipts row while the settings load (Figma S5): a title bar and two description lines. */
+.pvl__row-body--skeleton {
+  flex: 1;
+  gap: 8px;
+}
+
+.pvl-skeleton--title {
+  width: 148px;
+  height: 20px;
+  border-radius: 6px;
+}
+
+.pvl-skeleton--line {
+  height: 12px;
+  border-radius: 6px;
+}
+
+.pvl-skeleton--short {
+  width: 70%;
 }
 
 /* Inline error banner */

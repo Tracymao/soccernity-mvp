@@ -9,14 +9,21 @@
 // a new conversation with you; existing chats keep working. It can only make messaging stricter than
 // the safeguarding rules, never looser. The choice saves on change.
 //
-// Read receipts: the frames draw a row above the new setting. There is NO read-receipt backend and
-// nothing was decided about it, and no such row existed in the app before, so it is drawn visibly
-// disabled (a static switch with a note) and does nothing, the same discipline as every other
-// backend-pending Settings control. The frame's "Learn more" link points at help.twitter.com, so it
-// is not reproduced.
+// Read receipts (live since the B-061 read-receipts backend): the row above the new setting is a real
+// switch, from the Figma frames S1 to S10 (docs/figma-w8-privacy-reporting.md, section S:
+// desktop S1 7012:57260 on, S2 7012:57309 off, S3 7012:57356 saving, S4 7012:58176 save failed,
+// S5 7012:57459 loading; mobile S6 to S10). GET / PATCH /users/me/settings carry `readReceipts`, the
+// EFFECTIVE value (the saved choice, or the age default: on for an adult, off under 18). It saves on
+// toggle like the other settings: the switch flips at once and is dimmed with "Saving…" under the
+// description, a failed save puts it back and shows the banner ABOVE the row (S4). The rule itself
+// (both people on, same age class, only on messages you sent) is the server's; the description states
+// it once and this page computes nothing. The frame's "Learn more" link pointed at help.twitter.com and
+// the "not shown on message requests" sentence described a concept that does not exist, so neither is
+// reproduced.
 //
-// Wording: as drawn. The one sentence the frames tag carries the literal tag and has a row in
-// docs/pending-copy-manifest.md. Wording no frame draws (load failure, log-in prompt) is plain.
+// Wording: as drawn. The two sentences the frames tag (the read receipts description and the
+// "stricter" line) carry the literal tag and have rows in docs/pending-copy-manifest.md. Wording no
+// frame draws (load failure, log-in prompt) is plain.
 import { Link } from "react-router";
 import type { DmPermission } from "../../api/userSettings";
 import { useUserSettings } from "./useUserSettings";
@@ -34,7 +41,13 @@ export const MESSAGES = {
   // The one sentence the frames tag; the literal tag is shown to the person on purpose (B-124).
   stricterOnly:
     "This can only make messaging stricter. Our safety rules for under-18s still apply. [COPY PENDING LEGAL REVIEW]",
+  // The frames tag this sentence too (S1 to S4, S6 to S9).
+  readReceiptsDescription:
+    "When this is on, people you message can see when you’ve read their messages. “Seen” only shows when you and the other person both have read receipts on. [COPY PENDING LEGAL REVIEW]",
+  saving: "Saving…",
 } as const;
+
+export const READ_RECEIPTS_LABEL = "Read receipts";
 
 function Banner({ children }: { children: string }) {
   return (
@@ -46,7 +59,7 @@ function Banner({ children }: { children: string }) {
 }
 
 export default function DirectMessagesSettingsPage() {
-  const { view, settings, saving, failedFrom, save, reload } = useUserSettings();
+  const { view, settings, saving, savingKey, failedFrom, failedKey, save, reload } = useUserSettings();
 
   if (view === "no-session") {
     return (
@@ -56,21 +69,49 @@ export default function DirectMessagesSettingsPage() {
     );
   }
 
-  const readReceipts = (
-    <div className="pvl__row">
-      <div className="pvl__row-body">
-        <p className="pvl__row-title pvl__row-title--big">Read receipts</p>
-        <p className="pvl__row-desc">
-          Let people you’re messaging with know when you’ve seen their messages. Read receipts are not shown on
-          message requests.
-        </p>
-        <p className="pvl__note">Not adjustable yet.</p>
+  const receiptsOn = settings?.readReceipts ?? false;
+  const receiptsSaving = saving && savingKey === "readReceipts";
+
+  // The row (S1 to S4). While the settings load it is a skeleton of the same shape (S5).
+  const readReceipts =
+    view === "loading" ? (
+      <div className="pvl__row" data-testid="receipts-skeleton" role="status" aria-label="Loading your settings">
+        <div className="pvl__row-body pvl__row-body--skeleton">
+          <span className="pvl-skeleton pvl-skeleton--title" />
+          <span className="pvl-skeleton pvl-skeleton--line" />
+          <span className="pvl-skeleton pvl-skeleton--line pvl-skeleton--short" />
+        </div>
+        <span className="pvl-skeleton pvl-skeleton--switch" />
       </div>
-      <span className="pvl-switch pvl-switch--static" role="img" aria-label="Read receipts: not adjustable yet">
-        <span className="pvl-switch__knob" />
-      </span>
-    </div>
-  );
+    ) : (
+      <div className="pvl__row">
+        <div className="pvl__row-body">
+          <p className="pvl__row-title pvl__row-title--big pvl__row-title--live" id="read-receipts-label">
+            {READ_RECEIPTS_LABEL}
+          </p>
+          <p className="pvl__row-desc" id="read-receipts-desc">
+            {MESSAGES.readReceiptsDescription}
+          </p>
+          {receiptsSaving && (
+            <p className="pvl__note" role="status">
+              {MESSAGES.saving}
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          role="switch"
+          className="pvl-switch"
+          aria-checked={receiptsOn}
+          aria-labelledby="read-receipts-label"
+          aria-describedby="read-receipts-desc"
+          disabled={saving}
+          onClick={() => save({ readReceipts: !receiptsOn })}
+        >
+          <span className="pvl-switch__knob" />
+        </button>
+      </div>
+    );
 
   return (
     <div className="pvl" aria-busy={view === "loading" || saving}>
@@ -78,8 +119,6 @@ export default function DirectMessagesSettingsPage() {
         ←
       </Link>
       <h2 className="pvl__title">Direct Messages</h2>
-
-      {readReceipts}
 
       {view === "error" ? (
         <>
@@ -89,15 +128,18 @@ export default function DirectMessagesSettingsPage() {
           </button>
         </>
       ) : (
+        <>
+        {failedFrom && failedKey === "readReceipts" && <Banner>{MESSAGES.saveFailed}</Banner>}
+        {readReceipts}
         <fieldset
-          className={saving ? "pvl-group pvl-group--busy" : "pvl-group"}
+          className={saving && savingKey === "dmPermission" ? "pvl-group pvl-group--busy" : "pvl-group"}
           disabled={view === "loading" || saving}
           aria-describedby="dm-stricter"
         >
           <legend className="pvl-group__title">Who can message me</legend>
           <p className="pvl-group__lead">Choose who can start a new conversation with you.</p>
 
-          {failedFrom && <Banner>{MESSAGES.saveFailed}</Banner>}
+          {failedFrom && failedKey === "dmPermission" && <Banner>{MESSAGES.saveFailed}</Banner>}
 
           {view === "loading" ? (
             <div data-testid="dm-skeleton" role="status" aria-label="Loading your settings">
@@ -130,6 +172,7 @@ export default function DirectMessagesSettingsPage() {
             {MESSAGES.stricterOnly}
           </p>
         </fieldset>
+        </>
       )}
     </div>
   );
