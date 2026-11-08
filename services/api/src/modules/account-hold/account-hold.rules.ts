@@ -134,8 +134,9 @@ interface InvolvedReportRow {
 /**
  * Every report involving the account, with how it is involved. Raw SQL because Prisma's query builder
  * cannot express the per-targetType correlated EXISTS (Report.targetId is a bare string; the post and
- * comment cases join through Post / Comment.authorId, Decision Log #341). "Involved" is unchanged from the
- * old hasOpenInvestigation: reporter; target is the user; target is a post or comment they authored.
+ * comment cases join through Post / Comment.authorId, Decision Log #341; a message through Message.senderId,
+ * backend/b067-message-report). "Involved" is unchanged from the
+ * old hasOpenInvestigation: reporter; target is the user; target is a post, comment or message they authored.
  * This only GATHERS; whether a row is a hold is decided by reportHoldType, in one place.
  */
 export async function findInvolvedReports(db: Pick<Prisma.TransactionClient, '$queryRaw'>, userId: string): Promise<InvolvedReport[]> {
@@ -148,6 +149,8 @@ export async function findInvolvedReports(db: Pick<Prisma.TransactionClient, '$q
               SELECT 1 FROM "Post" p WHERE p."id" = r."targetId" AND p."authorId" = ${userId}))
         OR (r."targetType" = 'comment' AND EXISTS (
               SELECT 1 FROM "Comment" c WHERE c."id" = r."targetId" AND c."authorId" = ${userId}))
+        OR (r."targetType" = 'message' AND EXISTS (
+              SELECT 1 FROM "Message" m WHERE m."id" = r."targetId" AND m."senderId" = ${userId}))
       ) AS "isSubject"
     FROM "Report" r
     WHERE r."reporterId" = ${userId}
@@ -156,6 +159,8 @@ export async function findInvolvedReports(db: Pick<Prisma.TransactionClient, '$q
             SELECT 1 FROM "Post" p WHERE p."id" = r."targetId" AND p."authorId" = ${userId}))
       OR (r."targetType" = 'comment' AND EXISTS (
             SELECT 1 FROM "Comment" c WHERE c."id" = r."targetId" AND c."authorId" = ${userId}))
+      OR (r."targetType" = 'message' AND EXISTS (
+            SELECT 1 FROM "Message" m WHERE m."id" = r."targetId" AND m."senderId" = ${userId}))
   `;
   return rows.map((r) => ({
     status: r.status,

@@ -292,3 +292,21 @@ Account anonymisation deletes the user's `MessageHide` and `ConversationHide` ro
   individually or that was deleted for everyone still brings the conversation back, as an empty-looking thread.
 * A legacy message that carries `mediaUrl` (the column still exists) cannot be edited.
 * Reporting a message is NOT built and NOT decided (`REPORT_TARGET_TYPES` has no message type).
+
+## Reporting a message (`backend/b067-message-report`)
+
+A person can report a message in a chat through `POST /reports` with `targetType: 'message'` (see the moderation
+README, "Reporting a message in a chat"). The rules live in `ModerationService.assertMessageReportable`, not here,
+but they read this module's state, so they are listed:
+
+- Only the OTHER participant (the recipient) can report. The sender cannot report their own message; a stranger
+  cannot report anything in a private conversation. Both get the same 404 as a missing message.
+- The message must be currently visible to the reporter: not hidden by them (`MessageHide`), not sent at or before
+  their `ConversationHide.hiddenAt`, not deleted for everyone.
+- The report keeps working after the sender edits the message or deletes it for everyone: the Message row, its
+  `contentText` and `originalContentText` are never removed, and the admin report detail returns that ONE message
+  (current text, original text if edited, `editedAt`, `deletedForEveryone`) to a moderator. No user-facing read ever
+  returns `originalContentText`; only the admin report detail does, and only for a reported message.
+- Nothing purges a message while a report against it is open: no job deletes `Message` rows at all (`Message.sender`
+  is RESTRICT; the anonymiser deletes only `MessageHide`/`ConversationHide` rows).
+- Moderators can record `content_removed` against a message report but cannot delete a message (known gap).

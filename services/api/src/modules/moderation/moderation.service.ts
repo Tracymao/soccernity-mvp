@@ -18,6 +18,7 @@ import { RegistrationEmailService } from '../auth/registration/email/registratio
 import { GuardianSecurityEventKey } from '../guardian-security-notice/guardian-security-notice.constants';
 import { GuardianSecurityNoticeService } from '../guardian-security-notice/guardian-security-notice.service';
 import { resolveConcernsMinor } from './report-concerns-minor.util';
+import { PUBLIC_NAME_SELECT, resolvePublicName } from '../users/public-name.util';
 import { resolveReportedUserId } from './report-target.util';
 import { decodeModerationCursor, encodeModerationCursor } from './cursor.util';
 import { ActionReportDto } from './dto/action-report.dto';
@@ -34,6 +35,7 @@ import {
   ENQUIRY_REPORT_TARGET_TYPE,
   MODERATION_DEFAULT_PAGE_SIZE,
   MODERATION_MAX_PAGE_SIZE,
+  MESSAGE_REPORT_TARGET_TYPE,
   REASON_REQUIRED_CATEGORY,
   REPORT_REASON_REQUIRED_CODE,
   REPORT_SOURCE_CONTACT_ENQUIRY,
@@ -63,7 +65,26 @@ export interface ReportContactEnquiryView {
   userId: string | null;
 }
 
-export type ReportDetail = ReportWithSource & { contactEnquiry?: ReportContactEnquiryView | null };
+// backend/b067-message-report: the ONE message behind a 'message' report, for the report detail. Exactly this
+// message and nothing else of the conversation: no other message, no conversation id, no recipient, no media. The
+// text comes back even if the sender has since edited it (originalContentText is the text as first sent, null
+// unless it was edited) or deleted it for everyone (deletedForEveryone true): the row and its text are kept, and
+// the moderator must be able to see what was reported.
+export interface ReportedMessageView {
+  id: string;
+  sentAt: Date;
+  sender: { publicName: string };
+  contentText: string;
+  originalContentText: string | null;
+  editedAt: Date | null;
+  deletedForEveryone: boolean;
+}
+
+export type ReportDetail = ReportWithSource & {
+  contactEnquiry?: ReportContactEnquiryView | null;
+  // Set (to the message, or null if the row is gone, which nothing does today) only on a 'message' report.
+  reportedMessage?: ReportedMessageView | null;
+};
 
 // B-279 (Decision Log #456 A and C): the guardian of a MINOR who is the reported user is told the OUTCOME of an
 // actioned report, as the kind of action that was taken and nothing else. 'dismissed' took no action, so it has
@@ -111,6 +132,9 @@ export class ModerationService {
   // -------------------------------------------------------------------
   async createReport(reporterId: string, dto: CreateReportDto): Promise<Report> {
     const reason = this.resolveReportReason(dto.reasonCategory, dto.reason);
+    if (dto.targetType === MESSAGE_REPORT_TARGET_TYPE) {
+      return this.createMessageReport(reporterId, dto, reason);
+    }
     await this.assertReportTargetExists(dto.targetType, dto.targetId);
 
     return this.prisma.report.create({
@@ -190,6 +214,77 @@ export class ModerationService {
       });
     }
     return text;
+  }
+
+  // backend/b067-message-report (founder decision 2026-11-08). Reporting a message in a chat.
+  //
+  // Who may report: ONLY the other participant of the conversation (the recipient). Not the sender (their own
+  // message), not a stranger. The message must be one the reporter can currently SEE: not hidden by them
+  // (MessageHide), not sent at or before the moment they deleted the chat (ConversationHide), not deleted for
+  // everyone. Everything else is the SAME 404 'Message not found' a missing id gives: a private conversation's
+  // messages are never confirmed to exist to a non-participant (the assertParticipant convention in
+  // MessagingService). Block is NOT checked: a person who blocked the sender must still be able to report what the
+  // sender wrote (the thread still shows it, getMessages has no block filter).
+  private async assertMessageReportable(reporterId: string, messageId: string): Promise<void> {
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      select: {
+        id: true,
+        senderId: true,
+        sentAt: true,
+        conversationId: true,
+        deletedForEveryoneAt: true,
+        conversation: { select: { participantIds: true } },
+        hides: { where: { userId: reporterId }, select: { userId: true }, take: 1 },
+      },
+    });
+    if (
+      !message ||
+      message.senderId === reporterId ||
+      !message.conversation.participantIds.includes(reporterId) ||
+      message.deletedForEveryoneAt ||
+      message.hides.length > 0
+    ) {
+      throw new NotFoundException('Message not found');
+    }
+    const chatHide = await this.prisma.conversationHide.findUnique({
+      where: { userId_conversationId: { userId: reporterId, conversationId: message.conversationId } },
+      select: { hiddenAt: true },
+    });
+    // GET .../messages shows sentAt > hiddenAt only, so anything at or before the cutoff is gone for this person.
+    if (chatHide && message.sentAt <= chatHide.hiddenAt) {
+      throw new NotFoundException('Message not found');
+    }
+  }
+
+  // One OPEN report per reporter per message. DEFAULT, founder-veto-able: a repeat while the reporter's earlier
+  // report on the same message is still open returns that existing report (no second row, no error). The other
+  // user-reportable target types have no duplicate check at all (nothing to copy); the nearest precedent is
+  // PostMediaReportService, where a repeat is a success that changes nothing. Serialised per (reporter, message)
+  // by a transaction-level advisory lock so two simultaneous submissions cannot both create a row.
+  private async createMessageReport(reporterId: string, dto: CreateReportDto, reason: string): Promise<Report> {
+    await this.assertMessageReportable(reporterId, dto.targetId);
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`message-report:${reporterId}:${dto.targetId}`}))`;
+      const existing = await tx.report.findFirst({
+        where: { reporterId, targetType: MESSAGE_REPORT_TARGET_TYPE, targetId: dto.targetId, status: 'open' },
+        orderBy: { createdAt: 'asc' },
+      });
+      if (existing) return existing;
+      return tx.report.create({
+        data: {
+          reporterId,
+          targetType: MESSAGE_REPORT_TARGET_TYPE,
+          targetId: dto.targetId,
+          reason,
+          reasonCategory: dto.reasonCategory,
+          // Decision Log #466: the 'child_safety_concern' category raises the minor flag, exactly as for any report.
+          concernsMinor: resolveConcernsMinor(dto.reasonCategory, false),
+          severity: dto.severity ?? DEFAULT_REPORT_SEVERITY,
+        },
+      });
+    });
   }
 
   // A well-formed but non-existent target must 404, never a raw FK-less
@@ -493,6 +588,37 @@ export class ModerationService {
         },
       });
       return { ...withSourceHint(report), contactEnquiry };
+    }
+
+    // backend/b067-message-report: a 'message' report loads with ONLY the reported message attached (the shape
+    // 'enquiry' reports already use for their enquiry). Post and comment reports attach nothing: their detail is
+    // the Report row alone (targetType + targetId), so this is the one place a reported target's content is read.
+    // The vetting gate above has already applied when the report concerns a minor.
+    if (report.targetType === MESSAGE_REPORT_TARGET_TYPE) {
+      const row = await this.prisma.message.findUnique({
+        where: { id: report.targetId },
+        select: {
+          id: true,
+          sentAt: true,
+          contentText: true,
+          originalContentText: true,
+          editedAt: true,
+          deletedForEveryoneAt: true,
+          sender: { select: PUBLIC_NAME_SELECT },
+        },
+      });
+      const reportedMessage: ReportedMessageView | null = row
+        ? {
+            id: row.id,
+            sentAt: row.sentAt,
+            sender: { publicName: resolvePublicName(row.sender) },
+            contentText: row.contentText,
+            originalContentText: row.originalContentText,
+            editedAt: row.editedAt,
+            deletedForEveryone: row.deletedForEveryoneAt !== null,
+          }
+        : null;
+      return { ...report, reportedMessage };
     }
 
     return report;
