@@ -18,4 +18,10 @@ export class UpdateUserSettingsDto {
   @ValidateIf((o: UpdateUserSettingsDto) => o.readReceipts !== undefined)
   @IsBoolean()
   readReceipts?: boolean;
+
+  // The "Public profile" toggle (B-060, founder decision 2026-11-08). An under-18 account is refused with a
+  // 403 (profile_visibility_not_available) by UsersService, whatever the value.
+  @ValidateIf((o: UpdateUserSettingsDto) => o.isProfilePublic !== undefined)
+  @IsBoolean()
+  isProfilePublic?: boolean;
 }

@@ -6,6 +6,7 @@ import { notBlockedWith } from '../block/block.util';
 import { PostMediaConfig } from './post-media.config';
 import { PostMediaObjectsService } from './post-media-objects.service';
 import { postMediaVisibleTo } from './post-media-visibility.util';
+import { postProfileVisibleTo } from '../users/profile-visibility.util';
 import { MEDIA_REVIEW_CODES, postMediaError } from './post-media.errors';
 
 // backend/w15-media-review-queue (B-037; Decision Log #419 item 4). POST /media/:id/report -- a user
@@ -64,6 +65,9 @@ export class PostMediaReportService {
         { OR: [{ visibleFrom: null }, { visibleFrom: { lte: now } }] },
         { author: { accountStatus: { in: ['active', 'deleted'] } } },
         postMediaVisibleTo(userId),
+        // B-060: a file on a post whose author's profile is private to the reporter cannot be reported by them
+        // (they cannot see it), the same 404 as any other unseen file. Banter and Contest posts are exempt.
+        postProfileVisibleTo(userId),
       ],
     };
     const media = await this.prisma.postMedia.findFirst({

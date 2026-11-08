@@ -155,7 +155,7 @@ describe('Read receipts e2e', () => {
       const a = await adult('part');
       await patch(a, { dmPermission: 'following', mediaSensitive: true }).expect(200);
       const res = await patch(a, { readReceipts: false }).expect(200);
-      expect(res.body).toEqual({ dmPermission: 'following', mediaSensitive: true, readReceipts: false });
+      expect(res.body).toEqual({ dmPermission: 'following', mediaSensitive: true, readReceipts: false, isProfilePublic: true });
     });
 
     it('turning 18 flips the default with no backfill: the same NULL reads ON once isMinor is false', async () => {

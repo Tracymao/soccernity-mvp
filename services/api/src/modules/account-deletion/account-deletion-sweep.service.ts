@@ -537,6 +537,9 @@ export class AccountDeletionSweepService {
           profileCountry: null,
           // B-061: read receipts back to "use the age default" (NULL).
           readReceipts: null,
+          // B-060: an anonymised account goes back to the default (public). Its posts survive as
+          // "[deleted user]" (Decision Log #341) and must stay readable, not become followers-only.
+          isProfilePublic: true,
           avatarUrl: null,
           avatarKey: null,
           avatarStatus: null,

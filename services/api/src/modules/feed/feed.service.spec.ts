@@ -10,6 +10,7 @@ import {
 } from '../points/engagement-points.util';
 import { FeedService, visibleToViewer } from './feed.service';
 import { POST_MEDIA_ALL_APPROVED } from '../post-media/post-media-visibility.util';
+import { postProfileVisibleTo } from '../users/profile-visibility.util';
 
 // backend/w12-points (B-093): the baseline points engine has its own unit spec (engagement-points.util.spec.ts)
 // and a real-Postgres e2e. FeedService is tested here for WHEN it calls the engine, so the engine is mocked.
@@ -45,6 +46,8 @@ const visibleTo = (viewerId: string) => ({
   AND: [
     { OR: [{ visibleFrom: null }, { visibleFrom: { lte: FIXED_NOW } }, { authorId: viewerId }] },
     { OR: [{ authorId: viewerId }, POST_MEDIA_ALL_APPROVED] },
+    // B-060 (Public profile toggle): the author's profile must be visible to the viewer (or the post is exempt).
+    postProfileVisibleTo(viewerId),
   ],
 });
 // GET /posts/feed omits a final entry until the pin is removed (Post.communityFeedFrom).
@@ -2395,7 +2398,11 @@ describe('FeedService', () => {
       expect((prisma.post.findUnique as jest.Mock).mock.calls[0][0].where).toEqual({
         id: 'post-1',
         // backend/w7-contest: an anonymous read cannot be the author, so it only sees revealed posts.
-        AND: [{ OR: [{ visibleFrom: null }, { visibleFrom: { lte: FIXED_NOW } }] }, POST_MEDIA_ALL_APPROVED],
+        AND: [
+          { OR: [{ visibleFrom: null }, { visibleFrom: { lte: FIXED_NOW } }] },
+          POST_MEDIA_ALL_APPROVED,
+          postProfileVisibleTo(undefined),
+        ],
       });
     });
 
@@ -2405,7 +2412,11 @@ describe('FeedService', () => {
       await expect(new FeedService(prisma, FIXED_CLOCK).recordView(undefined, 'post-1')).rejects.toBeInstanceOf(NotFoundException);
       expect((prisma.post.findUnique as jest.Mock).mock.calls[0][0].where).toEqual({
         id: 'post-1',
-        AND: [{ OR: [{ visibleFrom: null }, { visibleFrom: { lte: FIXED_NOW } }] }, POST_MEDIA_ALL_APPROVED],
+        AND: [
+          { OR: [{ visibleFrom: null }, { visibleFrom: { lte: FIXED_NOW } }] },
+          POST_MEDIA_ALL_APPROVED,
+          postProfileVisibleTo(undefined),
+        ],
       });
     });
 
@@ -2797,6 +2808,7 @@ describe('visibleToViewer (post media gate)', () => {
       AND: [
         { OR: [{ visibleFrom: null }, { visibleFrom: { lte: NOW } }, { authorId: 'me' }] },
         { OR: [{ authorId: 'me' }, POST_MEDIA_ALL_APPROVED] },
+        postProfileVisibleTo('me'),
       ],
     });
   });

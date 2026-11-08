@@ -72,7 +72,8 @@ describe('PostMediaReportService.report', () => {
       postId: { not: null },
       uploader: { is: { blockedBy: { none: { blockerId: 'me' } }, blocksMade: { none: { blockedId: 'me' } } } },
     });
-    expect(where.post.is.AND).toHaveLength(3);
+    // reveal gate, active author, media gate, and (B-060) the author's Public profile toggle
+    expect(where.post.is.AND).toHaveLength(4);
   });
 
   it('records the report, counts it, and puts the item in the queue the first time (below the threshold it stays visible)', async () => {
