@@ -13,6 +13,12 @@
 // Section 5.7/8.3 name "joining a Banter Room" literally) -- surfaced
 // verbatim via BanterApiError's message rather than a generic fallback,
 // same as PostComposer.tsx's consent-guard handling.
+//
+// B-117 (Decision Log #404 item 10, open-forum model): on the ROOM PAGE
+// the same two endpoints are only the "My Bants" bookmark -- joining is
+// no longer a gate on posting or commenting. `variant="bookmark"` swaps
+// the wording (Add to My Bants / In My Bants) for that page only; the
+// room LIST keeps "Join" / "Leave" so nothing else changes.
 import { useState } from "react";
 import { joinRoom, leaveRoom, BanterApiError } from "../../api/banter";
 
@@ -22,6 +28,7 @@ interface BanterJoinButtonProps {
   joined: boolean;
   onToggled: (next: { joined: boolean; memberCount: number }) => void;
   className?: string;
+  variant?: "join" | "bookmark";
 }
 
 export default function BanterJoinButton({
@@ -30,9 +37,11 @@ export default function BanterJoinButton({
   joined,
   onToggled,
   className,
+  variant = "join",
 }: BanterJoinButtonProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const bookmark = variant === "bookmark";
 
   async function toggle() {
     if (pending) return;
@@ -45,26 +54,57 @@ export default function BanterJoinButton({
       setError(
         err instanceof BanterApiError
           ? err.message
-          : joined
-            ? "Couldn't leave that room."
-            : "Couldn't join that room.",
+          : bookmark
+            ? joined
+              ? "Couldn't remove this room from My Bants."
+              : "Couldn't add this room to My Bants."
+            : joined
+              ? "Couldn't leave that room."
+              : "Couldn't join that room.",
       );
     } finally {
       setPending(false);
     }
   }
 
-  const label = pending ? (joined ? "Leaving…" : "Joining…") : joined ? "Leave" : "Join";
+  const label = bookmark
+    ? pending
+      ? joined
+        ? "Removing…"
+        : "Adding…"
+      : joined
+        ? "In My Bants"
+        : "Add to My Bants"
+    : pending
+      ? joined
+        ? "Leaving…"
+        : "Joining…"
+      : joined
+        ? "Leave"
+        : "Join";
+  const buttonClass = bookmark
+    ? joined
+      ? "banter-join__button banter-join__button--saved"
+      : "banter-join__button banter-join__button--add"
+    : joined
+      ? "banter-join__button banter-join__button--leave"
+      : "banter-join__button";
 
   return (
     <div className={className ? `banter-join ${className}` : "banter-join"}>
       <button
         type="button"
-        className={joined ? "banter-join__button banter-join__button--leave" : "banter-join__button"}
+        className={buttonClass}
         onClick={toggle}
         disabled={pending}
         aria-pressed={joined}
+        title={bookmark && joined ? "Remove from My Bants" : undefined}
       >
+        {bookmark && !pending && (
+          <span className="banter-join__glyph" aria-hidden="true">
+            {joined ? "✓" : "+"}
+          </span>
+        )}
         {label}
       </button>
       {error && (

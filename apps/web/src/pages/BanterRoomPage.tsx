@@ -8,6 +8,16 @@
 // join/leave and posting-in-a-room (BanterModule, Decision Log #275/#276)
 // need somewhere to actually happen once api/banter.ts exists.
 //
+// B-117 (Decision Log #403 item 16, #404 item 10): Bants is an OPEN FORUM.
+// Any eligible signed-in account may post and comment in a room whether or
+// not they "joined" it; join / leave are only the My Bants bookmark
+// ("Add to My Bants" / "In My Bants", Figma 6998:54688 / 6999:54768), never
+// a gate. Eligibility (under-16, consent, verified email, complete profile)
+// is enforced server-side; this page does no membership check of its own.
+// Topic chips are read-only for everyone here (creator controls are a
+// separate PR); an inactive room shows the grey dot and an "Inactive" pill
+// (Figma 6999:55292).
+//
 // Real data (Build Plan Section 4.4):
 //   - GET /banter-rooms/:id        -- name, scope, member count, joined
 //   - GET /banter-rooms/:id/posts  -- the room feed, identical
@@ -15,11 +25,11 @@
 //     (delegates server-side to FeedService.getBanterRoomFeed) -- rendered
 //     with the same, reused PostCard.tsx as Community/Club Fan Page, real
 //     like/comment/save/follow.
-//   - one Join / Leave button      (BanterJoinButton)
+//   - one Add to My Bants / In My Bants button (BanterJoinButton,
+//     bookmark variant)
 //   - a plain composer -> POST /banter-rooms/:id/posts, contentText only.
-//     REQUIRES membership -- a non-member gets a 403 ("You must join this
-//     Banter Room before posting in it"), rendered as a "Join to post"
-//     prompt instead of a broken form, not a raw error.
+//     Open to any eligible signed-in account; a refusal (e.g. guardian
+//     consent) is shown as the server's own message.
 //
 // Feed loads independently of the room header (a failure shows a soft
 // in-section message, matching ClubFanPage.tsx). A missing / 404 room
@@ -40,6 +50,7 @@ import type { FeedPost } from "../api/feed";
 import { getStoredAccessToken, decodeAccessToken } from "../lib/session";
 import { UNDER_16_MESSAGE, isUnder16Restricted } from "../lib/under16";
 import BanterJoinButton from "./banter/BanterJoinButton";
+import BanterStatusDot from "./banter/BanterStatusDot";
 import PostCard from "./community/PostCard";
 import "./banter/BanterPage.css";
 import "./banter/BanterRoomPage.css";
@@ -209,14 +220,30 @@ export default function BanterRoomPage() {
           {room.name.trim()[0]?.toUpperCase() ?? "?"}
         </span>
         <div className="banter-room-page__text">
-          <h1 className="banter-room-page__name">{room.name}</h1>
+          <h1 className="banter-room-page__name">
+            <BanterStatusDot status={room.status} />
+            {room.name}
+          </h1>
+          {room.status === "inactive" && <span className="banter-room-page__inactive-pill">Inactive</span>}
           <p className="banter-room-page__meta">
             {SCOPE_LABELS[room.scopeType]} &middot; {memberLine(room.memberCount)}
           </p>
         </div>
       </div>
 
+      {room.topics && room.topics.length > 0 && (
+        <ul className="banter-room-page__topics" aria-label="Topics">
+          {room.topics.map((topic) => (
+            <li key={topic.id} className="banter-room-page__topic">
+              {topic.name}
+            </li>
+          ))}
+        </ul>
+      )}
+
       <BanterJoinButton
+        variant="bookmark"
+
         accessToken={token!}
         roomId={room.id}
         joined={room.joined}
@@ -231,40 +258,34 @@ export default function BanterRoomPage() {
           Room feed
         </h2>
 
-        {room.joined ? (
-          <form className="banter-room-composer" onSubmit={handlePost}>
-            <textarea
-              className="banter-room-composer__input"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder={`Say something to ${room.name}…`}
-              maxLength={MAX_LENGTH}
-              rows={3}
-            />
-            <div className="banter-room-composer__row">
-              <button
-                type="button"
-                className="banter-room-composer__attach"
-                disabled
-                title="Attaching photos or videos isn't available yet"
-              >
-                Attach photo/video
-              </button>
-              <button type="submit" className="banter-room-composer__submit" disabled={posting || !draft.trim()}>
-                {posting ? "Posting…" : "Post"}
-              </button>
-            </div>
-            {postError && (
-              <p className="banter-room-composer__error" role="alert">
-                {postError}
-              </p>
-            )}
-          </form>
-        ) : (
-          <p className="banter-status banter-status--inline" role="status">
-            Join this room to post in it.
-          </p>
-        )}
+        <form className="banter-room-composer" onSubmit={handlePost}>
+          <textarea
+            className="banter-room-composer__input"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={`Say something to ${room.name}…`}
+            maxLength={MAX_LENGTH}
+            rows={3}
+          />
+          <div className="banter-room-composer__row">
+            <button
+              type="button"
+              className="banter-room-composer__attach"
+              disabled
+              title="Attaching photos or videos isn't available yet"
+            >
+              Attach photo/video
+            </button>
+            <button type="submit" className="banter-room-composer__submit" disabled={posting || !draft.trim()}>
+              {posting ? "Posting…" : "Post"}
+            </button>
+          </div>
+          {postError && (
+            <p className="banter-room-composer__error" role="alert">
+              {postError}
+            </p>
+          )}
+        </form>
 
         {feedState === "loading" && (
           <p className="banter-status" role="status">
