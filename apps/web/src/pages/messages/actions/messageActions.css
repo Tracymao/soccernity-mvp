@@ -85,6 +85,23 @@
   color: var(--sn-text-secondary);
 }
 
+/* "Seen 08:09 AM" under your latest message (Figma V1 to V4): 11px Medium, secondary
+ * text colour, right-aligned under the bubble, 4px below it. On the mobile page the thread
+ * is a flex column with a 10px gap and in the pop-up the message wrap has an 8px gap, so
+ * the negative top margin brings it to the frame's 4px. */
+.msg-seen {
+  align-self: flex-end;
+  margin: -6px 0 0;
+  font: 500 11px/1.4 "Montserrat", "Inter", sans-serif;
+  color: var(--sn-text-secondary);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.chat-message-wrap > .msg-seen {
+  margin-top: -4px;
+}
+
 /* --- menus --------------------------------------------------------------- */
 
 .msg-menu {

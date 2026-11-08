@@ -14,8 +14,15 @@ function stubFetch(response: Partial<Response> | Error) {
 
 describe("userSettings client", () => {
   it("GETs /users/me/settings with the bearer token", async () => {
-    const fn = stubFetch({ ok: true, json: async () => ({ dmPermission: "none", mediaSensitive: true }) });
-    await expect(getUserSettings("tok")).resolves.toEqual({ dmPermission: "none", mediaSensitive: true });
+    const fn = stubFetch({
+      ok: true,
+      json: async () => ({ dmPermission: "none", mediaSensitive: true, readReceipts: false }),
+    });
+    await expect(getUserSettings("tok")).resolves.toEqual({
+      dmPermission: "none",
+      mediaSensitive: true,
+      readReceipts: false,
+    });
     const [url, init] = fn.mock.calls[0] as unknown as [string, { method?: string; body?: string; headers: unknown }];
     expect(url).toMatch(/\/users\/me\/settings$/);
     expect(init.method).toBeUndefined();
@@ -29,6 +36,21 @@ describe("userSettings client", () => {
     expect(init.method).toBe("PATCH");
     expect(init.body).toBe(JSON.stringify({ mediaSensitive: true }));
     expect((init.headers as Record<string, string>)["Content-Type"]).toBe("application/json");
+  });
+
+  it("PATCHes readReceipts on its own, as JSON, and returns the saved effective settings", async () => {
+    const fn = stubFetch({
+      ok: true,
+      json: async () => ({ dmPermission: "everyone", mediaSensitive: false, readReceipts: true }),
+    });
+    await expect(updateUserSettings("tok", { readReceipts: true })).resolves.toEqual({
+      dmPermission: "everyone",
+      mediaSensitive: false,
+      readReceipts: true,
+    });
+    const [, init] = fn.mock.calls[0] as unknown as [string, { method?: string; body?: string }];
+    expect(init.method).toBe("PATCH");
+    expect(init.body).toBe(JSON.stringify({ readReceipts: true }));
   });
 
   it("throws with the status on a non-OK answer", async () => {

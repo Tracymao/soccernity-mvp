@@ -45,11 +45,18 @@
 // actions/ for the shared pieces; the Community pop-up (ChatWindow.tsx) uses
 // the same ones.
 //
+// B-061 (read receipts): "Seen 08:09 AM" shows under YOUR latest message when the
+// server returned a read time for it. The server decides who may see a read
+// time (both people on, same age class, only on messages you sent); this page
+// only places the label (actions/messageActionRules.ts seenLabelMessageId).
+// There is no polling or push, so the label appears when the thread loads or
+// is reopened, like every other change from the other person.
+//
 // A 404 (conversation doesn't exist, or the caller isn't a participant --
 // MessagingService.assertParticipant never distinguishes the two, a DM
 // thread's existence is never disclosed to a non-participant) renders an
 // honest "Conversation not found" state, never a crash.
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import {
   getMessages,
@@ -68,11 +75,12 @@ import {
   DeletedText,
   EditBar,
   MessageHost,
+  SeenLabel,
   editedSuffix,
 } from "./actions/ActionUi";
 import { useConversationActions } from "./actions/useConversationActions";
 import { useMessageActions } from "./actions/useMessageActions";
-import { firstNameOf } from "./actions/messageActionRules";
+import { firstNameOf, seenLabelMessageId } from "./actions/messageActionRules";
 import "./MessagesPage.css";
 
 type LoadState = "loading" | "loaded" | "error" | "not-found" | "no-session";
@@ -250,6 +258,9 @@ export default function ConversationPage() {
 
   const isConsentBlocked = sendError !== null && /guardian consent/i.test(sendError);
 
+  // B-061: "Seen 08:09 AM" under my latest message, only when the server sent a read time for it.
+  const seenId = seenLabelMessageId(messages, decoded.sub);
+
   return (
     <div className="conversation-page">
       <Link to="/messages" className="conversation-page__back">
@@ -296,15 +307,18 @@ export default function ConversationPage() {
             );
           }
           return (
-            <MessageHost key={m.id} message={m} mine={mine} actions={messageActions}>
-              <div className={mine ? "conversation-bubble conversation-bubble--mine" : "conversation-bubble"}>
-                <p className="conversation-bubble__text">{m.contentText}</p>
-                <span className="conversation-bubble__time">
-                  {timeFor(m.sentAt)}
-                  {editedSuffix(m)}
-                </span>
-              </div>
-            </MessageHost>
+            <Fragment key={m.id}>
+              <MessageHost message={m} mine={mine} actions={messageActions}>
+                <div className={mine ? "conversation-bubble conversation-bubble--mine" : "conversation-bubble"}>
+                  <p className="conversation-bubble__text">{m.contentText}</p>
+                  <span className="conversation-bubble__time">
+                    {timeFor(m.sentAt)}
+                    {editedSuffix(m)}
+                  </span>
+                </div>
+              </MessageHost>
+              {m.id === seenId && m.readAt && <SeenLabel readAt={m.readAt} />}
+            </Fragment>
           );
         })}
       </div>

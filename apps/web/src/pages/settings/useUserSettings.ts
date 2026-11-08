@@ -14,6 +14,11 @@ export function useUserSettings() {
   const [saving, setSaving] = useState(false);
   // The setting as it was before a failed save; null when there is no failure to show.
   const [failedFrom, setFailedFrom] = useState<Partial<UserSettings> | null>(null);
+  // Which setting the failed save was for, so a page with several settings puts the banner
+  // beside the right one (the Direct Messages page has two).
+  const [failedKey, setFailedKey] = useState<keyof UserSettings | null>(null);
+  // Which setting is saving right now, for the same reason.
+  const [savingKey, setSavingKey] = useState<keyof UserSettings | null>(null);
   const mounted = useRef(true);
   const busy = useRef(false);
 
@@ -49,8 +54,11 @@ export function useUserSettings() {
       if (!token || !settings || busy.current) return;
       busy.current = true;
       const previous = settings;
+      const key = Object.keys(patch)[0] as keyof UserSettings;
       setFailedFrom(null);
+      setFailedKey(null);
       setSettings({ ...settings, ...patch });
+      setSavingKey(key);
       setSaving(true);
       try {
         const saved = await updateUserSettings(token, patch);
@@ -59,14 +67,18 @@ export function useUserSettings() {
         if (mounted.current) {
           setSettings(previous);
           setFailedFrom(previous);
+          setFailedKey(key);
         }
       } finally {
         busy.current = false;
-        if (mounted.current) setSaving(false);
+        if (mounted.current) {
+          setSaving(false);
+          setSavingKey(null);
+        }
       }
     },
     [token, settings],
   );
 
-  return { view, settings, saving, failedFrom, save, reload: load };
+  return { view, settings, saving, savingKey, failedFrom, failedKey, save, reload: load };
 }

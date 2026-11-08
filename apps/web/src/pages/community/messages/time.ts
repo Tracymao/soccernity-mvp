@@ -17,10 +17,22 @@ export function relativeShort(iso: string, now: number = Date.now()): string {
   return `${Math.floor(diff / (7 * DAY))}w`;
 }
 
+// "08:09 AM": the clock time on its own.
+export function clockTime(iso: string): string {
+  return new Date(iso)
+    .toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true })
+    .toUpperCase();
+}
+
+// "Seen 08:09 AM": the read-receipt label under your latest message (B-061, Figma V1 to V4).
+export function seenLabel(readAtIso: string): string {
+  return `Seen ${clockTime(readAtIso)}`;
+}
+
 // "Fri 08:00 AM" within the last week, "8 Aug 08:00 AM" for anything older.
 export function messageTimeLabel(iso: string, now: number = Date.now()): string {
   const date = new Date(iso);
-  const time = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true }).toUpperCase();
+  const time = clockTime(iso);
   if (now - date.getTime() < 6 * DAY) {
     return `${date.toLocaleDateString("en-GB", { weekday: "short" })} ${time}`;
   }

@@ -36,6 +36,7 @@ import type { Message } from "../../../api/messaging";
 import ReportAction from "../../community/ReportAction";
 import type { ConversationActions as ConversationActionsApi } from "./useConversationActions";
 import type { MessageActions } from "./useMessageActions";
+import { seenLabel } from "../../community/messages/time";
 import { canEditNow, WORDING } from "./messageActionRules";
 import "./messageActions.css";
 
@@ -351,6 +352,13 @@ export function MessageHost({ message, mine, actions, children }: MessageHostPro
     )}
     </>
   );
+}
+
+// "Seen 08:09 AM" under your latest message when it was read (B-061, Figma
+// V1 to V4). Only rendered for the message seenLabelMessageId picks; the
+// caller passes that message's own `readAt`.
+export function SeenLabel({ readAt }: { readAt: string }) {
+  return <p className="msg-seen">{seenLabel(readAt)}</p>;
 }
 
 // "(Edited)" in the time line of a bubble that was edited (B1).

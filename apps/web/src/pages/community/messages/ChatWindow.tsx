@@ -17,6 +17,10 @@
 // conversation actions menu in the header (Mark as read, View profile, Block,
 // Delete chat).
 //
+// B-061 (read receipts): "Seen 08:09 AM" under YOUR latest message when the
+// server returned a read time for it (Figma V3 / V4). The server decides who
+// may see a read time; see messages/actions/messageActionRules.ts.
+//
 // Not in the frame's behaviour and deliberately not built here:
 //   - the per-message heart icon;
 //   - the video / photo / GIF / emoji controls in the footer (a message is
@@ -47,10 +51,11 @@ import {
   DeletedText,
   EditBar,
   MessageHost,
+  SeenLabel,
 } from "../../messages/actions/ActionUi";
 import { useConversationActions } from "../../messages/actions/useConversationActions";
 import { useMessageActions } from "../../messages/actions/useMessageActions";
-import { firstNameOf } from "../../messages/actions/messageActionRules";
+import { firstNameOf, seenLabelMessageId } from "../../messages/actions/messageActionRules";
 import { initialsFor, messageTimeLabel, TIME_LABEL_GAP_MS } from "./time";
 
 type LoadState = "loading" | "loaded" | "error" | "not-found";
@@ -221,6 +226,9 @@ export default function ChatWindow({
 
   const isConsentBlocked = sendError !== null && /guardian consent/i.test(sendError);
 
+  // B-061: "Seen 08:09 AM" under my latest message, only when the server sent a read time for it.
+  const seenId = seenLabelMessageId(messages, currentUserId);
+
   return (
     <section className="chat-window" aria-label={`Chat with ${name}`}>
       <header className="chat-window__header">
@@ -317,6 +325,7 @@ export default function ChatWindow({
                       </MessageHost>
                     )}
                   </div>
+                  {!deleted && m.id === seenId && m.readAt && <SeenLabel readAt={m.readAt} />}
                 </div>
               );
             })}

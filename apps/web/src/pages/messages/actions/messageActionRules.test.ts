@@ -1,7 +1,7 @@
 // B-067: the client-side rules and error mapping. The server decides all of
 // them; these only decide what the screen says.
 import { describe, it, expect } from "vitest";
-import { MessagingApiError, type Message } from "../../../api/messaging";
+import { MessagingApiError, type DeletedMessage, type Message } from "../../../api/messaging";
 import {
   EDIT_WINDOW_MS,
   WORDING,
@@ -10,6 +10,7 @@ import {
   deleteFailure,
   editFailure,
   firstNameOf,
+  seenLabelMessageId,
 } from "./messageActionRules";
 
 function msgSentAt(sentAt: number): Message {
@@ -90,5 +91,45 @@ describe("wording", () => {
   it("carries the tag only on the one line the frames tag", () => {
     const tagged = Object.entries(WORDING).filter(([, text]) => text.includes("[COPY PENDING LEGAL REVIEW]"));
     expect(tagged.map(([key]) => key)).toEqual(["retention"]);
+  });
+});
+
+describe("seenLabelMessageId (the Seen label goes under one message only)", () => {
+  const ME = "me";
+  const OTHER = "them";
+  function m(id: string, senderId: string, readAt: string | null): Message {
+    return { id, conversationId: "c", senderId, contentText: id, sentAt: "2026-11-08T08:00:00.000Z", readAt };
+  }
+  const deleted: DeletedMessage = {
+    id: "gone",
+    conversationId: "c",
+    senderId: ME,
+    sentAt: "2026-11-08T08:10:00.000Z",
+    editedAt: null,
+    deletedForEveryone: true,
+    contentText: null,
+  };
+  const READ = "2026-11-08T08:09:00.000Z";
+
+  it("picks the latest message of mine when it was read", () => {
+    expect(seenLabelMessageId([m("a", ME, READ), m("b", OTHER, null), m("c", ME, READ)], ME)).toBe("c");
+  });
+
+  it("returns null when my latest message was not read, even if an older one was", () => {
+    expect(seenLabelMessageId([m("a", ME, READ), m("b", ME, null)], ME)).toBeNull();
+  });
+
+  it("ignores messages I received, wherever they sit", () => {
+    expect(seenLabelMessageId([m("a", ME, READ), m("b", OTHER, READ)], ME)).toBe("a");
+    expect(seenLabelMessageId([m("a", OTHER, READ)], ME)).toBeNull();
+  });
+
+  it("returns null when my latest message is a deleted placeholder (no earlier message gets the label)", () => {
+    expect(seenLabelMessageId([m("a", ME, READ), deleted], ME)).toBeNull();
+  });
+
+  it("returns null for an empty thread or one with no message of mine", () => {
+    expect(seenLabelMessageId([], ME)).toBeNull();
+    expect(seenLabelMessageId([m("a", OTHER, null)], ME)).toBeNull();
   });
 });
