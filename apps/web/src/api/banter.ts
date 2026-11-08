@@ -46,6 +46,12 @@ export type BanterRoomScopeType = "club" | "league" | "country" | "topic";
 // BanterRoom.status (Decision Log #357) — drives the room's status dot.
 export type BanterRoomStatus = "active" | "inactive";
 
+// Topic reference as embedded on a room (services/api TOPIC_SELECT: id + name).
+export interface BanterTopic {
+  id: string;
+  name: string;
+}
+
 export interface BanterRoom {
   id: string;
   name: string;
@@ -56,6 +62,9 @@ export interface BanterRoom {
   createdAt: string;
   memberCount: number;
   joined: boolean;
+  // sprint-3/banter-room-topics -- returned on every room read. Optional here only
+  // so older fixtures still type; the room page renders them read-only.
+  topics?: BanterTopic[];
 }
 
 export interface BanterRoomPage {
