@@ -50,6 +50,40 @@
   margin: 0;
 }
 
+/* B-117 / Figma M1, M10: status dot before the title, "Inactive" pill,
+ * read-only topic chips. Tokens only. */
+.banter-room-page__name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.banter-room-page__inactive-pill {
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sn-icon-inactive);
+  color: var(--sn-text-secondary);
+  font: 500 12px/1.4 "Inter", sans-serif;
+}
+
+.banter-room-page__topics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.banter-room-page__topic {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--sn-green-tint-12);
+  color: var(--sn-text-primary);
+  font: 500 12px/1.2 "Inter", sans-serif;
+}
+
 .banter-room-page__meta {
   font: 400 14px/1.5 "Inter", sans-serif;
   color: var(--sn-text-secondary);

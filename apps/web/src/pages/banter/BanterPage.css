@@ -452,6 +452,31 @@
   color: var(--sn-text-primary);
 }
 
+/* B-117 bookmark variant (room page only): Figma M1 "Add to My Bants"
+ * (outline) and M2 "In My Bants" (green tint with a check). */
+.banter-join__button--add,
+.banter-join__button--saved {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--sn-text-primary);
+}
+
+.banter-join__button--add {
+  background: var(--sn-background-surface);
+  border-color: var(--sn-icon-inactive);
+}
+
+.banter-join__button--saved {
+  background: var(--sn-green-tint-12);
+}
+
+.banter-join__glyph {
+  font-size: 16px;
+  line-height: 1;
+}
+
 .banter-join__button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
