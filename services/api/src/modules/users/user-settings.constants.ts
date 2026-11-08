@@ -9,7 +9,17 @@ export const DM_PERMISSIONS = ['everyone', 'following', 'none'] as const;
 export type DmPermission = (typeof DM_PERMISSIONS)[number];
 export const DEFAULT_DM_PERMISSION: DmPermission = 'everyone';
 
+// Read receipts (Decision Log #472; founder decision 2026-11-08). The column User.readReceipts is NULLABLE:
+// NULL means "use the age default", decided at READ time from the stored isMinor flag (so an account that
+// turns 18 changes default without a backfill). DEFAULT, founder-veto-able: ON for an adult account, OFF for
+// an under-18 account. An explicit true or false (set through PATCH /users/me/settings) always wins.
+export function effectiveReadReceipts(stored: boolean | null | undefined, isMinor: boolean): boolean {
+  return stored ?? !isMinor;
+}
+
 export interface UserSettings {
   dmPermission: DmPermission;
   mediaSensitive: boolean;
+  // The EFFECTIVE value (explicit choice, else the age default), never the raw nullable column.
+  readReceipts: boolean;
 }

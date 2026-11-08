@@ -37,6 +37,7 @@ import { SendMessageDto } from './dto/send-message.dto';
 import { EditMessageDto } from './dto/edit-message.dto';
 import { DeleteMessageScope } from './dto/delete-message-query.dto';
 import { MessagingQueryDto } from './dto/messaging-query.dto';
+import { canDiscloseReadAt } from './read-receipt-disclosure.util';
 import { PUBLIC_NAME_SELECT, resolvePublicName } from '../users/public-name.util';
 
 // The lean row every conversation-returning path selects — never the
@@ -94,7 +95,10 @@ export interface DeletedMessageView {
 }
 export type MessageView = LiveMessageView | DeletedMessageView;
 
-function toMessageView(row: MessageRow): MessageView {
+// `viewerId` is the caller and `discloseReadAt` the result of canDiscloseReadAt for the pair (see
+// read-receipt-disclosure.util.ts). A read time is returned ONLY on a message the viewer SENT and only when the
+// rule allows it; on a message the viewer received it is always null.
+function toMessageView(row: MessageRow, viewerId: string, discloseReadAt: boolean): MessageView {
   if (row.deletedForEveryoneAt) {
     return {
       id: row.id,
@@ -112,7 +116,7 @@ function toMessageView(row: MessageRow): MessageView {
     senderId: row.senderId,
     contentText: row.contentText,
     sentAt: row.sentAt,
-    readAt: row.readAt,
+    readAt: row.senderId === viewerId && discloseReadAt ? row.readAt : null,
     editedAt: row.editedAt ?? null,
     deletedForEveryone: false,
   };
@@ -379,7 +383,7 @@ export class MessagingService {
     callerId: string,
     query: MessagingQueryDto,
   ): Promise<MessagePage> {
-    await this.assertParticipant(conversationId, callerId);
+    const conversation = await this.assertParticipant(conversationId, callerId);
 
     const limit = Math.min(query.limit ?? MESSAGING_DEFAULT_PAGE_SIZE, MESSAGING_MAX_PAGE_SIZE);
 
@@ -408,7 +412,14 @@ export class MessagingService {
     const nextCursor =
       hasMore && last ? encodeMessageCursor({ sentAt: last.sentAt, id: last.id }) : null;
 
-    return { items: page.map(toMessageView), nextCursor };
+    // Read receipts: the two settings are read only when the page holds a message the caller SENT that has been
+    // read (an ordinary page costs no extra query).
+    const discloseReadAt = await this.shouldDiscloseReadAt(
+      callerId,
+      this.otherParticipantId(conversation.participantIds, callerId),
+      page,
+    );
+    return { items: page.map((row) => toMessageView(row, callerId, discloseReadAt)), nextCursor };
   }
 
   private buildMessageCursorFilter(raw: string): Prisma.MessageWhereInput {
@@ -511,7 +522,8 @@ export class MessagingService {
       }
       return message;
     });
-    return toMessageView(created);
+    // A message that was just created cannot have been read, so there is nothing to disclose.
+    return toMessageView(created, senderId, false);
   }
 
   // B-039: messages stop in both directions once either side has blocked the
@@ -620,7 +632,8 @@ export class MessagingService {
       where: { id: messageId },
       select: MESSAGE_SELECT,
     });
-    return toMessageView(updated);
+    const discloseReadAt = await this.shouldDiscloseReadAt(senderId, recipientId, [updated]);
+    return toMessageView(updated, senderId, discloseReadAt);
   }
 
   // DELETE /conversations/:id/messages/:messageId?scope=me|everyone (B-067).
@@ -935,6 +948,31 @@ export class MessagingService {
         unreadCount: unreadByConversation.get(c.id) ?? 0,
       };
     });
+  }
+
+  // Read receipts (see read-receipt-disclosure.util.ts). True only when the pair's settings and age classes allow
+  // the caller's own read messages to show a read time. Skipped (false, no query) when nothing in `rows` could use
+  // it: no row the caller sent that has been read, or no other participant.
+  private async shouldDiscloseReadAt(
+    callerId: string,
+    otherId: string | null,
+    rows: { senderId: string; readAt: Date | null; deletedForEveryoneAt: Date | null }[],
+  ): Promise<boolean> {
+    // A message deleted for everyone is returned as the placeholder (no readAt at all), so it needs no check.
+    if (
+      otherId === null ||
+      !rows.some((r) => r.senderId === callerId && r.readAt !== null && r.deletedForEveryoneAt === null)
+    ) {
+      return false;
+    }
+    const people = await this.prisma.user.findMany({
+      where: { id: { in: [callerId, otherId] } },
+      select: { id: true, isMinor: true, readReceipts: true },
+    });
+    return canDiscloseReadAt(
+      people.find((u) => u.id === callerId),
+      people.find((u) => u.id === otherId),
+    );
   }
 
   private otherParticipantId(participantIds: string[], callerId: string): string | null {

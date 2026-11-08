@@ -45,9 +45,9 @@ describe('/users/me/settings (HTTP layer)', () => {
   });
 
   it('GET /users/me/settings reaches the settings handler, not GET :id (which would 403 on "me")', async () => {
-    usersService.getOwnSettings.mockResolvedValue({ dmPermission: 'everyone', mediaSensitive: false });
+    usersService.getOwnSettings.mockResolvedValue({ dmPermission: 'everyone', mediaSensitive: false, readReceipts: true });
     const res = await request(app.getHttpServer()).get('/users/me/settings').expect(200);
-    expect(res.body).toEqual({ dmPermission: 'everyone', mediaSensitive: false });
+    expect(res.body).toEqual({ dmPermission: 'everyone', mediaSensitive: false, readReceipts: true });
     expect(usersService.getOwnSettings).toHaveBeenCalledWith('user-1');
     expect(usersService.getOwnProfile).not.toHaveBeenCalled();
   });
@@ -58,10 +58,13 @@ describe('/users/me/settings (HTTP layer)', () => {
     [{ dmPermission: 'none' }],
     [{ mediaSensitive: true }],
     [{ mediaSensitive: false }],
+    [{ readReceipts: true }],
+    [{ readReceipts: false }],
+    [{ dmPermission: 'none', mediaSensitive: true, readReceipts: false }],
     [{ dmPermission: 'none', mediaSensitive: true }],
     [{}],
   ])('PATCH accepts %j and forwards it with the token subject', async (body) => {
-    usersService.updateOwnSettings.mockResolvedValue({ dmPermission: 'none', mediaSensitive: true });
+    usersService.updateOwnSettings.mockResolvedValue({ dmPermission: 'none', mediaSensitive: true, readReceipts: true });
     await request(app.getHttpServer()).patch('/users/me/settings').send(body).expect(200);
     expect(usersService.updateOwnSettings).toHaveBeenCalledWith('user-1', body);
   });
@@ -74,7 +77,9 @@ describe('/users/me/settings (HTTP layer)', () => {
     [{ dmPermission: null }],
     [{ mediaSensitive: 'yes' }],
     [{ mediaSensitive: 1 }],
-    [{ readReceipts: true }],
+    [{ readReceipts: 'yes' }],
+    [{ readReceipts: 1 }],
+    [{ readReceipts: null }],
     [{ dmPermission: 'none', role: 'admin' }],
   ])('PATCH rejects %j with a 400 and writes nothing', async (body) => {
     await request(app.getHttpServer()).patch('/users/me/settings').send(body).expect(400);

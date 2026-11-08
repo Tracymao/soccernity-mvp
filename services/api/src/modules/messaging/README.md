@@ -264,7 +264,7 @@ again moves the cutoff forward.
 * a message deleted for everyone comes back, for BOTH people, as
   `{ id, conversationId, senderId, sentAt, deletedForEveryone: true, contentText: null, editedAt: null }`;
 * every other message is `{ id, conversationId, senderId, contentText, sentAt, readAt, editedAt, deletedForEveryone:
-  false }`. `editedAt` is `null` until an edit, then the time of the latest edit. A message the caller just sent
+  false }`. `readAt` is `null` unless the read-receipt rule below allows it. `editedAt` is `null` until an edit, then the time of the latest edit. A message the caller just sent
   (`POST .../messages`) has the same shape;
 * the original text is never returned to a user, and is not even selected.
 
@@ -278,6 +278,32 @@ again moves the cutoff forward.
 
 Account anonymisation deletes the user's `MessageHide` and `ConversationHide` rows (their own view settings); every
 `Message` stays.
+
+### Read receipts (Decision Log #472; founder decision 2026-11-08)
+
+`Message.readAt` is still RECORDED whenever the recipient opens the chat (`PATCH /conversations/:id/read`), whatever
+anyone's settings are: the unread counts, the inbox badge and the collapsed `message` Notification all use it. What
+changed is what is DISCLOSED. The rule lives in ONE place, `read-receipt-disclosure.util.ts` (`canDiscloseReadAt`),
+and is applied in `MessagingService` wherever a message is turned into a response (`toMessageView`). A message's read
+time is returned to its SENDER only when ALL of these hold; otherwise `readAt` is `null`:
+
+1. the message has been read;
+2. the sender's EFFECTIVE read-receipts setting is on;
+3. the reader's (the other participant's) EFFECTIVE setting is on;
+4. sender and reader are in the same age class (both adult, or both under 18, by the stored `User.isMinor` flag).
+
+The reader never sees a read time on a message they received. A participant with no row (hard-deleted) discloses
+nothing. The settings are read with one extra `user.findMany`, and only when the page holds a message the caller sent
+that has been read, so an ordinary page costs no extra query. Places that return `readAt`: `GET
+/conversations/:id/messages`, the response of `PATCH .../messages/:id` (an edit), and `POST .../messages` (a fresh
+message is never read, so it is always `null` there). `GET /conversations` carries no `readAt` (the last-message
+preview never did). The data export (`data-export`) selects no `readAt` and never has: it contains nothing about read
+times.
+
+The setting is `User.readReceipts` (nullable; see the users README, "Read receipts"). Because the rule is evaluated
+at READ time, turning receipts off later also hides the seen state of earlier messages, and turning them on shows it
+again (DEFAULT, founder-veto-able). The age default (ON adult, OFF under 18) is also DEFAULT, founder-veto-able, as
+is rule 4.
 
 ### DEFAULTS, founder-veto-able
 

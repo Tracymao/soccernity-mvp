@@ -432,6 +432,7 @@ describe('AccountDeletionSweepService', () => {
       coverRejectionReason: null,
       avatarUploadedAt: null,
       coverUploadedAt: null,
+      readReceipts: null, // B-061
     };
     // Evidence and safeguarding data: none of these may appear in the update at all.
     const KEPT_FIELDS = [
@@ -756,6 +757,7 @@ describe('AccountDeletionSweepService', () => {
           coverRejectionReason: null,
           avatarUploadedAt: null,
           coverUploadedAt: null,
+          readReceipts: null, // B-061
           accountStatus: 'deleted',
           pendingDeletionAt: null,
           // B-043 (#375): the purge clock starts here.
