@@ -1,9 +1,17 @@
 // Sports Hub / Highlightly API client -- Build Plan Section 4.6, the
 // SportsService built by sprint-4/sports-hub-highlightly-backend
-// (services/api/src/modules/sports/). Every route here is genuinely
-// public -- NO Authorization header, matching api/blog.ts's convention
-// (no JwtAuthGuard/AdminJwtAuthGuard anywhere in SportsMatchesController
-// / SportsStandingsController).
+// (services/api/src/modules/sports/). Every READ here is genuinely public
+// and works logged out, matching api/blog.ts's convention.
+//
+// B-070 (Decision Log #472) -- ONE EXCEPTION, on purpose. The three reads that
+// carry a per-caller `kickoffAlert` flag (GET /sports/live-scores, /fixtures and
+// /matches/:id) sit behind the backend's OptionalJwtAuthGuard: they never reject,
+// but they only fill the flag in for a request that presents the signed-in
+// person's access token. Without it the flag is always false, so those three
+// reads send `Authorization: Bearer <token>` WHEN A SESSION EXISTS and send
+// nothing when logged out (same response as before). Every other read stays
+// credential-free. The two kickoff-alert writes (PUT/DELETE
+// /sports/matches/:id/subscription) require a session.
 //
 // Response shapes mirror sports.service.ts's Public* interfaces exactly
 // -- this file never invents a field the backend doesn't return.
@@ -19,6 +27,9 @@
 //      server sends it.
 // Per Decision Log #378 / #462 item (h) the page HIDES a field the
 // vendor does not supply (no placeholder, no notice).
+import { getStoredAccessToken } from "../lib/session";
+import { errorBodyCode } from "./twoFactorCodes";
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3000";
 
 export type MatchPhase = "scheduled" | "live" | "finished" | "postponed" | "cancelled";
@@ -44,8 +55,16 @@ export interface MatchSummary {
   score: string | null;
 }
 
+// A match as the list reads and GET /sports/matches/:id return it: the summary plus
+// the signed-in caller's own kickoff-alert flag (B-070). The server always sends it
+// (false when logged out, or when the caller has no alert); typed optional so a
+// response from before B-070 still types.
+export interface MatchListItem extends MatchSummary {
+  kickoffAlert?: boolean;
+}
+
 export interface MatchesPage {
-  items: MatchSummary[];
+  items: MatchListItem[];
   nextCursor: string | null;
 }
 
@@ -246,18 +265,29 @@ export interface Highlights {
 
 export class SportsApiError extends Error {
   readonly status?: number;
+  // The API's machine-readable error code, when the body carries one (for example
+  // "match_already_started" on a kickoff-alert PUT). Callers branch on this, never on the message.
+  readonly code?: string;
 
-  constructor(message: string, options?: { status?: number }) {
+  constructor(message: string, options?: { status?: number; code?: string }) {
     super(message);
     this.name = "SportsApiError";
     this.status = options?.status;
+    this.code = options?.code;
   }
 }
 
-async function get<T>(path: string): Promise<T> {
+
+// `withCredentials`: send the access token when a session exists (see the header comment).
+// Only the three reads that carry `kickoffAlert` pass it; everything else is credential-free.
+async function get<T>(path: string, options?: { withCredentials?: boolean }): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`);
+    const token = options?.withCredentials ? getStoredAccessToken() : null;
+    // Logged out (or a credential-free read): the request is exactly what it always was.
+    response = token
+      ? await fetch(`${API_BASE_URL}${path}`, { headers: { Authorization: `Bearer ${token}` } })
+      : await fetch(`${API_BASE_URL}${path}`);
   } catch {
     throw new SportsApiError("Couldn't reach the Soccernity server.");
   }
@@ -278,7 +308,7 @@ export async function listLiveScores(options?: { league?: string; cursor?: strin
   if (options?.league) params.set("league", options.league);
   if (options?.cursor) params.set("cursor", options.cursor);
   const qs = params.toString();
-  return get<MatchesPage>(`/sports/live-scores${qs ? `?${qs}` : ""}`);
+  return get<MatchesPage>(`/sports/live-scores${qs ? `?${qs}` : ""}`, { withCredentials: true });
 }
 
 // GET /sports/fixtures?date=&league=&cursor= -- `date` is required
@@ -290,12 +320,42 @@ export async function listFixtures(
   const params = new URLSearchParams({ date });
   if (options?.league) params.set("league", options.league);
   if (options?.cursor) params.set("cursor", options.cursor);
-  return get<MatchesPage>(`/sports/fixtures?${params.toString()}`);
+  return get<MatchesPage>(`/sports/fixtures?${params.toString()}`, { withCredentials: true });
 }
 
 // GET /sports/matches/:id
-export async function getMatchById(matchId: string): Promise<MatchSummary> {
-  return get<MatchSummary>(`/sports/matches/${matchId}`);
+export async function getMatchById(matchId: string): Promise<MatchListItem> {
+  return get<MatchListItem>(`/sports/matches/${matchId}`, { withCredentials: true });
+}
+
+// PUT / DELETE /sports/matches/:id/subscription -- turn the signed-in person's kickoff alert on
+// (true) or off (false). Resolves to the server's own answer ({ subscribed }). A match that has
+// already started is a 409 with code "match_already_started" (surfaced on SportsApiError.code).
+// Requires a session; with none it fails before any request.
+export const MATCH_ALREADY_STARTED_CODE = "match_already_started";
+
+export async function setKickoffAlert(matchId: string, subscribed: boolean): Promise<boolean> {
+  const token = getStoredAccessToken();
+  if (!token) {
+    throw new SportsApiError("Log in to set a kickoff alert.", { status: 401 });
+  }
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/sports/matches/${encodeURIComponent(matchId)}/subscription`, {
+      method: subscribed ? "PUT" : "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    throw new SportsApiError("Couldn't reach the Soccernity server.");
+  }
+  if (!response.ok) {
+    throw new SportsApiError(`Couldn't update the alert (${response.status}).`, {
+      status: response.status,
+      code: (await errorBodyCode(response)) ?? undefined,
+    });
+  }
+  const body = (await response.json()) as { subscribed?: boolean };
+  return body.subscribed === true;
 }
 
 // GET /sports/matches/:id/stats

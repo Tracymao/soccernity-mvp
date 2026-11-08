@@ -12,6 +12,12 @@
 // same JwtAuthGuard-free posture (see services/api/src/modules/sports/
 // README.md's own "Guard -- none, deliberately" section).
 //
+// B-070 (Decision Log #472): a SIGNED-IN person also gets a kickoff-alert bell on
+// each match card (sports-hub/KickoffAlertButton.tsx). The list reads send the
+// access token when a session exists so each match carries that person's own
+// `kickoffAlert` flag (api/sports.ts); a logged-out visitor sees exactly what they
+// always did, with no control.
+//
 // REAL DATA as of sprint-4/sports-hub-frontend-wiring (Decision Log #6
 // resolved -- Highlightly -- by sprint-4/sports-hub-highlightly-backend).
 // "Live" reads GET /sports/live-scores; "Today" reads
@@ -36,10 +42,12 @@ import {
   listLiveScores,
   listFixtures,
   SportsApiError,
-  type MatchSummary,
+  type MatchListItem,
 } from "../api/sports";
+import { useAccessToken } from "../lib/AuthContext";
 import { RECENT_STORIES } from "./sports-hub/sportsHubData";
-import { monogramFor, phaseClass, phaseLabel, todayIso } from "./sports-hub/format";
+import { matchHasStarted, monogramFor, phaseClass, phaseLabel, todayIso } from "./sports-hub/format";
+import { KickoffAlertButton, KickoffAlertError, useKickoffAlert } from "./sports-hub/KickoffAlertButton";
 import "./sports-hub/SportsHubPage.css";
 
 type ViewMode = "live" | "today";
@@ -61,13 +69,49 @@ function TeamCrest({ name, logo }: { name: string; logo: string | null }) {
   );
 }
 
+// One match card. The kickoff-alert button (B-070) is a SIBLING of the link, not inside it
+// (a button inside an anchor is invalid and a click would navigate), laid over the card's right
+// edge. Only a signed-in person gets it; the match list itself is public.
+function MatchRow({ match: m, signedIn }: { match: MatchListItem; signedIn: boolean }) {
+  const alert = useKickoffAlert({
+    matchId: m.id,
+    initialOn: m.kickoffAlert === true,
+    started: matchHasStarted(m),
+  });
+  return (
+    <li>
+      <div className="sh-match-row">
+        <Link
+          to={`/sports-hub/matches/${m.id}`}
+          className={signedIn ? "sh-match sh-match--with-alert" : "sh-match"}
+        >
+          <span className={phaseClass(m.status)}>{phaseLabel(m)}</span>
+          <TeamCrest name={m.homeTeam.name} logo={m.homeTeam.logo} />
+          <span className="sh-match__team">{m.homeTeam.name}</span>
+          <span className="sh-match__score">{m.homeScore ?? "-"}</span>
+          <span className="sh-match__score">{m.awayScore ?? "-"}</span>
+          <span className="sh-match__team">{m.awayTeam.name}</span>
+          <TeamCrest name={m.awayTeam.name} logo={m.awayTeam.logo} />
+        </Link>
+        {signedIn && (
+          <div className="sh-match-row__alert">
+            <KickoffAlertButton alert={alert} variant="icon" />
+          </div>
+        )}
+      </div>
+      {signedIn && <KickoffAlertError alert={alert} />}
+    </li>
+  );
+}
+
 export default function SportsHubPage() {
+  const signedIn = useAccessToken() !== null;
   const [viewMode, setViewMode] = useState<ViewMode>("live");
   const [leagueFilter, setLeagueFilter] = useState<string | null>(null);
   const [leagueSearch, setLeagueSearch] = useState("");
 
   const [loadState, setLoadState] = useState<LoadState>("loading");
-  const [matches, setMatches] = useState<MatchSummary[]>([]);
+  const [matches, setMatches] = useState<MatchListItem[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
@@ -76,7 +120,7 @@ export default function SportsHubPage() {
   // stays browsable once a league filter narrows `matches` down.
   const [knownLeagues, setKnownLeagues] = useState<LeagueOption[]>([]);
 
-  function mergeKnownLeagues(items: MatchSummary[]) {
+  function mergeKnownLeagues(items: MatchListItem[]) {
     setKnownLeagues((prev) => {
       const map = new Map(prev.map((l) => [l.id, l.name]));
       for (const m of items) {
@@ -102,9 +146,11 @@ export default function SportsHubPage() {
     }
   }, []);
 
+  // `signedIn` is a dependency on purpose: the three reads only fill in each match's `kickoffAlert`
+  // for a request that carries the access token, so signing in or out re-reads the list.
   useEffect(() => {
     load(viewMode, leagueFilter);
-  }, [load, viewMode, leagueFilter]);
+  }, [load, viewMode, leagueFilter, signedIn]);
 
   async function loadMore() {
     if (!cursor || loadingMore) return;
@@ -223,17 +269,7 @@ export default function SportsHubPage() {
           <ul className="sh-match-list">
             {matches.length === 0 && <li className="sh-league-empty">{emptyMessage()}</li>}
             {matches.map((m) => (
-              <li key={m.id}>
-                <Link to={`/sports-hub/matches/${m.id}`} className="sh-match">
-                  <span className={phaseClass(m.status)}>{phaseLabel(m)}</span>
-                  <TeamCrest name={m.homeTeam.name} logo={m.homeTeam.logo} />
-                  <span className="sh-match__team">{m.homeTeam.name}</span>
-                  <span className="sh-match__score">{m.homeScore ?? "-"}</span>
-                  <span className="sh-match__score">{m.awayScore ?? "-"}</span>
-                  <span className="sh-match__team">{m.awayTeam.name}</span>
-                  <TeamCrest name={m.awayTeam.name} logo={m.awayTeam.logo} />
-                </Link>
-              </li>
+              <MatchRow key={m.id} match={m} signedIn={signedIn} />
             ))}
           </ul>
         )}
