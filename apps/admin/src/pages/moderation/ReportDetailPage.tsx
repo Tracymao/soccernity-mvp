@@ -40,6 +40,7 @@ import {
   type ReportAction,
 } from "../../api/moderation";
 import EnquiryReportView from "./EnquiryReportView";
+import ReportedMessageFields from "./ReportedMessageFields";
 import { CaseLevelHoldButtons, CaseLevelHoldCallout, HoldStatus, mergeHolds } from "./holdActions";
 import {
   EscalateReportCard,
@@ -70,7 +71,8 @@ export default function ReportDetailPage() {
     // queue hands over has none. So a handed-over report is read once more, only to
     // add its holds; a failure there changes nothing on screen.
     const handedOver = report !== null;
-    if (handedOver && report.holds !== undefined) return;
+    // A message report also needs the message itself, which only the single-report read carries.
+    if (handedOver && report.holds !== undefined && (report.targetType !== "message" || report.reportedMessage !== undefined)) return;
     let cancelled = false;
     getReportById(id)
       .then((found) => {
@@ -80,19 +82,31 @@ export default function ReportDetailPage() {
           // the single-report read carries.
           setReport((prev) =>
             prev
-              ? { ...prev, holds: found.holds ?? [], source: found.source ?? prev.source, contactEnquiry: found.contactEnquiry }
+              ? {
+                  ...prev,
+                  holds: found.holds ?? [],
+                  source: found.source ?? prev.source,
+                  contactEnquiry: found.contactEnquiry,
+                  ...(prev.targetType === "message" ? { reportedMessage: found.reportedMessage ?? null } : {}),
+                }
               : found,
           );
           return;
         }
-        setReport(found);
+        setReport(found.targetType === "message" ? { ...found, reportedMessage: found.reportedMessage ?? null } : found);
         setLoadState("loaded");
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         if (handedOver) {
           // The enquiry could not be read: say so rather than loading for ever.
-          setReport((prev) => (prev && prev.source === "contact_enquiry" ? { ...prev, contactEnquiry: null } : prev));
+          setReport((prev) => {
+            if (!prev) return prev;
+            if (prev.source === "contact_enquiry") return { ...prev, contactEnquiry: null };
+            // Same for a message report: say the message could not be read rather than loading for ever.
+            if (prev.targetType === "message" && prev.reportedMessage === undefined) return { ...prev, reportedMessage: null };
+            return prev;
+          });
           return;
         }
         if (isChildSafetyVettingRequiredError(err)) {
@@ -216,6 +230,7 @@ export default function ReportDetailPage() {
             <span className="mod-field__label">Target id</span>
             <span className="mod-field__value">{report.targetId}</span>
           </div>
+          {report.targetType === "message" ? <ReportedMessageFields message={report.reportedMessage} /> : null}
         </div>
 
         <div className="mod-card">
@@ -331,6 +346,11 @@ export default function ReportDetailPage() {
               Once actioned, both the reporter and the reported user are notified of the outcome.
               Recording an action does not by itself remove content or suspend an account.
             </p>
+            {report.targetType === "message" ? (
+              <p className="mod-note">
+                Moderators can’t delete a message yet. Remove Content only records the decision; the message stays as it is.
+              </p>
+            ) : null}
             <CaseLevelHoldCallout />
           </div>
         )}
