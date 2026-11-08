@@ -32,13 +32,13 @@ import {
   REPORT_TARGET_TYPES,
   reportSubmitErrorMessage,
   type ReportReasonCategory,
-  type ReportTargetType,
+  type PublicReportTargetType,
 } from "../api/moderation";
 import { ReportCategoryField, ReportDetailsField } from "../components/report/ReportFields";
 import { canSubmitReport, detailsToSend } from "../lib/reportReasons";
 import "./ReportPage.css";
 
-const TARGET_TYPE_LABELS: Record<ReportTargetType, string> = {
+const TARGET_TYPE_LABELS: Record<PublicReportTargetType, string> = {
   post: "A post",
   comment: "A comment",
   user: "A user account",
@@ -58,7 +58,7 @@ type Status = "idle" | "submitting" | "submitted" | "error";
 
 export default function ReportPage() {
   const [email, setEmail] = useState("");
-  const [targetType, setTargetType] = useState<ReportTargetType>("post");
+  const [targetType, setTargetType] = useState<PublicReportTargetType>("post");
   const [targetId, setTargetId] = useState("");
   const [category, setCategory] = useState<ReportReasonCategory | null>(null);
   const [details, setDetails] = useState("");
@@ -155,7 +155,7 @@ export default function ReportPage() {
             id="report-target-type"
             className="report-page__input report-page__select"
             value={targetType}
-            onChange={(e) => setTargetType(e.target.value as ReportTargetType)}
+            onChange={(e) => setTargetType(e.target.value as PublicReportTargetType)}
           >
             {REPORT_TARGET_TYPES.map((type) => (
               <option key={type} value={type}>
