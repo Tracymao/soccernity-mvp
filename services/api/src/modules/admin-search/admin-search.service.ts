@@ -278,13 +278,16 @@ export class AdminSearchService {
     if (categories.length > 0) or.push({ reasonCategory: { in: categories } });
     if (or.length === 0 && subjects.size === 0) return EMPTY;
 
-    // Report.targetId is a bare string, so "about a user" is: the user, a post they wrote, a comment they wrote.
+    // Report.targetId is a bare string, so "about a user" is: the user, a post they wrote, a comment they wrote, a
+    // message they sent (the sender is the reported person). A message is matched by id only: its text and its
+    // conversation are never selected.
     // The id lists are bounded; the reports list below is capped anyway.
     const postAuthor = new Map<string, string>();
     const commentAuthor = new Map<string, string>();
+    const messageSender = new Map<string, string>();
     if (subjects.size > 0) {
       const authorIds = [...subjects.keys()];
-      const [posts, comments] = await Promise.all([
+      const [posts, comments, messages] = await Promise.all([
         this.prisma.post.findMany({
           where: { authorId: { in: authorIds } },
           select: { id: true, authorId: true },
@@ -297,12 +300,22 @@ export class AdminSearchService {
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: ADMIN_SEARCH_OWNED_CONTENT_ID_CAP,
         }),
+        // Batched like the comment branch (one query for all matched senders). Deleted-for-everyone messages are
+        // still matched: the report about them stays findable. Only the id and the sender are selected.
+        this.prisma.message.findMany({
+          where: { senderId: { in: authorIds } },
+          select: { id: true, senderId: true },
+          orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
+          take: ADMIN_SEARCH_OWNED_CONTENT_ID_CAP,
+        }),
       ]);
       for (const p of posts) postAuthor.set(p.id, p.authorId);
       for (const c of comments) commentAuthor.set(c.id, c.authorId);
+      for (const m of messages) messageSender.set(m.id, m.senderId);
       or.push({ targetType: 'user', targetId: { in: authorIds } });
       if (postAuthor.size > 0) or.push({ targetType: 'post', targetId: { in: [...postAuthor.keys()] } });
       if (commentAuthor.size > 0) or.push({ targetType: 'comment', targetId: { in: [...commentAuthor.keys()] } });
+      if (messageSender.size > 0) or.push({ targetType: 'message', targetId: { in: [...messageSender.keys()] } });
     }
 
     // The same gate GET /admin/moderation/reports applies: a report that concerns a minor is for vetted admins only.
@@ -323,7 +336,9 @@ export class AdminSearchService {
               ? postAuthor.get(r.targetId)
               : r.targetType === 'comment'
                 ? commentAuthor.get(r.targetId)
-                : undefined;
+                : r.targetType === 'message'
+                  ? messageSender.get(r.targetId)
+                  : undefined;
         if (r.id === q.lower) matchedOn = 'report_id';
         else if (q.isReportReference && r.id.startsWith(q.lower)) matchedOn = 'report_reference';
         else if (reporterId !== null && reporterId === q.lower) matchedOn = 'reporter_user_id';
