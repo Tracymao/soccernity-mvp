@@ -767,3 +767,63 @@ module: the queue list and the detail add `source: 'contact_enquiry'` (absent on
 `contactEnquiry`, `resolveReportedUserId` returns null for it (no notification on closing, no second party), and
 `HoldService` refuses `holds/bad-faith` and `holds/legal` for it with `409 hold_not_applicable`. The
 child-safety-vetting gate applies as for any report with `concernsMinor: true`.
+
+## Reporting a message in a chat (`backend/b067-message-report`; follows Decision Log #472 (b), founder decision 2026-11-08)
+
+`POST /reports` accepts `targetType: 'message'` with `targetId` = the Message id. Same body as every other report:
+`reasonCategory` required (the nine B-284 categories; `child_safety_concern` stores `concernsMinor = true`, Decision
+Log #466), `reason` optional except for `other`, optional `severity`. `JwtAuthGuard` only, so a restricted-pending
+minor can still report (as for every report).
+
+**Who may report.** ONLY the other participant of the conversation (the recipient). The message must be one the
+reporter can currently see. Every refusal is the SAME `404 Message not found` a missing id gives, so a private DM is
+never confirmed to exist to a non-participant (`ModerationService.assertMessageReportable`):
+
+| Case | Result |
+| --- | --- |
+| the reporter is the sender (their own message) | 404 |
+| the reporter is not in the conversation (a stranger, or someone in another conversation) | 404 |
+| the reporter hid the message for themselves (`MessageHide`, "delete for me") | 404 |
+| the message was sent at or before the moment the reporter deleted the chat (`ConversationHide`) | 404 |
+| the message was deleted for everyone (`deletedForEveryoneAt`) | 404 |
+| a Block between the two people | NOT checked: the thread still shows the message to the blocker, and the blocker must be able to report it |
+
+**`POST /reports/public` never accepts `message`.** It uses `PUBLIC_REPORT_TARGET_TYPES` (every type except
+`message`), so the DTO answers a code-less 400 whether or not the message exists. A signed-out reporter is by
+definition not a participant.
+
+**One open report per reporter per message (DEFAULT, founder-veto-able).** A repeat while the reporter's earlier
+report on the same message is still `open` returns that existing report (201, same body shape, no second row). The
+check runs in a transaction under `pg_advisory_xact_lock(hashtext('message-report:<reporter>:<message>'))`, so
+simultaneous submissions create one row. Once that report is closed (`reviewed` or `actioned`) the recipient may
+report the message again. The other user-reportable target types have NO duplicate check, so there was nothing to copy;
+the nearest precedent is `PostMediaReportService`, where a repeat is a success that changes nothing.
+
+**Admin read.** `GET /admin/moderation/reports/:id` on a `message` report adds `reportedMessage`, exactly this
+message and nothing else of the conversation:
+`{ id, sentAt, sender: { publicName }, contentText, originalContentText, editedAt, deletedForEveryone }`.
+The text comes back even if the sender later edited it (`originalContentText` is the text as first sent, null unless
+edited) or deleted it for everyone (the row and text are kept). It carries no other message, no conversation id, no
+participant list, no media, no recipient, and the sender is the public name only (the real name is never selected).
+The shape follows the one existing precedent for attaching the target to a report detail: an `enquiry` report gets
+`contactEnquiry`. **Post and comment reports attach nothing today** (their detail is the Report row alone), so
+`reportedMessage` is the only place a reported target's content is read. The child-safety-vetting gate applies first
+when the report concerns a minor, as for every report.
+
+**The reported person.** `resolveReportedUserId('message', id)` returns the message's `senderId` (like a comment's
+author), so appeal eligibility, the outcome notification to the sender, the guardian notice for a minor sender, the
+report hold (`findInvolvedReports` joins `Message.senderId`) and `HoldService` all work as they do for a comment. A
+report being FILED notifies no one; the sender is never told who reported them or that a message was reported (the
+`moderation_decision` notification carries only the report id).
+
+**Moderator actions.** `content_removed` records the action only, exactly as for a post or comment (it is not
+enforced). Moderators cannot delete a message: that is a known gap (DEFAULT, founder-veto-able), not built here.
+
+**Purge.** Nothing deletes a `Message` row: `Message.sender` is RESTRICT, the account-deletion sweep removes only the
+user's `MessageHide` rows, and the anonymised-row purge treats `Message.sender` and `Conversation.participantIds` as
+content that blocks a purge. So a reported message cannot be purged while its report is open, and no new exclusion
+was needed. The purge's own raw `Report` check also joins `Message.senderId` now, for parity with comments.
+
+**Not done.** Admin search does not match a report by the sender's username through a message target (it still
+covers user, post and comment targets). `apps/web` has no Report item on the other person's message yet (Figma frame
+A3 `6977:47201` draws it), and `apps/web`/`apps/admin` `ReportTargetType` types do not list `message` yet.

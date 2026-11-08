@@ -13,8 +13,28 @@
 // Grassroots submission is logged to this queue against the record it
 // published (see GrassrootsService.logSensitiveContentReport), and the same
 // two types are also user-reportable through POST /reports.
-export const REPORT_TARGET_TYPES = ['post', 'user', 'comment', 'banter_room', 'grassroots_team', 'fixture'] as const;
+// 'message' added by backend/b067-message-report (Decision Log #472 (b) follow-up, founder decision 2026-11-08): a person
+// can report a message in a chat. targetId is the Message id. ONLY the other participant of the conversation may
+// report it (ModerationService.assertMessageReportable); the public route never accepts it (see below).
+export const REPORT_TARGET_TYPES = [
+  'post',
+  'user',
+  'comment',
+  'banter_room',
+  'grassroots_team',
+  'fixture',
+  'message',
+] as const;
 export type ReportTargetType = (typeof REPORT_TARGET_TYPES)[number];
+
+// The target types POST /reports/public accepts: every user-reportable type EXCEPT 'message'. A message is a private
+// DM; the only person who may report one is its recipient, and a public (signed-out) reporter is by definition not
+// a participant, so the type is not even offered there (a code-less 400 from the DTO, which reveals nothing about
+// whether any message exists).
+export const PUBLIC_REPORT_TARGET_TYPES = REPORT_TARGET_TYPES.filter((t) => t !== 'message') as ReadonlyArray<
+  Exclude<(typeof REPORT_TARGET_TYPES)[number], 'message'>
+>;
+export type PublicReportTargetType = (typeof PUBLIC_REPORT_TARGET_TYPES)[number];
 
 // backend/w7-contact-enquiry-admin-escalate (B-046 part B; Decision Log #444, #445). A Report whose target is a
 // Contact Us enquiry an admin escalated. DELIBERATELY NOT in REPORT_TARGET_TYPES above: that list is what the
@@ -23,6 +43,8 @@ export type ReportTargetType = (typeof REPORT_TARGET_TYPES)[number];
 // it can never produce a report-based account hold, a legal hold or a bad-faith hold (HoldService refuses both
 // place routes with hold_not_applicable).
 export const ENQUIRY_REPORT_TARGET_TYPE = 'enquiry';
+// A report about a message in a chat (backend/b067-message-report). Also listed in REPORT_TARGET_TYPES above.
+export const MESSAGE_REPORT_TARGET_TYPE = 'message';
 // The `source` hint the admin queue and report detail carry for such a report (the key is ABSENT otherwise).
 export const REPORT_SOURCE_CONTACT_ENQUIRY = 'contact_enquiry';
 

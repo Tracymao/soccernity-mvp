@@ -9,6 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 //   - 'banter_room'     -> the room's creator, if that account still exists (BanterRoom.createdBy is a bare
 //                          String, not an FK, so it can dangle).
 //   - 'grassroots_team' / 'fixture' -> the team's / teamA's organiser, if the team still has one.
+//   - 'message'         -> the message's senderId (backend/b067-message-report), like a comment's author.
 //   - 'enquiry'         -> always null: a report made from a Contact Us enquiry (B-046 part B) has no reported
 //                          user, so it can never create a hold or a notification for anyone but its (absent)
 //                          reporter. Stated as an explicit case so the intent is not an accident of `default`.
@@ -50,6 +51,13 @@ export async function resolveReportedUserId(
         select: { teamA: { select: { createdById: true } } },
       });
       return fixture?.teamA.createdById ?? null;
+    }
+    case 'message': {
+      // backend/b067-message-report: the person who SENT the reported message, so holds, outcome notifications
+      // and every existing admin path treat it like a comment. Message.sender is RESTRICT, so the row (and this
+      // sender) survives the sender's account being anonymised.
+      const message = await prisma.message.findUnique({ where: { id: targetId }, select: { senderId: true } });
+      return message?.senderId ?? null;
     }
     case 'enquiry':
       return null;

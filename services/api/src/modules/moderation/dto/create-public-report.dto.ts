@@ -2,10 +2,10 @@ import { IsBoolean, IsEmail, IsIn, IsOptional, IsString, IsUUID, MaxLength, MinL
 import {
   REPORT_REASON_CATEGORIES,
   REPORT_SEVERITIES,
-  REPORT_TARGET_TYPES,
+  PUBLIC_REPORT_TARGET_TYPES,
   ReportReasonCategory,
   ReportSeverity,
-  ReportTargetType,
+  PublicReportTargetType,
 } from '../moderation.constants';
 
 // POST /reports/public — a public, unauthenticated report route for a
@@ -33,8 +33,8 @@ export class CreatePublicReportDto {
   @IsEmail()
   reporterContactEmail!: string;
 
-  @IsIn(REPORT_TARGET_TYPES)
-  targetType!: ReportTargetType;
+  @IsIn(PUBLIC_REPORT_TARGET_TYPES as unknown as string[])
+  targetType!: PublicReportTargetType;
 
   @IsUUID()
   targetId!: string;
