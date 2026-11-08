@@ -15,7 +15,7 @@ A group a caller's role cannot open is **absent** (the key does not exist). A gr
 | Group | Who may open it (read from the section's own controller, not copied) | Matches | Returned fields |
 | --- | --- | --- | --- |
 | `users` | `AdminUsersController` list → moderator, superadmin | user ID exact; **email exact** (lowercased, the column is stored lowercase); **username prefix** (lowercased). An anonymised (`deleted`) account is found by **ID only**. | what the Users list shows: `id, displayName, username, email, accountStatus, createdAt` + `matchedOn` |
-| `reports` | `AdminModerationController` list → moderator, superadmin | report ID exact; **report reference** (the first 8 characters of the id, exactly 8 hex characters, as an id prefix); **target username prefix** (reports ABOUT a user whose username starts with the text, or about a post or comment they wrote); given a **user ID**, the reports **by** that user (reporter), **about** that user, and about a post or comment that user wrote (bounded id lists). **Never the free-text reason.** | `id, targetType, targetId, status, severity, concernsMinor, createdAt, source, matchedOn` — never the reason, a contact email, the reporter id or an escalation note |
+| `reports` | `AdminModerationController` list → moderator, superadmin | report ID exact; **report reference** (the first 8 characters of the id, exactly 8 hex characters, as an id prefix); **target username prefix** (reports ABOUT a user whose username starts with the text, or about a post, a comment or a **message** they wrote or sent); given a **user ID**, the reports **by** that user (reporter), **about** that user, and about a post, comment or message that user wrote (bounded id lists). **Never the free-text reason.** | `id, targetType, targetId, status, severity, concernsMinor, createdAt, source, matchedOn` — never the reason, a contact email, the reporter id or an escalation note |
 | `contactEnquiries` | `ContactEnquiryAdminController` list → moderator, superadmin | sender email **exact** (case-insensitive); subject **contains** (case-insensitive) | the inbox list fields + `matchedOn`; **never the message**, never `userId` / `escalatedReportId` (shown as `submitter`, `hasEscalation`, like the list) |
 | `articles` | `AdminArticlesController` list → editor, superadmin | title contains (case-insensitive) | `id, title, status, category, publishedAt, createdAt, matchedOn` — never the body |
 | `staff` | `AdminStaffRolesController` list → superadmin | name contains; email exact | `id, email, fullName, role, accountStatus, twoFactorEnabled, matchedOn` — `twoFactorEnabled` is a boolean derived from `totpEnabledAt` (same name as `GET /admin/staff`); the secret, the backup codes and the timestamp are never returned |
@@ -68,7 +68,7 @@ Role matrix, therefore: **editor** → `articles`; **moderator** → `users, rep
 | Maximum query length | 254 | `CONTACT_EMAIL_MAX_LENGTH`, the longest email stored / accepted — reused |
 | Per-group result cap | 20 (+1 read to set `truncated`) | Section 5.5 default page size; a test ties `ADMIN_SEARCH_GROUP_CAP` to `ADMIN_USERS_DEFAULT_PAGE_SIZE` |
 | Rate limit | **30 requests / 60 s per IP**, `429` over it | **NEW FIGURE.** Uses the existing `@AuthRateLimit({ limit, windowMs })` per-handler override (the form the admin login uses, 5 / 15 min). No existing admin read limit to reuse. |
-| Owned-content id lookup (reports by user) | 200 post ids + 200 comment ids | same order as `INCORRECT_DETAILS_LIST_CAP` (a safety cap on a small read); bounds the work, the reports list is capped at 20 anyway |
+| Owned-content id lookup (reports by user) | 200 post ids + 200 comment ids + 200 message ids | same order as `INCORRECT_DETAILS_LIST_CAP` (a safety cap on a small read); bounds the work, the reports list is capped at 20 anyway |
 | Audit trigger | text contains `@` | broader than "is a whole address" on purpose: half an address is personal data too |
 | Audit wording | `kind=email results=<n>` | kind and count only |
 | Username search | prefix, case-insensitive | usernames are stored lowercase (Decision Log #364) |
@@ -80,10 +80,14 @@ Role matrix, therefore: **editor** → `articles`; **moderator** → `users, rep
 
 - The 429 comes from the shared per-IP `AuthThrottlerGuard`, whose header is `Retry-After-auth` (named after the throttler), not `Retry-After`. Existing behaviour of every `@AuthRateLimit` route; not changed here.
 - Admin access tokens are counted by the global limiter as anonymous per IP (documented in the rate-limit module); this route's own limit is per IP as well, so staff behind one office address share it.
-- Reports about a user's posts / comments are found only among the user's 200 most recent of each; older reports remain reachable by report ID.
+- Reports about a user's posts / comments / messages are found only among the user's 200 most recent of each; older reports remain reachable by report ID.
 - Search over `Report` by free text (reason) is deliberately not offered. The new report matchers (reference, target username) never read `reason`; a test asserts it is neither selected nor in the `where`.
-- The target-username lookup reads at most 200 user ids (`ADMIN_SEARCH_OWNED_CONTENT_ID_CAP`), then at most 200 posts and 200 comments by them. A very common prefix is therefore bounded, not complete.
+- The target-username lookup reads at most 200 user ids (`ADMIN_SEARCH_OWNED_CONTENT_ID_CAP`), then at most 200 posts, 200 comments and 200 messages by them. A very common prefix is therefore bounded, not complete.
 
 ## Tests
 
 `admin-search.query.spec.ts` (parse, escape), `admin-search.service.spec.ts` (role matrix against the real controllers' metadata, vetting reads, pinned selects, the fake that throws on an unexpected model, caps, audit), `admin-search.controller.http.spec.ts` (HTTP layer, guards, validation), and `test/admin-search.e2e-spec.ts` (real Postgres: matchers, case, wildcard escaping, anonymised user, vetting, withheld-minor identity, pinned response keys, audit row content, 429 on request 31).
+
+## Message reports (B-284 follow-up)
+
+A report whose target is a **message** (`targetType: 'message'`, `targetId` a `Message.id`, the reported person is `Message.senderId`) is found when the admin searches the sender's username prefix or user ID, exactly like the comment branch: one batched `message.findMany` (`select: { id, senderId }`, newest first, 200 cap) feeds a `targetType: 'message'` clause and the same `matchedOn` (`target_username` / `target_user_id`). Nothing about the message is selected or returned: no text, no original text, no conversation, no recipient. A message deleted for everyone is still matched (the report stays findable). Searching the REPORTER's name does not reach it by the sender path. The child-safety vetting rule is unchanged and applies to these rows too.

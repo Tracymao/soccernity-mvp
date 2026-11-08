@@ -28,6 +28,7 @@ function buildPrisma(opts: { vetted?: boolean; rows?: Partial<Record<string, unk
     postMedia: model('postMedia'),
     post: model('post'),
     comment: model('comment'),
+    message: model('message'),
   };
   const prisma = new Proxy(models, {
     get(target, prop: string) {
@@ -87,7 +88,7 @@ describe('AdminSearchService: which groups a role gets', () => {
   it('does not query a model for a group the role cannot open', async () => {
     const { service, models } = build();
     await service.search(UUID, admin('editor'));
-    for (const m of ['user', 'report', 'contactEnquiry', 'adminUser', 'postMedia', 'post', 'comment']) {
+    for (const m of ['user', 'report', 'contactEnquiry', 'adminUser', 'postMedia', 'post', 'comment', 'message']) {
       expect(models[m].findMany).not.toHaveBeenCalled();
     }
     expect(models.adminUser.findUnique).not.toHaveBeenCalled(); // no vetting read either
@@ -193,6 +194,38 @@ describe('AdminSearchService: what is asked of the database', () => {
     ]);
     expect(models.post.findMany.mock.calls[0][0].take).toBe(200);
     expect(models.post.findMany.mock.calls[0][0].where).toEqual({ authorId: { in: [UUID] } });
+  });
+
+  it('reports: a user id also finds the reports about a message that user sent (batched, id and sender only)', async () => {
+    const { service, models } = build({ vetted: true, rows: { message: [{ id: 'm1', senderId: UUID }] } });
+    await service.search(UUID, admin('moderator'));
+    expect(models.message.findMany).toHaveBeenCalledTimes(1);
+    const call = models.message.findMany.mock.calls[0][0];
+    expect(call.where).toEqual({ senderId: { in: [UUID] } });
+    expect(call.select).toEqual({ id: true, senderId: true }); // no contentText, no conversation
+    expect(call.take).toBe(200);
+    expect(models.report.findMany.mock.calls[0][0].where.OR).toContainEqual({ targetType: 'message', targetId: { in: ['m1'] } });
+  });
+
+  it('reports: a message report gets matchedOn from the sender, a report with no sender path keeps the fallback, and no message text is returned', async () => {
+    const row = (id: string, targetType: string, targetId: string, reporterId: string | null) => ({
+      id, targetType, targetId, reporterId, status: 'open', severity: 'medium', concernsMinor: false, reasonCategory: null, createdAt: new Date(0),
+    });
+    const { service } = build({
+      vetted: true,
+      rows: {
+        user: [{ id: 'u-sender' }],
+        message: [{ id: 'm1', senderId: 'u-sender' }],
+        report: [row('r1', 'message', 'm1', 'someone-else'), row('r2', 'message', 'm-other', 'someone-else')],
+      },
+    });
+    const res = await service.search('sender', admin('moderator'));
+    const items = res.groups.reports!.items as unknown as Array<Record<string, unknown>>;
+    expect(items.find((i) => i.id === 'r1')!.matchedOn).toBe('target_username');
+    expect(items.find((i) => i.id === 'r2')!.matchedOn).toBe('target_user_id'); // fallback, no sender path
+    for (const i of items) {
+      for (const k of ['reporterId', 'contentText', 'originalContentText', 'reason']) expect(i).not.toHaveProperty(k);
+    }
   });
 
   it('reports and media: a query that is not an id makes no report or media call', async () => {

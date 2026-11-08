@@ -258,6 +258,76 @@ describe('GET /admin/search (real Postgres)', () => {
       expect((await search(mod.token, 'a report about nothing').expect(200)).body.groups.reports.items).toEqual([]);
     });
 
+    it('finds a report about a MESSAGE by the sender (username or user id), not by the reporter; no message text, no conversation', async () => {
+      const mod = await admin('moderator');
+      const editor = await admin('editor');
+      const sender = await user({ username: 'msg_sender_zk' });
+      const reporter = await user({ username: 'msg_reporter_qx' });
+      const bystander = await user();
+      const conversation = await prisma().conversation.create({
+        data: { participantIds: [sender.id, reporter.id], participantKey: [sender.id, reporter.id].sort().join(':') },
+      });
+      const message = await prisma().message.create({
+        data: { conversationId: conversation.id, senderId: sender.id, contentText: 'secretmessagetext zebra', originalContentText: 'originalsecrettext' },
+      });
+      const deleted = await prisma().message.create({
+        data: { conversationId: conversation.id, senderId: sender.id, contentText: 'gone', deletedForEveryoneAt: new Date() },
+      });
+      const otherMessage = await prisma().message.create({
+        data: { conversationId: conversation.id, senderId: reporter.id, contentText: 'from the reporter' },
+      });
+      const make = (data: Record<string, unknown>) => prisma().report.create({ data: { reason: 'r', ...data } as never });
+      const aboutMessage = await make({ reporterId: reporter.id, targetType: 'message', targetId: message.id });
+      const aboutDeleted = await make({ reporterId: reporter.id, targetType: 'message', targetId: deleted.id });
+      const aboutReportersMessage = await make({ reporterId: sender.id, targetType: 'message', targetId: otherMessage.id });
+      const unrelated = await make({ reporterId: bystander.id, targetType: 'user', targetId: bystander.id });
+
+      // by the sender username prefix: the two reports about the sender messages, matched as target_username
+      const byName = await search(mod.token, 'msg_sender').expect(200);
+      expect(ids(byName.body.groups.reports)).toEqual([aboutMessage.id, aboutDeleted.id].sort());
+      expect(byName.body.groups.reports.items.every((i: { matchedOn: string }) => i.matchedOn === 'target_username')).toBe(true);
+      // by the REPORTER name: only the report about a message the reporter SENT; the report they filed about the
+      // sender message is not reached through the reporter name
+      const byReporterName = await search(mod.token, 'msg_reporter').expect(200);
+      expect(ids(byReporterName.body.groups.reports)).toEqual([aboutReportersMessage.id]);
+      expect(ids(byReporterName.body.groups.reports)).not.toContain(aboutMessage.id);
+      // by the sender user id: reports about their messages (target_user_id) plus the report they filed (reporter_user_id)
+      const byId = await search(mod.token, sender.id).expect(200);
+      const kinds = Object.fromEntries(byId.body.groups.reports.items.map((i: { id: string; matchedOn: string }) => [i.id, i.matchedOn]));
+      expect(kinds[aboutMessage.id]).toBe('target_user_id');
+      expect(kinds[aboutReportersMessage.id]).toBe('reporter_user_id');
+      expect(ids(byId.body.groups.reports)).not.toContain(unrelated.id);
+      // nothing about the message or the conversation is in any response
+      const raw = JSON.stringify([byName.body, byReporterName.body, byId.body]);
+      for (const secret of ['secretmessagetext', 'originalsecrettext', 'from the reporter', conversation.id]) {
+        expect(raw).not.toContain(secret);
+      }
+      for (const item of byName.body.groups.reports.items) {
+        expect(Object.keys(item).sort()).toEqual(['concernsMinor', 'createdAt', 'id', 'matchedOn', 'reasonCategory', 'severity', 'source', 'status', 'targetId', 'targetType']);
+      }
+      // message text is never a search term
+      expect((await search(mod.token, 'secretmessagetext').expect(200)).body.groups.reports.items).toEqual([]);
+      expect((await search(mod.token, 'originalsecrettext').expect(200)).body.groups.reports.items).toEqual([]);
+      // the editor role has no Reports group at all
+      expect((await search(editor.token, 'msg_sender').expect(200)).body.groups.reports).toBeUndefined();
+    });
+
+    it('a message report concerning a minor is hidden from an admin who is not child-safety vetted, found for a vetted one', async () => {
+      const sender = await user({ username: 'msgminor_sender' });
+      const reporter = await user();
+      const conversation = await prisma().conversation.create({
+        data: { participantIds: [sender.id, reporter.id], participantKey: [sender.id, reporter.id].sort().join(':') },
+      });
+      const message = await prisma().message.create({ data: { conversationId: conversation.id, senderId: sender.id, contentText: 'hi' } });
+      const report = await prisma().report.create({
+        data: { reporterId: reporter.id, targetType: 'message', targetId: message.id, reason: 'r', concernsMinor: true },
+      });
+      const vetted = await admin('moderator', { vetted: true });
+      const unvetted = await admin('moderator', { vetted: false });
+      expect(ids((await search(vetted.token, 'msgminor_s').expect(200)).body.groups.reports)).toEqual([report.id]);
+      expect((await search(unvetted.token, 'msgminor_s').expect(200)).body.groups.reports.items).toEqual([]);
+    });
+
     it('returns only the pinned fields: never the reason, a contact email or an escalation note', async () => {
       const mod = await admin('moderator');
       const reporter = await user();
