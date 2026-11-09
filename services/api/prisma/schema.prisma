@@ -1419,7 +1419,13 @@ model Message {
   // editedAt: set on every edit. originalContentText: the text as first sent, written ONCE on the first edit
   // and never overwritten; NO user-facing read returns it (it is kept under the existing message retention,
   // there is no admin read of it yet). deletedForEveryoneAt: the sender deleted the message for both people;
-  // the row, the text and any original STAY in the database (nothing is purged), reads show a placeholder.
+  // the row, the text and any original STAY in the database until the retention job (below) removes them, reads
+  // show a placeholder.
+  //
+  // backend/b287-message-retention (B-287, Decision Log #478): MessageRetentionService deletes a message
+  // MESSAGE_RETENTION_MONTHS (default 12) after sentAt, minors and adults alike, with its originalContentText,
+  // EXCEPT a message a Report (targetType 'message') points at or that a ReportContextMessage row attached to a
+  // report. MessageHide rows go by cascade; a conversation left with no messages is deleted by the same job.
   editedAt             DateTime?
   originalContentText  String?
   deletedForEveryoneAt DateTime?

@@ -27,3 +27,12 @@ export const MESSAGE_EDIT_WINDOW_CLOSED_CODE = 'message_edit_window_closed';
 export const MESSAGE_NOT_EDITABLE_CODE = 'message_not_editable'; // deleted for everyone, or not a text message
 export const MESSAGE_EDIT_NOT_SENDER_CODE = 'message_edit_not_sender';
 export const MESSAGE_DELETE_NOT_SENDER_CODE = 'message_delete_not_sender';
+
+// backend/b287-message-retention (B-287, Decision Log #478, the founder's own decision like the Contact Us
+// figure of #440): a message is deleted this many calendar months after it was SENT, for everyone including
+// minors. Configuration (MESSAGE_RETENTION_MONTHS); this is the fallback.
+export const DEFAULT_MESSAGE_RETENTION_MONTHS = 12;
+
+// DEFAULT, founder-veto-able: at most this many messages per daily run, oldest first. Messages are far more
+// numerous than Contact Us enquiries (cap 200), so the cap is larger; a backlog drains over several nights.
+export const MESSAGE_RETENTION_MAX_PER_RUN = 500;
