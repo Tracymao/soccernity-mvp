@@ -50,6 +50,7 @@ export type RegistrationEmailTemplate =
   | 'contact-enquiry-notification'
   | 'email-change-verify'
   | 'email-change-notice'
+  | 'email-change-unavailable'
   | 'password-changed'
   | 'password-reset-completed'
   | 'welcome'
@@ -81,6 +82,8 @@ const RECOVERY_TEMPLATES: ReadonlySet<RegistrationEmailTemplate> = new Set<Regis
   // must not reach a log. The notice (to the OLD address) is quiet too: it names an account holder's mailbox.
   'email-change-verify',
   'email-change-notice',
+  // Decision Log #476: goes to an address that belongs to SOMEONE ELSE, so it is quiet too.
+  'email-change-unavailable',
 ]);
 
 // Decision Log #17 (Build Plan Section 9): Postmark is the chosen
@@ -546,6 +549,24 @@ export class RegistrationEmailService {
     });
   }
 
+  // Decision Log #476. Whether WEB_APP_BASE_URL can build a link at all, so the email-change route can refuse with
+  // a 503 on configuration alone, before any lookup that depends on the address. Logs nothing: the caller does.
+  isWebAppBaseUrlUsable(): boolean {
+    return buildWebAppLink(this.config.get<string>('WEB_APP_BASE_URL'), '/', {}) !== null;
+  }
+
+  // Decision Log #476. To an address somebody asked to use for an email change when that address already belongs to a
+  // Soccernity account. NO link, nothing about the person who asked, nothing the owner has to do. Plain functional
+  // wording with no promise about safety, data or who is told, so it is not tagged [COPY PENDING LEGAL REVIEW].
+  async sendEmailChangeUnavailableEmail(to: string): Promise<void> {
+    await this.dispatch({
+      to,
+      subject: 'A request to use your email address on Soccernity',
+      template: 'email-change-unavailable',
+      data: {},
+    });
+  }
+
   // backend/b069-transactional-emails (B-069; Decision Log #472, adopted default (a)). Five plain account emails
   // that had a Figma frame but no template. The founder reviews the wording himself (not counsel), so none of it
   // is tagged [COPY PENDING LEGAL REVIEW]; the PR body lists every sentence that states something about
@@ -949,6 +970,13 @@ ${data.link}
 ` +
         `Nothing changes until the request is confirmed from the new address. If this was not you, contact support@soccernity.com and change your password.`
       );
+    case 'email-change-unavailable':
+      return (
+        `Someone asked to use this email address to change the email on a Soccernity account.
+
+` +
+        `It cannot be used for that change because it already belongs to a Soccernity account. Nothing has changed on your account and you do not need to do anything.`
+      );
     case 'verify-email':
       return `Verify your Soccernity email address by opening this link:\n\n${data.link}\n\nIf you did not request this, you can safely ignore this email.`;
     case 'guardian-consent':
@@ -1283,6 +1311,11 @@ function renderHtmlBody(template: RegistrationEmailTemplate, data: Record<string
       return (
         `<p>A request was made to change the email address on your Soccernity account.</p>` +
         `<p>Nothing changes until the request is confirmed from the new address. If this was not you, contact support@soccernity.com and change your password.</p>`
+      );
+    case 'email-change-unavailable':
+      return (
+        `<p>Someone asked to use this email address to change the email on a Soccernity account.</p>` +
+        `<p>It cannot be used for that change because it already belongs to a Soccernity account. Nothing has changed on your account and you do not need to do anything.</p>`
       );
     case 'verify-email':
       return `<p>Verify your Soccernity email address:</p><p><a href="${data.link}">Verify my email</a></p><p>If the button does not work, copy this link into your browser: ${data.link}</p><p>If you did not request this, you can safely ignore this email.</p>`;

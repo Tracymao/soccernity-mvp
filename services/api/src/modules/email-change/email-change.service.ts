@@ -21,8 +21,6 @@ import {
   EMAIL_CHANGE_LINK_INVALID_CODE,
   EMAIL_CHANGE_LINK_INVALID_MESSAGE,
   EMAIL_CHANGE_MAX_EMAIL_LENGTH,
-  EMAIL_CHANGE_NOT_ACCEPTED_CODE,
-  EMAIL_CHANGE_NOT_ACCEPTED_MESSAGE,
   EMAIL_CHANGE_TWO_FACTOR_INVALID_CODE,
   EMAIL_CHANGE_TWO_FACTOR_REQUIRED_CODE,
   EMAIL_CHANGE_UNAVAILABLE_CODE,
@@ -33,23 +31,39 @@ import { EmailChangeLimiter } from './email-change.limiter';
 const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex');
 const normalise = (email: string): string => email.trim().toLowerCase();
 
-// backend/email-change (B-059; Decision Log #472 adopted default (f), register Section 80b item 8). Until now no code
-// path changed User.email. Two steps:
+type Requester = { id: string; email: string; isMinor: boolean };
+type AddressOutcome = { kind: 'ignore' } | { kind: 'usable' } | { kind: 'taken'; registeredEmail: string };
+
+// backend/email-change (B-059; Decision Log #472 adopted default (f), register Section 80b item 8; reworked by
+// Decision Log #476). Until B-059 no code path changed User.email. Two steps:
 //
 //   1. requestChange: a signed-in user proves their password (and a second factor when it is on) and names a new
-//      address. We store a HASH of a single-use secret and email the link to the NEW address; the CURRENT address is
-//      told a request was made. Nothing changes on User yet.
+//      address. The answer is ALWAYS 202 from then on, whatever the address is. What happens next is done in the
+//      BACKGROUND, so neither the response nor its timing says anything about the address:
+//        - usable: a HASH of a single-use secret is stored and the link is emailed to the NEW address;
+//        - already used by an account: a plain "cannot be used" email goes to that address (no link, nothing about
+//          the person who asked);
+//        - malformed, longer than 254 characters, the same as the current address, or (for a minor) the guardian's
+//          address: nothing is sent;
+//        - the CURRENT address is told a request was made for every one of them, without naming the new address.
+//      Nothing on User changes yet.
 //   2. confirmChange: the link is used (no sign-in needed; the secret is the credential). In ONE transaction the
 //      address is set, the request is marked used and the checks are repeated; then every session is ended and,
 //      for a minor, the confirmed guardian is told (GuardianSecurityNoticeService, event email_changed).
 //
-// Anti-enumeration: every reason the new address cannot be used returns the ONE identical email_change_not_accepted
-// answer, and a not-accepted attempt spends the same per-account budget as a wrong password (see the limiter).
-// KNOWN RESIDUAL, flagged in the PR: accepted (202) vs not accepted (400) still tells a signed-in, password-confirmed
-// user whether an address is registered; the budget above bounds how fast they can ask.
+// Limits (all on the shared AuthLimitsStore, see EmailChangeLimiter): 5 wrong passwords per 15 minutes per account;
+// 5 requests per hour per account on EVERY outcome (429 + Retry-After); and at most 3 emails per 24 hours per
+// recipient address (silent skip, response unchanged). The 503 for an unusable WEB_APP_BASE_URL is decided by
+// configuration alone, before anything that depends on the address.
+//
+// Anti-enumeration: a signed-in, password-confirmed person can no longer learn from this route whether an address is
+// registered. The only way left is by email (the owner of a taken address gets one), which is why that email says
+// nothing about who asked.
 @Injectable()
 export class EmailChangeService {
   private readonly logger = new Logger(EmailChangeService.name);
+  // Background steps still running. Only used by whenIdle(), so a test (or a graceful shutdown) can wait for them.
+  private readonly inFlight = new Set<Promise<void>>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -62,6 +76,18 @@ export class EmailChangeService {
   ) {}
 
   async requestChange(userId: string, dto: RequestEmailChangeDto): Promise<void> {
+    // Configuration alone decides this (Decision Log #476), before any lookup, so the 503 is the same for every
+    // address and says nothing about one.
+    if (!this.email.isWebAppBaseUrlUsable()) {
+      this.logger.error('[email-change] WEB_APP_BASE_URL is missing, a placeholder, or not https -- email change is unavailable.');
+      throw new ServiceUnavailableException({
+        statusCode: 503,
+        error: 'Service Unavailable',
+        code: EMAIL_CHANGE_UNAVAILABLE_CODE,
+        message: 'Email change is not available right now.',
+      });
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, email: true, passwordHash: true, isMinor: true },
@@ -95,12 +121,61 @@ export class EmailChangeService {
       }
     }
 
-    const newEmail = normalise(dto.newEmail);
-    if (!(await this.isAcceptable(user, newEmail))) {
-      // A not-accepted address counts as a failed attempt (DEFAULT, founder-veto-able): take a slot again.
-      await this.limiter.reserve(userId);
-      throw this.notAccepted();
+    // Identity is proven. From here the answer is the same 202 for every address: the request cap counts the
+    // attempt whatever the address is (429 + Retry-After once it is spent), and everything that depends on the
+    // address happens after the response.
+    await this.limiter.reserveRequest(userId);
+    const requester: Requester = { id: user.id, email: user.email, isMinor: user.isMinor };
+    this.runInBackground(() => this.processRequest(requester, normalise(dto.newEmail)));
+  }
+
+  // Resolves when every background step started so far has finished. For tests and a graceful shutdown; the request
+  // path never calls it.
+  async whenIdle(): Promise<void> {
+    while (this.inFlight.size > 0) await Promise.allSettled([...this.inFlight]);
+  }
+
+  private runInBackground(step: () => Promise<void>): void {
+    const promise: Promise<void> = step()
+      .catch((err) => {
+        // No address, token or user detail in the log line.
+        this.logger.warn(`Email change background step failed: ${(err as Error)?.message ?? err}`);
+      })
+      .finally(() => {
+        this.inFlight.delete(promise);
+      });
+    this.inFlight.add(promise);
+  }
+
+  // Everything that depends on the address. Each part is isolated, so a failure in one never stops the other.
+  private async processRequest(user: Requester, newEmail: string): Promise<void> {
+    // The notice to the CURRENT address (timing DEFAULT, founder-veto-able: at request time, so the real owner has a
+    // chance to react). For every request that got this far, and it never names the new address.
+    try {
+      if (await this.limiter.claimRecipientSlot(user.email)) await this.email.sendEmailChangeNoticeEmail(user.email);
+    } catch (err) {
+      this.logger.warn(`Email change notice was not sent: ${(err as Error)?.message ?? err}`);
     }
+
+    try {
+      const outcome = await this.classify(user, newEmail);
+      if (outcome.kind === 'ignore') return;
+      if (outcome.kind === 'taken') {
+        // Sent to the address as it is registered. No link, nothing about who asked.
+        if (await this.limiter.claimRecipientSlot(outcome.registeredEmail)) {
+          await this.email.sendEmailChangeUnavailableEmail(outcome.registeredEmail);
+        }
+        return;
+      }
+      await this.startChange(user.id, newEmail);
+    } catch (err) {
+      this.logger.warn(`Email change request was not completed: ${(err as Error)?.message ?? err}`);
+    }
+  }
+
+  private async startChange(userId: string, newEmail: string): Promise<void> {
+    // Checked BEFORE a row is created, so a skipped email never replaces an earlier pending request with a dead one.
+    if (!(await this.limiter.claimRecipientSlot(newEmail))) return;
 
     const secret = randomBytes(32).toString('base64url');
     const expiresAt = new Date(Date.now() + DEFAULT_EMAIL_VERIFICATION_TTL_MS);
@@ -115,20 +190,10 @@ export class EmailChangeService {
 
     const sent = await this.email.sendEmailChangeVerifyEmail(newEmail, secret);
     if (!sent) {
-      // WEB_APP_BASE_URL is unusable: there is no link to send. Same answer for every address; discard the request.
+      // The base URL turned unusable after the up-front check: there is no link to send. Discard the request.
       await this.prisma.emailChangeRequest.deleteMany({ where: { id: request.id } });
-      throw new ServiceUnavailableException({
-        statusCode: 503,
-        error: 'Service Unavailable',
-        code: EMAIL_CHANGE_UNAVAILABLE_CODE,
-        message: 'Email change is not available right now.',
-      });
+      this.logger.error('[email-change] The verification link could not be built; the request was discarded.');
     }
-    // The notice to the CURRENT address (timing DEFAULT, founder-veto-able: at request time, so the real owner has
-    // a chance to react). Never delays or fails the response.
-    void this.email.sendEmailChangeNoticeEmail(user.email).catch((err) => {
-      this.logger.warn(`Email change notice was not sent: ${(err as Error)?.message ?? err}`);
-    });
   }
 
   async confirmChange(rawToken: string): Promise<void> {
@@ -183,34 +248,27 @@ export class EmailChangeService {
     if (isMinor) this.guardianNotices.notifyInBackground(request.userId, 'email_changed');
   }
 
-  // Every reason the address is unusable folds into one boolean, so the caller can give one answer.
-  private async isAcceptable(user: { id: string; email: string; isMinor: boolean }, newEmail: string): Promise<boolean> {
-    if (newEmail.length > EMAIL_CHANGE_MAX_EMAIL_LENGTH || !isEmail(newEmail)) return false;
-    if (newEmail === normalise(user.email)) return false;
-    const taken = await this.prisma.user.findFirst({
-      where: { email: { equals: newEmail, mode: 'insensitive' } },
-      select: { id: true },
-    });
-    if (taken) return false;
+  // What to do with the new address. Runs in the background, so it may do as many lookups as it likes: nothing the
+  // caller sees depends on it. The guardian rule comes BEFORE the lookup, so a guardian's address is never emailed
+  // even when it also belongs to an account.
+  private async classify(user: Requester, newEmail: string): Promise<AddressOutcome> {
+    if (newEmail.length > EMAIL_CHANGE_MAX_EMAIL_LENGTH || !isEmail(newEmail)) return { kind: 'ignore' };
+    if (newEmail === normalise(user.email)) return { kind: 'ignore' };
     if (user.isMinor) {
       // #365: a minor's own email and the guardian's differ.
       const guardian = await this.prisma.guardian.findUnique({ where: { minorUserId: user.id }, select: { email: true } });
-      if (guardian && normalise(guardian.email) === newEmail) return false;
+      if (guardian && normalise(guardian.email) === newEmail) return { kind: 'ignore' };
     }
-    return true;
+    const taken = await this.prisma.user.findFirst({
+      where: { email: { equals: newEmail, mode: 'insensitive' } },
+      select: { id: true, email: true },
+    });
+    if (taken) return { kind: 'taken', registeredEmail: taken.email };
+    return { kind: 'usable' };
   }
 
   private identityError(code: string, message: string): ForbiddenException {
     return new ForbiddenException({ statusCode: 403, error: 'Forbidden', code, message });
-  }
-
-  private notAccepted(): BadRequestException {
-    return new BadRequestException({
-      statusCode: 400,
-      error: 'Bad Request',
-      code: EMAIL_CHANGE_NOT_ACCEPTED_CODE,
-      message: EMAIL_CHANGE_NOT_ACCEPTED_MESSAGE,
-    });
   }
 
   private linkInvalid(): BadRequestException {
