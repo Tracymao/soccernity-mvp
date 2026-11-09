@@ -6,9 +6,8 @@
 // this screen). The date of birth is NOT editable here (Decision Log #367,
 // B-074): Age Gate collected it, and Register shows it as a read-only value
 // (Figma 407:1051 "Date of Birth" row) with no date picker. The country the
-// Age Gate collected is sent for every signup. No Apple button: social
-// sign-in (Google / Facebook, Figma 5418:7097) is the SocialButtons block below the form
-// (B-085): shown only for providers the API reports as enabled.
+// Age Gate collected is sent for every signup. No social sign-in buttons of any kind
+// (Decision Log #479): Register offers only the platform's own form.
 //
 // B-125: after a successful registration this routes on the server's
 // `nextStep` (restricted_pending / verify_email / create_profile / none); it
@@ -23,7 +22,6 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import SignupSplitScreen from "./SignupSplitScreen";
-import SocialButtons from "../social/SocialButtons";
 import { lightAuthThemeVars } from "./authThemeVars";
 import { toIsoDate } from "./age";
 import { storeSession } from "../../lib/session";
@@ -209,10 +207,6 @@ export default function RegisterStep({ dob, country, isMinor, guardianDetails }:
           {submitting ? "Creating account…" : "Create account"}
         </button>
       </form>
-
-      {/* B-085: Google / Facebook, only for the providers the API says are switched on. A new person who
-          chooses one still goes through the Age Gate and the guardian flow after the provider returns. */}
-      <SocialButtons />
 
       <p className="signup-split__footer">
         Already have an account? <Link to="/login">Log in.</Link>

@@ -199,7 +199,7 @@
 }
 
 /* Below 900px the hero is hidden, so the panel is the only column. (It used to keep the two-column grid and sit in
- * half the width, which squeezed the form and the B-085 social buttons at phone width; Figma Login mobile 1625:2303
+ * half the width, which squeezed the form at phone width; Figma Login mobile 1625:2303
  * is one centred 350px column.) */
 @media (max-width: 899px) {
   .sn-login {
