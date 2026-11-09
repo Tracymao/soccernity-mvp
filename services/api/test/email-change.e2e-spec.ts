@@ -7,6 +7,7 @@ import { APP_CLOCK } from '../src/clock/clock';
 import { AccountDeletionSweepService } from '../src/modules/account-deletion/account-deletion-sweep.service';
 import { PasswordService } from '../src/modules/auth/password/password.service';
 import { RegistrationEmailService } from '../src/modules/auth/registration/email/registration-email.service';
+import { EmailChangeService } from '../src/modules/email-change/email-change.service';
 import { TokenService } from '../src/modules/auth/token/token.service';
 import { generateTotpCode } from '../src/modules/two-factor/totp.util';
 import { RedisService } from '../src/redis/redis.service';
@@ -27,6 +28,8 @@ import { disconnectTestPrismaClient, getTestPrismaClient, resetDatabase } from '
 //   - the guardian event reaches a minor's CONFIRMED guardian and nobody for an adult
 //   - the failed-attempt budget is a real Redis counter; the two-factor step uses the real sign-in lock path
 //   - the anonymiser deletes the rows
+//   - Decision Log #476: once identity is proven the answer is the same 202 for every kind of address; the request cap
+//     and the per-recipient share are real Redis counters; only the emails differ, and they go out after the response
 // ---------------------------------------------------------------------------------------------------------------
 
 jest.setTimeout(180_000);
@@ -47,7 +50,10 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
   const http = () => request(app.getHttpServer());
   const rand = () => Math.random().toString(36).slice(2);
   const calls = (method: string) => sent.filter((c) => c.method === method);
-  const secretFor = (to: string) => {
+  // The address is dealt with AFTER the response (Decision Log #476), so wait for that background step first.
+  const idle = () => app.get(EmailChangeService).whenIdle();
+  const secretFor = async (to: string) => {
+    await idle();
     const c = calls('sendEmailChangeVerifyEmail').filter((x) => x.args[0] === to).pop();
     if (!c) throw new Error(`no verification email to ${to}`);
     return c.args[1] as string;
@@ -55,10 +61,12 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
 
   // A recorder for every RegistrationEmailService instance. Only send* methods exist (answering every property would
   // look like a thenable and hang Nest). The verification sender answers true, as the real one does when it sent.
+  let baseUrlUsable = true;
   const emailRecorder = new Proxy(
     {},
     {
       get: (_target, name: string | symbol) => {
+        if (name === 'isWebAppBaseUrlUsable') return () => baseUrlUsable;
         if (typeof name !== 'string' || !name.startsWith('send')) return undefined;
         return (...args: unknown[]) => {
           sent.push({ method: name, args });
@@ -89,6 +97,9 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
   });
 
   beforeEach(async () => {
+    // The previous test may have ended right after a 202, with the post-response step (Decision Log #476) still
+    // writing. Let it finish first, or the TRUNCATE below can deadlock with it.
+    await idle();
     await resetDatabase();
     await clearAuthLimitCounters(app);
     for (const pattern of ['guardian-security-notice:*', '2fa:*']) {
@@ -96,10 +107,12 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
       if (keys.length > 0) await redis.del(...keys);
     }
     sent.length = 0;
+    baseUrlUsable = true;
     clock.current = BASE;
   });
 
   afterAll(async () => {
+    await idle();
     await clearAuthLimitCounters(app);
     await app.close();
     await disconnectTestPrismaClient();
@@ -153,7 +166,10 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
     http().post('/users/me/email-change').set(auth).send(body);
   const confirm = (token: string) => http().post('/auth/email-change/confirm').send({ token });
   const noticesToGuardian = () => calls('sendGuardianSecurityNoticeEmail');
-  const settle = () => new Promise((r) => setTimeout(r, 400));
+  const settle = async () => {
+    await idle();
+    await new Promise((r) => setTimeout(r, 400));
+  };
   async function waitForNotices(count: number) {
     const deadline = Date.now() + 5_000;
     while (noticesToGuardian().length < count && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25));
@@ -167,7 +183,7 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
       const res = await ask(u.auth, { password: PASSWORD, newEmail: '  New-Address@Example.COM ' }).expect(202);
       expect(res.body).toEqual({ status: 'verification_sent' });
 
-      const secret = secretFor('new-address@example.com');
+      const secret = await secretFor('new-address@example.com');
       const rows = await prisma().emailChangeRequest.findMany({ where: { userId: u.id } });
       expect(rows).toHaveLength(1);
       expect(rows[0].newEmail).toBe('new-address@example.com');
@@ -188,7 +204,7 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
       const u = await seedUser();
       await prisma().user.update({ where: { id: u.id }, data: { verificationStatus: 'unverified' } });
       await ask(u.auth, { password: PASSWORD, newEmail: 'Fresh@Example.com' }).expect(202);
-      const secret = secretFor('fresh@example.com');
+      const secret = await secretFor('fresh@example.com');
 
       await confirm(secret).expect(204);
 
@@ -220,7 +236,7 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
     it('works once; the second use is the coded 400', async () => {
       const u = await seedUser();
       await ask(u.auth, { password: PASSWORD, newEmail: 'once@example.com' }).expect(202);
-      const secret = secretFor('once@example.com');
+      const secret = await secretFor('once@example.com');
       await confirm(secret).expect(204);
       const again = await confirm(secret).expect(400);
       expect(again.body).toMatchObject({ code: 'email_change_link_invalid' });
@@ -229,7 +245,7 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
     it('two simultaneous clicks have exactly one winner', async () => {
       const u = await seedUser();
       await ask(u.auth, { password: PASSWORD, newEmail: 'race@example.com' }).expect(202);
-      const secret = secretFor('race@example.com');
+      const secret = await secretFor('race@example.com');
       const results = await Promise.all([confirm(secret), confirm(secret)]);
       expect(results.map((r) => r.status).sort()).toEqual([204, 400]);
       expect((await prisma().user.findUniqueOrThrow({ where: { id: u.id } })).email).toBe('race@example.com');
@@ -238,7 +254,7 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
     it('an expired link is the coded 400 and the address does not move', async () => {
       const u = await seedUser();
       await ask(u.auth, { password: PASSWORD, newEmail: 'late@example.com' }).expect(202);
-      const secret = secretFor('late@example.com');
+      const secret = await secretFor('late@example.com');
       await prisma().emailChangeRequest.updateMany({ where: { userId: u.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
       const res = await confirm(secret).expect(400);
       expect(res.body.code).toBe('email_change_link_invalid');
@@ -254,9 +270,9 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
     it('a new request replaces the earlier one: ONE pending row, and the first link is dead', async () => {
       const u = await seedUser();
       await ask(u.auth, { password: PASSWORD, newEmail: 'first@example.com' }).expect(202);
-      const first = secretFor('first@example.com');
+      const first = await secretFor('first@example.com');
       await ask(u.auth, { password: PASSWORD, newEmail: 'second@example.com' }).expect(202);
-      const second = secretFor('second@example.com');
+      const second = await secretFor('second@example.com');
 
       expect(await prisma().emailChangeRequest.count({ where: { userId: u.id, usedAt: null } })).toBe(1);
       await confirm(first).expect(400);
@@ -267,7 +283,7 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
     it('an address taken in the meantime rolls the whole change back: same coded 400, request still unused', async () => {
       const u = await seedUser();
       await ask(u.auth, { password: PASSWORD, newEmail: 'contested@example.com' }).expect(202);
-      const secret = secretFor('contested@example.com');
+      const secret = await secretFor('contested@example.com');
       await seedUser().then((other) => prisma().user.update({ where: { id: other.id }, data: { email: 'contested@example.com' } }));
 
       const res = await confirm(secret).expect(400);
@@ -279,7 +295,7 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
     it('a deactivated account cannot complete a change', async () => {
       const u = await seedUser();
       await ask(u.auth, { password: PASSWORD, newEmail: 'gone@example.com' }).expect(202);
-      const secret = secretFor('gone@example.com');
+      const secret = await secretFor('gone@example.com');
       await prisma().user.update({ where: { id: u.id }, data: { accountStatus: 'deactivated' } });
       await confirm(secret).expect(400);
       expect((await prisma().user.findUniqueOrThrow({ where: { id: u.id } })).email).toBe(u.email);
@@ -310,9 +326,11 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
       await ask(other.auth, { password: PASSWORD, newEmail: 'other-new@example.com' }).expect(202);
     });
 
-    it('a right password does not spend the budget', async () => {
+    it('a right password does not spend the wrong-password budget (only the request cap counts requests)', async () => {
       const u = await seedUser();
-      for (let i = 0; i < 8; i++) await ask(u.auth, { password: PASSWORD, newEmail: `ok${i}@example.com` }).expect(202);
+      for (let i = 0; i < 5; i++) await ask(u.auth, { password: PASSWORD, newEmail: `ok${i}@example.com` }).expect(202);
+      // Five good requests used the request cap, not the wrong-password budget: a wrong password is still a 403.
+      await ask(u.auth, { password: WRONG, newEmail: 'x@example.com' }).expect(403);
     });
 
     it('requires a sign-in', async () => {
@@ -339,6 +357,7 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
       expect(await prisma().emailChangeRequest.count()).toBe(0);
 
       await ask(u.auth, { password: PASSWORD, newEmail: 'tf@example.com', twoFactorCode: generateTotpCode(secret, clock.current) }).expect(202);
+      await idle();
       expect(await prisma().emailChangeRequest.count()).toBe(1);
     });
 
@@ -357,49 +376,188 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
 
   // ================================================================== the new address
 
-  describe('an unusable address is ONE identical answer', () => {
-    it('not an address, same as current, already used, too long: byte-identical bodies and statuses', async () => {
-      const u = await seedUser();
+  describe('every kind of address gets the SAME 202 (Decision Log #476)', () => {
+    it('usable, taken, malformed, blank, too long, same-as-current: byte-identical status, body and headers', async () => {
+      // Five requests per hour per account, so the six kinds run across two accounts.
+      const a = await seedUser();
+      const b = await seedUser();
       const taken = await seedUser();
-      const candidates = [
-        'not-an-address',
-        '   ',
-        u.email.toUpperCase(),
-        taken.email,
-        taken.email.toUpperCase(),
-        `${'a'.repeat(250)}@example.com`,
-      ];
-      const results = [];
-      for (const newEmail of candidates) results.push(await ask(u.auth, { password: PASSWORD, newEmail }));
-      // (Five failed attempts spend the budget, so the sixth candidate may be the 429. Run them across two accounts.)
-      const bodies = results.filter((r) => r.status !== 429).map((r) => JSON.stringify(r.body));
-      expect(bodies.length).toBeGreaterThanOrEqual(5);
-      expect(new Set(bodies).size).toBe(1);
-      expect(results.filter((r) => r.status !== 429).every((r) => r.status === 400)).toBe(true);
-      expect(JSON.parse(bodies[0])).toEqual({
-        statusCode: 400,
-        error: 'Bad Request',
-        code: 'email_change_not_accepted',
-        message: 'That email address cannot be used.',
-      });
-      expect(await prisma().emailChangeRequest.count()).toBe(0);
-      await settle();
-      expect(calls('sendEmailChangeVerifyEmail')).toHaveLength(0);
-      expect(calls('sendEmailChangeNoticeEmail')).toHaveLength(0);
+      const answers: Array<[string, request.Response]> = [];
+      answers.push(['usable', await ask(a.auth, { password: PASSWORD, newEmail: 'brand-new@example.com' })]);
+      answers.push(['taken', await ask(a.auth, { password: PASSWORD, newEmail: taken.email.toUpperCase() })]);
+      answers.push(['malformed', await ask(a.auth, { password: PASSWORD, newEmail: 'not-an-address' })]);
+      answers.push(['blank', await ask(b.auth, { password: PASSWORD, newEmail: '   ' })]);
+      answers.push(['too long', await ask(b.auth, { password: PASSWORD, newEmail: `${'a'.repeat(250)}@example.com` })]);
+      answers.push(['same as the current address', await ask(b.auth, { password: PASSWORD, newEmail: b.email.toUpperCase() })]);
+
+      const visible = (r: request.Response) => {
+        const headers = { ...r.headers };
+        delete headers.date;
+        // The shared per-IP limiter counts every request on this route down by one (x-ratelimit-remaining-auth), whatever
+        // the address is; it is the same counter for all of them, so it is left out of the comparison.
+        delete headers['x-ratelimit-remaining-auth'];
+        delete headers['x-ratelimit-reset-auth'];
+        return JSON.stringify({ status: r.status, body: r.body, headers });
+      };
+      const first = visible(answers[0][1]);
+      for (const [kind, res] of answers) expect({ kind, answer: visible(res) }).toEqual({ kind, answer: first });
+      expect(answers[0][1].status).toBe(202);
+      expect(answers[0][1].body).toEqual({ status: 'verification_sent' });
     });
 
-    it("a minor cannot move to their guardian's address (any case); the answer is the same", async () => {
+    it('only the emails differ: the link to a usable address, the "cannot be used" email to a taken one, nothing to the rest', async () => {
+      const u = await seedUser();
+      const v = await seedUser();
+      const taken = await seedUser();
+      await ask(u.auth, { password: PASSWORD, newEmail: 'usable@example.com' }).expect(202);
+      await ask(u.auth, { password: PASSWORD, newEmail: taken.email.toUpperCase() }).expect(202);
+      await ask(v.auth, { password: PASSWORD, newEmail: 'not-an-address' }).expect(202);
+      await ask(v.auth, { password: PASSWORD, newEmail: v.email }).expect(202);
+      await idle();
+
+      expect(calls('sendEmailChangeVerifyEmail').map((c) => c.args[0])).toEqual(['usable@example.com']);
+      // Sent to the address as it is registered, with nothing else: no link, no token, nothing about who asked.
+      expect(calls('sendEmailChangeUnavailableEmail').map((c) => c.args)).toEqual([[taken.email]]);
+      // Only one pending row exists: the usable address.
+      expect(await prisma().emailChangeRequest.count()).toBe(1);
+      // The current address is told for EVERY request that got this far, and never names the new address.
+      const notices = calls('sendEmailChangeNoticeEmail').map((c) => c.args);
+      expect(notices.filter(([to]) => to === u.email)).toHaveLength(2);
+      expect(notices.filter(([to]) => to === v.email)).toHaveLength(2);
+      expect(notices.every((args) => args.length === 1)).toBe(true);
+    });
+
+    it("a minor's guardian address (any case) is the same 202 and nothing is sent to it, even if it belongs to an account", async () => {
       const minor = await seedUser({ isMinor: true, guardianEmail: 'Parent.Person@Example.com' });
-      const res = await ask(minor.auth, { password: PASSWORD, newEmail: 'parent.person@example.com' }).expect(400);
-      expect(res.body.code).toBe('email_change_not_accepted');
+      await prisma().user.create({
+        data: {
+          email: 'parent.person@example.com',
+          passwordHash: 'x',
+          displayName: 'Parent Person',
+          dateOfBirth: seedDob('1980-01-01'),
+          isMinor: false,
+          accountStatus: 'active',
+        },
+      });
+      const res = await ask(minor.auth, { password: PASSWORD, newEmail: 'parent.person@example.com' }).expect(202);
+      expect(res.body).toEqual({ status: 'verification_sent' });
+      await idle();
+      expect(calls('sendEmailChangeVerifyEmail')).toHaveLength(0);
+      expect(calls('sendEmailChangeUnavailableEmail')).toHaveLength(0);
+      expect(await prisma().emailChangeRequest.count()).toBe(0);
       const unrelated = await ask(minor.auth, { password: PASSWORD, newEmail: 'minor-new@example.com' }).expect(202);
       expect(unrelated.body.status).toBe('verification_sent');
     });
 
-    it('guessing at addresses spends the failed-attempt budget (the sixth try is a 429)', async () => {
+    it('the address work happens AFTER the response: the 202 does not wait for the lookup or the sending', async () => {
       const u = await seedUser();
-      for (let i = 0; i < 5; i++) await ask(u.auth, { password: PASSWORD, newEmail: 'nonsense' }).expect(400);
+      const taken = await seedUser();
+      const service = app.get(EmailChangeService);
+      // Hold every recipient claim back; the response must still arrive, with nothing sent or stored yet.
+      const limiter = (service as unknown as { limiter: { claimRecipientSlot: (to: string) => Promise<boolean> } }).limiter;
+      const original = limiter.claimRecipientSlot.bind(limiter);
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      limiter.claimRecipientSlot = async (to: string) => {
+        await gate;
+        return original(to);
+      };
+      try {
+        await ask(u.auth, { password: PASSWORD, newEmail: taken.email }).expect(202);
+        expect(sent).toHaveLength(0);
+        expect(await prisma().emailChangeRequest.count()).toBe(0);
+      } finally {
+        release();
+        await idle();
+        limiter.claimRecipientSlot = original;
+      }
+      expect(calls('sendEmailChangeUnavailableEmail')).toHaveLength(1);
+    });
+  });
+
+  describe('the new limits (Decision Log #476)', () => {
+    it('five requests per hour on ANY outcome; the sixth is a 429 with Retry-After, whatever the address', async () => {
+      const u = await seedUser();
+      const taken = await seedUser();
+      const kinds = ['usable-1@example.com', taken.email, 'nonsense', u.email, 'usable-2@example.com'];
+      for (const newEmail of kinds) await ask(u.auth, { password: PASSWORD, newEmail }).expect(202);
+      const sixth = await ask(u.auth, { password: PASSWORD, newEmail: 'usable-3@example.com' }).expect(429);
+      expect(Number(sixth.headers['retry-after'])).toBeGreaterThan(0);
+      // Counted per account: another account is not affected.
+      const other = await seedUser();
+      await ask(other.auth, { password: PASSWORD, newEmail: 'other-new@example.com' }).expect(202);
+      await idle();
+      // The refused sixth sent nothing and stored nothing.
+      expect(calls('sendEmailChangeVerifyEmail').some((c) => c.args[0] === 'usable-3@example.com')).toBe(false);
+    });
+
+    it('a not-accepted address spends the request cap but NOT the wrong-password budget', async () => {
+      const u = await seedUser();
+      for (let i = 0; i < 5; i++) await ask(u.auth, { password: PASSWORD, newEmail: 'nonsense' }).expect(202);
       await ask(u.auth, { password: PASSWORD, newEmail: 'nonsense' }).expect(429);
+      // The wrong-password budget is untouched: a wrong password is still a plain 403, not the 429 lock.
+      const wrong = await ask(u.auth, { password: WRONG, newEmail: 'nonsense' }).expect(403);
+      expect(wrong.body.code).toBe('wrong_password');
+    });
+
+    it('at most 3 emails per 24 hours reach one recipient; beyond that it is skipped silently and the answer is still 202', async () => {
+      const target = 'popular@example.com';
+      const users = [await seedUser(), await seedUser(), await seedUser(), await seedUser(), await seedUser()];
+      for (const u of users) {
+        const res = await ask(u.auth, { password: PASSWORD, newEmail: target }).expect(202);
+        expect(res.body).toEqual({ status: 'verification_sent' });
+        await idle();
+      }
+      expect(calls('sendEmailChangeVerifyEmail').filter((c) => c.args[0] === target)).toHaveLength(3);
+      // The fourth and fifth were skipped BEFORE a row was made.
+      expect(await prisma().emailChangeRequest.count()).toBe(3);
+    });
+
+    it('the same share covers the "cannot be used" email and the old-address notice', async () => {
+      const taken = await seedUser();
+      const askers = [await seedUser(), await seedUser(), await seedUser(), await seedUser()];
+      for (const u of askers) {
+        await ask(u.auth, { password: PASSWORD, newEmail: taken.email }).expect(202);
+        await idle();
+      }
+      expect(calls('sendEmailChangeUnavailableEmail').filter((c) => c.args[0] === taken.email)).toHaveLength(3);
+
+      // Four requests from ONE account: four different new addresses, but its old address is one recipient.
+      const one = await seedUser();
+      for (let i = 0; i < 4; i++) {
+        await ask(one.auth, { password: PASSWORD, newEmail: `many-${i}@example.com` }).expect(202);
+        await idle();
+      }
+      expect(calls('sendEmailChangeNoticeEmail').filter((c) => c.args[0] === one.email)).toHaveLength(3);
+      expect(calls('sendEmailChangeVerifyEmail').filter((c) => String(c.args[0]).startsWith('many-'))).toHaveLength(4);
+    });
+
+    it('the recipient key is hashed: no raw address is stored in Redis', async () => {
+      const u = await seedUser();
+      await ask(u.auth, { password: PASSWORD, newEmail: 'private.person@example.com' }).expect(202);
+      await idle();
+      const keys = await redis.keys('*email-change*');
+      expect(keys.length).toBeGreaterThan(0);
+      expect(keys.some((k) => k.includes('private.person') || k.includes(u.email))).toBe(false);
+    });
+
+    it('an unusable WEB_APP_BASE_URL is the same coded 503 for every address and nothing is looked up or stored', async () => {
+      baseUrlUsable = false;
+      const u = await seedUser();
+      const taken = await seedUser();
+      const bodies = [];
+      for (const newEmail of ['usable@example.com', taken.email, 'nonsense']) {
+        const res = await ask(u.auth, { password: PASSWORD, newEmail }).expect(503);
+        bodies.push(JSON.stringify(res.body));
+      }
+      expect(new Set(bodies).size).toBe(1);
+      expect(JSON.parse(bodies[0])).toMatchObject({ code: 'email_change_unavailable' });
+      await settle();
+      expect(sent).toHaveLength(0);
+      expect(await prisma().emailChangeRequest.count()).toBe(0);
+      // It did not even spend a wrong-password slot or a request slot.
+      baseUrlUsable = true;
+      for (let i = 0; i < 5; i++) await ask(u.auth, { password: PASSWORD, newEmail: `after-${i}@example.com` }).expect(202);
     });
   });
 
@@ -411,7 +569,7 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
       await ask(minor.auth, { password: PASSWORD, newEmail: 'minor-new@example.com' }).expect(202);
       await settle();
       expect(noticesToGuardian()).toHaveLength(0); // asking is not a change
-      await confirm(secretFor('minor-new@example.com')).expect(204);
+      await confirm(await secretFor('minor-new@example.com')).expect(204);
       await waitForNotices(1);
 
       expect(noticesToGuardian()).toHaveLength(1);
@@ -443,7 +601,7 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
       const minor = await seedUser({ isMinor: true });
       await ask(minor.auth, { password: PASSWORD, newEmail: 'late-minor@example.com' }).expect(202);
       await prisma().guardian.update({ where: { minorUserId: minor.id }, data: { consentStatus: 'declined' } });
-      const res = await confirm(secretFor('late-minor@example.com')).expect(400);
+      const res = await confirm(await secretFor('late-minor@example.com')).expect(400);
       expect(res.body.code).toBe('email_change_link_invalid');
       await settle();
       expect(noticesToGuardian()).toHaveLength(0);
@@ -454,7 +612,7 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
       const minor = await seedUser({ isMinor: true });
       await ask(minor.auth, { password: PASSWORD, newEmail: 'swap@example.com' }).expect(202);
       await prisma().guardian.update({ where: { minorUserId: minor.id }, data: { email: 'Swap@Example.com' } });
-      await confirm(secretFor('swap@example.com')).expect(400);
+      await confirm(await secretFor('swap@example.com')).expect(400);
       expect((await prisma().user.findUniqueOrThrow({ where: { id: minor.id } })).email).toBe(minor.email);
     });
 
@@ -465,7 +623,7 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
       });
       await prisma().guardianNoticeWithhold.create({ data: { userId: minor.id, setByAdminId: admin.id, reason: 'child protection reasons' } });
       await ask(minor.auth, { password: PASSWORD, newEmail: 'withheld@example.com' }).expect(202);
-      await confirm(secretFor('withheld@example.com')).expect(204);
+      await confirm(await secretFor('withheld@example.com')).expect(204);
       await settle();
       expect(noticesToGuardian()).toHaveLength(0);
     });
@@ -477,6 +635,7 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
     it('the anonymiser deletes the account\'s open requests', async () => {
       const u = await seedUser();
       await ask(u.auth, { password: PASSWORD, newEmail: 'pending@example.com' }).expect(202);
+      await idle();
       expect(await prisma().emailChangeRequest.count({ where: { userId: u.id } })).toBe(1);
       await app.get(AccountDeletionSweepService).anonymizeUser(u.id, false, new Date());
       expect(await prisma().emailChangeRequest.count({ where: { userId: u.id } })).toBe(0);
@@ -485,6 +644,7 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
     it('a hard delete of the user cascades (the FK is ON DELETE CASCADE)', async () => {
       const u = await seedUser();
       await ask(u.auth, { password: PASSWORD, newEmail: 'pending2@example.com' }).expect(202);
+      await idle();
       expect(await prisma().emailChangeRequest.count({ where: { userId: u.id } })).toBe(1);
       await prisma().user.delete({ where: { id: u.id } });
       expect(await prisma().emailChangeRequest.count()).toBe(0);
