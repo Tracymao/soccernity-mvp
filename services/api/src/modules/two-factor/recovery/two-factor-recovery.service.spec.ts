@@ -158,7 +158,10 @@ function build(users: UserRow[]) {
     findFirst: jest.fn(async ({ where }: { where: Where }) => rows.find((r) => matches(r, where)) ?? null),
     findMany: jest.fn(async ({ where, take }: { where: Where; take?: number }) => {
       const found = rows.filter((r) => matches(r, where)).sort((a, b) => (a.executeAt?.getTime() ?? 0) - (b.executeAt?.getTime() ?? 0));
-      return found.slice(0, take ?? found.length).map((r) => ({ ...r, user: users.find((u) => u.id === r.userId) }));
+      return found.slice(0, take ?? found.length).map((r) => {
+        const u = users.find((x) => x.id === r.userId);
+        return { ...r, user: u ? { ...u, guardianNoticeWithhold: u.withheld ? { id: 'withhold-1' } : null } : undefined };
+      });
     }),
     create: jest.fn(async ({ data }: { data: Partial<Row> }) => {
       const row: Row = {
@@ -952,27 +955,44 @@ describe('guardian approve / decline', () => {
   });
 });
 
-// B-280 (Decision Log #458): while guardian notices are withheld for a minor's account, guardian-assisted recovery is off.
-describe('withhold guardian notices (B-280)', () => {
-  it('request: a withheld minor gets { audience: "no_guardian" } exactly like a minor with no confirmed guardian, and nothing is created or sent', async () => {
-    const withheld = build([minor()]);
-    withheld.users[0].withheld = true;
-    await withheld.service.onModuleInit();
-    const noGuardian = build([minor(null)]);
-    await noGuardian.service.onModuleInit();
+// B-280 (Decision Log #458) + Decision Log #480: while guardian notices are withheld for a minor's account,
+// guardian-assisted recovery is off and the minor takes the ADULT path (own email, 24-hour wait).
+describe('withhold guardian notices (B-280, Decision Log #480)', () => {
+  const flagged = (guardian?: UserRow['guardian']) => {
+    const t = build([guardian === undefined ? minor() : minor(guardian)]);
+    t.users[0].withheld = true;
+    return t;
+  };
 
-    const a = await withheld.service.request('minor@example.com', 'pw', IP);
-    const b = await noGuardian.service.request('minor@example.com', 'pw', IP);
+  it('request: a flagged minor gets { audience: "account" } and the link goes to their OWN email; nothing goes to a guardian', async () => {
+    const t = flagged();
+    await t.service.onModuleInit();
 
-    expect(a).toEqual({ audience: 'no_guardian' });
-    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
-    expect(withheld.rows).toHaveLength(0);
-    for (const fn of Object.values(withheld.emails)) expect(fn).not.toHaveBeenCalled();
+    expect(await t.service.request('minor@example.com', 'pw', IP)).toEqual({ audience: 'account' });
+
+    expect(t.rows).toHaveLength(1);
+    expect(t.rows[0]).toMatchObject({ userId: 'minor-1', kind: 'adult', state: 'pending' });
+    expect(t.rows[0].expiresAt.getTime() - t.clock.current).toBe(ADULT_LINK_TTL_MS);
+    expect(t.emails.sendTwoFactorRecoveryLinkEmail).toHaveBeenCalledTimes(1);
+    expect(t.emails.sendTwoFactorRecoveryLinkEmail.mock.calls[0][0]).toBe('minor@example.com');
+    expect(t.emails.sendTwoFactorRecoveryGuardianLinkEmail).not.toHaveBeenCalled();
+    expect(t.emails.sendTwoFactorRecoveryMinorNoticeEmail).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['no guardian row', null],
+    ['a pending guardian', { email: 'guardian@example.com', consentStatus: 'pending' }],
+    ['a confirmed guardian', { email: 'guardian@example.com', consentStatus: 'confirmed' }],
+  ] as const)('request: a flagged minor with %s takes the adult path (the flag decides, not the guardian)', async (_n, guardian) => {
+    const t = flagged(guardian as UserRow['guardian']);
+    await t.service.onModuleInit();
+    expect(await t.service.request('minor@example.com', 'pw', IP)).toEqual({ audience: 'account' });
+    expect(t.rows[0]).toMatchObject({ kind: 'adult' });
+    expect(t.emails.sendTwoFactorRecoveryGuardianLinkEmail).not.toHaveBeenCalled();
   });
 
   it('request: the same work and the same budget as a normal request (one verification, the limiter is charged)', async () => {
-    const t = build([minor()]);
-    t.users[0].withheld = true;
+    const t = flagged();
     await t.service.onModuleInit();
 
     await t.service.request('minor@example.com', 'pw', IP);
@@ -981,12 +1001,26 @@ describe('withhold guardian notices (B-280)', () => {
     await expect(t.service.request('minor@example.com', 'pw', IP)).rejects.toBeInstanceOf(AuthLimitExceeded);
   });
 
-  it('request: a WRONG password on a withheld minor is still the generic account answer (the audience is not revealed)', async () => {
-    const t = build([minor()]);
-    t.users[0].withheld = true;
+  it('request: a WRONG password on a flagged minor is the generic account answer, byte-identical to the correct one (nothing about the account is revealed)', async () => {
+    const t = flagged();
     await t.service.onModuleInit();
+    const wrong = await t.service.request('minor@example.com', 'WRONG', IP);
+    expect(wrong).toEqual({ audience: 'account' });
+    expect(t.rows).toHaveLength(0);
 
-    expect(await t.service.request('minor@example.com', 'WRONG', IP)).toEqual({ audience: 'account' });
+    const t2 = flagged();
+    await t2.service.onModuleInit();
+    const right = await t2.service.request('minor@example.com', 'pw', IP);
+    expect(JSON.stringify(right)).toBe(JSON.stringify(wrong));
+  });
+
+  it('request: an unflagged minor is exactly as before (guardian link, or no_guardian)', async () => {
+    const a = build([minor()]);
+    await a.service.onModuleInit();
+    expect(await a.service.request('minor@example.com', 'pw', IP)).toEqual({ audience: 'guardian' });
+    const b = build([minor(null)]);
+    await b.service.onModuleInit();
+    expect(await b.service.request('minor@example.com', 'pw', IP)).toEqual({ audience: 'no_guardian' });
   });
 
   it('request: an ADULT is untouched by the flag', async () => {
@@ -996,6 +1030,56 @@ describe('withhold guardian notices (B-280)', () => {
 
     expect(await t.service.request('adult@example.com', 'pw', IP)).toEqual({ audience: 'account' });
     expect(t.emails.sendTwoFactorRecoveryLinkEmail).toHaveBeenCalledTimes(1);
+  });
+
+  describe('the adult-kind wait on a flagged minor', () => {
+    async function requested() {
+      const t = flagged();
+      await t.service.onModuleInit();
+      await t.service.request('minor@example.com', 'pw', IP);
+      return { t, token: sentToken(t.emails.sendTwoFactorRecoveryLinkEmail) };
+    }
+
+    it('confirm starts the 24-hour wait while the flag is still set', async () => {
+      const { t, token } = await requested();
+      const result = await t.service.confirm(token);
+      expect(result.state).toBe('waiting');
+      expect(t.rows[0].state).toBe('waiting');
+      expect(t.emails.sendTwoFactorRecoveryWaitingEmail).toHaveBeenCalledWith('minor@example.com', expect.any(String), expect.any(String));
+    });
+
+    it('confirm: if the flag was CLEARED after the request, the link reads as expired and nothing starts', async () => {
+      const { t, token } = await requested();
+      t.users[0].withheld = false;
+      await expectLinkError(t.service.confirm(token), 'expired');
+      expect(t.rows[0].state).toBe('superseded');
+      expect(t.emails.sendTwoFactorRecoveryWaitingEmail).not.toHaveBeenCalled();
+    });
+
+    it('sweep: the wait completes (two-factor removed, sessions ended) while the flag is still set', async () => {
+      const { t, token } = await requested();
+      await t.service.confirm(token);
+      t.clock.current += ADULT_WAIT_MS + 1;
+      const result = await t.sweep.sweep(t.clock.now());
+      expect(result.completed).toEqual([t.rows[0].id]);
+      expect(t.users[0].totpEnabledAt).toBeNull();
+      expect(t.log).toEqual(['revoke:minor-1', 'cleared:minor-1']);
+      expect(t.emails.sendTwoFactorRecoveryCompletedEmail).toHaveBeenCalledWith('minor@example.com');
+    });
+
+    it('sweep: if the flag was CLEARED during the wait, the request is cancelled and nothing is removed', async () => {
+      const { t, token } = await requested();
+      await t.service.confirm(token);
+      t.users[0].withheld = false;
+      t.clock.current += ADULT_WAIT_MS + 1;
+      const result = await t.sweep.sweep(t.clock.now());
+      expect(result.completed).toEqual([]);
+      expect(result.cancelled).toEqual([t.rows[0].id]);
+      expect(t.rows[0].state).toBe('cancelled');
+      expect(t.users[0].totpEnabledAt).not.toBeNull();
+      expect(t.tokenService.revokeAllSessionsForUser).not.toHaveBeenCalled();
+      expect(t.emails.sendTwoFactorRecoveryCompletedEmail).not.toHaveBeenCalled();
+    });
   });
 
   describe('guardian links created before the flag was set', () => {

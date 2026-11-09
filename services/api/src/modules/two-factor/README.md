@@ -85,9 +85,10 @@ A rejected link action is **400** `{ statusCode, error, code, state, message }` 
 **`request`**: an unknown email, a wrong password, two-factor off and a non-active account are the SAME `202 { audience:
 "account" }`, send nothing, do one argon2 verification each (a dummy hash when there is no account) and spend the same
 budget, so the audience is revealed only after a correct password. After one: an **adult** gets a link at their own
-address; a **minor with a confirmed guardian** (and an email on file) gets a link sent to the **guardian** and a notice at
-their own address that it went there; a **minor with no confirmed guardian** gets `no_guardian` and nothing is created or
-sent. A new request supersedes an earlier unused one; a request that is already WAITING is left alone (same 202, no new
+address; a **minor whose guardian notices are withheld** (B-280) gets the SAME adult path (below, Decision Log #480); any
+other **minor with a confirmed guardian** (and an email on file) gets a link sent to the **guardian** and a notice at
+their own address that it went there; any other **minor with no confirmed guardian** gets `no_guardian` and nothing is
+created or sent. A new request supersedes an earlier unused one; a request that is already WAITING is left alone (same 202, no new
 row, no email). Adult or minor is `User.isMinor` at the moment of the request.
 
 **Limits.** The route first charges the EXISTING login limiter (`AuthLimitsService.beginLogin/endLogin`: the per-IP
@@ -129,20 +130,32 @@ guardian's own link email is the one guardian email of the request, and approve/
 new one · a successful sign-in cancels only a waiting request · all four failure cases spend the login budget · the
 cancel token is also returned by `confirm`.
 
-## Recovery and the withhold flag (B-280; Decision Log #458)
+## Recovery and the withhold flag (B-280; Decision Log #458, #480)
 
 Guardian-assisted recovery is **off** while a child-safety-vetted admin has "withhold guardian notices" switched on for
-the minor's account:
+the minor's account, and the minor recovers like an adult instead (Decision Log #480, founder, 2026-11-08):
 
-- `request()` returns `{ audience: "no_guardian" }` exactly as for a minor with no confirmed guardian: nothing created,
-  nothing sent, the same limiter budget spent. It is reached only after a correct password, so the anti-enumeration rule
-  is unchanged (a wrong password is still the generic `{ audience: "account" }`).
+- `request()`: after a CORRECT password, a minor with the flag set takes the **adult path**: `kind: "adult"`, the link goes
+  to the account's **own email**, the answer is `{ audience: "account" }`, the same 24-hour wait, the same limits and the
+  same limiter budget. It does not matter whether the minor has a guardian row, a pending guardian or a confirmed one: the
+  flag decides. **Nothing goes to the guardian**, no minor notice is sent (it would only say the link went elsewhere), and
+  the B-275 / B-279 notice gate stays silent as before. A wrong password, an unknown account, two-factor off and a closed
+  account are still the one generic `{ audience: "account" }`, so the answer for a flagged minor is byte-identical to every
+  other failure and nothing about the flag is revealed. Every OTHER minor behaves exactly as before: a guardian link, or
+  `no_guardian` when there is no confirmed guardian.
+- **Completion is re-checked against the flag, twice.** An adult-kind request belongs to a minor only while the flag is
+  STILL set: `confirm` (the link click) reads the flag at that moment and, if it was cleared in between, the request is
+  ended and the link reads as `expired` (the same answer as any other changed account); and the hourly sweep
+  (`completeDue`) cancels a confirmed wait for a minor whose flag was cleared during the 24 hours and removes nothing
+  (it is counted in `cancelled`). An adult account is never affected by the flag.
 - The guardian routes (`GET link/:token` for a guardian link, `guardian/approve`, `guardian/decline`) treat a withheld
   account as an **expired** link and do nothing (no session ended, no email, the request row untouched).
 - Setting the flag also **cancels, in the same transaction**, any active guardian-kind request for the account
   (`state: cancelled`, `doneAt` set), so an old link stays dead after the flag is cleared (it reads as used/expired).
-- The adult flow is not touched. What staff do to help a minor whose recovery is switched off is not built: the minor is
-  pointed to Contact Us and staff use the existing paths.
+  Adult-kind requests are not touched when the flag is set or cleared; the checks above handle them at confirm and in the
+  sweep.
+- Before #480 a flagged minor got `no_guardian` and was pointed to Contact Us. That is no longer the answer for a flagged
+  minor (it remains the answer for an unflagged minor with no confirmed guardian).
 
 
 ## Defaults I chose (founder can veto — each is flagged in the PR)

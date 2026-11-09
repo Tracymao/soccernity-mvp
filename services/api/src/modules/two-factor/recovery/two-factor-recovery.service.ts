@@ -114,6 +114,8 @@ export type CompleteOutcome = 'done' | 'lost' | 'not_enabled';
 //             minor, confirmed guardian  -> link to the GUARDIAN (72 h), notice to
 //                                           the minor's own address                 { audience: "guardian" }
 //             minor, no confirmed guardian -> nothing is sent                       { audience: "no_guardian" }
+//             minor, guardian notices WITHHELD (#458, Decision Log #480) -> the adult path: link to the account's own
+//                                           email, 24-hour wait, { audience: "account" }; nothing goes to a guardian
 //  confirm  (adult) the link starts the 24-hour wait and emails a notice with a separate cancel link.
 //  cancel   (adult) the cancel link, or a successful two-factor sign-in, stops a waiting request.
 //  approve / decline  (guardian). Approve removes two-factor at once; decline cancels and tells the minor.
@@ -193,17 +195,18 @@ export class TwoFactorRecoveryService implements OnModuleInit {
       await this.limits.endLogin(ticket, 'success');
 
       const now = this.clock.now();
-      if (!user.isMinor) {
+      // Decision Log #480: a minor whose guardian notices are withheld (#458) takes the ADULT path: the link goes to
+      // the account's own address, the same 24-hour wait, the same limits. Nothing goes to the guardian. Reached only
+      // after a correct password, so the audience is revealed to no one else.
+      if (!user.isMinor || user.guardianNoticeWithhold) {
         const created = await this.createRequest(user.id, 'adult', now, ADULT_LINK_TTL_MS);
         if (created) await this.email.sendTwoFactorRecoveryLinkEmail(user.email, created.token);
         return { audience: 'account' };
       }
 
       const guardianEmail = user.guardian?.email?.trim();
-      // B-280 (Decision Log #458): while guardian notices are withheld for this account, guardian-assisted recovery is
-      // OFF and looks exactly like "no confirmed guardian". Reached only after a correct password, so the audience
-      // is revealed to no one else (the anti-enumeration rule is unchanged), and the budget spent is the same.
-      if (user.guardianNoticeWithhold || user.guardian?.consentStatus !== 'confirmed' || !guardianEmail) {
+      // (A withheld minor never gets here: it took the adult path above, Decision Log #480.)
+      if (user.guardian?.consentStatus !== 'confirmed' || !guardianEmail) {
         // A minor with no usable guardian: nothing is created and nothing is sent. The page points to Contact Us.
         return { audience: 'no_guardian' };
       }
@@ -321,10 +324,12 @@ export class TwoFactorRecoveryService implements OnModuleInit {
 
     const user = await this.prisma.user.findUnique({
       where: { id: found.row.userId },
-      select: { email: true, accountStatus: true, totpEnabledAt: true, isMinor: true },
+      select: { email: true, accountStatus: true, totpEnabledAt: true, isMinor: true, guardianNoticeWithhold: { select: { id: true } } },
     });
-    // The account changed since the link was sent: the request no longer applies.
-    if (!user || user.accountStatus !== 'active' || !user.totpEnabledAt || user.isMinor) {
+    // The account changed since the link was sent: the request no longer applies. A minor is allowed here ONLY while
+    // guardian notices are STILL withheld at this moment (Decision Log #480); if the flag was cleared in between, the
+    // link reads as expired, the same answer as any other changed account.
+    if (!user || user.accountStatus !== 'active' || !user.totpEnabledAt || (user.isMinor && !user.guardianNoticeWithhold)) {
       await this.endRequest(found.row.id, 'superseded', ['pending']);
       throw this.linkError('expired');
     }
@@ -471,13 +476,28 @@ export class TwoFactorRecoveryService implements OnModuleInit {
       where: { state: 'waiting', executeAt: { lte: now } },
       orderBy: { executeAt: 'asc' },
       take: SWEEP_BATCH_SIZE,
-      select: { id: true, userId: true, user: { select: { email: true, accountStatus: true, totpEnabledAt: true } } },
+      select: {
+        id: true,
+        userId: true,
+        user: {
+          select: {
+            email: true,
+            accountStatus: true,
+            totpEnabledAt: true,
+            isMinor: true,
+            guardianNoticeWithhold: { select: { id: true } },
+          },
+        },
+      },
     });
     const completed: string[] = [];
     const cancelled: string[] = [];
     for (const row of due) {
       try {
-        if (row.user.accountStatus !== 'active' || !row.user.totpEnabledAt) {
+        // Decision Log #480: an adult-kind wait on a MINOR's account only completes while guardian notices are still
+        // withheld; if the flag was cleared during the 24 hours, the wait is cancelled and nothing is removed.
+        const minorNoLongerFlagged = row.user.isMinor && !row.user.guardianNoticeWithhold;
+        if (row.user.accountStatus !== 'active' || !row.user.totpEnabledAt || minorNoLongerFlagged) {
           if (await this.endRequest(row.id, 'cancelled', ['waiting'], now)) cancelled.push(row.id);
           continue;
         }
