@@ -101,7 +101,7 @@ export class RegistrationController {
 // field list and a nested `accessToken: { token, expiresIn }` shape. See
 // auth/README.md's "response shape reconciliation" note for why these two
 // endpoints intentionally return the identical token/user shape now.
-export function toRegisterResponse(result: RegisterResult) {
+function toRegisterResponse(result: RegisterResult) {
   const { user, dateOfBirth, guardian, tokens } = result;
   return {
     // A freshly registered minor's guardian row is always 'pending' (B-030).

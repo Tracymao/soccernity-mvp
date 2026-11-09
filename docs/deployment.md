@@ -165,20 +165,6 @@ No two may be the same.
      placeholder host, `http`, or localhost makes the API refuse to start**
      (`assertProductionEnv`, B-163; Decision Log #408). Outside production
      nothing is checked and localhost origins on any port are allowed.
-   - `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`,
-     `FACEBOOK_OAUTH_CLIENT_ID`, `FACEBOOK_OAUTH_CLIENT_SECRET` — social sign-in
-     (B-084). **Optional and OFF by default**: a provider is switched on only
-     when both its id and secret are set to real values, and until then its
-     endpoints answer "not available" and nothing else changes. To switch one
-     on: create an OAuth app with the provider (a **human** step: a Google Cloud
-     OAuth client, a Facebook app), register the redirect URI
-     `<WEB_APP_BASE_URL>/auth/social/google/callback` (or `.../facebook/callback`),
-     request the identity scopes only (**not** the birthday permission), and set
-     the two variables for that provider in the dashboard. A provider also needs
-     a usable `WEB_APP_BASE_URL`. The Facebook Graph API version is a constant in
-     `social-auth.constants.ts` (versions expire after about two years: confirm
-     it when you add the keys). The sign-in pages in `apps/web` (B-085) are a
-     separate build; until they exist the buttons do not appear.
    - `TRUST_PROXY_HOPS`, `MAXMIND_ACCOUNT_ID`, `MAXMIND_LICENSE_KEY`,
      `GEOLITE2_DB_PATH` — country derivation; see "Country derivation
      (GeoLite2)" below. All optional, all fail safe (stronger safeguarding

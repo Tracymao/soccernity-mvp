@@ -26,7 +26,6 @@ function buildPrismaMock(opts: { held?: boolean } = {}) {
     savedPost: { deleteMany: jest.fn() },
     // B-086: the hashes of the user's two-factor backup codes go with the account's ability to sign in.
     userBackupCode: { deleteMany: jest.fn() },
-    socialIdentity: { deleteMany: jest.fn() },
     twoFactorRecoveryRequest: { deleteMany: jest.fn() },
     emailChangeRequest: { deleteMany: jest.fn() },
     // B-062: the person's notification filter options go with the account.
@@ -471,8 +470,6 @@ describe('AccountDeletionSweepService', () => {
       expect(prisma.like.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.savedPost.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.userBackupCode.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
-      // B-084: the links to Google / Facebook are sign-in credentials and go with the ability to sign in.
-      expect(prisma.socialIdentity.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.notificationPreference.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.pushSubscription.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.follow.deleteMany).toHaveBeenCalledWith({
@@ -782,8 +779,6 @@ describe('AccountDeletionSweepService', () => {
       expect(prisma.like.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.savedPost.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.userBackupCode.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
-      // B-084: the links to Google / Facebook are sign-in credentials and go with the ability to sign in.
-      expect(prisma.socialIdentity.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.notificationPreference.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.pushSubscription.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
       expect(prisma.follow.deleteMany).toHaveBeenCalledWith({

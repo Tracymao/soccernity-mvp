@@ -261,10 +261,6 @@ export class AccountDeletionSweepService {
     // B-086: the hashes of the user's two-factor backup codes (the secret itself is cleared on the User row by
     // both callers). Credential material: it goes whenever the account can no longer sign in.
     await tx.userBackupCode.deleteMany({ where: { userId } });
-    // B-084: the links to Google / Facebook are sign-in credentials too. Deleted whenever the account can no longer
-    // sign in (the password hash goes in the same two paths), so a held or anonymised account cannot be entered
-    // through a provider either.
-    await tx.socialIdentity.deleteMany({ where: { userId } });
     // B-276: open two-factor recovery requests (link/cancel token hashes). Ephemeral and security-sensitive; nothing
     // to keep once the account can no longer sign in.
     await tx.twoFactorRecoveryRequest.deleteMany({ where: { userId } });
