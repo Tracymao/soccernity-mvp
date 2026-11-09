@@ -4,6 +4,7 @@ import {
   ANONYMISER_DELETES_RELATIONS,
   CONTENT_RELATIONS,
   PLAIN_USER_REFERENCES,
+  REPORT_EVIDENCE_MODELS,
   findFirstBlocker,
   unclassifiedRelationKeys,
   userForeignKeyRelations,
@@ -94,6 +95,27 @@ describe('purge reference classification', () => {
       }
     }
     expect(found.sort()).toEqual(Object.keys(PLAIN_USER_REFERENCES).sort());
+  });
+});
+
+describe('report evidence models (backend/b286-message-report-context)', () => {
+  it('ReportContextMessage is classified, exists in the schema, and has no relation to User of its own', () => {
+    expect(REPORT_EVIDENCE_MODELS).toEqual(['ReportContextMessage']);
+    const model = models.find((m) => m.name === 'ReportContextMessage');
+    expect(model).toBeDefined();
+    expect(model!.fields.some((f) => f.kind === 'object' && f.type === 'User')).toBe(false);
+  });
+
+  it('its message foreign key is RESTRICT (evidence cannot be deleted) and its report foreign key CASCADEs', () => {
+    const model = models.find((m) => m.name === 'ReportContextMessage')!;
+    const byName = (name: string) => model.fields.find((f) => f.name === name)!;
+    expect(byName('message').relationOnDelete).toBe('Restrict');
+    expect(byName('report').relationOnDelete).toBe('Cascade');
+  });
+
+  it('the sender of a context message is covered by the purge check through Message.sender and the thread', () => {
+    expect(CONTENT_RELATIONS).toContain('Message.sender');
+    expect(Object.keys(PLAIN_USER_REFERENCES)).toContain('Conversation.participantIds');
   });
 });
 

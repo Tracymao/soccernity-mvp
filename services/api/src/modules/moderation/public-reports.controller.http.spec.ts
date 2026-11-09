@@ -174,5 +174,12 @@ describe('PublicReportsController (HTTP layer)', () => {
         .send({ ...validBody, reporterId: 'someone' })
         .expect(400);
     });
+
+    it('rejects contextMessageIds: only a signed-in report about a message may carry context (B-286)', async () => {
+      await request(app.getHttpServer())
+        .post('/reports/public')
+        .send({ ...validBody, contextMessageIds: ['00000000-0000-4000-8000-000000000001'] })
+        .expect(400);
+    });
   });
 });

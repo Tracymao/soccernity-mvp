@@ -816,6 +816,51 @@ report hold (`findInvolvedReports` joins `Message.senderId`) and `HoldService` a
 report being FILED notifies no one; the sender is never told who reported them or that a message was reported (the
 `moderation_decision` notification carries only the report id).
 
+**Context messages (`backend/b286-message-report-context`, Decision Log #477, B-286).** A `message` report may attach
+other messages of the same conversation so a moderator sees what led to it. `POST /reports` takes an optional
+`contextMessageIds` (array of uuid, at most 20, duplicates dropped, order kept). The field with any other `targetType`
+is a coded 400 `report_context_not_allowed` before any database read (even an empty array); `POST /reports/public`
+never accepts it (global `forbidNonWhitelisted`).
+
+One validation, in one place (`ModerationService.resolveContextMessageIds`), run after the reported message itself has
+passed `assertMessageReportable`. Every id must be:
+
+- in the SAME conversation as the reported message;
+- among the 10 messages immediately BEFORE or the 10 immediately AFTER it in `(sentAt, id)` order. Positions are
+  counted over ALL the conversation's messages, hidden or deleted ones included, so the window does not shift and
+  reveals nothing about what the reporter cannot see;
+- visible to the reporter exactly as the reported message must be: not hidden by them (`MessageHide`), sent after any
+  `ConversationHide` cutoff, not deleted for everyone.
+
+The reporter's OWN messages are allowed (the lookup never reads the sender). The reported message itself is not a
+valid context id. ANY failure, for any id, refuses the whole set with the same `404 "Message not found"` the existing
+refusals give (a missing id, your own message, a stranger's), so nothing about a message the reporter may not see is
+confirmed. Nothing is written when validation fails.
+
+Storage: `ReportContextMessage` (`reportId` CASCADE, `messageId` RESTRICT, composite primary key, `createdAt`;
+migration `20261123090000_add_report_context_message`, additive, rollback in its header). RESTRICT is a deliberate
+safety net: a message that is part of a report's evidence cannot be deleted while the report exists.
+
+**Repeat reports.** The existing rule (one open report per reporter per message returns the existing report) now ALSO
+adds any new valid context ids to it, inside the same transaction and advisory lock. Ids already attached are skipped.
+At most 20 are attached to a report IN TOTAL: when it is nearly full only the first ids that fit (in the order sent)
+are added and the rest are ignored without an error (DEFAULT, founder-veto-able). A repeat whose ids fail validation is
+the 404 and leaves the existing report untouched.
+
+**Admin read** (`GET /admin/moderation/reports/:id` on a message report) keeps `reportedMessage` and adds
+`contextMessages`: an array, empty when none, oldest first (`sentAt`, then `id`). Each entry is
+`{ id, sentAt, sender: { publicName }, sentByReporter, contentText, originalContentText, editedAt, deletedForEveryone }`.
+The text is kept after an edit or a delete-for-everyone, like `reportedMessage`. No conversation id, no recipient, no
+sender id, no other message. The child-safety-vetting gate applies first, as today. Filing a report (with or without
+context) notifies nobody.
+
+**Retention (for the later sweep).** The messages in `ReportContextMessage` are evidence. The retention sweep that is
+built later MUST NOT delete any message that has a row there (nor the reported message of an open or unretired
+report). `messageId` RESTRICT makes a naive DELETE fail loudly rather than silently drop evidence, but the sweep must
+skip them on purpose. The account-deletion purge needs no entry of its own: the sender of every such message is
+already covered by `Message.sender` and `Conversation.participantIds`, and the model is listed in
+`REPORT_EVIDENCE_MODELS` (`anonymized-row-purge.references.ts`) so the decision is explicit.
+
 **Moderator actions.** `content_removed` records the action only, exactly as for a post or comment (it is not
 enforced). Moderators cannot delete a message: that is a known gap (DEFAULT, founder-veto-able), not built here.
 

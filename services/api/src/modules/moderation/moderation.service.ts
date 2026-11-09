@@ -35,8 +35,11 @@ import {
   ENQUIRY_REPORT_TARGET_TYPE,
   MODERATION_DEFAULT_PAGE_SIZE,
   MODERATION_MAX_PAGE_SIZE,
+  MESSAGE_REPORT_CONTEXT_MAX,
+  MESSAGE_REPORT_CONTEXT_WINDOW,
   MESSAGE_REPORT_TARGET_TYPE,
   REASON_REQUIRED_CATEGORY,
+  REPORT_CONTEXT_NOT_ALLOWED_CODE,
   REPORT_REASON_REQUIRED_CODE,
   REPORT_SOURCE_CONTACT_ENQUIRY,
   ROOM_DEACTIVATED_ACTION,
@@ -80,11 +83,36 @@ export interface ReportedMessageView {
   deletedForEveryone: boolean;
 }
 
+// backend/b286-message-report-context (Decision Log #477): one message the reporter attached as context to a
+// 'message' report. Same text rules as ReportedMessageView (text kept after an edit or a delete-for-everyone).
+// sentByReporter says which side wrote it. No conversation id, no recipient, no sender id.
+export interface ReportContextMessageView {
+  id: string;
+  sentAt: Date;
+  sender: { publicName: string };
+  sentByReporter: boolean;
+  contentText: string;
+  originalContentText: string | null;
+  editedAt: Date | null;
+  deletedForEveryone: boolean;
+}
+
 export type ReportDetail = ReportWithSource & {
   contactEnquiry?: ReportContactEnquiryView | null;
   // Set (to the message, or null if the row is gone, which nothing does today) only on a 'message' report.
   reportedMessage?: ReportedMessageView | null;
+  // Set only on a 'message' report: the attached context, oldest first, an empty array when none.
+  contextMessages?: ReportContextMessageView[];
 };
+
+// What assertMessageReportable learned about the reported message, for the context check.
+interface ReportableMessage {
+  id: string;
+  conversationId: string;
+  sentAt: Date;
+  // The reporter's "delete chat" cutoff for this conversation, or null.
+  chatHiddenAt: Date | null;
+}
 
 // B-279 (Decision Log #456 A and C): the guardian of a MINOR who is the reported user is told the OUTCOME of an
 // actioned report, as the kind of action that was taken and nothing else. 'dismissed' took no action, so it has
@@ -132,6 +160,15 @@ export class ModerationService {
   // -------------------------------------------------------------------
   async createReport(reporterId: string, dto: CreateReportDto): Promise<Report> {
     const reason = this.resolveReportReason(dto.reasonCategory, dto.reason);
+    // Decision Log #477: contextMessageIds belongs to a 'message' report only. A plain 400, before any database read.
+    if (dto.contextMessageIds != null && dto.targetType !== MESSAGE_REPORT_TARGET_TYPE) {
+      throw new BadRequestException({
+        statusCode: 400,
+        error: 'Bad Request',
+        code: REPORT_CONTEXT_NOT_ALLOWED_CODE,
+        message: 'Context messages can only be attached to a report about a message.',
+      });
+    }
     if (dto.targetType === MESSAGE_REPORT_TARGET_TYPE) {
       return this.createMessageReport(reporterId, dto, reason);
     }
@@ -225,7 +262,7 @@ export class ModerationService {
   // messages are never confirmed to exist to a non-participant (the assertParticipant convention in
   // MessagingService). Block is NOT checked: a person who blocked the sender must still be able to report what the
   // sender wrote (the thread still shows it, getMessages has no block filter).
-  private async assertMessageReportable(reporterId: string, messageId: string): Promise<void> {
+  private async assertMessageReportable(reporterId: string, messageId: string): Promise<ReportableMessage> {
     const message = await this.prisma.message.findUnique({
       where: { id: messageId },
       select: {
@@ -255,6 +292,91 @@ export class ModerationService {
     if (chatHide && message.sentAt <= chatHide.hiddenAt) {
       throw new NotFoundException('Message not found');
     }
+    return {
+      id: message.id,
+      conversationId: message.conversationId,
+      sentAt: message.sentAt,
+      chatHiddenAt: chatHide?.hiddenAt ?? null,
+    };
+  }
+
+  // backend/b286-message-report-context (Decision Log #477). The ONE place the context ids are checked. Every id must
+  // be a message of the SAME conversation as the reported one, among the MESSAGE_REPORT_CONTEXT_WINDOW messages
+  // immediately before and the same number immediately after it in (sentAt, id) order (positions are counted over ALL
+  // the conversation's messages, hidden or deleted ones included, so the window reveals nothing), and visible to the
+  // reporter exactly as the reported message must be (not hidden by them, after any "delete chat" cutoff, not
+  // deleted for everyone). The reporter's own messages are allowed. The reported message itself is NOT a valid
+  // context id (it is already the target). ANY failure is the same 404 'Message not found' the other refusals give,
+  // so nothing about a message the reporter may not see is confirmed. Duplicates are dropped first.
+  private async resolveContextMessageIds(
+    reporterId: string,
+    reported: ReportableMessage,
+    ids: string[] | undefined,
+  ): Promise<string[]> {
+    const unique = [...new Set(ids ?? [])];
+    if (unique.length === 0) return [];
+    const notFound = () => new NotFoundException('Message not found');
+    if (unique.includes(reported.id)) throw notFound();
+
+    const [before, after] = await Promise.all([
+      this.prisma.message.findMany({
+        where: {
+          conversationId: reported.conversationId,
+          OR: [{ sentAt: { lt: reported.sentAt } }, { sentAt: reported.sentAt, id: { lt: reported.id } }],
+        },
+        orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
+        take: MESSAGE_REPORT_CONTEXT_WINDOW,
+        select: { id: true },
+      }),
+      this.prisma.message.findMany({
+        where: {
+          conversationId: reported.conversationId,
+          OR: [{ sentAt: { gt: reported.sentAt } }, { sentAt: reported.sentAt, id: { gt: reported.id } }],
+        },
+        orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],
+        take: MESSAGE_REPORT_CONTEXT_WINDOW,
+        select: { id: true },
+      }),
+    ]);
+    const inWindow = new Set([...before, ...after].map((m) => m.id));
+    if (unique.some((id) => !inWindow.has(id))) throw notFound();
+
+    const rows = await this.prisma.message.findMany({
+      where: { id: { in: unique }, conversationId: reported.conversationId },
+      select: {
+        id: true,
+        sentAt: true,
+        deletedForEveryoneAt: true,
+        hides: { where: { userId: reporterId }, select: { userId: true }, take: 1 },
+      },
+    });
+    const visible = rows.filter(
+      (r) =>
+        !r.deletedForEveryoneAt &&
+        r.hides.length === 0 &&
+        !(reported.chatHiddenAt && r.sentAt <= reported.chatHiddenAt),
+    );
+    if (visible.length !== unique.length) throw notFound();
+    return unique;
+  }
+
+  // Attaches context ids to a report, inside the caller's transaction. At most MESSAGE_REPORT_CONTEXT_MAX in TOTAL:
+  // ids already attached are skipped, and when the report is nearly full only the first ones that fit (in the order
+  // the reporter sent them) are added; the rest are ignored without an error (DEFAULT, founder-veto-able).
+  private async attachContextMessages(
+    tx: Prisma.TransactionClient,
+    reportId: string,
+    ids: string[],
+  ): Promise<void> {
+    if (ids.length === 0) return;
+    const current = await tx.reportContextMessage.findMany({ where: { reportId }, select: { messageId: true } });
+    const have = new Set(current.map((c) => c.messageId));
+    const fresh = ids.filter((id) => !have.has(id)).slice(0, Math.max(0, MESSAGE_REPORT_CONTEXT_MAX - have.size));
+    if (fresh.length === 0) return;
+    await tx.reportContextMessage.createMany({
+      data: fresh.map((messageId) => ({ reportId, messageId })),
+      skipDuplicates: true,
+    });
   }
 
   // One OPEN report per reporter per message. DEFAULT, founder-veto-able: a repeat while the reporter's earlier
@@ -263,7 +385,8 @@ export class ModerationService {
   // PostMediaReportService, where a repeat is a success that changes nothing. Serialised per (reporter, message)
   // by a transaction-level advisory lock so two simultaneous submissions cannot both create a row.
   private async createMessageReport(reporterId: string, dto: CreateReportDto, reason: string): Promise<Report> {
-    await this.assertMessageReportable(reporterId, dto.targetId);
+    const reported = await this.assertMessageReportable(reporterId, dto.targetId);
+    const contextIds = await this.resolveContextMessageIds(reporterId, reported, dto.contextMessageIds);
 
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`message-report:${reporterId}:${dto.targetId}`}))`;
@@ -271,8 +394,12 @@ export class ModerationService {
         where: { reporterId, targetType: MESSAGE_REPORT_TARGET_TYPE, targetId: dto.targetId, status: 'open' },
         orderBy: { createdAt: 'asc' },
       });
-      if (existing) return existing;
-      return tx.report.create({
+      if (existing) {
+        // A repeat: the earlier report is returned, and any new valid context is added to it (up to the total cap).
+        await this.attachContextMessages(tx, existing.id, contextIds);
+        return existing;
+      }
+      const created = await tx.report.create({
         data: {
           reporterId,
           targetType: MESSAGE_REPORT_TARGET_TYPE,
@@ -284,6 +411,8 @@ export class ModerationService {
           severity: dto.severity ?? DEFAULT_REPORT_SEVERITY,
         },
       });
+      await this.attachContextMessages(tx, created.id, contextIds);
+      return created;
     });
   }
 
@@ -618,7 +747,37 @@ export class ModerationService {
             deletedForEveryone: row.deletedForEveryoneAt !== null,
           }
         : null;
-      return { ...report, reportedMessage };
+      // Decision Log #477: the context the reporter attached, oldest first. Only the fields below; no conversation
+      // id, no recipient, no sender id, no other message of the thread.
+      const contextRows = await this.prisma.reportContextMessage.findMany({
+        where: { reportId: report.id },
+        orderBy: [{ message: { sentAt: 'asc' } }, { message: { id: 'asc' } }],
+        select: {
+          message: {
+            select: {
+              id: true,
+              sentAt: true,
+              senderId: true,
+              contentText: true,
+              originalContentText: true,
+              editedAt: true,
+              deletedForEveryoneAt: true,
+              sender: { select: PUBLIC_NAME_SELECT },
+            },
+          },
+        },
+      });
+      const contextMessages: ReportContextMessageView[] = contextRows.map(({ message: m }) => ({
+        id: m.id,
+        sentAt: m.sentAt,
+        sender: { publicName: resolvePublicName(m.sender) },
+        sentByReporter: report.reporterId !== null && m.senderId === report.reporterId,
+        contentText: m.contentText,
+        originalContentText: m.originalContentText,
+        editedAt: m.editedAt,
+        deletedForEveryone: m.deletedForEveryoneAt !== null,
+      }));
+      return { ...report, reportedMessage, contextMessages };
     }
 
     return report;
