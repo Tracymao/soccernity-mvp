@@ -97,6 +97,9 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
   });
 
   beforeEach(async () => {
+    // The previous test may have ended right after a 202, with the post-response step (Decision Log #476) still
+    // writing. Let it finish first, or the TRUNCATE below can deadlock with it.
+    await idle();
     await resetDatabase();
     await clearAuthLimitCounters(app);
     for (const pattern of ['guardian-security-notice:*', '2fa:*']) {
@@ -109,6 +112,7 @@ describe('Email change (B-059) -- real Postgres + real Redis', () => {
   });
 
   afterAll(async () => {
+    await idle();
     await clearAuthLimitCounters(app);
     await app.close();
     await disconnectTestPrismaClient();
