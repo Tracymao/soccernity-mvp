@@ -1424,6 +1424,8 @@ model Message {
   originalContentText  String?
   deletedForEveryoneAt DateTime?
   hides                MessageHide[]
+  // backend/b286-message-report-context: the reports that attached this message as surrounding context.
+  reportContexts       ReportContextMessage[]
 
   // sprint-3/messaging-direct-messaging -- GET /conversations/:id/messages
   // filters by conversationId and keyset-paginates newest-first
@@ -1826,6 +1828,10 @@ model Report {
   appealReviewedByAdminId String?
   appealReviewedByAdmin   AdminUser? @relation("reportAppealReviewedBy", fields: [appealReviewedByAdminId], references: [id])
   appealReviewedAt        DateTime?
+
+  // backend/b286-message-report-context (Decision Log #477): messages the reporter attached as context to a
+  // 'message' report. See ReportContextMessage.
+  contextMessages ReportContextMessage[]
 
   // backend/w6-hold-rule-extension (B-044) -- reverse relation for AccountHold.report.
   accountHolds     AccountHold[]
@@ -3073,4 +3079,21 @@ model PushSubscription {
   createdAt DateTime @default(now())
 
   @@index([userId])
+}
+
+// backend/b286-message-report-context (B-286, Decision Log #477): the messages a reporter attached to a 'message'
+// report as surrounding context (at most 20 per report; each within 10 messages before or after the reported one,
+// in the same conversation, and visible to the reporter). A genuine addition beyond Section 3's entity list.
+// messageId is RESTRICT on purpose, a deliberate safety net: a message that is part of a report's evidence must
+// never be deleted (the retention sweep that is built later must skip these messages, see moderation/README.md).
+// Deleting a Report removes its rows (CASCADE). No User relation: the sender is reached through Message.sender.
+model ReportContextMessage {
+  reportId  String
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+
+  @@id([reportId, messageId])
+  @@index([messageId])
 }

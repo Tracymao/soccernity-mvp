@@ -177,6 +177,36 @@ describe('ReportsController (HTTP layer)', () => {
     });
   });
 
+  describe('POST /reports: contextMessageIds (backend/b286-message-report-context)', () => {
+    const MSG = '11111111-1111-4111-8111-111111111111';
+    const ctx = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+    const body = (over: Record<string, unknown> = {}) => ({
+      targetType: 'message',
+      targetId: MSG,
+      reasonCategory: 'harassment_or_bullying',
+      ...over,
+    });
+
+    it('forwards up to 20 ids to the service untouched', async () => {
+      moderationService.createReport.mockResolvedValue({ id: 'report-1', status: 'open' });
+      const ids = Array.from({ length: 20 }, (_, i) => ctx(i + 1));
+      await request(app.getHttpServer()).post('/reports').send(body({ contextMessageIds: ids })).expect(201);
+      expect(moderationService.createReport).toHaveBeenCalledWith('user-1', expect.objectContaining({ contextMessageIds: ids }));
+    });
+
+    it('21 ids, a non-array, a non-uuid entry: 400, the service is never reached', async () => {
+      for (const contextMessageIds of [Array.from({ length: 21 }, (_, i) => ctx(i + 1)), 'abc', [ctx(1), 'nope'], [7]]) {
+        await request(app.getHttpServer()).post('/reports').send(body({ contextMessageIds })).expect(400);
+      }
+      expect(moderationService.createReport).not.toHaveBeenCalled();
+    });
+
+    it('the field is optional: a plain message report still passes', async () => {
+      moderationService.createReport.mockResolvedValue({ id: 'report-1', status: 'open' });
+      await request(app.getHttpServer()).post('/reports').send(body()).expect(201);
+    });
+  });
+
   describe('POST /reports/:id/appeal', () => {
     it('appeals a report, forwarding the report id and the caller id', async () => {
       moderationService.appealReport.mockResolvedValue({ id: 'report-1', appealStatus: 'pending' });

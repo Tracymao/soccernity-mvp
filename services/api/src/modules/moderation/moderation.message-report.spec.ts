@@ -44,7 +44,8 @@ function messageRow(over: Partial<MessageRow> = {}): MessageRow {
 
 function buildPrisma() {
   const prisma = {
-    message: { findUnique: jest.fn().mockResolvedValue(messageRow()) },
+    message: { findUnique: jest.fn().mockResolvedValue(messageRow()), findMany: jest.fn().mockResolvedValue([]) },
+    reportContextMessage: { findMany: jest.fn().mockResolvedValue([]), createMany: jest.fn().mockResolvedValue({ count: 0 }) },
     conversationHide: { findUnique: jest.fn().mockResolvedValue(null) },
     report: {
       create: jest.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ id: 'new-report', ...data })),
@@ -54,7 +55,8 @@ function buildPrisma() {
     adminUser: { findUnique: jest.fn().mockResolvedValue({ childSafetyVetted: true }) },
     $executeRaw: jest.fn().mockResolvedValue(1),
   } as unknown as PrismaService & {
-    message: { findUnique: jest.Mock };
+    message: { findUnique: jest.Mock; findMany: jest.Mock };
+    reportContextMessage: { findMany: jest.Mock; createMany: jest.Mock };
     conversationHide: { findUnique: jest.Mock };
     report: { create: jest.Mock; findFirst: jest.Mock; findUnique: jest.Mock };
     adminUser: { findUnique: jest.Mock };

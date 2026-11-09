@@ -128,6 +128,18 @@ export const ANONYMISER_DELETES_RELATIONS: readonly RelationKey[] = [
   'GuardianNoticeWithhold.user', // B-280: CASCADE; deleted in anonymizeUser (not in minimiseHeldUser: the flag stays)
 ];
 
+/**
+ * backend/b286-message-report-context (Decision Log #477). Models that hold EVIDENCE for a report and have no
+ * relation to User of their own, so the two lists above cannot see them. Classified here so the decision is explicit:
+ *   ReportContextMessage  the messages a reporter attached as context to a 'message' report. Its messageId is RESTRICT
+ *                         on purpose, so such a message cannot be deleted while the report exists. It does NOT need an
+ *                         entry of its own in the purge check: the SENDER of every message it points at is already
+ *                         covered by 'Message.sender' (content) and 'Conversation.participantIds' (content), which
+ *                         block the purge of any account that wrote or took part in the thread. A future retention
+ *                         sweep for messages MUST skip any message that has a ReportContextMessage row.
+ */
+export const REPORT_EVIDENCE_MODELS: readonly string[] = ['ReportContextMessage'];
+
 /** Implicit m2m relations the anonymiser clears itself (ClubPage membership). */
 export const ANONYMISER_DELETES_IMPLICIT_M2M: readonly string[] = ['ClubMembership'];
 

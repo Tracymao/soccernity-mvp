@@ -45,6 +45,13 @@ export type PublicReportTargetType = (typeof PUBLIC_REPORT_TARGET_TYPES)[number]
 export const ENQUIRY_REPORT_TARGET_TYPE = 'enquiry';
 // A report about a message in a chat (backend/b067-message-report). Also listed in REPORT_TARGET_TYPES above.
 export const MESSAGE_REPORT_TARGET_TYPE = 'message';
+// backend/b286-message-report-context (Decision Log #477). A 'message' report may attach other messages of the SAME
+// conversation as context: at most MESSAGE_REPORT_CONTEXT_MAX in total per report, each among the
+// MESSAGE_REPORT_CONTEXT_WINDOW messages immediately before or after the reported one (in (sentAt, id) order).
+export const MESSAGE_REPORT_CONTEXT_MAX = 20;
+export const MESSAGE_REPORT_CONTEXT_WINDOW = 10;
+// 400 code when contextMessageIds is sent with any targetType other than 'message'.
+export const REPORT_CONTEXT_NOT_ALLOWED_CODE = 'report_context_not_allowed';
 // The `source` hint the admin queue and report detail carry for such a report (the key is ABSENT otherwise).
 export const REPORT_SOURCE_CONTACT_ENQUIRY = 'contact_enquiry';
 

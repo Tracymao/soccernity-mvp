@@ -1,5 +1,6 @@
-import { IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength, ValidateIf } from 'class-validator';
 import {
+  MESSAGE_REPORT_CONTEXT_MAX,
   REPORT_REASON_CATEGORIES,
   REPORT_SEVERITIES,
   REPORT_TARGET_TYPES,
@@ -50,4 +51,15 @@ export class CreateReportDto {
   @IsOptional()
   @IsIn(REPORT_SEVERITIES)
   severity?: ReportSeverity;
+
+  // backend/b286-message-report-context (Decision Log #477): ONLY for targetType 'message'. Ids of other messages in
+  // the same conversation to attach as context (at most 20, within 10 messages before or after the reported one,
+  // visible to the reporter). With any other targetType the field is a 400 (checked in ModerationService, coded).
+  // Duplicates are dropped in the service. Every other rule is enforced in ONE place in the service, and every
+  // failure there is the same 404 'Message not found'.
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MESSAGE_REPORT_CONTEXT_MAX)
+  @IsUUID('all', { each: true })
+  contextMessageIds?: string[];
 }
