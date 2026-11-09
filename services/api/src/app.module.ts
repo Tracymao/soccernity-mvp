@@ -7,7 +7,6 @@ import { HealthModule } from './health/health.module';
 import { PasswordResetModule } from './modules/auth/password-reset/password-reset.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AuthRegistrationModule } from './modules/auth/registration/registration.module';
-import { SocialAuthModule } from './modules/social-auth/social-auth.module';
 import { GuardianConsentModule } from './modules/auth/guardian-consent/guardian-consent.module';
 import { UsersModule } from './modules/users/users.module';
 import { BlockModule } from './modules/block/block.module';
@@ -112,9 +111,6 @@ import { GlobalRateLimitModule } from './rate-limit/global-rate-limit.module';
     // small merge-order conflict on the lines around this import is
     // expected when those land, not something to avoid architecturally.
     AuthRegistrationModule,
-    // B-084 (Decision Log #378, #468) -- Google / Facebook sign-in under /auth/social, built behind configuration
-    // (a provider is enabled only when its OAuth keys are set). See modules/social-auth/README.md.
-    SocialAuthModule,
     GuardianConsentModule, // Sprint 1 / PR B5 — /auth/guardian-consent (Section 4.1 / 8.3 step 4)
     UsersModule, // Sprint 1 — B6 (profile endpoints, Section 4.2, self-scope only for now)
     BlockModule, // backend/w5-profile-block — B-039 (Block: POST/DELETE /users/:id/block, GET /users/:id/blocks)

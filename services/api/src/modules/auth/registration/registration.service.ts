@@ -2,7 +2,7 @@ import { DobEncryptionService } from '../../../crypto/dob-encryption.service';
 import { BadRequestException, ConflictException, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
-import { Guardian, Prisma, User } from '@prisma/client';
+import { Guardian, User } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AccountEmailService } from '../../account-emails/account-email.service';
 import { ClubsService } from '../../clubs/clubs.service';
@@ -27,23 +27,6 @@ import {
 import { RegisterDto } from './dto/register.dto';
 import { EmailVerificationTokenStore } from './email-verification/email-verification-token.store';
 import { RegistrationEmailService } from './email/registration-email.service';
-
-// B-084 (Decision Log #378, #468): a registration that is completed with a provider-verified social identity
-// (Google / Facebook) instead of choosing a password. It rides the same register() steps -- age checks, guardian
-// capture, country derivation, club join, session -- so nothing about sign-up is skipped except the password.
-// `emailVerified` is whether the account's email address is already proven (Google said so, or the person verified
-// it with a code before any account existed); when false the usual verification email is sent as for any account.
-export interface SocialRegistrationContext {
-  provider: string;
-  providerAccountId: string;
-  emailVerified: boolean;
-}
-
-// The one message every "this social sign-up cannot go ahead" outcome uses, whatever the cause (the email already
-// has an account, the identity is already linked, a concurrent attempt won). It names no cause on purpose.
-export const SOCIAL_SIGNUP_UNAVAILABLE_CODE = 'social_signup_unavailable';
-export const SOCIAL_SIGNUP_UNAVAILABLE_MESSAGE =
-  "We couldn't finish creating your account this way. If you already have a Soccernity account, sign in with your email and password.";
 
 export interface RegisterResult {
   user: User;
@@ -120,7 +103,7 @@ export class RegistrationService {
   // below and is NEVER written to the database, a log or an email: B-024,
   // Decision Log #368. Optional so non-HTTP callers and tests need not supply
   // one -- an absent IP simply resolves to "unresolved" (the stronger control).
-  async register(dto: RegisterDto, clientIp?: string, social?: SocialRegistrationContext): Promise<RegisterResult> {
+  async register(dto: RegisterDto, clientIp?: string): Promise<RegisterResult> {
     // Decision Log #16 (Build Plan Section 9): normalize email to
     // lowercase on write so matching is case-insensitive — a guardian or
     // player who registered with mixed-case casing shouldn't be unable
@@ -136,7 +119,6 @@ export class RegistrationService {
       // timing or message differences beyond this standard 409; that's as
       // far as this PR's scope goes (no email-enumeration hardening spec
       // exists in Section 4/5.7 beyond ordinary REST semantics).
-      if (social) throw this.socialSignupUnavailable();
       throw new ConflictException('An account with this email already exists');
     }
 
@@ -204,39 +186,21 @@ export class RegistrationService {
     const lookup = await this.geoIp.lookupCountry(clientIp);
     const derivedCountry = lookup.resolved ? lookup.countryCode : null;
 
-    let user: User;
-    try {
-      user = await this.prisma.user.create({
-        data: {
-          email,
-          phone: dto.phone,
-          passwordHash,
-          displayName: dto.displayName,
-          dateOfBirth: this.dobEncryption.encrypt(dateOfBirth),
-          isMinor,
-          isUnder16,
-          declaredCountry,
-          derivedCountry,
-          countryDerivationMethod: lookup.method,
-          countryDerivedAt: new Date(),
-          // B-084: the social identity is written in this same create, so the account and its link exist together or
-          // not at all. verificationStatus is 'verified' only when the address is already proven.
-          ...(social
-            ? {
-                verificationStatus: social.emailVerified ? 'verified' : 'unverified',
-                socialIdentities: { create: { provider: social.provider, providerAccountId: social.providerAccountId } },
-              }
-            : {}),
-        },
-      });
-    } catch (err) {
-      // Two simultaneous social sign-ups for the same email or the same provider identity: the loser gets the same
-      // generic answer as every other "cannot go ahead" case. Password registration keeps its existing behaviour.
-      if (social && err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw this.socialSignupUnavailable();
-      }
-      throw err;
-    }
+    const user = await this.prisma.user.create({
+      data: {
+        email,
+        phone: dto.phone,
+        passwordHash,
+        displayName: dto.displayName,
+        dateOfBirth: this.dobEncryption.encrypt(dateOfBirth),
+        isMinor,
+        isUnder16,
+        declaredCountry,
+        derivedCountry,
+        countryDerivationMethod: lookup.method,
+        countryDerivedAt: new Date(),
+      },
+    });
 
     let guardian: Guardian | null = null;
     if (isMinor && dto.guardian) {
@@ -278,23 +242,14 @@ export class RegistrationService {
       await this.clubsService.joinClub(user.id, dto.clubId);
     }
 
-    // B-084: an address already proven (Google verified it, or the person verified it with a code before this account
-    // existed) needs no verification email. Every other account, social or not, gets the usual one.
-    if (!social?.emailVerified) {
-      const verificationToken = await this.emailVerificationTokenStore.issue(user.id);
+    const verificationToken = await this.emailVerificationTokenStore.issue(user.id);
 
-      // Registration must never block on (or fail because of) email
-      // delivery — see RegistrationEmailService's "wired, not live" note.
-      // Errors here are logged, not rethrown or awaited into the response.
-      void this.emailService.sendVerificationEmail(user.email, verificationToken).catch((err: Error) => {
-        this.logger.warn(`Failed to queue verification email for user ${user.id}: ${err.message}`);
-      });
-    } else {
-      // B-069: a social sign-in that already proved the address needs no verification step, so an ADULT's account
-      // is fully active right here and the welcome is sent now. A minor's is not (the guardian has not approved
-      // yet), so AccountEmailService sends nothing and the guardian's approval sends it later.
-      this.accountEmails?.welcomeIfReadyInBackground(user.id);
-    }
+    // Registration must never block on (or fail because of) email
+    // delivery — see RegistrationEmailService's "wired, not live" note.
+    // Errors here are logged, not rethrown or awaited into the response.
+    void this.emailService.sendVerificationEmail(user.email, verificationToken).catch((err: Error) => {
+      this.logger.warn(`Failed to queue verification email for user ${user.id}: ${err.message}`);
+    });
 
     if (guardian) {
       void this.emailService
@@ -315,15 +270,6 @@ export class RegistrationService {
     const tokens = await this.tokenService.issueTokenPair(user.id, user.role);
 
     return { user, dateOfBirth, guardian, tokens };
-  }
-
-  private socialSignupUnavailable(): ConflictException {
-    return new ConflictException({
-      statusCode: 409,
-      error: 'Conflict',
-      code: SOCIAL_SIGNUP_UNAVAILABLE_CODE,
-      message: SOCIAL_SIGNUP_UNAVAILABLE_MESSAGE,
-    });
   }
 
   async verifyEmail(token: string): Promise<VerifyEmailResult> {

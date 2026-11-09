@@ -177,18 +177,6 @@ services:
       # ADMIN_APP_BASE_URL: https origin of apps/admin. Used ONLY for the API CORS allowlist (QA D-01, Decision Log #407).
       - key: ADMIN_APP_BASE_URL
         sync: false
-      # B-084 (Decision Log #378, #468): Google / Facebook sign-in. A provider is switched on only when BOTH its id and
-      # secret are set (placeholders / unset = that provider's endpoints answer "not available"; nothing else changes).
-      # The redirect URI to register with each provider is WEB_APP_BASE_URL + /auth/social/google/callback (and
-      # /auth/social/facebook/callback). See docs/deployment.md.
-      - key: GOOGLE_OAUTH_CLIENT_ID
-        sync: false
-      - key: GOOGLE_OAUTH_CLIENT_SECRET
-        sync: false
-      - key: FACEBOOK_OAUTH_CLIENT_ID
-        sync: false
-      - key: FACEBOOK_OAUTH_CLIENT_SECRET
-        sync: false
       # --- Sports data (Highlightly) ---
       - key: SPORTS_DATA_API_KEY
         sync: false
@@ -522,18 +510,6 @@ services:
         sync: false
       # ADMIN_APP_BASE_URL: https origin of apps/admin. Used ONLY for the API CORS allowlist (QA D-01, Decision Log #407).
       - key: ADMIN_APP_BASE_URL
-        sync: false
-      # B-084 (Decision Log #378, #468): Google / Facebook sign-in. A provider is switched on only when BOTH its id and
-      # secret are set (placeholders / unset = that provider's endpoints answer "not available"; nothing else changes).
-      # The redirect URI to register with each provider is WEB_APP_BASE_URL + /auth/social/google/callback (and
-      # /auth/social/facebook/callback). See docs/deployment.md.
-      - key: GOOGLE_OAUTH_CLIENT_ID
-        sync: false
-      - key: GOOGLE_OAUTH_CLIENT_SECRET
-        sync: false
-      - key: FACEBOOK_OAUTH_CLIENT_ID
-        sync: false
-      - key: FACEBOOK_OAUTH_CLIENT_SECRET
         sync: false
       # --- Sports data (Highlightly) ---
       - key: SPORTS_DATA_API_KEY

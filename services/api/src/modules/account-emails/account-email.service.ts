@@ -83,8 +83,7 @@ export class AccountEmailService {
   // guardian approving. The account is ready, and the welcome is sent, only when ALL of these hold: the account is
   // 'active', the email is verified, and (for a minor) the guardian has confirmed consent. Whichever event comes
   // SECOND therefore sends it; the first one finds the account not ready yet and sends nothing. An adult is ready
-  // at email verification (or at creation, when a social sign-in already proved the address). It never sends
-  // before that, for an adult or a minor. Each event happens once, so the welcome is sent once; a verification and
+  // at email verification. It never sends before that, for an adult or a minor. Each event happens once, so the welcome is sent once; a verification and
   // an approval landing in the very same instant could in principle send it twice or not at all (no sent-flag
   // exists, and none was added: DEFAULT, founder-veto-able).
   welcomeIfReadyInBackground(userId: string): void {
