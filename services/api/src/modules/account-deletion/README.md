@@ -124,6 +124,7 @@
 > | `Follow` (both directions), `Like`, `SavedPost`, `Notification` | deleted outright (ephemeral signal). `Post.likeCount` is decremented for each removed like so the denormalized cache never drifts. |
 > | `Guardian` (minors) | unchanged from #42: snapshot into `ConsentAuditRecord`, then delete the `Guardian` row. The audit record keeps its own 6-month purge clock, measured from anonymization time. |
 > | `Post`, `Comment`, `Message`, `Result` | **untouched** — their FKs keep pointing at the now-anonymized row, which is the point. |
+> |  | *(B-287: direct `Message` rows are removed 12 months after `sentAt` by `MessageRetentionService`, independent of the account; see messaging/README.md "Retention".)* |
 > | `Report` | **never touched**, regardless of investigation status. |
 >
 > **`'deleted'` vs `'pending_deletion'`.** `pending_deletion` = the 30-day grace

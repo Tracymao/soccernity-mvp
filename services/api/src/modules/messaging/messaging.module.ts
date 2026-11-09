@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthFoundationModule } from '../auth/auth-foundation.module';
 import { ConversationsController } from './conversations.controller';
+import { MessageRetentionService } from './message-retention.service';
 import { MessagingService } from './messaging.service';
 
 // Sprint 3 — Build Plan Section 4.7 (Content, Messaging, Notification &
@@ -22,8 +24,8 @@ import { MessagingService } from './messaging.service';
 // shape decisions, and the restricted-pending enforcement (Decision Log
 // #12).
 @Module({
-  imports: [PrismaModule, AuthFoundationModule],
+  imports: [PrismaModule, AuthFoundationModule, ConfigModule],
   controllers: [ConversationsController],
-  providers: [MessagingService],
+  providers: [MessagingService, MessageRetentionService],
 })
 export class MessagingModule {}

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { TEST_CLOCK_ENV_VARS } from './clock/clock';
+import { DEFAULT_MESSAGE_RETENTION_MONTHS } from './modules/messaging/messaging.constants';
 import { POST_MEDIA_DEFAULTS } from './modules/post-media/post-media.config';
 import { GLOBAL_RATE_LIMIT_DEFAULTS } from './rate-limit/global-rate-limit.constants';
 import { AUTH_LIMIT_DEFAULTS } from './modules/auth/rate-limit/auth-limits/auth-limits.constants';
@@ -304,6 +305,28 @@ describe('environment completeness (B-018)', () => {
         forgotEmailMax: 3,
         forgotEmailWindowMs: 60 * 60_000,
       });
+    });
+  });
+
+  // Message retention (B-287, Decision Log #478): read by the code, in both render.yaml services and in
+  // .env.example, with the same value as the code default.
+  describe('message retention variable (B-287)', () => {
+    const NAME = 'MESSAGE_RETENTION_MONTHS';
+
+    it('is read by the code, declared in both render.yaml services and documented in .env.example', () => {
+      expect(read.has(NAME)).toBe(true);
+      for (const keys of services) expect(keys.has(NAME)).toBe(true);
+      expect(example.has(NAME)).toBe(true);
+    });
+
+    it('carries the decided default (12 months) in render.yaml (both services) and .env.example', () => {
+      expect(DEFAULT_MESSAGE_RETENTION_MONTHS).toBe(12);
+      const renderText = fs.readFileSync(path.join(REPO_ROOT, 'render.yaml'), 'utf8');
+      const exampleText = fs.readFileSync(path.join(REPO_ROOT, '.env.example'), 'utf8');
+      const inRender = [...renderText.matchAll(new RegExp(`-\\s+key:\\s+${NAME}\\s+value:\\s+"?([^"\\r\\n]+)"?\\s*$`, 'gm'))].map((m) => m[1]);
+      expect(inRender).toEqual(['12', '12']);
+      const inExample = exampleText.match(new RegExp(`^${NAME}=(\\S+)\\s*$`, 'm'));
+      expect(inExample && inExample[1]).toBe('12');
     });
   });
 
